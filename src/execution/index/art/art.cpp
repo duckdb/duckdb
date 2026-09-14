@@ -32,13 +32,19 @@
 
 namespace duckdb {
 
+enum class ARTScanType : uint8_t { FULL, PREDICATE, BATCH_EQUALITY };
+
 struct ARTIndexScanState : public IndexScanState {
+	explicit ARTIndexScanState(ARTScanType scan_type) : scan_type(scan_type) {
+	}
+
+	ARTScanType scan_type;
 	unique_ptr<DataChunk> batch_equality_values;
 	//! The predicates to scan.
 	//! A single predicate for point lookups, and two predicates for range scans.
 	Value values[2];
 	//! The expressions over the scan predicates.
-	ExpressionType expressions[2];
+	ExpressionType expressions[2] = {ExpressionType::INVALID, ExpressionType::INVALID};
 };
 
 //===--------------------------------------------------------------------===//
@@ -155,7 +161,7 @@ ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type
 
 static unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Value &value,
                                                                 const ExpressionType expression_type) {
-	auto result = make_uniq<ARTIndexScanState>();
+	auto result = make_uniq<ARTIndexScanState>(ARTScanType::PREDICATE);
 	result->values[0] = value;
 	result->expressions[0] = expression_type;
 	return std::move(result);
@@ -165,7 +171,7 @@ static unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Value &low_v
                                                               const ExpressionType low_expression_type,
                                                               const Value &high_value,
                                                               const ExpressionType high_expression_type) {
-	auto result = make_uniq<ARTIndexScanState>();
+	auto result = make_uniq<ARTIndexScanState>(ARTScanType::PREDICATE);
 	result->values[0] = low_value;
 	result->expressions[0] = low_expression_type;
 	result->values[1] = high_value;
@@ -280,13 +286,13 @@ unique_ptr<IndexScanState> ART::InitializeBatchScan(unique_ptr<DataChunk> values
 	if (!values || values->GetTypes() != logical_types) {
 		throw InternalException("ART batch scan keys must have the index's logical types");
 	}
-	auto result = make_uniq<ARTIndexScanState>();
+	auto result = make_uniq<ARTIndexScanState>(ARTScanType::BATCH_EQUALITY);
 	result->batch_equality_values = std::move(values);
 	return std::move(result);
 }
 
 unique_ptr<IndexScanState> ART::InitializeFullScan() {
-	return make_uniq<ARTIndexScanState>();
+	return make_uniq<ARTIndexScanState>(ARTScanType::FULL);
 }
 //===--------------------------------------------------------------------===//
 // ART Keys
@@ -858,13 +864,21 @@ bool ART::Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const {
 
 bool ART::ScanInternal(IndexScanState &state, RowIdVectorOutput &row_ids) const {
 	auto &scan_state = state.Cast<ARTIndexScanState>();
-	if (scan_state.batch_equality_values) {
-		return ScanBatch(*scan_state.batch_equality_values, row_ids);
-	}
-	if (scan_state.values[0].IsNull()) {
-		// full scan
+	switch (scan_state.scan_type) {
+	case ARTScanType::FULL: {
+		D_ASSERT(!scan_state.batch_equality_values);
 		IndexLock l(*this);
 		return FullScan(row_ids);
+	}
+	case ARTScanType::PREDICATE:
+		D_ASSERT(!scan_state.batch_equality_values);
+		D_ASSERT(!scan_state.values[0].IsNull());
+		break;
+	case ARTScanType::BATCH_EQUALITY:
+		D_ASSERT(scan_state.batch_equality_values);
+		return ScanBatch(*scan_state.batch_equality_values, row_ids);
+	default:
+		throw InternalException("Invalid ART scan type");
 	}
 	D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
 	ArenaAllocator arena_allocator(Allocator::Get(db));
