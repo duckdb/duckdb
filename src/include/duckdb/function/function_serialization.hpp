@@ -20,6 +20,20 @@ class ClientContext;
 
 class FunctionSerializer {
 private:
+	template <class FUNC>
+	static void SerializeSchemaPath(Serializer &, const FUNC &) {
+	}
+
+	static void SerializeSchemaPath(Serializer &serializer, const TableFunction &function) {
+		auto path = function.GetQualifiedName().Path();
+		if (path.size() > 3) {
+			path.pop_back();
+		} else {
+			path.clear();
+		}
+		serializer.WritePropertyWithDefault(507, "schema_path", path, vector<Identifier>());
+	}
+
 	class DeserializeContext {
 	public:
 		DeserializeContext(Deserializer &deserializer_p, const LogicalType &return_type,
@@ -58,10 +72,6 @@ private:
 		function.SetLogicalReturnType(return_type.IsAggregateState() ? function.GetReturnType() : return_type);
 	}
 
-	static void RestoreLogicalSignature(BoundWindowFunction &, const vector<unique_ptr<Expression>> &,
-	                                    const LogicalType &) {
-	}
-
 public:
 	template <class FUNC>
 	static void Serialize(Serializer &serializer, const FUNC &function, optional_ptr<FunctionData> bind_info) {
@@ -78,6 +88,7 @@ public:
 		// the fields are present, they will be used.
 		serializer.WritePropertyWithDefault<Identifier>(505, "catalog_name", function.GetCatalogName(), Identifier());
 		serializer.WritePropertyWithDefault<Identifier>(506, "schema_name", function.GetSchemaName(), Identifier());
+		SerializeSchemaPath(serializer, function);
 
 		bool has_serialize = function.HasSerializationCallbacks();
 		serializer.WriteProperty(503, "has_serialize", has_serialize);
@@ -99,12 +110,13 @@ public:
 	template <class FUNC, class CATALOG_ENTRY>
 	static FUNC DeserializeFunction(ClientContext &context, CatalogType catalog_type, const Identifier &catalog_name,
 	                                const Identifier &schema_name, const Identifier &name,
-	                                const vector<LogicalType> &arguments) {
+	                                const vector<LogicalType> &arguments, const vector<Identifier> &schema_path = {}) {
 		EntryLookupInfo lookup_info(catalog_type, QualifiedName(name));
-		auto &func_catalog =
-		    Catalog::GetEntry(context, catalog_type,
-		                      QualifiedName(catalog_name.empty() ? Identifier::SystemCatalog() : catalog_name,
-		                                    schema_name.empty() ? Identifier::DefaultSchema() : schema_name, name));
+		auto qualified_name = schema_path.empty()
+		                          ? QualifiedName(catalog_name.empty() ? Identifier::SystemCatalog() : catalog_name,
+		                                          schema_name.empty() ? Identifier::DefaultSchema() : schema_name, name)
+		                          : QualifiedName(schema_path, name);
+		auto &func_catalog = Catalog::GetEntry(context, catalog_type, qualified_name);
 
 		if (func_catalog.type != catalog_type) {
 			throw InternalException("DeserializeFunction - cant find catalog entry for function %s",
@@ -123,6 +135,7 @@ public:
 		auto original_arguments = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(502, "original_arguments");
 		auto catalog_name = deserializer.ReadPropertyWithDefault<Identifier>(505, "catalog_name");
 		auto schema_name = deserializer.ReadPropertyWithDefault<Identifier>(506, "schema_name");
+		auto schema_path = deserializer.ReadPropertyWithDefault<vector<Identifier>>(507, "schema_path");
 		if (catalog_name.empty()) {
 			catalog_name = Identifier::SystemCatalog();
 		}
@@ -141,8 +154,8 @@ public:
 			}
 		}
 
-		auto function =
-		    DeserializeFunction<FUNC, CATALOG_ENTRY>(context, catalog_type, catalog_name, schema_name, name, arguments);
+		auto function = DeserializeFunction<FUNC, CATALOG_ENTRY>(context, catalog_type, catalog_name, schema_name, name,
+		                                                         arguments, schema_path);
 		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
 		if (has_serialize) {
 			function.GetArguments() = std::move(arguments);

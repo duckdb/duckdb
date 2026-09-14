@@ -24,7 +24,13 @@ public:
 public:
 	AggregateFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateAggregateFunctionInfo &info);
 
+	bool IsRegisteredFunction(const shared_ptr<const AggregateFunction> &function) const;
+
 	//! The aggregate functions
 	AggregateFunctionSet functions;
+
+private:
+	//! The aggregate functions installed when the catalog entry was created
+	vector<shared_ptr<const AggregateFunction>> registered_functions;
 };
 } // namespace duckdb
