@@ -13,6 +13,11 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/parser/parsed_data/create_macro_info.hpp"
+#include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
@@ -264,20 +269,66 @@ static void VerifyExpressionDepth(const ParsedExpression &root, idx_t max_expres
 }
 
 static void VerifyStatementDepth(SQLStatement &statement, idx_t max_expression_depth) {
-	if (statement.type != StatementType::SELECT_STATEMENT) {
-		return;
-	}
-	auto &select = statement.Cast<SelectStatement>();
-	if (!select.node) {
-		return;
-	}
-	// EnumerateQueryNodeChildren yields every expression of the query tree (select list, WHERE, GROUP
-	// BY, HAVING, QUALIFY, modifiers, CTEs and nested subqueries), so one pass covers the whole node.
-	ParsedExpressionIterator::EnumerateQueryNodeChildren(*select.node, [&](unique_ptr<ParsedExpression> &child) {
-		if (child) {
-			VerifyExpressionDepth(*child, max_expression_depth);
+	auto verify = [&](const unique_ptr<ParsedExpression> &expr) {
+		if (expr) {
+			VerifyExpressionDepth(*expr, max_expression_depth);
 		}
-	});
+	};
+	// EnumerateQueryNodeChildren yields every expression of a query tree (select list, WHERE, GROUP BY,
+	// HAVING, QUALIFY, modifiers, CTEs and nested subqueries), so one pass covers a whole node.
+	auto verify_node = [&](optional_ptr<QueryNode> node) {
+		if (node) {
+			ParsedExpressionIterator::EnumerateQueryNodeChildren(*node, verify);
+		}
+	};
+	switch (statement.type) {
+	case StatementType::SELECT_STATEMENT:
+		verify_node(statement.Cast<SelectStatement>().node.get());
+		break;
+	case StatementType::CREATE_STATEMENT: {
+		auto &info = *statement.Cast<CreateStatement>().info;
+		switch (info.type) {
+		case CatalogType::VIEW_ENTRY: {
+			auto &view = info.Cast<CreateViewInfo>();
+			verify_node(view.query ? view.query->node.get() : nullptr);
+			break;
+		}
+		case CatalogType::INDEX_ENTRY: {
+			auto &index = info.Cast<CreateIndexInfo>();
+			for (auto &expr : index.expressions) {
+				verify(expr);
+			}
+			for (auto &expr : index.parsed_expressions) {
+				verify(expr);
+			}
+			break;
+		}
+		case CatalogType::MACRO_ENTRY:
+		case CatalogType::TABLE_MACRO_ENTRY: {
+			auto &macro_info = info.Cast<CreateMacroInfo>();
+			for (auto &macro : macro_info.macros) {
+				if (macro->type == MacroType::SCALAR_MACRO) {
+					verify(macro->Cast<ScalarMacroFunction>().expression);
+				} else if (macro->type == MacroType::TABLE_MACRO) {
+					verify_node(macro->Cast<TableMacroFunction>().query_node.get());
+				}
+			}
+			break;
+		}
+		case CatalogType::TABLE_ENTRY: {
+			// CREATE TABLE AS SELECT - column defaults / CHECK constraints are depth-checked by the binder
+			auto &table = info.Cast<CreateTableInfo>();
+			verify_node(table.query ? table.query->node.get() : nullptr);
+			break;
+		}
+		default:
+			break;
+		}
+		break;
+	}
+	default:
+		break;
+	}
 }
 
 void Parser::ParseQuery(const string &query_p) {
