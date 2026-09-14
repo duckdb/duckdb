@@ -255,7 +255,7 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransfor
 	if (add_column_entry.default_value) {
 		column_definition.SetDefaultValue(std::move(add_column_entry.default_value));
 	}
-	column_definition.SetCompressionType(add_column_entry.add_column_constraints.compression_type);
+	column_definition.SetCompressionType(add_column_entry.compression_type);
 
 	unique_ptr<AlterTableInfo> result;
 	auto if_not_exists_value = if_not_exists.has_value();
@@ -270,7 +270,7 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransfor
 		if (add_column_entry.add_column_constraints.add_unique) {
 			throw NotImplementedException("Adding UNIQUE constraints to nested fields is not supported");
 		}
-		if (add_column_entry.add_column_constraints.compression_type != CompressionType::COMPRESSION_AUTO) {
+		if (add_column_entry.compression_type != CompressionType::COMPRESSION_AUTO) {
 			throw NotImplementedException("Adding compression to nested fields is not supported");
 		}
 		const auto parent_path =
@@ -312,8 +312,8 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(
 			           constraint.constraint_type_info.second == ConstraintType::UNIQUE) {
 				new_column.add_column_constraints.add_unique = true;
 			} else if (constraint.constraint_name == "ColumnCompression") {
-				new_column.add_column_constraints.compression_type = constraint.compression_type;
-				if (new_column.add_column_constraints.compression_type == CompressionType::COMPRESSION_AUTO) {
+				new_column.compression_type = constraint.compression_type;
+				if (new_column.compression_type == CompressionType::COMPRESSION_AUTO) {
 					throw ParserException("Unrecognized option for column compression");
 				}
 			}

@@ -184,7 +184,6 @@ private:
 struct AddColumnConstraints {
 	bool add_not_null = false;
 	bool add_unique = false;
-	CompressionType compression_type = CompressionType::COMPRESSION_AUTO;
 };
 
 struct AddColumnInfo : public AlterTableInfo {
