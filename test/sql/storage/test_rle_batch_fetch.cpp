@@ -54,10 +54,13 @@ TEST_CASE("RLE batch fetch preserves arbitrary offsets and output boundaries", "
 		REQUIRE(output[ids.size() + 1] == -1);
 		segment.FetchRows(state, unsafe_array_ptr<row_t>(ids.data(), 0), 0, actual, 1);
 		REQUIRE(output[0] == -1);
+// Internal exceptions abort instead of throwing in this configuration.
+#ifndef DUCKDB_CRASH_ON_ASSERT
 		row_t invalid = -1;
 		REQUIRE_THROWS(segment.FetchRows(state, unsafe_array_ptr<row_t>(invalid), 1, actual, 1));
 		invalid = row_t(segment.count);
 		REQUIRE_THROWS(segment.FetchRows(state, unsafe_array_ptr<row_t>(invalid), 1, actual, 1));
+#endif
 
 		// Single-row fetches share the decoder but must preserve independent output boundaries.
 		vector<row_t> single_ids {0, 3, 4, row_t(segment.count - 1)};
@@ -71,12 +74,14 @@ TEST_CASE("RLE batch fetch preserves arbitrary offsets and output boundaries", "
 			REQUIRE(single_result.GetValue(1) == Value::BIGINT(row_id / 4));
 			REQUIRE(single_result.GetValue(2) == Value::BIGINT(-1));
 		}
+#ifndef DUCKDB_CRASH_ON_ASSERT
 		single_result.SetValue(1, Value::BIGINT(-1));
 		REQUIRE_THROWS(segment.FetchRow(state, -1, single_result, 1));
 		REQUIRE_THROWS(segment.FetchRow(state, row_t(segment.count), single_result, 1));
 		for (idx_t i = 0; i < 3; i++) {
 			REQUIRE(single_result.GetValue(i) == Value::BIGINT(-1));
 		}
+#endif
 
 		// Repeated fetches at a run boundary must not consume the current row.
 		vector<row_t> boundary_ids {3, 3, 4};
@@ -108,6 +113,7 @@ TEST_CASE("RLE batch fetch preserves arbitrary offsets and output boundaries", "
 			REQUIRE(mapped_data[request.size() + 1] == -1);
 		}
 
+#ifndef DUCKDB_CRASH_ON_ASSERT
 		// Invalid later requests must be rejected before any result is written.
 		vector<row_t> invalid_ids {8, 3, row_t(segment.count)};
 		Vector invalid_result(LogicalType::BIGINT, invalid_ids.size());
@@ -120,6 +126,7 @@ TEST_CASE("RLE batch fetch preserves arbitrary offsets and output boundaries", "
 		for (idx_t i = 0; i < invalid_ids.size(); i++) {
 			REQUIRE(invalid_data[i] == -1);
 		}
+#endif
 
 		// More than one vector of requests exercises ColumnData's bounded batching and non-identity selection.
 		const idx_t count = STANDARD_VECTOR_SIZE + 1;
