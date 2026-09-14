@@ -545,7 +545,14 @@ idx_t TemporaryFileManager::WriteTemporaryBuffer(QueryContext context, block_id_
 	D_ASSERT(handle);
 	D_ASSERT(index.IsValid());
 
-	handle->WriteTemporaryBuffer(context, buffer, index.block_index.GetIndex(), compressed_buffer);
+	try {
+		handle->WriteTemporaryBuffer(context, buffer, index.block_index.GetIndex(), compressed_buffer);
+	} catch (...) {
+		// the block was registered under the lock above - unregister it again on write failure
+		TemporaryFileManagerLock lock(manager_lock);
+		EraseUsedBlock(lock, block_id, *handle, index);
+		throw;
+	}
 
 	compression_adaptivity.Update(compression_result.level, time_before);
 	return static_cast<idx_t>(compression_result.size);
