@@ -110,6 +110,7 @@ public:
 
 		// whether or not the given tuple has found a match
 		unsafe_unique_array<bool> found_match;
+		unsafe_unique_array<bool> found_unknown;
 		JoinHashTable &ht;
 		bool finished;
 		bool is_null;
@@ -174,6 +175,8 @@ public:
 		                  const idx_t count, const idx_t col_idx);
 		void GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count, const idx_t col_idx);
 		void GatherResult(Vector &result, const idx_t count, const idx_t col_idx);
+		idx_t ResolveMarkPredicates(DataChunk &keys, SelectionVector &match_sel,
+		                            optional_ptr<SelectionVector> no_match_sel);
 		idx_t ResolvePredicates(DataChunk &keys, DataChunk &probe_data, SelectionVector &match_sel,
 		                        optional_ptr<SelectionVector> no_match_sel);
 	};
@@ -269,11 +272,14 @@ public:
 	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
 	//! Enable selective NULL refinement for an uncorrelated multi-column MARK join
-	void InitializeUncorrelatedMarkJoin();
+	void InitializeUncorrelatedMarkJoin(bool compare_conditions = false);
+	bool HasMarkJoinConjunction() const;
+	idx_t MarkJoinSize() const;
 	bool HasUncorrelatedMarkJoin() const;
 	//! Construct a MARK result, including selective UNKNOWN refinement when enabled
 	void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result,
-	                             optional_ptr<const bool> found_match = nullptr);
+	                             optional_ptr<const bool> found_match = nullptr,
+	                             optional_ptr<const bool> found_unknown = nullptr);
 	//! Scan the HT to construct the full outer join result
 	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result) const;
 
@@ -309,9 +315,7 @@ public:
 	}
 	idx_t SizeInBytes() const {
 		idx_t size = data_collection ? data_collection->SizeInBytes() : 0;
-		if (mark_join_info.uncorrelated_condition_rows) {
-			size += mark_join_info.uncorrelated_condition_rows->SizeInBytes();
-		}
+		size += MarkJoinSize();
 		return size;
 	}
 
@@ -443,6 +447,8 @@ public:
 		bool uncorrelated_has_null = false;
 		//! All RHS condition rows, used only for uncorrelated row equality NULL refinement
 		unique_ptr<ColumnDataCollection> uncorrelated_condition_rows;
+		//! NULL hash-key rows used by mixed-condition MARK probes with non-NULL keys.
+		unique_ptr<ColumnDataCollection> null_condition_rows;
 	} mark_join_info;
 
 private:
