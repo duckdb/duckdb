@@ -46,7 +46,7 @@ struct ARTIndexScanState : public IndexScanState {
 	}
 
 	ARTScanType scan_type;
-	unique_ptr<DataChunk> batch_equality_values;
+	unique_ptr<DataChunk> batch_equality_keys;
 	//! The predicates to scan.
 	//! A single predicate for point lookups, and two predicates for range scans.
 	Value values[2];
@@ -290,12 +290,12 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 	return InitializeScanSinglePredicate(high_value, high_comparison_type);
 }
 
-unique_ptr<IndexScanState> ART::InitializeBatchScan(unique_ptr<DataChunk> values) const {
-	if (!values || values->GetTypes() != logical_types) {
+unique_ptr<IndexScanState> ART::InitializeBatchScan(unique_ptr<DataChunk> key_columns) const {
+	if (!key_columns || key_columns->GetTypes() != logical_types) {
 		throw InternalException("ART batch scan keys must have the index's logical types");
 	}
 	auto result = make_uniq<ARTIndexScanState>(ARTScanType::BATCH_EQUALITY);
-	result->batch_equality_values = std::move(values);
+	result->batch_equality_keys = std::move(key_columns);
 	return std::move(result);
 }
 
@@ -861,7 +861,7 @@ bool ART::ScanInternal(IndexScanState &state, RowIdVectorOutput &row_ids) const 
 	auto &scan_state = state.Cast<ARTIndexScanState>();
 	switch (scan_state.scan_type) {
 	case ARTScanType::EQUALITY: {
-		D_ASSERT(!scan_state.batch_equality_values);
+		D_ASSERT(!scan_state.batch_equality_keys);
 		D_ASSERT(!scan_state.values[0].IsNull());
 		D_ASSERT(scan_state.values[1].IsNull());
 		D_ASSERT(scan_state.expressions[0] == ExpressionType::COMPARE_EQUAL);
@@ -872,12 +872,12 @@ bool ART::ScanInternal(IndexScanState &state, RowIdVectorOutput &row_ids) const 
 		return SearchEqual(key, row_ids);
 	}
 	case ARTScanType::RANGE:
-		D_ASSERT(!scan_state.batch_equality_values);
+		D_ASSERT(!scan_state.batch_equality_keys);
 		D_ASSERT(!scan_state.values[0].IsNull());
 		return ScanRange(scan_state, row_ids);
 	case ARTScanType::BATCH_EQUALITY:
-		D_ASSERT(scan_state.batch_equality_values);
-		return ScanBatch(*scan_state.batch_equality_values, row_ids);
+		D_ASSERT(scan_state.batch_equality_keys);
+		return ScanBatch(*scan_state.batch_equality_keys, row_ids);
 	default:
 		throw InternalException("Invalid ART scan type");
 	}

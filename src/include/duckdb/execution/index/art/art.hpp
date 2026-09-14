@@ -76,7 +76,7 @@ public:
 	//! Try to initialize a scan on the ART with the given expression and filter.
 	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr) const;
 	//! Initializes a scan for multiple equality lookup values.
-	unique_ptr<IndexScanState> InitializeBatchScan(unique_ptr<DataChunk> values) const;
+	unique_ptr<IndexScanState> InitializeBatchScan(unique_ptr<DataChunk> key_columns) const;
 	//! Scans the ART and appends matching row IDs to the output collection.
 	//! Returns true on completion, or false and clears the entire collection if its capacity is exceeded.
 	bool Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const DUCKDB_EXCLUDES(lock);
