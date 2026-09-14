@@ -2572,8 +2572,14 @@ void PartitionedCopy::InitializeFlush() {
 
 void PartitionedCopy::FinalizeState(PartitionedCopyState &state, InterruptState &interrupt_state) {
 	D_ASSERT(state.combined == state.locals);
+	// a state is finalized exactly once, by whoever observes its last combine
+	D_ASSERT(!state.global_source_state);
 	OperatorSinkFinalizeInput sort_strategy_finalize_input {*state.global_sink_state, interrupt_state};
-	sort_strategy->Finalize(context, sort_strategy_finalize_input);
+	auto finalize_result = sort_strategy->Finalize(context, sort_strategy_finalize_input);
+	if (finalize_result == SinkFinalizeType::BLOCKED) {
+		// the flush runs the strategy's tasks itself, so there is nothing that could resume it
+		throw InternalException("PartitionedCopy cannot resume a blocked sort strategy finalize");
+	}
 	state.CreateTaskList();
 }
 
