@@ -184,7 +184,7 @@ private:
 	uint8_t prefix_count;
 
 	bool ScanInternal(IndexScanState &state, RowIdVectorOutput &row_ids) const;
-	bool ScanPredicate(ARTIndexScanState &scan_state, RowIdVectorOutput &row_ids) const;
+	bool ScanRange(ARTIndexScanState &scan_state, RowIdVectorOutput &row_ids) const;
 	bool ScanBatch(DataChunk &values, RowIdVectorOutput &row_ids) const;
 	bool ScanChunk(DataChunk &input, RowIdVectorOutput &row_ids) const;
 	bool FullScan(RowIdVectorOutput &row_ids) const;

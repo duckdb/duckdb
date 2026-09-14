@@ -32,7 +32,16 @@
 
 namespace duckdb {
 
-enum class ARTScanType : uint8_t { FULL, PREDICATE, BATCH_EQUALITY };
+enum class ARTScanType : uint8_t {
+	//! Collect row IDs from the entire index.
+	FULL,
+	//! Equality lookup for one key.
+	EQUALITY,
+	//! Range lookup with one or two bounds.
+	RANGE,
+	//! Equality lookups for multiple keys.
+	BATCH_EQUALITY
+};
 
 struct ARTIndexScanState : public IndexScanState {
 	explicit ARTIndexScanState(ARTScanType scan_type) : scan_type(scan_type) {
@@ -161,7 +170,8 @@ ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type
 
 static unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Value &value,
                                                                 const ExpressionType expression_type) {
-	auto result = make_uniq<ARTIndexScanState>(ARTScanType::PREDICATE);
+	auto scan_type = expression_type == ExpressionType::COMPARE_EQUAL ? ARTScanType::EQUALITY : ARTScanType::RANGE;
+	auto result = make_uniq<ARTIndexScanState>(scan_type);
 	result->values[0] = value;
 	result->expressions[0] = expression_type;
 	return std::move(result);
@@ -171,7 +181,7 @@ static unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Value &low_v
                                                               const ExpressionType low_expression_type,
                                                               const Value &high_value,
                                                               const ExpressionType high_expression_type) {
-	auto result = make_uniq<ARTIndexScanState>(ARTScanType::PREDICATE);
+	auto result = make_uniq<ARTIndexScanState>(ARTScanType::RANGE);
 	result->values[0] = low_value;
 	result->expressions[0] = low_expression_type;
 	result->values[1] = high_value;
@@ -870,10 +880,21 @@ bool ART::ScanInternal(IndexScanState &state, RowIdVectorOutput &row_ids) const 
 		IndexLock l(*this);
 		return FullScan(row_ids);
 	}
-	case ARTScanType::PREDICATE:
+	case ARTScanType::EQUALITY: {
 		D_ASSERT(!scan_state.batch_equality_values);
 		D_ASSERT(!scan_state.values[0].IsNull());
-		return ScanPredicate(scan_state, row_ids);
+		D_ASSERT(scan_state.values[1].IsNull());
+		D_ASSERT(scan_state.expressions[0] == ExpressionType::COMPARE_EQUAL);
+		D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
+		ArenaAllocator arena_allocator(Allocator::Get(db));
+		auto key = ARTKey::CreateKey(arena_allocator, scan_state.values[0], storage_version);
+		IndexLock l(*this);
+		return SearchEqual(key, row_ids);
+	}
+	case ARTScanType::RANGE:
+		D_ASSERT(!scan_state.batch_equality_values);
+		D_ASSERT(!scan_state.values[0].IsNull());
+		return ScanRange(scan_state, row_ids);
 	case ARTScanType::BATCH_EQUALITY:
 		D_ASSERT(scan_state.batch_equality_values);
 		return ScanBatch(*scan_state.batch_equality_values, row_ids);
@@ -882,7 +903,7 @@ bool ART::ScanInternal(IndexScanState &state, RowIdVectorOutput &row_ids) const 
 	}
 }
 
-bool ART::ScanPredicate(ARTIndexScanState &scan_state, RowIdVectorOutput &row_ids) const {
+bool ART::ScanRange(ARTIndexScanState &scan_state, RowIdVectorOutput &row_ids) const {
 	D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
 	ArenaAllocator arena_allocator(Allocator::Get(db));
 
@@ -892,8 +913,6 @@ bool ART::ScanPredicate(ARTIndexScanState &scan_state, RowIdVectorOutput &row_id
 	if (scan_state.values[1].IsNull()) {
 		// Single predicate.
 		switch (scan_state.expressions[0]) {
-		case ExpressionType::COMPARE_EQUAL:
-			return SearchEqual(key, row_ids);
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 			return SearchGreater(key, true, row_ids);
 		case ExpressionType::COMPARE_GREATERTHAN:
