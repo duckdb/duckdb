@@ -47,6 +47,7 @@ Grammar extensions are not included in any of these benchmarks.
 | `ParserTPCDS` | All 99 TPC-DS query files, repeated 10 times | 990 | 1 |
 | `ParserFlummi` | The approximately 373 KiB generated Flummi ray-tracing query, repeated 5 times | 5 | 1 |
 | `ParserAoC` | All 25 Advent of Code 2024 query files, repeated 10 times | 250 | 1 |
+| `ParserGrammarConstruction` | Construct and destroy the base grammar | 500 constructions | No SQL parsing |
 
 The small synthetic cases help isolate regressions. TPC-H and TPC-DS cover realistic
 joins, subqueries, aggregation, CTEs and window functions; Flummi stresses parsing
