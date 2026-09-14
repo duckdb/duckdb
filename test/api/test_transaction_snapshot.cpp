@@ -692,18 +692,37 @@ TEST_CASE("Waiting for a shared statement lock honours max_execution_time", "[ap
 	DuckDB database(nullptr);
 	Connection owner(database);
 	Connection joiner(database);
+	Connection observer(database);
 	REQUIRE_NO_FAIL(owner.Query("CREATE SEQUENCE shared_sequence"));
+	REQUIRE_NO_FAIL(owner.Query("SELECT nextval('shared_sequence')"));
+	REQUIRE_NO_FAIL(owner.Query("PREPARE read_value AS SELECT $1"));
 	REQUIRE_NO_FAIL(owner.Query("BEGIN"));
 	SetTransactionSnapshot(joiner, ExportTransactionSnapshot(owner));
 	REQUIRE_NO_FAIL(owner.Query("SET max_execution_time = 200"));
+	string query;
+	SECTION("Sequence increment") {
+		query = "SELECT nextval('shared_sequence')";
+	}
+	SECTION("Nested sequence in an EXECUTE argument") {
+		query = "EXECUTE read_value(abs(nextval('shared_sequence')))";
+	}
+	SECTION("Nested sequence in a table function argument") {
+		query = "SELECT * FROM range(abs(nextval('shared_sequence')))";
+	}
+	SECTION("Sequence in a lambda body") {
+		query = "SELECT * FROM range(list_transform([1], lambda x: abs(nextval('shared_sequence')))[1])";
+	}
 	auto stream = joiner.SendQuery("SELECT i FROM range(10000000) t(i)");
 	REQUIRE(stream->GetResultType() == QueryResultType::STREAM_RESULT);
 	auto start = std::chrono::steady_clock::now();
-	auto blocked_result = owner.Query("SELECT nextval('shared_sequence')");
+	auto blocked_result = owner.Query(query);
 	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
 	REQUIRE_FAIL(blocked_result);
+	REQUIRE(blocked_result->GetError().find("maximum execution time") != string::npos);
 	// The deadline is checked on every poll of the lock, not on the throttled interrupt path.
 	REQUIRE(elapsed.count() < 1500);
+	auto sequence_result = observer.Query("SELECT currval('shared_sequence')");
+	REQUIRE(CHECK_COLUMN(sequence_result, 0, {1}));
 	stream->Cast<StreamQueryResult>().Close();
 	stream.reset();
 	REQUIRE_NO_FAIL(joiner.Query("ROLLBACK"));
@@ -927,6 +946,18 @@ TEST_CASE("Owner writes and finalization wait for every participant stream", "[a
 	SECTION("Sequence in a table function argument") {
 		query = "SELECT * FROM range(nextval('shared_sequence'))";
 	}
+	SECTION("Nested sequence in an EXECUTE argument") {
+		query = "EXECUTE read_value(abs(nextval('shared_sequence')))";
+	}
+	SECTION("Nested sequence in a table function argument") {
+		query = "SELECT * FROM range(abs(nextval('shared_sequence')))";
+	}
+	SECTION("Nested sequence assignment") {
+		query = "SELECT * FROM range(abs(setval('shared_sequence', 42)))";
+	}
+	SECTION("Sequence in a lambda body") {
+		query = "SELECT * FROM range(list_transform([1], lambda x: abs(nextval('shared_sequence')))[1])";
+	}
 	SECTION("Commit") {
 		query = "COMMIT";
 		finalizes = true;
@@ -1013,6 +1044,11 @@ TEST_CASE("Participant sequence modifications are rejected before evaluation", "
 	    "EXECUTE read_value(nextval('shared_sequence'))",
 	    "SELECT * FROM range(nextval('shared_sequence'))",
 	    "SET threads = nextval('shared_sequence')",
+	    "EXECUTE read_value(abs(nextval('shared_sequence')))",
+	    "SELECT * FROM range(abs(nextval('shared_sequence')))",
+	    "SELECT * FROM range(abs(setval('shared_sequence', 42)))",
+	    "SELECT * FROM range(list_transform([1], lambda x: abs(nextval('shared_sequence')))[1])",
+	    "SET threads = abs(nextval('shared_sequence'))",
 	};
 	for (auto &query : queries) {
 		INFO(query);
