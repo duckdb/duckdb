@@ -2,7 +2,6 @@
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -179,18 +178,11 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		if (expr.IsVolatile()) {
 			continue;
 		}
-		// IN with enough values benefits from a hash join and is handled by InClauseRewriter - skip pushdown.
+		// Keep expressions owned by InClauseRewriter in the logical plan so they can become hash joins.
 		// Also skip throwing IN expressions: scan pushdown loses short-circuit evaluation semantics.
-		if (expr.GetExpressionType() == ExpressionType::COMPARE_IN) {
-			if (expr.CanThrow()) {
-				continue;
-			}
-			auto &in_expr = expr.Cast<BoundOperatorExpression>();
-			if (!in_expr.GetChildren().empty() &&
-			    in_expr.GetChildren()[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
-			    in_expr.GetChildren().size() - 1 >= InClauseRewriter::IN_CLAUSE_REWRITE_THRESHOLD) {
-				continue;
-			}
+		if (expr.GetExpressionType() == ExpressionType::COMPARE_IN &&
+		    (expr.CanThrow() || InClauseRewriter::HasRewritableInClause(expr))) {
+			continue;
 		}
 		// Allow pushing down filters that can throw only if there is a single expression
 		if (expr.CanThrow() && filters.size() > 1) {

@@ -494,23 +494,24 @@ unique_ptr<FunctionData> EquiWidthBinDeserialize(Deserializer &deserializer, Bou
 
 } // namespace
 
+static void AddEquiWidthBinFunction(ScalarFunctionSet &functions, const LogicalType &min_max_type,
+                                    scalar_function_t function) {
+	ScalarFunction fun({}, LogicalType::LIST(LogicalType::ANY), function, BindEquiWidthFunction);
+	fun.GetSignature()
+	    .AddParameter("min", min_max_type)
+	    .AddParameter("max", min_max_type)
+	    .AddParameter("bin_count", LogicalType::BIGINT)
+	    .AddParameter("nice_rounding", LogicalType::BOOLEAN);
+	functions.AddFunction(std::move(fun));
+}
+
 ScalarFunctionSet EquiWidthBinsFun::GetFunctions() {
 	ScalarFunctionSet functions("equi_width_bins");
-	functions.AddFunction(
-	    ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BOOLEAN},
-	                   LogicalType::LIST(LogicalType::ANY), EquiWidthBinFunction<int64_t, EquiWidthBinsInteger>,
-	                   BindEquiWidthFunction));
-	functions.AddFunction(ScalarFunction(
-	    {LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::BIGINT, LogicalType::BOOLEAN},
-	    LogicalType::LIST(LogicalType::ANY), EquiWidthBinFunction<double, EquiWidthBinsDouble>, BindEquiWidthFunction));
-	functions.AddFunction(
-	    ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::BIGINT, LogicalType::BOOLEAN},
-	                   LogicalType::LIST(LogicalType::ANY), EquiWidthBinFunction<timestamp_t, EquiWidthBinsTimestamp>,
-	                   BindEquiWidthFunction));
-	functions.AddFunction(
-	    ScalarFunction({LogicalType::ANY_PARAMS(LogicalType::ANY, 150), LogicalType::ANY_PARAMS(LogicalType::ANY, 150),
-	                    LogicalType::BIGINT, LogicalType::BOOLEAN},
-	                   LogicalType::LIST(LogicalType::ANY), UnsupportedEquiWidth, BindEquiWidthFunction));
+	AddEquiWidthBinFunction(functions, LogicalType::BIGINT, EquiWidthBinFunction<int64_t, EquiWidthBinsInteger>);
+	AddEquiWidthBinFunction(functions, LogicalType::DOUBLE, EquiWidthBinFunction<double, EquiWidthBinsDouble>);
+	AddEquiWidthBinFunction(functions, LogicalType::TIMESTAMP,
+	                        EquiWidthBinFunction<timestamp_t, EquiWidthBinsTimestamp>);
+	AddEquiWidthBinFunction(functions, LogicalType::ANY_PARAMS(LogicalType::ANY, 150), UnsupportedEquiWidth);
 	functions.ApplyToFunctions([](ScalarFunction &function) {
 		function.SetSerializeCallback(EquiWidthBinSerialize);
 		function.SetDeserializeCallback(EquiWidthBinDeserialize);

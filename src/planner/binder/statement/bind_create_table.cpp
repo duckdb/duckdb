@@ -191,7 +191,8 @@ unique_ptr<BoundConstraint> Binder::BindUniqueConstraint(const Constraint &const
 		}
 		auto &col = columns.GetColumn(col_name);
 		if (col.Generated()) {
-			throw BinderException("cannot create a PRIMARY KEY on a generated column: %s",
+			string constraint_type = unique.IsPrimaryKey() ? "PRIMARY KEY" : "UNIQUE constraint";
+			throw BinderException("cannot create a %s on a generated column: %s", constraint_type,
 			                      SQLIdentifier(col.GetName()));
 		}
 
