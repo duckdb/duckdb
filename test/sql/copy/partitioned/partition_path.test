@@ -186,6 +186,21 @@ eu	4
 none	3
 us	3
 
+# a struct partition column is dereferenced with struct_extract
+statement ok
+CREATE TABLE structs AS SELECT 1 AS id, {'x': 'a'} AS p;
+
+statement ok
+COPY structs TO '{TEST_DIR}/partition_path_struct' (FORMAT parquet, PARTITION_BY (p),
+PARTITION_PATH struct_extract(p, 'x'), WRITE_PARTITION_COLUMNS);
+
+query III
+SELECT regexp_extract(replace(filename, '\', '/'), 'partition_path_struct/(.*)/[^/]*$', 1) AS dir, id, p
+FROM read_parquet('{TEST_DIR}/partition_path_struct/*/*.parquet', hive_partitioning = false)
+ORDER BY dir;
+----
+a	1	{'x': a}
+
 # errors
 statement error
 COPY sales TO '{TEST_DIR}/partition_path_error' (FORMAT parquet, PARTITION_PATH 'dir');
@@ -206,6 +221,17 @@ statement error
 COPY sales TO '{TEST_DIR}/partition_path_error' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH nonexistent);
 ----
 Column "nonexistent" referenced in PARTITION_PATH is not a PARTITION_BY column
+
+# a qualified reference to a partition column is not supported
+statement error
+COPY sales TO '{TEST_DIR}/partition_path_error' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH sales.region);
+----
+Column "sales.region" referenced in PARTITION_PATH is not a PARTITION_BY column
+
+statement error
+COPY structs TO '{TEST_DIR}/partition_path_error' (FORMAT parquet, PARTITION_BY (p), PARTITION_PATH p.x);
+----
+Column "p.x" referenced in PARTITION_PATH is not a PARTITION_BY column
 
 statement error
 COPY sales TO '{TEST_DIR}/partition_path_error' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH max(region));
