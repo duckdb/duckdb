@@ -619,11 +619,13 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			// need to implicitly reference everything.
 			break;
 		}
-		// distinct, all projected columns are used for the DISTINCT computation
-		// mark all columns as used and continue to the children
-		// FIXME: DISTINCT with expression list does not implicitly reference everything
+		// Preserve all DISTINCT inputs without affecting sibling branches.
+		const auto previous_everything_referenced = everything_referenced;
 		everything_referenced = true;
-		break;
+		LogicalOperatorVisitor::VisitOperatorExpressions(op);
+		VisitPrunableChildren(op);
+		everything_referenced = previous_everything_referenced;
+		return;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
 		if (analyze) {
