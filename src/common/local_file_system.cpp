@@ -1611,7 +1611,7 @@ static bool TryMoveFileWithPosixSemantics(HANDLE source_handle, const std::wstri
 	const auto file_name_length = target.size() * sizeof(WCHAR);
 	const auto rename_info_size = offsetof(FILE_RENAME_INFO, FileName) + file_name_length + sizeof(WCHAR);
 	const auto rename_info_size_dw = NumericCast<DWORD>(rename_info_size);
-	auto rename_info_buffer = unique_ptr<data_t[]>(new data_t[rename_info_size]);
+	auto rename_info_buffer = make_uniq_array<data_t>(rename_info_size);
 	auto rename_info = reinterpret_cast<FILE_RENAME_INFO *>(rename_info_buffer.get());
 	rename_info->Flags = FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS;
 	rename_info->RootDirectory = nullptr;
