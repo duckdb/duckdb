@@ -268,6 +268,9 @@ void CreateViewInfo::Serialize(Serializer &serializer) const {
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<ViewSecurityType>(207, "security_type", security_type, ViewSecurityType::REGULAR_VIEW);
 	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<identifier_map_t<InsertionOrderPreservingMap<string>>>(208, "column_tags_map", column_tags_map, identifier_map_t<InsertionOrderPreservingMap<string>>());
+	}
 }
 
 unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
@@ -283,6 +286,7 @@ unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
 	result->types = std::move(types);
 	result->query = std::move(query);
 	deserializer.ReadPropertyWithExplicitDefault<ViewSecurityType>(207, "security_type", result->security_type, ViewSecurityType::REGULAR_VIEW);
+	deserializer.ReadPropertyWithExplicitDefault<identifier_map_t<InsertionOrderPreservingMap<string>>>(208, "column_tags_map", result->column_tags_map, identifier_map_t<InsertionOrderPreservingMap<string>>());
 	result->SetName(std::move(view_name));
 	return std::move(result);
 }

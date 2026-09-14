@@ -755,7 +755,8 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 			break;
 		}
 		case AlterType::SET_COLUMN_COMMENT:
-		case AlterType::SET_COMMENT: {
+		case AlterType::SET_COMMENT:
+		case AlterType::SET_TAGS: {
 			disallow_alter = false;
 			break;
 		}

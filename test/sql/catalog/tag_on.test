@@ -1,0 +1,319 @@
+# name: test/sql/catalog/tag_on.test
+# description: Set and unset multiple tags on catalog entries and columns
+# group: [catalog]
+
+statement ok
+CREATE TABLE tagged_table(i INTEGER, payload STRUCT(a INTEGER));
+
+# TAG and UNSET are contextual syntax and remain available as identifiers
+statement ok
+CREATE TABLE keyword_compatibility(tag INTEGER, unset INTEGER);
+
+statement ok
+INSERT INTO keyword_compatibility(tag, unset) VALUES (1, 2);
+
+query II
+SELECT tag, unset FROM keyword_compatibility;
+----
+1	2
+
+statement ok
+TAG ON TABLE tagged_table SET ('owner' = 'analytics', 'classification' = 'internal');
+
+query II
+SELECT tags['owner'], tags['classification'] FROM duckdb_tables() WHERE table_name = 'tagged_table';
+----
+analytics	internal
+
+# SET merges tags and overwrites existing keys
+statement ok
+TAG ON TABLE tagged_table SET ('owner' = 'finance', 'retention' = '30d');
+
+query III
+SELECT tags['owner'], tags['classification'], tags['retention']
+FROM duckdb_tables() WHERE table_name = 'tagged_table';
+----
+finance	internal	30d
+
+# Tag mutation uses the existing map's case-insensitive key identity and retains the original spelling
+statement ok
+TAG ON TABLE tagged_table SET ('OWNER' = 'risk');
+
+query I
+SELECT tags['owner'] FROM duckdb_tables() WHERE table_name = 'tagged_table';
+----
+risk
+
+# A new key preserves its spelling; SQL MAP lookup itself remains case-sensitive
+statement ok
+TAG ON TABLE tagged_table SET ('MixedCase' = 'value');
+
+query II
+SELECT tags['MixedCase'], tags['mixedcase'] FROM duckdb_tables() WHERE table_name = 'tagged_table';
+----
+value	NULL
+
+statement ok
+TAG ON TABLE tagged_table UNSET ('mixedcase');
+
+statement ok
+TAG ON TABLE tagged_table UNSET ('classification', 'does-not-exist');
+
+query II
+SELECT tags['classification'], tags['retention'] FROM duckdb_tables() WHERE table_name = 'tagged_table';
+----
+NULL	30d
+
+# Multiple column tags, including on a nested-typed top-level column
+statement ok
+TAG ON COLUMN tagged_table.i SET ('unit' = 'count', 'pii' = 'false');
+
+statement ok
+TAG ON COLUMN tagged_table.payload SET ('format' = 'record');
+
+query III
+SELECT tags['unit'], tags['pii'], tags['format']
+FROM duckdb_columns() WHERE table_name = 'tagged_table' ORDER BY column_index;
+----
+count	false	NULL
+NULL	NULL	record
+
+statement ok
+TAG ON COLUMN tagged_table.i UNSET ('pii');
+
+query II
+SELECT tags['unit'], tags['pii'] FROM duckdb_columns()
+WHERE table_name = 'tagged_table' AND column_name = 'i';
+----
+count	NULL
+
+# Views persist column tags separately from their query output types
+statement ok
+CREATE VIEW tagged_view(first, second) AS SELECT i, payload FROM tagged_table;
+
+statement ok
+TAG ON VIEW tagged_view SET ('owner' = 'reporting');
+
+statement ok
+TAG ON COLUMN tagged_view.first SET ('semantic_type' = 'measure', 'unit' = 'rows');
+
+query I
+SELECT tags['owner'] FROM duckdb_views() WHERE view_name = 'tagged_view';
+----
+reporting
+
+query II
+SELECT tags['semantic_type'], tags['unit'] FROM duckdb_columns()
+WHERE table_name = 'tagged_view' AND column_name = 'first';
+----
+measure	rows
+
+# Resolve view columns by displayed names when aliases collide with underlying names
+statement ok
+CREATE VIEW swapped_alias_view(second, first) AS SELECT i AS first, payload AS second FROM tagged_table;
+
+statement ok
+TAG ON COLUMN swapped_alias_view.first SET ('alias_target' = 'yes');
+
+query TT rowsort
+SELECT column_name, tags['alias_target'] FROM duckdb_columns()
+WHERE table_name = 'swapped_alias_view';
+----
+first	yes
+second	NULL
+
+# Duplicate inputs remain independently addressable by explicit aliases
+statement ok
+CREATE VIEW duplicate_alias_view(x, y) AS SELECT i, i FROM tagged_table;
+
+statement ok
+TAG ON COLUMN duplicate_alias_view.y SET ('alias_target' = 'yes');
+
+query TT rowsort
+SELECT column_name, tags['alias_target'] FROM duckdb_columns()
+WHERE table_name = 'duplicate_alias_view';
+----
+x	NULL
+y	yes
+
+# Unaliased duplicate outputs use their deduplicated public names
+statement ok
+CREATE VIEW deduplicated_view AS SELECT i, i FROM tagged_table;
+
+statement ok
+TAG ON COLUMN deduplicated_view.i_1 SET ('deduplicated_target' = 'yes');
+
+query TT rowsort
+SELECT column_name, tags['deduplicated_target'] FROM duckdb_columns()
+WHERE table_name = 'deduplicated_view';
+----
+i	NULL
+i_1	yes
+
+# Partial aliases are applied before public-name deduplication
+statement ok
+CREATE VIEW partial_alias_view(a) AS SELECT i AS x, i AS a FROM tagged_table;
+
+statement ok
+TAG ON COLUMN partial_alias_view.a_1 SET ('deduplicated_target' = 'yes');
+
+query TT rowsort
+SELECT column_name, tags['deduplicated_target'] FROM duckdb_columns()
+WHERE table_name = 'partial_alias_view';
+----
+a	NULL
+a_1	yes
+
+# Metadata changes are allowed when other entries depend on the target
+statement ok
+CREATE VIEW dependent_view AS SELECT i FROM tagged_table;
+
+statement ok
+TAG ON TABLE tagged_table SET ('has_dependents' = 'yes');
+
+statement ok
+TAG ON COLUMN tagged_table.i SET ('has_dependents' = 'yes');
+
+# Other tag-bearing catalog entry types use the same generic mutation path
+statement ok
+CREATE SEQUENCE tagged_sequence;
+
+statement ok
+TAG ON SEQUENCE tagged_sequence SET ('owner' = 'sequence-team');
+
+query I
+SELECT tags['owner'] FROM duckdb_sequences() WHERE sequence_name = 'tagged_sequence';
+----
+sequence-team
+
+statement ok
+CREATE TYPE tagged_type AS ENUM ('a', 'b');
+
+statement ok
+TAG ON TYPE tagged_type SET ('domain' = 'example');
+
+query I
+SELECT tags['domain'] FROM duckdb_types() WHERE type_name = 'tagged_type';
+----
+example
+
+statement ok
+CREATE MACRO tagged_macro(x) AS x + 1;
+
+statement ok
+TAG ON MACRO tagged_macro SET ('owner' = 'macro-team');
+
+query I
+SELECT tags['owner'] FROM duckdb_functions() WHERE function_name = 'tagged_macro';
+----
+macro-team
+
+statement ok
+CREATE INDEX tagged_index ON tagged_table(i);
+
+statement ok
+TAG ON INDEX tagged_index SET ('purpose' = 'lookup');
+
+statement ok
+TAG ON INDEX tagged_index SET ('owner' = 'index-team');
+
+query II
+SELECT tags['purpose'], tags['owner'] FROM duckdb_indexes() WHERE index_name = 'tagged_index';
+----
+lookup	index-team
+
+statement ok
+TAG ON INDEX tagged_index UNSET ('purpose');
+
+query II
+SELECT tags['purpose'], tags['owner'] FROM duckdb_indexes() WHERE index_name = 'tagged_index';
+----
+NULL	index-team
+
+# Tag statements participate in transactions
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+TAG ON TABLE tagged_table SET ('transactional' = 'rolled-back');
+
+statement ok
+TAG ON COLUMN tagged_table.i SET ('transactional' = 'rolled-back');
+
+statement ok
+ROLLBACK;
+
+query II
+SELECT t.tags['transactional'], c.tags['transactional']
+FROM duckdb_tables() t, duckdb_columns() c
+WHERE t.table_name = 'tagged_table' AND c.table_name = 'tagged_table' AND c.column_name = 'i';
+----
+NULL	NULL
+
+# Quoting round-trips through the alter statement serializer
+statement ok
+TAG ON TABLE tagged_table SET ('key with spaces' = 'value with '' quote');
+
+query I
+SELECT tags['key with spaces'] FROM duckdb_tables() WHERE table_name = 'tagged_table';
+----
+value with ' quote
+
+# Invalid targets and ambiguous duplicate mutations are rejected
+statement error
+TAG ON TABLE missing_table SET ('x' = 'y');
+----
+Catalog Error: Table with name missing_table does not exist!
+
+statement error
+TAG ON COLUMN tagged_table.missing SET ('x' = 'y');
+----
+Table "tagged_table" does not have a column with name "missing"
+
+statement error
+TAG ON TABLE tagged_table SET ('duplicate' = 'one', 'DUPLICATE' = 'two');
+----
+Parser Error: Tag 'DUPLICATE' should be specified at most once
+
+statement error
+TAG ON TABLE tagged_table UNSET ('duplicate', 'DUPLICATE');
+----
+Parser Error: Tag 'DUPLICATE' should be specified at most once
+
+statement error
+TAG ON TABLE tagged_table SET ('x' = 42);
+----
+Parser Error: syntax error
+
+statement error
+TAG ON COLUMN tagged_table.rowid SET ('x' = 'y');
+----
+Binder Error: Table "tagged_table" does not have a column with name "rowid"
+
+statement error
+TAG ON TABLE information_schema.tables SET ('x' = 'y');
+----
+Binder Error: Cannot alter System Catalog entries
+
+# The initial TAG target set intentionally excludes database and schema objects
+statement error
+TAG ON DATABASE memory SET ('x' = 'y');
+----
+Parser Error: syntax error
+
+statement error
+TAG ON SCHEMA main SET ('x' = 'y');
+----
+Parser Error: syntax error
+
+# Temporary properties survive a column metadata-only alter
+statement ok
+CREATE TEMPORARY TABLE temporary_tagged(i INTEGER);
+
+statement ok
+TAG ON COLUMN temporary_tagged.i SET ('temporary' = 'yes');
+
+query TTI
+SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name = 'temporary_tagged';
+----
+temporary_tagged	temp	true

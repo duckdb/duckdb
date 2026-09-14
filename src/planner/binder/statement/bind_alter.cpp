@@ -4,8 +4,10 @@
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
+#include "duckdb/parser/parsed_data/set_tags_info.hpp"
 #include "duckdb/parser/statement/alter_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -14,6 +16,7 @@
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_alter.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -126,6 +129,22 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 			auto &view = entry->Cast<ViewCatalogEntry>();
 			view.BindView(context);
 		}
+	} else if (stmt.info->type == AlterType::SET_TAGS && stmt.info->Cast<SetTagsInfo>().IsColumn()) {
+		// Column tags can alter a table or a view, and we resolve that here.
+		auto &info = stmt.info->Cast<SetTagsInfo>();
+		entry = info.TryResolveCatalogEntry(entry_retriever);
+		if (entry && info.entry_catalog_type == CatalogType::VIEW_ENTRY) {
+			auto &attached = entry->ParentCatalog().GetAttached();
+			if (!entry->temporary && !attached.IsTemporary() && attached.HasStorageManager()) {
+				auto &storage_manager = attached.GetStorageManager();
+				if (!storage_manager.InMemory() && storage_manager.GetStorageVersion() < StorageVersion::V2_0_0) {
+					throw BinderException(
+					    "View column tags are only supported for storage versions v2.0.0 and higher.\n"
+					    "Use an in-memory database, or ATTACH with (STORAGE_VERSION 'v2.0.0')");
+				}
+			}
+			entry->Cast<ViewCatalogEntry>().BindView(context);
+		}
 	} else {
 		// For any other ALTER, we retrieve the catalog entry directly.
 		EntryLookupInfo lookup_info(stmt.info->GetCatalogType(), stmt.info->GetQualifiedName());
@@ -152,6 +171,9 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	BindAlterTypes(*type_binder, stmt);
 
 	if (catalog.IsSystemCatalog()) {
+		if (stmt.info->type == AlterType::SET_TAGS) {
+			throw BinderException("Cannot alter System Catalog entries");
+		}
 		throw BinderException("Can not comment on System Catalog entries");
 	}
 	if (!entry->temporary) {

@@ -12,6 +12,7 @@
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
+#include "duckdb/parser/parsed_data/set_tags_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
@@ -312,6 +313,12 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 	if (info.type == AlterType::SET_COLUMN_COMMENT) {
 		auto &comment_on_column_info = info.Cast<SetColumnCommentInfo>();
 		return SetColumnComment(context, comment_on_column_info);
+	}
+	if (info.type == AlterType::SET_TAGS) {
+		auto &set_tags_info = info.Cast<SetTagsInfo>();
+		if (set_tags_info.IsColumn()) {
+			return SetColumnTags(context, set_tags_info);
+		}
 	}
 
 	if (info.type != AlterType::ALTER_TABLE) {
@@ -1332,6 +1339,24 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetColumnComment(ClientContext &context
 	// Modify the column that was specified by 'column_name'
 	auto &col = table_info.columns.GetColumnMutable(col_idx);
 	col.SetComment(info.comment_value);
+
+	auto binder = Binder::CreateBinder(context);
+	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
+}
+
+unique_ptr<CatalogEntry> DuckTableEntry::SetColumnTags(ClientContext &context, SetTagsInfo &info) {
+	auto col_idx = GetColumnIndex(info.column_name);
+	if (col_idx.index == COLUMN_IDENTIFIER_ROW_ID) {
+		throw CatalogException("Cannot set tags for rowid column");
+	}
+
+	auto create_info = GetInfo();
+	auto &table_info = create_info->Cast<CreateTableInfo>();
+	auto &col = table_info.columns.GetColumnMutable(col_idx);
+	auto tags = col.Tags();
+	info.Apply(tags);
+	col.SetTags(std::move(tags));
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);

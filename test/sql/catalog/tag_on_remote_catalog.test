@@ -1,0 +1,92 @@
+# name: test/sql/catalog/tag_on_remote_catalog.test
+# description: TAG while a remote catalog is attached
+# group: [catalog]
+
+require quack
+
+require httpfs
+
+statement ok
+CALL quack_serve(token='test_token');
+
+statement ok
+ATTACH 'quack:localhost' AS qk (TOKEN 'test_token');
+
+statement ok
+CREATE TABLE tbl(i INTEGER, j INTEGER);
+
+statement ok
+TAG ON TABLE tbl SET ('owner' = 'local');
+
+statement ok
+TAG ON COLUMN tbl.i SET ('unit' = 'count');
+
+query II
+SELECT t.tags['owner'], c.tags['unit']
+FROM duckdb_tables() t, duckdb_columns() c
+WHERE t.table_name = 'tbl' AND c.table_name = 'tbl' AND c.column_name = 'i';
+----
+local	count
+
+statement ok
+TAG ON COLUMN memory.main.tbl.j SET ('qualified' = 'yes');
+
+query I
+SELECT tags['qualified'] FROM duckdb_columns() WHERE table_name = 'tbl' AND column_name = 'j';
+----
+yes
+
+statement error
+TAG ON COLUMN missing_tbl.i SET ('x' = 'y');
+----
+<REGEX>:Catalog Error:.*missing_tbl.*
+
+# Explicit remote targets are serialized and delegated to the storage extension
+statement ok
+CREATE TABLE qk.main.remote_tagged(i INTEGER, j INTEGER);
+
+statement ok
+TAG ON TABLE qk.main.remote_tagged SET ('owner' = 'remote', 'classification' = 'internal');
+
+statement ok
+TAG ON COLUMN qk.main.remote_tagged.i SET ('unit' = 'count', 'pii' = 'false');
+
+statement ok
+CONNECT qk;
+
+query II
+SELECT tags['owner'], tags['classification'] FROM duckdb_tables() WHERE table_name = 'remote_tagged';
+----
+remote	internal
+
+query II
+SELECT tags['unit'], tags['pii'] FROM duckdb_columns()
+WHERE table_name = 'remote_tagged' AND column_name = 'i';
+----
+count	false
+
+statement ok
+DISCONNECT;
+
+statement ok
+TAG ON TABLE qk.main.remote_tagged UNSET ('classification');
+
+statement ok
+TAG ON COLUMN qk.main.remote_tagged.i UNSET ('pii');
+
+statement ok
+CONNECT qk;
+
+query II
+SELECT tags['owner'], tags['classification'] FROM duckdb_tables() WHERE table_name = 'remote_tagged';
+----
+remote	NULL
+
+query II
+SELECT tags['unit'], tags['pii'] FROM duckdb_columns()
+WHERE table_name = 'remote_tagged' AND column_name = 'i';
+----
+count	NULL
+
+statement ok
+DISCONNECT;
