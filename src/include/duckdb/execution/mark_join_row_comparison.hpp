@@ -16,6 +16,7 @@ class DataChunk;
 struct JoinCondition;
 
 struct MarkJoinRowComparison {
+	static void UpdateRangeBound(const Vector &key, ExpressionType comparison, Value &bound, idx_t &null_count);
 	static void Compare(const Vector &left, const Vector &right, ExpressionType comparison_type, Vector &result);
 	static void Compare(const Vector &left, idx_t left_row, const Vector &right, ExpressionType comparison_type,
 	                    Vector &result);

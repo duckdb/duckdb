@@ -89,6 +89,8 @@ struct IEMarkJoinBounds {
 		return true;
 	}
 
+	vector<Value> remaining_bounds;
+	vector<idx_t> remaining_null_counts;
 	Value values[2];
 	Value other_null_values[2];
 	bool has_null[2] = {false, false};
@@ -107,6 +109,22 @@ struct IEMarkJoinBounds {
 	}
 
 	void Sink(DataChunk &keys, const vector<JoinCondition> &conditions) {
+		if (conditions.size() != 2) {
+			remaining_bounds.resize(conditions.size());
+			remaining_null_counts.resize(conditions.size(), 0);
+			for (idx_t col = 0; col < conditions.size(); col++) {
+				const auto comparison = conditions[col].GetComparisonType();
+				if (!keys.data[col].GetType().IsNested() &&
+				    (comparison == ExpressionType::COMPARE_LESSTHAN ||
+				     comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
+				     comparison == ExpressionType::COMPARE_GREATERTHAN ||
+				     comparison == ExpressionType::COMPARE_GREATERTHANOREQUALTO)) {
+					MarkJoinRowComparison::UpdateRangeBound(keys.data[col], comparison, remaining_bounds[col],
+					                                        remaining_null_counts[col]);
+				}
+			}
+			return;
+		}
 		for (idx_t row = 0; row < keys.size(); row++) {
 			Value row_values[] = {keys.GetValue(0, row), keys.GetValue(1, row)};
 			both_null |= row_values[0].IsNull() && row_values[1].IsNull();
@@ -121,6 +139,15 @@ struct IEMarkJoinBounds {
 	}
 
 	void Combine(const IEMarkJoinBounds &other, const vector<JoinCondition> &conditions) {
+		if (conditions.size() != 2) {
+			remaining_bounds.resize(conditions.size());
+			remaining_null_counts.resize(conditions.size(), 0);
+			for (idx_t col = 0; col < other.remaining_bounds.size(); col++) {
+				UpdateValue(remaining_bounds[col], other.remaining_bounds[col], conditions[col].GetComparisonType());
+				remaining_null_counts[col] += other.remaining_null_counts[col];
+			}
+			return;
+		}
 		both_null |= other.both_null;
 		for (idx_t col = 0; col < 2; col++) {
 			has_null[col] |= other.has_null[col];
@@ -145,6 +172,42 @@ struct IEMarkJoinBounds {
 		default:
 			throw InternalException("Expected IE join range comparison");
 		}
+	}
+
+	bool TryOneRemaining(DataChunk &keys, idx_t row, const vector<JoinCondition> &conditions, idx_t count,
+	                     bool &unknown) const {
+		idx_t remaining = DConstants::INVALID_INDEX;
+		bool has_null = false;
+		for (idx_t col = 0; col < conditions.size(); col++) {
+			const auto comparison = conditions[col].GetComparisonType();
+			if (keys.data[col].GetType().IsNested() || comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
+			    comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+				return false;
+			}
+			if (keys.data[col].GetValue(row).IsNull()) {
+				has_null = true;
+			} else if (remaining == DConstants::INVALID_INDEX) {
+				remaining = col;
+			} else {
+				return false;
+			}
+		}
+		if (!has_null) {
+			return false;
+		}
+		if (remaining == DConstants::INVALID_INDEX) {
+			unknown = count > 0;
+			return true;
+		}
+		const auto comparison = conditions[remaining].GetComparisonType();
+		if (comparison != ExpressionType::COMPARE_LESSTHAN && comparison != ExpressionType::COMPARE_LESSTHANOREQUALTO &&
+		    comparison != ExpressionType::COMPARE_GREATERTHAN &&
+		    comparison != ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+			return false;
+		}
+		unknown = count && (remaining_null_counts[remaining] ||
+		                    Matches(keys.data[remaining].GetValue(row), remaining_bounds[remaining], comparison));
+		return true;
 	}
 
 	bool IsUnknown(DataChunk &keys, idx_t row, const vector<JoinCondition> &conditions, idx_t build_count) const {
@@ -251,7 +314,8 @@ unique_ptr<LocalSinkState> PhysicalIEJoin::GetLocalSinkState(ExecutionContext &c
 void IEJoinGlobalState::Sink(ExecutionContext &context, DataChunk &input, IEJoinLocalState &lstate) {
 	// Sink the data into the local sort state
 	lstate.table.Sink(context, input);
-	if (child == 1 && tables[1]->op.join_type == JoinType::MARK && IEMarkJoinBounds::CanUse(tables[1]->op.conditions)) {
+	if (child == 1 && tables[1]->op.join_type == JoinType::MARK &&
+	    (tables[1]->op.conditions.size() > 2 || IEMarkJoinBounds::CanUse(tables[1]->op.conditions))) {
 		lstate.mark_bounds.Sink(lstate.table.keys, tables[1]->op.conditions);
 	}
 }
@@ -277,7 +341,8 @@ SinkCombineResultType PhysicalIEJoin::Combine(ExecutionContext &context, Operato
 	auto &gstate = input.global_state.Cast<IEJoinGlobalState>();
 	auto &lstate = input.local_state.Cast<IEJoinLocalState>();
 	gstate.tables[gstate.child]->Combine(context, lstate.table);
-	if (gstate.child == 1 && join_type == JoinType::MARK && IEMarkJoinBounds::CanUse(conditions)) {
+	if (gstate.child == 1 && join_type == JoinType::MARK &&
+	    (conditions.size() > 2 || IEMarkJoinBounds::CanUse(conditions))) {
 		lock_guard<mutex> guard(gstate.mark_lock);
 		gstate.mark_bounds.Combine(lstate.mark_bounds, conditions);
 	}
@@ -1837,6 +1902,11 @@ void IEJoinLocalSourceState::RefineMarkJoin(ExecutionContext &context, bool foun
 	}
 	for (idx_t probe = 0; probe < mark_keys.size(); probe++) {
 		if (found_match[probe]) {
+			continue;
+		}
+		if (null_probe && op.conditions.size() > 2 &&
+		    gsource.gsink.mark_bounds.TryOneRemaining(mark_keys, probe, op.conditions, right_table.count,
+		                                              found_unknown[probe])) {
 			continue;
 		}
 		TupleDataScanState scan;

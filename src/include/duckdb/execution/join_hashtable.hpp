@@ -449,6 +449,8 @@ public:
 		unique_ptr<ColumnDataCollection> uncorrelated_condition_rows;
 		//! NULL hash-key rows used by mixed-condition MARK probes with non-NULL keys.
 		unique_ptr<ColumnDataCollection> null_condition_rows;
+		vector<Value> range_bounds;
+		vector<idx_t> range_null_counts;
 	} mark_join_info;
 
 private:

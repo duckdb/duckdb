@@ -1,4 +1,5 @@
 #include "duckdb/execution/join_hashtable.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
@@ -155,6 +156,8 @@ void JoinHashTable::InitializeUncorrelatedMarkJoin(bool compare_conditions) {
 	mark_join_info.uncorrelated_condition_rows = make_uniq<ColumnDataCollection>(context, condition_types);
 	if (compare_conditions) {
 		mark_join_info.null_condition_rows = make_uniq<ColumnDataCollection>(context, condition_types);
+		mark_join_info.range_bounds.resize(conditions.size());
+		mark_join_info.range_null_counts.resize(conditions.size(), 0);
 	}
 }
 
@@ -194,6 +197,18 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 			info.uncorrelated_condition_rows->Combine(*other.mark_join_info.uncorrelated_condition_rows);
 			if (info.null_condition_rows) {
 				info.null_condition_rows->Combine(*other.mark_join_info.null_condition_rows);
+				for (idx_t col = 0; col < conditions.size(); col++) {
+					const auto &value = other.mark_join_info.range_bounds[col];
+					auto &bound = info.range_bounds[col];
+					const auto comparison = conditions[col].GetComparisonType();
+					const bool maximum = comparison == ExpressionType::COMPARE_LESSTHAN ||
+					                     comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO;
+					if (!value.IsNull() && (bound.IsNull() || (maximum ? ValueOperations::GreaterThan(value, bound)
+					                                                   : ValueOperations::LessThan(value, bound)))) {
+						bound = value;
+					}
+					info.range_null_counts[col] += other.mark_join_info.range_null_counts[col];
+				}
 			}
 		}
 	}
@@ -684,6 +699,17 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	if (mark_join_info.uncorrelated_condition_rows) {
 		// Keep all rows: probe-side NULLs can be UNKNOWN against non-NULL rows in other external hash partitions.
 		if (HasMarkJoinConjunction()) {
+			for (idx_t col = 0; col < conditions.size(); col++) {
+				const auto comparison = conditions[col].GetComparisonType();
+				if (!condition_types[col].IsNested() && (comparison == ExpressionType::COMPARE_LESSTHAN ||
+				                                         comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
+				                                         comparison == ExpressionType::COMPARE_GREATERTHAN ||
+				                                         comparison == ExpressionType::COMPARE_GREATERTHANOREQUALTO)) {
+					MarkJoinRowComparison::UpdateRangeBound(keys.data[col], comparison,
+					                                        mark_join_info.range_bounds[col],
+					                                        mark_join_info.range_null_counts[col]);
+				}
+			}
 			bool null_rows[STANDARD_VECTOR_SIZE] = {false};
 			MarkJoinKeysHaveNull(keys, null_rows, &equality_predicates);
 			SelectionVector null_sel(STANDARD_VECTOR_SIZE);
@@ -2151,6 +2177,62 @@ void JoinHashTable::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 			if (bool_result[probe] || !mask.RowIsValid(probe)) {
 				continue;
 			}
+			if (null_probe[probe]) {
+				idx_t remaining = DConstants::INVALID_INDEX;
+				bool can_reduce = true;
+				for (idx_t col = 0; col < conditions.size(); col++) {
+					if (condition_types[col].IsNested() ||
+					    conditions[col].GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM ||
+					    conditions[col].GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+						can_reduce = false;
+						break;
+					}
+					if (!join_keys.data[col].GetValue(probe).IsNull()) {
+						if (remaining != DConstants::INVALID_INDEX) {
+							can_reduce = false;
+							break;
+						}
+						remaining = col;
+					}
+				}
+				if (can_reduce && remaining == DConstants::INVALID_INDEX) {
+					mask.SetInvalid(probe);
+					continue;
+				}
+				if (can_reduce && remaining >= equality_types.size()) {
+					const auto comparison = conditions[remaining].GetComparisonType();
+					const bool maximum = comparison == ExpressionType::COMPARE_LESSTHAN ||
+					                     comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO;
+					if (maximum || comparison == ExpressionType::COMPARE_GREATERTHAN ||
+					    comparison == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+						const auto &bound = mark_join_info.range_bounds[remaining];
+						bool unknown = mark_join_info.range_null_counts[remaining] > 0;
+						if (!unknown && !bound.IsNull()) {
+							const auto value = join_keys.data[remaining].GetValue(probe);
+							switch (comparison) {
+							case ExpressionType::COMPARE_LESSTHAN:
+								unknown = ValueOperations::LessThan(value, bound);
+								break;
+							case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+								unknown = ValueOperations::LessThanEquals(value, bound);
+								break;
+							case ExpressionType::COMPARE_GREATERTHAN:
+								unknown = ValueOperations::GreaterThan(value, bound);
+								break;
+							case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+								unknown = ValueOperations::GreaterThanEquals(value, bound);
+								break;
+							default:
+								break;
+							}
+						}
+						if (unknown) {
+							mask.SetInvalid(probe);
+						}
+						continue;
+					}
+				}
+			}
 			auto &rows =
 			    null_probe[probe] ? *mark_join_info.uncorrelated_condition_rows : *mark_join_info.null_condition_rows;
 			if (!rows.Count()) {
@@ -2692,6 +2774,8 @@ static void ResetMarkJoinInfo(JoinHashTable &ht) {
 		info.uncorrelated_condition_rows = make_uniq<ColumnDataCollection>(ht.context, ht.condition_types);
 		if (info.null_condition_rows) {
 			info.null_condition_rows = make_uniq<ColumnDataCollection>(ht.context, ht.condition_types);
+			info.range_bounds.assign(ht.condition_types.size(), Value());
+			info.range_null_counts.assign(ht.condition_types.size(), 0);
 		}
 	}
 }
