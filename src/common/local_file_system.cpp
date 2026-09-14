@@ -62,12 +62,9 @@ namespace duckdb {
 bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
 	if (!filename.empty()) {
 		auto normalized_file = ExpandPath(filename, opener);
-		if (access(normalized_file.c_str(), 0) == 0) {
-			struct stat status;
-			stat(normalized_file.c_str(), &status);
-			if (S_ISREG(status.st_mode)) {
-				return true;
-			}
+		struct stat status;
+		if (stat(normalized_file.c_str(), &status) == 0 && S_ISREG(status.st_mode)) {
+			return true;
 		}
 	}
 	// if any condition fails
@@ -77,12 +74,9 @@ bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener
 bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
 	if (!filename.empty()) {
 		auto normalized_file = ExpandPath(filename, opener);
-		if (access(normalized_file.c_str(), 0) == 0) {
-			struct stat status;
-			stat(normalized_file.c_str(), &status);
-			if (S_ISFIFO(status.st_mode) || S_ISCHR(status.st_mode)) {
-				return true;
-			}
+		struct stat status;
+		if (stat(normalized_file.c_str(), &status) == 0 && (S_ISFIFO(status.st_mode) || S_ISCHR(status.st_mode))) {
+			return true;
 		}
 	}
 	// if any condition fails
@@ -159,24 +153,18 @@ static std::wstring NormalizePathAndConvertToUnicode(FileSystem &fs, const strin
 bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, filename, opener);
 	const wchar_t *wpath = unicode_path.c_str();
-	if (_waccess(wpath, 0) == 0) {
-		struct _stati64 status; // typos:ignore
-		_wstati64(wpath, &status);
-		if (status.st_mode & S_IFREG) {
-			return true;
-		}
+	struct _stati64 status; // typos:ignore
+	if (_wstati64(wpath, &status) == 0 && (status.st_mode & S_IFREG)) {
+		return true;
 	}
 	return false;
 }
 bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, filename, opener);
 	const wchar_t *wpath = unicode_path.c_str();
-	if (_waccess(wpath, 0) == 0) {
-		struct _stati64 status; // typos:ignore
-		_wstati64(wpath, &status);
-		if (status.st_mode & _S_IFCHR) {
-			return true;
-		}
+	struct _stati64 status; // typos:ignore
+	if (_wstati64(wpath, &status) == 0 && (status.st_mode & _S_IFCHR)) {
+		return true;
 	}
 	return false;
 }
@@ -640,12 +628,9 @@ bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 
 	if (!directory.empty()) {
 		auto normalized_dir = ExpandPath(directory, opener);
-		if (access(normalized_dir.c_str(), 0) == 0) {
-			struct stat status;
-			stat(normalized_dir.c_str(), &status);
-			if (S_ISDIR(status.st_mode)) {
-				return true;
-			}
+		struct stat status;
+		if (stat(normalized_dir.c_str(), &status) == 0 && S_ISDIR(status.st_mode)) {
+			return true;
 		}
 	}
 	// if any condition fails
