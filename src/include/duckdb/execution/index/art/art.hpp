@@ -187,8 +187,7 @@ private:
 
 	ARTLookupResult ScanInternal(IndexScanState &state, RowIdVectorOutput &row_ids) const;
 	ARTLookupResult ScanRange(ARTIndexScanState &scan_state, RowIdVectorOutput &row_ids) const;
-	ARTLookupResult ScanBatch(DataChunk &values, RowIdVectorOutput &row_ids) const;
-	ARTLookupResult ScanChunk(DataChunk &input, RowIdVectorOutput &row_ids) const;
+	ARTLookupResult ScanBatch(DataChunk &input, RowIdVectorOutput &row_ids) const;
 	ARTLookupResult SearchEqual(const ARTKey &key, RowIdVectorOutput &row_ids) const;
 	ARTLookupResult SearchGreater(const ARTKey &key, bool equal, RowIdVectorOutput &row_ids) const;
 	ARTLookupResult SearchLess(const ARTKey &upper_bound, bool equal, RowIdVectorOutput &row_ids) const;

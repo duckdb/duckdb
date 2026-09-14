@@ -817,9 +817,8 @@ ARTLookupResult ART::SearchCloseRange(const ARTKey &lower_bound, const ARTKey &u
 	                                                                              : ARTLookupResult::CAPACITY_EXCEEDED;
 }
 
-ARTLookupResult ART::ScanChunk(DataChunk &input, RowIdVectorOutput &row_ids) const {
+ARTLookupResult ART::ScanBatch(DataChunk &input, RowIdVectorOutput &row_ids) const {
 	D_ASSERT(input.GetTypes() == logical_types);
-	D_ASSERT(input.size() <= STANDARD_VECTOR_SIZE);
 	if (input.size() == 0) {
 		return ARTLookupResult::COMPLETED;
 	}
@@ -836,21 +835,6 @@ ARTLookupResult ART::ScanChunk(DataChunk &input, RowIdVectorOutput &row_ids) con
 	for (const auto &key : keys) {
 		D_ASSERT(!key.Empty());
 		if (SearchEqual(key, row_ids) == ARTLookupResult::CAPACITY_EXCEEDED) {
-			return ARTLookupResult::CAPACITY_EXCEEDED;
-		}
-	}
-	return ARTLookupResult::COMPLETED;
-}
-
-ARTLookupResult ART::ScanBatch(DataChunk &values, RowIdVectorOutput &row_ids) const {
-	if (values.size() <= STANDARD_VECTOR_SIZE) {
-		return ScanChunk(values, row_ids);
-	}
-	DataChunk chunk;
-	chunk.InitializeEmpty(values.GetTypes());
-	for (idx_t offset = 0; offset < values.size(); offset += STANDARD_VECTOR_SIZE) {
-		chunk.Slice(values, offset, MinValue<idx_t>(offset + STANDARD_VECTOR_SIZE, values.size()));
-		if (ScanChunk(chunk, row_ids) == ARTLookupResult::CAPACITY_EXCEEDED) {
 			return ARTLookupResult::CAPACITY_EXCEEDED;
 		}
 	}
