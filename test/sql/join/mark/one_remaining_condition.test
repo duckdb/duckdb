@@ -47,17 +47,19 @@ SET merge_join_threshold=0;
 
 foreach comparison < <= > >=
 
+statement ok
+CREATE OR REPLACE TABLE one_probe AS SELECT i id,NULL::INTEGER a,NULL::INTEGER c,i e FROM range(8)t(i);
+
+statement ok
+CREATE OR REPLACE TABLE one_build AS SELECT i b,i d,CASE WHEN i=1 THEN NULL ELSE i END f FROM range(1,7)t(i);
+
 query I
-WITH l AS (
-    SELECT i id,NULL::INTEGER a,NULL::INTEGER c,i e FROM range(8)t(i)
-), r AS (
-    SELECT i b,i d,CASE WHEN i=1 THEN NULL ELSE i END f FROM range(1,7)t(i)
-), native AS (
-    SELECT id,__mark_join_marker m FROM l JOIN BY(TYPE MARK) r ON a<b AND c>d AND e {comparison} f
+WITH native AS (
+    SELECT id,__mark_join_marker m FROM one_probe JOIN BY(TYPE MARK) one_build ON a<b AND c>d AND e {comparison} f
 ), oracle AS (
     SELECT id,max(CASE WHEN a<b AND c>d AND e {comparison} f THEN 2
                       WHEN (a<b AND c>d AND e {comparison} f) IS NULL THEN 1 ELSE 0 END)m
-    FROM l CROSS JOIN r GROUP BY id
+    FROM one_probe CROSS JOIN one_build GROUP BY id
 )
 SELECT count(*) FROM native JOIN oracle USING(id)
 WHERE CASE WHEN native.m THEN 2 WHEN native.m IS NULL THEN 1 ELSE 0 END<>oracle.m;

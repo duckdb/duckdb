@@ -1,6 +1,8 @@
 #include "duckdb/execution/operator/join/physical_iejoin.hpp"
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/map.hpp"
+#include <array>
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/bit_utils.hpp"
@@ -89,6 +91,9 @@ struct IEMarkJoinBounds {
 		return true;
 	}
 
+	unique_ptr<ColumnDataCollection> prefix;
+	vector<Value> prefix_ends;
+	vector<std::array<idx_t, 3>> prefix_chunks;
 	vector<Value> remaining_bounds;
 	vector<idx_t> remaining_null_counts;
 	Value values[2];
@@ -171,6 +176,99 @@ struct IEMarkJoinBounds {
 			return ValueOperations::GreaterThanEquals(value, bound);
 		default:
 			throw InternalException("Expected IE join range comparison");
+		}
+	}
+
+	void BuildPrefix(ExecutionContext &context, const PhysicalRangeJoin &op,
+	                 PhysicalRangeJoin::GlobalSortedTable &source_table, idx_t first, idx_t second) {
+		const auto &first_type = op.conditions[first].GetRHS().GetReturnType();
+		const auto &second_type = op.conditions[second].GetRHS().GetReturnType();
+		const auto first_comparison = op.conditions[first].GetComparisonType();
+		const auto second_comparison = op.conditions[second].GetComparisonType();
+		const bool descending = first_comparison == ExpressionType::COMPARE_LESSTHAN ||
+		                        first_comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO;
+		vector<BoundOrderByNode> orders;
+		orders.emplace_back(descending ? OrderType::DESCENDING : OrderType::ASCENDING, OrderByNullType::NULLS_LAST,
+		                    make_uniq<BoundReferenceExpression>(first_type, 0));
+		vector<LogicalType> types {first_type, second_type};
+		PhysicalRangeJoin::GlobalSortedTable sorted(context.client, orders, types, op);
+		auto local = sorted.sort->GetLocalSinkState(context);
+		InterruptState interrupt;
+		OperatorSinkInput sink {*sorted.global_sink, *local, interrupt};
+		auto &source = *source_table.sorted->payload_data;
+		const auto key_offset = op.children[1].get().GetTypes().size();
+		TupleDataScanState scan;
+		source.InitializeScan(scan, {key_offset + first, key_offset + second});
+		DataChunk keys;
+		source.InitializeScanChunk(scan, keys);
+		DataChunk input;
+		input.InitializeEmpty({first_type, first_type, second_type});
+		SelectionVector valid(STANDARD_VECTOR_SIZE);
+		while (source.Scan(scan, keys)) {
+			context.client.InterruptCheck();
+			idx_t count = 0;
+			for (idx_t row = 0; row < keys.size(); row++) {
+				auto a = keys.GetValue(0, row);
+				auto b = keys.GetValue(1, row);
+				if (a.IsNull() && b.IsNull()) {
+					both_null = true;
+				} else if (a.IsNull()) {
+					UpdateValue(other_null_values[1], b, second_comparison);
+				} else if (b.IsNull()) {
+					UpdateValue(other_null_values[0], a, first_comparison);
+				} else {
+					valid.set_index(count++, row);
+				}
+			}
+			if (!count) {
+				continue;
+			}
+			input.Reset();
+			input.data[0].Reference(keys.data[0]);
+			input.data[1].Reference(keys.data[0]);
+			input.data[2].Reference(keys.data[1]);
+			input.SetChildCardinality(keys.size());
+			input.Slice(valid, count);
+			sorted.sort->Sink(context, input, sink);
+			sorted.count += count;
+		}
+		OperatorSinkCombineInput combine {*sorted.global_sink, *local, interrupt};
+		sorted.sort->Combine(context, combine);
+		sorted.Finalize(context.client, interrupt);
+		sorted.Materialize(context, interrupt);
+
+		prefix = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context.client), types);
+		ColumnDataAppendState append;
+		prefix->InitializeAppend(append);
+		auto &ordered = *sorted.sorted->payload_data;
+		TupleDataScanState ordered_scan;
+		ordered.InitializeScan(ordered_scan);
+		DataChunk pair;
+		ordered.InitializeScanChunk(ordered_scan, pair);
+		DataChunk output;
+		output.Initialize(Allocator::Get(context.client), types);
+		Value bound;
+		while (ordered.Scan(ordered_scan, pair)) {
+			context.client.InterruptCheck();
+			output.Reset();
+			for (idx_t row = 0; row < pair.size(); row++) {
+				UpdateValue(bound, pair.GetValue(1, row), second_comparison);
+				output.data[0].Append(pair.GetValue(0, row));
+				output.data[1].Append(bound);
+			}
+			output.SetChildCardinality(pair.size());
+			prefix->Append(append, output);
+		}
+
+		ColumnDataParallelScanState directory;
+		ColumnDataLocalScanState directory_local;
+		prefix->InitializeScan(directory);
+		prefix->InitializeScanChunk(output);
+		idx_t chunk, segment, row;
+		while (prefix->NextScanIndex(directory.scan_state, chunk, segment, row)) {
+			prefix->ScanAtIndex(directory, directory_local, output, chunk, segment, row);
+			prefix_chunks.push_back({chunk, segment, row});
+			prefix_ends.push_back(output.GetValue(0, output.size() - 1));
 		}
 	}
 
@@ -275,6 +373,7 @@ public:
 	vector<unique_ptr<GlobalSortedTable>> tables;
 	mutex mark_lock;
 	IEMarkJoinBounds mark_bounds;
+	map<std::pair<idx_t, idx_t>, IEMarkJoinBounds> mark_prefixes;
 	//! The child that is being materialised (right/1 then left/0)
 	size_t child;
 	//! Should we not bother pushing down filters?
@@ -1895,48 +1994,165 @@ void IEJoinLocalSourceState::RefineMarkJoin(ExecutionContext &context, bool foun
 		return;
 	}
 
-	auto &source = *right_table.sorted->payload_data;
-	vector<column_t> key_columns;
-	for (idx_t col = 0; col < op.conditions.size(); col++) {
-		key_columns.push_back(op.children[1].get().GetTypes().size() + col);
-	}
+	bool resolved[STANDARD_VECTOR_SIZE] = {false};
+	bool true_impossible[STANDARD_VECTOR_SIZE] = {false};
+	map<std::pair<idx_t, idx_t>, vector<idx_t>> prefix_probes;
+	idx_t remaining = 0;
 	for (idx_t probe = 0; probe < mark_keys.size(); probe++) {
-		if (found_match[probe]) {
+		resolved[probe] = found_match[probe];
+		if (resolved[probe]) {
 			continue;
 		}
 		if (null_probe && op.conditions.size() > 2 &&
 		    gsource.gsink.mark_bounds.TryOneRemaining(mark_keys, probe, op.conditions, right_table.count,
 		                                              found_unknown[probe])) {
+			resolved[probe] = true;
 			continue;
 		}
-		TupleDataScanState scan;
-		source.InitializeScan(scan, key_columns);
+		idx_t columns[2];
+		idx_t count = 0;
+		bool can_reduce = null_probe;
+		for (idx_t col = 0; col < op.conditions.size(); col++) {
+			const auto comparison = op.conditions[col].GetComparisonType();
+			if (mark_keys.data[col].GetType().IsNested() || comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
+			    comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+				can_reduce = false;
+				continue;
+			}
+			if (mark_keys.data[col].GetValue(probe).IsNull()) {
+				true_impossible[probe] = true;
+			} else if (count < 2 && (comparison == ExpressionType::COMPARE_LESSTHAN ||
+			                         comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
+			                         comparison == ExpressionType::COMPARE_GREATERTHAN ||
+			                         comparison == ExpressionType::COMPARE_GREATERTHANOREQUALTO)) {
+				columns[count++] = col;
+			} else {
+				can_reduce = false;
+			}
+		}
+		if (can_reduce && true_impossible[probe] && count == 2) {
+			prefix_probes[{columns[0], columns[1]}].push_back(probe);
+			resolved[probe] = true;
+		} else {
+			remaining++;
+		}
+	}
+
+	for (auto &group : prefix_probes) {
+		const auto first = group.first.first;
+		const auto second = group.first.second;
+		auto &bounds = [&]() -> IEMarkJoinBounds & {
+			lock_guard<mutex> guard(gsource.gsink.mark_lock);
+			auto &entry = gsource.gsink.mark_prefixes[group.first];
+			if (!entry.prefix) {
+				IEMarkJoinBounds built;
+				built.BuildPrefix(context, op, right_table, first, second);
+				entry = std::move(built);
+			}
+			return entry;
+		}();
+		const auto first_comparison = op.conditions[first].GetComparisonType();
+		const auto second_comparison = op.conditions[second].GetComparisonType();
+		ColumnDataParallelScanState scan;
+		ColumnDataLocalScanState local;
+		bounds.prefix->InitializeScan(scan);
 		DataChunk keys;
-		source.InitializeScanChunk(scan, keys);
-		auto offset = source.Seek(scan, start / STANDARD_VECTOR_SIZE);
-		Vector comparison(LogicalType::BOOLEAN);
-		while (true) {
-			keys.Reset();
-			if (!source.Scan(scan, keys)) {
-				break;
-			}
+		bounds.prefix->InitializeScanChunk(keys);
+		idx_t cached_chunk = DConstants::INVALID_INDEX;
+		for (const auto probe : group.second) {
 			context.client.InterruptCheck();
-			const auto count = keys.size();
-			if (offset < start) {
-				keys.Slice(start - offset, count - (start - offset));
+			const auto a = mark_keys.data[first].GetValue(probe);
+			const auto b = mark_keys.data[second].GetValue(probe);
+			if (bounds.both_null || IEMarkJoinBounds::Matches(a, bounds.other_null_values[0], first_comparison) ||
+			    IEMarkJoinBounds::Matches(b, bounds.other_null_values[1], second_comparison)) {
+				found_unknown[probe] = true;
+				continue;
 			}
-			offset += count;
+			if (bounds.prefix_ends.empty()) {
+				continue;
+			}
+			idx_t lo = 0;
+			idx_t hi = bounds.prefix_ends.size();
+			while (lo < hi) {
+				const auto mid = lo + (hi - lo) / 2;
+				if (IEMarkJoinBounds::Matches(a, bounds.prefix_ends[mid], first_comparison)) {
+					lo = mid + 1;
+				} else {
+					hi = mid;
+				}
+			}
+			auto chunk = MinValue<idx_t>(lo, bounds.prefix_ends.size() - 1);
+			auto fetch = [&](idx_t index) {
+				if (index != cached_chunk) {
+					keys.Reset();
+					const auto &location = bounds.prefix_chunks[index];
+					bounds.prefix->ScanAtIndex(scan, local, keys, location[0], location[1], location[2]);
+					cached_chunk = index;
+				}
+			};
+			fetch(chunk);
+			lo = 0;
+			hi = keys.size();
+			while (lo < hi) {
+				const auto mid = lo + (hi - lo) / 2;
+				if (IEMarkJoinBounds::Matches(a, keys.GetValue(0, mid), first_comparison)) {
+					lo = mid + 1;
+				} else {
+					hi = mid;
+				}
+			}
+			if (!lo && chunk) {
+				fetch(chunk - 1);
+				lo = keys.size();
+			}
+			if (lo) {
+				found_unknown[probe] = IEMarkJoinBounds::Matches(b, keys.GetValue(1, lo - 1), second_comparison);
+			}
+		}
+	}
+
+	if (!remaining) {
+		return;
+	}
+	auto &source = *right_table.sorted->payload_data;
+	vector<column_t> key_columns;
+	for (idx_t col = 0; col < op.conditions.size(); col++) {
+		key_columns.push_back(op.children[1].get().GetTypes().size() + col);
+	}
+	TupleDataScanState scan;
+	source.InitializeScan(scan, key_columns);
+	DataChunk keys;
+	source.InitializeScanChunk(scan, keys);
+	auto offset = source.Seek(scan, start / STANDARD_VECTOR_SIZE);
+	Vector comparison(LogicalType::BOOLEAN);
+	while (remaining) {
+		keys.Reset();
+		if (!source.Scan(scan, keys)) {
+			break;
+		}
+		context.client.InterruptCheck();
+		const auto count = keys.size();
+		if (offset < start) {
+			keys.Slice(start - offset, count - (start - offset));
+		}
+		offset += count;
+		for (idx_t probe = 0; probe < mark_keys.size(); probe++) {
+			if (resolved[probe]) {
+				continue;
+			}
 			MarkJoinRowComparison::CompareConjunction(mark_keys, probe, keys, op.conditions, comparison);
 			for (auto entry : comparison.Values<bool>()) {
 				if (!entry.IsValid()) {
 					found_unknown[probe] = true;
+					resolved[probe] = true_impossible[probe];
 				} else if (entry.GetValue()) {
 					found_match[probe] = true;
+					resolved[probe] = true;
+				}
+				if (resolved[probe]) {
+					remaining--;
 					break;
 				}
-			}
-			if (found_match[probe]) {
-				break;
 			}
 		}
 	}
