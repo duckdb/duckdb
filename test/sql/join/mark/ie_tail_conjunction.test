@@ -95,22 +95,32 @@ SELECT last_value FROM duckdb_sequences() WHERE sequence_name='ie_tail_sequence'
 ----
 1
 
-foreach comparison = <>
-
-# A tuple with a NULL child needs row-comparison semantics on either side.
+# Tuple comparisons treat nested NULLs as values on either side.
 query I
 SELECT __mark_join_marker FROM (VALUES (1,1,(1,NULL))) l(a,c,e)
-JOIN BY(TYPE MARK) (VALUES (2,2,(1,2))) r(b,d,f) ON a<b AND c<d AND e {comparison} f;
+JOIN BY(TYPE MARK) (VALUES (2,2,(1,2))) r(b,d,f) ON a<b AND c<d AND e = f;
 ----
-NULL
+false
 
 query I
 SELECT __mark_join_marker FROM (VALUES (1,1,(1,2))) l(a,c,e)
-JOIN BY(TYPE MARK) (VALUES (2,2,(1,NULL))) r(b,d,f) ON a<b AND c<d AND e {comparison} f;
+JOIN BY(TYPE MARK) (VALUES (2,2,(1,NULL))) r(b,d,f) ON a<b AND c<d AND e = f;
 ----
-NULL
+false
 
-endloop
+# Tuple comparisons treat nested NULLs as values on either side.
+query I
+SELECT __mark_join_marker FROM (VALUES (1,1,(1,NULL))) l(a,c,e)
+JOIN BY(TYPE MARK) (VALUES (2,2,(1,2))) r(b,d,f) ON a<b AND c<d AND e <> f;
+----
+true
+
+query I
+SELECT __mark_join_marker FROM (VALUES (1,1,(1,2))) l(a,c,e)
+JOIN BY(TYPE MARK) (VALUES (2,2,(1,NULL))) r(b,d,f) ON a<b AND c<d AND e <> f;
+----
+true
+
 
 # A differing tuple field makes equality FALSE and inequality TRUE despite another NULL.
 query I

@@ -89,16 +89,16 @@ SELECT __mark_join_marker FROM (VALUES (NULL::INTEGER,7,0)) p(k,g,v) JOIN BY (TY
 ----
 false
 
-# Tuple equality can be UNKNOWN even when the outer tuple is not SQL NULL.
+# Nested NULLs are values in tuple equality.
 query I
 SELECT __mark_join_marker FROM (VALUES ((1,NULL),5)) p(k,v) JOIN BY (TYPE MARK) (VALUES ((1,2),6)) b(k,v) ON p.k=b.k AND p.v<b.v;
 ----
-NULL
+false
 
 query I
 SELECT __mark_join_marker FROM (VALUES ((1,2),5)) p(k,v) JOIN BY (TYPE MARK) (VALUES ((1,NULL),6)) b(k,v) ON p.k=b.k AND p.v<b.v;
 ----
-NULL
+false
 
 query I
 SELECT __mark_join_marker FROM (VALUES ((1,NULL),5)) p(k,v) JOIN BY (TYPE MARK) (VALUES ((2,2),6)) b(k,v) ON p.k=b.k AND p.v<b.v;

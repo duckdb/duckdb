@@ -619,23 +619,6 @@ static bool MarkJoinKeysHaveNull(DataChunk &keys, optional_ptr<bool> rows_with_n
 		if (predicates && (col_idx >= predicates->size() || (*predicates)[col_idx] != ExpressionType::COMPARE_EQUAL)) {
 			continue;
 		}
-		if (predicates && keys.data[col_idx].GetType().id() == LogicalTypeId::TUPLE) {
-			Vector self(keys.data[col_idx].GetType());
-			for (idx_t row = 0; row < keys.size(); row++) {
-				ConstantVector::Reference(self, count_t(1), keys.data[col_idx], row, keys.size());
-				bool is_false[1] = {false};
-				bool is_unknown[1] = {false};
-				MarkJoinRowComparison::CompareEquality(keys.data[col_idx], row, keys.size(), self, 1, is_false,
-				                                       is_unknown);
-				if (is_unknown[0]) {
-					has_null = true;
-					if (rows_with_null) {
-						rows_with_null.get()[row] = true;
-					}
-				}
-			}
-			continue;
-		}
 		UnifiedVectorFormat format;
 		if (keys.data[col_idx].GetType().IsNested()) {
 			Vector comparison(LogicalType::BOOLEAN, keys.size());
