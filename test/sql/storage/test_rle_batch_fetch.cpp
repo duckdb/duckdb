@@ -42,15 +42,13 @@ TEST_CASE("RLE batch fetch preserves arbitrary offsets and output boundaries", "
 		// Keep sentinel values around each output range to detect incorrect result offsets and overruns.
 		vector<row_t> ids {0, 5, 5, 2, 9, row_t(segment.count - 1), 12, 8, 4, 0, 0};
 		Vector actual(LogicalType::BIGINT, ids.size() + 2);
-		Vector expected(LogicalType::BIGINT, ids.size() + 2);
 		auto output = FlatVector::GetDataMutable<int64_t>(actual);
 		for (idx_t i = 0; i < ids.size() + 2; i++) {
 			output[i] = -1;
 		}
 		segment.FetchRows(state, unsafe_array_ptr<row_t>(ids.data(), ids.size()), ids.size(), actual, 1);
 		for (idx_t i = 0; i < ids.size(); i++) {
-			segment.FetchRow(state, ids[i], expected, i + 1);
-			REQUIRE(actual.GetValue(i + 1) == expected.GetValue(i + 1));
+			REQUIRE(actual.GetValue(i + 1) == Value::BIGINT(ids[i] / 4));
 		}
 		REQUIRE(output[0] == -1);
 		REQUIRE(output[ids.size() + 1] == -1);
@@ -60,6 +58,25 @@ TEST_CASE("RLE batch fetch preserves arbitrary offsets and output boundaries", "
 		REQUIRE_THROWS(segment.FetchRows(state, unsafe_array_ptr<row_t>(invalid), 1, actual, 1));
 		invalid = row_t(segment.count);
 		REQUIRE_THROWS(segment.FetchRows(state, unsafe_array_ptr<row_t>(invalid), 1, actual, 1));
+
+		// Single-row fetches share the decoder but must preserve independent output boundaries.
+		vector<row_t> single_ids {0, 3, 4, row_t(segment.count - 1)};
+		Vector single_result(LogicalType::BIGINT, 3);
+		for (const auto row_id : single_ids) {
+			for (idx_t i = 0; i < 3; i++) {
+				single_result.SetValue(i, Value::BIGINT(-1));
+			}
+			segment.FetchRow(state, row_id, single_result, 1);
+			REQUIRE(single_result.GetValue(0) == Value::BIGINT(-1));
+			REQUIRE(single_result.GetValue(1) == Value::BIGINT(row_id / 4));
+			REQUIRE(single_result.GetValue(2) == Value::BIGINT(-1));
+		}
+		single_result.SetValue(1, Value::BIGINT(-1));
+		REQUIRE_THROWS(segment.FetchRow(state, -1, single_result, 1));
+		REQUIRE_THROWS(segment.FetchRow(state, row_t(segment.count), single_result, 1));
+		for (idx_t i = 0; i < 3; i++) {
+			REQUIRE(single_result.GetValue(i) == Value::BIGINT(-1));
+		}
 
 		// Repeated fetches at a run boundary must not consume the current row.
 		vector<row_t> boundary_ids {3, 3, 4};

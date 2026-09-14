@@ -209,12 +209,12 @@ void ColumnSegment::FetchRows(ColumnFetchState &state, const unsafe_array_ptr<ro
 	}
 	auto &compression = function.get();
 	if (compression.fetch_rows) {
-		FetchRowMapping mapping;
 		if (strictly_increasing) {
-			compression.fetch_rows(*this, state, row_ids.SubArray(0, fetch_count), mapping, result, result_offset);
+			compression.fetch_rows(*this, state, row_ids.SubArray(0, fetch_count), nullptr, result, result_offset);
 			return;
 		}
 
+		FetchRowMapping mapping;
 		mapping.result_indexes.resize(fetch_count);
 		for (idx_t i = 0; i < fetch_count; i++) {
 			mapping.result_indexes[i] = i;

@@ -176,16 +176,11 @@ typedef void (*compression_fetch_row_t)(ColumnSegment &segment, ColumnFetchState
 
 //! Maps each unique fetched row to positions relative to the fetch result offset.
 struct FetchRowMapping {
-	//! Empty offsets represent the identity mapping.
+	//! Boundaries of each fetched row's range in result_indexes.
 	vector<idx_t> offsets;
 	vector<idx_t> result_indexes;
 
-	bool IsIdentity() const {
-		return offsets.empty();
-	}
-
 	unsafe_array_ptr<const idx_t> GetResultIndexes(idx_t row_index) const {
-		D_ASSERT(!IsIdentity());
 		D_ASSERT(row_index + 1 < offsets.size());
 		const auto begin = offsets[row_index];
 		const auto end = offsets[row_index + 1];
@@ -194,10 +189,11 @@ struct FetchRowMapping {
 	}
 };
 
-//! Read strictly increasing segment-relative row offsets and scatter values through the result mapping.
+//! Read strictly increasing segment-relative row offsets; a null mapping writes consecutive result positions.
 typedef void (*compression_fetch_rows_t)(ColumnSegment &segment, ColumnFetchState &state,
-                                         const unsafe_array_ptr<row_t> &row_ids, const FetchRowMapping &mapping,
-                                         Vector &result, idx_t result_offset);
+                                         const unsafe_array_ptr<row_t> &row_ids,
+                                         optional_ptr<const FetchRowMapping> mapping, Vector &result,
+                                         idx_t result_offset);
 //! Function prototype used for skipping 'skip_count' values, non-trivial if random-access is not supported for the
 //! compressed data.
 typedef void (*compression_skip_t)(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count);

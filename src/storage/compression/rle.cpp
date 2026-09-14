@@ -648,22 +648,8 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 // Fetch
 //===--------------------------------------------------------------------===//
 template <class T>
-void RLEFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	D_ASSERT(row_id >= 0);
-	auto row_index = NumericCast<idx_t>(row_id);
-	D_ASSERT(row_index < segment.count);
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-	auto handle = buffer_manager.Pin(state.context, segment.GetBlockHandle());
-	RLEScanState<T> scan_state(std::move(handle), segment);
-	scan_state.Skip(segment, row_index);
-
-	auto result_data = FlatVector::GetDataMutable<T>(result);
-	result_data[result_idx] = scan_state.ValidateAndGetCurrentRun().value;
-}
-
-template <class T>
 void RLEFetchRows(ColumnSegment &segment, ColumnFetchState &state, const unsafe_array_ptr<row_t> &row_ids,
-                  const FetchRowMapping &mapping, Vector &result, idx_t result_offset) {
+                  optional_ptr<const FetchRowMapping> mapping, Vector &result, idx_t result_offset) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	auto writer = FlatVector::ScatterWriter<T>(result);
 	auto handle = buffer_manager.Pin(state.context, segment.GetBlockHandle());
@@ -676,18 +662,25 @@ void RLEFetchRows(ColumnSegment &segment, ColumnFetchState &state, const unsafe_
 		position = target;
 		return scan_state.ValidateAndGetCurrentRun().value;
 	};
-	if (mapping.IsIdentity()) {
+	if (!mapping) {
 		for (idx_t idx = 0; idx < row_ids.size(); idx++) {
 			writer[result_offset + idx] = read_value(idx);
 		}
 	} else {
 		for (idx_t idx = 0; idx < row_ids.size(); idx++) {
 			const auto value = read_value(idx);
-			for (const auto result_index : mapping.GetResultIndexes(idx)) {
+			for (const auto result_index : mapping->GetResultIndexes(idx)) {
 				writer[result_offset + result_index] = value;
 			}
 		}
 	}
+}
+
+template <class T>
+void RLEFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+	D_ASSERT(row_id >= 0);
+	D_ASSERT(NumericCast<idx_t>(row_id) < segment.count);
+	RLEFetchRows<T>(segment, state, unsafe_array_ptr<row_t>(row_id), nullptr, result, result_idx);
 }
 
 //===--------------------------------------------------------------------===//
