@@ -45,7 +45,7 @@ module: query_result
 #
 # The result handle is single-consumer: step, fetch, and wait from one thread
 # at a time. Cross-thread control of an in-flight query goes through the
-# connection, via connection_interrupt and connection_query_progress.
+# connection, via connection_interrupt and connection_progress_get.
 #
 # Deliberately deferred conveniences. The primitives already cover both, at
 # the cost of more calls:
