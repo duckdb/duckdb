@@ -92,7 +92,7 @@ public:
 	}
 
 	// Construct from std::shared_ptr
-	explicit shared_ptr(std::shared_ptr<T> other) : internal(other) {
+	explicit shared_ptr(std::shared_ptr<T> other) : internal(std::move(other)) {
 		// FIXME: should we __enable_weak_this here?
 		// *our* enable_shared_from_this hasn't initialized yet, so I think so?
 		__enable_weak_this(internal.get(), internal.get());
