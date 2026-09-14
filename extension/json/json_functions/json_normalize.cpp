@@ -9,7 +9,7 @@ static void SortKeys(yyjson_mut_val *v) {
 		yyjson_mut_val *val;
 	};
 
-	auto stack = std::vector<stack_item>();
+	auto stack = vector<stack_item>();
 	stack.push_back(stack_item {v});
 
 	while (!stack.empty()) {
