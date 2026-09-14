@@ -507,30 +507,50 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownChild(uniqu
 	return result;
 }
 
-void FlattenDependentJoins::AddCTERefJoinConditions(LogicalComparisonJoin &join, const LogicalCTERef &cteref,
-                                                    const vector<ColumnBinding> &state) const {
+vector<optional_idx> FlattenDependentJoins::GetCTERefCorrelatedPositions(const LogicalCTERef &cteref) const {
+	vector<optional_idx> positions(correlated_columns.size());
 	if (cteref.correlated_columns == 0) {
-		return;
+		return positions;
 	}
 	auto rec_cte = binder.recursive_ctes.find(cteref.cte_index);
 	if (rec_cte == binder.recursive_ctes.end()) {
-		return;
+		throw InternalException(
+		    "Correlated CTE reference has no CTE metadata (CTE index: %llu, reference correlated columns: "
+		    "%llu, reference columns: %llu, required correlated columns: %llu)",
+		    cteref.cte_index.index, cteref.correlated_columns, cteref.chunk_types.size(), correlated_columns.size());
 	}
 	auto &cte_corr_cols = rec_cte->second->Cast<LogicalCTE>().correlated_columns;
-	D_ASSERT(cteref.correlated_columns <= cte_corr_cols.size());
+	if (cteref.correlated_columns > cte_corr_cols.size() || cteref.correlated_columns > cteref.chunk_types.size()) {
+		throw InternalException("Correlated CTE reference has inconsistent column counts (CTE index: %llu, reference "
+		                        "correlated columns: %llu, CTE correlated columns: %llu, reference columns: %llu)",
+		                        cteref.cte_index.index, cteref.correlated_columns, cte_corr_cols.size(),
+		                        cteref.chunk_types.size());
+	}
+	// A nested dependent join can request a different order or subset of the CTE's correlated columns.
+	// Match their original bindings instead of assuming that both correlated column lists share positions.
 	auto cte_ref_offset = cteref.chunk_types.size() - cteref.correlated_columns;
 	auto cte_corr_start = cte_corr_cols.size() - cteref.correlated_columns;
 	for (idx_t i = 0; i < cteref.correlated_columns; i++) {
 		auto correlated_idx = GetCorrelatedIndex(cte_corr_cols[cte_corr_start + i].binding);
-		if (!correlated_idx.IsValid()) {
+		if (correlated_idx.IsValid()) {
+			positions[correlated_idx.GetIndex()] = cte_ref_offset + i;
+		}
+	}
+	return positions;
+}
+
+void FlattenDependentJoins::AddCTERefJoinConditions(LogicalComparisonJoin &join, const LogicalCTERef &cteref,
+                                                    const vector<optional_idx> &positions,
+                                                    const vector<ColumnBinding> &state) const {
+	for (idx_t i = 0; i < positions.size(); i++) {
+		if (!positions[i].IsValid()) {
 			continue;
 		}
-		auto j = correlated_idx.GetIndex();
-		JoinCondition cond(
-		    make_uniq<BoundColumnRefExpression>(correlated_columns[j].type,
-		                                        ColumnBinding(cteref.table_index, ProjectionIndex(cte_ref_offset + i))),
-		    make_uniq<BoundColumnRefExpression>(correlated_columns[j].type, state[j]),
-		    ExpressionType::COMPARE_NOT_DISTINCT_FROM);
+		JoinCondition cond(make_uniq<BoundColumnRefExpression>(
+		                       correlated_columns[i].type,
+		                       ColumnBinding(cteref.table_index, ProjectionIndex(positions[i].GetIndex()))),
+		                   make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, state[i]),
+		                   ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 		join.conditions.push_back(std::move(cond));
 	}
 }
@@ -1395,22 +1415,32 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownCTE(unique_
 
 FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownCTERef(unique_ptr<LogicalOperator> &plan) {
 	auto &cteref = plan->Cast<LogicalCTERef>();
-	if (cteref.correlated_columns < correlated_columns.size()) {
-		auto delim_index = binder.GenerateTableIndex();
-		auto delim_state = CreateContiguousState(ColumnBinding(delim_index, ProjectionIndex(0)));
-		auto delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
-		auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
-		AddCTERefJoinConditions(*join, cteref, delim_state);
-		if (!join->conditions.empty()) {
-			join->children.push_back(std::move(plan));
-			join->children.push_back(std::move(delim_scan));
-			plan = std::move(join);
-			return UnnestingState(std::move(delim_state));
+	auto positions = GetCTERefCorrelatedPositions(cteref);
+	vector<ColumnBinding> cte_state;
+	cte_state.reserve(positions.size());
+	for (auto &position : positions) {
+		if (!position.IsValid()) {
+			break;
 		}
-		return UnnestingState(CreateDelimCrossProduct(plan, std::move(delim_scan), std::move(delim_state)));
+		cte_state.emplace_back(cteref.table_index, ProjectionIndex(position.GetIndex()));
 	}
-	auto correlated_offset = cteref.chunk_types.size() - cteref.correlated_columns;
-	return UnnestingState(CreateContiguousState(ColumnBinding(cteref.table_index, ProjectionIndex(correlated_offset))));
+	if (cte_state.size() == correlated_columns.size()) {
+		return UnnestingState(std::move(cte_state));
+	}
+
+	// Missing correlations require a domain scan; constrain it by every correlation shared with the CTE.
+	auto delim_index = binder.GenerateTableIndex();
+	auto delim_state = CreateContiguousState(ColumnBinding(delim_index, ProjectionIndex(0)));
+	auto delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
+	auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+	AddCTERefJoinConditions(*join, cteref, positions, delim_state);
+	if (!join->conditions.empty()) {
+		join->children.push_back(std::move(plan));
+		join->children.push_back(std::move(delim_scan));
+		plan = std::move(join);
+		return UnnestingState(std::move(delim_state));
+	}
+	return UnnestingState(CreateDelimCrossProduct(plan, std::move(delim_scan), std::move(delim_state)));
 }
 
 FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownCorrelatedNode(unique_ptr<LogicalOperator> &plan,

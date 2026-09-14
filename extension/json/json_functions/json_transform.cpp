@@ -1150,8 +1150,10 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 static void GetTransformFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({{"json", input_type}, {"structure", LogicalType::VARCHAR}}, LogicalType::ANY,
-	                               TransformFunction<false>, JSONTransformBind, nullptr, JSONFunctionLocalState::Init));
+	ScalarFunction fun({}, LogicalType::ANY, TransformFunction<false>, JSONTransformBind, nullptr,
+	                   JSONFunctionLocalState::Init);
+	fun.GetSignature().AddParameter("json", input_type).AddParameter("structure", LogicalType::VARCHAR);
+	set.AddFunction(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetTransformFunction() {
@@ -1163,8 +1165,10 @@ ScalarFunctionSet JSONFunctions::GetTransformFunction() {
 }
 
 static void GetTransformStrictFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::ANY, TransformFunction<true>,
-	                               JSONTransformBind, nullptr, JSONFunctionLocalState::Init));
+	ScalarFunction fun({}, LogicalType::ANY, TransformFunction<true>, JSONTransformBind, nullptr,
+	                   JSONFunctionLocalState::Init);
+	fun.GetSignature().AddParameter("json", input_type).AddParameter("structure", LogicalType::VARCHAR);
+	set.AddFunction(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {

@@ -6,6 +6,7 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/optimizer/aggregate_rewrite_helper.hpp"
+#include "duckdb/optimizer/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -258,7 +259,6 @@ bool GroupingSetsOptimizer::TryRewriteGroupingSets(unique_ptr<LogicalOperator> &
 	const idx_t aggregate_count = aggr.expressions.size();
 
 	// build the per-level aggregates
-	auto combine_function = CombineAggrFun::GetFunction();
 	FunctionBinder function_binder(optimizer.context);
 	vector<LogicalType> state_types;
 	for (idx_t level_idx = 0; level_idx < levels.size(); level_idx++) {
@@ -301,7 +301,10 @@ bool GroupingSetsOptimizer::TryRewriteGroupingSets(unique_ptr<LogicalOperator> &
 				vector<unique_ptr<Expression>> arguments;
 				arguments.push_back(make_uniq<BoundColumnRefExpression>(
 				    state_types[aggr_idx], ColumnBinding(cte_ref_index, ProjectionIndex(state_pos))));
-				auto combine_aggregate = function_binder.BindAggregateFunction(combine_function, std::move(arguments));
+				auto combine_function =
+				    GetBuiltinAggregateFunction(optimizer.context, CombineAggrFun::Name, {state_types[aggr_idx]});
+				auto combine_aggregate =
+				    function_binder.BindAggregateFunction(std::move(combine_function), std::move(arguments));
 				if (combine_aggregate->GetReturnType() != state_types[aggr_idx]) {
 					return false;
 				}

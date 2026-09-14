@@ -316,6 +316,8 @@ enum class LimitNodeType : uint8_t;
 
 enum class LimitValueType : uint8_t;
 
+enum class LiteralKind : uint8_t;
+
 enum class LoadType : uint8_t;
 
 enum class LogContextScope : uint8_t;
@@ -349,6 +351,8 @@ enum class MergeActionType : uint8_t;
 enum class MetaPipelineType : uint8_t;
 
 enum class Monotonicity : uint8_t;
+
+enum class MultiFileClaimResult : uint8_t;
 
 enum class MultiFileColumnMappingMode : uint8_t;
 
@@ -1072,6 +1076,9 @@ template<>
 const char* EnumUtil::ToChars<LimitValueType>(LimitValueType value);
 
 template<>
+const char* EnumUtil::ToChars<LiteralKind>(LiteralKind value);
+
+template<>
 const char* EnumUtil::ToChars<LoadType>(LoadType value);
 
 template<>
@@ -1121,6 +1128,9 @@ const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value);
 
 template<>
 const char* EnumUtil::ToChars<Monotonicity>(Monotonicity value);
+
+template<>
+const char* EnumUtil::ToChars<MultiFileClaimResult>(MultiFileClaimResult value);
 
 template<>
 const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value);
@@ -1991,6 +2001,9 @@ template<>
 LimitValueType EnumUtil::FromString<LimitValueType>(const char *value);
 
 template<>
+LiteralKind EnumUtil::FromString<LiteralKind>(const char *value);
+
+template<>
 LoadType EnumUtil::FromString<LoadType>(const char *value);
 
 template<>
@@ -2040,6 +2053,9 @@ MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value);
 
 template<>
 Monotonicity EnumUtil::FromString<Monotonicity>(const char *value);
+
+template<>
+MultiFileClaimResult EnumUtil::FromString<MultiFileClaimResult>(const char *value);
 
 template<>
 MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value);
