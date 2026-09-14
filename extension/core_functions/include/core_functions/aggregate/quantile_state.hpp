@@ -131,12 +131,13 @@ struct QuantileOperation {
 //! update callback is handed it along with the input and simply does not read it
 template <class STATE, class RESULT_TYPE, class OP>
 AggregateFunction QuantileBufferingAggregate(const LogicalType &input_type, const LogicalType &result_type) {
-	AggregateFunction fun({input_type}, result_type, AggregateFunction::StateSize<STATE>,
+	AggregateFunction fun({}, result_type, AggregateFunction::StateSize<STATE>,
 	                      AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
 	                      ListUpdateFunction<true>, ListCombineFunction<OP>,
 	                      AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
 	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(),
 	                      AggregateFunction::NoBind(), AggregateFunction::StateDestroy<STATE, OP>);
+	fun.GetSignature().AddParameter("x", input_type);
 	fun.SetInitLocalStateFinalizeCallback(FlattenedQuantileValues<typename STATE::InputType>::Init);
 	return fun;
 }

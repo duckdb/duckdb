@@ -27,7 +27,7 @@ struct ConstantOrNullFun {
 
 struct GetVariableFun {
 	static constexpr const char *Name = "getvariable";
-	static constexpr const char *Parameters = "";
+	static constexpr const char *Parameters = "variable_name";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
 	static constexpr const char *Categories = "";
