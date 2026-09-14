@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/helper/physical_set.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/database.hpp"

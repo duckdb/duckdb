@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/execution/operator/persistent/batch_memory_manager.hpp"

@@ -13,6 +13,7 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/open_file_info.hpp"
+#include "duckdb/common/query_context.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache.hpp"

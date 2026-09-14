@@ -21,6 +21,8 @@
 #include "duckdb/execution/row_id_deduplicator.hpp"
 
 namespace duckdb {
+class SchemaCatalogEntry;
+class TableCatalogEntry;
 
 //===--------------------------------------------------------------------===//
 // Sink

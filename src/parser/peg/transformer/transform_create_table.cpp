@@ -1,4 +1,6 @@
 #include "duckdb/parser/peg/ast/column_constraint_entry.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/peg/ast/column_constraints.hpp"
 #include "duckdb/parser/peg/ast/column_elements.hpp"
 #include "duckdb/parser/peg/ast/create_table_column_element.hpp"
@@ -108,7 +110,7 @@ PEGTransformerFactory::TransformCreateTableAs(PEGTransformer &transformer, optio
 	result.select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(statement));
 	if (with_data && *with_data) {
 		auto limit_modifier = make_uniq<LimitModifier>();
-		limit_modifier->limit = make_uniq<ConstantExpression>(0);
+		limit_modifier->limit = ConstantExpression::Integer(0);
 		result.select_statement->node->modifiers.push_back(std::move(limit_modifier));
 	}
 	return result;
@@ -494,7 +496,7 @@ ColumnConstraintEntry PEGTransformerFactory::TransformNotNullConstraint(PEGTrans
 ColumnConstraintEntry PEGTransformerFactory::TransformColumnCollation(PEGTransformer &transformer,
                                                                       const vector<string> &dotted_identifier) {
 	string collation = StringUtil::Join(dotted_identifier, ".");
-	auto expr = make_uniq<ConstantExpression>(Value(collation));
+	auto expr = ConstantExpression::String(collation);
 	expr->SetAlias("collation");
 	ColumnConstraintEntry entry;
 	entry.constraint_name = "ColumnCollation";

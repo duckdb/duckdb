@@ -1,4 +1,6 @@
 #include "duckdb/execution/operator/schema/physical_create_index.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"

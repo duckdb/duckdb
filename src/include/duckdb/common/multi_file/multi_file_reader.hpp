@@ -207,6 +207,16 @@ public:
 	                                        vector<Identifier> &names, MultiFileList &files, MultiFileBindData &result,
 	                                        BaseFileReaderOptions &options, MultiFileOptions &file_options);
 
+	//! Bind the schema on the first file only
+	MultiFileReaderBindData BindFirstReader(ClientContext &context, vector<LogicalType> &return_types,
+	                                        vector<Identifier> &names, MultiFileList &files, MultiFileBindData &result,
+	                                        BaseFileReaderOptions &options, MultiFileOptions &file_options);
+	//! Bind the schema on the first "maximum_sample_files" files, combining the schemas of the sampled files
+	MultiFileReaderBindData BindSampledReader(ClientContext &context, vector<LogicalType> &return_types,
+	                                          vector<Identifier> &names, MultiFileList &files,
+	                                          MultiFileBindData &result, BaseFileReaderOptions &options,
+	                                          MultiFileOptions &file_options);
+
 	MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types,
 	                                   vector<Identifier> &names, MultiFileList &files, MultiFileBindData &result,
 	                                   BaseFileReaderOptions &options, MultiFileOptions &file_options);

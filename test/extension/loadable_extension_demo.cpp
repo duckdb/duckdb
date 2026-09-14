@@ -411,8 +411,7 @@ public:
 		for (const auto &query_input : queries) {
 			if (StringUtil::CIEquals(query_input, "override")) {
 				auto select_node = make_uniq<SelectNode>();
-				select_node->select_list.push_back(
-				    make_uniq<ConstantExpression>(Value("The DuckDB parser has been overridden")));
+				select_node->select_list.push_back(ConstantExpression::String("The DuckDB parser has been overridden"));
 				select_node->from_table = make_uniq<EmptyTableRef>();
 				auto select_statement = make_uniq<SelectStatement>();
 				select_statement->node = std::move(select_node);

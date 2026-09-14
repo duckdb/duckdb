@@ -54,7 +54,8 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 			return std::move(root.GetChildrenMutable()[1 - constant_child]);
 		} else if (constant.GetValue() == 0) {
 			// multiply by zero: replace with constant or null
-			return ExpressionRewriter::ConstantOrNull(std::move(root.GetChildrenMutable()[1 - constant_child]),
+			return ExpressionRewriter::ConstantOrNull(GetContext(),
+			                                          std::move(root.GetChildrenMutable()[1 - constant_child]),
 			                                          Value::Numeric(root.GetReturnType(), 0));
 		}
 	} else if (func_name == "//") {

@@ -15,6 +15,7 @@
 
 namespace duckdb {
 class BufferManager;
+class ClientContext;
 class CommitDropState;
 class DuckTransaction;
 class StorageCommitState;

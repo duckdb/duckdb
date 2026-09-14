@@ -113,7 +113,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 					if (rhs_comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 						return make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
 					}
-					return ExpressionRewriter::ConstantOrNull(column_part.Copy(), Value::BOOLEAN(false));
+					return ExpressionRewriter::ConstantOrNull(GetContext(), column_part.Copy(), Value::BOOLEAN(false));
 				}
 
 				auto trunc = CreateTrunc(date_part, rhs, column_part.GetReturnType());
@@ -186,7 +186,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 					if (rhs_comparison_type == ExpressionType::COMPARE_DISTINCT_FROM) {
 						return make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
 					}
-					return ExpressionRewriter::ConstantOrNull(column_part.Copy(), Value::BOOLEAN(true));
+					return ExpressionRewriter::ConstantOrNull(GetContext(), column_part.Copy(), Value::BOOLEAN(true));
 				}
 
 				auto trunc = CreateTrunc(date_part, rhs, column_part.GetReturnType());

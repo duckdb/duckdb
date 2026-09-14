@@ -1187,7 +1187,7 @@ RemotePushdownOptimizer::TryConstantFold(unique_ptr<ParsedExpression> &expr) {
 		// evaluating the expression raises an error (e.g. an out-of-range error)
 		return ConstantFoldResult::FOLD_ERROR;
 	}
-	auto folded = make_uniq<ConstantExpression>(std::move(fold_result));
+	auto folded = ConstantExpression::FromValue(fold_result);
 	// preserve the name DuckDB would generate for the original expression
 	folded->SetAlias(expr->GetAlias().empty() ? Identifier(expr->ToString()) : expr->GetAlias());
 	folded->SetQueryLocation(expr->GetQueryLocation());

@@ -147,8 +147,7 @@ static FilterPropagateResult ContainsFilterPrune(const FunctionStatisticsPruneIn
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
 
-	if (StringStats::GetMinType(*haystack_stats) != StringStatsType::EXACT_STATS ||
-	    StringStats::GetMaxType(*haystack_stats) != StringStatsType::EXACT_STATS) {
+	if (!StringStats::HasMinMax(*haystack_stats)) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
@@ -157,8 +156,13 @@ static FilterPropagateResult ContainsFilterPrune(const FunctionStatisticsPruneIn
 	if (min != max) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	// If all strings are the same, we can evaluate the predicate directly.
+	// All strings share the stored prefix, so a needle within it always matches.
 	if (FindStrInStr(string_t(min), string_t(needle)) == DConstants::INVALID_INDEX) {
+		// A missing needle could still occur beyond the truncated prefix.
+		if (StringStats::GetMinType(*haystack_stats) != StringStatsType::EXACT_STATS ||
+		    StringStats::GetMaxType(*haystack_stats) != StringStatsType::EXACT_STATS) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
 	return haystack_stats->CanHaveNull() ? FilterPropagateResult::FILTER_TRUE_OR_NULL

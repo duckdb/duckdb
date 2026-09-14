@@ -1,4 +1,5 @@
 #include "duckdb/logging/log_storage.hpp"
+#include "duckdb/function/table_function.hpp"
 
 #include "duckdb/common/csv_writer.hpp"
 #include "duckdb/common/local_file_system.hpp"

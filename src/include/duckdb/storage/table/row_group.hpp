@@ -206,6 +206,8 @@ public:
 	idx_t GetCommittedRowCount();
 	//! Returns the number of rows visible to the given transaction
 	idx_t GetVisibleRowCount(TransactionData transaction);
+	//! Count visible rows in a scan assignment starting at a vector boundary
+	idx_t GetVisibleRowCount(TransactionData transaction, idx_t start_vector, idx_t scan_count);
 	bool CanReuseMetadata(RowGroupWriter &writer) const;
 	RowGroupWriteData WriteToDisk(RowGroupWriter &writer);
 	RowGroupPointer Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats,

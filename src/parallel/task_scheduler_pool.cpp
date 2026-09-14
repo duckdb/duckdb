@@ -215,7 +215,10 @@ void TaskSchedulerPool::RelaunchThreads(TaskScheduler &scheduler, bool destroy) 
 		}
 	}
 	current_thread_count = threads.size() + (pool_type == TaskSchedulerType::REGULAR ? external_threads : 0);
-	BlockAllocator::Get(db).FlushAll();
+	// on destroy the scheduler flushes once after every pool is joined
+	if (!destroy) {
+		BlockAllocator::Get(db).FlushAll();
+	}
 #endif
 }
 

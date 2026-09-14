@@ -230,6 +230,19 @@ bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, Multi
 			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.allow_empty = BooleanValue::Get(val);
+	} else if (key == "maximum_sample_files") {
+		if (val.IsNull()) {
+			throw BinderException("Cannot use NULL as argument to key %s", key);
+		}
+		auto sample_files = val.DefaultCastAs(LogicalType::BIGINT).GetValue<int64_t>();
+		if (sample_files == -1) {
+			options.maximum_sample_files = NumericLimits<idx_t>::Maximum();
+		} else if (sample_files > 0) {
+			options.maximum_sample_files = NumericCast<idx_t>(sample_files);
+		} else {
+			throw BinderException("\"maximum_sample_files\" parameter must be positive, or -1 to remove the limit "
+			                      "on the number of files used to determine the schema.");
+		}
 	} else if (key == "hive_types_autocast" || key == "hive_type_autocast") {
 		if (val.IsNull()) {
 			throw InvalidInputException("Cannot use NULL as argument for %s", key);
@@ -418,7 +431,7 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
 	auto &local_columns = reader_data.reader->GetColumns();
 	auto &filename = reader_data.reader->GetFileName();
 	case_insensitive_map_t<idx_t> name_map;
-	if (file_options.union_by_name) {
+	if (file_options.SchemaIsUnion()) {
 		for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
 			auto &column = local_columns[col_idx];
 			name_map[column.name.GetIdentifierName()] = col_idx;
@@ -440,7 +453,7 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
 		if (IsVirtualColumn(column_id)) {
 			continue;
 		}
-		if (file_options.union_by_name) {
+		if (file_options.SchemaIsUnion()) {
 			auto &column = global_columns[column_id];
 			auto &name = column.name;
 			auto &type = column.type;
@@ -666,19 +679,70 @@ MultiFileReaderBindData MultiFileReader::BindReader(ClientContext &context, vect
                                                     MultiFileOptions &file_options) {
 	if (file_options.union_by_name) {
 		return BindUnionReader(context, return_types, names, files, result, options, file_options);
-	} else {
-		shared_ptr<BaseFileReader> reader;
-		reader = CreateReader(context, files.GetFirstFile(), options, file_options, *result.interface);
-		auto &columns = reader->GetColumns();
-		for (auto &column : columns) {
-			return_types.emplace_back(column.type);
-			names.emplace_back(column.name);
-		}
-		result.Initialize(std::move(reader));
-		MultiFileReaderBindData bind_data;
-		BindOptions(file_options, files, return_types, names, bind_data);
-		return bind_data;
 	}
+	if (file_options.maximum_sample_files > 1) {
+		return BindSampledReader(context, return_types, names, files, result, options, file_options);
+	}
+	return BindFirstReader(context, return_types, names, files, result, options, file_options);
+}
+
+MultiFileReaderBindData MultiFileReader::BindFirstReader(ClientContext &context, vector<LogicalType> &return_types,
+                                                         vector<Identifier> &names, MultiFileList &files,
+                                                         MultiFileBindData &result, BaseFileReaderOptions &options,
+                                                         MultiFileOptions &file_options) {
+	auto reader = CreateReader(context, files.GetFirstFile(), options, file_options, *result.interface);
+	auto &columns = reader->GetColumns();
+	for (auto &column : columns) {
+		return_types.emplace_back(column.type);
+		names.emplace_back(column.name);
+	}
+	result.Initialize(std::move(reader));
+	MultiFileReaderBindData bind_data;
+	BindOptions(file_options, files, return_types, names, bind_data);
+	return bind_data;
+}
+
+MultiFileReaderBindData MultiFileReader::BindSampledReader(ClientContext &context, vector<LogicalType> &return_types,
+                                                           vector<Identifier> &names, MultiFileList &files,
+                                                           MultiFileBindData &result, BaseFileReaderOptions &options,
+                                                           MultiFileOptions &file_options) {
+	// gather the files we want to sample - note that we deliberately do not expand the entire file list here
+	vector<OpenFileInfo> sampled_files;
+	MultiFileListScanData file_scan;
+	files.InitializeScan(file_scan);
+	OpenFileInfo file;
+	bool sampled_all_files = true;
+	while (files.Scan(file_scan, file)) {
+		if (sampled_files.size() >= file_options.maximum_sample_files) {
+			sampled_all_files = false;
+			break;
+		}
+		sampled_files.push_back(std::move(file));
+	}
+	if (sampled_files.size() <= 1) {
+		// only a single file - there is nothing to combine
+		return BindFirstReader(context, return_types, names, files, result, options, file_options);
+	}
+
+	// open the sampled files and combine their schemas into one
+	vector<Identifier> union_col_names;
+	vector<LogicalType> union_col_types;
+	auto sampled_readers = UnionByName::UnionCols(context, sampled_files, union_col_types, union_col_names, options,
+	                                              file_options, *this, *result.interface);
+	names = union_col_names;
+	return_types = union_col_types;
+
+	if (sampled_all_files) {
+		// we have opened every file - keep the readers around so they do not need to be opened again
+		std::move(sampled_readers.begin(), sampled_readers.end(), std::back_inserter(result.union_readers));
+		result.Initialize(context, *result.union_readers[0]);
+	} else {
+		// we only sampled a subset - the readers cannot be re-used, keep only the reader of the first file
+		result.Initialize(context, *sampled_readers[0]);
+	}
+	MultiFileReaderBindData bind_data;
+	BindOptions(file_options, files, return_types, names, bind_data);
+	return bind_data;
 }
 
 ReaderInitializeType MultiFileReader::InitializeReader(MultiFileReaderData &reader_data,

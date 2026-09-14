@@ -1433,7 +1433,7 @@ vector<ParquetColumnDefinition> ParquetColumnDefinition::FromSchemaMap(ClientCon
 MultiFileColumnDefinition ParquetColumnDefinition::ToMultiFileColumnDefinition() const {
 	MultiFileColumnDefinition result(name, type);
 	result.identifier = identifier;
-	result.default_expression = make_uniq<ConstantExpression>(default_value);
+	result.default_expression = ConstantExpression::FromValue(default_value);
 	result.children.reserve(children.size());
 	for (auto &child : children) {
 		result.children.emplace_back(child.ToMultiFileColumnDefinition());

@@ -79,8 +79,9 @@ string TypeExpression::ToString() const {
 	if (result.empty() && type_name == "VARCHAR" && !params.empty()) {
 		if (params.back()->HasAlias() && params.back()->GetAlias() == "collation") {
 			// Special case for VARCHAR with collation
-			auto collate_expr = params.back()->Cast<ConstantExpression>();
-			return StringUtil::Format("VARCHAR COLLATE %s", SQLIdentifier(StringValue::Get(collate_expr.GetValue())));
+			auto &collate_expr = params.back()->Cast<ConstantExpression>();
+			return StringUtil::Format("VARCHAR COLLATE %s",
+			                          SQLIdentifier(collate_expr.GetLiteral().ToValue().ToString()));
 		}
 	}
 
@@ -124,12 +125,12 @@ unique_ptr<ParsedExpression> TypeChild(const LogicalType &type, const Identifier
 	return std::move(child);
 }
 
-unique_ptr<ParsedExpression> ValueChild(Value value, const char *label = nullptr) {
-	auto child = make_uniq_base<ParsedExpression, ConstantExpression>(std::move(value));
+// type parameters are the literal atoms the parser would produce for the type's SQL spelling
+unique_ptr<ParsedExpression> LiteralChild(unique_ptr<ConstantExpression> child, const char *label = nullptr) {
 	if (label) {
 		child->SetAlias(Identifier(label));
 	}
-	return child;
+	return std::move(child);
 }
 
 //! The name a built-in type is spelled with. Must be a name DefaultTypeGenerator knows.
@@ -240,7 +241,7 @@ unique_ptr<TypeExpression> TypeExpression::FromLogicalType(const LogicalType &ty
 	if (!alias.empty()) {
 		if (type.HasExtensionInfo()) {
 			for (auto &modifier : type.GetExtensionInfo()->modifiers) {
-				children.push_back(ValueChild(modifier.value));
+				children.push_back(ConstantExpression::FromValue(modifier.value));
 			}
 		}
 		return make_uniq<TypeExpression>(Identifier(alias), std::move(children));
@@ -255,24 +256,24 @@ unique_ptr<TypeExpression> TypeExpression::FromLogicalType(const LogicalType &ty
 
 	switch (type.id()) {
 	case LogicalTypeId::DECIMAL:
-		children.push_back(ValueChild(Value::UTINYINT(DecimalType::GetWidth(type))));
-		children.push_back(ValueChild(Value::UTINYINT(DecimalType::GetScale(type))));
+		children.push_back(LiteralChild(ConstantExpression::Integer(DecimalType::GetWidth(type))));
+		children.push_back(LiteralChild(ConstantExpression::Integer(DecimalType::GetScale(type))));
 		break;
 	case LogicalTypeId::VARCHAR: {
 		auto collation = StringType::GetCollation(type);
 		if (!collation.empty()) {
-			children.push_back(ValueChild(Value(collation), "collation"));
+			children.push_back(LiteralChild(ConstantExpression::String(collation), "collation"));
 		}
 		break;
 	}
 	case LogicalTypeId::GEOMETRY:
 		if (GeoType::HasCRS(type)) {
-			children.push_back(ValueChild(Value(GeoType::GetCRS(type).GetDefinition())));
+			children.push_back(LiteralChild(ConstantExpression::String(GeoType::GetCRS(type).GetDefinition())));
 		}
 		break;
 	case LogicalTypeId::ENUM:
 		for (idx_t i = 0; i < EnumType::GetSize(type); i++) {
-			children.push_back(ValueChild(Value(EnumType::GetString(type, i).GetString())));
+			children.push_back(LiteralChild(ConstantExpression::String(EnumType::GetString(type, i).GetString())));
 		}
 		break;
 	case LogicalTypeId::LIST:
@@ -281,7 +282,8 @@ unique_ptr<TypeExpression> TypeExpression::FromLogicalType(const LogicalType &ty
 	case LogicalTypeId::ARRAY:
 		children.push_back(TypeChild(ArrayType::GetChildType(type), Identifier()));
 		if (!ArrayType::IsAnySize(type)) {
-			children.push_back(ValueChild(Value::UBIGINT(ArrayType::GetSize(type))));
+			children.push_back(
+			    LiteralChild(ConstantExpression::Integer(NumericCast<int64_t>(ArrayType::GetSize(type)))));
 		}
 		break;
 	case LogicalTypeId::STRUCT:

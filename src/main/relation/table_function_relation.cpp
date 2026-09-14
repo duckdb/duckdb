@@ -78,7 +78,7 @@ unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 		children.push_back(std::move(subquery));
 	}
 	for (auto &parameter : parameters) {
-		children.push_back(make_uniq<ConstantExpression>(parameter));
+		children.push_back(ConstantExpression::FromValue(parameter));
 	}
 
 	for (auto &parameter : named_parameters) {
@@ -86,7 +86,7 @@ unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 		// This is all but pretty, basically the named parameter is the column, the table is empty because that's what
 		// the function binder likes
 		auto column_ref = make_uniq<ColumnRefExpression>(parameter.first);
-		auto constant_value = make_uniq<ConstantExpression>(parameter.second);
+		auto constant_value = ConstantExpression::FromValue(parameter.second);
 		auto comparison = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(column_ref),
 		                                                  std::move(constant_value));
 		children.push_back(std::move(comparison));

@@ -70,7 +70,7 @@ StarExpressionType Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr
 				values.emplace_back(GetColumnsStringValue(*element));
 			}
 			D_ASSERT(!values.empty());
-			expr = make_uniq<ConstantExpression>(Value::LIST(LogicalType::VARCHAR, values));
+			expr = ConstantExpression::FromValue(Value::LIST(LogicalType::VARCHAR, values));
 			return StarExpressionType::STAR;
 		}
 		if (in_columns) {

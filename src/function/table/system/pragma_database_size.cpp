@@ -1,4 +1,5 @@
 #include "duckdb/function/table/system_functions.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/string_util.hpp"

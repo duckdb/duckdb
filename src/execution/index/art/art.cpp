@@ -25,7 +25,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
-#include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/execution/index/index_lock.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -46,6 +46,28 @@ struct ARTIndexScanState : public IndexScanState {
 //===--------------------------------------------------------------------===//
 // ART
 //===--------------------------------------------------------------------===//
+
+static idx_t GetNode256LeafSegmentSize(const IndexStorageInfo &info, StorageVersion storage_version) {
+	// Preserve the oversized mask and padding of the persisted legacy layout.
+	struct LegacyNode256Leaf {
+		uint16_t count;
+		validity_t mask[Node256Leaf::CAPACITY / sizeof(validity_t)];
+	};
+	constexpr idx_t compact_size = sizeof(Node256Leaf);
+	constexpr idx_t legacy_size = sizeof(LegacyNode256Leaf);
+	const auto allocator_idx = NodePtr::GetAllocatorIdx(NType::NODE_256_LEAF);
+	if (info.allocator_infos.size() > allocator_idx) {
+		// Preserve the persisted segment size so existing buffers retain their original layout.
+		const auto saved_segment_size = info.allocator_infos[allocator_idx].segment_size;
+		if (saved_segment_size != compact_size && saved_segment_size != legacy_size) {
+			throw SerializationException("Invalid Node256Leaf segment size %llu (expected %llu or %llu)",
+			                             saved_segment_size, compact_size, legacy_size);
+		}
+		return saved_segment_size;
+	}
+	// New indexes must retain the original layout when targeting older storage versions.
+	return storage_version >= StorageVersion::V2_0_0 ? compact_size : legacy_size;
+}
 
 ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
@@ -83,6 +105,7 @@ ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type
 		owns_data = true;
 		auto prefix_size = NumericCast<idx_t>(prefix_count) + NumericCast<idx_t>(Prefix::METADATA_SIZE);
 		auto &block_manager = table_io_manager.GetIndexBlockManager();
+		const auto leaf256_size = GetNode256LeafSegmentSize(info, db.GetStorageManager().GetStorageVersion());
 
 		array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT> allocator_array = {
 		    make_unsafe_uniq<FixedSizeAllocator>(prefix_size, block_manager),
@@ -93,7 +116,7 @@ ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node256), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node7Leaf), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node15Leaf), block_manager),
-		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node256Leaf), block_manager),
+		    make_unsafe_uniq<FixedSizeAllocator>(leaf256_size, block_manager),
 		};
 		allocators =
 		    make_shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
@@ -517,11 +540,13 @@ ARTConflictType ART::Build(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &r
 //===--------------------------------------------------------------------===//
 
 ErrorData ART::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids) {
+	l.AssertHeld(*this);
 	IndexAppendInfo info;
 	return Insert(l, chunk, row_ids, info);
 }
 
 ErrorData ART::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info) {
+	l.AssertHeld(*this);
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	auto row_count = chunk.size();
 
@@ -591,6 +616,7 @@ ErrorData ART::InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, un
 }
 
 ErrorData ART::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) {
+	l.AssertHeld(*this);
 	// Execute all column expressions before inserting the data chunk.
 	DataChunk expr_chunk;
 	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
@@ -602,6 +628,7 @@ ErrorData ART::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) {
 }
 
 ErrorData ART::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info) {
+	l.AssertHeld(*this);
 	// Execute all column expressions before inserting the data chunk.
 	DataChunk expr_chunk;
 	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
@@ -625,6 +652,7 @@ void ART::VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<Con
 //===--------------------------------------------------------------------===//
 
 void ART::ResetStorage(IndexLock &index_lock) {
+	index_lock.AssertHeld(*this);
 	for (auto &allocator : *allocators) {
 		allocator->Reset();
 	}
@@ -633,6 +661,7 @@ void ART::ResetStorage(IndexLock &index_lock) {
 
 idx_t ART::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_ids, optional_ptr<SelectionVector> deleted_sel,
                      optional_ptr<SelectionVector> non_deleted_sel) {
+	state.AssertHeld(*this);
 	// FIXME: We could pass a row_count in here, as we sometimes don't have to delete all row IDs in the chunk,
 	// FIXME: but rather all row IDs up to the conflicting row.
 	auto row_count = entries.size();
@@ -782,7 +811,7 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids
 	auto &scan_state = state.Cast<ARTIndexScanState>();
 	if (scan_state.values[0].IsNull()) {
 		// full scan
-		lock_guard<mutex> l(lock);
+		IndexLock l(*this);
 		return FullScan(max_count, row_ids);
 	}
 	D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
@@ -790,7 +819,7 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids
 
 	auto key = ARTKey::CreateKey(arena_allocator, scan_state.values[0], storage_version);
 
-	lock_guard<mutex> l(lock);
+	IndexLock l(*this);
 	if (scan_state.values[1].IsNull()) {
 		// Single predicate.
 		switch (scan_state.expressions[0]) {
@@ -944,7 +973,7 @@ void ART::VerifyLeaf(const NodePtr &leaf, const ARTKey &key, DeleteIndexInfo del
 
 void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) {
 	// Lock the index during constraint checking.
-	lock_guard<mutex> l(lock);
+	IndexLock l(*this);
 
 	DataChunk expr_chunk;
 	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
@@ -981,7 +1010,7 @@ void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictMana
 }
 
 string ART::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index, DataChunk &input) const {
-	lock_guard<mutex> l(lock);
+	IndexLock l(*this);
 	auto key_name = GenerateErrorKeyName(input, failed_index);
 	auto exception_msg = GenerateConstraintErrorMessage(verify_type, key_name);
 	return exception_msg;
@@ -1051,7 +1080,7 @@ IndexStorageInfo ART::PrepareSerialize(const case_insensitive_map_t<Value> &opti
 }
 
 IndexStorageInfo ART::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
-	lock_guard<mutex> guard(lock);
+	IndexLock guard(*this);
 
 	// If the storage format uses deprecated leaf storage,
 	// then we need to transform all nested leaves before serialization.
@@ -1151,6 +1180,7 @@ void ART::SetPrefixCount(const IndexStorageInfo &info) {
 }
 
 idx_t ART::GetInMemorySize(IndexLock &index_lock) const {
+	index_lock.AssertHeld(*this);
 	D_ASSERT(owns_data);
 
 	idx_t in_memory_size = 0;
@@ -1206,6 +1236,7 @@ static void VacuumPointerIfNeeded(ART &art, const unordered_set<uint8_t> &indexe
 }
 
 void ART::Vacuum(IndexLock &state) {
+	state.AssertHeld(*this);
 	D_ASSERT(owns_data);
 
 	if (!tree.HasMetadata()) {
@@ -1309,6 +1340,7 @@ void ART::InitializeMerge(NodePtr &other_tree, unsafe_vector<idx_t> &upper_bound
 }
 
 bool ART::MergeIndexes(IndexLock &state, BoundIndex &source_index) {
+	state.AssertHeld(*this);
 	auto &other_art = source_index.Cast<ART>();
 	if (!other_art.tree.HasMetadata()) {
 		return true;
@@ -1317,6 +1349,13 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &source_index) {
 	if (other_art.owns_data) {
 		if (prefix_count != other_art.prefix_count) {
 			throw InternalException("Failed to merge ARTs - prefix count does not match");
+		}
+		const auto target_size = NodePtr::GetAllocator(*this, NType::NODE_256_LEAF).GetSegmentSize();
+		const auto source_size = NodePtr::GetAllocator(other_art, NType::NODE_256_LEAF).GetSegmentSize();
+		if (target_size != source_size) {
+			throw InternalException(
+			    "Failed to merge ARTs - Node256Leaf segment sizes do not match (target %llu, source %llu)", target_size,
+			    source_size);
 		}
 		if (tree.HasMetadata()) {
 			// Fully deserialize other_index, and traverse it to increment its buffer IDs.
@@ -1348,6 +1387,7 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &source_index) {
 // FIXME : Make this a more efficient structural tree removal merge
 //		   Right now this is only used in MergeCheckpointDeltas to avoid having to do a table scan.
 void ART::RemovalMerge(IndexLock &state, BoundIndex &source_index) {
+	state.AssertHeld(*this);
 	auto &source = source_index.Cast<ART>();
 	if (!source.tree.HasMetadata()) {
 		return;
@@ -1382,8 +1422,7 @@ void ART::RemovalMerge(IndexLock &state, BoundIndex &source_index) {
 }
 
 void ART::RemovalMerge(BoundIndex &source_index) {
-	IndexLock state;
-	InitializeLock(state);
+	IndexLock state(*this);
 	RemovalMerge(state, source_index);
 }
 
@@ -1391,6 +1430,7 @@ void ART::RemovalMerge(BoundIndex &source_index) {
 // handle deprecated leaves. This is being used in merging checkpoint deltas, to avoid a more inefficient table scan.
 // Once the structural merge adds support for deprecated leaves, we can replace the calls of this function with that.
 ErrorData ART::InsertMerge(IndexLock &state, BoundIndex &source_index, IndexAppendMode append_mode) {
+	state.AssertHeld(*this);
 	auto &source = source_index.Cast<ART>();
 	if (!source.tree.HasMetadata()) {
 		return ErrorData();
@@ -1422,8 +1462,7 @@ ErrorData ART::InsertMerge(IndexLock &state, BoundIndex &source_index, IndexAppe
 }
 
 ErrorData ART::InsertMerge(BoundIndex &source_index, IndexAppendMode append_mode) {
-	IndexLock state;
-	InitializeLock(state);
+	IndexLock state(*this);
 	return InsertMerge(state, source_index, append_mode);
 }
 
@@ -1445,6 +1484,7 @@ ErrorData ART::MergeCheckpointDelta(const IndexDeltaType type, BoundIndex &delta
 //===--------------------------------------------------------------------===//
 
 string ART::ToString(IndexLock &l, bool display_ascii) {
+	l.AssertHeld(*this);
 	return ToStringInternal(display_ascii);
 }
 
@@ -1456,6 +1496,7 @@ string ART::ToStringInternal(bool display_ascii) {
 }
 
 void ART::Verify(IndexLock &l) {
+	l.AssertHeld(*this);
 	VerifyInternal();
 }
 
@@ -1466,6 +1507,7 @@ void ART::VerifyInternal() {
 }
 
 void ART::VerifyAllocations(IndexLock &l) {
+	l.AssertHeld(*this);
 	return VerifyAllocationsInternal();
 }
 
@@ -1488,6 +1530,7 @@ void ART::VerifyAllocationsInternal() {
 }
 
 void ART::VerifyBuffers(IndexLock &l) {
+	l.AssertHeld(*this);
 	for (auto &allocator : *allocators) {
 		allocator->VerifyBuffers();
 	}

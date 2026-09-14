@@ -700,6 +700,12 @@
         "id": 107,
         "name": "allow_empty",
         "type": "bool"
+      },
+      {
+        "id": 108,
+        "name": "maximum_sample_files",
+        "type": "idx_t",
+        "default": "1"
       }
     ],
     "pointer_type": "none"
@@ -1136,6 +1142,25 @@
         "id": 101,
         "name": "types",
         "type": "vector<LogicalType>"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "Literal",
+    "includes": [
+      "duckdb/parser/literal.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "kind",
+        "type": "LiteralKind"
+      },
+      {
+        "id": 101,
+        "name": "text",
+        "type": "string"
       }
     ],
     "pointer_type": "none"

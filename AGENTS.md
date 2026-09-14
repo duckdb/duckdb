@@ -140,12 +140,12 @@ Results
 **Parser** (`src/parser/`)
 - Converts SQL strings to Abstract Syntax Tree (AST)
 - Uses a PEG-based parser
-- The grammar is located in `*.gram` files and generated using `scripts/build_grammar.sh`
+- The grammar is located in `*.gram` files and generated using `scripts/parser/build_grammar.sh`
 - Outputs: `SQLStatement`, `ParsedExpression`, `TableRef` objects
 - Key subdirectories: `expression/`, `statement/`, `tableref/`, `peg/`
 
 For more details on adding new grammar, see the README located at `src/parser/peg/README.md`. 
-Each new grammar rule must have a corresponding transformer rule, located at `peg/transformer`.
+Each new grammar rule must have a corresponding transformer rule, located at `src/parser/peg/transformer`.
 
 **Planner** (`src/planner/`)
 - Binds symbols to catalog entries and resolves types
@@ -210,7 +210,7 @@ Each new grammar rule must have a corresponding transformer rule, located at `pe
 ├── test/                 # Test framework and test cases
 │   ├── sql/             # SQL regression tests (.test files)
 │   └── api/             # C/C++ API tests
-├── tools/                # Language bindings (pythonpkg, shell, etc.)
+├── tools/                # Shell, sqllogictest, Swift
 ├── benchmark/            # Benchmark suites (TPC-H, TPC-DS, etc.)
 ├── scripts/              # Build and utility scripts
 └── third_party/          # Third-party dependencies
@@ -444,9 +444,9 @@ private:
 - Entry point: `src/main/database.cpp` (DatabaseInstance)
 - Query execution coordinator: `src/main/client_context.cpp`
 - SQL parsing: `src/parser/parser.cpp`
-- Logical planning: `src/planner/binder/query_planner.cpp`
+- Logical planning: `src/planner/planner.cpp`
 - Optimization orchestration: `src/optimizer/optimizer.cpp`
-- Physical plan generation: `src/execution/physical_plan/physical_plan_generator.cpp`
+- Physical plan generation: `src/execution/physical_plan_generator.cpp`
 - Execution orchestration: `src/parallel/executor.cpp`
 
 ### Searching the Codebase

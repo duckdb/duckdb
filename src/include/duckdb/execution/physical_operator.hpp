@@ -21,7 +21,6 @@
 #include "duckdb/execution/partition_info.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/execution/progress_data.hpp"
-#include "duckdb/optimizer/join_order/join_node.hpp"
 
 namespace duckdb {
 

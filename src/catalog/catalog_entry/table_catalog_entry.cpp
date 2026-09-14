@@ -393,6 +393,10 @@ optional_ptr<CatalogEntry> TableCatalogEntry::GetTrigger(CatalogTransaction tran
 	return nullptr;
 }
 
+bool TableCatalogEntry::DropTrigger(CatalogTransaction transaction, const Identifier &name, bool cascade) {
+	throw NotImplementedException("Triggers are not supported for this table type");
+}
+
 vector<const_reference<TriggerCatalogEntry>> TableCatalogEntry::GetTriggersForEvent(CatalogTransaction transaction,
                                                                                     TriggerEventType event_type,
                                                                                     TriggerForEach for_each) const {

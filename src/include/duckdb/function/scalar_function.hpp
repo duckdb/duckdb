@@ -575,9 +575,14 @@ public:
 	const shared_ptr<const ScalarFunction> &GetDefinition() const {
 		return definition;
 	}
-	//! Restore the definition after the bound function has been replaced wholesale
+	//! Restore the definition after the bound function has been replaced wholesale, together with the
+	//! qualification it carries - the replacement is a specialized implementation, not a different function
 	void SetDefinition(shared_ptr<const ScalarFunction> definition_p) {
 		definition = std::move(definition_p);
+		if (definition) {
+			schema_name = definition->GetSchemaName();
+			catalog_name = definition->GetCatalogName();
+		}
 	}
 
 private:

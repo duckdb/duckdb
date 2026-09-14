@@ -88,12 +88,19 @@ static unique_ptr<Expression> PlanExtremumRewrite(Binder &binder, BoundSubqueryE
 	auto &compare_type = expr.GetChildTargets()[0];
 	vector<unique_ptr<Expression>> min_max_children;
 	auto min_max_child = bound_colref->Copy();
-	ExpressionBinder::PushCollation(binder.context, min_max_child, compare_type);
+	// The comparison may carry a collation the subquery column does not, and the extremum has to be taken
+	// under that collation, so it is pushed here. BIT and VARIANT are the exception: min/max pushes its own
+	// collation for those, and doing it first makes that branch a no-op, after which the aggregate falls
+	// through to its binary-key implementation whose return type is BLOB.
+	if (compare_type.id() != LogicalTypeId::BIT && compare_type.id() != LogicalTypeId::VARIANT) {
+		ExpressionBinder::PushCollation(binder.context, min_max_child, compare_type);
+	}
 	min_max_children.push_back(std::move(min_max_child));
 
 	auto extremum_aggr =
 	    function_binder.BindAggregateFunction(is_min ? MinFunction::GetFunction() : MaxFunction::GetFunction(),
 	                                          std::move(min_max_children), nullptr, AggregateType::NON_DISTINCT);
+	auto extremum_type = extremum_aggr->GetReturnType();
 	aggregate_list.push_back(std::move(extremum_aggr));
 
 	// 2. count_star = COUNT(*)
@@ -117,7 +124,9 @@ static unique_ptr<Expression> PlanExtremumRewrite(Binder &binder, BoundSubqueryE
 	    make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, ColumnBinding(aggr_index, ProjectionIndex(1)));
 	auto count_child_ref =
 	    make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, ColumnBinding(aggr_index, ProjectionIndex(2)));
-	auto extremum_ref = make_uniq<BoundColumnRefExpression>(child_type, ColumnBinding(aggr_index, ProjectionIndex(0)));
+	// reference the aggregate by the type it actually produces, not by the subquery column type
+	auto extremum_ref =
+	    make_uniq<BoundColumnRefExpression>(extremum_type, ColumnBinding(aggr_index, ProjectionIndex(0)));
 
 	auto &x_expr = *expr.GetChildrenMutable()[0];
 

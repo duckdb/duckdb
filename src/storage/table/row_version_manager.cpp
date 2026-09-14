@@ -13,9 +13,14 @@ RowVersionManager::RowVersionManager(BufferManager &buffer_manager_p) noexcept
 }
 
 idx_t RowVersionManager::GetRowCount(ScanOptions options, idx_t count) {
+	return GetRowCount(options, 0, count);
+}
+
+idx_t RowVersionManager::GetRowCount(ScanOptions options, idx_t start_vector, idx_t count) {
 	lock_guard<mutex> l(version_lock);
 	idx_t total_count = 0;
-	for (idx_t r = 0, i = 0; r < count; r += STANDARD_VECTOR_SIZE, i++) {
+	// Only visit version vectors belonging to this scan assignment.
+	for (idx_t r = 0, i = start_vector; r < count; r += STANDARD_VECTOR_SIZE, i++) {
 		idx_t segment_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - r);
 		if (segment_count == 0) {
 			break;

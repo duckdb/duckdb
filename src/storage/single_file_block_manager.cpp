@@ -214,6 +214,28 @@ void MainHeader::CheckMagicBytes(MemoryMappedFile &handle) {
 	}
 }
 
+static void ShowUnsupportedStorageVersionError(const idx_t version_number) {
+	// Check the version number to determine if we can read this file.
+	auto version = GetDuckDBVersions(static_cast<StorageVersion>(version_number));
+	string version_text;
+	if (!version.empty()) {
+		// Known version.
+		version_text = "DuckDB version " + string(version);
+	} else if (version_number > VERSION_NUMBER_UPPER) {
+		version_text = "a newer version of DuckDB";
+	} else {
+		version_text = "an older development version of DuckDB";
+	}
+	throw IOException(
+	    "Trying to read a database file with storage version number %lld, but we can only read storage versions "
+	    "between %lld and %lld.\n"
+	    "The database file was created with %s.\n\n"
+	    "Newer DuckDB version might introduce backward incompatible changes (possibly guarded by compatibility "
+	    "settings).\n"
+	    "See the storage page for migration strategy and more information: https://duckdb.org/internals/storage",
+	    version_number, VERSION_NUMBER_LOWER, VERSION_NUMBER_UPPER, version_text);
+}
+
 MainHeader MainHeader::Read(ReadStream &source) {
 	data_t magic_bytes[MAGIC_BYTE_SIZE];
 
@@ -229,25 +251,7 @@ MainHeader MainHeader::Read(ReadStream &source) {
 		// if the version number in the main header is deprecated, then we just ignore the main header version number
 		// TODO: if we are confident, we can remove the check below
 	} else if (header.version_number < VERSION_NUMBER_LOWER || header.version_number > VERSION_NUMBER_UPPER) {
-		// Check the version number to determine if we can read this file.
-		auto version = GetDuckDBVersions(static_cast<StorageVersion>(header.version_number));
-		string version_text;
-		if (!version.empty()) {
-			// Known version.
-			version_text = "DuckDB version " + string(version);
-		} else {
-			version_text = string("an ") +
-			               (VERSION_NUMBER_UPPER > header.version_number ? "older development" : "newer") +
-			               string(" version of DuckDB");
-		}
-		throw IOException(
-		    "Trying to read a database file with version number %lld, but we can only read versions between %lld and "
-		    "%lld.\n"
-		    "The database file was created with %s.\n\n"
-		    "Newer DuckDB version might introduce backward incompatible changes (possibly guarded by compatibility "
-		    "settings).\n"
-		    "See the storage page for migration strategy and more information: https://duckdb.org/internals/storage",
-		    header.version_number, VERSION_NUMBER_LOWER, VERSION_NUMBER_UPPER, version_text);
+		ShowUnsupportedStorageVersionError(header.version_number);
 	}
 
 	// Read the flags.
@@ -294,7 +298,11 @@ void DatabaseHeader::SetStorageVersionInDatabaseHeader(DatabaseHeader &header, S
 			break;
 			// new versions should be added here
 		default:
-			throw InvalidInputException("Storage Version '%d' is not found!", static_cast<idx_t>(read_version));
+			if (static_cast<idx_t>(read_version) > VERSION_NUMBER_UPPER) {
+				ShowUnsupportedStorageVersionError(static_cast<idx_t>(read_version));
+			}
+			throw InvalidInputException("Unsupported Storage Version '%d' in the database header!",
+			                            static_cast<idx_t>(read_version));
 		}
 	} else {
 		// Before V2.0.0 the Storage Version in the main header could be written in two different ways

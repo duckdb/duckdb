@@ -214,6 +214,7 @@ unique_ptr<FunctionData> BetweenFunctionDeserialize(Deserializer &deserializer, 
 ScalarFunction BetweenFun::GetFunction() {
 	ScalarFunction between_fun("__between", {LogicalType::ANY, LogicalType::ANY, LogicalType::ANY},
 	                           LogicalType::BOOLEAN, BetweenFunction, BindBetweenFun);
+	between_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	between_fun.SetToStringCallback(BetweenToString);
 	between_fun.SetGetExpressionTypeCallback(BetweenGetExpressionType);
 	between_fun.SetLegacySerializeCallback(BetweenLegacySerializeCallback);

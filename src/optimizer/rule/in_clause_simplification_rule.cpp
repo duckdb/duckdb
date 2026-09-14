@@ -126,7 +126,7 @@ unique_ptr<Expression> InEnumSimplificationRule::Apply(LogicalOperator &op, vect
 	} else {
 		// constant_or_null(not_in, child[0])
 		const bool not_in = (expr.GetExpressionType() == ExpressionType::COMPARE_NOT_IN);
-		return rewriter.ConstantOrNull(in_children[0]->Copy(), Value::BOOLEAN(not_in));
+		return rewriter.ConstantOrNull(GetContext(), in_children[0]->Copy(), Value::BOOLEAN(not_in));
 	}
 
 	return nullptr;
@@ -212,11 +212,11 @@ unique_ptr<Expression> EnumCompareSimplificationRule::Apply(LogicalOperator &op,
 		//	Not in the domain, so rewrite as ConstantOrNull(enum, ne)
 		switch (expr.GetExpressionType()) {
 		case ExpressionType::COMPARE_EQUAL:
-			return rewriter.ConstantOrNull(std::move(cmp_children[0]), Value::BOOLEAN(false));
+			return rewriter.ConstantOrNull(GetContext(), std::move(cmp_children[0]), Value::BOOLEAN(false));
 		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 			return make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
 		case ExpressionType::COMPARE_NOTEQUAL:
-			return rewriter.ConstantOrNull(std::move(cmp_children[0]), Value::BOOLEAN(true));
+			return rewriter.ConstantOrNull(GetContext(), std::move(cmp_children[0]), Value::BOOLEAN(true));
 		case ExpressionType::COMPARE_DISTINCT_FROM:
 			return make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
 		default:

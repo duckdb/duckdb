@@ -14,6 +14,7 @@
 #include "duckdb/planner/bound_constraint.hpp"
 
 namespace duckdb {
+struct CreateInfo;
 class TableCatalogEntry;
 class LogicalGet;
 class LogicalProjection;

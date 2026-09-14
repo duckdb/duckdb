@@ -22,13 +22,14 @@ TableFunction::TableFunction(Identifier name, const vector<LogicalType> &argumen
       bind_operator(nullptr), init_global(init_global), init_local(init_local), function(function_),
       in_out_function(nullptr), in_out_function_final(nullptr), statistics(nullptr), statistics_extended(nullptr),
       dependency(nullptr), cardinality(nullptr), get_metrics(nullptr), pushdown_complex_filter(nullptr),
-      pushdown_expression(nullptr), to_string(nullptr), table_scan_progress(nullptr), get_partition_data(nullptr),
-      get_bind_info(nullptr), projection_expression_pushdown(nullptr), get_multi_file_reader(nullptr),
-      supports_pushdown_type(nullptr), supports_pushdown_extract(nullptr), is_repeatable(nullptr),
-      get_partition_info(nullptr), get_partition_stats(nullptr), get_virtual_columns(nullptr),
-      get_row_id_columns(nullptr), set_scan_order(nullptr), serialize(nullptr), deserialize(nullptr),
-      projection_pushdown(false), filter_pushdown(false), filter_prune(false), sampling_pushdown(false),
-      late_materialization(false), return_type(TableFunctionReturnType::TABLE_RETURNING_FUNCTION) {
+      pushdown_expression(nullptr), combine_schema(nullptr), claim_batch(nullptr), finish_batch(nullptr),
+      to_string(nullptr), table_scan_progress(nullptr), get_partition_data(nullptr), get_bind_info(nullptr),
+      projection_expression_pushdown(nullptr), get_multi_file_reader(nullptr), supports_pushdown_type(nullptr),
+      supports_pushdown_extract(nullptr), is_repeatable(nullptr), get_partition_info(nullptr),
+      get_partition_stats(nullptr), get_virtual_columns(nullptr), get_row_id_columns(nullptr), set_scan_order(nullptr),
+      serialize(nullptr), deserialize(nullptr), projection_pushdown(false), filter_pushdown(false), filter_prune(false),
+      sampling_pushdown(false), late_materialization(false),
+      return_type(TableFunctionReturnType::TABLE_RETURNING_FUNCTION) {
 }
 
 TableFunction::TableFunction(Identifier name, const vector<LogicalType> &arguments, std::nullptr_t function_,
@@ -38,13 +39,14 @@ TableFunction::TableFunction(Identifier name, const vector<LogicalType> &argumen
       bind_operator(nullptr), init_global(init_global), init_local(init_local), function(nullptr),
       in_out_function(nullptr), in_out_function_final(nullptr), statistics(nullptr), statistics_extended(nullptr),
       dependency(nullptr), cardinality(nullptr), get_metrics(nullptr), pushdown_complex_filter(nullptr),
-      pushdown_expression(nullptr), to_string(nullptr), table_scan_progress(nullptr), get_partition_data(nullptr),
-      get_bind_info(nullptr), projection_expression_pushdown(nullptr), get_multi_file_reader(nullptr),
-      supports_pushdown_type(nullptr), supports_pushdown_extract(nullptr), is_repeatable(nullptr),
-      get_partition_info(nullptr), get_partition_stats(nullptr), get_virtual_columns(nullptr),
-      get_row_id_columns(nullptr), set_scan_order(nullptr), serialize(nullptr), deserialize(nullptr),
-      projection_pushdown(false), filter_pushdown(false), filter_prune(false), sampling_pushdown(false),
-      late_materialization(false), return_type(TableFunctionReturnType::TABLE_RETURNING_FUNCTION) {
+      pushdown_expression(nullptr), combine_schema(nullptr), claim_batch(nullptr), finish_batch(nullptr),
+      to_string(nullptr), table_scan_progress(nullptr), get_partition_data(nullptr), get_bind_info(nullptr),
+      projection_expression_pushdown(nullptr), get_multi_file_reader(nullptr), supports_pushdown_type(nullptr),
+      supports_pushdown_extract(nullptr), is_repeatable(nullptr), get_partition_info(nullptr),
+      get_partition_stats(nullptr), get_virtual_columns(nullptr), get_row_id_columns(nullptr), set_scan_order(nullptr),
+      serialize(nullptr), deserialize(nullptr), projection_pushdown(false), filter_pushdown(false), filter_prune(false),
+      sampling_pushdown(false), late_materialization(false),
+      return_type(TableFunctionReturnType::TABLE_RETURNING_FUNCTION) {
 }
 
 TableFunction::TableFunction(const vector<LogicalType> &arguments, table_function_t function_,

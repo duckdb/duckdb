@@ -303,7 +303,7 @@ bool NodePtr::HasByte(const ART &art, const uint8_t byte) const {
 	case NType::NODE_15_LEAF:
 		return Ref<const Node15Leaf>(art, *this, NType::NODE_15_LEAF).HasByte(byte);
 	case NType::NODE_256_LEAF:
-		return Ref<Node256Leaf>(art, *this, NType::NODE_256_LEAF).HasByte(byte);
+		return Ref<const Node256Leaf>(art, *this, NType::NODE_256_LEAF).HasByte(byte);
 	default:
 		throw InternalException("Invalid node type for GetNextByte: %d.", type);
 	}
@@ -319,7 +319,7 @@ bool NodePtr::GetNextByte(const ART &art, uint8_t &byte) const {
 	case NType::NODE_15_LEAF:
 		return Ref<const Node15Leaf>(art, *this, NType::NODE_15_LEAF).GetNextByte(byte);
 	case NType::NODE_256_LEAF:
-		return Ref<Node256Leaf>(art, *this, NType::NODE_256_LEAF).GetNextByte(byte);
+		return Ref<const Node256Leaf>(art, *this, NType::NODE_256_LEAF).GetNextByte(byte);
 	default:
 		throw InternalException("Invalid node type for GetNextByte: %d.", type);
 	}

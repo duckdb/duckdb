@@ -1,4 +1,6 @@
 #include "duckdb/parser/peg/ast/unpivot_name_values.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/common/types/uuid.hpp"

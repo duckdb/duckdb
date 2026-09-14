@@ -1,4 +1,5 @@
 #include "duckdb/parser/statement/pragma_statement.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 
@@ -23,9 +24,9 @@ PEGTransformerFactory::TransformPragmaAssign(PEGTransformer &transformer, const 
 	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr->Cast<ColumnRefExpression>();
 		if (!colref.IsQualified()) {
-			info.parameters.emplace_back(make_uniq<ConstantExpression>(Value(colref.GetColumnName())));
+			info.parameters.emplace_back(ConstantExpression::String(colref.GetColumnName().GetIdentifierName()));
 		} else {
-			info.parameters.emplace_back(make_uniq<ConstantExpression>(Value(expr->ToString())));
+			info.parameters.emplace_back(ConstantExpression::String(expr->ToString()));
 		}
 	} else {
 		info.parameters.emplace_back(std::move(expr));
@@ -62,9 +63,10 @@ PEGTransformerFactory::TransformPragmaFunction(PEGTransformer &transformer, cons
 		} else if (parameter->GetExpressionType() == ExpressionType::COLUMN_REF) {
 			auto &colref = parameter->Cast<ColumnRefExpression>();
 			if (!colref.IsQualified()) {
-				result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(colref.GetColumnName())));
+				result->info->parameters.emplace_back(
+				    ConstantExpression::String(colref.GetColumnName().GetIdentifierName()));
 			} else {
-				result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(parameter->ToString())));
+				result->info->parameters.emplace_back(ConstantExpression::String(parameter->ToString()));
 			}
 		} else {
 			result->info->parameters.emplace_back(std::move(parameter));

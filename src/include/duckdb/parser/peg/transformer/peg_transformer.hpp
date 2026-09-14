@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/parser/peg/ast/unpivot_name_values.hpp"
+#include "duckdb/parser/qualified_name_set.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include "duckdb/parser/peg/transformer/transform_result.hpp"
 #include "duckdb/parser/peg/ast/add_column_entry.hpp"
@@ -78,6 +79,169 @@ struct GroupByExpressionInfo {
 	vector<unique_ptr<ParsedExpression>> expressions;
 	vector<GroupByExpressionInfo> children;
 };
+
+//===--------------------------------------------------------------------===//
+// START GENERATED TRANSFORM RESULT TYPES
+//===--------------------------------------------------------------------===//
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.AddColumnEntry", AddColumnEntry);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.AnalyzeTarget", AnalyzeTarget);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.BetweenInLikeOperator", BetweenInLikeOperator);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.BinaryExpressionTail", BinaryExpressionTail);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.CaseCheck", CaseCheck);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.CastArguments", CastArguments);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.CatalogType", CatalogType);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.ColumnConstraintEntry", ColumnConstraintEntry);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.ColumnElements", ColumnElements);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.ColumnList", ColumnList);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.CommonTableExpressionMap", CommonTableExpressionMap);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.ComparisonExpressionTail", ComparisonExpressionTail);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.ConstraintColumnDefinition", ConstraintColumnDefinition);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.CopyDatabaseType", CopyDatabaseType);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.CreateTableColumnElement", CreateTableColumnElement);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.CreateTableDefinition", CreateTableDefinition);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.DatePartSpecifier", DatePartSpecifier);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.DescribeTarget", DescribeTarget);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.DistinctClause", DistinctClause);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.ExpressionType", ExpressionType);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.ExtensionRepositoryInfo", ExtensionRepositoryInfo);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.FunctionArgument", FunctionArgument);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.GeneratedColumnDefinition", GeneratedColumnDefinition);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.GenericCopyOption", GenericCopyOption);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.GenericCopyOptionValue", GenericCopyOptionValue);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.GroupByExpressionInfo", GroupByExpressionInfo);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.GroupByNode", GroupByNode);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.Identifier", Identifier);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.InsertColumnOrder", InsertColumnOrder);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.InsertValues", InsertValues);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.IsDistinctFromTail", IsDistinctFromTail);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.JoinPrefix", JoinPrefix);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.JoinQualifier", JoinQualifier);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.JoinType", JoinType);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.KeyActions", KeyActions);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.LimitPercentResult", LimitPercentResult);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.LogicalType", LogicalType);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.LogicalTypeId", LogicalTypeId);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.MacroParameter", MacroParameter);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.MergeActionCondition", MergeActionCondition);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.MethodArguments", MethodArguments);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.OnConflictAction", OnConflictAction);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.OnConflictExpressionTarget", OnConflictExpressionTarget);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.OrderByNode", OrderByNode);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.OrderByNullType", OrderByNullType);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.OrderType", OrderType);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.OtherOperatorTail", OtherOperatorTail);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.ParsedOperator", ParsedOperator);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.PartitionSortedOptions", PartitionSortedOptions);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.PivotColumn", PivotColumn);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.QualifiedColumnName", QualifiedColumnName);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.QualifiedName", QualifiedName);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.SampleMethod", SampleMethod);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.SecretPersistType", SecretPersistType);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.SetOperationType", SetOperationType);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.SetScope", SetScope);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.SettingInfo", SettingInfo);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.ShowType", ShowType);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.TableAlias", TableAlias);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.TransactionModifierType", TransactionModifierType);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.TriggerEventInfo", TriggerEventInfo);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.TriggerForEach", TriggerForEach);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.TriggerTableReferencingInfo",
+                                      TriggerTableReferencingInfo);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.TriggerTiming", TriggerTiming);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.TrimArguments", TrimArguments);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.UnpivotNameValues", UnpivotNameValues);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.VacuumOptions", VacuumOptions);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.Value", Value);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.WindowBoundaryExpression", WindowBoundaryExpression);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.WindowExcludeMode", WindowExcludeMode);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.WindowFrame", WindowFrame);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.bool", bool);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.case_insensitive_map_t<unique_ptr<ParsedExpression>>",
+                                      case_insensitive_map_t<unique_ptr<ParsedExpression>>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.child_list_t<LogicalType>", child_list_t<LogicalType>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.int64_t", int64_t);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.optional_idx", optional_idx);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.pair<Identifier, LogicalType>",
+                                      pair<Identifier, LogicalType>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.pair<Identifier, unique_ptr<CommonTableExpressionInfo>>",
+                                      pair<Identifier, unique_ptr<CommonTableExpressionInfo>>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.pair<Identifier, unique_ptr<ParsedExpression>>",
+                                      pair<Identifier, unique_ptr<ParsedExpression>>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.pair<MergeActionCondition, unique_ptr<MergeIntoAction>>",
+                                      pair<MergeActionCondition, unique_ptr<MergeIntoAction>>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.pair<QualifiedColumnName, string>",
+                                      pair<QualifiedColumnName, string>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.pair<SampleMethod, optional_idx>",
+                                      pair<SampleMethod, optional_idx>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.pair<string, bool>", pair<string, bool>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.pair<string, unique_ptr<ParsedExpression>>",
+                                      pair<string, unique_ptr<ParsedExpression>>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.pair<string, unique_ptr<SequenceOption>>",
+                                      pair<string, unique_ptr<SequenceOption>>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE(
+    "duckdb.transform_result.pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>",
+    pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.qualified_column_map_t<string>",
+                                      qualified_column_map_t<string>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.qualified_column_set_t", qualified_column_set_t);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.string", string);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<AlterInfo>", unique_ptr<AlterInfo>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<AlterTableInfo>", unique_ptr<AlterTableInfo>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<AtClause>", unique_ptr<AtClause>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<BaseTableRef>", unique_ptr<BaseTableRef>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<ColumnRefExpression>",
+                                      unique_ptr<ColumnRefExpression>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<ConnectInfo>", unique_ptr<ConnectInfo>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<Constraint>", unique_ptr<Constraint>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<CreateStatement>",
+                                      unique_ptr<CreateStatement>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<CreateTypeInfo>", unique_ptr<CreateTypeInfo>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<DropStatement>", unique_ptr<DropStatement>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<MacroFunction>", unique_ptr<MacroFunction>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<MergeIntoAction>",
+                                      unique_ptr<MergeIntoAction>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<OnConflictInfo>", unique_ptr<OnConflictInfo>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<ParsedExpression>",
+                                      unique_ptr<ParsedExpression>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<QueryNode>", unique_ptr<QueryNode>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<ResultModifier>", unique_ptr<ResultModifier>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<SQLStatement>", unique_ptr<SQLStatement>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<SampleOptions>", unique_ptr<SampleOptions>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<SelectNode>", unique_ptr<SelectNode>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<SelectStatement>",
+                                      unique_ptr<SelectStatement>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<SetOperationNode>",
+                                      unique_ptr<SetOperationNode>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<SetStatement>", unique_ptr<SetStatement>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<TableRef>", unique_ptr<TableRef>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<TransformResultValue>",
+                                      unique_ptr<TransformResultValue>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<UpdateSetInfo>", unique_ptr<UpdateSetInfo>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<WindowExpression>",
+                                      unique_ptr<WindowExpression>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<FunctionArgument>", vector<FunctionArgument>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<GenericCopyOption>", vector<GenericCopyOption>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<Identifier>", vector<Identifier>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<LogicalType>", vector<LogicalType>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<MacroParameter>", vector<MacroParameter>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<OrderByNode>", vector<OrderByNode>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<PivotColumn>", vector<PivotColumn>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<PivotColumnEntry>", vector<PivotColumnEntry>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<WindowBoundaryExpression>",
+                                      vector<WindowBoundaryExpression>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<bool>", vector<bool>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<string>", vector<string>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<unique_ptr<ParsedExpression>>",
+                                      vector<unique_ptr<ParsedExpression>>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<unique_ptr<ResultModifier>>",
+                                      vector<unique_ptr<ResultModifier>>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<unique_ptr<SQLStatement>>",
+                                      vector<unique_ptr<SQLStatement>>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<unique_ptr<TableRef>>",
+                                      vector<unique_ptr<TableRef>>);
+//===--------------------------------------------------------------------===//
+// END GENERATED TRANSFORM RESULT TYPES
+//===--------------------------------------------------------------------===//
 
 class PEGTransformer;
 class TransformStack;
@@ -464,9 +628,6 @@ public:
 	static QualifiedName StringToQualifiedName(vector<string> input);
 	static QualifiedColumnName StringToQualifiedColumnName(const vector<string> &input);
 	static LogicalType GetIntervalTargetType(DatePartSpecifier date_part);
-	static bool ConstructConstantFromExpression(const ParsedExpression &expr, Value &value);
-	static unique_ptr<ParsedExpression> TryNegateValue(const ConstantExpression &expr);
-	static unique_ptr<ParsedExpression> ConvertNumberToValue(string val);
 	static void AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
 	                                 GroupByNode &result, vector<ProjectionIndex> &result_set);
 	static vector<GroupingSet> GroupByExpressionUnfolding(GroupByExpressionInfo &group_by_expr,
