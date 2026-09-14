@@ -559,8 +559,8 @@ set(SMALLER_BINARY "" CACHE STRING "Produce a smaller binary by trimming special
 set(SMALLER_BINARY_EXCEPT "" CACHE STRING "Feature or group names to keep, subtracted from SMALLER_BINARY.")
 option(NATIVE_ARCH "Compile targeting the native architecture" FALSE)
 set(DUCKDB_OPTIMIZATION_PROFILE "CLI" CACHE STRING
-    "Release architecture profile: CLI, EXTENSION, or NONE")
-set_property(CACHE DUCKDB_OPTIMIZATION_PROFILE PROPERTY STRINGS CLI EXTENSION NONE)
+    "Release architecture profile: CLI, EXTENSION, GRAVITON2, or NONE")
+set_property(CACHE DUCKDB_OPTIMIZATION_PROFILE PROPERTY STRINGS CLI EXTENSION GRAVITON2 NONE)
 option(ENABLE_JEMALLOC "Enable jemalloc as the memory allocator (only on supported platforms)" TRUE)
 option(OVERRIDE_NEW_DELETE "Override C++ new/delete (only when jemalloc is enabled)" FALSE)
 option(SET_DUCKDB_LIBRARY_VERSION "Whether or not to set the DuckDB Library version and emit versioned shared libraries" FALSE)

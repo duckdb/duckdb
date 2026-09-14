@@ -26,6 +26,10 @@ assert_architecture_flags(linux_amd64_extension Linux x86_64 Clang EXTENSION "" 
   "-march=x86-64-v2;-mtune=generic")
 assert_architecture_flags(linux_arm64 Linux aarch64 GNU CLI "" "" FALSE FALSE
   "-march=armv8-a;-mtune=generic")
+assert_architecture_flags(linux_arm64_graviton2_gcc Linux aarch64 GNU GRAVITON2 "" "" FALSE FALSE
+  "-march=armv8.2-a;-mtune=generic")
+assert_architecture_flags(linux_arm64_graviton2_clang Linux aarch64 Clang GRAVITON2 "" "" FALSE FALSE
+  "-march=armv8.2-a;-mtune=generic")
 assert_architecture_flags(windows_amd64_clang_cl Windows AMD64 Clang CLI "" "" FALSE FALSE
   "-march=haswell;-mtune=generic")
 assert_architecture_flags(windows_amd64_mingw Windows unknown GNU EXTENSION windows_amd64_mingw "" FALSE FALSE

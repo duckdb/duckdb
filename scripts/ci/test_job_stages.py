@@ -133,6 +133,7 @@ class JobStagesTest(unittest.TestCase):
         required_jobs = {"linux-relassert", "linux-release", "linux-release-tests", "tidy-check"}
         self.assertTrue(required_jobs.issubset(set(selection.enabled_jobs)))
         self.assertNotIn("osx", selection.enabled_jobs)
+        self.assertNotIn("arm64 Graviton 2+", [config["name"] for config in selection.linux_release_matrix])
         self.assertFalse(selection.save_cache)
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
@@ -140,6 +141,7 @@ class JobStagesTest(unittest.TestCase):
         selection = self._compute_job_selection("push", "main", "duckdb/duckdb", changed_keys={"osx"})
         self.assertIn("codecov", selection.enabled_jobs)
         self.assertEqual(selection.enabled_jobs.count("osx"), 1)
+        self.assertNotIn("arm64 Graviton 2+", [config["name"] for config in selection.linux_release_matrix])
         self.assertFalse(selection.save_cache)
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
@@ -152,7 +154,7 @@ class JobStagesTest(unittest.TestCase):
             self.assertTrue(set(job_stages.RELEASE_JOBS).issubset(set(workflow_dispatch_selection.enabled_jobs)))
             self.assertNotIn("regression", workflow_dispatch_selection.enabled_jobs)
             self.assertTrue(workflow_dispatch_selection.optimized_release)
-            self.assertEqual(len(workflow_dispatch_selection.linux_release_matrix), 4)
+            self.assertEqual(len(workflow_dispatch_selection.linux_release_matrix), 5)
             self.assertEqual(
                 [config["ccache_key"] for config in workflow_dispatch_selection.linux_release_matrix[:2]],
                 ["linux-cli-amd64-glibc", "linux-cli-arm64-glibc"],
@@ -164,6 +166,7 @@ class JobStagesTest(unittest.TestCase):
                     "linux-release-arm64-compat-build",
                     "linux-release-build",
                     "linux-release-arm64-build",
+                    "linux-release-arm64-graviton2-build",
                 ],
             )
             self.assertEqual(
@@ -181,7 +184,19 @@ class JobStagesTest(unittest.TestCase):
         self.assertNotIn("codecov", selection.enabled_jobs)
         self.assertNotIn("osx", selection.enabled_jobs)
         self.assertIn("linux-release-musl", selection.enabled_jobs)
-        self.assertEqual([config["name"] for config in selection.linux_release_matrix], ["amd64 compatibility"])
+        self.assertEqual(
+            [config["name"] for config in selection.linux_release_matrix],
+            ["amd64 compatibility", "arm64 Graviton 2+"],
+        )
+        graviton_config = selection.linux_release_matrix[1]
+        self.assertEqual(graviton_config["artifact_suffix"], "linux-arm64-graviton2")
+        self.assertEqual(graviton_config["optimization_profile"], "GRAVITON2")
+        self.assertEqual(graviton_config["expected_march"], "-march=armv8.2-a")
+        self.assertEqual(graviton_config["expected_mtune"], "-mtune=generic")
+        self.assertEqual(graviton_config["lto"], "thin")
+        self.assertTrue(graviton_config["publish_cli"])
+        self.assertFalse(graviton_config["is_canonical_build"])
+        self.assertFalse(graviton_config["publish_static"])
         self.assertEqual([config["name"] for config in selection.linux_musl_matrix], ["arm64"])
         self.assertFalse(selection.save_cache)
 
@@ -201,7 +216,13 @@ class JobStagesTest(unittest.TestCase):
         self.assertTrue(selection.optimized_release)
         self.assertEqual(
             [config["name"] for config in selection.linux_release_matrix],
-            ["amd64 compatibility", "arm64 compatibility", "amd64 optimized", "arm64 optimized"],
+            [
+                "amd64 compatibility",
+                "arm64 compatibility",
+                "amd64 optimized",
+                "arm64 optimized",
+                "arm64 Graviton 2+",
+            ],
         )
         self.assertEqual(
             [config["build_artifact"] for config in selection.linux_release_matrix],
@@ -210,6 +231,7 @@ class JobStagesTest(unittest.TestCase):
                 "linux-release-arm64-compat-build",
                 "linux-release-build",
                 "linux-release-arm64-build",
+                "linux-release-arm64-graviton2-build",
             ],
         )
         self.assertEqual(

@@ -697,6 +697,7 @@ jobs:
         FORCE_WARN_UNUSED: 1
         LTO: ${{ matrix.config.lto }}
         LTO_JOBS: ${{ matrix.config.lto_jobs }}
+        DUCKDB_OPTIMIZATION_PROFILE: ${{ matrix.config.optimization_profile }}
         SMOKE_RUNNER: build/release/test/run
         EXTRA_CMAKE_VARIABLES: ${{ matrix.config.extra_cmake_variables }}
       with:
@@ -723,19 +724,15 @@ jobs:
     - name: Verify build flags
       shell: bash
       run: |
-        if [[ "${{ matrix.config.arch }}" == "amd64" ]]; then
-          grep -Fq -- '-march=x86-64-v3' build/release/compile_commands.json
-        else
-          grep -Fq -- '-march=armv8-a' build/release/compile_commands.json
-        fi
-        grep -Fq -- '-mtune=generic' build/release/compile_commands.json
-        if [[ "${{ matrix.config.is_compatibility_build }}" == "true" ]]; then
+        grep -Fq -- '${{ matrix.config.expected_march }}' build/release/compile_commands.json
+        grep -Fq -- '${{ matrix.config.expected_mtune }}' build/release/compile_commands.json
+        if [[ -z "${{ matrix.config.lto }}" ]]; then
           if grep -Fq -- '-flto' build/release/compile_commands.json; then
             echo "Compatibility build unexpectedly contains LTO flags" >&2
             exit 1
           fi
         else
-          grep -Fq -- '-flto=thin' build/release/compile_commands.json
+          grep -Fq -- '-flto=${{ matrix.config.lto }}' build/release/compile_commands.json
         fi
 
     - name: GCC static library compatibility
@@ -785,15 +782,18 @@ jobs:
           make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/libs/*"
           assets+=(duckdb-static-libs-${{ matrix.config.artifact_suffix }}.tar.gz)
         fi
-        if [[ "${{ matrix.config.is_canonical_build }}" == "true" ]]; then
+        if [[ "${{ matrix.config.publish_cli }}" == "true" ]]; then
           make cli-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} CLI_BINARY=build/release/duckdb
+          assets+=(duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz)
+        fi
+        if [[ "${{ matrix.config.is_canonical_build }}" == "true" ]]; then
           make shared-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} SHARED_LIBRARIES="build/release/src/libduckdb.so*"
-          assets+=(duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz)
+          assets+=(duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz)
         fi
         ./scripts/upload-assets-to-staging.sh github_release "${assets[@]}"
 
     - uses: actions/upload-artifact@v7
-      if: ${{ matrix.config.is_canonical_build }}
+      if: ${{ matrix.config.publish_cli }}
       with:
         path: duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz
         archive: false

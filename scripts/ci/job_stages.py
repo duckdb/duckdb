@@ -170,9 +170,13 @@ def compatibility_release_config(*, runner: str, arch: str, optimized_release: b
         "save_vcpkg_cache": True,
         "lto": "",
         "lto_jobs": "",
+        "optimization_profile": "CLI",
+        "expected_march": "-march=x86-64-v3" if is_amd64 else "-march=armv8-a",
+        "expected_mtune": "-mtune=generic",
         "extra_cmake_variables": "",
         "is_compatibility_build": True,
         "is_canonical_build": not optimized_release,
+        "publish_cli": not optimized_release,
         "publish_static": True,
         "publish_source": is_amd64,
         "run_smoke": is_amd64,
@@ -197,14 +201,34 @@ def optimized_release_config(*, runner: str, arch: str) -> dict[str, object]:
         "save_vcpkg_cache": False,
         "lto": "thin",
         "lto_jobs": "8",
+        "optimization_profile": "CLI",
+        "expected_march": "-march=x86-64-v3" if is_amd64 else "-march=armv8-a",
+        "expected_mtune": "-mtune=generic",
         "extra_cmake_variables": "-DCMAKE_C_COMPILER_LAUNCHER= -DCMAKE_CXX_COMPILER_LAUNCHER=",
         "is_compatibility_build": False,
         "is_canonical_build": True,
+        "publish_cli": True,
         "publish_static": False,
         "publish_source": False,
         "run_smoke": True,
         "run_arm_tests": not is_amd64,
     }
+
+
+def graviton2_release_config(*, runner: str) -> dict[str, object]:
+    config = optimized_release_config(runner=runner, arch="arm64")
+    config.update(
+        {
+            "name": "arm64 Graviton 2+",
+            "artifact_suffix": "linux-arm64-graviton2",
+            "build_artifact": "linux-release-arm64-graviton2-build",
+            "optimization_profile": "GRAVITON2",
+            "expected_march": "-march=armv8.2-a",
+            "expected_mtune": "-mtune=generic",
+            "is_canonical_build": False,
+        }
+    )
+    return config
 
 
 def linux_release_matrix(selection_input: JobSelectionInput, optimized_release: bool) -> list[dict[str, object]]:
@@ -228,6 +252,8 @@ def linux_release_matrix(selection_input: JobSelectionInput, optimized_release: 
                 optimized_release_config(runner=selection_input.runners.get("linux_arm64", ""), arch="arm64"),
             ]
         )
+    if selection_input.event_name in {"pull_request", "workflow_dispatch"}:
+        result.append(graviton2_release_config(runner=selection_input.runners.get("linux_arm64", "")))
     return result
 
 
