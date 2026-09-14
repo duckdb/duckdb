@@ -142,9 +142,11 @@ idx_t MarkJoinRefinement::SizeInBytes() const {
 
 MarkPatternRefiner::MarkPatternRefiner(ClientContext &context, const PhysicalComparisonJoin &op,
                                        MarkJoinRefinement &refinement, mutex &lock, mark_key_fetch_t fetch,
-                                       DataChunk &keys, bool matches[], ValidityMask &validity)
+                                       DataChunk &keys, bool matches[], ValidityMask &validity,
+                                       optional_ptr<MarkPatternProbeSource> sorted_probes)
     : context(context), op(op), conditions(op.conditions), refinement(refinement), lock(lock), fetch(std::move(fetch)),
-      chunk(this->fetch(0)), keys(keys), matches(matches), validity(validity), comparison(LogicalType::BOOLEAN) {
+      chunk(this->fetch(0)), keys(keys), matches(matches), validity(validity), comparison(LogicalType::BOOLEAN),
+      sorted_probes(sorted_probes) {
 	condition_types = keys.GetTypes();
 	candidates.InitializeEmpty(condition_types);
 }
@@ -256,82 +258,73 @@ void MarkPatternRefiner::ProbeEqualityIndex(MarkJoinRefinementIndex &index, uint
 	}
 }
 
-void MarkPatternRefiner::RefineRangePattern(MarkJoinRefinementGroup &group, uint64_t probe_mask, uint64_t build_mask,
-                                            vector<idx_t> driving) {
-	if (!refinement_batches.emplace(probe_mask, build_mask).second) {
-		return;
-	}
-	std::sort(driving.begin(), driving.end(),
-	          [&](idx_t lhs, idx_t rhs) { return PhysicalRangeJoin::LessThan(conditions[lhs], conditions[rhs]); });
-	driving.resize(2);
-	vector<JoinCondition> range_conditions;
-	for (auto col : driving) {
-		range_conditions.push_back(conditions[col].Copy());
-	}
-	vector<LogicalType> types {condition_types[driving[0]], condition_types[driving[1]], LogicalType::UBIGINT};
-	ThreadContext thread(context);
-	ExecutionContext execution(context, thread, nullptr);
-	const auto &physical = op;
+unique_ptr<IEJoinBuildOrders> MarkPatternRefiner::BuildRangeIndex(ExecutionContext &execution,
+                                                                  MarkJoinRefinementGroup &group,
+                                                                  const vector<idx_t> &driving,
+                                                                  const vector<JoinCondition> &range_conditions) {
 	auto &manager = BufferManager::GetBufferManager(context);
-	auto &build = [&]() -> IEJoinBuildOrders & {
-		lock_guard<mutex> guard(lock);
-		const auto mask = (uint64_t(1) << driving[0]) | (uint64_t(1) << driving[1]);
-		auto &index = group.indexes[mask];
-		if (!index) {
-			index = make_uniq<MarkJoinRefinementIndex>();
-		}
-		if (!index->ranges) {
-			ColumnDataCollection input(manager, types);
-			ColumnDataAppendState append;
-			input.InitializeAppend(append);
-			DataChunk projected;
-			projected.Initialize(context, types);
-			for (auto &selection : group.selections) {
-				context.InterruptCheck();
-				fetch(selection.first);
-				projected.Reset();
-				for (auto row : selection.second) {
-					projected.data[0].Append(chunk.GetValue(driving[0], row));
-					projected.data[1].Append(chunk.GetValue(driving[1], row));
-					projected.data[2].Append(Value::UBIGINT(selection.first * STANDARD_VECTOR_SIZE + row));
-				}
-				projected.SetChildCardinality(selection.second.size());
-				input.Append(append, projected);
-			}
-			auto first = IEJoinUnion::SortInput(execution, physical, range_conditions, input);
-			index->ranges = IEJoinUnion::PrepareBuild(execution, physical, range_conditions, std::move(first));
-		}
-		return *index->ranges;
-	}();
+	vector<LogicalType> types {condition_types[driving[0]], condition_types[driving[1]], LogicalType::UBIGINT};
 	ColumnDataCollection input(manager, types);
 	ColumnDataAppendState append;
 	input.InitializeAppend(append);
 	DataChunk projected;
 	projected.Initialize(context, types);
-	idx_t count = 0;
-	for (idx_t row = 0; row < keys.size(); row++) {
-		if (matches.get()[row] || !validity.RowIsValid(row) ||
-		    MarkJoinRefinement::NullMask(keys, row, conditions) != probe_mask) {
-			continue;
+	for (auto &selection : group.selections) {
+		context.InterruptCheck();
+		fetch(selection.first);
+		projected.Reset();
+		for (auto row : selection.second) {
+			projected.data[0].Append(chunk.GetValue(driving[0], row));
+			projected.data[1].Append(chunk.GetValue(driving[1], row));
+			projected.data[2].Append(Value::UBIGINT(selection.first * STANDARD_VECTOR_SIZE + row));
 		}
-		projected.data[0].Append(keys.GetValue(driving[0], row));
-		projected.data[1].Append(keys.GetValue(driving[1], row));
-		projected.data[2].Append(Value::UBIGINT(row));
-		count++;
+		projected.SetChildCardinality(selection.second.size());
+		input.Append(append, projected);
 	}
-	projected.SetChildCardinality(count);
-	input.Append(append, projected);
-	auto probes = IEJoinUnion::SortInput(execution, physical, range_conditions, input);
-	auto ranks = IEJoinUnion::PrepareRanks(execution, physical, range_conditions, *probes, build);
+	auto first = IEJoinUnion::SortInput(execution, op, range_conditions, input);
+	return IEJoinUnion::PrepareBuild(execution, op, range_conditions, std::move(first));
+}
+
+void MarkPatternRefiner::RunRangeJoin(ExecutionContext &execution, IEJoinBuildOrders &build,
+                                      const vector<idx_t> &driving, const vector<JoinCondition> &range_conditions,
+                                      uint64_t probe_mask, uint64_t dropped, const mark_key_fetch_t &probe_fetch,
+                                      idx_t probe_count, AllocatedData &markers) {
+	auto &manager = BufferManager::GetBufferManager(context);
+	vector<LogicalType> types {condition_types[driving[0]], condition_types[driving[1]], LogicalType::UBIGINT};
+	ColumnDataCollection input(manager, types);
+	ColumnDataAppendState append;
+	input.InitializeAppend(append);
+	DataChunk projected;
+	projected.Initialize(context, types);
+	for (idx_t offset = 0; offset < probe_count; offset += STANDARD_VECTOR_SIZE) {
+		context.InterruptCheck();
+		auto &probe_keys = probe_fetch(offset / STANDARD_VECTOR_SIZE);
+		projected.Reset();
+		idx_t count = 0;
+		for (idx_t row = 0; row < probe_keys.size(); row++) {
+			if (markers.get()[offset + row] ||
+			    MarkJoinRefinement::NullMask(probe_keys, row, conditions) != probe_mask) {
+				continue;
+			}
+			projected.data[0].Append(probe_keys.GetValue(driving[0], row));
+			projected.data[1].Append(probe_keys.GetValue(driving[1], row));
+			projected.data[2].Append(Value::UBIGINT(offset + row));
+			count++;
+		}
+		projected.SetChildCardinality(count);
+		input.Append(append, projected);
+	}
+	auto probes = IEJoinUnion::SortInput(execution, op, range_conditions, input);
+	auto ranks = IEJoinUnion::PrepareRanks(execution, op, range_conditions, *probes, build);
 	auto left_ids = IEJoinUnion::ExtractColumn(*probes, 2, manager);
 	IEJoinCursor<uint64_t> left_id(*left_ids), right_id(*build.row_ids);
 	IEJoinUnion joiner(build, *ranks);
 	unsafe_vector<idx_t> left, right;
 	SelectionVector left_sel(STANDARD_VECTOR_SIZE), right_sel(STANDARD_VECTOR_SIZE);
+	idx_t probe_rows[STANDARD_VECTOR_SIZE];
 	DataChunk probe_candidates, build_candidates;
 	probe_candidates.InitializeEmpty(condition_types);
 	build_candidates.InitializeEmpty(condition_types);
-	const auto dropped = probe_mask | build_mask;
 	vector<idx_t> tail;
 	for (idx_t col = 0; col < conditions.size(); col++) {
 		if (col != driving[0] && col != driving[1] && !(dropped & (uint64_t(1) << col))) {
@@ -341,27 +334,30 @@ void MarkPatternRefiner::RefineRangePattern(MarkJoinRefinementGroup &group, uint
 	while (joiner.JoinBlocks(left, right)) {
 		context.InterruptCheck();
 		for (idx_t pair = 0; pair < left.size();) {
-			const auto build_chunk = right_id[right[pair]] / STANDARD_VECTOR_SIZE;
+			const auto left_chunk = left_id[left[pair]] / STANDARD_VECTOR_SIZE;
+			const auto right_chunk = right_id[right[pair]] / STANDARD_VECTOR_SIZE;
 			idx_t batch_count = 0;
 			while (pair < left.size()) {
-				const auto probe = left_id[left[pair]];
-				const auto build_row = right_id[right[pair]];
-				if (build_row / STANDARD_VECTOR_SIZE != build_chunk) {
+				const auto lhs = left_id[left[pair]];
+				const auto rhs = right_id[right[pair]];
+				if (lhs / STANDARD_VECTOR_SIZE != left_chunk || rhs / STANDARD_VECTOR_SIZE != right_chunk) {
 					break;
 				}
 				pair++;
-				if (matches.get()[probe] || (dropped && !validity.RowIsValid(probe))) {
+				if (markers.get()[lhs] == 2 || (dropped && markers.get()[lhs])) {
 					continue;
 				}
-				left_sel.set_index(batch_count, probe);
-				right_sel.set_index(batch_count++, build_row % STANDARD_VECTOR_SIZE);
+				left_sel.set_index(batch_count, lhs % STANDARD_VECTOR_SIZE);
+				right_sel.set_index(batch_count, rhs % STANDARD_VECTOR_SIZE);
+				probe_rows[batch_count++] = lhs;
 			}
 			if (!batch_count) {
 				continue;
 			}
-			fetch(build_chunk);
+			auto &probe_keys = probe_fetch(left_chunk);
+			fetch(right_chunk);
 			for (auto col : tail) {
-				probe_candidates.data[col].Slice(keys.data[col], left_sel, batch_count);
+				probe_candidates.data[col].Slice(probe_keys.data[col], left_sel, batch_count);
 				build_candidates.data[col].Slice(chunk.data[col], right_sel, batch_count);
 			}
 			probe_candidates.SetChildCardinality(batch_count);
@@ -369,24 +365,116 @@ void MarkPatternRefiner::RefineRangePattern(MarkJoinRefinementGroup &group, uint
 			MarkJoinRowComparison::CompareTail(probe_candidates, build_candidates, conditions, tail, comparison);
 			auto values = comparison.Values<bool>();
 			for (idx_t row = 0; row < batch_count; row++) {
-				const auto probe = left_sel.get_index(row);
+				auto &marker = markers.get()[probe_rows[row]];
 				auto value = values[row];
 				if (!value.IsValid() || (dropped && value.GetValue())) {
-					if (!matches.get()[probe]) {
-						validity.SetInvalid(probe);
+					if (marker != 2) {
+						marker = 1;
 					}
 				} else if (value.GetValue()) {
-					matches.get()[probe] = true;
-					validity.SetValid(probe);
+					marker = 2;
 				}
 			}
 		}
 		if (joiner.lrid > 0 && !left.empty() && left.back() == idx_t(joiner.lrid - 1)) {
-			const auto probe = left_id[left.back()];
-			if (matches.get()[probe] || (dropped && !validity.RowIsValid(probe))) {
+			const auto marker = markers.get()[left_id[left.back()]];
+			if (marker == 2 || (dropped && marker)) {
 				joiner.FinishRow();
 			}
 		}
+	}
+}
+
+void MarkPatternRefiner::ApplyMarker(idx_t probe, uint8_t marker) {
+	if (marker == 2) {
+		matches.get()[probe] = true;
+		validity.SetValid(probe);
+	} else if (marker == 1 && !matches.get()[probe]) {
+		validity.SetInvalid(probe);
+	}
+}
+
+void MarkPatternRefiner::RefineRangePattern(MarkJoinRefinementGroup &group, idx_t probe, uint64_t probe_mask,
+                                            uint64_t build_mask, vector<idx_t> driving) {
+	if (!sorted_probes && !refinement_batches.emplace(probe_mask, build_mask).second) {
+		return;
+	}
+	std::sort(driving.begin(), driving.end(),
+	          [&](idx_t lhs, idx_t rhs) { return PhysicalRangeJoin::LessThan(conditions[lhs], conditions[rhs]); });
+	driving.resize(2);
+	auto &manager = BufferManager::GetBufferManager(context);
+	const auto dropped = probe_mask | build_mask;
+	if (sorted_probes) {
+		lock_guard<mutex> guard(lock);
+		auto &index = group.indexes[dropped];
+		if (!index) {
+			index = make_uniq<MarkJoinRefinementIndex>();
+		}
+		auto &cached = index->probe_results[probe_mask];
+		if (!cached) {
+			vector<JoinCondition> range_conditions;
+			for (auto col : driving) {
+				range_conditions.push_back(conditions[col].Copy());
+			}
+			ThreadContext thread(context);
+			ExecutionContext execution(context, thread, nullptr);
+			if (!index->ranges) {
+				index->ranges = BuildRangeIndex(execution, group, driving, range_conditions);
+			}
+			auto markers = manager.GetBufferAllocator().Allocate(sorted_probes->count);
+			memset(markers.get(), 0, sorted_probes->count);
+			RunRangeJoin(execution, *index->ranges, driving, range_conditions, probe_mask, dropped,
+			             sorted_probes->fetch, sorted_probes->count, markers);
+			cached = make_uniq<ColumnDataCollection>(manager, vector<LogicalType> {LogicalType::UTINYINT});
+			ColumnDataAppendState append;
+			cached->InitializeAppend(append);
+			DataChunk result;
+			result.Initialize(context, cached->Types());
+			for (idx_t offset = 0; offset < sorted_probes->count; offset += STANDARD_VECTOR_SIZE) {
+				result.Reset();
+				const auto count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, sorted_probes->count - offset);
+				for (idx_t row = 0; row < count; row++) {
+					result.data[0].Append(Value::UTINYINT(markers.get()[offset + row]));
+				}
+				result.SetChildCardinality(count);
+				cached->Append(append, result);
+			}
+		}
+		IEJoinCursor<uint8_t> results(*cached);
+		ApplyMarker(probe, results[sorted_probes->row_ids[probe]]);
+		return;
+	}
+	vector<JoinCondition> range_conditions;
+	for (auto col : driving) {
+		range_conditions.push_back(conditions[col].Copy());
+	}
+	ThreadContext thread(context);
+	ExecutionContext execution(context, thread, nullptr);
+	auto &build = [&]() -> IEJoinBuildOrders & {
+		lock_guard<mutex> guard(lock);
+		const auto mask = (uint64_t(1) << driving[0]) | (uint64_t(1) << driving[1]);
+		auto &index = group.indexes[mask];
+		if (!index) {
+			index = make_uniq<MarkJoinRefinementIndex>();
+		}
+		if (!index->ranges) {
+			index->ranges = BuildRangeIndex(execution, group, driving, range_conditions);
+		}
+		return *index->ranges;
+	}();
+	auto markers = manager.GetBufferAllocator().Allocate(keys.size());
+	for (idx_t row = 0; row < keys.size(); row++) {
+		markers.get()[row] = matches.get()[row] ? 2 : !validity.RowIsValid(row);
+	}
+	RunRangeJoin(
+	    execution, build, driving, range_conditions, probe_mask, dropped,
+	    [&](idx_t chunk_index) -> DataChunk & {
+		    D_ASSERT(chunk_index == 0);
+		    return keys;
+	    },
+	    keys.size(), markers);
+	for (idx_t row = 0; row < keys.size(); row++) {
+		ApplyMarker(row, markers.get()[row]);
 	}
 }
 
@@ -394,7 +482,7 @@ bool MarkPatternRefiner::RefineOneRange(MarkJoinRefinementGroup &group, idx_t pr
                                         idx_t range_column) {
 	auto &index = [&]() -> MarkJoinRefinementIndex & {
 		lock_guard<mutex> guard(lock);
-		auto &cached = group.indexes[uint64_t(1) << range_column];
+		auto &cached = group.indexes[sorted_probes ? dropped : uint64_t(1) << range_column];
 		if (!cached) {
 			auto built = make_uniq<MarkJoinRefinementIndex>();
 			const auto comparison_type = conditions[range_column].GetComparisonType();
@@ -416,21 +504,26 @@ bool MarkPatternRefiner::RefineOneRange(MarkJoinRefinementGroup &group, idx_t pr
 		}
 		return *cached;
 	}();
-	fetch(index.witness / STANDARD_VECTOR_SIZE);
-	SelectionVector selected(1);
-	selected.set_index(0, index.witness % STANDARD_VECTOR_SIZE);
-	candidates.Reference(chunk);
-	candidates.Slice(selected, 1);
-	return Finish(probe, dropped);
+	return RefineWitness(index.witness, probe, dropped);
 }
 
 bool MarkPatternRefiner::RefineExact(MarkJoinRefinementGroup &group, idx_t probe, uint64_t dropped) {
 	for (auto &selection : group.selections) {
+		const auto start = sorted_probes ? sorted_probes->build_start : 0;
+		if (sorted_probes && refinement.chunks[selection.first][0] + refinement.chunks[selection.first][1] <= start) {
+			continue;
+		}
 		context.InterruptCheck();
 		fetch(selection.first);
-		SelectionVector selected(selection.second.data(), selection.second.size());
+		SelectionVector selected(STANDARD_VECTOR_SIZE);
+		idx_t count = 0;
+		for (auto row : selection.second) {
+			if (!sorted_probes || refinement.chunks[selection.first][0] + row >= start) {
+				selected.set_index(count++, row);
+			}
+		}
 		candidates.Reference(chunk);
-		candidates.Slice(selected, selection.second.size());
+		candidates.Slice(selected, count);
 		if (Finish(probe, dropped)) {
 			return true;
 		}
@@ -440,7 +533,7 @@ bool MarkPatternRefiner::RefineExact(MarkJoinRefinementGroup &group, idx_t probe
 
 void MarkPatternRefiner::Refine() {
 	for (idx_t probe = 0; probe < keys.size(); probe++) {
-		if (matches.get()[probe] || !validity.RowIsValid(probe)) {
+		if (matches.get()[probe] || (!sorted_probes && !validity.RowIsValid(probe))) {
 			continue;
 		}
 		const auto probe_mask = MarkJoinRefinement::NullMask(keys, probe, conditions);
@@ -448,21 +541,22 @@ void MarkPatternRefiner::Refine() {
 			auto &group = entry.second;
 			const auto classification = MarkJoinRefinement::Classify(probe_mask, entry.first, conditions);
 			const auto dropped = classification.dropped;
+			const bool reduce =
+			    classification.reducible && (!sorted_probes || sorted_probes->null_probe || entry.first);
 			bool finished = false;
-			if (classification.equality_mask) {
+			if (!sorted_probes && classification.equality_mask) {
 				if (refinement_batches.emplace(probe_mask, entry.first).second) {
 					auto &index = BuildEqualityIndex(group, classification.equality_mask);
 					ProbeEqualityIndex(index, probe_mask, dropped, classification.equality_mask);
 				}
-				finished = matches.get()[probe] || !validity.RowIsValid(probe);
-			} else if (classification.ranges.size() >= 2) {
-				RefineRangePattern(group, probe_mask, entry.first, classification.ranges);
-				finished = matches.get()[probe] || !validity.RowIsValid(probe);
-			} else if (classification.reducible && classification.applicable_count == 0) {
+				finished = matches.get()[probe] || ((!sorted_probes || dropped) && !validity.RowIsValid(probe));
+			} else if (reduce && classification.ranges.size() >= 2) {
+				RefineRangePattern(group, probe, probe_mask, entry.first, classification.ranges);
+				finished = matches.get()[probe] || ((!sorted_probes || dropped) && !validity.RowIsValid(probe));
+			} else if (reduce && classification.applicable_count == 0) {
 				const auto &selection = *group.selections.begin();
 				finished = RefineWitness(selection.first * STANDARD_VECTOR_SIZE + selection.second[0], probe, dropped);
-			} else if (classification.reducible && classification.applicable_count == 1 &&
-			           !classification.ranges.empty()) {
+			} else if (reduce && classification.applicable_count == 1 && !classification.ranges.empty()) {
 				finished = RefineOneRange(group, probe, dropped, classification.ranges[0]);
 			} else {
 				finished = RefineExact(group, probe, dropped);

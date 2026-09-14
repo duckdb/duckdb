@@ -581,9 +581,7 @@ public:
 	void ResolveMarkJoin(ExecutionContext &context, DataChunk &result);
 	void ConstructMarkJoinResult(ExecutionContext &context, DataChunk &result, bool found_match[], bool null_probe);
 	void RefineMarkJoin(ExecutionContext &context, bool found_match[], bool found_unknown[], bool null_probe);
-	unique_ptr<ColumnDataCollection> RefineRangePattern(ExecutionContext &context, uint64_t probe_mask,
-	                                                    uint64_t dropped, MarkJoinRefinementGroup &group,
-	                                                    MarkJoinRefinementIndex &index, const vector<idx_t> &driving);
+
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, RIGHT, FULL)
 	void ResolveComplexJoin(ExecutionContext &context, DataChunk &result);
 	//	Resolve left join results
@@ -1295,173 +1293,6 @@ struct IEMarkKeyScan {
 	DataChunk keys;
 };
 
-unique_ptr<ColumnDataCollection> IEJoinLocalSourceState::RefineRangePattern(ExecutionContext &context,
-                                                                            uint64_t probe_mask, uint64_t dropped,
-                                                                            MarkJoinRefinementGroup &group,
-                                                                            MarkJoinRefinementIndex &index,
-                                                                            const vector<idx_t> &driving) {
-	auto &op = gsource.op;
-	auto &manager = BufferManager::GetBufferManager(context.client);
-	vector<JoinCondition> conditions;
-	for (auto col : driving) {
-		conditions.push_back(op.conditions[col].Copy());
-	}
-	vector<LogicalType> input_types {conditions[0].GetLHS().GetReturnType(), conditions[1].GetLHS().GetReturnType(),
-	                                 LogicalType::UBIGINT};
-	vector<LogicalType> key_types;
-	for (auto &condition : op.conditions) {
-		key_types.push_back(condition.GetLHS().GetReturnType());
-	}
-	auto make_input = [&](idx_t side) {
-		auto result = make_uniq<ColumnDataCollection>(manager, input_types);
-		ColumnDataAppendState append;
-		result->InitializeAppend(append);
-		IEMarkKeyScan scan(context.client, op, *gsource.gsink.tables[side], side);
-		auto &keys = scan.keys;
-		DataChunk input;
-		input.Initialize(context.client, input_types);
-		idx_t chunk = 0;
-		while (scan.Scan()) {
-			context.client.InterruptCheck();
-			input.Reset();
-			auto add = [&](idx_t row) {
-				input.data[0].Append(keys.GetValue(driving[0], row));
-				input.data[1].Append(keys.GetValue(driving[1], row));
-				input.data[2].Append(Value::UBIGINT(chunk * STANDARD_VECTOR_SIZE + row));
-			};
-			idx_t count = 0;
-			if (side) {
-				auto selected = group.selections.find(chunk);
-				if (selected != group.selections.end()) {
-					for (auto row : selected->second) {
-						add(row);
-						count++;
-					}
-				}
-			} else {
-				for (idx_t row = 0; row < keys.size(); row++) {
-					if (MarkJoinRefinement::NullMask(keys, row, op.conditions) == probe_mask) {
-						add(row);
-						count++;
-					}
-				}
-			}
-			input.SetChildCardinality(count);
-			result->Append(append, input);
-			chunk++;
-		}
-		return result;
-	};
-	if (!index.ranges) {
-		auto build_keys = make_input(1);
-		auto first = IEJoinUnion::SortInput(context, op, conditions, *build_keys);
-		index.ranges = IEJoinUnion::PrepareBuild(context, op, conditions, std::move(first));
-	}
-	auto probe_keys = make_input(0);
-	auto probes = IEJoinUnion::SortInput(context, op, conditions, *probe_keys);
-	auto ranks = IEJoinUnion::PrepareRanks(context, op, conditions, *probes, *index.ranges);
-	auto left_ids = IEJoinUnion::ExtractColumn(*probes, 2, manager);
-	IEJoinCursor<uint64_t> left_id(*left_ids), right_id(*index.ranges->row_ids);
-	const idx_t count = gsource.gsink.tables[0]->count;
-	auto markers = manager.GetBufferAllocator().Allocate(count);
-	memset(markers.get(), 0, count);
-	array<unique_ptr<IEMarkKeyScan>, 2> scans;
-	array<idx_t, 2> loaded {DConstants::INVALID_INDEX, DConstants::INVALID_INDEX};
-	for (idx_t side = 0; side < 2; side++) {
-		scans[side] = make_uniq<IEMarkKeyScan>(context.client, op, *gsource.gsink.tables[side], side);
-	}
-	auto fetch = [&](idx_t side, idx_t row) {
-		const auto chunk = row / STANDARD_VECTOR_SIZE;
-		if (loaded[side] != chunk) {
-			scans[side]->Seek(chunk);
-			loaded[side] = chunk;
-		}
-	};
-	IEJoinUnion joiner(*index.ranges, *ranks);
-	unsafe_vector<idx_t> left, right;
-	Vector comparison(LogicalType::BOOLEAN);
-	array<DataChunk, 2> candidates;
-	for (auto &candidate : candidates) {
-		candidate.InitializeEmpty(key_types);
-	}
-	SelectionVector left_sel(STANDARD_VECTOR_SIZE), right_sel(STANDARD_VECTOR_SIZE);
-	idx_t probe_rows[STANDARD_VECTOR_SIZE];
-	vector<idx_t> tail;
-	for (idx_t col = 0; col < op.conditions.size(); col++) {
-		if (col != driving[0] && col != driving[1] && !(dropped & (uint64_t(1) << col))) {
-			tail.push_back(col);
-		}
-	}
-	while (joiner.JoinBlocks(left, right)) {
-		context.client.InterruptCheck();
-		for (idx_t pair = 0; pair < left.size();) {
-			const auto left_chunk = left_id[left[pair]] / STANDARD_VECTOR_SIZE;
-			const auto right_chunk = right_id[right[pair]] / STANDARD_VECTOR_SIZE;
-			idx_t batch_count = 0;
-			while (pair < left.size()) {
-				const auto lhs = left_id[left[pair]];
-				const auto rhs = right_id[right[pair]];
-				if (lhs / STANDARD_VECTOR_SIZE != left_chunk || rhs / STANDARD_VECTOR_SIZE != right_chunk) {
-					break;
-				}
-				pair++;
-				if (markers.get()[lhs] == 2 || (dropped && markers.get()[lhs])) {
-					continue;
-				}
-				left_sel.set_index(batch_count, lhs % STANDARD_VECTOR_SIZE);
-				right_sel.set_index(batch_count, rhs % STANDARD_VECTOR_SIZE);
-				probe_rows[batch_count++] = lhs;
-			}
-			if (!batch_count) {
-				continue;
-			}
-			fetch(0, left_chunk * STANDARD_VECTOR_SIZE);
-			fetch(1, right_chunk * STANDARD_VECTOR_SIZE);
-			for (auto col : tail) {
-				candidates[0].data[col].Slice(scans[0]->keys.data[col], left_sel, batch_count);
-				candidates[1].data[col].Slice(scans[1]->keys.data[col], right_sel, batch_count);
-			}
-			candidates[0].SetChildCardinality(batch_count);
-			candidates[1].SetChildCardinality(batch_count);
-			MarkJoinRowComparison::CompareTail(candidates[0], candidates[1], op.conditions, tail, comparison);
-			auto values = comparison.Values<bool>();
-			for (idx_t row = 0; row < batch_count; row++) {
-				auto &marker = markers.get()[probe_rows[row]];
-				auto value = values[row];
-				if (!value.IsValid() || (dropped && value.GetValue())) {
-					if (marker != 2) {
-						marker = 1;
-					}
-				} else if (value.GetValue()) {
-					marker = 2;
-				}
-			}
-		}
-		if (joiner.lrid > 0 && !left.empty() && left.back() == idx_t(joiner.lrid - 1)) {
-			const auto marker = markers.get()[left_id[left.back()]];
-			if (marker == 2 || (dropped && marker)) {
-				joiner.FinishRow();
-			}
-		}
-	}
-	auto result = make_uniq<ColumnDataCollection>(manager, vector<LogicalType> {LogicalType::UTINYINT});
-	ColumnDataAppendState append;
-	result->InitializeAppend(append);
-	DataChunk chunk;
-	chunk.Initialize(context.client, result->Types());
-	for (idx_t offset = 0; offset < count;) {
-		chunk.Reset();
-		const auto size = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - offset);
-		for (idx_t row = 0; row < size; row++) {
-			chunk.data[0].Append(Value::UTINYINT(markers.get()[offset + row]));
-		}
-		chunk.SetChildCardinality(size);
-		result->Append(append, chunk);
-		offset += size;
-	}
-	return result;
-}
-
 void IEJoinLocalSourceState::RefineMarkJoin(ExecutionContext &context, bool found_match[], bool found_unknown[],
                                             bool null_probe) {
 	auto &op = gsource.op;
@@ -1496,124 +1327,33 @@ void IEJoinLocalSourceState::RefineMarkJoin(ExecutionContext &context, bool foun
 			cached_chunk = chunk;
 		}
 	};
-	DataChunk candidates;
-	candidates.InitializeEmpty(types);
-	Vector comparison(LogicalType::BOOLEAN);
+	IEMarkKeyScan probe_scan(context.client, op, *gsource.gsink.tables[0], 0);
+	idx_t cached_probe_chunk = DConstants::INVALID_INDEX;
+	MarkPatternProbeSource probes;
+	probes.fetch = [&](idx_t chunk) -> DataChunk & {
+		if (cached_probe_chunk != chunk) {
+			probe_scan.Seek(chunk);
+			cached_probe_chunk = chunk;
+		}
+		return probe_scan.keys;
+	};
+	probes.count = gsource.gsink.tables[0]->count;
+	probes.build_start = start;
+	probes.null_probe = null_probe;
 	for (idx_t probe = 0; probe < mark_keys.size(); probe++) {
-		if (found_match[probe]) {
-			continue;
-		}
-		const auto probe_mask = MarkJoinRefinement::NullMask(mark_keys, probe, op.conditions);
-		for (auto &entry : state.groups) {
-			const auto dropped = probe_mask | entry.first;
-			auto &group = entry.second;
-			const auto classification = MarkJoinRefinement::Classify(probe_mask, entry.first, op.conditions);
-			const auto applicable = classification.applicable_count;
-			auto ranges = classification.ranges;
-			auto finish = [&]() {
-				MarkJoinRowComparison::CompareConjunction(mark_keys, probe, candidates, op.conditions, comparison);
-				for (auto value : comparison.Values<bool>()) {
-					if (!value.IsValid()) {
-						found_unknown[probe] = true;
-						if (dropped) {
-							return true;
-						}
-					} else if (value.GetValue()) {
-						found_match[probe] = true;
-						found_unknown[probe] = false;
-						return true;
-					}
-				}
-				return false;
-			};
-			auto witness = [&](idx_t id) {
-				fetch(id / STANDARD_VECTOR_SIZE);
-				SelectionVector selected(1);
-				selected.set_index(0, id % STANDARD_VECTOR_SIZE);
-				candidates.Reference(keys);
-				candidates.Slice(selected, 1);
-				return finish();
-			};
-			bool finished = false;
-			const bool reduce = classification.reducible && (null_probe || entry.first);
-			if (reduce && applicable == 0) {
-				const auto &selection = *group.selections.begin();
-				finished = witness(selection.first * STANDARD_VECTOR_SIZE + selection.second[0]);
-			} else if (reduce && ranges.size() >= 2) {
-				std::sort(ranges.begin(), ranges.end(), [&](idx_t lhs, idx_t rhs) {
-					return PhysicalRangeJoin::LessThan(op.conditions[lhs], op.conditions[rhs]);
-				});
-				ranges.resize(2);
-				auto &results = [&]() -> ColumnDataCollection & {
-					lock_guard<mutex> guard(gsource.gsink.mark_lock);
-					auto &index = group.indexes[dropped];
-					if (!index) {
-						index = make_uniq<MarkJoinRefinementIndex>();
-					}
-					auto &cached = index->probe_results[probe_mask];
-					if (!cached) {
-						cached = RefineRangePattern(context, probe_mask, dropped, group, *index, ranges);
-					}
-					return *cached;
-				}();
-				IEJoinCursor<uint8_t> markers(results);
-				const auto marker = markers[null_probe ? left_base + outer_sel[probe] : rsel[probe]];
-				found_match[probe] = marker == 2;
-				found_unknown[probe] |= marker == 1;
-				finished = marker == 2 || (dropped && marker == 1);
-			} else if (reduce && applicable == 1 && !ranges.empty()) {
-				auto &index = [&]() -> MarkJoinRefinementIndex & {
-					lock_guard<mutex> guard(gsource.gsink.mark_lock);
-					auto &cached = group.indexes[dropped];
-					if (!cached) {
-						auto built = make_uniq<MarkJoinRefinementIndex>();
-						const auto cmp = op.conditions[ranges[0]].GetComparisonType();
-						const bool maximum =
-						    cmp == ExpressionType::COMPARE_LESSTHAN || cmp == ExpressionType::COMPARE_LESSTHANOREQUALTO;
-						for (auto &selection : group.selections) {
-							context.client.InterruptCheck();
-							fetch(selection.first);
-							for (auto row : selection.second) {
-								auto value = keys.GetValue(ranges[0], row);
-								if (built->bound.IsNull() ||
-								    (maximum ? ValueOperations::GreaterThan(value, built->bound)
-								             : ValueOperations::LessThan(value, built->bound))) {
-									built->bound = std::move(value);
-									built->witness = selection.first * STANDARD_VECTOR_SIZE + row;
-								}
-							}
-						}
-						cached = std::move(built);
-					}
-					return *cached;
-				}();
-				finished = witness(index.witness);
-			} else {
-				for (auto &selection : group.selections) {
-					if (state.chunks[selection.first][0] + state.chunks[selection.first][1] <= start) {
-						continue;
-					}
-					context.client.InterruptCheck();
-					fetch(selection.first);
-					SelectionVector selected(STANDARD_VECTOR_SIZE);
-					idx_t count = 0;
-					for (auto row : selection.second) {
-						if (state.chunks[selection.first][0] + row >= start) {
-							selected.set_index(count++, row);
-						}
-					}
-					candidates.Reference(keys);
-					candidates.Slice(selected, count);
-					if (finish()) {
-						finished = true;
-						break;
-					}
-				}
-			}
-			if (finished) {
-				break;
-			}
-		}
+		probes.row_ids.push_back(null_probe ? left_base + outer_sel[probe] : rsel[probe]);
+	}
+	ValidityMask validity;
+	MarkPatternRefiner refiner(
+	    context.client, op, state, gsource.gsink.mark_lock,
+	    [&](idx_t chunk_index) -> DataChunk & {
+		    fetch(chunk_index);
+		    return keys;
+	    },
+	    mark_keys, found_match, validity, probes);
+	refiner.Refine();
+	for (idx_t probe = 0; probe < mark_keys.size(); probe++) {
+		found_unknown[probe] = !validity.RowIsValid(probe);
 	}
 }
 

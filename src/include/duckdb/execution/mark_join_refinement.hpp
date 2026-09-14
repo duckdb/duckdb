@@ -68,10 +68,20 @@ struct MarkJoinRefinement {
 	vector<array<idx_t, 3>> chunks;
 };
 
+//! Fetch returns one stable chunk object, valid until the next fetch on the same source.
+struct MarkPatternProbeSource {
+	mark_key_fetch_t fetch;
+	idx_t count;
+	vector<idx_t> row_ids;
+	idx_t build_start;
+	bool null_probe;
+};
+
 class MarkPatternRefiner {
 public:
 	MarkPatternRefiner(ClientContext &context, const PhysicalComparisonJoin &op, MarkJoinRefinement &refinement,
-	                   mutex &lock, mark_key_fetch_t fetch, DataChunk &keys, bool matches[], ValidityMask &validity);
+	                   mutex &lock, mark_key_fetch_t fetch, DataChunk &keys, bool matches[], ValidityMask &validity,
+	                   optional_ptr<MarkPatternProbeSource> sorted_probes = nullptr);
 	void Refine();
 
 private:
@@ -80,8 +90,15 @@ private:
 	MarkJoinRefinementIndex &BuildEqualityIndex(MarkJoinRefinementGroup &group, uint64_t equality_mask);
 	void ProbeEqualityIndex(MarkJoinRefinementIndex &index, uint64_t probe_mask, uint64_t dropped,
 	                        uint64_t equality_mask);
-	void RefineRangePattern(MarkJoinRefinementGroup &group, uint64_t probe_mask, uint64_t build_mask,
+	void RefineRangePattern(MarkJoinRefinementGroup &group, idx_t probe, uint64_t probe_mask, uint64_t build_mask,
 	                        vector<idx_t> driving);
+	unique_ptr<IEJoinBuildOrders> BuildRangeIndex(ExecutionContext &execution, MarkJoinRefinementGroup &group,
+	                                              const vector<idx_t> &driving,
+	                                              const vector<JoinCondition> &range_conditions);
+	void RunRangeJoin(ExecutionContext &execution, IEJoinBuildOrders &build, const vector<idx_t> &driving,
+	                  const vector<JoinCondition> &range_conditions, uint64_t probe_mask, uint64_t dropped,
+	                  const mark_key_fetch_t &probe_fetch, idx_t probe_count, AllocatedData &markers);
+	void ApplyMarker(idx_t probe, uint8_t marker);
 	bool RefineOneRange(MarkJoinRefinementGroup &group, idx_t probe, uint64_t dropped, idx_t range_column);
 	bool RefineExact(MarkJoinRefinementGroup &group, idx_t probe, uint64_t dropped);
 
@@ -99,6 +116,7 @@ private:
 	DataChunk candidates;
 	Vector comparison;
 	set<pair<uint64_t, uint64_t>> refinement_batches;
+	optional_ptr<MarkPatternProbeSource> sorted_probes;
 };
 
 } // namespace duckdb
