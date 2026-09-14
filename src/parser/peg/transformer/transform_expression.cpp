@@ -1192,7 +1192,7 @@ static unique_ptr<ParsedExpression> TransformOperatorFunction(const QualifiedNam
                                                               vector<unique_ptr<ParsedExpression>> children) {
 	auto result = make_uniq<FunctionExpression>(operator_name, std::move(children));
 	result->IsOperatorMutable() = true;
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression>
