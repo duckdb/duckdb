@@ -89,6 +89,22 @@ static unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, Func
 	return new_stats.ToUnique();
 }
 
+static vector<Identifier> StructInsertArgumentNames(const BoundScalarFunction &function) {
+	auto &arguments = function.GetLogicalArguments();
+	auto &return_type = function.GetLogicalReturnType();
+	D_ASSERT(!arguments.empty());
+	D_ASSERT(arguments[0].id() == LogicalTypeId::STRUCT);
+	D_ASSERT(return_type.id() == LogicalTypeId::STRUCT);
+	auto existing_count = StructType::GetChildCount(arguments[0]);
+	auto &return_children = StructType::GetChildTypes(return_type);
+	D_ASSERT(return_children.size() == existing_count + arguments.size() - 1);
+	vector<Identifier> result(arguments.size());
+	for (idx_t argument_index = 1; argument_index < arguments.size(); argument_index++) {
+		result[argument_index] = return_children[existing_count + argument_index - 1].first;
+	}
+	return result;
+}
+
 ScalarFunction StructInsertFun::GetFunction() {
 	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructInsertFunction, StructInsertBind, StructInsertStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
@@ -96,6 +112,7 @@ ScalarFunction StructInsertFun::GetFunction() {
 	fun.GetProperties().SetRequiresExpressionNames(true);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
+	fun.SetArgumentNamesCallback(StructInsertArgumentNames);
 	return fun;
 }
 

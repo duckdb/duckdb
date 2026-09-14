@@ -165,6 +165,9 @@ typedef unique_ptr<Expression> (*function_bind_expression_t)(FunctionBindExpress
 //! Convert a scalar function to string
 typedef string (*function_to_string_t)(FunctionToStringInput &input);
 
+//! Get the SQL argument names of a bound scalar function
+typedef vector<Identifier> (*scalar_function_argument_names_t)(const BoundScalarFunction &function);
+
 //! Get the expression type of a function
 typedef ExpressionType (*function_get_expression_type_t)(FunctionToStringInput &input);
 
@@ -191,6 +194,8 @@ public:
 	get_modified_databases_t get_modified_databases = nullptr;
 	//! Convert a scalar function to string
 	function_to_string_t to_string = nullptr;
+	//! Get SQL argument names
+	scalar_function_argument_names_t argument_names = nullptr;
 	//! Get the expression type
 	function_get_expression_type_t get_expression_type = nullptr;
 
@@ -299,6 +304,12 @@ public: // Callbacks
 	auto SetToStringCallback(function_to_string_t callback) -> void { callbacks.to_string = callback; }
 	auto FunctionToString(FunctionToStringInput &input) const -> string { return callbacks.to_string(input); }
 
+	auto HasArgumentNamesCallback() const -> bool { return callbacks.argument_names != nullptr; }
+	auto SetArgumentNamesCallback(scalar_function_argument_names_t callback) -> void { callbacks.argument_names = callback; }
+	auto GetArgumentNames(const BoundScalarFunction &function) const -> vector<Identifier> {
+		return callbacks.argument_names(function);
+	}
+
 	auto HasLegacySerializeCallback() const -> bool { return callbacks.legacy_serialize != nullptr; }
 	auto SetLegacySerializeCallback(function_legacy_serialize_t callback) -> void { callbacks.legacy_serialize = callback; }
 	auto GetLegacySerializeCallback() const -> function_legacy_serialize_t { return callbacks.legacy_serialize; }
@@ -365,7 +376,11 @@ private:
 
 protected:
 	FunctionProperties properties;
+
+private:
 	ScalarFunctionCallbacks callbacks;
+
+protected:
 	shared_ptr<ScalarFunctionInfo> function_info;
 
 	//! Per-argument declarative properties (monotonicity). Empty = no claims made.

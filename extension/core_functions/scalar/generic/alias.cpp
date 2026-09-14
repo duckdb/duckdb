@@ -1,27 +1,20 @@
 #include "core_functions/scalar/generic_functions.hpp"
+#include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
 namespace {
-struct AliasBindData : public FunctionData {
-	explicit AliasBindData(Identifier alias_p) : alias(std::move(alias_p)) {
-	}
-
-	Identifier alias;
-
-	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<AliasBindData>(alias);
-	}
-
-	bool Equals(const FunctionData &other_p) const override {
-		auto &other = other_p.Cast<AliasBindData>();
-		return alias == other.alias;
-	}
-};
-
 unique_ptr<FunctionData> AliasBind(BindScalarFunctionInput &input) {
 	return make_uniq<AliasBindData>(input.GetArguments()[0]->GetName());
+}
+
+void AliasSerialize(Serializer &serializer, const optional_ptr<FunctionData> data, const BoundScalarFunction &) {
+	serializer.WriteProperty(100, "alias", data->Cast<AliasBindData>().alias);
+}
+
+unique_ptr<FunctionData> AliasDeserialize(Deserializer &deserializer, BoundScalarFunction &) {
+	return make_uniq<AliasBindData>(deserializer.ReadProperty<Identifier>(100, "alias"));
 }
 } // namespace
 
@@ -37,6 +30,8 @@ ScalarFunction AliasFun::GetFunction() {
 	fun.GetSignature().AddParameter("expr", LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.GetProperties().SetRequiresExpressionNames(true);
+	fun.SetSerializeCallback(AliasSerialize);
+	fun.SetDeserializeCallback(AliasDeserialize);
 	return fun;
 }
 

@@ -34,7 +34,7 @@ ScalarFunctionInfo::~ScalarFunctionInfo() {
 
 ScalarFunction::ScalarFunction(Identifier name, FunctionSignature sig, scalar_function_t function)
     : SimpleFunction(std::move(name), std::move(sig)) {
-	callbacks.function = std::move(function);
+	SetFunctionCallback(std::move(function));
 }
 
 ScalarFunction::ScalarFunction(Identifier name, vector<LogicalType> arguments, LogicalType return_type,
@@ -46,7 +46,7 @@ ScalarFunction::ScalarFunction(Identifier name, vector<LogicalType> arguments, L
 	properties.stability = side_effects;
 	properties.null_handling = null_handling;
 
-	callbacks.function = std::move(function);
+	SetFunctionCallback(std::move(function));
 	callbacks.bind = bind;
 	callbacks.init_local_state = init_local_state;
 	callbacks.statistics = statistics;
@@ -71,7 +71,7 @@ ScalarFunction::ScalarFunction(Identifier name, std::initializer_list<FunctionPa
 	properties.stability = side_effects;
 	properties.null_handling = null_handling;
 
-	callbacks.function = std::move(function);
+	SetFunctionCallback(std::move(function));
 	callbacks.bind = bind;
 	callbacks.init_local_state = init_local_state;
 	callbacks.statistics = statistics;
