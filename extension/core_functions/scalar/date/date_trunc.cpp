@@ -582,14 +582,22 @@ unique_ptr<FunctionData> DateTruncBind(BindScalarFunctionInput &input) {
 
 } // namespace
 
+// Names the "part,timestamp" pair shared by date_trunc's per-type overloads.
+static ScalarFunction NamePartTimestampArguments(ScalarFunction fun, const LogicalType &type) {
+	fun.GetSignature().AddParameter("part", LogicalType::VARCHAR).AddParameter("timestamp", type);
+	return fun;
+}
+
 ScalarFunctionSet DateTruncFun::GetFunctions() {
 	ScalarFunctionSet date_trunc("date_trunc");
-	date_trunc.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP,
-	                                      DateTruncFunction<timestamp_t, timestamp_t>, DateTruncBind));
-	date_trunc.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::TIMESTAMP,
-	                                      DateTruncFunction<date_t, timestamp_t>, DateTruncBind));
-	date_trunc.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTERVAL}, LogicalType::INTERVAL,
-	                                      DateTruncFunction<interval_t, interval_t>));
+	date_trunc.AddFunction(NamePartTimestampArguments(
+	    ScalarFunction({}, LogicalType::TIMESTAMP, DateTruncFunction<timestamp_t, timestamp_t>, DateTruncBind),
+	    LogicalType::TIMESTAMP));
+	date_trunc.AddFunction(NamePartTimestampArguments(
+	    ScalarFunction({}, LogicalType::TIMESTAMP, DateTruncFunction<date_t, timestamp_t>, DateTruncBind),
+	    LogicalType::DATE));
+	date_trunc.AddFunction(NamePartTimestampArguments(
+	    ScalarFunction({}, LogicalType::INTERVAL, DateTruncFunction<interval_t, interval_t>), LogicalType::INTERVAL));
 	date_trunc.ApplyToFunctions([](ScalarFunction &func) {
 		func.SetFallible();
 		func.SetArgProperties(1, ArgProperties().NonDecreasing());

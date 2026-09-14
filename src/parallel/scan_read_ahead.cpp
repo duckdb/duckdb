@@ -300,11 +300,13 @@ bool ScanReadAhead::CanScheduleOpen() const {
 }
 
 bool ScanReadAhead::TryRunPendingTask() {
+	ThrowIfError();
 	shared_ptr<Task> task;
 	if (!executor->GetTask(task)) {
 		return false;
 	}
 	task->Execute(TaskExecutionMode::PROCESS_ALL);
+	ThrowIfError();
 	return true;
 }
 

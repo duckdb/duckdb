@@ -88,7 +88,8 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 			// for example, if we have x + 5 = 3, where x is an unsigned number, we will get x = -2
 			// since this is not possible we can remove the entire branch here
 			return ExpressionRewriter::ConstantOrNull(
-			    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(false));
+			    GetContext(), std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]),
+			    Value::BOOLEAN(false));
 		}
 		outer_constant.GetValueMutable() = std::move(*result_value);
 	} else if (op_type == "-") {
@@ -107,7 +108,8 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 					return nullptr;
 				}
 				return ExpressionRewriter::ConstantOrNull(
-				    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(false));
+				    GetContext(), std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]),
+				    Value::BOOLEAN(false));
 			}
 			outer_constant.GetValueMutable() = std::move(*result_value);
 		} else {
@@ -123,7 +125,8 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 					return nullptr;
 				}
 				return ExpressionRewriter::ConstantOrNull(
-				    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(false));
+				    GetContext(), std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]),
+				    Value::BOOLEAN(false));
 			}
 			outer_constant.GetValueMutable() = std::move(*result_value);
 			// in this case, we should also flip the comparison
@@ -152,7 +155,8 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 				// the result will be either FALSE or NULL (if COMPARE_EQUAL)
 				// or TRUE or NULL (if COMPARE_NOTEQUAL)
 				return ExpressionRewriter::ConstantOrNull(
-				    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(is_inequality));
+				    GetContext(), std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]),
+				    Value::BOOLEAN(is_inequality));
 			} else {
 				// not cleanly divisible and we are doing > >= < <=, skip the simplification for now
 				return nullptr;
@@ -169,7 +173,8 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 				return nullptr;
 			}
 			return ExpressionRewriter::ConstantOrNull(
-			    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(comparison_result));
+			    GetContext(), std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]),
+			    Value::BOOLEAN(comparison_result));
 		}
 		if (inner_value < 0) {
 			// multiply by negative value, need to flip expression
@@ -339,7 +344,7 @@ unique_ptr<Expression> MoveUnaryMinusRule::Apply(LogicalOperator &op, vector<ref
 			if (!TryOutOfRangeComparisonResult(comparison.GetExpressionType(), comparison_result)) {
 				return nullptr;
 			}
-			return ExpressionRewriter::ConstantOrNull(std::move(negation.GetChildrenMutable()[0]),
+			return ExpressionRewriter::ConstantOrNull(GetContext(), std::move(negation.GetChildrenMutable()[0]),
 			                                          Value::BOOLEAN(comparison_result));
 		}
 		outer_constant.GetValueMutable() = std::move(*result_value);
