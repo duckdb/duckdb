@@ -1942,11 +1942,12 @@ SetAssignment <- VariableAssign VariableList
 VariableAssign <- '=' / 'TO'
 VariableList <- List(Expression)
 
-TransactionStatement <- BeginTransaction / RollbackTransaction / CommitTransaction
+TransactionStatement <- SetTransactionSnapshot / BeginTransaction / RollbackTransaction / CommitTransaction
 
 BeginTransaction <- StartOrBegin Transaction? ReadOrWrite?
 RollbackTransaction <- AbortOrRollback Transaction?
 CommitTransaction <- CommitOrEnd Transaction?
+SetTransactionSnapshot <- 'SET' 'TRANSACTION' 'SNAPSHOT' StringLiteral
 
 StartOrBegin <- 'START' / 'BEGIN'
 Transaction <- 'WORK' / 'TRANSACTION'
@@ -1956,6 +1957,7 @@ ReadOnly <- 'ONLY'
 ReadWrite <- 'WRITE'
 AbortOrRollback <- 'ABORT' / 'ROLLBACK'
 CommitOrEnd <- 'COMMIT' / 'END'
+
 UpdateStatement <- WithClause? 'UPDATE' UpdateTarget UpdateSetClause FromClause? WhereClause? ReturningClause?
 
 UpdateTarget <- BaseTableSet / BaseTableAliasSet

@@ -76,6 +76,33 @@ shared_ptr<AttachedDatabase> DatabaseManager::GetDatabase(const Identifier &name
 	return GetDatabaseInternal(guard, name);
 }
 
+bool DatabaseManager::RegisterSharedTransaction(const string &token, AttachedDatabase &database) {
+	lock_guard<mutex> guard(shared_transactions_lock);
+	weak_ptr<AttachedDatabase> weak_database = database.shared_from_this();
+	return shared_transactions.emplace(token, std::move(weak_database)).second;
+}
+
+shared_ptr<AttachedDatabase> DatabaseManager::GetSharedTransactionDatabase(const string &token) {
+	lock_guard<mutex> guard(shared_transactions_lock);
+	auto entry = shared_transactions.find(token);
+	if (entry == shared_transactions.end()) {
+		return nullptr;
+	}
+	return entry->second.lock();
+}
+
+void DatabaseManager::UnregisterSharedTransaction(const string &token, AttachedDatabase &database) {
+	lock_guard<mutex> guard(shared_transactions_lock);
+	auto entry = shared_transactions.find(token);
+	if (entry == shared_transactions.end()) {
+		return;
+	}
+	auto registered = entry->second.lock();
+	if (!registered || RefersToSameObject(*registered, database)) {
+		shared_transactions.erase(entry);
+	}
+}
+
 shared_ptr<AttachedDatabase> DatabaseManager::GetDatabaseInternal(const lock_guard<mutex> &, const Identifier &name) {
 	if (name == SYSTEM_CATALOG) {
 		return system;

@@ -103,6 +103,7 @@ SQLStatement:
     - TransactionStatement
     - BeginTransaction
     - CommitTransaction
+    - SetTransactionSnapshot
     - RollbackTransaction
     - TriggerBody
     - UpdateStatement

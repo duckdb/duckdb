@@ -25,6 +25,7 @@ set(TEST_API_OBJECTS
     test_extension_setting_autoload.cpp
     test_instance_cache.cpp
     test_storage_extension_alias.cpp
+    test_transaction_snapshot.cpp
     test_results.cpp
     test_reset.cpp
     test_get_table_names.cpp

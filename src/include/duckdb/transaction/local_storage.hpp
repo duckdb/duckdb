@@ -81,7 +81,10 @@ public:
 	bool is_dropped = false;
 
 public:
-	void InitializeScan(CollectionScanState &state, optional_ptr<TableFilterSet> table_filters = nullptr);
+	//! Scans take the reading connection's context: a snapshot participant reads this storage while the
+	//! connection that created it may be gone, so the stored context must not reach the scan state.
+	void InitializeScan(const QueryContext &context, CollectionScanState &state,
+	                    optional_ptr<TableFilterSet> table_filters = nullptr);
 	//! Write a new row group to disk (if possible)
 	void WriteNewRowGroup(idx_t flushed_row_group_idx);
 	void FlushBlocks();
@@ -153,7 +156,8 @@ public:
 	static LocalStorage &Get(ClientContext &context, Catalog &catalog);
 
 	//! Initialize a scan of the local storage
-	void InitializeScan(DataTable &table, CollectionScanState &state, optional_ptr<TableFilterSet> table_filters);
+	void InitializeScan(const QueryContext &context, DataTable &table, CollectionScanState &state,
+	                    optional_ptr<TableFilterSet> table_filters);
 	//! Scan
 	void Scan(CollectionScanState &state, const vector<StorageIndex> &column_ids, DataChunk &result);
 

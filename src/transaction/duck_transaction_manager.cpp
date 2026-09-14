@@ -8,10 +8,12 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/shared_transaction_lock.hpp"
 #include "duckdb/transaction/transaction_data.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection_manager.hpp"
@@ -102,6 +104,107 @@ Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	// store it in the set of active transactions
 	active_transactions.push_back(std::move(transaction));
 	return transaction_ref;
+}
+
+shared_ptr<SharedTransactionState> DuckTransactionManager::ShareTransaction(DuckTransaction &transaction,
+                                                                            bool &newly_shared) {
+	// Take the statement lock before transaction_lock. Every other path takes a statement lock first and the
+	// manager lock second, so taking them the other way round here would be a lock-order inversion. Nothing else
+	// can reach this lock yet, so holding it costs nothing and keeps the sharing statement the only holder from
+	// the moment the token becomes visible.
+	auto statement_lock = make_shared_ptr<SharedTransactionLock>();
+	statement_lock->LockExclusive();
+	shared_ptr<SharedTransactionState> fresh_state;
+	auto release_unused = [&]() {
+		if (!fresh_state) {
+			statement_lock->UnlockExclusive();
+		}
+	};
+
+	try {
+		lock_guard<mutex> lock(transaction_lock);
+		newly_shared = false;
+		if (transaction.shared_state) {
+			release_unused();
+			return transaction.shared_state;
+		}
+		bool active = false;
+		for (auto &active_transaction : active_transactions) {
+			if (RefersToSameObject(*active_transaction, transaction)) {
+				active = true;
+				break;
+			}
+		}
+		if (!active) {
+			throw TransactionException("Cannot share a transaction that is no longer active");
+		}
+		auto &database_manager = DatabaseManager::Get(db);
+		while (true) {
+			// Build the state before publishing its token. Once a token is in either registry, only the state
+			// knows to take it back out again, so nothing between the two may throw.
+			auto candidate = make_shared_ptr<SharedTransactionState>(UUID::ToString(UUID::GenerateRandomUUID()),
+			                                                         statement_lock, transaction);
+			auto entry = shared_transactions.emplace(candidate->GetToken(), transaction);
+			if (!entry.second) {
+				continue;
+			}
+			try {
+				if (database_manager.RegisterSharedTransaction(candidate->GetToken(), db)) {
+					fresh_state = std::move(candidate);
+					break;
+				}
+			} catch (...) {
+				shared_transactions.erase(entry.first);
+				throw;
+			}
+			shared_transactions.erase(entry.first);
+		}
+		transaction.shared_state = fresh_state;
+		newly_shared = true;
+	} catch (...) {
+		release_unused();
+		throw;
+	}
+	return fresh_state;
+}
+
+shared_ptr<SharedTransactionState> DuckTransactionManager::GetSharedTransactionState(const string &token) {
+	lock_guard<mutex> lock(transaction_lock);
+	auto entry = shared_transactions.find(token);
+	if (entry == shared_transactions.end()) {
+		throw TransactionException("Shared transaction is no longer available");
+	}
+	return entry->second.get().shared_state;
+}
+
+DuckTransaction &DuckTransactionManager::JoinTransaction(const string &token) {
+	lock_guard<mutex> lock(transaction_lock);
+	auto entry = shared_transactions.find(token);
+	if (entry == shared_transactions.end()) {
+		throw TransactionException("Snapshot is no longer available");
+	}
+	auto &transaction = entry->second.get();
+	if (transaction.shared_state->IsInvalidated()) {
+		throw TransactionException("Snapshot is no longer available: a statement on the owning connection failed, "
+		                           "so its transaction will roll back");
+	}
+	// Reserve it across the gap between this lookup and joining, so a participant leaving in the meantime cannot
+	// destroy it underneath the joining connection.
+	if (!transaction.shared_state->TryReserveJoin()) {
+		throw TransactionException("Snapshot is no longer available");
+	}
+	return transaction;
+}
+
+void DuckTransactionManager::EndSharedTransaction(DuckTransaction &transaction) {
+	lock_guard<mutex> lock(transaction_lock);
+	auto &shared_state = transaction.shared_state;
+	if (!shared_state || shared_state->IsEnded()) {
+		return;
+	}
+	shared_state->MarkEnded();
+	shared_transactions.erase(shared_state->GetToken());
+	DatabaseManager::Get(db).UnregisterSharedTransaction(shared_state->GetToken(), db);
 }
 
 void DuckTransactionManager::SetActiveCheckpoint(idx_t checkpoint_id) {
@@ -299,6 +402,9 @@ void DuckTransactionManager::CleanupTransactions() {
 
 ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
+	if (transaction.IsShared()) {
+		EndSharedTransaction(transaction);
+	}
 	// flush the transaction-local blocks of bulk appends before taking any commit locks (see PreFlushOptimisticBlocks)
 	ErrorData error = transaction.PreFlushOptimisticBlocks(db);
 	unique_lock<mutex> t_lock(transaction_lock);
@@ -470,6 +576,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 void DuckTransactionManager::RollbackTransaction(Transaction &transaction_p) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
+	if (transaction.IsShared()) {
+		EndSharedTransaction(transaction);
+	}
 
 	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Rollback", transaction.GetTransactionId());
 

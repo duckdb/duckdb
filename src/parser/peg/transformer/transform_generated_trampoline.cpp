@@ -2863,6 +2863,9 @@ static const TransformFrameOps ROLLBACK_TRANSACTION_OPS = {
 static const TransformFrameOps COMMIT_TRANSACTION_OPS = {"CommitTransaction",
                                                          &PEGTransformerFactory::InitializeCommitTransactionTrampoline,
                                                          &PEGTransformerFactory::FinalizeCommitTransactionTrampoline};
+static const TransformFrameOps SET_TRANSACTION_SNAPSHOT_OPS = {
+    "SetTransactionSnapshot", &PEGTransformerFactory::InitializeSetTransactionSnapshotTrampoline,
+    &PEGTransformerFactory::FinalizeSetTransactionSnapshotTrampoline};
 static const TransformFrameOps READ_OR_WRITE_OPS = {"ReadOrWrite",
                                                     &PEGTransformerFactory::InitializeReadOrWriteTrampoline,
                                                     &PEGTransformerFactory::FinalizeReadOrWriteTrampoline};
@@ -3952,6 +3955,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"BeginTransaction", &BEGIN_TRANSACTION_OPS},
 	    {"RollbackTransaction", &ROLLBACK_TRANSACTION_OPS},
 	    {"CommitTransaction", &COMMIT_TRANSACTION_OPS},
+	    {"SetTransactionSnapshot", &SET_TRANSACTION_SNAPSHOT_OPS},
 	    {"ReadOrWrite", &READ_OR_WRITE_OPS},
 	    {"ReadOnlyOrReadWrite", &READ_ONLY_OR_READ_WRITE_OPS},
 	    {"ReadOnly", &READ_ONLY_OPS},
@@ -23985,6 +23989,20 @@ PEGTransformerFactory::FinalizeCommitTransactionTrampoline(PEGTransformer &trans
 	auto &has_result_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	has_result = has_result_opt.HasResult();
 	auto result = TransformCommitTransaction(transformer, has_result);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeSetTransactionSnapshotTrampoline(PEGTransformer &transformer,
+                                                                       GeneratedTransformProcess &process) {
+	process.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeSetTransactionSnapshotTrampoline(PEGTransformer &transformer,
+                                                                GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(3));
+	auto result = TransformSetTransactionSnapshot(transformer, string_literal);
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 

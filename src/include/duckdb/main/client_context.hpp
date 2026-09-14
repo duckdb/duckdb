@@ -27,6 +27,7 @@
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
+#include "duckdb/transaction/shared_transaction_guard.hpp"
 #include "duckdb/common/query_context.hpp"
 #include "duckdb/common/query_parameters.hpp"
 
@@ -58,6 +59,8 @@ class BufferedData;
 struct ClientData;
 class ClientContextState;
 class RegisteredStateManager;
+class SharedTransactionLock;
+class MetaTransaction;
 
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
@@ -182,6 +185,28 @@ public:
 
 	//! Destroy the client context
 	DUCKDB_API void Destroy();
+	//! Hold a shared transaction's statement lock for the active query, including an open streaming result.
+	void GuardSharedTransaction(shared_ptr<SharedTransactionLock> statement_lock, SharedTransactionGuardMode mode,
+	                            SharedTransactionGuardWait wait = SharedTransactionGuardWait::INTERRUPTIBLE);
+	//! Validate bound properties and acquire the write lock before executing a statement or a binding-time expression.
+	void CheckStatementProperties(const StatementProperties &properties, StatementType statement_type);
+	//! Hold the statement lock across a commit or rollback that can destroy a shared transaction, so it is never
+	//! torn down underneath a participant. Returns nothing when there is nothing to hold: the transaction is not
+	//! shared, this connection only reads it, or the caller already holds the lock.
+	//! When `hand_off_instead_of_waiting` is set and others are still holding the transaction, nothing is acquired
+	//! and the caller is told to hand it over: waiting here would block a destructor with no way out.
+	unique_ptr<SharedTransactionGuard> LockSharedTransactionForFinalize(MetaTransaction &meta_transaction,
+	                                                                    bool hand_off_instead_of_waiting = false,
+	                                                                    bool *hand_off = nullptr);
+	//! Record that a failed statement invalidated a shared transaction this connection owns, so participants stop
+	//! starting new statements. Readers already running may finish before rollback.
+	void MarkSharedTransactionInvalidated();
+	//! Whether this connection currently holds a shared transaction's statement lock. Guards are not always owned
+	//! by a query: RunFunctionInTransaction takes one for API paths that run without one.
+	bool HasSharedTransactionGuard() const;
+	//! Register and release a statement lock hold. Called only by SharedTransactionGuard.
+	void AddSharedTransactionGuard();
+	void RemoveSharedTransactionGuard();
 
 	//! Get the table info of a specific table, or nullptr if it cannot be found.
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const Identifier &database_name, const Identifier &schema_name,
@@ -300,7 +325,6 @@ private:
 	unique_ptr<PendingQueryResult> PendingPreparedStatementInternal(ClientContextLock &lock,
 	                                                                shared_ptr<PreparedStatementData> statement_data_p,
 	                                                                const PendingQueryParameters &parameters);
-	void CheckIfPreparedStatementIsExecutable(PreparedStatementData &statement);
 
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
 	shared_ptr<PreparedStatementData> CreatePreparedStatement(ClientContextLock &lock,
@@ -340,6 +364,8 @@ private:
 private:
 	//! Lock on using the ClientContext in parallel
 	mutex context_lock;
+	//! Shared transaction statement locks held by this connection, whether or not a query owns them.
+	atomic<idx_t> shared_transaction_guards {0};
 	//! The currently active query context
 	unique_ptr<ActiveQueryContext> active_query;
 	//! The current query progress

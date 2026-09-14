@@ -175,7 +175,7 @@ public:
 			l_state->column_ids.push_back(bind_data.table.GetStorageIndex(col_idx));
 		}
 		l_state->scan_state.Initialize(l_state->column_ids, context.client, input.filters.get());
-		local_storage.InitializeScan(storage, l_state->scan_state.local_state, input.filters);
+		local_storage.InitializeScan(context.client, storage, l_state->scan_state.local_state, input.filters);
 		return std::move(l_state);
 	}
 
@@ -228,6 +228,9 @@ public:
 				auto row_id_data = reinterpret_cast<data_ptr_t>(row_ids + offset);
 				Vector local_vector(LogicalType::ROW_TYPE, row_id_data, scan_count);
 
+				// Fetches that have to cast a child column need a client context, and the transaction's own may
+				// belong to a connection that is gone. Give them the reading connection's.
+				l_state.fetch_state.context = context;
 				if (CanRemoveFilterColumns()) {
 					l_state.all_columns.Reset();
 					storage.Fetch(tx, l_state.all_columns, column_ids, local_vector, scan_count, l_state.fetch_state);
