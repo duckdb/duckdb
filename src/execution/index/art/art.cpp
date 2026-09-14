@@ -873,13 +873,16 @@ bool ART::ScanInternal(IndexScanState &state, RowIdVectorOutput &row_ids) const 
 	case ARTScanType::PREDICATE:
 		D_ASSERT(!scan_state.batch_equality_values);
 		D_ASSERT(!scan_state.values[0].IsNull());
-		break;
+		return ScanPredicate(scan_state, row_ids);
 	case ARTScanType::BATCH_EQUALITY:
 		D_ASSERT(scan_state.batch_equality_values);
 		return ScanBatch(*scan_state.batch_equality_values, row_ids);
 	default:
 		throw InternalException("Invalid ART scan type");
 	}
+}
+
+bool ART::ScanPredicate(ARTIndexScanState &scan_state, RowIdVectorOutput &row_ids) const {
 	D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
 	ArenaAllocator arena_allocator(Allocator::Get(db));
 
