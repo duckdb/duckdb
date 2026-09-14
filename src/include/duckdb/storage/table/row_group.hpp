@@ -150,7 +150,10 @@ public:
 
 	//! Initialize a scan over this row_group
 	bool InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> &node);
-	bool InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset);
+	bool InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset,
+	                              bool initialize_columns = true);
+	//! Initializes the column scans of the assignment set up by InitializeScanWithOffset
+	void InitializeColumnScans(CollectionScanState &state);
 	//! Checks the given set of table filters against the row-group statistics. Returns false if the entire row group
 	//! can be skipped.
 	bool CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo &filters, idx_t row_start);
@@ -163,6 +166,8 @@ public:
 	void PrefetchScanIO(CollectionScanState &state, idx_t row_count) const;
 	//! Collects the async I/O tasks required to scan the next row_count rows, without performing any I/O
 	vector<unique_ptr<AsyncTask>> CollectScanIOTasks(CollectionScanState &state, idx_t row_count) const;
+	//! Rows of the remaining assignment worth prefetching, trailing vectors the zonemaps reject are left out
+	idx_t PrefetchRowCount(CollectionScanState &state);
 	//! Prepares the next eligible vector in the assigned range, idempotent, returns false when none remain
 	bool PrepareScan(ScanOptions options, CollectionScanState &state);
 	//! Processes the vector prepared by PrepareScan, clearing the prepared state when the vector is finished
@@ -201,6 +206,8 @@ public:
 	idx_t GetCommittedRowCount();
 	//! Returns the number of rows visible to the given transaction
 	idx_t GetVisibleRowCount(TransactionData transaction);
+	//! Count visible rows in a scan assignment starting at a vector boundary
+	idx_t GetVisibleRowCount(TransactionData transaction, idx_t start_vector, idx_t scan_count);
 	bool CanReuseMetadata(RowGroupWriter &writer) const;
 	RowGroupWriteData WriteToDisk(RowGroupWriter &writer);
 	RowGroupPointer Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats,

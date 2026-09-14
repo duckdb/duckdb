@@ -54,7 +54,9 @@ void StripAccentsFunction(DataChunk &args, ExpressionState &state, Vector &resul
 } // namespace
 
 ScalarFunction StripAccentsFun::GetFunction() {
-	return ScalarFunction("strip_accents", {LogicalType::VARCHAR}, LogicalType::VARCHAR, StripAccentsFunction);
+	ScalarFunction fun("strip_accents", {}, LogicalType::VARCHAR, StripAccentsFunction);
+	fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	return fun;
 }
 
 } // namespace duckdb
