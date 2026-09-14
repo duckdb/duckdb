@@ -5,13 +5,12 @@ namespace duckdb {
 
 //! Remove all object keys with null values
 static void StripNulls(yyjson_mut_val *val) {
-
 	struct stack_item {
 		yyjson_mut_val *val;
 	};
 
 	auto stack = vector<stack_item>();
-	stack.emplace_back(stack_item{ val});
+	stack.emplace_back(stack_item {val});
 
 	while (!stack.empty()) {
 		auto curr_val = stack.back().val;
@@ -29,14 +28,14 @@ static void StripNulls(yyjson_mut_val *val) {
 				if (unsafe_yyjson_is_null(child)) {
 					yyjson_mut_obj_iter_remove(&iter);
 				} else {
-					stack.emplace_back(stack_item{child});
+					stack.emplace_back(stack_item {child});
 				}
 			}
 		} else if (yyjson_mut_is_arr(curr_val)) {
 			idx_t idx, max;
 			yyjson_mut_val *elem;
 			yyjson_mut_arr_foreach(curr_val, idx, max, elem) {
-				stack.emplace_back(stack_item{elem});
+				stack.emplace_back(stack_item {elem});
 			}
 		}
 	}
