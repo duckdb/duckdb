@@ -186,7 +186,10 @@ public:
 	//! Destroy the client context
 	DUCKDB_API void Destroy();
 	//! Hold a shared transaction's statement lock for the active query, including an open streaming result.
-	void GuardSharedTransaction(shared_ptr<SharedTransactionLock> statement_lock, SharedTransactionGuardMode mode);
+	void GuardSharedTransaction(shared_ptr<SharedTransactionLock> statement_lock, SharedTransactionGuardMode mode,
+	                            SharedTransactionGuardWait wait = SharedTransactionGuardWait::INTERRUPTIBLE);
+	//! Validate bound properties and acquire the write lock before executing a statement or a binding-time expression.
+	void CheckStatementProperties(const StatementProperties &properties, StatementType statement_type);
 	//! Hold the statement lock across a commit or rollback that can destroy a shared transaction, so it is never
 	//! torn down underneath a participant. Returns nothing when there is nothing to hold: the transaction is not
 	//! shared, this connection only reads it, or the caller already holds the lock.
@@ -196,7 +199,7 @@ public:
 	                                                                    bool hand_off_instead_of_waiting = false,
 	                                                                    bool *hand_off = nullptr);
 	//! Record that a failed statement invalidated a shared transaction this connection owns, so participants stop
-	//! reading it. Called while the failing statement still holds the statement lock exclusively.
+	//! starting new statements. Readers already running may finish before rollback.
 	void MarkSharedTransactionInvalidated();
 	//! Whether this connection currently holds a shared transaction's statement lock. Guards are not always owned
 	//! by a query: RunFunctionInTransaction takes one for API paths that run without one.
@@ -322,7 +325,6 @@ private:
 	unique_ptr<PendingQueryResult> PendingPreparedStatementInternal(ClientContextLock &lock,
 	                                                                shared_ptr<PreparedStatementData> statement_data_p,
 	                                                                const PendingQueryParameters &parameters);
-	void CheckIfPreparedStatementIsExecutable(PreparedStatementData &statement);
 
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
 	shared_ptr<PreparedStatementData> CreatePreparedStatement(ClientContextLock &lock,

@@ -5,6 +5,7 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/common/type_visitor.hpp"
@@ -142,6 +143,20 @@ void ExpressionExecutor::ExecuteExpression(idx_t expr_idx, Vector &result) {
 Value ExpressionExecutor::EvaluateScalar(ClientContext &context, const Expression &expr, bool allow_unfoldable) {
 	D_ASSERT(allow_unfoldable || expr.IsFoldable());
 	D_ASSERT(expr.IsScalar());
+	if (allow_unfoldable) {
+		// Binding can execute modifying functions, for example nextval() in an EXECUTE argument.
+		StatementProperties properties;
+		ExpressionIterator::VisitExpression<BoundFunctionExpression>(
+		    expr, [&](const BoundFunctionExpression &function) {
+			    if (function.Function().HasModifiedDatabasesCallback()) {
+				    FunctionModifiedDatabasesInput input(function.BindInfo(), properties);
+				    function.Function().GetModifiedDatabasesCallback()(context, input);
+			    }
+		    });
+		if (!properties.modified_databases.empty()) {
+			context.CheckStatementProperties(properties, StatementType::SELECT_STATEMENT);
+		}
+	}
 	// use an ExpressionExecutor to execute the expression
 	ExpressionExecutor executor(context, expr);
 

@@ -330,6 +330,10 @@ unique_ptr<SharedTransactionGuard> ClientContext::LockSharedTransactionForFinali
 	if (!shared_state) {
 		return nullptr;
 	}
+	if (active_query && active_query->statement_guard) {
+		GuardSharedTransaction(shared_state->GetStatementLock(), SharedTransactionGuardMode::ACQUIRE_EXCLUSIVE,
+		                       SharedTransactionGuardWait::UNINTERRUPTIBLE);
+	}
 	if (HasSharedTransactionGuard()) {
 		// This runs while the lock is already held, such as an explicit ROLLBACK inside a statement.
 		return nullptr;
@@ -349,15 +353,20 @@ unique_ptr<SharedTransactionGuard> ClientContext::LockSharedTransactionForFinali
 }
 
 void ClientContext::GuardSharedTransaction(shared_ptr<SharedTransactionLock> statement_lock,
-                                           SharedTransactionGuardMode mode) {
+                                           SharedTransactionGuardMode mode, SharedTransactionGuardWait wait) {
 	D_ASSERT(active_query);
 	if (active_query->statement_guard) {
 		// The query already holds this lock; an exclusive hold also covers a shared request.
 		D_ASSERT(active_query->statement_guard->GetStatementLock() == statement_lock);
-		D_ASSERT(active_query->statement_guard->IsExclusive() || mode == SharedTransactionGuardMode::ACQUIRE_SHARED);
-		return;
+		if (active_query->statement_guard->IsExclusive() || mode == SharedTransactionGuardMode::ACQUIRE_SHARED) {
+			return;
+		}
+		D_ASSERT(mode == SharedTransactionGuardMode::ACQUIRE_EXCLUSIVE);
+		D_ASSERT(!ActiveTransaction().IsSharedParticipant());
+		// Release before waiting: this connection is the sole writer and its context lock serializes statements.
+		active_query->statement_guard.reset();
 	}
-	active_query->statement_guard = make_uniq<SharedTransactionGuard>(*this, std::move(statement_lock), mode);
+	active_query->statement_guard = make_uniq<SharedTransactionGuard>(*this, std::move(statement_lock), mode, wait);
 }
 
 void ClientContext::ProcessError(ErrorData &error, const string &query) const {
@@ -392,16 +401,18 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const SQLStateme
 		query_deadline.SetInvalid();
 	}
 
-	// Serialize the statements of a shared transaction and reject them once its owner has ended it.
+	// Protect the shared transaction during binding and reject statements once its owner has ended it.
 	// This runs before the query is registered so that a failure here leaves nothing to clean up.
 	unique_ptr<SharedTransactionGuard> statement_guard;
 	if (transaction.HasActiveTransaction()) {
 		auto &meta_transaction = transaction.ActiveTransaction();
 		auto shared_state = meta_transaction.GetSharedTransactionState();
 		if (shared_state) {
-			// The owner's statements exclude everyone; participants only read and may run concurrently.
-			auto mode = meta_transaction.IsSharedParticipant() ? SharedTransactionGuardMode::ACQUIRE_SHARED
-			                                                   : SharedTransactionGuardMode::ACQUIRE_EXCLUSIVE;
+			// Binding starts shared; modification metadata selects an exclusive hold before execution.
+			auto mode =
+			    !meta_transaction.IsSharedParticipant() && statement.type == StatementType::TRANSACTION_STATEMENT
+			        ? SharedTransactionGuardMode::ACQUIRE_EXCLUSIVE
+			        : SharedTransactionGuardMode::ACQUIRE_SHARED;
 			statement_guard = make_uniq<SharedTransactionGuard>(*this, shared_state->GetStatementLock(), mode);
 			if (statement.type != StatementType::TRANSACTION_STATEMENT) {
 				if (shared_state->IsEnded()) {
@@ -453,9 +464,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	}
 	active_query->progress_bar.reset();
 	if (!success && invalidate_transaction && transaction.HasActiveTransaction() && !transaction.IsAutoCommit()) {
-		// This statement failed and is about to invalidate the transaction below. Record that on the shared state
-		// first, while this statement still holds the statement lock exclusively, so that no participant can
-		// start reading a transaction that is now certain to roll back.
+		// Reject new participant statements; existing readers may finish before the owner rolls back.
 		MarkSharedTransactionInvalidated();
 	}
 	D_ASSERT(active_query.get());
@@ -720,14 +729,23 @@ void BindPreparedStatementParameters(ClientContext &context, PreparedStatementDa
 	statement.Bind(context, owned_values);
 }
 
-void ClientContext::CheckIfPreparedStatementIsExecutable(PreparedStatementData &statement) {
-	if (ValidChecker::IsInvalidated(ActiveTransaction()) && statement.properties.requires_valid_transaction) {
+void ClientContext::CheckStatementProperties(const StatementProperties &properties, StatementType statement_type) {
+	if (ValidChecker::IsInvalidated(ActiveTransaction()) && properties.requires_valid_transaction) {
 		throw ErrorManager::InvalidatedTransaction(*this);
 	}
 
 	auto &meta_transaction = MetaTransaction::Get(*this);
+	auto shared_state = meta_transaction.GetSharedTransactionState();
+	if (shared_state && !meta_transaction.IsSharedParticipant() && !properties.modified_databases.empty()) {
+		if (active_query) {
+			GuardSharedTransaction(shared_state->GetStatementLock(), SharedTransactionGuardMode::ACQUIRE_EXCLUSIVE);
+		} else {
+			// API calls without an active query already hold the owner's lock exclusively.
+			D_ASSERT(HasSharedTransactionGuard());
+		}
+	}
 	auto &manager = DatabaseManager::Get(*this);
-	for (auto &it : statement.properties.modified_databases) {
+	for (auto &it : properties.modified_databases) {
 		auto &modified_database = it.first;
 		auto entry = manager.GetDatabase(*this, modified_database);
 		if (!entry) {
@@ -737,7 +755,7 @@ void ClientContext::CheckIfPreparedStatementIsExecutable(PreparedStatementData &
 		if (entry->IsReadOnly()) {
 			throw InvalidInputException(StringUtil::Format(
 			    "Cannot execute statement of type \"%s\" on database %s which is attached in read-only mode!",
-			    StatementTypeToString(statement.statement_type), modified_database));
+			    StatementTypeToString(statement_type), modified_database));
 		}
 		meta_transaction.ModifyDatabase(*entry, it.second.modifications);
 	}
@@ -1087,7 +1105,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
 		return ErrorResult<PendingQueryResult>(InvalidInputException("Not all parameters were bound"));
 	}
 	// execute the prepared statement
-	CheckIfPreparedStatementIsExecutable(*prepared);
+	CheckStatementProperties(prepared->properties, prepared->statement_type);
 	return PendingPreparedStatementInternal(lock, std::move(prepared), parameters);
 }
 

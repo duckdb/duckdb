@@ -25,3 +25,42 @@ transaction is launched in read-only mode
 
 statement ok
 COMMIT
+
+statement ok
+CREATE SEQUENCE read_only_sequence
+
+query I
+SELECT nextval('read_only_sequence')
+----
+1
+
+statement ok
+PREPARE read_value AS SELECT $1
+
+statement ok
+BEGIN TRANSACTION READ ONLY
+
+# Scalar expressions evaluated during binding must also respect the transaction's write restrictions.
+statement error
+EXECUTE read_value(nextval('read_only_sequence'))
+----
+transaction is launched in read-only mode
+
+statement ok
+ROLLBACK
+
+statement ok
+BEGIN TRANSACTION READ ONLY
+
+statement error
+SELECT * FROM range(nextval('read_only_sequence'))
+----
+transaction is launched in read-only mode
+
+statement ok
+ROLLBACK
+
+query I
+SELECT currval('read_only_sequence')
+----
+1

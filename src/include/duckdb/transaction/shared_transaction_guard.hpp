@@ -16,7 +16,7 @@ class SharedTransactionLock;
 
 //! How a caller takes hold of a shared transaction's statement lock.
 enum class SharedTransactionGuardMode : uint8_t {
-	//! Read alongside the other participants, excluding only the owner's statements.
+	//! Read alongside the owner and other participants, excluding writes and finalization.
 	ACQUIRE_SHARED,
 	//! Exclude every other connection taking part.
 	ACQUIRE_EXCLUSIVE,
@@ -33,8 +33,7 @@ enum class SharedTransactionGuardWait : uint8_t {
 };
 
 //! Holds a shared transaction's statement lock, and counts itself on the connection holding it, for as long as it
-//! is alive. Participants take it shared and read concurrently; the owner takes it exclusively, which is what lets
-//! it end the transaction without a participant reading through the teardown.
+//! is alive. Readers take it shared; the owner takes it exclusively for writes and finalization.
 class SharedTransactionGuard {
 public:
 	//! Acquire the statement lock. Waiting checks for interrupts and the query deadline unless told otherwise.

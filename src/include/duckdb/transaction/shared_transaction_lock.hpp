@@ -17,9 +17,8 @@ namespace duckdb {
 //! Statement lock of a shared transaction (see duckdb_export_transaction_snapshot / SET TRANSACTION SNAPSHOT).
 //!
 //! A DuckTransaction's undo buffer and LocalStorage are built for a single writer and are not safe to mutate while
-//! another connection reads them. Participants only read, so they may run at the same time as each other, but never
-//! at the same time as the owner, which is the only connection that can modify the transaction. This lock enforces
-//! exactly that: participants' statements take it shared, the owner's statements take it exclusively.
+//! another connection reads them. Participants only read. The owner can read alongside them, but takes this lock
+//! exclusively before modifying or finalizing the transaction.
 //!
 //! It is held per statement, not per query operator: a single statement holds it once for its whole duration, so
 //! intra-query parallelism inside that statement is unaffected. The owner's connection close also takes it

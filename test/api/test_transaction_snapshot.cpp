@@ -102,10 +102,12 @@ static void RegisterConcurrencyProbe(Connection &connection, const shared_ptr<Co
 		                        } else if (!WaitFor([&]() { return probe->released.load(); })) {
 			                        // The gate serialized us: the round never filled.
 			                        probe->timed_out = true;
+			                        probe->released = true;
 		                        }
 		                        --probe->active;
 		                        result.Reference(input.data[0]);
 	                        });
+	function.SetVolatile();
 	CreateScalarFunctionInfo info(function);
 	connection.context->RunFunctionInTransaction(
 	    [&]() { Catalog::GetSystemCatalog(*connection.context).CreateFunction(*connection.context, info); });
@@ -280,7 +282,7 @@ TEST_CASE("Closing the owner hands off an in-flight joiner statement", "[api][tr
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
 
-TEST_CASE("Participant reads run concurrently and exclude the owner", "[api][transaction_snapshot]") {
+TEST_CASE("Participant reads run concurrently and exclude owner writes", "[api][transaction_snapshot]") {
 	DuckDB database(nullptr);
 	Connection setup(database);
 	Connection owner(database);
@@ -657,26 +659,28 @@ TEST_CASE("Waiting for a shared statement lock is interruptible", "[api][transac
 	DuckDB database(nullptr);
 	Connection owner(database);
 	Connection joiner(database);
+	REQUIRE_NO_FAIL(owner.Query("CREATE SEQUENCE shared_sequence"));
 	REQUIRE_NO_FAIL(owner.Query("BEGIN"));
 	SetTransactionSnapshot(joiner, ExportTransactionSnapshot(owner));
-	auto stream = owner.SendQuery("SELECT i FROM range(10000000) t(i)");
+	auto stream = joiner.SendQuery("SELECT i FROM range(10000000) t(i)");
 	REQUIRE(stream->GetResultType() == QueryResultType::STREAM_RESULT);
 	atomic<bool> query_finished {false};
 	unique_ptr<QueryResult> blocked_result;
 	std::thread blocked_thread([&]() {
-		blocked_result = joiner.Query("SELECT 42");
+		blocked_result = owner.Query("SELECT nextval('shared_sequence')");
 		query_finished = true;
 	});
 	for (idx_t i = 0; i < 100 && !query_finished.load(); i++) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
-	REQUIRE(!query_finished.load());
-	joiner.Interrupt();
+	auto was_waiting = !query_finished.load();
+	owner.Interrupt();
 	blocked_thread.join();
+	REQUIRE(was_waiting);
 	REQUIRE_FAIL(blocked_result);
 	// The abandoned acquisition must not leave the connection counted as a gate holder: a stale count would make
 	// its own teardown skip both the gate and the handoff.
-	REQUIRE(!joiner.context->HasSharedTransactionGuard());
+	REQUIRE(!owner.context->HasSharedTransactionGuard());
 	stream->Cast<StreamQueryResult>().Close();
 	stream.reset();
 	REQUIRE_NO_FAIL(joiner.Query("ROLLBACK"));
@@ -688,13 +692,14 @@ TEST_CASE("Waiting for a shared statement lock honours max_execution_time", "[ap
 	DuckDB database(nullptr);
 	Connection owner(database);
 	Connection joiner(database);
+	REQUIRE_NO_FAIL(owner.Query("CREATE SEQUENCE shared_sequence"));
 	REQUIRE_NO_FAIL(owner.Query("BEGIN"));
 	SetTransactionSnapshot(joiner, ExportTransactionSnapshot(owner));
-	REQUIRE_NO_FAIL(joiner.Query("SET max_execution_time = 200"));
-	auto stream = owner.SendQuery("SELECT i FROM range(10000000) t(i)");
+	REQUIRE_NO_FAIL(owner.Query("SET max_execution_time = 200"));
+	auto stream = joiner.SendQuery("SELECT i FROM range(10000000) t(i)");
 	REQUIRE(stream->GetResultType() == QueryResultType::STREAM_RESULT);
 	auto start = std::chrono::steady_clock::now();
-	auto blocked_result = joiner.Query("SELECT 42");
+	auto blocked_result = owner.Query("SELECT nextval('shared_sequence')");
 	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
 	REQUIRE_FAIL(blocked_result);
 	// The deadline is checked on every poll of the lock, not on the throttled interrupt path.
@@ -824,13 +829,13 @@ TEST_CASE("Joiner temporary changes roll back on detach", "[api][transaction_sna
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 }
 
-TEST_CASE("Participants read the snapshot concurrently", "[api][transaction_snapshot]") {
+TEST_CASE("The owner and participants read the snapshot concurrently", "[api][transaction_snapshot]") {
 	constexpr idx_t PARTICIPANT_COUNT = 4;
 	DuckDB database(nullptr);
 	Connection setup(database);
 	Connection owner(database);
 	auto probe = make_shared_ptr<ConcurrencyProbe>();
-	probe->target = PARTICIPANT_COUNT;
+	probe->target = PARTICIPANT_COUNT + 1;
 	RegisterConcurrencyProbe(setup, probe);
 	REQUIRE_NO_FAIL(setup.Query("CREATE TABLE shared_values (value BIGINT)"));
 
@@ -845,26 +850,180 @@ TEST_CASE("Participants read the snapshot concurrently", "[api][transaction_snap
 		SetTransactionSnapshot(*participants.back(), transaction_id);
 	}
 
-	// Every participant must be inside its statement at the same time, otherwise the probe times out.
-	vector<unique_ptr<QueryResult>> results(PARTICIPANT_COUNT);
+	const string query = "SELECT count(concurrency_probe(value)) FROM shared_values";
+	unique_ptr<PreparedStatement> prepared;
+	SECTION("Direct owner query") {
+	}
+	SECTION("Prepared owner query") {
+		prepared = owner.Prepare(query);
+		REQUIRE(!prepared->HasError());
+	}
+	// The owner and every participant must execute simultaneously, otherwise the probe times out.
+	vector<unique_ptr<QueryResult>> results(PARTICIPANT_COUNT + 1);
 	vector<std::thread> threads;
 	for (idx_t i = 0; i < PARTICIPANT_COUNT; i++) {
-		threads.emplace_back([&, i]() {
-			results[i] = participants[i]->Query("SELECT count(concurrency_probe(value)) FROM shared_values");
-		});
+		threads.emplace_back([&, i]() { results[i] = participants[i]->Query(query); });
 	}
+	threads.emplace_back([&]() { results[PARTICIPANT_COUNT] = prepared ? prepared->Execute() : owner.Query(query); });
 	for (auto &thread : threads) {
 		thread.join();
 	}
-	for (idx_t i = 0; i < PARTICIPANT_COUNT; i++) {
+	for (idx_t i = 0; i <= PARTICIPANT_COUNT; i++) {
 		REQUIRE_NO_FAIL(*results[i]);
 		REQUIRE(CHECK_COLUMN(results[i], 0, {1000}));
 	}
 	REQUIRE(!probe->timed_out.load());
-	REQUIRE(probe->peak.load() == PARTICIPANT_COUNT);
+	REQUIRE(probe->peak.load() == PARTICIPANT_COUNT + 1);
 
 	for (auto &participant : participants) {
 		REQUIRE_NO_FAIL(participant->Query("ROLLBACK"));
+	}
+	REQUIRE_NO_FAIL(owner.Query("COMMIT"));
+}
+
+TEST_CASE("Owner writes and finalization wait for every participant stream", "[api][transaction_snapshot]") {
+	DuckDB database(nullptr);
+	Connection owner(database);
+	Connection observer(database);
+	Connection reader_a(database);
+	Connection reader_b(database);
+	REQUIRE_NO_FAIL(owner.Query("CREATE TABLE shared_values (value BIGINT)"));
+	REQUIRE_NO_FAIL(owner.Query("CREATE SEQUENCE shared_sequence"));
+	REQUIRE_NO_FAIL(owner.Query("SELECT nextval('shared_sequence')"));
+	REQUIRE_NO_FAIL(owner.Query("PREPARE read_value AS SELECT $1"));
+	REQUIRE_NO_FAIL(owner.Query("PREPARE insert_value AS INSERT INTO shared_values VALUES ($1)"));
+	REQUIRE_NO_FAIL(owner.Query("BEGIN"));
+	REQUIRE_NO_FAIL(owner.Query("INSERT INTO shared_values SELECT * FROM range(100000)"));
+	auto transaction_id = ExportTransactionSnapshot(owner);
+	SetTransactionSnapshot(reader_a, transaction_id);
+	SetTransactionSnapshot(reader_b, transaction_id);
+
+	string query;
+	bool finalizes = false;
+	SECTION("Insert") {
+		query = "INSERT INTO shared_values VALUES (-1)";
+	}
+	SECTION("Prepared insert") {
+		query = "EXECUTE insert_value(-1)";
+	}
+	SECTION("Update") {
+		query = "UPDATE shared_values SET value = value + 1";
+	}
+	SECTION("Delete") {
+		query = "DELETE FROM shared_values";
+	}
+	SECTION("Schema change") {
+		query = "ALTER TABLE shared_values ADD COLUMN extra VARCHAR";
+	}
+	SECTION("Sequence increment") {
+		query = "SELECT nextval('shared_sequence')";
+	}
+	SECTION("Sequence assignment") {
+		query = "SELECT setval('shared_sequence', 42)";
+	}
+	SECTION("Sequence in an EXECUTE argument") {
+		query = "EXECUTE read_value(nextval('shared_sequence'))";
+	}
+	SECTION("Sequence in a table function argument") {
+		query = "SELECT * FROM range(nextval('shared_sequence'))";
+	}
+	SECTION("Commit") {
+		query = "COMMIT";
+		finalizes = true;
+	}
+	SECTION("Rollback") {
+		query = "ROLLBACK";
+		finalizes = true;
+	}
+
+	auto stream_a = reader_a.SendQuery("SELECT value FROM shared_values");
+	auto stream_b = reader_b.SendQuery("SELECT value FROM shared_values");
+	REQUIRE(stream_a->GetResultType() == QueryResultType::STREAM_RESULT);
+	REQUIRE(stream_b->GetResultType() == QueryResultType::STREAM_RESULT);
+	REQUIRE(reader_a.context->HasSharedTransactionGuard());
+	REQUIRE(reader_b.context->HasSharedTransactionGuard());
+
+	atomic<bool> started {false};
+	atomic<bool> finished {false};
+	unique_ptr<QueryResult> result;
+	std::thread writer([&]() {
+		started = true;
+		result = owner.Query(query);
+		finished = true;
+	});
+	auto did_start = WaitFor([&]() { return started.load(); });
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	auto waited_for_both = !finished.load();
+	auto sequence_result = observer.Query("SELECT currval('shared_sequence')");
+	stream_a->Cast<StreamQueryResult>().Close();
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	auto waited_for_last = !finished.load();
+	stream_b->Cast<StreamQueryResult>().Close();
+	writer.join();
+	REQUIRE(did_start);
+	REQUIRE(waited_for_both);
+	REQUIRE(waited_for_last);
+	REQUIRE(CHECK_COLUMN(sequence_result, 0, {1}));
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE_NO_FAIL(reader_a.Query("ROLLBACK"));
+	REQUIRE_NO_FAIL(reader_b.Query("ROLLBACK"));
+	if (!finalizes) {
+		REQUIRE_NO_FAIL(owner.Query("COMMIT"));
+	}
+}
+
+TEST_CASE("An owner stream allows participant reads between inserts", "[api][transaction_snapshot]") {
+	DuckDB database(nullptr);
+	Connection owner(database);
+	Connection joiner(database);
+	REQUIRE_NO_FAIL(owner.Query("CREATE TABLE shared_values (value BIGINT)"));
+	REQUIRE_NO_FAIL(owner.Query("BEGIN"));
+	REQUIRE_NO_FAIL(owner.Query("INSERT INTO shared_values SELECT * FROM range(100000)"));
+	SetTransactionSnapshot(joiner, ExportTransactionSnapshot(owner));
+	REQUIRE_NO_FAIL(joiner.Query("SET max_execution_time = 2000"));
+	for (idx_t round = 0; round < 3; round++) {
+		auto stream = owner.SendQuery("SELECT value FROM shared_values");
+		REQUIRE(stream->GetResultType() == QueryResultType::STREAM_RESULT);
+		auto result = joiner.Query("SELECT count(*) FROM shared_values");
+		REQUIRE_NO_FAIL(*result);
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(100000 + round)}));
+		stream->Cast<StreamQueryResult>().Close();
+		REQUIRE_NO_FAIL(owner.Query("INSERT INTO shared_values VALUES (-1)"));
+	}
+	REQUIRE_NO_FAIL(owner.Query("COMMIT"));
+	REQUIRE_NO_FAIL(joiner.Query("ROLLBACK"));
+	auto result = joiner.Query("SELECT count(*) FROM shared_values");
+	REQUIRE(CHECK_COLUMN(result, 0, {100003}));
+}
+
+TEST_CASE("Participant sequence modifications are rejected before evaluation", "[api][transaction_snapshot]") {
+	DuckDB database(nullptr);
+	Connection owner(database);
+	Connection joiner(database);
+	REQUIRE_NO_FAIL(owner.Query("CREATE SEQUENCE shared_sequence"));
+	REQUIRE_NO_FAIL(owner.Query("SELECT nextval('shared_sequence')"));
+	REQUIRE_NO_FAIL(owner.Query("BEGIN"));
+	auto transaction_id = ExportTransactionSnapshot(owner);
+	REQUIRE_NO_FAIL(joiner.Query("PREPARE read_value AS SELECT $1"));
+	REQUIRE_NO_FAIL(joiner.Query("PREPARE advance_sequence AS SELECT nextval($1)"));
+	const vector<string> queries {
+	    "SELECT nextval('shared_sequence')",
+	    "SELECT setval('shared_sequence', 42)",
+	    "EXECUTE advance_sequence('shared_sequence')",
+	    "EXECUTE read_value(nextval('shared_sequence'))",
+	    "SELECT * FROM range(nextval('shared_sequence'))",
+	    "SET threads = nextval('shared_sequence')",
+	};
+	for (auto &query : queries) {
+		INFO(query);
+		SetTransactionSnapshot(joiner, transaction_id);
+		auto result = joiner.Query(query);
+		REQUIRE_FAIL(result);
+		INFO(result->GetError());
+		REQUIRE(result->GetError().find("only the owning connection can modify") != string::npos);
+		result = owner.Query("SELECT currval('shared_sequence')");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+		REQUIRE_NO_FAIL(joiner.Query("ROLLBACK"));
 	}
 	REQUIRE_NO_FAIL(owner.Query("COMMIT"));
 }
@@ -1013,6 +1172,7 @@ TEST_CASE("An invalidated owner stops participants reading", "[api][transaction_
 	Connection setup(database);
 	Connection owner(database);
 	Connection joiner(database);
+	Connection active_reader(database);
 	Connection late_joiner(database);
 	REQUIRE_NO_FAIL(setup.Query("CREATE TABLE shared_values (value INTEGER)"));
 	REQUIRE_NO_FAIL(setup.Query("INSERT INTO shared_values VALUES (1)"));
@@ -1021,6 +1181,10 @@ TEST_CASE("An invalidated owner stops participants reading", "[api][transaction_
 	REQUIRE_NO_FAIL(owner.Query("INSERT INTO shared_values VALUES (2)"));
 	auto transaction_id = ExportTransactionSnapshot(owner);
 	SetTransactionSnapshot(joiner, transaction_id);
+	SetTransactionSnapshot(active_reader, transaction_id);
+	auto stream = active_reader.SendQuery("SELECT value FROM shared_values, range(100000)");
+	REQUIRE(stream->GetResultType() == QueryResultType::STREAM_RESULT);
+	REQUIRE_NO_FAIL(owner.Query("SET max_execution_time = 2000"));
 
 	// While the transaction is sound the participant reads the owner's uncommitted row.
 	auto result = joiner.Query("SELECT count(*) FROM shared_values");
@@ -1042,6 +1206,15 @@ TEST_CASE("An invalidated owner stops participants reading", "[api][transaction_
 	REQUIRE_FAIL(refused);
 	REQUIRE(refused->GetError().find("no longer available") != string::npos);
 	REQUIRE_NO_FAIL(late_joiner.Query("ROLLBACK"));
+
+	// An already running read can finish against the unchanged data, even though new statements are refused.
+	idx_t rows = 0;
+	while (auto chunk = stream->Fetch()) {
+		rows += chunk->size();
+	}
+	REQUIRE_NO_FAIL(*stream);
+	REQUIRE(rows == 200000);
+	REQUIRE_NO_FAIL(active_reader.Query("ROLLBACK"));
 
 	// Detaching still works, and the owner cannot keep what it wrote: an invalidated transaction turns COMMIT
 	// into ROLLBACK, which is exactly why participants must stop reading it.
