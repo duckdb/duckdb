@@ -8,6 +8,7 @@
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/planner/operator/logical_explain.hpp"
 
 namespace duckdb {
 
@@ -16,6 +17,14 @@ ColumnBindingResolver::ColumnBindingResolver(bool verify_only) : verify_only(ver
 
 void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_EXPLAIN:
+		if (!verify_only && op.Cast<LogicalExplain>().explain_type == ExplainType::EXPLAIN_SQL) {
+			// SQL export consumes logical bindings, not physical column positions.
+			bindings = op.GetColumnBindings();
+			types = op.types;
+			return;
+		}
+		break;
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();

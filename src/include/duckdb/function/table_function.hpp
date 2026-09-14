@@ -52,6 +52,7 @@ enum class OrderByStatistics : uint8_t;
 struct RowGroupOrderOptions;
 class LogicalOperator;
 class Binder;
+class QueryNode;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
@@ -426,6 +427,18 @@ typedef unique_ptr<FunctionData> (*table_function_combine_schema_t)(ClientContex
                                                                     vector<Identifier> &names);
 typedef InsertionOrderPreservingMap<string> (*table_function_to_string_t)(TableFunctionToStringInput &input);
 
+struct TableFunctionToSQLResult {
+	unique_ptr<QueryNode> query;
+	string unsupported_reason;
+};
+
+//! Return owned SQL for GetColumnIds followed by projected_input, before table_filters and projection_ids.
+//! The optional input has positional column aliases. Use relation_alias for the source relation.
+//! Unsupported sources return a reason without a query.
+typedef TableFunctionToSQLResult (*table_function_to_sql_t)(ClientContext &context, const LogicalGet &get,
+                                                            unique_ptr<TableRef> input,
+                                                            const Identifier &relation_alias);
+
 typedef void (*table_function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                            const TableFunction &function);
 typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(Deserializer &deserializer, TableFunction &function);
@@ -557,6 +570,9 @@ public:
 	table_function_schedule_io_t schedule_io;
 	//! (Optional) function for rendering the operator to a string in explain/profiling output (invoked pre-execution)
 	table_function_to_string_t to_string;
+	//! (Optional) reconstruct the source's SQL-visible state without retaining native objects.
+	//! Must not execute the source or perform effects during export.
+	table_function_to_sql_t to_sql = nullptr;
 	//! (Optional) return how much of the table we have scanned up to this point (% of the data)
 	table_function_progress_t table_scan_progress;
 	//! (Optional) returns the partition info of the current scan operator
@@ -630,6 +646,14 @@ public:
 	DUCKDB_API bool Equal(const TableFunction &rhs) const;
 	DUCKDB_API bool operator==(const TableFunction &rhs) const;
 	DUCKDB_API bool operator!=(const TableFunction &rhs) const;
+	//! SQL callback for sources fully reconstructed by their retained constant arguments.
+	DUCKDB_API static TableFunctionToSQLResult ToSQLFunctionCall(ClientContext &context, const LogicalGet &get,
+	                                                             unique_ptr<TableRef> input,
+	                                                             const Identifier &relation_alias);
+	DUCKDB_API static TableFunctionToSQLResult ToSQLFunctionCallWithOrdinality(ClientContext &context,
+	                                                                           const LogicalGet &get,
+	                                                                           unique_ptr<TableRef> input,
+	                                                                           const Identifier &relation_alias);
 };
 
 } // namespace duckdb

@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/logical_plan_sql_exporter.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
 
 namespace duckdb {
@@ -40,6 +41,10 @@ public:
 	virtual unique_ptr<LogicalExtensionOperator> Deserialize(Deserializer &deserializer) = 0;
 
 	virtual ~OperatorExtension() {
+	}
+
+	virtual LogicalPlanSQLExportExtensionResult ExportLogicalPlanSQL(const LogicalPlanSQLExportExtensionInput &) {
+		return LogicalPlanSQLExportExtensionResult::NotHandled();
 	}
 
 	static void Register(DBConfig &config, shared_ptr<OperatorExtension> extension);
