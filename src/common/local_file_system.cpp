@@ -1606,8 +1606,7 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 	}
 }
 
-static bool TryMoveFileWithPosixSemantics(const std::wstring &source, const std::wstring &target) {
-	constexpr DWORD delete_access = 0x00010000L;                                     // DELETE
+static bool TryMoveFileWithPosixSemantics(HANDLE source_handle, const std::wstring &target) {
 	constexpr auto file_rename_info_ex = static_cast<FILE_INFO_BY_HANDLE_CLASS>(22); // FileRenameInfoEx
 	const auto file_name_length = target.size() * sizeof(WCHAR);
 	const auto rename_info_size = offsetof(FILE_RENAME_INFO, FileName) + file_name_length + sizeof(WCHAR);
@@ -1619,26 +1618,30 @@ static bool TryMoveFileWithPosixSemantics(const std::wstring &source, const std:
 	rename_info->FileNameLength = NumericCast<DWORD>(file_name_length);
 	std::copy(target.c_str(), target.c_str() + target.size() + 1, rename_info->FileName);
 
-	// FileRenameInfoEx renames the file identified by a handle opened with DELETE access.
-	// See https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_rename_info
-	auto raw_source_handle =
-	    CreateFileW(source.c_str(), delete_access, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-	                OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-	if (raw_source_handle == INVALID_HANDLE_VALUE) {
-		return false;
-	}
-	unique_ptr<void, decltype(&CloseHandle)> source_handle(raw_source_handle, CloseHandle);
-
-	return SetFileInformationByHandle(source_handle.get(), file_rename_info_ex, rename_info, rename_info_size_dw);
+	return SetFileInformationByHandle(source_handle, file_rename_info_ex, rename_info, rename_info_size_dw);
 }
 
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
 	auto source_unicode = NormalizePathAndConvertToUnicode(*this, source, opener);
 	auto target_unicode = NormalizePathAndConvertToUnicode(*this, target, opener);
 
-	if (TryMoveFileWithPosixSemantics(source_unicode, target_unicode)) {
+	// FileRenameInfoEx renames the file identified by a handle opened with DELETE access.
+	// See https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_rename_info
+	constexpr DWORD delete_access = 0x00010000L; // DELETE
+	auto raw_source_handle =
+	    CreateFileW(source_unicode.c_str(), delete_access, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+	                nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+	if (raw_source_handle == INVALID_HANDLE_VALUE) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Could not move file \"%s\" to \"%s\": failed to open source file: %s", source, target,
+		                  error);
+	}
+	unique_ptr<void, decltype(&CloseHandle)> source_handle(raw_source_handle, CloseHandle);
+
+	if (TryMoveFileWithPosixSemantics(source_handle.get(), target_unicode)) {
 		return;
 	}
+	source_handle.reset();
 
 	DWORD flags = MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH;
 	if (!MoveFileExW(source_unicode.c_str(), target_unicode.c_str(), flags)) {
