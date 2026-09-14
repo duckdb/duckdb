@@ -64,12 +64,18 @@ jobs:
       - name: Clang-Tidy
         shell: bash
         run: |
-          set -o pipefail
-          make tidy-check \
-            TIDY_BINARY=clang-tidy-20 \
-            TIDY_SHARD_COUNT=4 \
-            TIDY_SHARD_INDEX=$((${{ matrix.shard }} - 1)) \
-            2>&1 | tee clang-tidy-shard-${{ matrix.shard }}.log
+          log_file=clang-tidy-shard-${{ matrix.shard }}.log
+          if make tidy-check \
+              TIDY_BINARY=clang-tidy-20 \
+              TIDY_SHARD_COUNT=4 \
+              TIDY_SHARD_INDEX=$((${{ matrix.shard }} - 1)) \
+              >"${log_file}" 2>&1; then
+            tidy_status=0
+          else
+            tidy_status=$?
+          fi
+          python3 scripts/ci/summarize_clang_tidy.py "${log_file}" --command-exit-code "${tidy_status}"
+          exit "${tidy_status}"
 
       - name: Upload clang-tidy log
         if: failure()
