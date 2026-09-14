@@ -40,3 +40,20 @@ All `require-env` and `test_env` expressions will be added as tags of the form `
 
 For an extensive example of tag matching expectations, see the file
 `test/sqlite/validate_tags_usage.sh` which unit tests these behaviors.
+
+### Executing SQL from EXPLAIN
+
+The `explain_sql` modifier applies to the following `query` or `statement` command:
+
+```text
+explain_sql
+
+query I
+SELECT 1 + 2;
+----
+3
+```
+
+The runner obtains `EXPLAIN (SQL)` on the command's connection, checks its result shape, and executes the returned query once against the existing expected-result oracle. The original query is prepared for an exact output-name/type comparison but is not executed. A preparation failure in either form fails this schema check. The modifier requires one query; use an ordinary command to test an EXPLAIN error. An unexpected EXPLAIN failure cannot satisfy `statement error`, which checks errors from the generated execution.
+
+The debug SQL-export verifier is temporarily disabled and restored, including whether its setting was inherited. This prevents another round trip from replacing the SQL under test. With SQL-export events enabled, these executions emit separate `explain_sql` records; they do not count toward the internal verifier's coverage denominator.

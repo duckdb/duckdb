@@ -38,6 +38,7 @@ struct ExecuteContext {
 	vector<LoopDefinition> running_loops;
 	bool is_parallel = false;
 	string sql_query;
+	bool sql_export_strict_failure = false;
 	string error_file;
 	int error_line = -1;
 };
@@ -60,6 +61,7 @@ public:
 	string base_sql_query;
 	string file_name;
 	vector<Condition> conditions;
+	bool explain_sql = false;
 
 public:
 	Connection &CommandConnection(ExecuteContext &context) const;

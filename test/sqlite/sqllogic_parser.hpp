@@ -50,6 +50,7 @@ class SQLLogicToken {
 public:
 	SQLLogicTokenType type;
 	vector<string> parameters;
+	bool explain_sql = false;
 };
 
 class SQLLogicParser {

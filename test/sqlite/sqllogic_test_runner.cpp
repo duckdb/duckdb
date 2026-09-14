@@ -247,6 +247,7 @@ NewDatabaseConnection SQLLogicTestRunner::CreateDatabase(const string &db_path, 
 	try {
 		result.db = make_uniq<DuckDB>(db_path, config.get());
 		LoadStaticExtensions(*result.db);
+		ConfigureDefaultInMemoryTemporaryDirectory(*result.db, db_path);
 
 		// always load core functions
 		auto &test_config = TestConfiguration::Get();
@@ -753,14 +754,16 @@ void add_env_tag(vector<string> &tags, const string &name, const string *value =
 	}
 }
 
-void SQLLogicTestRunner::ConfigureDefaultInMemoryTemporaryDirectory(const string &script) {
-	if (!dbpath.empty() || !config->options.use_temporary_directory || config->options.temporary_directory != ".tmp") {
+void SQLLogicTestRunner::ConfigureDefaultInMemoryTemporaryDirectory(DuckDB &database, const string &db_path) {
+	auto &db_config = DBConfig::GetConfig(*database.instance);
+	if (!db_path.empty() || !db_config.options.use_temporary_directory ||
+	    db_config.options.temporary_directory != ".tmp") {
 		return;
 	}
-	auto normalized_script = StringUtil::Replace(script, "\\", "/");
+	auto normalized_script = StringUtil::Replace(file_name, "\\", "/");
 	auto temp_directory_name = StringUtil::Replace(normalized_script, "/", "_");
-	auto temp_directory = TestJoinPath(TestJoinPath(TestDirectoryPath(), "sqllogic_temp"), temp_directory_name);
-	config->SetOptionByName("temp_directory", temp_directory);
+	auto temp_directory = TestJoinPath(TestDirectoryPath(), "sqllogic_temp_" + temp_directory_name);
+	db_config.SetOption(database.instance.get(), *DBConfig::GetOptionByName("temp_directory"), temp_directory);
 }
 
 void SQLLogicTestRunner::ExecuteFile(string script) {
@@ -808,10 +811,6 @@ void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &s
 		ignore_error_messages.insert(ignore);
 	}
 
-	// In-memory sqllogictests otherwise share ".tmp" across unittest processes.
-	// Give each script its own spill directory under the per-process TEST_DIR.
-	ConfigureDefaultInMemoryTemporaryDirectory(script);
-
 	// initialize the database with the default dbpath
 	LoadDatabase(dbpath, true);
 
@@ -825,6 +824,10 @@ void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &s
 	}
 
 	ExecuteScript(parser, script);
+	if (test_config.RequireSQLExportRoundTrip() && !test_skipped_requirement &&
+	    (sql_export_eligible + explain_sql_generated == 0 || sql_export_generated + explain_sql_generated == 0)) {
+		TEST_FAIL("SQL export configuration requires positive eligible and generated statement counts");
+	}
 
 	auto cleanup_sqllogic = test_config.GetCleanupSqllogic();
 	if (!cleanup_sqllogic.empty()) {
@@ -902,7 +905,6 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 					// (1) skipif duckdb
 					// (2) onlyif <other_system>
 					skip_statement = true;
-					break;
 				}
 			}
 			parser.NextLine();
@@ -924,6 +926,7 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 				parser.Fail("statement requires at least one parameter (statement ok/error)");
 			}
 			auto command = make_uniq<Statement>(*this);
+			command->explain_sql = token.explain_sql;
 
 			bool original_output_result_mode = output_result_mode;
 
@@ -970,6 +973,7 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 				parser.Fail("query requires at least one parameter (query III)");
 			}
 			auto command = make_uniq<Query>(*this);
+			command->explain_sql = token.explain_sql;
 
 			// parse the expected column count
 			command->expected_column_count = 0;
@@ -1381,6 +1385,218 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 	}
 	if (InLoop()) {
 		parser.Fail("Missing endloop!");
+	}
+}
+
+static JSONMutableValue SQLExportPathJSON(JSONWriter &writer, const LogicalPlanVerificationPath &path) {
+	auto components = writer.CreateArray();
+	for (auto &component : path.components) {
+		auto entry = writer.CreateObject();
+		const char *kind;
+		switch (component.type) {
+		case LogicalPlanVerificationPathComponentType::OPERATOR_CHILD:
+			kind = "operator_child";
+			break;
+		case LogicalPlanVerificationPathComponentType::OPERATOR_EXPRESSION:
+			kind = "operator_expression";
+			break;
+		default:
+			kind = "expression_child";
+			break;
+		}
+		entry.AddString("kind", kind);
+		entry.Add("ordinal", writer.CreateUnsignedInteger(component.ordinal));
+		components.Append(entry);
+	}
+	return components;
+}
+
+static const char *SQLExportIssueCodeName(LogicalPlanVerificationIssueCode code) {
+	switch (code) {
+	case LogicalPlanVerificationIssueCode::INVALID_BINDING:
+		return "INVALID_BINDING";
+	case LogicalPlanVerificationIssueCode::TYPE_MISMATCH:
+		return "TYPE_MISMATCH";
+	case LogicalPlanVerificationIssueCode::UNSUPPORTED_OPERATOR:
+		return "UNSUPPORTED_OPERATOR";
+	case LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPRESSION:
+		return "UNSUPPORTED_EXPRESSION";
+	case LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION:
+		return "UNSUPPORTED_FUNCTION";
+	case LogicalPlanVerificationIssueCode::UNSUPPORTED_SOURCE:
+		return "UNSUPPORTED_SOURCE";
+	case LogicalPlanVerificationIssueCode::UNSUPPORTED_EXTENSION:
+		return "UNSUPPORTED_EXTENSION";
+	case LogicalPlanVerificationIssueCode::MALFORMED_EXTENSION_RESULT:
+		return "MALFORMED_EXTENSION_RESULT";
+	case LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE:
+		return "UNSUPPORTED_EXPORT_FEATURE";
+	case LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT:
+		return "INTERNAL_INVARIANT";
+	default:
+		throw InternalException("Unknown SQL export diagnostic code");
+	}
+}
+
+static const char *SQLExportIssuePhaseName(LogicalPlanVerificationPhase phase) {
+	switch (phase) {
+	case LogicalPlanVerificationPhase::VERIFY:
+		return "VERIFY";
+	case LogicalPlanVerificationPhase::EXPRESSION_EXPORT:
+		return "EXPRESSION_EXPORT";
+	case LogicalPlanVerificationPhase::PLAN_EXPORT:
+		return "PLAN_EXPORT";
+	default:
+		throw InternalException("Unknown SQL export diagnostic phase");
+	}
+}
+
+static JSONMutableValue SQLExportFunctionJSON(JSONWriter &writer,
+                                              const LogicalPlanVerificationFunctionIdentity &function) {
+	auto result = writer.CreateObject();
+	result.AddString("catalog", function.catalog);
+	result.AddString("schema", function.schema);
+	result.AddString("name", function.name);
+	auto arguments = writer.CreateArray();
+	for (auto &argument : function.arguments) {
+		arguments.Append(writer.CreateString(argument.ToString()));
+	}
+	result.Add("arguments", arguments);
+	result.AddString("return_type", function.return_type.ToString());
+	return result;
+}
+
+static JSONMutableValue SQLExportConstructJSON(JSONWriter &writer,
+                                               const LogicalPlanVerificationConstructIdentity &construct) {
+	auto result = writer.CreateObject();
+	switch (construct.type) {
+	case LogicalPlanVerificationConstructType::LOGICAL_OPERATOR:
+		result.AddString("type", "logical_operator");
+		result.AddString("logical_operator", EnumUtil::ToString(*construct.logical_operator));
+		break;
+	case LogicalPlanVerificationConstructType::EXPRESSION:
+		result.AddString("type", "expression");
+		result.AddString("expression", EnumUtil::ToString(*construct.expression));
+		break;
+	case LogicalPlanVerificationConstructType::FUNCTION:
+		result.AddString("type", "function");
+		result.Add("function", SQLExportFunctionJSON(writer, *construct.function));
+		break;
+	case LogicalPlanVerificationConstructType::SOURCE_FUNCTION:
+		result.AddString("type", "source_function");
+		result.Add("function", SQLExportFunctionJSON(writer, *construct.function));
+		break;
+	case LogicalPlanVerificationConstructType::LOGICAL_TYPE:
+		result.AddString("type", "logical_type");
+		result.AddString("logical_type", construct.logical_type->ToString());
+		break;
+	case LogicalPlanVerificationConstructType::BINDING_TYPE_MISMATCH:
+		result.AddString("type", "binding_type_mismatch");
+		result.AddString("expected_type", construct.type_mismatch->expected_type.ToString());
+		result.AddString("actual_type", construct.type_mismatch->actual_type.ToString());
+		break;
+	case LogicalPlanVerificationConstructType::EXTENSION:
+		result.AddString("type", "extension");
+		result.AddString("identifier", *construct.identifier);
+		break;
+	case LogicalPlanVerificationConstructType::EXPORT_FEATURE:
+		result.AddString("type", "export_feature");
+		result.AddString("identifier", *construct.identifier);
+		break;
+	default:
+		throw InternalException("Unknown SQL export diagnostic construct");
+	}
+	return result;
+}
+
+static JSONMutableValue SQLExportIssueJSON(JSONWriter &writer, const LogicalPlanVerificationIssue &issue) {
+	auto result = writer.CreateObject();
+	result.AddString("code", SQLExportIssueCodeName(issue.code));
+	result.AddString("phase", SQLExportIssuePhaseName(issue.phase));
+	if (issue.path) {
+		result.Add("path", SQLExportPathJSON(writer, *issue.path));
+	}
+	if (issue.construct) {
+		result.Add("construct", SQLExportConstructJSON(writer, *issue.construct));
+	}
+	auto facts = writer.CreateArray();
+	for (auto &fact : issue.facts) {
+		auto item = writer.CreateObject();
+		item.AddString("name", fact.first);
+		item.AddString("type", fact.second.type().ToString());
+		item.AddString("value", fact.second.ToSQLString());
+		facts.Append(item);
+	}
+	result.Add("facts", facts);
+	result.AddString("message", issue.message);
+	return result;
+}
+
+void SQLLogicTestRunner::RecordSQLExport(const Command &command, ExecuteContext &context,
+                                         vector<SQLExportVerificationRecord> records) {
+	auto emit = TestConfiguration::Get().EmitSQLExportEvents();
+	for (idx_t i = 0; i < records.size(); i++) {
+		auto &record = records[i];
+		context.sql_export_strict_failure |= record.strict_failure;
+		if (record.eligible) {
+			sql_export_eligible++;
+		}
+		if (record.outcome == SQLExportOutcome::STRUCTURALLY_VALIDATED) {
+			sql_export_generated++;
+		}
+		if (!emit) {
+			continue;
+		}
+		JSONWriter writer;
+		auto obj = writer.CreateObject();
+		obj.AddString("event", "sql_export");
+		obj.AddString("file", command.file_name);
+		obj.Add("line", writer.CreateSignedInteger(command.query_line));
+		obj.AddString("connection", command.connection_name);
+		obj.Add("statement", writer.CreateUnsignedInteger(record.statement_index));
+		auto loops = writer.CreateArray();
+		for (auto &loop : context.running_loops) {
+			auto entry = writer.CreateObject();
+			entry.AddString("name", loop.loop_iterator_name);
+			entry.Add("iteration", writer.CreateUnsignedInteger(loop.loop_idx));
+			loops.Append(entry);
+		}
+		obj.Add("loops", loops);
+		obj.AddString("mode", EnumUtil::ToString(record.mode));
+		obj.AddString("outcome", EnumUtil::ToString(record.outcome));
+		obj.AddString("route", EnumUtil::ToString(record.route));
+		obj.AddString("comparability", EnumUtil::ToString(record.comparability));
+		obj.AddString("execution", EnumUtil::ToString(record.execution));
+		obj.AddString("code", record.code);
+		obj.AddString("phase", record.phase);
+		obj.Add("query_error", writer.CreateBoolean(record.query_error));
+		obj.Add("eligible", writer.CreateBoolean(record.eligible));
+		obj.Add("generated", writer.CreateBoolean(record.generated));
+		obj.Add("strict_failure", writer.CreateBoolean(record.strict_failure));
+		obj.Add("propagated_error", writer.CreateBoolean(record.propagated_error));
+		obj.Add("export_count", writer.CreateUnsignedInteger(record.export_count));
+		if (record.path) {
+			obj.Add("path", SQLExportPathJSON(writer, *record.path));
+		}
+		auto issues = writer.CreateArray();
+		for (auto &issue : record.issues) {
+			issues.Append(SQLExportIssueJSON(writer, issue));
+		}
+		obj.Add("issues", issues);
+		auto inventory = writer.CreateArray();
+		for (auto &entry : record.inventory) {
+			auto item = writer.CreateObject();
+			item.AddString("kind", entry.kind);
+			item.AddString("construct", entry.construct);
+			item.Add("path", SQLExportPathJSON(writer, entry.path));
+			inventory.Append(item);
+		}
+		obj.Add("inventory", inventory);
+		if (!record.generated_sql.empty()) {
+			obj.AddString("generated_sql", record.generated_sql);
+		}
+		writer.SetRoot(obj);
+		SQLLogicTestLogger::EmitTestEvent(writer.ToString());
 	}
 }
 

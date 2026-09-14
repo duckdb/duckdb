@@ -91,6 +91,11 @@ static const TestConfigOption test_config_options[] = {
      LogicalType::LIST(
          LogicalType::STRUCT({{"reason", LogicalType::VARCHAR}, {"paths", LogicalType::LIST(LogicalType::VARCHAR)}})),
      nullptr},
+    {"sql_export_events", "Emit SQL export coverage records outside query results", LogicalType::BOOLEAN, nullptr},
+    {"sql_export_failure_sql", "Retain generated SQL for reducing verifier and result failures", LogicalType::BOOLEAN,
+     nullptr},
+    {"sql_export_require_roundtrip", "Require positive eligible and generated counts in each selected test",
+     LogicalType::BOOLEAN, nullptr},
     {"skip_compiled", "Skip compiled tests", LogicalType::BOOLEAN, nullptr},
     {"skip_error_messages", "Skip compiled tests", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {"sort_style", "Default sort style if none is configured in the test (none, rowsort, valuesort)",
@@ -952,6 +957,18 @@ bool FailureSummary::SkipLoggingSameErrorInternal(const string &file_name) {
 	}
 	reported_files.insert(file_name);
 	return false;
+}
+
+bool TestConfiguration::EmitSQLExportEvents() {
+	return GetOptionOrDefault("sql_export_events", false);
+}
+
+bool TestConfiguration::RetainSQLExportFailureSQL() {
+	return GetOptionOrDefault("sql_export_failure_sql", false);
+}
+
+bool TestConfiguration::RequireSQLExportRoundTrip() {
+	return GetOptionOrDefault("sql_export_require_roundtrip", false);
 }
 
 } // namespace duckdb

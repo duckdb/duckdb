@@ -1,0 +1,8 @@
+{
+  "description": "Require optimized-plan SQL round trips for the measured SQL export subset",
+  "on_init": "SET debug_verify_sql_export='strict';",
+  "on_new_connection": "SET debug_verify_sql_export='strict';",
+  "sql_export_events": true,
+  "sql_export_require_roundtrip": true,
+  "skip_compiled": true
+}

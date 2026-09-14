@@ -70,6 +70,9 @@ public:
 	bool RunStorageFuzzer();
 	bool GetSummarizeFailures();
 	bool GetSkipCompiledTests();
+	bool EmitSQLExportEvents();
+	bool RetainSQLExportFailureSQL();
+	bool RequireSQLExportRoundTrip();
 	DebugVectorVerification GetVectorVerification();
 	DebugInitialize GetDebugInitialize();
 	ExtensionAutoLoadingMode GetExtensionAutoLoadingMode();

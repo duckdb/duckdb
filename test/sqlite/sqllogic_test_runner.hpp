@@ -13,6 +13,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "sqllogic_command.hpp"
 #include "test_config.hpp"
+#include "duckdb/main/sql_export_verification.hpp"
 #include <istream>
 
 namespace duckdb {
@@ -97,6 +98,9 @@ public:
 
 	//! Per-test statement tallies for --emit-test-events. Atomic: concurrent loops run the countable
 	//! commands on multiple threads; the begin/end events are emitted single-threaded at boundaries.
+	atomic<idx_t> sql_export_eligible {0};
+	atomic<idx_t> explain_sql_generated {0};
+	atomic<idx_t> sql_export_generated {0};
 	atomic<idx_t> test_stat_passes {0};
 	atomic<idx_t> test_stat_fails {0};
 	atomic<idx_t> test_stat_skip_mode {0};
@@ -139,6 +143,7 @@ public:
 	static string GetSkipReasonSummary();
 	//! Statement tallies, plus the begin/end JSON events emitted under --emit-test-events.
 	void CountStatement(bool passed);
+	void RecordSQLExport(const Command &command, ExecuteContext &context, vector<SQLExportVerificationRecord> records);
 	void CountSkipMode();
 	void EmitBegin(const string &test_name);
 	void EmitEnd(const string &test_name, const string &status, const string &data);
@@ -150,7 +155,7 @@ public:
 private:
 	void ExecuteInternal(SQLLogicParser &parser, const string &script);
 	RequireResult CheckRequire(SQLLogicParser &parser, const vector<string> &params);
-	void ConfigureDefaultInMemoryTemporaryDirectory(const string &script);
+	void ConfigureDefaultInMemoryTemporaryDirectory(DuckDB &database, const string &db_path);
 	static void AddSkipReason(const string &reason);
 
 private:
