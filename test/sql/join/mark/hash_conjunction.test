@@ -16,14 +16,20 @@ EXPLAIN SELECT __mark_join_marker FROM hash_probe p JOIN BY (TYPE MARK) hash_bui
 ----
 physical_plan	<REGEX>:[\s\S]*HASH_JOIN[\s\S]*
 
-# A hash probe has ample headroom; a 400-million-pair nested-loop regression must abort.
+# Repeat the 20k-by-20k probe to reach the throttled deadline checks even with large vectors.
 statement ok
-SET max_execution_time=250;
+SET max_execution_time=1000;
 
 query I
-SELECT count(*) FROM (SELECT __mark_join_marker m FROM hash_probe p JOIN BY (TYPE MARK) hash_build b ON p.k=b.k AND p.v<b.v) q WHERE m;
+WITH q AS NOT MATERIALIZED (
+    SELECT count(*) n FROM (
+        SELECT __mark_join_marker m FROM hash_probe p JOIN BY (TYPE MARK) hash_build b ON p.k=b.k AND p.v<b.v
+    ) markers WHERE m
+), r AS NOT MATERIALIZED (FROM q UNION ALL FROM q UNION ALL FROM q UNION ALL FROM q),
+s AS NOT MATERIALIZED (FROM r UNION ALL FROM r UNION ALL FROM r UNION ALL FROM r)
+SELECT sum(n) FROM s;
 ----
-20000
+320000
 
 statement ok
 RESET max_execution_time;
