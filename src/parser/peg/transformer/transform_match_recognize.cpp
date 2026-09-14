@@ -399,7 +399,7 @@ static idx_t QuantifierCount(const unique_ptr<ParsedExpression> &number_literal)
 	if (number_literal->GetExpressionClass() != ExpressionClass::CONSTANT) {
 		throw ParserException("Pattern quantifier bounds must be integer constants");
 	}
-	auto value = number_literal->Cast<ConstantExpression>().GetValue();
+	auto value = number_literal->Cast<ConstantExpression>().GetLiteral().ToValue();
 	if (!value.DefaultTryCastAs(LogicalType::UBIGINT)) {
 		throw ParserException("Pattern quantifier bounds must be non-negative integers");
 	}

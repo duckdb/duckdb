@@ -324,7 +324,7 @@ unique_ptr<SQLStatement> PEGTransformer::GenerateCreateEnumStmt(unique_ptr<Creat
 		select_node->modifiers.push_back(make_uniq<DistinctModifier>());
 		auto modifier = make_uniq<OrderModifier>();
 		modifier->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT,
-		                              make_uniq<ConstantExpression>(Value::INTEGER(1)));
+		                              ConstantExpression::Integer(1));
 		select_node->modifiers.push_back(std::move(modifier));
 		subselect = std::move(select_node);
 	} else {

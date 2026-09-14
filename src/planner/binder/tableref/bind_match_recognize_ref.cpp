@@ -565,11 +565,11 @@ static unique_ptr<SelectNode> PlanPatternWindow(Binder &binder, ClientContext &c
 		CaseCheck matched;
 		matched.when_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN,
 		                                                    make_uniq<FunctionExpression>("len", std::move(length)),
-		                                                    make_uniq<ConstantExpression>(Value::BIGINT(0)));
+		                                                    ConstantExpression::Integer(0));
 		matched.then_expr = spans->Copy();
 		vector<unique_ptr<ParsedExpression>> nothing;
 		nothing.push_back(make_uniq<CastExpression>(ListType::GetChildType(WindowMatchRecognizeExecutor::ResultType()),
-		                                            make_uniq<ConstantExpression>(Value())));
+		                                            ConstantExpression::Null()));
 		auto keep_row = make_uniq<CaseExpression>();
 		keep_row->CaseChecksMutable().push_back(std::move(matched));
 		keep_row->ElseMutable() = make_uniq<FunctionExpression>("list_value", std::move(nothing));
@@ -593,7 +593,7 @@ static unique_ptr<ParsedExpression> OnlyWhenMatchedRow(const string &state, uniq
 	check.when_expr = std::move(matched);
 	check.then_expr = std::move(value);
 	result->CaseChecksMutable().push_back(std::move(check));
-	result->ElseMutable() = make_uniq<ConstantExpression>(Value());
+	result->ElseMutable() = ConstantExpression::Null();
 	return std::move(result);
 }
 
@@ -738,8 +738,7 @@ static vector<unique_ptr<Expression>> BindDefineConditions(MatchRecognizeDefineB
 			condition =
 			    make_uniq<CastExpression>(LogicalType::BOOLEAN, make_uniq<ColumnRefExpression>(Identifier(symbol)));
 		} else {
-			condition =
-			    make_uniq<CastExpression>(LogicalType::BOOLEAN, make_uniq<ConstantExpression>(Value::BOOLEAN(true)));
+			condition = make_uniq<CastExpression>(LogicalType::BOOLEAN, ConstantExpression::Boolean(true));
 		}
 		condition_binder.BeginDefine(symbol);
 		conditions.push_back(condition_binder.Bind(condition));

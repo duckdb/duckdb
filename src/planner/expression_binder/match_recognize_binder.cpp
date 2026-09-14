@@ -24,7 +24,7 @@ static constexpr const char *MATCH_RECOGNIZE_VALUE_FIELD = "v";
 static unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> value, const string &child_name) {
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(value));
-	children.push_back(make_uniq<ConstantExpression>(child_name));
+	children.push_back(ConstantExpression::String(child_name));
 	return make_uniq<FunctionExpression>("struct_extract", std::move(children));
 }
 
@@ -44,7 +44,7 @@ static unique_ptr<ParsedExpression> OnlyWhenMatched(const string &state, unique_
 	check.when_expr = std::move(in_match);
 	check.then_expr = std::move(value);
 	result->CaseChecksMutable().push_back(std::move(check));
-	result->ElseMutable() = make_uniq<ConstantExpression>(Value());
+	result->ElseMutable() = ConstantExpression::Null();
 	return std::move(result);
 }
 
@@ -62,7 +62,7 @@ static unique_ptr<ParsedExpression> PackValue(const string &state, unique_ptr<Pa
 	check.when_expr = std::move(in_match);
 	check.then_expr = std::move(packed);
 	result->CaseChecksMutable().push_back(std::move(check));
-	result->ElseMutable() = make_uniq<ConstantExpression>(Value());
+	result->ElseMutable() = ConstantExpression::Null();
 	return std::move(result);
 }
 
@@ -73,7 +73,7 @@ static unique_ptr<ParsedExpression> ClassifierMatches(const string &state, const
 	vector<unique_ptr<ParsedExpression>> in_children;
 	in_children.push_back(CreateStructExtract(state, "classifier"));
 	for (auto &symbol : symbols) {
-		in_children.push_back(make_uniq<ConstantExpression>(Value(symbol)));
+		in_children.push_back(ConstantExpression::String(symbol));
 	}
 	return make_uniq<OperatorExpression>(ExpressionType::COMPARE_IN, std::move(in_children));
 }
@@ -86,7 +86,7 @@ static unique_ptr<ParsedExpression> ClassifiedValue(const string &state, const v
 	check.when_expr = std::move(matches_symbol);
 	check.then_expr = std::move(value);
 	result->CaseChecksMutable().push_back(std::move(check));
-	result->ElseMutable() = make_uniq<ConstantExpression>(Value());
+	result->ElseMutable() = ConstantExpression::Null();
 	return std::move(result);
 }
 
@@ -145,8 +145,7 @@ static unique_ptr<ParsedExpression> MatchScopedValue(ClientContext &context, con
 	    make_uniq<WindowExpression>("", "", offset > 0 ? "nth_value" : (first ? "first_value" : "last_value"));
 	window->GetArgumentsMutable().emplace_back(std::move(packed));
 	if (offset > 0) {
-		window->GetArgumentsMutable().emplace_back(
-		    make_uniq<ConstantExpression>(Value::BIGINT(NumericCast<int64_t>(offset + 1))));
+		window->GetArgumentsMutable().emplace_back(ConstantExpression::Integer(NumericCast<int64_t>(offset + 1)));
 	}
 	window->HasIgnoreNullsMutable() = true;
 	window->IgnoreNullsMutable() = true;
@@ -163,7 +162,7 @@ idx_t MatchRecognizeNavigationOffset(const string &function_name, const ParsedEx
 	if (offset_expr.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 		throw BinderException("The offset of %s() must be a constant", function_name);
 	}
-	auto offset_value = offset_expr.Cast<ConstantExpression>().GetValue();
+	auto offset_value = offset_expr.Cast<ConstantExpression>().GetLiteral().ToValue();
 	if (offset_value.IsNull()) {
 		throw BinderException("The offset of %s() must be a non-negative integer, not NULL", function_name);
 	}
@@ -301,7 +300,7 @@ BindResult MatchRecognizeDefineBinder::BindExpression(unique_ptr<ParsedExpressio
 		if (function_name == "CLASSIFIER" && function.GetArguments().empty()) {
 			OutsideMatch("CLASSIFIER()");
 			// the row being tested is the one this DEFINE decides on, so it classifies as this symbol
-			expr_ptr = make_uniq<ConstantExpression>(Value(define_name));
+			expr_ptr = ConstantExpression::String(define_name);
 			return SelectBinder::BindExpression(expr_ptr, depth, root_expression);
 		}
 		if (function_name == "MATCH_NUMBER" && function.GetArguments().empty()) {
