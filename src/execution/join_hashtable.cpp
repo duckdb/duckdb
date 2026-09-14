@@ -1,4 +1,7 @@
 #include "duckdb/execution/join_hashtable.hpp"
+#include "duckdb/execution/ie_join_union.hpp"
+#include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/common/set.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 
 #include "duckdb/common/enums/join_type.hpp"
@@ -2083,6 +2086,112 @@ void JoinHashTable::RefineMarkPatterns(DataChunk &keys, bool matches[], Validity
 	Vector comparison(LogicalType::BOOLEAN);
 	DataChunk candidates;
 	candidates.InitializeEmpty(condition_types);
+	set<pair<uint64_t, uint64_t>> range_batches;
+	auto refine_ranges = [&](MarkJoinRefinementGroup &group, uint64_t probe_mask, uint64_t build_mask,
+	                         vector<idx_t> driving) {
+		if (!range_batches.emplace(probe_mask, build_mask).second) {
+			return;
+		}
+		std::sort(driving.begin(), driving.end(),
+		          [&](idx_t lhs, idx_t rhs) { return PhysicalRangeJoin::LessThan(conditions[lhs], conditions[rhs]); });
+		driving.resize(2);
+		vector<JoinCondition> range_conditions;
+		for (auto col : driving) {
+			range_conditions.push_back(conditions[col].Copy());
+		}
+		vector<LogicalType> types {condition_types[driving[0]], condition_types[driving[1]], LogicalType::UBIGINT};
+		ThreadContext thread(context);
+		ExecutionContext execution(context, thread, nullptr);
+		auto &physical = op.Cast<PhysicalHashJoin>();
+		auto &manager = BufferManager::GetBufferManager(context);
+		auto &build = [&]() -> IEJoinUnion::SortedTable & {
+			lock_guard<mutex> guard(mark_join_info.mj_lock);
+			const auto mask = (uint64_t(1) << driving[0]) | (uint64_t(1) << driving[1]);
+			auto &index = group.indexes[mask];
+			if (!index) {
+				index = make_uniq<MarkJoinRefinementIndex>();
+			}
+			if (!index->ranges) {
+				ColumnDataCollection input(manager, types);
+				ColumnDataAppendState append;
+				input.InitializeAppend(append);
+				DataChunk projected;
+				projected.Initialize(context, types);
+				for (auto &selection : group.selections) {
+					context.InterruptCheck();
+					fetch(selection.first);
+					projected.Reset();
+					for (auto row : selection.second) {
+						projected.data[0].Append(chunk.GetValue(driving[0], row));
+						projected.data[1].Append(chunk.GetValue(driving[1], row));
+						projected.data[2].Append(Value::UBIGINT(selection.first * STANDARD_VECTOR_SIZE + row));
+					}
+					projected.SetChildCardinality(selection.second.size());
+					input.Append(append, projected);
+				}
+				index->ranges = IEJoinUnion::SortInput(execution, physical, range_conditions, input);
+			}
+			return *index->ranges;
+		}();
+		ColumnDataCollection input(manager, types);
+		ColumnDataAppendState append;
+		input.InitializeAppend(append);
+		DataChunk projected;
+		projected.Initialize(context, types);
+		idx_t count = 0;
+		for (idx_t row = 0; row < keys.size(); row++) {
+			if (matches[row] || !validity.RowIsValid(row) ||
+			    MarkJoinRefinement::NullMask(keys, row, conditions) != probe_mask) {
+				continue;
+			}
+			projected.data[0].Append(keys.GetValue(driving[0], row));
+			projected.data[1].Append(keys.GetValue(driving[1], row));
+			projected.data[2].Append(Value::UBIGINT(row));
+			count++;
+		}
+		projected.SetChildCardinality(count);
+		input.Append(append, projected);
+		auto probes = IEJoinUnion::SortInput(execution, physical, range_conditions, input);
+		unique_ptr<IEJoinUnion::SortedTable> l2;
+		unique_ptr<ColumnDataCollection> li, p;
+		IEJoinUnion::Prepare(execution, physical, range_conditions, *probes, build, l2, li, p);
+		auto left_ids = IEJoinUnion::ExtractColumn(*probes, 2, manager);
+		auto right_ids = IEJoinUnion::ExtractColumn(build, 2, manager);
+		IEJoinCursor<uint64_t> left_id(*left_ids), right_id(*right_ids);
+		IEJoinUnion joiner(*l2, *li, *p, range_conditions, {0, l2->BlockCount()});
+		unsafe_vector<idx_t> left, right;
+		SelectionVector selected(1);
+		const auto dropped = probe_mask | build_mask;
+		while (joiner.JoinBlocks(left, right)) {
+			context.InterruptCheck();
+			for (idx_t pair = 0; pair < left.size(); pair++) {
+				const auto probe = left_id[left[pair]];
+				if (matches[probe] || (dropped && !validity.RowIsValid(probe))) {
+					continue;
+				}
+				const auto build_row = right_id[right[pair]];
+				fetch(build_row / STANDARD_VECTOR_SIZE);
+				candidates.Reference(chunk);
+				selected.set_index(0, build_row % STANDARD_VECTOR_SIZE);
+				candidates.Slice(selected, 1);
+				MarkJoinRowComparison::CompareConjunction(keys, probe, candidates, conditions, comparison);
+				auto values = comparison.Values<bool>();
+				auto value = values[0];
+				if (!value.IsValid()) {
+					validity.SetInvalid(probe);
+				} else if (value.GetValue()) {
+					matches[probe] = true;
+					validity.SetValid(probe);
+				}
+			}
+			if (joiner.lrid > 0 && !left.empty() && left.back() == idx_t(joiner.lrid - 1)) {
+				const auto probe = left_id[left.back()];
+				if (matches[probe] || (dropped && !validity.RowIsValid(probe))) {
+					joiner.FinishRow();
+				}
+			}
+		}
+	};
 	for (idx_t probe = 0; probe < keys.size(); probe++) {
 		if (matches[probe] || !validity.RowIsValid(probe)) {
 			continue;
@@ -2094,6 +2203,7 @@ void JoinHashTable::RefineMarkPatterns(DataChunk &keys, bool matches[], Validity
 			uint64_t equality_mask = 0;
 			idx_t applicable_count = 0;
 			idx_t range_column = DConstants::INVALID_INDEX;
+			vector<idx_t> ranges;
 			if (conditions.size() <= 64) {
 				for (idx_t col = 0; col < conditions.size(); col++) {
 					if (dropped & (uint64_t(1) << col)) {
@@ -2111,6 +2221,7 @@ void JoinHashTable::RefineMarkPatterns(DataChunk &keys, bool matches[], Validity
 					           comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
 					           comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
 						range_column = col;
+						ranges.push_back(col);
 					}
 				}
 			}
@@ -2217,6 +2328,9 @@ void JoinHashTable::RefineMarkPatterns(DataChunk &keys, bool matches[], Validity
 						}
 					}
 				}
+			} else if (ranges.size() >= 2) {
+				refine_ranges(group, probe_mask, entry.first, ranges);
+				finished = matches[probe] || !validity.RowIsValid(probe);
 			} else if (conditions.size() <= 64 && applicable_count == 0) {
 				const auto &selection = *group.selections.begin();
 				fetch(selection.first);
