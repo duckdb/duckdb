@@ -17,6 +17,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/expression_barrier.hpp"
 #include "duckdb/planner/expression_nullability.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
@@ -366,21 +367,80 @@ static void CollectMarkerReferences(LogicalOperator &op, marker_binding_map_t &m
 	}
 }
 
+static bool RewriteFilterThroughProjections(unique_ptr<Expression> &expr,
+                                            const vector<reference<LogicalProjection>> &projections) {
+	for (auto &projection : projections) {
+		bool can_push = true;
+		ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+		    expr, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &) {
+			    if (colref.Depth() != 0) {
+				    can_push = false;
+				    return;
+			    }
+			    auto &projected = projection.get().GetExpression(colref.Binding());
+			    if (projected.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+				    can_push = false;
+				    return;
+			    }
+			    auto &input = projected.Cast<BoundColumnRefExpression>();
+			    if (input.Depth() != 0) {
+				    can_push = false;
+				    return;
+			    }
+			    colref.BindingMutable() = input.Binding();
+		    });
+		if (!can_push) {
+			return false;
+		}
+	}
+	return true;
+}
+
 static bool PushEligibleFilterExpressionsIntoDelimJoinInputs(unique_ptr<LogicalOperator> &plan) {
 	auto &filter = plan->Cast<LogicalFilter>();
 	if (filter.HasProjectionMap()) {
 		return false;
 	}
-	if (filter.children[0]->type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+	reference<LogicalOperator> input = *filter.children[0];
+	vector<reference<LogicalProjection>> projections;
+	while (input.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		auto &projection = input.get().Cast<LogicalProjection>();
+		projections.push_back(projection);
+		input = *projection.children[0];
+	}
+	if (input.get().type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		return false;
 	}
 
 	bool changed = false;
-	auto &delim_join = filter.children[0]->Cast<LogicalComparisonJoin>();
+	auto &delim_join = input.get().Cast<LogicalComparisonJoin>();
+	if (!projections.empty() && delim_join.join_type != JoinType::INNER && delim_join.join_type != JoinType::LEFT) {
+		return false;
+	}
+	for (auto &projection : projections) {
+		for (auto &expr : projection.get().expressions) {
+			if (ExpressionBarrier::Required(*expr) || ExpressionBarrier::Contains(*expr)) {
+				return false;
+			}
+		}
+	}
 	vector<unique_ptr<Expression>> remaining_expressions;
 	auto expressions = std::move(filter.expressions);
 	LogicalFilter::SplitPredicates(expressions);
 	for (auto &expr : expressions) {
+		if (!projections.empty()) {
+			if (!ExpressionBarrier::Required(*expr) && !ExpressionBarrier::Contains(*expr)) {
+				auto rewritten = expr->Copy();
+				if (RewriteFilterThroughProjections(rewritten, projections) &&
+				    FilterReferencesDelimInput(delim_join, *rewritten)) {
+					AddFilterToOperator(delim_join.children[0], std::move(rewritten));
+					changed = true;
+					continue;
+				}
+			}
+			remaining_expressions.push_back(std::move(expr));
+			continue;
+		}
 		if (FilterReferencesDelimInput(delim_join, *expr)) {
 			AddFilterToOperator(delim_join.children[0], std::move(expr));
 			changed = true;

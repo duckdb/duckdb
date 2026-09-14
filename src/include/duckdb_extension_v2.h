@@ -1309,6 +1309,15 @@ typedef struct {
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_projection_pushdown)
 	(duckdb_v2_table_function_handle function, bool enable, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_sql_statement_get_parameter_count)
+	(duckdb_v2_sql_statement_handle statement, idx_t *out_count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_sql_statement_get_parameter_name)
+	(duckdb_v2_sql_statement_handle statement, idx_t index, duckdb_v2_identifier_t *out_name,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_sql_statement_get_text)
+	(duckdb_v2_sql_statement_handle statement, duckdb_v2_str *out_text, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_sql_statement_get_type)
+	(duckdb_v2_sql_statement_handle statement, DUCKDB_V2_STATEMENT_TYPE *out_type, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_token_iterator_destroy)(duckdb_v2_token_iterator_handle *iterator);
 	DUCKDB_V2_ERROR(*duckdb_v2_token_iterator_ends_unterminated)
 	(duckdb_v2_token_iterator_handle iterator, bool *out_ends_unterminated, duckdb_v2_error_info_handle *err);
@@ -1914,6 +1923,10 @@ typedef struct {
 #define duckdb_v2_table_function_set_filter_pushdown_callback                                                          \
 	duckdb_ext_api.duckdb_v2_table_function_set_filter_pushdown_callback
 #define duckdb_v2_table_function_set_projection_pushdown duckdb_ext_api.duckdb_v2_table_function_set_projection_pushdown
+#define duckdb_v2_sql_statement_get_parameter_count      duckdb_ext_api.duckdb_v2_sql_statement_get_parameter_count
+#define duckdb_v2_sql_statement_get_parameter_name       duckdb_ext_api.duckdb_v2_sql_statement_get_parameter_name
+#define duckdb_v2_sql_statement_get_text                 duckdb_ext_api.duckdb_v2_sql_statement_get_text
+#define duckdb_v2_sql_statement_get_type                 duckdb_ext_api.duckdb_v2_sql_statement_get_type
 #define duckdb_v2_token_iterator_destroy                 duckdb_ext_api.duckdb_v2_token_iterator_destroy
 #define duckdb_v2_token_iterator_ends_unterminated       duckdb_ext_api.duckdb_v2_token_iterator_ends_unterminated
 #define duckdb_v2_token_iterator_next                    duckdb_ext_api.duckdb_v2_token_iterator_next

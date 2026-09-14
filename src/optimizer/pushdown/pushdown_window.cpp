@@ -87,6 +87,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 	}
 	op->children[0] = pushdown.Rewrite(std::move(op->children[0]));
 	filters = std::move(leftover_filters);
-	return FinishPushdown(std::move(op));
+	return PushFinalFilters(std::move(op));
 }
 } // namespace duckdb

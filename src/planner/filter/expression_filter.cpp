@@ -1,6 +1,7 @@
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/function/arg_properties.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/cast/cast_statistics.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -8,6 +9,7 @@
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -273,6 +275,11 @@ static optional_ptr<const BaseStatistics> TryGetExpressionStats(optional_ptr<Cli
 				child_stats.push_back(child_stat->Copy());
 			}
 
+			auto constant_stats = StatisticsPropagator::PropagateConstantInputs(*context_p, func, child_stats);
+			if (constant_stats) {
+				owned_stats.push_back(std::move(constant_stats));
+				return owned_stats.back().get();
+			}
 			// Use copy to avoid expression rewritten
 			auto expr_copy = func.Copy();
 			auto &func_copy = expr_copy->Cast<BoundFunctionExpression>();
@@ -284,7 +291,7 @@ static optional_ptr<const BaseStatistics> TryGetExpressionStats(optional_ptr<Cli
 		// No custom callback: fall back to the declared monotonicity (ArgProperties) and derive output
 		// bounds by evaluating the function at the corners of each argument's range. This lets a
 		// f(col) OP const filter prune row groups via the zonemap of the base column.
-		if (func.Function().HasArgProperties()) {
+		if (func.Function().GetStability() == FunctionStability::CONSISTENT) {
 			vector<BaseStatistics> child_stats;
 			child_stats.reserve(func.GetChildren().size());
 			for (auto &child_expr : func.GetChildren()) {
@@ -292,7 +299,10 @@ static optional_ptr<const BaseStatistics> TryGetExpressionStats(optional_ptr<Cli
 				child_stats.push_back(child_stat ? child_stat->Copy()
 				                                 : BaseStatistics::CreateUnknown(child_expr->GetReturnType()));
 			}
-			auto derived = StatisticsPropagator::PropagateMonotoneBounds(*context_p, func, child_stats);
+			auto derived = StatisticsPropagator::PropagateConstantInputs(*context_p, func, child_stats);
+			if (!derived) {
+				derived = StatisticsPropagator::PropagateMonotoneBounds(*context_p, func, child_stats);
+			}
 			if (derived) {
 				owned_stats.push_back(std::move(derived));
 				return owned_stats.back().get();
@@ -353,6 +363,87 @@ static optional_ptr<const BaseStatistics> TryGetExpressionStats(optional_ptr<Cli
 	default:
 		return nullptr;
 	}
+}
+
+static bool CanDeriveExpressionStatistics(const Expression &expr) {
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::BOUND_COLUMN_REF:
+	case ExpressionClass::BOUND_REF:
+		return true;
+	case ExpressionClass::BOUND_CONSTANT:
+		return !expr.Cast<BoundConstantExpression>().GetValue().IsNull();
+	case ExpressionClass::BOUND_FUNCTION: {
+		const auto &func = expr.Cast<BoundFunctionExpression>();
+		if (BoundCastExpression::IsCast(func)) {
+			return BoundCastExpression::GetBoundCast(func).HasStatisticsCallback() &&
+			       CanDeriveExpressionStatistics(BoundCastExpression::Child(func));
+		}
+		if (func.Function().HasStatisticsCallback()) {
+			for (const auto &child : func.GetChildren()) {
+				if (!CanDeriveExpressionStatistics(*child)) {
+					return false;
+				}
+			}
+			return true;
+		}
+		if (!func.Function().HasArgProperties() || func.GetChildren().empty() ||
+		    BaseStatistics::GetStatsType(func.GetReturnType()) != StatisticsType::NUMERIC_STATS ||
+		    func.GetReturnType().InternalType() == PhysicalType::BOOL) {
+			return false;
+		}
+		for (idx_t child_idx = 0; child_idx < func.GetChildren().size(); ++child_idx) {
+			const auto &child = *func.GetChildren()[child_idx];
+			if (child.IsFoldable()) {
+				continue;
+			}
+			if (!IsKnownMonotonic(func.Function().GetArgProperties(child_idx).monotonicity) ||
+			    !CanDeriveExpressionStatistics(child)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	default:
+		return false;
+	}
+}
+
+static bool CanPropagateExpressionStatisticsInternal(const Expression &expr) {
+	if (BoundComparisonExpression::IsComparison(expr)) {
+		switch (expr.GetExpressionType()) {
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOTEQUAL:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+			break;
+		default:
+			return false;
+		}
+		const auto &comparison = expr.Cast<BoundFunctionExpression>();
+		return CanDeriveExpressionStatistics(BoundComparisonExpression::Left(comparison)) &&
+		       CanDeriveExpressionStatistics(BoundComparisonExpression::Right(comparison));
+	}
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
+		return false;
+	}
+	const auto &conjunction = expr.Cast<BoundConjunctionExpression>();
+	if ((conjunction.GetExpressionType() != ExpressionType::CONJUNCTION_AND &&
+	     conjunction.GetExpressionType() != ExpressionType::CONJUNCTION_OR) ||
+	    conjunction.GetChildren().empty()) {
+		return false;
+	}
+	for (const auto &child : conjunction.GetChildren()) {
+		if (!CanPropagateExpressionStatisticsInternal(*child)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool ExpressionFilter::CanPropagateExpressionStatistics(const Expression &expr) {
+	return expr.IsConsistent() && !expr.CanThrow() && CanPropagateExpressionStatisticsInternal(expr);
 }
 
 static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientContext> context_p,
@@ -574,7 +665,7 @@ static FilterPropagateResult CheckFunctionStatistics(optional_ptr<ClientContext>
 		return CheckComparisonStatistics(context_p, func_expr, input_stats);
 	}
 	if (!func_expr.Function().HasFilterPruneCallback()) {
-		if (func_expr.GetReturnType().id() != LogicalTypeId::BOOLEAN || !func_expr.Function().HasStatisticsCallback()) {
+		if (func_expr.GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 		vector<unique_ptr<BaseStatistics>> owned_stats;

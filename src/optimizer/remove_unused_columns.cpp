@@ -699,10 +699,7 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		// Distinct column indexes here, unlike the per-reader map, so comparing sizes is a valid width check.
 		if (cte_map_entry.everything_referenced || readers_visible_in_output ||
 		    referenced_columns_in_rhs.size() == cte.children[0]->GetColumnBindings().size()) {
-			if (!analyze) {
-				everything_referenced = true;
-			}
-			// We may opt out here, but we still need to traverse the left-hand side of the CTE.
+			// Preserve the CTE input without marking unrelated sibling outputs as referenced.
 			RemoveUnusedColumns remove(*this, true);
 			remove.VisitOperator(cte.children[0]);
 			return;

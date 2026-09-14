@@ -1,5 +1,9 @@
 #include "test_capi_v2.hpp"
 
+#include "duckdb/common/enums/statement_type.hpp"
+
+#include <vector>
+
 // ---------------------------------------------------------------------------
 // V2 sql_statement tests: parse_sql, the statement iterator, and executing
 // statements via statement_execute (non-consuming: it runs a copy, so the
@@ -34,6 +38,53 @@ int64_t StmtScalarI64(duckdb_v2_result_handle r) {
 	duckdb_v2_data_chunk_destroy(&chunk);
 	REQUIRE(StepChunk(r) == nullptr); // single row only
 	return value;
+}
+
+// Parse every statement of sql (raw, unbound). The caller destroys each one.
+std::vector<duckdb_v2_sql_statement_handle> StmtParseAll(duckdb_v2_connection_handle conn, const char *sql) {
+	duckdb_v2_statement_iterator_handle iter = nullptr;
+	REQUIRE(duckdb_v2_parse_sql(conn, sql, &iter, nullptr) == DUCKDB_V2_ERROR_NONE);
+	std::vector<duckdb_v2_sql_statement_handle> statements;
+	while (true) {
+		duckdb_v2_sql_statement_handle stmt = nullptr;
+		REQUIRE(duckdb_v2_statement_iterator_next(iter, &stmt, nullptr) == DUCKDB_V2_ERROR_NONE);
+		if (!stmt) {
+			break;
+		}
+		statements.push_back(stmt);
+	}
+	duckdb_v2_statement_iterator_destroy(&iter);
+	return statements;
+}
+
+DUCKDB_V2_STATEMENT_TYPE StmtType(duckdb_v2_sql_statement_handle stmt) {
+	DUCKDB_V2_STATEMENT_TYPE type = DUCKDB_V2_STATEMENT_TYPE_INVALID;
+	REQUIRE(duckdb_v2_sql_statement_get_type(stmt, &type, nullptr) == DUCKDB_V2_ERROR_NONE);
+	return type;
+}
+
+std::string StmtText(duckdb_v2_sql_statement_handle stmt) {
+	duckdb_v2_str text = {nullptr, 0};
+	REQUIRE(duckdb_v2_sql_statement_get_text(stmt, &text, nullptr) == DUCKDB_V2_ERROR_NONE);
+	return Convert(text);
+}
+
+// The parameter names in binding order, and pins that the count matches and one past the end is rejected.
+std::vector<std::string> StmtParameterNames(duckdb_v2_sql_statement_handle stmt) {
+	idx_t count = 0;
+	REQUIRE(duckdb_v2_sql_statement_get_parameter_count(stmt, &count, nullptr) == DUCKDB_V2_ERROR_NONE);
+	std::vector<std::string> names;
+	for (idx_t i = 0; i < count; i++) {
+		duckdb_v2_identifier_t name = {nullptr, 0};
+		REQUIRE(duckdb_v2_sql_statement_get_parameter_name(stmt, i, &name, nullptr) == DUCKDB_V2_ERROR_NONE);
+		names.push_back(Convert(name));
+	}
+	duckdb_v2_identifier_t past = {"x", 1};
+	REQUIRE(duckdb_v2_sql_statement_get_parameter_name(stmt, count, &past, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_OUT_OF_RANGE);
+	REQUIRE(past.ptr == nullptr);
+	REQUIRE(past.len == 0);
+	return names;
 }
 
 } // namespace
@@ -573,6 +624,154 @@ TEST_CASE("V2: statement_bind parameter names are the statement_execute keys", "
 }
 
 // ===========================================================================
+// Parse-time metadata: type, text, and parameter names, without binding.
+// ===========================================================================
+
+TEST_CASE("V2: sql_statement_get_type reports the parser's classification", "[capi_v2][sql_statement]") {
+	EnvFixture fx;
+	struct Case {
+		const char *sql;
+		DUCKDB_V2_STATEMENT_TYPE type;
+	};
+	const Case cases[] = {
+	    {"SELECT 42", DUCKDB_V2_STATEMENT_TYPE_SELECT},
+	    {"INSERT INTO t VALUES (1)", DUCKDB_V2_STATEMENT_TYPE_INSERT},
+	    {"CREATE TABLE t (i INTEGER)", DUCKDB_V2_STATEMENT_TYPE_CREATE},
+	    {"ALTER TABLE t ADD COLUMN j INTEGER", DUCKDB_V2_STATEMENT_TYPE_ALTER},
+	    {"ATTACH ':memory:' AS other", DUCKDB_V2_STATEMENT_TYPE_ATTACH},
+	    {"DETACH other", DUCKDB_V2_STATEMENT_TYPE_DETACH},
+	    {"PRAGMA version", DUCKDB_V2_STATEMENT_TYPE_PRAGMA},
+	    {"CONNECT ':memory:'", DUCKDB_V2_STATEMENT_TYPE_CONNECT},
+	    // Statements the parser expands into a group.
+	    {"ALTER TABLE t ADD COLUMN j INTEGER NOT NULL", DUCKDB_V2_STATEMENT_TYPE_MULTI},
+	    {"PIVOT t ON c", DUCKDB_V2_STATEMENT_TYPE_MULTI},
+	    {"PIVOT t ON c IN (1, 2)", DUCKDB_V2_STATEMENT_TYPE_SELECT},
+	};
+	for (auto &c : cases) {
+		auto stmt = StmtParseOne(fx.conn, c.sql);
+		REQUIRE(StmtType(stmt) == c.type);
+		duckdb_v2_sql_statement_destroy(&stmt);
+	}
+}
+
+TEST_CASE("V2: sql_statement_get_type is the type before statement rewrites", "[capi_v2][sql_statement]") {
+	EnvFixture fx;
+	// PRAGMA version is rewritten into a table function call at execution; the parse
+	// tree still says PRAGMA, the executed result says what it became.
+	auto stmt = StmtParseOne(fx.conn, "PRAGMA version");
+	REQUIRE(StmtType(stmt) == DUCKDB_V2_STATEMENT_TYPE_PRAGMA);
+
+	duckdb_v2_result_handle r = nullptr;
+	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, nullptr, nullptr, 0, &r, nullptr) == DUCKDB_V2_ERROR_NONE);
+	DUCKDB_V2_STATEMENT_TYPE executed = DUCKDB_V2_STATEMENT_TYPE_INVALID;
+	REQUIRE(duckdb_v2_result_get_statement_type(r, &executed, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(executed == DUCKDB_V2_STATEMENT_TYPE_SELECT);
+	duckdb_v2_result_destroy(&r);
+	duckdb_v2_sql_statement_destroy(&stmt);
+}
+
+TEST_CASE("V2: every core statement type is in the spec", "[capi_v2][sql_statement]") {
+	// Core's enum has no count sentinel to pin at compile time; an appended member shows up
+	// here as a name where core should report INVALID.
+	for (int v = DUCKDB_V2_STATEMENT_TYPE_EXTERNAL_RESOURCE + 1; v <= 255; v++) {
+		REQUIRE(duckdb::StatementTypeToString(static_cast<duckdb::StatementType>(v)) == "INVALID");
+	}
+}
+
+TEST_CASE("V2: sql_statement_get_text is the statement's own slice", "[capi_v2][sql_statement]") {
+	EnvFixture fx;
+	// Each slice runs from the statement's first token to the next statement's first token,
+	// so terminators, whitespace and comments after a statement belong to it; a leading
+	// comment or separator belongs to nobody.
+	auto statements = StmtParseAll(fx.conn, "-- lead\n;select $1;\n\n  select 21 ;;\t-- mid\nSELECT 3; -- tail");
+	REQUIRE(statements.size() == 3);
+	REQUIRE(StmtText(statements[0]) == "select $1;\n\n  ");
+	REQUIRE(StmtText(statements[1]) == "select 21 ;;\t-- mid\n");
+	REQUIRE(StmtText(statements[2]) == "SELECT 3; -- tail");
+	for (auto &stmt : statements) {
+		duckdb_v2_sql_statement_destroy(&stmt);
+	}
+}
+
+TEST_CASE("V2: sql_statement_get_text outlives the input string and the iterator", "[capi_v2][sql_statement]") {
+	EnvFixture fx;
+	std::string sql = "SELECT 1; SELECT 2";
+	auto statements = StmtParseAll(fx.conn, sql.c_str());
+	REQUIRE(statements.size() == 2);
+	// The iterator is already destroyed by StmtParseAll; now clobber the caller's buffer too.
+	sql.assign(sql.size(), 'x');
+	REQUIRE(StmtText(statements[0]) == "SELECT 1; ");
+	REQUIRE(StmtText(statements[1]) == "SELECT 2");
+	for (auto &stmt : statements) {
+		duckdb_v2_sql_statement_destroy(&stmt);
+	}
+}
+
+TEST_CASE("V2: sql_statement parameter names come from the parse tree", "[capi_v2][sql_statement]") {
+	EnvFixture fx;
+	struct Case {
+		const char *sql;
+		std::vector<std::string> names;
+	};
+	const Case cases[] = {
+	    {"SELECT 1", {}},
+	    {"SELECT $1 + $2", {"1", "2"}},
+	    {"SELECT ? + ?", {"1", "2"}},
+	    {"SELECT $b + $a", {"b", "a"}},
+	    {"SELECT $3 + $1", {"1", "3"}},
+	    {"SELECT $1 + $1", {"1"}},
+	    {"SELECT $Name + $name", {"Name"}},
+	    {"PIVOT t ON c USING sum(v + $1)", {"1"}},
+	};
+	for (auto &c : cases) {
+		auto stmt = StmtParseOne(fx.conn, c.sql);
+		REQUIRE(StmtParameterNames(stmt) == c.names);
+		duckdb_v2_sql_statement_destroy(&stmt);
+	}
+}
+
+TEST_CASE("V2: sql_statement parameter names are statement_bind's, in its order", "[capi_v2][sql_statement]") {
+	EnvFixture fx;
+	for (const char *sql : {"SELECT $a + $b", "SELECT $3 + $1", "SELECT $Name + $name"}) {
+		auto stmt = StmtParseOne(fx.conn, sql);
+		duckdb_v2_schema_handle out = nullptr;
+		duckdb_v2_schema_handle params = nullptr;
+		REQUIRE(duckdb_v2_statement_bind(fx.conn, stmt, &out, &params, nullptr) == DUCKDB_V2_ERROR_NONE);
+		idx_t count = 0;
+		REQUIRE(duckdb_v2_schema_get_count(params, &count, nullptr) == DUCKDB_V2_ERROR_NONE);
+		std::vector<std::string> bound;
+		for (idx_t i = 0; i < count; i++) {
+			duckdb_v2_str name = {nullptr, 0};
+			duckdb_v2_logical_type_handle type = nullptr;
+			REQUIRE(duckdb_v2_schema_get_field(params, i, &name, &type, nullptr) == DUCKDB_V2_ERROR_NONE);
+			bound.push_back(Convert(name));
+		}
+		REQUIRE(StmtParameterNames(stmt) == bound);
+		duckdb_v2_schema_destroy(&out);
+		duckdb_v2_schema_destroy(&params);
+		duckdb_v2_sql_statement_destroy(&stmt);
+	}
+}
+
+TEST_CASE("V2: sql_statement parameter names answer before the catalog can", "[capi_v2][sql_statement]") {
+	EnvFixture fx;
+	auto statements = StmtParseAll(fx.conn, "CREATE TABLE t (i INTEGER); INSERT INTO t VALUES ($v)");
+	REQUIRE(statements.size() == 2);
+
+	// The table does not exist yet, so binding the INSERT fails ...
+	duckdb_v2_schema_handle out = nullptr;
+	REQUIRE(duckdb_v2_statement_bind(fx.conn, statements[1], &out, nullptr, nullptr) ==
+	        DUCKDB_V2_ERROR_DATABASE_CATALOG);
+	REQUIRE(out == nullptr);
+	// ... while the parse tree already knows the parameter.
+	REQUIRE(StmtParameterNames(statements[1]) == std::vector<std::string> {"v"});
+
+	for (auto &stmt : statements) {
+		duckdb_v2_sql_statement_destroy(&stmt);
+	}
+}
+
+// ===========================================================================
 // Null-arg validation and destroy null-safety.
 // ===========================================================================
 
@@ -600,6 +799,20 @@ TEST_CASE("V2: sql_statement null-arg rejection and null-safe destroys", "[capi_
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_statement_execute(fx.conn, valid, nullptr, nullptr, 2, &r, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
+
+	// The getters reject a NULL statement and a NULL out-slot.
+	DUCKDB_V2_STATEMENT_TYPE type = DUCKDB_V2_STATEMENT_TYPE_SELECT;
+	duckdb_v2_str text = {nullptr, 0};
+	idx_t count = 0;
+	duckdb_v2_identifier_t name = {nullptr, 0};
+	REQUIRE(duckdb_v2_sql_statement_get_type(nullptr, &type, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_sql_statement_get_type(valid, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_sql_statement_get_text(nullptr, &text, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_sql_statement_get_text(valid, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_sql_statement_get_parameter_count(nullptr, &count, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_sql_statement_get_parameter_count(valid, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_sql_statement_get_parameter_name(nullptr, 0, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_sql_statement_get_parameter_name(valid, 0, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_sql_statement_destroy(&valid);
 
 	// Destroys are null-safe.

@@ -21,6 +21,7 @@
 
 namespace duckdb {
 class BaseStatistics;
+class FunctionBinder;
 struct ScalarFunctionInfo {
 	DUCKDB_API virtual ~ScalarFunctionInfo();
 
@@ -584,9 +585,26 @@ public:
 			catalog_name = definition->GetCatalogName();
 		}
 	}
+	const vector<LogicalType> &GetLogicalArguments() const {
+		return logical_arguments;
+	}
+	const LogicalType &GetLogicalReturnType() const {
+		return logical_return_type;
+	}
 
 private:
+	void SetLogicalArguments(vector<LogicalType> arguments_p) {
+		logical_arguments = std::move(arguments_p);
+	}
+	void SetLogicalReturnType(LogicalType return_type_p) {
+		logical_return_type = std::move(return_type_p);
+	}
 	shared_ptr<const ScalarFunction> definition;
+	vector<LogicalType> logical_arguments;
+	LogicalType logical_return_type;
+
+	friend class FunctionSerializer;
+	friend class FunctionBinder;
 };
 
 class BindScalarFunctionInput : public BindFunctionInput {
