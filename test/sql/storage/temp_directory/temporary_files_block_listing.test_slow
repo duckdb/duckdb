@@ -1,0 +1,54 @@
+# name: test/sql/storage/temp_directory/temporary_files_block_listing.test_slow
+# description: duckdb_temporary_files() reports the one-file-per-buffer .block spills
+# group: [temp_directory]
+
+# The workload is the one block_file_evicted_bytes_accounting.test_slow already uses to force
+# .block spills: ~576KB incompressible overflow strings, written in small batches under a budget
+# they exceed. It lives here for the same reason it lives there - it is the only way to get a
+# .block file, and it needs the headroom a slow test is given
+require block_size 262144
+
+statement ok
+SET threads = 1;
+
+statement ok
+SET temp_directory = '{TEST_DIR}/temporary_files_block_listing';
+
+statement ok
+SET memory_limit = '50MB';
+
+statement ok
+ATTACH '{TEST_DIR}/block_listing.db' AS blocks;
+
+statement ok
+CREATE TABLE blocks.t (id INTEGER, val VARCHAR);
+
+loop b 0 5
+
+statement maybe
+INSERT INTO blocks.t SELECT range + {b}*20, hex(repeat(md5(range::VARCHAR)::BLOB, 9000)) FROM range(20);
+----
+<REGEX>:.*invalidated.*
+
+endloop
+
+query I
+SELECT count(*) > 0 FROM glob('{TEST_DIR}/temporary_files_block_listing/*.block');
+----
+true
+
+# The regression: the listing used to hand its own callback's file name straight to OpenFile,
+# which resolved it against the working directory and missed, so every one of these was dropped
+# without an error - NULL_IF_NOT_EXISTS turns a miss into an empty answer. glob() reads the same
+# directory independently, so the two disagreeing is exactly the bug
+query I
+SELECT (SELECT count(*) FROM glob('{TEST_DIR}/temporary_files_block_listing/*.block'))
+     = (SELECT count(*) FROM duckdb_temporary_files() WHERE path LIKE '%.block');
+----
+true
+
+# and they are reported with the bytes they hold, not as zero
+query I
+SELECT min(size) > 0 FROM duckdb_temporary_files() WHERE path LIKE '%.block';
+----
+true

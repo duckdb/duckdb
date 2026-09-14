@@ -27,9 +27,8 @@
 #   read-backs already wrap the counter to 0 before any explicit scan is needed.
 #
 # Notes:
-#   - duckdb_temporary_files() does NOT enumerate .block files (its ListFiles callback
-#     receives basenames but passes them to OpenFile expecting full paths), so we use
-#     glob() to verify on-disk presence.
+#   - glob() is used as an on-disk signal independent of duckdb_temporary_files(), so the two
+#     assertions below cannot fail together for a shared reason.
 #
 
 statement ok
