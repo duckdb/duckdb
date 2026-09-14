@@ -42,19 +42,12 @@ query I nosort mult_test
 EXPLAIN SELECT 2 * col0  FROM test
 ----
 
-# addition mixed multiplication
-query I nosort add_mult
-EXPLAIN SELECT col0 * 1 * 2 + col1 + 1 + 2 FROM test
+# mixed * and +: multiply constants still fold, but addends are not pulled across
+# multiple non-constants (that reassociation can overflow)
+query I nosort add_mult_mul
+EXPLAIN SELECT col0 * 1 * 2 + col1 FROM test
 ----
 
-query I nosort add_mult
-EXPLAIN SELECT 1 * col0 * 2 + 1 + col1 + 2 FROM test
-----
-
-query I nosort add_mult
-EXPLAIN SELECT 1 * 2 * col0 + 1 + 2 + col1 FROM test
-----
-
-query I nosort add_mult
-EXPLAIN SELECT 3 + 2 * col0 + col1 FROM test
+query I nosort add_mult_mul
+EXPLAIN SELECT 2 * col0 + col1 FROM test
 ----
