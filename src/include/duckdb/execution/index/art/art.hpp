@@ -18,6 +18,9 @@ namespace duckdb {
 enum class VerifyExistenceType : uint8_t { APPEND = 0, APPEND_FK = 1, DELETE_FK = 2 };
 enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1 };
 
+//! Result of collecting row IDs; capacity exhaustion cannot be resumed.
+enum class ARTLookupResult : uint8_t { COMPLETED, CAPACITY_EXCEEDED };
+
 class ConflictManager;
 class ARTKey;
 class ARTKeySection;
@@ -78,8 +81,8 @@ public:
 	//! Initializes a scan for multiple equality lookup values.
 	unique_ptr<IndexScanState> InitializeBatchScan(unique_ptr<DataChunk> key_columns) const;
 	//! Scans the ART and appends matching row IDs to the output collection.
-	//! Returns true on completion, or false and clears the entire collection if its capacity is exceeded.
-	bool Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const DUCKDB_EXCLUDES(lock);
+	//! Returns CAPACITY_EXCEEDED and clears the entire collection if its capacity is exceeded.
+	ARTLookupResult Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const DUCKDB_EXCLUDES(lock);
 
 	//! Simple merge: scan source ART and delete each (key, rowid) from this ART.
 	// FIXME: replace with structural tree delete merge.
@@ -182,15 +185,15 @@ private:
 	//! The number of bytes fitting in the prefix.
 	uint8_t prefix_count;
 
-	bool ScanInternal(IndexScanState &state, RowIdVectorOutput &row_ids) const;
-	bool ScanRange(ARTIndexScanState &scan_state, RowIdVectorOutput &row_ids) const;
-	bool ScanBatch(DataChunk &values, RowIdVectorOutput &row_ids) const;
-	bool ScanChunk(DataChunk &input, RowIdVectorOutput &row_ids) const;
-	bool SearchEqual(const ARTKey &key, RowIdVectorOutput &row_ids) const;
-	bool SearchGreater(const ARTKey &key, bool equal, RowIdVectorOutput &row_ids) const;
-	bool SearchLess(const ARTKey &upper_bound, bool equal, RowIdVectorOutput &row_ids) const;
-	bool SearchCloseRange(const ARTKey &lower_bound, const ARTKey &upper_bound, bool left_equal, bool right_equal,
-	                      RowIdVectorOutput &row_ids) const;
+	ARTLookupResult ScanInternal(IndexScanState &state, RowIdVectorOutput &row_ids) const;
+	ARTLookupResult ScanRange(ARTIndexScanState &scan_state, RowIdVectorOutput &row_ids) const;
+	ARTLookupResult ScanBatch(DataChunk &values, RowIdVectorOutput &row_ids) const;
+	ARTLookupResult ScanChunk(DataChunk &input, RowIdVectorOutput &row_ids) const;
+	ARTLookupResult SearchEqual(const ARTKey &key, RowIdVectorOutput &row_ids) const;
+	ARTLookupResult SearchGreater(const ARTKey &key, bool equal, RowIdVectorOutput &row_ids) const;
+	ARTLookupResult SearchLess(const ARTKey &upper_bound, bool equal, RowIdVectorOutput &row_ids) const;
+	ARTLookupResult SearchCloseRange(const ARTKey &lower_bound, const ARTKey &upper_bound, bool left_equal,
+	                                 bool right_equal, RowIdVectorOutput &row_ids) const;
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row) const;
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name) const;
