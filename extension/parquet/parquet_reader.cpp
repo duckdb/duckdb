@@ -864,7 +864,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		// Create the VariantColumnReader with the column index, so we can perform the extract at Read
 		auto column_reader = make_uniq<VariantColumnReader>(context, *this, schema, std::move(children), column_id);
 
-		auto scan_type = column_id.GetScanType();
+		const auto &scan_type = column_id.GetScanType();
 		if (scan_type.id() == LogicalTypeId::VARIANT) {
 			return std::move(column_reader);
 		}

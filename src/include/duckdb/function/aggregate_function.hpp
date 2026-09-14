@@ -646,7 +646,7 @@ public:
 	}
 
 	template <class STATE, class RESULT_TYPE, class OP>
-	static AggregateFunction NullaryAggregate(LogicalType return_type) {
+	static AggregateFunction NullaryAggregate(const LogicalType &return_type) {
 		AggregateFunction result(
 		    Identifier(), {}, return_type, AggregateFunction::StateSize<STATE>,
 		    AggregateFunction::StateInitialize<STATE, OP>, AggregateFunction::NullaryScatterUpdate<STATE, OP>,
@@ -659,7 +659,7 @@ public:
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP,
 	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static AggregateFunction
-	UnaryAggregate(const LogicalType &input_type, LogicalType return_type,
+	UnaryAggregate(const LogicalType &input_type, const LogicalType &return_type,
 	               FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		AggregateFunction result(Identifier(), {input_type}, return_type, AggregateFunction::StateSize<STATE>,
 		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
@@ -689,7 +689,7 @@ public:
 	template <class STATE, class A_TYPE, class B_TYPE, class RESULT_TYPE, class OP,
 	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static AggregateFunction BinaryAggregate(const LogicalType &a_type, const LogicalType &b_type,
-	                                         LogicalType return_type) {
+	                                         const LogicalType &return_type) {
 		AggregateFunction result({a_type, b_type}, return_type, AggregateFunction::StateSize<STATE>,
 		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
 		                         AggregateFunction::BinaryScatterUpdate<STATE, A_TYPE, B_TYPE, OP>,

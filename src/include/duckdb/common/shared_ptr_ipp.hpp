@@ -55,7 +55,7 @@ public:
 	}
 	// From raw pointer of type T with custom DELETER
 	template <typename DELETER>
-	shared_ptr(T *ptr, DELETER deleter) : internal(ptr, deleter) {
+	shared_ptr(T *ptr, DELETER deleter) : internal(ptr, std::move(deleter)) {
 		__enable_weak_this(internal.get(), internal.get());
 	}
 	// Aliasing constructor: shares ownership information with ref but contains ptr instead
@@ -100,7 +100,7 @@ public:
 
 	// Construct from weak_ptr
 	template <class U>
-	explicit shared_ptr(weak_ptr<U> other) : internal(other.internal) {
+	explicit shared_ptr(const weak_ptr<U> &other) : internal(other.internal) {
 	}
 
 	// Construct from unique_ptr, takes over ownership of the unique_ptr

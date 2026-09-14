@@ -126,7 +126,7 @@ idx_t StandardBufferManager::GetOperatorMemoryLimit() const {
 template <typename... ARGS>
 TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(QueryContext context, MemoryTag tag,
                                                                     idx_t memory_delta, unique_ptr<FileBuffer> *buffer,
-                                                                    ARGS... args) {
+                                                                    const ARGS &...args) {
 	auto r = buffer_pool.EvictBlocks(context, tag, memory_delta, buffer_pool.maximum_memory, buffer);
 	if (!r.success) {
 		string extra_text = StringUtil::Format(" (%s/%s used)", StringUtil::BytesToHumanReadableString(GetUsedMemory()),
