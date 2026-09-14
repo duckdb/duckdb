@@ -801,38 +801,23 @@ static bool ValueQualifies(const Value &value, const vector<ComparisonCondition>
 	return true;
 }
 
-static bool ExtractValuesFromExpression(const Expression &expr, value_set_t &values) {
+static bool ExtractValuesFromExpression(const Expression &expr, const LogicalType &key_type, DataChunk &key_columns) {
 	value_set_t in_values;
 	vector<ComparisonCondition> comparisons;
 	if (!CollectValuesAndComparisonsFromExpression(expr, in_values, comparisons) || in_values.empty()) {
 		return false;
 	}
-	for (auto &value : in_values) {
-		if (ValueQualifies(value, comparisons)) {
-			values.insert(value);
+	key_columns.Initialize(Allocator::DefaultAllocator(), {key_type}, in_values.size());
+	for (const auto &value : in_values) {
+		if (!ValueQualifies(value, comparisons)) {
+			continue;
 		}
-	}
-	return !values.empty();
-}
-
-static unique_ptr<IndexScanState> TryInitializeBatchIndexScan(const IndexReadHandle<ART> &art,
-                                                              const Expression &index_expr,
-                                                              const BoundColumnRefExpression &column,
-                                                              const value_set_t &values) {
-	if (!column.Equals(index_expr)) {
-		return nullptr;
-	}
-	for (const auto &value : values) {
-		if (value.type() != column.GetReturnType()) {
-			return nullptr;
+		if (value.type() != key_type) {
+			return false;
 		}
+		key_columns.data[0].Append(value);
 	}
-	auto value_chunk = make_uniq<DataChunk>();
-	value_chunk->Initialize(Allocator::DefaultAllocator(), {column.GetReturnType()}, values.size());
-	for (const auto &value : values) {
-		value_chunk->data[0].Append(value);
-	}
-	return art->InitializeBatchScan(std::move(value_chunk));
+	return key_columns.size() > 0;
 }
 
 static unique_ptr<IndexScanState> TryInitializeIndexScan(const IndexReadHandle<ART> &art, const Expression &index_expr,
@@ -842,18 +827,22 @@ static unique_ptr<IndexScanState> TryInitializeIndexScan(const IndexReadHandle<A
 	ColumnBinding binding(TableIndex(0), storage_index);
 	BoundColumnRefExpression bound_ref(col.Name(), col.Type(), binding);
 
-	value_set_t values;
-	if (!ExtractValuesFromExpression(*expr_filter.expr, values)) {
+	auto key_columns = make_uniq<DataChunk>();
+	if (!ExtractValuesFromExpression(*expr_filter.expr, col.Type(), *key_columns)) {
 		auto filter_expr = expr_filter.ToExpression(bound_ref);
 		return art->TryInitializeScan(index_expr, *filter_expr);
 	}
-	if (values.size() == 1) {
-		auto filter_expr = BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, bound_ref.Copy(),
-		                                                     make_uniq<BoundConstantExpression>(*values.begin()));
+	if (key_columns->size() == 1) {
+		auto filter_expr =
+		    BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, bound_ref.Copy(),
+		                                      make_uniq<BoundConstantExpression>(key_columns->GetValue(0, 0)));
 		return art->TryInitializeScan(index_expr, *filter_expr);
 	}
 
-	return TryInitializeBatchIndexScan(art, index_expr, bound_ref, values);
+	if (!bound_ref.Equals(index_expr)) {
+		return nullptr;
+	}
+	return art->InitializeBatchScan(std::move(key_columns));
 }
 
 bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list, TableFunctionInitInput &input,
