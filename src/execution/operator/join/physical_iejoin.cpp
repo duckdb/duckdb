@@ -1507,27 +1507,9 @@ void IEJoinLocalSourceState::RefineMarkJoin(ExecutionContext &context, bool foun
 		for (auto &entry : state.groups) {
 			const auto dropped = probe_mask | entry.first;
 			auto &group = entry.second;
-			idx_t applicable = 0;
-			vector<idx_t> ranges;
-			idx_t driving = DConstants::INVALID_INDEX;
-			if (op.conditions.size() <= 64) {
-				for (idx_t col = 0; col < op.conditions.size(); col++) {
-					if (dropped & (uint64_t(1) << col)) {
-						continue;
-					}
-					applicable++;
-					const auto cmp = op.conditions[col].GetComparisonType();
-					if (!types[col].IsNested() &&
-					    (cmp == ExpressionType::COMPARE_LESSTHAN || cmp == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
-					     cmp == ExpressionType::COMPARE_GREATERTHAN ||
-					     cmp == ExpressionType::COMPARE_GREATERTHANOREQUALTO)) {
-						ranges.push_back(col);
-						if (driving == DConstants::INVALID_INDEX) {
-							driving = col;
-						}
-					}
-				}
-			}
+			const auto classification = MarkJoinRefinement::Classify(probe_mask, entry.first, op.conditions);
+			const auto applicable = classification.applicable_count;
+			auto ranges = classification.ranges;
 			auto finish = [&]() {
 				MarkJoinRowComparison::CompareConjunction(mark_keys, probe, candidates, op.conditions, comparison);
 				for (auto value : comparison.Values<bool>()) {
@@ -1553,7 +1535,7 @@ void IEJoinLocalSourceState::RefineMarkJoin(ExecutionContext &context, bool foun
 				return finish();
 			};
 			bool finished = false;
-			const bool reduce = op.conditions.size() <= 64 && (null_probe || entry.first);
+			const bool reduce = classification.reducible && (null_probe || entry.first);
 			if (reduce && applicable == 0) {
 				const auto &selection = *group.selections.begin();
 				finished = witness(selection.first * STANDARD_VECTOR_SIZE + selection.second[0]);
@@ -1579,20 +1561,20 @@ void IEJoinLocalSourceState::RefineMarkJoin(ExecutionContext &context, bool foun
 				found_match[probe] = marker == 2;
 				found_unknown[probe] |= marker == 1;
 				finished = marker == 2 || (dropped && marker == 1);
-			} else if (reduce && applicable == 1 && driving != DConstants::INVALID_INDEX) {
+			} else if (reduce && applicable == 1 && !ranges.empty()) {
 				auto &index = [&]() -> MarkJoinRefinementIndex & {
 					lock_guard<mutex> guard(gsource.gsink.mark_lock);
 					auto &cached = group.indexes[dropped];
 					if (!cached) {
 						auto built = make_uniq<MarkJoinRefinementIndex>();
-						const auto cmp = op.conditions[driving].GetComparisonType();
+						const auto cmp = op.conditions[ranges[0]].GetComparisonType();
 						const bool maximum =
 						    cmp == ExpressionType::COMPARE_LESSTHAN || cmp == ExpressionType::COMPARE_LESSTHANOREQUALTO;
 						for (auto &selection : group.selections) {
 							context.client.InterruptCheck();
 							fetch(selection.first);
 							for (auto row : selection.second) {
-								auto value = keys.GetValue(driving, row);
+								auto value = keys.GetValue(ranges[0], row);
 								if (built->bound.IsNull() ||
 								    (maximum ? ValueOperations::GreaterThan(value, built->bound)
 								             : ValueOperations::LessThan(value, built->bound))) {

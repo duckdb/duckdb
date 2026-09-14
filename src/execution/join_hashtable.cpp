@@ -2242,31 +2242,10 @@ void JoinHashTable::RefineMarkPatterns(DataChunk &keys, bool matches[], Validity
 		for (auto &entry : refinement.groups) {
 			const auto dropped = probe_mask | entry.first;
 			auto &group = entry.second;
-			uint64_t equality_mask = 0;
-			idx_t applicable_count = 0;
-			idx_t range_column = DConstants::INVALID_INDEX;
-			vector<idx_t> ranges;
-			if (conditions.size() <= 64) {
-				for (idx_t col = 0; col < conditions.size(); col++) {
-					if (dropped & (uint64_t(1) << col)) {
-						continue;
-					}
-					applicable_count++;
-					if (condition_types[col].IsNested()) {
-						continue;
-					}
-					const auto comparison_type = conditions[col].GetComparisonType();
-					if (comparison_type == ExpressionType::COMPARE_EQUAL) {
-						equality_mask |= uint64_t(1) << col;
-					} else if (comparison_type == ExpressionType::COMPARE_LESSTHAN ||
-					           comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
-					           comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-					           comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
-						range_column = col;
-						ranges.push_back(col);
-					}
-				}
-			}
+			const auto classification = MarkJoinRefinement::Classify(probe_mask, entry.first, conditions);
+			const auto equality_mask = classification.equality_mask;
+			const auto applicable_count = classification.applicable_count;
+			const auto &ranges = classification.ranges;
 			auto finish = [&]() {
 				MarkJoinRowComparison::CompareConjunction(keys, probe, candidates, conditions, comparison);
 				for (auto value : comparison.Values<bool>()) {
@@ -2290,49 +2269,11 @@ void JoinHashTable::RefineMarkPatterns(DataChunk &keys, bool matches[], Validity
 						lock_guard<mutex> guard(mark_join_info.mj_lock);
 						auto &cached = group.indexes[equality_mask];
 						if (!cached) {
-							auto built = make_uniq<MarkJoinRefinementIndex>();
-							vector<LogicalType> types;
-							for (idx_t col = 0; col < conditions.size(); col++) {
-								if (equality_mask & (uint64_t(1) << col)) {
-									built->columns.push_back(col);
-									built->conditions.push_back(conditions[col].Copy());
-									types.push_back(condition_types[col]);
-								}
-							}
-							built->output_columns.push_back(types.size());
-							built->hash = make_uniq<JoinHashTable>(context, op, built->conditions,
-							                                       vector<LogicalType> {LogicalType::UBIGINT},
-							                                       JoinType::INNER, 0, built->output_columns, nullptr);
-							auto layout_types = types;
-							layout_types.push_back(LogicalType::UBIGINT);
-							layout_types.push_back(LogicalType::HASH);
-							auto layout = make_shared_ptr<TupleDataLayout>();
-							layout->Initialize(layout_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
-							built->hash->FinishInitWithLayout(layout);
-							PartitionedTupleDataAppendState append;
-							built->hash->GetSinkCollection().InitializeAppendState(append);
-							DataChunk index_keys, payload;
-							index_keys.InitializeEmpty(types);
-							payload.Initialize(Allocator::Get(context), {LogicalType::UBIGINT});
-							for (auto &selection : group.selections) {
-								context.InterruptCheck();
-								fetch(selection.first);
-								SelectionVector selected(selection.second.data(), selection.second.size());
-								index_keys.ReferenceColumns(chunk, built->columns);
-								index_keys.Slice(selected, selection.second.size());
-								payload.Reset();
-								for (auto row : selection.second) {
-									payload.data[0].Append(
-									    Value::UBIGINT(selection.first * STANDARD_VECTOR_SIZE + row));
-								}
-								payload.SetChildCardinality(selection.second.size());
-								built->hash->Build(append, index_keys, payload);
-							}
-							built->hash->Unpartition();
-							built->hash->AllocatePointerTable();
-							built->hash->InitializePointerTable(0, built->hash->capacity);
-							built->hash->Finalize(0, built->hash->GetDataCollection().ChunkCount(), false);
-							cached = std::move(built);
+							cached = MarkJoinRefinementIndex::BuildHash(context, op, group, equality_mask, conditions,
+							                                            [&](idx_t chunk_index) -> DataChunk & {
+								                                            fetch(chunk_index);
+								                                            return chunk;
+							                                            });
 						}
 						return *cached;
 					}();
@@ -2419,7 +2360,7 @@ void JoinHashTable::RefineMarkPatterns(DataChunk &keys, bool matches[], Validity
 			} else if (ranges.size() >= 2) {
 				refine_ranges(group, probe_mask, entry.first, ranges);
 				finished = matches[probe] || !validity.RowIsValid(probe);
-			} else if (conditions.size() <= 64 && applicable_count == 0) {
+			} else if (classification.reducible && applicable_count == 0) {
 				const auto &selection = *group.selections.begin();
 				fetch(selection.first);
 				SelectionVector selected(1);
@@ -2427,20 +2368,20 @@ void JoinHashTable::RefineMarkPatterns(DataChunk &keys, bool matches[], Validity
 				candidates.Reference(chunk);
 				candidates.Slice(selected, 1);
 				finished = finish();
-			} else if (conditions.size() <= 64 && applicable_count == 1 && range_column != DConstants::INVALID_INDEX) {
+			} else if (classification.reducible && applicable_count == 1 && !ranges.empty()) {
 				auto &index = [&]() -> MarkJoinRefinementIndex & {
 					lock_guard<mutex> guard(mark_join_info.mj_lock);
-					auto &cached = group.indexes[uint64_t(1) << range_column];
+					auto &cached = group.indexes[uint64_t(1) << ranges[0]];
 					if (!cached) {
 						auto built = make_uniq<MarkJoinRefinementIndex>();
-						const auto comparison_type = conditions[range_column].GetComparisonType();
+						const auto comparison_type = conditions[ranges[0]].GetComparisonType();
 						const bool maximum = comparison_type == ExpressionType::COMPARE_LESSTHAN ||
 						                     comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
 						for (auto &selection : group.selections) {
 							context.InterruptCheck();
 							fetch(selection.first);
 							for (auto row : selection.second) {
-								auto value = chunk.GetValue(range_column, row);
+								auto value = chunk.GetValue(ranges[0], row);
 								if (built->bound.IsNull() ||
 								    (maximum ? ValueOperations::GreaterThan(value, built->bound)
 								             : ValueOperations::LessThan(value, built->bound))) {
