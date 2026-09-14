@@ -186,6 +186,33 @@ eu	4
 none	3
 us	3
 
+# a custom location for one partition, the hive layout for the others
+statement ok
+CREATE TABLE events AS SELECT * FROM (VALUES (1, 'eu', 'x'), (2, 'us', 'y'), (3, 'eu', 'y')) v(id, region, part);
+
+statement ok
+COPY events TO '{TEST_DIR}/partition_path_mixed' (FORMAT parquet, PARTITION_BY (region, part),
+PARTITION_PATH CASE WHEN region = 'eu' AND part = 'x' THEN 'custom_location'
+ELSE path_join(hive_partition_component('region', region), hive_partition_component('part', part)) END);
+
+query II
+SELECT regexp_extract(replace(filename, '\', '/'), 'partition_path_mixed/(.*)/[^/]*$', 1) AS dir, id
+FROM read_parquet('{TEST_DIR}/partition_path_mixed/**/*.parquet', hive_partitioning = false)
+ORDER BY dir;
+----
+custom_location	1
+region=eu/part=y	3
+region=us/part=y	2
+
+# the hive part of that layout is still readable as hive partitions
+query III
+SELECT region, part, id
+FROM read_parquet('{TEST_DIR}/partition_path_mixed/region=*/part=*/*.parquet', hive_partitioning = true)
+ORDER BY id;
+----
+us	y	2
+eu	y	3
+
 # a struct partition column is dereferenced with struct_extract
 statement ok
 CREATE TABLE structs AS SELECT 1 AS id, {'x': 'a'} AS p;
