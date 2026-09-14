@@ -202,7 +202,7 @@ SET debug_verify_sql_export='strict';
 statement error
 EXPLAIN (SQL) SELECT x=ANY(SELECT y FROM union_r r WHERE r.g=l.g) FROM union_l l;
 ----
-<REGEX>:.*UNSUPPORTED_EXPORT_FEATURE.*The\ MARK\ join\ requires\ its\ group\-specific\ NULL\ semantics.*
+<REGEX>:.*UNSUPPORTED_EXPORT_FEATURE.*The MARK condition requires conjunction execution semantics.*
 
 query TT
 EXPLAIN SELECT __mark_join_marker FROM union_l l JOIN BY (TYPE MARK) union_r r ON l.g IS NOT DISTINCT FROM r.g AND l.x=r.y;

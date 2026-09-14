@@ -71,7 +71,7 @@ SELECT count(*), count(s) FROM public_text;
 ----
 3	2
 
-query I
+query TT
 EXPLAIN (SQL) SELECT p FROM public_rows WHERE i=1;
 ----
-<REGEX>:.*public_rows.*WHERE.*
+sql	<REGEX>:.*public_rows.*WHERE.*

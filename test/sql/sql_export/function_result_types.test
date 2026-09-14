@@ -32,7 +32,7 @@ FROM (VALUES (1.25::DECIMAL(9,2)), (2.50::DECIMAL(9,2)), (NULL::DECIMAL(9,2))) t
 query TT
 EXPLAIN (SQL) SELECT sum(i) FROM (VALUES (1.25::DECIMAL(9,2)), (2.50::DECIMAL(9,2)), (NULL::DECIMAL(9,2))) t(i);
 ----
-sql	<REGEX>:.*main[.]sum[(].* AS DECIMAL[(]38,2[)].*
+sql	<REGEX>:.*main[.]sum[(].* AS DECIMAL[(]38, *2[)].*
 
 statement ok
 RESET debug_verify_serializer;

@@ -440,7 +440,7 @@ TEST_CASE("Logical plan field types follow expression SQL type admission", "[sql
 			options.extension_resolver = [](const LogicalPlanSQLExportExtensionInput &input) {
 				auto query = make_uniq<SelectNode>();
 				for (auto &type : input.op.types) {
-					query->select_list.push_back(ConstantExpression::FromValue(Value(type)));
+					query->select_list.push_back(ConstantExpression::Null());
 				}
 				return LogicalPlanSQLExportExtensionResult::Exported(std::move(query));
 			};
@@ -3220,7 +3220,7 @@ TEST_CASE("Grouped MARK SQL export rejects inconsistent group metadata",
 	auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
 	REQUIRE(exported.HasError());
 	REQUIRE(exported.GetIssues()[0].construct ==
-	        LogicalPlanVerificationConstructIdentity::ExportFeature("mark_group_null_semantics"));
+	        LogicalPlanVerificationConstructIdentity::ExportFeature("mark_condition_semantics"));
 
 	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE collated_l(g VARCHAR COLLATE nocase,x INTEGER); "
 	                                 "CREATE TABLE collated_r(g VARCHAR COLLATE nocase,y INTEGER); "
@@ -3232,6 +3232,13 @@ TEST_CASE("Grouped MARK SQL export rejects inconsistent group metadata",
 	REQUIRE(collated_join.mark_types.size() == 1);
 	REQUIRE(StringType::GetCollation(collated_join.mark_types[0]) == "nocase");
 	collated_join.mark_types[0] = LogicalType::VARCHAR;
+	exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
+	REQUIRE(exported.HasError());
+	REQUIRE(exported.GetIssues()[0].construct ==
+	        LogicalPlanVerificationConstructIdentity::ExportFeature("mark_condition_semantics"));
+	for (auto &condition : collated_join.conditions) {
+		condition = JoinCondition(condition.GetLHS().Copy(), condition.GetRHS().Copy(), ExpressionType::COMPARE_EQUAL);
+	}
 	exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
 	REQUIRE(exported.HasError());
 	REQUIRE(exported.GetIssues()[0].construct ==
@@ -3711,22 +3718,6 @@ TEST_CASE("SQL export preserves ordinary functions with compression-like names",
 	}
 	connection.Rollback();
 }
-
-namespace {
-
-void RequireDecorrelatedSQLExportInput(LogicalOperator &op) {
-	REQUIRE(op.type != LogicalOperatorType::LOGICAL_DELIM_JOIN);
-	REQUIRE(op.type != LogicalOperatorType::LOGICAL_DELIM_GET);
-	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expression) {
-		ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
-		    **expression, [&](const BoundColumnRefExpression &ref) { REQUIRE(ref.Depth() == 0); });
-	});
-	for (auto &child : op.children) {
-		RequireDecorrelatedSQLExportInput(*child);
-	}
-}
-
-} // namespace
 
 TEST_CASE("Grouped MARK SQL export preserves stream effects and late errors",
           "[sql_export][logical_plan_sql_export][join_sql_export]") {

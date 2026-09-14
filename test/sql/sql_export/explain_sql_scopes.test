@@ -10,7 +10,7 @@ sql	SELECT CAST(1 AS INTEGER) AS "1"
 query TT
 EXPLAIN (SQL) SELECT NULL::INTEGER AS "null value", 2::BIGINT AS "two";
 ----
-sql	SELECT CAST(NULL::INTEGER AS INTEGER) AS "null value", CAST(2 AS BIGINT) AS two
+sql	SELECT CAST(NULL AS INTEGER) AS "null value", CAST(2 AS BIGINT) AS two
 
 explain_sql
 

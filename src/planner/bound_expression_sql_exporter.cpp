@@ -274,12 +274,30 @@ static bool IsArraySliceDefinition(const ScalarFunction &definition) {
 }
 
 static bool IsOmittedArraySliceBound(const Expression &expression) {
-	if (expression.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
-	    expression.GetReturnType() != LogicalType::LIST(LogicalType::INTEGER)) {
+	if (expression.GetReturnType().id() != LogicalTypeId::LIST) {
+		return false;
+	}
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &function = expression.Cast<BoundFunctionExpression>();
+		auto &definition = function.Function().GetDefinition();
+		return definition && definition->GetQualifiedName() == QualifiedName("system", "main", "list_value") &&
+		       function.GetChildren().empty();
+	}
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
 		return false;
 	}
 	auto &value = expression.Cast<BoundConstantExpression>().GetValue();
-	return value == Value::LIST(LogicalType::INTEGER, {});
+	return !value.IsNull() && ListValue::GetChildren(value).empty();
+}
+
+static LogicalType SQLCastType(const LogicalType &type) {
+	// Scalar collations are applied by COLLATE, outside the cast's type expression.
+	return type.id() == LogicalTypeId::VARCHAR && !type.HasAlias() ? LogicalType::VARCHAR : type;
+}
+
+static unique_ptr<ParsedExpression> SQLCast(const LogicalType &type, unique_ptr<ParsedExpression> child,
+                                            bool try_cast = false) {
+	return make_uniq<CastExpression>(SQLCastType(type), std::move(child), try_cast);
 }
 
 static unique_ptr<ParsedExpression> SystemFunction(const string &name, vector<unique_ptr<ParsedExpression>> arguments) {
@@ -575,7 +593,7 @@ private:
 		unique_ptr<ParsedExpression> result = std::move(window);
 		if (IsSQLRepresentableType(expression.GetReturnType()) && definition->HasBindCallback() &&
 		    definition->GetReturnType() != expression.GetReturnType()) {
-			result = make_uniq<CastExpression>(expression.GetReturnType(), std::move(result));
+			result = SQLCast(expression.GetReturnType(), std::move(result));
 		}
 		return BoundExpressionSQLExportResult::Success(std::move(result));
 	}
@@ -594,8 +612,7 @@ private:
 	                                                    const LogicalPlanVerificationPath &path) {
 		if (type.id() == LogicalTypeId::TYPE) {
 			if (!value || value->IsNull()) {
-				return BoundExpressionSQLExportResult::Success(
-				    make_uniq<CastExpression>(type, ConstantExpression::FromValue(Value())));
+				return BoundExpressionSQLExportResult::Success(SQLCast(type, ConstantExpression::FromValue(Value())));
 			}
 			auto witness = ExportNestedConstant(TypeValue::GetType(*value), nullptr, path);
 			if (witness.HasError()) {
@@ -645,7 +662,7 @@ private:
 			}
 			auto result = BinarySystemFunction("map", std::move(left.GetValue()), std::move(right.GetValue()));
 			if (type.HasAlias()) {
-				result = make_uniq<CastExpression>(type, std::move(result));
+				result = SQLCast(type, std::move(result));
 			}
 			return BoundExpressionSQLExportResult::Success(std::move(result));
 		}
@@ -692,7 +709,7 @@ private:
 		unique_ptr<ParsedExpression> result =
 		    make_uniq<FunctionExpression>(QualifiedName("system", "main", Identifier(function)), std::move(arguments));
 		if (type.HasAlias()) {
-			result = make_uniq<CastExpression>(type, std::move(result));
+			result = SQLCast(type, std::move(result));
 		}
 		return BoundExpressionSQLExportResult::Success(std::move(result));
 	}
@@ -753,7 +770,7 @@ private:
 		if (return_type.id() == LogicalTypeId::GEOMETRY) {
 			if (value.IsNull()) {
 				auto geometry = GeoType::HasCRS(return_type) ? Value("GEOMETRYCOLLECTION EMPTY") : Value();
-				result = make_uniq<CastExpression>(LogicalType::GEOMETRY(), ConstantExpression::FromValue(geometry));
+				result = SQLCast(LogicalType::GEOMETRY(), ConstantExpression::FromValue(geometry));
 			} else {
 				result = UnarySystemFunction("st_geomfromwkb",
 				                             ConstantExpression::FromValue(Value::BLOB_RAW(StringValue::Get(value))));
@@ -774,10 +791,13 @@ private:
 				return BoundExpressionSQLExportResult::Success(std::move(result));
 			}
 		} else {
-			result = ConstantExpression::FromValue(value);
+			result = ConstantExpression::FromValue(value.WithType(SQLCastType(return_type)));
 		}
-		if (return_type.id() != LogicalTypeId::SQLNULL) {
-			result = make_uniq<CastExpression>(return_type, std::move(result));
+		if (return_type.id() != LogicalTypeId::SQLNULL &&
+		    (result->GetExpressionClass() != ExpressionClass::CAST ||
+		     !result->Cast<CastExpression>().TargetType().Equals(
+		         *TypeExpression::FromLogicalType(SQLCastType(return_type))))) {
+			result = SQLCast(return_type, std::move(result));
 		}
 		return BoundExpressionSQLExportResult::Success(std::move(result));
 	}
@@ -992,8 +1012,8 @@ private:
 				                       "Aggregate state TRY_CAST or custom casts require a SQL representation"));
 			}
 			auto storage_type = expression.GetReturnType().WithAlias("").WithExtensionInfo(nullptr);
-			auto result = ExportAggregateFunction::StateToSQL(
-			    expression.GetReturnType(), make_uniq<CastExpression>(storage_type, std::move(child.GetValue())));
+			auto result = ExportAggregateFunction::StateToSQL(expression.GetReturnType(),
+			                                                  SQLCast(storage_type, std::move(child.GetValue())));
 			if (!result) {
 				return Failure(UnsupportedFeature(path, "aggregate_state_parameters",
 				                                  "Aggregate state SQL parameters are not representable"));
@@ -1008,8 +1028,8 @@ private:
 			}
 			return CastToConstructedType(expression.GetReturnType(), std::move(child.GetValue()), path);
 		}
-		return BoundExpressionSQLExportResult::Success(make_uniq<CastExpression>(
-		    expression.GetReturnType(), std::move(child.GetValue()), BoundCastExpression::IsTryCast(expression)));
+		return BoundExpressionSQLExportResult::Success(SQLCast(expression.GetReturnType(), std::move(child.GetValue()),
+		                                                       BoundCastExpression::IsTryCast(expression)));
 	}
 
 	BoundExpressionSQLExportResult ExportComparison(const BoundFunctionExpression &expression,
@@ -1440,8 +1460,7 @@ private:
 				if (!IsOmittedArraySliceBound(*expression.GetChildren()[child_index])) {
 					continue;
 				}
-				auto &value = expression.GetChildren()[child_index]->Cast<BoundConstantExpression>().GetValue();
-				children[child_index] = ConstantExpression::FromValue(value);
+				children[child_index] = OperatorExpression::EmptySliceBound();
 			}
 		}
 		unique_ptr<ParsedExpression> result;
@@ -1464,7 +1483,7 @@ private:
 			if (HasNestedCollation(expression.GetReturnType())) {
 				return CastToConstructedType(expression.GetReturnType(), std::move(result), path);
 			}
-			result = make_uniq<CastExpression>(expression.GetReturnType(), std::move(result));
+			result = SQLCast(expression.GetReturnType(), std::move(result));
 		}
 		return BoundExpressionSQLExportResult::Success(std::move(result));
 	}
@@ -1588,7 +1607,7 @@ private:
 		if (expression.StateExportMode() == AggregateStateExportMode::NONE &&
 		    IsSQLRepresentableType(expression.GetReturnType()) && !expression.GetReturnType().IsAggregateState() &&
 		    definition->HasBindCallback() && definition->GetReturnType() != expression.GetReturnType()) {
-			result = make_uniq<CastExpression>(expression.GetReturnType(), std::move(result));
+			result = SQLCast(expression.GetReturnType(), std::move(result));
 		}
 		return BoundExpressionSQLExportResult::Success(std::move(result));
 	}
