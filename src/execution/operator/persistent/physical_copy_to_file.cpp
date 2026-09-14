@@ -11,6 +11,7 @@
 #include "duckdb/common/vector/vector_writer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/window/window_collection.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -1470,21 +1471,17 @@ static bool UsePerPartitionFileOffsets(const PhysicalCopyToFile &op) {
 	return op.hive_file_pattern && !op.partition_path_expression;
 }
 
-static void HivePartitionPathFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	// the arguments are (name, value) pairs - type-erased, as the values can have any type
-	D_ASSERT(args.ColumnCount() % 2 == 0);
+//! One directory of the hive layout, e.g. year=2024 - the arguments are the column name and its partition value
+static void HivePartitionComponentFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	// type-erased, as the partition value can have any type
 	auto writer = FlatVector::Writer<string_t>(result, args.size());
 	for (idx_t row = 0; row < args.size(); row++) {
-		string path;
-		for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx += 2) {
-			auto value = args.data[col_idx + 1].GetValue(row);
-			path += col_idx > 0 ? "/" : "";
-			path += HivePartitioning::Escape(args.data[col_idx].GetValue(row).ToString());
-			path += "=";
-			path += value.IsNull() ? HivePartitioning::DEFAULT_PARTITION_NAME
-			                       : HivePartitioning::EscapeValue(value.ToString());
-		}
-		writer.WriteValue(string_t(path.c_str(), UnsafeNumericCast<uint32_t>(path.size())));
+		auto value = args.data[1].GetValue(row);
+		// escaping the name and the value is what url_encode does, NULL goes into the default partition
+		auto component = HivePartitioning::Escape(args.data[0].GetValue(row).ToString()) + "=";
+		component +=
+		    value.IsNull() ? HivePartitioning::DEFAULT_PARTITION_NAME : HivePartitioning::EscapeValue(value.ToString());
+		writer.WriteValue(string_t(component.c_str(), UnsafeNumericCast<uint32_t>(component.size())));
 	}
 }
 
@@ -1493,18 +1490,21 @@ static unique_ptr<Expression> CreateHivePartitionPath(ClientContext &context, co
 	if (op.partition_columns.empty()) {
 		return nullptr;
 	}
-	vector<unique_ptr<Expression>> children;
+	ScalarFunction component_function("hive_partition_component", {LogicalType::VARCHAR, LogicalType::ANY},
+	                                  LogicalType::VARCHAR, HivePartitionComponentFunction);
+	// a NULL partition value has a directory of its own
+	component_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+
+	FunctionBinder function_binder(context);
+	vector<unique_ptr<Expression>> components;
 	for (idx_t i = 0; i < op.partition_columns.size(); i++) {
 		auto col_idx = op.partition_columns[i];
+		vector<unique_ptr<Expression>> children;
 		children.push_back(make_uniq<BoundConstantExpression>(Value(op.names[col_idx].GetIdentifierName())));
 		children.push_back(make_uniq<BoundReferenceExpression>(op.expected_types[col_idx], i));
+		components.push_back(function_binder.BindScalarFunction(component_function, std::move(children)));
 	}
-	ScalarFunction function("hive_partition_path", {}, LogicalType::VARCHAR, HivePartitionPathFunction);
-	function.SetVarArgs(LogicalType::ANY);
-	// NULL values map to the default partition
-	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	FunctionBinder function_binder(context);
-	return function_binder.BindScalarFunction(function, std::move(children));
+	return function_binder.BindScalarFunction(PathJoinFun::GetFunction(), std::move(components));
 }
 
 static string EvaluatePartitionPath(ClientContext &context, const PhysicalCopyToFile &op,
