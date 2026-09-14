@@ -834,7 +834,8 @@ ARTLookupResult ART::ScanChunk(DataChunk &input, RowIdVectorOutput &row_ids) con
 	}
 	IndexLock guard(*this);
 	for (const auto &key : keys) {
-		if (!key.Empty() && SearchEqual(key, row_ids) == ARTLookupResult::CAPACITY_EXCEEDED) {
+		D_ASSERT(!key.Empty());
+		if (SearchEqual(key, row_ids) == ARTLookupResult::CAPACITY_EXCEEDED) {
 			return ARTLookupResult::CAPACITY_EXCEEDED;
 		}
 	}
