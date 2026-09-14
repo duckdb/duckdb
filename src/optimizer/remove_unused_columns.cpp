@@ -4,6 +4,8 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/scalar/struct_functions.hpp"
+#include "duckdb/optimizer/builtin_function_lookup.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
@@ -373,10 +375,10 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index);
 			if (aggr.expressions.empty() && aggr.groups.empty()) {
 				// removed all expressions from the aggregate: push a COUNT(*)
-				auto count_star_fun = CountStarFun::GetFunction();
+				auto count_star_fun = GetBuiltinAggregateFunction(context, CountStarFun::Name, {});
 				FunctionBinder function_binder(context);
-				aggr.expressions.push_back(
-				    function_binder.BindAggregateFunction(count_star_fun, {}, nullptr, AggregateType::NON_DISTINCT));
+				aggr.expressions.push_back(function_binder.BindAggregateFunction(std::move(count_star_fun), {}, nullptr,
+				                                                                 AggregateType::NON_DISTINCT));
 			}
 		}
 
@@ -697,10 +699,7 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		// Distinct column indexes here, unlike the per-reader map, so comparing sizes is a valid width check.
 		if (cte_map_entry.everything_referenced || readers_visible_in_output ||
 		    referenced_columns_in_rhs.size() == cte.children[0]->GetColumnBindings().size()) {
-			if (!analyze) {
-				everything_referenced = true;
-			}
-			// We may opt out here, but we still need to traverse the left-hand side of the CTE.
+			// Preserve the CTE input without marking unrelated sibling outputs as referenced.
 			RemoveUnusedColumns remove(*this, true);
 			remove.VisitOperator(cte.children[0]);
 			return;
@@ -918,7 +917,6 @@ static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &cont
 		auto &child_types = StructType::GetChildTypes(type_iter.get());
 		D_ASSERT(child_index < child_types.size());
 		auto is_unnamed = StructType::IsUnnamed(type_iter.get());
-		auto function = is_unnamed ? GetIndexExtractFunction() : GetKeyExtractFunction();
 
 		type_iter = child_types[child_index].second;
 
@@ -929,7 +927,8 @@ static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &cont
 		} else {
 			arguments[1] = make_uniq<BoundConstantExpression>(Value(child_types[child_index].first));
 		}
-		target = function.Bind(context, std::move(arguments));
+		// the struct_extract set holds both the key and the index overload, the constant argument selects between them
+		target = BindBuiltinScalarFunction(context, StructExtractFun::Name, std::move(arguments));
 		if (!path_iter.get().HasChildren()) {
 			break;
 		}

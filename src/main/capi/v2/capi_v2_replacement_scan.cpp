@@ -68,12 +68,12 @@ public:
 		case CV2ReplacementScanClaim::FUNCTION: {
 			vector<unique_ptr<ParsedExpression>> children;
 			for (auto &argument : out_arguments) {
-				children.push_back(make_uniq<ConstantExpression>(std::move(argument)));
+				children.push_back(ConstantExpression::FromValue(argument));
 			}
 			for (auto &named_argument : out_named_arguments) {
 				// A named argument is an argument whose alias is the parameter name: the binder recovers the name
 				// from the expression alias, and drops FunctionArgument::name outright.
-				auto child = make_uniq<ConstantExpression>(std::move(named_argument.second));
+				auto child = ConstantExpression::FromValue(named_argument.second);
 				child->SetAlias(named_argument.first);
 				children.push_back(std::move(child));
 			}

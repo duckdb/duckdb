@@ -10,8 +10,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 from scripts.regression.benchmark import (
+    BENCHMARK_DATA_DIRECTORY,
     BenchmarkRunner,
     EXTENSION_DIRECTORY_ENV,
+    create_isolated_benchmark_root,
     find_benchmark_cache_directory,
     find_extension_directory,
 )
@@ -51,6 +53,30 @@ class TestBenchmarkRunner(unittest.TestCase):
             cache_directories = {find_benchmark_cache_directory(str(path)) for path in runner_paths}
             expected_directory = os.path.abspath(build_directory / "duckdb_benchmark_data")
             self.assertEqual(cache_directories, {expected_directory})
+
+    def test_isolated_root_symlinks_existing_benchmark_data(self):
+        with tempfile.TemporaryDirectory() as temp_directory:
+            source_root = Path(temp_directory) / "duckdb"
+            source_data_directory = source_root / BENCHMARK_DATA_DIRECTORY
+            source_data_directory.mkdir(parents=True)
+            (source_root / "benchmark").mkdir()
+            (source_data_directory / "real_nest.duckdb").write_text("data", encoding="utf-8")
+
+            target_roots = [Path(temp_directory) / "base", Path(temp_directory) / "pr"]
+            for target_root in target_roots:
+                create_isolated_benchmark_root(source_root, target_root)
+                data_directory = target_root / BENCHMARK_DATA_DIRECTORY
+                self.assertTrue((target_root / "benchmark").is_symlink())
+                self.assertFalse(data_directory.is_symlink())
+                self.assertEqual(
+                    (data_directory / "real_nest.duckdb").resolve(),
+                    (source_data_directory / "real_nest.duckdb").resolve(),
+                )
+
+            # generated data stays inside the root that wrote it
+            (target_roots[0] / BENCHMARK_DATA_DIRECTORY / "tpch_sf1.duckdb").write_text("base", encoding="utf-8")
+            self.assertFalse((target_roots[1] / BENCHMARK_DATA_DIRECTORY / "tpch_sf1.duckdb").exists())
+            self.assertFalse((source_data_directory / "tpch_sf1.duckdb").exists())
 
     def test_passes_artifact_extension_directory_to_runner(self):
         with tempfile.TemporaryDirectory() as temp_directory:
@@ -318,7 +344,7 @@ print(f"{sys.argv[1]}\\t1\\tINCORRECT", file=sys.stderr)
 print("INCORRECT RESULT: Data Corruption Error: attempted to read past the end of the segment", file=sys.stderr)
 """
 
-    shared_state_runner_source = """#!/usr/bin/env python3
+    benchmark_data_runner_source = """#!/usr/bin/env python3
 import os
 import sys
 from pathlib import Path
@@ -327,11 +353,29 @@ label = os.path.basename(sys.argv[0])
 runs = int(sys.argv[sys.argv.index("--timed-runs") + 1])
 with open(os.environ["BENCHMARK_ORDER_LOG"], "a", encoding="utf-8") as order_log:
     order_log.write(f"{label}:{runs}\\n")
-if "--root-dir" in sys.argv:
-    state_directory = Path(sys.argv[sys.argv.index("--root-dir") + 1]) / "duckdb_benchmark_data"
-else:
-    state_directory = Path(os.environ["BENCHMARK_COUNTER_DIR"])
+state_directory = Path(sys.argv[sys.argv.index("--root-dir") + 1]) / "duckdb_benchmark_data"
 owner_path = state_directory / "shared-owner"
+previous_owner = owner_path.read_text(encoding="utf-8") if owner_path.exists() else None
+owner_path.write_text(label, encoding="utf-8")
+print("name\\trun\\timing", file=sys.stderr)
+if label == "old" and previous_owner == "new":
+    print(f"{sys.argv[1]}\\t1\\tINCORRECT", file=sys.stderr)
+    print("INCORRECT RESULT: old runner opened state written by new runner", file=sys.stderr)
+else:
+    for run in range(1, runs + 1):
+        print(f"{sys.argv[1]}\\t{run}\\t1.0", file=sys.stderr)
+"""
+
+    external_state_runner_source = """#!/usr/bin/env python3
+import os
+import sys
+from pathlib import Path
+
+label = os.path.basename(sys.argv[0])
+runs = int(sys.argv[sys.argv.index("--timed-runs") + 1])
+with open(os.environ["BENCHMARK_ORDER_LOG"], "a", encoding="utf-8") as order_log:
+    order_log.write(f"{label}:{runs}\\n")
+owner_path = Path(os.environ["BENCHMARK_COUNTER_DIR"]) / "external-owner"
 previous_owner = owner_path.read_text(encoding="utf-8") if owner_path.exists() else None
 owner_path.write_text(label, encoding="utf-8")
 print("name\\trun\\timing", file=sys.stderr)
@@ -612,14 +656,13 @@ else:
         process, _, _ = self.run_regression_test(
             self.stable_runner_source,
             extra_args=[
-                "--benchmark-cache=clear",
                 "--memory-limit",
                 "512MB",
                 "--benchmark-argument",
                 "sf=10",
             ],
             create_cache=True,
-            expected_cache_state="absent",
+            expected_cache_state="present",
             expected_memory_limit="512MB",
             expected_benchmark_argument="sf=10",
         )
@@ -651,21 +694,17 @@ else:
         )
         self.assertNotIn("could not convert string to float", process.stdout)
 
-    def test_failure_identifies_runner_that_previously_wrote_shared_state(self):
-        process, order, _ = self.run_regression_test(self.shared_state_runner_source)
+    def test_failure_identifies_runner_that_ran_before_the_failing_runner(self):
+        process, order, _ = self.run_regression_test(self.external_state_runner_source)
         self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
         self.assertEqual(order, ["old:5", "new:5", "new:5", "old:5"])
         self.assertIn("Base benchmark runner reported INCORRECT", process.stdout)
         self.assertIn("Comparison batch 2 ran PR immediately before Base.", process.stdout)
-        self.assertIn(
-            "Both runners use the same benchmark cache, so files may have been last written by PR.", process.stdout
-        )
+        self.assertNotIn("Both runners use the same benchmark cache", process.stdout)
         self.assertIn("PR:\n No failure", process.stdout)
 
-    def test_clear_cache_isolates_runner_writable_state(self):
-        process, order, _ = self.run_regression_test(
-            self.shared_state_runner_source, extra_args=["--benchmark-cache=clear"]
-        )
+    def test_benchmark_directories_isolate_runner_writable_state(self):
+        process, order, _ = self.run_regression_test(self.benchmark_data_runner_source)
         self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
         self.assertEqual(order, self.expected_order(10))
         self.assertNotIn("opened state written by", process.stdout)
