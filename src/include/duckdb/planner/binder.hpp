@@ -19,6 +19,7 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/tableref/delimgetref.hpp"
 #include "duckdb/parser/tokens.hpp"
@@ -596,7 +597,8 @@ private:
 	                                         vector<Value> parameters, named_parameter_map_t named_parameters,
 	                                         vector<LogicalType> input_table_types,
 	                                         vector<Identifier> input_table_names,
-	                                         optional_ptr<unique_ptr<LogicalOperator>> input_plan);
+	                                         optional_ptr<unique_ptr<LogicalOperator>> input_plan,
+	                                         unique_ptr<TableRef> table_function_ref = nullptr);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundJoinRef &ref);
 

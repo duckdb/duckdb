@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/common/extra_operator_info.hpp"
@@ -51,6 +52,8 @@ public:
 	vector<Value> parameters;
 	//! The set of named input parameters for the table function
 	named_parameter_map_t named_parameters;
+	//! The SQL invocation used to bind this table function, when one exists
+	unique_ptr<TableRef> table_function_ref;
 	//! The set of named input table types for the table-in table-out function
 	vector<LogicalType> input_table_types;
 	//! The set of named input table names for the table-in table-out function

@@ -1,4 +1,6 @@
 #include "duckdb/planner/operator/logical_secure_view.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/tableref/bound_at_clause.hpp"
 
 #include "duckdb/common/string_util.hpp"
 
@@ -9,6 +11,25 @@ LogicalSecureView::LogicalSecureView() : LogicalOperator(LogicalOperatorType::LO
 
 LogicalSecureView::LogicalSecureView(string view_name_p, unique_ptr<LogicalOperator> child)
     : LogicalOperator(LogicalOperatorType::LOGICAL_SECURE_VIEW), view_name(std::move(view_name_p)) {
+	children.push_back(std::move(child));
+}
+
+LogicalSecureView::LogicalSecureView(string view_name_p, QualifiedName source_name_p,
+                                     vector<LogicalType> source_types_p, optional_ptr<BoundAtClause> at_clause,
+                                     unique_ptr<LogicalOperator> child)
+    : LogicalOperator(LogicalOperatorType::LOGICAL_SECURE_VIEW), view_name(std::move(view_name_p)), has_source(true),
+      source_name(std::move(source_name_p)), source_types(std::move(source_types_p)),
+      has_at_clause(at_clause != nullptr) {
+	if (at_clause) {
+		at_unit = at_clause->Unit();
+		at_value = at_clause->GetValue();
+	}
+	output_bindings = child->GetColumnBindings();
+	D_ASSERT(output_bindings.size() == source_types.size());
+	for (idx_t i = 0; i < source_types.size(); i++) {
+		output_expressions.push_back(
+		    make_uniq<BoundColumnRefExpression>(source_types[i], ColumnBinding(TableIndex(0), ProjectionIndex(i))));
+	}
 	children.push_back(std::move(child));
 }
 
