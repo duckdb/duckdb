@@ -44,6 +44,11 @@ enum class ARTScanType : uint8_t {
 struct ARTIndexScanState : public IndexScanState {
 	explicit ARTIndexScanState(ARTScanType scan_type) : scan_type(scan_type) {
 	}
+	ARTIndexScanState(ARTScanType scan_type, unique_ptr<DataChunk> key_columns)
+	    : scan_type(scan_type), batch_equality_keys(std::move(key_columns)) {
+		D_ASSERT(scan_type == ARTScanType::BATCH_EQUALITY);
+		D_ASSERT(batch_equality_keys);
+	}
 
 	ARTScanType scan_type;
 	unique_ptr<DataChunk> batch_equality_keys;
@@ -294,9 +299,7 @@ unique_ptr<IndexScanState> ART::InitializeBatchScan(unique_ptr<DataChunk> key_co
 	if (!key_columns || key_columns->GetTypes() != logical_types) {
 		throw InternalException("ART batch scan keys must have the index's logical types");
 	}
-	auto result = make_uniq<ARTIndexScanState>(ARTScanType::BATCH_EQUALITY);
-	result->batch_equality_keys = std::move(key_columns);
-	return std::move(result);
+	return make_uniq<ARTIndexScanState>(ARTScanType::BATCH_EQUALITY, std::move(key_columns));
 }
 
 //===--------------------------------------------------------------------===//
