@@ -159,6 +159,8 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(Deserializer &deser
 		// return type mismatch - push a cast
 		auto &context = deserializer.Get<ClientContext &>();
 		return BoundCastExpression::AddCastToType(context, std::move(result), return_type);
+	} else {
+		result->SetReturnType(std::move(return_type));
 	}
 	return Expression::PreserveReturnType(return_type, std::move(result));
 }

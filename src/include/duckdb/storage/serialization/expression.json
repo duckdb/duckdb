@@ -194,7 +194,8 @@
       {
         "id": 200,
         "name": "value",
-        "type": "Value"
+        "type": "Value",
+        "serialize_property": "value.WithType(return_type)"
       }
     ],
     "constructor": ["value"]

@@ -25,6 +25,7 @@
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/enums/checkpoint_on_detach.hpp"
+#include "duckdb/common/enums/compressed_materialization_origin.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/copy_overwrite_mode.hpp"
 #include "duckdb/common/enums/cte_materialize.hpp"
@@ -1351,6 +1352,26 @@ const char* EnumUtil::ToChars<CompressedMaterializationDirection>(CompressedMate
 template<>
 CompressedMaterializationDirection EnumUtil::FromString<CompressedMaterializationDirection>(const char *value) {
 	return static_cast<CompressedMaterializationDirection>(StringUtil::StringToEnum(GetCompressedMaterializationDirectionValues(), 3, "CompressedMaterializationDirection", value));
+}
+
+const StringUtil::EnumStringLiteral *GetCompressedMaterializationOriginValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CompressedMaterializationOrigin::NONE), "NONE" },
+		{ static_cast<uint32_t>(CompressedMaterializationOrigin::CAST), "CAST" },
+		{ static_cast<uint32_t>(CompressedMaterializationOrigin::COMPRESS), "COMPRESS" },
+		{ static_cast<uint32_t>(CompressedMaterializationOrigin::DECOMPRESS), "DECOMPRESS" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CompressedMaterializationOrigin>(CompressedMaterializationOrigin value) {
+	return StringUtil::EnumToString(GetCompressedMaterializationOriginValues(), 4, "CompressedMaterializationOrigin", static_cast<uint32_t>(value));
+}
+
+template<>
+CompressedMaterializationOrigin EnumUtil::FromString<CompressedMaterializationOrigin>(const char *value) {
+	return static_cast<CompressedMaterializationOrigin>(StringUtil::StringToEnum(GetCompressedMaterializationOriginValues(), 4, "CompressedMaterializationOrigin", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCompressedMaterializationTypeValues() {
