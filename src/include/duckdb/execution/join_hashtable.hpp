@@ -116,6 +116,7 @@ public:
 		JoinHashTable &ht;
 		bool finished;
 		bool is_null;
+		bool null_free_mark = false;
 		bool has_null_value_filter = false;
 
 		// it records the RHS pointers for the result chunk
@@ -448,6 +449,7 @@ public:
 		DataChunk result_chunk;
 		//! Whether an RHS condition can produce UNKNOWN during equality comparison
 		bool uncorrelated_has_null = false;
+		bool conditions_can_be_unknown = false;
 		//! All RHS condition rows, used only for uncorrelated row equality NULL refinement
 		unique_ptr<ColumnDataCollection> uncorrelated_condition_rows;
 		bool compare_conditions = false;

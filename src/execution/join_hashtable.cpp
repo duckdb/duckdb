@@ -156,6 +156,7 @@ void JoinHashTable::InitializeUncorrelatedMarkJoin(bool compare_conditions) {
 	D_ASSERT(join_type == JoinType::MARK);
 	D_ASSERT(mark_join_info.correlated_types.empty());
 	mark_join_info.uncorrelated_has_null = false;
+	mark_join_info.conditions_can_be_unknown = false;
 	mark_join_info.uncorrelated_condition_rows = make_uniq<ColumnDataCollection>(context, condition_types);
 	mark_join_info.compare_conditions = compare_conditions;
 }
@@ -194,6 +195,8 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 		}
 		if (info.uncorrelated_condition_rows && other.mark_join_info.uncorrelated_condition_rows) {
 			info.uncorrelated_has_null = info.uncorrelated_has_null || other.mark_join_info.uncorrelated_has_null;
+			info.conditions_can_be_unknown =
+			    info.conditions_can_be_unknown || other.mark_join_info.conditions_can_be_unknown;
 			info.uncorrelated_condition_rows->Combine(*other.mark_join_info.uncorrelated_condition_rows);
 		}
 	}
@@ -637,6 +640,15 @@ static bool MarkJoinKeysHaveNull(DataChunk &keys, optional_ptr<bool> rows_with_n
 	return has_null;
 }
 
+static bool MarkJoinKeysCanBeUnknown(const DataChunk &keys) {
+	for (const auto &key : keys.data) {
+		if (key.GetType().IsNested() || key.Validity().CanHaveNull()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChunk &keys, DataChunk &payload) {
 	D_ASSERT(!finalized);
 	D_ASSERT(keys.size() == payload.size());
@@ -669,6 +681,8 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 		mark_join_info.uncorrelated_has_null =
 		    mark_join_info.uncorrelated_has_null ||
 		    MarkJoinKeysHaveNull(keys, nullptr, HasMarkJoinConjunction() ? &equality_predicates : nullptr);
+		mark_join_info.conditions_can_be_unknown =
+		    mark_join_info.conditions_can_be_unknown || MarkJoinKeysCanBeUnknown(keys);
 		mark_join_info.uncorrelated_condition_rows->Append(keys);
 	}
 
@@ -1602,7 +1616,7 @@ idx_t ScanStructure::ResolveMarkPredicates(DataChunk &keys, SelectionVector &mat
 
 idx_t ScanStructure::ResolvePredicates(DataChunk &keys, DataChunk &probe_data, SelectionVector &match_sel,
                                        optional_ptr<SelectionVector> no_match_sel) {
-	if (ht.HasMarkJoinConjunction()) {
+	if (ht.HasMarkJoinConjunction() && !null_free_mark) {
 		return ResolveMarkPredicates(keys, match_sel, no_match_sel);
 	}
 	// Initialize the found_match array to the current sel_vector
@@ -2538,6 +2552,8 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 	// this method should only be called for a non-empty HT
 	D_ASSERT(ht.Count() > 0);
 
+	null_free_mark = ht.HasMarkJoinConjunction() && !ht.residual_predicate &&
+	                 !ht.mark_join_info.conditions_can_be_unknown && !MarkJoinKeysCanBeUnknown(keys);
 	ScanKeyMatches(keys, probe_data);
 
 	if (ht.mark_join_info.correlated_types.empty()) {
@@ -3011,6 +3027,7 @@ static void ResetMarkJoinInfo(JoinHashTable &ht) {
 	if (info.uncorrelated_condition_rows) {
 		info.refinement.reset();
 		info.uncorrelated_has_null = false;
+		info.conditions_can_be_unknown = false;
 		info.uncorrelated_condition_rows = make_uniq<ColumnDataCollection>(ht.context, ht.condition_types);
 	}
 }
