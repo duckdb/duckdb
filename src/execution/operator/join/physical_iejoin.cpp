@@ -11,6 +11,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/execution/mark_join_row_comparison.hpp"
+#include "duckdb/execution/mark_join_refinement.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -77,257 +78,6 @@ PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoi
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-// Directional extrema partitioned by NULL key, collected from the original evaluated keys.
-struct IEMarkJoinBounds {
-	static bool CanUse(const vector<JoinCondition> &conditions) {
-		if (conditions.size() != 2) {
-			return false;
-		}
-		for (const auto &condition : conditions) {
-			if (condition.GetLHS().GetReturnType().id() == LogicalTypeId::UNION) {
-				return false;
-			}
-		}
-		return true;
-	}
-
-	unique_ptr<ColumnDataCollection> prefix;
-	vector<Value> prefix_ends;
-	vector<array<idx_t, 3>> prefix_chunks;
-	vector<Value> remaining_bounds;
-	vector<idx_t> remaining_null_counts;
-	Value values[2];
-	Value other_null_values[2];
-	bool has_null[2] = {false, false};
-	bool both_null = false;
-
-	static void UpdateValue(Value &bound, const Value &value, ExpressionType comparison) {
-		if (value.IsNull()) {
-			return;
-		}
-		const auto use_max =
-		    comparison == ExpressionType::COMPARE_LESSTHAN || comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO;
-		if (bound.IsNull() ||
-		    (use_max ? ValueOperations::GreaterThan(value, bound) : ValueOperations::LessThan(value, bound))) {
-			bound = value;
-		}
-	}
-
-	void Sink(DataChunk &keys, const vector<JoinCondition> &conditions) {
-		if (conditions.size() != 2) {
-			remaining_bounds.resize(conditions.size());
-			remaining_null_counts.resize(conditions.size(), 0);
-			for (idx_t col = 0; col < conditions.size(); col++) {
-				const auto comparison = conditions[col].GetComparisonType();
-				if (!keys.data[col].GetType().IsNested() &&
-				    (comparison == ExpressionType::COMPARE_LESSTHAN ||
-				     comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
-				     comparison == ExpressionType::COMPARE_GREATERTHAN ||
-				     comparison == ExpressionType::COMPARE_GREATERTHANOREQUALTO)) {
-					MarkJoinRowComparison::UpdateRangeBound(keys.data[col], comparison, remaining_bounds[col],
-					                                        remaining_null_counts[col]);
-				}
-			}
-			return;
-		}
-		for (idx_t row = 0; row < keys.size(); row++) {
-			Value row_values[] = {keys.GetValue(0, row), keys.GetValue(1, row)};
-			both_null |= row_values[0].IsNull() && row_values[1].IsNull();
-			for (idx_t col = 0; col < 2; col++) {
-				has_null[col] |= row_values[col].IsNull();
-				UpdateValue(values[col], row_values[col], conditions[col].GetComparisonType());
-				if (row_values[1 - col].IsNull()) {
-					UpdateValue(other_null_values[col], row_values[col], conditions[col].GetComparisonType());
-				}
-			}
-		}
-	}
-
-	void Combine(const IEMarkJoinBounds &other, const vector<JoinCondition> &conditions) {
-		if (conditions.size() != 2) {
-			remaining_bounds.resize(conditions.size());
-			remaining_null_counts.resize(conditions.size(), 0);
-			for (idx_t col = 0; col < other.remaining_bounds.size(); col++) {
-				UpdateValue(remaining_bounds[col], other.remaining_bounds[col], conditions[col].GetComparisonType());
-				remaining_null_counts[col] += other.remaining_null_counts[col];
-			}
-			return;
-		}
-		both_null |= other.both_null;
-		for (idx_t col = 0; col < 2; col++) {
-			has_null[col] |= other.has_null[col];
-			UpdateValue(values[col], other.values[col], conditions[col].GetComparisonType());
-			UpdateValue(other_null_values[col], other.other_null_values[col], conditions[col].GetComparisonType());
-		}
-	}
-
-	static bool Matches(const Value &value, const Value &bound, ExpressionType comparison) {
-		if (bound.IsNull()) {
-			return false;
-		}
-		switch (comparison) {
-		case ExpressionType::COMPARE_LESSTHAN:
-			return ValueOperations::LessThan(value, bound);
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			return ValueOperations::LessThanEquals(value, bound);
-		case ExpressionType::COMPARE_GREATERTHAN:
-			return ValueOperations::GreaterThan(value, bound);
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			return ValueOperations::GreaterThanEquals(value, bound);
-		default:
-			throw InternalException("Expected IE join range comparison");
-		}
-	}
-
-	void BuildPrefix(ExecutionContext &context, const PhysicalRangeJoin &op,
-	                 PhysicalRangeJoin::GlobalSortedTable &source_table, idx_t first, idx_t second) {
-		const auto &first_type = op.conditions[first].GetRHS().GetReturnType();
-		const auto &second_type = op.conditions[second].GetRHS().GetReturnType();
-		const auto first_comparison = op.conditions[first].GetComparisonType();
-		const auto second_comparison = op.conditions[second].GetComparisonType();
-		const bool descending = first_comparison == ExpressionType::COMPARE_LESSTHAN ||
-		                        first_comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO;
-		vector<BoundOrderByNode> orders;
-		orders.emplace_back(descending ? OrderType::DESCENDING : OrderType::ASCENDING, OrderByNullType::NULLS_LAST,
-		                    make_uniq<BoundReferenceExpression>(first_type, 0));
-		vector<LogicalType> types {first_type, second_type};
-		PhysicalRangeJoin::GlobalSortedTable sorted(context.client, orders, types, op);
-		auto local = sorted.sort->GetLocalSinkState(context);
-		InterruptState interrupt;
-		OperatorSinkInput sink {*sorted.global_sink, *local, interrupt};
-		auto &source = *source_table.sorted->payload_data;
-		const auto key_offset = op.children[1].get().GetTypes().size();
-		TupleDataScanState scan;
-		source.InitializeScan(scan, {key_offset + first, key_offset + second});
-		DataChunk keys;
-		source.InitializeScanChunk(scan, keys);
-		DataChunk input;
-		input.InitializeEmpty({first_type, first_type, second_type});
-		SelectionVector valid(STANDARD_VECTOR_SIZE);
-		while (source.Scan(scan, keys)) {
-			context.client.InterruptCheck();
-			idx_t count = 0;
-			for (idx_t row = 0; row < keys.size(); row++) {
-				auto a = keys.GetValue(0, row);
-				auto b = keys.GetValue(1, row);
-				if (a.IsNull() && b.IsNull()) {
-					both_null = true;
-				} else if (a.IsNull()) {
-					UpdateValue(other_null_values[1], b, second_comparison);
-				} else if (b.IsNull()) {
-					UpdateValue(other_null_values[0], a, first_comparison);
-				} else {
-					valid.set_index(count++, row);
-				}
-			}
-			if (!count) {
-				continue;
-			}
-			input.Reset();
-			input.data[0].Reference(keys.data[0]);
-			input.data[1].Reference(keys.data[0]);
-			input.data[2].Reference(keys.data[1]);
-			input.SetChildCardinality(keys.size());
-			input.Slice(valid, count);
-			sorted.sort->Sink(context, input, sink);
-			sorted.count += count;
-		}
-		OperatorSinkCombineInput combine {*sorted.global_sink, *local, interrupt};
-		sorted.sort->Combine(context, combine);
-		sorted.Finalize(context.client, interrupt);
-		sorted.Materialize(context, interrupt);
-
-		prefix = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context.client), types);
-		ColumnDataAppendState append;
-		prefix->InitializeAppend(append);
-		auto &ordered = *sorted.sorted->payload_data;
-		TupleDataScanState ordered_scan;
-		ordered.InitializeScan(ordered_scan);
-		DataChunk pair;
-		ordered.InitializeScanChunk(ordered_scan, pair);
-		DataChunk output;
-		output.Initialize(Allocator::Get(context.client), types);
-		Value bound;
-		while (ordered.Scan(ordered_scan, pair)) {
-			context.client.InterruptCheck();
-			output.Reset();
-			for (idx_t row = 0; row < pair.size(); row++) {
-				UpdateValue(bound, pair.GetValue(1, row), second_comparison);
-				output.data[0].Append(pair.GetValue(0, row));
-				output.data[1].Append(bound);
-			}
-			output.SetChildCardinality(pair.size());
-			prefix->Append(append, output);
-		}
-
-		ColumnDataParallelScanState directory;
-		ColumnDataLocalScanState directory_local;
-		prefix->InitializeScan(directory);
-		prefix->InitializeScanChunk(output);
-		idx_t chunk, segment, row;
-		while (prefix->NextScanIndex(directory.scan_state, chunk, segment, row)) {
-			prefix->ScanAtIndex(directory, directory_local, output, chunk, segment, row);
-			prefix_chunks.push_back({chunk, segment, row});
-			prefix_ends.push_back(output.GetValue(0, output.size() - 1));
-		}
-	}
-
-	bool TryOneRemaining(DataChunk &keys, idx_t row, const vector<JoinCondition> &conditions, idx_t count,
-	                     bool &unknown) const {
-		idx_t remaining = DConstants::INVALID_INDEX;
-		bool has_null = false;
-		for (idx_t col = 0; col < conditions.size(); col++) {
-			const auto comparison = conditions[col].GetComparisonType();
-			if (keys.data[col].GetType().IsNested() || comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
-			    comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-				return false;
-			}
-			if (keys.data[col].GetValue(row).IsNull()) {
-				has_null = true;
-			} else if (remaining == DConstants::INVALID_INDEX) {
-				remaining = col;
-			} else {
-				return false;
-			}
-		}
-		if (!has_null) {
-			return false;
-		}
-		if (remaining == DConstants::INVALID_INDEX) {
-			unknown = count > 0;
-			return true;
-		}
-		const auto comparison = conditions[remaining].GetComparisonType();
-		if (comparison != ExpressionType::COMPARE_LESSTHAN && comparison != ExpressionType::COMPARE_LESSTHANOREQUALTO &&
-		    comparison != ExpressionType::COMPARE_GREATERTHAN &&
-		    comparison != ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
-			return false;
-		}
-		unknown = count && (remaining_null_counts[remaining] ||
-		                    Matches(keys.data[remaining].GetValue(row), remaining_bounds[remaining], comparison));
-		return true;
-	}
-
-	bool IsUnknown(DataChunk &keys, idx_t row, const vector<JoinCondition> &conditions, idx_t build_count) const {
-		if (!build_count) {
-			return false;
-		}
-		auto first = keys.GetValue(0, row);
-		auto second = keys.GetValue(1, row);
-		if (first.IsNull() && second.IsNull()) {
-			return true;
-		}
-		if (first.IsNull()) {
-			return has_null[1] || Matches(second, values[1], conditions[1].GetComparisonType());
-		}
-		if (second.IsNull()) {
-			return has_null[0] || Matches(first, values[0], conditions[0].GetComparisonType());
-		}
-		return both_null || Matches(first, other_null_values[0], conditions[0].GetComparisonType()) ||
-		       Matches(second, other_null_values[1], conditions[1].GetComparisonType());
-	}
-};
-
 class IEJoinLocalState;
 
 class IEJoinGlobalState : public GlobalSinkState {
@@ -372,8 +122,7 @@ public:
 	//! The two input tables (IEJoin materialises both sides)
 	vector<unique_ptr<GlobalSortedTable>> tables;
 	mutex mark_lock;
-	IEMarkJoinBounds mark_bounds;
-	map<std::pair<idx_t, idx_t>, IEMarkJoinBounds> mark_prefixes;
+	unique_ptr<MarkJoinRefinement> mark_refinement;
 	//! The child that is being materialised (right/1 then left/0)
 	size_t child;
 	//! Should we not bother pushing down filters?
@@ -395,7 +144,6 @@ public:
 
 	//! The local sort state
 	LocalSortedTable table;
-	IEMarkJoinBounds mark_bounds;
 	//! Local state for accumulating filter statistics
 	unique_ptr<JoinFilterLocalState> local_filter_state;
 };
@@ -413,10 +161,6 @@ unique_ptr<LocalSinkState> PhysicalIEJoin::GetLocalSinkState(ExecutionContext &c
 void IEJoinGlobalState::Sink(ExecutionContext &context, DataChunk &input, IEJoinLocalState &lstate) {
 	// Sink the data into the local sort state
 	lstate.table.Sink(context, input);
-	if (child == 1 && tables[1]->op.join_type == JoinType::MARK &&
-	    (tables[1]->op.conditions.size() > 2 || IEMarkJoinBounds::CanUse(tables[1]->op.conditions))) {
-		lstate.mark_bounds.Sink(lstate.table.keys, tables[1]->op.conditions);
-	}
 }
 
 SinkResultType PhysicalIEJoin::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
@@ -440,11 +184,7 @@ SinkCombineResultType PhysicalIEJoin::Combine(ExecutionContext &context, Operato
 	auto &gstate = input.global_state.Cast<IEJoinGlobalState>();
 	auto &lstate = input.local_state.Cast<IEJoinLocalState>();
 	gstate.tables[gstate.child]->Combine(context, lstate.table);
-	if (gstate.child == 1 && join_type == JoinType::MARK &&
-	    (conditions.size() > 2 || IEMarkJoinBounds::CanUse(conditions))) {
-		lock_guard<mutex> guard(gstate.mark_lock);
-		gstate.mark_bounds.Combine(lstate.mark_bounds, conditions);
-	}
+
 	auto &client_profiler = QueryProfiler::Get(context.client);
 
 	context.thread.profiler.Flush(*this);
@@ -1988,171 +1728,228 @@ void IEJoinLocalSourceState::ResolveMarkJoin(ExecutionContext &context, DataChun
 void IEJoinLocalSourceState::RefineMarkJoin(ExecutionContext &context, bool found_match[], bool found_unknown[],
                                             bool null_probe) {
 	auto &op = gsource.op;
-	auto &right_table = *gsource.gsink.tables[1];
-	const idx_t start = null_probe ? 0 : right_table.count - right_table.has_null;
-	if (start == right_table.count) {
+	auto &table = *gsource.gsink.tables[1];
+	const auto start = null_probe ? 0 : table.count - table.has_null;
+	if (start == table.count) {
 		return;
 	}
-
-	bool resolved[STANDARD_VECTOR_SIZE] = {false};
-	bool true_impossible[STANDARD_VECTOR_SIZE] = {false};
-	map<std::pair<idx_t, idx_t>, vector<idx_t>> prefix_probes;
-	idx_t remaining = 0;
-	for (idx_t probe = 0; probe < mark_keys.size(); probe++) {
-		resolved[probe] = found_match[probe];
-		if (resolved[probe]) {
-			continue;
-		}
-		if (null_probe && op.conditions.size() > 2 &&
-		    gsource.gsink.mark_bounds.TryOneRemaining(mark_keys, probe, op.conditions, right_table.count,
-		                                              found_unknown[probe])) {
-			resolved[probe] = true;
-			continue;
-		}
-		idx_t columns[2];
-		idx_t count = 0;
-		bool can_reduce = null_probe;
-		for (idx_t col = 0; col < op.conditions.size(); col++) {
-			const auto comparison = op.conditions[col].GetComparisonType();
-			if (mark_keys.data[col].GetType().IsNested() || comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
-			    comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-				can_reduce = false;
-				continue;
-			}
-			if (mark_keys.data[col].GetValue(probe).IsNull()) {
-				true_impossible[probe] = true;
-			} else if (count < 2 && (comparison == ExpressionType::COMPARE_LESSTHAN ||
-			                         comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
-			                         comparison == ExpressionType::COMPARE_GREATERTHAN ||
-			                         comparison == ExpressionType::COMPARE_GREATERTHANOREQUALTO)) {
-				columns[count++] = col;
-			} else {
-				can_reduce = false;
-			}
-		}
-		if (can_reduce && true_impossible[probe] && count == 2) {
-			prefix_probes[{columns[0], columns[1]}].push_back(probe);
-			resolved[probe] = true;
-		} else {
-			remaining++;
-		}
-	}
-
-	for (auto &group : prefix_probes) {
-		const auto first = group.first.first;
-		const auto second = group.first.second;
-		auto &bounds = [&]() -> IEMarkJoinBounds & {
-			lock_guard<mutex> guard(gsource.gsink.mark_lock);
-			auto &entry = gsource.gsink.mark_prefixes[group.first];
-			if (!entry.prefix) {
-				IEMarkJoinBounds built;
-				built.BuildPrefix(context, op, right_table, first, second);
-				entry = std::move(built);
-			}
-			return entry;
-		}();
-		const auto first_comparison = op.conditions[first].GetComparisonType();
-		const auto second_comparison = op.conditions[second].GetComparisonType();
-		ColumnDataParallelScanState scan;
-		ColumnDataLocalScanState local;
-		bounds.prefix->InitializeScan(scan);
-		DataChunk keys;
-		bounds.prefix->InitializeScanChunk(keys);
-		idx_t cached_chunk = DConstants::INVALID_INDEX;
-		for (const auto probe : group.second) {
-			context.client.InterruptCheck();
-			const auto a = mark_keys.data[first].GetValue(probe);
-			const auto b = mark_keys.data[second].GetValue(probe);
-			if (bounds.both_null || IEMarkJoinBounds::Matches(a, bounds.other_null_values[0], first_comparison) ||
-			    IEMarkJoinBounds::Matches(b, bounds.other_null_values[1], second_comparison)) {
-				found_unknown[probe] = true;
-				continue;
-			}
-			if (bounds.prefix_ends.empty()) {
-				continue;
-			}
-			idx_t lo = 0;
-			idx_t hi = bounds.prefix_ends.size();
-			while (lo < hi) {
-				const auto mid = lo + (hi - lo) / 2;
-				if (IEMarkJoinBounds::Matches(a, bounds.prefix_ends[mid], first_comparison)) {
-					lo = mid + 1;
-				} else {
-					hi = mid;
-				}
-			}
-			auto chunk = MinValue<idx_t>(lo, bounds.prefix_ends.size() - 1);
-			auto fetch = [&](idx_t index) {
-				if (index != cached_chunk) {
-					keys.Reset();
-					const auto &location = bounds.prefix_chunks[index];
-					bounds.prefix->ScanAtIndex(scan, local, keys, location[0], location[1], location[2]);
-					cached_chunk = index;
-				}
-			};
-			fetch(chunk);
-			lo = 0;
-			hi = keys.size();
-			while (lo < hi) {
-				const auto mid = lo + (hi - lo) / 2;
-				if (IEMarkJoinBounds::Matches(a, keys.GetValue(0, mid), first_comparison)) {
-					lo = mid + 1;
-				} else {
-					hi = mid;
-				}
-			}
-			if (!lo && chunk) {
-				fetch(chunk - 1);
-				lo = keys.size();
-			}
-			if (lo) {
-				found_unknown[probe] = IEMarkJoinBounds::Matches(b, keys.GetValue(1, lo - 1), second_comparison);
-			}
-		}
-	}
-
-	if (!remaining) {
-		return;
-	}
-	auto &source = *right_table.sorted->payload_data;
-	vector<column_t> key_columns;
+	auto &source = *table.sorted->payload_data;
+	vector<column_t> columns;
+	vector<LogicalType> types;
 	for (idx_t col = 0; col < op.conditions.size(); col++) {
-		key_columns.push_back(op.children[1].get().GetTypes().size() + col);
+		columns.push_back(op.children[1].get().GetTypes().size() + col);
+		types.push_back(op.conditions[col].GetRHS().GetReturnType());
 	}
 	TupleDataScanState scan;
-	source.InitializeScan(scan, key_columns);
+	source.InitializeScan(scan, columns);
 	DataChunk keys;
 	source.InitializeScanChunk(scan, keys);
-	auto offset = source.Seek(scan, start / STANDARD_VECTOR_SIZE);
-	Vector comparison(LogicalType::BOOLEAN);
-	while (remaining) {
-		keys.Reset();
-		if (!source.Scan(scan, keys)) {
-			break;
-		}
-		context.client.InterruptCheck();
-		const auto count = keys.size();
-		if (offset < start) {
-			keys.Slice(start - offset, count - (start - offset));
-		}
-		offset += count;
-		for (idx_t probe = 0; probe < mark_keys.size(); probe++) {
-			if (resolved[probe]) {
-				continue;
+	auto &state = [&]() -> MarkJoinRefinement & {
+		lock_guard<mutex> guard(gsource.gsink.mark_lock);
+		if (!gsource.gsink.mark_refinement) {
+			auto built = make_uniq<MarkJoinRefinement>();
+			idx_t offset = 0;
+			while (source.Scan(scan, keys)) {
+				context.client.InterruptCheck();
+				built->AddChunk(keys, built->chunks.size(), op.conditions);
+				built->chunks.push_back({offset, keys.size(), 0});
+				offset += keys.size();
+				keys.Reset();
 			}
-			MarkJoinRowComparison::CompareConjunction(mark_keys, probe, keys, op.conditions, comparison);
-			for (auto entry : comparison.Values<bool>()) {
-				if (!entry.IsValid()) {
-					found_unknown[probe] = true;
-					resolved[probe] = true_impossible[probe];
-				} else if (entry.GetValue()) {
-					found_match[probe] = true;
-					resolved[probe] = true;
+			gsource.gsink.mark_refinement = std::move(built);
+		}
+		return *gsource.gsink.mark_refinement;
+	}();
+	idx_t cached_chunk = DConstants::INVALID_INDEX;
+	auto fetch = [&](idx_t chunk) {
+		if (cached_chunk != chunk) {
+			source.Seek(scan, chunk);
+			keys.Reset();
+			source.Scan(scan, keys);
+			cached_chunk = chunk;
+		}
+	};
+	DataChunk candidates;
+	candidates.InitializeEmpty(types);
+	Vector comparison(LogicalType::BOOLEAN);
+	for (idx_t probe = 0; probe < mark_keys.size(); probe++) {
+		if (found_match[probe]) {
+			continue;
+		}
+		const auto probe_mask = MarkJoinRefinement::NullMask(mark_keys, probe, op.conditions);
+		for (auto &entry : state.groups) {
+			const auto dropped = probe_mask | entry.first;
+			auto &group = entry.second;
+			idx_t applicable = 0;
+			idx_t driving = DConstants::INVALID_INDEX;
+			if (op.conditions.size() <= 64) {
+				for (idx_t col = 0; col < op.conditions.size(); col++) {
+					if (dropped & (uint64_t(1) << col)) {
+						continue;
+					}
+					applicable++;
+					const auto cmp = op.conditions[col].GetComparisonType();
+					if (!types[col].IsNested() &&
+					    (cmp == ExpressionType::COMPARE_LESSTHAN || cmp == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
+					     cmp == ExpressionType::COMPARE_GREATERTHAN ||
+					     cmp == ExpressionType::COMPARE_GREATERTHANOREQUALTO)) {
+						if (driving == DConstants::INVALID_INDEX) {
+							driving = col;
+						}
+					}
 				}
-				if (resolved[probe]) {
-					remaining--;
-					break;
+			}
+			auto finish = [&]() {
+				MarkJoinRowComparison::CompareConjunction(mark_keys, probe, candidates, op.conditions, comparison);
+				for (auto value : comparison.Values<bool>()) {
+					if (!value.IsValid()) {
+						found_unknown[probe] = true;
+						if (dropped) {
+							return true;
+						}
+					} else if (value.GetValue()) {
+						found_match[probe] = true;
+						found_unknown[probe] = false;
+						return true;
+					}
 				}
+				return false;
+			};
+			auto witness = [&](idx_t id) {
+				fetch(id / STANDARD_VECTOR_SIZE);
+				SelectionVector selected(1);
+				selected.set_index(0, id % STANDARD_VECTOR_SIZE);
+				candidates.Reference(keys);
+				candidates.Slice(selected, 1);
+				return finish();
+			};
+			bool finished = false;
+			const bool reduce = op.conditions.size() <= 64 && (null_probe || entry.first);
+			if (reduce && applicable == 0) {
+				const auto &selection = *group.selections.begin();
+				finished = witness(selection.first * STANDARD_VECTOR_SIZE + selection.second[0]);
+			} else if (reduce && driving != DConstants::INVALID_INDEX) {
+				auto &index = [&]() -> MarkJoinRefinementIndex & {
+					lock_guard<mutex> guard(gsource.gsink.mark_lock);
+					auto &cached = group.indexes[dropped];
+					if (!cached) {
+						auto built = make_uniq<MarkJoinRefinementIndex>();
+						const auto cmp = op.conditions[driving].GetComparisonType();
+						const bool maximum =
+						    cmp == ExpressionType::COMPARE_LESSTHAN || cmp == ExpressionType::COMPARE_LESSTHANOREQUALTO;
+						if (applicable == 1) {
+							for (auto &selection : group.selections) {
+								context.client.InterruptCheck();
+								fetch(selection.first);
+								for (auto row : selection.second) {
+									auto value = keys.GetValue(driving, row);
+									if (built->bound.IsNull() ||
+									    (maximum ? ValueOperations::GreaterThan(value, built->bound)
+									             : ValueOperations::LessThan(value, built->bound))) {
+										built->bound = std::move(value);
+										built->witness = selection.first * STANDARD_VECTOR_SIZE + row;
+									}
+								}
+							}
+						} else {
+							vector<LogicalType> index_types {types[driving], LogicalType::UBIGINT};
+							vector<BoundOrderByNode> orders;
+							orders.emplace_back(maximum ? OrderType::DESCENDING : OrderType::ASCENDING,
+							                    OrderByNullType::NULLS_LAST,
+							                    make_uniq<BoundReferenceExpression>(types[driving], 0));
+							Sort sort(context.client, orders, index_types, {0, 1});
+							auto global = sort.GetGlobalSinkState(context.client);
+							auto local = sort.GetLocalSinkState(context);
+							InterruptState interrupt;
+							OperatorSinkInput input {*global, *local, interrupt};
+							DataChunk chunk;
+							chunk.Initialize(context.client, index_types);
+							for (auto &selection : group.selections) {
+								context.client.InterruptCheck();
+								fetch(selection.first);
+								chunk.Reset();
+								for (auto row : selection.second) {
+									chunk.data[0].Append(keys.GetValue(driving, row));
+									chunk.data[1].Append(Value::UBIGINT(selection.first * STANDARD_VECTOR_SIZE + row));
+								}
+								chunk.SetChildCardinality(selection.second.size());
+								sort.Sink(context, chunk, input);
+							}
+							OperatorSinkCombineInput combine {*global, *local, interrupt};
+							sort.Combine(context, combine);
+							OperatorSinkFinalizeInput finalize {*global, interrupt};
+							sort.Finalize(context.client, finalize);
+							auto global_source = sort.GetGlobalSourceState(context.client, *global);
+							auto local_source = sort.GetLocalSourceState(context, *global_source);
+							OperatorSourceInput output {*global_source, *local_source, interrupt};
+							while (sort.MaterializeColumnData(context, output) != SourceResultType::FINISHED) {
+								context.client.InterruptCheck();
+							}
+							built->prefix = sort.GetColumnData(output);
+						}
+						cached = std::move(built);
+					}
+					return *cached;
+				}();
+				if (applicable == 1) {
+					finished = witness(index.witness);
+				} else {
+					ColumnDataScanState prefix_scan;
+					index.prefix->InitializeScan(prefix_scan);
+					DataChunk prefix;
+					index.prefix->InitializeScanChunk(prefix);
+					Vector eligible(LogicalType::BOOLEAN);
+					bool exhausted = false;
+					while (!finished && !exhausted && index.prefix->Scan(prefix_scan, prefix)) {
+						context.client.InterruptCheck();
+						MarkJoinRowComparison::Compare(mark_keys.data[driving], probe, prefix.data[0],
+						                               op.conditions[driving].GetComparisonType(), eligible);
+						auto matches = eligible.Values<bool>();
+						auto ids = prefix.data[1].Values<uint64_t>();
+						idx_t row = 0;
+						SelectionVector selected(STANDARD_VECTOR_SIZE);
+						while (row < prefix.size() && !finished) {
+							if (!matches[row].GetValue()) {
+								exhausted = true;
+								break;
+							}
+							const auto chunk = ids[row].GetValue() / STANDARD_VECTOR_SIZE;
+							idx_t count = 0;
+							do {
+								selected.set_index(count++, ids[row++].GetValue() % STANDARD_VECTOR_SIZE);
+							} while (row < prefix.size() && matches[row].GetValue() &&
+							         ids[row].GetValue() / STANDARD_VECTOR_SIZE == chunk);
+							fetch(chunk);
+							candidates.Reference(keys);
+							candidates.Slice(selected, count);
+							finished = finish();
+						}
+					}
+				}
+			} else {
+				for (auto &selection : group.selections) {
+					if (state.chunks[selection.first][0] + state.chunks[selection.first][1] <= start) {
+						continue;
+					}
+					context.client.InterruptCheck();
+					fetch(selection.first);
+					SelectionVector selected(STANDARD_VECTOR_SIZE);
+					idx_t count = 0;
+					for (auto row : selection.second) {
+						if (state.chunks[selection.first][0] + row >= start) {
+							selected.set_index(count++, row);
+						}
+					}
+					candidates.Reference(keys);
+					candidates.Slice(selected, count);
+					if (finish()) {
+						finished = true;
+						break;
+					}
+				}
+			}
+			if (finished) {
+				break;
 			}
 		}
 	}
@@ -2162,16 +1959,7 @@ void IEJoinLocalSourceState::ConstructMarkJoinResult(ExecutionContext &context, 
                                                      bool null_probe) {
 	ReferenceMarkKeys();
 	bool found_unknown[STANDARD_VECTOR_SIZE] = {false};
-	auto &op = gsource.op;
-	if (IEMarkJoinBounds::CanUse(op.conditions)) {
-		for (idx_t row = 0; row < mark_keys.size(); row++) {
-			found_unknown[row] =
-			    !found_match[row] &&
-			    gsource.gsink.mark_bounds.IsUnknown(mark_keys, row, op.conditions, gsource.gsink.tables[1]->count);
-		}
-	} else {
-		RefineMarkJoin(context, found_match, found_unknown, null_probe);
-	}
+	RefineMarkJoin(context, found_match, found_unknown, null_probe);
 	PhysicalJoin::ConstructMarkJoinResult(mark_keys, mark_payload, result, found_match, false, found_unknown);
 }
 
