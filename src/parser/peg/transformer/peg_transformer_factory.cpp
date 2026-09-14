@@ -1,6 +1,8 @@
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/common/enums/trigger_type.hpp"
 #include "duckdb/common/query_location.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/parser/sql_statement.hpp"
@@ -19,9 +21,6 @@ namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransformer &transformer,
                                                                    ParseResult &parse_result) {
-	if (transformer.options.debug_transformer_trampoline_style) {
-		return TransformStatementTrampoline(transformer, parse_result);
-	}
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto result = transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.GetResult());
@@ -31,30 +30,6 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransforme
 	}
 	result->has_anonymous_parameters = transformer.has_anonymous_parameters;
 	return result;
-}
-
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatementTrampoline(PEGTransformer &transformer,
-                                                                             ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto &choice_result = choice_pr.GetResult();
-
-	TransformStack stack(transformer);
-	auto result = stack.Execute<unique_ptr<SQLStatement>>(choice_result, GetTrampolineOps(choice_result));
-	if (!transformer.named_parameter_map.empty()) {
-		result->named_param_map = transformer.named_parameter_map;
-	}
-	result->has_anonymous_parameters = transformer.has_anonymous_parameters;
-	return result;
-}
-
-const TransformFrameOps &PEGTransformerFactory::GetTrampolineOps(const ParseResult &parse_result) {
-	auto &ops_map = GeneratedTrampolineOps();
-	auto ops_entry = ops_map.find(parse_result.name);
-	if (ops_entry == ops_map.end()) {
-		throw NotImplementedException("No trampoline transformer for rule '%s'", parse_result.name);
-	}
-	return *ops_entry->second;
 }
 
 static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &transformer,
@@ -82,7 +57,7 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(TokenIterator &token_iterator,
                                                                            ParserOptions &options,
-                                                                           const Matcher &root_matcher) {
+                                                                           const CompiledGrammar &grammar) {
 	if (!token_iterator.Current()) {
 		return nullptr;
 	}
@@ -90,9 +65,13 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	ParseResultAllocator parse_result_allocator;
 	ParserPackratCache packrat_cache;
 	idx_t max_token_index = token_iterator.Position();
-	MatchState state(token_iterator, suggestions, parse_result_allocator, max_token_index,
-	                 MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode, &packrat_cache);
-	auto match_result = root_matcher.MatchParseResult(state);
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext match_context(suggestions, parse_result_allocator, process_allocator, max_token_index,
+	                           MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode, options.heap_based_parser,
+	                           &packrat_cache);
+	MatchState state(token_iterator, match_context);
+	auto match_result = grammar.TopLevelStatementMatcher().MatchParseResult(state);
+	process_allocator.FreeAll();
 	if (!match_result.IsSuccess()) {
 		// syntax error — surface as a parser exception in the same shape as Transform()
 		auto token_stream = token_iterator.ToString();
@@ -136,7 +115,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	}
 
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
-	PEGTransformer transformer(transformer_allocator, token_iterator, options);
+	PEGTransformer transformer(transformer_allocator, token_iterator, options, grammar);
 
 	return ExtractAndTransformStatement(transformer, token_iterator, stmt_opt.GetResult(), terminator_offset);
 }
@@ -199,6 +178,14 @@ PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar
 	RegisterPivot();
 	RegisterSelect();
 	RegisterKeywordsAndIdentifiers();
+	for (auto &entry : GeneratedTransformFrameOps()) {
+		auto process_info = entry.second;
+		grammar.SetTransformProcess(
+		    entry.first,
+		    [process_info](PEGTransformer &transformer, ParseResult &parse_result) -> unique_ptr<TransformProcess> {
+			    return make_uniq<GeneratedTransformProcess>(transformer, TransformInput {parse_result}, *process_info);
+		    });
+	}
 }
 
 void PEGTransformerFactory::RegisterDefaultTransforms(ParsedGrammar &grammar) {
@@ -251,6 +238,33 @@ QualifiedName PEGTransformerFactory::StringToQualifiedName(vector<string> input)
 	} else {
 		throw ParserException("Too many qualifications found - expected [catalog.schema.name] or [schema.name]");
 	}
+}
+
+QualifiedColumnName PEGTransformerFactory::StringToQualifiedColumnName(const vector<string> &input) {
+	if (input.empty()) {
+		throw InternalException("QualifiedColumnName cannot be made with an empty input.");
+	}
+	auto identifiers = StringsToIdentifiers(input);
+	if (identifiers.size() == 1) {
+		return QualifiedColumnName(std::move(identifiers[0]));
+	} else if (identifiers.size() == 2) {
+		return QualifiedColumnName(std::move(identifiers[0]), std::move(identifiers[1]));
+	} else if (identifiers.size() == 3) {
+		QualifiedColumnName result;
+		result.schema = std::move(identifiers[0]);
+		result.table = std::move(identifiers[1]);
+		result.column = std::move(identifiers[2]);
+		return result;
+	} else if (identifiers.size() == 4) {
+		QualifiedColumnName result;
+		result.catalog = std::move(identifiers[0]);
+		result.schema = std::move(identifiers[1]);
+		result.table = std::move(identifiers[2]);
+		result.column = std::move(identifiers[3]);
+		return result;
+	}
+	throw ParserException("Expected at most 4 entries (catalog.schema.table.column), but found %zu entries (input: %s)",
+	                      input.size(), StringUtil::Join(input, "."));
 }
 
 LogicalType PEGTransformerFactory::GetIntervalTargetType(DatePartSpecifier date_part) {

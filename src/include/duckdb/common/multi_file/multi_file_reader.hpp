@@ -100,6 +100,8 @@ public:
 	static constexpr int32_t ROW_ID_FIELD_ID = 2147483540;
 	// Reserved field id used for the "_last_updated_sequence_number" field according to the iceberg spec
 	static constexpr int32_t LAST_UPDATED_SEQUENCE_NUMBER_ID = 2147483539;
+	//! The field of a file STRUCT that holds the path of the file - all other fields are open options
+	static constexpr const char *FILE_PATH_FIELD = "filename";
 
 public:
 	virtual ~MultiFileReader();
@@ -117,13 +119,21 @@ public:
 	//! Creates a table function set from a single reader function (including e.g. list parameters, etc)
 	DUCKDB_API static TableFunctionSet CreateFunctionSet(TableFunction table_function);
 
-	//! Parse a Value containing 1 or more paths into a vector of paths. Note: no expansion is performed here
-	DUCKDB_API virtual vector<string> ParsePaths(const Value &input);
+	//! Parse a Value containing 1 or more files into a vector of files. A file is specified either as a path
+	//! (VARCHAR) or as a STRUCT/VARIANT holding the path together with the options to open the file with
+	DUCKDB_API virtual vector<OpenFileInfo> ParseFileList(const Value &input);
+	//! Parse a single entry of a file list - see ParseFileList
+	DUCKDB_API OpenFileInfo ParseFileEntry(const Value &input);
 	//! Create a MultiFileList from a vector of paths. Any globs will be expanded using the default filesystem
 	DUCKDB_API virtual shared_ptr<MultiFileList>
 	CreateFileList(ClientContext &context, const vector<string> &paths,
 	               const FileGlobInput &glob_input = FileGlobOptions::DISALLOW_EMPTY);
-	//! Shorthand for ParsePaths + CreateFileList
+	//! Create a MultiFileList from a vector of files. Files that carry explicit open options are used as-is,
+	//! any other paths are expanded using the default filesystem
+	DUCKDB_API virtual shared_ptr<MultiFileList>
+	CreateFileList(ClientContext &context, vector<OpenFileInfo> files,
+	               const FileGlobInput &glob_input = FileGlobOptions::DISALLOW_EMPTY);
+	//! Shorthand for ParseFileList + CreateFileList
 	DUCKDB_API shared_ptr<MultiFileList>
 	CreateFileList(ClientContext &context, const Value &input,
 	               const FileGlobInput &glob_input = FileGlobOptions::DISALLOW_EMPTY);

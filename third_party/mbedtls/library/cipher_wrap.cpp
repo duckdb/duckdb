@@ -2460,13 +2460,13 @@ const mbedtls_cipher_base_t * const mbedtls_cipher_base_lookup_table[] = {
     /* [MBEDTLS_CIPHER_BASE_INDEX_DES] = */ &des_info,
 #endif
 #if defined(MBEDTLS_CIPHER_HAVE_GCM_AES_VIA_LEGACY_OR_USE_PSA)
-    /* [MBEDTLS_CIPHER_BASE_INDEX_GCM_AES] =  */ &gcm_aes_info,
+    /* [MBEDTLS_CIPHER_BASE_INDEX_GCM_AES] = */ &gcm_aes_info,
 #endif
 #if defined(MBEDTLS_GCM_C) && defined(MBEDTLS_ARIA_C)
     /* [MBEDTLS_CIPHER_BASE_INDEX_GCM_ARIA] = */ &gcm_aria_info,
 #endif
 #if defined(MBEDTLS_GCM_C) && defined(MBEDTLS_CAMELLIA_C)
-    /* [MBEDTLS_CIPHER_BASE_INDEX_GCM_CAMELLIA] =*/  &gcm_camellia_info,
+    /* [MBEDTLS_CIPHER_BASE_INDEX_GCM_CAMELLIA] = */ &gcm_camellia_info,
 #endif
 #if defined(MBEDTLS_NIST_KW_C)
     /* [MBEDTLS_CIPHER_BASE_INDEX_KW_AES] = */ &kw_aes_info,

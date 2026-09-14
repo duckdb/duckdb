@@ -2,53 +2,39 @@
 
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/optional.hpp"
+#include "duckdb/common/queue.hpp"
 #include "duckdb/parser/peg/matcher/list.hpp"
 
 namespace duckdb {
 struct CompiledGrammar;
+struct PEGExpression;
 
 class MatcherFactory;
 
 //! Class for building matchers
 class MatcherFactory {
 private:
-	struct MatcherList {
-	public:
-		struct Entry {
-			explicit Entry(Matcher &matcher) : matcher(matcher), function_name() {
-			}
-			Entry(Matcher &matcher, string_t function_name_p) : matcher(matcher), function_name(function_name_p) {
-			}
-
-			Matcher &matcher;
-			//! Left empty for non-function entries
-			optional<string_t> function_name;
-		};
-
-	public:
-		explicit MatcherList(MatcherFactory &factory);
-		void AddMatcher(Matcher &matcher);
-		void AddRootMatcher(Matcher &matcher);
-		idx_t GetRootMatcherCount() const;
-		void BeginFunction(string_t function_name);
-		void CloseBracket();
-		MatcherList::Entry &GetLastRootMatcher();
+	struct MatcherConstructionState {
+		void Register(string_t rule_name);
+		void Schedule(string_t rule_name);
+		bool Begin(string_t rule_name);
+		bool HasScheduled() const;
+		string_t TakeNext();
 
 	private:
-		MatcherFactory &factory;
-		vector<MatcherList::Entry> matchers;
+		string_set_t unconstructed;
+		string_set_t scheduled;
+		queue<string_t> pending;
 	};
 
 public:
-	MatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar_p, CompiledGrammar &compiled_p);
+	MatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar_p, CompiledGrammar &compiled_p,
+	               terminal_rule_overrides_t terminal_rule_overrides_p);
 	virtual ~MatcherFactory() = default;
 
 public:
-	//! Create a matcher from a PEG grammar
-	Matcher &CreateMatcher(string_t root_rule);
 	Matcher &CreateRootMatcher(const string &root_rule);
-	//! Look up a matcher for a rule that was already built (as a sub-rule of a previous
-	//! CreateMatcher call). Throws if the rule has not been built.
+	//! Look up a matcher for a rule that was built by CreateRootMatcher. Throws if the rule has not been built.
 	Matcher &GetMatcher(const string &rule_name);
 
 private:
@@ -66,17 +52,25 @@ private:
 	virtual unique_ptr<OptionalMatcher> CreateOptional(Matcher &matcher) const;
 	virtual unique_ptr<RepeatMatcher> CreateRepeat(Matcher &matcher) const;
 
+	void SetRuleOverrides();
+
 	void AddKeywordOverride(const char *name, KeywordInfo keyword_info);
-	void AddRuleOverride(const char *name, Matcher &matcher);
+	void AddRuleOverride(const char *name, unique_ptr<Matcher> &&matcher_p);
 	void AddPackratMemoizedRule(const char *name);
 	void SuppressSuggestions(const char *name);
+	Matcher &CreateMatcher(string_t rule_name);
 	Matcher &CreateMatcher(string_t rule_name, vector<reference<Matcher>> &parameters);
+	Matcher &CreateMatcher(const PEGExpression &expression, const string_map_t<idx_t> &parameter_map,
+	                       vector<reference<Matcher>> &parameters);
 
 private:
 	MatcherAllocator &allocator;
 	const ParsedGrammar &grammar;
 	CompiledGrammar &compiled;
+	//! Keeps terminal rule names alive while the matcher graph is constructed.
+	terminal_rule_overrides_t terminal_rule_overrides;
 	string_map_t<reference<Matcher>> matchers;
+	MatcherConstructionState construction_state;
 	mutable case_insensitive_map_t<reference<KeywordMatcher>> keywords;
 	case_insensitive_map_t<KeywordInfo> keyword_overrides;
 	string_set_t no_suggestion_rules;

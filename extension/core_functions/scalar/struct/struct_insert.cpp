@@ -3,7 +3,6 @@
 #include "core_functions/scalar/struct_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
@@ -74,6 +73,7 @@ static unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, Func
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	auto new_stats = StructStats::CreateUnknown(expr.GetReturnType());
+	new_stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 
 	auto existing_count = StructType::GetChildCount(child_stats[0].GetType());
 	auto existing_stats = StructStats::GetChildStats(child_stats[0]);

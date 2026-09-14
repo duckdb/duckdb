@@ -4,8 +4,13 @@ add_definitions(-DDUCKDB_ROOT_DIRECTORY="${PROJECT_SOURCE_DIR}"
                 -DDUCKDB_BUILD_DIRECTORY="${PROJECT_BINARY_DIR}")
 
 set(SQLITE_TEST_RUNNER_SOURCES
-    result_helper.cpp sqllogic_command.cpp sqllogic_test_runner.cpp
-    sqllogic_parser.cpp test_sqllogictest.cpp sqllogic_test_logger.cpp)
+    result_helper.cpp
+    sqllogic_command.cpp
+    sqllogic_test_runner.cpp
+    sqllogic_parser.cpp
+    test_sqllogictest.cpp
+    sqllogic_test_logger.cpp
+    catch_test_reporter.cpp)
 
 add_library_unity(test_sqlite OBJECT ${SQLITE_TEST_RUNNER_SOURCES})
 set(UNITTEST_OBJECT_FILES

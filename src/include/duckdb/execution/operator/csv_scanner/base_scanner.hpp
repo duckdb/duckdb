@@ -13,6 +13,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/swar.hpp"
 
 namespace duckdb {
 
@@ -183,10 +184,6 @@ public:
 	static CSVIterator SkipCSVRows(shared_ptr<CSVBufferManager> buffer_manager,
 	                               const shared_ptr<CSVStateMachine> &state_machine, idx_t rows_to_skip);
 
-	inline static bool ContainsZeroByte(uint64_t v) {
-		return (v - UINT64_C(0x0101010101010101)) & ~(v)&UINT64_C(0x8080808080808080);
-	}
-
 protected:
 	//! Boundaries of this scanner
 	CSVIterator iterator;
@@ -319,8 +316,8 @@ protected:
 				while (iterator.pos.buffer_pos + 8 < to_pos) {
 					const uint64_t value =
 					    Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[iterator.pos.buffer_pos]));
-					if (ContainsZeroByte((value ^ state_machine->transition_array.quote) &
-					                     (value ^ state_machine->transition_array.escape))) {
+					if (SwarWord::MaybeZeroBytes((value ^ state_machine->transition_array.quote) &
+					                             (value ^ state_machine->transition_array.escape))) {
 						break;
 					}
 					iterator.pos.buffer_pos += 8;
@@ -356,11 +353,11 @@ protected:
 				while (iterator.pos.buffer_pos + 8 < to_pos) {
 					uint64_t value =
 					    Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[iterator.pos.buffer_pos]));
-					if (ContainsZeroByte((value ^ state_machine->transition_array.delimiter) &
-					                     (value ^ state_machine->transition_array.new_line) &
-					                     (value ^ state_machine->transition_array.carriage_return) &
-					                     (value ^ state_machine->transition_array.escape) &
-					                     (value ^ state_machine->transition_array.comment))) {
+					if (SwarWord::MaybeZeroBytes((value ^ state_machine->transition_array.delimiter) &
+					                             (value ^ state_machine->transition_array.new_line) &
+					                             (value ^ state_machine->transition_array.carriage_return) &
+					                             (value ^ state_machine->transition_array.escape) &
+					                             (value ^ state_machine->transition_array.comment))) {
 						break;
 					}
 					iterator.pos.buffer_pos += 8;
@@ -382,8 +379,8 @@ protected:
 				while (iterator.pos.buffer_pos + 8 < to_pos) {
 					const uint64_t value =
 					    Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[iterator.pos.buffer_pos]));
-					if (ContainsZeroByte((value ^ state_machine->transition_array.new_line) &
-					                     (value ^ state_machine->transition_array.carriage_return))) {
+					if (SwarWord::MaybeZeroBytes((value ^ state_machine->transition_array.new_line) &
+					                             (value ^ state_machine->transition_array.carriage_return))) {
 						break;
 					}
 					iterator.pos.buffer_pos += 8;

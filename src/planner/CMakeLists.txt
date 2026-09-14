@@ -13,6 +13,8 @@ add_library_unity(
   bound_parameter_map.cpp
   collation_binding.cpp
   column_binding.cpp
+  logical_plan_verification_result.cpp
+  logical_plan_verifier.cpp
   column_qualifier.cpp
   expression_iterator.cpp
   expression.cpp

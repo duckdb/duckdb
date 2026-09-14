@@ -242,10 +242,15 @@ void InterpretedBenchmark::ProcessFile(const string &path) {
 				ThrowResultModeError(reader);
 			}
 			if (splits[1] == "streaming") {
-				if (splits.size() != 2) {
+				if (splits.size() > 3) {
 					throw std::runtime_error(
-					    reader.FormatException("resultmode 'streaming' does not accept a parameter"));
+					    reader.FormatException("resultmode 'streaming' accepts one optional drain mode"));
 				}
+				if (splits.size() == 3 && splits[2] != "drop" && splits[2] != "materialize") {
+					throw std::runtime_error(
+					    reader.FormatException("resultmode 'streaming' drain mode must be 'materialize' or 'drop'"));
+				}
+				discard_stream_result = splits.size() == 3 && splits[2] == "drop";
 				result_type = QueryResultType::STREAM_RESULT;
 			} else if (splits[1] == "arrow") {
 				arrow_batch_size = STANDARD_VECTOR_SIZE;
@@ -496,6 +501,10 @@ void InterpretedBenchmark::LoadBenchmark() {
 		throw InvalidInputException("Invalid benchmark file: no \"run\" query specified");
 	}
 	run_query = queries["run"];
+	if (discard_stream_result && !result_queries.empty()) {
+		throw InvalidInputException(
+		    "Invalid benchmark file: resultmode 'streaming drop' discards the result and cannot verify it");
+	}
 	is_loaded = true;
 }
 
@@ -690,7 +699,19 @@ void InterpretedBenchmark::Run(BenchmarkState *state_p) {
 	}
 	if (temp_result->GetResultType() == QueryResultType::STREAM_RESULT) {
 		auto &stream_query = temp_result->Cast<StreamQueryResult>();
-		state.result = stream_query.Materialize();
+		if (discard_stream_result) {
+			// Fetching from a result that already carries an error throws instead of returning nullptr
+			while (!stream_query.HasError()) {
+				auto chunk = stream_query.Fetch();
+				if (!chunk || chunk->size() == 0) {
+					break;
+				}
+			}
+			state.result =
+			    stream_query.HasError() ? make_uniq<MaterializedQueryResult>(stream_query.GetErrorObject()) : nullptr;
+		} else {
+			state.result = stream_query.Materialize();
+		}
 	} else if (temp_result->GetResultType() == QueryResultType::ARROW_RESULT) {
 		/* no-op, this is only used to test the overhead of the result collector */
 		state.result = nullptr;

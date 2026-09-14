@@ -88,6 +88,33 @@ void RemapChildVectors(const Vector &result, const vector<reference<Vector>> &in
 	}
 }
 
+//! Copy the list_entry_t values from the input vector into the result, preserving top-level validity
+//! Returns false if the input is a constant NULL - in that case the result is set to a constant NULL
+bool CopyListEntries(Vector &input, Vector &result, idx_t result_size) {
+	bool is_constant = input.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	if (is_constant && ConstantVector::IsNull(input)) {
+		ConstantVector::SetNull(result, count_t(result_size));
+		return false;
+	}
+	auto writer = FlatVector::Writer<list_entry_t>(result, result_size);
+	if (is_constant) {
+		// broadcast the single list entry over all result rows
+		auto list_entry = *ConstantVector::GetData<list_entry_t>(input);
+		for (idx_t i = 0; i < result_size; i++) {
+			writer.WriteValue(list_entry);
+		}
+		return true;
+	}
+	for (const auto entry : input.Values<list_entry_t>()) {
+		if (entry.IsValid()) {
+			writer.WriteValue(entry.GetValueUnsafe());
+		} else {
+			writer.WriteNull();
+		}
+	}
+	return true;
+}
+
 void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t result_size,
               const vector<RemapColumnInfo> &remap_info) {
 	auto &input_key_vector = MapVector::GetKeys(input);
@@ -100,23 +127,8 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 	ListVector::SetListSize(result, list_size);
 
 	// copy over the list_entry_t values from the input vector, preserving top-level validity
-	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		if (ConstantVector::IsNull(input)) {
-			ConstantVector::SetNull(result, count_t(result_size));
-			return;
-		}
-		auto list_data = ConstantVector::GetData<list_entry_t>(input);
-		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
-		memcpy(result_list_data, list_data, sizeof(list_entry_t));
-	} else {
-		auto writer = FlatVector::Writer<list_entry_t>(result, result_size);
-		for (const auto entry : input.Values<list_entry_t>()) {
-			if (entry.IsValid()) {
-				writer.WriteValue(entry.GetValueUnsafe());
-			} else {
-				writer.WriteNull();
-			}
-		}
+	if (!CopyListEntries(input, result, result_size)) {
+		return;
 	}
 	// set up the correct vector references
 	D_ASSERT(remap_info.size() == 2);
@@ -142,23 +154,8 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 	ListVector::SetListSize(result, list_size);
 
 	// copy over the list_entry_t values from the input vector, preserving top-level validity
-	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		if (ConstantVector::IsNull(input)) {
-			ConstantVector::SetNull(result, count_t(result_size));
-			return;
-		}
-		auto list_data = ConstantVector::GetData<list_entry_t>(input);
-		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
-		memcpy(result_list_data, list_data, sizeof(list_entry_t));
-	} else {
-		auto writer = FlatVector::Writer<list_entry_t>(result, result_size);
-		for (const auto entry : input.Values<list_entry_t>()) {
-			if (entry.IsValid()) {
-				writer.WriteValue(entry.GetValueUnsafe());
-			} else {
-				writer.WriteNull();
-			}
-		}
+	if (!CopyListEntries(input, result, result_size)) {
+		return;
 	}
 
 	//! Build up the input for remapping the child of the list

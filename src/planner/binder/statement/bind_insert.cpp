@@ -255,7 +255,7 @@ unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, Inse
 	if (insert.columns.empty()) {
 		for (auto &column : column_list.Physical()) {
 			// FIXME: can these column names be aliased somehow?
-			if (conflict_columns.count(column.Oid())) {
+			if (conflict_columns.count(column.Physical().index)) {
 				continue;
 			}
 			columns.emplace_back(column.Name());
@@ -264,7 +264,7 @@ unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, Inse
 		// a list of columns was explicitly supplied, only update those
 		for (auto &name : insert.columns) {
 			auto &column = column_list.GetColumn(name);
-			if (conflict_columns.count(column.Oid())) {
+			if (conflict_columns.count(column.Physical().index)) {
 				continue;
 			}
 			columns.push_back(name);

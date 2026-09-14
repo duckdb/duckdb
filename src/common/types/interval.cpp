@@ -10,6 +10,7 @@
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 
@@ -169,11 +170,10 @@ interval_parse_time : {
 	if (!Time::TryConvertInterval(str + start_pos, len - start_pos, pos, time)) {
 		return false;
 	}
-	result.micros += time.value;
-	found_any = true;
-	if (negative) {
-		result.micros = -result.micros;
+	if (!IntervalTryAddition<int64_t>(result.micros, negative ? -time.value : time.value, 1, error_message)) {
+		return false;
 	}
+	found_any = true;
 	goto end_of_string;
 }
 interval_parse_identifier:
@@ -352,8 +352,10 @@ interval_parse_ago:
 		}
 	}
 	// invert all the values
-	if (result.months == NumericLimits<int32_t>::Minimum() || result.days == NumericLimits<int32_t>::Minimum()) {
-		throw OutOfRangeException("AGO interval value is out of range");
+	if (result.months == NumericLimits<int32_t>::Minimum() || result.days == NumericLimits<int32_t>::Minimum() ||
+	    result.micros == NumericLimits<int64_t>::Minimum()) {
+		AssignOutOfRangeErrorOrThrow("AGO interval value is out of range", error_message);
+		return false;
 	}
 
 	result.months = -result.months;
@@ -546,6 +548,15 @@ interval_t Interval::FromMicro(int64_t delta_us) {
 }
 
 interval_t Interval::Invert(interval_t interval) {
+	if (interval.days == NumericLimits<int32_t>::Minimum()) {
+		throw OutOfRangeException("Interval days value out of range");
+	}
+	if (interval.micros == NumericLimits<int64_t>::Minimum()) {
+		throw OutOfRangeException("Interval micros value out of range");
+	}
+	if (interval.months == NumericLimits<int32_t>::Minimum()) {
+		throw OutOfRangeException("Interval months value out of range");
+	}
 	interval.days = -interval.days;
 	interval.micros = -interval.micros;
 	interval.months = -interval.months;

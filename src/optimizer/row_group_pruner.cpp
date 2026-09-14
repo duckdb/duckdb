@@ -143,6 +143,15 @@ optional_ptr<LogicalGet> RowGroupPruner::FindLogicalGet(const LogicalOrder &logi
 	}
 
 	D_ASSERT(pushdown_targets.size() == 1);
+	auto &pushed_column = pushdown_targets[0].columns[0];
+	if (pushed_column.mode != JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION ||
+	    RuntimeFilterCastUtil::RuntimeFilterUsesTryCast(pushed_column)) {
+		// the sort key reaches the scan through a cast chain that does not preserve the raw column's
+		// ordering (an explicit TRY_CAST, or a cast that can throw) - ordering row groups by the raw
+		// column statistics would be incorrect - bail out
+		return nullptr;
+	}
+
 	auto &logical_get = pushdown_targets.front().get;
 
 	if (!logical_get.function.set_scan_order) {

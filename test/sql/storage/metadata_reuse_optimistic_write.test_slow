@@ -1,0 +1,82 @@
+# name: test/sql/storage/metadata_reuse_optimistic_write.test_slow
+# description: A concurrent optimistic writer must not claim a block the durable header still needs
+# group: [storage]
+
+# WriteHeader frees this checkpoint's blocks into free_list before the new header is durable, so an
+# optimistic write (a row group flush, which allocates during execution rather than at commit) can
+# claim one and overwrite a block the header on disk still points at. Aborting before the header
+# write leaves that state on disk.
+
+load __TEST_DIR__/metadata_reuse_optimistic.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+SET wal_autocheckpoint='128KB';
+
+statement ok
+CREATE TABLE base AS SELECT i, hash(i * 40503)::VARCHAR AS s FROM range(20000) t(i);
+
+statement ok
+CREATE TABLE sink(i BIGINT, s VARCHAR);
+
+# A big catalog makes the metadata flush, and so the window, longer.
+loop i 0 6000
+
+statement ok
+CREATE OR REPLACE VIEW v${i} AS SELECT i, s FROM base WHERE i % 7 = ${i} % 7;
+
+endloop
+
+statement ok
+CHECKPOINT;
+
+# Shrink the catalog so metadata blocks are fully freed.
+loop i 0 1500
+
+statement ok
+DROP VIEW v${i};
+
+endloop
+
+# The abort is one-shot, so hold checkpoints off until the writers are mid-flight.
+statement ok
+SET GLOBAL wal_autocheckpoint='1TB';
+
+statement ok
+SET GLOBAL debug_checkpoint_abort='after_free_list_write';
+
+concurrentloop threadid 0 8
+
+# Thread 0 frees metadata, and doubles as the delay before checkpoints resume.
+loop j 1500 1800
+
+onlyif threadid=0
+statement maybe
+DROP VIEW IF EXISTS v${j};
+----
+
+endloop
+
+onlyif threadid=0
+statement maybe
+SET GLOBAL wal_autocheckpoint='128KB';
+----
+
+# Past a row group (~122880 rows), so these flush mid-statement.
+loop k 0 20
+
+onlyif threadid<>0
+statement maybe
+INSERT INTO sink SELECT i, hash(i * ${threadid} + ${k})::VARCHAR FROM range(${k} * 300000, ${k} * 300000 + 300000) t(i);
+----
+
+endloop
+
+endloop
+
+restart
+
+statement ok
+SELECT count(*) FROM sink;

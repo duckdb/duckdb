@@ -243,6 +243,13 @@ static unique_ptr<TableFilter> SerializeInternalFunctionToLegacyFilter(const Bou
 		if (!func_expr.BindInfo()) {
 			return make_uniq<LegacyDynamicFilter>();
 		}
+		if (func_expr.GetChildren().size() != 1 ||
+		    func_expr.GetChildren()[0]->GetExpressionType() != ExpressionType::BOUND_REF) {
+			// the dynamic filter is evaluated on top of a reconstructed expression (e.g. a cast chain
+			// over the raw scan column) - the legacy format cannot represent this, so drop the filter
+			// (the optional wrapper degrades to a no-op)
+			return nullptr;
+		}
 		auto &data = func_expr.BindInfo()->Cast<DynamicFilterFunctionData>();
 		return make_uniq<LegacyDynamicFilter>(data.filter_data);
 	}

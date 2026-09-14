@@ -38,25 +38,42 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 		return std::move(result);
 	}
 	auto &add_column = alter_table.Cast<AddColumnInfo>();
-	if (!add_column.new_column.HasDefaultValue()) {
-		return std::move(result);
-	}
 	auto &column_entry = add_column.new_column;
-	if (IsSimpleDefaultValue(column_entry.DefaultValue())) {
+	const bool add_not_null = add_column.add_not_null;
+	const bool materialize_default =
+	    column_entry.HasDefaultValue() && !IsSimpleDefaultValue(column_entry.DefaultValue());
+	if (!add_not_null && !materialize_default) {
 		return std::move(result);
 	}
+
 	if (add_column.if_column_not_exists) {
+		if (add_not_null) {
+			throw NotImplementedException("Adding a NOT NULL column with IF NOT EXISTS is not supported");
+		}
 		// IF NOT EXISTS is not supported by the multi-statement rewrite - keep the plain ALTER
 		return std::move(result);
 	}
-	auto null_column = column_entry.Copy();
-	null_column.SetDefaultValue(make_uniq<ConstantExpression>(ConstantExpression(Value(nullptr))));
+
 	auto alter_entry_data = add_column.GetAlterEntryData();
-	return unique_ptr<SQLStatement>(std::move(
-	    TransformAndMaterializeAlter(alter_entry_data,
-	                                 make_uniq<AddColumnInfo>(add_column.GetAlterEntryData(), std::move(null_column),
-	                                                          add_column.if_column_not_exists),
-	                                 column_entry.GetName().GetIdentifierName(), column_entry.DefaultValue().Copy())));
+	auto column_name = column_entry.GetName();
+	unique_ptr<MultiStatement> multi_statement;
+	if (materialize_default) {
+		auto null_column = column_entry.Copy();
+		null_column.SetDefaultValue(make_uniq<ConstantExpression>(ConstantExpression(Value(nullptr))));
+		multi_statement = TransformAndMaterializeAlter(
+		    alter_entry_data,
+		    make_uniq<AddColumnInfo>(add_column.GetAlterEntryData(), std::move(null_column),
+		                             add_column.if_column_not_exists, /*add_not_null=*/false),
+		    column_name.GetIdentifierName(), column_entry.DefaultValue().Copy());
+	} else {
+		multi_statement = make_uniq<MultiStatement>();
+		add_column.add_not_null = false;
+		AddToMultiStatement(multi_statement, std::move(result->info));
+	}
+	if (add_not_null) {
+		AddToMultiStatement(multi_statement, make_uniq<SetNotNullInfo>(alter_entry_data, column_name));
+	}
+	return std::move(multi_statement);
 }
 
 unique_ptr<AlterInfo>
@@ -231,8 +248,12 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransfor
 	auto if_not_exists_value = if_not_exists.has_value();
 
 	if (add_column_entry.column_path.size() == 1) {
-		result = make_uniq<AddColumnInfo>(AlterEntryData(), std::move(column_definition), if_not_exists_value);
+		result = make_uniq<AddColumnInfo>(AlterEntryData(), std::move(column_definition), if_not_exists_value,
+		                                  add_column_entry.is_not_null);
 	} else {
+		if (add_column_entry.is_not_null) {
+			throw NotImplementedException("Adding NOT NULL constraints to nested fields is not supported");
+		}
 		const auto parent_path =
 		    vector<Identifier>(add_column_entry.column_path.begin(), add_column_entry.column_path.end() - 1);
 		result =
@@ -265,6 +286,9 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(
 					throw ParserException("Cannot define a default value twice");
 				}
 				new_column.default_value = std::move(constraint.expression);
+			} else if (constraint.constraint_name == "NotNullConstraint" &&
+			           constraint.constraint_type_info.second == ConstraintType::NOT_NULL) {
+				new_column.is_not_null = true;
 			}
 		}
 	}
@@ -285,6 +309,13 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformDropColumn(
 	auto result = make_uniq<RemoveFieldInfo>(AlterEntryData(), nested_column_name->ColumnNames(), if_exists_value,
 	                                         drop_behavior_value);
 	return std::move(result);
+}
+
+unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformDropConstraint(PEGTransformer &transformer,
+                                                                          const optional<bool> &if_exists,
+                                                                          const Identifier &identifier,
+                                                                          const optional<bool> &drop_behavior) {
+	throw NotImplementedException("No support for that ALTER TABLE option yet!");
 }
 
 unique_ptr<AlterTableInfo>

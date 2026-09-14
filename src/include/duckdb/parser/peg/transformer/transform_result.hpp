@@ -19,43 +19,32 @@ const char *TransformResultTypeName() {
 #endif
 }
 
-struct TransformResultValue {
+struct DUCKDB_API TransformResultValue {
 	virtual ~TransformResultValue() = default;
 
-	//! Identifies the concrete TypedTransformResult<T> without relying on RTTI
-	virtual const char *TypeTag() const = 0;
+	//! Returns a pointer to the value if its type matches, without relying on RTTI
+	virtual void *GetValuePointer(const char *type_name) = 0;
 };
 
 template <class T>
-struct TypedTransformResult : public TransformResultValue {
+struct DUCKDB_API TypedTransformResult : public TransformResultValue {
 	explicit TypedTransformResult(T value_p) : value(std::move(value_p)) {
 	}
+	TypedTransformResult(const TypedTransformResult &) = delete;
+	TypedTransformResult &operator=(const TypedTransformResult &) = delete;
 
-	const char *TypeTag() const override {
-		return TransformResultTypeName<T>();
+	void *GetValuePointer(const char *type_name) override {
+		auto expected = TransformResultTypeName<T>();
+		return type_name == expected || std::strcmp(type_name, expected) == 0 ? &value : nullptr;
 	}
 
 	T value;
 };
 
-//! Casts to TypedTransformResult<T> if the result holds exactly that type, and returns nullptr otherwise
+//! Returns a pointer to the contained value if the result holds exactly T, and nullptr otherwise
 template <class T>
-TypedTransformResult<T> *TryCastTransformResult(TransformResultValue *result) {
-	if (!result) {
-		return nullptr;
-	}
-	auto tag = result->TypeTag();
-	auto expected = TransformResultTypeName<T>();
-	// the pointers are equal whenever both sides come from the same image, which is the common case
-	if (tag != expected && std::strcmp(tag, expected) != 0) {
-		return nullptr;
-	}
-	return static_cast<TypedTransformResult<T> *>(result);
-}
-
-template <class T>
-TypedTransformResult<T> *TryCastTransformResult(TransformResultValue &result) {
-	return TryCastTransformResult<T>(&result);
+T *TryGetTransformResult(TransformResultValue &result) {
+	return reinterpret_cast<T *>(result.GetValuePointer(TransformResultTypeName<T>()));
 }
 
 } // namespace duckdb

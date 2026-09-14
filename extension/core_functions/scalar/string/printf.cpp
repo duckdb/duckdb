@@ -3,6 +3,7 @@
 #include "duckdb/common/limits.hpp"
 #include "fmt/format.h"
 #include "fmt/printf.h"
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
@@ -172,6 +173,11 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 
 		// finally actually perform the format
 		string dynamic_result = FORMAT_FUN::template OP<CTX>(format_string.c_str(), current_args);
+		if (!Utf8Proc::IsValid(dynamic_result.c_str(), dynamic_result.size())) {
+			throw InvalidInputException("Invalid UTF8 produced by format string \"%s\" - note that %%c writes a "
+			                            "single byte, use chr(...) to write a Unicode code point",
+			                            format_string);
+		}
 		result_data.WriteValue(dynamic_result);
 	}
 }

@@ -99,6 +99,14 @@ SELECT
 ----
 NULL	NULL	NULL	NULL
 
+query III
+SELECT
+	TRY_CAST('-2147483648 months ago' AS INTERVAL),
+	TRY_CAST('-2147483648 days ago' AS INTERVAL),
+	TRY_CAST('-9223372036854775800 microseconds -8 microseconds ago' AS INTERVAL);
+----
+NULL	NULL	NULL
+
 statement error
 SELECT CAST('2147483648 days' AS INTERVAL);
 ----

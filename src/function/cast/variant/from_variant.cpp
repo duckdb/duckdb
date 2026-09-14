@@ -23,12 +23,23 @@ namespace {
 
 struct FromVariantConversionData {
 public:
-	explicit FromVariantConversionData(RecursiveUnifiedVectorFormat &variant_format) : variant(variant_format) {
+	FromVariantConversionData(RecursiveUnifiedVectorFormat &variant_format, optional_ptr<ClientContext> client)
+	    : variant(variant_format), client(client) {
+	}
+
+	optional<Value> TryCastAs(const Value &value, const LogicalType &target_type, string *error_message = nullptr,
+	                          bool strict = false) {
+		if (client) {
+			return value.TryCastAs(*client, target_type, error_message, strict);
+		}
+		return value.DefaultTryCastAs(target_type, error_message, strict);
 	}
 
 public:
 	//! The input Variant column
 	UnifiedVariantVectorData variant;
+	//! The optional client to use for casting
+	optional_ptr<ClientContext> client;
 	//! If unsuccessful - the error of the conversion
 	string error;
 };
@@ -55,6 +66,19 @@ public:
 public:
 	idx_t width;
 	idx_t scale;
+};
+
+struct ToVariantCastData : public BoundCastData {
+public:
+	explicit ToVariantCastData(optional_ptr<ClientContext> client) : client(client) {
+	}
+
+	unique_ptr<BoundCastData> Copy() const override {
+		return make_uniq<ToVariantCastData>(client);
+	}
+
+public:
+	optional_ptr<ClientContext> client;
 };
 
 } // namespace
@@ -182,7 +206,7 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 		}
 		if (!converted) {
 			auto value = VariantUtils::ConvertVariantToValue(conversion_data.variant, row_index, sel[i]);
-			auto cast_value = value.DefaultTryCastAs(target_type, nullptr, true);
+			auto cast_value = conversion_data.TryCastAs(value, target_type, nullptr, true);
 			if (!cast_value) {
 				conversion_data.error = StringUtil::Format("Can't convert VARIANT(%s) value '%s'",
 				                                           EnumUtil::ToString(type_id), value.ToString());
@@ -576,7 +600,7 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			uint32_t value_index = sel[i];
 			auto value = VariantUtils::ConvertVariantToValue(conversion_data.variant, row_index, value_index);
 			try {
-				auto cast_value = value.DefaultTryCastAs(target_type, nullptr, true);
+				auto cast_value = conversion_data.TryCastAs(value, target_type, nullptr, true);
 				if (!cast_value) {
 					cast_value = Value(target_type);
 					all_valid = false;
@@ -770,7 +794,11 @@ static bool CastFromVARIANT(Vector &variant_vec, Vector &result, idx_t count, Ca
 	D_ASSERT(variant_vec.GetType().id() == LogicalTypeId::VARIANT);
 	RecursiveUnifiedVectorFormat variant_format;
 	Vector::RecursiveToUnifiedFormat(variant_vec, variant_format);
-	FromVariantConversionData conversion_data(variant_format);
+	optional_ptr<ClientContext> client;
+	if (parameters.cast_data) {
+		client = parameters.cast_data->Cast<ToVariantCastData>().client;
+	}
+	FromVariantConversionData conversion_data(variant_format, client);
 
 	reference<const SelectionVector> sel(*ConstantVector::ZeroSelectionVector());
 	SelectionVector zero_sel;
@@ -794,6 +822,7 @@ static bool CastFromVARIANT(Vector &variant_vec, Vector &result, idx_t count, Ca
 
 BoundCastInfo DefaultCasts::VariantCastSwitch(BindCastInput &input, const LogicalType &source,
                                               const LogicalType &target) {
+	auto cast_data = make_uniq<ToVariantCastData>(input.context);
 	D_ASSERT(source.id() == LogicalTypeId::VARIANT);
 	switch (target.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -831,11 +860,11 @@ BoundCastInfo DefaultCasts::VariantCastSwitch(BindCastInput &input, const Logica
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::ARRAY:
-		return BoundCastInfo(CastFromVARIANT);
+		return BoundCastInfo(CastFromVARIANT, std::move(cast_data));
 	case LogicalTypeId::GEOMETRY:
-		return BoundCastInfo(CastFromVARIANT);
+		return BoundCastInfo(CastFromVARIANT, std::move(cast_data));
 	case LogicalTypeId::VARCHAR: {
-		return BoundCastInfo(CastFromVARIANT);
+		return BoundCastInfo(CastFromVARIANT, std::move(cast_data));
 	}
 	default:
 		return TryVectorNullCast;

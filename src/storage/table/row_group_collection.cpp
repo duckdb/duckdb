@@ -220,9 +220,8 @@ void RowGroupCollection::FinalizeCheckpoint(MetaBlockPointer pointer,
 void RowGroupCollection::Initialize(PersistentCollectionData &data) {
 	stats.InitializeEmpty(types);
 	auto l = owned_row_groups->Lock();
-	auto base_row_id = owned_row_groups->GetBaseRowId();
 	for (auto &row_group_data : data.row_group_data) {
-		D_ASSERT(row_group_data.start == base_row_id + total_rows.load());
+		D_ASSERT(row_group_data.start == owned_row_groups->GetBaseRowId() + total_rows.load());
 		auto row_group = make_uniq<RowGroup>(*this, row_group_data);
 		row_group->MergeIntoStatistics(stats);
 		total_rows += row_group->count;
@@ -612,8 +611,8 @@ bool RowGroupCollection::CanFetch(TransactionData transaction, const row_t row_i
 // Append
 //===--------------------------------------------------------------------===//
 TableAppendState::TableAppendState()
-    : row_group_append_state(*this), total_append_count(0), start_row_group(nullptr), transaction(0, 0),
-      hashes(LogicalType::HASH) {
+    : row_group_append_state(*this), total_append_count(0), start_row_group(nullptr),
+      transaction(TransactionData::Unversioned()), hashes(LogicalType::HASH) {
 }
 
 TableAppendState::~TableAppendState() {
@@ -667,7 +666,7 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 }
 
 void RowGroupCollection::InitializeAppend(TableAppendState &state) {
-	TransactionData tdata(0, 0);
+	auto tdata = TransactionData::Unversioned();
 	InitializeAppend(tdata, state);
 }
 
@@ -819,7 +818,7 @@ void RowGroupCollection::RevertAppendInternal(idx_t new_end_idx) {
 	D_ASSERT(next_row_id.load() >= total_rows.load());
 }
 
-void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
+void RowGroupCollection::CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t start, idx_t count) {
 	auto row_groups = GetRowGroups();
 	auto row_group = row_groups->GetSegment(start);
 	D_ASSERT(row_group);
@@ -830,7 +829,7 @@ void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t s
 		idx_t start_in_row_group = current_row - row_group->GetRowStart();
 		idx_t append_count = MinValue<idx_t>(current_row_group.count - start_in_row_group, remaining);
 
-		current_row_group.CleanupAppend(lowest_transaction, start_in_row_group, append_count);
+		current_row_group.CleanupAppend(lowest_visibility_bound, start_in_row_group, append_count);
 
 		current_row += append_count;
 		remaining -= append_count;
@@ -885,10 +884,14 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 	}
 	bool is_persistent = segments.back()->GetNode().IsPersistent();
 	idx_t merged_count = 0;
+#ifdef D_ASSERT_IS_ENABLED
 	idx_t source_offset = 0;
+#endif
 	idx_t target_row_start = start_index;
 	for (auto &entry : segments) {
+#ifdef D_ASSERT_IS_ENABLED
 		D_ASSERT(entry->GetRowStart() == source_row_groups->GetBaseRowId() + source_offset);
+#endif
 		auto row_group = entry->MoveNode();
 		row_group->MoveToCollection(*this);
 		idx_t row_group_count = row_group->count;
@@ -900,7 +903,9 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 			row_group_data->row_group_data.push_back(std::move(persistent_data));
 		}
 		merged_count += row_group_count;
+#ifdef D_ASSERT_IS_ENABLED
 		source_offset += row_group_count;
+#endif
 		row_groups->AppendSegment(std::move(row_group), target_row_start);
 		target_row_start += row_group_count;
 	}
@@ -1029,7 +1034,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 
 	ColumnFetchState state;
 	state.fetch_type = FetchType::FORCE_FETCH;
-	TransactionData commit_transaction(MAX_TRANSACTION_ID, TRANSACTION_ID_START - 1);
+	TransactionData commit_transaction(MAX_TRANSACTION_ID, VisibilityBound::Before(MAX_COMMIT_ID));
 	Fetch(commit_transaction, fetch_chunk, column_ids, row_identifiers, count, state);
 
 	// Used for index value removal.
@@ -1710,7 +1715,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	InitializeVacuumState(checkpoint_state, vacuum_state, writer.GetRowGroupCount());
 
 	auto &transaction_manager = DuckTransactionManager::Get(GetAttached());
-	auto lowest_active_start = transaction_manager.LowestActiveStart();
+	auto lowest_visibility_bound = transaction_manager.LowestVisibilityBound();
 	try {
 		// schedule tasks
 		idx_t total_vacuum_tasks = 0;
@@ -1734,7 +1739,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				throw InternalException("RowGroup Vacuum - row group collection of row group changed");
 			}
 			// the row group is kept as-is: try to compress its version information
-			row_group.CompressVersionInfo(lowest_active_start);
+			row_group.CompressVersionInfo(lowest_visibility_bound);
 			if (writer.GetCheckpointOptions().type != CheckpointType::VACUUM_ONLY) {
 				DUCKDB_LOG(checkpoint_state.writer.GetDatabase(), CheckpointLogType, GetAttached(), *info, segment_idx,
 				           row_group, vacuum_state.row_start);
@@ -2199,7 +2204,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 	auto result_row_groups = result->GetRowGroups();
 	for (auto &node : row_groups->SegmentNodes()) {
 		auto &current_row_group = node.GetNode();
-		auto new_row_group = current_row_group.AddColumn(*result, new_column, default_executor);
+		auto new_row_group = current_row_group.AddColumn(*result, new_column, default_executor, new_column_stats);
 		// merge in the statistics
 		new_row_group->MergeIntoStatistics(new_column_idx, new_column_stats.Statistics());
 
@@ -2272,16 +2277,17 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 
 	for (auto &node : row_groups->SegmentNodes()) {
 		auto &current_row_group = node.GetNode();
-		auto new_row_group = current_row_group.AlterType(*result, target_type, changed_idx, executor,
-		                                                 scan_state.table_state, node, scan_chunk, transaction);
+		auto new_row_group =
+		    current_row_group.AlterType(*result, target_type, changed_idx, executor, scan_state.table_state, node,
+		                                scan_chunk, transaction, changed_stats);
 		new_row_group->MergeIntoStatistics(changed_idx, changed_stats.Statistics());
 		result_row_groups->AppendSegment(std::move(new_row_group), node.GetRowStart());
 	}
 	return result;
 }
 
-void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTable &parent,
-                                             const BoundConstraint &constraint) {
+void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DuckTransaction &transaction,
+                                             DataTable &parent, const BoundConstraint &constraint) {
 	if (total_rows == 0) {
 		return;
 	}
@@ -2299,17 +2305,21 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 	vector<StorageIndex> column_ids;
 	column_ids.emplace_back(physical_index);
 
-	// Use SCAN_COMMITTED to scan the latest data.
 	CreateIndexScanState state;
-	auto scan_type = TableScanType::TABLE_SCAN_OMIT_PERMANENTLY_DELETED;
 	state.Initialize(column_ids, nullptr);
 	InitializeScan(context, state.table_state, column_ids, nullptr);
 
 	InitializeCreateIndexScan(state);
 
+	auto &transaction_manager = DuckTransactionManager::Get(parent.db);
+	TransactionData constraint_visibility(transaction.GetTransactionId(),
+	                                      VisibilityBound::Through(transaction_manager.GetLastCommit()));
+	ScanOptions scan_options(constraint_visibility);
+	scan_options.insert_type = InsertedScanType::ALL_ROWS;
+	scan_options.update_type = UpdateScanType::DISALLOW_UPDATES;
 	while (true) {
 		scan_chunk.Reset();
-		state.table_state.Scan(scan_chunk, scan_type, state.segment_lock);
+		state.table_state.Scan(scan_options, scan_chunk, state.segment_lock);
 		if (scan_chunk.size() == 0) {
 			break;
 		}

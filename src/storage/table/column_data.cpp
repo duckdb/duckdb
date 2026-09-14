@@ -897,10 +897,7 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatist
 		target_stats.Merge(data_pointer.statistics);
 
 		// create a persistent segment
-		auto segment = ColumnSegment::CreatePersistentSegment(
-		    GetDatabase(), block_manager, data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset,
-		    data_pointer.tuple_count, data_pointer.compression_type, std::move(data_pointer.statistics),
-		    std::move(data_pointer.segment_state));
+		auto segment = ColumnSegment::CreatePersistentSegment(GetDatabase(), block_manager, data_pointer);
 
 		auto l = data.Lock();
 		AppendSegment(l, std::move(segment));

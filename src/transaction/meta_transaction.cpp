@@ -69,8 +69,12 @@ Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
 #ifdef DEBUG
 		VerifyAllTransactionsUnique(db, all_transactions);
 #endif
-		all_transactions.push_back(db);
+		// Rollback looks every entry of all_transactions up in transactions, so the two must not get out of sync:
+		// reserve first, then insert, so that a failing allocation happens before either is modified and the
+		// push_back that follows cannot allocate.
+		all_transactions.reserve(all_transactions.size() + 1);
 		transactions.insert(make_pair(reference<AttachedDatabase>(db), TransactionReference(new_transaction)));
+		all_transactions.push_back(db);
 		auto shared_db = db.shared_from_this();
 		UseDatabase(shared_db);
 

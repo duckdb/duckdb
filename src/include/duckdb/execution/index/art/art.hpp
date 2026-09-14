@@ -18,10 +18,10 @@ enum class VerifyExistenceType : uint8_t { APPEND = 0, APPEND_FK = 1, DELETE_FK 
 enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1 };
 enum class ARTSerializationFormat : uint8_t { V1_0_0 = 0, CURRENT = 1 };
 
-
 class ConflictManager;
 class ARTKey;
 class ARTKeySection;
+class RowIdVectorOutput;
 class FixedSizeAllocator;
 
 struct ARTIndexScanState;
@@ -79,9 +79,9 @@ public:
 	//! Try to initialize a scan on the ART with the given expression and filter.
 	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr) const;
 	unique_ptr<IndexScanState> InitializeFullScan();
-	//! Perform a lookup on the ART, fetching up to max_count row IDs.
+	//! Perform a lookup on the ART, fetching up to the collection capacity.
 	//! If all row IDs were fetched, it return true, else false.
-	bool Scan(IndexScanState &state, idx_t max_count, set<row_t> &row_ids) const;
+	bool Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const;
 
 	//! Simple merge: scan source ART and delete each (key, rowid) from this ART.
 	// FIXME: replace with structural tree delete merge.
@@ -190,12 +190,12 @@ private:
 	//! Returns how many allocators are used based on the target serialization format.
 	static uint8_t GetAllocatorCount(ARTSerializationFormat format);
 
-	bool FullScan(idx_t max_count, set<row_t> &row_ids) const;
-	bool SearchEqual(const ARTKey &key, idx_t max_count, set<row_t> &row_ids) const;
-	bool SearchGreater(const ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids) const;
-	bool SearchLess(const ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids) const;
+	bool FullScan(RowIdVectorOutput &row_ids) const;
+	bool SearchEqual(const ARTKey &key, RowIdVectorOutput &row_ids) const;
+	bool SearchGreater(const ARTKey &key, bool equal, RowIdVectorOutput &row_ids) const;
+	bool SearchLess(const ARTKey &upper_bound, bool equal, RowIdVectorOutput &row_ids) const;
 	bool SearchCloseRange(const ARTKey &lower_bound, const ARTKey &upper_bound, bool left_equal, bool right_equal,
-	                      idx_t max_count, set<row_t> &row_ids) const;
+	                      RowIdVectorOutput &row_ids) const;
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row) const;
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name) const;

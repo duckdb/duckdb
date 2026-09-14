@@ -12,9 +12,13 @@ UnpivotKeyword <- 'UNPIVOT' / 'PIVOT_LONGER'
 
 UnpivotStatement <- UnpivotKeyword TableRef 'ON' TargetList IntoNameValues?
 
-IntoNameValues <- 'INTO' 'NAME' ColIdOrString ValueOrValues List(Identifier)
+IntoNameValues <- 'INTO' 'NAME' ColIdOrString ValueOrValues OptionalParensNameList
 
 ValueOrValues <- 'VALUE' / 'VALUES'
+
+OptionalParensNameList <- ParenthesizedNameList / BareNameList
+ParenthesizedNameList <- Parens(List(ColIdOrString))
+BareNameList <- List(ColIdOrString)
 
 IncludeOrExcludeNulls <- IncludeNulls / ExcludeNulls
 IncludeNulls <- 'INCLUDE' 'NULLS'

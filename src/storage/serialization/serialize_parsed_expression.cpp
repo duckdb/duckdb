@@ -123,21 +123,6 @@ unique_ptr<ParsedExpression> CaseExpression::Deserialize(Deserializer &deseriali
 	return std::move(result);
 }
 
-void CastExpression::Serialize(Serializer &serializer) const {
-	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "child", child);
-	serializer.WriteProperty<LogicalType>(201, "cast_type", cast_type);
-	serializer.WritePropertyWithDefault<bool>(202, "try_cast", try_cast);
-}
-
-unique_ptr<ParsedExpression> CastExpression::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<CastExpression>(new CastExpression());
-	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(200, "child", result->child);
-	deserializer.ReadProperty<LogicalType>(201, "cast_type", result->cast_type);
-	deserializer.ReadPropertyWithDefault<bool>(202, "try_cast", result->try_cast);
-	return std::move(result);
-}
-
 void CollateExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "child", child);
@@ -321,6 +306,9 @@ void TypeExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<Identifier>(201, "schema", qualified_name.Schema());
 	serializer.WritePropertyWithDefault<Identifier>(202, "type_name", qualified_name.Name());
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(203, "children", children);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0) || (qualified_name.Path().size() > 3)) {
+		serializer.WriteProperty<QualifiedName>(204, "qualified_name", qualified_name);
+	}
 }
 
 unique_ptr<ParsedExpression> TypeExpression::Deserialize(Deserializer &deserializer) {
@@ -329,7 +317,11 @@ unique_ptr<ParsedExpression> TypeExpression::Deserialize(Deserializer &deseriali
 	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(201, "schema");
 	auto type_name = deserializer.ReadPropertyWithDefault<Identifier>(202, "type_name");
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(203, "children", result->children);
+	auto qualified_name = deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(204, "qualified_name", QualifiedName());
 	result->SetQualifiedName(std::move(catalog), std::move(schema), std::move(type_name));
+	if (!qualified_name.Path().empty()) {
+		result->SetQualifiedName(std::move(qualified_name));
+	}
 	return std::move(result);
 }
 

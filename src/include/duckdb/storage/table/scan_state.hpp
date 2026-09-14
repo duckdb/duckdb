@@ -17,6 +17,7 @@
 #include "duckdb/storage/table/segment_lock.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
+#include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 
@@ -308,6 +309,7 @@ public:
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentLock &l, SegmentNode<RowGroup> &row_group) const;
 	optional_ptr<SegmentNode<RowGroup>> GetRootSegment() const;
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
+	bool Scan(ScanOptions options, DataChunk &result, optional_ptr<SegmentLock> l = nullptr);
 	bool Scan(DataChunk &result, TableScanType type, optional_ptr<SegmentLock> l = nullptr);
 	//! Prepares the next eligible vector of the assignment and collects its I/O tasks
 	bool PrepareScanIO(DuckTransaction &transaction, vector<unique_ptr<AsyncTask>> &tasks);

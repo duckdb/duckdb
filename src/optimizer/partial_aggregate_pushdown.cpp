@@ -804,8 +804,12 @@ static unique_ptr<LogicalAggregate> DECreateUpperAggregate(Optimizer &optimizer,
 	for (auto &group : aggr.groups) {
 		auto &ref = group->Cast<BoundColumnRefExpression>();
 		idx_t gs;
+#ifdef D_ASSERT_IS_ENABLED
 		auto has_side = GetExpressionSide(*group, side_bindings, gs);
 		D_ASSERT(has_side);
+#else
+		GetExpressionSide(*group, side_bindings, gs);
+#endif
 		auto binding = sides[gs].group_map.at(ref.Binding());
 		upper_aggr->groups.push_back(make_uniq<BoundColumnRefExpression>(ref.GetReturnType(), binding));
 	}

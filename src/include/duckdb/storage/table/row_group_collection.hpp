@@ -128,7 +128,7 @@ public:
 	void FinalizeAppend(TransactionData transaction, TableAppendState &state);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	void RevertAppendInternal(idx_t start_row);
-	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
+	void CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t start, idx_t count);
 
 	void MergeStorage(RowGroupCollection &data, optional_ptr<DataTable> table,
 	                  optional_ptr<StorageCommitState> commit_state);
@@ -184,7 +184,8 @@ public:
 	shared_ptr<RowGroupCollection> AlterType(ClientContext &context, idx_t changed_idx, const LogicalType &target_type,
 	                                         vector<StorageIndex> bound_columns, Expression &cast_expr,
 	                                         TransactionData transaction);
-	void VerifyNewConstraint(const QueryContext &context, DataTable &parent, const BoundConstraint &constraint);
+	void VerifyNewConstraint(const QueryContext &context, DuckTransaction &transaction, DataTable &parent,
+	                         const BoundConstraint &constraint);
 
 	void SetStats(TableStatistics &new_stats);
 	void CopyStats(TableStatistics &stats);

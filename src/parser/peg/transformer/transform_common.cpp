@@ -56,6 +56,7 @@ string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &trans
 LogicalType PEGTransformerFactory::TransformType(PEGTransformer &transformer,
                                                  unique_ptr<ParsedExpression> type_variations,
                                                  const optional<vector<int64_t>> &array_bounds) {
+	auto array_depth_guard = transformer.StackCheck(array_bounds ? array_bounds->size() : 0);
 	auto type = std::move(type_variations);
 	if (array_bounds) {
 		for (auto array_size : *array_bounds) {
@@ -303,9 +304,13 @@ QualifiedName PEGTransformerFactory::TransformSchemaReservedTypeName(PEGTransfor
 
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaTypeName(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
-    const Identifier &reserved_schema_qualification, const Identifier &reserved_type_name) {
-	QualifiedName result(catalog_qualification, reserved_schema_qualification, reserved_type_name);
-	return result;
+    const vector<Identifier> &reserved_schema_qualification, const Identifier &reserved_type_name) {
+	vector<Identifier> qualification;
+	qualification.push_back(catalog_qualification);
+	for (auto &schema : reserved_schema_qualification) {
+		qualification.push_back(schema);
+	}
+	return QualifiedName(std::move(qualification), reserved_type_name);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMapType(PEGTransformer &transformer,

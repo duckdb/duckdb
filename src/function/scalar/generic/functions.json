@@ -22,6 +22,14 @@
         "type": "scalar_function"
     },
     {
+        "name": "__internal_barrier",
+        "struct": "BarrierFun",
+        "parameters": "arg",
+        "description": "Returns arg unchanged, and marks it as an optimizer barrier: the expression is never evaluated on rows removed by the operators around it",
+        "example": "__internal_barrier(s::INTEGER = 42)",
+        "type": "scalar_function"
+    },
+    {
         "name": "create_sort_key",
         "parameters": "parameters...",
         "description": "Constructs a binary-comparable sort key based on a set of input parameters and sort qualifiers",

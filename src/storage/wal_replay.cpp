@@ -923,7 +923,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "info");
 	auto &alter_info = info->Cast<AlterInfo>();
 	alter_info.bind_mode = AlterBindMode::SKIP_BINDING;
-	if (!alter_info.IsAddPrimaryKey()) {
+	if (!alter_info.IsAddUniqueConstraint()) {
 		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
 	}
 
@@ -967,12 +967,13 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	}
 
 	vector<column_t> column_ids;
-	for (auto &column_index : column_indexes) {
-		column_ids.push_back(column_index.GetPrimaryIndex());
+	column_ids.reserve(logical_indexes.size());
+	for (const auto &logical_index : logical_indexes) {
+		column_ids.push_back(column_list.LogicalToPhysical(logical_index).index);
 	}
 
 	auto &storage = table.GetStorage();
-	CreateIndexInput input(context, TableIOManager::Get(storage), storage.db, IndexConstraintType::PRIMARY,
+	CreateIndexInput input(context, TableIOManager::Get(storage), storage.db, unique_info.GetIndexConstraintType(),
 	                       index_storage_info.name, column_ids, unbound_expressions, index_storage_info,
 	                       index_storage_info.options);
 
@@ -1338,15 +1339,17 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 		for (auto &col : state.current_table->GetColumns().Physical()) {
 			column_ids.emplace_back(col.StorageOid());
 		}
-		Vector row_id_vector(LogicalType::ROW_TYPE, STANDARD_VECTOR_SIZE);
 		auto current_row_id = storage.GetNextRowId();
 		for (auto &chunk : new_row_groups.Chunks(transaction, column_ids)) {
-			auto row_id_writer = FlatVector::Writer<row_t>(row_id_vector, chunk.size());
-			for (idx_t r = 0; r < chunk.size(); r++) {
-				row_id_writer.WriteValue(NumericCast<row_t>(current_row_id + r));
+			// Deleted index entries are removed when the replay transaction commits. Duplicates can temporarily
+			// exist, similar to tuple WAL replay.
+			auto error = indexes.Append(nullptr, chunk, NumericCast<row_t>(current_row_id),
+			                            IndexAppendMode::INSERT_DUPLICATES, optional_idx());
+			if (error.HasError()) {
+				throw InternalException("Failed to append to index during ROW_GROUP_DATA WAL replay: %s",
+				                        error.Message());
 			}
 			current_row_id += chunk.size();
-			indexes.Append(chunk, row_id_vector);
 		}
 	}
 	storage.MergeStorage(new_row_groups, nullptr);

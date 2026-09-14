@@ -182,6 +182,12 @@ public:
 	static vector<string> GetTrustedPublicKeys(DatabaseInstance &db, ExtensionRepositoryType repository_type,
 	                                           const string &repository_name);
 
+	//! The origin whose signing keys a load trusts: an explicit FROM trusts the named origin, an autoload (core_only)
+	//! trusts the core keys only, and a plain bare LOAD trusts the core keys plus the community keys for a community
+	//! extension - never a user-provided repository's own keys
+	static ExtensionRepositoryType ResolveTrustedSignatureOrigin(bool has_from_clause, bool core_only,
+	                                                             ExtensionRepositoryType recorded_origin);
+
 	// Returns extension name, or empty string if not a replacement open path
 	static string ExtractExtensionPrefixFromPath(const string &path);
 
@@ -275,13 +281,14 @@ private:
 	static vector<string> DefaultExtensionFolders(FileSystem &fs);
 	static bool AllowAutoInstall(const string &extension);
 	static ExtensionInitResult InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
-	                                       const string &repository_name = string());
+	                                       const string &repository_name = string(), bool core_only = false);
 	static bool TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
-	                           const string &repository_name, ExtensionInitResult &result, string &error);
+	                           const string &repository_name, bool core_only, ExtensionInitResult &result,
+	                           string &error);
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);
 	static void LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
-	                                          const string &repository_name, ExtensionActiveLoad &info,
+	                                          const string &repository_name, bool core_only, ExtensionActiveLoad &info,
 	                                          optional_ptr<ClientContext> context);
 
 private:

@@ -133,14 +133,14 @@ class JobStagesTest(unittest.TestCase):
         required_jobs = {"linux-relassert", "linux-release", "linux-release-tests", "tidy-check"}
         self.assertTrue(required_jobs.issubset(set(selection.enabled_jobs)))
         self.assertNotIn("osx", selection.enabled_jobs)
-        self.assertTrue(selection.save_cache)
+        self.assertFalse(selection.save_cache)
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_main_includes_main_only_jobs(self):
         selection = self._compute_job_selection("push", "main", "duckdb/duckdb", changed_keys={"osx"})
         self.assertIn("codecov", selection.enabled_jobs)
         self.assertEqual(selection.enabled_jobs.count("osx"), 1)
-        self.assertTrue(selection.save_cache)
+        self.assertFalse(selection.save_cache)
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_workflow_dispatch_adds_release_jobs(self):
@@ -174,7 +174,7 @@ class JobStagesTest(unittest.TestCase):
                 ],
                 ["amd64 optimized", "arm64 optimized"],
             )
-            self.assertEqual(workflow_dispatch_selection.save_cache, push_selection.save_cache)
+            self.assertTrue(workflow_dispatch_selection.save_cache)
 
     def test_regular_branch_excludes_main_only_jobs(self):
         selection = self._compute_job_selection("pull_request", "feature/my-branch", "duckdb/duckdb")
@@ -282,7 +282,7 @@ class JobStagesTest(unittest.TestCase):
             with open(output_path, "r", encoding="utf-8") as f:
                 out = f.read()
             self.assertIn("enabled_jobs=", out)
-            self.assertIn("save_cache=true", out)
+            self.assertIn("save_cache=false", out)
             payload = out.splitlines()[0].split("=", 1)[1]
             selected_jobs = json.loads(payload)
             required_jobs = {"linux-relassert", "linux-release", "linux-release-tests", "tidy-check"}

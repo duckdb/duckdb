@@ -41,12 +41,11 @@ using namespace duckdb::capiv2;
 DUCKDB_V2_ERROR duckdb_v2_parse_sql(duckdb_v2_connection_handle conn, const char *sql,
                                     duckdb_v2_statement_iterator_handle *out_iterator,
                                     duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(conn);
+	DUCKDB_CHECK_ARG(sql);
+	DUCKDB_CHECK_ARG(out_iterator);
+	*out_iterator = nullptr;
 	return WithErrorHandler(err, [&]() {
-		if (!conn || !sql || !out_iterator) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_parse_sql");
-		}
-		*out_iterator = nullptr;
-
 		auto *connection = Convert(conn);
 		// Set up a lazy iterator over the connection's parser options and
 		// extensions, but parse nothing here. Each statement is parsed on demand by
@@ -65,12 +64,10 @@ DUCKDB_V2_ERROR duckdb_v2_parse_sql(duckdb_v2_connection_handle conn, const char
 DUCKDB_V2_ERROR duckdb_v2_statement_iterator_next(duckdb_v2_statement_iterator_handle iterator,
                                                   duckdb_v2_sql_statement_handle *out_statement,
                                                   duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(iterator);
+	DUCKDB_CHECK_ARG(out_statement);
+	*out_statement = nullptr;
 	return WithErrorHandler(err, [&]() {
-		if (!iterator || !out_statement) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_statement_iterator_next");
-		}
-		*out_statement = nullptr;
-
 		auto *wrapper = Convert(iterator);
 		if (wrapper->finished) {
 			// Spent by a prior exhaustion or parse error: *out_statement stays NULL.
@@ -133,15 +130,16 @@ DUCKDB_V2_ERROR duckdb_v2_statement_iterator_destroy(duckdb_v2_statement_iterato
 DUCKDB_V2_ERROR duckdb_v2_statement_bind(duckdb_v2_connection_handle conn, duckdb_v2_sql_statement_handle statement,
                                          duckdb_v2_schema_handle *out_schema, duckdb_v2_schema_handle *out_parameters,
                                          duckdb_v2_error_info_handle *err) {
-	if (!conn || !statement || !out_schema) {
-		return WithErrorHandler(
-		    err, [&]() { throw duckdb::InvalidInputException("null argument to duckdb_v2_statement_bind"); });
-	}
+	DUCKDB_CHECK_ARG(conn);
+	DUCKDB_CHECK_ARG(statement);
+	DUCKDB_CHECK_ARG(out_schema);
 	*out_schema = nullptr;
-	*out_parameters = nullptr;
-
-	auto *connection = Convert(conn);
 	return WithErrorHandler(err, [&]() {
+		if (out_parameters) {
+			*out_parameters = nullptr;
+		}
+
+		auto *connection = Convert(conn);
 		// Borrowed, not consumed: bind a copy. Preprocess it so the schema matches
 		// what execution would bind (pragma reparse, expansion).
 		duckdb::vector<duckdb::unique_ptr<duckdb::SQLStatement>> fragments;

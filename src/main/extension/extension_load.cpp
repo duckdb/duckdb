@@ -453,7 +453,8 @@ bool ExtensionHelper::CheckExtensionBufferSignature(DatabaseInstance &db, const 
 }
 
 bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
-                                     const string &repository_name, ExtensionInitResult &result, string &error) {
+                                     const string &repository_name, bool core_only, ExtensionInitResult &result,
+                                     string &error) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
@@ -624,11 +625,23 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 
 	if (!Settings::Get<AllowUnsignedExtensionsSetting>(db)) {
 		bool signature_valid;
+		// The recorded origin (from the .info) determines which keys could have signed the extension, but without an
+		// explicit FROM a bare load - which is also how autoloading loads - trusts only the fixed core/community keys,
+		// never a user-provided repository's own keys. So an extension a repository merely redeploys still loads if it
+		// is genuinely core-signed, while one signed by the repository's own key does not. This stops a repointed
+		// extension_directory (a repository's served layout matches an extension directory's) from loading native code
+		// under a user-provided key.
+		bool bare_load = repository_name.empty();
+		auto recorded_origin = install_info ? install_info->repository_type : ExtensionRepositoryType::CORE;
+		auto trusted_origin = ExtensionHelper::ResolveTrustedSignatureOrigin(!bare_load, core_only, recorded_origin);
+		auto signing_repository_name = install_info ? install_info->repository_name : string();
+		if (trusted_origin != recorded_origin) {
+			// forced onto the core keys - the repository's own name is no longer the trust anchor
+			signing_repository_name = string();
+		}
 		if (parsed_metadata.AppearsValid()) {
-			// the repository the extension was installed from determines which keys can have signed it
-			auto repository_type = install_info ? install_info->repository_type : ExtensionRepositoryType::CORE;
-			auto repository_name = install_info ? install_info->repository_name : string();
-			signature_valid = CheckExtensionSignature(db, *handle, parsed_metadata, repository_type, repository_name);
+			signature_valid =
+			    CheckExtensionSignature(db, *handle, parsed_metadata, trusted_origin, signing_repository_name);
 		} else {
 			signature_valid = false;
 		}
@@ -638,6 +651,14 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		}
 
 		if (!signature_valid) {
+			// an extension from a user-provided repository is trusted only when the repository is named: a plain load
+			// verifies it against the core keys, so it fails here. Keep the message generic - reaching this needs an
+			// unusual setup (a repointed extension_directory), and it must not spell out how to load the refused file
+			if (bare_load && install_info && install_info->repository_type == ExtensionRepositoryType::USER_PROVIDED) {
+				throw IOException("Extension '%s' was installed from a user-provided repository; a plain LOAD only "
+				                  "loads core and community extensions. Load it explicitly from its repository.",
+				                  extension);
+			}
 			throw IOException(db.config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename));
 		}
 	} else if (!Settings::Get<AllowExtensionsMetadataMismatchSetting>(db)) {
@@ -707,10 +728,10 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 }
 
 ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
-                                                 const string &repository_name) {
+                                                 const string &repository_name, bool core_only) {
 	string error;
 	ExtensionInitResult result;
-	if (!TryInitialLoad(db, fs, extension, repository_name, result, error)) {
+	if (!TryInitialLoad(db, fs, extension, repository_name, core_only, result, error)) {
 		if (!Settings::Get<AutoinstallKnownExtensionsSetting>(db) || !ExtensionHelper::AllowAutoInstall(extension)) {
 			throw IOException(error);
 		}
@@ -724,7 +745,7 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSyste
 		}
 		ExtensionHelper::InstallExtension(db, fs, extension, options);
 		// try loading again
-		if (!TryInitialLoad(db, fs, extension, repository_name, result, error)) {
+		if (!TryInitialLoad(db, fs, extension, repository_name, core_only, result, error)) {
 			throw IOException(error);
 		}
 	}
@@ -775,7 +796,8 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		return;
 	}
 	try {
-		LoadExternalExtensionInternal(db, fs, options.extension_name, options.repository, *info, context);
+		LoadExternalExtensionInternal(db, fs, options.extension_name, options.repository, options.core_only, *info,
+		                              context);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		info->LoadFail(error);
@@ -784,12 +806,12 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 }
 
 void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
-                                                    const string &repository_name, ExtensionActiveLoad &info,
-                                                    optional_ptr<ClientContext> context) {
+                                                    const string &repository_name, bool core_only,
+                                                    ExtensionActiveLoad &info, optional_ptr<ClientContext> context) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
-	auto extension_init_result = InitialLoad(db, fs, extension, repository_name);
+	auto extension_init_result = InitialLoad(db, fs, extension, repository_name, core_only);
 
 	// C++ ABI
 	if (extension_init_result.abi_type == ExtensionABIType::CPP) {

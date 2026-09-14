@@ -1,0 +1,27 @@
+From 20ff264f5bdad3d4c44a1935e27f4b4beae0a299 Mon Sep 17 00:00:00 2001
+From: Copilot <copilot@localhost>
+Date: Fri, 28 Aug 2026 13:12:34 +0200
+Subject: [PATCH 6/8] Support OpenSSL versions before 3.0
+
+
+diff --git a/third_party/httplib/httplib.hpp b/third_party/httplib/httplib.hpp
+index de9f340..e446393 100644
+--- a/third_party/httplib/httplib.hpp
++++ b/third_party/httplib/httplib.hpp
+@@ -425,6 +425,7 @@ using socket_t = int;
+ 
+ #include <openssl/err.h>
+ #include <openssl/evp.h>
++#include <openssl/rand.h>
+ #include <openssl/ssl.h>
+ #include <openssl/x509v3.h>
+ 
+@@ -441,7 +442,7 @@ using socket_t = int;
+ #endif
+ #define SSL_get1_peer_certificate SSL_get_peer_certificate
+ #elif OPENSSL_VERSION_NUMBER < 0x30000000L
+-#error Sorry, OpenSSL versions prior to 3.0.0 are not supported
++#define SSL_get1_peer_certificate SSL_get_peer_certificate
+ #endif
+ 
+ #endif // CPPHTTPLIB_OPENSSL_SUPPORT

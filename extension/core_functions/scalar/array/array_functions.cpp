@@ -213,6 +213,10 @@ static auto ArrayGenericFoldStats(ClientContext &context, FunctionStatisticsInpu
 	const auto &lhs_stats = input.child_stats[0];
 	const auto &rhs_stats = input.child_stats[1];
 	auto new_stats = NumericStats::CreateUnknown(input.expr.GetReturnType());
+	new_stats.CombineValidity(lhs_stats, rhs_stats);
+	if (!lhs_stats.CanHaveNoNull() || !rhs_stats.CanHaveNoNull()) {
+		new_stats.Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
+	}
 
 	auto &lhs_child_stats = ArrayStats::GetChildStats(lhs_stats);
 	auto &rhs_child_stats = ArrayStats::GetChildStats(rhs_stats);
@@ -226,9 +230,6 @@ static auto ArrayGenericFoldStats(ClientContext &context, FunctionStatisticsInpu
 
 	// If the child has no nulls, we won't throw.
 	input.expr.FunctionMutable().GetProperties().SetErrorMode(FunctionErrors::CANNOT_ERROR);
-
-	// Forward the validity
-	new_stats.CombineValidity(lhs_stats, rhs_stats);
 
 	return new_stats.ToUnique();
 }

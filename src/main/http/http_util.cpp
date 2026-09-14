@@ -1,10 +1,10 @@
-#include "duckdb/common/http_util.hpp"
+#include "duckdb/main/http/http_util.hpp"
+#include "duckdb/main/http/http_retry_budget.hpp"
 
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
-#include "duckdb/common/limits.hpp"
+#include "duckdb/common/hash_functions.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_context_file_opener.hpp"
@@ -24,14 +24,17 @@
 #include "httplib.hpp"
 #endif
 
-#ifndef DUCKDB_NO_THREADS
-#include <chrono>
-#include <thread>
-#endif
-
 namespace duckdb {
 
 HTTPParams::~HTTPParams() {
+}
+
+idx_t HTTPParams::GetTransportReuseDomain() const {
+	return transport_reuse_domain;
+}
+
+void HTTPParams::SetTransportReuseDomain(idx_t transport_reuse_domain_p) {
+	transport_reuse_domain = transport_reuse_domain_p;
 }
 
 HTTPHeaders::HTTPHeaders(DatabaseInstance &db) {
@@ -136,6 +139,10 @@ string HTTPUtil::GetName() const {
 	return "Built-In";
 }
 
+HTTPTransportReusePolicy HTTPUtil::GetTransportReusePolicy() const {
+	return HTTPTransportReusePolicy::EPHEMERAL;
+}
+
 bool HTTPResponse::ShouldRetry() const {
 	if (HasRequestError()) {
 		// request errors are eligible for retry
@@ -165,11 +172,16 @@ bool HTTPUtil::ShouldRetry(const BaseRequest &request, const HTTPResponse &respo
 
 unique_ptr<HTTPResponse> HTTPUtil::Request(BaseRequest &request) {
 	unique_ptr<HTTPClient> client;
-	return SendRequest(request, client);
+	return Request(request, client);
 }
 
 unique_ptr<HTTPResponse> HTTPUtil::Request(BaseRequest &request, unique_ptr<HTTPClient> &client) {
-	return SendRequest(request, client);
+	auto response = SendRequest(request, client);
+	if (!response) {
+		auto method = EnumUtil::ToString(request.type);
+		throw IOException("HTTP provider returned no response for HTTP %s to '%s'", method, request.url);
+	}
+	return response;
 }
 
 BaseRequest::BaseRequest(RequestType type, const string &url, const HTTPHeaders &headers, HTTPParams &params)
@@ -290,45 +302,75 @@ unique_ptr<HTTPClient> HTTPUtil::InitializeClient(HTTPParams &http_params, const
 #endif
 }
 
+unique_ptr<HTTPClient> HTTPUtil::InitializeClientExtended(HTTPParams &http_params, const string &proto_host_port,
+                                                          const HTTPClientInitializationOptions &) {
+	return InitializeClient(http_params, proto_host_port);
+}
+
 void HTTPUtil::CloseClient(unique_ptr<HTTPClient> &&) {
 	// default: no-op, client is destroyed
 }
 
+unique_ptr<HTTPClient> HTTPUtil::InitializeClientWithPolicy(BaseRequest &request, HTTPClientCachePolicy cache_policy) {
+	HTTPClientInitializationOptions options;
+	options.cache_policy = cache_policy;
+	return InitializeClientExtended(request.params, request.proto_host_port, options);
+}
+
+unique_ptr<HTTPResponse> HTTPUtil::SendRequestOnce(BaseRequest &request, HTTPClient &client,
+                                                   HTTPClientCachePolicy initial_cache_policy,
+                                                   HTTPClientCachePolicy &retry_cache_policy) {
+	retry_cache_policy = initial_cache_policy;
+
+	// When logging is enabled, we collect request timings
+	if (request.params.logger) {
+		request.have_request_timing = request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL);
+	}
+
+	unique_ptr<HTTPResponse> response;
+	try {
+		request.request_system_start = Timestamp::GetCurrentTimestamp();
+		request.request_monotonic_start = TimePoint::Tick();
+		response = client.Request(request);
+	} catch (...) {
+		retry_cache_policy = HTTPClientCachePolicy::BYPASS_CACHE;
+		request.request_monotonic_end = TimePoint::Tick();
+		LogRequest(request, nullptr);
+		throw;
+	}
+	if (!response || response->HasRequestError()) {
+		retry_cache_policy = HTTPClientCachePolicy::BYPASS_CACHE;
+	}
+	request.request_monotonic_end = TimePoint::Tick();
+	LogRequest(request, response ? response.get() : nullptr);
+	return response;
+}
+
 unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client) {
+	const auto initial_cache_policy =
+	    request.params.transport_manager ? HTTPClientCachePolicy::BYPASS_CACHE : HTTPClientCachePolicy::DEFAULT;
 	if (!client) {
-		client = InitializeClient(request.params, request.proto_host_port);
+		if (initial_cache_policy == HTTPClientCachePolicy::BYPASS_CACHE) {
+			client = InitializeClientWithPolicy(request, initial_cache_policy);
+		} else {
+			client = InitializeClient(request.params, request.proto_host_port);
+		}
 		if (!client) {
 			throw InvalidConfigurationException(
 			    "HTTPClient is not been setup yet (possibly due to configuration), no HTTP request can be performed");
 		}
 	}
 
-	std::function<unique_ptr<HTTPResponse>(void)> on_request([&]() {
-		unique_ptr<HTTPResponse> response;
-
-		// When logging is enabled, we collect request timings
-		if (request.params.logger) {
-			request.have_request_timing = request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL);
-		}
-
-		try {
-			request.request_system_start = Timestamp::GetCurrentTimestamp();
-			request.request_monotonic_start = TimePoint::Tick();
-			response = client->Request(request);
-		} catch (...) {
-			request.request_monotonic_end = TimePoint::Tick();
-			LogRequest(request, nullptr);
-			throw;
-		}
-		request.request_monotonic_end = TimePoint::Tick();
-		LogRequest(request, response ? response.get() : nullptr);
-		return response;
-	});
-
-	// Refresh the client on retries
-	std::function<void(void)> on_retry([&]() { client = InitializeClient(request.params, request.proto_host_port); });
-
-	return RunRequestWithRetry(on_request, request, on_retry);
+	auto retry_cache_policy = initial_cache_policy;
+	return RunRequestWithRetry(
+	    [&]() { return SendRequestOnce(request, *client, initial_cache_policy, retry_cache_policy); }, request,
+	    [&]() {
+		    client.reset();
+		    client = InitializeClientWithPolicy(request, retry_cache_policy);
+		    if (!client) {
+			    throw InvalidConfigurationException("HTTP provider returned a null client during retry");
+		    }
+	    });
 }
 
 void HTTPUtil::LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> response) {
@@ -440,135 +482,96 @@ void HTTPUtil::DecomposeURL(const string &input, string &path_out, string &proto
 	}
 }
 
-// Retry the request performed by fun using the exponential backoff strategy defined in params. Before retry, the
-// retry callback is called
+// Retry eligible requests using an operation-local budget and the existing transport retry hook.
 duckdb::unique_ptr<HTTPResponse>
 HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)> &on_request,
                               const BaseRequest &request, const std::function<void(void)> &retry_cb) {
 	auto &params = request.params;
-	idx_t tries = 0;
-	while (true) {
-		std::exception_ptr caught_e = nullptr;
-		unique_ptr<HTTPResponse> response;
-		string exception_error;
-		string caught_status;
-		string caught_retry_after;
-
-		try {
-			response = on_request();
-			if (response) {
-				response->url = request.url;
-			}
-		} catch (IOException &e) {
-			exception_error = e.what();
-			caught_e = std::current_exception();
-		} catch (HTTPException &e) {
-			exception_error = e.what();
-			caught_e = std::current_exception();
-			// handlers turn error statuses into exceptions; recover the status for throttle detection
-			ErrorData error_data(e);
-			auto entry = error_data.ExtraInfo().find("status_code");
-			if (entry != error_data.ExtraInfo().end()) {
-				caught_status = entry->second;
-			}
-			auto retry_entry = error_data.ExtraInfo().find("header_Retry-After");
-			if (retry_entry != error_data.ExtraInfo().end()) {
-				caught_retry_after = retry_entry->second;
-			}
-		}
-
-		// Request errors and caught exceptions are eligible for retry without a response status
-		bool should_retry = !response || params.http_util.ShouldRetry(request, *response);
-		if (!should_retry) {
-			auto response_code = static_cast<uint16_t>(response->status);
-			if (response_code >= 200 && response_code < 300) {
-				response->success = true;
-				return response;
-			}
-			switch (response->status) {
-			case HTTPStatusCode::NotModified_304:
-				response->success = true;
-				break;
-			default:
-				response->success = false;
-				break;
-			}
-			return response;
-		}
-
-		tries += 1;
-		// throttle responses get extra, capped, jittered backoff so bursts degrade instead of failing queries
-		const bool throttled = (response && (response->status == HTTPStatusCode::TooManyRequests_429 ||
-		                                     response->status == HTTPStatusCode::ServiceUnavailable_503)) ||
-		                       caught_status == "429" || caught_status == "503";
-#ifndef DUCKDB_NO_THREADS
-		static constexpr idx_t THROTTLE_EXTRA_RETRIES = 5;
-#else
-		// without threads we cannot sleep between retries, so do not add zero-delay retries
-		static constexpr idx_t THROTTLE_EXTRA_RETRIES = 0;
-#endif
-		static constexpr uint64_t THROTTLE_MAX_BACKOFF_MS = 10000;
-		const idx_t max_tries =
-		    !HTTPUtil::IsIdempotent(request.type) ? 0 : params.retries + (throttled ? THROTTLE_EXTRA_RETRIES : 0);
-		if (tries <= max_tries) {
-			if (tries > 1 || throttled) {
-#ifndef DUCKDB_NO_THREADS
-				const auto backoff_exp = static_cast<double>(throttled ? tries - 1 : tries - 2);
-				const auto backoff_ms = (double)params.retry_wait_ms * pow(params.retry_backoff, backoff_exp);
-				// cap in the double domain to avoid overflow in the cast
-				uint64_t sleep_amount =
-				    (uint64_t)MinValue<double>(backoff_ms, (double)NumericLimits<int64_t>::Maximum());
-				if (throttled) {
-					sleep_amount = MinValue<uint64_t>(sleep_amount, THROTTLE_MAX_BACKOFF_MS);
-					string retry_after = caught_retry_after;
-					if (response && response->headers.HasHeader("Retry-After")) {
-						retry_after = response->headers.GetHeaderValue("Retry-After");
-					}
-					if (!retry_after.empty()) {
-						// honor a numeric Retry-After (seconds), capped like the backoff
-						uint64_t retry_after_s = 0;
-						if (TryCast::Operation<string_t, uint64_t>(string_t(retry_after), retry_after_s)) {
-							retry_after_s = MinValue<uint64_t>(retry_after_s, THROTTLE_MAX_BACKOFF_MS / 1000);
-							sleep_amount = MaxValue<uint64_t>(sleep_amount, retry_after_s * 1000);
-						}
-					}
-					// subtractive jitter ([base/2, base]) de-synchronizes retry bursts while honoring the cap
-					RandomEngine random;
-					sleep_amount -= random.NextRandomInteger64() % (sleep_amount / 2 + 1);
-				}
-				std::this_thread::sleep_for(std::chrono::milliseconds(sleep_amount));
-#endif
-			}
-			if (retry_cb) {
-				retry_cb();
-			}
-		} else {
-			// failed and we cannot retry
-			if (request.try_request) {
-				// try request - return the failure
-				if (!response) {
-					response = make_uniq<HTTPResponse>(HTTPStatusCode::INVALID);
-					string error = "Unknown error";
-					if (!exception_error.empty()) {
-						error = std::move(exception_error);
-					}
-					response->request_error = std::move(error);
-				}
-				response->success = false;
-				return response;
-			}
-			auto method = EnumUtil::ToString(request.type);
-			if (caught_e) {
-				std::rethrow_exception(caught_e);
-			} else if (response && !response->HasRequestError()) {
-				throw HTTPException(*response, "Request returned HTTP %d for HTTP %s to '%s'",
-				                    static_cast<int>(response->status), method, request.url);
-			} else {
-				string error = response ? response->GetError() : "Unknown error";
-				throw IOException("%s error for HTTP %s to '%s'", error, method, request.url);
-			}
-		}
+	HTTPRetryBudget local_retry_budget(params);
+	auto retry_budget = request.retry_budget;
+	if (!retry_budget) {
+		retry_budget = local_retry_budget;
 	}
+
+	unique_ptr<HTTPResponse> response;
+	std::exception_ptr caught_e;
+	string exception_error;
+	bool should_retry = false;
+	retry_budget->Run(
+	    [&]() {
+		    response.reset();
+		    caught_e = nullptr;
+		    exception_error.clear();
+		    string caught_status;
+		    string caught_retry_after;
+		    try {
+			    response = on_request();
+			    if (response) {
+				    response->url = request.url;
+			    }
+		    } catch (IOException &e) {
+			    exception_error = e.what();
+			    caught_e = std::current_exception();
+		    } catch (HTTPException &e) {
+			    exception_error = e.what();
+			    caught_e = std::current_exception();
+			    // Handlers turn error statuses into exceptions; recover the throttle information.
+			    ErrorData error_data(e);
+			    auto entry = error_data.ExtraInfo().find("status_code");
+			    if (entry != error_data.ExtraInfo().end()) {
+				    caught_status = entry->second;
+			    }
+			    auto retry_entry = error_data.ExtraInfo().find("header_Retry-After");
+			    if (retry_entry != error_data.ExtraInfo().end()) {
+				    caught_retry_after = retry_entry->second;
+			    }
+		    }
+
+		    // Request errors and caught exceptions are eligible without a response status.
+		    should_retry = !response || params.http_util.ShouldRetry(request, *response);
+		    if (!should_retry) {
+			    auto response_code = static_cast<uint16_t>(response->status);
+			    response->success = (response_code >= 200 && response_code < 300) ||
+			                        response->status == HTTPStatusCode::NotModified_304;
+			    return HTTPRetryDecision::Finish();
+		    }
+		    if (!HTTPUtil::IsIdempotent(request.type)) {
+			    return HTTPRetryDecision::Finish();
+		    }
+		    const bool throttled = (response && (response->status == HTTPStatusCode::TooManyRequests_429 ||
+		                                         response->status == HTTPStatusCode::ServiceUnavailable_503)) ||
+		                           caught_status == "429" || caught_status == "503";
+		    if (throttled) {
+			    if (response && response->headers.HasHeader("Retry-After")) {
+				    caught_retry_after = response->headers.GetHeaderValue("Retry-After");
+			    }
+			    return HTTPRetryDecision::Throttled(caught_retry_after);
+		    }
+		    return HTTPRetryDecision::Retry();
+	    },
+	    retry_cb);
+
+	if (!should_retry) {
+		return response;
+	}
+	if (request.try_request) {
+		if (!response) {
+			response = make_uniq<HTTPResponse>(HTTPStatusCode::INVALID);
+			response->request_error = exception_error.empty() ? "Unknown error" : std::move(exception_error);
+		}
+		response->success = false;
+		return response;
+	}
+	auto method = EnumUtil::ToString(request.type);
+	if (caught_e) {
+		std::rethrow_exception(caught_e);
+	}
+	if (response && !response->HasRequestError()) {
+		throw HTTPException(*response, "Request returned HTTP %d for HTTP %s to '%s'",
+		                    static_cast<int>(response->status), method, request.url);
+	}
+	string error = response ? response->GetError() : "Unknown error";
+	throw IOException("%s error for HTTP %s to '%s'", error, method, request.url);
 }
 
 void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
@@ -632,6 +635,10 @@ unique_ptr<HTTPResponse> HTTPClient::Request(BaseRequest &request) {
 	}
 }
 
+bool HTTPClient::CanReuse(const HTTPParams &) const {
+	return false;
+}
+
 bool HTTPUtil::IsHTTPProtocol(const string &url) {
 	return StringUtil::StartsWith(url, "http://");
 }
@@ -639,6 +646,28 @@ void HTTPUtil::BumpToSecureProtocol(string &url) {
 	if (IsHTTPProtocol(url)) {
 		url = "https://" + url.substr(7);
 	}
+}
+
+string HTTPUtil::CreateSignatureV4(EncryptionUtil &encryption_util, const SignatureV4Params &sig_params) {
+	hash_bytes canonical_request_hash;
+	hash_str canonical_request_hash_str;
+	sha256(encryption_util, const_data_ptr_cast(sig_params.canonical_request.data()),
+	       sig_params.canonical_request.length(), canonical_request_hash);
+	hex256(canonical_request_hash, canonical_request_hash_str);
+
+	auto string_to_sign = "AWS4-HMAC-SHA256\n" + sig_params.datetime_now + "\n" + sig_params.credential_scope + "\n" +
+	                      string(const_char_ptr_cast(canonical_request_hash_str), sizeof(hash_str));
+	hash_bytes k_date, k_region, k_service, signing_key, signature;
+	auto sign_key = "AWS4" + sig_params.secret_access_key;
+	hmac256(encryption_util, sig_params.date_now, const_data_ptr_cast(sign_key.data()), sign_key.length(), k_date);
+	hmac256(encryption_util, sig_params.region, k_date, k_region);
+	hmac256(encryption_util, sig_params.service, k_region, k_service);
+	hmac256(encryption_util, "aws4_request", k_service, signing_key);
+	hmac256(encryption_util, string_to_sign, signing_key, signature);
+
+	hash_str signature_str;
+	hex256(signature, signature_str);
+	return string(const_char_ptr_cast(signature_str), sizeof(hash_str));
 }
 
 } // namespace duckdb

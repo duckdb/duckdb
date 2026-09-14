@@ -376,6 +376,7 @@ private:
 
 static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(ClientContext &context, const string &sql,
                                                                            AutoCompleteParameters &parameters) {
+	parameters.use_heap_based_parser = context.GetParserOptions().heap_based_parser;
 	ClientContextCatalogProvider provider(context);
 	auto result = GenerateAutoCompleteSuggestions(provider, sql, parameters);
 	return make_uniq<SQLAutoCompleteFunctionData>(std::move(result));
@@ -467,9 +468,15 @@ static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context
 	ParseResultAllocator parse_allocator;
 	idx_t max_token_index = 0;
 	TokenIterator token_iterator(tokens);
-	MatchState state(token_iterator, suggestions, parse_allocator, max_token_index, MatchMode::RECOGNIZE_ONLY);
+	auto parser_options = context.GetParserOptions();
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext match_context(suggestions, parse_allocator, process_allocator, max_token_index,
+	                           MatchMode::RECOGNIZE_ONLY, parser_options.identifier_case_mode,
+	                           parser_options.heap_based_parser);
+	MatchState state(token_iterator, match_context);
 
 	compiled_grammar->ProgramMatcher().MatchParseResult(state);
+	process_allocator.FreeAll();
 
 	return make_uniq<SQLTokenizeFunctionData>(std::move(tokens));
 }
@@ -556,9 +563,15 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	ParseResultAllocator parse_allocator;
 	idx_t max_token_index = 0;
 	TokenIterator token_iterator(root_tokens);
-	MatchState state(token_iterator, suggestions, parse_allocator, max_token_index, MatchMode::RECOGNIZE_ONLY);
+	auto parser_options = context.GetParserOptions();
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext match_context(suggestions, parse_allocator, process_allocator, max_token_index,
+	                           MatchMode::RECOGNIZE_ONLY, parser_options.identifier_case_mode,
+	                           parser_options.heap_based_parser);
+	MatchState state(token_iterator, match_context);
 
 	auto match_result = compiled_grammar->ProgramMatcher().MatchParseResult(state);
+	process_allocator.FreeAll();
 	// `+ 1` accounts for the EOI sentinel — the matcher walk may report success without
 	// consuming it.
 	if (!match_result.IsSuccess() || state.token_iterator.Position() + 1 < root_tokens.size()) {

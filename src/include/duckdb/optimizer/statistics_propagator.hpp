@@ -42,8 +42,8 @@ public:
 	bool FilterBindingsChanged() const {
 		return filter_bindings_changed;
 	}
-	bool HasRemovedAggregateChildren() const {
-		return removed_aggregate_children;
+	bool HasRemovedExpressions() const {
+		return removed_expressions;
 	}
 
 	//! Derive output statistics of a monotone function by evaluating it at the corners of its
@@ -158,8 +158,8 @@ private:
 	};
 	//! The map of CTE index -> statistics of its definition
 	unordered_map<TableIndex, CTEStatistics> cte_stats_map;
-	//! Whether a statistics callback removed aggregate children, leaving columns that may now be unused
-	bool removed_aggregate_children = false;
+	//! Whether any expression, filter or join condition was removed, leaving columns that may now be unused
+	bool removed_expressions = false;
 	//! Node stats for the current node
 	unique_ptr<NodeStatistics> node_stats;
 	//! Whether statistics changed which relations a filter depends on

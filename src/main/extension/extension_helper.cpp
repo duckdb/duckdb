@@ -227,6 +227,13 @@ string ExtensionHelper::AddExtensionInstallHintToErrorMsg(DatabaseInstance &db, 
 	return base_error;
 }
 
+// autoloading only ever targets core extensions, so it trusts the core keys exclusively
+static ExtensionLoadOptions AutoLoadOptions(const string &extension_name) {
+	ExtensionLoadOptions options(extension_name);
+	options.core_only = true;
+	return options;
+}
+
 bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept {
 	if (context.db->ExtensionIsLoaded(extension_name)) {
 		return true;
@@ -239,7 +246,7 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 			options.repository = autoinstall_repo;
 			ExtensionHelper::InstallExtension(context, extension_name, options);
 		}
-		ExtensionHelper::LoadExternalExtension(context, {extension_name});
+		ExtensionHelper::LoadExternalExtension(context, AutoLoadOptions(extension_name));
 		return true;
 	} catch (...) {
 		return false;
@@ -269,7 +276,7 @@ bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const str
 			ExtensionHelper::InstallExtension(instance, fs, extension_name, options);
 		}
 		if (Settings::Get<AutoloadKnownExtensionsSetting>(instance)) {
-			ExtensionHelper::LoadExternalExtension(instance, fs, {extension_name});
+			ExtensionHelper::LoadExternalExtension(instance, fs, AutoLoadOptions(extension_name));
 			return true;
 		}
 		return false;
@@ -284,7 +291,7 @@ bool ExtensionHelper::TryAutoLoadAvailableExtension(DatabaseInstance &instance, 
 	}
 	try {
 		auto &fs = FileSystem::GetFileSystem(instance);
-		ExtensionHelper::LoadExternalExtension(instance, fs, {extension_name});
+		ExtensionHelper::LoadExternalExtension(instance, fs, AutoLoadOptions(extension_name));
 		return true;
 	} catch (...) {
 		return false;
@@ -438,7 +445,7 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 			ExtensionHelper::InstallExtension(db, fs, extension_name, options);
 		}
 #endif
-		ExtensionHelper::LoadExternalExtension(db, fs, {extension_name});
+		ExtensionHelper::LoadExternalExtension(db, fs, AutoLoadOptions(extension_name));
 		DUCKDB_LOG_INFO(db, "Loaded extension '%s'", extension_name);
 	} catch (std::exception &e) {
 		ErrorData error(e);
@@ -931,6 +938,24 @@ vector<string> ExtensionHelper::GetTrustedPublicKeys(DatabaseInstance &db, Exten
 		}
 		return keys;
 	}
+}
+
+ExtensionRepositoryType ExtensionHelper::ResolveTrustedSignatureOrigin(bool has_from_clause, bool core_only,
+                                                                       ExtensionRepositoryType recorded_origin) {
+	if (has_from_clause) {
+		// an explicit FROM names the origin, so its keys are the ones to trust
+		return recorded_origin;
+	}
+	if (core_only) {
+		// autoloading only ever targets core extensions - not even community keys are trusted
+		return ExtensionRepositoryType::CORE;
+	}
+	// a plain bare load trusts the fixed core and community keys: a community extension keeps its community keys, every
+	// other origin (including a user-provided repository) is verified against the core keys, never its own
+	if (recorded_origin == ExtensionRepositoryType::COMMUNITY) {
+		return ExtensionRepositoryType::COMMUNITY;
+	}
+	return ExtensionRepositoryType::CORE;
 }
 
 } // namespace duckdb

@@ -171,7 +171,7 @@ void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t 
 	// copy the data from the base table
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetDataMutable<T>(result);
-	memcpy(result_data + result_offset, source_data, scan_count * sizeof(T));
+	memcpy(result_data + result_offset, source_data.data(), scan_count * sizeof(T));
 }
 
 template <class T>
@@ -182,7 +182,7 @@ void FixedSizeScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_co
 	auto source_data = scan_state.reader.GetArraySlice<T>(0, start, scan_count);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	FlatVector::SetData(result, data_ptr_cast(const_cast<T *>(source_data)), count_t(scan_count));
+	FlatVector::SetData(result, data_ptr_cast(const_cast<T *>(source_data.data())), count_t(scan_count));
 }
 
 //===--------------------------------------------------------------------===//
@@ -193,7 +193,7 @@ void FixedSizeFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t ro
                        idx_t result_idx) {
 	auto row_index = NumericCast<idx_t>(row_id);
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-	auto handle = buffer_manager.Pin(segment.GetBlockHandle());
+	auto handle = buffer_manager.Pin(state.context, segment.GetBlockHandle());
 	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "fixed-size segment");
 
 	// first fetch the data from the base table

@@ -221,6 +221,9 @@ public:
 	ClientContext &GetClientContext() const {
 		return context;
 	}
+	DuckTransaction &GetTransaction() const {
+		return transaction;
+	}
 
 	void FlushBulkAppendBlocksAndSync(AttachedDatabase &db);
 	bool SyncedFlushedBlocks() const {

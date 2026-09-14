@@ -216,6 +216,9 @@ void ShowRef::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<ShowType>(202, "show_type", show_type);
 	serializer.WritePropertyWithDefault<Identifier>(203, "catalog_name", qualified_name.Catalog());
 	serializer.WritePropertyWithDefault<Identifier>(204, "schema_name", qualified_name.Schema());
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0) || (qualified_name.Path().size() > 3)) {
+		serializer.WriteProperty<QualifiedName>(205, "qualified_name", qualified_name);
+	}
 }
 
 unique_ptr<TableRef> ShowRef::Deserialize(Deserializer &deserializer) {
@@ -225,7 +228,11 @@ unique_ptr<TableRef> ShowRef::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<ShowType>(202, "show_type", result->show_type);
 	auto catalog_name = deserializer.ReadPropertyWithDefault<Identifier>(203, "catalog_name");
 	auto schema_name = deserializer.ReadPropertyWithDefault<Identifier>(204, "schema_name");
+	auto qualified_name = deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(205, "qualified_name", QualifiedName());
 	result->SetQualifiedName(std::move(catalog_name), std::move(schema_name), std::move(table_name));
+	if (!qualified_name.Path().empty()) {
+		result->qualified_name = std::move(qualified_name);
+	}
 	return std::move(result);
 }
 

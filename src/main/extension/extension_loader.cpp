@@ -352,6 +352,16 @@ TableFunctionCatalogEntry &ExtensionLoader::GetTableFunction(const Identifier &n
 void ExtensionLoader::RegisterType(string type_name, LogicalType type, bind_logical_type_function_t bind_modifiers) {
 	D_ASSERT(!type_name.empty());
 	CreateTypeInfo info(std::move(type_name), std::move(type), bind_modifiers);
+	RegisterType(info);
+}
+
+void ExtensionLoader::RegisterType(string type_name, LogicalType type, TypeConstructorSet constructors) {
+	D_ASSERT(!type_name.empty());
+	CreateTypeInfo info(std::move(type_name), std::move(type), std::move(constructors));
+	RegisterType(info);
+}
+
+void ExtensionLoader::RegisterType(CreateTypeInfo &info) {
 	info.temporary = true;
 	info.internal = true;
 	info.extension_name = GetRegisteredExtensionName();
