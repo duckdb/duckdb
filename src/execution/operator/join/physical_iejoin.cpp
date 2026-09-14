@@ -8,6 +8,7 @@
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/execution/mark_join_row_comparison.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -76,6 +77,18 @@ PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoi
 //===--------------------------------------------------------------------===//
 // Directional extrema partitioned by NULL key, collected from the original evaluated keys.
 struct IEMarkJoinBounds {
+	static bool CanUse(const vector<JoinCondition> &conditions) {
+		if (conditions.size() != 2) {
+			return false;
+		}
+		for (const auto &condition : conditions) {
+			if (condition.GetLHS().GetReturnType().id() == LogicalTypeId::UNION) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	Value values[2];
 	Value other_null_values[2];
 	bool has_null[2] = {false, false};
@@ -166,14 +179,12 @@ public:
 		const auto &lhs_types = op.children[0].get().GetTypes();
 		vector<BoundOrderByNode> lhs_order;
 		lhs_order.emplace_back(op.lhs_orders[0].Copy());
-		tables[0] = make_uniq<GlobalSortedTable>(context, lhs_order, lhs_types, op,
-		                                         op.join_type == JoinType::MARK && op.conditions.size() == 2);
+		tables[0] = make_uniq<GlobalSortedTable>(context, lhs_order, lhs_types, op, op.join_type == JoinType::MARK);
 
 		const auto &rhs_types = op.children[1].get().GetTypes();
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0].Copy());
-		tables[1] = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_types, op,
-		                                         op.join_type == JoinType::MARK && op.conditions.size() == 2);
+		tables[1] = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_types, op, op.join_type == JoinType::MARK);
 
 		if (op.filter_pushdown) {
 			skip_filter_pushdown = op.filter_pushdown->probe_info.empty();
@@ -240,7 +251,7 @@ unique_ptr<LocalSinkState> PhysicalIEJoin::GetLocalSinkState(ExecutionContext &c
 void IEJoinGlobalState::Sink(ExecutionContext &context, DataChunk &input, IEJoinLocalState &lstate) {
 	// Sink the data into the local sort state
 	lstate.table.Sink(context, input);
-	if (child == 1 && tables[1]->op.join_type == JoinType::MARK && tables[1]->op.conditions.size() == 2) {
+	if (child == 1 && tables[1]->op.join_type == JoinType::MARK && IEMarkJoinBounds::CanUse(tables[1]->op.conditions)) {
 		lstate.mark_bounds.Sink(lstate.table.keys, tables[1]->op.conditions);
 	}
 }
@@ -266,7 +277,7 @@ SinkCombineResultType PhysicalIEJoin::Combine(ExecutionContext &context, Operato
 	auto &gstate = input.global_state.Cast<IEJoinGlobalState>();
 	auto &lstate = input.local_state.Cast<IEJoinLocalState>();
 	gstate.tables[gstate.child]->Combine(context, lstate.table);
-	if (gstate.child == 1 && join_type == JoinType::MARK && conditions.size() == 2) {
+	if (gstate.child == 1 && join_type == JoinType::MARK && IEMarkJoinBounds::CanUse(conditions)) {
 		lock_guard<mutex> guard(gstate.mark_lock);
 		gstate.mark_bounds.Combine(lstate.mark_bounds, conditions);
 	}
@@ -1046,7 +1057,7 @@ public:
 		auto left_payload_types = op.children[0].get().GetTypes();
 		auto right_payload_types = op.children[1].get().GetTypes();
 		mark_payload.InitializeEmpty(left_payload_types);
-		if (op.join_type == JoinType::MARK && op.conditions.size() == 2) {
+		if (op.join_type == JoinType::MARK) {
 			for (const auto &condition : op.conditions) {
 				left_payload_types.push_back(condition.GetLHS().GetReturnType());
 				right_payload_types.push_back(condition.GetRHS().GetReturnType());
@@ -1073,7 +1084,7 @@ public:
 			pred_matches.Initialize();
 		}
 
-		if (op.join_type == JoinType::MARK && op.conditions.size() == 2) {
+		if (op.join_type == JoinType::MARK) {
 			vector<LogicalType> types;
 			for (const auto &condition : op.conditions) {
 				types.push_back(condition.GetLHS().GetReturnType());
@@ -1155,6 +1166,8 @@ public:
 	void ResolveAntiJoin(ExecutionContext &context, DataChunk &result);
 	// 	Resolve MARK joins
 	void ResolveMarkJoin(ExecutionContext &context, DataChunk &result);
+	void ConstructMarkJoinResult(ExecutionContext &context, DataChunk &result, bool found_match[], bool null_probe);
+	void RefineMarkJoin(ExecutionContext &context, bool found_match[], bool found_unknown[], bool null_probe);
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, RIGHT, FULL)
 	void ResolveComplexJoin(ExecutionContext &context, DataChunk &result);
 	//	Resolve left join results
@@ -1501,10 +1514,18 @@ const SelectionVector *IEJoinLocalSourceState::ApplyTailConditions() {
 	right_keys.Reset();
 	for (size_t cmp_idx = 0; cmp_idx < tail_cols; ++cmp_idx) {
 		auto &left = left_keys.data[cmp_idx];
-		left_executor.ExecuteExpression(cmp_idx, left);
+		if (op.join_type == JoinType::MARK) {
+			left.Reference(lpayload.data[op.children[0].get().GetTypes().size() + cmp_idx + 2]);
+		} else {
+			left_executor.ExecuteExpression(cmp_idx, left);
+		}
 
 		auto &right = right_keys.data[cmp_idx];
-		right_executor.ExecuteExpression(cmp_idx, right);
+		if (op.join_type == JoinType::MARK) {
+			right.Reference(rpayload.data[op.children[1].get().GetTypes().size() + cmp_idx + 2]);
+		} else {
+			right_executor.ExecuteExpression(cmp_idx, right);
+		}
 
 		if (tail_count < result_count) {
 			left.Slice(*sel, tail_count);
@@ -1777,7 +1798,6 @@ void IEJoinLocalSourceState::ResolveMarkJoin(ExecutionContext &context, DataChun
 	auto &op = gsource.op;
 	auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
 	auto &left_table = *ie_sink.tables[0];
-	auto &right_table = *ie_sink.tables[1];
 
 	//	We need to have _all_ the rows, so we perform the SEMI JOIN,
 	//	then go back and merge in the ANTI JOIN rows.
@@ -1796,25 +1816,77 @@ void IEJoinLocalSourceState::ResolveMarkJoin(ExecutionContext &context, DataChun
 	op.SliceSortedPayload(lpayload, left_table, *left_iterator, left_chunk_state, left_block_index, rsel,
 	                      *left_scan_state);
 
-	//	Compute the residual keys
-	//	We know here that the two sort columns are not NULL, so the tail columns are all we need
-	left_executor.Execute(&lpayload, left_keys);
-
-	//	Now hand it off to code that knows the rules...
-	//	Note that it can handle left_keys.ColumnCount().empty()
-	if (op.conditions.size() == 2) {
-		ReferenceMarkKeys();
-		bool found_unknown[STANDARD_VECTOR_SIZE] = {false};
-		for (idx_t row = 0; row < lpayload.size(); row++) {
-			found_unknown[row] =
-			    !found_match[row] && ie_sink.mark_bounds.IsUnknown(mark_keys, row, op.conditions, right_table.count);
-		}
-		PhysicalJoin::ConstructMarkJoinResult(mark_keys, mark_payload, result, found_match, false, found_unknown);
-	} else {
-		PhysicalJoin::ConstructMarkJoinResult(left_keys, lpayload, result, found_match, right_table.has_null);
-	}
+	ConstructMarkJoinResult(context, result, found_match, false);
 
 	result.Verify(context.client.db);
+}
+
+void IEJoinLocalSourceState::RefineMarkJoin(ExecutionContext &context, bool found_match[], bool found_unknown[],
+                                            bool null_probe) {
+	auto &op = gsource.op;
+	auto &right_table = *gsource.gsink.tables[1];
+	const idx_t start = null_probe ? 0 : right_table.count - right_table.has_null;
+	if (start == right_table.count) {
+		return;
+	}
+
+	auto &source = *right_table.sorted->payload_data;
+	vector<column_t> key_columns;
+	for (idx_t col = 0; col < op.conditions.size(); col++) {
+		key_columns.push_back(op.children[1].get().GetTypes().size() + col);
+	}
+	for (idx_t probe = 0; probe < mark_keys.size(); probe++) {
+		if (found_match[probe]) {
+			continue;
+		}
+		TupleDataScanState scan;
+		source.InitializeScan(scan, key_columns);
+		DataChunk keys;
+		source.InitializeScanChunk(scan, keys);
+		auto offset = source.Seek(scan, start / STANDARD_VECTOR_SIZE);
+		Vector comparison(LogicalType::BOOLEAN);
+		while (true) {
+			keys.Reset();
+			if (!source.Scan(scan, keys)) {
+				break;
+			}
+			context.client.InterruptCheck();
+			const auto count = keys.size();
+			if (offset < start) {
+				keys.Slice(start - offset, count - (start - offset));
+			}
+			offset += count;
+			MarkJoinRowComparison::CompareConjunction(mark_keys, probe, keys, op.conditions, comparison);
+			for (auto entry : comparison.Values<bool>()) {
+				if (!entry.IsValid()) {
+					found_unknown[probe] = true;
+				} else if (entry.GetValue()) {
+					found_match[probe] = true;
+					break;
+				}
+			}
+			if (found_match[probe]) {
+				break;
+			}
+		}
+	}
+}
+
+void IEJoinLocalSourceState::ConstructMarkJoinResult(ExecutionContext &context, DataChunk &result, bool found_match[],
+                                                     bool null_probe) {
+	ReferenceMarkKeys();
+	bool found_unknown[STANDARD_VECTOR_SIZE] = {false};
+	auto &op = gsource.op;
+	if (IEMarkJoinBounds::CanUse(op.conditions)) {
+		for (idx_t row = 0; row < mark_keys.size(); row++) {
+			found_unknown[row] =
+			    !found_match[row] &&
+			    gsource.gsink.mark_bounds.IsUnknown(mark_keys, row, op.conditions, gsource.gsink.tables[1]->count);
+		}
+	} else {
+		RefineMarkJoin(context, found_match, found_unknown, null_probe);
+	}
+	PhysicalJoin::ConstructMarkJoinResult(mark_keys, mark_payload, result, found_match, false, found_unknown);
 }
 
 void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataChunk &result) {
@@ -2248,27 +2320,8 @@ void IEJoinLocalSourceState::ExecuteMarkTask(ExecutionContext &context, DataChun
 	op.SliceSortedPayload(lpayload, left_table, *left_iterator, left_chunk_state, left_block_index, outer_sel,
 	                      *left_scan_state);
 
-	if (op.conditions.size() == 2) {
-		ReferenceMarkKeys();
-		bool found_unknown[STANDARD_VECTOR_SIZE] = {false};
-		for (idx_t row = 0; row < lpayload.size(); row++) {
-			found_unknown[row] = ie_sink.mark_bounds.IsUnknown(mark_keys, row, op.conditions, ie_sink.tables[1]->count);
-		}
-		PhysicalJoin::ConstructMarkJoinResult(mark_keys, mark_payload, result, nullptr, false, found_unknown);
-		return;
-	}
-
-	// for the initial set of columns we just reference the left side
-	result.SetChildCardinality(lpayload.size());
-	for (idx_t i = 0; i < lpayload.ColumnCount(); i++) {
-		result.data[i].Reference(lpayload.data[i]);
-	}
-
-	//	One of the two main keys is NULL, so the result is NULL
-	auto &mark_vector = result.data.back();
-	mark_vector.SetVectorType(VectorType::FLAT_VECTOR);
-	auto &mask = FlatVector::ValidityMutable(mark_vector);
-	mask.SetAllInvalid(count);
+	bool found_match[STANDARD_VECTOR_SIZE] = {false};
+	ConstructMarkJoinResult(context, result, found_match, true);
 
 	result.Verify(context.client.db);
 }

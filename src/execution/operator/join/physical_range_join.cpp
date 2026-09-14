@@ -7,6 +7,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/mark_join_row_comparison.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -409,6 +410,26 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 	for (const auto &v : keys.data) {
 		if (v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			++all_constant;
+		}
+	}
+
+	if (global_table.retain_keys) {
+		for (idx_t col = 0; col < keys.ColumnCount(); col++) {
+			auto &key = keys.data[col];
+			if (!key.GetType().IsNested()) {
+				continue;
+			}
+			// Nested comparison NULLs need refinement even when the outer value is valid.
+			Vector comparison(LogicalType::BOOLEAN, count);
+			MarkJoinRowComparison::Compare(key, key, conditions[col].GetComparisonType(), comparison);
+			auto values = comparison.Values<bool>();
+			for (idx_t row = 0; row < count; row++) {
+				if (!values[row].IsValid()) {
+					primary.Flatten();
+					FlatVector::ValidityMutable(primary).SetInvalid(row);
+					all_constant = 0;
+				}
+			}
 		}
 	}
 

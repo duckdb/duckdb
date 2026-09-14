@@ -193,11 +193,7 @@ static bool RequiresNestedLoopMark(const LogicalComparisonJoin &op) {
 	if (op.mark_types.empty() && op.TryGetMarkJoinGroupTypes(group_types)) {
 		return false;
 	}
-	if (op.HasArbitraryConditions()) {
-		return true;
-	}
-	idx_t range_count = 0;
-	return comparison_count > 2 && !op.HasEquality(range_count);
+	return op.HasArbitraryConditions();
 }
 
 PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoin &op) {
