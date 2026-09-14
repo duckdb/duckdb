@@ -3,11 +3,82 @@
 #include "duckdb/common/value_operations/value_operations.hpp"
 
 #include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
+
+static void CompareRowEqualityInternal(const Vector &left, idx_t left_row, idx_t left_count, const Vector &right,
+                                       idx_t right_count, const bool active[], bool row_is_false[],
+                                       bool row_is_unknown[]) {
+	if (left.GetType().id() != LogicalTypeId::TUPLE) {
+		Vector left_reference(left.GetType());
+		ConstantVector::Reference(left_reference, count_t(right_count), left, left_row, left_count);
+		Vector comparison(LogicalType::BOOLEAN, right_count);
+		VectorOperations::Equals(left_reference, right, comparison);
+
+		UnifiedVectorFormat comparison_format;
+		comparison.ToUnifiedFormat(comparison_format);
+		auto comparison_data = comparison_format.GetData<bool>();
+		for (idx_t right_row = 0; right_row < right_count; right_row++) {
+			if (!active[right_row] || row_is_false[right_row]) {
+				continue;
+			}
+			auto comparison_idx = comparison_format.sel->get_index(right_row);
+			if (!comparison_format.validity.RowIsValid(comparison_idx)) {
+				row_is_unknown[right_row] = true;
+			} else if (!comparison_data[comparison_idx]) {
+				row_is_false[right_row] = true;
+				row_is_unknown[right_row] = false;
+			}
+		}
+		return;
+	}
+
+	D_ASSERT(right.GetType().id() == LogicalTypeId::TUPLE);
+	UnifiedVectorFormat left_format;
+	UnifiedVectorFormat right_format;
+	left.ToUnifiedFormat(left_format);
+	right.ToUnifiedFormat(right_format);
+	auto left_idx = left_format.sel->get_index(left_row);
+
+	bool child_active[STANDARD_VECTOR_SIZE] = {false};
+	for (idx_t right_row = 0; right_row < right_count; right_row++) {
+		if (!active[right_row] || row_is_false[right_row]) {
+			continue;
+		}
+		auto right_idx = right_format.sel->get_index(right_row);
+		if (!left_format.validity.RowIsValid(left_idx) || !right_format.validity.RowIsValid(right_idx)) {
+			row_is_unknown[right_row] = true;
+		} else {
+			child_active[right_row] = true;
+		}
+	}
+
+	auto &left_children = StructVector::GetEntries(left);
+	auto &right_children = StructVector::GetEntries(right);
+	D_ASSERT(left_children.size() == right_children.size());
+	for (idx_t child_idx = 0; child_idx < left_children.size(); child_idx++) {
+		CompareRowEqualityInternal(left_children[child_idx], left_row, left_count, right_children[child_idx],
+		                           right_count, child_active, row_is_false, row_is_unknown);
+	}
+}
+
+void MarkJoinRowComparison::CompareEquality(const Vector &left, idx_t left_row, idx_t left_count, const Vector &right,
+                                            idx_t right_count, bool row_is_false[], bool row_is_unknown[]) {
+	D_ASSERT(left.GetType() == right.GetType());
+	D_ASSERT(right_count <= STANDARD_VECTOR_SIZE);
+	bool active[STANDARD_VECTOR_SIZE];
+	for (idx_t right_row = 0; right_row < right_count; right_row++) {
+		active[right_row] = !row_is_false[right_row];
+	}
+	CompareRowEqualityInternal(left, left_row, left_count, right, right_count, active, row_is_false, row_is_unknown);
+	for (idx_t right_row = 0; right_row < right_count; right_row++) {
+		D_ASSERT(!row_is_false[right_row] || !row_is_unknown[right_row]);
+	}
+}
 
 template <class T>
 static Value MarkRangeExtreme(const Vector &key, bool maximum, idx_t &null_count) {
@@ -107,7 +178,8 @@ void MarkJoinRowComparison::Compare(const Vector &left, idx_t left_row, const Ve
 }
 
 void MarkJoinRowComparison::CompareConjunction(DataChunk &left, idx_t left_row, DataChunk &right,
-                                               const vector<JoinCondition> &conditions, Vector &result) {
+                                               const vector<JoinCondition> &conditions, Vector &result,
+                                               bool nested_loop) {
 	D_ASSERT(left_row < left.size());
 	D_ASSERT(right.size() <= STANDARD_VECTOR_SIZE);
 	D_ASSERT(left.ColumnCount() == conditions.size());
@@ -116,8 +188,27 @@ void MarkJoinRowComparison::CompareConjunction(DataChunk &left, idx_t left_row, 
 	bool pair_is_false[STANDARD_VECTOR_SIZE] = {false};
 	bool pair_is_unknown[STANDARD_VECTOR_SIZE] = {false};
 	for (idx_t condition_idx = 0; condition_idx < conditions.size(); condition_idx++) {
-		MarkJoinRowComparison::Compare(left.data[condition_idx], left_row, right.data[condition_idx],
-		                               conditions[condition_idx].GetComparisonType(), comparison);
+		const auto type = conditions[condition_idx].GetComparisonType();
+		if (nested_loop && left.data[condition_idx].GetType().id() == LogicalTypeId::TUPLE &&
+		    (type == ExpressionType::COMPARE_EQUAL || type == ExpressionType::COMPARE_NOTEQUAL)) {
+			bool is_false[STANDARD_VECTOR_SIZE] = {false};
+			bool is_unknown[STANDARD_VECTOR_SIZE] = {false};
+			CompareEquality(left.data[condition_idx], left_row, left.size(), right.data[condition_idx], right.size(),
+			                is_false, is_unknown);
+			comparison.SetVectorType(VectorType::FLAT_VECTOR);
+			FlatVector::ValidityMutable(comparison).Reset(right.size());
+			auto writer = FlatVector::Writer<bool>(comparison, right.size());
+			for (idx_t row = 0; row < right.size(); row++) {
+				if (is_unknown[row]) {
+					writer.WriteNull();
+				} else {
+					writer.WriteValue(type == ExpressionType::COMPARE_EQUAL ? !is_false[row] : is_false[row]);
+				}
+			}
+		} else {
+			MarkJoinRowComparison::Compare(left.data[condition_idx], left_row, right.data[condition_idx],
+			                               conditions[condition_idx].GetComparisonType(), comparison);
+		}
 		auto entries = comparison.Values<bool>();
 		for (idx_t right_row = 0; right_row < right.size(); right_row++) {
 			auto entry = entries[right_row];
@@ -149,7 +240,7 @@ void MarkJoinRowComparison::Perform(DataChunk &left, DataChunk &right, bool foun
 		if (found_match[left_row]) {
 			continue;
 		}
-		MarkJoinRowComparison::CompareConjunction(left, left_row, right, conditions, comparison);
+		MarkJoinRowComparison::CompareConjunction(left, left_row, right, conditions, comparison, true);
 		for (auto entry : comparison.Values<bool>()) {
 			if (entry.IsValid()) {
 				if (entry.GetValue()) {

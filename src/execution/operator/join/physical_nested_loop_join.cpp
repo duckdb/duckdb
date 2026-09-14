@@ -472,7 +472,7 @@ static void ResolveSimpleJoinPredicate(const vector<JoinCondition> &conditions, 
 				continue;
 			}
 			MarkJoinRowComparison::CompareConjunction(state.left_condition, left_row, state.right_condition, conditions,
-			                                          comparison);
+			                                          comparison, join_type == JoinType::MARK);
 			auto comparisons = comparison.Values<bool>();
 			idx_t candidate_count = 0;
 			for (idx_t right_row = 0; right_row < state.right_condition.size(); right_row++) {
