@@ -32,6 +32,7 @@
 #include "duckdb/common/enums/debug_initialize.hpp"
 #include "duckdb/common/enums/debug_order_verification.hpp"
 #include "duckdb/common/enums/debug_progress_verification.hpp"
+#include "duckdb/common/enums/debug_sql_export_verification.hpp"
 #include "duckdb/common/enums/debug_statement_verification.hpp"
 #include "duckdb/common/enums/debug_vector_verification.hpp"
 #include "duckdb/common/enums/debug_verification_mode.hpp"
@@ -169,6 +170,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/setting_info.hpp"
+#include "duckdb/main/sql_export_verification.hpp"
 #include "duckdb/optimizer/aggregate_rewrite.hpp"
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 #include "duckdb/optimizer/compressed_materialization.hpp"
@@ -1739,6 +1741,25 @@ const char* EnumUtil::ToChars<DebugProgressVerification>(DebugProgressVerificati
 template<>
 DebugProgressVerification EnumUtil::FromString<DebugProgressVerification>(const char *value) {
 	return static_cast<DebugProgressVerification>(StringUtil::StringToEnum(GetDebugProgressVerificationValues(), 3, "DebugProgressVerification", value));
+}
+
+const StringUtil::EnumStringLiteral *GetDebugSQLExportVerificationValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DebugSQLExportVerification::OFF), "OFF" },
+		{ static_cast<uint32_t>(DebugSQLExportVerification::REPORT), "REPORT" },
+		{ static_cast<uint32_t>(DebugSQLExportVerification::STRICT), "STRICT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DebugSQLExportVerification>(DebugSQLExportVerification value) {
+	return StringUtil::EnumToString(GetDebugSQLExportVerificationValues(), 3, "DebugSQLExportVerification", static_cast<uint32_t>(value));
+}
+
+template<>
+DebugSQLExportVerification EnumUtil::FromString<DebugSQLExportVerification>(const char *value) {
+	return static_cast<DebugSQLExportVerification>(StringUtil::StringToEnum(GetDebugSQLExportVerificationValues(), 3, "DebugSQLExportVerification", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDebugStatementVerificationValues() {
@@ -5481,6 +5502,95 @@ const char* EnumUtil::ToChars<RowIdHandling>(RowIdHandling value) {
 template<>
 RowIdHandling EnumUtil::FromString<RowIdHandling>(const char *value) {
 	return static_cast<RowIdHandling>(StringUtil::StringToEnum(GetRowIdHandlingValues(), 3, "RowIdHandling", value));
+}
+
+const StringUtil::EnumStringLiteral *GetSQLExportComparabilityValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SQLExportComparability::NOT_APPLICABLE), "NOT_APPLICABLE" },
+		{ static_cast<uint32_t>(SQLExportComparability::COMPARABLE), "COMPARABLE" },
+		{ static_cast<uint32_t>(SQLExportComparability::NON_REPEATABLE), "NON_REPEATABLE" },
+		{ static_cast<uint32_t>(SQLExportComparability::UNKNOWN), "UNKNOWN" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SQLExportComparability>(SQLExportComparability value) {
+	return StringUtil::EnumToString(GetSQLExportComparabilityValues(), 4, "SQLExportComparability", static_cast<uint32_t>(value));
+}
+
+template<>
+SQLExportComparability EnumUtil::FromString<SQLExportComparability>(const char *value) {
+	return static_cast<SQLExportComparability>(StringUtil::StringToEnum(GetSQLExportComparabilityValues(), 4, "SQLExportComparability", value));
+}
+
+const StringUtil::EnumStringLiteral *GetSQLExportExecutionRouteValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SQLExportExecutionRoute::NONE), "NONE" },
+		{ static_cast<uint32_t>(SQLExportExecutionRoute::GENERATED), "GENERATED" },
+		{ static_cast<uint32_t>(SQLExportExecutionRoute::ORIGINAL_NOT_APPLICABLE), "ORIGINAL_NOT_APPLICABLE" },
+		{ static_cast<uint32_t>(SQLExportExecutionRoute::ORIGINAL_FALLBACK), "ORIGINAL_FALLBACK" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SQLExportExecutionRoute>(SQLExportExecutionRoute value) {
+	return StringUtil::EnumToString(GetSQLExportExecutionRouteValues(), 4, "SQLExportExecutionRoute", static_cast<uint32_t>(value));
+}
+
+template<>
+SQLExportExecutionRoute EnumUtil::FromString<SQLExportExecutionRoute>(const char *value) {
+	return static_cast<SQLExportExecutionRoute>(StringUtil::StringToEnum(GetSQLExportExecutionRouteValues(), 4, "SQLExportExecutionRoute", value));
+}
+
+const StringUtil::EnumStringLiteral *GetSQLExportExecutionStatusValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SQLExportExecutionStatus::NOT_RUN), "NOT_RUN" },
+		{ static_cast<uint32_t>(SQLExportExecutionStatus::SUCCEEDED), "SUCCEEDED" },
+		{ static_cast<uint32_t>(SQLExportExecutionStatus::ERRORED), "ERRORED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SQLExportExecutionStatus>(SQLExportExecutionStatus value) {
+	return StringUtil::EnumToString(GetSQLExportExecutionStatusValues(), 3, "SQLExportExecutionStatus", static_cast<uint32_t>(value));
+}
+
+template<>
+SQLExportExecutionStatus EnumUtil::FromString<SQLExportExecutionStatus>(const char *value) {
+	return static_cast<SQLExportExecutionStatus>(StringUtil::StringToEnum(GetSQLExportExecutionStatusValues(), 3, "SQLExportExecutionStatus", value));
+}
+
+const StringUtil::EnumStringLiteral *GetSQLExportOutcomeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SQLExportOutcome::NOT_APPLICABLE), "NOT_APPLICABLE" },
+		{ static_cast<uint32_t>(SQLExportOutcome::STRUCTURALLY_VALIDATED), "STRUCTURALLY_VALIDATED" },
+		{ static_cast<uint32_t>(SQLExportOutcome::UNSUPPORTED_EXPRESSION), "UNSUPPORTED_EXPRESSION" },
+		{ static_cast<uint32_t>(SQLExportOutcome::UNSUPPORTED_OPERATOR), "UNSUPPORTED_OPERATOR" },
+		{ static_cast<uint32_t>(SQLExportOutcome::UNSUPPORTED_SOURCE), "UNSUPPORTED_SOURCE" },
+		{ static_cast<uint32_t>(SQLExportOutcome::UNSUPPORTED_EXTENSION), "UNSUPPORTED_EXTENSION" },
+		{ static_cast<uint32_t>(SQLExportOutcome::UNSUPPORTED_EXPORT_FEATURE), "UNSUPPORTED_EXPORT_FEATURE" },
+		{ static_cast<uint32_t>(SQLExportOutcome::UNSUPPORTED_INPUT_PROFILE), "UNSUPPORTED_INPUT_PROFILE" },
+		{ static_cast<uint32_t>(SQLExportOutcome::EXPORT_ERROR), "EXPORT_ERROR" },
+		{ static_cast<uint32_t>(SQLExportOutcome::SERIALIZE_ERROR), "SERIALIZE_ERROR" },
+		{ static_cast<uint32_t>(SQLExportOutcome::REPARSE_ERROR), "REPARSE_ERROR" },
+		{ static_cast<uint32_t>(SQLExportOutcome::REBIND_ERROR), "REBIND_ERROR" },
+		{ static_cast<uint32_t>(SQLExportOutcome::REOPTIMIZE_ERROR), "REOPTIMIZE_ERROR" },
+		{ static_cast<uint32_t>(SQLExportOutcome::OUTPUT_SCHEMA_MISMATCH), "OUTPUT_SCHEMA_MISMATCH" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SQLExportOutcome>(SQLExportOutcome value) {
+	return StringUtil::EnumToString(GetSQLExportOutcomeValues(), 14, "SQLExportOutcome", static_cast<uint32_t>(value));
+}
+
+template<>
+SQLExportOutcome EnumUtil::FromString<SQLExportOutcome>(const char *value) {
+	return static_cast<SQLExportOutcome>(StringUtil::StringToEnum(GetSQLExportOutcomeValues(), 14, "SQLExportOutcome", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSampleMethodValues() {
