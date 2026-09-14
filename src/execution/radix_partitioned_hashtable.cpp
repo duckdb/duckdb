@@ -188,7 +188,7 @@ public:
 
 public:
 	idx_t GetThreadLimit() const {
-		return temporary_memory_state->GetReservation() / number_of_threads / 10 * 8;
+		return temporary_memory_state->GetReservationForMemoryLimit() / number_of_threads / 10 * 8;
 	}
 
 public:
@@ -1053,9 +1053,9 @@ idx_t RadixPartitionedHashTable::MaxThreads(GlobalSinkState &sink_p) const {
 	    sink.context, sink.stored_allocators_size + max_threads * sink.max_partition_size);
 
 	// we cannot spill aggregate state memory
-	const auto usable_memory = sink.temporary_memory_state->GetReservation() > sink.stored_allocators_size
-	                               ? sink.temporary_memory_state->GetReservation() - sink.stored_allocators_size
-	                               : 0;
+	const auto reservation = sink.temporary_memory_state->GetReservationForMemoryLimit();
+	const auto usable_memory =
+	    reservation > sink.stored_allocators_size ? reservation - sink.stored_allocators_size : 0;
 	// This many partitions will fit given our reservation (at least 1))
 	const auto partitions_fit = MaxValue<idx_t>(usable_memory / sink.max_partition_size, 1);
 
