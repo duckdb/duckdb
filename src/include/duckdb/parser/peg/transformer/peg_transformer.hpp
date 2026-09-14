@@ -2314,6 +2314,10 @@ public:
 	static void InitializeParensExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeParensExpressionTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
+	static void InitializeMeasureSemanticsExpressionTrampoline(PEGTransformer &transformer,
+	                                                           GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue>
+	FinalizeMeasureSemanticsExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static void InitializeSingleExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeSingleExpressionTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
@@ -3030,6 +3034,19 @@ public:
 	static void InitializeAllRowsPerMatchTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeAllRowsPerMatchTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
+	static void InitializeAllRowsEmptyMatchesTrampoline(PEGTransformer &transformer,
+	                                                    GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeAllRowsEmptyMatchesTrampoline(PEGTransformer &transformer,
+	                                                                              GeneratedTransformProcess &process);
+	static void InitializeShowEmptyMatchesTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeShowEmptyMatchesTrampoline(PEGTransformer &transformer,
+	                                                                           GeneratedTransformProcess &process);
+	static void InitializeOmitEmptyMatchesTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeOmitEmptyMatchesTrampoline(PEGTransformer &transformer,
+	                                                                           GeneratedTransformProcess &process);
+	static void InitializeWithUnmatchedRowsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeWithUnmatchedRowsTrampoline(PEGTransformer &transformer,
+	                                                                            GeneratedTransformProcess &process);
 	static void InitializeAfterMatchSkipTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeAfterMatchSkipTrampoline(PEGTransformer &transformer,
 	                                                                         GeneratedTransformProcess &process);
@@ -3049,6 +3066,9 @@ public:
 	static void InitializeSkipToLastVarTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeSkipToLastVarTrampoline(PEGTransformer &transformer,
 	                                                                        GeneratedTransformProcess &process);
+	static void InitializeSkipToVarTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeSkipToVarTrampoline(PEGTransformer &transformer,
+	                                                                    GeneratedTransformProcess &process);
 	static void InitializePatternClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizePatternClauseTrampoline(PEGTransformer &transformer,
 	                                                                        GeneratedTransformProcess &process);
@@ -3082,6 +3102,9 @@ public:
 	                                                                     GeneratedTransformProcess &process);
 	static void InitializeRowPatternGroupTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeRowPatternGroupTrampoline(PEGTransformer &transformer,
+	                                                                          GeneratedTransformProcess &process);
+	static void InitializeRowPatternEmptyTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeRowPatternEmptyTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
 	static void InitializeRowPatternExclusionTrampoline(PEGTransformer &transformer,
 	                                                    GeneratedTransformProcess &process);
@@ -6078,6 +6101,11 @@ public:
 	                                                                          ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformParensExpression(PEGTransformer &transformer,
 	                                                              unique_ptr<ParsedExpression> expression);
+	static unique_ptr<TransformResultValue> TransformMeasureSemanticsExpressionInternal(PEGTransformer &transformer,
+	                                                                                    ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformMeasureSemanticsExpression(PEGTransformer &transformer, const bool &measure_semantics,
+	                                    unique_ptr<ParsedExpression> function_expression);
 	static unique_ptr<TransformResultValue> TransformSingleExpressionInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformExpressionInternal(PEGTransformer &transformer,
@@ -6848,7 +6876,6 @@ public:
 	static unique_ptr<TransformResultValue> TransformMeasuresElementInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformMeasuresElement(PEGTransformer &transformer,
-	                                                             const optional<bool> &measure_semantics,
 	                                                             unique_ptr<ParsedExpression> expression,
 	                                                             const Identifier &col_label_or_string);
 	static unique_ptr<TransformResultValue> TransformMeasureSemanticsInternal(PEGTransformer &transformer,
@@ -6866,7 +6893,19 @@ public:
 	static MatchRecognizeRows TransformOneRowPerMatch(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformAllRowsPerMatchInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
-	static MatchRecognizeRows TransformAllRowsPerMatch(PEGTransformer &transformer);
+	static MatchRecognizeRows TransformAllRowsPerMatch(PEGTransformer &transformer,
+	                                                   const optional<MatchRecognizeRows> &all_rows_empty_matches);
+	static unique_ptr<TransformResultValue> TransformAllRowsEmptyMatchesInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformShowEmptyMatchesInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static MatchRecognizeRows TransformShowEmptyMatches(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformOmitEmptyMatchesInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static MatchRecognizeRows TransformOmitEmptyMatches(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformWithUnmatchedRowsInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static MatchRecognizeRows TransformWithUnmatchedRows(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformAfterMatchSkipInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformAfterMatchSkipTargetInternal(PEGTransformer &transformer,
@@ -6885,6 +6924,10 @@ public:
 	                                                                       ParseResult &parse_result);
 	static MatchRecognizeAfterMatchClause TransformSkipToLastVar(PEGTransformer &transformer,
 	                                                             const Identifier &col_label_or_string);
+	static unique_ptr<TransformResultValue> TransformSkipToVarInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static MatchRecognizeAfterMatchClause TransformSkipToVar(PEGTransformer &transformer,
+	                                                         const Identifier &col_label_or_string);
 	static unique_ptr<TransformResultValue> TransformPatternClauseInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformRowPatternInternal(PEGTransformer &transformer,
@@ -6919,6 +6962,9 @@ public:
 	static unique_ptr<ParsedExpression> TransformPatternEnd(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformRowPatternGroupInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformRowPatternEmptyInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformRowPatternEmpty(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformRowPatternExclusionInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformRowPatternExclusion(PEGTransformer &transformer,

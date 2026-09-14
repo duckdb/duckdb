@@ -3750,19 +3750,21 @@ const StringUtil::EnumStringLiteral *GetMatchRecognizeRowsValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_DEFAULT), "MATCH_RECOGNIZE_ROWS_DEFAULT" },
 		{ static_cast<uint32_t>(MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ONE), "MATCH_RECOGNIZE_ROWS_ONE" },
-		{ static_cast<uint32_t>(MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL), "MATCH_RECOGNIZE_ROWS_ALL" }
+		{ static_cast<uint32_t>(MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL), "MATCH_RECOGNIZE_ROWS_ALL" },
+		{ static_cast<uint32_t>(MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL_OMIT_EMPTY), "MATCH_RECOGNIZE_ROWS_ALL_OMIT_EMPTY" },
+		{ static_cast<uint32_t>(MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL_UNMATCHED), "MATCH_RECOGNIZE_ROWS_ALL_UNMATCHED" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<MatchRecognizeRows>(MatchRecognizeRows value) {
-	return StringUtil::EnumToString(GetMatchRecognizeRowsValues(), 3, "MatchRecognizeRows", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMatchRecognizeRowsValues(), 5, "MatchRecognizeRows", static_cast<uint32_t>(value));
 }
 
 template<>
 MatchRecognizeRows EnumUtil::FromString<MatchRecognizeRows>(const char *value) {
-	return static_cast<MatchRecognizeRows>(StringUtil::StringToEnum(GetMatchRecognizeRowsValues(), 3, "MatchRecognizeRows", value));
+	return static_cast<MatchRecognizeRows>(StringUtil::StringToEnum(GetMatchRecognizeRowsValues(), 5, "MatchRecognizeRows", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMemoryTagValues() {

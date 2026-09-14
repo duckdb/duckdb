@@ -181,18 +181,20 @@ bool PEGTransformerFactory::TransformFinalSemantics(PEGTransformer &transformer)
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMeasuresElement(PEGTransformer &transformer,
-                                                                             const optional<bool> &measure_semantics,
                                                                              unique_ptr<ParsedExpression> expression,
                                                                              const Identifier &col_label_or_string) {
-	if (measure_semantics) {
-		// carry the choice to the binder, which knows the frame it turns into
-		vector<unique_ptr<ParsedExpression>> wrapped;
-		wrapped.push_back(std::move(expression));
-		expression = make_uniq<FunctionExpression>(
-		    *measure_semantics ? MATCH_RECOGNIZE_FINAL_MARKER : MATCH_RECOGNIZE_RUNNING_MARKER, std::move(wrapped));
-	}
 	expression->SetAlias(col_label_or_string);
 	return expression;
+}
+
+//! RUNNING and FINAL are carried to the binder as a wrapper, which knows the frame they turn into
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformMeasureSemanticsExpression(PEGTransformer &transformer, const bool &measure_semantics,
+                                                           unique_ptr<ParsedExpression> function_expression) {
+	vector<unique_ptr<ParsedExpression>> wrapped;
+	wrapped.push_back(std::move(function_expression));
+	return make_uniq<FunctionExpression>(
+	    measure_semantics ? MATCH_RECOGNIZE_FINAL_MARKER : MATCH_RECOGNIZE_RUNNING_MARKER, std::move(wrapped));
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDefineElement(PEGTransformer &transformer,
@@ -237,8 +239,23 @@ MatchRecognizeRows PEGTransformerFactory::TransformOneRowPerMatch(PEGTransformer
 	return MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ONE;
 }
 
-MatchRecognizeRows PEGTransformerFactory::TransformAllRowsPerMatch(PEGTransformer &transformer) {
+MatchRecognizeRows
+PEGTransformerFactory::TransformAllRowsPerMatch(PEGTransformer &transformer,
+                                                const optional<MatchRecognizeRows> &all_rows_empty_matches) {
+	// SHOW EMPTY MATCHES is what ALL ROWS PER MATCH means when it says nothing
+	return all_rows_empty_matches ? *all_rows_empty_matches : MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL;
+}
+
+MatchRecognizeRows PEGTransformerFactory::TransformShowEmptyMatches(PEGTransformer &transformer) {
 	return MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL;
+}
+
+MatchRecognizeRows PEGTransformerFactory::TransformOmitEmptyMatches(PEGTransformer &transformer) {
+	return MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL_OMIT_EMPTY;
+}
+
+MatchRecognizeRows PEGTransformerFactory::TransformWithUnmatchedRows(PEGTransformer &transformer) {
+	return MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL_UNMATCHED;
 }
 
 //===--------------------------------------------------------------------===//
@@ -260,6 +277,13 @@ MatchRecognizeAfterMatchClause PEGTransformerFactory::TransformSkipToFirstVar(PE
 
 MatchRecognizeAfterMatchClause PEGTransformerFactory::TransformSkipToLastVar(PEGTransformer &transformer,
                                                                              const Identifier &col_label_or_string) {
+	return MatchRecognizeAfterMatchClause {MatchRecognizeAfterMatch::MATCH_RECOGNIZE_AFTER_MATCH_LAST_VAR,
+	                                       col_label_or_string.GetIdentifierName()};
+}
+
+MatchRecognizeAfterMatchClause PEGTransformerFactory::TransformSkipToVar(PEGTransformer &transformer,
+                                                                         const Identifier &col_label_or_string) {
+	// naming a variable without saying which of its rows resumes at its last one
 	return MatchRecognizeAfterMatchClause {MatchRecognizeAfterMatch::MATCH_RECOGNIZE_AFTER_MATCH_LAST_VAR,
 	                                       col_label_or_string.GetIdentifierName()};
 }
@@ -348,6 +372,11 @@ PEGTransformerFactory::TransformRowPatternExclusion(PEGTransformer &transformer,
 	auto result = make_uniq<QuantifiedExpression>(std::move(row_pattern), 1, 1);
 	result->excluded = true;
 	return std::move(result);
+}
+
+//! () matches where it stands and takes no row, which is a concatenation of nothing
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformRowPatternEmpty(PEGTransformer &transformer) {
+	return make_uniq_base<ParsedExpression, ConcatenationExpression>(vector<unique_ptr<ParsedExpression>>());
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPatternStart(PEGTransformer &transformer) {

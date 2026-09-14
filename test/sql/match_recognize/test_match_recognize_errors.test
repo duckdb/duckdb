@@ -287,32 +287,6 @@ SELECT count(*) FROM skips MATCH_RECOGNIZE(
 ----
 1
 
-# Oracle takes three modifiers here that decide which matches reach the output. None are supported
-# yet, so they are refused by the parser rather than quietly ignored.
-statement error
-SELECT count(*) FROM skips MATCH_RECOGNIZE(
-    ORDER BY seq MEASURES count(*) AS n ALL ROWS PER MATCH WITH UNMATCHED ROWS
-    PATTERN (B) DEFINE B AS c='b'
-)
-----
-<REGEX>:Parser Error.*syntax error.*
-
-statement error
-SELECT count(*) FROM skips MATCH_RECOGNIZE(
-    ORDER BY seq MEASURES count(*) AS n ALL ROWS PER MATCH OMIT EMPTY MATCHES
-    PATTERN (B*) DEFINE B AS c='b'
-)
-----
-<REGEX>:Parser Error.*syntax error.*
-
-statement error
-SELECT count(*) FROM skips MATCH_RECOGNIZE(
-    ORDER BY seq MEASURES count(*) AS n ALL ROWS PER MATCH SHOW EMPTY MATCHES
-    PATTERN (B*) DEFINE B AS c='b'
-)
-----
-<REGEX>:Parser Error.*syntax error.*
-
 # a condition decides whether a row is the variable, so it has to produce a boolean
 query I
 FROM (VALUES (1)) t(x) MATCH_RECOGNIZE (

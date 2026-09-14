@@ -1,5 +1,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 
+#include "duckdb/function/match_recognize.hpp"
+
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -73,6 +75,13 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		if (IsUnnestFunction(function.FunctionName())) {
 			// special case, not in catalog
 			return BindUnnest(function, depth, root_expression);
+		}
+		if (function.FunctionName() == MATCH_RECOGNIZE_RUNNING_MARKER ||
+		    function.FunctionName() == MATCH_RECOGNIZE_FINAL_MARKER) {
+			// RUNNING and FINAL say how much of a match the call below them reads, and only the
+			// MEASURES binder knows what a match is
+			return BindResult(BinderException::Unsupported(
+			    function, "RUNNING and FINAL are only meaningful in the MEASURES of a MATCH_RECOGNIZE"));
 		}
 		// binding a function expression requires an extra parameter for macros
 		return BindExpression(function, depth, expr);

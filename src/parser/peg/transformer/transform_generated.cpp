@@ -5772,6 +5772,16 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformParensExpressio
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformMeasureSemanticsExpressionInternal(PEGTransformer &transformer,
+                                                                   ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto measure_semantics = transformer.Transform<bool>(list_pr.GetChild(0));
+	auto function_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = TransformMeasureSemanticsExpression(transformer, measure_semantics, std::move(function_expression));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSingleExpressionInternal(PEGTransformer &transformer,
                                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -8091,15 +8101,9 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformMeasuresClauseI
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformMeasuresElementInternal(PEGTransformer &transformer,
                                                                                          ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	optional<bool> measure_semantics {};
-	auto &measure_semantics_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
-	if (measure_semantics_opt.HasResult()) {
-		auto measure_semantics_value = transformer.Transform<bool>(measure_semantics_opt.GetResult());
-		measure_semantics = measure_semantics_value;
-	}
-	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
-	auto col_label_or_string = transformer.Transform<Identifier>(list_pr.GetChild(3));
-	auto result = TransformMeasuresElement(transformer, measure_semantics, std::move(expression), col_label_or_string);
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	auto col_label_or_string = transformer.Transform<Identifier>(list_pr.GetChild(2));
+	auto result = TransformMeasuresElement(transformer, std::move(expression), col_label_or_string);
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
@@ -8139,7 +8143,41 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformOneRowPerMatchI
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAllRowsPerMatchInternal(PEGTransformer &transformer,
                                                                                          ParseResult &parse_result) {
-	auto result = TransformAllRowsPerMatch(transformer);
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<MatchRecognizeRows> all_rows_empty_matches {};
+	auto &all_rows_empty_matches_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (all_rows_empty_matches_opt.HasResult()) {
+		auto all_rows_empty_matches_value =
+		    transformer.Transform<MatchRecognizeRows>(all_rows_empty_matches_opt.GetResult());
+		all_rows_empty_matches = all_rows_empty_matches_value;
+	}
+	auto result = TransformAllRowsPerMatch(transformer, all_rows_empty_matches);
+	return make_uniq<TypedTransformResult<MatchRecognizeRows>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformAllRowsEmptyMatchesInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<MatchRecognizeRows>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<MatchRecognizeRows>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformShowEmptyMatchesInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto result = TransformShowEmptyMatches(transformer);
+	return make_uniq<TypedTransformResult<MatchRecognizeRows>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformOmitEmptyMatchesInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto result = TransformOmitEmptyMatches(transformer);
+	return make_uniq<TypedTransformResult<MatchRecognizeRows>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformWithUnmatchedRowsInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto result = TransformWithUnmatchedRows(transformer);
 	return make_uniq<TypedTransformResult<MatchRecognizeRows>>(result);
 }
 
@@ -8184,6 +8222,14 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSkipToLastVarIn
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto col_label_or_string = transformer.Transform<Identifier>(list_pr.GetChild(2));
 	auto result = TransformSkipToLastVar(transformer, col_label_or_string);
+	return make_uniq<TypedTransformResult<MatchRecognizeAfterMatchClause>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSkipToVarInternal(PEGTransformer &transformer,
+                                                                                   ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto col_label_or_string = transformer.Transform<Identifier>(list_pr.GetChild(1));
+	auto result = TransformSkipToVar(transformer, col_label_or_string);
 	return make_uniq<TypedTransformResult<MatchRecognizeAfterMatchClause>>(std::move(result));
 }
 
@@ -8301,6 +8347,12 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRowPatternGroup
 	auto row_pattern =
 	    transformer.Transform<unique_ptr<ParsedExpression>>(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto result = std::move(row_pattern);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRowPatternEmptyInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto result = TransformRowPatternEmpty(transformer);
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
@@ -12058,6 +12110,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ListComprehensionExpression", &PEGTransformerFactory::TransformListComprehensionExpressionInternal},
 	    {"ListComprehensionFilter", &PEGTransformerFactory::TransformListComprehensionFilterInternal},
 	    {"ParensExpression", &PEGTransformerFactory::TransformParensExpressionInternal},
+	    {"MeasureSemanticsExpression", &PEGTransformerFactory::TransformMeasureSemanticsExpressionInternal},
 	    {"SingleExpression", &PEGTransformerFactory::TransformSingleExpressionInternal},
 	    {"Expression", &PEGTransformerFactory::TransformExpressionInternal},
 	    {"ColumnDefaultExpr", &PEGTransformerFactory::TransformColumnDefaultExprInternal},
@@ -12275,12 +12328,17 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"RowsPerMatch", &PEGTransformerFactory::TransformRowsPerMatchInternal},
 	    {"OneRowPerMatch", &PEGTransformerFactory::TransformOneRowPerMatchInternal},
 	    {"AllRowsPerMatch", &PEGTransformerFactory::TransformAllRowsPerMatchInternal},
+	    {"AllRowsEmptyMatches", &PEGTransformerFactory::TransformAllRowsEmptyMatchesInternal},
+	    {"ShowEmptyMatches", &PEGTransformerFactory::TransformShowEmptyMatchesInternal},
+	    {"OmitEmptyMatches", &PEGTransformerFactory::TransformOmitEmptyMatchesInternal},
+	    {"WithUnmatchedRows", &PEGTransformerFactory::TransformWithUnmatchedRowsInternal},
 	    {"AfterMatchSkip", &PEGTransformerFactory::TransformAfterMatchSkipInternal},
 	    {"AfterMatchSkipTarget", &PEGTransformerFactory::TransformAfterMatchSkipTargetInternal},
 	    {"SkipToNextRow", &PEGTransformerFactory::TransformSkipToNextRowInternal},
 	    {"SkipPastLastRow", &PEGTransformerFactory::TransformSkipPastLastRowInternal},
 	    {"SkipToFirstVar", &PEGTransformerFactory::TransformSkipToFirstVarInternal},
 	    {"SkipToLastVar", &PEGTransformerFactory::TransformSkipToLastVarInternal},
+	    {"SkipToVar", &PEGTransformerFactory::TransformSkipToVarInternal},
 	    {"PatternClause", &PEGTransformerFactory::TransformPatternClauseInternal},
 	    {"RowPattern", &PEGTransformerFactory::TransformRowPatternInternal},
 	    {"RowPatternAlternative", &PEGTransformerFactory::TransformRowPatternAlternativeInternal},
@@ -12292,6 +12350,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"PatternStart", &PEGTransformerFactory::TransformPatternStartInternal},
 	    {"PatternEnd", &PEGTransformerFactory::TransformPatternEndInternal},
 	    {"RowPatternGroup", &PEGTransformerFactory::TransformRowPatternGroupInternal},
+	    {"RowPatternEmpty", &PEGTransformerFactory::TransformRowPatternEmptyInternal},
 	    {"RowPatternExclusion", &PEGTransformerFactory::TransformRowPatternExclusionInternal},
 	    {"RowPatternLabel", &PEGTransformerFactory::TransformRowPatternLabelInternal},
 	    {"RowPatternQuantifier", &PEGTransformerFactory::TransformRowPatternQuantifierInternal},

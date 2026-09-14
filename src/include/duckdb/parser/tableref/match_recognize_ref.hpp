@@ -17,10 +17,19 @@
 namespace duckdb {
 
 enum class MatchRecognizeRows : uint8_t {
-	MATCH_RECOGNIZE_ROWS_DEFAULT = 1, /* no option specified */
-	MATCH_RECOGNIZE_ROWS_ONE = 2,     /* ONE ROW PER MATCH */
-	MATCH_RECOGNIZE_ROWS_ALL = 3      /* ALL ROWS PER MATCH */
+	MATCH_RECOGNIZE_ROWS_DEFAULT = 1,        /* no option specified */
+	MATCH_RECOGNIZE_ROWS_ONE = 2,            /* ONE ROW PER MATCH */
+	MATCH_RECOGNIZE_ROWS_ALL = 3,            /* ALL ROWS PER MATCH */
+	MATCH_RECOGNIZE_ROWS_ALL_OMIT_EMPTY = 4, /* ALL ROWS PER MATCH OMIT EMPTY MATCHES */
+	MATCH_RECOGNIZE_ROWS_ALL_UNMATCHED = 5   /* ALL ROWS PER MATCH WITH UNMATCHED ROWS */
 };
+
+//! Whether this reports one row per match or the rows of the match
+inline bool MatchRecognizeReportsRows(MatchRecognizeRows rows) {
+	return rows == MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL ||
+	       rows == MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL_OMIT_EMPTY ||
+	       rows == MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL_UNMATCHED;
+}
 
 enum class MatchRecognizeAfterMatch : uint8_t {
 	MATCH_RECOGNIZE_AFTER_MATCH_DEFAULT = 1,   /* no option specified */

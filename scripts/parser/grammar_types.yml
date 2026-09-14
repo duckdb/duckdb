@@ -549,8 +549,10 @@ Expression:
     - PatternStart
     - PatternEnd
     - RowPatternGroup
+    - RowPatternEmpty
     - RowPatternExclusion
     - RowPatternLabel
+    - MeasureSemanticsExpression
     - DefineElement
 
 ColumnRefExpression:
@@ -1922,6 +1924,10 @@ MatchRecognizeRows:
     - RowsPerMatch
     - OneRowPerMatch
     - AllRowsPerMatch
+    - AllRowsEmptyMatches
+    - ShowEmptyMatches
+    - OmitEmptyMatches
+    - WithUnmatchedRows
 MatchRecognizeAfterMatchClause:
   type: "MatchRecognizeAfterMatchClause"
   by_value: true
@@ -1932,6 +1938,7 @@ MatchRecognizeAfterMatchClause:
     - SkipPastLastRow
     - SkipToFirstVar
     - SkipToLastVar
+    - SkipToVar
 MatchRecognizeQuantifier:
   type: "MatchRecognizeQuantifier"
   rules:

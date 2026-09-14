@@ -6,7 +6,11 @@
 
 #include "duckdb/main/config.hpp"
 
+#include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -337,7 +341,7 @@ static MatchRecognizeSymbols CollectSymbols(const MatchRecognizeConfig &config) 
 static void ValidateClauses(const MatchRecognizeConfig &config, const MatchRecognizeSymbols &symbols,
                             bool has_exclusion) {
 	// {- -} decides which of a match's rows reach the output, so it needs rows in the output
-	if (has_exclusion && config.rows_per_match != MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL) {
+	if (has_exclusion && !MatchRecognizeReportsRows(config.rows_per_match)) {
 		throw BinderException("Pattern exclusion syntax {- -} requires ALL ROWS PER MATCH");
 	}
 	case_insensitive_set_t subset_names;
@@ -517,7 +521,7 @@ static void FinishMatchData(const MatchRecognizeConfig &config, vector<string> d
 static unique_ptr<SelectNode> PlanPatternWindow(Binder &binder, ClientContext &context, BoundStatement bound_define,
                                                 TableIndex rows_index, MatchRecognizeWindowInputs inputs,
                                                 GeneratedNames &names, const string &spans_column,
-                                                const string &state_column) {
+                                                const string &state_column, bool unmatched) {
 	auto bound_window = make_uniq<BoundWindowExpression>(
 	    WindowMatchRecognizeExecutor::ResultType(), nullptr,
 	    make_uniq<BoundWindowFunction>(MatchRecognizeFun::GetFunction()), std::move(inputs.match_data));
@@ -552,12 +556,45 @@ static unique_ptr<SelectNode> PlanPatternWindow(Binder &binder, ClientContext &c
 	spans_star->ExcludeListMutable().insert(QualifiedColumnName(Identifier(spans_column)));
 	unnest_node->select_list.push_back(std::move(spans_star));
 
+	unique_ptr<ParsedExpression> spans = make_uniq<ColumnRefExpression>(Identifier(spans_column));
+	if (unmatched) {
+		// unnesting drops a row whose list is empty, which is every row in no match. WITH UNMATCHED
+		// ROWS keeps those, with nothing where the match would be.
+		vector<unique_ptr<ParsedExpression>> length;
+		length.push_back(spans->Copy());
+		CaseCheck matched;
+		matched.when_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN,
+		                                                    make_uniq<FunctionExpression>("len", std::move(length)),
+		                                                    make_uniq<ConstantExpression>(Value::BIGINT(0)));
+		matched.then_expr = spans->Copy();
+		vector<unique_ptr<ParsedExpression>> nothing;
+		nothing.push_back(make_uniq<CastExpression>(ListType::GetChildType(WindowMatchRecognizeExecutor::ResultType()),
+		                                            make_uniq<ConstantExpression>(Value())));
+		auto keep_row = make_uniq<CaseExpression>();
+		keep_row->CaseChecksMutable().push_back(std::move(matched));
+		keep_row->ElseMutable() = make_uniq<FunctionExpression>("list_value", std::move(nothing));
+		spans = std::move(keep_row);
+	}
 	vector<unique_ptr<ParsedExpression>> spans_argument;
-	spans_argument.push_back(make_uniq<ColumnRefExpression>(Identifier(spans_column)));
+	spans_argument.push_back(std::move(spans));
 	auto unnest_spans = make_uniq<FunctionExpression>("unnest", std::move(spans_argument));
 	unnest_spans->SetAlias(Identifier(state_column));
 	unnest_node->select_list.push_back(std::move(unnest_spans));
 	return unnest_node;
+}
+
+//! Report this only on a row that is part of a match: WITH UNMATCHED ROWS carries the rows that are
+//! not, and those have no match for a measure to be about.
+static unique_ptr<ParsedExpression> OnlyWhenMatchedRow(const string &state, unique_ptr<ParsedExpression> value) {
+	auto matched = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL,
+	                                             make_uniq<ColumnRefExpression>(Identifier(state)));
+	auto result = make_uniq<CaseExpression>();
+	CaseCheck check;
+	check.when_expr = std::move(matched);
+	check.then_expr = std::move(value);
+	result->CaseChecksMutable().push_back(std::move(check));
+	result->ElseMutable() = make_uniq<ConstantExpression>(Value());
+	return std::move(result);
 }
 
 //! How the output names what the measures computed: the name the user gave it, which the output
@@ -575,7 +612,9 @@ static unique_ptr<SelectNode> BuildOutputNode(const MatchRecognizeConfig &config
                                               bool has_exclusion) {
 	auto measures_select = MakeSelectStatement(std::move(select_node));
 	auto output_node = MakeSelectNode(make_uniq<SubqueryRef>(std::move(measures_select)));
-	if (config.rows_per_match == MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL) {
+	// a row in no match has no measures to report, only itself
+	const auto unmatched = config.rows_per_match == MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL_UNMATCHED;
+	if (MatchRecognizeReportsRows(config.rows_per_match)) {
 		// the matcher's state has served the measures and the filter, and stops here, as do the columns
 		// the projections below read the clause's own values by
 		auto output_star = make_uniq<StarExpression>();
@@ -601,17 +640,37 @@ static unique_ptr<SelectNode> BuildOutputNode(const MatchRecognizeConfig &config
 		}
 	}
 	for (idx_t i = 0; i < measures.columns.size(); i++) {
-		auto measure = make_uniq<ColumnRefExpression>(Identifier(measures.columns[i]));
+		unique_ptr<ParsedExpression> measure = make_uniq<ColumnRefExpression>(Identifier(measures.columns[i]));
+		if (unmatched) {
+			measure = OnlyWhenMatchedRow(state_column, std::move(measure));
+		}
 		measure->SetAlias(measures.aliases[i]);
 		output_node->select_list.push_back(std::move(measure));
 	}
-	if (config.rows_per_match == MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL) {
+	if (MatchRecognizeReportsRows(config.rows_per_match)) {
 		// an excluded row still belongs to the match, so it is dropped here rather than before the
-		// measures: the aggregates over the match have to have seen it
+		// measures: the aggregates over the match have to have seen it. A row in no match is excluded
+		// by nothing, which is not the same as being excluded.
+		unique_ptr<ParsedExpression> keep;
 		if (has_exclusion) {
-			output_node->where_clause = make_uniq<OperatorExpression>(
-			    ExpressionType::OPERATOR_NOT, MatchRecognizeStateField(state_column, "is_excluded"));
+			keep = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT,
+			                                     MatchRecognizeStateField(state_column, "is_excluded"));
+			if (unmatched) {
+				// a row in no match is excluded from nothing, and its state has no field to read
+				auto no_match = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL,
+				                                              make_uniq<ColumnRefExpression>(Identifier(state_column)));
+				keep = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(no_match),
+				                                        std::move(keep));
+			}
 		}
+		if (config.rows_per_match == MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL_OMIT_EMPTY) {
+			auto not_empty = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT,
+			                                               MatchRecognizeStateField(state_column, "is_empty"));
+			keep = keep ? unique_ptr<ParsedExpression>(make_uniq<ConjunctionExpression>(
+			                  ExpressionType::CONJUNCTION_AND, std::move(keep), std::move(not_empty)))
+			            : unique_ptr<ParsedExpression>(std::move(not_empty));
+		}
+		output_node->where_clause = std::move(keep);
 	} else {
 		// the last row is the one reported, which is the FINAL semantics a bare column has here
 		output_node->where_clause = MatchRecognizeStateField(state_column, "is_match_end");
@@ -863,12 +922,14 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 
 	MatchRecognizeWindowInputs window_inputs {std::move(match_data), std::move(children), std::move(bound_partitions),
 	                                          std::move(bound_orders)};
-	auto spans_node = PlanPatternWindow(*this, context, std::move(bound_define), define_node.GetRootIndex(),
-	                                    std::move(window_inputs), names, spans_column, state_column);
+	auto spans_node =
+	    PlanPatternWindow(*this, context, std::move(bound_define), define_node.GetRootIndex(), std::move(window_inputs),
+	                      names, spans_column, state_column,
+	                      ref.config->rows_per_match == MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL_UNMATCHED);
 
 	// MEASURES are projected on top of the pattern window, where the match a row belongs to is known,
 	// by a binder of their own
-	const auto all_rows = ref.config->rows_per_match == MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL;
+	const auto all_rows = MatchRecognizeReportsRows(ref.config->rows_per_match);
 	auto measures_binder = Binder::CreateBinder(context, this);
 	auto spans_ref = make_uniq<SubqueryRef>(MakeSelectStatement(std::move(spans_node)));
 	auto bound_spans = measures_binder->Bind(*spans_ref);

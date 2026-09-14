@@ -107,6 +107,12 @@ string MatchRecognizeRef::ToString() const {
 	case MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL:
 		result += "ALL ROWS PER MATCH ";
 		break;
+	case MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL_OMIT_EMPTY:
+		result += "ALL ROWS PER MATCH OMIT EMPTY MATCHES ";
+		break;
+	case MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL_UNMATCHED:
+		result += "ALL ROWS PER MATCH WITH UNMATCHED ROWS ";
+		break;
 	default:
 		break;
 	}
