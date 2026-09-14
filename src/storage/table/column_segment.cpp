@@ -19,6 +19,7 @@
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
 
+#include <algorithm>
 #include <cstring>
 
 namespace duckdb {
@@ -195,24 +196,47 @@ void ColumnSegment::FetchRows(ColumnFetchState &state, const unsafe_array_ptr<ro
 		return;
 	}
 	// Validate the whole batch before dispatching so optimized codecs keep the single-row bounds contract.
+	bool sorted = true;
+	bool strictly_increasing = true;
 	for (idx_t i = 0; i < fetch_count; i++) {
 		if (row_ids[i] < 0 || NumericCast<idx_t>(row_ids[i]) >= count) {
 			throw InternalException("ColumnSegment::FetchRows - row_id out of range for segment");
 		}
+		if (i > 0) {
+			sorted = sorted && row_ids[i] >= row_ids[i - 1];
+			strictly_increasing = strictly_increasing && row_ids[i] > row_ids[i - 1];
+		}
 	}
 	auto &compression = function.get();
 	if (compression.fetch_rows) {
-		idx_t batch_start = 0;
-		while (batch_start < fetch_count) {
-			auto batch_end = batch_start + 1;
-			while (batch_end < fetch_count && row_ids[batch_end] >= row_ids[batch_end - 1]) {
-				batch_end++;
-			}
-			const auto batch_count = batch_end - batch_start;
-			compression.fetch_rows(*this, state, row_ids.SubArray(batch_start, batch_count), batch_count, result,
-			                       result_offset + batch_start);
-			batch_start = batch_end;
+		FetchRowMapping mapping;
+		if (strictly_increasing) {
+			compression.fetch_rows(*this, state, row_ids.SubArray(0, fetch_count), mapping, result, result_offset);
+			return;
 		}
+
+		mapping.result_indexes.resize(fetch_count);
+		for (idx_t i = 0; i < fetch_count; i++) {
+			mapping.result_indexes[i] = i;
+		}
+		if (!sorted) {
+			std::sort(mapping.result_indexes.begin(), mapping.result_indexes.end(),
+			          [&](idx_t left, idx_t right) { return row_ids[left] < row_ids[right]; });
+		}
+
+		vector<row_t> unique_row_ids;
+		unique_row_ids.reserve(fetch_count);
+		mapping.offsets.reserve(fetch_count + 1);
+		for (idx_t i = 0; i < fetch_count; i++) {
+			const auto row_id = row_ids[mapping.result_indexes[i]];
+			if (unique_row_ids.empty() || row_id != unique_row_ids.back()) {
+				unique_row_ids.push_back(row_id);
+				mapping.offsets.push_back(i);
+			}
+		}
+		mapping.offsets.push_back(fetch_count);
+		compression.fetch_rows(*this, state, unsafe_array_ptr<row_t>(unique_row_ids.data(), unique_row_ids.size()),
+		                       mapping, result, result_offset);
 	} else {
 		for (idx_t i = 0; i < fetch_count; i++) {
 			compression.fetch_row(*this, state, row_ids[i], result, result_offset + i);

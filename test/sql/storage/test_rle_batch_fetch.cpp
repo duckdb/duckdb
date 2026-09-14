@@ -70,6 +70,40 @@ TEST_CASE("RLE batch fetch preserves arbitrary offsets and output boundaries", "
 		REQUIRE(boundary_result.GetValue(1) == Value::BIGINT(0));
 		REQUIRE(boundary_result.GetValue(2) == Value::BIGINT(1));
 
+		// Cover identity, duplicate-only, ordered duplicate, and scattered result mappings.
+		vector<vector<row_t>> requests {{0, 3, 4, 12}, {3, 3, 3}, {3, 3, 4, 4, 7, 8}, {8, 3, 8, 4, 3, 7}, {12, 8, 4, 0},
+		                                {3},           {}};
+		for (auto &request : requests) {
+			const auto original = request;
+			Vector mapped(LogicalType::BIGINT, request.size() + 2);
+			auto mapped_data = FlatVector::GetDataMutable<int64_t>(mapped);
+			for (idx_t i = 0; i < request.size() + 2; i++) {
+				mapped_data[i] = -1;
+			}
+			row_t empty = 0;
+			auto request_data = request.empty() ? &empty : request.data();
+			segment.FetchRows(state, unsafe_array_ptr<row_t>(request_data, request.size()), request.size(), mapped, 1);
+			REQUIRE(request == original);
+			for (idx_t i = 0; i < request.size(); i++) {
+				REQUIRE(mapped.GetValue(i + 1) == Value::BIGINT(original[i] / 4));
+			}
+			REQUIRE(mapped_data[0] == -1);
+			REQUIRE(mapped_data[request.size() + 1] == -1);
+		}
+
+		// Invalid later requests must be rejected before any result is written.
+		vector<row_t> invalid_ids {8, 3, row_t(segment.count)};
+		Vector invalid_result(LogicalType::BIGINT, invalid_ids.size());
+		auto invalid_data = FlatVector::GetDataMutable<int64_t>(invalid_result);
+		for (idx_t i = 0; i < invalid_ids.size(); i++) {
+			invalid_data[i] = -1;
+		}
+		REQUIRE_THROWS(segment.FetchRows(state, unsafe_array_ptr<row_t>(invalid_ids.data(), invalid_ids.size()),
+		                                 invalid_ids.size(), invalid_result, 0));
+		for (idx_t i = 0; i < invalid_ids.size(); i++) {
+			REQUIRE(invalid_data[i] == -1);
+		}
+
 		// More than one vector of requests exercises ColumnData's bounded batching and non-identity selection.
 		const idx_t count = STANDARD_VECTOR_SIZE + 1;
 		vector<idx_t> offsets(count);
