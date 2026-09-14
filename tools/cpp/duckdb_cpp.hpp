@@ -432,7 +432,9 @@ public:
 
 	/// `CreateType` for a name that may be catalog- or schema-qualified. An unqualified name is resolved along the
 	/// search path and then in the system catalog; a qualified one is resolved exactly as written.
-	auto CreateType(const QualifiedName &name, const std::vector<TypeParam> &params = {}) const -> LogicalType;
+	auto CreateType(const QualifiedName &name, const std::vector<TypeParam> &params) const -> LogicalType;
+	/// Parameterless overload of the above.
+	auto CreateType(const QualifiedName &name) const -> LogicalType;
 
 	/// The file system this context reads and writes through. Borrowed, and valid only while the context is.
 	auto GetFileSystem() const -> FileSystem;
@@ -680,7 +682,9 @@ public:
 
 	/// `CreateType` for a name that may be catalog- or schema-qualified. An unqualified name is resolved along the
 	/// search path and then in the system catalog; a qualified one is resolved exactly as written.
-	auto CreateType(const QualifiedName &name, const std::vector<TypeParam> &params = {}) -> LogicalType;
+	auto CreateType(const QualifiedName &name, const std::vector<TypeParam> &params) -> LogicalType;
+	/// Parameterless overload of the above.
+	auto CreateType(const QualifiedName &name) -> LogicalType;
 
 	/// The file system this connection reads and writes through. Borrowed, and valid only while the connection is.
 	auto GetFileSystem() const -> FileSystem;

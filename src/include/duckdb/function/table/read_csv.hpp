@@ -9,11 +9,9 @@
 #pragma once
 
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_buffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_handle.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_state_machine_cache.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -74,8 +72,6 @@ struct ReadCSVData : public BaseCSVData {
 	//! The buffer manager (if any): this is used when automatic detection is used during binding.
 	//! In this case, some CSV buffers have already been read and can be reused.
 	shared_ptr<CSVBufferManager> buffer_manager;
-	//! Column info (used for union reader serialization)
-	vector<ColumnInfo> column_info;
 	//! The CSV schema, in case there is a unified schema that all files must read
 	CSVSchema csv_schema;
 

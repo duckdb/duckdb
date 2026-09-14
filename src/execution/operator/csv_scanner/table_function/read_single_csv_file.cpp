@@ -42,7 +42,7 @@ public:
 
 struct ReadSingleCSVFileLocalState : public LocalTableFunctionState {
 	CSVLocalState state;
-	//! Whether our caller claims the parts of the file we read - see table_function_claim_scan_unit_t
+	//! Whether our caller claims the batches we read - see table_function_claim_batch_t
 	bool claimed_externally = false;
 };
 
@@ -344,7 +344,7 @@ static bool ClaimNextPart(ReadSingleCSVFileGlobalState &gstate, ReadSingleCSVFil
 	return false;
 }
 
-static bool ReadSingleCSVFileClaimScanUnit(ClientContext &context, TableFunctionInput &input) {
+static bool ReadSingleCSVFileClaimBatch(ClientContext &context, TableFunctionInput &input) {
 	auto &gstate = input.global_state->Cast<ReadSingleCSVFileGlobalState>();
 	auto &lstate = input.local_state->Cast<ReadSingleCSVFileLocalState>();
 	// our caller hands out the parts of the file, so we must not claim the next one ourselves
@@ -369,7 +369,7 @@ static AsyncResult ReadSingleCSVFileScheduleIO(ClientContext &context, TableFunc
 }
 
 //! Release the part of the file this thread was reading
-static void ReadSingleCSVFileFinishScan(ClientContext &context, TableFunctionInput &input) {
+static void ReadSingleCSVFileFinishBatch(ClientContext &context, TableFunctionInput &input) {
 	auto &gstate = input.global_state->Cast<ReadSingleCSVFileGlobalState>();
 	auto &lstate = input.local_state->Cast<ReadSingleCSVFileLocalState>();
 	lock_guard<mutex> guard(gstate.lock);
@@ -443,8 +443,8 @@ TableFunction ReadCSVTableFunction::GetSingleFileFunction() {
 	TableFunction read_csv("read_single_csv_file", {LogicalType::VARCHAR}, ReadSingleCSVFileFunction,
 	                       ReadSingleCSVFileBind, ReadSingleCSVFileInitGlobal, ReadSingleCSVFileInitLocal);
 	read_csv.combine_schema = ReadSingleCSVFileCombineSchema;
-	read_csv.claim_scan_unit = ReadSingleCSVFileClaimScanUnit;
-	read_csv.finish_scan = ReadSingleCSVFileFinishScan;
+	read_csv.claim_batch = ReadSingleCSVFileClaimBatch;
+	read_csv.finish_batch = ReadSingleCSVFileFinishBatch;
 	read_csv.supports_read_ahead = ReadSingleCSVFileSupportsReadAhead;
 	read_csv.schedule_io = ReadSingleCSVFileScheduleIO;
 	read_csv.table_scan_progress = ReadSingleCSVFileProgress;

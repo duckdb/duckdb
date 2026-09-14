@@ -1,4 +1,4 @@
-#include "duckdb/common/http_client_pool.hpp"
+#include "duckdb/main/http/http_client_pool.hpp"
 
 #include "duckdb/common/exception.hpp"
 
@@ -6,7 +6,8 @@ namespace duckdb {
 
 bool HTTPClientPool::ClientKey::operator==(const ClientKey &other) const {
 	return provider_epoch == other.provider_epoch && connection_epoch == other.connection_epoch &&
-	       session_id == other.session_id && reuse_domain == other.reuse_domain && origin_hash == other.origin_hash;
+	       session_id == other.session_id && reuse_domain == other.reuse_domain && origin_hash == other.origin_hash &&
+	       transport_config_hash == other.transport_config_hash;
 }
 
 hash_t HTTPClientPool::ClientKeyHash::operator()(const ClientKey &key) const {
@@ -18,6 +19,7 @@ hash_t HTTPClientPool::ClientKeyHash::operator()(const ClientKey &key) const {
 	combine(std::hash<idx_t> {}(key.session_id));
 	combine(std::hash<idx_t> {}(key.reuse_domain));
 	combine(key.origin_hash);
+	combine(key.transport_config_hash);
 	return result;
 }
 
@@ -101,10 +103,11 @@ bool HTTPClientPool::IsClosed() const {
 	return closed;
 }
 
-HTTPClientPool::Reservation HTTPClientPool::Reserve(const ClientKey &key, const string &origin, bool cacheable) {
+HTTPClientPool::Reservation HTTPClientPool::Reserve(const ClientKey &key, const string &origin,
+                                                    const HTTPTransportConfig &transport_config, bool cacheable) {
 	D_ASSERT(!closed);
 	D_ASSERT(HasAdmissionResource());
-	auto exact = cacheable ? FindBucket(key, origin) : client_buckets.end();
+	auto exact = cacheable ? FindBucket(key, origin, transport_config) : client_buckets.end();
 	Reservation result;
 	result.key = key;
 	result.cacheable = cacheable;
@@ -137,7 +140,7 @@ HTTPClientPool::Reservation HTTPClientPool::Reserve(const ClientKey &key, const 
 	return result;
 }
 
-bool HTTPClientPool::Reservation::PrepareBucket(const string &origin) {
+bool HTTPClientPool::Reservation::PrepareBucket(const string &origin, const HTTPTransportConfig &transport_config) {
 	if (!cacheable || bucket.IsValid()) {
 		return false;
 	}
@@ -150,11 +153,13 @@ bool HTTPClientPool::Reservation::PrepareBucket(const string &origin) {
 		bucket_node.node.key() = key;
 		new_bucket.key = key;
 		new_bucket.origin = origin;
+		new_bucket.transport_config = transport_config;
 		new_bucket.reserved_clients = 1;
 	} else {
 		ClientBucket new_bucket;
 		new_bucket.key = key;
 		new_bucket.origin = origin;
+		new_bucket.transport_config = transport_config;
 		new_bucket.idle_clients.reserve(bucket_capacity);
 		new_bucket.reserved_clients = 1;
 		ClientBucketMap pending;
@@ -164,10 +169,11 @@ bool HTTPClientPool::Reservation::PrepareBucket(const string &origin) {
 	return true;
 }
 
-void HTTPClientPool::AdoptPreparedBucket(Reservation &reservation, const string &origin) {
+void HTTPClientPool::AdoptPreparedBucket(Reservation &reservation) {
 	D_ASSERT(!reservation.bucket.IsValid());
 	D_ASSERT(reservation.bucket_node.node);
-	auto exact = FindBucket(reservation.key, origin);
+	auto &prepared = reservation.bucket_node.node.mapped();
+	auto exact = FindBucket(reservation.key, prepared.origin, prepared.transport_config);
 	if (exact != client_buckets.end()) {
 		exact->second.reserved_clients++;
 		reservation.bucket = BucketHandle(exact->second);
@@ -242,14 +248,16 @@ bool HTTPClientPool::IsEmpty() const {
 	return reserved_clients == 0 && client_buckets.empty() && non_empty_buckets.empty() && admission_waiters.empty();
 }
 
-HTTPClientPool::ClientBucketMap::iterator HTTPClientPool::FindBucket(const ClientKey &key, const string &origin) {
+HTTPClientPool::ClientBucketMap::iterator HTTPClientPool::FindBucket(const ClientKey &key, const string &origin,
+                                                                     const HTTPTransportConfig &transport_config) {
 	auto entry = client_buckets.find(key);
-	if (entry == client_buckets.end() || entry->second.origin == origin) {
+	if (entry == client_buckets.end() ||
+	    (entry->second.origin == origin && entry->second.transport_config == transport_config)) {
 		return entry;
 	}
 	auto range = client_buckets.equal_range(key);
 	for (entry = range.first; entry != range.second; ++entry) {
-		if (entry->second.origin == origin) {
+		if (entry->second.origin == origin && entry->second.transport_config == transport_config) {
 			return entry;
 		}
 	}
@@ -289,7 +297,7 @@ HTTPClientPool::ClientBucketMap::node_type HTTPClientPool::ExtractBucket(ClientB
 	D_ASSERT(bucket.reserved_clients == 0);
 	D_ASSERT(bucket.idle_clients.empty());
 	D_ASSERT(!bucket.non_empty_index.IsValid());
-	auto entry = FindBucket(bucket.key, bucket.origin);
+	auto entry = FindBucket(bucket.key, bucket.origin, bucket.transport_config);
 	D_ASSERT(entry != client_buckets.end());
 	D_ASSERT(&entry->second == &bucket);
 	return client_buckets.extract(entry);

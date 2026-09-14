@@ -15,6 +15,7 @@
 #include "duckdb/common/open_file_info.hpp"
 #include "json_reader_options.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/query_context.hpp"
 #include "json_common.hpp"
 #include "json_enums.hpp"
 #include "yyjson_memory.hpp"

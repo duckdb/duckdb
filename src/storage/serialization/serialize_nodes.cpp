@@ -32,6 +32,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
+#include "duckdb/parser/literal.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
@@ -402,6 +403,18 @@ JoinCondition JoinCondition::Deserialize(Deserializer &deserializer) {
 	auto right = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(101, "right");
 	auto comparison = deserializer.ReadProperty<ExpressionType>(102, "comparison");
 	JoinCondition result(std::move(left), std::move(right), comparison);
+	return result;
+}
+
+void Literal::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<LiteralKind>(100, "kind", kind);
+	serializer.WritePropertyWithDefault<string>(101, "text", text);
+}
+
+Literal Literal::Deserialize(Deserializer &deserializer) {
+	Literal result;
+	deserializer.ReadProperty<LiteralKind>(100, "kind", result.kind);
+	deserializer.ReadPropertyWithDefault<string>(101, "text", result.text);
 	return result;
 }
 

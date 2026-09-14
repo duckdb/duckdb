@@ -137,7 +137,7 @@ CompiledGrammar::Create(const case_insensitive_map_t<reference<GrammarExtension>
 	auto new_matcher = shared_ptr<CompiledGrammar>(new CompiledGrammar(grammar, !grammar_extensions.empty()));
 	for (auto &entry : grammar.rules) {
 		auto &rule = *entry.second;
-		new_matcher->rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, rule.transform));
+		new_matcher->rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, rule.transform_process));
 	}
 	auto terminal_rule_overrides = grammar.BuildTerminalRuleOverrides(new_matcher->GetKeywordHelper());
 	MatcherFactory factory(new_matcher->allocator, grammar, *new_matcher, std::move(terminal_rule_overrides));

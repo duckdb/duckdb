@@ -287,7 +287,7 @@ void UnboundTypeInfo::Serialize(Serializer &serializer) const {
 		}
 
 		auto &const_expr = param->Cast<ConstantExpression>();
-		user_type_mods.push_back(const_expr.GetValue());
+		user_type_mods.push_back(const_expr.GetLiteral().ToValue());
 	}
 
 	serializer.WritePropertyWithDefault<vector<Value>>(203, "user_type_modifiers", user_type_mods);
@@ -310,7 +310,7 @@ shared_ptr<ExtraTypeInfo> UnboundTypeInfo::Deserialize(Deserializer &deserialize
 		vector<unique_ptr<ParsedExpression>> user_type_mods;
 		auto mods = deserializer.ReadPropertyWithDefault<vector<Value>>(203, "user_type_modifiers");
 		for (auto &mod : mods) {
-			user_type_mods.push_back(make_uniq_base<ParsedExpression, ConstantExpression>(mod));
+			user_type_mods.push_back(ConstantExpression::FromValue(mod));
 		}
 
 		result->expr = make_uniq<TypeExpression>(

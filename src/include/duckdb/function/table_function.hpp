@@ -398,19 +398,19 @@ typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<Expression>> &filters);
 typedef bool (*table_function_pushdown_expression_t)(ClientContext &context, const LogicalGet &get, Expression &expr);
-//! Claims the next unit of work for the given local state - returns false when there is nothing left to scan.
-//! A function that implements this is scanned one unit at a time by its caller, rather than being run until it
-//! returns an empty chunk. This lets the caller tell the units apart, so that units scanned in parallel can be put
-//! back in order
-typedef bool (*table_function_claim_scan_unit_t)(ClientContext &context, TableFunctionInput &input);
-//! Whether the scan of this function can be driven by read-ahead - the caller then claims units and schedules
-//! their I/O ahead of scanning them. Only meaningful together with table_function_claim_scan_unit_t
+//! Claims the next batch for the given local state - returns false when there is nothing left to scan.
+//! A function that implements this is scanned one batch at a time by its caller, rather than being run until it
+//! returns an empty chunk. This lets the caller tell the batches apart, so that batches scanned in parallel can be
+//! put back in order
+typedef bool (*table_function_claim_batch_t)(ClientContext &context, TableFunctionInput &input);
+//! Called when a local state will not scan any more batches - lets the function release the resources of the batch
+//! it scanned last. The counterpart of table_function_claim_batch_t
+typedef void (*table_function_finish_batch_t)(ClientContext &context, TableFunctionInput &input);
+//! Whether the scan of this function can be driven by read-ahead - the caller then claims batches and schedules
+//! their I/O ahead of scanning them. Only meaningful together with table_function_claim_batch_t
 typedef bool (*table_function_supports_read_ahead_t)(const FunctionData &bind_data);
-//! Schedules the I/O needed by the unit a local state has claimed, so it can be loaded before it is scanned
+//! Schedules the I/O needed by the batch a local state has claimed, so it can be loaded before it is scanned
 typedef AsyncResult (*table_function_schedule_io_t)(ClientContext &context, TableFunctionInput &input);
-//! Called when a local state will not scan any more units - lets the function release the resources of the unit it
-//! scanned last. The counterpart of table_function_claim_scan_unit_t
-typedef void (*table_function_finish_scan_t)(ClientContext &context, TableFunctionInput &input);
 //! Combines the schemas of several individually bound files into one. The names and types are pre-filled with the
 //! schemas of the files combined by name - the function can replace or adjust them. Returns the bind data describing
 //! the combined schema, which is then handed to the bind of every file that is read - or nullptr when the files must
@@ -542,13 +542,13 @@ public:
 	//! (Optional) combines the schemas of several files that were bound individually into a single schema
 	//! Used when this function reads a single file and is wrapped into a multi-file function
 	table_function_combine_schema_t combine_schema;
-	//! (Optional) claims the next unit of work for a local state - see table_function_claim_scan_unit_t
-	table_function_claim_scan_unit_t claim_scan_unit;
-	//! (Optional) called when a local state will not scan any more units - see table_function_finish_scan_t
-	table_function_finish_scan_t finish_scan;
+	//! (Optional) claims the next batch for a local state - see table_function_claim_batch_t
+	table_function_claim_batch_t claim_batch;
+	//! (Optional) called when a local state will not scan any more batches - see table_function_finish_batch_t
+	table_function_finish_batch_t finish_batch;
 	//! (Optional) whether the scan can be driven by read-ahead - see table_function_supports_read_ahead_t
 	table_function_supports_read_ahead_t supports_read_ahead;
-	//! (Optional) schedules the I/O of a claimed unit - see table_function_schedule_io_t
+	//! (Optional) schedules the I/O of a claimed batch - see table_function_schedule_io_t
 	table_function_schedule_io_t schedule_io;
 	//! (Optional) function for rendering the operator to a string in explain/profiling output (invoked pre-execution)
 	table_function_to_string_t to_string;

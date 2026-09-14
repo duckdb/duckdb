@@ -21,6 +21,7 @@ static void InitializeExecutor(ClientContext &context, const Expression &express
 }
 
 ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression) {
+	can_throw = expression.CanThrow();
 	fast_executor = TryCreateFastExecutor(expression, false);
 	InitializeExecutor(context, expression, *this);
 }

@@ -23,48 +23,66 @@ static void ListSearchFunction(DataChunk &input, ExpressionState &state, Vector 
 	ListSearchOp<RETURN_TYPE, FIND_NULLS>(input_list, list_child, target, result, target_count);
 }
 
-static FilterPropagateResult ListSearchFilterPruneImpl(optional_ptr<const BaseStatistics> list_stats,
-                                                       optional_ptr<const BaseStatistics> needle_stats) {
+//! Whether the statistics prove that no list element can ever match the needle.
+//! FIND_NULLS (list_position) also matches NULL elements against a NULL needle, whereas list_contains
+//! never matches a NULL needle at all.
+static bool ListSearchNeverMatches(optional_ptr<const BaseStatistics> list_stats,
+                                   optional_ptr<const BaseStatistics> needle_stats, const bool find_nulls) {
 	if (!list_stats || list_stats->GetStatsType() != StatisticsType::LIST_STATS) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		return false;
+	}
+	if (!list_stats->CanHaveNoNull()) {
+		// The list is always NULL, so there is nothing to search.
+		return true;
 	}
 
 	auto &child = ListStats::GetChildStats(*list_stats);
-	if (!list_stats->CanHaveNoNull() || !child.CanHaveNoNull()) {
-		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
-	}
+	// A NULL needle finds a NULL element - only list_position looks for those.
+	const bool null_needle_matches = find_nulls && child.CanHaveNull();
 
 	if (!needle_stats) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		// The needle is unknown, so it can only be ruled out if no element can match anything.
+		return !null_needle_matches && !child.CanHaveNoNull();
 	}
 	if (!needle_stats->CanHaveNoNull()) {
-		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
+		// The needle is always NULL.
+		return !null_needle_matches;
+	}
+	if (null_needle_matches && needle_stats->CanHaveNull()) {
+		// The needle can be NULL, in which case it matches any NULL element.
+		return false;
+	}
+	if (!child.CanHaveNoNull()) {
+		// Every element is NULL, and the needle we are searching for is not.
+		return true;
 	}
 	if (child.GetType() != needle_stats->GetType()) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		return false;
 	}
-	const bool can_have_null = list_stats->CanHaveNull() || needle_stats->CanHaveNull();
-	const auto filter_false =
-	    can_have_null ? FilterPropagateResult::FILTER_FALSE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_FALSE;
-
 	auto zonemap = StatisticsPropagator::PropagateComparison(child, *needle_stats, ExpressionType::COMPARE_EQUAL);
-	if (zonemap == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
-	    zonemap == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
-		return filter_false;
-	}
-	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	return zonemap == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+	       zonemap == FilterPropagateResult::FILTER_FALSE_OR_NULL;
 }
 
 static FilterPropagateResult ListContainsFilterPrune(const FunctionStatisticsPruneInput &input) {
-	return ListSearchFilterPruneImpl(input.ChildStats(0), input.ChildStats(1));
+	auto list_stats = input.ChildStats(0);
+	auto needle_stats = input.ChildStats(1);
+	if (!ListSearchNeverMatches(list_stats, needle_stats, false)) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	// list_contains is NULL if either side is NULL, and false otherwise.
+	const bool can_have_null = list_stats->CanHaveNull() || !needle_stats || needle_stats->CanHaveNull();
+	return can_have_null ? FilterPropagateResult::FILTER_FALSE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_FALSE;
 }
 
 static unique_ptr<BaseStatistics> ListPositionPropagateStats(ClientContext &, FunctionStatisticsInput &input) {
 	if (input.child_stats.size() != 2) {
 		return nullptr;
 	}
-	auto prune = ListSearchFilterPruneImpl(input.child_stats[0], input.child_stats[1]);
-	if (prune != FilterPropagateResult::FILTER_ALWAYS_FALSE && prune != FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+	if (BaseStatistics::GetStatsType(input.expr.GetReturnType()) != StatisticsType::NUMERIC_STATS) {
+		return nullptr;
+	}
+	if (!ListSearchNeverMatches(input.child_stats[0], input.child_stats[1], true)) {
 		return nullptr;
 	}
 	// Needle cannot occur: list_position is NULL for every row.

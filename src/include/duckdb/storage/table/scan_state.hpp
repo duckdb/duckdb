@@ -17,6 +17,7 @@
 #include "duckdb/storage/table/segment_lock.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
+#include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 
@@ -289,6 +290,10 @@ public:
 	SelectionVector valid_sel;
 	//! The currently prepared vector (see RowGroup::PrepareScan)
 	PreparedScanVector prepared_vector;
+	//! Whether scan I/O for the current row group assignment has been registered
+	bool assignment_io_registered = false;
+	//! Whether the column scans of the current assignment still have to be initialized
+	bool column_scans_pending = false;
 
 	RandomEngine random;
 
@@ -308,11 +313,21 @@ public:
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentLock &l, SegmentNode<RowGroup> &row_group) const;
 	optional_ptr<SegmentNode<RowGroup>> GetRootSegment() const;
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
+	bool Scan(ScanOptions options, DataChunk &result, optional_ptr<SegmentLock> l = nullptr);
 	bool Scan(DataChunk &result, TableScanType type, optional_ptr<SegmentLock> l = nullptr);
-	//! Prepares the next eligible vector of the assignment and collects its I/O tasks
-	bool PrepareScanIO(DuckTransaction &transaction, vector<unique_ptr<AsyncTask>> &tasks);
+	//! Prepares the next eligible vector, collecting its I/O tasks, or the remaining assignment's when registering it
+	bool PrepareScanIO(DuckTransaction &transaction, vector<unique_ptr<AsyncTask>> &tasks,
+	                   bool register_assignment = false);
+	//! Rows of the assignment left to scan from the current vector onwards
+	idx_t RemainingAssignmentRows() const;
+	//! Initializes the column scans a claim deferred
+	void InitializeColumnScans();
 	//! Processes the vector prepared by PrepareScanIO
 	void ProcessPreparedScan(DuckTransaction &transaction, DataChunk &result);
+
+private:
+	//! Registers the remaining assignment's scan I/O, returning the async tasks that execute it
+	vector<unique_ptr<AsyncTask>> RegisterAssignmentIO();
 
 private:
 	TableScanState &parent;
@@ -373,6 +388,10 @@ public:
 	ScanFilterInfo &GetFilterInfo();
 
 	ScanSamplingInfo &GetSamplingInfo();
+	//! Initializes the column scans a claim deferred, for whichever collection holds the assignment
+	void InitializeColumnScans();
+	//! Rows scanned from persistent and transaction-local storage
+	idx_t RowsScanned() const;
 
 private:
 	//! The column identifiers of the scan
