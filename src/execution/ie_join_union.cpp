@@ -481,6 +481,8 @@ static unique_ptr<ColumnDataCollection> RankSortedKeys(ExecutionContext &context
 	using Iterator = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
 	auto build_state = build.CreateIteratorState();
 	auto probe_state = probes.CreateIteratorState();
+	build_state->SetKeepPinned(false);
+	probe_state->SetKeepPinned(false);
 	Iterator build_keys(*build_state), probe_keys(*probe_state);
 	auto result = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context.client),
 	                                              vector<LogicalType> {LogicalType::UBIGINT});
