@@ -1,0 +1,159 @@
+# name: test/sql/sql_export/basic_plan_shapes.test
+# description: SQL export preserves basic aggregate scopes, qualification and scan aliases
+# group: [sql_export]
+
+statement ok
+SET debug_verify_sql_export='strict';
+
+query I rowsort
+SELECT sum(i) AS total FROM (VALUES (1), (2), (2), (4)) AS t(i) WHERE i > 1;
+----
+8
+
+query T rowsort
+SELECT typeof(total) FROM (SELECT sum(i) AS total FROM (VALUES (1), (2), (2), (4)) AS t(i) WHERE i > 1);
+----
+HUGEINT
+
+query TT
+EXPLAIN (SQL) SELECT sum(i) AS total FROM (VALUES (1), (2), (2), (4)) AS t(i) WHERE i > 1;
+----
+sql	<REGEX>:.*FROM [(]VALUES.*WHERE.*
+
+query I rowsort
+SELECT * FROM (VALUES (1), (2)) t(i);
+----
+1
+2
+
+query I rowsort
+SELECT sum(i) FROM (VALUES (1), (2)) t(i);
+----
+3
+
+query II rowsort
+VALUES (1,2),(3,4);
+----
+1	2
+3	4
+
+statement ok
+SET debug_verify_serializer=false;
+
+query R rowsort
+SELECT avg(i) FROM (VALUES (1), (NULL), (2), (2)) t(i);
+----
+1.6666666666666667
+
+query TT
+EXPLAIN (SQL) SELECT avg(i) FROM (VALUES (1), (NULL), (2), (2)) t(i);
+----
+sql	<REGEX>:.*system"?[.]main[.]"?count"?[(].*
+
+statement ok
+PRAGMA disable_optimizer;
+
+query R
+SELECT avg(i) FROM (VALUES (1), (NULL), (2), (2)) t(i);
+----
+1.6666666666666667
+
+statement ok
+PRAGMA enable_optimizer;
+
+statement ok
+CREATE SCHEMA shadow;
+
+statement ok
+CREATE MACRO shadow.prefix(a,b) AS false;
+
+statement ok
+SET search_path='shadow,main';
+
+query I rowsort
+SELECT s LIKE 'a%' FROM (VALUES ('abc'),('xyz'),(NULL)) t(s);
+----
+0
+1
+NULL
+
+query TT
+EXPLAIN (SQL) SELECT s LIKE 'a%' FROM (VALUES ('abc'),('xyz'),(NULL)) t(s);
+----
+sql	<REGEX>:.*system"?[.]main[.]"?prefix"?[(].*
+
+statement ok
+SET search_path='main';
+
+statement ok
+SET debug_verify_serializer=true;
+
+query II
+SELECT * FROM range(3) WITH ORDINALITY;
+----
+0	1
+1	2
+2	3
+
+statement ok
+CREATE TABLE readable_scan("unusual name" INTEGER, column0 INTEGER);
+
+statement ok
+INSERT INTO readable_scan VALUES (1,2);
+
+statement ok
+CREATE TABLE reserved_scan(rowid INTEGER, rownum INTEGER);
+
+statement ok
+INSERT INTO reserved_scan VALUES (3,4);
+
+query II rowsort
+SELECT * FROM readable_scan;
+----
+1	2
+
+query TT
+EXPLAIN (SQL) SELECT * FROM readable_scan;
+----
+sql	<REGEX>:.*FROM.*readable_scan AS r[0-9]+[(]"unusual name", column0[)].*
+
+query II rowsort
+SELECT * FROM reserved_scan;
+----
+3	4
+
+query TT
+EXPLAIN (SQL) SELECT * FROM reserved_scan;
+----
+sql	<REGEX>:.*FROM.*reserved_scan AS r[0-9]+[(]column0, column1[)].*
+
+query II
+WITH RECURSIVE t(i,unused) AS (SELECT 0,int FROM test_all_types() UNION ALL SELECT i+1,unused FROM t WHERE i<2) SELECT i,count(*) FROM t GROUP BY i ORDER BY i;
+----
+0	3
+1	3
+2	3
+
+query TT
+EXPLAIN (SQL) WITH RECURSIVE t(i,unused) AS (SELECT 0,int FROM test_all_types() UNION ALL SELECT i+1,unused FROM t WHERE i<2) SELECT i,count(*) FROM t GROUP BY i ORDER BY i;
+----
+sql	<REGEX>:.*WITH RECURSIVE t [(]c0[)] AS.*
+
+statement ok
+PRAGMA disable_optimizer;
+
+statement ok
+SET debug_verify_sql_export='off';
+
+query II
+WITH RECURSIVE t(i,unused) AS (SELECT 0,int FROM test_all_types() UNION ALL SELECT i+1,unused FROM t WHERE i<2) SELECT i,count(*) FROM t GROUP BY i ORDER BY i;
+----
+0	3
+1	3
+2	3
+
+statement ok
+PRAGMA enable_optimizer;
+
+statement ok
+SET debug_verify_sql_export='strict';

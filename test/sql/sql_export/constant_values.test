@@ -1,0 +1,90 @@
+# name: test/sql/sql_export/constant_values.test
+# description: SQL export preserves exact constant values, interval fields and signed zero
+# group: [sql_export]
+
+statement ok
+SET debug_verify_sql_export='strict';
+
+query TTTTTTTTTTTTTTTTTTTT
+SELECT
+	NULL,
+	typeof(NULL),
+	NULL::SMALLINT,
+	typeof(NULL::SMALLINT),
+	-12::TINYINT,
+	typeof(-12::TINYINT),
+	250::UTINYINT,
+	typeof(250::UTINYINT),
+	-9000000000::BIGINT,
+	typeof(-9000000000::BIGINT),
+	18000000000000000000::UBIGINT,
+	typeof(18000000000000000000::UBIGINT),
+	42::HUGEINT,
+	typeof(42::HUGEINT),
+	84::UHUGEINT,
+	typeof(84::UHUGEINT),
+	1.25::FLOAT,
+	typeof(1.25::FLOAT),
+	-3.5::DOUBLE,
+	typeof(-3.5::DOUBLE);
+----
+NULL	"NULL"	NULL	SMALLINT	-12	TINYINT	250	UTINYINT	-9000000000	BIGINT	18000000000000000000	UBIGINT	42	HUGEINT	84	UHUGEINT	1.25	FLOAT	-3.5	DOUBLE
+
+query TTTTTTTTTTTTTTTT
+SELECT
+	'-0.0'::FLOAT,
+	typeof('-0.0'::FLOAT),
+	'-0.0'::DOUBLE,
+	typeof('-0.0'::DOUBLE),
+	12.345::DECIMAL(9,3),
+	typeof(12.345::DECIMAL(9,3)),
+	to_months(-2147483648)+to_days(-2147483648)+to_microseconds(-9223372036854775808),
+	typeof(to_months(-2147483648)+to_days(-2147483648)+to_microseconds(-9223372036854775808)),
+	[1::SMALLINT,2::SMALLINT],
+	typeof([1::SMALLINT,2::SMALLINT]),
+	{'n': 7, 'items': ['x','y']},
+	typeof({'n': 7, 'items': ['x','y']}),
+	{'n': 7::SMALLINT, 'items': [1::TINYINT, NULL]}::VARIANT,
+	typeof({'n': 7::SMALLINT, 'items': [1::TINYINT, NULL]}::VARIANT),
+	'POINT ZM(1.25 -2.5 3.75 4.5)'::GEOMETRY('OGC:CRS84'),
+	typeof('POINT ZM(1.25 -2.5 3.75 4.5)'::GEOMETRY('OGC:CRS84'));
+----
+-0.0	FLOAT	-0.0	DOUBLE	12.345	DECIMAL(9,3)	-178956970 years -8 months -2147483648 days -2562047788:00:54.775808	INTERVAL	[1, 2]	SMALLINT[]	{'n': 7, 'items': [x, y]}	STRUCT(n INTEGER, items VARCHAR[])	{'n': 7, 'items': [1, NULL]}	VARIANT	POINT ZM (1.25 -2.5 3.75 4.5)	GEOMETRY('OGC:CRS84')
+
+# Preserve the signed-zero constructor itself as well as its observable sign.
+
+query I
+SELECT signbit(x) FROM (VALUES ('-0.0'::FLOAT)) t(x);
+----
+true
+
+query TT
+EXPLAIN (SQL) SELECT '-0.0'::FLOAT;
+----
+sql	<REGEX>:.*'-0[.]0'.*FLOAT.*
+
+query I
+SELECT signbit(x) FROM (VALUES ('-0.0'::DOUBLE)) t(x);
+----
+true
+
+query TT
+EXPLAIN (SQL) SELECT '-0.0'::DOUBLE;
+----
+sql	<REGEX>:.*'-0[.]0'.*DOUBLE.*
+
+query III
+SELECT date_part('year',i)::BIGINT*12+date_part('month',i),date_part('day',i),date_part('hour',i)::HUGEINT*3600000000+date_part('minute',i)::HUGEINT*60000000+date_part('microsecond',i) FROM (VALUES (to_months(-2147483648)+to_days(-2147483648)+to_microseconds(-9223372036854775808)))t(i);
+----
+-2147483648	-2147483648	-9223372036854775808
+
+query TT
+SELECT variant_typeof(v.n),variant_typeof(v.items[1]) FROM (VALUES ({'n': 7::SMALLINT, 'items': [1::TINYINT, NULL]}::VARIANT)) t(v);
+----
+INT16	INT8
+
+query T
+SELECT hex(ST_AsWKB(g)) FROM (VALUES ('POINT ZM(1.25 -2.5 3.75 4.5)'::GEOMETRY('OGC:CRS84')))t(g);
+----
+01B90B0000000000000000F43F00000000000004C00000000000000E400000000000001240
+

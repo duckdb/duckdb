@@ -1,0 +1,34 @@
+# name: test/sql/sql_export/verification_logging.test
+# description: SQL verification logs the original statement once
+# group: [sql_export]
+
+statement ok
+SET debug_verify_sql_export='strict';
+
+query I
+SELECT 42
+----
+42
+
+statement ok
+SET debug_verify_sql_export='strict';
+
+statement ok
+CALL enable_logging();
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# Exercise the verification route: EXPLAIN has its own query log entries.
+query I
+SELECT 42
+----
+42
+
+statement ok
+SET debug_verify_sql_export='off';
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE type='QueryLog' AND message='SELECT 42';
+----
+1
