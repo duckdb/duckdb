@@ -87,3 +87,19 @@ query T
 SELECT hex(ST_AsWKB(g)) FROM (VALUES ('POINT ZM(1.25 -2.5 3.75 4.5)'::GEOMETRY('OGC:CRS84')))t(g);
 ----
 01B90B0000000000000000F43F00000000000004C00000000000000E400000000000001240
+
+# Reconstruct nested VARIANT payloads without changing observable object-key order.
+query T
+SELECT variant_extract_string(v, '') FROM (VALUES ({'a': [{'b': 1::SMALLINT, 'c': 2::TINYINT, 'a': 3}], 'b': 4, 'c': 5}::VARIANT)) t(v);
+----
+{"a":[{"b":1,"c":2,"a":3}],"b":4,"c":5}
+
+query TT
+SELECT variant_typeof(v.a[1].b), variant_typeof(v.a[1].c) FROM (VALUES ({'a': [{'b': 1::SMALLINT, 'c': 2::TINYINT, 'a': 3}], 'b': 4, 'c': 5}::VARIANT)) t(v);
+----
+INT16	INT8
+
+query TTT
+SELECT variant_extract_string(v, ''), variant_typeof(v.a[1]), variant_typeof(v.a[2].b) FROM (VALUES ({'a': [7::SMALLINT::VARIANT, {'b': 2::TINYINT, 'a': 3}::VARIANT]}::VARIANT)) t(v);
+----
+{"a":[7,{"b":2,"a":3}]}	INT16	INT8
