@@ -81,8 +81,8 @@ public:
 	//! Initializes a scan for multiple equality lookup values.
 	unique_ptr<IndexScanState> InitializeBatchScan(unique_ptr<DataChunk> key_columns) const;
 	//! Scans the ART and appends matching row IDs to the output collection.
-	//! Returns CAPACITY_EXCEEDED and clears the entire collection if its capacity is exceeded.
-	ARTLookupResult Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const DUCKDB_EXCLUDES(lock);
+	//! Returns true on completion, or false and clears the entire collection if its capacity is exceeded.
+	bool Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const DUCKDB_EXCLUDES(lock);
 
 	//! Simple merge: scan source ART and delete each (key, rowid) from this ART.
 	// FIXME: replace with structural tree delete merge.

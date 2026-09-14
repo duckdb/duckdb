@@ -856,12 +856,12 @@ ARTLookupResult ART::ScanBatch(DataChunk &values, RowIdVectorOutput &row_ids) co
 	return ARTLookupResult::COMPLETED;
 }
 
-ARTLookupResult ART::Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const {
+bool ART::Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const {
 	if (ScanInternal(state, row_ids) == ARTLookupResult::CAPACITY_EXCEEDED) {
 		row_ids.Reset();
-		return ARTLookupResult::CAPACITY_EXCEEDED;
+		return false;
 	}
-	return ARTLookupResult::COMPLETED;
+	return true;
 }
 
 ARTLookupResult ART::ScanInternal(IndexScanState &state, RowIdVectorOutput &row_ids) const {
