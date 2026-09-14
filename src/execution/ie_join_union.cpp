@@ -86,15 +86,7 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 IEJoinUnion::IEJoinUnion(SortedTable &l2, ColumnDataCollection &li, ColumnDataCollection &p,
                          const vector<JoinCondition> &conditions, const ChunkRange &chunks)
     : n(0), i(0), li(li), p(p) {
-	// 7. initialize bit-array B (|B| = n), and set all bits to 0
-	n_j = l2.count.load();
-	bit_array.resize(ValidityMask::EntryCount(n_j), 0);
-	bit_mask.Initialize(bit_array.data(), n_j);
-
-	// Bloom filter
-	bloom_count = (n_j + (BLOOM_CHUNK_BITS - 1)) / BLOOM_CHUNK_BITS;
-	bloom_array.resize(ValidityMask::EntryCount(bloom_count), 0);
-	bloom_filter.Initialize(bloom_array.data(), bloom_count);
+	InitializeBitmaps(l2.count);
 
 	// 11. for(i←1 to n) do
 	const auto strict2 = IsStrictComparison(conditions[1].GetComparisonType());
@@ -227,8 +219,10 @@ static idx_t NextValid(const ValidityMask &bits, idx_t j, const idx_t n) {
 
 idx_t IEJoinUnion::JoinBlocks(unsafe_vector<idx_t> &lsel, unsafe_vector<idx_t> &rsel) {
 	// Release pinned blocks
-	op2->Repin();
-	off2->Repin();
+	if (op2) {
+		op2->Repin();
+		off2->Repin();
+	}
 
 	// 8. initialize join result as an empty list for tuple pairs
 	idx_t result_count = 0;
@@ -259,7 +253,7 @@ idx_t IEJoinUnion::JoinBlocks(unsafe_vector<idx_t> &lsel, unsafe_vector<idx_t> &
 			}
 
 			// Filter out tuples with the same sign (they come from the same table)
-			const auto rrid = li[j];
+			const auto rrid = first_rank ? -UnsafeNumericCast<int64_t>(j) - 1 : li[j];
 			++j;
 
 			D_ASSERT(lrid > 0 && rrid < 0);
@@ -362,12 +356,13 @@ void IEJoinUnion::InitializeTables(ClientContext &client, const PhysicalComparis
 
 unique_ptr<IEJoinUnion::SortedTable> IEJoinUnion::SortInput(ExecutionContext &context, const PhysicalComparisonJoin &op,
                                                             const vector<JoinCondition> &conditions,
-                                                            ColumnDataCollection &keys) {
+                                                            ColumnDataCollection &keys, bool reverse) {
 	const auto comparison = conditions[0].GetComparisonType();
 	const bool ascending =
 	    comparison == ExpressionType::COMPARE_LESSTHAN || comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO;
 	vector<BoundOrderByNode> orders;
-	orders.emplace_back(ascending ? OrderType::ASCENDING : OrderType::DESCENDING, OrderByNullType::NULLS_LAST,
+	orders.emplace_back(ascending != reverse ? OrderType::ASCENDING : OrderType::DESCENDING,
+	                    OrderByNullType::NULLS_LAST,
 	                    make_uniq<BoundReferenceExpression>(conditions[0].GetLHS().GetReturnType(), 0));
 	auto result = make_uniq<SortedTable>(context.client, orders, keys.Types(), op);
 	auto local = result->sort->GetLocalSinkState(context);
@@ -397,35 +392,185 @@ unique_ptr<IEJoinUnion::SortedTable> IEJoinUnion::SortInput(ExecutionContext &co
 	return result;
 }
 
-void IEJoinUnion::Prepare(ExecutionContext &context, const PhysicalComparisonJoin &op,
-                          const vector<JoinCondition> &conditions, SortedTable &left, SortedTable &right,
-                          unique_ptr<SortedTable> &l2, unique_ptr<ColumnDataCollection> &li,
-                          unique_ptr<ColumnDataCollection> &p) {
-	unique_ptr<SortedTable> l1;
-	InitializeTables(context.client, op, conditions, l1, l2);
-	InterruptState interrupt;
-	for (idx_t side = 0; side < 2; side++) {
-		auto &table = side ? right : left;
-		BoundReferenceExpression first(conditions[0].GetLHS().GetReturnType(), 0);
-		BoundConstantExpression from_left(Value::BOOLEAN(side == 0));
-		BoundReferenceExpression second(conditions[1].GetLHS().GetReturnType(), 1);
-		ExpressionExecutor executor(context.client);
-		executor.AddExpression(first);
-		executor.AddExpression(from_left);
-		executor.AddExpression(second);
-		const int64_t direction = side ? -1 : 1;
-		AppendKey(context, interrupt, table, executor, *l1, direction, direction, {0, table.BlockCount()});
+idx_t IEJoinBuildOrders::SizeInBytes() const {
+	return sizeof(*this) + first->sorted->SizeInBytes() + second->sorted->SizeInBytes() + row_ids->SizeInBytes() +
+	       second_positions->SizeInBytes();
+}
+
+void IEJoinUnion::InitializeBitmaps(idx_t count) {
+	n_j = count;
+	bit_array.resize(ValidityMask::EntryCount(n_j), 0);
+	bit_mask.Initialize(bit_array.data(), n_j);
+	bloom_count = (n_j + BLOOM_CHUNK_BITS - 1) / BLOOM_CHUNK_BITS;
+	bloom_array.resize(ValidityMask::EntryCount(bloom_count), 0);
+	bloom_filter.Initialize(bloom_array.data(), bloom_count);
+}
+
+IEJoinUnion::IEJoinUnion(IEJoinBuildOrders &build, ColumnDataCollection &ranks)
+    : next_row_func(&IEJoinUnion::NextRankedRow), n(ranks.Count()), i(0), j(0), anti_i(0),
+      first_rank(make_uniq<IEJoinCursor<idx_t>>(ranks, 0)), second_rank(make_uniq<IEJoinCursor<idx_t>>(ranks, 1)),
+      probe_rank(make_uniq<IEJoinCursor<idx_t>>(ranks, 2)), li(*build.row_ids), p(*build.second_positions) {
+	InitializeBitmaps(build.first->count);
+	NextRankedRow();
+}
+
+bool IEJoinUnion::NextRankedRow() {
+	if (i >= n) {
+		return false;
 	}
-	l1->Finalize(context.client, interrupt);
-	l1->Materialize(context, interrupt);
-	li = ExtractColumn(*l1, 1, BufferManager::GetBufferManager(context.client));
-	BoundReferenceExpression second(conditions[1].GetLHS().GetReturnType(), 0);
-	ExpressionExecutor executor(context.client);
-	executor.AddExpression(second);
-	AppendKey(context, interrupt, *l1, executor, *l2, 1, 0, {0, l1->BlockCount()});
-	l2->Finalize(context.client, interrupt);
-	l2->Materialize(context, interrupt);
-	p = ExtractColumn(*l2, 0, BufferManager::GetBufferManager(context.client));
+	const auto end = (*second_rank)[i];
+	while (activated < end) {
+		const auto position = p[activated++];
+		bit_mask.SetValidUnsafe(position);
+		bloom_filter.SetValidUnsafe(position / BLOOM_CHUNK_BITS);
+	}
+	j = (*first_rank)[i];
+	lrid = UnsafeNumericCast<int64_t>((*probe_rank)[i]) + 1;
+	return true;
+}
+
+static unique_ptr<IEJoinUnion::SortedTable> SortSecondKey(ExecutionContext &context, const PhysicalComparisonJoin &op,
+                                                          const vector<JoinCondition> &conditions,
+                                                          IEJoinUnion::SortedTable &first) {
+	vector<LogicalType> types {conditions[1].GetLHS().GetReturnType(), LogicalType::BIGINT};
+	ColumnDataCollection input(BufferManager::GetBufferManager(context.client), types);
+	ColumnDataAppendState append;
+	input.InitializeAppend(append);
+	auto &source = *first.sorted->payload_data;
+	TupleDataScanState scan;
+	source.InitializeScan(scan, {1});
+	DataChunk keys, projected;
+	source.InitializeScanChunk(scan, keys);
+	projected.Initialize(context.client, types);
+	idx_t row = 0;
+	while (source.Scan(scan, keys)) {
+		context.client.InterruptCheck();
+		projected.Reset();
+		projected.data[0].Reference(keys.data[0]);
+		{
+			auto writer = FlatVector::Writer<int64_t>(projected.data[1], keys.size());
+			for (idx_t offset = 0; offset < keys.size(); offset++) {
+				writer.WriteValue(UnsafeNumericCast<int64_t>(row + offset));
+			}
+		}
+		projected.SetChildCardinality(keys.size());
+		input.Append(append, projected);
+		row += keys.size();
+	}
+	vector<JoinCondition> second;
+	second.push_back(conditions[1].Copy());
+	return IEJoinUnion::SortInput(context, op, second, input, true);
+}
+
+unique_ptr<IEJoinBuildOrders> IEJoinUnion::PrepareBuild(ExecutionContext &context, const PhysicalComparisonJoin &op,
+                                                        const vector<JoinCondition> &conditions,
+                                                        unique_ptr<SortedTable> first) {
+	auto result = make_uniq<IEJoinBuildOrders>();
+	auto &manager = BufferManager::GetBufferManager(context.client);
+	result->second = SortSecondKey(context, op, conditions, *first);
+	result->second_positions = ExtractColumn(*result->second, 1, manager);
+	result->row_ids = ExtractColumn(*first, 2, manager);
+	result->first = std::move(first);
+	return result;
+}
+
+template <SortKeyType SORT_KEY_TYPE>
+static unique_ptr<ColumnDataCollection> RankSortedKeys(ExecutionContext &context, IEJoinUnion::SortedTable &build,
+                                                       IEJoinUnion::SortedTable &probes, bool upper) {
+	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
+	using Iterator = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
+	auto build_state = build.CreateIteratorState();
+	auto probe_state = probes.CreateIteratorState();
+	Iterator build_keys(*build_state), probe_keys(*probe_state);
+	auto result = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context.client),
+	                                              vector<LogicalType> {LogicalType::UBIGINT});
+	ColumnDataAppendState append;
+	result->InitializeAppend(append);
+	DataChunk ranks;
+	ranks.Initialize(context.client, result->Types());
+	idx_t previous = 0;
+	for (idx_t offset = 0; offset < probes.count;) {
+		context.client.InterruptCheck();
+		probe_state->SetKeepPinned(true);
+		ranks.Reset();
+		const auto count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, probes.count - offset);
+		{
+			auto writer = FlatVector::Writer<uint64_t>(ranks.data[0], count);
+			for (idx_t row = 0; row < count; row++) {
+				build_state->SetKeepPinned(true);
+				const auto &key = probe_keys[offset + row];
+				idx_t low = previous, high = build.count;
+				while (low < high) {
+					const auto middle = low + (high - low) / 2;
+					const auto &candidate = build_keys[middle];
+					if (candidate < key || (upper && !(key < candidate))) {
+						low = middle + 1;
+					} else {
+						high = middle;
+					}
+				}
+				writer.WriteValue(low);
+				previous = low;
+			}
+		}
+		ranks.SetChildCardinality(count);
+		result->Append(append, ranks);
+		offset += count;
+	}
+	return result;
+}
+
+static unique_ptr<ColumnDataCollection> RankSortedKeys(ExecutionContext &context, IEJoinUnion::SortedTable &build,
+                                                       IEJoinUnion::SortedTable &probes, bool upper) {
+	D_ASSERT(build.GetSortKeyType() == probes.GetSortKeyType());
+	switch (build.GetSortKeyType()) {
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		return RankSortedKeys<SortKeyType::SORT_KEY_TYPE>(context, build, probes, upper);
+		DUCKDB_FOR_EACH_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
+	default:
+		throw InternalException("Unexpected sort key type in IE join ranks");
+	}
+}
+
+unique_ptr<ColumnDataCollection> IEJoinUnion::PrepareRanks(ExecutionContext &context, const PhysicalComparisonJoin &op,
+                                                           const vector<JoinCondition> &conditions, SortedTable &probes,
+                                                           IEJoinBuildOrders &build) {
+	auto second = SortSecondKey(context, op, conditions, probes);
+	auto first_ranks =
+	    RankSortedKeys(context, *build.first, probes, IsStrictComparison(conditions[0].GetComparisonType()));
+	auto second_ranks =
+	    RankSortedKeys(context, *build.second, *second, !IsStrictComparison(conditions[1].GetComparisonType()));
+	auto &manager = BufferManager::GetBufferManager(context.client);
+	auto positions = ExtractColumn(*second, 1, manager);
+	IEJoinCursor<idx_t> first(*first_ranks), next(*second_ranks);
+	IEJoinCursor<idx_t, int64_t> position(*positions);
+	auto result = make_uniq<ColumnDataCollection>(manager, vector<LogicalType>(3, LogicalType::UBIGINT));
+	ColumnDataAppendState append;
+	result->InitializeAppend(append);
+	DataChunk chunk;
+	chunk.Initialize(context.client, result->Types());
+	for (idx_t offset = 0; offset < probes.count;) {
+		context.client.InterruptCheck();
+		chunk.Reset();
+		const auto count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, probes.count - offset);
+		{
+			auto first_writer = FlatVector::Writer<uint64_t>(chunk.data[0], count);
+			auto second_writer = FlatVector::Writer<uint64_t>(chunk.data[1], count);
+			auto position_writer = FlatVector::Writer<uint64_t>(chunk.data[2], count);
+			for (idx_t row = 0; row < count; row++) {
+				const auto pos = position[offset + row];
+				first_writer.WriteValue(first[pos]);
+				second_writer.WriteValue(next[offset + row]);
+				position_writer.WriteValue(pos);
+			}
+		}
+		chunk.SetChildCardinality(count);
+		result->Append(append, chunk);
+		offset += count;
+	}
+	return result;
 }
 
 } // namespace duckdb

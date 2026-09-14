@@ -1,5 +1,6 @@
 #include "duckdb/execution/mark_join_refinement.hpp"
 #include "duckdb/execution/join_hashtable.hpp"
+#include "duckdb/execution/ie_join_union.hpp"
 
 namespace duckdb {
 
@@ -45,7 +46,7 @@ idx_t MarkJoinRefinement::SizeInBytes() const {
 				size += index.second->hash->SizeInBytes() + index.second->hash->capacity * sizeof(ht_entry_t);
 			}
 			if (index.second->ranges) {
-				size += index.second->ranges->sorted->SizeInBytes();
+				size += index.second->ranges->SizeInBytes();
 			}
 			for (auto &result : index.second->probe_results) {
 				size += sizeof(result) + result.second->SizeInBytes();

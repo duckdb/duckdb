@@ -16,6 +16,7 @@
 namespace duckdb {
 
 class JoinHashTable;
+struct IEJoinBuildOrders;
 
 struct MarkJoinRefinementIndex {
 	MarkJoinRefinementIndex();
@@ -24,7 +25,7 @@ struct MarkJoinRefinementIndex {
 	vector<idx_t> output_columns;
 	vector<JoinCondition> conditions;
 	unique_ptr<JoinHashTable> hash;
-	unique_ptr<PhysicalRangeJoin::GlobalSortedTable> ranges;
+	unique_ptr<IEJoinBuildOrders> ranges;
 	map<uint64_t, unique_ptr<ColumnDataCollection>> probe_results;
 	Value bound;
 	idx_t witness = 0;

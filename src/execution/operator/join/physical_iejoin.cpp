@@ -1263,16 +1263,14 @@ unique_ptr<ColumnDataCollection> IEJoinLocalSourceState::RefineRangePattern(Exec
 	};
 	if (!index.ranges) {
 		auto build_keys = make_input(1);
-		index.ranges = IEJoinUnion::SortInput(context, op, conditions, *build_keys);
+		auto first = IEJoinUnion::SortInput(context, op, conditions, *build_keys);
+		index.ranges = IEJoinUnion::PrepareBuild(context, op, conditions, std::move(first));
 	}
 	auto probe_keys = make_input(0);
 	auto probes = IEJoinUnion::SortInput(context, op, conditions, *probe_keys);
-	unique_ptr<IEJoinUnion::SortedTable> l2;
-	unique_ptr<ColumnDataCollection> li, p;
-	IEJoinUnion::Prepare(context, op, conditions, *probes, *index.ranges, l2, li, p);
+	auto ranks = IEJoinUnion::PrepareRanks(context, op, conditions, *probes, *index.ranges);
 	auto left_ids = IEJoinUnion::ExtractColumn(*probes, 2, manager);
-	auto right_ids = IEJoinUnion::ExtractColumn(*index.ranges, 2, manager);
-	IEJoinCursor<uint64_t> left_id(*left_ids), right_id(*right_ids);
+	IEJoinCursor<uint64_t> left_id(*left_ids), right_id(*index.ranges->row_ids);
 	const idx_t count = gsource.gsink.tables[0]->count;
 	auto markers = manager.GetBufferAllocator().Allocate(count);
 	memset(markers.get(), 0, count);
@@ -1297,7 +1295,7 @@ unique_ptr<ColumnDataCollection> IEJoinLocalSourceState::RefineRangePattern(Exec
 			loaded[side] = chunk;
 		}
 	};
-	IEJoinUnion joiner(*l2, *li, *p, conditions, {0, l2->BlockCount()});
+	IEJoinUnion joiner(*index.ranges, *ranks);
 	unsafe_vector<idx_t> left, right;
 	Vector comparison(LogicalType::BOOLEAN);
 	DataChunk candidate;

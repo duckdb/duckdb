@@ -2104,7 +2104,7 @@ void JoinHashTable::RefineMarkPatterns(DataChunk &keys, bool matches[], Validity
 		ExecutionContext execution(context, thread, nullptr);
 		auto &physical = op.Cast<PhysicalHashJoin>();
 		auto &manager = BufferManager::GetBufferManager(context);
-		auto &build = [&]() -> IEJoinUnion::SortedTable & {
+		auto &build = [&]() -> IEJoinBuildOrders & {
 			lock_guard<mutex> guard(mark_join_info.mj_lock);
 			const auto mask = (uint64_t(1) << driving[0]) | (uint64_t(1) << driving[1]);
 			auto &index = group.indexes[mask];
@@ -2129,7 +2129,8 @@ void JoinHashTable::RefineMarkPatterns(DataChunk &keys, bool matches[], Validity
 					projected.SetChildCardinality(selection.second.size());
 					input.Append(append, projected);
 				}
-				index->ranges = IEJoinUnion::SortInput(execution, physical, range_conditions, input);
+				auto first = IEJoinUnion::SortInput(execution, physical, range_conditions, input);
+				index->ranges = IEJoinUnion::PrepareBuild(execution, physical, range_conditions, std::move(first));
 			}
 			return *index->ranges;
 		}();
@@ -2152,13 +2153,10 @@ void JoinHashTable::RefineMarkPatterns(DataChunk &keys, bool matches[], Validity
 		projected.SetChildCardinality(count);
 		input.Append(append, projected);
 		auto probes = IEJoinUnion::SortInput(execution, physical, range_conditions, input);
-		unique_ptr<IEJoinUnion::SortedTable> l2;
-		unique_ptr<ColumnDataCollection> li, p;
-		IEJoinUnion::Prepare(execution, physical, range_conditions, *probes, build, l2, li, p);
+		auto ranks = IEJoinUnion::PrepareRanks(execution, physical, range_conditions, *probes, build);
 		auto left_ids = IEJoinUnion::ExtractColumn(*probes, 2, manager);
-		auto right_ids = IEJoinUnion::ExtractColumn(build, 2, manager);
-		IEJoinCursor<uint64_t> left_id(*left_ids), right_id(*right_ids);
-		IEJoinUnion joiner(*l2, *li, *p, range_conditions, {0, l2->BlockCount()});
+		IEJoinCursor<uint64_t> left_id(*left_ids), right_id(*build.row_ids);
+		IEJoinUnion joiner(build, *ranks);
 		unsafe_vector<idx_t> left, right;
 		SelectionVector selected(1);
 		const auto dropped = probe_mask | build_mask;

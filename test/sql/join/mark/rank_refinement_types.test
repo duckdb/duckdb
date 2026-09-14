@@ -1,0 +1,63 @@
+# name: test/sql/join/mark/rank_refinement_types.test
+# description: Native sort-key ranks preserve MARK boundaries across types and duplicates
+# group: [mark]
+
+statement ok
+SET nested_loop_join_threshold=0
+
+statement ok
+SET merge_join_threshold=0
+
+statement ok
+SET max_execution_time=10000
+
+statement ok
+CREATE TABLE rank_probe AS SELECT i id, NULL::BIGINT k,
+    (i%7)::SMALLINT small, (i%7)::HUGEINT huge, ((i%7)/10)::DECIMAL(38,3) decimal_key,
+    CASE WHEN i%7=0 THEN 'NaN'::DOUBLE ELSE (i%5)::DOUBLE END floating,
+    repeat('common prefix',4)||(i%7)::VARCHAR text_key, i%5 tail FROM range(19) t(i)
+
+statement ok
+CREATE TABLE rank_build AS SELECT CASE WHEN i%7=0 THEN NULL ELSE i END k,
+    (i%7)::SMALLINT small, (i%7)::HUGEINT huge, ((i%7)/10)::DECIMAL(38,3) decimal_key,
+    CASE WHEN i%7=0 THEN 'NaN'::DOUBLE ELSE (i%5)::DOUBLE END floating,
+    repeat('common prefix',4)||(i%7)::VARCHAR text_key, i%3 tail FROM range(23) t(i)
+
+foreach external false true
+
+statement ok
+SET debug_force_external={external}
+
+foreach kind = <
+
+foreach key small huge decimal_key floating text_key
+
+foreach first < <= > >=
+
+foreach second < <= > >=
+
+query I
+WITH actual AS (
+    SELECT id,__mark_join_marker marker FROM rank_probe p JOIN BY(TYPE MARK) rank_build r
+    ON p.k {kind} r.k AND p.{key} {first} r.{key} AND p.tail {second} r.tail
+), expected AS (
+    SELECT id,max(CASE
+        WHEN p.k {kind} r.k AND p.{key} {first} r.{key} AND p.tail {second} r.tail THEN 2
+        WHEN (p.k {kind} r.k AND p.{key} {first} r.{key} AND p.tail {second} r.tail) IS NULL THEN 1
+        ELSE 0 END) marker
+    FROM rank_probe p CROSS JOIN rank_build r GROUP BY id
+)
+SELECT count(*) FROM actual JOIN expected USING(id)
+WHERE CASE WHEN actual.marker THEN 2 WHEN actual.marker IS NULL THEN 1 ELSE 0 END <> expected.marker
+----
+0
+
+endloop
+
+endloop
+
+endloop
+
+endloop
+
+endloop
