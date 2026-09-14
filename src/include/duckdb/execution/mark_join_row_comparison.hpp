@@ -23,7 +23,7 @@ struct MarkJoinRowComparison {
 	static void CompareConjunction(DataChunk &left, idx_t left_row, DataChunk &right,
 	                               const vector<JoinCondition> &conditions, Vector &result, bool nested_loop = false);
 	static void CompareTail(DataChunk &left, DataChunk &right, const vector<JoinCondition> &conditions,
-	                        const vector<idx_t> &tail, bool unknown, Vector &result);
+	                        const vector<idx_t> &tail, Vector &result);
 	static void Perform(DataChunk &left, DataChunk &right, bool found_match[], const vector<JoinCondition> &conditions,
 	                    optional_ptr<bool> found_unknown);
 	static void CompareEquality(const Vector &left, idx_t left_row, idx_t left_count, const Vector &right,

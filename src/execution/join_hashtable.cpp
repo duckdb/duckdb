@@ -2086,10 +2086,10 @@ void JoinHashTable::RefineMarkPatterns(DataChunk &keys, bool matches[], Validity
 	Vector comparison(LogicalType::BOOLEAN);
 	DataChunk candidates;
 	candidates.InitializeEmpty(condition_types);
-	set<pair<uint64_t, uint64_t>> range_batches;
+	set<pair<uint64_t, uint64_t>> refinement_batches;
 	auto refine_ranges = [&](MarkJoinRefinementGroup &group, uint64_t probe_mask, uint64_t build_mask,
 	                         vector<idx_t> driving) {
-		if (!range_batches.emplace(probe_mask, build_mask).second) {
+		if (!refinement_batches.emplace(probe_mask, build_mask).second) {
 			return;
 		}
 		std::sort(driving.begin(), driving.end(),
@@ -2159,8 +2159,9 @@ void JoinHashTable::RefineMarkPatterns(DataChunk &keys, bool matches[], Validity
 		IEJoinUnion joiner(build, *ranks);
 		unsafe_vector<idx_t> left, right;
 		SelectionVector left_sel(STANDARD_VECTOR_SIZE), right_sel(STANDARD_VECTOR_SIZE);
-		DataChunk probe_candidates;
+		DataChunk probe_candidates, build_candidates;
 		probe_candidates.InitializeEmpty(condition_types);
+		build_candidates.InitializeEmpty(condition_types);
 		const auto dropped = probe_mask | build_mask;
 		vector<idx_t> tail;
 		for (idx_t col = 0; col < conditions.size(); col++) {
@@ -2190,17 +2191,18 @@ void JoinHashTable::RefineMarkPatterns(DataChunk &keys, bool matches[], Validity
 					continue;
 				}
 				fetch(build_chunk);
-				probe_candidates.Reference(keys);
-				probe_candidates.Slice(left_sel, batch_count);
-				candidates.Reference(chunk);
-				candidates.Slice(right_sel, batch_count);
-				MarkJoinRowComparison::CompareTail(probe_candidates, candidates, conditions, tail, dropped != 0,
-				                                   comparison);
+				for (auto col : tail) {
+					probe_candidates.data[col].Slice(keys.data[col], left_sel, batch_count);
+					build_candidates.data[col].Slice(chunk.data[col], right_sel, batch_count);
+				}
+				probe_candidates.SetChildCardinality(batch_count);
+				build_candidates.SetChildCardinality(batch_count);
+				MarkJoinRowComparison::CompareTail(probe_candidates, build_candidates, conditions, tail, comparison);
 				auto values = comparison.Values<bool>();
 				for (idx_t row = 0; row < batch_count; row++) {
 					const auto probe = left_sel.get_index(row);
 					auto value = values[row];
-					if (!value.IsValid()) {
+					if (!value.IsValid() || (dropped && value.GetValue())) {
 						if (!matches[probe]) {
 							validity.SetInvalid(probe);
 						}
@@ -2269,91 +2271,137 @@ void JoinHashTable::RefineMarkPatterns(DataChunk &keys, bool matches[], Validity
 			};
 			bool finished = false;
 			if (equality_mask) {
-				auto &index = [&]() -> MarkJoinRefinementIndex & {
-					lock_guard<mutex> guard(mark_join_info.mj_lock);
-					auto &cached = group.indexes[equality_mask];
-					if (!cached) {
-						auto built = make_uniq<MarkJoinRefinementIndex>();
-						vector<LogicalType> types;
-						for (idx_t col = 0; col < conditions.size(); col++) {
-							if (equality_mask & (uint64_t(1) << col)) {
-								built->columns.push_back(col);
-								built->conditions.push_back(conditions[col].Copy());
-								types.push_back(condition_types[col]);
+				if (refinement_batches.emplace(probe_mask, entry.first).second) {
+					auto &index = [&]() -> MarkJoinRefinementIndex & {
+						lock_guard<mutex> guard(mark_join_info.mj_lock);
+						auto &cached = group.indexes[equality_mask];
+						if (!cached) {
+							auto built = make_uniq<MarkJoinRefinementIndex>();
+							vector<LogicalType> types;
+							for (idx_t col = 0; col < conditions.size(); col++) {
+								if (equality_mask & (uint64_t(1) << col)) {
+									built->columns.push_back(col);
+									built->conditions.push_back(conditions[col].Copy());
+									types.push_back(condition_types[col]);
+								}
 							}
-						}
-						built->output_columns.push_back(types.size());
-						built->hash = make_uniq<JoinHashTable>(context, op, built->conditions,
-						                                       vector<LogicalType> {LogicalType::UBIGINT},
-						                                       JoinType::INNER, 0, built->output_columns, nullptr);
-						auto layout_types = types;
-						layout_types.push_back(LogicalType::UBIGINT);
-						layout_types.push_back(LogicalType::HASH);
-						auto layout = make_shared_ptr<TupleDataLayout>();
-						layout->Initialize(layout_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
-						built->hash->FinishInitWithLayout(layout);
-						PartitionedTupleDataAppendState append;
-						built->hash->GetSinkCollection().InitializeAppendState(append);
-						DataChunk index_keys, payload;
-						index_keys.InitializeEmpty(types);
-						payload.Initialize(Allocator::Get(context), {LogicalType::UBIGINT});
-						for (auto &selection : group.selections) {
-							context.InterruptCheck();
-							fetch(selection.first);
-							SelectionVector selected(selection.second.data(), selection.second.size());
-							index_keys.ReferenceColumns(chunk, built->columns);
-							index_keys.Slice(selected, selection.second.size());
-							payload.Reset();
-							for (auto row : selection.second) {
-								payload.data[0].Append(Value::UBIGINT(selection.first * STANDARD_VECTOR_SIZE + row));
+							built->output_columns.push_back(types.size());
+							built->hash = make_uniq<JoinHashTable>(context, op, built->conditions,
+							                                       vector<LogicalType> {LogicalType::UBIGINT},
+							                                       JoinType::INNER, 0, built->output_columns, nullptr);
+							auto layout_types = types;
+							layout_types.push_back(LogicalType::UBIGINT);
+							layout_types.push_back(LogicalType::HASH);
+							auto layout = make_shared_ptr<TupleDataLayout>();
+							layout->Initialize(layout_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
+							built->hash->FinishInitWithLayout(layout);
+							PartitionedTupleDataAppendState append;
+							built->hash->GetSinkCollection().InitializeAppendState(append);
+							DataChunk index_keys, payload;
+							index_keys.InitializeEmpty(types);
+							payload.Initialize(Allocator::Get(context), {LogicalType::UBIGINT});
+							for (auto &selection : group.selections) {
+								context.InterruptCheck();
+								fetch(selection.first);
+								SelectionVector selected(selection.second.data(), selection.second.size());
+								index_keys.ReferenceColumns(chunk, built->columns);
+								index_keys.Slice(selected, selection.second.size());
+								payload.Reset();
+								for (auto row : selection.second) {
+									payload.data[0].Append(
+									    Value::UBIGINT(selection.first * STANDARD_VECTOR_SIZE + row));
+								}
+								payload.SetChildCardinality(selection.second.size());
+								built->hash->Build(append, index_keys, payload);
 							}
-							payload.SetChildCardinality(selection.second.size());
-							built->hash->Build(append, index_keys, payload);
+							built->hash->Unpartition();
+							built->hash->AllocatePointerTable();
+							built->hash->InitializePointerTable(0, built->hash->capacity);
+							built->hash->Finalize(0, built->hash->GetDataCollection().ChunkCount(), false);
+							cached = std::move(built);
 						}
-						built->hash->Unpartition();
-						built->hash->AllocatePointerTable();
-						built->hash->InitializePointerTable(0, built->hash->capacity);
-						built->hash->Finalize(0, built->hash->GetDataCollection().ChunkCount(), false);
-						cached = std::move(built);
+						return *cached;
+					}();
+					SelectionVector selected(STANDARD_VECTOR_SIZE);
+					idx_t probe_count = 0;
+					for (idx_t row = 0; row < keys.size(); row++) {
+						if (!matches[row] && validity.RowIsValid(row) &&
+						    MarkJoinRefinement::NullMask(keys, row, conditions) == probe_mask) {
+							selected.set_index(probe_count++, row);
+						}
 					}
-					return *cached;
-				}();
-				DataChunk probe_keys, probe_payload, result;
-				probe_keys.InitializeEmpty(index.hash->condition_types);
-				probe_keys.ReferenceColumns(keys, index.columns);
-				SelectionVector selected(1);
-				selected.set_index(0, probe);
-				probe_keys.Slice(selected, 1);
-				probe_payload.SetChildCardinality(1);
-				result.Initialize(Allocator::Get(context), {LogicalType::UBIGINT});
-				TupleDataChunkState key_state;
-				TupleDataCollection::InitializeChunkState(key_state, index.hash->condition_types);
-				JoinHashTable::ScanStructure cursor(*index.hash, key_state);
-				JoinHashTable::ProbeState probe_state;
-				index.hash->Probe(cursor, probe_keys, key_state, probe_state);
-				while (cursor.count > 0 && !finished) {
-					context.InterruptCheck();
-					result.Reset();
-					cursor.Next(probe_keys, probe_payload, result);
-					auto ids = result.data[0].Values<uint64_t>();
-					SelectionVector selected_rows(STANDARD_VECTOR_SIZE);
-					idx_t offset = 0;
-					while (offset < result.size()) {
-						const auto chunk_index = ids[offset].GetValue() / STANDARD_VECTOR_SIZE;
-						idx_t count = 0;
-						do {
-							selected_rows.set_index(count++, ids[offset++].GetValue() % STANDARD_VECTOR_SIZE);
-						} while (offset < result.size() &&
-						         ids[offset].GetValue() / STANDARD_VECTOR_SIZE == chunk_index);
-						fetch(chunk_index);
-						candidates.Reference(chunk);
-						candidates.Slice(selected_rows, count);
-						if (finish()) {
-							finished = true;
-							break;
+					DataChunk probe_keys, probe_payload, probe_candidates, build_candidates;
+					probe_keys.InitializeEmpty(index.hash->condition_types);
+					probe_keys.ReferenceColumns(keys, index.columns);
+					probe_keys.Slice(selected, probe_count);
+					probe_payload.SetChildCardinality(probe_count);
+					probe_candidates.InitializeEmpty(condition_types);
+					build_candidates.InitializeEmpty(condition_types);
+					vector<idx_t> tail;
+					for (idx_t col = 0; col < conditions.size(); col++) {
+						if (!((equality_mask | dropped) & (uint64_t(1) << col))) {
+							tail.push_back(col);
 						}
+					}
+					TupleDataChunkState key_state;
+					TupleDataCollection::InitializeChunkState(key_state, index.hash->condition_types);
+					JoinHashTable::ScanStructure cursor(*index.hash, key_state);
+					JoinHashTable::ProbeState probe_state;
+					index.hash->Probe(cursor, probe_keys, key_state, probe_state);
+					Vector build_ids(LogicalType::UBIGINT);
+					SelectionVector matched(STANDARD_VECTOR_SIZE), remaining(STANDARD_VECTOR_SIZE);
+					SelectionVector left_sel(STANDARD_VECTOR_SIZE), right_sel(STANDARD_VECTOR_SIZE);
+					while (cursor.count > 0) {
+						context.InterruptCheck();
+						const auto match_count = cursor.ResolvePredicates(probe_keys, probe_payload, matched, nullptr);
+						if (match_count) {
+							cursor.GatherResult(build_ids, matched, match_count, index.output_columns[0]);
+							FlatVector::SetSize(build_ids, count_t(match_count));
+							auto ids = build_ids.Values<uint64_t>();
+							for (idx_t offset = 0; offset < match_count;) {
+								const auto chunk_index = ids[offset].GetValue() / STANDARD_VECTOR_SIZE;
+								idx_t batch_count = 0;
+								do {
+									left_sel.set_index(batch_count, selected.get_index(matched.get_index(offset)));
+									right_sel.set_index(batch_count++, ids[offset++].GetValue() % STANDARD_VECTOR_SIZE);
+								} while (offset < match_count &&
+								         ids[offset].GetValue() / STANDARD_VECTOR_SIZE == chunk_index);
+								fetch(chunk_index);
+								for (auto col : tail) {
+									probe_candidates.data[col].Slice(keys.data[col], left_sel, batch_count);
+									build_candidates.data[col].Slice(chunk.data[col], right_sel, batch_count);
+								}
+								probe_candidates.SetChildCardinality(batch_count);
+								build_candidates.SetChildCardinality(batch_count);
+								MarkJoinRowComparison::CompareTail(probe_candidates, build_candidates, conditions, tail,
+								                                   comparison);
+								auto values = comparison.Values<bool>();
+								for (idx_t row = 0; row < batch_count; row++) {
+									const auto original = left_sel.get_index(row);
+									auto value = values[row];
+									if (!value.IsValid() || (dropped && value.GetValue())) {
+										if (!matches[original]) {
+											validity.SetInvalid(original);
+										}
+									} else if (value.GetValue()) {
+										matches[original] = true;
+										validity.SetValid(original);
+									}
+								}
+							}
+						}
+						idx_t remaining_count = 0;
+						for (idx_t row = 0; row < cursor.count; row++) {
+							const auto local = cursor.sel_vector.get_index(row);
+							const auto original = selected.get_index(local);
+							if (!matches[original] && !(dropped && !validity.RowIsValid(original))) {
+								remaining.set_index(remaining_count++, local);
+							}
+						}
+						cursor.AdvancePointers(remaining, remaining_count);
 					}
 				}
+				finished = matches[probe] || !validity.RowIsValid(probe);
 			} else if (ranges.size() >= 2) {
 				refine_ranges(group, probe_mask, entry.first, ranges);
 				finished = matches[probe] || !validity.RowIsValid(probe);

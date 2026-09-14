@@ -234,35 +234,26 @@ void MarkJoinRowComparison::CompareConjunction(DataChunk &left, idx_t left_row, 
 }
 
 void MarkJoinRowComparison::CompareTail(DataChunk &left, DataChunk &right, const vector<JoinCondition> &conditions,
-                                        const vector<idx_t> &tail, bool unknown, Vector &result) {
+                                        const vector<idx_t> &tail, Vector &result) {
 	D_ASSERT(left.size() == right.size());
 	D_ASSERT(left.size() <= STANDARD_VECTOR_SIZE);
-	bool pair_is_false[STANDARD_VECTOR_SIZE] = {false};
-	bool pair_is_unknown[STANDARD_VECTOR_SIZE] = {false};
-	Vector comparison(LogicalType::BOOLEAN);
-	for (auto col : tail) {
-		Compare(left.data[col], right.data[col], conditions[col].GetComparisonType(), comparison);
-		auto values = comparison.Values<bool>();
-		for (idx_t row = 0; row < right.size(); row++) {
-			auto value = values[row];
-			if (!value.IsValid()) {
-				pair_is_unknown[row] = true;
-			} else if (!value.GetValue()) {
-				pair_is_false[row] = true;
-			}
-		}
-	}
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	FlatVector::ValidityMutable(result).Reset(right.size());
-	auto writer = FlatVector::Writer<bool>(result, right.size());
-	for (idx_t row = 0; row < right.size(); row++) {
-		if (pair_is_false[row]) {
-			writer.WriteValue(false);
-		} else if (unknown || pair_is_unknown[row]) {
-			writer.WriteNull();
-		} else {
+	if (tail.empty()) {
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+		FlatVector::ValidityMutable(result).Reset(left.size());
+		auto writer = FlatVector::Writer<bool>(result, left.size());
+		for (idx_t row = 0; row < left.size(); row++) {
 			writer.WriteValue(true);
 		}
+		return;
+	}
+	const auto first = tail[0];
+	Compare(left.data[first], right.data[first], conditions[first].GetComparisonType(), result);
+	for (idx_t i = 1; i < tail.size(); i++) {
+		const auto col = tail[i];
+		Vector comparison(LogicalType::BOOLEAN), conjunction(LogicalType::BOOLEAN);
+		Compare(left.data[col], right.data[col], conditions[col].GetComparisonType(), comparison);
+		VectorOperations::And(result, comparison, conjunction);
+		result.Reference(conjunction);
 	}
 }
 

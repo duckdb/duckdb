@@ -1335,17 +1335,18 @@ unique_ptr<ColumnDataCollection> IEJoinLocalSourceState::RefineRangePattern(Exec
 			}
 			fetch(0, left_chunk * STANDARD_VECTOR_SIZE);
 			fetch(1, right_chunk * STANDARD_VECTOR_SIZE);
-			candidates[0].Reference(keys[0]);
-			candidates[1].Reference(keys[1]);
-			candidates[0].Slice(left_sel, batch_count);
-			candidates[1].Slice(right_sel, batch_count);
-			MarkJoinRowComparison::CompareTail(candidates[0], candidates[1], op.conditions, tail, dropped != 0,
-			                                   comparison);
+			for (auto col : tail) {
+				candidates[0].data[col].Slice(keys[0].data[col], left_sel, batch_count);
+				candidates[1].data[col].Slice(keys[1].data[col], right_sel, batch_count);
+			}
+			candidates[0].SetChildCardinality(batch_count);
+			candidates[1].SetChildCardinality(batch_count);
+			MarkJoinRowComparison::CompareTail(candidates[0], candidates[1], op.conditions, tail, comparison);
 			auto values = comparison.Values<bool>();
 			for (idx_t row = 0; row < batch_count; row++) {
 				auto &marker = markers.get()[probe_rows[row]];
 				auto value = values[row];
-				if (!value.IsValid()) {
+				if (!value.IsValid() || (dropped && value.GetValue())) {
 					if (marker != 2) {
 						marker = 1;
 					}
