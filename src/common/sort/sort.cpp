@@ -102,14 +102,20 @@ Sort::Sort(ClientContext &client_context_p, const vector<BoundOrderByNode> &orde
 	vector<LogicalType> payload_types;
 	for (idx_t output_col_idx = 0; output_col_idx < projection_map.size(); output_col_idx++) {
 		const auto &input_col_idx = projection_map[output_col_idx];
+		const auto &input_col_type = input_types[input_col_idx];
 		const auto it = input_column_to_key.find(input_col_idx);
-		if (it != input_column_to_key.end()) {
+		//! The sort key encoding for FLOAT/DOUBLE is not injective around zero (-0.0 and 0.0 encode
+		//! identically, since they must compare equal), so re-decoding the key would turn -0.0 into 0.0.
+		//! Route such columns through the payload instead, where the original bits are preserved.
+		const bool key_encoding_is_lossy = TypeVisitor::Contains(input_col_type, LogicalTypeId::FLOAT) ||
+		                                   TypeVisitor::Contains(input_col_type, LogicalTypeId::DOUBLE);
+		if (it != input_column_to_key.end() && !key_encoding_is_lossy) {
 			// Projected column also appears as a key, just reference it
 			output_projection_columns.push_back({false, it->second, output_col_idx});
 		} else {
 			// Projected column does not appear as a key, add to payload layout
 			output_projection_columns.push_back({true, payload_types.size(), output_col_idx});
-			payload_types.push_back(input_types[input_col_idx]);
+			payload_types.push_back(input_col_type);
 			input_projection_map.push_back(input_col_idx);
 		}
 	}
