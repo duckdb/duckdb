@@ -18,13 +18,13 @@ foreach probe_count 67 4103
 
 statement ok
 CREATE TABLE probes AS SELECT i id, CASE WHEN i%3=0 THEN NULL ELSE i%5 END k,
-    i%13 x, 13-i%13 y,
+    i%2 bucket, i%13 x, 13-i%13 y,
     CASE WHEN i%7=0 THEN NULL::TUPLE(BIGINT,BIGINT) ELSE row(i%5,NULL::BIGINT) END tag
 FROM range({probe_count}) t(i)
 
 statement ok
 CREATE TABLE builds AS SELECT CASE WHEN i%11=0 THEN NULL ELSE i%5 END k,
-    i%13 x, 13-i%13 y,
+    i%2 bucket, i%13 x, 13-i%13 y,
     CASE WHEN i%17=0 THEN NULL::TUPLE(BIGINT,BIGINT) ELSE row(i%5,NULL::BIGINT) END tag
 FROM range(4170-{probe_count}) t(i)
 
@@ -32,6 +32,23 @@ foreach external false true
 
 statement ok
 SET debug_force_external={external}
+
+query I
+WITH actual AS (
+    SELECT id, __mark_join_marker marker FROM probes p JOIN BY(TYPE MARK) builds r
+    ON p.k=r.k AND p.bucket=r.bucket AND p.x<=r.x AND p.y>=r.y AND p.tag IS NOT DISTINCT FROM r.tag
+), expected AS (
+    SELECT id,max(CASE
+        WHEN p.k=r.k AND p.bucket=r.bucket AND p.x<=r.x AND p.y>=r.y AND p.tag IS NOT DISTINCT FROM r.tag THEN 2
+        WHEN (p.k=r.k AND p.bucket=r.bucket AND p.x<=r.x AND p.y>=r.y AND p.tag IS NOT DISTINCT FROM r.tag) IS NULL THEN 1
+        ELSE 0 END) marker
+    FROM probes p CROSS JOIN builds r GROUP BY id
+)
+SELECT count(*) FROM actual FULL JOIN expected USING(id)
+WHERE actual.id IS NULL OR expected.id IS NULL
+   OR CASE WHEN actual.marker THEN 2 WHEN actual.marker IS NULL THEN 1 ELSE 0 END <> expected.marker
+----
+0
 
 foreach kind = <
 
@@ -82,5 +99,30 @@ DROP TABLE probes
 
 statement ok
 DROP TABLE builds
+
+endloop
+
+# Reuse the result vector from an empty tail for a nonempty tail in each probe chunk.
+statement ok
+CREATE TABLE changing_tail_probes AS
+SELECT i id, NULL::BIGINT a, i%2 k,
+       CASE WHEN i%2048=0 THEN NULL ELSE i END b
+FROM range(4099) t(i)
+
+statement ok
+CREATE TABLE changing_tail_builds AS
+SELECT 1::BIGINT a, i k, 100000::BIGINT b FROM range(2) t(i)
+
+foreach external false true
+
+statement ok
+SET debug_force_external=${external}
+
+query I
+SELECT count(*) FILTER (WHERE __mark_join_marker IS NULL)
+FROM changing_tail_probes p JOIN BY (TYPE MARK) changing_tail_builds r
+ON p.a=r.a AND p.k=r.k AND p.b<r.b
+----
+4099
 
 endloop
