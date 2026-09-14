@@ -440,4 +440,3 @@ query T
 SELECT string_agg(DISTINCT v, '|' ORDER BY length(v), v) FROM (VALUES ('aa'),('b'),('b'),(NULL)) t(v);
 ----
 b|aa
-

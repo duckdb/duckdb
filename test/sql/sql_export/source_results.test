@@ -181,4 +181,3 @@ SELECT n FROM scan_rows WHERE j=2;
 2.250
 2.250
 NULL
-

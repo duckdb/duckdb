@@ -252,4 +252,3 @@ query I
 SELECT 42;
 ----
 42
-

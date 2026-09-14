@@ -94,4 +94,3 @@ statement error
 SELECT CAST(CASE WHEN i=1 THEN 'bad' ELSE '0' END AS BIGINT) x FROM range(2)t(i) UNION ALL SELECT 0 WHERE false LIMIT 1;
 ----
 <REGEX>:Conversion Error:.*Could not convert string 'bad' to INT64.*
-

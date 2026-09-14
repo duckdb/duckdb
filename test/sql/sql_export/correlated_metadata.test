@@ -257,4 +257,3 @@ query T rowsort
 SELECT x<ANY(SELECT y FROM list_r r WHERE r.g=l.g) FROM list_l l;
 ----
 NULL
-

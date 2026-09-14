@@ -237,4 +237,3 @@ SELECT i FROM t WHERE i<j;
 ----
 -2
 -3
-

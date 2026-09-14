@@ -186,4 +186,3 @@ WITH RECURSIVE r(a,b,c) USING KEY(c,a,max(b+1) AS b) AS (VALUES(1,3,1),(1,1,1) U
 1	4	1
 1	4	2
 1	4	3
-

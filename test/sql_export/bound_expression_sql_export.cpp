@@ -1944,7 +1944,7 @@ TEST_CASE("SQL export retains bound alias names across copies and renamed inputs
 		function.SetAlias(Identifier("explicit"));
 		RequireRoundTrip(connection, function, context, from, "'explicit'");
 		function.SetAlias(Identifier());
-		function.BindInfoMutable() = ConstantOrNull::Bind(Value::INTEGER(7));
+		function.BindInfoMutable() = make_uniq<OpaqueSQLFunctionData>();
 		auto wrong_data = BoundExpressionSQLExporter::Export(function, context);
 		REQUIRE(wrong_data.HasError());
 		REQUIRE(wrong_data.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION);

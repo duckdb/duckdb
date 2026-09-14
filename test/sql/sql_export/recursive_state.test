@@ -631,4 +631,3 @@ query I
 SELECT currval('seq');
 ----
 3
-

@@ -3185,6 +3185,22 @@ TEST_CASE("Copied UNION SQL outlives its plan and original exported AST",
 	connection.Rollback();
 }
 
+namespace {
+
+void RequireDecorrelatedSQLExportInput(LogicalOperator &op) {
+	REQUIRE(op.type != LogicalOperatorType::LOGICAL_DELIM_JOIN);
+	REQUIRE(op.type != LogicalOperatorType::LOGICAL_DELIM_GET);
+	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expression) {
+		ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+		    **expression, [&](const BoundColumnRefExpression &ref) { REQUIRE(ref.Depth() == 0); });
+	});
+	for (auto &child : op.children) {
+		RequireDecorrelatedSQLExportInput(*child);
+	}
+}
+
+} // namespace
+
 TEST_CASE("Grouped MARK SQL export rejects inconsistent group metadata",
           "[sql_export][logical_plan_sql_export][join_sql_export]") {
 	DuckDB db(nullptr);
@@ -3695,6 +3711,22 @@ TEST_CASE("SQL export preserves ordinary functions with compression-like names",
 	}
 	connection.Rollback();
 }
+
+namespace {
+
+void RequireDecorrelatedSQLExportInput(LogicalOperator &op) {
+	REQUIRE(op.type != LogicalOperatorType::LOGICAL_DELIM_JOIN);
+	REQUIRE(op.type != LogicalOperatorType::LOGICAL_DELIM_GET);
+	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expression) {
+		ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+		    **expression, [&](const BoundColumnRefExpression &ref) { REQUIRE(ref.Depth() == 0); });
+	});
+	for (auto &child : op.children) {
+		RequireDecorrelatedSQLExportInput(*child);
+	}
+}
+
+} // namespace
 
 TEST_CASE("Grouped MARK SQL export preserves stream effects and late errors",
           "[sql_export][logical_plan_sql_export][join_sql_export]") {

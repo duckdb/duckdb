@@ -118,4 +118,3 @@ query T rowsort
 SELECT list_transform(l, lambda x, i: x + c + CAST(i AS INTEGER)) FROM lists;
 ----
 [16, 16, 16, 16, 16]
-

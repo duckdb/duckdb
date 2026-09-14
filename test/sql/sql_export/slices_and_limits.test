@@ -162,4 +162,3 @@ EXPLAIN (SQL) SELECT b[:] FROM slice_input ORDER BY id;
 
 statement ok
 SET search_path='main';
-

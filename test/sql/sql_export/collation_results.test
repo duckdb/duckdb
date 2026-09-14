@@ -265,4 +265,3 @@ SELECT (v COLLATE "binary")='a' FROM collated_values;
 0
 1
 NULL
-

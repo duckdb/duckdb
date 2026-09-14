@@ -118,4 +118,3 @@ query T rowsort
 SELECT finalize(min(s) EXPORT_STATE) FROM (VALUES ('1'::BIT), ('01'::BIT), (NULL)) t(s);
 ----
 01
-

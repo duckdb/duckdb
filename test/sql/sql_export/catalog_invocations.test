@@ -87,4 +87,3 @@ SELECT platform FROM pragma_platform();
 
 statement ok
 SET debug_verify_sql_export='strict';
-

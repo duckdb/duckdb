@@ -275,4 +275,3 @@ SET debug_verify_sql_export='strict';
 
 query II nosort numbered_29
 SELECT i,v FROM hint_groups WHERE i>v LIMIT 5;
-
