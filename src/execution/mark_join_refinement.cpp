@@ -252,9 +252,12 @@ void MarkPatternRefiner::ProbeEqualityIndex(MarkJoinRefinementIndex &index, uint
 				MarkJoinRowComparison::CompareTail(probe_candidates, build_candidates, conditions, tail, comparison);
 				auto values = comparison.Values<bool>();
 				for (idx_t row = 0; row < batch_count; row++) {
-					const auto original = left_sel.get_index(row);
 					auto value = values[row];
-					if (!value.IsValid() || (dropped && value.GetValue())) {
+					if (value.IsValid() && !value.GetValue()) {
+						continue;
+					}
+					const auto original = left_sel.get_index(row);
+					if (!value.IsValid() || dropped) {
 						if (!matches[original]) {
 							validity.SetInvalid(original);
 						}
