@@ -252,12 +252,6 @@ public:
 		prepared_for_schedule = true;
 	}
 
-	// The caller has already reset the pipeline before checking its available parallelism.
-	void SchedulePrepared() {
-		prepared_for_schedule = true;
-		Schedule();
-	}
-
 	void Schedule() override {
 		// Sink state is prepared up-front from the main thread. Reinitialize the remaining
 		// global state here, reusing existing state objects when operators expose reset hooks.
@@ -267,7 +261,14 @@ public:
 			pipeline->ResetForReschedule(false);
 		}
 
-		auto max_threads = GetRecursivePipelineMaxThreads(*pipeline, worker_limit);
+		SchedulePrepared(GetRecursivePipelineMaxThreads(*pipeline, worker_limit));
+	}
+
+	// The caller has prepared the pipeline and determined its worker count.
+	void SchedulePrepared(idx_t max_threads) {
+		D_ASSERT(max_threads > 0);
+		D_ASSERT(max_threads <= worker_limit);
+		prepared_for_schedule = true;
 		if (state.GetMetrics().Enabled()) {
 			state.GetMetrics().RecordTasks(max_threads);
 			state.GetEpochMetrics().RecordPipelineWorkers(max_threads);
@@ -827,17 +828,16 @@ static void ExecuteRecursiveInlinePlan(RecursiveCTEState &state, Executor &execu
 		case PipelineScheduleStageType::EXECUTE: {
 			pipeline.ResetForReschedule(false);
 			// Invariant builds have independent source work even when the recursive frontier is tiny.
-			if (stage.is_invariant_build) {
-				auto worker_limit = TaskScheduler::GetScheduler(executor.context).NumberOfThreads();
-				if (GetRecursivePipelineMaxThreads(pipeline, worker_limit) > 1) {
-					auto event = make_shared_ptr<RecursiveCTEPipelineEvent>(pipeline.shared_from_this(), state,
-					                                                        worker_limit, stage.metric_type);
-					event->SchedulePrepared();
-					WaitForRecursiveEvent(executor, *event);
-					break;
-				}
+			const auto worker_limit =
+			    stage.is_invariant_build ? TaskScheduler::GetScheduler(executor.context).NumberOfThreads() : idx_t(1);
+			const auto max_threads = GetRecursivePipelineMaxThreads(pipeline, worker_limit);
+			if (max_threads > 1) {
+				auto event = make_shared_ptr<RecursiveCTEPipelineEvent>(pipeline.shared_from_this(), state,
+				                                                        worker_limit, stage.metric_type);
+				event->SchedulePrepared(max_threads);
+				WaitForRecursiveEvent(executor, *event);
+				break;
 			}
-			auto max_threads = GetRecursivePipelineMaxThreads(pipeline, 1);
 			D_ASSERT(max_threads == 1);
 			state.GetScheduler().PrepareExecutors(pipeline, max_threads);
 			auto &executors = state.GetScheduler().GetExecutors(pipeline);
