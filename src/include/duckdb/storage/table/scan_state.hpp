@@ -271,6 +271,8 @@ public:
 	QueryContext context;
 	//! The current row_group we are scanning
 	optional_ptr<SegmentNode<RowGroup>> row_group;
+	//! Owning pin of the scanned row group, the tree may swap the segment payload mid-scan with an optimistic flush
+	shared_ptr<RowGroup> pinned_row_group;
 	//! The vector index within the row_group
 	idx_t vector_index;
 	//! The maximum row within the row group
