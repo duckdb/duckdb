@@ -413,7 +413,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 		}
 	}
 
-	if (global_table.retain_keys) {
+	if (global_table.op.type == PhysicalOperatorType::IE_JOIN && global_table.op.join_type == JoinType::MARK) {
 		for (idx_t col = 0; col < keys.ColumnCount(); col++) {
 			auto &key = keys.data[col];
 			if (!key.GetType().IsNested()) {

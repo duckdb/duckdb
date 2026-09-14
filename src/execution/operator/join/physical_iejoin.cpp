@@ -17,6 +17,9 @@
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/function/lambda_functions.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 #include <utility>
@@ -81,6 +84,27 @@ PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoi
 //===--------------------------------------------------------------------===//
 class IEJoinLocalState;
 
+static bool RetainMarkKey(const Expression &expression) {
+	if (expression.IsVolatile()) {
+		return true;
+	}
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		const auto &function = expression.Cast<BoundFunctionExpression>();
+		if (function.Function().RequiresOrderedExecution()) {
+			return true;
+		}
+		if (function.Function().HasBindLambdaCallback() && function.BindInfo()) {
+			auto lambda = function.BindInfo()->Cast<LambdaFunctionData>().GetLambdaExpression();
+			if (lambda && RetainMarkKey(*lambda)) {
+				return true;
+			}
+		}
+	}
+	bool retain = false;
+	ExpressionIterator::EnumerateChildren(expression, [&](const Expression &child) { retain |= RetainMarkKey(child); });
+	return retain;
+}
+
 class IEJoinGlobalState : public GlobalSinkState {
 public:
 	using GlobalSortedTable = PhysicalRangeJoin::GlobalSortedTable;
@@ -88,15 +112,22 @@ public:
 public:
 	IEJoinGlobalState(ClientContext &context, const PhysicalIEJoin &op) : child(1) {
 		tables.resize(2);
+		bool retain_left = false, retain_right = false;
+		if (op.join_type == JoinType::MARK) {
+			for (const auto &condition : op.conditions) {
+				retain_left |= RetainMarkKey(condition.GetLHS());
+				retain_right |= RetainMarkKey(condition.GetRHS());
+			}
+		}
 		const auto &lhs_types = op.children[0].get().GetTypes();
 		vector<BoundOrderByNode> lhs_order;
 		lhs_order.emplace_back(op.lhs_orders[0].Copy());
-		tables[0] = make_uniq<GlobalSortedTable>(context, lhs_order, lhs_types, op, op.join_type == JoinType::MARK);
+		tables[0] = make_uniq<GlobalSortedTable>(context, lhs_order, lhs_types, op, retain_left);
 
 		const auto &rhs_types = op.children[1].get().GetTypes();
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0].Copy());
-		tables[1] = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_types, op, op.join_type == JoinType::MARK);
+		tables[1] = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_types, op, retain_right);
 
 		if (op.filter_pushdown) {
 			skip_filter_pushdown = op.filter_pushdown->probe_info.empty();
@@ -422,7 +453,8 @@ public:
 
 	IEJoinLocalSourceState(ClientContext &client, IEJoinGlobalSourceState &gsource)
 	    : gsource(gsource), true_sel(STANDARD_VECTOR_SIZE), left_executor(client), right_executor(client),
-	      simple_sel(STANDARD_VECTOR_SIZE), pred_executor(client), left_matches(nullptr), right_matches(nullptr)
+	      simple_sel(STANDARD_VECTOR_SIZE), pred_executor(client), left_matches(nullptr), right_matches(nullptr),
+	      mark_executor(client)
 
 	{
 		auto &op = gsource.op;
@@ -433,8 +465,12 @@ public:
 		mark_payload.InitializeEmpty(left_payload_types);
 		if (op.join_type == JoinType::MARK) {
 			for (const auto &condition : op.conditions) {
-				left_payload_types.push_back(condition.GetLHS().GetReturnType());
-				right_payload_types.push_back(condition.GetRHS().GetReturnType());
+				if (gsource.gsink.tables[0]->retain_keys) {
+					left_payload_types.push_back(condition.GetLHS().GetReturnType());
+				}
+				if (gsource.gsink.tables[1]->retain_keys) {
+					right_payload_types.push_back(condition.GetRHS().GetReturnType());
+				}
 			}
 		}
 		lpayload.Initialize(allocator, left_payload_types);
@@ -458,10 +494,13 @@ public:
 			pred_matches.Initialize();
 		}
 
-		if (op.join_type == JoinType::MARK) {
+		if (op.join_type == JoinType::MARK && (left_table.has_null || right_table.has_null)) {
 			vector<LogicalType> types;
 			for (const auto &condition : op.conditions) {
 				types.push_back(condition.GetLHS().GetReturnType());
+				if (!left_table.retain_keys) {
+					mark_executor.AddExpression(condition.GetLHS());
+				}
 			}
 			mark_keys.Initialize(allocator, types);
 		}
@@ -613,16 +652,22 @@ public:
 	idx_t anti_lsel = 0;
 	DataChunk mark_keys;
 	DataChunk mark_payload;
+	ExpressionExecutor mark_executor;
 
 	void ReferenceMarkKeys() {
 		for (idx_t col = 0; col < mark_payload.ColumnCount(); col++) {
 			mark_payload.data[col].Reference(lpayload.data[col]);
 		}
-		for (idx_t col = 0; col < mark_keys.ColumnCount(); col++) {
-			mark_keys.data[col].Reference(lpayload.data[mark_payload.ColumnCount() + col]);
-		}
 		mark_payload.SetChildCardinality(lpayload.size());
-		mark_keys.SetChildCardinality(lpayload.size());
+		if (gsource.gsink.tables[0]->retain_keys) {
+			for (idx_t col = 0; col < mark_keys.ColumnCount(); col++) {
+				mark_keys.data[col].Reference(lpayload.data[mark_payload.ColumnCount() + col]);
+			}
+			mark_keys.SetChildCardinality(lpayload.size());
+		} else {
+			mark_keys.Reset();
+			mark_executor.Execute(mark_payload, mark_keys);
+		}
 	}
 };
 
@@ -891,14 +936,14 @@ const SelectionVector *IEJoinLocalSourceState::ApplyTailConditions() {
 	right_keys.Reset();
 	for (size_t cmp_idx = 0; cmp_idx < tail_cols; ++cmp_idx) {
 		auto &left = left_keys.data[cmp_idx];
-		if (op.join_type == JoinType::MARK) {
+		if (gsource.gsink.tables[0]->retain_keys) {
 			left.Reference(lpayload.data[op.children[0].get().GetTypes().size() + cmp_idx + 2]);
 		} else {
 			left_executor.ExecuteExpression(cmp_idx, left);
 		}
 
 		auto &right = right_keys.data[cmp_idx];
-		if (op.join_type == JoinType::MARK) {
+		if (gsource.gsink.tables[1]->retain_keys) {
 			right.Reference(rpayload.data[op.children[1].get().GetTypes().size() + cmp_idx + 2]);
 		} else {
 			right_executor.ExecuteExpression(cmp_idx, right);
@@ -1198,6 +1243,58 @@ void IEJoinLocalSourceState::ResolveMarkJoin(ExecutionContext &context, DataChun
 	result.Verify(context.client.db);
 }
 
+struct IEMarkKeyScan {
+	IEMarkKeyScan(ClientContext &context, const PhysicalIEJoin &op, PhysicalRangeJoin::GlobalSortedTable &table,
+	              idx_t side)
+	    : source(*table.sorted->payload_data), retain_keys(table.retain_keys), executor(context) {
+		vector<column_t> columns;
+		vector<LogicalType> types;
+		for (idx_t col = 0; col < op.conditions.size(); col++) {
+			const auto &expr = side ? op.conditions[col].GetRHS() : op.conditions[col].GetLHS();
+			types.push_back(expr.GetReturnType());
+			if (retain_keys) {
+				columns.push_back(op.children[side].get().GetTypes().size() + col);
+			} else {
+				executor.AddExpression(expr);
+			}
+		}
+		if (!retain_keys) {
+			for (idx_t col = 0; col < op.children[side].get().GetTypes().size(); col++) {
+				columns.push_back(col);
+			}
+		}
+		source.InitializeScan(scan, columns);
+		source.InitializeScanChunk(scan, payload);
+		keys.Initialize(context, types);
+	}
+
+	bool Scan() {
+		payload.Reset();
+		keys.Reset();
+		if (!source.Scan(scan, payload)) {
+			return false;
+		}
+		if (retain_keys) {
+			keys.Reference(payload);
+		} else {
+			executor.Execute(payload, keys);
+		}
+		return true;
+	}
+
+	void Seek(idx_t chunk) {
+		source.Seek(scan, chunk);
+		Scan();
+	}
+
+	TupleDataCollection &source;
+	bool retain_keys;
+	ExpressionExecutor executor;
+	TupleDataScanState scan;
+	DataChunk payload;
+	DataChunk keys;
+};
+
 unique_ptr<ColumnDataCollection> IEJoinLocalSourceState::RefineRangePattern(ExecutionContext &context,
                                                                             uint64_t probe_mask, uint64_t dropped,
                                                                             MarkJoinRefinementGroup &group,
@@ -1219,18 +1316,12 @@ unique_ptr<ColumnDataCollection> IEJoinLocalSourceState::RefineRangePattern(Exec
 		auto result = make_uniq<ColumnDataCollection>(manager, input_types);
 		ColumnDataAppendState append;
 		result->InitializeAppend(append);
-		auto &source = *gsource.gsink.tables[side]->sorted->payload_data;
-		vector<column_t> columns;
-		for (idx_t col = 0; col < op.conditions.size(); col++) {
-			columns.push_back(op.children[side].get().GetTypes().size() + col);
-		}
-		TupleDataScanState scan;
-		source.InitializeScan(scan, columns);
-		DataChunk keys, input;
-		source.InitializeScanChunk(scan, keys);
+		IEMarkKeyScan scan(context.client, op, *gsource.gsink.tables[side], side);
+		auto &keys = scan.keys;
+		DataChunk input;
 		input.Initialize(context.client, input_types);
 		idx_t chunk = 0;
-		while (source.Scan(scan, keys)) {
+		while (scan.Scan()) {
 			context.client.InterruptCheck();
 			input.Reset();
 			auto add = [&](idx_t row) {
@@ -1274,24 +1365,15 @@ unique_ptr<ColumnDataCollection> IEJoinLocalSourceState::RefineRangePattern(Exec
 	const idx_t count = gsource.gsink.tables[0]->count;
 	auto markers = manager.GetBufferAllocator().Allocate(count);
 	memset(markers.get(), 0, count);
-	array<TupleDataScanState, 2> scans;
-	array<DataChunk, 2> keys;
+	array<unique_ptr<IEMarkKeyScan>, 2> scans;
 	array<idx_t, 2> loaded {DConstants::INVALID_INDEX, DConstants::INVALID_INDEX};
 	for (idx_t side = 0; side < 2; side++) {
-		auto &source = *gsource.gsink.tables[side]->sorted->payload_data;
-		vector<column_t> columns;
-		for (idx_t col = 0; col < op.conditions.size(); col++) {
-			columns.push_back(op.children[side].get().GetTypes().size() + col);
-		}
-		source.InitializeScan(scans[side], columns);
-		source.InitializeScanChunk(scans[side], keys[side]);
+		scans[side] = make_uniq<IEMarkKeyScan>(context.client, op, *gsource.gsink.tables[side], side);
 	}
 	auto fetch = [&](idx_t side, idx_t row) {
 		const auto chunk = row / STANDARD_VECTOR_SIZE;
 		if (loaded[side] != chunk) {
-			auto &source = *gsource.gsink.tables[side]->sorted->payload_data;
-			source.Seek(scans[side], chunk);
-			source.Scan(scans[side], keys[side]);
+			scans[side]->Seek(chunk);
 			loaded[side] = chunk;
 		}
 	};
@@ -1336,8 +1418,8 @@ unique_ptr<ColumnDataCollection> IEJoinLocalSourceState::RefineRangePattern(Exec
 			fetch(0, left_chunk * STANDARD_VECTOR_SIZE);
 			fetch(1, right_chunk * STANDARD_VECTOR_SIZE);
 			for (auto col : tail) {
-				candidates[0].data[col].Slice(keys[0].data[col], left_sel, batch_count);
-				candidates[1].data[col].Slice(keys[1].data[col], right_sel, batch_count);
+				candidates[0].data[col].Slice(scans[0]->keys.data[col], left_sel, batch_count);
+				candidates[1].data[col].Slice(scans[1]->keys.data[col], right_sel, batch_count);
 			}
 			candidates[0].SetChildCardinality(batch_count);
 			candidates[1].SetChildCardinality(batch_count);
@@ -1388,23 +1470,15 @@ void IEJoinLocalSourceState::RefineMarkJoin(ExecutionContext &context, bool foun
 	if (start == table.count) {
 		return;
 	}
-	auto &source = *table.sorted->payload_data;
-	vector<column_t> columns;
-	vector<LogicalType> types;
-	for (idx_t col = 0; col < op.conditions.size(); col++) {
-		columns.push_back(op.children[1].get().GetTypes().size() + col);
-		types.push_back(op.conditions[col].GetRHS().GetReturnType());
-	}
-	TupleDataScanState scan;
-	source.InitializeScan(scan, columns);
-	DataChunk keys;
-	source.InitializeScanChunk(scan, keys);
+	IEMarkKeyScan scan(context.client, op, table, 1);
+	auto &keys = scan.keys;
+	const auto types = keys.GetTypes();
 	auto &state = [&]() -> MarkJoinRefinement & {
 		lock_guard<mutex> guard(gsource.gsink.mark_lock);
 		if (!gsource.gsink.mark_refinement) {
 			auto built = make_uniq<MarkJoinRefinement>();
 			idx_t offset = 0;
-			while (source.Scan(scan, keys)) {
+			while (scan.Scan()) {
 				context.client.InterruptCheck();
 				built->AddChunk(keys, built->chunks.size(), op.conditions);
 				built->chunks.push_back({offset, keys.size(), 0});
@@ -1418,9 +1492,7 @@ void IEJoinLocalSourceState::RefineMarkJoin(ExecutionContext &context, bool foun
 	idx_t cached_chunk = DConstants::INVALID_INDEX;
 	auto fetch = [&](idx_t chunk) {
 		if (cached_chunk != chunk) {
-			source.Seek(scan, chunk);
-			keys.Reset();
-			source.Scan(scan, keys);
+			scan.Seek(chunk);
 			cached_chunk = chunk;
 		}
 	};
@@ -1565,6 +1637,14 @@ void IEJoinLocalSourceState::RefineMarkJoin(ExecutionContext &context, bool foun
 
 void IEJoinLocalSourceState::ConstructMarkJoinResult(ExecutionContext &context, DataChunk &result, bool found_match[],
                                                      bool null_probe) {
+	if (!gsource.gsink.tables[0]->has_null && !gsource.gsink.tables[1]->has_null) {
+		for (idx_t col = 0; col < mark_payload.ColumnCount(); col++) {
+			mark_payload.data[col].Reference(lpayload.data[col]);
+		}
+		mark_payload.SetChildCardinality(lpayload.size());
+		PhysicalJoin::ConstructMarkJoinResult(mark_keys, mark_payload, result, found_match, false);
+		return;
+	}
 	ReferenceMarkKeys();
 	bool found_unknown[STANDARD_VECTOR_SIZE] = {false};
 	RefineMarkJoin(context, found_match, found_unknown, null_probe);
