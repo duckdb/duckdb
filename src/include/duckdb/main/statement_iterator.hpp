@@ -13,10 +13,10 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/parse_iterator.hpp"
+#include "duckdb/main/client_context_lock.hpp"
 
 namespace duckdb {
 class ClientContext;
-class ClientContextLock;
 class SQLStatement;
 
 //! Iterator over the engine-facing statements of a query.
@@ -58,11 +58,11 @@ public:
 	//! Self-locking variant for callers that do not hold the context lock.
 	DUCKDB_API unique_ptr<SQLStatement> GetStatement();
 	//! Same, for callers that already hold the context lock.
-	DUCKDB_API unique_ptr<SQLStatement> GetStatementWithLock(ClientContextLock &lock);
+	DUCKDB_API unique_ptr<SQLStatement> GetStatementWithLock(ClientContextLock &lock) DUCKDB_REQUIRES(lock);
 	//! Pull the next statement and attach its parser timing to the per-statement query profiler.
 	DUCKDB_API unique_ptr<SQLStatement> GetStatementForExecution();
 	//! Same, for callers that already hold the context lock.
-	DUCKDB_API unique_ptr<SQLStatement> GetStatementForExecutionWithLock(ClientContextLock &lock);
+	DUCKDB_API unique_ptr<SQLStatement> GetStatementForExecutionWithLock(ClientContextLock &lock) DUCKDB_REQUIRES(lock);
 
 private:
 	//! Shared body for both Get variants. `lock` is null for the self-locking path (preprocessing

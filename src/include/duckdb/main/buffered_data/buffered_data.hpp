@@ -22,11 +22,11 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/thread_annotation.hpp"
+#include "duckdb/main/client_context_lock.hpp"
 
 namespace duckdb {
 
 class StreamQueryResult;
-class ClientContextLock;
 
 //! A blocked sink. Holds the InterruptState and owns the finished copy of the chunk it could not append.
 struct BlockedSink {
@@ -68,9 +68,11 @@ public:
 	bool HasParkedProducer();
 	//! Blocking call that executes tasks on the calling thread until a chunk is buffered or execution reaches a
 	//! terminal state.
-	StreamExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock);
+	StreamExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock)
+	    DUCKDB_REQUIRES(context_lock);
 	//! One blocking replenish step: run executor tasks until a chunk is poppable
-	StreamExecutionResult ExecuteTaskInternal(StreamQueryResult &result, ClientContextLock &context_lock);
+	StreamExecutionResult ExecuteTaskInternal(StreamQueryResult &result, ClientContextLock &context_lock)
+	    DUCKDB_REQUIRES(context_lock);
 	virtual unique_ptr<DataChunk> Scan() = 0;
 	virtual void UnblockSinks() = 0;
 	shared_ptr<ClientContext> GetContext() {
