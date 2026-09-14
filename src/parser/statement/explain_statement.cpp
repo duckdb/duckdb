@@ -18,6 +18,9 @@ unique_ptr<SQLStatement> ExplainStatement::Copy() const {
 }
 
 string ExplainStatement::OptionsToString() const {
+	if (explain_type == ExplainType::EXPLAIN_SQL) {
+		return "(SQL)";
+	}
 	string options;
 	if (explain_type == ExplainType::EXPLAIN_ANALYZE) {
 		options += "(";

@@ -33,6 +33,35 @@ namespace duckdb {
 Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context)), context(context) {
 }
 
+void Planner::Optimize() {
+	auto &profiler = QueryProfiler::Get(context);
+#ifdef DEBUG
+	plan->Verify(context);
+#endif
+	bool optimize = Settings::Get<EnableOptimizerSetting>(context);
+	if (Settings::Get<DebugDisableOptimizerSetting>(context)) {
+		// verify disable optimizer - disable EXCEPT for explain, otherwise every single EXPLAIN query breaks
+		if (plan->type != LogicalOperatorType::LOGICAL_EXPLAIN) {
+			optimize = false;
+		}
+	}
+	if (plan->RequireOptimizer()) {
+		{
+			auto optimizer_timer = profiler.StartTimer<MetricOptimizerTotalTime>();
+			Optimizer optimizer(*binder, context);
+			if (optimize) {
+				plan = optimizer.Optimize(std::move(plan));
+			} else {
+				plan = optimizer.LowerMandatoryAggregateRewrites(std::move(plan));
+			}
+			D_ASSERT(plan);
+		}
+#ifdef DEBUG
+		plan->Verify(context);
+#endif
+	}
+}
+
 // Pre-decorrelation pass: replace LogicalTrigger with LogicalDependentJoin so the standard
 // FlattenDependentJoins machinery can decorrelate the trigger body.
 static void RewriteTriggersToDependent(Binder &binder, LogicalOperator &op) {

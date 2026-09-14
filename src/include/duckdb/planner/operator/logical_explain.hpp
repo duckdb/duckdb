@@ -28,6 +28,7 @@ public:
 	string physical_plan;
 	string logical_plan_unopt;
 	string logical_plan_opt;
+	vector<Identifier> sql_output_names;
 
 public:
 	void Serialize(Serializer &serializer) const override;

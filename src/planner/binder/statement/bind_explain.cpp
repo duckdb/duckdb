@@ -7,13 +7,16 @@ namespace duckdb {
 
 BoundStatement Binder::Bind(ExplainStatement &stmt) {
 	BoundStatement result;
+	if (stmt.explain_type == ExplainType::EXPLAIN_SQL && stmt.stmt->type != StatementType::SELECT_STATEMENT) {
+		throw NotImplementedException("EXPLAIN (SQL) supports SELECT, VALUES and WITH queries only");
+	}
 
 	// bind the underlying statement
 	auto plan = Bind(*stmt.stmt);
 	// render the unoptimized logical plan, but only when it will be shown: a plain EXPLAIN in a multi-plan format.
 	// (it is unused for EXPLAIN ANALYZE, and single-plan formats like FORMAT WEB render only the final plan)
 	string logical_plan_unopt;
-	if (stmt.explain_type != ExplainType::EXPLAIN_ANALYZE) {
+	if (stmt.explain_type == ExplainType::EXPLAIN_STANDARD) {
 		auto renderer = TreeRenderer::CreateRenderer(context, stmt.format);
 		if (!renderer || !renderer->RendersSinglePlan()) {
 			logical_plan_unopt = plan.plan->ToString(context, stmt.format);
@@ -21,6 +24,9 @@ BoundStatement Binder::Bind(ExplainStatement &stmt) {
 	}
 	auto explain = make_uniq<LogicalExplain>(std::move(plan.plan), stmt.explain_type, stmt.format);
 	explain->logical_plan_unopt = logical_plan_unopt;
+	if (stmt.explain_type == ExplainType::EXPLAIN_SQL) {
+		explain->sql_output_names = std::move(plan.names);
+	}
 
 	result.plan = std::move(explain);
 	result.names = {"explain_key", "explain_value"};
