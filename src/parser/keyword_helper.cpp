@@ -31,6 +31,10 @@ KeywordCategory KeywordHelper::KeywordCategoryType(const string &text) {
 }
 
 bool KeywordHelper::RequiresQuotes(const string &text, bool allow_caps) {
+	// After a qualification dot, an underscore followed by a digit can begin a decimal literal.
+	if (text.size() > 1 && text[0] == '_' && StringUtil::CharacterIsDigit(text[1])) {
+		return true;
+	}
 	for (size_t i = 0; i < text.size(); i++) {
 		if (i > 0 && (text[i] >= '0' && text[i] <= '9')) {
 			continue;
