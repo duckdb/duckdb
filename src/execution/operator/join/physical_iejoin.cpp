@@ -510,7 +510,8 @@ struct IEJoinUnion {
 		const bool strict;
 	};
 
-	IEJoinUnion(IEJoinGlobalSourceState &gsource, const ChunkRange &chunks);
+	IEJoinUnion(SortedTable &l2, ColumnDataCollection &li, ColumnDataCollection &p,
+	            const vector<JoinCondition> &conditions, const ChunkRange &chunks);
 
 	idx_t SearchL1(idx_t pos);
 
@@ -529,9 +530,6 @@ struct IEJoinUnion {
 		++i;
 		return (this->*next_row_func)();
 	}
-
-	//! Constructor arguments
-	IEJoinGlobalSourceState &gsource;
 
 	//! Inverted loop
 	idx_t JoinBlocks(unsafe_vector<idx_t> &lsel, unsafe_vector<idx_t> &rsel);
@@ -639,12 +637,10 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 	return inserted;
 }
 
-IEJoinUnion::IEJoinUnion(IEJoinGlobalSourceState &gsource, const ChunkRange &chunks)
-    : gsource(gsource), n(0), i(0), li(*gsource.li), p(*gsource.p) {
-	auto &op = gsource.op;
-
+IEJoinUnion::IEJoinUnion(SortedTable &l2, ColumnDataCollection &li, ColumnDataCollection &p,
+                         const vector<JoinCondition> &conditions, const ChunkRange &chunks)
+    : n(0), i(0), li(li), p(p) {
 	// 7. initialize bit-array B (|B| = n), and set all bits to 0
-	auto &l2 = *gsource.l2;
 	n_j = l2.count.load();
 	bit_array.resize(ValidityMask::EntryCount(n_j), 0);
 	bit_mask.Initialize(bit_array.data(), n_j);
@@ -655,7 +651,7 @@ IEJoinUnion::IEJoinUnion(IEJoinGlobalSourceState &gsource, const ChunkRange &chu
 	bloom_filter.Initialize(bloom_array.data(), bloom_count);
 
 	// 11. for(i←1 to n) do
-	const auto strict2 = IsStrictComparison(op.conditions[1].GetComparisonType());
+	const auto strict2 = IsStrictComparison(conditions[1].GetComparisonType());
 	op2 = make_uniq<UnionIterator>(l2, strict2);
 	off2 = make_uniq<UnionIterator>(l2, strict2);
 	n = l2.BlockStart(chunks.second);
@@ -1188,7 +1184,7 @@ bool IEJoinLocalSourceState::TryAssignTask() {
 		right_block_index = 0;
 		right_base = 0;
 
-		joiner = make_uniq<IEJoinUnion>(gsource, task->range);
+		joiner = make_uniq<IEJoinUnion>(*gsource.l2, *gsource.li, *gsource.p, gsource.op.conditions, task->range);
 		break;
 	case IEJoinSourceStage::OUTER:
 		if (task->thread_idx < gsource.left_outers) {
