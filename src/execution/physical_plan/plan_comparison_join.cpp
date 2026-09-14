@@ -197,7 +197,7 @@ static bool RequiresNestedLoopMark(const LogicalComparisonJoin &op) {
 		return true;
 	}
 	idx_t range_count = 0;
-	return comparison_count > 1 && !op.HasEquality(range_count);
+	return comparison_count > 2 && !op.HasEquality(range_count);
 }
 
 PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoin &op) {

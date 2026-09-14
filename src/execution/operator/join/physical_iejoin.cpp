@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/join/physical_iejoin.hpp"
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
@@ -73,6 +74,86 @@ PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoi
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
+// Directional extrema partitioned by NULL key, collected from the original evaluated keys.
+struct IEMarkJoinBounds {
+	Value values[2];
+	Value other_null_values[2];
+	bool has_null[2] = {false, false};
+	bool both_null = false;
+
+	static void UpdateValue(Value &bound, const Value &value, ExpressionType comparison) {
+		if (value.IsNull()) {
+			return;
+		}
+		const auto use_max =
+		    comparison == ExpressionType::COMPARE_LESSTHAN || comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO;
+		if (bound.IsNull() ||
+		    (use_max ? ValueOperations::GreaterThan(value, bound) : ValueOperations::LessThan(value, bound))) {
+			bound = value;
+		}
+	}
+
+	void Sink(DataChunk &keys, const vector<JoinCondition> &conditions) {
+		for (idx_t row = 0; row < keys.size(); row++) {
+			Value row_values[] = {keys.GetValue(0, row), keys.GetValue(1, row)};
+			both_null |= row_values[0].IsNull() && row_values[1].IsNull();
+			for (idx_t col = 0; col < 2; col++) {
+				has_null[col] |= row_values[col].IsNull();
+				UpdateValue(values[col], row_values[col], conditions[col].GetComparisonType());
+				if (row_values[1 - col].IsNull()) {
+					UpdateValue(other_null_values[col], row_values[col], conditions[col].GetComparisonType());
+				}
+			}
+		}
+	}
+
+	void Combine(const IEMarkJoinBounds &other, const vector<JoinCondition> &conditions) {
+		both_null |= other.both_null;
+		for (idx_t col = 0; col < 2; col++) {
+			has_null[col] |= other.has_null[col];
+			UpdateValue(values[col], other.values[col], conditions[col].GetComparisonType());
+			UpdateValue(other_null_values[col], other.other_null_values[col], conditions[col].GetComparisonType());
+		}
+	}
+
+	static bool Matches(const Value &value, const Value &bound, ExpressionType comparison) {
+		if (bound.IsNull()) {
+			return false;
+		}
+		switch (comparison) {
+		case ExpressionType::COMPARE_LESSTHAN:
+			return ValueOperations::LessThan(value, bound);
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+			return ValueOperations::LessThanEquals(value, bound);
+		case ExpressionType::COMPARE_GREATERTHAN:
+			return ValueOperations::GreaterThan(value, bound);
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			return ValueOperations::GreaterThanEquals(value, bound);
+		default:
+			throw InternalException("Expected IE join range comparison");
+		}
+	}
+
+	bool IsUnknown(DataChunk &keys, idx_t row, const vector<JoinCondition> &conditions, idx_t build_count) const {
+		if (!build_count) {
+			return false;
+		}
+		auto first = keys.GetValue(0, row);
+		auto second = keys.GetValue(1, row);
+		if (first.IsNull() && second.IsNull()) {
+			return true;
+		}
+		if (first.IsNull()) {
+			return has_null[1] || Matches(second, values[1], conditions[1].GetComparisonType());
+		}
+		if (second.IsNull()) {
+			return has_null[0] || Matches(first, values[0], conditions[0].GetComparisonType());
+		}
+		return both_null || Matches(first, other_null_values[0], conditions[0].GetComparisonType()) ||
+		       Matches(second, other_null_values[1], conditions[1].GetComparisonType());
+	}
+};
+
 class IEJoinLocalState;
 
 class IEJoinGlobalState : public GlobalSinkState {
@@ -85,12 +166,14 @@ public:
 		const auto &lhs_types = op.children[0].get().GetTypes();
 		vector<BoundOrderByNode> lhs_order;
 		lhs_order.emplace_back(op.lhs_orders[0].Copy());
-		tables[0] = make_uniq<GlobalSortedTable>(context, lhs_order, lhs_types, op);
+		tables[0] = make_uniq<GlobalSortedTable>(context, lhs_order, lhs_types, op,
+		                                         op.join_type == JoinType::MARK && op.conditions.size() == 2);
 
 		const auto &rhs_types = op.children[1].get().GetTypes();
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0].Copy());
-		tables[1] = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_types, op);
+		tables[1] = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_types, op,
+		                                         op.join_type == JoinType::MARK && op.conditions.size() == 2);
 
 		if (op.filter_pushdown) {
 			skip_filter_pushdown = op.filter_pushdown->probe_info.empty();
@@ -116,6 +199,8 @@ public:
 
 	//! The two input tables (IEJoin materialises both sides)
 	vector<unique_ptr<GlobalSortedTable>> tables;
+	mutex mark_lock;
+	IEMarkJoinBounds mark_bounds;
 	//! The child that is being materialised (right/1 then left/0)
 	size_t child;
 	//! Should we not bother pushing down filters?
@@ -137,6 +222,7 @@ public:
 
 	//! The local sort state
 	LocalSortedTable table;
+	IEMarkJoinBounds mark_bounds;
 	//! Local state for accumulating filter statistics
 	unique_ptr<JoinFilterLocalState> local_filter_state;
 };
@@ -154,6 +240,9 @@ unique_ptr<LocalSinkState> PhysicalIEJoin::GetLocalSinkState(ExecutionContext &c
 void IEJoinGlobalState::Sink(ExecutionContext &context, DataChunk &input, IEJoinLocalState &lstate) {
 	// Sink the data into the local sort state
 	lstate.table.Sink(context, input);
+	if (child == 1 && tables[1]->op.join_type == JoinType::MARK && tables[1]->op.conditions.size() == 2) {
+		lstate.mark_bounds.Sink(lstate.table.keys, tables[1]->op.conditions);
+	}
 }
 
 SinkResultType PhysicalIEJoin::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
@@ -177,6 +266,10 @@ SinkCombineResultType PhysicalIEJoin::Combine(ExecutionContext &context, Operato
 	auto &gstate = input.global_state.Cast<IEJoinGlobalState>();
 	auto &lstate = input.local_state.Cast<IEJoinLocalState>();
 	gstate.tables[gstate.child]->Combine(context, lstate.table);
+	if (gstate.child == 1 && join_type == JoinType::MARK && conditions.size() == 2) {
+		lock_guard<mutex> guard(gstate.mark_lock);
+		gstate.mark_bounds.Combine(lstate.mark_bounds, conditions);
+	}
 	auto &client_profiler = QueryProfiler::Get(context.client);
 
 	context.thread.profiler.Flush(*this);
@@ -950,8 +1043,17 @@ public:
 		auto &op = gsource.op;
 		auto &allocator = Allocator::Get(client);
 		unprojected.InitializeEmpty(op.unprojected_types);
-		lpayload.Initialize(allocator, op.children[0].get().GetTypes());
-		rpayload.Initialize(allocator, op.children[1].get().GetTypes());
+		auto left_payload_types = op.children[0].get().GetTypes();
+		auto right_payload_types = op.children[1].get().GetTypes();
+		mark_payload.InitializeEmpty(left_payload_types);
+		if (op.join_type == JoinType::MARK && op.conditions.size() == 2) {
+			for (const auto &condition : op.conditions) {
+				left_payload_types.push_back(condition.GetLHS().GetReturnType());
+				right_payload_types.push_back(condition.GetRHS().GetReturnType());
+			}
+		}
+		lpayload.Initialize(allocator, left_payload_types);
+		rpayload.Initialize(allocator, right_payload_types);
 
 		auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
 		auto &left_table = *ie_sink.tables[0];
@@ -971,6 +1073,13 @@ public:
 			pred_matches.Initialize();
 		}
 
+		if (op.join_type == JoinType::MARK && op.conditions.size() == 2) {
+			vector<LogicalType> types;
+			for (const auto &condition : op.conditions) {
+				types.push_back(condition.GetLHS().GetReturnType());
+			}
+			mark_keys.Initialize(allocator, types);
+		}
 		if (op.conditions.size() < 3) {
 			return;
 		}
@@ -1112,6 +1221,19 @@ public:
 
 	//! Simple Joins
 	idx_t anti_lsel = 0;
+	DataChunk mark_keys;
+	DataChunk mark_payload;
+
+	void ReferenceMarkKeys() {
+		for (idx_t col = 0; col < mark_payload.ColumnCount(); col++) {
+			mark_payload.data[col].Reference(lpayload.data[col]);
+		}
+		for (idx_t col = 0; col < mark_keys.ColumnCount(); col++) {
+			mark_keys.data[col].Reference(lpayload.data[mark_payload.ColumnCount() + col]);
+		}
+		mark_payload.SetChildCardinality(lpayload.size());
+		mark_keys.SetChildCardinality(lpayload.size());
+	}
 };
 
 bool IEJoinLocalSourceState::TryAssignTask() {
@@ -1205,11 +1327,19 @@ void IEJoinLocalSourceState::ExecuteSinkL1Task(ExecutionContext &context, Interr
 
 		// LHS has positive rids
 		ExpressionExecutor l_executor(context.client);
-		l_executor.AddExpression(*order1.expression);
+		auto left_first = left_table.retain_keys
+		                      ? make_uniq<BoundReferenceExpression>(order1.expression->GetReturnType(),
+		                                                            op.children[0].get().GetTypes().size())
+		                      : order1.expression->Copy();
+		auto left_second = left_table.retain_keys
+		                       ? make_uniq<BoundReferenceExpression>(order2.expression->GetReturnType(),
+		                                                             op.children[0].get().GetTypes().size() + 1)
+		                       : order2.expression->Copy();
+		l_executor.AddExpression(*left_first);
 		// add const column true
 		auto left_const = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
 		l_executor.AddExpression(*left_const);
-		l_executor.AddExpression(*order2.expression);
+		l_executor.AddExpression(*left_second);
 		const auto rid = UnsafeNumericCast<int64_t>(left_table.BlockStart(range.first)) + 1;
 		IEJoinUnion::AppendKey(context, interrupt, left_table, l_executor, *l1, 1, rid, range);
 	}
@@ -1222,11 +1352,19 @@ void IEJoinLocalSourceState::ExecuteSinkL1Task(ExecutionContext &context, Interr
 
 		// RHS has negative rids
 		ExpressionExecutor r_executor(context.client);
-		r_executor.AddExpression(*op.rhs_orders[0].expression);
+		auto right_first = right_table.retain_keys
+		                       ? make_uniq<BoundReferenceExpression>(op.rhs_orders[0].expression->GetReturnType(),
+		                                                             op.children[1].get().GetTypes().size())
+		                       : op.rhs_orders[0].expression->Copy();
+		auto right_second = right_table.retain_keys
+		                        ? make_uniq<BoundReferenceExpression>(op.rhs_orders[1].expression->GetReturnType(),
+		                                                              op.children[1].get().GetTypes().size() + 1)
+		                        : op.rhs_orders[1].expression->Copy();
+		r_executor.AddExpression(*right_first);
 		// add const column false
 		auto right_const = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
 		r_executor.AddExpression(*right_const);
-		r_executor.AddExpression(*op.rhs_orders[1].expression);
+		r_executor.AddExpression(*right_second);
 		const auto rid = UnsafeNumericCast<int64_t>(right_table.BlockStart(range.first)) + 1;
 		IEJoinUnion::AppendKey(context, interrupt, right_table, r_executor, *l1, -1, -rid, range);
 	}
@@ -1664,7 +1802,17 @@ void IEJoinLocalSourceState::ResolveMarkJoin(ExecutionContext &context, DataChun
 
 	//	Now hand it off to code that knows the rules...
 	//	Note that it can handle left_keys.ColumnCount().empty()
-	PhysicalJoin::ConstructMarkJoinResult(left_keys, lpayload, result, found_match, right_table.has_null);
+	if (op.conditions.size() == 2) {
+		ReferenceMarkKeys();
+		bool found_unknown[STANDARD_VECTOR_SIZE] = {false};
+		for (idx_t row = 0; row < lpayload.size(); row++) {
+			found_unknown[row] =
+			    !found_match[row] && ie_sink.mark_bounds.IsUnknown(mark_keys, row, op.conditions, right_table.count);
+		}
+		PhysicalJoin::ConstructMarkJoinResult(mark_keys, mark_payload, result, found_match, false, found_unknown);
+	} else {
+		PhysicalJoin::ConstructMarkJoinResult(left_keys, lpayload, result, found_match, right_table.has_null);
+	}
 
 	result.Verify(context.client.db);
 }
@@ -2099,6 +2247,16 @@ void IEJoinLocalSourceState::ExecuteMarkTask(ExecutionContext &context, DataChun
 	left_table.Repin(*left_iterator);
 	op.SliceSortedPayload(lpayload, left_table, *left_iterator, left_chunk_state, left_block_index, outer_sel,
 	                      *left_scan_state);
+
+	if (op.conditions.size() == 2) {
+		ReferenceMarkKeys();
+		bool found_unknown[STANDARD_VECTOR_SIZE] = {false};
+		for (idx_t row = 0; row < lpayload.size(); row++) {
+			found_unknown[row] = ie_sink.mark_bounds.IsUnknown(mark_keys, row, op.conditions, ie_sink.tables[1]->count);
+		}
+		PhysicalJoin::ConstructMarkJoinResult(mark_keys, mark_payload, result, nullptr, false, found_unknown);
+		return;
+	}
 
 	// for the initial set of columns we just reference the left side
 	result.SetChildCardinality(lpayload.size());
