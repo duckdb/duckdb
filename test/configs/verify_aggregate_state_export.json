@@ -8,6 +8,7 @@
       "paths": [
         "test/optimizer/aggregate_reuse.test",
         "test/optimizer/deliminator.test",
+        "test/optimizer/pushdown/filter_cannot_pushdown.test",
         "test/optimizer/eager_aggregate_execution.test",
         "test/optimizer/eager_aggregate_execution_parquet.test",
         "test/optimizer/partial_aggregate_precomputation.test",
@@ -56,12 +57,14 @@
         "test/sql/aggregate/aggregates/test_histogram_3529.test",
         "test/sql/aggregate/aggregates/test_mode.test",
         "test/sql/aggregate/aggregates/test_ordered_aggregates.test",
+        "test/sql/aggregate/aggregates/test_reservoir_quantile_decimal.test",
         "test/sql/function/list/aggregates/histogram_decimal.test",
         "test/sql/pivot/pivot_operator_expression.test",
         "test/sql/prepared/prepared_statistics_optimization.test",
         "test/sql/types/struct/struct_equality_bug.test",
         "test/sql/types/timestamp/test_infinite_time.test",
-        "test/sql/variant/variant_comparator.test"
+        "test/sql/variant/variant_comparator.test",
+        "test/sql/window/test_window_agg_stats_propagation.test"
       ]
     },
     {
@@ -69,6 +72,7 @@
       "paths": [
         "test/extension/test_function_named_args.test",
         "test/extension/volatile_aggregate.test",
+        "test/issues/general/test_24049.test",
         "test/sql/aggregate/aggregates/test_approximate_distinct_count.test",
         "test/sql/aggregate/aggregates/test_stddev.test",
         "test/sql/cte/cte_describe.test",

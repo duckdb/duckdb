@@ -1,5 +1,5 @@
 # name: test/sql/optimizer/contains_row_group_pruning.test
-# description: Row-group pruning through contains when all values in a row group are identical
+# description: Row-group pruning through contains using constant values and shared prefixes
 # group: [optimizer]
 
 statement ok
@@ -55,6 +55,26 @@ SELECT count(*) FROM with_nulls WHERE contains(s, 'python');
 ----
 0
 
+# A nullable constant group produces true-or-NULL, so its negation cannot match any rows.
+statement ok
+CREATE TABLE negated_nullable_contains AS
+SELECT CASE
+           WHEN range < 2048 THEN CASE WHEN range % 2 = 0 THEN 'abc' ELSE NULL END
+           WHEN range < 4096 THEN 'zzz'
+           ELSE 'abc'
+       END::VARCHAR AS s
+FROM range(6144)
+
+query I
+SELECT count(*) FROM negated_nullable_contains WHERE NOT contains(s, 'a')
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM negated_nullable_contains WHERE NOT contains(s, 'a')
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
 # strings longer than the stats prefix are not exact: no pruning, but results stay correct
 statement ok
 CREATE TABLE long_strings AS SELECT 'duckduckgo_search' AS s FROM range(6144);
@@ -68,3 +88,19 @@ query I
 SELECT count(*) FROM long_strings WHERE contains(s, 'python');
 ----
 0
+
+# The first two row groups share /api/health/; the first also contains a NULL.
+statement ok
+CREATE TABLE requests AS
+SELECT CASE WHEN i = 0 THEN NULL WHEN i < 4096 THEN '/api/health/' ELSE '/api/orders/' END || i::VARCHAR AS path
+FROM range(6144) t(i);
+
+query I
+SELECT count(*) FROM requests WHERE path NOT LIKE '%health%';
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT path FROM requests WHERE path NOT LIKE '%health%';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*

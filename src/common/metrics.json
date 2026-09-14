@@ -51,6 +51,11 @@
 			"description": "Peak memory usage of the buffer manager",
 			"unit": "bytes"
 		},
+		"peak_streaming_buffer_size": {
+			"metric_type": "uint64",
+			"description": "Peak number of bytes buffered by a streaming query result",
+			"unit": "bytes"
+		},
 		"peak_temp_dir_size": {
 			"metric_type": "uint64",
 			"description": "Peak size of the temporary directory",
@@ -68,10 +73,20 @@
 			"description": "The total amount of bytes read from storage",
 			"unit": "bytes"
 		},
+		"total_read_operations": {
+			"metric_type": "uint64",
+			"description": "The total number of read operations issued to storage",
+			"unit": "operations"
+		},
 		"total_bytes_written": {
 			"metric_type": "uint64",
 			"description": "The total amount of bytes written to storage",
 			"unit": "bytes"
+		},
+		"total_write_operations": {
+			"metric_type": "uint64",
+			"description": "The total number of write operations issued to storage",
+			"unit": "operations"
 		}
 	},
 	"storage": {

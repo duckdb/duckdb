@@ -132,11 +132,18 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	}
 	vector<unique_ptr<Expression>> bound_partitions;
 	for (auto &child : window.PartitionsMutable()) {
-		bound_partitions.push_back(BindChild(child, depth, error));
+		auto bound_partition = BindChild(child, depth, error);
+		if (!error.HasError() && bound_partition->IsVolatile()) {
+			throw BinderException(error_context, "PARTITION BY window expressions cannot be volatile");
+		}
+		bound_partitions.push_back(std::move(bound_partition));
 	}
 	vector<unique_ptr<Expression>> bound_orders;
 	for (auto &order : window.OrderByMutable()) {
 		auto bound_order = BindChild(order.expression, depth, error);
+		if (!error.HasError() && bound_order->IsVolatile()) {
+			throw BinderException(error_context, "ORDER BY window expressions cannot be volatile");
+		}
 
 		//	If the frame is a RANGE frame and the type is a time,
 		//	then we have to convert the time to a timestamp to avoid wrapping.
@@ -147,7 +154,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		const auto type_id = bound_order->GetReturnType().id();
 		if (type_id == LogicalTypeId::TIME || type_id == LogicalTypeId::TIME_TZ) {
 			//	Convert to time + epoch and rebind
-			unique_ptr<ParsedExpression> epoch = make_uniq<ConstantExpression>(Value::DATE(date_t::epoch()));
+			unique_ptr<ParsedExpression> epoch = ConstantExpression::FromValue(Value::DATE(date_t::epoch()));
 			auto bound_epoch = BindChild(epoch, depth, error);
 			BindRangeExpression(context, "+", bound_order, bound_epoch);
 		}

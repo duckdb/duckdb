@@ -96,6 +96,10 @@ struct DuckDBDialectsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBGrammarExtensionsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBExtensionsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -178,6 +182,10 @@ struct DuckDBMetricsFun {
 };
 
 struct DuckDBOptimizersFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBSecretTypeParametersFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
