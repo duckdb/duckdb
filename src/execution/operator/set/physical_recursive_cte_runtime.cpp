@@ -220,10 +220,6 @@ public:
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
-	bool TaskBlockedOnResult() const override {
-		return pipeline.IsStreamingResultPipeline() && pipeline_executor.RemainingSinkChunk();
-	}
-
 private:
 	// Keep partial execution reasonably coarse so blocked pipelines make progress without creating tiny tasks.
 	static constexpr const idx_t PARTIAL_CHUNK_COUNT = 50;
@@ -584,12 +580,8 @@ FindInvariantRecursiveMetaPipelines(const vector<shared_ptr<MetaPipeline>> &meta
 			vector<shared_ptr<Pipeline>> pipelines;
 			meta_pipeline->GetPipelines(pipelines, false);
 			for (auto &pipeline : pipelines) {
-				for (auto &dependency : pipeline->GetDependencies()) {
-					auto dep = dependency.lock();
-					if (!dep) {
-						continue;
-					}
-					auto dep_entry = pipeline_to_meta_pipeline.find(*dep);
+				for (auto &dependency : pipeline->GetAllDependencies()) {
+					auto dep_entry = pipeline_to_meta_pipeline.find(*dependency);
 					if (dep_entry == pipeline_to_meta_pipeline.end()) {
 						continue;
 					}
@@ -600,23 +592,6 @@ FindInvariantRecursiveMetaPipelines(const vector<shared_ptr<MetaPipeline>> &meta
 				}
 				if (depends_on_variant) {
 					break;
-				}
-			}
-			if (!depends_on_variant) {
-				for (auto &entry : meta_pipeline->GetDependencies()) {
-					for (auto &dependency : entry.second) {
-						auto dep_entry = pipeline_to_meta_pipeline.find(dependency.pipeline.get());
-						if (dep_entry == pipeline_to_meta_pipeline.end()) {
-							continue;
-						}
-						if (variant_meta_pipelines.find(dep_entry->second) != variant_meta_pipelines.end()) {
-							depends_on_variant = true;
-							break;
-						}
-					}
-					if (depends_on_variant) {
-						break;
-					}
 				}
 			}
 			if (depends_on_variant) {

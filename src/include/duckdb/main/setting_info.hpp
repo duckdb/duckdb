@@ -71,6 +71,8 @@ struct SettingCallbackInfo {
 	optional_ptr<DatabaseInstance> db;
 	optional_ptr<ClientContext> context;
 	SetScope scope;
+	//! Whether the callback fires for a RESET rather than a SET
+	bool is_reset = false;
 };
 
 typedef void (*set_callback_t)(SettingCallbackInfo &info, Value &parameter);
@@ -93,11 +95,14 @@ struct ConfigurationOption {
 	const char *default_value;
 	set_callback_t set_callback;
 	optional_idx setting_idx;
+	bool is_debug = false;
+	bool is_deprecated = false;
 };
 
 struct ConfigurationAlias {
 	const char *alias;
-	idx_t option_index;
+	//! The name of the setting this alias refers to
+	const char *setting_name;
 };
 
 typedef void (*set_option_callback_t)(ClientContext &context, SetScope scope, Value &parameter);

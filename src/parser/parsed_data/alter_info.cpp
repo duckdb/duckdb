@@ -1,4 +1,5 @@
 #include "duckdb/parser/parsed_data/alter_info.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
@@ -20,7 +21,7 @@ AlterEntryData AlterInfo::GetAlterEntryData() const {
 	return AlterEntryData(GetQualifiedName(), if_not_found);
 }
 
-bool AlterInfo::IsAddPrimaryKey() const {
+bool AlterInfo::IsAddUniqueConstraint() const {
 	if (type != AlterType::ALTER_TABLE) {
 		return false;
 	}
@@ -31,16 +32,17 @@ bool AlterInfo::IsAddPrimaryKey() const {
 	}
 
 	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
-	if (constraint_info.constraint->type != ConstraintType::UNIQUE) {
+	return constraint_info.constraint->type == ConstraintType::UNIQUE;
+}
+
+bool AlterInfo::IsAddPrimaryKey() const {
+	if (!IsAddUniqueConstraint()) {
 		return false;
 	}
 
-	auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
-	if (!unique_info.IsPrimaryKey()) {
-		return false;
-	}
-
-	return true;
+	auto &table_info = Cast<AlterTableInfo>();
+	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
+	return constraint_info.constraint->Cast<UniqueConstraint>().IsPrimaryKey();
 }
 
 } // namespace duckdb

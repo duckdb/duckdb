@@ -43,10 +43,15 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 	auto query_location = col_ref.GetQueryLocation();
 	auto column_names = col_ref.ColumnNames();
 	auto result_name = StringUtil::Join(column_names, ".");
+	// the name is never a column of this scope, so it can only come from an enclosing one. Resolving it
+	// there is not enough to call it a lateral parameter: a scope can reach a name and still fail to
+	// bind it, in which case the name falls through to being read as a string literal instead.
+	// BindInEnclosingScope performs the whole outward walk - installing each scope's qualified form and
+	// passing over the scopes that cannot bind it - so what is left is a real bind, as it was before.
+	ErrorData not_a_parameter(ExceptionType::BINDER,
+	                          StringUtil::Format("Referenced column \"%s\" not found in FROM clause!", result_name));
 	if (!table_function_name.empty()) {
-		// check if this is a lateral join column/parameter
-		auto result = BindCorrelatedColumns(expr_ptr, ErrorData("error"));
-		if (!result.HasError()) {
+		if (!BindInEnclosingScope(col_ref, depth, expr_ptr, not_a_parameter).HasError()) {
 			// it is a lateral join parameter - this is not supported in this type of table function
 			throw BinderException(query_location,
 			                      "Table function \"%s\" does not support lateral join column parameters - cannot use "
@@ -58,22 +63,16 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 	if (accept_sql_value_functions) {
 		auto value_function = ExpressionBinder::GetSQLValueFunction(column_names.back());
 		if (value_function) {
-			auto result = BindExpression(value_function, depth, root_expression);
-			// the value function expression is destroyed on return: erase any entries left for its children
-			GetBoundExpressions().EraseSubtree(*value_function);
-			return result;
+			return BindExpression(value_function, depth, root_expression);
 		}
 	}
 
-	auto result = BindCorrelatedColumns(expr_ptr, ErrorData("error"));
-	if (!result.HasError()) {
-		auto bound_expr = GetBoundExpressions().Consume(*expr_ptr);
-		ExtractCorrelatedExpressions(binder, *bound_expr);
-		result.expression = std::move(bound_expr);
-		return result;
-	}
-
 	if (table_function_name.empty()) {
+		// a COLUMNS expression: an enclosing scope may still own the name
+		auto result = BindInEnclosingScope(col_ref, depth, expr_ptr, std::move(not_a_parameter));
+		if (!result.HasError()) {
+			return result;
+		}
 		throw BinderException(query_location,
 		                      "Failed to bind \"%s\" - COLUMNS expression can only contain lambda parameters",
 		                      result_name);

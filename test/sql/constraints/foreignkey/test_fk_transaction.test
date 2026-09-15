@@ -61,8 +61,10 @@ BEGIN TRANSACTION
 statement ok
 DELETE FROM pkt WHERE i = 1
 
-statement ok
+statement error
 INSERT INTO fkt VALUES (1)
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
 
 statement ok
 ROLLBACK
@@ -108,8 +110,10 @@ BEGIN TRANSACTION
 statement ok
 DELETE FROM pkt WHERE i = 3
 
-statement ok
+statement error
 INSERT INTO fkt VALUES (3)
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
 
 statement ok
 ROLLBACK
@@ -147,3 +151,48 @@ DELETE FROM b
 
 statement ok
 DELETE FROM a
+
+statement ok
+COMMIT
+
+# Cross-table check: a parent DELETE followed by a child INSERT in the same
+# transaction must not commit a dangling foreign key reference.
+
+statement ok
+CREATE TABLE cross_fk_parent(id INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE cross_fk_child(pid INTEGER, FOREIGN KEY (pid) REFERENCES cross_fk_parent(id))
+
+statement ok
+INSERT INTO cross_fk_parent VALUES (1)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DELETE FROM cross_fk_parent WHERE id = 1
+
+statement error
+INSERT INTO cross_fk_child VALUES (1)
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
+
+statement ok
+ROLLBACK
+
+query I
+SELECT count(*) FROM cross_fk_parent
+----
+1
+
+query I
+SELECT count(*) FROM cross_fk_child
+----
+0
+
+statement ok
+DROP TABLE cross_fk_child
+
+statement ok
+DROP TABLE cross_fk_parent

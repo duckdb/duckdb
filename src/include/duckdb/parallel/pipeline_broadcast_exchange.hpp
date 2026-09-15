@@ -31,6 +31,10 @@ class PipelineExecutor;
 class PhysicalOperator;
 
 enum class PipelineBroadcastExchangeCompletionMode : uint8_t { STOP_WHEN_UNCONSUMED, RUN_TO_COMPLETION };
+//! THROTTLE_PRODUCER blocks the producer while the consumers cannot keep up. BUFFER_ALL never blocks the producer and
+//! buffers the rows instead (spilling to disk if required) - required when the consumer of the exchange cannot run
+//! until the producer is done, e.g. because its pipeline depends on a pipeline that the producer feeds
+enum class PipelineBroadcastExchangeBufferMode { THROTTLE_PRODUCER, BUFFER_ALL };
 enum class PipelineBroadcastExchangeOrderMode : uint8_t { UNORDERED, SEQUENTIAL, BATCH_INDEX };
 enum class PipelineBroadcastExchangeLocalMode : uint8_t { DIRECT_ONLY, BUFFERED };
 enum class PipelineBroadcastExchangeDirectPushState : uint8_t { NOT_STARTED, RESUMING, ACTIVE, FINISHED };
@@ -84,9 +88,10 @@ class PipelineBroadcastExchange {
 	friend class PipelineBroadcastExchangeLocalState;
 
 public:
-	PipelineBroadcastExchange(ClientContext &context, vector<LogicalType> types_p,
-	                          PipelineBroadcastExchangeCompletionMode completion_mode_p,
-	                          OrderPreservationType source_order_p, bool use_batch_index_p);
+	PipelineBroadcastExchange(
+	    ClientContext &context, vector<LogicalType> types_p, PipelineBroadcastExchangeCompletionMode completion_mode_p,
+	    OrderPreservationType source_order_p, bool use_batch_index_p,
+	    PipelineBroadcastExchangeBufferMode buffer_mode_p = PipelineBroadcastExchangeBufferMode::THROTTLE_PRODUCER);
 
 	const vector<LogicalType> &Types() const {
 		return types;
@@ -267,6 +272,7 @@ private:
 	ClientContext &context;
 	vector<LogicalType> types;
 	PipelineBroadcastExchangeCompletionMode completion_mode;
+	PipelineBroadcastExchangeBufferMode buffer_mode;
 	PipelineBroadcastExchangeOrderMode order_mode;
 	OrderPreservationType source_order;
 	idx_t max_threads;

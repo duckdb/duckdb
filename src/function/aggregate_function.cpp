@@ -128,6 +128,8 @@ BoundAggregateFunction::BoundAggregateFunction(shared_ptr<const AggregateFunctio
 	for (auto &param : function.GetSignature().GetParameters()) {
 		arguments.push_back(param.GetType());
 	}
+	logical_arguments = arguments;
+	logical_return_type = return_type;
 }
 
 bool BoundAggregateFunction::operator==(const BoundAggregateFunction &rhs) const {
@@ -136,6 +138,12 @@ bool BoundAggregateFunction::operator==(const BoundAggregateFunction &rhs) const
 }
 bool BoundAggregateFunction::operator!=(const BoundAggregateFunction &rhs) const {
 	return !(*this == rhs);
+}
+
+void BoundAggregateFunction::ReplaceImplementation(const BoundAggregateFunction &function) {
+	BaseAggregateFunction::operator=(function);
+	BoundSimpleFunction::operator=(function);
+	SetDefinition(definition);
 }
 
 void BoundAggregateFunction::ReplaceImplementation(const AggregateFunction &function) {

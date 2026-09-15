@@ -1,5 +1,6 @@
 #include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/parser/grammar_extension.hpp"
 #include "duckdb/parser/dialect_extension.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
@@ -8,6 +9,7 @@
 #include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/main/profiler_extension.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -16,6 +18,8 @@ struct ExtensionCallbackRegistry {
 	vector<DialectExtension> dialect_extensions;
 	//! Extensions made to the parser
 	vector<ParserExtension> parser_extensions;
+	//! Extensions made to the grammar of the main (PEG) parser
+	case_insensitive_map_t<shared_ptr<GrammarExtension>> grammar_extensions;
 	//! Extensions made to the planner
 	vector<PlannerExtension> planner_extensions;
 	//! Extensions made to the optimizer
@@ -60,6 +64,22 @@ void ExtensionCallbackManager::Register(ParserExtension extension) {
 	lock_guard<mutex> guard(registry_lock);
 	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
 	new_registry->parser_extensions.push_back(std::move(extension));
+	callback_registry.atomic_store(new_registry);
+}
+
+void ExtensionCallbackManager::Register(shared_ptr<GrammarExtension> extension) {
+	if (!extension) {
+		throw InvalidInputException("Cannot register a null parser extension");
+	}
+	lock_guard<mutex> guard(registry_lock);
+	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
+	auto name = extension->Name();
+	auto res = new_registry->grammar_extensions.emplace(name, std::move(extension));
+	if (!res.second) {
+		//! FIXME: we'll want to namespace the GrammarExtension with the extension that added it
+		throw InvalidInputException(
+		    "Can't add GrammarExtension \"%s\", a GrammarExtension by that name already exists");
+	}
 	callback_registry.atomic_store(new_registry);
 }
 
@@ -136,6 +156,11 @@ ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> ExtensionCallback
 	return ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>>(operator_extensions, std::move(registry));
 }
 
+case_insensitive_map_t<shared_ptr<GrammarExtension>> ExtensionCallbackManager::GrammarExtensions() const {
+	auto registry = callback_registry.atomic_load();
+	return registry->grammar_extensions;
+}
+
 ExtensionCallbackIteratorHelper<OptimizerExtension> ExtensionCallbackManager::OptimizerExtensions() const {
 	auto registry = callback_registry.atomic_load();
 	auto &optimizer_extensions = registry->optimizer_extensions;
@@ -164,6 +189,15 @@ ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> ExtensionCallback
 	auto registry = callback_registry.atomic_load();
 	auto &extension_callbacks = registry->extension_callbacks;
 	return ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>>(extension_callbacks, std::move(registry));
+}
+
+optional_ptr<GrammarExtension> ExtensionCallbackManager::FindGrammarExtension(const string &name) const {
+	auto registry = callback_registry.atomic_load();
+	auto entry = registry->grammar_extensions.find(name);
+	if (entry == registry->grammar_extensions.end()) {
+		return nullptr;
+	}
+	return entry->second.get();
 }
 
 optional_ptr<StorageExtension> ExtensionCallbackManager::FindStorageExtension(const string &name) const {
@@ -207,6 +241,10 @@ void ParserExtension::Register(DBConfig &config, ParserExtension extension) {
 	config.GetCallbackManager().Register(std::move(extension));
 }
 
+void GrammarExtension::Register(DatabaseInstance &db, shared_ptr<GrammarExtension> extension) {
+	DBConfig::GetConfig(db).GetCallbackManager().Register(std::move(extension));
+}
+
 void DialectExtension::Register(DBConfig &config, DialectExtension extension) {
 	config.GetCallbackManager().Register(std::move(extension));
 }
@@ -244,6 +282,7 @@ template class ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>>;
 template class ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>>;
 template class ExtensionCallbackIteratorHelper<OptimizerExtension>;
 template class ExtensionCallbackIteratorHelper<ParserExtension>;
+template class ExtensionCallbackIteratorHelper<shared_ptr<GrammarExtension>>;
 template class ExtensionCallbackIteratorHelper<DialectExtension>;
 template class ExtensionCallbackIteratorHelper<PlannerExtension>;
 
