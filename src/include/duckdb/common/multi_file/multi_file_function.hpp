@@ -602,7 +602,9 @@ public:
 		result->job->scan_state = bind_data.interface->InitializeLocalState(context.client, *gstate.global_state);
 
 		if (!ClaimNextJob(context.client, bind_data, gstate, *result->job)) {
-			return nullptr;
+			// keep the local state so the scan can still emit FinalizeScan output
+			result->job.reset();
+			return std::move(result);
 		}
 		result->job_state = MultiFileJobState::SCHEDULE;
 		return std::move(result);
@@ -735,6 +737,12 @@ public:
 		auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData>();
 		auto &data = input.local_state->Cast<MultiFileLocalState>();
 		auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
+		if (data.finalize_batch_index.IsValid()) {
+			if (input.partition_info.RequiresPartitionColumns()) {
+				throw InternalException("Cannot get partition columns for FinalizeScan output");
+			}
+			return OperatorPartitionData(data.finalize_batch_index.GetIndex());
+		}
 		auto &job = *data.job;
 		OperatorPartitionData partition_data(job.batch_index);
 		bind_data.multi_file_reader->GetPartitionData(context, bind_data.reader_bind, *job.reader_data,
@@ -819,7 +827,7 @@ public:
 	                                                 MultiFileLocalState &lstate, MultiFileGlobalState &gstate,
 	                                                 MultiFileBindData &bind_data) {
 		if (lstate.job_state == MultiFileJobState::NONE) {
-			if (!ClaimNextJob(context, bind_data, gstate, *lstate.job)) {
+			if (!lstate.job || !ClaimNextJob(context, bind_data, gstate, *lstate.job)) {
 				return ScanReadAheadAcquire::EXHAUSTED;
 			}
 			lstate.job_state = MultiFileJobState::SCHEDULE;
@@ -884,11 +892,12 @@ public:
 				case ScanReadAheadAcquire::PARKED:
 					return;
 				case ScanReadAheadAcquire::EXHAUSTED:
-					// If a thread is exhausted without getting a job, data.job
-					// is nullptr. If FinalizeScan returns true, duckdb calls
-					// scan function again, and after it returns, calls
-					// MultiFileGetPartitionData which in turn uses data.job.
-					if (data.job && bind_data.interface->FinalizeScan(context, *gstate.global_state, output)) {
+					if (bind_data.interface->FinalizeScan(context, *gstate.global_state, output)) {
+						// finalized output has no job, give it its own batch index for GetPartitionData
+						if (!data.finalize_batch_index.IsValid()) {
+							lock_guard<mutex> guard(gstate.lock);
+							data.finalize_batch_index = gstate.batch_index++;
+						}
 						data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
 						return;
 					}
