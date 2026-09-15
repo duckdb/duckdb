@@ -1,4 +1,4 @@
-# name: test/sql/aggregate/aggregate_functions/test_approx_top_k_overflow.test_slow
+# name: test/sql/aggregate/aggregates/test_approx_top_k_overflow.test_slow
 # description: test for approx_top_k heap buffer overflow on strings whose size > UINT32_MAX
 # group: [aggregates]
 
