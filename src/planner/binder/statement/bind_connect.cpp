@@ -29,6 +29,11 @@ BoundStatement Binder::Bind(ConnectStatement &stmt) {
 		stmt.info->parsed_options.clear();
 	}
 
+	// Bind the external resource clause (ATTACH/CONNECT TO EXTERNAL RESOURCE ...): resolve the type + create params.
+	if (stmt.info->external_resource) {
+		BindExternalResource(*stmt.info->external_resource);
+	}
+
 	result.plan = make_uniq<LogicalConnect>(std::move(stmt.info));
 
 	auto &properties = GetStatementProperties();
