@@ -101,7 +101,7 @@ struct VariantBuilder {
 	//! maps a key string to its (unsorted) dictionary index, owned by the result's keys vector
 	OrderedOwningStringMap<uint32_t> &dictionary;
 
-	static constexpr idx_t MAX_NESTING_DEPTH = 16;
+	static constexpr idx_t INIT_NESTING_DEPTH = 8;
 
 	//! the offsets at which the current row's entries begin
 	idx_t row_values = 0;
@@ -458,19 +458,19 @@ struct VariantBuilder {
 		}
 	}
 
-	idx_t BeginContainer(VariantLogicalType type_id, idx_t n) {
+	optional_idx BeginContainer(VariantLogicalType type_id, idx_t n) {
 		auto byte_offset = NumericCast<uint32_t>(blob.size());
 		type_ids.push_back(static_cast<uint8_t>(type_id));
 		byte_offsets.push_back(byte_offset);
 		VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(n));
 		if (!n) {
-			return DConstants::INVALID_INDEX;
+			return optional_idx();
 		}
 		VariantBuilderAppendVarint(blob, LocalChild());
 		auto block = child_value_ids.size();
 		child_value_ids.resize(block + n);
 		child_key_ids.resize(block + n);
-		return block;
+		return optional_idx(block);
 	}
 
 	void AssignObjectChild(idx_t block, idx_t i, string_t key) {
@@ -484,6 +484,8 @@ struct VariantBuilder {
 		child_key_ids[block + i] = VARIANT_INVALID_KEY;
 	}
 };
+
+
 
 //===--------------------------------------------------------------------===//
 // Emit (source: a VariantNode-like cursor)
@@ -515,7 +517,7 @@ void EmitIterator(const NODE &root, VariantBuilder &builder) {
 	};
 
 	vector<Frame> stack;
-	stack.reserve(VariantBuilder::MAX_NESTING_DEPTH);
+	stack.reserve(VariantBuilder::INIT_NESTING_DEPTH);
 
 	auto ProcessNode = [&](const NODE &node) {
 		if (node.IsNull() || node.IsMissing()) {
@@ -527,14 +529,14 @@ void EmitIterator(const NODE &root, VariantBuilder &builder) {
 		case VariantLogicalType::OBJECT: {
 			auto children = CollectObjectChildren(node);
 			auto n = children.size();
-			if (stack.size() >= VariantBuilder::MAX_NESTING_DEPTH) {
-				throw InvalidInputException("VARIANT nesting exceeds maximum of %d", VariantBuilder::MAX_NESTING_DEPTH);
+			if (stack.size() >= stack.capacity()) {
+				stack.reserve(NextPowerOfTwo(stack.size() + 1));
 			}
 			auto block = builder.BeginContainer(VariantLogicalType::OBJECT, n);
-			if (block != DConstants::INVALID_INDEX) {
+			if (block.IsValid()) {
 				Frame frame;
 				frame.is_object = true;
-				frame.block = block;
+				frame.block = block.GetIndex();
 				frame.object_children = std::move(children);
 				stack.push_back(std::move(frame));
 			}
@@ -543,14 +545,14 @@ void EmitIterator(const NODE &root, VariantBuilder &builder) {
 		case VariantLogicalType::ARRAY: {
 			auto array_iter = node.GetArrayChildren();
 			auto n = array_iter.size();
-			if (stack.size() >= VariantBuilder::MAX_NESTING_DEPTH) {
-				throw InvalidInputException("VARIANT nesting exceeds maximum of %d", VariantBuilder::MAX_NESTING_DEPTH);
+			if (stack.size() >= stack.capacity()) {
+				stack.reserve(NextPowerOfTwo(stack.size() + 1));
 			}
 			auto block = builder.BeginContainer(VariantLogicalType::ARRAY, n);
-			if (block != DConstants::INVALID_INDEX) {
+			if (block.IsValid()) {
 				Frame frame;
 				frame.is_object = false;
-				frame.block = block;
+				frame.block = block.GetIndex();
 				frame.array_children.emplace(std::move(array_iter));
 				stack.push_back(std::move(frame));
 			}
