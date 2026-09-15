@@ -11,6 +11,7 @@
 #include "duckdb.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "sqllogic_command.hpp"
+#include "test_failure_record.hpp"
 
 namespace duckdb {
 
@@ -56,6 +57,11 @@ public:
 	void UnexpectedStatement(bool expect_ok, MaterializedQueryResult &result);
 	void ExpectedErrorMismatch(const string &expected_error, MaterializedQueryResult &result);
 	void InternalException(MaterializedQueryResult &result);
+	//! A single cell differed. `row`/`column` are zero-based indices into the compared result.
+	void ValueMismatch(MaterializedQueryResult &result, const string &actual_value, const string &expected_value,
+	                   idx_t row, idx_t column, const vector<string> &result_values, const vector<string> &values,
+	                   idx_t expected_column_count, bool row_wise);
+	void TestError(const string &description, const string &detail);
 	static void LoadDatabaseFail(const string &file_name, const string &dbpath, const string &message);
 	//! Write a machine-readable event line: "[TEST_EVENT] <json>" (--emit-test-events). Caller gates.
 	static void EmitTestEvent(const string &json_payload);
@@ -64,6 +70,19 @@ public:
 	static void LogFailure(const string &log_message);
 	static void LogFailureAnnotation(const string &log_message);
 	string ResultToString(MaterializedQueryResult &result);
+
+private:
+	//! Seed a record with this failure's location and query. Cheap enough to build unconditionally;
+	//! callers still gate on TestFailureRecorder::Enabled() before doing the result-copying work.
+	TestFailureRecord BaseRecord(TestFailureKind kind, const string &message) const;
+	//! Copy a row-major value list into `out`, capping it at TEST_FAILURE_MAX_VALUES cells.
+	static void FillValues(const vector<string> &values, idx_t columns, vector<string> &out, bool &truncated,
+	                       idx_t &rows);
+	//! Copy a query result into `out` in the same row-major layout, under the same cap.
+	void FillValues(MaterializedQueryResult &result, vector<string> &out, bool &truncated, idx_t &rows, idx_t &columns);
+	//! Row indices where `expected` and `actual` differ. Empty unless both sides share a shape.
+	static vector<idx_t> ComputeMismatchRows(const vector<string> &expected, const vector<string> &actual,
+	                                         idx_t columns);
 
 private:
 	Connection &connection;

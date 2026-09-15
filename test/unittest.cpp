@@ -11,6 +11,7 @@
 #include "sqlite/sqllogic_test_runner.hpp"
 #include "test_helpers.hpp"
 #include "test_config.hpp"
+#include "test_failure_record.hpp"
 
 using namespace duckdb;
 
@@ -81,6 +82,7 @@ int main(int argc_in, char *argv[]) {
 	}
 	bool keep_home = false;
 	bool use_stdin = false;
+	auto output_format = TestOutputFormat::DEFAULT;
 	vector<string> input_files;
 	unordered_set<idx_t> input_file_arg_indices;
 
@@ -89,7 +91,8 @@ int main(int argc_in, char *argv[]) {
 	// remains here is what that table cannot express.
 	idx_t argc = NumericCast<idx_t>(argc_in);
 	int new_argc = 0;
-	auto new_argv = duckdb::unique_ptr<char *[]>(new char *[argc]);
+	// +2: --output=json injects "-r json" below
+	auto new_argv = duckdb::unique_ptr<char *[]>(new char *[argc + 2]);
 	for (idx_t i = 0; i < argc; i++) {
 		string argument(argv[i]);
 		if (argument == "--test-dir") {
@@ -104,6 +107,27 @@ int main(int argc_in, char *argv[]) {
 			use_stdin = true;
 		} else if (argument == "--emit-test-events") {
 			SetEmitTestEvents(true);
+		} else if (argument == "--output" || StringUtil::StartsWith(argument, "--output=")) {
+			string format;
+			if (argument == "--output") {
+				if (i + 1 >= argc) {
+					fprintf(stderr, "Missing value for --output (expected \"default\" or \"json\")\n");
+					return 1;
+				}
+				format = string(argv[++i]);
+			} else {
+				format = argument.substr(strlen("--output="));
+			}
+			format = StringUtil::Lower(format);
+			if (format == "json") {
+				output_format = TestOutputFormat::JSON;
+			} else if (format == "default") {
+				output_format = TestOutputFormat::DEFAULT;
+			} else {
+				fprintf(stderr, "Unsupported --output format \"%s\" (expected \"default\" or \"json\")\n",
+				        format.c_str());
+				return 1;
+			}
 		} else {
 			try {
 				if (!test_config.ParseArgument(argument, argc, argv, i)) {
@@ -201,9 +225,22 @@ int main(int argc_in, char *argv[]) {
 	} else {
 		RegisterSqllogictests();
 	}
+	if (output_format == TestOutputFormat::JSON) {
+		// Swap the console reporter for the JSON one and silence everything that writes to the streams
+		// outside it, so stdout carries nothing but JSON Lines.
+		static char reporter_flag[] = "-r";
+		static char reporter_name[] = "json";
+		new_argv[new_argc++] = reporter_flag;
+		new_argv[new_argc++] = reporter_name;
+		Catch::setProgressReporting(false);
+		TestFailureRecorder::SetEnabled(true);
+		SetTestOutputFormat(TestOutputFormat::JSON);
+	}
+
 	int result = Catch::Session().run(new_argc, new_argv.get());
 
-	std::string failures_summary = FailureSummary::GetFailureSummary();
+	std::string failures_summary =
+	    output_format == TestOutputFormat::JSON ? std::string() : FailureSummary::GetFailureSummary();
 	if (!failures_summary.empty()) {
 		auto description = test_config.GetDescription();
 		if (!description.empty()) {
@@ -217,7 +254,8 @@ int main(int argc_in, char *argv[]) {
 		std::cerr << "====================================================\n" << std::endl;
 		std::cerr << failures_summary;
 	}
-	std::string skip_reason_summary = SQLLogicTestRunner::GetSkipReasonSummary();
+	std::string skip_reason_summary =
+	    output_format == TestOutputFormat::JSON ? std::string() : SQLLogicTestRunner::GetSkipReasonSummary();
 	if (!skip_reason_summary.empty()) {
 		std::cerr << "\n"
 		          << "Skipped tests for the following reasons:" << std::endl;

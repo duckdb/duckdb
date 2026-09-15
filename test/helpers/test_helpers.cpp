@@ -577,6 +577,20 @@ bool EmitTestEventsEnabled() {
 	return emit_test_events;
 }
 
+static TestOutputFormat test_output_format = TestOutputFormat::DEFAULT;
+
+void SetTestOutputFormat(TestOutputFormat format) {
+	test_output_format = format;
+}
+
+TestOutputFormat GetTestOutputFormat() {
+	return test_output_format;
+}
+
+bool SuppressTextFailureOutput() {
+	return test_output_format == TestOutputFormat::JSON;
+}
+
 void ClearTestDirectory() {
 	if (!DeleteTestPath()) {
 		return;
