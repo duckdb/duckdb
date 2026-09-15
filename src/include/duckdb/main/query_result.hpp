@@ -42,20 +42,16 @@ struct ResultCollectionOf<ChunkFormat> {
 template <class FORMAT>
 struct ResultAccess;
 
-enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, ARROW_RESULT };
-
 class BaseQueryResult {
 public:
 	//! Creates a successful query result with the specified names and types
-	DUCKDB_API BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
-	                           vector<LogicalType> types, vector<Identifier> names);
+	DUCKDB_API BaseQueryResult(StatementType statement_type, StatementProperties properties, vector<LogicalType> types,
+	                           vector<Identifier> names);
 	//! Creates an unsuccessful query result with error condition
-	DUCKDB_API BaseQueryResult(QueryResultType type, ErrorData error);
+	DUCKDB_API explicit BaseQueryResult(ErrorData error);
 	DUCKDB_API virtual ~BaseQueryResult();
 
 public:
-	//! Returns the type of the result (MATERIALIZED or ARROW)
-	DUCKDB_API QueryResultType GetResultType() const;
 	//! Returns the type of the statement that created this result
 	DUCKDB_API StatementType GetStatementType() const;
 	//! Returns the properties of the statement that created this result
@@ -76,8 +72,6 @@ public:
 	DUCKDB_API const ErrorData &GetErrorObject() const;
 
 private:
-	//! The type of the result (MATERIALIZED or ARROW). Will be removed.
-	QueryResultType type;
 	//! The type of the statement that created this result
 	StatementType statement_type;
 	//! Properties of the statement
@@ -117,34 +111,12 @@ public:
 	                       ClientProperties client_properties);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API explicit QueryResult(ErrorData error);
-	//! Creates a successful query result of a subclass with the specified names and types
-	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
-	                       vector<LogicalType> types, vector<Identifier> names, ClientProperties client_properties);
-	//! Creates an unsuccessful query result of a subclass
-	DUCKDB_API QueryResult(QueryResultType type, ErrorData error);
 	DUCKDB_API ~QueryResult() override;
 
 	//! Properties from the client context
 	ClientProperties client_properties;
 	//! The next result (if any)
 	unique_ptr<QueryResult> next;
-
-public:
-	template <class TARGET>
-	TARGET &Cast() {
-		if (GetResultType() != TARGET::TYPE) {
-			throw InternalException("Failed to cast query result to type - query result type mismatch");
-		}
-		return reinterpret_cast<TARGET &>(*this);
-	}
-
-	template <class TARGET>
-	const TARGET &Cast() const {
-		if (GetResultType() != TARGET::TYPE) {
-			throw InternalException("Failed to cast query result to type - query result type mismatch");
-		}
-		return reinterpret_cast<const TARGET &>(*this);
-	}
 
 public:
 	//! Deduplicate column names for interop with external libraries
@@ -200,9 +172,9 @@ public:
 	//! returned. Will materialize the full result into a CDC if it hadn't yet. Chunk format only
 	DUCKDB_API unique_ptr<DataChunk> FetchRaw();
 	//! Converts the QueryResult to a string
-	DUCKDB_API virtual string ToString();
+	DUCKDB_API string ToString();
 	//! Converts the QueryResult to a box-rendered string
-	DUCKDB_API virtual string ToBox(BoxRendererContext &context, const BoxRendererConfig &config);
+	DUCKDB_API string ToBox(BoxRendererContext &context, const BoxRendererConfig &config);
 	//! Prints the QueryResult to the console
 	DUCKDB_API void Print();
 	//! Returns true if the two results are identical; false otherwise. Note that this method is destructive; it calls
@@ -231,9 +203,6 @@ public:
 		D_ASSERT(buffer);
 		return *buffer;
 	}
-
-protected:
-	DUCKDB_API virtual unique_ptr<DataChunk> FetchInternal();
 
 private:
 	unique_ptr<ClientContextLock> LockContext();

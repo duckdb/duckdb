@@ -1,8 +1,6 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
-#include "duckdb/common/arrow/arrow_query_result.hpp"
-#include "duckdb/common/arrow/physical_arrow_collector.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
@@ -88,18 +86,6 @@ ScopedConfigSetting UseTestStreamingCollector(ClientConfig &config) {
 		    config.get_result_collector = [](ClientContext &context,
 		                                     PreparedStatementData &data) -> unique_ptr<PhysicalOperator> {
 			    return make_uniq<TestStreamingCollector>(*data.physical_plan, data);
-		    };
-	    },
-	    [](ClientConfig &config) { config.get_result_collector = nullptr; });
-}
-
-ScopedConfigSetting UseArrowCollector(ClientConfig &config) {
-	return ScopedConfigSetting(
-	    config,
-	    [](ClientConfig &config) {
-		    config.get_result_collector = [](ClientContext &context,
-		                                     PreparedStatementData &data) -> unique_ptr<PhysicalOperator> {
-			    return PhysicalArrowCollector::Create(context, data, STANDARD_VECTOR_SIZE);
 		    };
 	    },
 	    [](ClientConfig &config) { config.get_result_collector = nullptr; });
@@ -348,18 +334,8 @@ TEST_CASE("A custom collector hands out its own result object", "[api][query_res
 	auto &config = ClientConfig::GetConfig(*con.context);
 	DrainWatchdog watchdog(con);
 
-	SECTION("arrow collector, from Query and from Submit") {
-		auto setting = UseArrowCollector(config);
-		auto queried = con.Query("SELECT i FROM range(3000) t(i)");
-		REQUIRE(queried->GetResultType() == QueryResultType::ARROW_RESULT);
-		REQUIRE(!queried->HasError());
-		REQUIRE(!queried->Cast<ArrowQueryResult>().Arrays().empty());
-
-		auto submitted = con.Submit("SELECT i FROM range(3000) t(i)");
-		REQUIRE(submitted->GetResultType() == QueryResultType::ARROW_RESULT);
-		REQUIRE(!submitted->HasError());
-	}
-	SECTION("a streaming collector keeps the query open until its result is dropped") {
+	{
+		// A streaming collector keeps the query open until its result is dropped
 		auto setting = UseTestStreamingCollector(config);
 		auto result = con.Submit("SELECT i FROM range(3000) t(i)");
 		REQUIRE(!result->HasError());

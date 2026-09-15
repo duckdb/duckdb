@@ -1,19 +1,65 @@
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
+#include "duckdb/common/arrow/arrow_format.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/main/query_parameters.hpp"
 #include "fmt/format.h"
 
 using duckdb::ArrowConverter;
+using duckdb::ArrowFormat;
 using duckdb::ArrowResultWrapper;
 using duckdb::CClientArrowOptionsWrapper;
 using duckdb::Connection;
 using duckdb::DataChunk;
 using duckdb::LogicalType;
 using duckdb::PreparedStatementWrapper;
+using duckdb::QueryParameters;
 using duckdb::QueryResult;
-using duckdb::QueryResultType;
+
+namespace {
+
+//! Every duckdb_arrow result is produced in the Arrow format, so the engine's worker threads build
+//! the record batches and duckdb_query_arrow_array only hands them out
+QueryParameters ArrowParameters() {
+	QueryParameters parameters;
+	parameters.format = duckdb::make_shared_ptr<ArrowFormat>(STANDARD_VECTOR_SIZE);
+	return parameters;
+}
+
+//! The rows a CHANGED_ROWS statement affected. Read while the result still holds its record batches,
+//! because duckdb_query_arrow_array takes them out one by one
+idx_t ChangedRows(QueryResult &result) {
+	if (result.HasError()) {
+		return 0;
+	}
+	if (result.GetStatementProperties().return_type != duckdb::StatementReturnType::CHANGED_ROWS) {
+		return 0;
+	}
+	auto &types = result.GetTypes();
+	if (types.size() != 1 || types[0].id() != duckdb::LogicalTypeId::BIGINT) {
+		return 0;
+	}
+	// A CHANGED_ROWS result is one BIGINT row, which the Arrow format wrapped in a record batch of a
+	// single int64 child
+	auto &units = result.Collection<ArrowFormat>().Units();
+	if (units.empty()) {
+		return 0;
+	}
+	auto &array = units.front()->Cast<duckdb::ArrowUnit>().array.arrow_array;
+	if (array.length != 1 || array.n_children != 1 || !array.children || !array.children[0]) {
+		return 0;
+	}
+	auto &child = *array.children[0];
+	if (child.n_buffers < 2 || !child.buffers || !child.buffers[1]) {
+		return 0;
+	}
+	auto counts = reinterpret_cast<const int64_t *>(child.buffers[1]);
+	return duckdb::NumericCast<idx_t>(counts[array.offset + child.offset]);
+}
+
+} // namespace
 
 duckdb_error_data duckdb_to_arrow_schema(duckdb_arrow_options arrow_options, duckdb_logical_type *types,
                                          const char **names, idx_t column_count, struct ArrowSchema *out_schema) {
@@ -162,7 +208,8 @@ duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query,
 	Connection *conn = (Connection *)connection;
 	auto wrapper = new ArrowResultWrapper();
 	try {
-		wrapper->result = conn->Query(query);
+		wrapper->result = conn->context->Query(query, ArrowParameters());
+		wrapper->rows_changed = ChangedRows(*wrapper->result);
 		*out_result = (duckdb_arrow)wrapper;
 		return !wrapper->result->HasError() ? DuckDBSuccess : DuckDBError;
 	} catch (...) {
@@ -234,17 +281,17 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 		return DuckDBSuccess;
 	}
 	auto wrapper = reinterpret_cast<ArrowResultWrapper *>(result);
-	auto success = wrapper->result->TryFetchOrError(wrapper->current_chunk, wrapper->result->GetErrorObject());
-	if (!success) { // LCOV_EXCL_START
+	duckdb::unique_ptr<duckdb::ArrowUnit> unit;
+	try {
+		unit = wrapper->result->Fetch<ArrowFormat>();
+	} catch (std::exception &ex) { // LCOV_EXCL_START
+		wrapper->result->SetError(duckdb::ErrorData(ex));
 		return DuckDBError;
 	} // LCOV_EXCL_STOP
-	if (!wrapper->current_chunk || wrapper->current_chunk->size() == 0) {
+	if (!unit) {
 		return DuckDBSuccess;
 	}
-	auto extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(
-	    *wrapper->result->client_properties.client_context, wrapper->result->GetTypes());
-	ArrowConverter::ToArrowArray(*wrapper->current_chunk, reinterpret_cast<ArrowArray *>(*out_array),
-	                             wrapper->result->client_properties, extension_type_cast);
+	unit->array.MoveTo(*reinterpret_cast<ArrowArray *>(*out_array));
 	return DuckDBSuccess;
 }
 
@@ -276,21 +323,7 @@ idx_t duckdb_arrow_column_count(duckdb_arrow result) {
 }
 
 idx_t duckdb_arrow_rows_changed(duckdb_arrow result) {
-	auto wrapper = reinterpret_cast<ArrowResultWrapper *>(result);
-	if (wrapper->result->HasError()) {
-		return 0;
-	}
-	idx_t rows_changed = 0;
-	auto &collection = wrapper->result->Collection();
-	idx_t row_count = collection.Count();
-	if (row_count > 0 &&
-	    wrapper->result->GetStatementProperties().return_type == duckdb::StatementReturnType::CHANGED_ROWS) {
-		auto rows = collection.GetRows();
-		D_ASSERT(row_count == 1);
-		D_ASSERT(rows.size() == 1);
-		rows_changed = duckdb::NumericCast<idx_t>(rows[0].GetValue(0).GetValue<int64_t>());
-	}
-	return rows_changed;
+	return reinterpret_cast<ArrowResultWrapper *>(result)->rows_changed;
 }
 
 const char *duckdb_query_arrow_error(duckdb_arrow result) {
@@ -327,9 +360,8 @@ duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_st
 	}
 	auto arrow_wrapper = new ArrowResultWrapper();
 	try {
-		auto result = wrapper->statement->Execute(wrapper->values);
-		D_ASSERT(result->GetResultType() == QueryResultType::MATERIALIZED_RESULT);
-		arrow_wrapper->result = std::move(result);
+		arrow_wrapper->result = wrapper->statement->Execute(wrapper->values, ArrowParameters());
+		arrow_wrapper->rows_changed = ChangedRows(*arrow_wrapper->result);
 		*out_result = reinterpret_cast<duckdb_arrow>(arrow_wrapper);
 		return !arrow_wrapper->result->HasError() ? DuckDBSuccess : DuckDBError;
 	} catch (...) {

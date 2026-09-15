@@ -15,15 +15,14 @@
 
 namespace duckdb {
 
-BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties_p,
+BaseQueryResult::BaseQueryResult(StatementType statement_type, StatementProperties properties_p,
                                  vector<LogicalType> types_p, vector<Identifier> names_p)
-    : type(type), statement_type(statement_type), properties(std::move(properties_p)), types(std::move(types_p)),
+    : statement_type(statement_type), properties(std::move(properties_p)), types(std::move(types_p)),
       names(std::move(names_p)), success(true) {
 	D_ASSERT(types.size() == names.size());
 }
 
-BaseQueryResult::BaseQueryResult(QueryResultType type, ErrorData error)
-    : type(type), success(false), error(std::move(error)) {
+BaseQueryResult::BaseQueryResult(ErrorData error) : success(false), error(std::move(error)) {
 	// Assert that the error object is initialized
 	D_ASSERT(this->error.HasError());
 }
@@ -67,10 +66,6 @@ idx_t BaseQueryResult::ColumnCount() const {
 	return types.size();
 }
 
-QueryResultType BaseQueryResult::GetResultType() const {
-	return type;
-}
-
 StatementType BaseQueryResult::GetStatementType() const {
 	return statement_type;
 }
@@ -90,23 +85,10 @@ const vector<Identifier> &BaseQueryResult::GetNames() const {
 //===--------------------------------------------------------------------===//
 // Construction
 //===--------------------------------------------------------------------===//
-QueryResult::QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
-                         vector<LogicalType> types_p, vector<Identifier> names_p, ClientProperties client_properties_p)
-    : BaseQueryResult(type, statement_type, std::move(properties), std::move(types_p), std::move(names_p)),
-      client_properties(std::move(client_properties_p)), format(ResultFormat::Chunk()) {
-}
-
-QueryResult::QueryResult(QueryResultType type, ErrorData error)
-    : BaseQueryResult(type, std::move(error)),
-      client_properties("UTC", ArrowOffsetSize::REGULAR, false, false, false, ArrowFormatVersion::V1_0, nullptr),
-      format(ResultFormat::Chunk()) {
-}
-
 QueryResult::QueryResult(shared_ptr<ClientContext> context_p, PreparedStatementData &statement,
                          vector<LogicalType> types_p, ClientProperties client_properties_p,
                          shared_ptr<BufferedData> buffer_p, shared_ptr<ResultFormat> format_p)
-    : BaseQueryResult(QueryResultType::MATERIALIZED_RESULT, statement.statement_type, statement.properties,
-                      std::move(types_p), statement.names),
+    : BaseQueryResult(statement.statement_type, statement.properties, std::move(types_p), statement.names),
       client_properties(std::move(client_properties_p)), context(std::move(context_p)), buffer(std::move(buffer_p)),
       format(std::move(format_p)) {
 	if (!format) {
@@ -117,8 +99,7 @@ QueryResult::QueryResult(shared_ptr<ClientContext> context_p, PreparedStatementD
 
 QueryResult::QueryResult(StatementType statement_type, StatementProperties properties, vector<Identifier> names_p,
                          unique_ptr<ColumnDataCollection> collection_p, ClientProperties client_properties_p)
-    : BaseQueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, std::move(properties),
-                      collection_p->Types(), std::move(names_p)),
+    : BaseQueryResult(statement_type, std::move(properties), collection_p->Types(), std::move(names_p)),
       client_properties(std::move(client_properties_p)), format(ResultFormat::Chunk()),
       collection(std::move(collection_p)) {
 }
@@ -127,14 +108,16 @@ QueryResult::QueryResult(StatementType statement_type, StatementProperties prope
                          vector<Identifier> names_p, unique_ptr<ResultUnitCollection> units_p,
                          shared_ptr<ResultFormat> format_p, shared_ptr<ResultFormatGlobalState> format_state_p,
                          ClientProperties client_properties_p)
-    : BaseQueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, std::move(properties), std::move(types_p),
-                      std::move(names_p)),
+    : BaseQueryResult(statement_type, std::move(properties), std::move(types_p), std::move(names_p)),
       client_properties(std::move(client_properties_p)), format(std::move(format_p)),
       format_state(std::move(format_state_p)), unit_collection(std::move(units_p)) {
 	D_ASSERT(format && format_state && unit_collection);
 }
 
-QueryResult::QueryResult(ErrorData error) : QueryResult(QueryResultType::MATERIALIZED_RESULT, std::move(error)) {
+QueryResult::QueryResult(ErrorData error)
+    : BaseQueryResult(std::move(error)),
+      client_properties("UTC", ArrowOffsetSize::REGULAR, false, false, false, ArrowFormatVersion::V1_0, nullptr),
+      format(ResultFormat::Chunk()) {
 }
 
 QueryResult::~QueryResult() {
@@ -440,7 +423,7 @@ void QueryResult::HandleFetchFailure(ClientContextLock &lock, ErrorData error) {
 	context->CleanupInternal(lock, this, invalidate_query);
 }
 
-unique_ptr<DataChunk> QueryResult::FetchInternal() {
+unique_ptr<DataChunk> QueryResult::FetchRaw() {
 	Complete();
 	if (HasError()) {
 		throw InvalidInputException("Attempting to fetch from an unsuccessful query result\nError: %s", GetError());
@@ -463,10 +446,6 @@ unique_ptr<DataChunk> QueryResult::FetchInternal() {
 		return nullptr;
 	}
 	return result;
-}
-
-unique_ptr<DataChunk> QueryResult::FetchRaw() {
-	return FetchInternal();
 }
 
 //===--------------------------------------------------------------------===//

@@ -5146,16 +5146,25 @@ typedef struct _duckdb_v2_arrow_exporter {
  * closes the query and frees the connection's live-result slot as `duckdb_v2_result_destroy()` would, so the connection
  * can run its next query.
  *
- * The stream's `get_next` drives the result, waiting internally until a batch is ready, and gathers DuckDB chunks into
- * one Arrow array of up to `batch_size` rows. The Arrow schema and the extension type map are built and cached here,
- * while the query's transaction is still active, because building them can run extension populate-schema callbacks and
- * read ENUM dictionaries. `get_schema` returns a copy of the cached schema and never touches the catalog.
+ * The rows are converted by the worker threads that produce them: the result is asked for in the Arrow format, so
+ * `get_next` only pops a record batch the engine already built, waiting internally until one is ready. A batch holds up
+ * to `batch_size` rows, and is shorter at a row-group boundary and at the end of a producer's input, so `batch_size` is
+ * a target rather than a guarantee. Batches that are ready but not yet taken stay under `max_streaming_buffer_size`,
+ * and each engine thread may hold, beyond that, the batches it is still building or handing over from its current
+ * chunk.
  *
- * A result that has already yielded some chunks is allowed and produces a stream over the remaining rows.
+ * The Arrow schema is built and cached here, while the query's transaction is still active, because building it can run
+ * extension populate-schema callbacks and read ENUM dictionaries. `get_schema` returns a copy of the cached schema and
+ * never touches the catalog.
+ *
+ * This must be called before the result has yielded anything. A result that has already produced a chunk, or that has
+ * already been stepped into its streaming phase, is rejected with an invalid-input error: its rows are committed to
+ * chunks by then. Such a result is still consumed.
  *
  * If the statement expanded into a group whose row-producing fragment has not started yet, this call steps the result
  * far enough to cache the schema, which may block briefly. No rows are lost, since none are produced before that
- * fragment is prepared. For an ordinary statement nothing executes here.
+ * fragment is prepared. For an ordinary statement nothing executes here: the format takes effect on the first
+ * `get_next`.
  *
  * The result is consumed on every path that reaches the engine, including failures. Only a null-argument rejection
  * leaves it intact. `out_stream` is untouched unless the call succeeds.

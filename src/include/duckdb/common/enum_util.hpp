@@ -458,8 +458,6 @@ enum class QueryResultMemoryType : uint8_t;
 
 enum class QueryResultState : uint8_t;
 
-enum class QueryResultType : uint8_t;
-
 enum class RecoveryMode : uint8_t;
 
 enum class RecursiveCTEPipelineMetricType : uint8_t;
@@ -1291,9 +1289,6 @@ const char* EnumUtil::ToChars<QueryResultMemoryType>(QueryResultMemoryType value
 
 template<>
 const char* EnumUtil::ToChars<QueryResultState>(QueryResultState value);
-
-template<>
-const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value);
 
 template<>
 const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value);
@@ -2222,9 +2217,6 @@ QueryResultMemoryType EnumUtil::FromString<QueryResultMemoryType>(const char *va
 
 template<>
 QueryResultState EnumUtil::FromString<QueryResultState>(const char *value);
-
-template<>
-QueryResultType EnumUtil::FromString<QueryResultType>(const char *value);
 
 template<>
 RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value);

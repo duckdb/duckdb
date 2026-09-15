@@ -68,7 +68,8 @@ struct PendingStatementWrapper {
 
 struct ArrowResultWrapper {
 	unique_ptr<QueryResult> result;
-	unique_ptr<DataChunk> current_chunk;
+	//! Read once, before the record batches are handed out: fetching them empties the collection
+	idx_t rows_changed = 0;
 };
 
 struct AppenderWrapper {
