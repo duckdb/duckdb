@@ -376,6 +376,8 @@ enum class OperatorFinalResultType : uint8_t;
 
 enum class OperatorFinalizeResultType : uint8_t;
 
+enum class OperatorMatcherMode : uint8_t;
+
 enum class OperatorResultType : uint8_t;
 
 enum class OptimizerType : uint32_t;
@@ -1162,6 +1164,9 @@ const char* EnumUtil::ToChars<OperatorFinalResultType>(OperatorFinalResultType v
 
 template<>
 const char* EnumUtil::ToChars<OperatorFinalizeResultType>(OperatorFinalizeResultType value);
+
+template<>
+const char* EnumUtil::ToChars<OperatorMatcherMode>(OperatorMatcherMode value);
 
 template<>
 const char* EnumUtil::ToChars<OperatorResultType>(OperatorResultType value);
@@ -2084,6 +2089,9 @@ OperatorFinalResultType EnumUtil::FromString<OperatorFinalResultType>(const char
 
 template<>
 OperatorFinalizeResultType EnumUtil::FromString<OperatorFinalizeResultType>(const char *value);
+
+template<>
+OperatorMatcherMode EnumUtil::FromString<OperatorMatcherMode>(const char *value);
 
 template<>
 OperatorResultType EnumUtil::FromString<OperatorResultType>(const char *value);
