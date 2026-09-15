@@ -288,6 +288,8 @@ enum class IndexAppendMode : uint8_t;
 
 enum class IndexBindState : uint8_t;
 
+enum class IndexCheckpointMode : uint8_t;
+
 enum class IndexConstraintType : uint8_t;
 
 enum class IndexDeltaType : uint8_t;
@@ -1028,6 +1030,9 @@ const char* EnumUtil::ToChars<IndexAppendMode>(IndexAppendMode value);
 
 template<>
 const char* EnumUtil::ToChars<IndexBindState>(IndexBindState value);
+
+template<>
+const char* EnumUtil::ToChars<IndexCheckpointMode>(IndexCheckpointMode value);
 
 template<>
 const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value);
@@ -1947,6 +1952,9 @@ IndexAppendMode EnumUtil::FromString<IndexAppendMode>(const char *value);
 
 template<>
 IndexBindState EnumUtil::FromString<IndexBindState>(const char *value);
+
+template<>
+IndexCheckpointMode EnumUtil::FromString<IndexCheckpointMode>(const char *value);
 
 template<>
 IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value);

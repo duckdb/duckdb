@@ -225,6 +225,7 @@
 #include "duckdb/storage/caching_mode.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache_block_state.hpp"
+#include "duckdb/storage/index.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
@@ -3055,6 +3056,24 @@ const char* EnumUtil::ToChars<IndexBindState>(IndexBindState value) {
 template<>
 IndexBindState EnumUtil::FromString<IndexBindState>(const char *value) {
 	return static_cast<IndexBindState>(StringUtil::StringToEnum(GetIndexBindStateValues(), 4, "IndexBindState", value));
+}
+
+const StringUtil::EnumStringLiteral *GetIndexCheckpointModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(IndexCheckpointMode::IMMEDIATE), "IMMEDIATE" },
+		{ static_cast<uint32_t>(IndexCheckpointMode::DEFERRED), "DEFERRED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<IndexCheckpointMode>(IndexCheckpointMode value) {
+	return StringUtil::EnumToString(GetIndexCheckpointModeValues(), 2, "IndexCheckpointMode", static_cast<uint32_t>(value));
+}
+
+template<>
+IndexCheckpointMode EnumUtil::FromString<IndexCheckpointMode>(const char *value) {
+	return static_cast<IndexCheckpointMode>(StringUtil::StringToEnum(GetIndexCheckpointModeValues(), 2, "IndexCheckpointMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetIndexConstraintTypeValues() {
