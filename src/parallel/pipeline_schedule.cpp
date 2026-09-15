@@ -215,26 +215,19 @@ unique_ptr<PipelineSchedule> BuildPipelineSchedule(const vector<shared_ptr<MetaP
 		}
 	}
 
-	// Meta-pipeline dependencies order their execute stages directly.
-	for (auto &meta_pipeline : meta_pipelines) {
-		for (auto &entry : meta_pipeline->GetDependencies()) {
-			auto pipeline_entry = stage_map.find(entry.first.get());
-			if (pipeline_entry == stage_map.end()) {
+	// Dependencies within a MetaPipeline order their execute stages directly.
+	for (auto &entry : stage_map) {
+		for (auto &intra_dependency : entry.first.get().GetIntraDependencies()) {
+			auto dep = intra_dependency.pipeline.lock();
+			D_ASSERT(dep);
+			auto dependency_entry = stage_map.find(*dep);
+			if (dependency_entry == stage_map.end()) {
 				if (!allow_missing_meta_pipelines) {
-					throw InternalException("Missing pipeline in meta-pipeline dependency");
+					throw InternalException("Missing dependency pipeline in meta-pipeline dependency");
 				}
 				continue;
 			}
-			for (auto &dependency : entry.second) {
-				auto dependency_entry = stage_map.find(dependency.pipeline.get());
-				if (dependency_entry == stage_map.end()) {
-					if (!allow_missing_meta_pipelines) {
-						throw InternalException("Missing dependency pipeline in meta-pipeline dependency");
-					}
-					continue;
-				}
-				AddDependency(*result, pipeline_entry->second.execute, dependency_entry->second.execute);
-			}
+			AddDependency(*result, entry.second.execute, dependency_entry->second.execute);
 		}
 	}
 

@@ -57,7 +57,10 @@ class SimpleBufferedData;
 class BufferedData;
 struct ClientData;
 class ClientContextState;
+class Connection;
+class PhysicalTransaction;
 class RegisteredStateManager;
+struct TransactionInfo;
 
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
@@ -94,6 +97,8 @@ class ClientContext : public enable_shared_from_this<ClientContext> {
 	friend class BatchedBufferedData; // ExecuteTaskInternal
 	friend class StreamQueryResult;   // LockContext
 	friend class ConnectionManager;
+	friend class Connection;
+	friend class PhysicalTransaction;
 
 public:
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
@@ -249,7 +254,7 @@ public:
 	DUCKDB_API SettingLookupResult TryGetCurrentUserSetting(idx_t setting_index, Value &result) const;
 
 	//! Returns the parser options for this client context
-	DUCKDB_API ParserOptions GetParserOptions() const;
+	DUCKDB_API ParserOptions GetParserOptions();
 
 	//! Whether or not the given result object (streaming query result or pending query result) is active
 	DUCKDB_API bool IsActiveResult(ClientContextLock &lock, BaseQueryResult &result);
@@ -281,6 +286,11 @@ public:
 	DUCKDB_API LogicalType ParseLogicalType(const string &type);
 
 private:
+	//! Runs a transaction statement without going through the local query processing pipeline.
+	void RunTransactionStatement(const TransactionInfo &info);
+	//! Same as RunTransactionStatement, but does not obtain a lock or route CONNECT statements.
+	void RunTransactionStatementInternal(const TransactionInfo &info);
+
 	//! Issues a query to the database and returns a Pending Query Result
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                                    const PendingQueryParameters &parameters, bool verify = true);

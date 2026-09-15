@@ -161,7 +161,7 @@ struct tpch_append_information {
 			return;
 		}
 		FlushChunk();
-		TransactionData transaction_data(0, 0);
+		auto transaction_data = TransactionData::Unversioned();
 		auto &row_collection = *optimistic_collection->collection;
 		row_collection.FinalizeAppend(transaction_data, append_state);
 		finalized = true;
@@ -1365,9 +1365,6 @@ private:
 				parallel_work_offset++;
 			}
 			executor.WorkOnTasks();
-			if (executor.HasError()) {
-				executor.ThrowError();
-			}
 			for (idx_t appender_idx = 0; appender_idx < new_appenders.size(); appender_idx++) {
 				auto work_item_idx = parallel_work_offset - new_appenders.size() + appender_idx;
 				finished_appenders.push_back(make_uniq<FinishedDBGenAppender>(

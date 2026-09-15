@@ -229,14 +229,16 @@ public:
 	static void WriteString(ColumnSegment &segment, string_t string, block_id_t &result_block, int32_t &result_offset);
 	static void WriteStringMemory(ColumnSegment &segment, string_t string, block_id_t &result_block,
 	                              int32_t &result_offset);
-	static string_t ReadOverflowString(ColumnSegment &segment, Vector &result, block_id_t block, int32_t offset);
+	static string_t ReadOverflowString(const QueryContext &context, ColumnSegment &segment, Vector &result,
+	                                   block_id_t block, int32_t offset);
 	static string_t ReadString(data_ptr_t target, int32_t offset, uint32_t string_length);
 	static string_t ReadStringWithLength(data_ptr_t target, int32_t offset);
 	static void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
 	static void ReadStringMarker(data_ptr_t target, block_id_t &block_id, int32_t &offset);
 
-	inline static string_t FetchStringFromDict(ColumnSegment &segment, uint32_t dict_end_offset, Vector &result,
-	                                           data_ptr_t base_ptr, int32_t dict_offset, uint32_t string_length) {
+	inline static string_t FetchStringFromDict(const QueryContext &context, ColumnSegment &segment,
+	                                           uint32_t dict_end_offset, Vector &result, data_ptr_t base_ptr,
+	                                           int32_t dict_offset, uint32_t string_length) {
 		D_ASSERT(dict_offset <= NumericCast<int32_t>(segment.GetBlockSize()));
 		if (DUCKDB_LIKELY(dict_offset >= 0)) {
 			// regular string - fetch from dictionary
@@ -260,7 +262,7 @@ public:
 			int32_t offset;
 			ReadStringMarker(base_ptr + dict_end_offset - AbsValue<int32_t>(dict_offset), block_id, offset);
 
-			return ReadOverflowString(segment, result, block_id, offset);
+			return ReadOverflowString(context, segment, result, block_id, offset);
 		}
 	}
 

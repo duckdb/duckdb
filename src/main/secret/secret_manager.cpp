@@ -1,4 +1,5 @@
 #include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/common/common.hpp"
@@ -557,6 +558,20 @@ vector<SecretType> SecretManager::AllSecretTypes() {
 
 	for (const auto &secret : secret_types) {
 		result.push_back(secret.second);
+	}
+
+	return result;
+}
+
+vector<CreateSecretFunction> SecretManager::AllSecretFunctions() {
+	unique_lock<mutex> lck(manager_lock);
+	vector<CreateSecretFunction> result;
+
+	for (auto &secret_set : secret_functions) {
+		auto &inner_functions = secret_set.second.GetFunctions();
+		for (auto &func_pair : inner_functions) {
+			result.push_back(func_pair.second);
+		}
 	}
 
 	return result;

@@ -1754,6 +1754,7 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
+	case LogicalTypeId::GEOMETRY:
 		return "'" + ToString() + "'::" + type_.ToString();
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::ENUM: {
@@ -1764,15 +1765,27 @@ string Value::ToSQLString() const {
 		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
 	}
 	case LogicalTypeId::VARIANT: {
-		string ret = "VARIANT(";
 		Vector tmp(*this, count_t(1));
 		RecursiveUnifiedVectorFormat format;
 		Vector::RecursiveToUnifiedFormat(tmp, format);
 		UnifiedVariantVectorData vector_data(format);
 		auto val = VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
-		ret += val.ToString();
-		ret += ")";
-		return ret;
+		if (val.type().id() == LogicalTypeId::STRUCT) {
+			child_list_t<Value> children;
+			auto &values = StructValue::GetChildren(val);
+			for (idx_t i = 0; i < values.size(); i++) {
+				children.emplace_back(StructType::GetChildName(val.type(), i),
+				                      values[i].DefaultCastAs(LogicalType::VARIANT()));
+			}
+			val = Value::STRUCT(std::move(children));
+			return "CAST(" + val.ToSQLString() + " AS VARIANT)";
+		}
+		if (val.type().id() == LogicalTypeId::LIST) {
+			val = Value::LIST(LogicalType::VARIANT(), ListValue::GetChildren(val));
+			return "CAST(" + val.ToSQLString() + " AS VARIANT)";
+		}
+		// Preserve the payload's type as well as its value (e.g. SMALLINT versus INTEGER).
+		return "CAST(CAST(" + val.ToSQLString() + " AS " + val.type().ToString() + ") AS VARIANT)";
 	}
 	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::STRUCT: {
@@ -1801,12 +1814,17 @@ string Value::ToSQLString() const {
 		return ret;
 	}
 	case LogicalTypeId::FLOAT:
-		if (!FloatIsFinite(FloatValue::Get(*this))) {
+		if (!FloatIsFinite(FloatValue::Get(*this)) ||
+		    (FloatValue::Get(*this) == 0 && std::signbit(FloatValue::Get(*this)))) {
 			return "'" + ToString() + "'::" + type_.ToString();
 		}
 		return ToString();
 	case LogicalTypeId::DOUBLE: {
 		double val = DoubleValue::Get(*this);
+		// A numeric -0.0 literal is parsed as DECIMAL, losing the floating-point sign.
+		if (val == 0 && std::signbit(val)) {
+			return "'" + ToString() + "'::" + type_.ToString();
+		}
 		if (!DoubleIsFinite(val)) {
 			if (!Value::IsNan(val)) {
 				// to infinity and beyond

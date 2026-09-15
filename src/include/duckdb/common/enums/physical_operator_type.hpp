@@ -133,6 +133,8 @@ enum class PhysicalOperatorType : uint8_t {
 	// Physical-only recursive CTE specialization. Keep appended to preserve existing enum values.
 	RECURSIVE_KEY_JOIN,
 	SECURE_VIEW,
+	//! Source of a MERGE INTO action pipeline. Keep appended to preserve existing enum values.
+	MERGE_ACTION_SOURCE,
 };
 
 string PhysicalOperatorToString(PhysicalOperatorType type);

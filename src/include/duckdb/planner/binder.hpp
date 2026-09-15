@@ -360,6 +360,8 @@ public:
 	static void BindSchemaOrCatalog(ClientContext &context, QualifiedName &qualified_name);
 
 	void BindLogicalType(LogicalType &type);
+	//! Resolve a type expression into a concrete type
+	LogicalType BindLogicalType(const ParsedExpression &type_expr);
 
 	optional_ptr<Binding> GetMatchingBinding(const Identifier &table_name, const Identifier &column_name,
 	                                         ErrorData &error);
@@ -645,8 +647,6 @@ private:
 
 	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const Identifier &schema_name,
 	                                         bool default_schema_precedence = false);
-
-	LogicalType BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &type_expr);
 
 	BoundStatement BindSelectNode(SelectNode &statement, BoundStatement from_table);
 

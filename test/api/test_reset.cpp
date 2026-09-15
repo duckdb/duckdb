@@ -4,7 +4,7 @@
 #include "duckdb/common/enums/dialect_compatibility_mode.hpp"
 #include "duckdb/common/enums/table_function_identifier_conversion.hpp"
 #include "duckdb/common/enums/show_behavior.hpp"
-#include "duckdb/parser/dialect_extension.hpp"
+#include "duckdb/parser/peg/dialect_extension.hpp"
 #include "test_helpers.hpp"
 
 #include <iostream>
@@ -91,7 +91,6 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"file_search_path", {"test"}},
 	    {"force_compression", {"uncompressed", "uncompressed"}},
 	    {"home_directory", {"test"}},
-	    {"default_io_mode", {"MMAP"}},
 	    {"allow_extensions_metadata_mismatch", {"true"}},
 	    {"extension_directory", {"test"}},
 	    {"extension_repository_directory", {"test"}},
@@ -146,7 +145,6 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"storage_block_prefetch", {"always_prefetch"}},
 	    {"operator_memory_limit", {"4.0 GiB"}},
 	    {"pin_threads", {"off"}},
-	    {"current_dialect", {"test"}},
 	    {"current_transaction_invalidation_policy", {"SYNTACTIC_ERRORS_DO_NOT_INVALIDATE"}},
 	    {"default_transaction_invalidation_policy", {"SYNTACTIC_ERRORS_DO_NOT_INVALIDATE"}},
 	    {"checkpoint_on_detach", {"ENABLED"}},
@@ -154,7 +152,6 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"enable_caching_operators", {false}},
 	    {"enable_optimistic_write", {false}},
 	    {"enable_optimizer", {false}},
-	    {"parallelize_sequential_sources", {false}},
 	    {"initial_column_segment_size", {4096}},
 	    {"delim_join_as_cte", {false}}};
 	// Every option that's not excluded has to be part of this map
@@ -183,10 +180,12 @@ bool OptionIsExcludedFromTest(const string &name) {
 	static unordered_set<string> excluded_options = {
 	    "__delta_only_variant_encoding_enabled",
 	    "access_mode",
+	    "active_grammar_extensions",
 	    "allowed_configs",
 	    "allowed_directories",
 	    "allowed_paths",
 	    "schema",
+	    "current_dialect",
 	    "search_path",
 	    "debug_window_mode",
 	    "experimental_parallel_csv",
@@ -203,7 +202,8 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "temp_file_encryption",
 	    "enable_object_cache",
 	    "force_variant_shredding",
-	    "streaming_buffer_size",
+	    "max_streaming_buffer_size",
+	    "streaming_buffer_size", // alias of max_streaming_buffer_size
 	    "log_query_path",
 	    "password",
 	    "username",
@@ -212,9 +212,6 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "external_threads", // tested in test_threads.cpp
 	    "profiling_output", // just an alias
 	    "duckdb_api",
-	    "configure_profiling",
-	    "configure_metrics",
-	    "custom_profiling_settings",
 	    "custom_user_agent",
 	    "default_block_size",
 	    "index_scan_percentage",
@@ -232,7 +229,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "debug_verification_mode",
 	    "standard_vector_size",
 	    "warnings_as_errors", // requires logging to be enabled
-	    "debug_heap_based_parser",
+	    "heap_based_parser",
 	    "block_allocator_memory"}; // cant reduce
 	return excluded_options.count(name) == 1;
 }
@@ -266,7 +263,6 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 	// Create a connection
 	DBConfig config;
 	config.options.load_extensions = false;
-	DialectExtension::Register(config, DialectExtension("test"));
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 	con.Query("BEGIN TRANSACTION");

@@ -511,6 +511,9 @@ public:
 	                OnEntryNotFound if_not_found);
 
 private:
+	//! Look up an entry within this catalog and handle autoloading and errors
+	optional_ptr<CatalogEntry> GetEntryInCatalog(CatalogEntryRetriever &retriever, const EntryLookupInfo &lookup_info,
+	                                             OnEntryNotFound if_not_found);
 	//! Lookup an entry in the schema (taken from the lookup_info), returning the entry and schema if they exist
 	virtual CatalogEntryLookup TryLookupEntryInternal(CatalogTransaction transaction,
 	                                                  const EntryLookupInfo &lookup_info);
