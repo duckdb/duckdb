@@ -96,6 +96,7 @@ DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.ColumnList", Colu
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.CommonTableExpressionMap", CommonTableExpressionMap);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.ComparisonExpressionTail", ComparisonExpressionTail);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.ConstraintColumnDefinition", ConstraintColumnDefinition);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.ConstraintTiming", ConstraintTiming);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.CopyDatabaseType", CopyDatabaseType);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.CreateTableColumnElement", CreateTableColumnElement);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.CreateTableDefinition", CreateTableDefinition);
@@ -1664,6 +1665,16 @@ public:
 	                                                     GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizePrimaryKeyConstraintTrampoline(PEGTransformer &transformer,
 	                                                                               GeneratedTransformProcess &process);
+	static void InitializeConstraintTimingTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeConstraintTimingTrampoline(PEGTransformer &transformer,
+	                                                                           GeneratedTransformProcess &process);
+	static void InitializeImmediateConstraintTrampoline(PEGTransformer &transformer,
+	                                                    GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeImmediateConstraintTrampoline(PEGTransformer &transformer,
+	                                                                              GeneratedTransformProcess &process);
+	static void InitializeDeferredConstraintTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeDeferredConstraintTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
 	static void InitializeDefaultValueTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeDefaultValueTrampoline(PEGTransformer &transformer,
 	                                                                       GeneratedTransformProcess &process);
@@ -5146,10 +5157,20 @@ public:
 	static bool TransformNotNullColumnConstraint(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformUniqueConstraintInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
-	static ColumnConstraintEntry TransformUniqueConstraint(PEGTransformer &transformer);
+	static ColumnConstraintEntry TransformUniqueConstraint(PEGTransformer &transformer,
+	                                                       const optional<ConstraintTiming> &constraint_timing);
 	static unique_ptr<TransformResultValue> TransformPrimaryKeyConstraintInternal(PEGTransformer &transformer,
 	                                                                              ParseResult &parse_result);
-	static ColumnConstraintEntry TransformPrimaryKeyConstraint(PEGTransformer &transformer);
+	static ColumnConstraintEntry TransformPrimaryKeyConstraint(PEGTransformer &transformer,
+	                                                           const optional<ConstraintTiming> &constraint_timing);
+	static unique_ptr<TransformResultValue> TransformConstraintTimingInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformImmediateConstraintInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static ConstraintTiming TransformImmediateConstraint(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformDeferredConstraintInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static ConstraintTiming TransformDeferredConstraint(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformDefaultValueInternal(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
 	static ColumnConstraintEntry TransformDefaultValue(PEGTransformer &transformer,
@@ -5212,11 +5233,13 @@ public:
 	static unique_ptr<TransformResultValue> TransformTopPrimaryKeyConstraintInternal(PEGTransformer &transformer,
 	                                                                                 ParseResult &parse_result);
 	static unique_ptr<Constraint> TransformTopPrimaryKeyConstraint(PEGTransformer &transformer,
-	                                                               const vector<string> &column_id_list);
+	                                                               const vector<string> &column_id_list,
+	                                                               const optional<ConstraintTiming> &constraint_timing);
 	static unique_ptr<TransformResultValue> TransformTopUniqueConstraintInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<Constraint> TransformTopUniqueConstraint(PEGTransformer &transformer,
-	                                                           const vector<string> &column_id_list);
+	                                                           const vector<string> &column_id_list,
+	                                                           const optional<ConstraintTiming> &constraint_timing);
 	static unique_ptr<TransformResultValue> TransformTopForeignKeyConstraintInternal(PEGTransformer &transformer,
 	                                                                                 ParseResult &parse_result);
 	static unique_ptr<Constraint> TransformTopForeignKeyConstraint(PEGTransformer &transformer,
