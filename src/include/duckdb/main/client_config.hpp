@@ -65,7 +65,7 @@ struct ClientConfig {
 	vector<shared_ptr<ReplacementScan>> replacement_scans;
 
 	//! The maximum amount of memory to keep buffered in a streaming query result. Default: 10mb.
-	idx_t max_streaming_buffer_size = 10 * 1024 * 1024;
+	idx_t max_streaming_buffer_size = idx_t(10) * 1024 * 1024;
 
 	//! The maximum memory for query intermediates (sorts, hash tables) per connection (in bytes). Default: Global
 	//! memory limit.

@@ -1,6 +1,7 @@
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/function/table/arrow.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "fmt/format.h"
 
@@ -10,7 +11,6 @@ using duckdb::CClientArrowOptionsWrapper;
 using duckdb::Connection;
 using duckdb::DataChunk;
 using duckdb::LogicalType;
-using duckdb::MaterializedQueryResult;
 using duckdb::PreparedStatementWrapper;
 using duckdb::QueryResult;
 using duckdb::QueryResultType;
@@ -234,7 +234,7 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 		return DuckDBSuccess;
 	}
 	auto wrapper = reinterpret_cast<ArrowResultWrapper *>(result);
-	auto success = wrapper->result->TryFetch(wrapper->current_chunk, wrapper->result->GetErrorObject());
+	auto success = wrapper->result->TryFetchOrError(wrapper->current_chunk, wrapper->result->GetErrorObject());
 	if (!success) { // LCOV_EXCL_START
 		return DuckDBError;
 	} // LCOV_EXCL_STOP
@@ -254,11 +254,12 @@ void duckdb_result_arrow_array(duckdb_result result, duckdb_data_chunk chunk, du
 	}
 	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result.internal_data));
-	auto extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(
-	    *result_data.result->client_properties.client_context, result_data.result->GetTypes());
+	auto &client_properties = result_data.GetClientProperties();
+	auto extension_type_cast =
+	    duckdb::ArrowTypeExtensionData::GetExtensionTypes(*client_properties.client_context, result_data.GetTypes());
 
-	ArrowConverter::ToArrowArray(*dchunk, reinterpret_cast<ArrowArray *>(*out_array),
-	                             result_data.result->client_properties, extension_type_cast);
+	ArrowConverter::ToArrowArray(*dchunk, reinterpret_cast<ArrowArray *>(*out_array), client_properties,
+	                             extension_type_cast);
 }
 
 idx_t duckdb_arrow_row_count(duckdb_arrow result) {
@@ -326,9 +327,9 @@ duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_st
 	}
 	auto arrow_wrapper = new ArrowResultWrapper();
 	try {
-		auto result = wrapper->statement->Execute(wrapper->values, false);
+		auto result = wrapper->statement->Execute(wrapper->values);
 		D_ASSERT(result->GetResultType() == QueryResultType::MATERIALIZED_RESULT);
-		arrow_wrapper->result = duckdb::unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
+		arrow_wrapper->result = std::move(result);
 		*out_result = reinterpret_cast<duckdb_arrow>(arrow_wrapper);
 		return !arrow_wrapper->result->HasError() ? DuckDBSuccess : DuckDBError;
 	} catch (...) {
