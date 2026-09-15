@@ -21,7 +21,6 @@
 
 namespace duckdb {
 
-class ColumnDataCollection;
 class DataChunk;
 
 //! Per-query state of a format, built once when the format is settled.
@@ -65,9 +64,9 @@ struct ResultFormatContext {
 	ResultOrdering ordering = ResultOrdering::UNORDERED;
 };
 
-//! Turns the chunks a query produces into units. Every subclass declares Unit, Collection,
-//! GlobalState and a NAME. NAME is what the result's accessors and the stream constructors check
-//! against the settled format, and the only identity a unit has: a format defines its own unit type.
+//! Turns the chunks a query produces into units. Every subclass declares Unit, GlobalState and a
+//! NAME. NAME is what the result's accessors and the stream constructors check against the settled
+//! format, and the only identity a unit has: a format defines its own unit type.
 //! Append, IsFull and Finish run concurrently on worker threads that share the format object and the
 //! global state, so a format may mutate only its local state without synchronization
 class ResultFormat {
@@ -103,7 +102,6 @@ public:
 class ChunkFormat : public ResultFormat {
 public:
 	using Unit = DataChunk;
-	using Collection = ColumnDataCollection;
 	using GlobalState = ResultFormatGlobalState;
 	static constexpr const char *NAME = "chunk";
 
