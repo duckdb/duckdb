@@ -9,6 +9,8 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
+#include <cstring>
+
 namespace duckdb {
 
 BaseStatistics NumericStats::CreateUnknown(LogicalType type) {
@@ -322,7 +324,22 @@ bool NumericStats::ConstantsCoverRange(const BaseStatistics &stats, array_ptr<co
 }
 
 bool NumericStats::IsConstant(const BaseStatistics &stats) {
-	return NumericStats::Max(stats) <= NumericStats::Min(stats);
+	if (NumericStats::Max(stats) > NumericStats::Min(stats)) {
+		return false;
+	}
+	// IEEE: +0 == -0, so also require identical bits for floats.
+	auto physical_type = stats.GetType().InternalType();
+	if (physical_type == PhysicalType::FLOAT) {
+		auto min = GetMinUnsafe<float>(stats);
+		auto max = GetMaxUnsafe<float>(stats);
+		return memcmp(&min, &max, sizeof(float)) == 0;
+	}
+	if (physical_type == PhysicalType::DOUBLE) {
+		auto min = GetMinUnsafe<double>(stats);
+		auto max = GetMaxUnsafe<double>(stats);
+		return memcmp(&min, &max, sizeof(double)) == 0;
+	}
+	return true;
 }
 
 void SetNumericValueInternal(const Value &input, const LogicalType &type, NumericValueUnion &val, bool &has_val) {
