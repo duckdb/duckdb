@@ -1890,10 +1890,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 				filter_pushdown->FinalizeFilters(context, *this, std::move(filter_min_max), &ht, true, false,
 				                                 sink.global_filter_state.get());
 			}
-			// The Bloom filter published to the probe side is captured once, after the first build round
-			// finishes. For an external join, later rounds load additional partitions that PrepareBloomFilterForFinalize
-			// (which only sizes/covers the round currently in data_collection) would never account for, so build it
-			// eagerly here from the complete sink_collection across all partitions/rounds (see #25702).
+			// Build the Bloom filter from all build rounds before it is published to the probe side.
 			ht.BuildBloomFilterFromSinkCollection();
 			ht.PrepareBloomFilterForFinalize();
 			D_ASSERT(sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);

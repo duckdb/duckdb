@@ -986,7 +986,7 @@ static void InsertHashesLoop(unsafe_optional_ptr<atomic<ht_entry_t>> entries, Ve
 void JoinHashTable::InsertHashes(Vector &hashes_v, TupleDataChunkState &chunk_state, InsertState &insert_state,
                                  bool parallel) {
 	// Insert Hashes into the BF
-	if (bloom_filter.IsInitialized()) {
+	if (bloom_filter.IsInitialized() && !bloom_filter_built_from_sink) {
 		bloom_filter.InsertHashes(hashes_v);
 	}
 	auto atomic_entries = GetAtomicEntries();
@@ -1102,6 +1102,7 @@ void JoinHashTable::PrepareBloomFilterForFinalize() {
 	bloom_filter.Reset();
 	bloom_filter_init_count = actual_init_count;
 	bloom_filter.Initialize(context, bloom_filter_init_count);
+	bloom_filter_built_from_sink = false;
 }
 
 void JoinHashTable::BuildBloomFilterFromSinkCollection() {
@@ -1135,6 +1136,7 @@ void JoinHashTable::BuildBloomFilterFromSinkCollection() {
 			bloom_filter.InsertHashes(hashes);
 		} while (iterator.Next());
 	}
+	bloom_filter_built_from_sink = true;
 }
 
 void JoinHashTable::InitializePointerTable(idx_t entry_idx_from, idx_t entry_idx_to) {
@@ -2616,6 +2618,7 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	should_build_bloom_filter = false;
 	bloom_filter.Reset();
 	bloom_filter_init_count = 0;
+	bloom_filter_built_from_sink = false;
 	prefix_range_filter.reset();
 	should_build_prefix_range_filter = false;
 	ResetMarkJoinInfo(*this);

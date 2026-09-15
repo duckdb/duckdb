@@ -499,6 +499,8 @@ private:
 	BloomFilter bloom_filter;
 	bool should_build_bloom_filter = false;
 	idx_t bloom_filter_init_count = 0;
+	//! Set once BuildBloomFilterFromSinkCollection has populated the filter from every build round.
+	bool bloom_filter_built_from_sink = false;
 
 	unique_ptr<PrefixRangeFilter> prefix_range_filter;
 	bool should_build_prefix_range_filter = false;
@@ -584,10 +586,7 @@ public:
 		this->should_build_bloom_filter = should_build;
 	}
 	void PrepareBloomFilterForFinalize();
-	//! For an external hash join, eagerly builds the Bloom filter from the entire (radix-partitioned)
-	//! sink_collection, i.e. from every build round, not just the round that is currently loaded into
-	//! data_collection. This must run before the filter is published to the probe side, otherwise rows
-	//! whose key lives in a not-yet-built partition are wrongly filtered out (see #25702).
+	//! Eagerly builds the Bloom filter from every partition of sink_collection, not just the current round.
 	void BuildBloomFilterFromSinkCollection();
 
 	BloomFilter &GetBloomFilter() {
