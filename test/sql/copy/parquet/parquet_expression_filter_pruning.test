@@ -72,11 +72,12 @@ EXPLAIN SELECT count(*) FROM '{TEST_DIR}/expr_prune_int.parquet' WHERE a * 4 + 4
 physical_plan	<REGEX>:.*EMPTY_RESULT.*
 
 # d + d < 20479.5  <=>  d < 10239.75  -> first row group (d twice -> not foldable)
+# These generated FLOAT/DOUBLE files contain no NaNs, so finite bounds can be explicitly enabled.
 statement ok
 CALL enable_logging('PhysicalOperator')
 
 query I
-SELECT count(*) FROM '{TEST_DIR}/expr_prune_double.parquet' WHERE d + d < 20479.5e0
+SELECT count(*) FROM read_parquet('{TEST_DIR}/expr_prune_double.parquet', can_have_nan=false) WHERE d + d < 20479.5e0
 ----
 10240
 
@@ -97,7 +98,7 @@ statement ok
 CALL enable_logging('PhysicalOperator')
 
 query I
-SELECT count(*) FROM '{TEST_DIR}/expr_prune_double.parquet' WHERE abs(d) = 42.0
+SELECT count(*) FROM read_parquet('{TEST_DIR}/expr_prune_double.parquet', can_have_nan=false) WHERE abs(d) = 42.0
 ----
 1
 
@@ -117,7 +118,7 @@ statement ok
 CALL enable_logging('PhysicalOperator')
 
 query I
-SELECT count(*) FROM '{TEST_DIR}/expr_prune_float.parquet' WHERE abs(f) = 42.0::FLOAT
+SELECT count(*) FROM read_parquet('{TEST_DIR}/expr_prune_float.parquet', can_have_nan=false) WHERE abs(f) = 42.0::FLOAT
 ----
 1
 
@@ -133,7 +134,36 @@ SkipRowGroup	9
 statement ok
 CALL truncate_duckdb_logs()
 
-# NaN at row 95000 -> its row group has no min/max stats and is never pruned; the others are pruned
+# Default NaN-safe reads still prune finite equality and lower-range filters.
+foreach type double float
+
+foreach predicate x=42 x<1
+
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/expr_prune_{type}.parquet') t(x) WHERE {predicate}
+----
+1
+
+statement ok
+CALL disable_logging()
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+ReadRowGroup	1
+SkipRowGroup	9
+
+statement ok
+CALL truncate_duckdb_logs()
+
+endloop
+
+endloop
+
+# NaN at row 95000 has no min/max stats; the other groups' finite maxima cannot rule out NaNs either.
 statement ok
 CALL enable_logging('PhysicalOperator')
 
@@ -148,14 +178,12 @@ CALL disable_logging()
 query II
 SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
 ----
-ReadRowGroup	1
-SkipRowGroup	9
+ReadRowGroup	10
 
 statement ok
 CALL truncate_duckdb_logs()
 
-# can_have_nan=true disables stats pruning entirely (NaN compares larger than anything),
-# but the NaN row must still survive the filter
+# Explicit can_have_nan=true has the same behaviour as the default for this upper-range predicate.
 statement ok
 CALL enable_logging('PhysicalOperator')
 

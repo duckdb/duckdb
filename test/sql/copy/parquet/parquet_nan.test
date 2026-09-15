@@ -11,28 +11,32 @@ select * from parquet_scan('{DATA_DIR}/parquet-testing/nan-float.parquet') order
 2.5	baz	1
 inf	bar	0
 
+foreach source parquet_scan('{DATA_DIR}/parquet-testing/arrow_nan.parquet') parquet_scan('{DATA_DIR}/parquet-testing/arrow_nan.parquet',can_have_nan=true)
+
 query II
-select * from parquet_scan('{DATA_DIR}/parquet-testing/arrow_nan.parquet', can_have_nan := true) where f='nan';
+select * from {source} where f='nan';
 ----
 nan	nan
 
 query II
-select * from parquet_scan('{DATA_DIR}/parquet-testing/arrow_nan.parquet', can_have_nan := true) where f>10;
+select * from {source} where f>10;
 ----
 nan	nan
 
 query II
-select * from parquet_scan('{DATA_DIR}/parquet-testing/arrow_nan.parquet', can_have_nan := true) where d='nan';
+select * from {source} where d='nan';
 ----
 nan	nan
 
 query II
-select * from parquet_scan('{DATA_DIR}/parquet-testing/arrow_nan.parquet', can_have_nan := true) where d>10;
+select * from {source} where d>10;
 ----
 nan	nan
 
 query II
 SELECT sum(isnan(f)::INT), sum(isnan(d)::INT)
-FROM parquet_scan('{DATA_DIR}/parquet-testing/arrow_nan.parquet', can_have_nan := true)
+FROM {source}
 ----
 1	1
+
+endloop

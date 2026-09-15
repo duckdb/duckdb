@@ -282,7 +282,9 @@ struct ParquetOptions {
 
 	vector<ParquetColumnDefinition> schema;
 	idx_t explicit_cardinality = 0;
-	bool can_have_nan = false; // if floats or doubles can contain NaN values
+	// Set false only when FLOAT/DOUBLE columns are known to contain no NaNs.
+	// The serialization default stays false for compatibility; new default scans explicitly serialize true.
+	bool can_have_nan = true;
 	ParquetPrefetchStrategyOption prefetch_strategy = ParquetPrefetchStrategyOption::AUTO;
 	StringColumnReader::Utf8ValidationOption utf8_validation_option =
 	    StringColumnReader::Utf8ValidationOption::STRICT_UTF8;
