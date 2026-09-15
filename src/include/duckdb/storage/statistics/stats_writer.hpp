@@ -71,6 +71,11 @@ struct StatsWriter : public BaseStatsWriter {
 	}
 
 	void UpdateMinMax(T new_value) {
+		// Assign initial values to min and max if they are not set
+		if (GreaterThan::Operation(min, max)) {
+			min = max = new_value;
+			return;
+		}
 		min = LessThan::Operation(new_value, min) ? new_value : min;
 		max = GreaterThan::Operation(new_value, max) ? new_value : max;
 	}
