@@ -66,6 +66,18 @@ SPECIAL_DISPATCH_RULES = {
         "cpp_type": "unique_ptr<SQLStatement>",
     },
 }
+IDENTIFIER_OR_KEYWORD_RULES = (
+    "PragmaName",
+    "TypeName",
+    "PlainIdentifier",
+    "QuotedIdentifier",
+    "ReservedKeyword",
+    "UnreservedKeyword",
+    "ColumnNameKeyword",
+    "FuncNameKeyword",
+    "TypeNameKeyword",
+    "SettingName",
+)
 TRAMPOLINE_START_BLOCK = (
     "\t//===--------------------------------------------------------------------===//\n"
     "\t// START GENERATED TRAMPOLINE RULES\n"
@@ -333,15 +345,19 @@ class UseGramPreviewEmitter:
         ]
 
     def emitted_ops_rules(self):
-        return list(SPECIAL_DISPATCH_RULES.keys()) + self.emitted_rules()
+        return list(SPECIAL_DISPATCH_RULES.keys()) + list(IDENTIFIER_OR_KEYWORD_RULES) + self.emitted_rules()
 
     def initialize_hook(self, rule_name):
+        if rule_name in IDENTIFIER_OR_KEYWORD_RULES:
+            return "InitializeIdentifierOrKeywordTrampoline"
         config = self.rule_config_entry(rule_name)
         if config is not None and config.init:
             return config.init
         return init_name(rule_name)
 
     def finalize_hook(self, rule_name):
+        if rule_name in IDENTIFIER_OR_KEYWORD_RULES:
+            return "FinalizeIdentifierOrKeywordTrampoline"
         config = self.rule_config_entry(rule_name)
         if config is not None and config.finalize:
             return config.finalize
@@ -357,6 +373,14 @@ class UseGramPreviewEmitter:
                 f"\tstatic unique_ptr<TransformResultValue> {finalize_name(rule_name)}(PEGTransformer &transformer, "
                 f"GeneratedTransformProcess &process);\n"
             )
+        lines.append(
+            "\tstatic void InitializeIdentifierOrKeywordTrampoline(PEGTransformer &transformer, "
+            "GeneratedTransformProcess &process);\n"
+        )
+        lines.append(
+            "\tstatic unique_ptr<TransformResultValue> "
+            "FinalizeIdentifierOrKeywordTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);\n"
+        )
         for rule_name in self.emitted_rules():
             if self.is_manual_rule(rule_name):
                 continue
@@ -582,6 +606,21 @@ class UseGramPreviewEmitter:
             lines.append(f"\treturn {typed_result_expr(cpp_type, 'result', True)};")
             lines.append("}")
             lines.append("")
+        lines.append(
+            "void PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline("
+            "PEGTransformer &transformer, GeneratedTransformProcess &process) {"
+        )
+        lines.append("\tprocess.ReserveChildSlots(0);")
+        lines.append("}")
+        lines.append("")
+        lines.append(
+            "unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline("
+            "PEGTransformer &transformer, GeneratedTransformProcess &process) {"
+        )
+        lines.append("\tauto result = TransformIdentifierOrKeyword(transformer, process.parse_result);")
+        lines.append(f"\treturn {typed_result_expr('string', 'result', False)};")
+        lines.append("}")
+        lines.append("")
         return lines
 
     def emit_rule(self, rule_name, ast):

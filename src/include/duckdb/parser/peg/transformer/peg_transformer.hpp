@@ -695,6 +695,10 @@ public:
 	static void InitializeStatementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeStatementTrampoline(PEGTransformer &transformer,
 	                                                                    GeneratedTransformProcess &process);
+	static void InitializeIdentifierOrKeywordTrampoline(PEGTransformer &transformer,
+	                                                    GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeIdentifierOrKeywordTrampoline(PEGTransformer &transformer,
+	                                                                              GeneratedTransformProcess &process);
 	static void InitializeAlterStatementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeAlterStatementTrampoline(PEGTransformer &transformer,
 	                                                                         GeneratedTransformProcess &process);
