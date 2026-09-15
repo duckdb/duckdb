@@ -59,7 +59,7 @@ public:
 	LocalStorage &GetLocalStorage();
 
 	void PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data, idx_t extra_data_size);
-	void PushAttach(AttachedDatabase &db);
+	void PushAttach(AttachedDatabase &db, optional_ptr<AttachedDatabase> replaced_database);
 
 	void SetModifications(DatabaseModificationType type) override;
 
