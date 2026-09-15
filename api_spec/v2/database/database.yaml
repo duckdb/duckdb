@@ -303,7 +303,7 @@ functions:
         kind: OUT
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
     return_type: ERROR
-  database_get_option:
+  database_get_option_by_name:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |

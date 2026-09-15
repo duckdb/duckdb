@@ -75,8 +75,9 @@ DUCKDB_V2_ERROR duckdb_v2_option_get_alias(duckdb_v2_option_handle option, idx_t
 // Context option getters: the connection's cascade, read from inside DuckDB
 // ---------------------------------------------------------------------------
 
-DUCKDB_V2_ERROR duckdb_v2_context_get_option(duckdb_v2_context_handle ctx, duckdb_v2_identifier_t name,
-                                             duckdb_v2_option_handle *out_option, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_context_get_option_by_name(duckdb_v2_context_handle ctx, duckdb_v2_identifier_t name,
+                                                     duckdb_v2_option_handle *out_option,
+                                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(name);
 	DUCKDB_CHECK_ARG(out_option);

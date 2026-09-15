@@ -1621,10 +1621,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_option_get_alias(duckdb_v2_option_handle 
 /*!
  * Reads a config option through a context.
  *
- * The context is a connection seen from inside DuckDB, so this reads the same cascade connection_get_option does: the
- * LOCAL override if the connection set one, otherwise the GLOBAL value, otherwise the static default. Aliases resolve
- * transparently, and an unknown name returns ERROR_INPUT_INVALID. The caller destroys the returned option. A context is
- * a read scope: options are written through a database or connection.
+ * The context is a connection seen from inside DuckDB, so this reads the same cascade connection_get_option_by_name
+ * does: the LOCAL override if the connection set one, otherwise the GLOBAL value, otherwise the static default. Aliases
+ * resolve transparently, and an unknown name returns ERROR_INPUT_INVALID. The caller destroys the returned option. A
+ * context is a read scope: options are written through a database or connection.
  *
  * history:
  * - stable: v2.0.0
@@ -1635,9 +1635,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_option_get_alias(duckdb_v2_option_handle 
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_option(duckdb_v2_context_handle ctx, duckdb_v2_identifier_t name,
-                                                          duckdb_v2_option_handle *out_option,
-                                                          duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_option_by_name(duckdb_v2_context_handle ctx,
+                                                                  duckdb_v2_identifier_t name,
+                                                                  duckdb_v2_option_handle *out_option,
+                                                                  duckdb_v2_error_info_handle *err);
 
 /*!
  * Returns the number of config options visible to this context.
@@ -2238,9 +2239,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_set_option(duckdb_v2_database_ha
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_get_option(duckdb_v2_database_handle db, duckdb_v2_identifier_t name,
-                                                           duckdb_v2_option_handle *out_option,
-                                                           duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_get_option_by_name(duckdb_v2_database_handle db,
+                                                                   duckdb_v2_identifier_t name,
+                                                                   duckdb_v2_option_handle *out_option,
+                                                                   duckdb_v2_error_info_handle *err);
 
 /*!
  * Returns the number of config options registered on the database.
@@ -5719,8 +5721,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_set_option(duckdb_v2_connectio
  *
  * Returns the option's effective setting at the connection's scope: the LOCAL override if this connection set one,
  * otherwise the GLOBAL value, otherwise the static default. The remaining fields are populated exactly as by
- * database_get_option. Aliases resolve transparently, and an unknown name returns ERROR_INPUT_INVALID. The caller
- * destroys the returned option.
+ * database_get_option_by_name. Aliases resolve transparently, and an unknown name returns ERROR_INPUT_INVALID. The
+ * caller destroys the returned option.
  *
  * history:
  * - stable: v2.0.0
@@ -5731,10 +5733,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_set_option(duckdb_v2_connectio
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_option(duckdb_v2_connection_handle conn,
-                                                             duckdb_v2_identifier_t name,
-                                                             duckdb_v2_option_handle *out_option,
-                                                             duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_option_by_name(duckdb_v2_connection_handle conn,
+                                                                     duckdb_v2_identifier_t name,
+                                                                     duckdb_v2_option_handle *out_option,
+                                                                     duckdb_v2_error_info_handle *err);
 
 /*!
  * Returns the number of config options visible to this connection.

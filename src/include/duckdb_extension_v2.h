@@ -134,11 +134,11 @@ typedef struct {
 	(duckdb_v2_connection_handle conn, duckdb_v2_logical_type_handle base_type, duckdb_v2_identifier_t alias_name,
 	 duckdb_v2_logical_type_handle *out_type, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_connection_destroy)(duckdb_v2_connection_handle *conn);
-	DUCKDB_V2_ERROR(*duckdb_v2_connection_get_option)
-	(duckdb_v2_connection_handle conn, duckdb_v2_identifier_t name, duckdb_v2_option_handle *out_option,
-	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_get_option_by_index)
 	(duckdb_v2_connection_handle conn, idx_t index, duckdb_v2_option_handle *out_option,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_get_option_by_name)
+	(duckdb_v2_connection_handle conn, duckdb_v2_identifier_t name, duckdb_v2_option_handle *out_option,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_get_option_count)
 	(duckdb_v2_connection_handle conn, idx_t *out_count, duckdb_v2_error_info_handle *err);
@@ -194,11 +194,11 @@ typedef struct {
 	DUCKDB_V2_ERROR (*duckdb_v2_database_destroy)(duckdb_v2_database_handle *db);
 	DUCKDB_V2_ERROR(*duckdb_v2_database_detach)
 	(duckdb_v2_database_handle db, duckdb_v2_str path, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_database_get_option)
-	(duckdb_v2_database_handle db, duckdb_v2_identifier_t name, duckdb_v2_option_handle *out_option,
-	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_database_get_option_by_index)
 	(duckdb_v2_database_handle db, idx_t index, duckdb_v2_option_handle *out_option, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_database_get_option_by_name)
+	(duckdb_v2_database_handle db, duckdb_v2_identifier_t name, duckdb_v2_option_handle *out_option,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_database_get_option_count)
 	(duckdb_v2_database_handle db, idx_t *out_count, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_database_set_option)
@@ -1335,11 +1335,11 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_attach_options_set)
 	(duckdb_v2_attach_options_handle options, duckdb_v2_identifier_t key, duckdb_v2_str setting,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_context_get_option)
-	(duckdb_v2_context_handle ctx, duckdb_v2_identifier_t name, duckdb_v2_option_handle *out_option,
-	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_context_get_option_by_index)
 	(duckdb_v2_context_handle ctx, idx_t index, duckdb_v2_option_handle *out_option, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_context_get_option_by_name)
+	(duckdb_v2_context_handle ctx, duckdb_v2_identifier_t name, duckdb_v2_option_handle *out_option,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_context_get_option_count)
 	(duckdb_v2_context_handle ctx, idx_t *out_count, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_database_set_default)
@@ -1385,8 +1385,8 @@ typedef struct {
 #define duckdb_v2_connection_create_type_from_text  duckdb_ext_api.duckdb_v2_connection_create_type_from_text
 #define duckdb_v2_connection_create_type_with_alias duckdb_ext_api.duckdb_v2_connection_create_type_with_alias
 #define duckdb_v2_connection_destroy                duckdb_ext_api.duckdb_v2_connection_destroy
-#define duckdb_v2_connection_get_option             duckdb_ext_api.duckdb_v2_connection_get_option
 #define duckdb_v2_connection_get_option_by_index    duckdb_ext_api.duckdb_v2_connection_get_option_by_index
+#define duckdb_v2_connection_get_option_by_name     duckdb_ext_api.duckdb_v2_connection_get_option_by_name
 #define duckdb_v2_connection_get_option_count       duckdb_ext_api.duckdb_v2_connection_get_option_count
 #define duckdb_v2_connection_interrupt              duckdb_ext_api.duckdb_v2_connection_interrupt
 #define duckdb_v2_connection_query_progress         duckdb_ext_api.duckdb_v2_connection_query_progress
@@ -1408,8 +1408,8 @@ typedef struct {
 #define duckdb_v2_database_create                   duckdb_ext_api.duckdb_v2_database_create
 #define duckdb_v2_database_destroy                  duckdb_ext_api.duckdb_v2_database_destroy
 #define duckdb_v2_database_detach                   duckdb_ext_api.duckdb_v2_database_detach
-#define duckdb_v2_database_get_option               duckdb_ext_api.duckdb_v2_database_get_option
 #define duckdb_v2_database_get_option_by_index      duckdb_ext_api.duckdb_v2_database_get_option_by_index
+#define duckdb_v2_database_get_option_by_name       duckdb_ext_api.duckdb_v2_database_get_option_by_name
 #define duckdb_v2_database_get_option_count         duckdb_ext_api.duckdb_v2_database_get_option_count
 #define duckdb_v2_database_set_option               duckdb_ext_api.duckdb_v2_database_set_option
 #define duckdb_v2_environment_create                duckdb_ext_api.duckdb_v2_environment_create
@@ -1952,8 +1952,8 @@ typedef struct {
 #define duckdb_v2_attach_options_create                  duckdb_ext_api.duckdb_v2_attach_options_create
 #define duckdb_v2_attach_options_destroy                 duckdb_ext_api.duckdb_v2_attach_options_destroy
 #define duckdb_v2_attach_options_set                     duckdb_ext_api.duckdb_v2_attach_options_set
-#define duckdb_v2_context_get_option                     duckdb_ext_api.duckdb_v2_context_get_option
 #define duckdb_v2_context_get_option_by_index            duckdb_ext_api.duckdb_v2_context_get_option_by_index
+#define duckdb_v2_context_get_option_by_name             duckdb_ext_api.duckdb_v2_context_get_option_by_name
 #define duckdb_v2_context_get_option_count               duckdb_ext_api.duckdb_v2_context_get_option_count
 #define duckdb_v2_database_set_default                   duckdb_ext_api.duckdb_v2_database_set_default
 // capigen:end appended

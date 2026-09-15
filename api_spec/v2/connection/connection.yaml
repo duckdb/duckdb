@@ -95,7 +95,7 @@ functions:
         kind: OUT
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
     return_type: ERROR
-  connection_get_option:
+  connection_get_option_by_name:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
@@ -104,7 +104,7 @@ functions:
       Returns the option's effective setting at the connection's scope: the
       LOCAL override if this connection set one, otherwise the GLOBAL value,
       otherwise the static default. The remaining fields are populated exactly
-      as by database_get_option. Aliases resolve transparently, and an unknown
+      as by database_get_option_by_name. Aliases resolve transparently, and an unknown
       name returns ERROR_INPUT_INVALID. The caller destroys the returned
       option.
     role: getter

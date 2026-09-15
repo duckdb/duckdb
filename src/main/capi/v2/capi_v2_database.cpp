@@ -311,8 +311,9 @@ DUCKDB_V2_ERROR duckdb_v2_database_set_option(duckdb_v2_database_handle db, duck
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_database_get_option(duckdb_v2_database_handle db, duckdb_v2_identifier_t name,
-                                              duckdb_v2_option_handle *out_option, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_database_get_option_by_name(duckdb_v2_database_handle db, duckdb_v2_identifier_t name,
+                                                      duckdb_v2_option_handle *out_option,
+                                                      duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(db);
 	DUCKDB_CHECK_ARG(name);
 	DUCKDB_CHECK_ARG(out_option);

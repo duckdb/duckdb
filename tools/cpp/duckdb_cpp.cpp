@@ -504,7 +504,8 @@ auto Database::GetOptionByIndex(size_t index) const -> DatabaseOption {
 
 auto Database::GetOption(std::string_view name) const -> DatabaseOption {
 	duckdb_v2_option_handle option = nullptr;
-	CheckedAPICall(duckdb_v2_database_get_option, handle(), duckdb_v2_identifier_t {name.data(), name.size()}, &option);
+	CheckedAPICall(duckdb_v2_database_get_option_by_name, handle(), duckdb_v2_identifier_t {name.data(), name.size()},
+	               &option);
 	return detail::Factory::Make<DatabaseOption>(option);
 }
 
@@ -547,7 +548,7 @@ auto Connection::GetOptionByIndex(size_t index) const -> DatabaseOption {
 
 auto Connection::GetOption(std::string_view name) const -> DatabaseOption {
 	duckdb_v2_option_handle option = nullptr;
-	CheckedAPICall(duckdb_v2_connection_get_option, handle(), duckdb_v2_identifier_t {name.data(), name.size()},
+	CheckedAPICall(duckdb_v2_connection_get_option_by_name, handle(), duckdb_v2_identifier_t {name.data(), name.size()},
 	               &option);
 	return detail::Factory::Make<DatabaseOption>(option);
 }
