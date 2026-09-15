@@ -105,6 +105,13 @@
         "id": 202,
         "name": "columns",
         "type": "vector<Identifier>"
+      },
+      {
+        "id": 203,
+        "name": "timing",
+        "type": "ConstraintTiming",
+        "default": "ConstraintTiming::DEFAULT",
+        "version": "v2.0.0"
       }
     ]
   }
