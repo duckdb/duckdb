@@ -1052,6 +1052,16 @@ struct CastFromPointer {
 template <>
 duckdb::string_t CastFromPointer::Operation(uintptr_t input, StringHeap &heap);
 
+//! Parses the text produced by CastFromPointer; not registered as a SQL cast
+struct CastToPointer {
+	template <class SRC, class DST>
+	static inline DST Operation(SRC input) {
+		throw duckdb::NotImplementedException("Cast to pointer could not be performed!");
+	}
+};
+template <>
+uintptr_t CastToPointer::Operation(string_t input);
+
 //===--------------------------------------------------------------------===//
 // Types
 //===--------------------------------------------------------------------===//
