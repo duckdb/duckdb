@@ -192,16 +192,19 @@ void UndoBuffer::WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState>
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
 }
 
-void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, CommitInfo &info) {
+void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, CommitInfo &info,
+                        optional_ptr<LocalStorageCommitState> local_commit_state) {
 	active_transaction_state = info.active_transactions;
 
-	CommitState state(transaction, info.commit_id, active_transaction_state, CommitMode::COMMIT);
+	CommitState state(transaction, info.commit_id, active_transaction_state, CommitMode::COMMIT, local_commit_state);
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data, info); });
 	state.Verify();
 }
 
-void UndoBuffer::RevertCommit(UndoBuffer::IteratorState &end_state, transaction_t transaction_id) {
-	CommitState state(transaction, transaction_id, active_transaction_state, CommitMode::REVERT_COMMIT);
+void UndoBuffer::RevertCommit(UndoBuffer::IteratorState &end_state, transaction_t transaction_id,
+                              optional_ptr<LocalStorageCommitState> local_commit_state) {
+	CommitState state(transaction, transaction_id, active_transaction_state, CommitMode::REVERT_COMMIT,
+	                  local_commit_state);
 	UndoBuffer::IteratorState start_state;
 	IterateEntries(start_state, end_state, [&](UndoFlags type, data_ptr_t data) { state.RevertCommit(type, data); });
 
