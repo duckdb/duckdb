@@ -17,6 +17,9 @@
 
 namespace duckdb {
 
+template <typename T, typename VECTOR_TYPE>
+class IEJoinCursor;
+
 class JoinHashTable;
 struct IEJoinBuildOrders;
 struct MarkJoinRefinementGroup;
@@ -82,6 +85,7 @@ public:
 	MarkPatternRefiner(ClientContext &context, const PhysicalComparisonJoin &op, MarkJoinRefinement &refinement,
 	                   mutex &lock, mark_key_fetch_t fetch, DataChunk &keys, bool matches[], ValidityMask &validity,
 	                   optional_ptr<MarkPatternProbeSource> sorted_probes = nullptr);
+	~MarkPatternRefiner();
 	void Refine();
 
 private:
@@ -119,6 +123,8 @@ private:
 	Vector comparison;
 	set<pair<uint64_t, uint64_t>> refinement_batches;
 	optional_ptr<MarkPatternProbeSource> sorted_probes;
+	optional_ptr<ColumnDataCollection> result_collection;
+	unique_ptr<IEJoinCursor<uint8_t, uint8_t>> result_reader;
 };
 
 } // namespace duckdb

@@ -412,6 +412,8 @@ void MarkPatternRefiner::RunRangeJoin(ExecutionContext &execution, IEJoinBuildOr
 	}
 }
 
+MarkPatternRefiner::~MarkPatternRefiner() = default;
+
 void MarkPatternRefiner::ApplyMarker(idx_t probe, uint8_t marker) {
 	if (marker == 2) {
 		matches.get()[probe] = true;
@@ -467,8 +469,11 @@ void MarkPatternRefiner::RefineRangePattern(MarkJoinRefinementGroup &group, idx_
 				cached->Append(append, result);
 			}
 		}
-		IEJoinCursor<uint8_t> results(*cached);
-		ApplyMarker(probe, results[sorted_probes->row_ids[probe]]);
+		if (result_collection.get() != cached.get()) {
+			result_reader = make_uniq<IEJoinCursor<uint8_t>>(*cached);
+			result_collection = cached.get();
+		}
+		ApplyMarker(probe, (*result_reader)[sorted_probes->row_ids[probe]]);
 		return;
 	}
 	vector<JoinCondition> range_conditions;
