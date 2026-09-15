@@ -5,7 +5,7 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
-#include "duckdb/optimizer/builtin_function_lookup.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
@@ -619,11 +619,13 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			// need to implicitly reference everything.
 			break;
 		}
-		// distinct, all projected columns are used for the DISTINCT computation
-		// mark all columns as used and continue to the children
-		// FIXME: DISTINCT with expression list does not implicitly reference everything
+		// Preserve all DISTINCT inputs without affecting sibling branches.
+		const auto previous_everything_referenced = everything_referenced;
 		everything_referenced = true;
-		break;
+		LogicalOperatorVisitor::VisitOperatorExpressions(op);
+		VisitPrunableChildren(op);
+		everything_referenced = previous_everything_referenced;
+		return;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
 		if (analyze) {
@@ -1135,8 +1137,10 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 			filter_expr = std::move(column_ref);
 		}
 		filter_expressions.push_back(std::move(filter_expr));
+	}
+	for (auto &filter_expression : filter_expressions) {
 		//! Now visit the filter to add to the 'column_references'
-		VisitExpression(&filter_expressions.back());
+		VisitExpression(&filter_expression);
 	}
 	for (const auto &filter : get.table_filters.GetMultiColumnFilters()) {
 		const auto &expression_filter = ExpressionFilter::GetExpressionFilter(*filter, "RemoveUnusedColumns::VisitGet");
