@@ -25,20 +25,20 @@ PrefixHandle PrefixHandle::NewInternal(ART &art, NodePtr &node, const_data_ptr_t
 PrefixChain PrefixHandle::New(ART &art, const ARTKey &key, const idx_t depth, const idx_t count) {
 	D_ASSERT(count > 0);
 
-	NodePtr root;
-	auto first_count = UnsafeNumericCast<uint8_t>(MinValue<idx_t>(art.PrefixCount(), count));
-	auto prefix = NewInternal(art, root, key.data, first_count, depth);
-	auto tail = std::move(prefix);
+	NodePtr root_ptr;
+	auto root_count = UnsafeNumericCast<uint8_t>(MinValue<idx_t>(art.PrefixCount(), count));
+	auto prefix_handle = NewInternal(art, root_ptr, key.data, root_count, depth);
+	auto tail_handle = std::move(prefix_handle);
 
-	idx_t offset = first_count;
+	idx_t offset = root_count;
 	while (offset < count) {
 		auto this_count = UnsafeNumericCast<uint8_t>(MinValue<idx_t>(art.PrefixCount(), count - offset));
-		auto next = NewInternal(art, tail.Child(art), key.data, this_count, depth + offset);
-		tail = std::move(next);
+		auto next_handle = NewInternal(art, tail_handle.Child(art), key.data, this_count, depth + offset);
+		tail_handle = std::move(next_handle);
 
 		offset += this_count;
 	}
-	return {root, std::move(tail)};
+	return {root_ptr, std::move(tail_handle)};
 }
 
 PrefixHandle PrefixHandle::AppendByte(ART &art, PrefixHandle prefix, const uint8_t byte) {
@@ -78,14 +78,14 @@ void PrefixHandle::Append(ART &art, PrefixHandle prefix, NodePtr other) {
 	prefix.Child(art) = other;
 }
 
-NodePtr PrefixHandle::Split(ART &art, NodePtr &node, NodePtr &replacement, const uint8_t pos) {
-	D_ASSERT(node.HasMetadata());
-	D_ASSERT(node.GetType() == PREFIX);
-	D_ASSERT(replacement.HasMetadata());
+NodePtr PrefixHandle::Split(ART &art, NodePtr &prefix_ptr, NodePtr &branching_node4, const uint8_t pos) {
+	D_ASSERT(prefix_ptr.HasMetadata());
+	D_ASSERT(prefix_ptr.GetType() == PREFIX);
+	D_ASSERT(branching_node4.HasMetadata());
 
 	NodePtr child;
 	{
-		PrefixHandle prefix(NodeHandle(art, node));
+		PrefixHandle prefix(NodeHandle(art, prefix_ptr));
 		const auto count = prefix.GetCount(art);
 		D_ASSERT(pos < count);
 
@@ -117,16 +117,16 @@ NodePtr PrefixHandle::Split(ART &art, NodePtr &node, NodePtr &replacement, const
 			// The subsequent node replaces the split byte.
 			// Any gate stays on this prefix.
 			prefix.SetCount(art, pos);
-			prefix.Child(art) = replacement;
+			prefix.Child(art) = branching_node4;
 			return child;
 		}
-		// No bytes left before the split, so replacement inherits this node's gate before we free it.
-		replacement.SetGateStatus(node.GetGateStatus());
+		// No bytes left before the split, so branching_node4 inherits the prefix's gate before we free it.
+		branching_node4.SetGateStatus(prefix_ptr.GetGateStatus());
 	}
 
 	// Release the prefix handle before freeing its node, which may destroy the allocator buffer.
-	NodePtr::FreeNode(art, node);
-	node = replacement;
+	NodePtr::FreeNode(art, prefix_ptr);
+	prefix_ptr = branching_node4;
 	return child;
 }
 

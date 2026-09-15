@@ -404,12 +404,12 @@ private:
 		const auto cast_pos = UnsafeNumericCast<uint8_t>(pos);
 		const auto byte = Prefix::GetByte(art, node_ref, cast_pos);
 
-		NodePtr replacement;
-		Node4::New(art, replacement);
-		auto child = PrefixHandle::Split(art, node_ref, replacement, cast_pos);
+		NodePtr branching_node4;
+		Node4::New(art, branching_node4);
+		auto child = PrefixHandle::Split(art, node_ref, branching_node4, cast_pos);
 
-		Node4::InsertChild(art, replacement, byte, child);
-		InsertIntoNode(art, replacement, key, row_id, depth, status);
+		Node4::InsertChild(art, branching_node4, byte, child);
+		InsertIntoNode(art, branching_node4, key, row_id, depth, status);
 	}
 };
 

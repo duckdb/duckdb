@@ -275,18 +275,18 @@ void ARTMerger::MergePrefixes(NodeEntry &entry) {
 		// We split the left prefix, and reduce the right prefix.
 		// Then, we insert both remainders into a new Node4.
 		// Then, we are done.
-		const auto cast_pos = UnsafeNumericCast<uint8_t>(pos.GetIndex());
-		const auto l_byte = Prefix::GetByte(art, entry.left, cast_pos);
-		const auto r_byte = Prefix::GetByte(art, entry.right, cast_pos);
+		const auto split_pos = UnsafeNumericCast<uint8_t>(pos.GetIndex());
+		const auto l_byte = Prefix::GetByte(art, entry.left, split_pos);
+		const auto r_byte = Prefix::GetByte(art, entry.right, split_pos);
 
 		// Split and reduce.
-		NodePtr replacement;
-		Node4::New(art, replacement);
-		auto l_child = PrefixHandle::Split(art, entry.left, replacement, cast_pos);
-		Prefix::Reduce(art, entry.right, cast_pos);
+		NodePtr branching_node4;
+		Node4::New(art, branching_node4);
+		auto l_child = PrefixHandle::Split(art, entry.left, branching_node4, split_pos);
+		Prefix::Reduce(art, entry.right, split_pos);
 
-		Node4::InsertChild(art, replacement, l_byte, l_child);
-		Node4::InsertChild(art, replacement, r_byte, entry.right);
+		Node4::InsertChild(art, branching_node4, l_byte, l_child);
+		Node4::InsertChild(art, branching_node4, r_byte, entry.right);
 		entry.right.Clear();
 		return;
 	}
