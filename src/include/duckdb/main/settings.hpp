@@ -117,6 +117,19 @@ struct DeltaOnlyVariantEncodingEnabledSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct AbortOnWalFailureSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "abort_on_wal_failure";
+	static constexpr const char *Description = "Whether to abort startup when the write-ahead log cannot be fully "
+	                                           "replayed, instead of discarding the part that could not be replayed";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct AccessModeSetting {
 	using RETURN_TYPE = AccessMode;
 	static constexpr const char *Name = "access_mode";
