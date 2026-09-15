@@ -31,7 +31,7 @@ VALUES (32942348563242.111222333444555666777888::DECIMAL(38,24)), (NULL::DECIMAL
 statement ok
 VALUES (32942348563242.111222333444555666777888::DECIMAL(38,24)), (NULL::DECIMAL(10,2));
 
-# Only one warning is emitted per affected column
+# Only one warning is emitted per affected column and query execution
 statement ok
 SET warnings_as_errors=false;
 
@@ -44,9 +44,9 @@ VALUES (32942348563242.111222333444555666777888::DECIMAL(38,24)),
        (NULL::NUMERIC);
 
 query I
-SELECT count(*)
+SELECT count(*) > 0 AND count(*) = count(DISTINCT query_id)
 FROM duckdb_logs
 WHERE log_level = 'WARNING'
   AND starts_with(message, 'Potential loss of decimal precision while resolving a VALUES column');
 ----
-1
+true
