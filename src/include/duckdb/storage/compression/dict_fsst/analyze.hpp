@@ -49,6 +49,9 @@ public:
 	idx_t current_unique_count = 0;
 	idx_t current_dict_size = 0;
 	idx_t current_max_string_length = 0;
+	//! Whether a simulated block ever held the same value twice. A segment holds one block worth of values, so
+	//! this is also whether FSST_ONLY - which requires every value in a segment to be unique - is reachable.
+	bool block_had_repeated_value = false;
 	string_set_t current_set;
 	//! Owns the memory of the strings in 'current_set'; reset per simulated block to bound memory usage
 	StringHeap heap;

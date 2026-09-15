@@ -115,6 +115,9 @@ bool DictFSSTAnalyzeState::Analyze(const Vector &input) {
 		}
 
 		bool new_string = !current_set.count(str);
+		if (!new_string) {
+			block_had_repeated_value = true;
+		}
 		auto next_unique_count = current_unique_count + (new_string ? 1 : 0);
 		auto next_dict_size = current_dict_size + (new_string ? str_len : 0);
 		auto next_max_length = new_string ? MaxValue(current_max_string_length, str_len) : current_max_string_length;
@@ -141,8 +144,10 @@ bool DictFSSTAnalyzeState::Analyze(const Vector &input) {
 }
 
 idx_t DictFSSTAnalyzeState::FSSTOnlyEstimate() const {
-	if (disable_fsst || contains_nulls || !total_count) {
-		// FSST_ONLY is only reachable without NULLs, see DictFSSTCompressionState::TryEncode
+	// FSST_ONLY needs every value in the segment to be unique and no NULLs, see
+	// DictFSSTCompressionState::TryEncode. Estimating a mode that cannot be reached would let it undercut the
+	// layouts that can.
+	if (disable_fsst || contains_nulls || block_had_repeated_value || !total_count) {
 		return DConstants::INVALID_INDEX;
 	}
 	const idx_t block_size = info.GetBlockSize();
@@ -153,11 +158,11 @@ idx_t DictFSSTAnalyzeState::FSSTOnlyEstimate() const {
 		return DConstants::INVALID_INDEX;
 	}
 
-	// Assume FSST halves the values, which is what it has to achieve to earn back the symbol table
+	// Assume FSST halves the values, which is what it has to achieve to earn back the symbol table. Every value
+	// also costs its bitpacked length, counted in bits because the lengths buffer is not byte aligned per value.
 	const idx_t encoded_length = MaxValue<idx_t>((total_string_length / 2) / total_count, 1);
-	const auto string_lengths_width = BitpackingPrimitives::MinimumBitWidth(max_string_length);
-	const idx_t per_value = encoded_length + AlignValue<idx_t>(string_lengths_width, 8) / 8;
-	const idx_t values_per_block = (block_size - block_overhead) / per_value;
+	const idx_t bits_per_value = encoded_length * 8 + BitpackingPrimitives::MinimumBitWidth(max_string_length);
+	const idx_t values_per_block = ((block_size - block_overhead) * 8) / bits_per_value;
 	if (!values_per_block) {
 		return DConstants::INVALID_INDEX;
 	}
