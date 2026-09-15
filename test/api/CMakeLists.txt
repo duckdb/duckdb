@@ -49,7 +49,6 @@ set(TEST_API_OBJECTS
     test_dialect_extension.cpp
     test_grammar_extension.cpp
     test_progress_bar.cpp
-  test_ungrouped_progress.cpp
     test_uuid.cpp
     test_insertion_order_preserving_map.cpp
     test_bignum.cpp
