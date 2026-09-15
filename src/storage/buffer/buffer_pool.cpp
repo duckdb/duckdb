@@ -506,7 +506,17 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 			continue;
 		}
 
-		if (!fn(node, handle, lock)) {
+		bool continue_iteration;
+		try {
+			continue_iteration = fn(node, handle, lock);
+		} catch (...) {
+			// The unload failed (e.g. the temporary directory is full) and the block is still loaded.
+			// Give it its queue entry back, or it stays un-evictable until the next unpin.
+			handle->SetHasLiveQueueEntry(lock, true);
+			q.enqueue(std::move(node));
+			throw;
+		}
+		if (!continue_iteration) {
 			break;
 		}
 	}
