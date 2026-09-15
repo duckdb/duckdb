@@ -322,22 +322,7 @@ bool NumericStats::ConstantsCoverRange(const BaseStatistics &stats, array_ptr<co
 }
 
 bool NumericStats::IsConstant(const BaseStatistics &stats) {
-	if (NumericStats::Max(stats) > NumericStats::Min(stats)) {
-		return false;
-	}
-	// IEEE: +0 == -0, so also require identical bits for floats.
-	auto physical_type = stats.GetType().InternalType();
-	if (physical_type == PhysicalType::FLOAT) {
-		auto min = GetMinUnsafe<float>(stats);
-		auto max = GetMaxUnsafe<float>(stats);
-		return Load<uint32_t>(const_data_ptr_cast(&min)) == Load<uint32_t>(const_data_ptr_cast(&max));
-	}
-	if (physical_type == PhysicalType::DOUBLE) {
-		auto min = GetMinUnsafe<double>(stats);
-		auto max = GetMaxUnsafe<double>(stats);
-		return Load<uint64_t>(const_data_ptr_cast(&min)) == Load<uint64_t>(const_data_ptr_cast(&max));
-	}
-	return true;
+	return NumericStats::Max(stats) <= NumericStats::Min(stats);
 }
 
 void SetNumericValueInternal(const Value &input, const LogicalType &type, NumericValueUnion &val, bool &has_val) {
