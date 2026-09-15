@@ -16,10 +16,10 @@ namespace duckdb {
 struct ExtensionLoadOptions {
 	ExtensionLoadOptions() = default;
 	// NOLINTNEXTLINE: allow implicit conversion from the extension name
-	ExtensionLoadOptions(string extension_name) : extension_name(std::move(extension_name)) {
+	ExtensionLoadOptions(string extension_name_or_path) : extension_name_or_path(std::move(extension_name_or_path)) {
 	}
 
-	string extension_name;
+	string extension_name_or_path;
 	Identifier alias;
 	//! The repository named in the FROM clause the extension is loaded from (e.g. LOAD httpfs FROM core). Empty for a
 	//! bare LOAD, which only resolves core and community extensions

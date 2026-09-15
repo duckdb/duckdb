@@ -170,7 +170,7 @@ static void ThrowResultModeError(BenchmarkFileReader &reader) {
 	throw std::runtime_error(reader.FormatException(error));
 }
 
-void InterpretedBenchmark::AddExtension(const string &extension, bool load_only) {
+void InterpretedBenchmark::AddExtension(const Identifier &extension, bool load_only) {
 	auto &map = load_only ? load_extensions_map : extensions_map;
 	auto it = map.find(extension);
 	if (it != map.end()) {
@@ -233,9 +233,9 @@ void InterpretedBenchmark::ProcessFile(const string &path) {
 					throw std::runtime_error(
 					    reader.FormatException("require only supports load_only as a second parameter"));
 				}
-				AddExtension(splits[1], true);
+				AddExtension(Identifier(splits[1]), true);
 			} else {
-				AddExtension(splits[1], false);
+				AddExtension(Identifier(splits[1]), false);
 			}
 		} else if (splits[0] == "resultmode") {
 			if (splits.size() < 2) {

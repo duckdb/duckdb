@@ -152,17 +152,17 @@ struct ExtensionAccess {
 //===--------------------------------------------------------------------===//
 // Static C API Extension Loading
 //===--------------------------------------------------------------------===//
-void DuckDB::LoadStaticCAPIExtension(const string &name, ext_init_c_api_fun_t init_fun) {
+void DuckDB::LoadStaticCAPIExtension(const Identifier &name, ext_init_c_api_fun_t init_fun) {
 	auto &manager = ExtensionManager::Get(*instance);
-	auto load_info = manager.BeginLoad({name});
+	auto load_info = manager.BeginLoad({name.GetIdentifierName()});
 	if (!load_info) {
 		// already loaded
 		return;
 	}
 
 	ExtensionInitResult init_result;
-	init_result.filename = name;
-	init_result.filebase = name;
+	init_result.filename = name.GetIdentifierName();
+	init_result.extension_name = name;
 	// Statically compiled extensions are always tied to the exact DuckDB version
 	init_result.abi_type = ExtensionABIType::C_STRUCT_UNSTABLE;
 	init_result.lib_hdl = nullptr;
@@ -186,17 +186,17 @@ void DuckDB::LoadStaticCAPIExtension(const string &name, ext_init_c_api_fun_t in
 	load_info->FinishLoad(install_info);
 }
 
-void DuckDB::LoadStaticCAPIExtensionV2(const string &name, ext_init_c_api_v2_fun_t init_fun) {
+void DuckDB::LoadStaticCAPIExtensionV2(const Identifier &name, ext_init_c_api_v2_fun_t init_fun) {
 	auto &manager = ExtensionManager::Get(*instance);
-	auto load_info = manager.BeginLoad({name});
+	auto load_info = manager.BeginLoad({name.GetIdentifierName()});
 	if (!load_info) {
 		// already loaded
 		return;
 	}
 
 	ExtensionInitResult init_result;
-	init_result.filename = name;
-	init_result.filebase = name;
+	init_result.filename = name.GetIdentifierName();
+	init_result.extension_name = name;
 	// Statically compiled extensions are always tied to the exact DuckDB version
 	init_result.abi_type = ExtensionABIType::C_STRUCT_UNSTABLE;
 	init_result.lib_hdl = nullptr;
@@ -204,7 +204,8 @@ void DuckDB::LoadStaticCAPIExtensionV2(const string &name, ext_init_c_api_v2_fun
 	try {
 		// Statically linked extensions bind DuckDB's symbols at link time, so they never fetch the vtable. There is no
 		// client context this early either, so the entrypoint gets a connection of its own.
-		instance->InvokeExtensionEntrypointV2(init_result, name, init_fun, nullptr, /* statically_linked */ true);
+		instance->InvokeExtensionEntrypointV2(init_result, name.GetIdentifierName(), init_fun, nullptr,
+		                                      /* statically_linked */ true);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		load_info->LoadFail(error);
@@ -452,7 +453,7 @@ bool ExtensionHelper::CheckExtensionBufferSignature(DatabaseInstance &db, const 
 	                                     signature_key_fingerprint);
 }
 
-bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
+bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension_name_or_path,
                                      const string &repository_name, bool core_only, ExtensionInitResult &result,
                                      string &error) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
@@ -461,7 +462,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	if (!Settings::Get<EnableExternalAccessSetting>(db)) {
 		throw PermissionException("Loading external extensions is disabled through configuration");
 	}
-	auto filename = fs.ConvertSeparators(extension);
+	auto filename = fs.ConvertSeparators(extension_name_or_path);
 
 	bool direct_load;
 
@@ -471,7 +472,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	bool expect_user_repo = false;
 	ExtensionRepositoryType expected_repository_type = ExtensionRepositoryType::CORE;
 	if (!repository_name.empty()) {
-		if (ExtensionHelper::IsFullPath(extension)) {
+		if (ExtensionHelper::IsFullPath(extension_name_or_path)) {
 			error = "Cannot combine a FROM repository with a file path";
 			return false;
 		}
@@ -488,9 +489,9 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	}
 
 	// shorthand case
-	if (!ExtensionHelper::IsFullPath(extension)) {
+	if (!ExtensionHelper::IsFullPath(extension_name_or_path)) {
 		direct_load = false;
-		string extension_name = ApplyExtensionAlias(extension);
+		auto extension_name = ApplyExtensionAlias(Identifier(extension_name_or_path));
 #ifdef WASM_LOADABLE_EXTENSIONS
 		string url_template = ExtensionUrlTemplate(&config, "");
 		string url = ExtensionFinalizeUrlTemplate(url_template, extension_name);
@@ -516,7 +517,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 #else
 
 		// Local function to process local path
-		auto ComputeLocalExtensionPath = [&](const string &base_path, const string &extension_name) -> string {
+		auto ComputeLocalExtensionPath = [&](const string &base_path, const Identifier &extension_name) -> string {
 			// convert random separators to platform-canonic
 			string local_path = fs.ConvertSeparators(base_path);
 			// expand ~ in extension directory
@@ -579,9 +580,9 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	}
 	if (!fs.FileExists(filename)) {
 		string message;
-		bool exact_match = ExtensionHelper::CreateSuggestions(extension, message);
+		bool exact_match = ExtensionHelper::CreateSuggestions(extension_name_or_path, message);
 		if (exact_match) {
-			message += "\nInstall it first using \"INSTALL " + extension + "\".";
+			message += "\nInstall it first using \"INSTALL " + extension_name_or_path + "\".";
 		}
 		error = StringUtil::Format("Extension \"%s\" not found.\n%s", filename, message);
 		return false;
@@ -595,11 +596,12 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	auto metadata_mismatch_error = parsed_metadata.GetInvalidMetadataError();
 
 	if (!metadata_mismatch_error.empty()) {
-		metadata_mismatch_error = StringUtil::Format("Failed to load '%s', %s", extension, metadata_mismatch_error);
+		metadata_mismatch_error =
+		    StringUtil::Format("Failed to load '%s', %s", extension_name_or_path, metadata_mismatch_error);
 	}
 
 	auto filebase = fs.ExtractBaseName(filename);
-	auto lowercase_extension_name = StringUtil::Lower(filebase);
+	auto lowercase_extension_name = Identifier(StringUtil::Lower(filebase));
 
 	// The install info tells us where the extension came from, which determines the keys that are trusted to sign it.
 	// Extensions that are loaded directly have no install info: those are verified against the core keys
@@ -617,8 +619,8 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		                             install_info->repository_name == repository_name)
 		                          : (install_info->repository_type == expected_repository_type);
 		if (!origin_matches) {
-			error =
-			    StringUtil::Format("Extension '%s' was not installed from repository '%s'", extension, repository_name);
+			error = StringUtil::Format("Extension '%s' was not installed from repository '%s'", extension_name_or_path,
+			                           repository_name);
 			return false;
 		}
 	}
@@ -657,7 +659,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 			if (bare_load && install_info && install_info->repository_type == ExtensionRepositoryType::USER_PROVIDED) {
 				throw IOException("Extension '%s' was installed from a user-provided repository; a plain LOAD only "
 				                  "loads core and community extensions. Load it explicitly from its repository.",
-				                  extension);
+				                  extension_name_or_path);
 			}
 			throw IOException(db.config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename));
 		}
@@ -697,7 +699,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	}
 
 	// Initialize the ExtensionInitResult
-	result.filebase = lowercase_extension_name;
+	result.extension_name = lowercase_extension_name;
 	result.filename = filename;
 	result.lib_hdl = lib_hdl;
 	result.abi_type = parsed_metadata.abi_type;
@@ -714,7 +716,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		if (result.install_info->version != parsed_metadata.extension_version) {
 			throw IOException("Metadata mismatch detected when loading extension '%s'\nPlease try reinstalling the "
 			                  "extension using `FORCE INSTALL '%s'`",
-			                  filename, extension);
+			                  filename, extension_name_or_path);
 		}
 	} else {
 		result.install_info = make_uniq<ExtensionInstallInfo>();
@@ -727,12 +729,14 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 #endif
 }
 
-ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
-                                                 const string &repository_name, bool core_only) {
+ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSystem &fs,
+                                                 const string &extension_name_or_path, const string &repository_name,
+                                                 bool core_only) {
 	string error;
 	ExtensionInitResult result;
-	if (!TryInitialLoad(db, fs, extension, repository_name, core_only, result, error)) {
-		if (!Settings::Get<AutoinstallKnownExtensionsSetting>(db) || !ExtensionHelper::AllowAutoInstall(extension)) {
+	if (!TryInitialLoad(db, fs, extension_name_or_path, repository_name, core_only, result, error)) {
+		if (!Settings::Get<AutoinstallKnownExtensionsSetting>(db) ||
+		    !ExtensionHelper::AllowAutoInstall(extension_name_or_path)) {
 			throw IOException(error);
 		}
 		// the extension load failed - try installing the extension, from the requested repository if one was given
@@ -743,9 +747,9 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSyste
 		     ExtensionRepository::TryGetKnownRepository(repository_name, repository))) {
 			options.repository = repository;
 		}
-		ExtensionHelper::InstallExtension(db, fs, extension, options);
+		ExtensionHelper::InstallExtension(db, fs, extension_name_or_path, options);
 		// try loading again
-		if (!TryInitialLoad(db, fs, extension, repository_name, core_only, result, error)) {
+		if (!TryInitialLoad(db, fs, extension_name_or_path, repository_name, core_only, result, error)) {
 			throw IOException(error);
 		}
 	}
@@ -757,21 +761,21 @@ bool ExtensionHelper::IsFullPath(const string &extension) {
 	       StringUtil::Contains(extension, "\\");
 }
 
-string ExtensionHelper::GetExtensionName(const string &original_name) {
-	auto extension = StringUtil::Lower(original_name);
-	if (!IsFullPath(extension)) {
-		return ExtensionHelper::ApplyExtensionAlias(extension);
+Identifier ExtensionHelper::GetExtensionName(const string &extension_name_or_path) {
+	auto lowered = StringUtil::Lower(extension_name_or_path);
+	if (!IsFullPath(lowered)) {
+		return ExtensionHelper::ApplyExtensionAlias(Identifier(lowered));
 	}
 	// split the name if it's a full path
-	auto splits = StringUtil::Split(StringUtil::Replace(extension, "\\", "/"), '/');
+	auto splits = StringUtil::Split(StringUtil::Replace(lowered, "\\", "/"), '/');
 	if (splits.empty()) {
-		return ExtensionHelper::ApplyExtensionAlias(extension);
+		return ExtensionHelper::ApplyExtensionAlias(Identifier(lowered));
 	}
 	splits = StringUtil::Split(splits.back(), '.');
 	if (splits.empty()) {
-		return ExtensionHelper::ApplyExtensionAlias(extension);
+		return ExtensionHelper::ApplyExtensionAlias(Identifier(lowered));
 	}
-	return ExtensionHelper::ApplyExtensionAlias(splits.front());
+	return ExtensionHelper::ApplyExtensionAlias(Identifier(splits.front()));
 }
 
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options,
@@ -782,8 +786,8 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	// Statically linked extensions are inherently core-trusted, so only take this shortcut for a bare
 	// load or an explicit core namespace - never let community/x or myrepo/x resolve to a linked core extension.
 	bool allow_static_shortcut = options.repository.empty() || StringUtil::Lower(options.repository) == "core";
-	if (allow_static_shortcut && !ExtensionHelper::IsFullPath(options.extension_name)) {
-		auto logical_name = ExtensionHelper::GetExtensionName(options.extension_name);
+	if (allow_static_shortcut && !ExtensionHelper::IsFullPath(options.extension_name_or_path)) {
+		auto logical_name = ExtensionHelper::GetExtensionName(options.extension_name_or_path);
 		DuckDB db_wrapper(db);
 		if (ExtensionHelper::LoadExtension(db_wrapper, logical_name) == ExtensionLoadResult::LOADED_EXTENSION) {
 			return;
@@ -796,8 +800,8 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		return;
 	}
 	try {
-		LoadExternalExtensionInternal(db, fs, options.extension_name, options.repository, options.core_only, *info,
-		                              context);
+		LoadExternalExtensionInternal(db, fs, options.extension_name_or_path, options.repository, options.core_only,
+		                              *info, context);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		info->LoadFail(error);
@@ -805,22 +809,23 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	}
 }
 
-void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
-                                                    const string &repository_name, bool core_only,
-                                                    ExtensionActiveLoad &info, optional_ptr<ClientContext> context) {
+void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs,
+                                                    const string &extension_name_or_path, const string &repository_name,
+                                                    bool core_only, ExtensionActiveLoad &info,
+                                                    optional_ptr<ClientContext> context) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
-	auto extension_init_result = InitialLoad(db, fs, extension, repository_name, core_only);
+	auto extension_init_result = InitialLoad(db, fs, extension_name_or_path, repository_name, core_only);
 
 	// C++ ABI
 	if (extension_init_result.abi_type == ExtensionABIType::CPP) {
-		auto init_fun_name = extension_init_result.filebase + "_duckdb_cpp_init";
+		auto init_fun_name = extension_init_result.extension_name + "_duckdb_cpp_init";
 		ext_init_fun_t init_fun = TryLoadFunctionFromDLL<ext_init_fun_t>(extension_init_result.lib_hdl, init_fun_name,
 		                                                                 extension_init_result.filename);
 		if (!init_fun) {
-			throw IOException("Extension '%s' did not contain the expected entrypoint function '%s'", extension,
-			                  init_fun_name);
+			throw IOException("Extension '%s' did not contain the expected entrypoint function '%s'",
+			                  extension_name_or_path, init_fun_name);
 		}
 
 		try {
@@ -841,7 +846,7 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 
 	// C ABI, V2
 	if (UsesCAPIV2(extension_init_result)) {
-		auto init_fun_name = extension_init_result.filebase + "_init_c_api_v2";
+		auto init_fun_name = extension_init_result.extension_name + "_init_c_api_v2";
 		auto init_fun_capi_v2 = TryLoadFunctionFromDLL<ext_init_c_api_v2_fun_t>(
 		    extension_init_result.lib_hdl, init_fun_name, extension_init_result.filename);
 
@@ -850,11 +855,11 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 			    "File \"%s\" did not contain function \"%s\". Extensions built against the unstable C API, or against "
 			    "C API v2.x.y, must use the entrypoint from duckdb_extension_v2.h. To keep using the V1 C API, pin it "
 			    "with build_loadable_extension_capi(%s 1 5 6 ...), which provides \"%s_init_c_api\" instead.",
-			    extension_init_result.filename, init_fun_name, extension_init_result.filebase,
-			    extension_init_result.filebase);
+			    extension_init_result.filename, init_fun_name, extension_init_result.extension_name,
+			    extension_init_result.extension_name);
 		}
 
-		db.InvokeExtensionEntrypointV2(extension_init_result, extension, init_fun_capi_v2, context,
+		db.InvokeExtensionEntrypointV2(extension_init_result, extension_name_or_path, init_fun_capi_v2, context,
 		                               /* statically_linked */ false);
 
 		D_ASSERT(extension_init_result.install_info);
@@ -865,7 +870,7 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 
 	// C ABI, V1
 	if (extension_init_result.abi_type == ExtensionABIType::C_STRUCT) {
-		auto init_fun_name = extension_init_result.filebase + "_init_c_api";
+		auto init_fun_name = extension_init_result.extension_name + "_init_c_api";
 		ext_init_c_api_fun_t init_fun_capi = TryLoadFunctionFromDLL<ext_init_c_api_fun_t>(
 		    extension_init_result.lib_hdl, init_fun_name, extension_init_result.filename);
 
@@ -881,8 +886,8 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 
 		// Throw any error that the extension might have encountered
 		if (load_state.has_error) {
-			load_state.error_data.Throw("An error was thrown during initialization of the extension '" + extension +
-			                            "': ");
+			load_state.error_data.Throw("An error was thrown during initialization of the extension '" +
+			                            extension_name_or_path + "': ");
 		}
 
 		// Extensions are expected to either set an error or return true indicating successful initialization
@@ -893,7 +898,7 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 			    "initialization. "
 			    "This means that the Extension may be partially initialized resulting in an inconsistent state of "
 			    "DuckDB.",
-			    extension);
+			    extension_name_or_path);
 		}
 
 		D_ASSERT(extension_init_result.install_info);
@@ -903,12 +908,20 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 	}
 
 	throw IOException("Unknown ABI type of value '%s' for extension '%s'",
-	                  static_cast<uint8_t>(extension_init_result.abi_type), extension);
+	                  static_cast<uint8_t>(extension_init_result.abi_type), extension_name_or_path);
 #endif
 }
 
 void ExtensionHelper::LoadExternalExtension(ClientContext &context, const ExtensionLoadOptions &options) {
 	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileSystem(context), options, context);
+}
+
+void ExtensionHelper::LoadExternalExtension(ClientContext &context, const Identifier &extension_name) {
+	LoadExternalExtension(context, ExtensionLoadOptions(extension_name.GetIdentifierName()));
+}
+
+void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const Identifier &extension_name) {
+	LoadExternalExtension(db, fs, ExtensionLoadOptions(extension_name.GetIdentifierName()));
 }
 
 string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {
