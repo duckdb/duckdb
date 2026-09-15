@@ -1,0 +1,48 @@
+# name: test/sql/index/art/storage/test_art_if_not_exists_constraint_name.test
+# description: Prevent IF NOT EXISTS from reusing hidden constraint index names
+# group: [storage]
+
+statement ok
+CREATE TABLE parent (id INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE child (id INTEGER REFERENCES parent(id))
+
+statement ok
+INSERT INTO parent VALUES (1)
+
+statement ok
+INSERT INTO child VALUES (1)
+
+statement ok
+CREATE INDEX IF NOT EXISTS FOREIGN_child_0 ON child(id)
+
+# The no-op CREATE INDEX must not make the hidden foreign-key index droppable.
+statement error
+DROP INDEX FOREIGN_child_0
+----
+<REGEX>:Catalog Error.*Index with name FOREIGN_child_0 does not exist.*
+
+statement error
+DELETE FROM parent WHERE id = 1
+----
+<REGEX>:Constraint Error.*still referenced by a foreign key.*
+
+statement ok
+CREATE TABLE constrained (id INTEGER PRIMARY KEY, value INTEGER UNIQUE)
+
+statement ok
+CREATE INDEX IF NOT EXISTS PRIMARY_constrained_0 ON constrained(id)
+
+statement ok
+CREATE INDEX IF NOT EXISTS UNIQUE_constrained_1 ON constrained(value)
+
+# IF NOT EXISTS must continue to ignore ordinary catalog index collisions.
+statement ok
+CREATE TABLE regular (id INTEGER)
+
+statement ok
+CREATE INDEX regular_id ON regular(id)
+
+statement ok
+CREATE INDEX IF NOT EXISTS regular_id ON regular(id)
