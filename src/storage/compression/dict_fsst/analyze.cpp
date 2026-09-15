@@ -76,9 +76,6 @@ bool DictFSSTAnalyzeState::FitsInBlock(idx_t tuple_count, idx_t unique_count, id
 }
 
 void DictFSSTAnalyzeState::FlushSimulatedBlock() {
-	if (current_unique_count != current_tuple_count) {
-		has_duplicates = true;
-	}
 	segment_count++;
 	current_tuple_count = 0;
 	current_unique_count = 0;
@@ -143,19 +140,34 @@ bool DictFSSTAnalyzeState::Analyze(const Vector &input) {
 	return true;
 }
 
+idx_t DictFSSTAnalyzeState::FSSTOnlyEstimate() const {
+	if (disable_fsst || contains_nulls || !total_count) {
+		// FSST_ONLY is only reachable without NULLs, see DictFSSTCompressionState::TryEncode
+		return DConstants::INVALID_INDEX;
+	}
+	const idx_t block_size = info.GetBlockSize();
+	// every block stores the symbol table needed to decode it, and no selection buffer
+	const idx_t block_overhead =
+	    AlignValue<idx_t>(sizeof(dict_fsst_compression_header_t)) + DictFSSTCompression::FSST_SYMBOL_TABLE_SIZE;
+	if (block_overhead >= block_size) {
+		return DConstants::INVALID_INDEX;
+	}
+
+	// Assume FSST halves the values, which is what it has to achieve to earn back the symbol table
+	const idx_t encoded_length = MaxValue<idx_t>((total_string_length / 2) / total_count, 1);
+	const auto string_lengths_width = BitpackingPrimitives::MinimumBitWidth(max_string_length);
+	const idx_t per_value = encoded_length + AlignValue<idx_t>(string_lengths_width, 8) / 8;
+	const idx_t values_per_block = (block_size - block_overhead) / per_value;
+	if (!values_per_block) {
+		return DConstants::INVALID_INDEX;
+	}
+	// charge whole blocks: a block that few large values leave mostly empty still costs a full block
+	return ((total_count + values_per_block - 1) / values_per_block) * block_size;
+}
+
 idx_t DictFSSTAnalyzeState::FinalAnalyze() {
 	if (!total_count) {
 		return 0;
-	}
-	if (current_unique_count != current_tuple_count) {
-		has_duplicates = true;
-	}
-
-	if (!disable_fsst && !contains_nulls && !has_duplicates) {
-		// FSST_ONLY does not depend on deduplication at all - it FSST-encodes every value and omits the
-		// selection buffer. It is only reachable when no value repeats and there are no NULLs, see
-		// DictFSSTCompressionState::TryEncode.
-		return LossyNumericCast<idx_t>((double)total_string_length / 2.0);
 	}
 
 	// Every block carries its own dictionary, so a value repeated across blocks is stored once per block.
@@ -163,7 +175,16 @@ idx_t DictFSSTAnalyzeState::FinalAnalyze() {
 	// dictionary left mostly empty - which a ratio of the raw size cannot express.
 	const idx_t last_block_space =
 	    RequiredSpace(current_tuple_count, current_unique_count, current_dict_size, current_max_string_length);
-	return segment_count * info.GetBlockSize() + last_block_space;
+	idx_t estimate = segment_count * info.GetBlockSize() + last_block_space;
+
+	// FSST_ONLY does not deduplicate at all, so it can be the cheaper layout for unique values. It is charged
+	// per block as well, otherwise large unique values would again be estimated without paying for the blocks
+	// they leave mostly empty.
+	const idx_t fsst_only_estimate = FSSTOnlyEstimate();
+	if (fsst_only_estimate != DConstants::INVALID_INDEX) {
+		estimate = MinValue(estimate, fsst_only_estimate);
+	}
+	return estimate;
 }
 
 } // namespace dict_fsst

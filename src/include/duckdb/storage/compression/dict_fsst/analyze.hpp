@@ -22,6 +22,10 @@ public:
 	//! Space one block would need to hold the given amount of tuples and dictionary entries
 	static idx_t RequiredSpace(idx_t tuple_count, idx_t unique_count, idx_t dict_size, idx_t max_string_length);
 
+	//! Size of the FSST_ONLY layout, which stores every value encoded with a symbol table per block and no
+	//! selection buffer. Returns DConstants::INVALID_INDEX when that mode is not reachable.
+	idx_t FSSTOnlyEstimate() const;
+
 private:
 	bool FitsInBlock(idx_t tuple_count, idx_t unique_count, idx_t dict_size, idx_t max_string_length) const;
 	void FlushSimulatedBlock();
@@ -45,8 +49,6 @@ public:
 	idx_t current_unique_count = 0;
 	idx_t current_dict_size = 0;
 	idx_t current_max_string_length = 0;
-	//! Whether any simulated block held the same value more than once
-	bool has_duplicates = false;
 	string_set_t current_set;
 	//! Owns the memory of the strings in 'current_set'; reset per simulated block to bound memory usage
 	StringHeap heap;
