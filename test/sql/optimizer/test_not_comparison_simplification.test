@@ -38,10 +38,13 @@ EXPLAIN SELECT * FROM t WHERE NOT (a != 2);
 ----
 logical_opt	<REGEX>:.*a = 2.*
 
+# NOT (a IS DISTINCT FROM 2) simplifies to (a IS NOT DISTINCT FROM 2), which
+# the filter combiner then folds to an equality (equivalent for filtering: a
+# NULL row is excluded either way)
 query II
 EXPLAIN SELECT * FROM t WHERE NOT (a IS DISTINCT FROM 2);
 ----
-logical_opt	<REGEX>:.*a IS NOT DISTINCT FROM 2.*
+logical_opt	<REGEX>:.*a = 2.*
 
 query II
 EXPLAIN SELECT * FROM t WHERE NOT (a IS NOT DISTINCT FROM 2);
