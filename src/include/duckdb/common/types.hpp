@@ -324,6 +324,8 @@ struct LogicalType {
 	}
 
 	DUCKDB_API bool operator==(const LogicalType &rhs) const;
+	//! Compare SQL types, including collations nested in containers.
+	DUCKDB_API bool EqualsWithCollation(const LogicalType &rhs) const;
 	inline bool operator!=(const LogicalType &rhs) const {
 		return !(*this == rhs);
 	}
