@@ -179,10 +179,6 @@ static bool ExpressionReferencesChild(Expression &expr, LogicalOperator &child) 
 	return false;
 }
 
-static bool ExpressionNullPropagatesForChild(Expression &expr, LogicalOperator &child) {
-	return ExpressionReferencesChild(expr, child) && expr.PropagatesNullValues();
-}
-
 static bool ExpressionNullRejectsDelimJoinRHS(Expression &expr, LogicalComparisonJoin &delim_join) {
 	auto &rhs = *delim_join.children[1];
 	if (!ExpressionReferencesChild(expr, rhs)) {
@@ -193,9 +189,14 @@ static bool ExpressionNullRejectsDelimJoinRHS(Expression &expr, LogicalCompariso
 	}
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR &&
 	    expr.GetExpressionType() == ExpressionType::OPERATOR_IS_NOT_NULL) {
+		auto rhs_output = rhs.GetColumnBindings();
+		column_binding_set_t rhs_bindings(rhs_output.begin(), rhs_output.end());
+		auto column_becomes_null = [&](const BoundColumnRefExpression &column) {
+			return column.Depth() == 0 && rhs_bindings.find(column.Binding()) != rhs_bindings.end();
+		};
 		bool null_propagating_child = false;
 		ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
-			null_propagating_child = null_propagating_child || ExpressionNullPropagatesForChild(child, rhs);
+			null_propagating_child |= ExpressionBecomesNull(child, column_becomes_null);
 		});
 		return null_propagating_child;
 	}
