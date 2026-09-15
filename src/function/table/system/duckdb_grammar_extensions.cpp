@@ -7,7 +7,7 @@
 namespace duckdb {
 
 struct GrammarExtensionData {
-	string name;
+	Identifier name;
 	string description;
 };
 
@@ -32,7 +32,7 @@ static unique_ptr<GlobalTableFunctionState> DuckDBGrammarExtensionsInit(ClientCo
 	auto &callback_manager = ExtensionCallbackManager::Get(context);
 	for (auto &[name, extension] : callback_manager.GrammarExtensions()) {
 		GrammarExtensionData data;
-		data.name = name.GetIdentifierName();
+		data.name = name;
 		data.description = extension->Description();
 		result->extensions.push_back(data);
 	}
