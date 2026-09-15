@@ -33,6 +33,7 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/table/index_entry.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
@@ -92,12 +93,17 @@ void ReorderTableEntries(catalog_entry_vector_t &tables);
 SingleFileCheckpointWriter::SingleFileCheckpointWriter(QueryContext context, AttachedDatabase &db,
                                                        BlockManager &block_manager, CheckpointOptions options_p)
     : CheckpointWriter(db), context(context.GetClientContext()),
-      partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT), options(options_p) {
+      partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT),
+      index_partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT), options(options_p) {
 }
 
 BlockManager &SingleFileCheckpointWriter::GetBlockManager() {
 	auto &storage_manager = db.GetStorageManager().Cast<SingleFileStorageManager>();
 	return *storage_manager.block_manager;
+}
+
+PartialBlockManager SingleFileCheckpointWriter::CreateIsolatedIndexPartialBlockManager() {
+	return PartialBlockManager(QueryContext(context), GetBlockManager(), PartialBlockType::FULL_CHECKPOINT);
 }
 
 MetadataWriter &SingleFileCheckpointWriter::GetMetadataWriter() {

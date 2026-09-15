@@ -1595,13 +1595,16 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 		RebuildIndexes();
 		timer.EndTimer();
 	}
-	// The row group payload data has been written. Now write:
-	//   sample
-	//   column stats
-	//   row-group pointers
-	//   table pointer
-	//   index data
-	writer.FinalizeTable(global_stats, *info, *row_groups, serializer);
+
+	const auto storage_version = serializer.GetOptions().storage_compatibility.storage_version;
+	const auto index_writer = writer.GetTableIndexWriter(storage_version);
+	vector<shared_ptr<const IndexStorageInfo>> index_infos;
+	if (index_writer) {
+		// Only checkpoint indexes when we write to disk
+		index_infos = info->GetIndexes().CheckPoint(*index_writer);
+	}
+
+	writer.FinalizeTable(global_stats, *info, *row_groups, index_infos, serializer);
 	row_groups->SetStats(global_stats);
 }
 

@@ -103,7 +103,9 @@ void InMemoryTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer,
 }
 
 void InMemoryTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info,
-                                            RowGroupCollection &collection, Serializer &serializer) {
+                                            RowGroupCollection &collection,
+                                            const vector<shared_ptr<const IndexStorageInfo>> &index_infos,
+                                            Serializer &serializer) {
 	// nop: no need to write anything
 }
 
@@ -111,6 +113,10 @@ unique_ptr<RowGroupWriter> InMemoryTableDataWriter::GetRowGroupWriter(RowGroup &
 	return make_uniq<InMemoryRowGroupWriter>(*this, table, checkpoint_manager.GetPartialBlockManager(),
 	                                         checkpoint_manager);
 }
+
+unique_ptr<TableIndexWriter> InMemoryTableDataWriter::GetTableIndexWriter(StorageVersion) {
+	return nullptr;
+};
 
 void InMemoryTableDataWriter::FlushPartialBlocks() {
 }
