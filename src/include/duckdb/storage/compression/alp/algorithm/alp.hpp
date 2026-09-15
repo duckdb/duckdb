@@ -329,11 +329,14 @@ struct AlpCompression {
 
 		// Finding first non exception value
 		int64_t a_non_exception_value = 0;
+		idx_t exc_idx = 0;
 		for (idx_t i = 0; i < n_values; i++) {
-			if (i != compression_data.exceptions_positions[i]) {
-				a_non_exception_value = compression_data.encoded_integers[i];
-				break;
+			if (exc_idx < exceptions_idx && compression_data.exceptions_positions[exc_idx] == i) {
+				exc_idx++;
+				continue;
 			}
+			a_non_exception_value = compression_data.encoded_integers[i];
+			break;
 		}
 		// Replacing that first non exception value on the vector exceptions
 		for (idx_t i = 0; i < exceptions_idx; i++) {
