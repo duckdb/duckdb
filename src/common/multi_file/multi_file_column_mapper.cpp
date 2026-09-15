@@ -1,14 +1,17 @@
 #include "duckdb/common/multi_file/multi_file_column_mapper.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/filter/list.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
@@ -84,7 +87,7 @@ struct ColumnMapper {
 	virtual ~ColumnMapper() = default;
 	virtual unique_ptr<ColumnMapper> Create(const vector<MultiFileColumnDefinition> &columns) const = 0;
 	virtual MultiFileLocalIndex Find(const MultiFileColumnDefinition &column) const = 0;
-	virtual unique_ptr<Expression> GetDefaultExpression(const MultiFileColumnDefinition &column,
+	virtual unique_ptr<Expression> GetDefaultExpression(ClientContext &context, const MultiFileColumnDefinition &column,
 	                                                    bool is_root) const = 0;
 	virtual idx_t MapCount() const = 0;
 };
@@ -113,21 +116,27 @@ struct FieldIdMapper : public ColumnMapper {
 		}
 		return entry->second;
 	}
-	static unique_ptr<Expression> GetDefault(const MultiFileColumnDefinition &column) {
+	static unique_ptr<Expression> GetDefault(ClientContext &context, const MultiFileColumnDefinition &column) {
 		auto &default_val = column.default_expression;
 		if (!default_val) {
 			throw InternalException("No default expression in FieldId Map");
 		}
-		if (default_val->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
-			throw NotImplementedException("Default expression that isn't constant is not supported yet");
+		auto binder = Binder::CreateBinder(context);
+		binder->SetCanContainNulls(true);
+		ConstantBinder constant_binder(*binder, context, "default value");
+		auto expr = default_val->Copy();
+		LogicalType target_type = column.type;
+		auto bound = constant_binder.Bind(expr, &target_type);
+		if (!bound->IsFoldable()) {
+			return bound;
 		}
-		auto &constant_expr = default_val->Cast<ConstantExpression>();
-		// return only the expression
-		return make_uniq<BoundConstantExpression>(constant_expr.GetValue());
+		// a constant default is kept as a constant so filters on the missing column can be evaluated up front
+		return make_uniq<BoundConstantExpression>(ExpressionExecutor::EvaluateScalar(context, *bound, true));
 	}
 
-	unique_ptr<Expression> GetDefaultExpression(const MultiFileColumnDefinition &column, bool is_root) const override {
-		return GetDefault(column);
+	unique_ptr<Expression> GetDefaultExpression(ClientContext &context, const MultiFileColumnDefinition &column,
+	                                            bool is_root) const override {
+		return GetDefault(context, column);
 	}
 	idx_t MapCount() const override {
 		return field_id_map.size();
@@ -155,10 +164,11 @@ struct NameMapper : public ColumnMapper {
 		}
 		return entry->second;
 	}
-	unique_ptr<Expression> GetDefaultExpression(const MultiFileColumnDefinition &column, bool is_root) const override {
+	unique_ptr<Expression> GetDefaultExpression(ClientContext &context, const MultiFileColumnDefinition &column,
+	                                            bool is_root) const override {
 		if (column.default_expression) {
 			// we have an explicit default - return it
-			return FieldIdMapper::GetDefault(column);
+			return FieldIdMapper::GetDefault(context, column);
 		}
 		// no explicit default and no match
 		if (is_root) {
@@ -309,7 +319,7 @@ static ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColu
 		default_expressions.push_back(std::move(child_map.default_value));
 
 		// auto default_type = LogicalType::STRUCT(std::move(default_type_list));
-		result.default_value = StructPackFun::GetFunction().Bind(context, std::move(default_expressions));
+		result.default_value = BindBuiltinScalarFunction(context, StructPackFun::Name, std::move(default_expressions));
 	}
 	result.column_index = make_uniq<ColumnIndex>(local_id.GetIndex(), std::move(child_indexes));
 	result.mapping = std::move(mapping);
@@ -430,7 +440,7 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 	}
 	if (!default_expressions.empty()) {
 		// we have default values at a previous level wrap it in a "list"
-		result.default_value = StructPackFun::GetFunction().Bind(context, std::move(default_expressions));
+		result.default_value = BindBuiltinScalarFunction(context, StructPackFun::Name, std::move(default_expressions));
 	}
 	vector<ColumnIndex> map_indexes;
 	map_indexes.emplace_back(0, std::move(child_indexes));
@@ -535,7 +545,7 @@ static ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileCo
 	}
 
 	if (!default_expressions.empty()) {
-		result.default_value = StructPackFun::GetFunction().Bind(context, std::move(default_expressions));
+		result.default_value = BindBuiltinScalarFunction(context, StructPackFun::Name, std::move(default_expressions));
 	}
 	result.column_index = make_uniq<ColumnIndex>(local_id.GetIndex(), std::move(child_indexes));
 	if (global_index.HasType()) {
@@ -554,7 +564,7 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 	auto local_idx = mapper.Find(global_column);
 	if (!local_idx.IsValid()) {
 		// entry not present in map, use default value
-		result.default_value = mapper.GetDefaultExpression(global_column, is_root);
+		result.default_value = mapper.GetDefaultExpression(context, global_column, is_root);
 		return result;
 	}
 	// the field exists! get the local column
@@ -616,7 +626,7 @@ static unique_ptr<Expression> ConstructMapExpression(ClientContext &context, Mul
 	} else {
 		children.push_back(std::move(mapping.default_value));
 	}
-	return RemapStructFun::GetFunction().Bind(context, std::move(children));
+	return BindBuiltinScalarFunction(context, RemapStructFun::Name, std::move(children));
 }
 
 ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const ColumnMapper &mapper) {
@@ -884,7 +894,9 @@ static unique_ptr<Expression> CreateStructExtractExpression(unique_ptr<Expressio
 }
 
 static bool TryCastConstant(Value &constant, const LogicalType &target_type) {
-	if (!StatisticsPropagator::CanPropagateCast(constant.type(), target_type)) {
+	// this filter replaces the global one in the reader, so a constant that does not survive the cast
+	// exactly would silently change which rows match
+	if (!BoundCastExpression::CastIsInvertible(constant.type(), target_type)) {
 		return false;
 	}
 	auto cast = constant.DefaultTryCastAs(target_type);

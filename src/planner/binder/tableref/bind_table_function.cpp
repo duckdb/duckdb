@@ -1,6 +1,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -43,7 +44,7 @@ static TableFunctionBindType GetTableFunctionBindType(TableFunctionCatalogEntry 
 	bool has_standard_table_function = false;
 	bool has_table_parameter = false;
 	for (idx_t function_idx = 0; function_idx < table_function.functions.Size(); function_idx++) {
-		const auto &function = table_function.functions.GetFunctionByOffset(function_idx);
+		const auto &function = *table_function.functions.GetFunctionByOffset(function_idx);
 		for (auto &arg : function.GetArguments()) {
 			if (arg.id() == LogicalTypeId::TABLE) {
 				has_table_parameter = true;
@@ -119,7 +120,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		if (bind_type == TableFunctionBindType::TABLE_PARAMETER_FUNCTION &&
 		    child->GetExpressionType() == ExpressionType::SUBQUERY) {
 			D_ASSERT(table_function.functions.Size() == 1);
-			const auto &fun = table_function.functions.GetFunctionByOffset(0);
+			const auto &fun = *table_function.functions.GetFunctionByOffset(0);
 			if (table_function.functions.Size() != 1 || fun.GetArguments().empty()) {
 				throw BinderException(
 				    "Only table-in-out functions can have subquery parameters - %s only accepts constant parameters",
@@ -333,7 +334,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 
 		auto window_index = GenerateTableIndex();
 		auto window = make_uniq<duckdb::LogicalWindow>(window_index);
-		auto row_number = RowNumberFun::GetFunction().Bind(context);
+		auto row_number = GetBuiltinWindowFunction(context, RowNumberFun::Name, {})->Bind(context);
 		row_number->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
 		row_number->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
 		Identifier ordinality_alias(ordinality_column_name);
@@ -449,7 +450,8 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		error.AddQueryLocation(ref);
 		error.Throw();
 	}
-	auto table_function = function.functions.GetFunctionByOffset(best_function_idx.GetIndex());
+	// copied out of the set: BindTableFunctionInternal fills in the bound arguments/return types
+	auto table_function = *function.functions.GetFunctionByOffset(best_function_idx.GetIndex());
 
 	// now check the named parameters
 	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);

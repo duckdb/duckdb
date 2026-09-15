@@ -35,7 +35,7 @@ public:
 	template <class SIGNED, class UNSIGNED>
 	static int SignedLength(SIGNED value) {
 		int sign = -(value < 0);
-		UNSIGNED unsigned_value = UnsafeNumericCast<UNSIGNED>((value ^ sign) - sign);
+		UNSIGNED unsigned_value = UNSIGNED(value ^ sign) + UNSIGNED(AbsValue(sign));
 		return UnsignedLength(unsigned_value) - sign;
 	}
 

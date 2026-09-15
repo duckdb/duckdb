@@ -185,3 +185,66 @@ FROM src;
 ----
 0
 0
+
+#
+# Tie-breaking: MODE with ORDER BY must pick the earliest max-count value in the frame
+# (duckdb/duckdb#24826)
+#
+
+foreach windowmode "window" "combine" "separate"
+
+statement ok
+PRAGMA debug_window_mode={windowmode}
+
+# Sliding frame: tie-break must not use values that have left the frame
+query II
+WITH t(id, x) AS (VALUES (1, 'A'), (2, 'B'), (3, 'A'), (4, 'B'), (5, 'A'))
+SELECT id, MODE(x ORDER BY id) OVER (ORDER BY id ROWS BETWEEN 3 PRECEDING AND CURRENT ROW)
+FROM t
+ORDER BY id
+----
+1	A
+2	A
+3	A
+4	A
+5	B
+
+# Growing frame: a new tie must re-evaluate the mode
+query II
+WITH t(id, x) AS (VALUES (1, 'B'), (2, 'A'), (3, 'A'), (4, 'B'))
+SELECT id, MODE(x ORDER BY id) OVER (ORDER BY id ROWS UNBOUNDED PRECEDING)
+FROM t
+ORDER BY id
+----
+1	B
+2	B
+3	A
+4	B
+
+# EXCLUDE CURRENT ROW: tie-break must walk all subframes
+query II
+WITH t(id, x) AS (VALUES (1, 'A'), (2, 'B'), (3, 'A'), (4, 'B'), (5, 'A'))
+SELECT id, MODE(x ORDER BY id) OVER (ORDER BY id ROWS BETWEEN 3 PRECEDING AND CURRENT ROW EXCLUDE CURRENT ROW)
+FROM t
+ORDER BY id
+----
+1	NULL
+2	A
+3	A
+4	A
+5	B
+
+# Typed (non-VARCHAR) implementation
+query II
+WITH t(id, x) AS (VALUES (1, 10), (2, 20), (3, 10), (4, 20), (5, 10))
+SELECT id, MODE(x ORDER BY id) OVER (ORDER BY id ROWS BETWEEN 3 PRECEDING AND CURRENT ROW)
+FROM t
+ORDER BY id
+----
+1	10
+2	10
+3	10
+4	10
+5	20
+
+endloop

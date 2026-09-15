@@ -11,13 +11,17 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/common/arrow/physical_arrow_collector.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "debug_fs_extension.hpp"
 
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 
 namespace duckdb {
+
+static constexpr const char *BENCHMARK_EXTENSION_DIRECTORY_ENV = "DUCKDB_BENCHMARK_EXTENSION_DIRECTORY";
 
 static string ParseGroupFromPath(string file) {
 	string extension = "";
@@ -66,6 +70,10 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 			result->options.storage_compatibility = StorageCompatibility::FromString(version);
 		}
 		result->options.load_extensions = false;
+		auto extension_directory = std::getenv(BENCHMARK_EXTENSION_DIRECTORY_ENV);
+		if (extension_directory && extension_directory[0]) {
+			result->SetOptionByName("allow_unsigned_extensions", true);
+		}
 		return result;
 	}
 };
@@ -234,10 +242,15 @@ void InterpretedBenchmark::ProcessFile(const string &path) {
 				ThrowResultModeError(reader);
 			}
 			if (splits[1] == "streaming") {
-				if (splits.size() != 2) {
+				if (splits.size() > 3) {
 					throw std::runtime_error(
-					    reader.FormatException("resultmode 'streaming' does not accept a parameter"));
+					    reader.FormatException("resultmode 'streaming' accepts one optional drain mode"));
 				}
+				if (splits.size() == 3 && splits[2] != "drop" && splits[2] != "materialize") {
+					throw std::runtime_error(
+					    reader.FormatException("resultmode 'streaming' drain mode must be 'materialize' or 'drop'"));
+				}
+				discard_stream_result = splits.size() == 3 && splits[2] == "drop";
 				result_type = QueryResultType::STREAM_RESULT;
 			} else if (splits[1] == "arrow") {
 				arrow_batch_size = STANDARD_VECTOR_SIZE;
@@ -488,6 +501,10 @@ void InterpretedBenchmark::LoadBenchmark() {
 		throw InvalidInputException("Invalid benchmark file: no \"run\" query specified");
 	}
 	run_query = queries["run"];
+	if (discard_stream_result && !result_queries.empty()) {
+		throw InvalidInputException(
+		    "Invalid benchmark file: resultmode 'streaming drop' discards the result and cannot verify it");
+	}
 	is_loaded = true;
 }
 
@@ -499,6 +516,21 @@ void InterpretedBenchmark::LoadExtensions(InterpretedBenchmarkState &state, bool
 		if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
 			throw InvalidInputException("Unknown extension " + extension);
 		} else if (result == ExtensionLoadResult::NOT_LOADED) {
+			auto extension_directory = std::getenv(BENCHMARK_EXTENSION_DIRECTORY_ENV);
+			if (extension_directory && extension_directory[0]) {
+				auto fs = FileSystem::CreateLocal();
+				auto extension_path = fs->JoinPath(extension_directory, extension + ".duckdb_extension");
+				if (!fs->FileExists(extension_path)) {
+					throw InvalidInputException("Extension %s is not linked and was not found at %s", extension,
+					                            extension_path);
+				}
+				auto load_result = state.con.Query("LOAD " + SQLString(extension_path));
+				if (load_result->HasError()) {
+					throw InvalidInputException("Failed to load benchmark extension %s from %s: %s", extension,
+					                            extension_path, load_result->GetError());
+				}
+				continue;
+			}
 			throw InvalidInputException("Extension " + extension +
 			                            " is not available/was not compiled. Cannot run this benchmark.");
 		}
@@ -667,7 +699,19 @@ void InterpretedBenchmark::Run(BenchmarkState *state_p) {
 	}
 	if (temp_result->GetResultType() == QueryResultType::STREAM_RESULT) {
 		auto &stream_query = temp_result->Cast<StreamQueryResult>();
-		state.result = stream_query.Materialize();
+		if (discard_stream_result) {
+			// Fetching from a result that already carries an error throws instead of returning nullptr
+			while (!stream_query.HasError()) {
+				auto chunk = stream_query.Fetch();
+				if (!chunk || chunk->size() == 0) {
+					break;
+				}
+			}
+			state.result =
+			    stream_query.HasError() ? make_uniq<MaterializedQueryResult>(stream_query.GetErrorObject()) : nullptr;
+		} else {
+			state.result = stream_query.Materialize();
+		}
 	} else if (temp_result->GetResultType() == QueryResultType::ARROW_RESULT) {
 		/* no-op, this is only used to test the overhead of the result collector */
 		state.result = nullptr;

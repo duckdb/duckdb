@@ -32,6 +32,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/common/types/string.hpp"
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
@@ -176,6 +177,13 @@ Value::Value(String val) : type_(LogicalType::VARCHAR), is_null(false) {
 		throw ErrorManager::InvalidUnicodeError(val, "value construction");
 	}
 	value_info_ = make_shared_ptr<StringValueInfo>(val.ToStdString());
+}
+
+Value::Value(std::string_view val) : type_(LogicalType::VARCHAR), is_null(false) {
+	if (!Value::StringIsValid(val.data(), val.size())) {
+		throw ErrorManager::InvalidUnicodeError(string(val), "value construction");
+	}
+	value_info_ = make_shared_ptr<StringValueInfo>(string(val));
 }
 
 Value::~Value() {
@@ -1692,6 +1700,14 @@ interval_t Value::GetValueUnsafe() const {
 }
 
 //===--------------------------------------------------------------------===//
+// GetPointerToData
+//===--------------------------------------------------------------------===//
+const_data_ptr_t Value::GetPointerToData() const {
+	D_ASSERT(TypeIsConstantSize(type_.InternalType()));
+	return const_data_ptr_cast(&value_);
+}
+
+//===--------------------------------------------------------------------===//
 // Hash
 //===--------------------------------------------------------------------===//
 hash_t Value::Hash() const {
@@ -1717,7 +1733,11 @@ string Value::ToString() const {
 
 string Value::ToSQLString() const {
 	if (IsNull()) {
-		return ToString();
+		auto res = ToString();
+		if (type_.id() != LogicalTypeId::SQLNULL) {
+			res += "::" + type_.ToString();
+		}
+		return res;
 	}
 	switch (type_.id()) {
 	case LogicalTypeId::UUID:
@@ -1733,6 +1753,8 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIT:
+	case LogicalTypeId::GEOMETRY:
 		return "'" + ToString() + "'::" + type_.ToString();
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::ENUM: {
@@ -1743,15 +1765,27 @@ string Value::ToSQLString() const {
 		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
 	}
 	case LogicalTypeId::VARIANT: {
-		string ret = "VARIANT(";
 		Vector tmp(*this, count_t(1));
 		RecursiveUnifiedVectorFormat format;
 		Vector::RecursiveToUnifiedFormat(tmp, format);
 		UnifiedVariantVectorData vector_data(format);
 		auto val = VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
-		ret += val.ToString();
-		ret += ")";
-		return ret;
+		if (val.type().id() == LogicalTypeId::STRUCT) {
+			child_list_t<Value> children;
+			auto &values = StructValue::GetChildren(val);
+			for (idx_t i = 0; i < values.size(); i++) {
+				children.emplace_back(StructType::GetChildName(val.type(), i),
+				                      values[i].DefaultCastAs(LogicalType::VARIANT()));
+			}
+			val = Value::STRUCT(std::move(children));
+			return "CAST(" + val.ToSQLString() + " AS VARIANT)";
+		}
+		if (val.type().id() == LogicalTypeId::LIST) {
+			val = Value::LIST(LogicalType::VARIANT(), ListValue::GetChildren(val));
+			return "CAST(" + val.ToSQLString() + " AS VARIANT)";
+		}
+		// Preserve the payload's type as well as its value (e.g. SMALLINT versus INTEGER).
+		return "CAST(CAST(" + val.ToSQLString() + " AS " + val.type().ToString() + ") AS VARIANT)";
 	}
 	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::STRUCT: {
@@ -1766,7 +1800,7 @@ string Value::ToSQLString() const {
 			if (is_unnamed) {
 				ret += child.ToSQLString();
 			} else {
-				ret += "'" + name + "': " + child.ToSQLString();
+				ret += "'" + StringUtil::Replace(name.GetIdentifierName(), "'", "''") + "': " + child.ToSQLString();
 			}
 			if (i < struct_values.size() - 1) {
 				ret += ", ";
@@ -1780,12 +1814,17 @@ string Value::ToSQLString() const {
 		return ret;
 	}
 	case LogicalTypeId::FLOAT:
-		if (!FloatIsFinite(FloatValue::Get(*this))) {
+		if (!FloatIsFinite(FloatValue::Get(*this)) ||
+		    (FloatValue::Get(*this) == 0 && std::signbit(FloatValue::Get(*this)))) {
 			return "'" + ToString() + "'::" + type_.ToString();
 		}
 		return ToString();
 	case LogicalTypeId::DOUBLE: {
 		double val = DoubleValue::Get(*this);
+		// A numeric -0.0 literal is parsed as DECIMAL, losing the floating-point sign.
+		if (val == 0 && std::signbit(val)) {
+			return "'" + ToString() + "'::" + type_.ToString();
+		}
 		if (!DoubleIsFinite(val)) {
 			if (!Value::IsNan(val)) {
 				// to infinity and beyond
@@ -1843,9 +1882,9 @@ string Value::ToSQLString() const {
 		string ret = "union_value(";
 		auto union_tag = UnionValue::GetTag(*this);
 		auto &tag_name = UnionType::GetMemberName(type(), union_tag);
-		ret += tag_name + " := ";
+		ret += SQLIdentifier(tag_name) + " := ";
 		ret += UnionValue::GetValue(*this).ToSQLString();
-		ret += ")";
+		ret += ")::" + type_.ToString();
 		return ret;
 	}
 	default:

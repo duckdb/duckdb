@@ -29,6 +29,22 @@
         "id": 104,
         "name": "etag",
         "type": "string"
+      },
+      {
+        "id": 105,
+        "name": "repository_type",
+        "type": "ExtensionRepositoryType",
+        "default": "ExtensionRepositoryType::CORE"
+      },
+      {
+        "id": 106,
+        "name": "repository_name",
+        "type": "string"
+      },
+      {
+        "id": 107,
+        "name": "signature_key_fingerprint",
+        "type": "string"
       }
     ]
   }

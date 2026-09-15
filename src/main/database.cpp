@@ -1,10 +1,12 @@
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/arrow/arrow_type_extension.hpp"
 #include "duckdb/main/profiler/metrics_manager.hpp"
-#include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/http_util.hpp"
+#include "duckdb/main/http/http_util.hpp"
+#include "duckdb/main/http/http_transport_manager.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
@@ -60,7 +62,7 @@ DBConfig::DBConfig() {
 	index_types = make_uniq<IndexTypeSet>();
 	error_manager = make_uniq<ErrorManager>();
 	secret_manager = make_uniq<SecretManager>();
-	http_util = make_shared_ptr<HTTPUtil>();
+	http_transport_manager = HTTPTransportManager::Create(make_shared_ptr<HTTPUtil>());
 	callback_manager = make_uniq<ExtensionCallbackManager>();
 }
 
@@ -80,6 +82,7 @@ DBConfig::~DBConfig() {
 DatabaseInstance::DatabaseInstance() : db_validity(*this) {
 	config.is_user_config = false;
 	create_api_v1 = nullptr;
+	invoke_capi_v2 = nullptr;
 	parser_cache = make_uniq<ParserCache>();
 }
 
@@ -92,6 +95,7 @@ DatabaseInstance::~DatabaseInstance() {
 	if (db_manager) {
 		db_manager->ResetDatabases();
 	}
+	config.http_transport_manager->Close();
 	// destroy child elements
 	connection_manager.reset();
 	object_cache.reset();
@@ -231,6 +235,7 @@ void DatabaseInstance::CreateMainDatabase() {
 	Connection con(*this);
 	con.BeginTransaction();
 	AttachOptions options(config.options);
+	options.options = config.options.main_database_options;
 	options.is_main_database = true;
 	db_manager->AttachDatabase(*con.context, info, options);
 	con.Commit();
@@ -302,8 +307,11 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	Configure(*config_ptr, database_path);
+	// publish what this binary links, unless the config already carries a set handed to us
+	ExtensionHelper::RegisterLinkedExtensions(config);
 
 	create_api_v1 = CreateAPIv1Wrapper;
+	invoke_capi_v2 = InvokeCAPIV2Entrypoint;
 
 	db_file_system = make_uniq<DatabaseFileSystem>(*this);
 	local_db_file_system = make_uniq<LocalDatabaseFileSystem>(*this);
@@ -354,7 +362,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	LoadExtensionSettings();
 
-	if (!db_manager->HasDefaultDatabase()) {
+	if (!db_manager->HasAttachedDatabase()) {
 		CreateMainDatabase();
 	}
 
@@ -477,6 +485,9 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
 	config.options = new_config.options;
 	config.user_settings = new_config.user_settings;
+	// carry over a capability set handed to us, so a database created by code with its own copy of
+	// DuckDB can be given the extensions the binary that created it links
+	config.linked_extensions = new_config.linked_extensions;
 
 	if (Settings::Get<DuckDBAPISetting>(*this).empty()) {
 		config.SetOptionByName("duckdb_api", "cpp");
@@ -504,6 +515,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	} else {
 		config.file_system = make_uniq<VirtualFileSystem>(FileSystem::CreateLocal());
 	}
+	config.http_transport_manager->Initialize(DBConfig::GetSystemMaxThreads(*config.file_system));
 	if (database_path && !Settings::Get<EnableExternalAccessSetting>(*this)) {
 		config.AddAllowedPath(database_path);
 		config.AddAllowedPath(database_path + string(".wal"));
@@ -647,6 +659,13 @@ ValidChecker &DatabaseInstance::GetValidChecker() {
 const duckdb_ext_api_v1 DatabaseInstance::GetExtensionAPIV1() {
 	D_ASSERT(create_api_v1);
 	return create_api_v1();
+}
+
+void DatabaseInstance::InvokeExtensionEntrypointV2(const ExtensionInitResult &init_result, const string &extension_name,
+                                                   ext_init_c_api_v2_fun_t init_fun,
+                                                   optional_ptr<ClientContext> context, bool statically_linked) {
+	D_ASSERT(invoke_capi_v2);
+	invoke_capi_v2(*this, init_result, extension_name, init_fun, context, statically_linked);
 }
 
 LogManager &DatabaseInstance::GetLogManager() const {

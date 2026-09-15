@@ -1,12 +1,12 @@
 #include "duckdb/parser/keyword_helper.hpp"
-#include "duckdb/parser/peg/keyword_helper.hpp"
+#include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/identifier.hpp"
 
 namespace duckdb {
 
 static KeywordCategory GetPEGKeywordCategory(const string &text) {
-	auto &helper = PEGKeywordHelper::Instance();
+	auto &helper = DuckDBKeywordHelper::Instance();
 	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_RESERVED)) {
 		return KeywordCategory::KEYWORD_RESERVED;
 	}
@@ -93,11 +93,27 @@ string SQLIdentifier::ToString(const string &identifier) {
 	return SQLQuotedIdentifier::ToString(identifier);
 }
 
+string SQLIdentifier::ToString(const Identifier &identifier) {
+	return ToString(identifier.GetIdentifierName());
+}
+
+string SQLIdentifier::ToString(const char *identifier) {
+	return ToString(string(identifier));
+}
+
 SQLQuotedIdentifier::SQLQuotedIdentifier(const Identifier &id) : raw_string(id.GetIdentifierName()) {
 }
 
 string SQLQuotedIdentifier::ToString(const string &identifier) {
 	return KeywordHelper::WriteQuotedAndEscaped(identifier, '"');
+}
+
+string SQLQuotedIdentifier::ToString(const Identifier &identifier) {
+	return ToString(identifier.GetIdentifierName());
+}
+
+string SQLQuotedIdentifier::ToString(const char *identifier) {
+	return ToString(string(identifier));
 }
 
 string SQLString::ToString(const string &literal) {

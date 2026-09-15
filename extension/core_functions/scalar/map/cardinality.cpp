@@ -1,7 +1,6 @@
 #include "core_functions/scalar/map_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 
@@ -38,7 +37,8 @@ static unique_ptr<FunctionData> CardinalityBind(BindScalarFunctionInput &input) 
 }
 
 ScalarFunction CardinalityFun::GetFunction() {
-	ScalarFunction fun({LogicalType::ANY}, LogicalType::UBIGINT, CardinalityFunction, CardinalityBind);
+	ScalarFunction fun({}, LogicalType::UBIGINT, CardinalityFunction, CardinalityBind);
+	fun.GetSignature().AddParameter("map", LogicalType::ANY);
 	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
 	return fun;

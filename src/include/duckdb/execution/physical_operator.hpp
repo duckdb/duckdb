@@ -21,7 +21,6 @@
 #include "duckdb/execution/partition_info.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/execution/progress_data.hpp"
-#include "duckdb/optimizer/join_order/join_node.hpp"
 
 namespace duckdb {
 
@@ -37,6 +36,7 @@ class PhysicalPlan;
 enum class TableFunctionParallelism : uint8_t;
 enum class OperatorCachingMode : uint8_t { NONE, PARTITIONED, ORDERED, UNORDERED };
 enum class PipelineExternalInputSupport : uint8_t { UNSUPPORTED, SUPPORTED };
+enum class PipelineExternalInputCost : uint8_t { PIPELINED, SERIALIZED_FANOUT };
 enum class PipelineSourceConsumption : uint8_t { ALL_INPUT, MAY_STOP_EARLY };
 
 //! PhysicalOperator is the base class of the physical operators present in the execution plan.
@@ -63,7 +63,8 @@ public:
 	//! The estimated cardinality.
 	idx_t estimated_cardinality;
 
-	//! The global sink state.
+	//! The global sink state. Published under `lock` by Pipeline::ResetSink on a worker;
+	//! a reader racing pipeline initialization must hold `lock` to observe it safely
 	unique_ptr<GlobalSinkState> sink_state;
 	//! The global operator state.
 	unique_ptr<GlobalOperatorState> op_state;
@@ -114,6 +115,9 @@ public:
 
 	virtual PipelineExternalInputSupport GetExternalInputSupport() const {
 		return PipelineExternalInputSupport::UNSUPPORTED;
+	}
+	virtual PipelineExternalInputCost GetExternalInputCost() const {
+		return PipelineExternalInputCost::PIPELINED;
 	}
 
 	virtual PipelineSourceConsumption GetSourceConsumption() const {

@@ -1,0 +1,68 @@
+From f770105c4f6e4b0af29f78b690525bd0e8681716 Mon Sep 17 00:00:00 2001
+From: Copilot <copilot@localhost>
+Date: Fri, 28 Aug 2026 13:12:33 +0200
+Subject: [PATCH 5/8] Support pre-Windows 10 file mapping APIs
+
+
+diff --git a/third_party/httplib/httplib.hpp b/third_party/httplib/httplib.hpp
+index ad9322a..de9f340 100644
+--- a/third_party/httplib/httplib.hpp
++++ b/third_party/httplib/httplib.hpp
+@@ -17,13 +17,6 @@
+ #include "duckdb/common/string.hpp"
+ #include "duckdb/original/std/memory.hpp"
+ 
+-#ifdef _WIN32
+-#if defined(_WIN32_WINNT) && _WIN32_WINNT < 0x0A00
+-#error                                                                         \
+-    "cpp-httplib doesn't support Windows 8 or lower. Please use Windows 10 or later."
+-#endif
+-#endif
+-
+ /*
+  * Configuration
+  */
+@@ -6001,9 +5994,15 @@ inline bool mmap::open(const char *path) {
+   auto wpath = u8string_to_wstring(path);
+   if (wpath.empty()) { return false; }
+ 
+-  hFile_ =
+-      ::CreateFile2(wpath.c_str(), GENERIC_READ,
+-                    FILE_SHARE_READ | FILE_SHARE_WRITE, OPEN_EXISTING, NULL);
++#if defined(_WIN32_WINNT) && _WIN32_WINNT < 0x0A00
++  hFile_ = ::CreateFileW(wpath.c_str(), GENERIC_READ,
++                         FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING,
++                         FILE_ATTRIBUTE_NORMAL, NULL);
++#else
++  hFile_ = ::CreateFile2(wpath.c_str(), GENERIC_READ,
++                         FILE_SHARE_READ | FILE_SHARE_WRITE, OPEN_EXISTING,
++                         NULL);
++#endif
+ 
+   if (hFile_ == INVALID_HANDLE_VALUE) { return false; }
+ 
+@@ -6019,8 +6018,12 @@ inline bool mmap::open(const char *path) {
+   }
+   size_ = static_cast<size_t>(size.QuadPart);
+ 
++#if defined(_WIN32_WINNT) && _WIN32_WINNT < 0x0A00
++  hMapping_ = ::CreateFileMappingW(hFile_, NULL, PAGE_READONLY, 0, 0, NULL);
++#else
+   hMapping_ =
+       ::CreateFileMappingFromApp(hFile_, NULL, PAGE_READONLY, size_, NULL);
++#endif
+ 
+   // Special treatment for an empty file...
+   if (hMapping_ == NULL && size_ == 0) {
+@@ -6034,7 +6037,11 @@ inline bool mmap::open(const char *path) {
+     return false;
+   }
+ 
++#if defined(_WIN32_WINNT) && _WIN32_WINNT < 0x0A00
++  addr_ = ::MapViewOfFile(hMapping_, FILE_MAP_READ, 0, 0, 0);
++#else
+   addr_ = ::MapViewOfFileFromApp(hMapping_, FILE_MAP_READ, 0, 0);
++#endif
+ 
+   if (addr_ == nullptr) {
+     close();

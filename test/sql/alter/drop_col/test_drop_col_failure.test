@@ -40,3 +40,18 @@ statement error
 ALTER TABLE test2 DROP COLUMN age
 ----
 Catalog Error: Cannot drop column "age" because it is referenced in unique constraint UNIQUE(surname, age)
+
+# dropping a single-column PRIMARY KEY reports the PRIMARY KEY constraint
+statement error
+ALTER TABLE test2 DROP COLUMN id
+----
+Catalog Error: Cannot drop column "id" because there is a PRIMARY KEY constraint that depends on it
+
+# dropping a column of a multi-column PRIMARY KEY reports the PRIMARY KEY constraint
+statement ok
+CREATE TABLE test3 (a INT, b INT, c INT, PRIMARY KEY(a, b))
+
+statement error
+ALTER TABLE test3 DROP COLUMN a
+----
+Catalog Error: Cannot drop column "a" because it is referenced in primary key constraint PRIMARY KEY(a, b)

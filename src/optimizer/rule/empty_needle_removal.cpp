@@ -71,9 +71,46 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 	// PREFIX(NULL, '') is NULL
 	// so rewrite PREFIX(x, '') to TRUE_OR_NULL(x)
 	if (needle_string.empty()) {
-		return ExpressionRewriter::ConstantOrNull(std::move(root.GetChildrenMutable()[0]), Value::BOOLEAN(true));
+		return ExpressionRewriter::ConstantOrNull(GetContext(), std::move(root.GetChildrenMutable()[0]),
+		                                          Value::BOOLEAN(true));
 	}
 	return nullptr;
+}
+
+NoopReplaceRemovalRule::NoopReplaceRemovalRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
+	auto func = make_uniq<FunctionExpressionMatcher>();
+	func->matchers.push_back(make_uniq<ExpressionMatcher>());
+	func->matchers.push_back(make_uniq<ExpressionMatcher>());
+	func->matchers.push_back(make_uniq<ExpressionMatcher>());
+	func->policy = SetMatcher::Policy::ORDERED;
+	func->function = make_uniq<SpecificFunctionMatcher>("replace");
+	root = std::move(func);
+}
+
+unique_ptr<Expression> NoopReplaceRemovalRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
+                                                     bool &changes_made, bool is_root) {
+	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
+	D_ASSERT(root.GetChildren().size() == 3);
+	auto &needle_expr = bindings[2].get();
+	auto &replacement_expr = bindings[3].get();
+	if (!needle_expr.IsFoldable() || !replacement_expr.IsFoldable()) {
+		return nullptr;
+	}
+
+	Value needle;
+	Value replacement;
+	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), needle_expr, needle) ||
+	    !ExpressionExecutor::TryEvaluateScalar(GetContext(), replacement_expr, replacement)) {
+		return nullptr;
+	}
+	if (needle.IsNull() || replacement.IsNull() || needle.type().id() != LogicalTypeId::VARCHAR ||
+	    replacement.type().id() != LogicalTypeId::VARCHAR) {
+		return nullptr;
+	}
+	if (StringValue::Get(needle) != StringValue::Get(replacement)) {
+		return nullptr;
+	}
+	return std::move(root.GetChildrenMutable()[0]);
 }
 
 } // namespace duckdb

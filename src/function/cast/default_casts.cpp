@@ -14,6 +14,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -23,13 +24,37 @@ BindCastInfo::~BindCastInfo() {
 BoundCastData::~BoundCastData() {
 }
 
+CastStatisticsInput::CastStatisticsInput(BoundCastInfo &bound_cast_p, const LogicalType &source_type_p,
+                                         const LogicalType &target_type_p, const BaseStatistics &child_stats_p,
+                                         optional_ptr<ClientContext> context_p)
+    : source_type(source_type_p), target_type(target_type_p), child_stats(child_stats_p), context(context_p),
+      bound_cast(bound_cast_p) {
+}
+
+void CastStatisticsInput::SetFunction(cast_function_t new_function) {
+	bound_cast.function = new_function;
+}
+
 BoundCastInfo::BoundCastInfo(cast_function_t function_p, unique_ptr<BoundCastData> cast_data_p,
                              init_cast_local_state_t init_local_state_p)
     : function(function_p), init_local_state(init_local_state_p), cast_data(std::move(cast_data_p)) {
 }
 
 BoundCastInfo BoundCastInfo::Copy() const {
-	return BoundCastInfo(function, cast_data ? cast_data->Copy() : nullptr, init_local_state);
+	auto result = BoundCastInfo(function, cast_data ? cast_data->Copy() : nullptr, init_local_state);
+	result.statistics = statistics;
+	return result;
+}
+
+unique_ptr<BaseStatistics> BoundCastInfo::PropagateStatistics(const LogicalType &source_type,
+                                                              const LogicalType &target_type,
+                                                              const BaseStatistics &child_stats,
+                                                              optional_ptr<ClientContext> context) {
+	if (!statistics) {
+		return nullptr;
+	}
+	CastStatisticsInput input(*this, source_type, target_type, child_stats, context);
+	return statistics(input);
 }
 
 bool DefaultCasts::NopCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {

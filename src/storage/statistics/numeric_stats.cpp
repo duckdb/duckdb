@@ -1,6 +1,9 @@
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 
+#include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -280,6 +283,42 @@ FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, Ex
 	default:
 		throw InternalException("Unsupported type for NumericStats::CheckZonemap");
 	}
+}
+
+bool NumericStats::ConstantsCoverRange(const BaseStatistics &stats, array_ptr<const Value> constants) {
+	auto &type = stats.GetType();
+	// values are compared as hugeint_t, which cannot hold large UINT128 values
+	if (!type.IsIntegral() || type.InternalType() == PhysicalType::UINT128 || !NumericStats::HasMinMax(stats)) {
+		return false;
+	}
+	auto min_value = NumericStats::Min(stats).GetValue<hugeint_t>();
+	auto max_value = NumericStats::Max(stats).GetValue<hugeint_t>();
+	// covering [min, max] requires at least max - min + 1 constants
+	hugeint_t range;
+	if (!TrySubtractOperator::Operation(max_value, min_value, range) ||
+	    range >= NumericCast<int64_t>(constants.size())) {
+		return false;
+	}
+	vector<hugeint_t> values;
+	for (auto &constant_value : constants) {
+		if (constant_value.type() != type) {
+			return false;
+		}
+		auto constant = constant_value.GetValue<hugeint_t>();
+		if (constant >= min_value && constant <= max_value) {
+			values.push_back(constant);
+		}
+	}
+	std::sort(values.begin(), values.end());
+	if (values.empty() || values.front() != min_value || values.back() != max_value) {
+		return false;
+	}
+	for (idx_t i = 1; i < values.size(); i++) {
+		if (values[i - 1] != values[i] && values[i - 1] + 1 != values[i]) {
+			return false;
+		}
+	}
+	return true;
 }
 
 bool NumericStats::IsConstant(const BaseStatistics &stats) {

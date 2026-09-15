@@ -1,0 +1,40 @@
+module: arena
+# The "arena" is a handle to an "Arena Allocator", an object that manages a sequence of contiguous blocks of memory
+# from which it can hand out piecewise slices from in a linear fashion. Arena allocators are commonly used to amortize
+# the cost of many small allocations. It also provides a simple way to manage the lifetime of many small objects that
+# are allocated together as the blocks can all be freed at once when the arena is destroyed.
+#
+# In DuckDB, vectors containing strings (or blobs, or any other string-based type) also hold an auxiliary "arena", the
+#  so called the "String Heap". This is used to store the actual string data of large strings that do not fit in the
+# individual `string_t`s inline storage.
+functions:
+  # TODO: This should probably take an "alignment" parameter too
+  arena_allocate:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Allocate `byte_len` bytes from the arena.
+
+      Returns a writable pointer to `byte_len` uninitialized bytes, valid for as long as the arena is. There is no
+      minimum or maximum allocation size, and the arena may return a pointer to a block of memory that is larger than 
+      `byte_len`. The arena will free all allocated memory when it is destroyed, so the caller should not attempt to free the returned pointer themselves.
+    role: method
+    belongs_to: arena
+    parameters:
+      arena:
+        type: arena
+        description: The arena to allocate from.
+      byte_len:
+        type: idx
+        description: Number of bytes to reserve. May be 0.
+      out_ptr:
+        type: u8
+        indirection: 2
+        kind: OUT_BORROW
+        description: Receives a writable pointer to byte_len arena-owned bytes.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR

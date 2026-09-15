@@ -4,7 +4,6 @@
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
@@ -83,6 +82,7 @@ static unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, Functi
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	auto struct_stats = StructStats::CreateUnknown(expr.GetReturnType());
+	struct_stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 	for (idx_t i = 0; i < child_stats.size(); i++) {
 		StructStats::SetChildStats(struct_stats, i, child_stats[i]);
 	}

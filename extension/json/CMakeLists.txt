@@ -15,7 +15,6 @@ set(JSON_EXTENSION_FILES
     json_common.cpp
     json_enums.cpp
     json_functions.cpp
-    json_multi_file_info.cpp
     json_scan.cpp
     json_serializer.cpp
     json_deserializer.cpp
@@ -32,6 +31,7 @@ set(JSON_EXTENSION_FILES
     json_functions/json_structure.cpp
     json_functions/json_transform.cpp
     json_functions/json_create.cpp
+    json_functions/json_geojson.cpp
     json_functions/json_type.cpp
     json_functions/json_valid.cpp
     json_functions/json_value.cpp
@@ -43,7 +43,7 @@ set(JSON_EXTENSION_FILES
     json_functions/json_modify.cpp
     json_functions/json_strip_nulls.cpp
     json_functions/read_json.cpp
-    json_functions/read_json_objects.cpp)
+    json_functions/read_single_json_file.cpp)
 
 build_static_extension(json ${JSON_EXTENSION_FILES})
 set(PARAMETERS "-warnings")

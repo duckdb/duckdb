@@ -15,3 +15,19 @@ CALL check_peg_parser($TEST_PEG_PARSER$with cte1 as MATERIALIZED (Select i as j 
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$from my_wonderful_values : (values(42))$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT t.a FROM t: (SELECT 42 AS a) ORDER BY t.a$TEST_PEG_PARSER$);
+
+query I
+SELECT t.a FROM t: (SELECT 42 AS a) ORDER BY t.a
+----
+42
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT v.col0 FROM v: VALUES (42) ORDER BY v.col0$TEST_PEG_PARSER$);
+
+query I
+SELECT v.col0 FROM v: VALUES (42) ORDER BY v.col0
+----
+42

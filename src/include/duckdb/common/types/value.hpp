@@ -65,6 +65,8 @@ public:
 	DUCKDB_API Value(string val); // NOLINT: Allow implicit conversion from `string`
 	//! Create a VARCHAR value
 	DUCKDB_API Value(String val); // NOLINT: Allow implicit conversion from `string`
+	//! Create a VARCHAR value
+	DUCKDB_API Value(std::string_view val);
 	//! Copy constructor
 	DUCKDB_API Value(const Value &other);
 	//! Move constructor
@@ -200,6 +202,9 @@ public:
 	static Value BLOB_RAW(const string &data) { // NOLINT
 		return Value::BLOB(const_data_ptr_cast(data.c_str()), data.size());
 	}
+	static Value BLOB_RAW(std::string_view data) {
+		return Value::BLOB(const_data_ptr_cast(data.data()), data.size());
+	}
 	//! Creates a blob by casting a specified string to a blob (i.e. interpreting \x characters)
 	DUCKDB_API static Value BLOB(const string &data);
 	//! Creates a bitstring by casting a specified string to a bitstring
@@ -228,6 +233,10 @@ public:
 	// type of the value. Only use this if you know what you are doing.
 	template <class T>
 	T GetValueUnsafe() const;
+
+	//! Pointer to the inline-stored payload bytes. Only valid for constant-size physical types; the
+	//! pointer borrows the Value's storage and is valid until the Value is destroyed.
+	DUCKDB_API const_data_ptr_t GetPointerToData() const;
 
 	//! Return a copy of this value
 	Value Copy() const {

@@ -49,6 +49,13 @@ class BufferPool;
 class CastFunctionSet;
 class CollationBinding;
 class ClientContext;
+class DuckDB;
+
+//! An extension linked into the binary, and how to load it into a database.
+struct LinkedExtension {
+	string name;
+	std::function<void(DuckDB &)> load;
+};
 class ErrorManager;
 class CompressionFunction;
 class TableFunctionRef;
@@ -58,6 +65,7 @@ class ExtensionCallback;
 class SecretManager;
 class CompressionInfo;
 class EncryptionUtil;
+class HTTPTransportManager;
 class HTTPUtil;
 class DatabaseFilePathManager;
 class ExtensionCallbackManager;
@@ -78,6 +86,8 @@ struct DBConfigOptions {
 	string database_type;
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
 	AccessMode access_mode = AccessMode::AUTOMATIC;
+	//! ATTACH-style options applied to the main database, e.g. IO_MODE. Same keys ATTACH accepts
+	unordered_map<string, Value> main_database_options;
 	//! Checkpoint when WAL reaches this size (default: 16MiB)
 	idx_t checkpoint_wal_size = 1 << 24;
 	//! Whether extensions should be loaded on start-up
@@ -214,7 +224,8 @@ public:
 
 	DUCKDB_API void AddExtensionOption(const Identifier &name, string description, LogicalType parameter,
 	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr,
-	                                   SetScope default_scope = SetScope::SESSION);
+	                                   SetScope default_scope = SetScope::SESSION, bool is_debug = false,
+	                                   bool is_deprecated = false);
 	DUCKDB_API bool HasExtensionOption(const Identifier &name) const;
 	DUCKDB_API identifier_map_t<ExtensionOption> GetExtensionSettings() const;
 	DUCKDB_API bool TryGetExtensionOption(const Identifier &name, ExtensionOption &result) const;
@@ -267,6 +278,14 @@ public:
 	DUCKDB_API bool HasArrowExtension(ArrowExtensionMetadata info) const;
 	DUCKDB_API void RegisterArrowExtension(const ArrowTypeExtension &extension) const;
 
+	//! Extensions compiled into the binary that produced this config, published as callables rather
+	//! than as generated code. Code carrying its own copy of DuckDB - a statically built extension -
+	//! cannot see the generated loader, but it can read this; and copying it into a child config
+	//! hands a database the same capability set as the one that created it.
+	//! A vector, not a map: extensions load in registration order, and that order has to be stable
+	//! across runs and platforms.
+	vector<LinkedExtension> linked_extensions;
+
 	bool operator==(const DBConfig &other);
 	bool operator!=(const DBConfig &other);
 
@@ -302,6 +321,7 @@ public:
 
 	void SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util);
 	HTTPUtil &GetHTTPUtil() const;
+	DUCKDB_API HTTPTransportManager &GetHTTPTransportManager();
 
 private:
 	mutable mutex config_lock;
@@ -313,10 +333,8 @@ private:
 	unique_ptr<IndexTypeSet> index_types;
 	unique_ptr<ExtensionCallbackManager> callback_manager;
 	bool is_user_config = true;
-	//! HTTP Request utility functions
-	shared_ptr<HTTPUtil> http_util;
-	vector<shared_ptr<HTTPUtil>> old_http_utils;
-	mutex http_util_lock;
+	//! HTTP provider publication and bounded client ownership
+	unique_ptr<HTTPTransportManager> http_transport_manager;
 };
 
 } // namespace duckdb

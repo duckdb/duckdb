@@ -1,0 +1,134 @@
+module: error
+# Accessors and lifecycle for error_info, the opaque handle that
+# every fallible function optionally writes out when it fails.
+functions:
+  error_info_get_code:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Retrieves the error code associated with an error info handle.
+
+      On success, writes the info's error code to `*out_code`. On failure
+      (e.g. if `info` is invalid), leaves `*out_code` unchanged and returns
+      a non-success error code.
+    role: getter
+    belongs_to: error_info
+    parameters:
+      info:
+        type: error_info
+        description: "The error info handle to query."
+      out_code:
+        type: ERROR
+        indirection: 1
+        kind: OUT
+        description: "The error code associated with the info, if the call succeeds."
+    return_type: ERROR
+
+  error_info_get_text:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Retrieves the error message associated with an error info handle.
+
+      Returns a borrowed pointer to the info's null-terminated error message.
+      The pointer is owned by DuckDB and is valid until the info is destroyed;
+      callers must not free it, and must not read it once the info has been
+      destroyed.
+    role: getter
+    belongs_to: error_info
+    parameters:
+      info:
+        type: error_info
+        description: "The error info handle to query."
+      out_text:
+        type: str
+        indirection: 1
+        kind: OUT_BORROW
+        description: "Receives a borrowed view of the message. Owned by DuckDB; valid until the info handle is destroyed."
+    return_type: ERROR
+
+  error_info_get_raw_message:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Retrieves the error message body without the leading category prefix.
+
+      Returns a borrowed view of the same message error_info_get_text reports,
+      minus the leading "<Type> Error: " prefix. This is the authoritative
+      unprefixed body: the API exposes no type name, so the prefix cannot be
+      reconstructed and the body cannot be derived from error_info_get_text.
+      Unprefixed does not mean plain — the body keeps whatever form it was
+      rendered in (a LINE/caret block by default, JSON under errors_as_json).
+      `{NULL, 0}` when there is no message. The pointer is owned by DuckDB and
+      valid until the info handle is destroyed.
+    role: getter
+    belongs_to: error_info
+    parameters:
+      info:
+        type: error_info
+        description: "The error info handle to query."
+      out_raw_message:
+        type: str
+        indirection: 1
+        kind: OUT_BORROW
+        description: "Receives a borrowed view of the raw message. Owned by DuckDB; valid until the info handle is destroyed."
+    return_type: ERROR
+
+  error_info_set_code:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Sets the error code for an error info handle.
+
+      On success, replaces the info's error code with the provided one. On
+      failure, nothing is changed. Accepts a `nullptr` info handle, in which
+      case the call is a no-op and returns ERROR_NONE.
+    role: setter
+    belongs_to: error_info
+    parameters:
+      info:
+        type: error_info
+        description: "The error info handle to set. On success, updated with the provided code."
+      code:
+        type: ERROR
+        description: "The error code to set in the info."
+    return_type: ERROR
+
+  error_info_set_text:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Sets the error message for an error info handle.
+
+      On success, replaces the info's message with the provided one; DuckDB
+      allocates its own copy of the string. On failure, nothing is changed.
+      Accepts a `nullptr` info handle, in which case the call is a no-op and
+      returns ERROR_NONE.
+    role: setter
+    belongs_to: error_info
+    parameters:
+      info:
+        type: error_info
+        description: "The error info handle to set. On success, updated with the provided message."
+      text:
+        type: str
+        description: "The error message to set in the info."
+    return_type: ERROR
+
+  error_info_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Destroys an error info handle and frees its resources.
+
+      Null-safe: calling with a null handle, or a null pointer-to-handle, is a
+      no-op and returns ERROR_NONE. On return `*info` is set to nullptr. Safe
+      to call on any info DuckDB returned.
+    role: destructor
+    belongs_to: error_info
+    parameters:
+      info:
+        type: error_info
+        indirection: 1
+        description: "The error info handle to destroy. Set to nullptr on return."
+    return_type: ERROR

@@ -488,6 +488,8 @@ unique_ptr<FunctionData> BindDecimalFirst(BindAggregateFunctionInput &input) {
 	function.SetName(std::move(name));
 	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 	function.SetDirectRewriteCallback(RewriteOrderedFirst<LAST, SKIP_NULLS>);
+	function.SetSingleValueIdentity(true);
+	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	function.SetReturnType(decimal_type);
 	return nullptr;
 }
@@ -511,17 +513,23 @@ unique_ptr<FunctionData> BindFirst(BindAggregateFunctionInput &input) {
 	function.SetName(std::move(name));
 	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 	function.SetDirectRewriteCallback(RewriteOrderedFirst<LAST, SKIP_NULLS>);
+	function.SetSingleValueIdentity(true);
+	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	return nullptr;
 }
 
 template <bool LAST, bool SKIP_NULLS>
 void AddFirstOperator(AggregateFunctionSet &set) {
-	set.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-	                                  BindDecimalFirst<LAST, SKIP_NULLS>));
-	set.AddFunction(AggregateFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                                  FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-	                                  BindFirst<LAST, SKIP_NULLS>));
+	AggregateFunction decimal_fun({}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                              FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+	                              BindDecimalFirst<LAST, SKIP_NULLS>);
+	decimal_fun.GetSignature().AddParameter("arg", LogicalTypeId::DECIMAL);
+	set.AddFunction(decimal_fun);
+
+	AggregateFunction any_fun({}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                          FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, BindFirst<LAST, SKIP_NULLS>);
+	any_fun.GetSignature().AddParameter("arg", LogicalTypeId::ANY);
+	set.AddFunction(any_fun);
 }
 
 } // namespace
@@ -530,6 +538,8 @@ AggregateFunction FirstFunctionGetter::GetFunction(const LogicalType &type) {
 	auto fun = GetFirstFunction<false, false>(type);
 	fun.SetName("first");
 	fun.SetDirectRewriteCallback(RewriteOrderedFirst<false, false>);
+	fun.SetSingleValueIdentity(true);
+	fun.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	return fun;
 }
 
@@ -537,6 +547,8 @@ AggregateFunction LastFunctionGetter::GetFunction(const LogicalType &type) {
 	auto fun = GetFirstFunction<true, false>(type);
 	fun.SetName("last");
 	fun.SetDirectRewriteCallback(RewriteOrderedFirst<true, false>);
+	fun.SetSingleValueIdentity(true);
+	fun.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	return fun;
 }
 

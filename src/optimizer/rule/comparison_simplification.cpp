@@ -12,8 +12,9 @@
 
 namespace duckdb {
 
-static bool DateTimestampComparisonIsInvertible(BoundFunctionExpression &expr, BoundFunctionExpression &cast_expression,
-                                                const Value &constant_value, Value &cast_constant, bool column_ref_left,
+static bool DateTimestampComparisonIsInvertible(ClientContext &context, BoundFunctionExpression &expr,
+                                                BoundFunctionExpression &cast_expression, const Value &constant_value,
+                                                Value &cast_constant, bool column_ref_left,
                                                 unique_ptr<Expression> &replacement) {
 	if (Timestamp::GetTime(constant_value.GetValue<timestamp_t>()) == dtime_t(0)) {
 		return true; // it's midnight: no replacement needed
@@ -24,13 +25,13 @@ static bool DateTimestampComparisonIsInvertible(BoundFunctionExpression &expr, B
 	switch (op) {
 	case ExpressionType::COMPARE_EQUAL:
 		// d =  T   -> false, preserving NULL
-		replacement = ExpressionRewriter::ConstantOrNull(std::move(BoundCastExpression::ChildMutable(cast_expression)),
-		                                                 Value::BOOLEAN(false));
+		replacement = ExpressionRewriter::ConstantOrNull(
+		    context, std::move(BoundCastExpression::ChildMutable(cast_expression)), Value::BOOLEAN(false));
 		return true;
 	case ExpressionType::COMPARE_NOTEQUAL:
 		// d != T   -> true, preserving NULL
-		replacement = ExpressionRewriter::ConstantOrNull(std::move(BoundCastExpression::ChildMutable(cast_expression)),
-		                                                 Value::BOOLEAN(true));
+		replacement = ExpressionRewriter::ConstantOrNull(
+		    context, std::move(BoundCastExpression::ChildMutable(cast_expression)), Value::BOOLEAN(true));
 		return true;
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		// d IS DISTINCT FROM T     -> true
@@ -72,17 +73,24 @@ static bool DateTimestampComparisonIsInvertible(BoundFunctionExpression &expr, B
 	return true;
 }
 
-static bool ConstantCastIsInvertible(BoundFunctionExpression &expr, BoundFunctionExpression &cast_expression,
-                                     const Value &constant_value, Value &cast_constant, const LogicalType &target_type,
-                                     bool column_ref_left, unique_ptr<Expression> &replacement) {
+static bool ConstantCastIsInvertible(ClientContext &context, BoundFunctionExpression &expr,
+                                     BoundFunctionExpression &cast_expression, const Value &constant_value,
+                                     Value &cast_constant, const LogicalType &target_type, bool column_ref_left,
+                                     unique_ptr<Expression> &replacement) {
 	if (cast_constant.IsNull() || BoundCastExpression::CastIsInvertible(cast_expression.GetReturnType(), target_type)) {
+		return true;
+	}
+	// This asks about the constant, not the column, and the constant was cast strictly just above - for
+	// integers that already proves it is exactly representable, so no type-level guarantee is needed. The
+	// column side is checked separately by the caller.
+	if (cast_expression.GetReturnType().IsIntegral() && target_type.IsIntegral()) {
 		return true;
 	}
 	if (target_type.id() != LogicalTypeId::DATE || cast_expression.GetReturnType().id() != LogicalTypeId::TIMESTAMP) {
 		return false;
 	}
-	return DateTimestampComparisonIsInvertible(expr, cast_expression, constant_value, cast_constant, column_ref_left,
-	                                           replacement);
+	return DateTimestampComparisonIsInvertible(context, expr, cast_expression, constant_value, cast_constant,
+	                                           column_ref_left, replacement);
 }
 
 static unique_ptr<Expression> CreateNullCheckExpression(ExpressionType expression_type, unique_ptr<Expression> child) {
@@ -115,7 +123,6 @@ unique_ptr<Expression> RowComparisonSimplificationRule::Apply(LogicalOperator &o
 	if (!is_root || op.type != LogicalOperatorType::LOGICAL_FILTER) {
 		return nullptr;
 	}
-	auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
 	auto &left = bindings[1].get().Cast<BoundFunctionExpression>();
 	auto &right = bindings[2].get().Cast<BoundFunctionExpression>();
 	if (left.Function().GetName() != "row" || right.Function().GetName() != "row") {
@@ -139,7 +146,8 @@ unique_ptr<Expression> RowComparisonSimplificationRule::Apply(LogicalOperator &o
 	auto result = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 	for (idx_t child_idx = 0; child_idx < left_children.size(); child_idx++) {
 		result->GetChildrenMutable().push_back(BoundComparisonExpression::Create(
-		    comparison.GetExpressionType(), std::move(left_children[child_idx]), std::move(right_children[child_idx])));
+		    ExpressionType::COMPARE_NOT_DISTINCT_FROM, std::move(left_children[child_idx]),
+		    std::move(right_children[child_idx])));
 	}
 	return std::move(result);
 }
@@ -175,10 +183,15 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		return make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 	}
 	if (BoundComparisonExpression::IsComparison(column_ref_expr) && !constant_value.IsNull() &&
-	    constant_value.type().id() == LogicalTypeId::BOOLEAN && BooleanValue::Get(constant_value)) {
+	    constant_value.type().id() == LogicalTypeId::BOOLEAN) {
 		if (expr.GetExpressionType() == ExpressionType::COMPARE_EQUAL ||
 		    (expr.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM && is_root &&
 		     op.type == LogicalOperatorType::LOGICAL_FILTER)) {
+			if (!BooleanValue::Get(constant_value)) {
+				auto &comparison = column_ref_expr.Cast<BoundFunctionExpression>();
+				auto negated_type = NegateComparisonExpression(comparison.GetExpressionType());
+				BoundComparisonExpression::SetType(comparison, negated_type);
+			}
 			return column_ref_left ? std::move(left) : std::move(right);
 		}
 	}
@@ -202,7 +215,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 
 		// Is the constant cast invertible?
 		unique_ptr<Expression> replacement;
-		if (!ConstantCastIsInvertible(expr, cast_expression, constant_value, cast_constant, target_type,
+		if (!ConstantCastIsInvertible(GetContext(), expr, cast_expression, constant_value, cast_constant, target_type,
 		                              column_ref_left, replacement)) {
 			return nullptr;
 		}

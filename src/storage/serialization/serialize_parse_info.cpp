@@ -241,12 +241,14 @@ void AddColumnInfo::Serialize(Serializer &serializer) const {
 	AlterTableInfo::Serialize(serializer);
 	serializer.WriteProperty<ColumnDefinition>(400, "new_column", new_column);
 	serializer.WritePropertyWithDefault<bool>(401, "if_column_not_exists", if_column_not_exists);
+	serializer.WritePropertyWithDefault<bool>(402, "add_not_null", add_not_null);
 }
 
 unique_ptr<AlterTableInfo> AddColumnInfo::Deserialize(Deserializer &deserializer) {
 	auto new_column = deserializer.ReadProperty<ColumnDefinition>(400, "new_column");
 	auto result = duckdb::unique_ptr<AddColumnInfo>(new AddColumnInfo(std::move(new_column)));
 	deserializer.ReadPropertyWithDefault<bool>(401, "if_column_not_exists", result->if_column_not_exists);
+	deserializer.ReadPropertyWithDefault<bool>(402, "add_not_null", result->add_not_null);
 	return std::move(result);
 }
 
@@ -399,6 +401,9 @@ void CopyInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(209, "is_format_auto_detected", is_format_auto_detected);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(210, "file_path_expression", file_path_expression);
 	serializer.WritePropertyWithDefault<identifier_map_t<unique_ptr<ParsedExpression>>>(211, "parsed_options", parsed_options);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0) || (qualified_name.Path().size() > 3)) {
+		serializer.WriteProperty<QualifiedName>(212, "qualified_name", qualified_name);
+	}
 }
 
 unique_ptr<ParseInfo> CopyInfo::Deserialize(Deserializer &deserializer) {
@@ -415,7 +420,11 @@ unique_ptr<ParseInfo> CopyInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<bool>(209, "is_format_auto_detected", result->is_format_auto_detected);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(210, "file_path_expression", result->file_path_expression);
 	deserializer.ReadPropertyWithDefault<identifier_map_t<unique_ptr<ParsedExpression>>>(211, "parsed_options", result->parsed_options);
+	auto qualified_name = deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(212, "qualified_name", QualifiedName());
 	result->SetQualifiedName(std::move(catalog), std::move(schema), std::move(table));
+	if (!qualified_name.Path().empty()) {
+		result->SetQualifiedName(std::move(qualified_name));
+	}
 	return std::move(result);
 }
 
@@ -493,6 +502,11 @@ void LoadInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(203, "version", version);
 	serializer.WritePropertyWithDefault<bool>(204, "repo_is_alias", repo_is_alias);
 	serializer.WritePropertyWithDefault<Identifier>(205, "alias", alias);
+	serializer.WritePropertyWithDefault<string>(206, "repository_url", repository_url);
+	serializer.WritePropertyWithDefault<vector<string>>(207, "public_keys", public_keys);
+	serializer.WritePropertyWithDefault<OnCreateConflict>(208, "on_conflict", on_conflict, OnCreateConflict::ERROR_ON_CONFLICT);
+	serializer.WritePropertyWithDefault<bool>(209, "missing_ok", missing_ok, false);
+	serializer.WritePropertyWithDefault<bool>(210, "load_after_install", load_after_install, false);
 }
 
 unique_ptr<ParseInfo> LoadInfo::Deserialize(Deserializer &deserializer) {
@@ -503,6 +517,11 @@ unique_ptr<ParseInfo> LoadInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<string>(203, "version", result->version);
 	deserializer.ReadPropertyWithDefault<bool>(204, "repo_is_alias", result->repo_is_alias);
 	deserializer.ReadPropertyWithDefault<Identifier>(205, "alias", result->alias);
+	deserializer.ReadPropertyWithDefault<string>(206, "repository_url", result->repository_url);
+	deserializer.ReadPropertyWithDefault<vector<string>>(207, "public_keys", result->public_keys);
+	deserializer.ReadPropertyWithExplicitDefault<OnCreateConflict>(208, "on_conflict", result->on_conflict, OnCreateConflict::ERROR_ON_CONFLICT);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(209, "missing_ok", result->missing_ok, false);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(210, "load_after_install", result->load_after_install, false);
 	return std::move(result);
 }
 

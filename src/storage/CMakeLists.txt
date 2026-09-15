@@ -24,6 +24,7 @@ add_library_unity(
   database_handle.cpp
   data_pointer.cpp
   data_table.cpp
+  index_entry.cpp
   index.cpp
   local_storage.cpp
   magic_bytes.cpp

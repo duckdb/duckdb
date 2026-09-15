@@ -138,7 +138,7 @@ WHERE prev_p < p
 statement error
 copy (from range(10)) to '{TEST_DIR}/duplicated' (partition_by (range, range));
 ----
-Binder Error: partition_by does now allow duplicate columns
+Binder Error: "partition_by" does now allow duplicate columns
 
 statement ok
 CREATE TABLE order_by_expr_repro AS

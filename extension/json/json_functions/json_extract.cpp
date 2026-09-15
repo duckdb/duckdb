@@ -35,13 +35,20 @@ static void ExtractStringManyFunction(DataChunk &args, ExpressionState &state, V
 }
 
 static void GetExtractFunctionsInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({input_type, LogicalType::BIGINT}, LogicalType::JSON(), ExtractFunction,
-	                               JSONReadFunctionData::Bind, nullptr, JSONFunctionLocalState::Init));
-	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::JSON(), ExtractFunction,
-	                               JSONReadFunctionData::Bind, nullptr, JSONFunctionLocalState::Init));
-	set.AddFunction(ScalarFunction({input_type, LogicalType::LIST(LogicalType::VARCHAR)},
-	                               LogicalType::LIST(LogicalType::JSON()), ExtractManyFunction,
-	                               JSONReadManyFunctionData::Bind, nullptr, JSONFunctionLocalState::Init));
+	ScalarFunction index_fun({}, LogicalType::JSON(), ExtractFunction, JSONReadFunctionData::Bind, nullptr,
+	                         JSONFunctionLocalState::Init);
+	index_fun.GetSignature().AddParameter("json", input_type).AddParameter("index", LogicalType::BIGINT);
+	set.AddFunction(index_fun);
+	ScalarFunction path_fun({}, LogicalType::JSON(), ExtractFunction, JSONReadFunctionData::Bind, nullptr,
+	                        JSONFunctionLocalState::Init);
+	path_fun.GetSignature().AddParameter("json", input_type).AddParameter("path", LogicalType::VARCHAR);
+	set.AddFunction(path_fun);
+	ScalarFunction many_fun({}, LogicalType::LIST(LogicalType::JSON()), ExtractManyFunction,
+	                        JSONReadManyFunctionData::Bind, nullptr, JSONFunctionLocalState::Init);
+	many_fun.GetSignature()
+	    .AddParameter("json", input_type)
+	    .AddParameter("path", LogicalType::LIST(LogicalType::VARCHAR));
+	set.AddFunction(many_fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetExtractFunction() {
@@ -49,24 +56,31 @@ ScalarFunctionSet JSONFunctions::GetExtractFunction() {
 	ScalarFunctionSet set("json_extract");
 	GetExtractFunctionsInternal(set, LogicalType::VARCHAR);
 	GetExtractFunctionsInternal(set, LogicalType::JSON());
-	for (auto &func : set.functions) {
+	set.ApplyToFunctions([](ScalarFunction &func) {
 		const auto &sig = func.GetSignature();
 		if (sig.GetParameter(0).GetType().IsJSONType() && sig.GetParameter(1).GetType().IsNumeric()) {
-			continue;
+			return;
 		}
 		func.SetFallible();
-	}
+	});
 	return set;
 }
 
 static void GetExtractStringFunctionsInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({input_type, LogicalType::BIGINT}, LogicalType::VARCHAR, ExtractStringFunction,
-	                               JSONReadFunctionData::Bind, nullptr, JSONFunctionLocalState::Init));
-	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::VARCHAR, ExtractStringFunction,
-	                               JSONReadFunctionData::Bind, nullptr, JSONFunctionLocalState::Init));
-	set.AddFunction(ScalarFunction({input_type, LogicalType::LIST(LogicalType::VARCHAR)},
-	                               LogicalType::LIST(LogicalType::VARCHAR), ExtractStringManyFunction,
-	                               JSONReadManyFunctionData::Bind, nullptr, JSONFunctionLocalState::Init));
+	ScalarFunction index_fun({}, LogicalType::VARCHAR, ExtractStringFunction, JSONReadFunctionData::Bind, nullptr,
+	                         JSONFunctionLocalState::Init);
+	index_fun.GetSignature().AddParameter("json", input_type).AddParameter("index", LogicalType::BIGINT);
+	set.AddFunction(index_fun);
+	ScalarFunction path_fun({}, LogicalType::VARCHAR, ExtractStringFunction, JSONReadFunctionData::Bind, nullptr,
+	                        JSONFunctionLocalState::Init);
+	path_fun.GetSignature().AddParameter("json", input_type).AddParameter("path", LogicalType::VARCHAR);
+	set.AddFunction(path_fun);
+	ScalarFunction many_fun({}, LogicalType::LIST(LogicalType::VARCHAR), ExtractStringManyFunction,
+	                        JSONReadManyFunctionData::Bind, nullptr, JSONFunctionLocalState::Init);
+	many_fun.GetSignature()
+	    .AddParameter("json", input_type)
+	    .AddParameter("path", LogicalType::LIST(LogicalType::VARCHAR));
+	set.AddFunction(many_fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetExtractStringFunction() {
@@ -74,13 +88,13 @@ ScalarFunctionSet JSONFunctions::GetExtractStringFunction() {
 	ScalarFunctionSet set("json_extract_string");
 	GetExtractStringFunctionsInternal(set, LogicalType::VARCHAR);
 	GetExtractStringFunctionsInternal(set, LogicalType::JSON());
-	for (auto &func : set.functions) {
+	set.ApplyToFunctions([](ScalarFunction &func) {
 		const auto &sig = func.GetSignature();
 		if (sig.GetParameter(0).GetType().IsJSONType() && sig.GetParameter(1).GetType().IsNumeric()) {
-			continue;
+			return;
 		}
 		func.SetFallible();
-	}
+	});
 	return set;
 }
 

@@ -33,6 +33,15 @@ bool ValueAllNull(const ShreddedGroupView &view, idx_t count) {
 	return true;
 }
 
+bool LeafAllValid(const ShreddedGroupView &view, idx_t count) {
+	for (idx_t idx = 0; idx < count; idx++) {
+		if (!view.leaf_format.validity.RowIsValid(view.leaf_format.sel->get_index(idx))) {
+			return false;
+		}
+	}
+	return true;
+}
+
 //! A plan mirroring the group tree: 'flat' marks a primitive leaf that is fully convertible and is emitted
 //! as a bare (referenced) column instead of a wrapper.
 struct ShredPlan {
@@ -51,7 +60,7 @@ ShredPlan AnalyzeShred(const ShreddedGroupView &view, idx_t count, bool is_objec
 		//! A leaf is fully convertible if there is no binary leftover; an OBJECT field additionally must never
 		//! be missing (a NULL typed_value of a flat field would read as VARIANT_NULL, not "missing")
 		bool no_leftover = ValueAllNull(view, count);
-		bool no_missing = !is_object_field || view.leaf_format.validity.CheckAllValid(count);
+		bool no_missing = !is_object_field || LeafAllValid(view, count);
 		plan.flat = no_leftover && no_missing;
 		break;
 	}

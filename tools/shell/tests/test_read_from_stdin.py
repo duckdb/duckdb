@@ -89,6 +89,26 @@ class TestReadFromStdin(object):
         result.check_stdout("column0,column1,column2")
         result.check_stdout('0,0, test')
 
+    @pytest.mark.parametrize("reader,expected", [
+        ("read_csv('/dev/stdin', columns = {'time': 'DOUBLE'})", '2,1.0,2.0'),
+        ("read_csv_auto('/dev/stdin', header = false)", '2,1,2'),
+    ])
+    def test_summarize_stdin_csv(self, shell, tmp_path, reader, expected):
+        input_file = tmp_path / 'summarize.csv'
+        input_file.write_text('1\n2\n')
+        test = (
+            ShellTest(shell)
+            .input_file(input_file)
+            .statement(f"SELECT count, min, max FROM (SUMMARIZE (FROM {reader}))")
+            .add_argument(
+                '-csv',
+                ':memory:'
+            )
+        )
+        result = test.run()
+        result.check_stdout('count,min,max')
+        result.check_stdout(expected)
+
     def test_split_part_csv(self, shell):
         test = (
             ShellTest(shell)

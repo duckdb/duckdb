@@ -19,6 +19,7 @@
 namespace duckdb {
 
 class BufferManager;
+class FunctionBinder;
 class InterruptState;
 class BoundAggregateFunction;
 struct AggregateRewriteInput;
@@ -334,6 +335,9 @@ public:
 	//! Whether the aggregate is affect by distinct modifiers
 	AggregateDistinctDependent distinct_dependent = AggregateDistinctDependent::DISTINCT_DEPENDENT;
 
+	//! Whether a single input row finalizes to that input's first argument unchanged
+	bool single_value_identity = false;
+
 	bool operator==(const AggregateFunctionProperties &rhs) const;
 	bool operator!=(const AggregateFunctionProperties &rhs) const;
 };
@@ -375,6 +379,10 @@ public: // Properties
 	//! Whether the aggregate is affect by distinct modifiers
 	auto GetDistinctDependent() const -> AggregateDistinctDependent { return properties.distinct_dependent; }
 	auto SetDistinctDependent(AggregateDistinctDependent value) -> void { properties.distinct_dependent = value; }
+
+	//! Whether a single input row finalizes to that input's first argument unchanged
+	auto HasSingleValueIdentity() const -> bool { return properties.single_value_identity; }
+	auto SetSingleValueIdentity(bool value) -> void { properties.single_value_identity = value; }
 
 	// Derived properties
 	bool CanAggregate() const { return callbacks.update || callbacks.combine || callbacks.finalize; }
@@ -600,6 +608,11 @@ public:
 
 	unique_ptr<BoundAggregateExpression> Bind(ClientContext &context, vector<unique_ptr<Expression>> arguments) const;
 
+	//! Statistics callback for aggregates whose result always lies within the range of their first
+	//! argument (e.g. min, max, first, median): the output inherits the input column statistics
+	static unique_ptr<BaseStatistics> PropagateInputValueStats(ClientContext &context, BoundAggregateExpression &expr,
+	                                                           AggregateStatisticsInput &input);
+
 	AggregateFunction &SetStructStateExport(aggregate_get_state_type_t get_state_type_callback) {
 		callbacks.get_state_type = get_state_type_callback;
 		return *this;
@@ -760,31 +773,34 @@ public:
 		AggregateExecutor::NullaryClustUpdate<STATE, OP>(aggr_input_data, clustered, count);
 	}
 
+	//! Update callbacks consume their leading arguments. They can be handed more: a bind may fold trailing
+	//! arguments into its bind data (e.g. the separator of string_agg), and those stay part of the argument list and
+	//! are still evaluated into the payload - they are simply not read here.
 	template <class STATE, class T, class OP>
 	static void UnaryScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                               Vector &states, idx_t count) {
-		D_ASSERT(input_count == 1);
+		D_ASSERT(input_count >= 1);
 		AggregateExecutor::UnaryScatter<STATE, T, OP>(inputs[0], states, aggr_input_data, count);
 	}
 
 	template <class STATE, class INPUT_TYPE, class OP>
 	static void UnaryUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
 	                        idx_t count) {
-		D_ASSERT(input_count == 1);
+		D_ASSERT(input_count >= 1);
 		AggregateExecutor::UnaryUpdate<STATE, INPUT_TYPE, OP>(inputs[0], aggr_input_data, state, count);
 	}
 
 	template <class STATE, class INPUT_TYPE, class OP>
 	static void UnaryClusterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                               const ClusteredAggr &clustered, idx_t count) {
-		D_ASSERT(input_count == 1);
+		D_ASSERT(input_count >= 1);
 		AggregateExecutor::ExecuteUnaryClustered<STATE, INPUT_TYPE, OP>(inputs[0], aggr_input_data, clustered, count);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>
 	static void BinaryScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                                Vector &states, idx_t count) {
-		D_ASSERT(input_count == 2);
+		D_ASSERT(input_count >= 2);
 		AggregateExecutor::BinaryScatter<STATE, A_TYPE, B_TYPE, OP>(aggr_input_data, inputs[0], inputs[1], states,
 		                                                            count);
 	}
@@ -792,7 +808,7 @@ public:
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>
 	static void BinaryUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
 	                         idx_t count) {
-		D_ASSERT(input_count == 2);
+		D_ASSERT(input_count >= 2);
 		AggregateExecutor::BinaryUpdate<STATE, A_TYPE, B_TYPE, OP>(aggr_input_data, inputs[0], inputs[1], state, count);
 	}
 
@@ -822,12 +838,39 @@ public:
 class BoundAggregateFunction : public BaseAggregateFunction, public BoundSimpleFunction {
 public:
 	explicit BoundAggregateFunction(const AggregateFunction &function);
+	explicit BoundAggregateFunction(shared_ptr<const AggregateFunction> function);
 
+	//! Swap in a different implementation, keeping the definition this was bound from intact
 	void ReplaceImplementation(const AggregateFunction &function);
+	void ReplaceImplementation(const BoundAggregateFunction &function);
 
 	DUCKDB_API bool operator==(const BoundAggregateFunction &rhs) const;
 	DUCKDB_API bool operator!=(const BoundAggregateFunction &rhs) const;
 
+public:
+	//! The function this was bound from. Unaffected by ReplaceImplementation and by later mutation of the bound
+	//! function, e.g. statistics propagation swapping in a specialized implementation. For a function bound from an
+	//! AggregateFunctionSet this is the set's own overload, so it compares equal by pointer across binds. Functions
+	//! bound outside of a set are copied into a definition of their own.
+	//! Only null in a moved-from bound function.
+	const shared_ptr<const AggregateFunction> &GetDefinition() const {
+		return definition;
+	}
+	//! Restore the definition after the bound function has been replaced wholesale, together with the
+	//! qualification it carries - the replacement is a specialized implementation, not a different function
+	void SetDefinition(shared_ptr<const AggregateFunction> definition_p) {
+		definition = std::move(definition_p);
+		if (definition) {
+			schema_name = definition->GetSchemaName();
+			catalog_name = definition->GetCatalogName();
+		}
+	}
+	const vector<LogicalType> &GetLogicalArguments() const {
+		return logical_arguments;
+	}
+	const LogicalType &GetLogicalReturnType() const {
+		return logical_return_type;
+	}
 	AggregateStateLayout GetStateType(optional_ptr<FunctionData> bind_data) const {
 		D_ASSERT(callbacks.get_state_type);
 		AggregateLayoutInput input(*this, bind_data);
@@ -840,6 +883,20 @@ public:
 		AggregateStateInput input(*this, bind_data);
 		return callbacks.state_size(input);
 	}
+
+private:
+	void SetLogicalArguments(vector<LogicalType> arguments_p) {
+		logical_arguments = std::move(arguments_p);
+	}
+	void SetLogicalReturnType(LogicalType return_type_p) {
+		logical_return_type = std::move(return_type_p);
+	}
+	shared_ptr<const AggregateFunction> definition;
+	vector<LogicalType> logical_arguments;
+	LogicalType logical_return_type;
+
+	friend class FunctionSerializer;
+	friend class FunctionBinder;
 };
 
 // Defined here (after BoundAggregateFunction is complete) so the lambda body can call GetReturnType().

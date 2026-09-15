@@ -91,4 +91,4 @@ statement error
 COPY (SELECT 1 AS a, 2 AS b)
 TO '{TEST_DIR}/json_partition_bad_wpc' (FORMAT JSON, PARTITION_BY (a), WRITE_PARTITION_COLUMNS (true, false));
 ----
-Invalid Input Error: Copy option write_partition_columns did not expect a list as argument
+Invalid Input Error: Copy option "write_partition_columns" did not expect a list as argument

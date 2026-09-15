@@ -14,7 +14,7 @@ statement ok
 create or replace table random_values(id int, mod ubigint);
 
 statement ok
-insert into random_values select id, (random() * 3)::UBIGINT from range(100) t(id);
+insert into random_values select id, (random() * 3)::UBIGINT + 1 from range(100) t(id);
 
 loop i 0 100
 

@@ -14,16 +14,22 @@ PEGTransformerFactory::TransformGenericCopyOptionList(PEGTransformer &transforme
 	return generic_copy_option;
 }
 
+vector<GenericCopyOption>
+PEGTransformerFactory::TransformCopyGenericOptionList(PEGTransformer &transformer,
+                                                      const vector<GenericCopyOption> &copy_generic_option) {
+	return copy_generic_option;
+}
+
 static void SetGenericCopyOptionExpression(GenericCopyOption &copy_option, unique_ptr<ParsedExpression> expression) {
 	if (expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		copy_option.children.push_back(Value(expression->Cast<ConstantExpression>().GetValue()));
+		copy_option.children.push_back(expression->Cast<ConstantExpression>().GetLiteral().ToValue());
 	} else if (expression->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		copy_option.children.push_back(Value(expression->Cast<ColumnRefExpression>().GetColumnName()));
 	} else if (expression->GetExpressionType() == ExpressionType::PLACEHOLDER) {
 		auto &op_expr = expression->Cast<OperatorExpression>();
 		for (auto &child : op_expr.GetChildren()) {
 			if (child->GetExpressionClass() == ExpressionClass::CONSTANT) {
-				copy_option.children.push_back(Value(child->Cast<ConstantExpression>().GetValue()));
+				copy_option.children.push_back(child->Cast<ConstantExpression>().GetLiteral().ToValue());
 			} else if (child->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 				copy_option.children.push_back(Value(child->Cast<ColumnRefExpression>().GetColumnName()));
 			} else {
@@ -38,10 +44,10 @@ static void SetGenericCopyOptionExpression(GenericCopyOption &copy_option, uniqu
 	} else if (expression->GetExpressionType() == ExpressionType::OPERATOR_CAST) {
 		auto &cast_expr = expression->Cast<CastExpression>();
 		if (cast_expr.Child().GetExpressionClass() == ExpressionClass::CONSTANT) {
-			auto &const_expr = cast_expr.Child().Cast<ConstantExpression>();
-			if (const_expr.GetValue().GetValue<string>() == "t") {
+			auto &literal = cast_expr.Child().Cast<ConstantExpression>().GetLiteral();
+			if (literal.kind == LiteralKind::STRING && literal.text == "t") {
 				copy_option.children.push_back(Value(true));
-			} else if (const_expr.GetValue().GetValue<string>() == "f") {
+			} else if (literal.kind == LiteralKind::STRING && literal.text == "f") {
 				copy_option.children.push_back(Value(false));
 			} else {
 				copy_option.expression = std::move(expression);
@@ -63,7 +69,7 @@ static unique_ptr<ParsedExpression> CreateOrderByRowFunction(const vector<OrderB
 	vector<unique_ptr<ParsedExpression>> children;
 	children.reserve(orders.size());
 	for (auto &order : orders) {
-		children.push_back(make_uniq<ConstantExpression>(Value(order.ToString())));
+		children.push_back(ConstantExpression::String(order.ToString()));
 	}
 	return CreateRowFunction(std::move(children));
 }
@@ -77,11 +83,10 @@ static unique_ptr<ParsedExpression> CreateExpressionRowFunction(vector<OrderByNo
 	return CreateRowFunction(std::move(children));
 }
 
-GenericCopyOption
-PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer, const Identifier &copy_option_name,
-                                                  optional<GenericCopyOptionValue> generic_copy_option_value) {
+static GenericCopyOption BuildGenericCopyOption(const Identifier &generic_copy_option_name,
+                                                optional<GenericCopyOptionValue> generic_copy_option_value) {
 	GenericCopyOption copy_option;
-	copy_option.name = Identifier(StringUtil::Lower(copy_option_name.GetIdentifierName()));
+	copy_option.name = Identifier(StringUtil::Lower(generic_copy_option_name.GetIdentifierName()));
 	if (!generic_copy_option_value || !generic_copy_option_value->has_value) {
 		return copy_option;
 	}
@@ -99,7 +104,7 @@ PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer, c
 		if (copy_option.name == "ORDER_BY") {
 			copy_option.expression = CreateOrderByRowFunction(orders);
 		} else if (has_order_modifier) {
-			throw ParserException("ORDER BY modifiers are only supported in the ORDER_BY option");
+			throw ParserException("ORDER BY modifiers are only supported in the ORDER BY option");
 		} else if (orders.size() == 1) {
 			SetGenericCopyOptionExpression(copy_option, std::move(orders[0].expression));
 		} else {
@@ -109,6 +114,24 @@ PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer, c
 		SetGenericCopyOptionExpression(copy_option, std::move(generic_copy_option_value->expression));
 	}
 	return copy_option;
+}
+
+GenericCopyOption
+PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer, const Identifier &copy_option_name,
+                                                  optional<GenericCopyOptionValue> generic_copy_option_value) {
+	return BuildGenericCopyOption(copy_option_name, std::move(generic_copy_option_value));
+}
+
+GenericCopyOption
+PEGTransformerFactory::TransformOrderByCopyOption(PEGTransformer &transformer,
+                                                  optional<GenericCopyOptionValue> generic_copy_option_value) {
+	return BuildGenericCopyOption(Identifier("order_by"), std::move(generic_copy_option_value));
+}
+
+GenericCopyOption
+PEGTransformerFactory::TransformPartitionedByCopyOption(PEGTransformer &transformer,
+                                                        optional<GenericCopyOptionValue> generic_copy_option_value) {
+	return BuildGenericCopyOption(Identifier("partition_by"), std::move(generic_copy_option_value));
 }
 
 GenericCopyOptionValue PEGTransformerFactory::TransformGenericCopyOptionOrderList(

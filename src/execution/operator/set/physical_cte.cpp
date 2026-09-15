@@ -418,12 +418,16 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 	}
 
 	children[1].get().BuildPipelines(current, meta_pipeline);
-	pipeline_selection_state = CTEPipelineSelectionState::RESOLVED;
+	auto has_unresolved_consumers = exchange && exchange->GetConsumerSummary().unresolved > 0;
+	pipeline_selection_state =
+	    has_unresolved_consumers ? CTEPipelineSelectionState::UNRESOLVED : CTEPipelineSelectionState::RESOLVED;
 
+	bool dependency_added = false;
 	if (exchange && !UseStreamingExchange()) {
-		// All exchange consumers were converted to materialized scans during pipeline construction.
+		// Keep the materialized fallback until graph-dependent consumer selection has completed.
 		auto cte_pipeline = child_meta_pipeline.GetBasePipeline();
 		current.AddDependency(cte_pipeline);
+		dependency_added = true;
 	}
 	if (exchange && last_child_ptr && !current.HasDataflowDependencies()) {
 		for (auto &side_effect_pipeline : side_effect_pipelines) {
@@ -435,17 +439,38 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 		                                       exchange ? DataflowDependencyMode::SKIP_CONFLICTING
 		                                                : DataflowDependencyMode::INCLUDE);
 	}
+	if (has_unresolved_consumers) {
+		state.AddCTEPipelineSelection(*this, current, child_meta_pipeline.GetBasePipeline(), dependency_added);
+	}
 }
 
 bool PhysicalCTE::TryRegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_idx) {
-	if (!exchange) {
+	if (!CanRegisterDirectConsumer(pipeline)) {
 		return false;
 	}
-	if (!exchange->TryRegisterDirectConsumer(pipeline, consumer_idx)) {
-		return false;
-	}
-	RegisterBatchPreference(pipeline);
+	pipeline.SetExternalInput(GetProducerPipelines());
+	RegisterDirectConsumer(pipeline, consumer_idx);
 	return true;
+}
+
+bool PhysicalCTE::CanRegisterDirectConsumer(Pipeline &pipeline) const {
+	return exchange && exchange->CanRegisterDirectConsumer(pipeline);
+}
+
+void PhysicalCTE::RegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_idx) {
+	D_ASSERT(exchange);
+	exchange->SelectDirectConsumer(pipeline, consumer_idx);
+	RegisterBatchPreference(pipeline);
+}
+
+vector<reference<Pipeline>> PhysicalCTE::GetProducerPipelines() const {
+	D_ASSERT(exchange);
+	return exchange->GetProducerPipelines();
+}
+
+void PhysicalCTE::SetPipelineSelectionResolved() {
+	D_ASSERT(pipeline_selection_state == CTEPipelineSelectionState::UNRESOLVED);
+	pipeline_selection_state = CTEPipelineSelectionState::RESOLVED;
 }
 
 bool PhysicalCTE::ShouldUseBufferedConsumer(Pipeline &pipeline) const {

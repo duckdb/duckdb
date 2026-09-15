@@ -309,6 +309,11 @@ NULL
 NULL
 NULL
 
+statement error
+SELECT last_day(DATE '5881580-07-10');
+----
+Date out of range: 5881580-8-1
+
 #  monthname
 query T
 SELECT MONTHNAME(d) FROM dates;

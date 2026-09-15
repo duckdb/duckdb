@@ -271,10 +271,11 @@ WHERE prefix(s, p) OR prefix(s, 'd')
 ----
 analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 4 / 4.*
 
-# Byte-wise prefix successor should prune across a UTF-8 byte boundary
+# Byte-wise prefix successor should prune across a UTF-8 byte boundary. The first
+# row group mixes chr(254) and chr(255) so it stays inconclusive and is scanned.
 statement ok
 COPY (
-	SELECT CASE WHEN range < 2048 THEN chr(255) || 'a' ELSE chr(256) || 'a' END AS s
+	SELECT CASE WHEN range < 2048 THEN chr((254 + range % 2)::INT) || 'a' ELSE chr(256) || 'a' END AS s
 	FROM range(4096)
 ) TO '{TEST_DIR}/expr_prune_prefix_utf8_boundary.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048)
 
@@ -283,7 +284,7 @@ SELECT count(*)
 FROM '{TEST_DIR}/expr_prune_prefix_utf8_boundary.parquet'
 WHERE prefix(s, chr(255)) OR prefix(s, 'zz')
 ----
-2048
+1024
 
 query II
 EXPLAIN ANALYZE SELECT count(*)
@@ -291,6 +292,20 @@ FROM '{TEST_DIR}/expr_prune_prefix_utf8_boundary.parquet'
 WHERE prefix(s, chr(255)) OR prefix(s, 'zz')
 ----
 analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 2.*
+
+# When min and max of a row group both start with the prefix, the filter is proven true for the whole row group: the count is answered from row group metadata without any scan.
+statement ok
+COPY (
+	SELECT CASE WHEN range < 2048 THEN chr(255) || 'a' ELSE chr(256) || 'a' END AS s
+	FROM range(4096)
+) TO '{TEST_DIR}/expr_prune_prefix_always_true.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048)
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_always_true.parquet'
+WHERE prefix(s, chr(255)) OR prefix(s, 'zz')
+----
+2048
 
 # ILIKE uses conservative ASCII bounds while retaining the original filter
 query I

@@ -6,6 +6,9 @@
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -237,7 +240,25 @@ void SumNoOverflowSerialize(Serializer &serializer, const optional_ptr<FunctionD
 }
 
 unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, BoundAggregateFunction &function) {
-	function.SetReturnType(deserializer.Get<const LogicalType &>());
+	auto &context = deserializer.Get<ClientContext &>();
+	auto &return_type = deserializer.Get<const LogicalType &>();
+	auto &children = deserializer.Get<const const_expression_list_t &>();
+	vector<unique_ptr<Expression>> arguments;
+	vector<LogicalType> argument_types;
+	for (auto &child : children) {
+		arguments.push_back(child.get().Copy());
+		argument_types.push_back(child.get().GetReturnType());
+	}
+	auto &entry = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
+	    context, QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(), Identifier("sum")));
+	FunctionBinder binder(context);
+	auto logical = binder.ResolveFunction(entry.functions.GetFunctionByArguments(context, argument_types), arguments);
+	if (logical.second || (!return_type.IsAggregateState() && logical.first.GetReturnType() != return_type)) {
+		throw SerializationException("Cannot reconstruct the logical sum signature");
+	}
+	logical.first.ReplaceImplementation(function);
+	function = std::move(logical.first);
+	function.SetReturnType(return_type);
 	return nullptr;
 }
 
@@ -246,6 +267,7 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 	case PhysicalType::INT32: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int32_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::INTEGER, LogicalType::HUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
 		function.SetName("sum_no_overflow");
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		function.SetBindCallback(SumNoOverflowBind);
@@ -256,6 +278,7 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 	case PhysicalType::INT64: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int64_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::BIGINT, LogicalType::HUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
 		function.SetName("sum_no_overflow");
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		function.SetBindCallback(SumNoOverflowBind);
@@ -269,9 +292,10 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 }
 
 AggregateFunction GetSumAggregateNoOverflowDecimal() {
-	AggregateFunction aggr({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr,
-	                       nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(),
+	AggregateFunction aggr({}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                       FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(),
 	                       SumNoOverflowBind);
+	aggr.GetSignature().AddParameter("arg", LogicalTypeId::DECIMAL);
 	aggr.SetSerializeCallback(SumNoOverflowSerialize);
 	aggr.SetDeserializeCallback(SumNoOverflowDeserialize);
 	return aggr;
@@ -279,37 +303,66 @@ AggregateFunction GetSumAggregateNoOverflowDecimal() {
 
 unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
                                              AggregateStatisticsInput &input) {
-	if (input.node_stats && input.node_stats->has_max_cardinality) {
-		auto &numeric_stats = input.child_stats[0];
-		if (!NumericStats::HasMinMax(numeric_stats)) {
-			return nullptr;
-		}
-		auto internal_type = numeric_stats.GetType().InternalType();
-		hugeint_t max_negative;
-		hugeint_t max_positive;
-		switch (internal_type) {
-		case PhysicalType::INT32:
-			max_negative = NumericStats::Min(numeric_stats).GetValueUnsafe<int32_t>();
-			max_positive = NumericStats::Max(numeric_stats).GetValueUnsafe<int32_t>();
-			break;
-		case PhysicalType::INT64:
-			max_negative = NumericStats::Min(numeric_stats).GetValueUnsafe<int64_t>();
-			max_positive = NumericStats::Max(numeric_stats).GetValueUnsafe<int64_t>();
-			break;
-		default:
-			throw InternalException("Unsupported type for propagate sum stats");
-		}
-		auto max_sum_negative = max_negative * Hugeint::Convert(input.node_stats->max_cardinality);
-		auto max_sum_positive = max_positive * Hugeint::Convert(input.node_stats->max_cardinality);
-		if (max_sum_positive >= NumericLimits<int64_t>::Maximum() ||
-		    max_sum_negative <= NumericLimits<int64_t>::Minimum()) {
-			// sum can potentially exceed int64_t bounds: use hugeint sum
-			return nullptr;
-		}
-		// total sum is guaranteed to fit in a single int64: use int64 sum instead of hugeint sum
+	if (!input.node_stats || !input.node_stats->has_max_cardinality) {
+		return nullptr;
+	}
+	auto &numeric_stats = input.child_stats[0];
+	if (!NumericStats::HasMinMax(numeric_stats)) {
+		return nullptr;
+	}
+	auto internal_type = numeric_stats.GetType().InternalType();
+	hugeint_t max_negative = 0;
+	hugeint_t max_positive = 0;
+	switch (internal_type) {
+	case PhysicalType::BOOL:
+		max_negative = NumericStats::Min(numeric_stats).GetValueUnsafe<bool>() ? 1 : 0;
+		max_positive = NumericStats::Max(numeric_stats).GetValueUnsafe<bool>() ? 1 : 0;
+		break;
+	case PhysicalType::INT16:
+		max_negative = NumericStats::Min(numeric_stats).GetValueUnsafe<int16_t>();
+		max_positive = NumericStats::Max(numeric_stats).GetValueUnsafe<int16_t>();
+		break;
+	case PhysicalType::INT32:
+		max_negative = NumericStats::Min(numeric_stats).GetValueUnsafe<int32_t>();
+		max_positive = NumericStats::Max(numeric_stats).GetValueUnsafe<int32_t>();
+		break;
+	case PhysicalType::INT64:
+		max_negative = NumericStats::Min(numeric_stats).GetValueUnsafe<int64_t>();
+		max_positive = NumericStats::Max(numeric_stats).GetValueUnsafe<int64_t>();
+		break;
+	case PhysicalType::INT128:
+		max_negative = NumericStats::Min(numeric_stats).GetValueUnsafe<hugeint_t>();
+		max_positive = NumericStats::Max(numeric_stats).GetValueUnsafe<hugeint_t>();
+		break;
+	default:
+		throw InternalException("Unsupported type for propagate sum stats");
+	}
+
+	const auto max_card = Hugeint::Convert(input.node_stats->max_cardinality);
+	hugeint_t wide_negative = 0;
+	hugeint_t wide_positive = 0;
+	if (!Hugeint::TryMultiply(max_negative, max_card, wide_negative) ||
+	    !Hugeint::TryMultiply(max_positive, max_card, wide_positive)) {
+		return nullptr;
+	}
+
+	// Replace with fast implementation when possible: only INT32/INT64 have a narrower no-overflow implementation to
+	// swap in.
+	const bool has_no_overflow_variant = internal_type == PhysicalType::INT32 || internal_type == PhysicalType::INT64;
+	const bool sum_fits_in_int64 =
+	    wide_negative > NumericLimits<int64_t>::Minimum() && wide_positive < NumericLimits<int64_t>::Maximum();
+	if (has_no_overflow_variant && sum_fits_in_int64) {
 		expr.FunctionMutable().ReplaceImplementation(GetSumAggregateNoOverflow(internal_type));
 	}
-	return nullptr;
+
+	// Propagate stats.
+	auto sum_min = max_negative <= 0 ? wide_negative : max_negative;
+	auto sum_max = max_positive >= 0 ? wide_positive : max_positive;
+	auto result = NumericStats::CreateEmpty(expr.GetReturnType()).ToUnique();
+	NumericStats::SetMin(*result, Value::HUGEINT(sum_min));
+	NumericStats::SetMax(*result, Value::HUGEINT(sum_max));
+	result->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
+	return result;
 }
 
 AggregateFunction GetSumAggregate(PhysicalType type) {
@@ -317,12 +370,16 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 	case PhysicalType::BOOL: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, bool, hugeint_t, IntegerSumOperation>(
 		    LogicalType::BOOLEAN, LogicalType::HUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
+		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
 	}
 	case PhysicalType::INT16: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int16_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::SMALLINT, LogicalType::HUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
+		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
 	}
@@ -331,6 +388,7 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, int32_t, hugeint_t, SumToHugeintOperation>(
 		        LogicalType::INTEGER, LogicalType::HUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
 		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
@@ -339,6 +397,7 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, int64_t, hugeint_t, SumToHugeintOperation>(
 		        LogicalType::BIGINT, LogicalType::HUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
 		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
@@ -347,6 +406,8 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, hugeint_t, hugeint_t, HugeintSumOperation>(
 		        LogicalType::HUGEINT, LogicalType::HUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
+		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
 	}
@@ -422,9 +483,10 @@ struct BignumOperation {
 AggregateFunctionSet SumFun::GetFunctions() {
 	AggregateFunctionSet sum;
 	// decimal
-	sum.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-	                                  BindDecimalSum));
+	AggregateFunction decimal_sum({}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                              FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, BindDecimalSum);
+	decimal_sum.GetSignature().AddParameter("arg", LogicalTypeId::DECIMAL);
+	sum.AddFunction(decimal_sum);
 	sum.AddFunction(GetSumAggregate(PhysicalType::BOOL));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT16));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT32));
@@ -432,9 +494,12 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
 	auto sum_double = AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE);
+	sum_double.GetSignature().GetParameter(0).SetName("arg");
 	sum.AddFunction(sum_double);
-	sum.AddFunction(AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, BignumOperation>(
-	    LogicalType::BIGNUM, LogicalType::BIGNUM));
+	auto sum_bignum = AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, BignumOperation>(
+	    LogicalType::BIGNUM, LogicalType::BIGNUM);
+	sum_bignum.GetSignature().GetParameter(0).SetName("arg");
+	sum.AddFunction(sum_bignum);
 	return sum;
 }
 
@@ -451,8 +516,10 @@ AggregateFunctionSet SumNoOverflowFun::GetFunctions() {
 }
 
 AggregateFunction KahanSumFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<KahanSumState, double, double, KahanSumOperation>(LogicalType::DOUBLE,
-	                                                                                           LogicalType::DOUBLE);
+	auto fun = AggregateFunction::UnaryAggregate<KahanSumState, double, double, KahanSumOperation>(LogicalType::DOUBLE,
+	                                                                                               LogicalType::DOUBLE);
+	fun.GetSignature().GetParameter(0).SetName("arg");
+	return fun;
 }
 
 } // namespace duckdb

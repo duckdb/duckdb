@@ -18,7 +18,7 @@ INSERT INTO test VALUES
 statement error
 ALTER TABLE test RENAME COLUMN s.element TO not_element
 ----
-Catalog Error: Cannot rename field 'element' from column 's' - can only rename fields inside a struct
+Catalog Error: Cannot rename field "element" from column "s" - can only rename fields inside a struct
 
 statement ok
 ALTER TABLE test RENAME COLUMN s.element.j TO k

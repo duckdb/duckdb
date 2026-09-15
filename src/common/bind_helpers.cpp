@@ -23,16 +23,16 @@ Value ConvertVectorToValue(vector<Value> set) {
 	return Value::LIST(std::move(set));
 }
 
-vector<bool> ParseColumnList(const vector<Value> &set, vector<string> &names, const Identifier &option_name) {
+vector<bool> ParseColumnList(const vector<Value> &set, const vector<Identifier> &names, const Identifier &option_name) {
 	vector<bool> result;
 
 	if (set.empty()) {
 		throw BinderException("%s expects a column list or * as parameter", option_name);
 	}
 	// list of options: parse the list
-	case_insensitive_map_t<bool> option_map;
+	identifier_map_t<bool> option_map;
 	for (idx_t i = 0; i < set.size(); i++) {
-		option_map[set[i].ToString()] = false;
+		option_map[Identifier(set[i].ToString())] = false;
 	}
 	result.resize(names.size(), false);
 	for (idx_t i = 0; i < names.size(); i++) {
@@ -51,7 +51,7 @@ vector<bool> ParseColumnList(const vector<Value> &set, vector<string> &names, co
 	return result;
 }
 
-vector<bool> ParseColumnList(const Value &value, vector<string> &names, const Identifier &option_name) {
+vector<bool> ParseColumnList(const Value &value, const vector<Identifier> &names, const Identifier &option_name) {
 	vector<bool> result;
 
 	// Only accept a list of arguments

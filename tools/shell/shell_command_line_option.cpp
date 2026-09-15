@@ -94,6 +94,133 @@ MetadataResult LaunchUI(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
+bool ShellState::ExpandCommandParameters(const string &command, string &result) {
+	result.clear();
+	bool in_string_literal = false;
+	for (idx_t pos = 0; pos < command.size(); pos++) {
+		if (command[pos] != '{') {
+			if (command[pos] == '\'') {
+				in_string_literal = !in_string_literal;
+			}
+			result += command[pos];
+			continue;
+		}
+		auto close_pos = command.find('}', pos);
+		if (close_pos == string::npos) {
+			// no closing bracket - emit the remainder of the command verbatim
+			result += command.substr(pos);
+			break;
+		}
+		auto placeholder = command.substr(pos + 1, close_pos - pos - 1);
+		pos = close_pos;
+
+		// placeholders have the form {parameter} or {parameter|default_value}
+		auto separator = placeholder.find('|');
+		auto parameter = placeholder.substr(0, separator);
+		auto entry = command_parameters.find(parameter);
+		if (entry != command_parameters.end()) {
+			result += in_string_literal ? StringUtil::Replace(entry->second, "'", "''") : entry->second;
+			continue;
+		}
+		if (separator == string::npos) {
+			// no value provided and no default value specified
+			PrintDatabaseError(
+			    StringUtil::Format("Invalid Command Error: no value provided for parameter '%s' in command \"%s\"\n"
+			                       "Provide a value using '-%s VALUE', or specify a default value using '{%s|default}'",
+			                       parameter, command, parameter, parameter));
+			return false;
+		}
+		result += placeholder.substr(separator + 1);
+	}
+	return true;
+}
+
+//! Expand and run one of the configurable commands (e.g. the serve/connect command)
+static MetadataResult RunConfiguredCommand(ShellState &state, const string &command) {
+	string expanded_command;
+	if (!state.ExpandCommandParameters(command, expanded_command)) {
+		ShellState::Exit(1);
+		return MetadataResult::EXIT;
+	}
+	auto rc = state.RunInitialCommand(expanded_command.c_str(), true);
+	if (rc != 0) {
+		ShellState::Exit(rc);
+		return MetadataResult::EXIT;
+	}
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult LaunchServer(ShellState &state, const vector<string> &args) {
+	return RunConfiguredCommand(state, state.serve_command);
+}
+
+//! The only database type `-serve` can serve
+static constexpr const char *SERVE_TYPE = "quack";
+
+//! Split the `TYPE[:SECRET]` argument shared by `-serve` and `-connect`
+static bool ParseConnectionTarget(ShellState &state, const char *option, const string &argument, string &type,
+                                  string &secret) {
+	auto separator = argument.find(':');
+	type = argument.substr(0, separator);
+	secret = separator == string::npos ? string() : argument.substr(separator + 1);
+	if (type.empty() || (separator != string::npos && secret.empty())) {
+		state.PrintF(PrintOutput::STDERR, "%s: Error: invalid argument (%s) for '-%s': expected TYPE[:SECRET]\n",
+		             state.program_name, argument.c_str(), option);
+		return false;
+	}
+	return true;
+}
+
+static string QuoteSecretName(const string &secret) {
+	return StringUtil::Replace(secret, "'", "''");
+}
+
+//! Runs while the command line is still being parsed, so that the database argument can be rejected
+//! before the database is opened
+MetadataResult MarkClientMode(ShellState &state, const vector<string> &args) {
+	// the shell is a client for the remainder of the session - Ctrl-D exits instead of disconnecting
+	state.started_as_client = true;
+	if (args.size() <= 1) {
+		return MetadataResult::SUCCESS;
+	}
+	string type, secret;
+	if (!ParseConnectionTarget(state, "connect", args[1], type, secret)) {
+		ShellState::Exit(1);
+		return MetadataResult::EXIT;
+	}
+	state.command_parameters["type"] = type;
+	if (!secret.empty()) {
+		state.command_parameters["connect_secret"] = StringUtil::Format(" (SECRET '%s')", QuoteSecretName(secret));
+	}
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetServeTarget(ShellState &state, const vector<string> &args) {
+	if (args.size() <= 1) {
+		return MetadataResult::SUCCESS;
+	}
+	string type, secret;
+	if (!ParseConnectionTarget(state, "serve", args[1], type, secret)) {
+		ShellState::Exit(1);
+		return MetadataResult::EXIT;
+	}
+	if (!StringUtil::CIEquals(type, SERVE_TYPE)) {
+		state.PrintF(PrintOutput::STDERR,
+		             "%s: Error: cannot serve a database of type '%s' - only '%s' is supported by '-serve'\n",
+		             state.program_name, type.c_str(), SERVE_TYPE);
+		ShellState::Exit(1);
+		return MetadataResult::EXIT;
+	}
+	if (!secret.empty()) {
+		state.command_parameters["serve_secret"] = StringUtil::Format(", secret='%s'", QuoteSecretName(secret));
+	}
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ConnectToServer(ShellState &state, const vector<string> &args) {
+	return RunConfiguredCommand(state, state.connect_command);
+}
+
 MetadataResult SetNewlineSeparator(ShellState &state, const vector<string> &args) {
 	// run the UI command
 	state.rowSeparator = args[1];
@@ -216,6 +343,10 @@ static const CommandLineOption command_line_options[] = {
     {"box", 0, "", nullptr, ToggleOutputMode<RenderMode::BOX>, "set output mode to 'box'"},
     {"column", 0, "", nullptr, ToggleOutputMode<RenderMode::COLUMN>, "set output mode to 'column'"},
     {"cmd", 1, "COMMAND", nullptr, RunCommand<false>, "run \"COMMAND\" before reading stdin"},
+    {"connect", 0, "[TYPE[:SECRET]]", MarkClientMode, ConnectToServer,
+     "connect to a database of the given type, optionally using a named secret. Default: 'quack' "
+     "(configurable with .connect_command)",
+     true},
     {"csv", 0, "", nullptr, ToggleCSVMode, "set output mode to 'csv'"},
     {"c", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" and exit"},
     {"dark-mode", 0, "", SetColorScheme<HighlightMode::DARK_MODE>, SetColorScheme<HighlightMode::DARK_MODE>,
@@ -248,6 +379,8 @@ static const CommandLineOption command_line_options[] = {
     {"s", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" and exit"},
     {"safe", 0, "", ShellState::EnableSafeMode, nullptr, "enable safe-mode"},
     {"separator", 1, "SEP", nullptr, ShellState::SetSeparator, "set output column separator. Default: '|'"},
+    {"serve", 0, "[quack[:SECRET]]", SetServeTarget, LaunchServer,
+     "serve this database, optionally using a named secret (configurable with .serve_command)", true},
     {"storage-version", 1, "VER", SetStorageVersion, nullptr,
      "database storage compatibility version to use. Default: 'v0.10.0'"},
     {"table", 0, "", nullptr, ToggleOutputMode<RenderMode::TABLE>, "set output mode to 'table'"},

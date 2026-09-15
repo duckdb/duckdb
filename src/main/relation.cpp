@@ -54,7 +54,7 @@ shared_ptr<Relation> Relation::Project(vector<unique_ptr<ParsedExpression>> expr
 	                                           StringsToIdentifiers(aliases));
 }
 
-static vector<unique_ptr<ParsedExpression>> StringListToExpressionList(const ClientContext &context,
+static vector<unique_ptr<ParsedExpression>> StringListToExpressionList(ClientContext &context,
                                                                        const vector<string> &expressions) {
 	if (expressions.empty()) {
 		throw ParserException("Zero expressions provided");

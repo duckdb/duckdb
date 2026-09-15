@@ -58,11 +58,11 @@ SELECT nextval('s1.s2.seq');
 ----
 5
 
-# a dotted name is at most three components, so the catalog cannot be spelled out on top of a nested schema path
-statement error
-SELECT nextval('memory.s1.s2.seq');
+# the catalog can be spelled out on top of a nested schema path
+query I
+SELECT currval('memory.s1.s2.seq');
 ----
-<REGEX>:.*too many entries found.*
+5
 
 query II
 SELECT schema_name, sequence_name FROM duckdb_sequences() WHERE sequence_name = 'seq';

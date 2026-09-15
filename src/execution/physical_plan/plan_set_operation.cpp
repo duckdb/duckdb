@@ -5,6 +5,7 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/operator/set/physical_union.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -17,7 +18,7 @@ namespace duckdb {
 static vector<unique_ptr<Expression>> CreatePartitionedRowNumExpression(ClientContext &client,
                                                                         const vector<LogicalType> &types) {
 	vector<unique_ptr<Expression>> res;
-	auto expr = RowNumberFun::GetFunction().Bind(client);
+	auto expr = GetBuiltinWindowFunction(client, RowNumberFun::Name, {})->Bind(client);
 	expr->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
 	expr->WindowEndMutable() = WindowBoundary::UNBOUNDED_FOLLOWING;
 	for (idx_t i = 0; i < types.size(); i++) {
@@ -100,6 +101,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 
 		// For EXCEPT ALL / INTERSECT ALL we need to remove the row number column again
 		if (op.setop_all) {
+			// Restore the logical operator's types: the ROW_NUMBER column is an implementation detail of the physical
+			// plan.
+			op.types.pop_back();
+
 			vector<unique_ptr<Expression>> select_list;
 			for (idx_t i = 0; i < types.size(); i++) {
 				select_list.push_back(make_uniq<BoundReferenceExpression>(types[i], i));

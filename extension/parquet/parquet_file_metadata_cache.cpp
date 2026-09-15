@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "duckdb/common/enums/cache_validation_mode.hpp"
+#include "duckdb/common/encryption_state.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache_util.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
@@ -13,16 +14,18 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "parquet_crypto.hpp"
 
 namespace duckdb {
 
 ParquetFileMetadataCache::ParquetFileMetadataCache(unique_ptr<duckdb_parquet::FileMetaData> file_metadata,
                                                    CachingFileHandle &handle,
                                                    unique_ptr<GeoParquetFileMetadata> geo_metadata,
-                                                   unique_ptr<FileCryptoMetaData> crypto_metadata, idx_t footer_size)
+                                                   unique_ptr<FileCryptoMetaData> crypto_metadata,
+                                                   string encryption_key_hash_p, idx_t footer_size)
     : metadata(std::move(file_metadata)), geo_metadata(std::move(geo_metadata)),
-      crypto_metadata(std::move(crypto_metadata)), footer_size(footer_size),
-      last_modified(handle.GetLastModifiedTime()), version_tag(handle.GetVersionTag()) {
+      crypto_metadata(std::move(crypto_metadata)), encryption_key_hash(std::move(encryption_key_hash_p)),
+      footer_size(footer_size), last_modified(handle.GetLastModifiedTime()), version_tag(handle.GetVersionTag()) {
 }
 
 string ParquetFileMetadataCache::ObjectType() {
@@ -53,9 +56,35 @@ optional_idx ParquetFileMetadataCache::GetEstimatedCacheMemory() const {
 	}
 
 	memory += footer_size;
+	memory += encryption_key_hash.size();
 	memory += version_tag.size();
 
 	return memory;
+}
+
+bool ParquetFileMetadataCache::IsEncrypted() const {
+	return crypto_metadata != nullptr;
+}
+
+bool ParquetFileMetadataCache::CanUseMetadataStatistics(const shared_ptr<ParquetEncryptionConfig> &encryption_config,
+                                                        optional_ptr<const string> provided_key_hash) const {
+	if (!IsEncrypted()) {
+		// This can run from planner paths before ParquetReader validates the encryption configuration.
+		return !encryption_config;
+	}
+	if (!encryption_config || !provided_key_hash) {
+		return false;
+	}
+	return encryption_key_hash == *provided_key_hash;
+}
+
+string ParquetFileMetadataCache::CreateEncryptionKeyHash(const ParquetEncryptionConfig &encryption_config,
+                                                         const EncryptionUtil &encryption_util) {
+	string result(CryptoHash::GetHexDigestSize(CryptoHashFunction::SHA256), '\0');
+	const auto &footer_key = encryption_config.GetFooterKey();
+	encryption_util.HashHex(CryptoHashFunction::SHA256, const_data_ptr_cast(footer_key.data()), footer_key.size(),
+	                        &result[0]);
+	return result;
 }
 
 bool ParquetFileMetadataCache::IsValid(CachingFileHandle &new_handle) const {
