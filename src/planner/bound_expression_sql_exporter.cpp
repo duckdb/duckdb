@@ -1,3 +1,4 @@
+#include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/planner/bound_expression_sql_exporter.hpp"
 
 #include "duckdb/planner/sql_export_helpers.hpp"
@@ -273,23 +274,6 @@ static bool IsArraySliceDefinition(const ScalarFunction &definition) {
 	return true;
 }
 
-static bool IsOmittedArraySliceBound(const Expression &expression) {
-	if (expression.GetReturnType().id() != LogicalTypeId::LIST) {
-		return false;
-	}
-	if (expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
-		auto &function = expression.Cast<BoundFunctionExpression>();
-		auto &definition = function.Function().GetDefinition();
-		return definition && definition->GetQualifiedName() == QualifiedName("system", "main", "list_value") &&
-		       function.GetChildren().empty();
-	}
-	if (expression.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
-		return false;
-	}
-	auto &value = expression.Cast<BoundConstantExpression>().GetValue();
-	return !value.IsNull() && ListValue::GetChildren(value).empty();
-}
-
 static LogicalType SQLCastType(const LogicalType &type) {
 	// Scalar collations are applied by COLLATE, outside the cast's type expression.
 	return type.id() == LogicalTypeId::VARCHAR && !type.HasAlias() ? LogicalType::VARCHAR : type;
@@ -519,8 +503,30 @@ private:
 			}
 			return &offset;
 		};
-		auto start = range_offset(expression.StartExpr(), expression.WindowStart(), expression.SQLRangeStart());
-		auto end = range_offset(expression.EndExpr(), expression.WindowEnd(), expression.SQLRangeEnd());
+		std::function<optional<Value>(const ParsedExpression &)> numeric_literal =
+		    [&](const ParsedExpression &literal) -> optional<Value> {
+			if (literal.GetExpressionClass() == ExpressionClass::CONSTANT) {
+				auto value = literal.Cast<ConstantExpression>().GetLiteral().ToValue();
+				return value.type().IsNumeric() && !value.IsNull() ? optional<Value>(value) : optional<Value>();
+			}
+			if (literal.GetExpressionClass() == ExpressionClass::CAST) {
+				auto &cast = literal.Cast<CastExpression>();
+				auto type = UnboundType::TryDefaultBind(cast.TargetType());
+				auto child = numeric_literal(cast.Child());
+				if (child && type.IsNumeric() && !cast.IsTryCast()) {
+					return child->DefaultTryCastAs(type);
+				}
+			}
+			return {};
+		};
+		auto retained_offset = [&](const unique_ptr<ParsedExpression> &literal) -> unique_ptr<Expression> {
+			auto value = literal ? numeric_literal(*literal) : optional<Value>();
+			return value ? make_uniq<BoundConstantExpression>(*value) : nullptr;
+		};
+		auto start_literal = retained_offset(expression.SQLRangeStart());
+		auto end_literal = retained_offset(expression.SQLRangeEnd());
+		auto start = range_offset(expression.StartExpr(), expression.WindowStart(), start_literal);
+		auto end = range_offset(expression.EndExpr(), expression.WindowEnd(), end_literal);
 		if ((expression.StartExpr() && !start) || (expression.EndExpr() && !end)) {
 			return Failure(UnsupportedFeature(
 			    path, "window_range_offset", "The RANGE endpoint does not retain its SQL offset and ordering operand"));
@@ -983,8 +989,7 @@ private:
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound cast has malformed type, data, or arity"));
 		}
-		if (context.discard_optimizer_metadata &&
-		    expression.compression_origin == CompressedMaterializationOrigin::CAST) {
+		if (context.discard_optimizer_metadata && CMUtils::GetExpressionType(expression) == CMExpressionType::CAST) {
 			if (!BoundCastExpression::IsDefaultCast(expression)) {
 				return Failure(
 				    UnsupportedFeature(path, "compressed_materialization_cast",
@@ -1234,8 +1239,8 @@ private:
 		if (!definition) {
 			return {};
 		}
-		auto compress = expression.compression_origin == CompressedMaterializationOrigin::COMPRESS;
-		auto decompress = expression.compression_origin == CompressedMaterializationOrigin::DECOMPRESS;
+		auto compress = CMUtils::GetExpressionType(expression) == CMExpressionType::COMPRESS;
+		auto decompress = CMUtils::GetExpressionType(expression) == CMExpressionType::DECOMPRESS;
 		if (!compress && !decompress) {
 			return {};
 		}
@@ -1340,30 +1345,6 @@ private:
 			                                   "The retained scalar function definition is not representable as SQL"));
 		}
 		bool captured_aliases_are_ignored = *name == QualifiedName("system", "main", "row");
-		if (qualified_name == QualifiedName("system", "main", "alias")) {
-			if (expression.GetChildren().size() != 1 ||
-			    (expression.GetAlias().empty() && (!expression.BindInfo() || expression.BindInfo()->GetInternalKind() !=
-			                                                                     FunctionData::InternalKind::ALIAS))) {
-				return Failure(UnsupportedFunction(path, std::move(identity),
-				                                   "The alias function does not expose its bound argument name"));
-			}
-			auto child = ExportChild(*expression.GetChildren()[0], path, 0);
-			if (child.HasError()) {
-				return child;
-			}
-			auto value = Value(expression.GetAlias().empty() ? expression.BindInfo()->Cast<AliasBindData>().alias
-			                                                 : expression.GetAlias());
-			vector<unique_ptr<ParsedExpression>> arguments;
-			arguments.push_back(std::move(child.GetValue()));
-			vector<unique_ptr<ParsedExpression>> condition;
-			condition.push_back(make_uniq<FunctionExpression>(qualified_name, std::move(arguments)));
-			auto result = make_uniq<CaseExpression>();
-			result->CaseChecksMutable().push_back(
-			    {make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, std::move(condition)),
-			     ConstantExpression::FromValue(value)});
-			result->ElseMutable() = ConstantExpression::FromValue(value);
-			return BoundExpressionSQLExportResult::Success(std::move(result));
-		}
 		bool argument_aliases_are_semantic = qualified_name == QualifiedName("system", "main", "struct_pack");
 		idx_t first_argument_alias = 0;
 		if (qualified_name == QualifiedName("system", "main", "struct_update") ||
@@ -1372,44 +1353,18 @@ private:
 			first_argument_alias = 1;
 		}
 		if (definition->GetProperties().GetCaptureArgumentAliases() && !argument_aliases_are_semantic &&
-		    !captured_aliases_are_ignored) {
+		    !captured_aliases_are_ignored && !definition->HasUnbindCallback()) {
 			return Failure(UnsupportedFunction(path, std::move(identity),
 			                                   "The bound scalar function does not expose its SQL argument names"));
 		}
-		bool array_slice_syntax = false;
-		if (IsArraySliceDefinition(*definition) && expression.GetChildren().size() == identity.arguments.size()) {
-			for (idx_t child_index = 1; child_index < 3; child_index++) {
-				auto &child = *expression.GetChildren()[child_index];
-				if (child.GetReturnType().id() != LogicalTypeId::LIST) {
-					continue;
-				}
-				if (!IsOmittedArraySliceBound(child)) {
-					return Failure(InternalExpressionInvariant(ChildPath(path, child_index), child,
-					                                           "Bound array slice has an invalid omitted bound"));
-				}
-				array_slice_syntax = true;
-			}
-			if (array_slice_syntax && (!expression.BindInfo() || expression.BindInfo()->GetInternalKind() !=
-			                                                         FunctionData::InternalKind::ARRAY_SLICE)) {
-				return Failure(
-				    UnsupportedFunction(path, std::move(identity),
-				                        "The bound array slice does not retain canonical omitted-bound metadata"));
-			}
-		}
-		if (definition->GetProperties().RequiresExpressionNames() && !definition->HasArgumentNamesCallback() &&
+		if (definition->GetProperties().RequiresExpressionNames() && !definition->HasUnbindCallback() &&
 		    !argument_aliases_are_semantic && !captured_aliases_are_ignored) {
 			return Failure(
 			    UnsupportedFunction(path, std::move(identity),
 			                        "The bound scalar function requires expression names that are not retained"));
 		}
 		vector<Identifier> argument_names;
-		if (definition->HasArgumentNamesCallback()) {
-			argument_names = definition->GetArgumentNames(function);
-			if (argument_names.size() != expression.GetChildren().size()) {
-				return Failure(InternalExpressionInvariant(
-				    path, expression, "The scalar SQL argument-name callback returned an invalid argument count"));
-			}
-		} else if (argument_aliases_are_semantic) {
+		if (argument_aliases_are_semantic) {
 			argument_names.resize(expression.GetChildren().size());
 			for (idx_t argument_index = first_argument_alias; argument_index < argument_names.size();
 			     argument_index++) {
@@ -1455,17 +1410,14 @@ private:
 			}
 			children.push_back(std::move(child.GetValue()));
 		}
-		if (array_slice_syntax) {
-			for (idx_t child_index = 1; child_index < 3; child_index++) {
-				if (!IsOmittedArraySliceBound(*expression.GetChildren()[child_index])) {
-					continue;
-				}
-				children[child_index] = OperatorExpression::EmptySliceBound();
-			}
-		}
 		unique_ptr<ParsedExpression> result;
-		if (array_slice_syntax) {
-			result = make_uniq<OperatorExpression>(ExpressionType::ARRAY_SLICE, std::move(children));
+		if (definition->HasUnbindCallback()) {
+			FunctionUnbindInput input(expression, std::move(children));
+			result = definition->GetUnbindCallback()(input);
+			if (!result) {
+				return Failure(UnsupportedFunction(path, std::move(identity),
+				                                   "The function cannot reconstruct its bound invocation"));
+			}
 		} else if (!argument_names.empty()) {
 			vector<FunctionArgument> arguments;
 			for (idx_t argument_index = 0; argument_index < children.size(); argument_index++) {

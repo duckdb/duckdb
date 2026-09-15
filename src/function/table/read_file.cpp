@@ -188,6 +188,7 @@ struct ReadTextOperation {
 template <class OP>
 static TableFunction GetFunction() {
 	MultiFileFunction<DirectMultiFileInfo<OP>> table_function(OP::NAME);
+	table_function.to_sql = TableFunction::ToSQLFunctionCall;
 	// Erase extra multi file reader options
 	table_function.named_parameters.erase("filename");
 	table_function.named_parameters.erase("hive_partitioning");

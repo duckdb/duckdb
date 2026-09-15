@@ -1,3 +1,4 @@
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
@@ -176,7 +177,7 @@ static unique_ptr<LogicalProjection> PlanProjection(TableIndex table_index, uniq
 static unique_ptr<ParsedExpression> PlanParsedInteger(int32_t value, const Identifier &alias) {
 	auto result = ConstantExpression::FromValue(Value::INTEGER(value));
 	result->SetAlias(alias);
-	return std::move(result);
+	return result;
 }
 
 static unique_ptr<QueryNode> PlanConstantRelation(const LogicalPlanSQLExportExtensionInput &input, int32_t value) {
@@ -1993,17 +1994,17 @@ TEST_CASE("Logical plan SQL export verifies unordered VALUES list canonicalizers
 	}
 
 	SECTION("collation setting changes after binding") {
-		const string sql = "SELECT list_sort(list(x)) FROM (VALUES ('b',0),('B',1))t(x,r)";
+		const string sql = "SELECT list_sort(list(x)) FROM (VALUES ('a',0),('B',1))t(x,r)";
 		auto expected_value = [](bool bind_nocase, bool multirow_values) {
 			vector<Value> expected;
 			idx_t row_count = multirow_values ? 3 : 1;
 			for (idx_t i = 0; i < row_count; i++) {
 				if (bind_nocase) {
-					expected.push_back(Value("b"));
+					expected.insert(expected.begin(), Value("a"));
 					expected.push_back(Value("B"));
 				} else {
 					expected.insert(expected.begin(), Value("B"));
-					expected.push_back(Value("b"));
+					expected.push_back(Value("a"));
 				}
 			}
 			return Value::LIST(LogicalType::VARCHAR, std::move(expected));
@@ -2038,7 +2039,7 @@ TEST_CASE("Logical plan SQL export verifies unordered VALUES list canonicalizers
 			}
 		}
 
-		SECTION("export rebinds the current sort key") {
+		SECTION("export retains the bound sort key") {
 			for (bool bind_nocase : {false, true}) {
 				for (bool binary : {false, true}) {
 					CAPTURE(bind_nocase, binary);
@@ -2062,15 +2063,7 @@ TEST_CASE("Logical plan SQL export verifies unordered VALUES list canonicalizers
 
 					auto generated = connection.Query(exported.GetValue().query->ToString());
 					REQUIRE_NO_FAIL(*generated);
-					if (bind_nocase) {
-						REQUIRE(Value::NotDistinctFrom(generated->GetValue(0, 0), expected_value(false, true)));
-					} else {
-						auto value = generated->GetValue(0, 0);
-						auto &values = ListValue::GetChildren(value);
-						REQUIRE(values.size() == 6);
-						REQUIRE(std::count(values.begin(), values.end(), Value("b")) == 3);
-						REQUIRE(std::count(values.begin(), values.end(), Value("B")) == 3);
-					}
+					REQUIRE(Value::NotDistinctFrom(generated->GetValue(0, 0), expected_value(bind_nocase, true)));
 					connection.Rollback();
 				}
 			}
@@ -2282,18 +2275,20 @@ TEST_CASE("Retained source SQL invocation survives plan serialization",
 	auto plan = OptimizeLogicalPlanExportQuery(connection, "SELECT sum(x) FROM range(10) t(x)");
 	auto get = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_GET);
 	REQUIRE(get);
-	REQUIRE(get->Cast<LogicalGet>().table_function_ref);
-	auto invocation = get->Cast<LogicalGet>().table_function_ref->ToString();
+	auto parameters = get->Cast<LogicalGet>().parameters;
 	auto copy = plan->Copy(*connection.context);
 	auto copied_get = FindLogicalPlanExportOperator(*copy, LogicalOperatorType::LOGICAL_GET);
 	REQUIRE(copied_get);
-	REQUIRE(copied_get->Cast<LogicalGet>().table_function_ref);
-	REQUIRE(copied_get->Cast<LogicalGet>().table_function_ref->ToString() == invocation);
+	REQUIRE(copied_get->Cast<LogicalGet>().parameters == parameters);
 	REQUIRE(LogicalPlanSQLExporter::Export(*connection.context, *copy).IsSuccess());
+	copied_get->Cast<LogicalGet>().function.to_sql = nullptr;
+	auto unsupported = LogicalPlanSQLExporter::Export(*connection.context, *copy);
+	REQUIRE(unsupported.HasError());
+	REQUIRE(unsupported.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_SOURCE);
 	connection.Rollback();
 }
 
-TEST_CASE("Logical plan SQL export rebinds generic source invocations",
+TEST_CASE("Logical plan SQL export retains bound source arguments and reopens files",
           "[sql_export][logical_plan_sql_export][table_source_sql]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
@@ -2304,13 +2299,14 @@ TEST_CASE("Logical plan SQL export rebinds generic source invocations",
 	auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
 	REQUIRE(exported.IsSuccess());
 	auto generated_sql = exported.GetValue().query->ToString();
-	REQUIRE(StringUtil::Contains(generated_sql, "getvariable"));
+	REQUIRE_FALSE(StringUtil::Contains(generated_sql, "getvariable"));
 	REQUIRE_NO_FAIL(connection.Query("SET VARIABLE sql_export_count=2"));
 	auto original = connection.Query(variable_sql);
 	auto generated = connection.Query(generated_sql);
 	REQUIRE_NO_FAIL(*original);
 	REQUIRE_NO_FAIL(*generated);
-	REQUIRE(SQLExportRows(*generated, true) == SQLExportRows(*original, true));
+	REQUIRE(original->RowCount() == 2);
+	REQUIRE(generated->RowCount() == 4);
 
 	auto csv_path = TestCreatePath("sql_export_generic_source.csv");
 	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE csv_source(i INTEGER, s VARCHAR);"

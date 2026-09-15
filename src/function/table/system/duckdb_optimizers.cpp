@@ -53,6 +53,7 @@ void DuckDBOptimizersFunction(ClientContext &context, TableFunctionInput &data_p
 void DuckDBOptimizersFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction duckdb_optimizers("duckdb_optimizers", {}, DuckDBOptimizersFunction, DuckDBOptimizersBind,
 	                                DuckDBOptimizersInit);
+	duckdb_optimizers.to_sql = TableFunction::ToSQLFunctionCall;
 	set.AddFunction(duckdb_optimizers);
 }
 

@@ -514,6 +514,7 @@ static vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &conte
 
 TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	MultiFileFunction<ParquetMultiFileInfo> table_function("parquet_scan");
+	table_function.to_sql = TableFunction::ToSQLFunctionCall;
 	table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["file_row_number"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["debug_use_openssl"] = LogicalType::BOOLEAN;

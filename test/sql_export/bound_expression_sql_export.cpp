@@ -333,29 +333,12 @@ static unique_ptr<FunctionData> BindDropLastAggregateArgument(BindAggregateFunct
 	return make_uniq<OpaqueSQLFunctionData>();
 }
 
-static vector<Identifier> PositionalSQLArgumentNames(const BoundScalarFunction &function) {
-	return vector<Identifier>(function.GetLogicalArguments().size());
+static unique_ptr<ParsedExpression> PositionalSQLUnbind(FunctionUnbindInput &input) {
+	return make_uniq<FunctionExpression>(input.expression.Function().GetQualifiedName(), std::move(input.children));
 }
 
-static vector<Identifier> MissingSQLArgumentName(const BoundScalarFunction &function) {
-	auto count = function.GetLogicalArguments().size();
-	return vector<Identifier>(count == 0 ? 0 : count - 1);
-}
-
-static vector<Identifier> InvalidSQLArgumentName(const BoundScalarFunction &function) {
-	vector<Identifier> result(function.GetLogicalArguments().size());
-	if (!result.empty()) {
-		result[0] = Identifier(string("bad\0name", 8));
-	}
-	return result;
-}
-
-static vector<Identifier> NamedThenPositionalSQLArguments(const BoundScalarFunction &function) {
-	vector<Identifier> result(function.GetLogicalArguments().size());
-	if (!result.empty()) {
-		result[0] = Identifier("named");
-	}
-	return result;
+static unique_ptr<ParsedExpression> DeclineSQLUnbind(FunctionUnbindInput &) {
+	return nullptr;
 }
 
 struct SubtractOperation {
@@ -557,11 +540,11 @@ TEST_CASE("Bound expression SQL export checks malformed array slice state",
 	LogicalPlanVerificationPath child_path;
 	child_path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
 	child_path.components.push_back({LogicalPlanVerificationPathComponentType::EXPRESSION_CHILD, 1});
-	RequireIssue(invalid, LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, child_path);
+	RequireIssue(invalid, LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, root_path);
 	{
 		INFO("modified bind data");
 		auto modified_bind_data = slice->Copy();
-		modified_bind_data->Cast<BoundFunctionExpression>().BindInfoMutable() = make_uniq<OpaqueSQLFunctionData>();
+		modified_bind_data->Cast<BoundFunctionExpression>().BindInfoMutable().reset();
 		RequireIssue(BoundExpressionSQLExporter::Export(*modified_bind_data, context),
 		             LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, root_path);
 	}
@@ -1855,19 +1838,19 @@ TEST_CASE("Bound expression SQL export owns named arguments after source destruc
 	connection.Rollback();
 }
 
-TEST_CASE("Bound expression SQL export validates scalar argument-name callbacks",
+TEST_CASE("Bound expression SQL export uses scalar unbind callbacks",
           "[sql_export][bound_expression_sql_export][struct_insert_sql_export]") {
 	DuckDB db;
 	Connection connection(db);
 	connection.BeginTransaction();
 	auto &catalog = Catalog::GetSystemCatalog(*connection.context);
 	auto bind_definition = [&](const Identifier &name, const vector<LogicalType> &types,
-	                           scalar_function_argument_names_t callback) {
+	                           scalar_function_unbind_t callback) {
 		auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(
 		    *connection.context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), name));
 		auto definition =
 		    make_shared_ptr<ScalarFunction>(*entry.functions.GetFunctionByArguments(*connection.context, types));
-		definition->SetArgumentNamesCallback(callback);
+		definition->SetUnbindCallback(callback);
 		vector<unique_ptr<Expression>> children;
 		for (auto &type : types) {
 			children.push_back(Constant(type == LogicalType::INTEGER ? Value::INTEGER(-7) : Value::DOUBLE(2)));
@@ -1876,7 +1859,7 @@ TEST_CASE("Bound expression SQL export validates scalar argument-name callbacks"
 		return binder.BindScalarFunction(std::move(definition), std::move(children));
 	};
 
-	auto positional = bind_definition(Identifier("abs"), {LogicalType::INTEGER}, PositionalSQLArgumentNames);
+	auto positional = bind_definition(Identifier("abs"), {LogicalType::INTEGER}, PositionalSQLUnbind);
 	auto positional_result = BoundExpressionSQLExporter::Export(*positional, {});
 	REQUIRE(positional_result.IsSuccess());
 	auto &positional_call = positional_result.GetValue()->Cast<FunctionExpression>();
@@ -1884,24 +1867,10 @@ TEST_CASE("Bound expression SQL export validates scalar argument-name callbacks"
 	REQUIRE_FALSE(positional_call.GetArguments()[0].HasName());
 	REQUIRE_NO_FAIL(connection.Query("SELECT " + positional_call.ToString()));
 
-	auto missing = bind_definition(Identifier("abs"), {LogicalType::INTEGER}, MissingSQLArgumentName);
+	auto missing = bind_definition(Identifier("abs"), {LogicalType::INTEGER}, DeclineSQLUnbind);
 	auto missing_result = BoundExpressionSQLExporter::Export(*missing, {});
 	REQUIRE(missing_result.HasError());
-	REQUIRE(missing_result.GetIssues()[0].code == LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT);
-	REQUIRE(StringUtil::Contains(missing_result.GetIssues()[0].message, "invalid argument count"));
-
-	auto invalid = bind_definition(Identifier("abs"), {LogicalType::INTEGER}, InvalidSQLArgumentName);
-	auto invalid_result = BoundExpressionSQLExporter::Export(*invalid, {});
-	REQUIRE(invalid_result.HasError());
-	REQUIRE(invalid_result.GetIssues()[0].code == LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT);
-	REQUIRE(StringUtil::Contains(invalid_result.GetIssues()[0].message, "invalid identifier"));
-
-	auto reordered = bind_definition(Identifier("power"), {LogicalType::DOUBLE, LogicalType::DOUBLE},
-	                                 NamedThenPositionalSQLArguments);
-	auto reordered_result = BoundExpressionSQLExporter::Export(*reordered, {});
-	REQUIRE(reordered_result.HasError());
-	REQUIRE(reordered_result.GetIssues()[0].code == LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT);
-	REQUIRE(StringUtil::Contains(reordered_result.GetIssues()[0].message, "positional argument after a named"));
+	REQUIRE(missing_result.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION);
 
 	auto alias_plan = BindExportQuery(connection, "SELECT struct_pack(\"named field\" := 1)");
 	auto struct_pack = FindExpression(*alias_plan, [](const Expression &candidate) {
@@ -1936,7 +1905,6 @@ TEST_CASE("SQL export retains bound alias names across copies and renamed inputs
 	for (bool binary : {false, true}) {
 		auto copy = binary ? BinaryRoundTrip(*connection.context, *renamed) : renamed->Copy();
 		auto &function = copy->Cast<BoundFunctionExpression>();
-		REQUIRE(function.BindInfo()->Cast<AliasBindData>().alias == Identifier("MiXeD' name"));
 		auto binding = function.GetChildren()[0]->Cast<BoundColumnRefExpression>().Binding();
 		auto context = ResolveBinding(binding, {Identifier("renamed")}, LogicalType::INTEGER);
 		const string from = " FROM (SELECT \"MiXeD' name\" AS renamed FROM names)";
@@ -1944,7 +1912,7 @@ TEST_CASE("SQL export retains bound alias names across copies and renamed inputs
 		function.SetAlias(Identifier("explicit"));
 		RequireRoundTrip(connection, function, context, from, "'explicit'");
 		function.SetAlias(Identifier());
-		function.BindInfoMutable() = make_uniq<OpaqueSQLFunctionData>();
+		function.BindInfoMutable().reset();
 		auto wrong_data = BoundExpressionSQLExporter::Export(function, context);
 		REQUIRE(wrong_data.HasError());
 		REQUIRE(wrong_data.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION);

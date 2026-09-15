@@ -481,6 +481,7 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction range_function({LogicalType::BIGINT}, nullptr, RangeFunctionBind<false>, RangeFunctionGlobalInit,
 	                             RangeFunctionLocalInit);
 	range_function.table_scan_progress = RangeFunctionProgress;
+	range_function.to_sql = TableFunction::ToSQLFunctionCall;
 	range_function.in_out_function = RangeFunction<false>;
 	range_function.cardinality = RangeCardinality;
 	range_function.is_repeatable = RangeIsRepeatable;
@@ -498,6 +499,7 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction range_in_out({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL}, nullptr,
 	                           RangeDateTimeBind<false>, RangeDateTimeGlobalInit, RangeDateTimeLocalInit);
 	range_in_out.table_scan_progress = RangeDateTimeProgress;
+	range_in_out.to_sql = TableFunction::ToSQLFunctionCall;
 	range_in_out.in_out_function = RangeDateTimeFunction<false>;
 	range_in_out.cardinality = RangeDateTimeCardinality;
 	range_in_out.is_repeatable = RangeIsRepeatable;
@@ -520,6 +522,7 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	                                     nullptr, RangeDateTimeBind<true>, RangeDateTimeGlobalInit,
 	                                     RangeDateTimeLocalInit);
 	generate_series_in_out.table_scan_progress = RangeDateTimeProgress;
+	generate_series_in_out.to_sql = TableFunction::ToSQLFunctionCall;
 	generate_series_in_out.in_out_function = RangeDateTimeFunction<true>;
 	generate_series_in_out.is_repeatable = RangeIsRepeatable;
 	generate_series_in_out.parallelism = TableFunctionParallelism::FORCE_SINGLE_THREADED;

@@ -1,3 +1,4 @@
+#include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/planner/logical_plan_sql_exporter.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 
@@ -261,7 +262,7 @@ static optional<Value> ConstantSQLInput(const Expression &expression, LogicalOpe
 	}
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &function = expression.Cast<BoundFunctionExpression>();
-		if (!function.GetChildren().empty() && function.compression_origin != CompressedMaterializationOrigin::NONE) {
+		if (!function.GetChildren().empty() && CMUtils::GetExpressionType(function) != CMExpressionType::NONE) {
 			return ConstantSQLInput(*function.GetChildren()[0], input);
 		}
 	}
@@ -316,8 +317,8 @@ static LogicalType SemanticExpressionType(const Expression &expression,
 	}
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &function = expression.Cast<BoundFunctionExpression>();
-		if (context.discard_optimizer_metadata &&
-		    function.compression_origin != CompressedMaterializationOrigin::NONE && !function.GetChildren().empty()) {
+		if (context.discard_optimizer_metadata && CMUtils::GetExpressionType(function) != CMExpressionType::NONE &&
+		    !function.GetChildren().empty()) {
 			return SemanticExpressionType(*function.GetChildren()[0], context);
 		}
 	}
@@ -421,8 +422,7 @@ static bool HasEffectfulExpressionSubtree(const LogicalOperator &op) {
 		std::function<void(unique_ptr<Expression> &)> strip_compression = [&](unique_ptr<Expression> &value) {
 			if (value->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 				auto &function = value->Cast<BoundFunctionExpression>();
-				if (function.compression_origin != CompressedMaterializationOrigin::NONE &&
-				    !function.GetChildren().empty()) {
+				if (CMUtils::GetExpressionType(function) != CMExpressionType::NONE && !function.GetChildren().empty()) {
 					auto child = std::move(function.GetChildrenMutable()[0]);
 					value = std::move(child);
 					strip_compression(value);
@@ -587,11 +587,10 @@ static bool OrdersAggregateArguments(ClientContext &context, const BoundAggregat
 	return true;
 }
 
-template <class ENTRY>
-static bool IsRegisteredCoreFunction(ClientContext &context, const QualifiedName &name,
-                                     const vector<LogicalType> &arguments) {
+static bool IsCurrentCoreAggregate(ClientContext &context, const AggregateFunction &definition,
+                                   const vector<LogicalType> &arguments) {
 	try {
-		auto &entry = Catalog::GetEntry<ENTRY>(context, name);
+		auto &entry = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, definition.GetQualifiedName());
 		if (!entry.internal || entry.extension_name != Identifier("core_functions")) {
 			return false;
 		}
@@ -599,7 +598,7 @@ static bool IsRegisteredCoreFunction(ClientContext &context, const QualifiedName
 		FunctionBinder function_binder(context);
 		auto function_index = function_binder.BindFunction(entry.name, entry.functions, arguments, error);
 		return function_index.IsValid() &&
-		       entry.IsRegisteredFunction(entry.functions.GetFunctionByOffset(function_index.GetIndex()));
+		       *entry.functions.GetFunctionByOffset(function_index.GetIndex()) == definition;
 	} catch (const Exception &) {
 		return false;
 	}
@@ -1171,8 +1170,7 @@ private:
 		if (op.type == LogicalOperatorType::LOGICAL_WINDOW &&
 		    op.children[0]->type == LogicalOperatorType::LOGICAL_GET) {
 			auto &get = op.children[0]->Cast<LogicalGet>();
-			if (get.table_function_ref && !get.ordinality_idx.IsValid() &&
-			    get.table_function_ref->Cast<TableFunctionRef>().with_ordinality == OrdinalityType::WITH_ORDINALITY) {
+			if (get.source_ordinality == OrdinalityType::WITH_ORDINALITY && !get.ordinality_idx.IsValid()) {
 				bool supported = op.expressions.size() == 1 && !get.table_filters.HasFilters() &&
 				                 !get.extra_info.sample_options &&
 				                 (!get.function.to_sql || get.function.to_sql == TableFunction::ToSQLFunctionCall);
@@ -1489,8 +1487,14 @@ private:
 			}
 			input = CreateSubquery(std::move(child.GetValue()));
 		}
-		auto to_sql = get.function.to_sql ? get.function.to_sql : TableFunction::ToSQLFunctionCall;
+		auto to_sql = get.function.to_sql;
+		if (!to_sql) {
+			return PlanFailure(UnsupportedSource(path, LogicalSourceIdentity(get), "to_sql_callback"));
+		}
 		if (ordinality) {
+			if (to_sql != TableFunction::ToSQLFunctionCall) {
+				return PlanFailure(UnsupportedSource(path, LogicalSourceIdentity(get), "source_ordinality"));
+			}
 			fields.GetValue().push_back(*ordinality);
 			scan_fields.push_back(*ordinality);
 			to_sql = TableFunction::ToSQLFunctionCallWithOrdinality;
@@ -2028,16 +2032,16 @@ private:
 		return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields.GetValue())});
 	}
 
-	BoundExpressionSQLExportResult ExportPivotDefault(const BoundAggregateExpression &aggregate,
-	                                                  const LogicalPlanVerificationPath &path) {
+	LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
+	ExportPivotDefault(const BoundAggregateExpression &aggregate, const LogicalPlanVerificationPath &path) {
 		if (aggregate.Function().GetStability() == FunctionStability::VOLATILE ||
 		    aggregate.Function().GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
-			return BoundExpressionSQLExportResult::Failure({PlanUnsupportedFeature(
+			return LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>::Failure({PlanUnsupportedFeature(
 			    path, "pivot_empty_aggregate",
 			    "A volatile or fallible PIVOT default must be evaluated before query execution")});
 		}
 		if (aggregate.StateExportMode() != AggregateStateExportMode::NONE) {
-			return BoundExpressionSQLExportResult::Failure({PlanUnsupportedFeature(
+			return LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>::Failure({PlanUnsupportedFeature(
 			    path, "pivot_empty_aggregate", "The PIVOT default requires an ordinary aggregate invocation")});
 		}
 		auto copy = aggregate.Copy();
@@ -2055,15 +2059,15 @@ private:
 		};
 		replace(copy);
 		if (outer_reference) {
-			return BoundExpressionSQLExportResult::Failure({PlanUnsupportedFeature(
+			return LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>::Failure({PlanUnsupportedFeature(
 			    path, "pivot_empty_aggregate", "The PIVOT default contains an unresolved outer reference")});
 		}
 		auto result = BoundExpressionSQLExporter::ExportAggregateCallAtPath(copy->Cast<BoundAggregateExpression>(),
 		                                                                    CreateBindingContext(context, {}), path);
 		if (result.HasError()) {
-			return BoundExpressionSQLExportResult::Failure(result.GetIssues());
+			return LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>::Failure(result.GetIssues());
 		}
-		return BoundExpressionSQLExportResult::Success(std::move(result.GetValue()));
+		return LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>::Success(std::move(result.GetValue()));
 	}
 
 	LogicalPlanVerificationResult<bool> VerifyPivotListSource(LogicalPivot &pivot,
@@ -2148,8 +2152,7 @@ private:
 			    aggregate.StateExportMode() != AggregateStateExportMode::NONE) {
 				return failure("The PIVOT child lists do not cover the same input rows");
 			}
-			if (!IsRegisteredCoreFunction<AggregateFunctionCatalogEntry>(
-			        context, definition->GetQualifiedName(), {aggregate.GetChildren()[0]->GetReturnType()})) {
+			if (!IsCurrentCoreAggregate(context, *definition, {aggregate.GetChildren()[0]->GetReturnType()})) {
 				return failure("The PIVOT list source uses a modified aggregate definition");
 			}
 		}

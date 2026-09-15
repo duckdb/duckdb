@@ -44,6 +44,7 @@ static void PragmaVersionFunction(ClientContext &context, TableFunctionInput &da
 
 void PragmaVersion::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction pragma_version("pragma_version", {}, PragmaVersionFunction);
+	pragma_version.to_sql = TableFunction::ToSQLFunctionCall;
 	pragma_version.bind = PragmaVersionBind;
 	pragma_version.init_global = PragmaVersionInit;
 	set.AddFunction(pragma_version);
@@ -121,6 +122,7 @@ static void PragmaPlatformFunction(ClientContext &context, TableFunctionInput &d
 
 void PragmaPlatform::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction pragma_platform("pragma_platform", {}, PragmaPlatformFunction);
+	pragma_platform.to_sql = TableFunction::ToSQLFunctionCall;
 	pragma_platform.bind = PragmaPlatformBind;
 	pragma_platform.init_global = PragmaPlatformInit;
 	set.AddFunction(pragma_platform);

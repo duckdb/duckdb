@@ -338,6 +338,7 @@ TEST_CASE("SQL export structurally validates effecting table sources without rep
 	ExtensionLoader loader(*db.instance, "sql_export_effecting_source");
 	TableFunction function("sql_export_effecting_source", {}, SQLExportEffectingSource, BindSQLExportEffectingSource,
 	                       InitSQLExportEffectingSource);
+	function.to_sql = TableFunction::ToSQLFunctionCall;
 	function.is_repeatable = [](optional_ptr<const FunctionData>) {
 		return false;
 	};

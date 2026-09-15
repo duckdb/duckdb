@@ -445,6 +445,7 @@ static void TestAllTypesFunction(ClientContext &context, TableFunctionInput &dat
 
 void TestAllTypesFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction test_all_types("test_all_types", {}, TestAllTypesFunction, TestAllTypesBind, TestAllTypesInit);
+	test_all_types.to_sql = TableFunction::ToSQLFunctionCall;
 	test_all_types.is_repeatable = [](optional_ptr<const FunctionData>) {
 		return true;
 	};

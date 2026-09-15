@@ -195,6 +195,7 @@ static bool PushdownProjectionExpressionMultiFile(ClientContext &context,
 TableFunction ReadCSVTableFunction::GetFunction() {
 	// the multi-file CSV reader is the single-file CSV reader wrapped into a multi-file function
 	auto read_csv = ReadCSVTableFunction::GetMultiFileFunction("read_csv");
+	read_csv.to_sql = TableFunction::ToSQLFunctionCall;
 	read_csv.serialize = CSVReaderSerialize;
 	read_csv.deserialize = CSVReaderDeserialize;
 	read_csv.projection_expression_pushdown = PushdownProjectionExpressionMultiFile;

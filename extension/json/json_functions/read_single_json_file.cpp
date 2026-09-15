@@ -333,8 +333,10 @@ TableFunction JSONFunctions::GetJSONTableFunction(Identifier name, shared_ptr<JS
 	// the schema is determined by combining the schemas of up to 32 files - the keys of the files are unified, so a
 	// file does not need to have every column of the combined schema
 	settings.maximum_sample_files = 32;
-	return TableFunctionMultiFileWrapper::CreateFunction(std::move(single_file_function), std::move(name),
-	                                                     std::move(settings));
+	auto function = TableFunctionMultiFileWrapper::CreateFunction(std::move(single_file_function), std::move(name),
+	                                                              std::move(settings));
+	function.to_sql = TableFunction::ToSQLFunctionCall;
+	return function;
 }
 
 static TableFunctionSet CreateJSONFunctionSet(Identifier name, shared_ptr<JSONScanInfo> function_info) {

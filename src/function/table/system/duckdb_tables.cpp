@@ -175,7 +175,9 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 }
 
 void DuckDBTablesFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("duckdb_tables", {}, DuckDBTablesFunction, DuckDBTablesBind, DuckDBTablesInit));
+	auto function = TableFunction("duckdb_tables", {}, DuckDBTablesFunction, DuckDBTablesBind, DuckDBTablesInit);
+	function.to_sql = TableFunction::ToSQLFunctionCall;
+	set.AddFunction(std::move(function));
 }
 
 } // namespace duckdb

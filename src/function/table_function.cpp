@@ -105,21 +105,23 @@ bool TableFunction::operator!=(const TableFunction &rhs) const {
 }
 
 static string SQLFunctionCallGuard(const LogicalGet &get, bool has_input) {
+	if (!has_input && ((!get.function.HasVarArgs() && get.parameters.size() != get.function.GetArguments().size()) ||
+	                   get.parameters.size() < get.function.GetArguments().size())) {
+		return "positional_parameters";
+	}
 	if (has_input && !get.function.in_out_function) {
 		return "input_child";
 	}
 	if (has_input && (get.input_table_types.empty() || get.input_table_types.size() > get.children[0]->types.size())) {
 		return "input_columns";
 	}
-	if (get.ordinality_idx.IsValid() &&
-	    (!get.table_function_ref ||
-	     get.table_function_ref->Cast<TableFunctionRef>().with_ordinality != OrdinalityType::WITH_ORDINALITY)) {
+	if (get.ordinality_idx.IsValid() && get.source_ordinality != OrdinalityType::WITH_ORDINALITY) {
 		return "ordinality";
 	}
 	if (!get.scan_partition_indices.empty()) {
 		return "scan_partitions";
 	}
-	if (!get.table_function_ref) {
+	{
 		auto name = get.function.GetQualifiedName();
 		if (!SQLExportHelpers::IsValidIdentifier(name.Catalog())) {
 			return "catalog_identifier";
@@ -219,86 +221,64 @@ static TableFunctionToSQLResult SQLFunctionCall(ClientContext &context, const Lo
 	if (!guard.empty()) {
 		return {nullptr, std::move(guard)};
 	}
-	unique_ptr<TableRef> function;
+	auto function = make_uniq<TableFunctionRef>();
+	vector<unique_ptr<ParsedExpression>> parameters;
 	const auto &signature = get.function.GetArguments();
 	const bool table_parameter = std::find(signature.begin(), signature.end(), LogicalType::TABLE) != signature.end();
-	if (input && table_parameter) {
-		if (!get.table_function_ref || !get.projected_input.empty() ||
-		    input->column_name_alias.size() < get.input_table_types.size() ||
-		    get.input_table_names.size() != get.input_table_types.size()) {
-			return {nullptr, "to_sql_callback_declined_without_guard"};
+	if (input && !table_parameter) {
+		if (input->column_name_alias.size() < get.input_table_types.size()) {
+			return {nullptr, "input_columns"};
 		}
-		function = get.table_function_ref->Copy();
-		auto &call = function->Cast<TableFunctionRef>().function->Cast<FunctionExpression>();
-		optional_ptr<SubqueryExpression> subquery;
-		for (auto &argument : call.GetArgumentsMutable()) {
-			auto &expression = argument.GetExpressionMutable();
-			if (expression->GetExpressionClass() == ExpressionClass::SUBQUERY) {
-				if (subquery) {
-					return {nullptr, "to_sql_callback_declined_without_guard"};
-				}
-				subquery = expression->Cast<SubqueryExpression>();
-			}
-		}
-		if (!subquery) {
-			return {nullptr, "to_sql_callback_declined_without_guard"};
-		}
-		auto query = make_uniq<SelectNode>();
 		for (idx_t i = 0; i < get.input_table_types.size(); i++) {
-			auto column = make_uniq<ColumnRefExpression>(input->column_name_alias[i], input->alias);
-			column->SetAlias(get.input_table_names[i]);
-			query->select_list.push_back(std::move(column));
+			parameters.push_back(make_uniq<ColumnRefExpression>(input->column_name_alias[i], input->alias));
 		}
-		query->from_table = std::move(input);
-		subquery->SubqueryMutable()->node = std::move(query);
-	} else if (input) {
-		if (input->column_name_alias.size() < get.children[0]->types.size()) {
-			return {nullptr, "to_sql_callback_declined_without_guard"};
-		}
-		vector<unique_ptr<ParsedExpression>> arguments;
-		for (idx_t i = 0; i < get.input_table_types.size(); i++) {
-			arguments.push_back(make_uniq<ColumnRefExpression>(input->column_name_alias[i], input->alias));
-		}
-		auto function_ref = make_uniq<TableFunctionRef>();
-		function_ref->function = make_uniq<FunctionExpression>(get.function.GetQualifiedName(), std::move(arguments));
-		if (get.ordinality_idx.IsValid()) {
-			function_ref->with_ordinality = OrdinalityType::WITH_ORDINALITY;
-		}
-		function = std::move(function_ref);
-	} else if (get.table_function_ref) {
-		function = get.table_function_ref->Copy();
 	} else {
-		auto name = get.function.GetQualifiedName();
-		vector<unique_ptr<ParsedExpression>> parameters;
-		for (auto &parameter : get.parameters) {
-			if (!SQLExportHelpers::IsSQLRepresentableType(parameter.type())) {
-				return {nullptr, "positional_parameter_type"};
+		bool consumed_input = false;
+		for (idx_t i = 0; i < get.parameters.size(); i++) {
+			if (i < signature.size() && signature[i] == LogicalType::TABLE) {
+				if (!input || consumed_input || !get.projected_input.empty() ||
+				    input->column_name_alias.size() < get.input_table_types.size() ||
+				    get.input_table_names.size() != get.input_table_types.size()) {
+					return {nullptr, "table_parameter"};
+				}
+				auto query = make_uniq<SelectNode>();
+				for (idx_t column_idx = 0; column_idx < get.input_table_types.size(); column_idx++) {
+					auto column = make_uniq<ColumnRefExpression>(input->column_name_alias[column_idx], input->alias);
+					column->SetAlias(get.input_table_names[column_idx]);
+					query->select_list.push_back(std::move(column));
+				}
+				query->from_table = std::move(input);
+				auto subquery = make_uniq<SubqueryExpression>();
+				subquery->GetSubqueryTypeMutable() = SubqueryType::SCALAR;
+				subquery->SubqueryMutable() = make_uniq<SelectStatement>();
+				subquery->SubqueryMutable()->node = std::move(query);
+				parameters.push_back(std::move(subquery));
+				consumed_input = true;
+				continue;
 			}
-			auto exported = BoundExpressionSQLExporter::Export(BoundConstantExpression(parameter), {});
+			auto exported = BoundExpressionSQLExporter::Export(BoundConstantExpression(get.parameters[i]), {});
 			if (exported.HasError()) {
 				return {nullptr, "positional_parameter_expression"};
 			}
 			parameters.push_back(std::move(exported.GetValue()));
 		}
-		for (auto &parameter : get.named_parameters) {
-			if (!SQLExportHelpers::IsValidIdentifier(parameter.first)) {
-				return {nullptr, "named_parameter_identifier"};
-			}
-			if (!SQLExportHelpers::IsSQLRepresentableType(parameter.second.type())) {
-				return {nullptr, "named_parameter_type"};
-			}
-			auto exported = BoundExpressionSQLExporter::Export(BoundConstantExpression(parameter.second), {});
-			if (exported.HasError()) {
-				return {nullptr, "named_parameter_expression"};
-			}
-			parameters.push_back(make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL,
-			                                                     make_uniq<ColumnRefExpression>(parameter.first),
-			                                                     std::move(exported.GetValue())));
+		if (input) {
+			return {nullptr, "table_parameter"};
 		}
-		auto function_ref = make_uniq<TableFunctionRef>();
-		function_ref->function = make_uniq<FunctionExpression>(name, std::move(parameters));
-		function = std::move(function_ref);
 	}
+	for (auto &parameter : get.named_parameters) {
+		if (!SQLExportHelpers::IsValidIdentifier(parameter.first)) {
+			return {nullptr, "named_parameter_identifier"};
+		}
+		auto exported = BoundExpressionSQLExporter::Export(BoundConstantExpression(parameter.second), {});
+		if (exported.HasError()) {
+			return {nullptr, "named_parameter_expression"};
+		}
+		parameters.push_back(make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL,
+		                                                     make_uniq<ColumnRefExpression>(parameter.first),
+		                                                     std::move(exported.GetValue())));
+	}
+	function->function = make_uniq<FunctionExpression>(get.function.GetQualifiedName(), std::move(parameters));
 	auto &function_ref = function->Cast<TableFunctionRef>();
 	function_ref.with_ordinality = get.ordinality_idx.IsValid() || source_ordinality
 	                                   ? OrdinalityType::WITH_ORDINALITY

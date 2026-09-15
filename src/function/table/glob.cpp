@@ -85,6 +85,7 @@ static double GlobFunctionProgress(ClientContext &context, const FunctionData *b
 void GlobTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction glob_function("glob", {LogicalType::VARCHAR}, GlobFunction, GlobFunctionBind, GlobFunctionInit);
 	glob_function.table_scan_progress = GlobFunctionProgress;
+	glob_function.to_sql = TableFunction::ToSQLFunctionCall;
 	set.AddFunction(MultiFileReader::CreateFunctionSet(glob_function));
 }
 
