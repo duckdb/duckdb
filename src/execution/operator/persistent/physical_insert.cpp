@@ -273,7 +273,7 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, InsertGlobalState
 
 		if (GLOBAL) {
 			auto update_state = data_table.InitializeUpdate(table, context.client, op.bound_constraints);
-			data_table.Update(*update_state, context.client, table, row_ids, set_columns, update_chunk);
+			data_table.Update(*update_state, context.client, table, row_ids, set_columns, set_columns, update_chunk);
 			return update_chunk.size();
 		}
 		auto &local_storage = LocalStorage::Get(context.client, data_table.db);

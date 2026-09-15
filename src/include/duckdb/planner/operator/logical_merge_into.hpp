@@ -26,7 +26,9 @@ public:
 	//! Condition - or NULL if this should always be performed for the given action
 	unique_ptr<Expression> condition;
 	//! The set of referenced physical columns (for UPDATE)
-	vector<PhysicalIndex> columns;
+	vector<PhysicalIndex> referenced_columns;
+	//! Columns targeted by the UPDATE action
+	vector<PhysicalIndex> columns_to_update;
 	//! Set of expressions for INSERT or UPDATE
 	vector<unique_ptr<Expression>> expressions;
 	//! Deprecated: Column index map (for INSERT)

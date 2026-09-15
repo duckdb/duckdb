@@ -40,6 +40,8 @@
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 
+#include <algorithm>
+
 namespace duckdb {
 
 DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p,
@@ -1390,21 +1392,21 @@ idx_t DataTable::Delete(TableDeleteState &state, ClientContext &context, DuckTab
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
-static void CreateMockChunk(vector<LogicalType> &types, const vector<PhysicalIndex> &column_ids, DataChunk &chunk,
-                            DataChunk &mock_chunk) {
+static void CreateMockChunk(vector<LogicalType> &types, const vector<PhysicalIndex> &referenced_column_ids,
+                            DataChunk &chunk, DataChunk &mock_chunk) {
 	// construct a mock DataChunk
 	mock_chunk.InitializeEmpty(types);
-	for (column_t i = 0; i < column_ids.size(); i++) {
-		mock_chunk.data[column_ids[i].index].Reference(chunk.data[i]);
+	for (column_t i = 0; i < referenced_column_ids.size(); i++) {
+		mock_chunk.data[referenced_column_ids[i].index].Reference(chunk.data[i]);
 	}
 }
 
-static bool CreateMockChunk(TableCatalogEntry &table, const vector<PhysicalIndex> &column_ids,
+static bool CreateMockChunk(TableCatalogEntry &table, const vector<PhysicalIndex> &referenced_column_ids,
                             physical_index_set_t &desired_column_ids, DataChunk &chunk, DataChunk &mock_chunk) {
 	idx_t found_columns = 0;
 	// check whether the desired columns are present in the UPDATE clause
-	for (column_t i = 0; i < column_ids.size(); i++) {
-		if (desired_column_ids.find(column_ids[i]) != desired_column_ids.end()) {
+	for (column_t i = 0; i < referenced_column_ids.size(); i++) {
+		if (desired_column_ids.find(referenced_column_ids[i]) != desired_column_ids.end()) {
 			found_columns++;
 		}
 	}
@@ -1419,12 +1421,13 @@ static bool CreateMockChunk(TableCatalogEntry &table, const vector<PhysicalIndex
 	}
 	// construct a mock DataChunk
 	auto types = table.GetTypes();
-	CreateMockChunk(types, column_ids, chunk, mock_chunk);
+	CreateMockChunk(types, referenced_column_ids, chunk, mock_chunk);
 	return true;
 }
 
 void DataTable::VerifyUpdateConstraints(ConstraintState &state, ClientContext &context, DataChunk &chunk,
-                                        const vector<PhysicalIndex> &column_ids) {
+                                        const vector<PhysicalIndex> &referenced_column_ids,
+                                        const vector<PhysicalIndex> &updated_column_ids) {
 	auto &table = state.table;
 	auto &constraints = table.GetConstraints();
 	auto &bound_constraints = state.bound_constraints;
@@ -1435,9 +1438,9 @@ void DataTable::VerifyUpdateConstraints(ConstraintState &state, ClientContext &c
 		case ConstraintType::NOT_NULL: {
 			auto &bound_not_null = constraint->Cast<BoundNotNullConstraint>();
 			auto &not_null = base_constraint->Cast<NotNullConstraint>();
-			// check if the constraint is in the list of column_ids
-			for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-				if (column_ids[col_idx] == bound_not_null.index) {
+			// check if the constraint column is materialized
+			for (idx_t col_idx = 0; col_idx < referenced_column_ids.size(); col_idx++) {
+				if (referenced_column_ids[col_idx] == bound_not_null.index) {
 					// found the column id: check the data in
 					auto &col = table.GetColumn(LogicalIndex(not_null.index));
 					VerifyNotNullConstraint(table, chunk.data[col_idx], col.Name());
@@ -1451,7 +1454,7 @@ void DataTable::VerifyUpdateConstraints(ConstraintState &state, ClientContext &c
 			auto &bound_check = constraint->Cast<BoundCheckConstraint>();
 
 			DataChunk mock_chunk;
-			if (CreateMockChunk(table, column_ids, bound_check.bound_columns, chunk, mock_chunk)) {
+			if (CreateMockChunk(table, referenced_column_ids, bound_check.bound_columns, chunk, mock_chunk)) {
 				VerifyCheckConstraint(context, table, *bound_check.expression, mock_chunk, check);
 			}
 			break;
@@ -1465,7 +1468,7 @@ void DataTable::VerifyUpdateConstraints(ConstraintState &state, ClientContext &c
 	}
 	// Ensure that we never call UPDATE for indexed columns.
 	// Instead, we must rewrite these updates into DELETE + INSERT.
-	info->indexes.VerifyUpdate(column_ids);
+	info->indexes.VerifyUpdate(updated_column_ids);
 }
 
 unique_ptr<TableUpdateState> DataTable::InitializeUpdate(TableCatalogEntry &table, ClientContext &context,
@@ -1478,9 +1481,10 @@ unique_ptr<TableUpdateState> DataTable::InitializeUpdate(TableCatalogEntry &tabl
 }
 
 void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTableEntry &table_entry, Vector &row_ids,
-                       const vector<PhysicalIndex> &column_ids, DataChunk &updates) {
+                       const vector<PhysicalIndex> &referenced_column_ids,
+                       const vector<PhysicalIndex> &updated_column_ids, DataChunk &updates) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
-	D_ASSERT(column_ids.size() == updates.ColumnCount());
+	D_ASSERT(referenced_column_ids.size() == updates.ColumnCount());
 	updates.Verify(context.db);
 
 	auto count = updates.size();
@@ -1495,13 +1499,30 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTabl
 	}
 
 	// first verify that no constraints are violated
-	VerifyUpdateConstraints(*state.constraint_state, context, updates, column_ids);
+	VerifyUpdateConstraints(*state.constraint_state, context, updates, referenced_column_ids, updated_column_ids);
+
+	vector<column_t> update_projection_ids;
+	vector<LogicalType> update_types;
+	update_projection_ids.reserve(updated_column_ids.size());
+	update_types.reserve(updated_column_ids.size());
+	for (const auto &updated_column : updated_column_ids) {
+		auto entry = std::find(referenced_column_ids.begin(), referenced_column_ids.end(), updated_column);
+		if (entry == referenced_column_ids.end()) {
+			throw InternalException("Updated column is not present in the materialized update columns");
+		}
+		auto update_index = NumericCast<column_t>(entry - referenced_column_ids.begin());
+		update_projection_ids.push_back(update_index);
+		update_types.push_back(updates.data[update_index].GetType());
+	}
+	DataChunk write_updates;
+	write_updates.InitializeEmpty(update_types);
+	write_updates.ReferenceColumns(updates, update_projection_ids);
 
 	// now perform the actual update
 	Vector max_row_id_vec(Value::BIGINT(MAX_ROW_ID), count_t(count));
 	Vector row_ids_slice(LogicalType::BIGINT);
 	DataChunk updates_slice;
-	updates_slice.InitializeEmpty(updates.GetTypes());
+	updates_slice.InitializeEmpty(write_updates.GetTypes());
 
 	SelectionVector sel_local_update(count), sel_global_update(count);
 	auto n_local_update = VectorOperations::GreaterThanEquals(row_ids, max_row_id_vec, nullptr, count,
@@ -1510,24 +1531,24 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTabl
 
 	// row id > MAX_ROW_ID? transaction-local storage
 	if (n_local_update > 0) {
-		updates_slice.Slice(updates, sel_local_update, n_local_update);
+		updates_slice.Slice(write_updates, sel_local_update, n_local_update);
 		updates_slice.Flatten();
 		row_ids_slice.Slice(row_ids, sel_local_update, n_local_update);
 		row_ids_slice.Flatten();
 
-		LocalStorage::Get(context, db).Update(*this, table_entry, row_ids_slice, column_ids, updates_slice);
+		LocalStorage::Get(context, db).Update(*this, table_entry, row_ids_slice, updated_column_ids, updates_slice);
 	}
 
 	// otherwise global storage
 	if (n_global_update > 0) {
 		auto &transaction = DuckTransaction::Get(context, db);
-		updates_slice.Slice(updates, sel_global_update, n_global_update);
+		updates_slice.Slice(write_updates, sel_global_update, n_global_update);
 		updates_slice.Flatten();
 		row_ids_slice.Slice(row_ids, sel_global_update, n_global_update);
 		row_ids_slice.Flatten();
 
-		row_groups->Update(transaction, table_entry, FlatVector::GetDataMutable<row_t>(row_ids_slice), column_ids,
-		                   updates_slice);
+		row_groups->Update(transaction, table_entry, FlatVector::GetDataMutable<row_t>(row_ids_slice),
+		                   updated_column_ids, updates_slice);
 	}
 }
 

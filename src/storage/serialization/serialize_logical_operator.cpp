@@ -214,7 +214,7 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 void BoundMergeIntoAction::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<MergeActionType>(200, "action_type", action_type);
 	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(201, "condition", condition);
-	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(202, "columns", columns);
+	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(202, "referenced_columns", referenced_columns);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", expressions);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<IndexVector<idx_t, PhysicalIndex>>(204, "column_index_map", column_index_map, IndexVector<idx_t, PhysicalIndex>());
@@ -222,16 +222,18 @@ void BoundMergeIntoAction::Serialize(Serializer &serializer) const {
 		serializer.WriteProperty<IndexVector<idx_t, PhysicalIndex>>(204, "column_index_map", column_index_map);
 	}
 	serializer.WritePropertyWithDefault<bool>(205, "update_is_del_and_insert", update_is_del_and_insert);
+	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(206, "columns_to_update", columns_to_update);
 }
 
 unique_ptr<BoundMergeIntoAction> BoundMergeIntoAction::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<BoundMergeIntoAction>(new BoundMergeIntoAction());
 	deserializer.ReadProperty<MergeActionType>(200, "action_type", result->action_type);
 	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(201, "condition", result->condition);
-	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(202, "columns", result->columns);
+	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(202, "referenced_columns", result->referenced_columns);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", result->expressions);
 	deserializer.ReadPropertyWithExplicitDefault<IndexVector<idx_t, PhysicalIndex>>(204, "column_index_map", result->column_index_map, IndexVector<idx_t, PhysicalIndex>());
 	deserializer.ReadPropertyWithDefault<bool>(205, "update_is_del_and_insert", result->update_is_del_and_insert);
+	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(206, "columns_to_update", result->columns_to_update);
 	return result;
 }
 
@@ -922,12 +924,13 @@ void LogicalUpdate::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<TableIndex>(201, "table_index", table_index);
 	serializer.WritePropertyWithDefault<bool>(202, "return_chunk", return_chunk);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", expressions);
-	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(204, "columns", columns);
+	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(204, "referenced_columns", referenced_columns);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(205, "bound_defaults", bound_defaults);
 	serializer.WritePropertyWithDefault<bool>(206, "update_is_del_and_insert", update_is_del_and_insert);
 	serializer.WritePropertyWithDefault<bool>(207, "capture_old_rows", capture_old_rows, false);
 	serializer.WritePropertyWithDefault<vector<idx_t>>(208, "old_row_columns", old_row_columns);
 	serializer.WritePropertyWithDefault<RowIdHandling>(209, "row_id_handling", row_id_handling, RowIdHandling::ASSUME_UNIQUE);
+	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(210, "columns_to_update", columns_to_update);
 }
 
 unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(Deserializer &deserializer) {
@@ -936,12 +939,13 @@ unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(Deserializer &deserialize
 	deserializer.ReadPropertyWithDefault<TableIndex>(201, "table_index", result->table_index);
 	deserializer.ReadPropertyWithDefault<bool>(202, "return_chunk", result->return_chunk);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", result->expressions);
-	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(204, "columns", result->columns);
+	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(204, "referenced_columns", result->referenced_columns);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(205, "bound_defaults", result->bound_defaults);
 	deserializer.ReadPropertyWithDefault<bool>(206, "update_is_del_and_insert", result->update_is_del_and_insert);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(207, "capture_old_rows", result->capture_old_rows, false);
 	deserializer.ReadPropertyWithDefault<vector<idx_t>>(208, "old_row_columns", result->old_row_columns);
 	deserializer.ReadPropertyWithExplicitDefault<RowIdHandling>(209, "row_id_handling", result->row_id_handling, RowIdHandling::ASSUME_UNIQUE);
+	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(210, "columns_to_update", result->columns_to_update);
 	return std::move(result);
 }
 

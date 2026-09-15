@@ -238,22 +238,22 @@ void LogicalUpdate::BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, 
 	}
 	idx_t found_column_count = 0;
 	physical_index_set_t found_columns;
-	for (idx_t i = 0; i < update.columns.size(); i++) {
-		if (bound_columns.find(update.columns[i]) != bound_columns.end()) {
+	for (idx_t i = 0; i < update.referenced_columns.size(); i++) {
+		if (bound_columns.find(update.referenced_columns[i]) != bound_columns.end()) {
 			// this column is referenced in the CHECK constraint
 			found_column_count++;
-			found_columns.insert(update.columns[i]);
+			found_columns.insert(update.referenced_columns[i]);
 		}
 	}
 	if (found_column_count != bound_columns.size()) {
-		// columns that were required are not all part of the UPDATE
-		// add them to the scan and update set
+		// columns that were required are not all materialized
+		// add them to the scan and referenced column set
 		for (auto &physical_id : bound_columns) {
 			if (found_columns.find(physical_id) != found_columns.end()) {
 				// column is already projected
 				continue;
 			}
-			// column is not projected yet: project it by adding the clause "i=i" to the set of updated columns
+			// column is not projected yet: project its existing value
 			auto &column = table.GetColumns().GetColumn(physical_id);
 			auto proj_ref = make_uniq<BoundColumnRefExpression>(
 			    column.Type(), ColumnBinding(get.table_index, ProjectionIndex(get.GetColumnIds().size())));
@@ -261,7 +261,7 @@ void LogicalUpdate::BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, 
 			update.expressions.push_back(
 			    make_uniq<BoundColumnRefExpression>(column.Type(), ColumnBinding(proj.table_index, proj_index)));
 			get.AddColumnId(column.Logical().index);
-			update.columns.push_back(physical_id);
+			update.referenced_columns.push_back(physical_id);
 		}
 	}
 }
@@ -284,8 +284,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 	// check the constraints and indexes of the table to see if we need to project any additional columns
 	// we do this for indexes with multiple columns and CHECK constraints in the UPDATE clause
 	// suppose we have a constraint CHECK(i + j < 10); now we need both i and j to check the constraint
-	// if we are only updating one of the two columns we add the other one to the UPDATE set
-	// with a "useless" update (i.e. i=i) so we can verify that the CHECK constraint is not violated
+	// if we are only updating one of the two columns we also materialize the other column
 	auto bound_constraints = binder.BindConstraints(constraints, name, GetColumns());
 	for (auto &constraint : bound_constraints) {
 		if (constraint->type == ConstraintType::CHECK) {
@@ -303,12 +302,10 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 	}
 	// for index updates we always turn any update into an insert and a delete
 	// we thus need all the columns to be available, hence we check if the update touches any index columns
-	// If the returning keyword is used, we need access to the whole row in case the user requests it.
-	// Therefore switch the update to a delete and insert.
 	update.update_is_del_and_insert = Settings::Get<ForceUpdateToDelAndInsertSetting>(context);
 	TableStorageInfo table_storage_info = GetStorageInfo(context);
 	for (auto index : table_storage_info.index_info) {
-		for (auto &column : update.columns) {
+		for (auto &column : update.columns_to_update) {
 			if (index.column_set.find(column.index) != index.column_set.end()) {
 				update.update_is_del_and_insert = true;
 				break;
@@ -317,7 +314,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 	}
 
 	// we also convert any updates on LIST columns into delete + insert
-	for (auto &col_index : update.columns) {
+	for (auto &col_index : update.columns_to_update) {
 		auto &column = GetColumns().GetColumn(col_index);
 		if (!column.Type().SupportsRegularUpdate()) {
 			update.update_is_del_and_insert = true;
@@ -326,8 +323,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 	}
 
 	if (update.update_is_del_and_insert) {
-		// the update updates a column required by an index or requires returning the updated rows,
-		// push projections for all columns
+		// the update updates a column required by an index, so push projections for all columns
 		physical_index_set_t all_columns;
 		for (auto &column : GetColumns().Physical()) {
 			all_columns.insert(column.Physical());

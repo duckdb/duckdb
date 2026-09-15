@@ -303,6 +303,24 @@ SELECT * FROM table4;
 7	8	9
 1	10	3
 
+# RETURNING must not turn a non-key update into a delete and insert
+statement ok
+CREATE TABLE returning_parent (id INTEGER PRIMARY KEY, value INTEGER);
+
+statement ok
+CREATE TABLE returning_child (parent_id INTEGER REFERENCES returning_parent(id));
+
+statement ok
+INSERT INTO returning_parent VALUES (1, 10);
+
+statement ok
+INSERT INTO returning_child VALUES (1);
+
+query I
+UPDATE returning_parent SET value = 11 WHERE id = 1 RETURNING value;
+----
+11
+
 query I
 SELECT count(*) FROM table1;
 ----
