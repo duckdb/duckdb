@@ -360,6 +360,7 @@ ResultModifier:
     - OffsetLimitClause
     - LimitOffsetClause
     - OffsetFetchClause
+    - FetchOffsetClause
     - FetchOnlyClause
 
 AtClause:
@@ -817,6 +818,8 @@ LimitPercentResult:
     - LimitLiteralPercent
     - LimitExpression
     - FetchClause
+    - FetchClauseWithoutValue
+    - FetchClauseWithValue
     - FetchValue
     - OffsetClause
     - OffsetValue

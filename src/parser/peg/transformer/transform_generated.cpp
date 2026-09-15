@@ -8675,6 +8675,15 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformOffsetFetchClau
 	return make_uniq<TypedTransformResult<unique_ptr<ResultModifier>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformFetchOffsetClauseInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto fetch_clause = transformer.Transform<LimitPercentResult>(list_pr.GetChild(0));
+	auto offset_clause = transformer.Transform<LimitPercentResult>(list_pr.GetChild(1));
+	auto result = TransformFetchOffsetClause(transformer, std::move(fetch_clause), std::move(offset_clause));
+	return make_uniq<TypedTransformResult<unique_ptr<ResultModifier>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformFetchOnlyClauseInternal(PEGTransformer &transformer,
                                                                                          ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -10332,6 +10341,21 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformLimitExpression
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformFetchClauseInternal(PEGTransformer &transformer,
                                                                                      ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<LimitPercentResult>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<LimitPercentResult>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformFetchClauseWithoutValueInternal(PEGTransformer &transformer,
+                                                                ParseResult &parse_result) {
+	auto result = TransformFetchClauseWithoutValue(transformer);
+	return make_uniq<TypedTransformResult<LimitPercentResult>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformFetchClauseWithValueInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto fetch_value = transformer.Transform<LimitPercentResult>(list_pr.GetChild(2));
 	auto result = std::move(fetch_value);
 	return make_uniq<TypedTransformResult<LimitPercentResult>>(std::move(result));
@@ -11824,6 +11848,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"LimitOffsetClause", &PEGTransformerFactory::TransformLimitOffsetClauseInternal},
 	    {"OffsetLimitClause", &PEGTransformerFactory::TransformOffsetLimitClauseInternal},
 	    {"OffsetFetchClause", &PEGTransformerFactory::TransformOffsetFetchClauseInternal},
+	    {"FetchOffsetClause", &PEGTransformerFactory::TransformFetchOffsetClauseInternal},
 	    {"FetchOnlyClause", &PEGTransformerFactory::TransformFetchOnlyClauseInternal},
 	    {"TableStatement", &PEGTransformerFactory::TransformTableStatementInternal},
 	    {"OptionalParensSimpleSelect", &PEGTransformerFactory::TransformOptionalParensSimpleSelectInternal},
@@ -11972,6 +11997,8 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"LimitLiteralPercent", &PEGTransformerFactory::TransformLimitLiteralPercentInternal},
 	    {"LimitExpression", &PEGTransformerFactory::TransformLimitExpressionInternal},
 	    {"FetchClause", &PEGTransformerFactory::TransformFetchClauseInternal},
+	    {"FetchClauseWithoutValue", &PEGTransformerFactory::TransformFetchClauseWithoutValueInternal},
+	    {"FetchClauseWithValue", &PEGTransformerFactory::TransformFetchClauseWithValueInternal},
 	    {"FetchValue", &PEGTransformerFactory::TransformFetchValueInternal},
 	    {"AliasedExpression", &PEGTransformerFactory::TransformAliasedExpressionInternal},
 	    {"ColIdExpression", &PEGTransformerFactory::TransformColIdExpressionInternal},
