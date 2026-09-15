@@ -1306,7 +1306,7 @@ void WriteAheadLogDeserializer::ReplayInsert() {
 		return;
 	}
 	if (!state.current_table) {
-		throw InternalException("Corrupt WAL: insert without table");
+		throw SerializationException("Corrupt WAL: insert without table");
 	}
 
 	// Append to the current table without constraint verification.
@@ -1334,7 +1334,7 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 		return;
 	}
 	if (!state.current_table) {
-		throw InternalException("Corrupt WAL: insert without table");
+		throw SerializationException("Corrupt WAL: insert without table");
 	}
 	auto &storage = state.current_table->GetStorage();
 	auto &table_info = storage.GetDataTableInfo();
@@ -1404,11 +1404,11 @@ void WriteAheadLogDeserializer::ReplayUpdate() {
 		return;
 	}
 	if (!state.current_table) {
-		throw InternalException("Corrupt WAL: update without table");
+		throw SerializationException("Corrupt WAL: update without table");
 	}
 
 	if (column_path[0] >= state.current_table->GetColumns().PhysicalColumnCount()) {
-		throw InternalException("Corrupt WAL: column index for update out of bounds");
+		throw SerializationException("Corrupt WAL: column index for update out of bounds");
 	}
 
 	// remove the row id vector from the chunk
