@@ -269,14 +269,6 @@ public:
 	explicit CollectionScanState(TableScanState &parent_p);
 	//! The query context for this scan
 	QueryContext context;
-	//! `row_group` and `pinned_row_group` advance together, but an optimistic flush can swap the tree payload
-	//! mid-scan: `row_group` stays valid as the advancement cursor while `pinned_row_group` keeps owning the
-	//! row group being scanned, so all scan access must go through `pinned_row_group`.
-	//!
-	//! The current row_group we are scanning
-	optional_ptr<SegmentNode<RowGroup>> row_group;
-	//! Owning pin of the scanned row group, the tree may swap the segment payload mid-scan with an optimistic flush
-	shared_ptr<RowGroup> pinned_row_group;
 	//! The vector index within the row_group
 	idx_t vector_index;
 	//! The maximum row within the row group
@@ -315,6 +307,8 @@ public:
 	ScanFilterInfo &GetFilterInfo();
 	ScanSamplingInfo &GetSamplingInfo();
 	TableScanOptions &GetOptions();
+	optional_ptr<SegmentNode<RowGroup>> GetRowGroup() const;
+	void SetRowGroup(optional_ptr<SegmentNode<RowGroup>> row_group);
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentNode<RowGroup> &row_group) const;
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentLock &l, SegmentNode<RowGroup> &row_group) const;
 	optional_ptr<SegmentNode<RowGroup>> GetRootSegment() const;
@@ -336,6 +330,9 @@ private:
 	vector<unique_ptr<AsyncTask>> RegisterAssignmentIO();
 
 private:
+	//! The segment node is the traversal cursor, while the shared pointer pins its replaceable payload
+	optional_ptr<SegmentNode<RowGroup>> row_group;
+	shared_ptr<RowGroup> pinned_row_group;
 	TableScanState &parent;
 };
 

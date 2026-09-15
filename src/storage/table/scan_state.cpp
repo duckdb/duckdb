@@ -239,6 +239,15 @@ CollectionScanState::CollectionScanState(TableScanState &parent_p)
       valid_sel(STANDARD_VECTOR_SIZE), random(-1), parent(parent_p) {
 }
 
+optional_ptr<SegmentNode<RowGroup>> CollectionScanState::GetRowGroup() const {
+	return row_group;
+}
+
+void CollectionScanState::SetRowGroup(optional_ptr<SegmentNode<RowGroup>> row_group_p) {
+	row_group = row_group_p;
+	pinned_row_group = row_group ? row_group->ReferenceNode() : nullptr;
+}
+
 optional_ptr<SegmentNode<RowGroup>> CollectionScanState::GetNextRowGroup(SegmentNode<RowGroup> &row_group) const {
 	if (reorderer) {
 		return reorderer->GetNextRowGroup(row_group);
@@ -270,20 +279,18 @@ bool CollectionScanState::Scan(ScanOptions options, DataChunk &result, optional_
 			return true;
 		}
 		if (max_row <= row_group->GetRowStart() + pinned_row_group->count) {
-			row_group = nullptr;
-			pinned_row_group = nullptr;
+			SetRowGroup(nullptr);
 			return false;
 		}
 		do {
 			if (l) {
-				row_group = GetNextRowGroup(*l, *row_group).get();
+				SetRowGroup(GetNextRowGroup(*l, *row_group));
 			} else {
-				row_group = GetNextRowGroup(*row_group).get();
+				SetRowGroup(GetNextRowGroup(*row_group));
 			}
 			if (row_group) {
 				if (row_group->GetRowStart() >= max_row) {
-					row_group = nullptr;
-					pinned_row_group = nullptr;
+					SetRowGroup(nullptr);
 					break;
 				}
 				bool scan_row_group = row_group->GetNode().InitializeScan(*this, *row_group);
@@ -305,9 +312,9 @@ bool CollectionScanState::Scan(DataChunk &result, TableScanType type, optional_p
 		}
 		// move to the next row group
 		if (l) {
-			row_group = GetNextRowGroup(*l, *row_group).get();
+			SetRowGroup(GetNextRowGroup(*l, *row_group));
 		} else {
-			row_group = GetNextRowGroup(*row_group).get();
+			SetRowGroup(GetNextRowGroup(*row_group));
 		}
 		if (row_group) {
 			row_group->GetNode().InitializeScan(*this, *row_group);
@@ -326,8 +333,7 @@ bool CollectionScanState::PrepareScanIO(DuckTransaction &transaction, vector<uni
 	if (!current_row_group.PrepareScan(options, *this)) {
 		// the assignment is exhausted
 		D_ASSERT(max_row <= row_group->GetRowStart() + current_row_group.count);
-		row_group = nullptr;
-		pinned_row_group = nullptr;
+		SetRowGroup(nullptr);
 		return false;
 	}
 	if (prepared_vector.prepare_state == VectorPrepareState::IO_REGISTERED) {
