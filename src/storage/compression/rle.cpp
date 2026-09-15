@@ -14,6 +14,23 @@ namespace duckdb {
 
 using rle_count_t = uint16_t;
 
+template <class T>
+static inline bool RLEValueEqual(const T &a, const T &b) {
+	return a == b;
+}
+
+template <>
+inline bool RLEValueEqual(const float &a, const float &b) {
+	// avoid folding -0.0 and 0.0 (or differently-signed NaNs) into a single run: they compare
+	// equal but are not bit-identical
+	return Load<uint32_t>(const_data_ptr_cast(&a)) == Load<uint32_t>(const_data_ptr_cast(&b));
+}
+
+template <>
+inline bool RLEValueEqual(const double &a, const double &b) {
+	return Load<uint64_t>(const_data_ptr_cast(&a)) == Load<uint64_t>(const_data_ptr_cast(&b));
+}
+
 //===--------------------------------------------------------------------===//
 // Analyze
 //===--------------------------------------------------------------------===//
@@ -53,7 +70,7 @@ public:
 				seen_count++;
 				last_seen_count++;
 				all_null = false;
-			} else if (last_value == data[idx]) {
+			} else if (RLEValueEqual<T>(last_value, data[idx])) {
 				// the last value is identical to this value: increment the last_seen_count
 				last_seen_count++;
 			} else {
