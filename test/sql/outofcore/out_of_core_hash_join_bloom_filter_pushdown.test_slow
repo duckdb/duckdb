@@ -1,7 +1,8 @@
 # name: test/sql/outofcore/out_of_core_hash_join_bloom_filter_pushdown.test_slow
 # description: Test that runtime filter pushdown (Bloom filter) does not drop rows when the hash join build side
-#              spills to disk (external / multi-round hash join). Regression test for #25702.
 # group: [outofcore]
+
+#              spills to disk (external / multi-round hash join). Regression test for #25702.
 
 load {TEST_DIR}/out_of_core_hash_join_bloom_filter_pushdown.db
 
