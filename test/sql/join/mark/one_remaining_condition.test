@@ -1,0 +1,96 @@
+# name: test/sql/join/mark/one_remaining_condition.test
+# description: MARK NULL probes with one remaining inequality use exact build bounds
+# group: [mark]
+
+foreach external false true
+
+statement ok
+SET debug_force_external={external};
+
+foreach type INTEGER BIGINT DOUBLE DECIMAL(12,2) VARCHAR
+
+foreach comparison < <= > >=
+
+foreach build_null false true
+
+query I
+WITH l AS (
+    SELECT i id,NULL::INTEGER a,i::{type} c FROM range(8)t(i)
+), r AS (
+    SELECT i b,CASE WHEN {build_null} AND i=1 THEN NULL ELSE i::{type} END d FROM range(1,7)t(i)
+), native AS (
+    SELECT id,__mark_join_marker m FROM l JOIN BY(TYPE MARK) r ON a=b AND c {comparison} d
+), oracle AS (
+    SELECT id,max(CASE WHEN a=b AND c {comparison} d THEN 2
+                      WHEN (a=b AND c {comparison} d) IS NULL THEN 1 ELSE 0 END)m
+    FROM l CROSS JOIN r GROUP BY id
+)
+SELECT count(*) FROM native JOIN oracle USING(id)
+WHERE CASE WHEN native.m THEN 2 WHEN native.m IS NULL THEN 1 ELSE 0 END<>oracle.m;
+----
+0
+
+endloop
+
+endloop
+
+endloop
+
+statement ok
+SET prefer_range_joins=true;
+
+statement ok
+SET nested_loop_join_threshold=0;
+
+statement ok
+SET merge_join_threshold=0;
+
+foreach comparison < <= > >=
+
+statement ok
+CREATE OR REPLACE TABLE one_probe AS SELECT i id,NULL::INTEGER a,NULL::INTEGER c,i e FROM range(8)t(i);
+
+statement ok
+CREATE OR REPLACE TABLE one_build AS SELECT i b,i d,CASE WHEN i=1 THEN NULL ELSE i END f FROM range(1,7)t(i);
+
+query I
+WITH native AS (
+    SELECT id,__mark_join_marker m FROM one_probe JOIN BY(TYPE MARK) one_build ON a<b AND c>d AND e {comparison} f
+), oracle AS (
+    SELECT id,max(CASE WHEN a<b AND c>d AND e {comparison} f THEN 2
+                      WHEN (a<b AND c>d AND e {comparison} f) IS NULL THEN 1 ELSE 0 END)m
+    FROM one_probe CROSS JOIN one_build GROUP BY id
+)
+SELECT count(*) FROM native JOIN oracle USING(id)
+WHERE CASE WHEN native.m THEN 2 WHEN native.m IS NULL THEN 1 ELSE 0 END<>oracle.m;
+----
+0
+
+endloop
+
+# All ordinary conditions become UNKNOWN, but an empty build still yields FALSE.
+query I
+SELECT __mark_join_marker FROM (VALUES(NULL::INTEGER,NULL::INTEGER,NULL::INTEGER))l(a,c,e)
+JOIN BY(TYPE MARK)(VALUES(1,1,1))r(b,d,f) ON a<b AND c>d AND e<f;
+----
+NULL
+
+query I
+SELECT __mark_join_marker FROM (VALUES(NULL::INTEGER,NULL::INTEGER,NULL::INTEGER))l(a,c,e)
+JOIN BY(TYPE MARK)(SELECT 1 b,1 d,1 f WHERE false)r ON a<b AND c>d AND e<f;
+----
+false
+
+statement ok
+RESET prefer_range_joins;
+
+statement ok
+RESET nested_loop_join_threshold;
+
+statement ok
+RESET merge_join_threshold;
+
+endloop
+
+statement ok
+RESET debug_force_external;

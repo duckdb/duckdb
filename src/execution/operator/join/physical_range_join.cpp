@@ -7,6 +7,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/mark_join_row_comparison.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -36,6 +37,11 @@ PhysicalRangeJoin::LocalSortedTable::LocalSortedTable(ExecutionContext &context,
 	types.resize(1);
 	const auto &payload_types = op.children[child].get().types;
 	types.insert(types.end(), payload_types.begin(), payload_types.end());
+	if (global_table.retain_keys) {
+		for (const auto &type : keys.GetTypes()) {
+			types.push_back(type);
+		}
+	}
 	sort_chunk.InitializeEmpty(types);
 }
 
@@ -70,6 +76,11 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(ExecutionContext &context, DataCh
 	for (column_t col_idx = 0; col_idx < input.ColumnCount(); ++col_idx) {
 		sort_chunk.data[col_idx + 1].Reference(input.data[col_idx]);
 	}
+	if (global_table.retain_keys) {
+		for (idx_t col = 0; col < keys.ColumnCount(); col++) {
+			sort_chunk.data[1 + input.ColumnCount() + col].Reference(keys.data[col]);
+		}
+	}
 	sort_chunk.SetChildCardinality(input.size());
 	// Sink the data into the local sort state
 	InterruptState interrupt;
@@ -80,8 +91,8 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(ExecutionContext &context, DataCh
 PhysicalRangeJoin::GlobalSortedTable::GlobalSortedTable(ClientContext &client,
                                                         const vector<BoundOrderByNode> &order_bys,
                                                         const vector<LogicalType> &payload_types,
-                                                        const PhysicalRangeJoin &op)
-    : op(op), has_null(0), count(0), tasks_completed(0) {
+                                                        const PhysicalComparisonJoin &op, bool retain_keys_p)
+    : op(op), retain_keys(retain_keys_p), has_null(0), count(0), tasks_completed(0) {
 	// Set up the sort. We will materialize keys ourselves, so just set up references.
 	vector<BoundOrderByNode> orders;
 	vector<LogicalType> input_types;
@@ -99,6 +110,12 @@ PhysicalRangeJoin::GlobalSortedTable::GlobalSortedTable(ClientContext &client,
 		input_types.emplace_back(type);
 	}
 
+	if (retain_keys) {
+		for (const auto &condition : op.conditions) {
+			projection_map.push_back(input_types.size());
+			input_types.push_back(condition.GetLHS().GetReturnType());
+		}
+	}
 	sort = make_uniq<Sort>(client, orders, input_types, projection_map);
 
 	global_sink = sort->GetGlobalSinkState(client);
@@ -393,6 +410,26 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 	for (const auto &v : keys.data) {
 		if (v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			++all_constant;
+		}
+	}
+
+	if (global_table.op.type == PhysicalOperatorType::IE_JOIN && global_table.op.join_type == JoinType::MARK) {
+		for (idx_t col = 0; col < keys.ColumnCount(); col++) {
+			auto &key = keys.data[col];
+			if (!key.GetType().IsNested()) {
+				continue;
+			}
+			// Nested comparison NULLs need refinement even when the outer value is valid.
+			Vector comparison(LogicalType::BOOLEAN, count);
+			MarkJoinRowComparison::Compare(key, key, conditions[col].GetComparisonType(), comparison);
+			auto values = comparison.Values<bool>();
+			for (idx_t row = 0; row < count; row++) {
+				if (!values[row].IsValid()) {
+					primary.Flatten();
+					FlatVector::ValidityMutable(primary).SetInvalid(row);
+					all_constant = 0;
+				}
+			}
 		}
 	}
 

@@ -51,7 +51,8 @@ public:
 	class GlobalSortedTable {
 	public:
 		GlobalSortedTable(ClientContext &client, const vector<BoundOrderByNode> &orders,
-		                  const vector<LogicalType> &payload_layout, const PhysicalRangeJoin &op);
+		                  const vector<LogicalType> &payload_layout, const PhysicalComparisonJoin &op,
+		                  bool retain_keys = false);
 
 		inline idx_t Count() const {
 			return count;
@@ -121,7 +122,9 @@ public:
 		}
 
 		//! The hosting operator
-		const PhysicalRangeJoin &op;
+		const PhysicalComparisonJoin &op;
+		//! Retain evaluated IE MARK keys in the sorted payload.
+		bool retain_keys;
 		//! The sort description
 		unique_ptr<Sort> sort;
 		//! The shared sort state

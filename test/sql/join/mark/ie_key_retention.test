@@ -1,0 +1,66 @@
+# name: test/sql/join/mark/ie_key_retention.test
+# description: IE MARK replays deterministic keys but retains effectful lambda keys
+# group: [mark]
+
+statement ok
+SET threads=1; SET prefer_range_joins=true; SET nested_loop_join_threshold=0; SET merge_join_threshold=0; SET max_execution_time=10000
+
+foreach external false true
+
+statement ok
+SET debug_force_external={external}
+
+foreach nulls false true
+
+statement ok
+CREATE OR REPLACE TABLE probes AS
+SELECT i id,i%13 x,13-i%13 y,
+       CASE WHEN {nulls} AND i%7=0 THEN NULL ELSE i%5 END tag
+FROM range(67) t(i)
+
+statement ok
+CREATE OR REPLACE TABLE builds AS
+SELECT i id,i%13 x,13-i%13 y,
+       CASE WHEN {nulls} AND i%11=0 THEN NULL ELSE i%5 END tag
+FROM range(73) t(i)
+
+foreach side p r
+
+statement ok
+CREATE OR REPLACE SEQUENCE ie_lambda_effects
+
+statement ok
+CREATE OR REPLACE MACRO mark_key(v) AS
+list_extract(list_transform([v], lambda value: nextval('ie_lambda_effects')*0+value),1)
+
+query I
+WITH actual AS (
+    SELECT p.id,__mark_join_marker marker
+    FROM probes p JOIN BY(TYPE MARK) builds r
+    ON p.x+1<=r.x+1 AND p.y*2>=r.y*2
+       AND CASE WHEN '{side}'='p' THEN mark_key(p.tag) ELSE p.tag END
+           IS NOT DISTINCT FROM
+           CASE WHEN '{side}'='r' THEN mark_key(r.tag) ELSE r.tag END
+), expected AS (
+    SELECT p.id,max(CASE WHEN p.x<=r.x AND p.y>=r.y AND p.tag IS NOT DISTINCT FROM r.tag THEN 2
+                        WHEN (p.x<=r.x AND p.y>=r.y AND p.tag IS NOT DISTINCT FROM r.tag) IS NULL THEN 1
+                        ELSE 0 END) marker
+    FROM probes p CROSS JOIN builds r GROUP BY p.id
+)
+SELECT count(*) FROM actual FULL JOIN expected USING(id)
+WHERE actual.id IS NULL OR expected.id IS NULL
+   OR CASE WHEN actual.marker THEN 2 WHEN actual.marker IS NULL THEN 1 ELSE 0 END<>expected.marker
+----
+0
+
+query I
+SELECT last_value=CASE WHEN '{side}'='p' THEN 67 ELSE 73 END
+FROM duckdb_sequences() WHERE sequence_name='ie_lambda_effects'
+----
+true
+
+endloop
+
+endloop
+
+endloop
