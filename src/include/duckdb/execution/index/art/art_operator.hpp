@@ -390,7 +390,7 @@ private:
 			// Outside of gates, we create a prefix for the inlined leaf.
 			auto count = key.len - depth - 1;
 			auto chain = PrefixHandle::New(art, key, depth + 1, count);
-			Leaf::New(chain.tail.Get(), row_id.GetRowId());
+			Leaf::New(chain.tail.Child(art), row_id.GetRowId());
 			leaf = chain.root;
 		} else {
 			Leaf::New(leaf, row_id.GetRowId());

@@ -28,13 +28,13 @@ PrefixChain PrefixHandle::New(ART &art, const ARTKey &key, const idx_t depth, co
 	NodePtr root;
 	auto first_count = UnsafeNumericCast<uint8_t>(MinValue<idx_t>(art.PrefixCount(), count));
 	auto prefix = NewInternal(art, root, key.data, first_count, depth);
-	auto tail = std::move(prefix).IntoChild(art);
+	auto tail = std::move(prefix);
 
 	idx_t offset = first_count;
 	while (offset < count) {
 		auto this_count = UnsafeNumericCast<uint8_t>(MinValue<idx_t>(art.PrefixCount(), count - offset));
-		auto next = NewInternal(art, tail.Get(), key.data, this_count, depth + offset);
-		tail = std::move(next).IntoChild(art);
+		auto next = NewInternal(art, tail.Child(art), key.data, this_count, depth + offset);
+		tail = std::move(next);
 
 		offset += this_count;
 	}
@@ -49,8 +49,7 @@ PrefixHandle PrefixHandle::AppendByte(ART &art, PrefixHandle prefix, const uint8
 		return prefix;
 	}
 
-	auto tail = std::move(prefix).IntoChild(art);
-	return NewInternal(art, tail.Get(), &byte, 1, 0);
+	return NewInternal(art, prefix.Child(art), &byte, 1, 0);
 }
 
 void PrefixHandle::Append(ART &art, PrefixHandle prefix, NodePtr other) {

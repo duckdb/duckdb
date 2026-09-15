@@ -16,13 +16,7 @@ namespace duckdb {
 
 class ARTKey;
 
-//! A newly allocated prefix chain with a pinned final child location.
-struct PrefixChain {
-	//! Pointer value identifying the first prefix.
-	NodePtr root;
-	//! Pins the final prefix containing the child pointer to fill.
-	NodePtrHandle tail;
-};
+struct PrefixChain;
 
 //! PrefixHandle owns the pin for a mutable prefix node.
 class PrefixHandle {
@@ -81,11 +75,6 @@ public:
 		return ChildRef(art, handle);
 	}
 
-	//! Transfer this prefix's pin to a handle for its child NodePtr storage location.
-	NodePtrHandle IntoChild(const ART &art) && {
-		return NodePtrHandle(Child(art), std::move(handle));
-	}
-
 	//! Get a mutable reference to the child NodePtr of the prefix.
 	static NodePtr &ChildRef(const ART &art, NodeHandle &handle) {
 		return *reinterpret_cast<NodePtr *>(handle.GetPtr() + art.PrefixCount() + 1);
@@ -118,6 +107,14 @@ private:
 
 private:
 	NodeHandle handle;
+};
+
+//! A newly allocated prefix chain with a pinned final child location.
+struct PrefixChain {
+	//! Pointer value identifying the first prefix.
+	NodePtr root;
+	//! Pins the final prefix containing the child pointer to fill.
+	PrefixHandle tail;
 };
 
 } // namespace duckdb

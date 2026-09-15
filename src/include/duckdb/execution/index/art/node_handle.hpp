@@ -52,34 +52,6 @@ private:
 	NType type;
 };
 
-//! NodePtrHandle owns the pin for the node containing a mutable NodePtr storage location.
-class NodePtrHandle {
-	friend class PrefixHandle;
-
-public:
-	NodePtrHandle(const NodePtrHandle &) = delete;
-	NodePtrHandle &operator=(const NodePtrHandle &) = delete;
-	NodePtrHandle(NodePtrHandle &&) noexcept = default;
-	NodePtrHandle &operator=(NodePtrHandle &&) noexcept = default;
-
-public:
-	//! The reference is valid while this handle owns the containing node's pin.
-	NodePtr &Get() {
-		D_ASSERT(handle.GetPtr());
-		return node_ptr.get();
-	}
-
-private:
-	//! node_ptr_p must be stored in the node pinned by handle_p.
-	NodePtrHandle(NodePtr &node_ptr_p, NodeHandle &&handle_p) : node_ptr(node_ptr_p), handle(std::move(handle_p)) {
-		D_ASSERT(handle.GetPtr());
-	}
-
-private:
-	reference<NodePtr> node_ptr;
-	NodeHandle handle;
-};
-
 //! ConstNodeHandle is a read-only wrapper to access a node.
 //! A segment handle is used for memory management, but it is not marked as modified.
 //! For mutable access, use NodeHandle instead.
