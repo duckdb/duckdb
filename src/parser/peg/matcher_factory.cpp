@@ -201,8 +201,9 @@ void MatcherFactory::SuppressSuggestions(const char *name) {
 }
 
 MatcherFactory::MatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar_p,
-                               const compiled_rules_map_t &rules, terminal_rule_overrides_t terminal_rule_overrides_p)
-    : allocator(allocator), grammar(grammar_p), rules(rules),
+                               const compiled_rules_map_t &rules, const PEGKeywordHelper &keyword_helper_p,
+                               terminal_rule_overrides_t terminal_rule_overrides_p)
+    : allocator(allocator), grammar(grammar_p), rules(rules), keyword_helper(keyword_helper_p),
       terminal_rule_overrides(std::move(terminal_rule_overrides_p)) {
 }
 
@@ -280,7 +281,7 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 }
 
 unique_ptr<KeywordMatcher> MatcherFactory::CreateKeyword(const string &keyword, const KeywordInfo &info) const {
-	return make_uniq<CompiledKeywordMatcher>(keyword, info, compiled.GetKeywordHelper());
+	return make_uniq<CompiledKeywordMatcher>(keyword, info, keyword_helper);
 }
 
 unique_ptr<ListMatcher> MatcherFactory::CreateList() const {
@@ -288,7 +289,7 @@ unique_ptr<ListMatcher> MatcherFactory::CreateList() const {
 }
 
 unique_ptr<ChoiceMatcher> MatcherFactory::CreateChoice(vector<reference<Matcher>> &&matchers) const {
-	auto table = compiled.GetKeywordHelper().GetLiteralTable();
+	auto table = keyword_helper.GetLiteralTable();
 	if (table && matchers.size() > 1) {
 		unordered_map<uint32_t, idx_t> literal_children;
 		for (idx_t i = 0; i < matchers.size(); i++) {

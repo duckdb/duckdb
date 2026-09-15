@@ -26,6 +26,16 @@ struct LiteralChoiceTestResult {
 	string tree;
 };
 
+static compiled_rules_map_t CompileTestProgramRule(const ParsedGrammar &grammar) {
+	compiled_rules_map_t rules;
+	auto rule = grammar.GetRule("Program");
+	if (!rule) {
+		throw InternalException("Test grammar is missing the Program rule");
+	}
+	rules.emplace(rule->name, make_uniq<CompiledGrammarRule>(rule->name, rule->transform_process));
+	return rules;
+}
+
 static vector<MatcherSuggestion> GetLiteralChoiceSuggestions(const Matcher &matcher) {
 	vector<MatcherToken> tokens;
 	TokenIterator iterator(tokens);
@@ -42,8 +52,9 @@ static vector<MatcherSuggestion> GetLiteralChoiceSuggestions(const Matcher &matc
 TEST_CASE("Literal choice dispatch retains autocomplete metadata", "[api][grammar_extension]") {
 	auto compiled = CompiledGrammar::Create();
 	auto grammar = ParsedGrammar::Parse("Program <- 'TABLE' / '(' / '.' / 'table'");
+	auto rules = CompileTestProgramRule(grammar);
 	MatcherAllocator allocator;
-	MatcherFactory factory(allocator, grammar, *compiled, {});
+	MatcherFactory factory(allocator, grammar, rules, compiled->GetKeywordHelper(), {});
 	auto &root = factory.CreateRootMatcher("Program").Cast<ListMatcher>();
 	auto &choice = root.matchers[0].get().Cast<ChoiceMatcher>();
 	vector<reference<Matcher>> children = choice.matchers;
@@ -84,8 +95,9 @@ static LiteralChoiceTestResult MatchLiteralChoiceTest(const Matcher &matcher, co
 TEST_CASE("Literal choice dispatch preserves ordered choice results", "[api][grammar_extension]") {
 	auto compiled = CompiledGrammar::Create();
 	auto grammar = ParsedGrammar::Parse("Program <- 'SELECT' / 'FROM' / 'select' / 'WHERE' / '('");
+	auto rules = CompileTestProgramRule(grammar);
 	MatcherAllocator allocator;
-	MatcherFactory factory(allocator, grammar, *compiled, {});
+	MatcherFactory factory(allocator, grammar, rules, compiled->GetKeywordHelper(), {});
 	auto &root = factory.CreateRootMatcher("Program").Cast<ListMatcher>();
 	auto &choice = root.matchers[0].get().Cast<ChoiceMatcher>();
 	vector<reference<Matcher>> children = choice.matchers;
@@ -150,9 +162,9 @@ private:
 
 class DispatchOverrideMatcherFactory final : public MatcherFactory {
 public:
-	DispatchOverrideMatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar, CompiledGrammar &compiled,
-	                               idx_t &calls_p)
-	    : MatcherFactory(allocator, grammar, compiled, {}), helper(compiled.GetKeywordHelper()), calls(calls_p) {
+	DispatchOverrideMatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar,
+	                               const compiled_rules_map_t &rules, const PEGKeywordHelper &helper_p, idx_t &calls_p)
+	    : MatcherFactory(allocator, grammar, rules, helper_p, {}), helper(helper_p), calls(calls_p) {
 	}
 
 private:
@@ -167,9 +179,10 @@ private:
 TEST_CASE("Literal dispatch does not assume custom keyword matcher semantics", "[api][grammar_extension]") {
 	auto compiled = CompiledGrammar::Create();
 	auto grammar = ParsedGrammar::Parse("Program <- 'SELECT' / 'FROM'");
+	auto rules = CompileTestProgramRule(grammar);
 	MatcherAllocator allocator;
 	idx_t calls = 0;
-	DispatchOverrideMatcherFactory factory(allocator, grammar, *compiled, calls);
+	DispatchOverrideMatcherFactory factory(allocator, grammar, rules, compiled->GetKeywordHelper(), calls);
 	auto &root = factory.CreateRootMatcher("Program");
 	for (bool heap : {false, true}) {
 		calls = 0;
@@ -185,8 +198,9 @@ TEST_CASE("Literal dispatch leaves mixed and unregistered alternatives unchanged
 	for (auto &definition : vector<string> {"Program <- 'SELECT' / ('FROM' 'WHERE')",
 	                                        "Program <- 'SELECT' / 'unregistered_dispatch_word'"}) {
 		auto grammar = ParsedGrammar::Parse(definition);
+		auto rules = CompileTestProgramRule(grammar);
 		MatcherAllocator allocator;
-		MatcherFactory factory(allocator, grammar, *compiled, {});
+		MatcherFactory factory(allocator, grammar, rules, compiled->GetKeywordHelper(), {});
 		auto &root = factory.CreateRootMatcher("Program").Cast<ListMatcher>();
 		auto &choice = root.matchers[0].get().Cast<ChoiceMatcher>();
 		vector<reference<Matcher>> children = choice.matchers;
