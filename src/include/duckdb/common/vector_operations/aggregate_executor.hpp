@@ -635,7 +635,7 @@ public:
 						}
 					}
 				}
-				auto *cluster_iter = clustered.ClusterIter(input, count);
+				auto *cluster_iter = clustered.ClusterIter(input);
 				if (cluster_iter) {
 					ExecuteUnaryClusteredDictOpt<true, STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count,
 					                                                               cluster_iter);

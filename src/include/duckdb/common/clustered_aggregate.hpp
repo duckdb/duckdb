@@ -77,7 +77,7 @@ struct ClusteredAggr {
 	const ClusteredAggrState *state = nullptr;
 
 	//! Initialize a single run covering 0..count-1 for one aggregate state.
-	void SetSingleRun(data_ptr_t state, idx_t count);
+	void SetSingleRun(data_ptr_t state_ptr, idx_t count);
 
 	//! Advance all run state pointers by payload_size.
 	void AdvanceStates(idx_t payload_size);
@@ -90,7 +90,7 @@ struct ClusteredAggr {
 	}
 
 	//! Returns a composed dict sel for simple dictionary input, or nullptr.
-	const sel_t *ClusterIter(const Vector &input, idx_t count) const;
+	const sel_t *ClusterIter(const Vector &input) const;
 
 private:
 	friend struct ClusteredAggrState;
@@ -104,8 +104,7 @@ private:
 	GroupRun single_run;
 	GroupRun *group_runs;
 
-	//! Used by SetSingleRun callers that do not have a ClusteredAggrState.
-	mutable unsafe_unique_array<sel_t> local_composed_sel_data;
+	//! Cached dictionary selection for the last composed cluster iteration.
 	mutable const sel_t *cached_dict_sel = nullptr;
 };
 

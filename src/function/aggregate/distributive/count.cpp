@@ -206,7 +206,7 @@ struct CountFunction : public BaseCountFunction {
 			}
 			return;
 		}
-		auto *cluster_iter = clustered.ClusterIter(inputs[0], count);
+		auto *cluster_iter = clustered.ClusterIter(inputs[0]);
 		if (cluster_iter) {
 			CountClusteredDict<true>(inputs[0], clustered, count, cluster_iter);
 			return;
@@ -221,7 +221,7 @@ struct CountFunction : public BaseCountFunction {
 		// pre-composes the dict sel once for the whole chunk.
 		if (aggr_input_data.clustered) {
 			auto &cs = *aggr_input_data.clustered;
-			auto *cluster_iter = cs.ClusterIter(inputs[0], count);
+			auto *cluster_iter = cs.ClusterIter(inputs[0]);
 			if (cluster_iter) {
 				CountClusteredDict<true>(inputs[0], cs, count, cluster_iter);
 				return;
