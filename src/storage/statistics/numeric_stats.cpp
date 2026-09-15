@@ -9,8 +9,6 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
-#include <cstring>
-
 namespace duckdb {
 
 BaseStatistics NumericStats::CreateUnknown(LogicalType type) {
@@ -332,12 +330,12 @@ bool NumericStats::IsConstant(const BaseStatistics &stats) {
 	if (physical_type == PhysicalType::FLOAT) {
 		auto min = GetMinUnsafe<float>(stats);
 		auto max = GetMaxUnsafe<float>(stats);
-		return memcmp(&min, &max, sizeof(float)) == 0;
+		return Load<uint32_t>(const_data_ptr_cast(&min)) == Load<uint32_t>(const_data_ptr_cast(&max));
 	}
 	if (physical_type == PhysicalType::DOUBLE) {
 		auto min = GetMinUnsafe<double>(stats);
 		auto max = GetMaxUnsafe<double>(stats);
-		return memcmp(&min, &max, sizeof(double)) == 0;
+		return Load<uint64_t>(const_data_ptr_cast(&min)) == Load<uint64_t>(const_data_ptr_cast(&max));
 	}
 	return true;
 }

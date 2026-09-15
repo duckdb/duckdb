@@ -8,7 +8,6 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
-#include <cstring>
 #include <functional>
 
 namespace duckdb {
@@ -17,8 +16,18 @@ using rle_count_t = uint16_t;
 
 template <class T>
 bool RLEValueEqual(const T &lhs, const T &rhs) {
-	// IEEE == treats +0 and -0 as equal; RLE must keep their bit patterns distinct.
-	return memcmp(&lhs, &rhs, sizeof(T)) == 0;
+	return lhs == rhs;
+}
+
+template <>
+bool RLEValueEqual(const float &lhs, const float &rhs) {
+	// IEEE == collapses +0 and -0; compare the bit pattern instead.
+	return Load<uint32_t>(const_data_ptr_cast(&lhs)) == Load<uint32_t>(const_data_ptr_cast(&rhs));
+}
+
+template <>
+bool RLEValueEqual(const double &lhs, const double &rhs) {
+	return Load<uint64_t>(const_data_ptr_cast(&lhs)) == Load<uint64_t>(const_data_ptr_cast(&rhs));
 }
 
 //===--------------------------------------------------------------------===//
