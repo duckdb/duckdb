@@ -21,16 +21,21 @@ static std::atomic<idx_t> data_reads {0};
 //! Footer reads pass so files open, the first I/O task then fails, and the opens queued behind it are retired.
 class ReadAheadFaultFileSystem : public LocalFileSystem {
 public:
+	//! Resolve the test directory once, on the test's own thread: the query runs on other threads, where the
+	//! test helpers cannot tell which test is active and would resolve a different directory
+	ReadAheadFaultFileSystem() : local_prefix(TestCreatePath("read_ahead_fault_")) {
+	}
+
 	static const string &Prefix() {
 		static const string prefix = "read-ahead-fault://";
 		return prefix;
 	}
 
-	static string MapPath(const string &path) {
+	string MapPath(const string &path) const {
 		if (!StringUtil::StartsWith(path, Prefix())) {
 			return path;
 		}
-		return TestCreatePath("read_ahead_fault_" + path.substr(Prefix().size()));
+		return local_prefix + path.substr(Prefix().size());
 	}
 
 	string GetName() const override {
@@ -76,13 +81,15 @@ public:
 
 private:
 	bool IsDataRead(FileHandle &handle, int64_t nr_bytes, idx_t location) {
-		if (!StringUtil::StartsWith(handle.GetPath(), TestCreatePath("read_ahead_fault_"))) {
+		if (!StringUtil::StartsWith(handle.GetPath(), local_prefix)) {
 			return false;
 		}
 		// the footer sits at the end of the file, row-group data well before it
 		auto file_size = NumericCast<idx_t>(LocalFileSystem::GetFileSize(handle));
 		return location + NumericCast<idx_t>(nr_bytes) < file_size / 2;
 	}
+
+	const string local_prefix;
 };
 
 class AsyncPoolBlockerState {
@@ -170,16 +177,17 @@ TEST_CASE("Read-ahead reports an async I/O failure instead of hanging or ending 
 	REQUIRE_NO_FAIL(con.Query("SET read_ahead_depth=64"));
 
 	// a few MB per file, so row-group reads sit well away from the footer and cannot ride along with it
+	auto fault_fs = make_uniq<ReadAheadFaultFileSystem>();
 	const vector<string> names {"a.parquet", "b.parquet", "c.parquet"};
 	string file_list;
 	for (auto &name : names) {
-		auto path = ReadAheadFaultFileSystem::MapPath(ReadAheadFaultFileSystem::Prefix() + name);
+		auto path = fault_fs->MapPath(ReadAheadFaultFileSystem::Prefix() + name);
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format(
 		    "COPY (SELECT hash(i) AS h, i FROM range(400000) t(i)) TO '%s' (FORMAT parquet)", path)));
 		file_list +=
 		    (file_list.empty() ? "" : ", ") + StringUtil::Format("'%s%s'", ReadAheadFaultFileSystem::Prefix(), name);
 	}
-	FileSystem::GetFileSystem(*con.context).RegisterSubSystem(make_uniq<ReadAheadFaultFileSystem>());
+	FileSystem::GetFileSystem(*con.context).RegisterSubSystem(std::move(fault_fs));
 
 	// with the worker parked the scan thread drains the queue itself, in order: the first file's I/O fails and
 	// records the error, and the file open queued behind it is retired instead of run, leaving that reader in
