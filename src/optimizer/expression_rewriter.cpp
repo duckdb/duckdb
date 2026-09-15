@@ -1,7 +1,7 @@
 #include "duckdb/optimizer/expression_rewriter.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/optimizer/builtin_function_lookup.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
