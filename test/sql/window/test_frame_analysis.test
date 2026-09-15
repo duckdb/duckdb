@@ -2,6 +2,12 @@
 # description: Test IGNORE NULLS window syntax
 # group: [window]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
 #
 # Table 4
 #
@@ -22,6 +28,14 @@ create table t as from values
 
 # Case ia
 query II
+explain
+select count(a) over ia, count(*) over ia
+from t
+window ia as (rows between current row and current row exclude current row)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query II
 select count(a) over ia, count(*) over ia
 from t
 window ia as (rows between current row and current row exclude current row)
@@ -32,6 +46,14 @@ window ia as (rows between current row and current row exclude current row)
 0	0
 
 # Case ib
+query II
+explain
+select count(a) over ib, count(*) over ib
+from t
+window ib as (rows between 0 preceding and 0 following exclude current row)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
 query II
 select count(a) over ib, count(*) over ib
 from t
@@ -47,6 +69,14 @@ window ib as (rows between 0 preceding and 0 following exclude current row)
 # 0 arguments
 foreach func rank dense_rank cume_dist percent_rank
 
+query II
+explain
+select {func}() over ia
+from t
+window ia as (rows between current row and current row exclude current row)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
 query I
 select {func}() over ia
 from t
@@ -56,6 +86,14 @@ NULL
 NULL
 NULL
 NULL
+
+query II
+explain
+select {func}() over ib
+from t
+window ib as (rows between 0 preceding and 0 following exclude current row)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
 
 query I
 select {func}() over ib
@@ -72,6 +110,14 @@ endloop
 # 1 argument
 foreach func first_value last_value min
 
+query II
+explain
+select {func}(a) over ia
+from t
+window ia as (rows between current row and current row exclude current row)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
 query I
 select {func}(a) over ia
 from t
@@ -81,6 +127,14 @@ NULL
 NULL
 NULL
 NULL
+
+query II
+explain
+select {func}(a) over ib
+from t
+window ib as (rows between 0 preceding and 0 following exclude current row)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
 
 query I
 select {func}(a) over ib
@@ -97,6 +151,14 @@ endloop
 # 2+ argument
 foreach func nth_value
 
+query II
+explain
+select {func}(a, 1) over ia
+from t
+window ia as (rows between current row and current row exclude current row)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
 query I
 select {func}(a, 1) over ia
 from t
@@ -106,6 +168,14 @@ NULL
 NULL
 NULL
 NULL
+
+query II
+explain
+select {func}(a, 2) over ia
+from t
+window ia as (rows between current row and current row exclude current row)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
 
 query I
 select {func}(a, 2) over ib
