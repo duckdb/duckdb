@@ -8,11 +8,18 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
+#include <cstring>
 #include <functional>
 
 namespace duckdb {
 
 using rle_count_t = uint16_t;
+
+template <class T>
+bool RLEValueEqual(const T &lhs, const T &rhs) {
+	// IEEE == treats +0 and -0 as equal; RLE must keep their bit patterns distinct.
+	return memcmp(&lhs, &rhs, sizeof(T)) == 0;
+}
 
 //===--------------------------------------------------------------------===//
 // Analyze
@@ -53,7 +60,7 @@ public:
 				seen_count++;
 				last_seen_count++;
 				all_null = false;
-			} else if (last_value == data[idx]) {
+			} else if (RLEValueEqual(last_value, data[idx])) {
 				// the last value is identical to this value: increment the last_seen_count
 				last_seen_count++;
 			} else {
