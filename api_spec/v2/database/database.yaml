@@ -29,9 +29,9 @@ handles:
   attach_options:
     description: |
       An opaque, owned handle to the `(KEY value)` options of one
-      database_attach call, as SQL `ATTACH` accepts them. Created from the
-      database handle it will be used with via attach_options_create; destroy
-      it via attach_options_destroy.
+      `[[database_attach]]` call, as SQL `ATTACH` accepts them. Created from the
+      database handle it will be used with via `[[attach_options_create]]`; destroy
+      it via `[[attach_options_destroy]]`.
     cleanup_with: attach_options_destroy
 functions:
   database_create:
@@ -41,10 +41,10 @@ functions:
       Creates a database handle under the environment.
 
       The handle starts with no database attached and with its instance not
-      yet started; set startup options with database_set_option, then attach
-      a database with database_attach and pick the default with
-      database_set_default, or connect with connection_create. The caller destroys it
-      via database_destroy.
+      yet started; set startup options with `[[database_set_option]]`, then attach
+      a database with `[[database_attach]]` and pick the default with
+      `[[database_set_default]]`, or connect with `[[connection_create]]`. The caller destroys it
+      via `[[database_destroy]]`.
     role: constructor
     belongs_to: database
     parameters:
@@ -60,7 +60,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
   database_destroy:
     lifecycle:
@@ -102,7 +102,7 @@ functions:
       and must have been created from this database handle. `make_default`
       makes the attached
       database the default for connections created afterwards, exactly as a
-      database_set_default call right after the attach would; otherwise the
+      `[[database_set_default]]` call right after the attach would; otherwise the
       default is left alone. A path that is already attached on this or any
       other database of the environment returns ERROR_RESOURCE_IN_USE, and a
       name that is already attached fails. Options that only apply at startup
@@ -130,7 +130,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
   database_detach:
     lifecycle:
@@ -140,11 +140,11 @@ functions:
 
       Detaches it like `DETACH`, checkpointing a file database first. Unlike
       SQL, the default database may be detached too; new connections then
-      start without a default until database_set_default names another, and
+      start without a default until `[[database_set_default]]` names another, and
       existing connections bound to it keep it alive until their transaction
       on it ends and fail unqualified DDL afterwards. The path is matched
-      against the attached databases as database_attach recorded it, so pass
-      the path that was passed to database_attach. Returns ERROR_INPUT_INVALID
+      against the attached databases as `[[database_attach]]` recorded it, so pass
+      the path that was passed to `[[database_attach]]`. Returns ERROR_INPUT_INVALID
       when no database attached from that path exists. Connections that still
       reference the database keep it alive until they release it.
     role: method
@@ -160,7 +160,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
   database_set_default:
     lifecycle:
@@ -174,10 +174,10 @@ functions:
       when they connected, or what they chose with `USE`. The default is where
       unqualified DDL and unqualified table lookups that miss the temporary
       catalog go. It stays the default for new connections until another
-      database_set_default call or until it is detached; a connection whose
+      `[[database_set_default]]` call or until it is detached; a connection whose
       default has been detached fails unqualified DDL with a message saying
       so until it selects another with `USE`. `path` is either the path that
-      was passed to database_attach or the name the database is attached
+      was passed to `[[database_attach]]` or the name the database is attached
       under; a name match wins. Returns ERROR_INPUT_INVALID when neither
       matches an attached database.
     role: method
@@ -193,16 +193,16 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
   attach_options_create:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-15" ]
     description: |
-      Creates an empty set of attach options for use with database_attach on
+      Creates an empty set of attach options for use with `[[database_attach]]` on
       `db`.
 
-      Starts empty. The caller destroys it via attach_options_destroy; the
+      Starts empty. The caller destroys it via `[[attach_options_destroy]]`; the
       options may be destroyed as soon as the attach call returns, and reused
       for further attaches before that.
     role: constructor
@@ -220,7 +220,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
   attach_options_set:
     lifecycle:
@@ -252,7 +252,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
   attach_options_destroy:
     lifecycle:
@@ -276,8 +276,8 @@ functions:
     description: |
       Sets a config option on the database (GLOBAL scope).
 
-      Before the instance has started (no database_attach or
-      connection_create yet), the option goes into the startup configuration: this is the only
+      Before the instance has started (no `[[database_attach]]` or
+      `[[connection_create]]` yet), the option goes into the startup configuration: this is the only
       way to set an option that can only be chosen at startup, such as
       access_mode or enable_external_access. Unknown names are kept for an
       extension to consume at startup; if none does, startup fails with the
@@ -301,7 +301,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
   database_get_option_by_name:
     lifecycle:
@@ -335,7 +335,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
   database_get_option_count:
     lifecycle:
@@ -361,7 +361,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
   database_get_option_by_index:
     lifecycle:
@@ -391,7 +391,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
   library_version:
     lifecycle:
@@ -409,5 +409,5 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR

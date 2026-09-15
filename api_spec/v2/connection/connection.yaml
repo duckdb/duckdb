@@ -3,8 +3,8 @@ handles:
   query_progress:
     description: |
       An opaque, owned handle to a snapshot of a query's execution progress,
-      taken by connection_query_progress at call time. Read it with the
-      query_progress_get_* accessors; destroy it via query_progress_destroy.
+      taken by `[[connection_query_progress]]` at call time. Read it with the
+      query_progress_get_* accessors; destroy it via `[[query_progress_destroy]]`.
     cleanup_with: query_progress_destroy
 
 functions:
@@ -20,7 +20,7 @@ functions:
       pool, and transaction manager. A connection may be created before any
       database is attached to the handle; until one is, only the system
       catalog and the connection's temporary catalog are visible. The caller
-      destroys it via connection_destroy.
+      destroys it via `[[connection_destroy]]`.
     role: constructor
     belongs_to: connection
     parameters:
@@ -36,7 +36,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
   connection_destroy:
     lifecycle:
@@ -73,7 +73,7 @@ functions:
       LOCAL_ONLY option, LOCAL against a GLOBAL_ONLY one, and the legacy
       analogues. An unknown name is rejected unless an extension that
       defines it can be autoloaded; to stage a setting for an extension
-      before startup, use database_set_option.
+      before startup, use `[[database_set_option]]`.
     role: setter
     belongs_to: connection
     parameters:
@@ -93,7 +93,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
   connection_get_option_by_name:
     lifecycle:
@@ -104,7 +104,7 @@ functions:
       Returns the option's effective setting at the connection's scope: the
       LOCAL override if this connection set one, otherwise the GLOBAL value,
       otherwise the static default. The remaining fields are populated exactly
-      as by database_get_option_by_name. Aliases resolve transparently, and an unknown
+      as by `[[database_get_option_by_name]]`. Aliases resolve transparently, and an unknown
       name returns ERROR_INPUT_INVALID. The caller destroys the returned
       option.
     role: getter
@@ -125,7 +125,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
   connection_get_option_count:
     lifecycle:
@@ -133,7 +133,7 @@ functions:
     description: |
       Returns the number of config options visible to this connection.
 
-      The same count database_get_option_count reports for the underlying
+      The same count `[[database_get_option_count]]` reports for the underlying
       database: core plus extension options, aliases excluded.
     role: getter
     belongs_to: connection
@@ -150,7 +150,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
   connection_get_option_by_index:
     lifecycle:
@@ -180,7 +180,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
   # Query processing
   connection_interrupt:
@@ -192,8 +192,8 @@ functions:
       The cross-thread cancellation entry point for streaming results: safe to
       call from any thread, including while another thread steps the query's
       result. A no-op when no query is active. Cancellation surfaces on the
-      consuming side as step status CANCELLED (result_step), or as
-      ERROR_RUNTIME_INTERRUPT (result_fetch_chunk).
+      consuming side as step status CANCELLED (`[[result_step]]`), or as
+      ERROR_RUNTIME_INTERRUPT (`[[result_fetch_chunk]]`).
     role: method
     belongs_to: connection
     parameters:
@@ -204,7 +204,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
   connection_query_progress:
     lifecycle:
@@ -214,7 +214,7 @@ functions:
 
       Writes the progress of the query currently executing on the connection
       into an owned snapshot handle; read it with the query_progress_get_*
-      accessors and destroy it via query_progress_destroy. Safe to call from
+      accessors and destroy it via `[[query_progress_destroy]]`. Safe to call from
       any thread, including while another thread steps the query's result.
 
       Progress is published only while the enable_progress_bar option is set;
@@ -236,7 +236,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
   query_progress_get_percentage:
     lifecycle:
@@ -261,7 +261,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
   query_progress_get_rows_processed:
     lifecycle:
@@ -282,7 +282,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
   query_progress_get_total_rows_to_process:
     lifecycle:
@@ -303,7 +303,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
   query_progress_destroy:
     lifecycle:

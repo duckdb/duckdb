@@ -81,7 +81,7 @@ functions:
       Borrows the option's canonical name.
 
       When the option was resolved from an alias, this still reports the
-      canonical name; the alias is reachable via option_get_alias.
+      canonical name; the alias is reachable via `[[option_get_alias]]`.
     role: getter
     belongs_to: option
     parameters:
@@ -97,7 +97,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
 
   option_get_setting:
@@ -123,7 +123,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
 
   option_get_default_setting:
@@ -148,7 +148,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
 
   option_get_description:
@@ -171,7 +171,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
 
   option_get_target_scope:
@@ -197,7 +197,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
 
   option_get_alias_count:
@@ -222,7 +222,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
 
   option_get_alias:
@@ -250,7 +250,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
 
   context_get_option_by_name:
@@ -260,7 +260,7 @@ functions:
       Reads a config option through a context.
 
       The context is a connection seen from inside DuckDB, so this reads the
-      same cascade connection_get_option_by_name does: the LOCAL override if the
+      same cascade `[[connection_get_option_by_name]]` does: the LOCAL override if the
       connection set one, otherwise the GLOBAL value, otherwise the static
       default. Aliases resolve transparently, and an unknown name returns
       ERROR_INPUT_INVALID. The caller destroys the returned option. A context
@@ -283,7 +283,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
 
   context_get_option_count:
@@ -292,7 +292,7 @@ functions:
     description: |
       Returns the number of config options visible to this context.
 
-      The same count database_get_option_count reports for the underlying
+      The same count `[[database_get_option_count]]` reports for the underlying
       database: core plus extension options, aliases excluded.
     role: getter
     belongs_to: context
@@ -309,7 +309,7 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
 
   context_get_option_by_index:
@@ -340,5 +340,5 @@ functions:
         type: error_info
         indirection: 1
         kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
