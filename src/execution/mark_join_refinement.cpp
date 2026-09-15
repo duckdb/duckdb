@@ -425,13 +425,17 @@ void MarkPatternRefiner::ApplyMarker(idx_t probe, uint8_t marker) {
 }
 
 void MarkPatternRefiner::RefineRangePattern(MarkJoinRefinementGroup &group, idx_t probe, uint64_t probe_mask,
-                                            uint64_t build_mask, vector<idx_t> driving) {
+                                            uint64_t build_mask, const vector<idx_t> &ranges) {
 	if (!sorted_probes && !refinement_batches.emplace(probe_mask, build_mask).second) {
 		return;
 	}
-	std::sort(driving.begin(), driving.end(),
-	          [&](idx_t lhs, idx_t rhs) { return PhysicalRangeJoin::LessThan(conditions[lhs], conditions[rhs]); });
-	driving.resize(2);
+	auto select_driving = [&]() {
+		auto driving = ranges;
+		std::sort(driving.begin(), driving.end(),
+		          [&](idx_t lhs, idx_t rhs) { return PhysicalRangeJoin::LessThan(conditions[lhs], conditions[rhs]); });
+		driving.resize(2);
+		return driving;
+	};
 	auto &manager = BufferManager::GetBufferManager(context);
 	const auto dropped = probe_mask | build_mask;
 	if (sorted_probes) {
@@ -442,6 +446,7 @@ void MarkPatternRefiner::RefineRangePattern(MarkJoinRefinementGroup &group, idx_
 		}
 		auto &cached = index->probe_results[probe_mask];
 		if (!cached) {
+			auto driving = select_driving();
 			vector<JoinCondition> range_conditions;
 			for (auto col : driving) {
 				range_conditions.push_back(conditions[col].Copy());
@@ -477,6 +482,7 @@ void MarkPatternRefiner::RefineRangePattern(MarkJoinRefinementGroup &group, idx_
 		ApplyMarker(probe, (*result_reader)[sorted_probes->row_ids[probe]]);
 		return;
 	}
+	auto driving = select_driving();
 	vector<JoinCondition> range_conditions;
 	for (auto col : driving) {
 		range_conditions.push_back(conditions[col].Copy());

@@ -96,7 +96,7 @@ private:
 	void ProbeEqualityIndex(MarkJoinRefinementIndex &index, uint64_t probe_mask, uint64_t dropped,
 	                        uint64_t equality_mask);
 	void RefineRangePattern(MarkJoinRefinementGroup &group, idx_t probe, uint64_t probe_mask, uint64_t build_mask,
-	                        vector<idx_t> driving);
+	                        const vector<idx_t> &ranges);
 	unique_ptr<IEJoinBuildOrders> BuildRangeIndex(ExecutionContext &execution, MarkJoinRefinementGroup &group,
 	                                              const vector<idx_t> &driving,
 	                                              const vector<JoinCondition> &range_conditions);
