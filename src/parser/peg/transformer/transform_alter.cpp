@@ -149,7 +149,7 @@ QualifiedName PEGTransformerFactory::TransformQualifiedSequenceName(PEGTransform
 unique_ptr<AlterInfo>
 PEGTransformerFactory::TransformRenameAlterSequenceOptions(PEGTransformer &transformer,
                                                            unique_ptr<AlterTableInfo> rename_alter) {
-	return std::move(rename_alter);
+	throw NotImplementedException("Renaming sequences is not yet supported");
 }
 
 unique_ptr<AlterInfo>

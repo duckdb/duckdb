@@ -549,9 +549,10 @@ bool DBConfig::TryGetExtensionOption(const Identifier &name, ExtensionOption &re
 }
 
 void DBConfig::AddExtensionOption(const Identifier &name, string description, LogicalType parameter,
-                                  const Value &default_value, set_option_callback_t function, SetScope default_scope) {
+                                  const Value &default_value, set_option_callback_t function, SetScope default_scope,
+                                  bool is_debug, bool is_deprecated) {
 	ExtensionOption extension_option(std::move(description), std::move(parameter), function, default_value,
-	                                 default_scope);
+	                                 default_scope, is_debug, is_deprecated);
 	auto setting_index = user_settings.AddExtensionOption(name, std::move(extension_option));
 	// copy over unrecognized options, if they match the new extension option
 	auto iter = options.unrecognized_options.find(name);

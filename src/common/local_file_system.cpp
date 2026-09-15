@@ -17,7 +17,9 @@
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 
+#include <algorithm>
 #include <climits>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <sys/stat.h>
@@ -144,7 +146,9 @@ static std::wstring NormalizePathAndConvertToUnicode(FileSystem &fs, const strin
 	}
 
 	if (abs_path.find(L"\\\\") == 0) {
-		return WINDOWS_UNC_LONG_PATH_PREFIX + abs_path;
+		// Extended UNC paths use "\\?\UNC\server\share", so remove the original leading "\\".
+		// See https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file#namespaces
+		return WINDOWS_UNC_LONG_PATH_PREFIX + abs_path.substr(2);
 	}
 
 	return WINDOWS_LOCAL_LONG_PATH_PREFIX + abs_path;
@@ -1587,13 +1591,53 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 	}
 }
 
+static bool TryMoveFileWithPosixSemantics(HANDLE source_handle, const std::wstring &target) {
+	constexpr auto file_rename_info_ex = static_cast<FILE_INFO_BY_HANDLE_CLASS>(22); // FileRenameInfoEx
+	const auto file_name_length = target.size() * sizeof(WCHAR);
+	const auto rename_info_size = offsetof(FILE_RENAME_INFO, FileName) + file_name_length + sizeof(WCHAR);
+	const auto rename_info_size_dw = NumericCast<DWORD>(rename_info_size);
+	auto rename_info_buffer = make_uniq_array<data_t>(rename_info_size);
+	auto rename_info = reinterpret_cast<FILE_RENAME_INFO *>(rename_info_buffer.get());
+	rename_info->Flags = FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS;
+	rename_info->RootDirectory = nullptr;
+	rename_info->FileNameLength = NumericCast<DWORD>(file_name_length);
+	std::copy(target.c_str(), target.c_str() + target.size() + 1, rename_info->FileName);
+
+	return SetFileInformationByHandle(source_handle, file_rename_info_ex, rename_info, rename_info_size_dw);
+}
+
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
 	auto source_unicode = NormalizePathAndConvertToUnicode(*this, source, opener);
 	auto target_unicode = NormalizePathAndConvertToUnicode(*this, target, opener);
-	DWORD flags = MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH;
 
+	// FileRenameInfoEx renames the file identified by a handle opened with DELETE access.
+	// See https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_rename_info
+	constexpr DWORD delete_access = 0x00010000L; // DELETE
+	auto raw_source_handle =
+	    CreateFileW(source_unicode.c_str(), delete_access, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+	                nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+	if (raw_source_handle == INVALID_HANDLE_VALUE) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Could not move file \"%s\" to \"%s\": failed to open source file: %s", source, target,
+		                  error);
+	}
+	unique_ptr<void, decltype(&CloseHandle)> source_handle(raw_source_handle, CloseHandle);
+
+	if (TryMoveFileWithPosixSemantics(source_handle.get(), target_unicode)) {
+		return;
+	}
+	auto error_code = GetLastError();
+	source_handle.reset();
+
+	if (error_code != ERROR_INVALID_PARAMETER && error_code != ERROR_NOT_SUPPORTED &&
+	    error_code != ERROR_INVALID_FUNCTION) {
+		SetLastError(error_code);
+		throw IOException("Could not move file \"%s\" to \"%s\": %s", source, target, GetLastErrorAsString());
+	}
+
+	DWORD flags = MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH;
 	if (!MoveFileExW(source_unicode.c_str(), target_unicode.c_str(), flags)) {
-		throw IOException("Could not move file: %s", GetLastErrorAsString());
+		throw IOException("Could not move file \"%s\" to \"%s\": %s", source, target, GetLastErrorAsString());
 	}
 }
 
