@@ -36,7 +36,7 @@ enum class ARTConflictType : uint8_t;
 
 enum class ARTScanNodeResult : uint8_t;
 
-enum class ARTScanResult : uint8_t;
+enum class ARTScanProgress : uint8_t;
 
 enum class ARTSearchResult : uint8_t;
 
@@ -656,7 +656,7 @@ template<>
 const char* EnumUtil::ToChars<ARTScanNodeResult>(ARTScanNodeResult value);
 
 template<>
-const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value);
+const char* EnumUtil::ToChars<ARTScanProgress>(ARTScanProgress value);
 
 template<>
 const char* EnumUtil::ToChars<ARTSearchResult>(ARTSearchResult value);
@@ -1581,7 +1581,7 @@ template<>
 ARTScanNodeResult EnumUtil::FromString<ARTScanNodeResult>(const char *value);
 
 template<>
-ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value);
+ARTScanProgress EnumUtil::FromString<ARTScanProgress>(const char *value);
 
 template<>
 ARTSearchResult EnumUtil::FromString<ARTSearchResult>(const char *value);

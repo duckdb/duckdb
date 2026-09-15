@@ -756,8 +756,8 @@ ARTSearchResult ART::SearchEqual(const ARTKey &key, RowIdVectorOutput &row_ids) 
 	Iterator it(*this);
 	it.FindMinimum(leaf.Get());
 	const auto empty_key = ARTKey();
-	return it.Scan(empty_key, row_ids, false) == ARTScanResult::COMPLETED ? ARTSearchResult::COMPLETED
-	                                                                      : ARTSearchResult::CAPACITY_EXCEEDED;
+	return it.Scan(empty_key, row_ids, false) == ARTScanProgress::COMPLETED ? ARTSearchResult::COMPLETED
+	                                                                        : ARTSearchResult::CAPACITY_EXCEEDED;
 }
 
 ARTSearchResult ART::SearchGreater(const ARTKey &key, bool equal, RowIdVectorOutput &row_ids) const {
@@ -775,8 +775,8 @@ ARTSearchResult ART::SearchGreater(const ARTKey &key, bool equal, RowIdVectorOut
 
 	// We continue the scan. We do not check the bounds as any value following this value is
 	// greater and satisfies our predicate.
-	return it.Scan(ARTKey(), row_ids, false) == ARTScanResult::COMPLETED ? ARTSearchResult::COMPLETED
-	                                                                     : ARTSearchResult::CAPACITY_EXCEEDED;
+	return it.Scan(ARTKey(), row_ids, false) == ARTScanProgress::COMPLETED ? ARTSearchResult::COMPLETED
+	                                                                       : ARTSearchResult::CAPACITY_EXCEEDED;
 }
 
 ARTSearchResult ART::SearchLess(const ARTKey &upper_bound, bool equal, RowIdVectorOutput &row_ids) const {
@@ -794,8 +794,8 @@ ARTSearchResult ART::SearchLess(const ARTKey &upper_bound, bool equal, RowIdVect
 	}
 
 	// Continue the scan until we reach the upper bound.
-	return it.Scan(upper_bound, row_ids, equal) == ARTScanResult::COMPLETED ? ARTSearchResult::COMPLETED
-	                                                                        : ARTSearchResult::CAPACITY_EXCEEDED;
+	return it.Scan(upper_bound, row_ids, equal) == ARTScanProgress::COMPLETED ? ARTSearchResult::COMPLETED
+	                                                                          : ARTSearchResult::CAPACITY_EXCEEDED;
 }
 
 ARTSearchResult ART::SearchCloseRange(const ARTKey &lower_bound, const ARTKey &upper_bound, bool left_equal,
@@ -813,8 +813,9 @@ ARTSearchResult ART::SearchCloseRange(const ARTKey &lower_bound, const ARTKey &u
 	}
 
 	// Continue the scan until we reach the upper bound.
-	return it.Scan(upper_bound, row_ids, right_equal) == ARTScanResult::COMPLETED ? ARTSearchResult::COMPLETED
-	                                                                              : ARTSearchResult::CAPACITY_EXCEEDED;
+	return it.Scan(upper_bound, row_ids, right_equal) == ARTScanProgress::COMPLETED
+	           ? ARTSearchResult::COMPLETED
+	           : ARTSearchResult::CAPACITY_EXCEEDED;
 }
 
 ARTSearchResult ART::ScanBatch(DataChunk &input, RowIdVectorOutput &row_ids) const {
@@ -1009,7 +1010,7 @@ void ART::VerifyLeaf(const NodePtr &leaf, const ARTKey &key, DeleteIndexInfo del
 	set<row_t> row_ids;
 	RowIdSetOutput output(row_ids, 2);
 	auto result = it.Scan(empty_key, output, false);
-	if (result != ARTScanResult::COMPLETED || row_ids.size() != 2) {
+	if (result != ARTScanProgress::COMPLETED || row_ids.size() != 2) {
 		throw InternalException("VerifyLeaf expects exactly two row IDs to be scanned");
 	}
 
@@ -1465,7 +1466,7 @@ void ART::RemovalMerge(IndexLock &state, BoundIndex &source_index) {
 	ARTKey empty_key = ARTKey();
 
 	KeyRowIdOutput output(arena, keys, row_id_keys, STANDARD_VECTOR_SIZE);
-	ARTScanResult result;
+	ARTScanProgress result;
 	do {
 		output.Reset();
 		result = it.Scan(empty_key, output, false);
@@ -1473,7 +1474,7 @@ void ART::RemovalMerge(IndexLock &state, BoundIndex &source_index) {
 			scan_count += output.Count();
 			delete_count += DeleteKeys(keys, row_id_keys, output.Count());
 		}
-	} while (result == ARTScanResult::PAUSED);
+	} while (result == ARTScanProgress::PAUSED);
 
 	if (delete_count != scan_count) {
 		throw InternalException("Failed to remove all rows while merging checkpoint deltas - "
@@ -1506,7 +1507,7 @@ ErrorData ART::InsertMerge(IndexLock &state, BoundIndex &source_index, IndexAppe
 	ARTKey empty_key = ARTKey();
 
 	KeyRowIdOutput output(arena, keys, row_id_keys, STANDARD_VECTOR_SIZE);
-	ARTScanResult result;
+	ARTScanProgress result;
 	do {
 		output.Reset();
 		result = it.Scan(empty_key, output, false);
@@ -1516,7 +1517,7 @@ ErrorData ART::InsertMerge(IndexLock &state, BoundIndex &source_index, IndexAppe
 				return error;
 			}
 		}
-	} while (result == ARTScanResult::PAUSED);
+	} while (result == ARTScanProgress::PAUSED);
 
 	return ErrorData();
 }
