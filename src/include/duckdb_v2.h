@@ -101,9 +101,9 @@ extern "C" {
 #endif
 
 //! Set to 1 to compile the unstable surface, 0 to omit it. Defaults from the
-//! older DUCKDB_EXTENSION_API_VERSION_UNSTABLE macro when that is what the consumer defines.
+//! older DUCKDB_API_ALLOW_UNSTABLE macro when that is what the consumer defines.
 #if !defined(DUCKDB_V2_API_ALLOW_UNSTABLE)
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#ifdef DUCKDB_API_ALLOW_UNSTABLE
 #define DUCKDB_V2_API_ALLOW_UNSTABLE 1
 #else
 #define DUCKDB_V2_API_ALLOW_UNSTABLE 0
@@ -2165,12 +2165,12 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_create_environment(duckdb_v2_environment_
  * @param env The environment.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_destroy_environment(duckdb_v2_environment_handle *env);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_environment_destroy(duckdb_v2_environment_handle *env);
 
 /*!
  * Returns the number of databases currently open under the environment.
  *
- * A diagnostic accessor, for tracking down leaked database handles when destroy_environment returns
+ * A diagnostic accessor, for tracking down leaked database handles when environment_destroy returns
  * ERROR_RESOURCE_IN_USE. The count is a snapshot and may change before the next call.
  *
  * history:
@@ -2218,39 +2218,40 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_environment_database_count(duckdb_v2_envi
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_error_info_get_code(duckdb_v2_error_info_handle info, DUCKDB_V2_ERROR *out_code);
 
 /*!
- * Retrieves the error message associated with an error info handle.
+ * Retrieves the error text associated with an error info handle.
  *
- * Returns a borrowed pointer to the info's null-terminated error message. The pointer is owned by DuckDB and is valid
- * until the info is destroyed; callers must not free it, and must not read it once the info has been destroyed.
+ * Returns a borrowed pointer to the info's null-terminated error text. The pointer is owned by DuckDB and is valid
+ * until the info is destroyed or a new text is set; callers must not free it, and must not read it once the info has
+ * been destroyed.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param info The error info handle to query.
- * @param out_text Receives a borrowed view of the message. Owned by DuckDB; valid until the info handle is destroyed.
+ * @param out_text Receives a borrowed view of the text. Owned by DuckDB; valid until the info handle is destroyed.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_error_info_get_text(duckdb_v2_error_info_handle info, duckdb_v2_str *out_text);
 
 /*!
- * Retrieves the error message body without the leading category prefix.
+ * Retrieves the error text body without the leading category prefix.
  *
- * Returns a borrowed view of the same message error_info_get_text reports, minus the leading "<Type> Error: " prefix.
- * This is the authoritative unprefixed body: the API exposes no type name, so the prefix cannot be reconstructed and
- * the body cannot be derived from error_info_get_text. Unprefixed does not mean plain — the body keeps whatever form it
- * was rendered in (a LINE/caret block by default, JSON under errors_as_json). `{NULL, 0}` when there is no message. The
+ * Returns a borrowed view of the same text error_info_get_text reports, minus the leading "<Type> Error: " prefix. This
+ * is the authoritative unprefixed body: the API exposes no type name, so the prefix cannot be reconstructed and the
+ * body cannot be derived from error_info_get_text. Unprefixed does not mean plain — the body keeps whatever form it was
+ * rendered in (a LINE/caret block by default, JSON under errors_as_json). `{NULL, 0}` when there is no text. The
  * pointer is owned by DuckDB and valid until the info handle is destroyed.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param info The error info handle to query.
- * @param out_raw_message Receives a borrowed view of the raw message. Owned by DuckDB; valid until the info handle is
+ * @param out_raw_text Receives a borrowed view of the raw text. Owned by DuckDB; valid until the info handle is
  * destroyed.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_error_info_get_raw_message(duckdb_v2_error_info_handle info,
-                                                                  duckdb_v2_str *out_raw_message);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_error_info_get_raw_text(duckdb_v2_error_info_handle info,
+                                                               duckdb_v2_str *out_raw_text);
 
 /*!
  * Sets the error code for an error info handle.
@@ -2268,17 +2269,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_error_info_get_raw_message(duckdb_v2_erro
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_error_info_set_code(duckdb_v2_error_info_handle info, DUCKDB_V2_ERROR code);
 
 /*!
- * Sets the error message for an error info handle.
+ * Sets the error text for an error info handle.
  *
- * On success, replaces the info's message with the provided one; DuckDB allocates its own copy of the string. On
- * failure, nothing is changed. Accepts a `nullptr` info handle, in which case the call is a no-op and returns
- * ERROR_NONE.
+ * On success, replaces the info's text with the provided one; DuckDB allocates its own copy of the string. On failure,
+ * nothing is changed. Accepts a `nullptr` info handle, in which case the call is a no-op and returns ERROR_NONE.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param info The error info handle to set. On success, updated with the provided message.
- * @param text The error message to set in the info.
+ * @param info The error info handle to set. On success, updated with the provided text.
+ * @param text The error text to set in the info.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_error_info_set_text(duckdb_v2_error_info_handle info, duckdb_v2_str text);

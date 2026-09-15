@@ -755,7 +755,7 @@ functions:
   # as VARCHAR or BLOB, dispatching inline vs pointer on the transparent bytes
   # type, or read a BIGNUM value's storage with value_get_blob, then decode.
   # To write: encode the magnitude, then write the BIGNUM vector exactly like
-  # a VARCHAR or BLOB one — size the buffer, allocate it out of the vector's
+  # a VARCHAR or BLOB one: size the buffer, allocate it out of the vector's
   # arena, encode into it, and assemble the bytes payload.
   # -----------------------------------------------------------------------
   bignum_decode:

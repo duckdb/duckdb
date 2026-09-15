@@ -38,7 +38,7 @@ TEST_CASE("V2 error: get_raw_message on a binder error", "[capi_v2][error]") {
 	auto err = FailingQuery(fx.conn, "SELECT * FROM no_such_table", DUCKDB_V2_ERROR_DATABASE_CATALOG);
 
 	duckdb_v2_str raw = {nullptr, 0};
-	REQUIRE(duckdb_v2_error_info_get_raw_message(err, &raw) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_error_info_get_raw_text(err, &raw) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(raw.ptr != nullptr);
 	REQUIRE(Convert(raw).find("no_such_table") != std::string::npos);
 	// The body carries no "<Type> Error: " prefix.
@@ -64,15 +64,21 @@ TEST_CASE("V2 error: directly-set messages have no raw body", "[capi_v2][error]"
 	REQUIRE(err != nullptr);
 
 	duckdb_v2_str raw = {nullptr, 0};
-	REQUIRE(duckdb_v2_error_info_get_raw_message(err, &raw) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_error_info_get_raw_text(err, &raw) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(raw.ptr == nullptr);
 	REQUIRE(raw.len == 0);
 
 	// set_text leaves no raw body either.
 	REQUIRE(duckdb_v2_error_info_set_text(err, Convert("reset")) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_error_info_get_raw_message(err, &raw) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_error_info_get_raw_text(err, &raw) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(raw.ptr == nullptr);
 	REQUIRE(raw.len == 0);
+
+	// set an error code
+	REQUIRE(duckdb_v2_error_info_set_code(err, DUCKDB_V2_ERROR_CONFIGURATION_PERMISSION) == DUCKDB_V2_ERROR_NONE);
+	DUCKDB_V2_ERROR out_err_code;
+	REQUIRE(duckdb_v2_error_info_get_code(err, &out_err_code) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(out_err_code == DUCKDB_V2_ERROR_CONFIGURATION_PERMISSION);
 
 	duckdb_v2_error_info_destroy(&err);
 }
@@ -90,12 +96,12 @@ TEST_CASE("V2 error: raw body does not leak across slot reuse", "[capi_v2][error
 	REQUIRE(r == nullptr);
 	REQUIRE(err != nullptr);
 	duckdb_v2_str raw = {nullptr, 0};
-	REQUIRE(duckdb_v2_error_info_get_raw_message(err, &raw) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_error_info_get_raw_text(err, &raw) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(raw.ptr != nullptr);
 
 	// Reuse the slot with a directly-set message: the raw body is cleared.
 	REQUIRE(duckdb_v2_error_info_set_text(err, Convert("manual")) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_error_info_get_raw_message(err, &raw) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_error_info_get_raw_text(err, &raw) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(raw.ptr == nullptr);
 	REQUIRE(raw.len == 0);
 
@@ -111,8 +117,8 @@ TEST_CASE("V2 error: get_raw_message rejects null args", "[capi_v2][error]") {
 	SetErrorInfo(&err, DUCKDB_V2_ERROR_API, "x");
 
 	duckdb_v2_str out = {nullptr, 0};
-	REQUIRE(duckdb_v2_error_info_get_raw_message(nullptr, &out) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_error_info_get_raw_message(err, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_error_info_get_raw_text(nullptr, &out) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_error_info_get_raw_text(err, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	duckdb_v2_error_info_destroy(&err);
 }
@@ -173,7 +179,7 @@ TEST_CASE("V2 error: errors_as_json makes the parse boundary emit JSON", "[capi_
 
 	// The body is the bare JSON object carrying the failure position.
 	duckdb_v2_str raw = {nullptr, 0};
-	REQUIRE(duckdb_v2_error_info_get_raw_message(err, &raw) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_error_info_get_raw_text(err, &raw) == DUCKDB_V2_ERROR_NONE);
 	auto raw_str = Convert(raw);
 	INFO("errors_as_json raw: " << raw_str);
 	REQUIRE(raw_str.rfind("{", 0) == 0);
@@ -277,6 +283,7 @@ TEST_CASE("V2 error: error_info_destroy is null-safe", "[capi_v2][error]") {
 	}
 }
 
+// Why are these commented out?
 /*
 TEST_CASE("V2 error: WithErrorHandler success leaves the err slot untouched", "[capi_v2][error]") {
     duckdb_v2_environment_handle env = nullptr;
@@ -311,7 +318,7 @@ TEST_CASE("V2 error: WithErrorHandler success leaves the err slot untouched", "[
 
     duckdb_v2_disconnect(&conn);
     duckdb_v2_close(&db);
-    duckdb_v2_destroy_environment(&env);
+    duckdb_v2_environment_destroy(&env);
 }
 TEST_CASE("V2 error: WithErrorHandler failure overwrites the prior message in the slot", "[capi_v2][error]") {
     duckdb_v2_error_info_handle err = nullptr;

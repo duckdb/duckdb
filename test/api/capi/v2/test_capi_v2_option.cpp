@@ -203,7 +203,7 @@ TEST_CASE("V2 db/conn option: open with options applies them at GLOBAL scope", "
 
 	duckdb_v2_option_destroy(&o1);
 	duckdb_v2_close(&db);
-	duckdb_v2_destroy_environment(&env);
+	duckdb_v2_environment_destroy(&env);
 }
 TEST_CASE("V2 option: create / destroy", "[capi_v2][option]") {
 	SECTION("create succeeds and destroy nulls the slot") {
