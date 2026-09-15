@@ -38,7 +38,7 @@ struct SortKeyBindData : public FunctionData {
 	}
 };
 
-void AccumulateSortKeyWidth(const LogicalType &type, bool &all_constant, idx_t &constant_size) {
+static void AccumulateSortKeyWidth(const LogicalType &type, bool &all_constant, idx_t &constant_size) {
 	const auto physical_type = type.InternalType();
 	if (!TypeIsConstantSize(physical_type)) {
 		all_constant = false;
@@ -48,7 +48,7 @@ void AccumulateSortKeyWidth(const LogicalType &type, bool &all_constant, idx_t &
 	constant_size += GetTypeIdSize(physical_type) + 1;
 }
 
-void VerifyDecodeSortKeyType(const LogicalType &sort_key_type, bool all_constant, idx_t constant_size) {
+static void VerifyDecodeSortKeyType(const LogicalType &sort_key_type, bool all_constant, idx_t constant_size) {
 	if (sort_key_type == LogicalType::BIGINT) {
 		if (!all_constant || constant_size > sizeof(int64_t)) {
 			throw BinderException("sort_key has type BIGINT but arguments require BLOB");
@@ -1055,7 +1055,7 @@ unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
 		const auto &col_name = col_def.GetName();
 		auto col_type = col_def.GetType();
 		if (col_type.IsUnbound()) {
-			// only user-defined types need catalog resolution
+			// Resolve the parsed type against the catalog.
 			col_type = TransformStringToLogicalType(col_type.ToString(), context);
 		}
 
@@ -1507,8 +1507,9 @@ unique_ptr<Expression> DecodeSortKeyFun::Bind(unique_ptr<Expression> sort_key, c
 	auto bind_data = make_uniq<SortKeyBindData>();
 	bind_data->modifiers = std::move(modifiers);
 	bind_data->all_constant = all_constant;
-	BoundScalarFunction function(GetFunction());
-	function.SetReturnType(LogicalType::STRUCT(std::move(columns)));
+	ScalarFunction definition("decode_sort_key", {sort_key->GetReturnType()}, LogicalType::STRUCT(std::move(columns)),
+	                          DecodeSortKeyFunction);
+	BoundScalarFunction function(definition);
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(sort_key));
 	return make_uniq<BoundFunctionExpression>(std::move(function), std::move(children), std::move(bind_data));
