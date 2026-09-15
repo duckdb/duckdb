@@ -354,37 +354,31 @@ auto RenderQuotedIdentifier(std::string_view name) -> std::string {
 
 Environment::Environment() {
 	duckdb_v2_environment_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_create_environment, &_h);
+	CheckedAPICall(duckdb_v2_environment_create, &_h);
 	impl = _h;
 }
 
 Environment::~Environment() {
 	auto _h = handle();
-	duckdb_v2_destroy_environment(&_h);
+	duckdb_v2_environment_destroy(&_h);
 }
 
-auto Environment::GetOpenDatabaseCount() const -> size_t {
+auto Environment::GetDatabaseCount() const -> size_t {
 	idx_t count = 0;
-	CheckedAPICall(duckdb_v2_environment_database_count, handle(), &count);
+	CheckedAPICall(duckdb_v2_environment_get_database_count, handle(), &count);
 	return static_cast<size_t>(count);
 }
 
-auto Environment::Open(const std::string &path) -> Database {
+auto Environment::CreateDatabase() -> Database {
 	duckdb_v2_database_handle db = nullptr;
-	CheckedAPICall(duckdb_v2_open, handle(), ToStr(path), nullptr, static_cast<idx_t>(0), &db);
+	CheckedAPICall(duckdb_v2_database_create, handle(), &db);
 	return detail::Factory::Make<Database>(db);
 }
 
-auto Environment::Open(const std::string &path, const std::vector<DatabaseOption> &options) -> Database {
-	std::vector<duckdb_v2_option_handle> handles;
-	handles.reserve(options.size());
-	for (const auto &option : options) {
-		handles.push_back(option.handle());
-	}
-	duckdb_v2_database_handle db = nullptr;
-	CheckedAPICall(duckdb_v2_open, handle(), ToStr(path), handles.empty() ? nullptr : handles.data(),
-	               static_cast<idx_t>(handles.size()), &db);
-	return detail::Factory::Make<Database>(db);
+auto Environment::Open(const std::string &path) -> Database {
+	auto db = CreateDatabase();
+	db.Open(path);
+	return db;
 }
 
 //---------------------------------------------------------------------------
@@ -392,12 +386,6 @@ auto Environment::Open(const std::string &path, const std::vector<DatabaseOption
 //---------------------------------------------------------------------------
 
 DatabaseOption::DatabaseOption(void *impl) : detail::Handle<DatabaseOption>(impl) {
-}
-
-DatabaseOption::DatabaseOption(const std::string &name, const std::string &value) {
-	duckdb_v2_option_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_option_create, ToStr(name), ToStr(value), &_h);
-	impl = _h;
 }
 
 auto DatabaseOption::GetName() const -> std::string_view {
@@ -468,34 +456,43 @@ Database::Database(void *impl) : detail::Handle<Database>(impl) {
 
 Database::~Database() {
 	auto _h = handle();
-	duckdb_v2_close(&_h);
+	duckdb_v2_database_destroy(&_h);
+}
+
+auto Database::Open(const std::string &path) -> void {
+	CheckedAPICall(duckdb_v2_database_open, handle(), ToStr(path));
+}
+
+auto Database::Close(const std::string &path) -> void {
+	CheckedAPICall(duckdb_v2_database_close, handle(), ToStr(path));
 }
 
 auto Database::GetOptionCount() const -> size_t {
 	idx_t count = 0;
-	CheckedAPICall(duckdb_v2_database_option_get_count, handle(), &count);
+	CheckedAPICall(duckdb_v2_database_get_option_count, handle(), &count);
 	return static_cast<size_t>(count);
 }
 
 auto Database::GetOptionByIndex(size_t index) const -> DatabaseOption {
 	duckdb_v2_option_handle option = nullptr;
-	CheckedAPICall(duckdb_v2_database_option_get_by_index, handle(), static_cast<idx_t>(index), &option);
+	CheckedAPICall(duckdb_v2_database_get_option_by_index, handle(), static_cast<idx_t>(index), &option);
 	return detail::Factory::Make<DatabaseOption>(option);
 }
 
 auto Database::GetOption(std::string_view name) const -> DatabaseOption {
 	duckdb_v2_option_handle option = nullptr;
-	CheckedAPICall(duckdb_v2_database_option_get, handle(), duckdb_v2_identifier_t {name.data(), name.size()}, &option);
+	CheckedAPICall(duckdb_v2_database_get_option, handle(), duckdb_v2_identifier_t {name.data(), name.size()}, &option);
 	return detail::Factory::Make<DatabaseOption>(option);
 }
 
-auto Database::SetOption(const DatabaseOption &option) -> void {
-	CheckedAPICall(duckdb_v2_database_option_set, handle(), option.handle());
+auto Database::SetOption(std::string_view name, std::string_view value) -> void {
+	CheckedAPICall(duckdb_v2_database_set_option, handle(), duckdb_v2_identifier_t {name.data(), name.size()},
+	               duckdb_v2_str {value.data(), value.size()});
 }
 
 auto Database::Connect() -> Connection {
 	duckdb_v2_connection_handle conn = nullptr;
-	CheckedAPICall(duckdb_v2_connect, handle(), &conn);
+	CheckedAPICall(duckdb_v2_connection_create, handle(), &conn);
 	return detail::Factory::Make<Connection>(conn, true);
 }
 
@@ -509,40 +506,40 @@ Connection::Connection(void *impl, bool owned) : detail::Handle<Connection>(impl
 Connection::~Connection() {
 	if (owned) {
 		auto _h = handle();
-		duckdb_v2_disconnect(&_h);
+		duckdb_v2_connection_destroy(&_h);
 	}
 }
 
 auto Connection::GetOptionCount() const -> size_t {
 	idx_t count = 0;
-	CheckedAPICall(duckdb_v2_connection_option_get_count, handle(), &count);
+	CheckedAPICall(duckdb_v2_connection_get_option_count, handle(), &count);
 	return static_cast<size_t>(count);
 }
 
 auto Connection::GetOptionByIndex(size_t index) const -> DatabaseOption {
 	duckdb_v2_option_handle option = nullptr;
-	CheckedAPICall(duckdb_v2_connection_option_get_by_index, handle(), static_cast<idx_t>(index), &option);
+	CheckedAPICall(duckdb_v2_connection_get_option_by_index, handle(), static_cast<idx_t>(index), &option);
 	return detail::Factory::Make<DatabaseOption>(option);
 }
 
 auto Connection::GetOption(std::string_view name) const -> DatabaseOption {
 	duckdb_v2_option_handle option = nullptr;
-	CheckedAPICall(duckdb_v2_connection_option_get, handle(), duckdb_v2_identifier_t {name.data(), name.size()},
+	CheckedAPICall(duckdb_v2_connection_get_option, handle(), duckdb_v2_identifier_t {name.data(), name.size()},
 	               &option);
 	return detail::Factory::Make<DatabaseOption>(option);
 }
 
-auto Connection::SetOption(const DatabaseOption &option) -> void {
-	SetOption(option, SettingScope::AUTOMATIC);
+auto Connection::SetOption(std::string_view name, std::string_view value) -> void {
+	SetOption(name, value, SettingScope::AUTOMATIC);
 }
 
-auto Connection::SetOption(const DatabaseOption &option, SettingScope scope) -> void {
+auto Connection::SetOption(std::string_view name, std::string_view value, SettingScope scope) -> void {
 	static_assert(static_cast<int>(SettingScope::AUTOMATIC) == DUCKDB_V2_SETTING_SCOPE_AUTOMATIC &&
 	                  static_cast<int>(SettingScope::GLOBAL) == DUCKDB_V2_SETTING_SCOPE_GLOBAL &&
 	                  static_cast<int>(SettingScope::LOCAL) == DUCKDB_V2_SETTING_SCOPE_LOCAL,
 	              "SettingScope must mirror DUCKDB_V2_SETTING_SCOPE");
-	CheckedAPICall(duckdb_v2_connection_option_set, handle(), option.handle(),
-	               static_cast<DUCKDB_V2_SETTING_SCOPE>(scope));
+	CheckedAPICall(duckdb_v2_connection_set_option, handle(), duckdb_v2_identifier_t {name.data(), name.size()},
+	               duckdb_v2_str {value.data(), value.size()}, static_cast<DUCKDB_V2_SETTING_SCOPE>(scope));
 }
 
 auto Connection::ParseType(std::string_view text) -> LogicalType {

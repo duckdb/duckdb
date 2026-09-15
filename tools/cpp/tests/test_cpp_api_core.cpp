@@ -27,10 +27,6 @@ TEST_CASE("Stable C++API: Database GetOption by name and option target scope", "
 	REQUIRE(option.GetName() == "allow_community_extensions");
 	REQUIRE(option.GetTargetScope() == OptionTargetScope::GLOBAL_ONLY);
 
-	// Constructor-built options are unresolved: scope reports Unknown.
-	DatabaseOption fresh("memory_limit", "1GB");
-	REQUIRE(fresh.GetTargetScope() == OptionTargetScope::UNKNOWN);
-
 	// An alias resolves to its canonical option.
 	REQUIRE(db.GetOption("memory_limit").GetName() == "max_memory");
 
@@ -98,13 +94,13 @@ TEST_CASE("Stable C++API: Connection::SetOption scope split is visible correctly
 
 	// max_execution_time is LOCAL_DEFAULT: a LOCAL write on conn_a stays
 	// invisible to conn_b.
-	conn_a.SetOption(DatabaseOption("max_execution_time", "5000"), SettingScope::LOCAL);
+	conn_a.SetOption("max_execution_time", "5000", SettingScope::LOCAL);
 	REQUIRE(conn_a.GetOption("max_execution_time").GetValue() == "5000");
 	REQUIRE(conn_b.GetOption("max_execution_time").GetValue() != "5000");
 
 	// A GLOBAL write on conn_a is visible identically on conn_b. The options
 	// must outlive the borrowed views their getters return.
-	conn_a.SetOption(DatabaseOption("memory_limit", "987MB"), SettingScope::GLOBAL);
+	conn_a.SetOption("memory_limit", "987MB", SettingScope::GLOBAL);
 	auto option_a = conn_a.GetOption("memory_limit");
 	auto option_b = conn_b.GetOption("memory_limit");
 	auto seen_a = option_a.GetValue();
@@ -113,8 +109,8 @@ TEST_CASE("Stable C++API: Connection::SetOption scope split is visible correctly
 	REQUIRE(std::string(seen_a) == std::string(seen_b));
 
 	// A GLOBAL_ONLY option rejects a LOCAL scope.
-	REQUIRE_THROWS_MATCHES(conn_a.SetOption(DatabaseOption("allow_community_extensions", "false"), SettingScope::LOCAL),
-	                       Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(conn_a.SetOption("allow_community_extensions", "false", SettingScope::LOCAL), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
 TEST_CASE("Stable C++API: Connection::GetOption by name and the scopeless SetOption default", "[cpp_api]") {
 	using namespace duckdb::cxx;
@@ -127,13 +123,13 @@ TEST_CASE("Stable C++API: Connection::GetOption by name and the scopeless SetOpt
 	REQUIRE(option.GetName() == "allow_community_extensions");
 
 	// The scopeless overload uses Automatic scope (SQL `SET` semantics).
-	conn.SetOption(DatabaseOption("max_execution_time", "4242"));
+	conn.SetOption("max_execution_time", "4242");
 	REQUIRE(conn.GetOption("max_execution_time").GetValue() == "4242");
 
 	REQUIRE_THROWS_MATCHES(conn.GetOption("no_such_option_xyz"), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
-TEST_CASE("Stable C++API: Environment::Open with pre-open options enforces read-only", "[cpp_api]") {
+TEST_CASE("Stable C++API: a startup option set before Open enforces read-only", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
 	auto path = duckdb::TestCreatePath("cpp_api_readonly.duckdb");
@@ -150,9 +146,9 @@ TEST_CASE("Stable C++API: Environment::Open with pre-open options enforces read-
 	}
 
 	{
-		std::vector<DatabaseOption> options;
-		options.push_back(DatabaseOption("access_mode", "READ_ONLY"));
-		auto ro_db = env.Open(path, options);
+		auto ro_db = env.CreateDatabase();
+		ro_db.SetOption("access_mode", "READ_ONLY");
+		ro_db.Open(path);
 		auto ro_conn = ro_db.Connect();
 
 		// Reads see the seeded data. Scoped so the live result is released

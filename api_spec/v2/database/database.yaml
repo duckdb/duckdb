@@ -1,45 +1,44 @@
 module: database
+# A database handle is a DuckDB instance: a buffer pool, a scheduler, a set
+# of GLOBAL settings, and the databases attached to it. Creating the handle
+# and opening a database on it are separate steps:
+#
+#   database_create(env, &db);
+#   database_set_option(db, "access_mode", "READ_ONLY");   // startup option
+#   database_open(db, "path/to/file.db");                  // attaches it
+#   database_set_option(db, "memory_limit", "4GB");        // SET GLOBAL
+#   connection_create(db, &conn);
+#
+# The instance starts on its first use: the first database_open or
+# connection_create. Options set before that point go into the startup
+# configuration, so options that can only be chosen at startup (access_mode,
+# enable_external_access, threads, block sizes, ...) are set through the same
+# call as the ones that can change at runtime. After startup,
+# database_set_option is SQL `SET GLOBAL`.
+#
+# Nothing is attached until database_open: only the system catalog and each
+# connection's temporary catalog exist, and statements that need a default
+# database fail until one is opened. database_open attaches a database the
+# way `ATTACH 'path'` does; the first one opened becomes the default database
+# for every connection that does not `USE` another. database_close detaches
+# it again.
 functions:
-  open:
+  database_create:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Opens a database under the environment.
+      Creates a database handle under the environment.
 
-      `path` semantics:
-        - `nullptr`, ":memory:", or any ":memory:..." path opens a fresh
-          in-memory database. In-memory databases are never deduplicated
-          across calls.
-        - any other path opens that file as a database, and returns
-          ERROR_RESOURCE_IN_USE if the file is already open under the same
-          environment.
-
-      `options` is an optional array of pre-created config option handles
-      applied at construction time. Only the name and setting of each handle
-      are read; the remaining fields are ignored. Options may include pre-open
-      database settings (e.g. access_mode, memory_limit) and ATTACH-style
-      storage options (e.g. BLOCK_SIZE, ENCRYPTION_KEY). Unknown names are
-      accepted and kept for a later extension to consume. Pass
-      `options=nullptr` and `option_count=0` to open with defaults.
-
-      LOCAL_ONLY options are rejected at this scope, as they are by
-      database_option_set.
+      The handle starts with no database attached and with its instance not
+      yet started; set startup options with database_set_option, then open a
+      database with database_open or connect with connection_create. The
+      caller destroys it via database_destroy.
     role: constructor
     belongs_to: database
     parameters:
       env:
         type: environment
         description: "The environment."
-      path:
-        type: str
-        description: "Path to the database. An empty view (`{NULL, 0}` or zero length) or any ':memory:...' path opens an in-memory database."
-      options:
-        type: option
-        indirection: 1
-        description: "Optional array of pre-created config option handles. May be `nullptr` if option_count is 0."
-      option_count:
-        type: idx
-        description: "The number of entries in the options array."
       out_db:
         type: database
         indirection: 1
@@ -51,67 +50,140 @@ functions:
         kind: OUT
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
     return_type: ERROR
-  close:
+  database_destroy:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Closes the database.
+      Destroys the database handle.
 
-      Always succeeds. The underlying database instance stays alive for as long
-      as any connection still references it; when the last reference drops, the
-      instance is destroyed and its path becomes available to reopen. On
-      success the handle is set to null.
+      Always succeeds. Every attached database is closed with the instance.
+      The instance itself stays alive for as long as any connection still
+      references it; when the last reference drops, it is destroyed and its
+      database files become available to open again. On success the handle
+      is set to null. Safe to call on an already-null slot.
     role: destructor
     belongs_to: database
     parameters:
       db:
         type: database
         indirection: 1
-        description: "The database to close."
+        description: "The database handle to destroy."
     return_type: ERROR
-  database_option_set:
+  database_open:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Sets a config option on the database (GLOBAL scope).
+      Opens a database on the handle, starting the instance if it has not
+      started yet.
 
-      Only the name and setting of the option are read; the remaining fields
-      are ignored. Equivalent to SQL `SET GLOBAL name = setting`. Returns
-      ERROR_INPUT_INVALID for an option declared LOCAL_ONLY, and for a legacy
-      option with no global setter. Unknown names are accepted and kept for a
-      later extension to consume.
-    role: setter
+      Attaches the database at `path` exactly like `ATTACH 'path'`:
+        - `:memory:` or an empty view opens a fresh in-memory database named
+          `memory`.
+        - any other path opens that file, creating it if it does not exist,
+          under the name derived from the file's base name.
+      The first database opened is the default database for every connection
+      that does not `USE` another; further opens attach alongside it. A path
+      that is already open on this or any other database of the environment
+      returns ERROR_RESOURCE_IN_USE, and a name that is already attached
+      (two files with the same base name, or `:memory:` twice) fails; use SQL
+      `ATTACH ... AS name` for those. Options that only apply at startup
+      must be set before the first open or connection.
+    role: method
     belongs_to: database
     parameters:
       db:
         type: database
-        description: "The database."
-      option:
-        type: option
-        description: "The config option to apply."
+        description: "The database handle."
+      path:
+        type: str
+        description: "Path to the database file, or `:memory:` / an empty view for an in-memory database."
       err:
         type: error_info
         indirection: 1
         kind: OUT
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
     return_type: ERROR
-  database_option_get:
+  database_close:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Closes the database that was opened from `path`.
+
+      Detaches it like `DETACH`, checkpointing a file database first. Unlike
+      SQL, the default database may be closed too: the oldest remaining
+      attached database takes over as the default. The path is matched
+      against the attached databases as database_open recorded it, so pass
+      the path that was passed to database_open. Returns ERROR_INPUT_INVALID
+      when no database opened from that path is attached. Connections that
+      still reference the database keep it alive until they release it.
+    role: method
+    belongs_to: database
+    parameters:
+      db:
+        type: database
+        description: "The database handle."
+      path:
+        type: str
+        description: "The path the database was opened from."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+    return_type: ERROR
+  database_set_option:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Sets a config option on the database (GLOBAL scope).
+
+      Before the instance has started (no database_open or connection_create
+      yet), the option goes into the startup configuration: this is the only
+      way to set an option that can only be chosen at startup, such as
+      access_mode or enable_external_access. Unknown names are kept for an
+      extension to consume at startup; if none does, startup fails with the
+      unrecognized names. After startup, this is `SET GLOBAL name = setting`
+      and an unknown name is rejected unless an extension that defines it can
+      be autoloaded. Returns ERROR_INPUT_INVALID for an option declared
+      LOCAL_ONLY, and for a legacy option with no global setter.
+    role: setter
+    belongs_to: database
+    parameters:
+      db:
+        type: database
+        description: "The database handle."
+      name:
+        type: identifier
+        description: "Option name (canonical or alias)."
+      setting:
+        type: str
+        description: "The setting, in the textual form SQL `SET` accepts."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+    return_type: ERROR
+  database_get_option:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
       Reads a config option from the database (GLOBAL scope) by name.
 
       Allocates a fully populated option: canonical name, current GLOBAL
-      setting, default setting, description, target scope, and aliases. Aliases
-      resolve transparently — passing an alias returns the canonical option,
-      with the alias listed in its alias array. An unknown name returns
-      ERROR_INPUT_INVALID. The caller destroys the returned option.
+      setting, default setting, description, target scope, and aliases.
+      Before startup the current setting is the staged startup value, or the
+      default. Aliases resolve transparently — passing an alias returns the
+      canonical option, with the alias listed in its alias array. An unknown
+      name returns ERROR_INPUT_INVALID; before startup that includes an
+      option of an extension that has not loaded yet, even if a setting for
+      it has been staged. The caller destroys the returned option.
     role: getter
     belongs_to: database
     parameters:
       db:
         type: database
-        description: "The database."
+        description: "The database handle."
       name:
         type: identifier
         description: "Option name (canonical or alias)."
@@ -126,7 +198,7 @@ functions:
         kind: OUT
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
     return_type: ERROR
-  database_option_get_count:
+  database_get_option_count:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
@@ -140,7 +212,7 @@ functions:
     parameters:
       db:
         type: database
-        description: "The database."
+        description: "The database handle."
       out_count:
         type: idx
         indirection: 1
@@ -152,7 +224,7 @@ functions:
         kind: OUT
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
     return_type: ERROR
-  database_option_get_by_index:
+  database_get_option_by_index:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
@@ -167,7 +239,7 @@ functions:
     parameters:
       db:
         type: database
-        description: "The database."
+        description: "The database handle."
       index:
         type: idx
         description: "The option index, in [0, option_count)."

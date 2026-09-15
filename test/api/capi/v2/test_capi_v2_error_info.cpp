@@ -280,11 +280,11 @@ TEST_CASE("V2 error: error_info_destroy is null-safe", "[capi_v2][error]") {
 /*
 TEST_CASE("V2 error: WithErrorHandler success leaves the err slot untouched", "[capi_v2][error]") {
     duckdb_v2_environment_handle env = nullptr;
-    duckdb_v2_create_environment(&env, nullptr);
+    duckdb_v2_environment_create(&env, nullptr);
     duckdb_v2_database_handle db = nullptr;
-    duckdb_v2_open(env, duckdb_v2_str {nullptr, 0}, nullptr, 0, &db, nullptr);
+    OpenDatabase(env, duckdb_v2_str {nullptr, 0}, &db, nullptr);
     duckdb_v2_connection_handle conn = nullptr;
-    duckdb_v2_connect(db, &conn, nullptr);
+    duckdb_v2_connection_create(db, &conn, nullptr);
 
     // A successful call with a fresh (null) slot does not allocate: the return
     // code is authoritative, so the library never touches the slot on success.
@@ -309,9 +309,9 @@ TEST_CASE("V2 error: WithErrorHandler success leaves the err slot untouched", "[
     duckdb_v2_error_info_destroy(&err);
     REQUIRE(err == nullptr);
 
-    duckdb_v2_disconnect(&conn);
-    duckdb_v2_close(&db);
-    duckdb_v2_destroy_environment(&env);
+    duckdb_v2_connection_destroy(&conn);
+    duckdb_v2_database_destroy(&db);
+    duckdb_v2_environment_destroy(&env);
 }
 TEST_CASE("V2 error: WithErrorHandler failure overwrites the prior message in the slot", "[capi_v2][error]") {
     duckdb_v2_error_info_handle err = nullptr;

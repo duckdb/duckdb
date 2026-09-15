@@ -314,15 +314,14 @@ public:
 //----------------------------------------------------------------------------------------------------------------------
 // Database Option
 //----------------------------------------------------------------------------------------------------------------------
-// Configuration settings, as name/value pairs.
-// Construct a `DatabaseOption` to write a setting, or read one back from an existing `Database` or `Connection` to
-// inspect its current value, default value, description or aliases.
-// Settings that can only be chosen up front must be passed to `Environment::Open`.
+// Configuration settings. Write one with `Database::SetOption` or `Connection::SetOption`, which take the name and
+// value directly; read one back as a `DatabaseOption` to inspect its current value, default value, description,
+// target scope or aliases. Settings that can only be chosen at startup are written on a `Database` before its first
+// `Open` or `Connect`.
 
 /// At which scope a setting may be written.
 enum class OptionTargetScope : uint8_t {
-	/// Unknown: the setting declares no target scope, or the option was constructed here and has not been resolved
-	/// against a database yet.
+	/// Unknown: the setting declares no target scope, which includes every extension setting.
 	UNKNOWN = 0,
 	/// Writable only at GLOBAL (database) scope.
 	GLOBAL_ONLY = 1,
@@ -344,42 +343,32 @@ enum class SettingScope : uint8_t {
 	LOCAL = 2,
 };
 
-/// A single configuration setting
-/// This holds the value of the setting plus the metadata DuckDB declares for it.
+/// A single configuration setting as read from a database or connection: its current value there, plus the
+/// metadata DuckDB declares for it. Read-only.
 /// The string accessors return views borrowed from this option, valid until it is destroyed.
 class DatabaseOption final : public detail::Handle<DatabaseOption> {
 	friend detail::Factory;
 
 public:
-	/// An option setting `name` to `value`, to hand to `Environment::Open` or to a `SetOption`. The value is parsed
-	/// when the option is applied, so an unknown name or an ill-typed value throws there rather than here.
-	/// @param name The setting to write, either its canonical name or one of its aliases.
-	/// @param value The new value, in the same textual form SQL's `SET` accepts.
-	DatabaseOption(const std::string &name, const std::string &value);
-
 	DatabaseOption(DatabaseOption &&) noexcept = default;
 	DatabaseOption &operator=(DatabaseOption &&) noexcept = default;
 
 	/// The setting's name.
 	auto GetName() const -> std::string_view;
 
-	/// The value this option carries, as text.
+	/// The setting's current value where it was read from, as text.
 	auto GetValue() const -> std::string_view;
 
-	/// The value the setting falls back to when it is not set. Empty until the option has been read back from a
-	/// database or connection.
+	/// The value the setting falls back to when it is not set. Empty when the setting declares no default.
 	auto GetDefaultValue() const -> std::string_view;
 
-	/// A human-readable description of the setting. Empty until the option has been read back from a database or
-	/// connection.
+	/// A human-readable description of the setting.
 	auto GetDescription() const -> std::string_view;
 
-	/// At which scope this setting may be written. UNKNOWN until the option has been read back from a database or
-	/// connection.
+	/// At which scope this setting may be written.
 	auto GetTargetScope() const -> OptionTargetScope;
 
-	/// How many alternative names resolve to this setting. 0 until the option has been read back from a database or
-	/// connection.
+	/// How many alternative names resolve to this setting. 0 for an extension setting.
 	auto GetAliasCount() const -> size_t;
 
 	/// One of the setting's aliases.
@@ -698,14 +687,17 @@ public:
 	auto GetOption(std::string_view name) const -> DatabaseOption;
 
 	/// Writes a setting at the scope it declares for itself, like SQL `SET name = value`.
-	/// @param option The name/value pair to apply.
-	auto SetOption(const DatabaseOption &option) -> void;
+	/// @param name The setting to write, either its canonical name or one of its aliases.
+	/// @param value The new value, in the same textual form SQL's `SET` accepts.
+	/// @throws InvalidInputException When no setting goes by that name or the value does not parse.
+	auto SetOption(std::string_view name, std::string_view value) -> void;
 
 	/// Writes a setting at an explicit scope.
-	/// @param option The name/value pair to apply.
+	/// @param name The setting to write, either its canonical name or one of its aliases.
+	/// @param value The new value, in the same textual form SQL's `SET` accepts.
 	/// @param scope GLOBAL to write it database-wide, LOCAL for this session only.
 	/// @throws Exception When the setting does not allow the requested scope.
-	auto SetOption(const DatabaseOption &option, SettingScope scope) -> void;
+	auto SetOption(std::string_view name, std::string_view value, SettingScope scope) -> void;
 
 	/// Parses a SQL string into an iterator over its statements, without binding or executing any of them.
 	/// Parsing happens statement by statement as the iterator advances, so a syntax error surfaces from
@@ -844,6 +836,18 @@ public:
 	Database(Database &&) noexcept = default;
 	Database &operator=(Database &&) noexcept = default;
 
+	/// Opens a database on this instance, like SQL `ATTACH 'path'`, starting the instance if this is its first use.
+	/// The first database opened is the default database for every connection that does not `USE` another.
+	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
+	/// @throws Exception When the path is already open in this environment, or a database of that name is attached.
+	auto Open(const std::string &path) -> void;
+
+	/// Closes the database opened from `path`, like SQL `DETACH`. Connections still using it keep it alive until
+	/// they let go.
+	/// @param path The path that was passed to `Open`.
+	/// @throws InvalidInputException When no database opened from that path is attached.
+	auto Close(const std::string &path) -> void;
+
 	/// How many settings this database exposes.
 	auto GetOptionCount() const -> size_t;
 
@@ -857,11 +861,15 @@ public:
 	/// @throws InvalidInputException When no setting goes by that name.
 	auto GetOption(std::string_view name) const -> DatabaseOption;
 
-	/// Writes a setting globally, for this database and every session on it.
-	/// @param option The name/value pair to apply.
-	auto SetOption(const DatabaseOption &option) -> void;
+	/// Writes a setting globally, for this database and every session on it. Before the first `Open` or `Connect`
+	/// the setting goes into the startup configuration, which is how settings that can only be chosen at startup,
+	/// such as access_mode, are written; afterwards this is SQL `SET GLOBAL`.
+	/// @param name The setting to write, either its canonical name or one of its aliases.
+	/// @param value The new value, in the same textual form SQL's `SET` accepts.
+	/// @throws InvalidInputException When no setting goes by that name or the value does not parse.
+	auto SetOption(std::string_view name, std::string_view value) -> void;
 
-	/// Opens a new session on this database.
+	/// Opens a new session on this database, starting the instance if this is its first use.
 	/// @return An owning `Connection`, which disconnects when destroyed. Open one per thread.
 	auto Connect() -> Connection;
 
@@ -900,11 +908,11 @@ auto RunExtensionEntry(void (*body)(Extension &, Context &), void *extension, vo
 //----------------------------------------------------------------------------------------------------------------------
 // Environment
 //----------------------------------------------------------------------------------------------------------------------
-// The entry point to the API: an `Environment` opens databases and tracks the ones it has opened. Create one, keep it
-// for as long as any database is open, and open databases through it.
+// The entry point to the API: an `Environment` creates databases and tracks the ones it has created. Create one,
+// keep it for as long as any database is alive, and create databases through it.
 
-/// The environment databases are opened in. It must outlive every `Database` opened through it; destroying it while
-/// databases are still open leaks them.
+/// The environment databases are created in. It must outlive every `Database` created through it; destroying it
+/// while databases are still alive leaks them.
 class Environment final : public detail::Handle<Environment> {
 	friend detail::Factory;
 
@@ -914,18 +922,16 @@ public:
 	Environment(Environment &&) noexcept = default;
 	Environment &operator=(Environment &&) noexcept = default;
 
-	/// How many databases are currently open in this environment.
-	auto GetOpenDatabaseCount() const -> size_t;
+	/// How many databases are currently alive in this environment.
+	auto GetDatabaseCount() const -> size_t;
 
-	/// Opens a database with default settings.
+	/// Creates a database instance with nothing opened on it. Write startup settings with `Database::SetOption`,
+	/// then open a database with `Database::Open`.
+	auto CreateDatabase() -> Database;
+
+	/// Creates a database instance with default settings and opens `path` on it.
 	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
 	auto Open(const std::string &path) -> Database;
-
-	/// Opens a database, configuring it up front. Settings such as access_mode and the storage options can only be
-	/// chosen here, before the database exists.
-	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
-	/// @param options The settings to open with. Borrowed for the call only; the caller keeps them.
-	auto Open(const std::string &path, const std::vector<DatabaseOption> &options) -> Database;
 };
 
 /// The version of the DuckDB library this program is linked against, e.g. "v1.5.0", with a suffix such as

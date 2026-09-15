@@ -54,8 +54,10 @@ public:
 	//! Attach a new database
 	shared_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, AttachInfo &info, AttachOptions &options);
 
-	//! Detach an existing database
-	void DetachDatabase(ClientContext &context, const Identifier &name, OnEntryNotFound if_not_found);
+	//! Detach an existing database. SQL DETACH refuses the connection's default database, which would leave it
+	//! without one; a host closing a database it opened passes `allow_default_database` to detach it regardless.
+	void DetachDatabase(ClientContext &context, const Identifier &name, OnEntryNotFound if_not_found,
+	                    bool allow_default_database = false);
 	//! Alter operation dispatcher
 	void Alter(ClientContext &context, AlterInfo &info);
 	//! Rollback the attach of a database
@@ -63,7 +65,10 @@ public:
 	//! Returns a reference to the system catalog
 	Catalog &GetSystemCatalog();
 
+	//! The default database of the connection: its USE'd catalog, else the oldest attached database. Throws when no
+	//! database is attached; TryGetDefaultDatabase returns the empty identifier instead, for lookups that can skip it.
 	static Identifier GetDefaultDatabase(ClientContext &context);
+	static Identifier TryGetDefaultDatabase(ClientContext &context);
 
 	//! Inserts a path to name mapping to the database paths map
 	InsertDatabasePathResult InsertDatabasePath(const AttachInfo &info, AttachOptions &options);

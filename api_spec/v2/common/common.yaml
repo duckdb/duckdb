@@ -3,23 +3,34 @@ handles:
   environment:
     description: |
       An opaque, owned handle to the V2 environment: the required root through
-      which databases are opened. All databases under one environment share a
-      cache, so file-level conflicts — the same database file opened twice —
-      are detected across them. Destroying the environment refuses with
-      ERROR_RESOURCE_IN_USE while any database opened through it is still
-      alive; close those first.
-    cleanup_with: destroy_environment
+      which database handles are created. All databases under one environment
+      share an instance cache, so file-level conflicts — the same database
+      file opened twice — are detected across them. Destroying the
+      environment refuses with ERROR_RESOURCE_IN_USE while any database
+      created through it is still alive; destroy those first.
+    cleanup_with: environment_destroy
   database:
-    description: An opaque, owned handle to a DuckDB database instance.
+    description: |
+      An opaque, owned handle to a DuckDB database instance: a buffer pool, a
+      scheduler, a set of GLOBAL settings, and the databases attached to it.
+      Created empty by database_create; databases are attached with
+      database_open and detached with database_close. Always destroy via
+      database_destroy.
+    cleanup_with: database_destroy
   connection:
-    description: An opaque, owned handle to a DuckDB connection.
+    description: |
+      An opaque, owned handle to a DuckDB connection: a session on a database
+      instance with its own LOCAL settings and transaction state. Always
+      destroy via connection_destroy.
+    cleanup_with: connection_destroy
   option:
     description: |
-      An opaque, owned handle to a single config option: a name and a setting,
-      plus optional metadata (description, default setting, target scope,
-      aliases). You can create an with option_create and pass it when opening a database or connection, or you can
-      retrieve one with metadata already filled in using option_get. The
-      caller always destroys it via option_destroy,
+      An opaque, owned, read-only descriptor of a single config option as seen
+      from a database, connection, or context: its canonical name, current
+      setting, default setting, description, target scope, and aliases.
+      Returned by the *_get_option and *_get_option_by_index functions; the
+      caller always destroys it via option_destroy. Options are written with
+      the *_set_option functions, which take a name and a setting directly.
     cleanup_with: option_destroy
   # Error reporting. Every fallible function takes a trailing
   # `error_info *err` out-parameter.

@@ -258,8 +258,9 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 	return db_ref;
 }
 
-void DatabaseManager::DetachDatabase(ClientContext &context, const Identifier &name, OnEntryNotFound if_not_found) {
-	if (GetDefaultDatabase(context) == name) {
+void DatabaseManager::DetachDatabase(ClientContext &context, const Identifier &name, OnEntryNotFound if_not_found,
+                                     bool allow_default_database) {
+	if (!allow_default_database && GetDefaultDatabase(context) == name) {
 		throw BinderException("Cannot detach database %s because it is the default database. Select a different "
 		                      "database using `USE` to allow detaching this database",
 		                      name);
@@ -407,6 +408,15 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 }
 
 Identifier DatabaseManager::GetDefaultDatabase(ClientContext &context) {
+	auto result = TryGetDefaultDatabase(context);
+	if (IsInvalidCatalog(result)) {
+		// Reachable on an instance created without a database (DuckDB::CreateEmpty).
+		throw CatalogException("No database is attached: attach one with ATTACH before referring to a database");
+	}
+	return result;
+}
+
+Identifier DatabaseManager::TryGetDefaultDatabase(ClientContext &context) {
 	auto &config = ClientData::Get(context);
 	auto &default_entry = config.catalog_search_path->GetDefault();
 	if (IsInvalidCatalog(default_entry.GetCatalog())) {
@@ -417,7 +427,7 @@ Identifier DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 			if (modified_database) {
 				return modified_database->GetName();
 			}
-			throw InternalException("Calling DatabaseManager::GetDefaultDatabase with no database attached");
+			return Identifier();
 		}
 		// OIDs are assigned in attach order, so the oldest attached database is the default.
 		auto default_database = manager.databases.begin();
