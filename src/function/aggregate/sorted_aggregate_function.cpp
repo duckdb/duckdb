@@ -135,10 +135,11 @@ struct SortedAggregateBindData : public FunctionData {
 	}
 
 	SortedAggregateBindData(const SortedAggregateBindData &other)
-	    : context(other.context), function(other.function), sort_types(other.sort_types), scan_cols(other.scan_cols),
-	      scan_types(other.scan_types), sort(other.sort), buffered_cols(other.buffered_cols),
-	      buffered_types(other.buffered_types), buffered_struct_type(other.buffered_struct_type),
-	      buffered_funcs(other.buffered_funcs), sorted_on_args(other.sorted_on_args), threshold(other.threshold) {
+	    : FunctionData(other), context(other.context), function(other.function), sort_types(other.sort_types),
+	      scan_cols(other.scan_cols), scan_types(other.scan_types), sort(other.sort),
+	      buffered_cols(other.buffered_cols), buffered_types(other.buffered_types),
+	      buffered_struct_type(other.buffered_struct_type), buffered_funcs(other.buffered_funcs),
+	      sorted_on_args(other.sorted_on_args), threshold(other.threshold) {
 		if (other.bind_info) {
 			bind_info = other.bind_info->Copy();
 		}

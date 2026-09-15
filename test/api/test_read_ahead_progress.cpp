@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "duckdb/parallel/scan_read_ahead.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -43,4 +44,20 @@ TEST_CASE("Read-ahead progress only counts the assignments a thread is decoding"
 	REQUIRE(percentage > 0);
 	REQUIRE(percentage < 5);
 	stream.reset();
+}
+
+TEST_CASE("Read-ahead settles a file open that never runs", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	std::atomic<bool> opened {false};
+	std::atomic<bool> settled {false};
+	{
+		ScanReadAhead read_ahead(*con.context, 1, nullptr);
+		read_ahead.PushError(ErrorData("injected read-ahead error"));
+		read_ahead.ScheduleFileOpen([&]() { opened = true; }, [&]() { settled = true; });
+		// leaving the scope cancels and drains, retiring the open without running it
+	}
+	REQUIRE(settled);
+	REQUIRE(!opened);
 }

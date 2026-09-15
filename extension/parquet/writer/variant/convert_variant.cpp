@@ -1030,8 +1030,8 @@ static unique_ptr<FunctionData> BindTransform(BindScalarFunctionInput &input) {
 }
 
 ScalarFunction VariantColumnWriter::GetTransformFunction() {
-	ScalarFunction transform("variant_to_parquet_variant", {{"variant", LogicalType::VARIANT()}}, LogicalType::ANY,
-	                         ToParquetVariant, BindTransform);
+	ScalarFunction transform("variant_to_parquet_variant", {}, LogicalType::ANY, ToParquetVariant, BindTransform);
+	transform.GetSignature().AddParameter("variant", LogicalType::VARIANT());
 	transform.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	// throws for values that are out of range for the parquet variant encoding
 	transform.SetFallible();

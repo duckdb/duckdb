@@ -6,6 +6,8 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/type_expression.hpp"
 
+#include <cmath>
+
 namespace duckdb {
 
 unique_ptr<ConstantExpression> ConstantExpression::FromLiteral(Literal literal) {
@@ -131,6 +133,9 @@ unique_ptr<ParsedExpression> ConstantExpression::FromValue(const Value &value) {
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE: {
 		auto dbl = value.GetValue<double>();
+		if (dbl == 0 && std::signbit(dbl)) {
+			return StringCast(value);
+		}
 		if (Value::IsNan(dbl)) {
 			return StringCast(value);
 		}
@@ -166,6 +171,21 @@ unique_ptr<ParsedExpression> ConstantExpression::FromValue(const Value &value) {
 		return LiteralOrCast(Literal::Bit(value.ToString()), value);
 	case LogicalTypeId::STRUCT:
 		return StructExpression(value);
+	case LogicalTypeId::VARIANT: {
+		auto payload = VariantValue::GetValue(value);
+		if (payload.type().id() == LogicalTypeId::STRUCT) {
+			child_list_t<Value> children;
+			auto &values = StructValue::GetChildren(payload);
+			for (idx_t i = 0; i < values.size(); i++) {
+				children.emplace_back(StructType::GetChildName(payload.type(), i),
+				                      values[i].DefaultCastAs(LogicalType::VARIANT()));
+			}
+			payload = Value::STRUCT(std::move(children));
+		} else if (payload.type().id() == LogicalTypeId::LIST) {
+			payload = Value::LIST(LogicalType::VARIANT(), ListValue::GetChildren(payload));
+		}
+		return CastTo(type, CastTo(payload.type(), FromValue(payload)));
+	}
 	case LogicalTypeId::LIST: {
 		auto &children = ListValue::GetChildren(value);
 		if (children.empty()) {
