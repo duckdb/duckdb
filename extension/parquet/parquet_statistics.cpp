@@ -507,13 +507,10 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 		if (can_have_nan) {
-			// Since parquet doesn't tell us if the column has NaN values, if the user has explicitly declared that it
-			// does, we create stats without an upper max value, as NaN compares larger than anything else.
+			// Parquet extrema can exclude NaNs, which compare greater than every other value in DuckDB.
 			return CreateFloatingPointStats(type, schema, parquet_stats);
 		} else {
-			// Otherwise we use the numeric stats as usual, which might lead to "wrong" pruning if the column contains
-			// NaN values. The parquet spec is not clear on how to handle NaN values in statistics, and so this is
-			// probably the best we can do for now.
+			// The caller has explicitly declared that the input contains no NaNs.
 			return CreateNumericStats(type, schema, parquet_stats);
 		}
 		break;

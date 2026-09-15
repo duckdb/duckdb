@@ -9,6 +9,15 @@ from pathlib import Path
 def generate_parquet(data_dir: Path):
     generate_silly_names(data_dir / 'silly-names.parquet')
     generate_byte_stream_split(data_dir / 'byte_stream_split.parquet')
+    generate_nullable_nan(data_dir / 'arrow_nullable_nan.parquet')
+
+
+def generate_nullable_nan(path: Path):
+    # Finite singleton bounds do not include the NaN; NULL remains distinct.
+    values = [1.0, float('nan'), None]
+    table = pa.table({'f': pa.array(values, type=pa.float32()),
+                      'd': pa.array(values, type=pa.float64())})
+    pq.write_table(table, path)
 
 
 def generate_silly_names(path: Path):
