@@ -1,6 +1,5 @@
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window_function.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/function/aggregate_state.hpp"
@@ -18,7 +17,11 @@ namespace {
 struct ScalarWindowBindData : public FunctionData {
 	using BindInfoPtr = unique_ptr<FunctionData>;
 
-	ScalarWindowBindData(ClientContext &client, BoundWindowExpression &wexpr) : client(client), wexpr(wexpr) {
+	ScalarWindowBindData(ClientContext &client, BoundWindowExpression &wexpr) : client(client), wexpr(wexpr.Copy()) {
+	}
+
+	ScalarWindowBindData(const ScalarWindowBindData &other)
+	    : FunctionData(other), client(other.client), wexpr(other.wexpr->Copy()) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -27,26 +30,24 @@ struct ScalarWindowBindData : public FunctionData {
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<ScalarWindowBindData>();
-		if (!wexpr.Equals(other.wexpr)) {
+		if (!wexpr->Equals(*other.wexpr)) {
 			return false;
 		}
 		return true;
 	}
 
 	ClientContext &client;
-	BoundWindowExpression &wexpr;
+	unique_ptr<Expression> wexpr;
 };
 
 void AggregateScalarFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &scalar_info = func_expr.BindInfo()->Cast<ScalarWindowBindData>();
-	auto &wexpr = scalar_info.wexpr;
+	auto &wexpr = scalar_info.wexpr->Cast<BoundWindowExpression>();
 	auto bind_info = wexpr.BindInfo().get();
 
 	//	Is the frame empty?
-	auto &frame_begin = wexpr.StartExpr()->Cast<BoundConstantExpression>();
-	auto &frame_end = wexpr.EndExpr()->Cast<BoundConstantExpression>();
-	const idx_t width = idx_t(frame_begin.GetValue() != frame_end.GetValue());
+	const idx_t width = (wexpr.WindowExclude() == WindowExcludeMode::CURRENT_ROW) ? 0 : 1;
 
 	auto &client = scalar_info.client;
 	ThreadContext thread(client);
@@ -74,8 +75,7 @@ void AggregateScalarFunc(DataChunk &args, ExpressionState &state, Vector &result
 
 	//	Initialise the states
 	auto initialize = callbacks.GetStateInitCallback();
-	state_ptr = agg_state.data();
-	initialize(agg_input, &state_ptr, count);
+	initialize(agg_input, states, count);
 
 	//	Update the state if the frame is not empty
 	AggregateFinalizeInputData aggr_bind_info(aggr.function, bind_info, arena_allocator);
@@ -98,12 +98,10 @@ void AggregateScalarFunc(DataChunk &args, ExpressionState &state, Vector &result
 void WindowScalarFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &scalar_info = func_expr.BindInfo()->Cast<ScalarWindowBindData>();
-	auto &wexpr = scalar_info.wexpr;
+	auto &wexpr = scalar_info.wexpr->Cast<BoundWindowExpression>();
 
 	//	Is the frame empty?
-	auto &frame_begin = wexpr.StartExpr()->Cast<BoundConstantExpression>();
-	auto &frame_end = wexpr.EndExpr()->Cast<BoundConstantExpression>();
-	const idx_t width = idx_t(frame_begin.GetValue() != frame_end.GetValue());
+	const idx_t width = (wexpr.WindowExclude() == WindowExcludeMode::CURRENT_ROW) ? 0 : 1;
 
 	auto &client = scalar_info.client;
 	ThreadContext thread(client);
@@ -130,30 +128,9 @@ void WindowScalarFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 		WindowSharedExpressions shared;
 		WindowExecutor wexec(wexpr, shared);
 
-		DataChunk sink_chunk;
-		ExpressionExecutor sink_exec(client);
-		shared.PrepareSink(sink_exec, sink_chunk);
-		sink_exec.Execute(args, sink_chunk);
-
 		DataChunk coll_chunk;
 		ExpressionExecutor coll_exec(client);
 		shared.PrepareCollection(coll_exec, coll_chunk);
-
-		optional_ptr<WindowCollection> collection;
-		if (coll_chunk.data.empty()) {
-			coll_chunk.SetChildCardinality(args.size());
-		} else {
-			coll_exec.Execute(args, coll_chunk);
-			auto &buffer_manager = BufferManager::GetBufferManager(client);
-			collection = make_uniq<WindowCollection>(buffer_manager, count, coll_chunk.GetTypes());
-			auto builder = make_uniq<WindowBuilder>(*collection);
-			builder->Sink(coll_chunk, 0);
-		}
-
-		DataChunk eval_chunk;
-		ExpressionExecutor eval_exec(client);
-		shared.PrepareEvaluate(eval_exec, eval_chunk);
-		eval_exec.Execute(args, eval_chunk);
 
 		//	Build acceleration data
 		ValidityMask mask(count);
@@ -161,11 +138,44 @@ void WindowScalarFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 		auto gsink = wexec.GetGlobalState(client, count, mask, mask);
 		auto lsink = wexec.GetLocalState(context, *gsink);
 
+		//	Compute fully materialised expressions
+		auto &buffer_manager = BufferManager::GetBufferManager(client);
+		auto collection = make_uniq<WindowCollection>(buffer_manager, count, coll_chunk.GetTypes());
+		if (coll_chunk.data.empty()) {
+			coll_chunk.SetChildCardinality(count);
+		} else {
+			coll_exec.Execute(args, coll_chunk);
+			auto builder = make_uniq<WindowBuilder>(*collection);
+			builder->Sink(coll_chunk, 0);
+		}
+
+		// Compute sink expressions
+		DataChunk sink_chunk;
+		ExpressionExecutor sink_exec(client);
+		shared.PrepareSink(sink_exec, sink_chunk);
+		if (sink_chunk.data.empty()) {
+			sink_chunk.SetChildCardinality(count);
+		} else {
+			sink_exec.Execute(args, sink_chunk);
+		}
+
 		InterruptState interrupt;
 		OperatorSinkInput sink {*gsink, *lsink, interrupt};
 		wexec.Sink(context, sink_chunk, coll_chunk, 0, sink);
 
+		collection->Combine(shared.coll_validity);
 		wexec.Finalize(context, collection, sink);
+
+		//	Evaluate
+		DataChunk eval_chunk;
+		ExpressionExecutor eval_exec(client);
+		shared.PrepareEvaluate(eval_exec, eval_chunk);
+		if (eval_chunk.data.empty()) {
+			eval_chunk.SetChildCardinality(count);
+		} else {
+			eval_exec.Execute(args, eval_chunk);
+		}
+
 		wexec.Evaluate(context, 0, eval_chunk, result, sink, count);
 	} else {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);

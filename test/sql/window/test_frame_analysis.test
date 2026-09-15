@@ -1,0 +1,124 @@
+# name: test/sql/window/test_frame_analysis.test
+# description: Test IGNORE NULLS window syntax
+# group: [window]
+
+#
+# Table 4
+#
+# Note that cases iii-iv are not yet supported because we don't have UCC detection
+
+statement ok
+create table t as from values
+	(0, 0, 10, 'a'),
+	(1, 0, 11, 'b'),
+	(2, 1, 12, 'c'),
+	(3, 1, 13, 'd')
+	w(u, p, o, a)
+;
+
+#
+# [W] == 0
+#
+
+# Case ia
+query II
+select count(a) over ia, count(*) over ia
+from t
+window ia as (rows between current row and current row exclude current row)
+----
+0	0
+0	0
+0	0
+0	0
+
+# Case ib
+query II
+select count(a) over ib, count(*) over ib
+from t
+window ib as (rows between 0 preceding and 0 following exclude current row)
+----
+0	0
+0	0
+0	0
+0	0
+
+# any other
+
+# 0 arguments
+foreach func rank dense_rank cume_dist percent_rank
+
+query I
+select {func}() over ia
+from t
+window ia as (rows between current row and current row exclude current row)
+----
+NULL
+NULL
+NULL
+NULL
+
+query I
+select {func}() over ib
+from t
+window ib as (rows between 0 preceding and 0 following exclude current row)
+----
+NULL
+NULL
+NULL
+NULL
+
+endloop
+
+# 1 argument
+foreach func first_value last_value min
+
+query I
+select {func}(a) over ia
+from t
+window ia as (rows between current row and current row exclude current row)
+----
+NULL
+NULL
+NULL
+NULL
+
+query I
+select {func}(a) over ib
+from t
+window ib as (rows between 0 preceding and 0 following exclude current row)
+----
+NULL
+NULL
+NULL
+NULL
+
+endloop
+
+# 2+ argument
+foreach func nth_value
+
+query I
+select {func}(a, 1) over ia
+from t
+window ia as (rows between current row and current row exclude current row)
+----
+NULL
+NULL
+NULL
+NULL
+
+query I
+select {func}(a, 2) over ib
+from t
+window ib as (rows between 0 preceding and 0 following exclude current row)
+----
+NULL
+NULL
+NULL
+NULL
+
+endloop
+
+#
+# [W] == 1
+#
