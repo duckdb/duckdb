@@ -5,6 +5,7 @@
 #include "duckdb/execution/mark_join_row_comparison.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/execution/operator/join/outer_join_marker.hpp"
+#include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 
@@ -461,7 +462,8 @@ static void ResolveSimpleJoinPredicate(const vector<JoinCondition> &conditions, 
 	gstate.right_condition_data.InitializeScan(state.condition_scan_state);
 	gstate.right_payload_data.InitializeScan(state.payload_scan_state);
 	Vector comparison(LogicalType::BOOLEAN);
-	Vector predicate_result(LogicalType::BOOLEAN);
+	VectorCache predicate_cache(state.pred_executor.GetAllocator(), LogicalType::BOOLEAN);
+	Vector predicate_result(predicate_cache);
 	while (gstate.right_condition_data.Scan(state.condition_scan_state, state.right_condition)) {
 		if (!gstate.right_payload_data.Scan(state.payload_scan_state, state.right_payload) ||
 		    state.right_condition.size() != state.right_payload.size()) {
@@ -491,6 +493,7 @@ static void ResolveSimpleJoinPredicate(const vector<JoinCondition> &conditions, 
 				ConstantVector::Reference(state.pred_input.data[column_idx], count_t(candidate_count),
 				                          input.data[column_idx], left_row, input.size());
 			}
+			predicate_result.ResetFromCache(predicate_cache);
 			state.pred_executor.ExecuteExpression(state.pred_input, predicate_result);
 			auto predicates = predicate_result.Values<bool>();
 			for (idx_t candidate = 0; candidate < candidate_count; candidate++) {
