@@ -1,0 +1,81 @@
+# name: test/extension/loadable_parser_rewrite.test
+# description: Rewrite a parser extension statement inside the planning transaction
+# group: [extension]
+
+require skip_reload
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
+
+query I
+CONTEXT REWRITE SUCCESS
+----
+42
+
+# Statement verification can bind a rewritten extension below EXPLAIN.
+statement ok
+SET debug_verify_statement = 'EXPLAIN_STATEMENT';
+
+query I
+CONTEXT REWRITE SUCCESS
+----
+42
+
+statement ok
+RESET debug_verify_statement;
+
+# The rewrite and the generated statement bind in the same transaction.
+query I
+CONTEXT REWRITE TRANSACTION
+----
+true
+
+# Rewrites can see uncommitted catalog changes in an explicit transaction.
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+CREATE TABLE context_rewrite_table(i INTEGER);
+
+statement ok
+INSERT INTO context_rewrite_table VALUES (1), (2);
+
+query I
+CONTEXT REWRITE TABLE
+----
+2
+
+statement ok
+ROLLBACK;
+
+# A plan-only extension statement is a valid replacement.
+query T rowsort
+CONTEXT REWRITE PLAN_EXTENSION
+----
+QUACK
+QUACK
+
+statement error
+CONTEXT REWRITE EMPTY
+----
+Invalid Input Error: Parser extension rewrite functions must generate a statement
+
+statement error
+CONTEXT REWRITE MULTI
+----
+Invalid Input Error: Parser extension rewrite functions cannot generate multi statements
+
+statement error
+CONTEXT REWRITE RECURSE
+----
+Invalid Input Error: Parser extension rewrite functions cannot generate recursively rewritten statements
+
+statement error
+CONTEXT REWRITE PRAGMA
+----
+Invalid Input Error: Parser extension rewrite functions cannot generate pragma statements
+
+statement error
+CONTEXT REWRITE TRANSACTION_CONTROL
+----
+Invalid Input Error: Parser extension rewrite functions cannot generate transaction statements

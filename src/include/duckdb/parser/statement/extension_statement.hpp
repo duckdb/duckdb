@@ -19,6 +19,7 @@ public:
 
 public:
 	ExtensionStatement(ParserExtension extension, unique_ptr<ParserExtensionParseData> parse_data);
+	ExtensionStatement(const ExtensionStatement &other);
 
 	//! The ParserExtension this statement was generated from
 	ParserExtension extension;
