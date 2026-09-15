@@ -1587,7 +1587,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_option_get_description(duckdb_v2_option_h
  * Returns the option's target scope.
  *
  * OPTION_TARGET_SCOPE_UNKNOWN for an option created via option_create until it has been resolved through a
- * database/connection get, and for one whose declaration carries no explicit scope target.
+ * database/connection get.
  *
  * history:
  * - stable: v2.0.0
@@ -2002,7 +2002,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_chunk_get_vector(duckdb_v2_data_chun
  * are accepted and kept for a later extension to consume. Pass `options=nullptr` and `option_count=0` to open with
  * defaults.
  *
- * LOCAL_ONLY options are rejected at this scope, as they are by database_option_set.
+ * LOCAL_ONLY options are rejected at this scope.
  *
  * history:
  * - stable: v2.0.0
@@ -3520,8 +3520,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_get_size(duckdb_v2_vector_handle v
 /*!
  * Sets the number of elements in the vector.
  *
- * The counterpart of vector_get_size: it declares how many logical elements the vector now holds, and does not allocate
- * or initialize anything.
+ * The counterpart of vector_get_size: it declares how many logical elements the vector now holds. It reserves enough
+ * space for size logical elements.
  *
  * history:
  * - stable: v2.0.0
@@ -3621,9 +3621,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_flatten(duckdb_v2_vector_handle ve
  * Repoints a vector at another vector's data and type, without copying.
  *
  * `vector` takes on the storage and logical type of `source`: no data moves, and the two alias the same buffers until
- * one of them is reset or re-referenced. Works for any type, nested included. The source's data must outlive every read
- * of `vector`. Use it to hand an already-materialized vector — a chunk column produced by arrow_array_to_data_chunk,
- * say — straight to an output vector without a per-row copy.
+ * one of them is reset or re-referenced. Works for any type, including nested types. The source's data must outlive
+ * every read of `vector`. Use it to hand an already-materialized vector straight to an output vector without a per-row
+ * copy.
  *
  * history:
  * - stable: v2.0.0
@@ -5602,9 +5602,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_option_get_by_index(duckdb_v2_
 /*!
  * Interrupts the query currently executing on the connection.
  *
- * The cross-thread cancellation entry point for streaming results: safe to call from any thread, including while
- * another thread steps the query's result. A no-op when no query is active. Cancellation surfaces on the consuming side
- * as step status CANCELLED (result_step), or as ERROR_RUNTIME_INTERRUPT (result_fetch_chunk).
+ * The cross-thread (but not cross-connection) cancellation entry point for streaming results: safe to call from any
+ * thread within the execution of a query through a connection, including while another thread steps the query's result.
+ * A no-op when no query is active. Cancellation surfaces on the consuming side as step status CANCELLED (result_step),
+ * or as ERROR_RUNTIME_INTERRUPT (result_fetch_chunk).
  *
  * history:
  * - stable: v2.0.0
@@ -9034,7 +9035,7 @@ typedef struct _duckdb_v2_statement_iterator {
  * history:
  * - stable: v2.0.0
  *
- * @param conn The connection supplying the parser state.
+ * @param conn The connection supplying the parser configuration.
  * @param sql Null-terminated SQL string; may contain any number of statements.
  * @param out_iterator Receives the new iterator handle.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
@@ -9085,7 +9086,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_iterator_next(duckdb_v2_stateme
  * history:
  * - stable: v2.0.0
  *
- * @param conn The connection supplying the catalog, transaction, and parser state.
+ * @param conn The connection supplying the catalog, transaction, and parser configuration.
  * @param statement The statement to bind. Borrowed; not consumed.
  * @param out_schema Receives the owned output schema (result columns). Destroy via schema_destroy.
  * @param out_parameters Optional. When non-NULL, receives the owned input schema (parameter types, ordered by binding
@@ -11760,7 +11761,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_destroy(duckdb_v2_result_handle *r
  * - stable: v2.0.0
  *
  * @param result The result to step.
- * @param out_chunk Receives an owned chunk iff *out_status is CHUNK; set to nullptr otherwise.
+ * @param out_chunk Receives an owned chunk if *out_status is CHUNK; set to nullptr otherwise.
  * @param out_status Receives the step status.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR

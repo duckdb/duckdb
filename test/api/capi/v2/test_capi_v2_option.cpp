@@ -108,11 +108,19 @@ TEST_CASE("V2 conn option: set LOCAL is invisible to other connections", "[capi_
 	        DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_option_destroy(&opt);
 
+	idx_t out_count = 0;
+	duckdb_v2_connection_option_get_count(fx.conn, &out_count, nullptr);
+	REQUIRE(out_count != 0);
+
 	duckdb_v2_option_handle on_fx = nullptr;
 	duckdb_v2_connection_option_get(fx.conn, Convert("max_execution_time"), &on_fx, nullptr);
 	duckdb_v2_str fx_setting = {nullptr, 0};
 	duckdb_v2_option_get_setting(on_fx, &fx_setting, nullptr);
 	REQUIRE(fx_setting == "5000");
+	duckdb_v2_option_destroy(&on_fx);
+
+	duckdb_v2_connection_option_get_by_index(fx.conn, 0, &on_fx, nullptr);
+	duckdb_v2_option_get_setting(on_fx, &fx_setting, nullptr);
 	duckdb_v2_option_destroy(&on_fx);
 
 	duckdb_v2_option_handle on_other = nullptr;
