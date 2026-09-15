@@ -135,7 +135,8 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 		}
 		auto data = const_data_ptr_cast(value.GetData());
 		auto size = value.GetSize();
-
+#ifdef DUCKDB_DEBUG_NO_INLINE
+		// without inlining a short string only has `size` readable bytes
 		auto copy_count = MinValue<idx_t>(size, StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
 		if (is_set) {
 			// compare to current min/max
@@ -158,6 +159,32 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 			max_size = size;
 			is_set = true;
 		}
+#else
+		// a string_t always has CURRENT_MAX_STRING_MINMAX_SIZE readable bytes at its data pointer, zero-padded
+		// past the length when inlined, so min and max are kept as zero-padded prefixes and compared as integers
+		static_assert(StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE == string_t::INLINE_LENGTH,
+		              "the string statistics prefix is the inline area of a string_t");
+		if (is_set) {
+			// the prefix compare covers the first min(size, min_size) bytes exactly because the shorter side is
+			// zero-padded, and the length breaks a tie
+			auto min_cmp = string_t::StringComparisonOperators::CompareInlineBytes(data, min);
+			if (min_cmp < 0 || (min_cmp == 0 && size < min_size)) {
+				memcpy(min, data, StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
+				min_size = size;
+			}
+			auto max_cmp = string_t::StringComparisonOperators::CompareInlineBytes(data, max);
+			if (max_cmp > 0 || (max_cmp == 0 && size > max_size)) {
+				memcpy(max, data, StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
+				max_size = size;
+			}
+		} else {
+			memcpy(min, data, StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
+			memcpy(max, data, StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
+			min_size = size;
+			max_size = size;
+			is_set = true;
+		}
+#endif
 		if (size > max_string_length) {
 			max_string_length = UnsafeNumericCast<uint32_t>(size);
 		}

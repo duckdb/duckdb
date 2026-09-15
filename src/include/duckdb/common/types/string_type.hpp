@@ -194,6 +194,22 @@ public:
 			//     either way, they can't represent the same underlying string
 			return false;
 		}
+		//! Lexicographic compare of two 12-byte buffers holding a string prefix that is zero-padded past the
+		//! string length, e.g. the inline area of a string_t. Returns <0, 0 or >0 like memcmp.
+		static inline int CompareInlineBytes(const_data_ptr_t a, const_data_ptr_t b) {
+			const uint32_t a_prefix = Load<uint32_t>(a);
+			const uint32_t b_prefix = Load<uint32_t>(b);
+			if (a_prefix != b_prefix) {
+				return BSwapIfLE(a_prefix) < BSwapIfLE(b_prefix) ? -1 : 1;
+			}
+			const uint64_t a_rest = Load<uint64_t>(a + PREFIX_BYTES);
+			const uint64_t b_rest = Load<uint64_t>(b + PREFIX_BYTES);
+			if (a_rest != b_rest) {
+				return BSwapIfLE(a_rest) < BSwapIfLE(b_rest) ? -1 : 1;
+			}
+			return 0;
+		}
+
 		// compare up to shared length. if still the same, compare lengths
 		static bool GreaterThan(const string_t &left, const string_t &right) {
 			const uint32_t left_length = UnsafeNumericCast<uint32_t>(left.GetSize());
