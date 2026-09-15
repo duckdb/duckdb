@@ -12,6 +12,7 @@ PRAGMA explain_output = PHYSICAL_ONLY;
 # Table 4
 #
 # Note that cases iii-iv are not yet supported because we don't have UCC detection
+# Note also that ii is not possible with [W] == 0 because only one EXCLUDE clause is allowed
 
 statement ok
 create table t as from values
@@ -267,6 +268,42 @@ b
 c
 d
 
+query II
+explain
+select {func}(a) over iia
+from t
+window iia as (range between current row and current row exclude ties)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query I
+select {func}(a) over iia
+from t
+window iia as (range between current row and current row exclude ties)
+----
+a
+b
+c
+d
+
+query II
+explain
+select {func}(a) over iib
+from t
+window iib as (groups between current row and current row exclude ties)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query I
+select {func}(a) over iib
+from t
+window iib as (groups between current row and current row exclude ties)
+----
+a
+b
+c
+d
+
 endloop
 
 # nth_value(a, 1), nth_value(a, n), n ≠ 1 
@@ -310,6 +347,42 @@ d
 
 query II
 explain
+select {func}(a, 1) over iia
+from t
+window iia as (range between current row and current row exclude ties)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query I
+select {func}(a, 1) over iia
+from t
+window iia as (range between current row and current row exclude ties)
+----
+a
+b
+c
+d
+
+query II
+explain
+select {func}(a, 1) over iib
+from t
+window iib as (groups between current row and current row exclude ties)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query I
+select {func}(a, 1) over iib
+from t
+window iib as (groups between current row and current row exclude ties)
+----
+a
+b
+c
+d
+
+query II
+explain
 select {func}(a, 2) over ia
 from t
 window ia as (rows between current row and current row)
@@ -338,6 +411,42 @@ query I
 select {func}(a, 2) over ib
 from t
 window ib as (rows between 0 preceding and 0 following)
+----
+NULL
+NULL
+NULL
+NULL
+
+query II
+explain
+select {func}(a, 2) over iia
+from t
+window iia as (range between current row and current row exclude ties)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query I
+select {func}(a, 2) over iia
+from t
+window iia as (range between current row and current row exclude ties)
+----
+NULL
+NULL
+NULL
+NULL
+
+query II
+explain
+select {func}(a, 2) over iib
+from t
+window iib as (groups between current row and current row exclude ties)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query I
+select {func}(a, 2) over iib
+from t
+window iib as (groups between current row and current row exclude ties)
 ----
 NULL
 NULL
@@ -377,6 +486,60 @@ query III
 select count(a) over ib, count(*) over ib, count(case when p = 0 then a end) over ib
 from t
 window ib as (rows between 0 preceding and 0 following)
+----
+1	1	1
+1	1	1
+1	1	0
+1	1	0
+
+query II
+explain
+select count(a) over ia, count(*) over ia, count(case when p = 0 then a end) over ia
+from t
+window ia as (rows between current row and current row)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query III
+select count(a) over ia, count(*) over ia, count(case when p = 0 then a end) over ia
+from t
+window ia as (rows between current row and current row)
+----
+1	1	1
+1	1	1
+1	1	0
+1	1	0
+
+query II
+explain
+select count(a) over iia, count(*) over iia, count(case when p = 0 then a end) over iia
+from t
+window iia as (range between current row and current row exclude ties)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query III
+select count(a) over iia, count(*) over iia, count(case when p = 0 then a end) over iia
+from t
+window iia as (range between current row and current row exclude ties)
+----
+1	1	1
+1	1	1
+1	1	0
+1	1	0
+
+query II
+explain
+select count(a) over iib, count(*) over iib, count(case when p = 0 then a end) over iib
+from t
+window iib as (groups between current row and current row exclude ties)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query III
+select count(a) over iib, count(*) over iib, count(case when p = 0 then a end) over iib
+from t
+window iib as (groups between current row and current row exclude ties)
 ----
 1	1	1
 1	1	1
