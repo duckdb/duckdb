@@ -10,7 +10,6 @@
 
 #include "duckdb/common/shared_ptr_ipp.hpp"
 #include "duckdb/common/unique_ptr.hpp"
-#include "duckdb/common/vector.hpp"
 #include "duckdb/storage/index_storage_info.hpp"
 
 namespace duckdb {
@@ -18,6 +17,8 @@ class PartialBlockManager;
 class SingleFileCheckpointWriter;
 class BoundIndex;
 
+//! Checkpointing result for an index. The shadow index may be empty either when
+//! the index is unbound, or the index does not support deferred checkpointing.
 struct CheckpointedIndex {
 	shared_ptr<const IndexStorageInfo> storage_info;
 	unique_ptr<BoundIndex> shadow_index;

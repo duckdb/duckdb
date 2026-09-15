@@ -3,22 +3,14 @@
 #include "duckdb/storage/partial_block_manager.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
-
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
-#include "duckdb/common/types/constraint_conflict_info.hpp"
-#include "duckdb/common/types/conflict_manager.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/checkpoint/table_index_writer.hpp"
+
+#include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/storage/table/data_table_info.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 

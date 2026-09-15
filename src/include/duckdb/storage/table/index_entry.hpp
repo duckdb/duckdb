@@ -10,7 +10,6 @@
 
 #include "duckdb/common/enums/index_removal_type.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/storage/checkpoint/table_index_writer.hpp"
 #include "duckdb/storage/index.hpp"
@@ -164,9 +163,9 @@ public:
 	IndexInfo GetStorageInfo() const;
 	//! Returns the in-memory size of the physical index, or zero if it is unbound.
 	idx_t GetInMemorySize() const;
-	//! Serializes the physical index into the checkpoint writer and registers its shadow index.
+	//! Persist the index through the index writer and optionally returns a shadow index.
 	CheckpointedIndex Checkpoint(TableIndexWriter &writer);
-	//! Installs the shadow index produced by Checkpoint.
+	//! Install a shadow index in place of the current live index.
 	void Swap(unique_ptr<BoundIndex> shadow_index);
 	//! Serializes the bound physical index for the write-ahead log.
 	IndexStorageInfo SerializeToWAL(const StorageVersion version);

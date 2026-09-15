@@ -279,7 +279,7 @@ FixedSizeAllocatorInfo FixedSizeAllocator::GetInfo() const {
 	info.segment_size = segment_size;
 
 	for (const auto &[buffer_id, buffer] : buffers) {
-		if (!ShouldSerializeBuffer(*buffer)) {
+		if (buffer->IsEmpty()) {
 			continue;
 		}
 
@@ -312,7 +312,7 @@ unsafe_unique_ptr<FixedSizeAllocator> FixedSizeAllocator::Persist(PartialBlockMa
 	result->total_segment_count = total_segment_count;
 
 	for (auto &[buffer_id, buffer] : buffers) {
-		if (!ShouldSerializeBuffer(*buffer)) {
+		if (buffer->IsEmpty()) {
 			continue;
 		}
 
@@ -332,7 +332,7 @@ unsafe_unique_ptr<FixedSizeAllocator> FixedSizeAllocator::Persist(PartialBlockMa
 vector<IndexBufferInfo> FixedSizeAllocator::InitSerializationToWAL() {
 	vector<IndexBufferInfo> buffer_infos;
 	for (auto &[buffer_id, buffer] : buffers) {
-		if (!ShouldSerializeBuffer(*buffer)) {
+		if (buffer->IsEmpty()) {
 			continue;
 		}
 
@@ -404,10 +404,6 @@ void FixedSizeAllocator::Deserialize(MetadataManager &metadata_manager, const Bl
 	for (idx_t i = 0; i < buffers_with_free_space_count; i++) {
 		buffers_with_free_space.insert(reader.Read<idx_t>());
 	}
-}
-
-bool FixedSizeAllocator::ShouldSerializeBuffer(const FixedSizeBuffer &buffer) {
-	return buffer.segment_count != 0;
 }
 
 idx_t FixedSizeAllocator::GetAvailableBufferId() const {

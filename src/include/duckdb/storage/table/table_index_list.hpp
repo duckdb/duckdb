@@ -135,7 +135,7 @@ public:
 	unique_ptr<IndexStorageInfo> SerializeToWAL(const Identifier &name, const StorageVersion version);
 
 public:
-	//! Write checkpoint metadata without accessing the live indexes.
+	//! Write persist metadata.
 	static void Serialize(const vector<shared_ptr<const IndexStorageInfo>> &infos, Serializer &serializer);
 	//! Initialize an index_chunk from a table.
 	static void InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,

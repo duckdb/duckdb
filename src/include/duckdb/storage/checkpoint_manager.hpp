@@ -150,8 +150,6 @@ public:
 	unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) override;
 
 	BlockManager &GetBlockManager();
-	//! Register table index results until all checkpoint metadata has been written.
-	void RegisterIndexWriter(TableIndexWriter &writer);
 	//! Make a partial block scope for an index that persists immediately.
 	PartialBlockManager CreateIsolatedIndexPartialBlockManager();
 	CheckpointOptions GetCheckpointOptions() const {

@@ -51,6 +51,11 @@ public:
 
 	~FixedSizeBuffer();
 
+public:
+	bool IsEmpty() const {
+		return segment_count == 0;
+	}
+
 private:
 	//! Returns a pointer to the buffer in memory, and calls Deserialize, if the buffer is not in memory.
 	//! DEPRECATED. Use segment handles.

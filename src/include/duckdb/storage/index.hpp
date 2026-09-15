@@ -74,11 +74,7 @@ public:
 		return IndexCheckpointMode::IMMEDIATE;
 	}
 
-	//! Checkpoint an index.
-	//!
-	//! Index implementations that persist data must override this method.  The default
-	//! keeps the extension interface source compatible for indexes that do not support
-	//! persistence yet and reports the error when such an index is checkpointed.
+	//! Checkpoint an index, based on the mode supported by the index flushing may be deferred.
 	virtual CheckpointedIndex Checkpoint(PartialBlockManager &partial_block_manager, const StorageVersion version);
 
 	//! Returns unique flag
