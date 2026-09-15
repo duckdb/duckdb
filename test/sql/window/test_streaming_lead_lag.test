@@ -259,3 +259,31 @@ FROM VALUES
 ----
 3
 3
+
+# UNION ALL must not finalize a streaming LEAD between its input pipelines
+query II
+WITH src AS (
+	SELECT 0 AS i
+	UNION ALL
+	SELECT 1 AS i
+)
+SELECT i, LEAD(i, 1, -1) OVER () AS x
+FROM src;
+----
+0	1
+1	-1
+
+# The finalization must also be delayed across multiple UNION ALL children
+query II
+SELECT i, LEAD(i, 1, -1) OVER () AS x
+FROM (
+	SELECT 0 AS i
+	UNION ALL
+	SELECT 1 AS i
+	UNION ALL
+	SELECT 2 AS i
+) src;
+----
+0	1
+1	2
+2	-1
