@@ -34,7 +34,13 @@ public:
 	}
 	//! Adds len to offset, throwing if the running total would exceed what a uint32_t blob offset can represent.
 	static void AddBlobOffset(uint32_t &offset, uint32_t len) {
-		offset = uinteger_t(offset) += len;
+		try {
+			offset = uinteger_t(offset) += len;
+		} catch (OutOfRangeException &) {
+			throw InvalidInputException(
+			    "Cannot convert value to VARIANT: encoded row size exceeds the maximum supported %u bytes",
+			    NumericLimits<uint32_t>::Maximum());
+		}
 	}
 };
 
