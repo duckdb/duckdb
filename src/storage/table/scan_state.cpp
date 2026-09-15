@@ -235,8 +235,8 @@ ParallelCollectionScanState::GetNextRowGroup(RowGroupSegmentTree &row_groups, Se
 }
 
 CollectionScanState::CollectionScanState(TableScanState &parent_p)
-    : row_group(nullptr), vector_index(0), max_row_group_row(0), row_groups(nullptr), max_row(0), batch_index(0),
-      valid_sel(STANDARD_VECTOR_SIZE), random(-1), parent(parent_p) {
+    : vector_index(0), max_row_group_row(0), row_groups(nullptr), max_row(0), batch_index(0),
+      valid_sel(STANDARD_VECTOR_SIZE), random(-1), row_group(nullptr), parent(parent_p) {
 }
 
 optional_ptr<SegmentNode<RowGroup>> CollectionScanState::GetRowGroup() const {
