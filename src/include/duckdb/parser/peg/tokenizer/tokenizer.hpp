@@ -76,7 +76,7 @@ private:
 	bool TokenizeInputInternal(TokenizerBehavior &behavior) const;
 
 public:
-	bool IsSpecialOperator(const string &sql, idx_t pos, idx_t &op_len) const;
+	bool IsCompoundColonToken(const string &sql, idx_t pos, idx_t &token_length) const;
 	static bool IsSingleByteOperator(char c);
 	static bool CharacterIsInitialNumber(char c);
 	static bool CharacterIsNumber(char c);
