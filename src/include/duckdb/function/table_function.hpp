@@ -106,15 +106,28 @@ struct LocalTableFunctionState {
 	}
 };
 
+//! One TABLE argument bound for a table function call
+struct TableFunctionInputRelation {
+	//! Positional index of this TABLE argument in the function signature
+	idx_t argument_index;
+	//! Column types of this input
+	vector<LogicalType> types;
+	//! Column names of this input
+	vector<Identifier> names;
+	//! The bound plan for this input - move out of it to consume the input
+	unique_ptr<LogicalOperator> plan;
+};
+
 struct TableFunctionBindInput {
 	TableFunctionBindInput(vector<Value> &inputs, named_parameter_map_t &named_parameters,
 	                       vector<LogicalType> &input_table_types, vector<Identifier> &input_table_names,
 	                       optional_ptr<TableFunctionInfo> info, optional_ptr<Binder> binder,
 	                       TableFunction &table_function, const TableFunctionRef &ref,
-	                       optional_ptr<unique_ptr<LogicalOperator>> input_plan = nullptr)
+	                       optional_ptr<unique_ptr<LogicalOperator>> input_plan = nullptr,
+	                       optional_ptr<vector<TableFunctionInputRelation>> input_relations = nullptr)
 	    : inputs(inputs), named_parameters(named_parameters), input_table_types(input_table_types),
 	      input_table_names(input_table_names), info(info), binder(binder), table_function(table_function), ref(ref),
-	      input_plan(input_plan) {
+	      input_plan(input_plan), input_relations(input_relations) {
 	}
 
 	vector<Value> &inputs;
@@ -126,6 +139,9 @@ struct TableFunctionBindInput {
 	TableFunction &table_function;
 	const TableFunctionRef &ref;
 	optional_ptr<unique_ptr<LogicalOperator>> input_plan;
+	//! (Optional) One entry per TABLE argument, in signature order. Move a plan out to consume that input.
+	//! With a single TABLE argument input_plan points at the same plan.
+	optional_ptr<vector<TableFunctionInputRelation>> input_relations;
 	//! (Optional) The schema this bind is expected to produce. This is set when binding a single file of a
 	//! multi-file scan whose schema was already determined - the bind should read the file using this schema
 	//! instead of determining a schema of its own
@@ -139,6 +155,12 @@ struct TableFunctionBindInput {
 	bool HasExpectedSchema() const {
 		return expected_names && expected_types;
 	}
+
+	//! The TABLE arguments bound for this call, in signature order. Empty when the function has none.
+	DUCKDB_API const vector<TableFunctionInputRelation> &InputRelations() const;
+	//! Takes the bound plan of a TABLE argument, consuming that input. Every TABLE argument of a function with
+	//! more than one must be taken exactly once - the binder rejects any that are left behind.
+	DUCKDB_API unique_ptr<LogicalOperator> TakeInputPlan(idx_t relation_index);
 };
 
 struct TableFunctionInitInput {
@@ -357,6 +379,8 @@ typedef unique_ptr<BaseStatistics> (*table_statistics_extended_t)(ClientContext 
 typedef void (*table_function_t)(ClientContext &context, TableFunctionInput &data, DataChunk &output);
 typedef OperatorResultType (*table_in_out_function_t)(ExecutionContext &context, TableFunctionInput &data,
                                                       DataChunk &input, DataChunk &output);
+//! Finalization is per pipeline/local state. With multiple TABLE inputs, branches can run concurrently and out of
+//! order, empty inputs invoke no row callback, and this callback does not signal per-input or all-input completion.
 typedef OperatorFinalizeResultType (*table_in_out_function_final_t)(ExecutionContext &context, TableFunctionInput &data,
                                                                     DataChunk &output);
 typedef OperatorPartitionData (*table_function_get_partition_data_t)(ClientContext &context,
