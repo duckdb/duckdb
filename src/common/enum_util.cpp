@@ -262,24 +262,6 @@ ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value) {
 	return static_cast<ARTConflictType>(StringUtil::StringToEnum(GetARTConflictTypeValues(), 2, "ARTConflictType", value));
 }
 
-const StringUtil::EnumStringLiteral *GetARTLookupResultValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ARTLookupResult::COMPLETED), "COMPLETED" },
-		{ static_cast<uint32_t>(ARTLookupResult::CAPACITY_EXCEEDED), "CAPACITY_EXCEEDED" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<ARTLookupResult>(ARTLookupResult value) {
-	return StringUtil::EnumToString(GetARTLookupResultValues(), 2, "ARTLookupResult", static_cast<uint32_t>(value));
-}
-
-template<>
-ARTLookupResult EnumUtil::FromString<ARTLookupResult>(const char *value) {
-	return static_cast<ARTLookupResult>(StringUtil::StringToEnum(GetARTLookupResultValues(), 2, "ARTLookupResult", value));
-}
-
 const StringUtil::EnumStringLiteral *GetARTScanNodeResultValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ARTScanNodeResult::SCAN_CHILDREN), "SCAN_CHILDREN" },
@@ -314,6 +296,24 @@ const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value) {
 template<>
 ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value) {
 	return static_cast<ARTScanResult>(StringUtil::StringToEnum(GetARTScanResultValues(), 2, "ARTScanResult", value));
+}
+
+const StringUtil::EnumStringLiteral *GetARTSearchResultValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ARTSearchResult::COMPLETED), "COMPLETED" },
+		{ static_cast<uint32_t>(ARTSearchResult::CAPACITY_EXCEEDED), "CAPACITY_EXCEEDED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ARTSearchResult>(ARTSearchResult value) {
+	return StringUtil::EnumToString(GetARTSearchResultValues(), 2, "ARTSearchResult", static_cast<uint32_t>(value));
+}
+
+template<>
+ARTSearchResult EnumUtil::FromString<ARTSearchResult>(const char *value) {
+	return static_cast<ARTSearchResult>(StringUtil::StringToEnum(GetARTSearchResultValues(), 2, "ARTSearchResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAccessModeValues() {

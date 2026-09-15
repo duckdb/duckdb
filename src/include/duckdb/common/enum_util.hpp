@@ -34,11 +34,11 @@ struct EnumUtil {
 
 enum class ARTConflictType : uint8_t;
 
-enum class ARTLookupResult : uint8_t;
-
 enum class ARTScanNodeResult : uint8_t;
 
 enum class ARTScanResult : uint8_t;
+
+enum class ARTSearchResult : uint8_t;
 
 enum class AccessMode : uint8_t;
 
@@ -653,13 +653,13 @@ template<>
 const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value);
 
 template<>
-const char* EnumUtil::ToChars<ARTLookupResult>(ARTLookupResult value);
-
-template<>
 const char* EnumUtil::ToChars<ARTScanNodeResult>(ARTScanNodeResult value);
 
 template<>
 const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value);
+
+template<>
+const char* EnumUtil::ToChars<ARTSearchResult>(ARTSearchResult value);
 
 template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
@@ -1578,13 +1578,13 @@ template<>
 ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value);
 
 template<>
-ARTLookupResult EnumUtil::FromString<ARTLookupResult>(const char *value);
-
-template<>
 ARTScanNodeResult EnumUtil::FromString<ARTScanNodeResult>(const char *value);
 
 template<>
 ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value);
+
+template<>
+ARTSearchResult EnumUtil::FromString<ARTSearchResult>(const char *value);
 
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);

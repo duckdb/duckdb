@@ -747,22 +747,22 @@ bool ART::HasLegacyGeometryKeys() const {
 //===--------------------------------------------------------------------===//
 // Point and range lookups
 //===--------------------------------------------------------------------===//
-ARTLookupResult ART::SearchEqual(const ARTKey &key, RowIdVectorOutput &row_ids) const {
+ARTSearchResult ART::SearchEqual(const ARTKey &key, RowIdVectorOutput &row_ids) const {
 	auto leaf = ARTOperator::Lookup(*this, tree, key, 0);
 	if (!leaf) {
-		return ARTLookupResult::COMPLETED;
+		return ARTSearchResult::COMPLETED;
 	}
 
 	Iterator it(*this);
 	it.FindMinimum(leaf.Get());
 	const auto empty_key = ARTKey();
-	return it.Scan(empty_key, row_ids, false) == ARTScanResult::COMPLETED ? ARTLookupResult::COMPLETED
-	                                                                      : ARTLookupResult::CAPACITY_EXCEEDED;
+	return it.Scan(empty_key, row_ids, false) == ARTScanResult::COMPLETED ? ARTSearchResult::COMPLETED
+	                                                                      : ARTSearchResult::CAPACITY_EXCEEDED;
 }
 
-ARTLookupResult ART::SearchGreater(const ARTKey &key, bool equal, RowIdVectorOutput &row_ids) const {
+ARTSearchResult ART::SearchGreater(const ARTKey &key, bool equal, RowIdVectorOutput &row_ids) const {
 	if (!tree.HasMetadata()) {
-		return ARTLookupResult::COMPLETED;
+		return ARTSearchResult::COMPLETED;
 	}
 
 	// Find the lowest value that satisfies the predicate.
@@ -770,18 +770,18 @@ ARTLookupResult ART::SearchGreater(const ARTKey &key, bool equal, RowIdVectorOut
 
 	// Early-out, if the maximum value in the ART is lower than the lower bound.
 	if (!it.LowerBound(tree, key, equal)) {
-		return ARTLookupResult::COMPLETED;
+		return ARTSearchResult::COMPLETED;
 	}
 
 	// We continue the scan. We do not check the bounds as any value following this value is
 	// greater and satisfies our predicate.
-	return it.Scan(ARTKey(), row_ids, false) == ARTScanResult::COMPLETED ? ARTLookupResult::COMPLETED
-	                                                                     : ARTLookupResult::CAPACITY_EXCEEDED;
+	return it.Scan(ARTKey(), row_ids, false) == ARTScanResult::COMPLETED ? ARTSearchResult::COMPLETED
+	                                                                     : ARTSearchResult::CAPACITY_EXCEEDED;
 }
 
-ARTLookupResult ART::SearchLess(const ARTKey &upper_bound, bool equal, RowIdVectorOutput &row_ids) const {
+ARTSearchResult ART::SearchLess(const ARTKey &upper_bound, bool equal, RowIdVectorOutput &row_ids) const {
 	if (!tree.HasMetadata()) {
-		return ARTLookupResult::COMPLETED;
+		return ARTSearchResult::COMPLETED;
 	}
 
 	// Find the minimum value in the ART: we start scanning from this value.
@@ -790,18 +790,18 @@ ARTLookupResult ART::SearchLess(const ARTKey &upper_bound, bool equal, RowIdVect
 
 	// Early-out, if the minimum value is higher than the upper bound.
 	if (it.current_key.GreaterThan(upper_bound, equal, it.GetNestedDepth())) {
-		return ARTLookupResult::COMPLETED;
+		return ARTSearchResult::COMPLETED;
 	}
 
 	// Continue the scan until we reach the upper bound.
-	return it.Scan(upper_bound, row_ids, equal) == ARTScanResult::COMPLETED ? ARTLookupResult::COMPLETED
-	                                                                        : ARTLookupResult::CAPACITY_EXCEEDED;
+	return it.Scan(upper_bound, row_ids, equal) == ARTScanResult::COMPLETED ? ARTSearchResult::COMPLETED
+	                                                                        : ARTSearchResult::CAPACITY_EXCEEDED;
 }
 
-ARTLookupResult ART::SearchCloseRange(const ARTKey &lower_bound, const ARTKey &upper_bound, bool left_equal,
+ARTSearchResult ART::SearchCloseRange(const ARTKey &lower_bound, const ARTKey &upper_bound, bool left_equal,
                                       bool right_equal, RowIdVectorOutput &row_ids) const {
 	if (!tree.HasMetadata()) {
-		return ARTLookupResult::COMPLETED;
+		return ARTSearchResult::COMPLETED;
 	}
 
 	// Find the first node that satisfies the left predicate.
@@ -809,18 +809,18 @@ ARTLookupResult ART::SearchCloseRange(const ARTKey &lower_bound, const ARTKey &u
 
 	// Early-out, if the maximum value in the ART is lower than the lower bound.
 	if (!it.LowerBound(tree, lower_bound, left_equal)) {
-		return ARTLookupResult::COMPLETED;
+		return ARTSearchResult::COMPLETED;
 	}
 
 	// Continue the scan until we reach the upper bound.
-	return it.Scan(upper_bound, row_ids, right_equal) == ARTScanResult::COMPLETED ? ARTLookupResult::COMPLETED
-	                                                                              : ARTLookupResult::CAPACITY_EXCEEDED;
+	return it.Scan(upper_bound, row_ids, right_equal) == ARTScanResult::COMPLETED ? ARTSearchResult::COMPLETED
+	                                                                              : ARTSearchResult::CAPACITY_EXCEEDED;
 }
 
-ARTLookupResult ART::ScanBatch(DataChunk &input, RowIdVectorOutput &row_ids) const {
+ARTSearchResult ART::ScanBatch(DataChunk &input, RowIdVectorOutput &row_ids) const {
 	D_ASSERT(input.GetTypes() == logical_types);
 	if (input.size() == 0) {
-		return ARTLookupResult::COMPLETED;
+		return ARTSearchResult::COMPLETED;
 	}
 	ArenaAllocator arena(Allocator::Get(db));
 	unsafe_vector<ARTKey> keys(input.size());
@@ -834,22 +834,22 @@ ARTLookupResult ART::ScanBatch(DataChunk &input, RowIdVectorOutput &row_ids) con
 	IndexLock guard(*this);
 	for (const auto &key : keys) {
 		D_ASSERT(!key.Empty());
-		if (SearchEqual(key, row_ids) == ARTLookupResult::CAPACITY_EXCEEDED) {
-			return ARTLookupResult::CAPACITY_EXCEEDED;
+		if (SearchEqual(key, row_ids) == ARTSearchResult::CAPACITY_EXCEEDED) {
+			return ARTSearchResult::CAPACITY_EXCEEDED;
 		}
 	}
-	return ARTLookupResult::COMPLETED;
+	return ARTSearchResult::COMPLETED;
 }
 
 bool ART::Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const {
-	if (ScanInternal(state, row_ids) == ARTLookupResult::CAPACITY_EXCEEDED) {
+	if (ScanInternal(state, row_ids) == ARTSearchResult::CAPACITY_EXCEEDED) {
 		row_ids.Reset();
 		return false;
 	}
 	return true;
 }
 
-ARTLookupResult ART::ScanInternal(IndexScanState &state, RowIdVectorOutput &row_ids) const {
+ARTSearchResult ART::ScanInternal(IndexScanState &state, RowIdVectorOutput &row_ids) const {
 	auto &scan_state = state.Cast<ARTIndexScanState>();
 	switch (scan_state.scan_type) {
 	case ARTScanType::EQUALITY: {
@@ -875,7 +875,7 @@ ARTLookupResult ART::ScanInternal(IndexScanState &state, RowIdVectorOutput &row_
 	}
 }
 
-ARTLookupResult ART::ScanRange(ARTIndexScanState &scan_state, RowIdVectorOutput &row_ids) const {
+ARTSearchResult ART::ScanRange(ARTIndexScanState &scan_state, RowIdVectorOutput &row_ids) const {
 	D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
 	ArenaAllocator arena_allocator(Allocator::Get(db));
 
