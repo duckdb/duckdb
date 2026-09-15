@@ -116,7 +116,7 @@ public:
 	const Identifier &GetTableName() const {
 		return GetCreateInfo().table;
 	}
-	void Checkpoint(TableIndexWriter &writer) override;
+	CheckpointedIndex Checkpoint(PartialBlockManager &partial_block_manager, StorageVersion version) override;
 
 	//! Buffers an insert or delete (replay_type) chunk, to be replayed once the index is bound.
 	//! table_chunk uses physical table layout: data[j] holds physical column j. It may be sparse,

@@ -52,7 +52,7 @@ public:
 	void WriteUnchangedTable(MetaBlockPointer pointer, const vector<MetaBlockPointer> &metadata_pointers,
 	                         idx_t total_rows, idx_t next_row_id) override;
 	void FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info, RowGroupCollection &collection,
-	                   optional_ptr<TableIndexWriter>, Serializer &serializer) override;
+	                   const vector<shared_ptr<const IndexStorageInfo>> &index_infos, Serializer &serializer) override;
 	unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
 	unique_ptr<TableIndexWriter> GetTableIndexWriter(StorageVersion version) override;
 	void FlushPartialBlocks() override;

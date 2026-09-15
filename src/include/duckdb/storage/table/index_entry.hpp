@@ -199,6 +199,10 @@ private:
 	template <class>
 	friend class IndexWriteHandle;
 
+	//! Replace the physical index while holding the exclusive entry lock.
+	void SwapInternal(unique_ptr<BoundIndex> shadow_index);
+
+private:
 	atomic<IndexBindState> bind_state;
 	//! Phase-fair lock protecting the physical index and all delta indexes owned by this entry.
 	mutable StorageLock lock;

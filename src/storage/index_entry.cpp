@@ -501,12 +501,16 @@ CheckpointedIndex IndexEntry::Checkpoint(TableIndexWriter &index_writer) {
 	partial_block_manager.FlushPartialBlocks();
 
 	// TODO: do we want to move the swap outside here?
-	Swap(std::move(checkpoint.shadow_index));
+	SwapInternal(std::move(checkpoint.shadow_index));
 	return checkpoint;
 }
 
 void IndexEntry::Swap(unique_ptr<BoundIndex> shadow_index) {
 	auto entry_lock = lock.GetExclusiveLock();
+	SwapInternal(std::move(shadow_index));
+}
+
+void IndexEntry::SwapInternal(unique_ptr<BoundIndex> shadow_index) {
 	if (!shadow_index) {
 		return;
 	}

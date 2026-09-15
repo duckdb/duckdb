@@ -92,8 +92,7 @@ void SingleFileTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer,
 }
 
 unique_ptr<TableIndexWriter> SingleFileTableDataWriter::GetTableIndexWriter(StorageVersion version) {
-	const auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetDatabase());
-	return make_uniq<SingleFileTableIndexWriter>(checkpoint_manager, version, debug_verify_blocks);
+	return make_uniq<SingleFileTableIndexWriter>(checkpoint_manager, version);
 }
 
 void SingleFileTableDataWriter::FlushPartialBlocks() {
@@ -102,7 +101,7 @@ void SingleFileTableDataWriter::FlushPartialBlocks() {
 
 void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info,
                                               RowGroupCollection &collection,
-                                              vector<shared_ptr<const IndexStorageInfo>> &index_infos,
+                                              const vector<shared_ptr<const IndexStorageInfo>> &index_infos,
                                               Serializer &serializer) {
 	MetaBlockPointer pointer;
 	idx_t total_rows;
@@ -198,6 +197,13 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
 	if (debug_verify_blocks) {
+		for (const auto &index_info : index_infos) {
+			for (const auto &allocator : index_info->allocator_infos) {
+				for (const auto &block : allocator.block_pointers) {
+					checkpoint_manager.verify_block_usage_count[block.block_id]++;
+				}
+			}
+		}
 	}
 	TableIndexList::Serialize(index_infos, serializer);
 

@@ -103,7 +103,8 @@ void InMemoryTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer,
 }
 
 void InMemoryTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info,
-                                            RowGroupCollection &collection, optional_ptr<TableIndexWriter>,
+                                            RowGroupCollection &collection,
+                                            const vector<shared_ptr<const IndexStorageInfo>> &index_infos,
                                             Serializer &serializer) {
 	// nop: no need to write anything
 }

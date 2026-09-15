@@ -142,7 +142,6 @@ public:
 	IndexCheckpointType GetCheckpointType() const override {
 		return IndexCheckpointType::DEFERRED;
 	}
-	void Checkpoint(TableIndexWriter &writer) override;
 	CheckpointedIndex Checkpoint(PartialBlockManager &partial_block_manager, const StorageVersion version) override;
 
 	//! Returns the in-memory usage of the ART.

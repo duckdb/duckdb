@@ -1070,31 +1070,6 @@ ARTSerializationFormat ART::GetSerializationFormat(const StorageVersion storage_
 	return ARTSerializationFormat::CURRENT;
 }
 
-// TODO: do we need to grab the internal lock here?
-// void ART::Checkpoint(TableIndexWriter &writer) {
-// 	const auto target_format = GetSerializationFormat(writer.GetStorageVersion());
-// 	// This may mutate the live ART into a deprecated representation, but we accept this to prevent double copying.
-// 	auto storage_info = PrepareSerialize(target_format);
-//
-// 	auto &partial_block_manager = writer.GetPartialBlockManager();
-// 	const auto new_allocators = make_shared_ptr<AllocatorArray>();
-// 	const auto allocator_count = GetAllocatorCount(target_format);
-//
-// 	// We allocate all allocators, but serialize in accordance with the target format.
-// 	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
-// 		auto &new_allocator = (*new_allocators)[i];
-//
-// 		new_allocator = (*allocators)[i]->Persist(partial_block_manager);
-//
-// 		if (i < allocator_count) {
-// 			storage_info.allocator_infos.push_back(new_allocator->GetInfo());
-// 		}
-// 	}
-//
-// 	auto shadow = make_uniq<ART>(*this, new_allocators);
-// 	writer.AddBoundIndex(std::move(storage_info), std::move(shadow));
-// }
-
 CheckpointedIndex ART::Checkpoint(PartialBlockManager &partial_block_manager, const StorageVersion version) {
 	const auto target_format = GetSerializationFormat(version);
 	// This may mutate the live ART into a deprecated representation, but we accept this to prevent double copying.

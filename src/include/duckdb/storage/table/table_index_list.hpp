@@ -123,6 +123,7 @@ public:
 	//! Verify a foreign key constraint.
 	void VerifyForeignKey(optional_ptr<const TableIndexList> delete_indexes, const vector<PhysicalIndex> &fk_keys,
 	                      DataChunk &chunk, ConflictManager &conflict_manager);
+	//! Persist index buffers and install replacements before returning their metadata.
 	vector<shared_ptr<const IndexStorageInfo>> CheckPoint(TableIndexWriter &writer);
 	//! Returns the physical table columns referenced by any index.
 	unordered_set<column_t> GetIndexedColumns() const;
@@ -134,6 +135,7 @@ public:
 	unique_ptr<IndexStorageInfo> SerializeToWAL(const Identifier &name, const StorageVersion version);
 
 public:
+	//! Write checkpoint metadata without accessing the live indexes.
 	static void Serialize(const vector<shared_ptr<const IndexStorageInfo>> &infos, Serializer &serializer);
 	//! Initialize an index_chunk from a table.
 	static void InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,

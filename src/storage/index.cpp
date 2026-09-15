@@ -10,10 +10,6 @@ Index::Index(const vector<column_t> &column_ids, TableIOManager &table_io_manage
 	column_id_set.insert(column_ids.begin(), column_ids.end());
 }
 
-void Index::Checkpoint(TableIndexWriter &) {
-	throw NotImplementedException("Checkpoint not implemented for index type \"%s\"", GetIndexType());
-}
-
 CheckpointedIndex Index::Checkpoint(PartialBlockManager &partial_block_manager, const StorageVersion version) {
 	throw NotImplementedException("Checkpoint not implemented for index type \"%s\"", GetIndexType());
 }

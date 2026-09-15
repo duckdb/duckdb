@@ -14,7 +14,6 @@
 #include "duckdb/storage/index_storage_info.hpp"
 
 namespace duckdb {
-class Serializer;
 class PartialBlockManager;
 class SingleFileCheckpointWriter;
 class BoundIndex;
@@ -35,7 +34,6 @@ public:
 	}
 
 	virtual PartialBlockManager CreateIsolatedPartialBlockManager() = 0;
-	virtual void Serialize(Serializer &serializer) = 0;
 	//! Writes the index buffers to disk
 	virtual void Flush() = 0;
 	//! Get the targeted storage version for the current writer
@@ -49,20 +47,14 @@ protected:
 
 class SingleFileTableIndexWriter : public TableIndexWriter {
 public:
-	explicit SingleFileTableIndexWriter(SingleFileCheckpointWriter &checkpoint_manager, StorageVersion version,
-	                                    bool debug_verify_blocks);
+	explicit SingleFileTableIndexWriter(SingleFileCheckpointWriter &checkpoint_manager, StorageVersion version);
 
 public:
 	PartialBlockManager CreateIsolatedPartialBlockManager() override;
 	void Flush() override;
-	void Serialize(Serializer &serializer) override;
-
-private:
-	static void VerifyBlockUsage(const vector<shared_ptr<const IndexStorageInfo>> &infos);
 
 private:
 	SingleFileCheckpointWriter &checkpoint_manager;
-	bool debug_verify_blocks;
 };
 
 } // namespace duckdb

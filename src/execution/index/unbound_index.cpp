@@ -55,8 +55,8 @@ void UnboundIndex::ResetStorage() {
 	}
 }
 
-void UnboundIndex::Checkpoint(TableIndexWriter &writer) {
-	writer.AddUnboundIndex(GetStorageInfoPtr());
+CheckpointedIndex UnboundIndex::Checkpoint(PartialBlockManager &, StorageVersion) {
+	return {GetStorageInfoPtr(), nullptr};
 }
 
 IndexStorageInfo UnboundIndex::CopyStorageInfo() const {

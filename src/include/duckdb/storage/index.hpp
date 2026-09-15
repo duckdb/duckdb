@@ -76,7 +76,6 @@ public:
 	//! Index implementations that persist data must override this method.  The default
 	//! keeps the extension interface source compatible for indexes that do not support
 	//! persistence yet and reports the error when such an index is checkpointed.
-	virtual void Checkpoint(TableIndexWriter &writer);
 	virtual CheckpointedIndex Checkpoint(PartialBlockManager &partial_block_manager, const StorageVersion version);
 
 	//! Returns unique flag
