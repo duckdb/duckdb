@@ -269,6 +269,7 @@ IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer old_ptr) {
 
 	auto old_handle = GetHandle(old_ptr);
 	auto new_handle = GetHandle(new_ptr);
+	new_handle.MarkModified();
 
 	memcpy(new_handle.GetPtr(), old_handle.GetPtr(), segment_size);
 	return new_ptr;
