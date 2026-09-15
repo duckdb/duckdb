@@ -44,9 +44,6 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_data
 	parent_collection.CommitDropColumn(alter_column_index);
 	row_groups = std::move(parent.row_groups);
 	row_groups->collection = std::move(new_collection);
-	// The new collection starts with allocation_size = 0; reset stale accounting
-	// inherited from the parent's OptimisticWriteCollection to avoid tripping the
-	// prev_allocated_size > allocated_size invariant in WriteNewRowGroup.
 	row_groups->ResetCollectionAccounting();
 
 	append_indexes.Move(parent.append_indexes);

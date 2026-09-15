@@ -2,13 +2,6 @@
 # description: Test optimistic write followed by ALTER TABLE then another append in the same transaction
 # group: [optimistic_write]
 
-# Regression test: a bulk INSERT that triggers optimistic writes sets prev_allocated_size on the
-# OptimisticWriteCollection. An in-transaction ALTER TABLE rebuilds LocalTableStorage, inheriting
-# the stale prev_allocated_size but replacing the RowGroupCollection with a fresh one whose
-# allocation_size is 0. A subsequent append that fills a new row group triggers
-# OptimisticDataWriter::WriteNewRowGroup, which asserts prev_allocated_size <= allocated_size
-# and throws InternalException, invalidating the entire database.
-
 load {TEST_DIR}/optimistic_write_alter_then_append.db
 
 statement ok
