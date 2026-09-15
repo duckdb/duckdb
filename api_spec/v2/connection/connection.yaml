@@ -18,9 +18,9 @@ functions:
       Each connection carries its own client context and session-scoped (LOCAL)
       settings. Connections to the same database share its catalog, buffer
       pool, and transaction manager. A connection may be created before any
-      database is opened on the handle; until one is, only the system catalog
-      and the connection's temporary catalog are visible. The caller destroys
-      it via connection_destroy.
+      database is attached to the handle; until one is, only the system
+      catalog and the connection's temporary catalog are visible. The caller
+      destroys it via connection_destroy.
     role: constructor
     belongs_to: connection
     parameters:

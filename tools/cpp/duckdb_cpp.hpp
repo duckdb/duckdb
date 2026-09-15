@@ -317,7 +317,7 @@ public:
 // Configuration settings. Write one with `Database::SetOption` or `Connection::SetOption`, which take the name and
 // value directly; read one back as a `DatabaseOption` to inspect its current value, default value, description,
 // target scope or aliases. Settings that can only be chosen at startup are written on a `Database` before its first
-// `Open` or `Connect`.
+// `Attach` or `Connect`.
 
 /// At which scope a setting may be written.
 enum class OptionTargetScope : uint8_t {
@@ -836,17 +836,24 @@ public:
 	Database(Database &&) noexcept = default;
 	Database &operator=(Database &&) noexcept = default;
 
-	/// Opens a database on this instance, like SQL `ATTACH 'path'`, starting the instance if this is its first use.
-	/// The first database opened is the default database for every connection that does not `USE` another.
+	/// Attaches a database to this instance, like SQL `ATTACH 'path'`, starting the instance if this is its first
+	/// use. Attaching does not choose the default database; call `SetDefault` for that.
 	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
-	/// @throws Exception When the path is already open in this environment, or a database of that name is attached.
-	auto Open(const std::string &path) -> void;
+	/// @throws Exception When the path is already attached in this environment, or a database of that name exists.
+	auto Attach(const std::string &path) -> void;
 
-	/// Closes the database opened from `path`, like SQL `DETACH`. Connections still using it keep it alive until
-	/// they let go.
-	/// @param path The path that was passed to `Open`.
-	/// @throws InvalidInputException When no database opened from that path is attached.
-	auto Close(const std::string &path) -> void;
+	/// Detaches the database attached from `path`, like SQL `DETACH`. Connections still using it keep it alive until
+	/// they let go; if it was the default database, new sessions have no default until `SetDefault` names another.
+	/// @param path The path that was passed to `Attach`.
+	/// @throws InvalidInputException When no database attached from that path exists.
+	auto Detach(const std::string &path) -> void;
+
+	/// Makes the database attached from `path` the default database for sessions opened from now on: where their
+	/// unqualified DDL and unqualified table lookups that miss the temporary catalog go, unless they `USE` another.
+	/// Sessions already open keep the default they connected with.
+	/// @param path The path that was passed to `Attach`.
+	/// @throws InvalidInputException When no database attached from that path exists.
+	auto SetDefault(const std::string &path) -> void;
 
 	/// How many settings this database exposes.
 	auto GetOptionCount() const -> size_t;
@@ -861,7 +868,7 @@ public:
 	/// @throws InvalidInputException When no setting goes by that name.
 	auto GetOption(std::string_view name) const -> DatabaseOption;
 
-	/// Writes a setting globally, for this database and every session on it. Before the first `Open` or `Connect`
+	/// Writes a setting globally, for this database and every session on it. Before the first `Attach` or `Connect`
 	/// the setting goes into the startup configuration, which is how settings that can only be chosen at startup,
 	/// such as access_mode, are written; afterwards this is SQL `SET GLOBAL`.
 	/// @param name The setting to write, either its canonical name or one of its aliases.
@@ -925,11 +932,11 @@ public:
 	/// How many databases are currently alive in this environment.
 	auto GetDatabaseCount() const -> size_t;
 
-	/// Creates a database instance with nothing opened on it. Write startup settings with `Database::SetOption`,
-	/// then open a database with `Database::Open`.
+	/// Creates a database instance with nothing attached. Write startup settings with `Database::SetOption`, then
+	/// attach a database with `Database::Attach` and make it the default with `Database::SetDefault`.
 	auto CreateDatabase() -> Database;
 
-	/// Creates a database instance with default settings and opens `path` on it.
+	/// Creates a database instance with default settings, attaches `path`, and makes it the default database.
 	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
 	auto Open(const std::string &path) -> Database;
 };

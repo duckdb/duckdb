@@ -304,6 +304,17 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	if (!db_manager->HasAttachedDatabase()) {
 		CreateMainDatabase();
 	}
+	// The main database is the default; a storage extension may have attached it during startup instead.
+	optional_ptr<AttachedDatabase> main_database;
+	for (auto &attached : db_manager->GetDatabases()) {
+		if (attached->IsSystem()) {
+			continue;
+		}
+		if (!main_database || attached->oid < main_database->oid) {
+			main_database = attached.get();
+		}
+	}
+	db_manager->SetDefaultDatabase(main_database->GetName());
 	StartScheduler();
 }
 

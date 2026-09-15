@@ -377,7 +377,8 @@ auto Environment::CreateDatabase() -> Database {
 
 auto Environment::Open(const std::string &path) -> Database {
 	auto db = CreateDatabase();
-	db.Open(path);
+	db.Attach(path);
+	db.SetDefault(path);
 	return db;
 }
 
@@ -459,12 +460,16 @@ Database::~Database() {
 	duckdb_v2_database_destroy(&_h);
 }
 
-auto Database::Open(const std::string &path) -> void {
-	CheckedAPICall(duckdb_v2_database_open, handle(), ToStr(path));
+auto Database::Attach(const std::string &path) -> void {
+	CheckedAPICall(duckdb_v2_database_attach, handle(), ToStr(path));
 }
 
-auto Database::Close(const std::string &path) -> void {
-	CheckedAPICall(duckdb_v2_database_close, handle(), ToStr(path));
+auto Database::Detach(const std::string &path) -> void {
+	CheckedAPICall(duckdb_v2_database_detach, handle(), ToStr(path));
+}
+
+auto Database::SetDefault(const std::string &path) -> void {
+	CheckedAPICall(duckdb_v2_database_set_default, handle(), ToStr(path));
 }
 
 auto Database::GetOptionCount() const -> size_t {

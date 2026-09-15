@@ -260,7 +260,7 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 
 void DatabaseManager::DetachDatabase(ClientContext &context, const Identifier &name, OnEntryNotFound if_not_found,
                                      bool allow_default_database) {
-	if (!allow_default_database && GetDefaultDatabase(context) == name) {
+	if (!allow_default_database && TryGetDefaultDatabase(context) == name) {
 		throw BinderException("Cannot detach database %s because it is the default database. Select a different "
 		                      "database using `USE` to allow detaching this database",
 		                      name);
@@ -321,6 +321,9 @@ void DatabaseManager::RenameDatabase(ClientContext &context, const Identifier &o
 		databases.erase(old_entry);
 		attached_db->SetName(new_name);
 		databases[new_name] = attached_db;
+		if (default_database == old_name) {
+			default_database = new_name;
+		}
 	}
 }
 
@@ -334,6 +337,9 @@ shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const Identifier &n
 		}
 		attached_db = std::move(entry->second);
 		databases.erase(entry);
+		if (default_database == name) {
+			default_database = Identifier();
+		}
 	}
 	if (attached_db && attached_db->GetCatalog().Supports(RemoteCapability::IS_REMOTE)) {
 		--remote_catalog_count;
@@ -409,36 +415,52 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 
 Identifier DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 	auto result = TryGetDefaultDatabase(context);
-	if (IsInvalidCatalog(result)) {
-		// Reachable on an instance created without a database (DuckDB::CreateEmpty).
-		throw CatalogException("No database is attached: attach one with ATTACH before referring to a database");
+	if (!IsInvalidCatalog(result)) {
+		return result;
 	}
-	return result;
+	auto &connected_with = ClientData::Get(context).default_database;
+	if (!IsInvalidCatalog(connected_with)) {
+		throw CatalogException("The default database %s has been detached: select another database using `USE`",
+		                       connected_with);
+	}
+	// Reachable on an instance created without a database (DuckDB::CreateEmpty).
+	throw CatalogException("No database is attached: attach one with ATTACH before referring to a database");
 }
 
 Identifier DatabaseManager::TryGetDefaultDatabase(ClientContext &context) {
-	auto &config = ClientData::Get(context);
-	auto &default_entry = config.catalog_search_path->GetDefault();
-	if (IsInvalidCatalog(default_entry.GetCatalog())) {
-		auto &manager = DatabaseManager::Get(context);
-		lock_guard<mutex> guard(manager.databases_lock);
-		if (manager.databases.empty()) {
-			auto modified_database = MetaTransaction::Get(context).ModifiedDatabase();
-			if (modified_database) {
-				return modified_database->GetName();
-			}
-			return Identifier();
-		}
-		// OIDs are assigned in attach order, so the oldest attached database is the default.
-		auto default_database = manager.databases.begin();
-		for (auto entry = manager.databases.begin(); entry != manager.databases.end(); entry++) {
-			if (entry->second->oid < default_database->second->oid) {
-				default_database = entry;
-			}
-		}
-		return default_database->first;
+	auto &client_data = ClientData::Get(context);
+	auto &default_entry = client_data.catalog_search_path->GetDefault();
+	if (!IsInvalidCatalog(default_entry.GetCatalog())) {
+		return default_entry.GetCatalog();
 	}
-	return default_entry.GetCatalog();
+	auto &manager = DatabaseManager::Get(context);
+	if (!IsInvalidCatalog(client_data.default_database)) {
+		// still the default while attached, or while this transaction still references it
+		if (manager.GetDatabase(context, client_data.default_database)) {
+			return client_data.default_database;
+		}
+		return Identifier();
+	}
+	if (!manager.HasAttachedDatabase()) {
+		auto modified_database = MetaTransaction::Get(context).ModifiedDatabase();
+		if (modified_database) {
+			return modified_database->GetName();
+		}
+	}
+	return Identifier();
+}
+
+Identifier DatabaseManager::GetDefaultDatabase() {
+	lock_guard<mutex> guard(databases_lock);
+	return default_database;
+}
+
+void DatabaseManager::SetDefaultDatabase(const Identifier &name) {
+	lock_guard<mutex> guard(databases_lock);
+	if (!IsInvalidCatalog(name) && databases.find(name) == databases.end()) {
+		throw BinderException("Cannot make database %s the default database: it is not attached", name);
+	}
+	default_database = name;
 }
 
 vector<shared_ptr<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext &context,

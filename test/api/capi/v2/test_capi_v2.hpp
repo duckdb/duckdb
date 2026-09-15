@@ -46,14 +46,18 @@ namespace test_capi_v2 {
 // Common Fixtures
 //----------------------------------------------------------------------------------------------------------------------
 
-//! Creates a database handle under `env` and opens `path` on it, destroying the handle again if the open fails.
+//! Creates a database handle under `env`, attaches `path` and makes it the default database, destroying the handle
+//! again if that fails.
 inline DUCKDB_V2_ERROR OpenDatabase(duckdb_v2_environment_handle env, duckdb_v2_str path,
                                     duckdb_v2_database_handle *out_db, duckdb_v2_error_info_handle *err) {
 	auto rc = duckdb_v2_database_create(env, out_db, err);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		return rc;
 	}
-	rc = duckdb_v2_database_open(*out_db, path, err);
+	rc = duckdb_v2_database_attach(*out_db, path, err);
+	if (rc == DUCKDB_V2_ERROR_NONE) {
+		rc = duckdb_v2_database_set_default(*out_db, path, err);
+	}
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		duckdb_v2_database_destroy(out_db);
 	}

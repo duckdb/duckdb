@@ -65,10 +65,16 @@ public:
 	//! Returns a reference to the system catalog
 	Catalog &GetSystemCatalog();
 
-	//! The default database of the connection: its USE'd catalog, else the oldest attached database. Throws when no
-	//! database is attached; TryGetDefaultDatabase returns the empty identifier instead, for lookups that can skip it.
+	//! The default database of the connection: its USE'd catalog, else the default database it connected with, as long
+	//! as that is still attached. Throws when there is none; TryGetDefaultDatabase returns the empty identifier
+	//! instead, for lookups that can skip it.
 	static Identifier GetDefaultDatabase(ClientContext &context);
 	static Identifier TryGetDefaultDatabase(ClientContext &context);
+	//! The default database new connections start with; empty when none is set.
+	Identifier GetDefaultDatabase();
+	//! Sets the default database for new connections, which must be attached; the empty identifier clears it. Set to
+	//! the main database at startup, cleared when it is detached, and never set implicitly by an attach otherwise.
+	void SetDefaultDatabase(const Identifier &name);
 
 	//! Inserts a path to name mapping to the database paths map
 	InsertDatabasePathResult InsertDatabasePath(const AttachInfo &info, AttachOptions &options);
@@ -129,6 +135,8 @@ private:
 	mutex databases_lock;
 	//! The set of attached databases
 	identifier_map_t<shared_ptr<AttachedDatabase>> databases;
+	//! The default database for new connections; empty when none is set (guarded by databases_lock)
+	Identifier default_database;
 	//! The next object id handed out by the NextOid method
 	atomic<idx_t> next_oid;
 	//! The current query number

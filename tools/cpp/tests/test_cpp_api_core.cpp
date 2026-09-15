@@ -148,7 +148,8 @@ TEST_CASE("Stable C++API: a startup option set before Open enforces read-only", 
 	{
 		auto ro_db = env.CreateDatabase();
 		ro_db.SetOption("access_mode", "READ_ONLY");
-		ro_db.Open(path);
+		ro_db.Attach(path);
+		ro_db.SetDefault(path);
 		auto ro_conn = ro_db.Connect();
 
 		// Reads see the seeded data. Scoped so the live result is released

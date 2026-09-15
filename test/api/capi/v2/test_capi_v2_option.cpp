@@ -270,7 +270,7 @@ TEST_CASE("V2 db option: options set before the first open are startup options",
 		duckdb_v2_option_destroy(&first);
 
 		// Once started, the engine reports the applied value, which differs from the untouched default.
-		REQUIRE(duckdb_v2_database_open(db, duckdb_v2_str {nullptr, 0}, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_database_attach(db, duckdb_v2_str {nullptr, 0}, nullptr) == DUCKDB_V2_ERROR_NONE);
 		auto applied = DbSetting(db, "memory_limit");
 		REQUIRE(applied != default_value);
 		REQUIRE(applied != "2GB");
@@ -298,7 +298,8 @@ TEST_CASE("V2 db option: options set before the first open are startup options",
 		duckdb_v2_database_create(env, &db, nullptr);
 		REQUIRE(duckdb_v2_database_set_option(db, Convert("access_mode"), Convert("READ_ONLY"), nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_database_open(db, Convert(path), nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_database_attach(db, Convert(path), nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_database_set_default(db, Convert(path), nullptr) == DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_connection_handle conn = nullptr;
 		duckdb_v2_connection_create(db, &conn, nullptr);
 
@@ -329,7 +330,7 @@ TEST_CASE("V2 db option: options set before the first open are startup options",
 		        DUCKDB_V2_ERROR_INPUT_INVALID);
 
 		duckdb_v2_error_info_handle err = nullptr;
-		REQUIRE(duckdb_v2_database_open(db, duckdb_v2_str {nullptr, 0}, &err) != DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_database_attach(db, duckdb_v2_str {nullptr, 0}, &err) != DUCKDB_V2_ERROR_NONE);
 		REQUIRE(err != nullptr);
 		duckdb_v2_str msg = {nullptr, 0};
 		duckdb_v2_error_info_get_text(err, &msg);

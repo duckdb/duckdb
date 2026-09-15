@@ -121,11 +121,13 @@ typedef struct {
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_data_chunk_get_vector_count)
 	(duckdb_v2_data_chunk_handle chunk, idx_t *out_count, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_database_close)
+	DUCKDB_V2_ERROR(*duckdb_v2_database_attach)
 	(duckdb_v2_database_handle db, duckdb_v2_str path, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_database_create)
 	(duckdb_v2_environment_handle env, duckdb_v2_database_handle *out_db, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_database_destroy)(duckdb_v2_database_handle *db);
+	DUCKDB_V2_ERROR(*duckdb_v2_database_detach)
+	(duckdb_v2_database_handle db, duckdb_v2_str path, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_database_get_option)
 	(duckdb_v2_database_handle db, duckdb_v2_identifier_t name, duckdb_v2_option_handle *out_option,
 	 duckdb_v2_error_info_handle *err);
@@ -133,8 +135,6 @@ typedef struct {
 	(duckdb_v2_database_handle db, idx_t index, duckdb_v2_option_handle *out_option, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_database_get_option_count)
 	(duckdb_v2_database_handle db, idx_t *out_count, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_database_open)
-	(duckdb_v2_database_handle db, duckdb_v2_str path, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_database_set_option)
 	(duckdb_v2_database_handle db, duckdb_v2_identifier_t name, duckdb_v2_str setting,
 	 duckdb_v2_error_info_handle *err);
@@ -1270,6 +1270,8 @@ typedef struct {
 	(duckdb_v2_context_handle ctx, idx_t index, duckdb_v2_option_handle *out_option, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_context_get_option_count)
 	(duckdb_v2_context_handle ctx, idx_t *out_count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_database_set_default)
+	(duckdb_v2_database_handle db, duckdb_v2_str path, duckdb_v2_error_info_handle *err);
 } duckdb_ext_api_v2;
 
 //===--------------------------------------------------------------------===//
@@ -1325,13 +1327,13 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_data_chunk_get_size = duckdb_v2_data_chunk_get_size;
 	result.duckdb_v2_data_chunk_get_vector = duckdb_v2_data_chunk_get_vector;
 	result.duckdb_v2_data_chunk_get_vector_count = duckdb_v2_data_chunk_get_vector_count;
-	result.duckdb_v2_database_close = duckdb_v2_database_close;
+	result.duckdb_v2_database_attach = duckdb_v2_database_attach;
 	result.duckdb_v2_database_create = duckdb_v2_database_create;
 	result.duckdb_v2_database_destroy = duckdb_v2_database_destroy;
+	result.duckdb_v2_database_detach = duckdb_v2_database_detach;
 	result.duckdb_v2_database_get_option = duckdb_v2_database_get_option;
 	result.duckdb_v2_database_get_option_by_index = duckdb_v2_database_get_option_by_index;
 	result.duckdb_v2_database_get_option_count = duckdb_v2_database_get_option_count;
-	result.duckdb_v2_database_open = duckdb_v2_database_open;
 	result.duckdb_v2_database_set_option = duckdb_v2_database_set_option;
 	result.duckdb_v2_environment_create = duckdb_v2_environment_create;
 	result.duckdb_v2_environment_destroy = duckdb_v2_environment_destroy;
@@ -1834,6 +1836,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_context_get_option = duckdb_v2_context_get_option;
 	result.duckdb_v2_context_get_option_by_index = duckdb_v2_context_get_option_by_index;
 	result.duckdb_v2_context_get_option_count = duckdb_v2_context_get_option_count;
+	result.duckdb_v2_database_set_default = duckdb_v2_database_set_default;
 	return result;
 }
 

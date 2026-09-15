@@ -46,7 +46,7 @@ static void WithTransaction(Connection &connection, T action) {
 	connection.Commit();
 }
 
-void CV2Database::Open(const string &path) {
+void CV2Database::Attach(const string &path) {
 	Start();
 	WithTransaction(*internal_connection, [&](ClientContext &context) {
 		// Mirrors PhysicalAttach for `ATTACH 'path'` without options.
@@ -68,9 +68,9 @@ void CV2Database::Open(const string &path) {
 	});
 }
 
-//! Finds the attached database opened from `path`: by the path it was attached under, disambiguated by the name
-//! database_open derives from the path. Throws when nothing matches.
-static shared_ptr<AttachedDatabase> FindOpenedDatabase(DatabaseInstance &instance, const string &path) {
+//! Finds the database attached from `path`: by the path it was attached under, disambiguated by the name
+//! database_attach derives from the path. Throws when nothing matches.
+static shared_ptr<AttachedDatabase> FindAttachedDatabase(DatabaseInstance &instance, const string &path) {
 	auto &fs = FileSystem::GetFileSystem(instance);
 	string stripped = path;
 	string db_type;
@@ -109,25 +109,33 @@ static shared_ptr<AttachedDatabase> FindOpenedDatabase(DatabaseInstance &instanc
 		}
 	}
 	if (!match) {
-		throw InvalidInputException("no database opened from '%s' is attached", path);
+		throw InvalidInputException("no database attached from '%s'", path);
 	}
 	if (match_count > 1 && match->GetName() != derived_name) {
-		throw InvalidInputException("several attached databases were opened from '%s'; detach one by name with DETACH",
-		                            path);
+		throw InvalidInputException("several databases are attached from '%s'; refer to one by name in SQL", path);
 	}
 	return match;
 }
 
-void CV2Database::Close(const string &path) {
+void CV2Database::Detach(const string &path) {
 	if (!IsStarted()) {
-		throw InvalidInputException("no database opened from '%s' is attached", path);
+		throw InvalidInputException("no database attached from '%s'", path);
 	}
 	auto &instance = *database->instance;
-	auto attached = FindOpenedDatabase(instance, path);
+	auto attached = FindAttachedDatabase(instance, path);
 	WithTransaction(*internal_connection, [&](ClientContext &context) {
 		DatabaseManager::Get(instance).DetachDatabase(context, attached->GetName(), OnEntryNotFound::THROW_EXCEPTION,
 		                                              true);
 	});
+}
+
+void CV2Database::SetDefault(const string &path) {
+	if (!IsStarted()) {
+		throw InvalidInputException("no database attached from '%s'", path);
+	}
+	auto &instance = *database->instance;
+	auto attached = FindAttachedDatabase(instance, path);
+	DatabaseManager::Get(instance).SetDefaultDatabase(attached->GetName());
 }
 
 void CV2Database::SetOption(const Identifier &name, const string &setting) {
@@ -197,25 +205,36 @@ DUCKDB_V2_ERROR duckdb_v2_database_destroy(duckdb_v2_database_handle *db) {
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_database_open(duckdb_v2_database_handle db, duckdb_v2_str path,
-                                        duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_database_attach(duckdb_v2_database_handle db, duckdb_v2_str path,
+                                          duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(db);
 	DUCKDB_CHECK_ARG(path);
 	return WithErrorHandler(err, [&]() {
 		auto &wrapper = *Convert(db);
 		duckdb::lock_guard<duckdb::mutex> guard(wrapper.lock);
-		wrapper.Open(duckdb::string(Convert(path)));
+		wrapper.Attach(duckdb::string(Convert(path)));
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_database_close(duckdb_v2_database_handle db, duckdb_v2_str path,
-                                         duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_database_detach(duckdb_v2_database_handle db, duckdb_v2_str path,
+                                          duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(db);
 	DUCKDB_CHECK_ARG(path);
 	return WithErrorHandler(err, [&]() {
 		auto &wrapper = *Convert(db);
 		duckdb::lock_guard<duckdb::mutex> guard(wrapper.lock);
-		wrapper.Close(duckdb::string(Convert(path)));
+		wrapper.Detach(duckdb::string(Convert(path)));
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_database_set_default(duckdb_v2_database_handle db, duckdb_v2_str path,
+                                               duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(db);
+	DUCKDB_CHECK_ARG(path);
+	return WithErrorHandler(err, [&]() {
+		auto &wrapper = *Convert(db);
+		duckdb::lock_guard<duckdb::mutex> guard(wrapper.lock);
+		wrapper.SetDefault(duckdb::string(Convert(path)));
 	});
 }
 

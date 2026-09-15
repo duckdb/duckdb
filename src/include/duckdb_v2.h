@@ -207,8 +207,8 @@ typedef struct _duckdb_v2_environment {
 
 /*!
  * An opaque, owned handle to a DuckDB database instance: a buffer pool, a scheduler, a set of GLOBAL settings, and the
- * databases attached to it. Created empty by database_create; databases are attached with database_open and detached
- * with database_close. Always destroy via database_destroy.
+ * databases attached to it. Created empty by database_create; databases are attached with database_attach, made the
+ * default with database_set_default, and detached with database_detach. Always destroy via database_destroy.
  */
 typedef struct _duckdb_v2_database {
 	void *internal_ptr;
@@ -2031,8 +2031,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_chunk_get_vector(duckdb_v2_data_chun
  * Creates a database handle under the environment.
  *
  * The handle starts with no database attached and with its instance not yet started; set startup options with
- * database_set_option, then open a database with database_open or connect with connection_create. The caller destroys
- * it via database_destroy.
+ * database_set_option, then attach a database with database_attach and pick the default with database_set_default, or
+ * connect with connection_create. The caller destroys it via database_destroy.
  *
  * history:
  * - stable: v2.0.0
@@ -2062,16 +2062,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_create(duckdb_v2_environment_han
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_destroy(duckdb_v2_database_handle *db);
 
 /*!
- * Opens a database on the handle, starting the instance if it has not started yet.
+ * Attaches a database to the handle, starting the instance if it has not started yet.
  *
  * Attaches the database at `path` exactly like `ATTACH 'path'`:
- *   - `:memory:` or an empty view opens a fresh in-memory database named `memory`.
- *   - any other path opens that file, creating it if it does not exist, under the name derived from the file's base
- * name. The first database opened is the default database for every connection that does not `USE` another; further
- * opens attach alongside it. A path that is already open on this or any other database of the environment returns
- * ERROR_RESOURCE_IN_USE, and a name that is already attached (two files with the same base name, or `:memory:` twice)
- * fails; use SQL `ATTACH ... AS name` for those. Options that only apply at startup must be set before the first open
- * or connection.
+ *   - `:memory:` or an empty view attaches a fresh in-memory database named `memory`.
+ *   - any other path attaches that file, creating it if it does not exist, under the name derived from the file's base
+ * name. Attaching does not make the database the default; call database_set_default for that. A path that is already
+ * attached on this or any other database of the environment returns ERROR_RESOURCE_IN_USE, and a name that is already
+ * attached (two files with the same base name, or `:memory:` twice) fails; use SQL `ATTACH ... AS name` for those.
+ * Options that only apply at startup must be set before the first attach or connection.
  *
  * history:
  * - stable: v2.0.0
@@ -2081,33 +2080,55 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_destroy(duckdb_v2_database_handl
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_open(duckdb_v2_database_handle db, duckdb_v2_str path,
-                                                     duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_attach(duckdb_v2_database_handle db, duckdb_v2_str path,
+                                                       duckdb_v2_error_info_handle *err);
 
 /*!
- * Closes the database that was opened from `path`.
+ * Detaches the database that was attached from `path`.
  *
- * Detaches it like `DETACH`, checkpointing a file database first. Unlike SQL, the default database may be closed too:
- * the oldest remaining attached database takes over as the default. The path is matched against the attached databases
- * as database_open recorded it, so pass the path that was passed to database_open. Returns ERROR_INPUT_INVALID when no
- * database opened from that path is attached. Connections that still reference the database keep it alive until they
- * release it.
+ * Detaches it like `DETACH`, checkpointing a file database first. Unlike SQL, the default database may be detached too;
+ * new connections then start without a default until database_set_default names another, and existing connections bound
+ * to it keep it alive until their transaction on it ends and fail unqualified DDL afterwards. The path is matched
+ * against the attached databases as database_attach recorded it, so pass the path that was passed to database_attach.
+ * Returns ERROR_INPUT_INVALID when no database attached from that path exists. Connections that still reference the
+ * database keep it alive until they release it.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param db The database handle.
- * @param path The path the database was opened from.
+ * @param path The path the database was attached from.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_close(duckdb_v2_database_handle db, duckdb_v2_str path,
-                                                      duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_detach(duckdb_v2_database_handle db, duckdb_v2_str path,
+                                                       duckdb_v2_error_info_handle *err);
+
+/*!
+ * Makes the database that was attached from `path` the default database for connections created from now on.
+ *
+ * A connection binds to the default database when it is created, so this does not retarget existing connections: their
+ * default stays what it was when they connected, or what they chose with `USE`. The default is where unqualified DDL
+ * and unqualified table lookups that miss the temporary catalog go. It stays the default for new connections until
+ * another database_set_default call or until it is detached; a connection whose default has been detached fails
+ * unqualified DDL with a message saying so until it selects another with `USE`. Returns ERROR_INPUT_INVALID when no
+ * database attached from that path exists.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param db The database handle.
+ * @param path The path the database was attached from.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_set_default(duckdb_v2_database_handle db, duckdb_v2_str path,
+                                                            duckdb_v2_error_info_handle *err);
 
 /*!
  * Sets a config option on the database (GLOBAL scope).
  *
- * Before the instance has started (no database_open or connection_create yet), the option goes into the startup
+ * Before the instance has started (no database_attach or connection_create yet), the option goes into the startup
  * configuration: this is the only way to set an option that can only be chosen at startup, such as access_mode or
  * enable_external_access. Unknown names are kept for an extension to consume at startup; if none does, startup fails
  * with the unrecognized names. After startup, this is `SET GLOBAL name = setting` and an unknown name is rejected
@@ -5564,8 +5585,8 @@ typedef struct _duckdb_v2_query_progress {
  * Opens a connection to a database, starting its instance if it has not started yet.
  *
  * Each connection carries its own client context and session-scoped (LOCAL) settings. Connections to the same database
- * share its catalog, buffer pool, and transaction manager. A connection may be created before any database is opened on
- * the handle; until one is, only the system catalog and the connection's temporary catalog are visible. The caller
+ * share its catalog, buffer pool, and transaction manager. A connection may be created before any database is attached
+ * to the handle; until one is, only the system catalog and the connection's temporary catalog are visible. The caller
  * destroys it via connection_destroy.
  *
  * history:

@@ -14,8 +14,8 @@ handles:
       An opaque, owned handle to a DuckDB database instance: a buffer pool, a
       scheduler, a set of GLOBAL settings, and the databases attached to it.
       Created empty by database_create; databases are attached with
-      database_open and detached with database_close. Always destroy via
-      database_destroy.
+      database_attach, made the default with database_set_default, and detached with
+      database_detach. Always destroy via database_destroy.
     cleanup_with: database_destroy
   connection:
     description: |

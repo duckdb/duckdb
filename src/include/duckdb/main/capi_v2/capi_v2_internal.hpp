@@ -173,7 +173,7 @@ inline auto Convert(duckdb_v2_environment_handle env) -> CV2Environment * {
 class CV2Option;
 
 //! A database handle: a DuckDB instance plus the configuration it starts with. The instance starts on first use
-//! (database_open or connection_create); until then options are staged in the startup config. Every entry point
+//! (database_attach or connection_create); until then options are staged in the startup config. Every entry point
 //! holds `lock`, which also serializes use of the internal connection.
 class CV2Database {
 public:
@@ -185,9 +185,11 @@ public:
 	//! Starts the instance if it has not started yet, consuming the staged config.
 	void Start();
 	//! Attaches the database at `path`, like ATTACH; starts the instance first if needed.
-	void Open(const string &path);
-	//! Detaches the database that was opened from `path`.
-	void Close(const string &path);
+	void Attach(const string &path);
+	//! Detaches the database that was attached from `path`.
+	void Detach(const string &path);
+	//! Makes the database that was attached from `path` the instance's default database.
+	void SetDefault(const string &path);
 	//! Stages a startup option, or SET GLOBAL once started.
 	void SetOption(const Identifier &name, const string &setting);
 	unique_ptr<CV2Option> GetOption(std::string_view name);
