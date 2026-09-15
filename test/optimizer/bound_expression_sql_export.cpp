@@ -575,9 +575,9 @@ TEST_CASE("Bound expression SQL export preserves exact constant types and values
 		REQUIRE_FALSE(rebound->HasError());
 		REQUIRE(rebound->GetTypes()[0] == value.type());
 		if (value.IsNull()) {
-			REQUIRE(rebound->GetValue(0, 0).IsNull());
+			REQUIRE(rebound->Collection().GetValue(0, 0).IsNull());
 		} else {
-			REQUIRE(rebound->GetValue(0, 0) == value);
+			REQUIRE(rebound->Collection().GetValue(0, 0) == value);
 		}
 	}
 	BoundConstantExpression metadata_expression(Value::INTEGER(1));
@@ -602,7 +602,7 @@ TEST_CASE("Bound expression SQL export reconstructs VARIANT literals", "[bound_e
 		INFO(sql);
 		auto original = connection.Query("SELECT " + string(sql));
 		REQUIRE_NO_FAIL(*original);
-		BoundConstantExpression expression(original->GetValue(0, 0));
+		BoundConstantExpression expression(original->Collection().GetValue(0, 0));
 		RequireRoundTrip(connection, expression, {}, string(), sql);
 		auto copied = expression.Copy();
 		RequireRoundTrip(connection, *copied, {}, string(), sql);
@@ -618,14 +618,14 @@ TEST_CASE("Bound expression SQL export preserves negative floating zero", "[boun
 		auto sql = "'-0.0'::" + string(type) + "::VARIANT";
 		auto original = connection.Query("SELECT " + sql);
 		REQUIRE_NO_FAIL(*original);
-		BoundConstantExpression expression(original->GetValue(0, 0));
+		BoundConstantExpression expression(original->Collection().GetValue(0, 0));
 		for (idx_t lifecycle = 0; lifecycle < 3; lifecycle++) {
 			auto candidate = lifecycle == 2 ? BinaryRoundTrip(*connection.context, expression) : expression.Copy();
 			auto exported = BoundExpressionSQLExporter::Export(lifecycle == 0 ? expression : *candidate, {});
 			REQUIRE(exported.IsSuccess());
 			auto result = connection.Query("SELECT 1.0 / (" + exported.GetValue()->ToString() + ")::DOUBLE");
 			REQUIRE_NO_FAIL(*result);
-			REQUIRE(result->GetValue(0, 0) == Value("-Infinity").DefaultCastAs(LogicalType::DOUBLE));
+			REQUIRE(result->Collection().GetValue(0, 0) == Value("-Infinity").DefaultCastAs(LogicalType::DOUBLE));
 		}
 	}
 }
@@ -635,7 +635,7 @@ TEST_CASE("Bound expression SQL export rejects opaque aggregate-state literals",
 	Connection connection(db);
 	auto result = connection.Query("SELECT sum(i) EXPORT_STATE FROM (VALUES (1),(2)) t(i)");
 	REQUIRE_NO_FAIL(*result);
-	auto state = result->GetValue(0, 0);
+	auto state = result->Collection().GetValue(0, 0);
 	REQUIRE(state.type().IsAggregateState());
 	vector<Value> values {state, Value(state.type()), Value::LIST(state.type(), {state}),
 	                      Value::STRUCT({{"state", state}}), Value(LogicalType::LIST(state.type()))};
@@ -662,7 +662,7 @@ TEST_CASE("Bound expression SQL export rejects unrepresentable VARIANT object ke
 	                  "{\"a\":1,\"A\":2}", "{\"outer\":{\"a\":1,\"A\":2}}", "[{\"a\":1,\"A\":2}]"}) {
 		auto original = connection.Query("SELECT j::JSON::VARIANT FROM (VALUES ('" + string(json) + "')) t(j)");
 		REQUIRE_NO_FAIL(*original);
-		auto value = original->GetValue(0, 0);
+		auto value = original->Collection().GetValue(0, 0);
 		for (auto &nested : {value, Value::LIST(LogicalType::VARIANT(), {value}), Value::STRUCT({{"v", value}}),
 		                     Value::ARRAY(LogicalType::VARIANT(), {value}),
 		                     Value::MAP(LogicalType::VARCHAR, LogicalType::VARIANT(), {Value("v")}, {value}),
@@ -749,7 +749,7 @@ TEST_CASE("Bound expression SQL export rejects functions that observe expression
 		auto original = connection.Query(entry.sql);
 		REQUIRE_NO_FAIL(*original);
 		for (idx_t row = 0; row < 3; row++) {
-			REQUIRE(original->GetValue(0, row) == Value(entry.expected));
+			REQUIRE(original->Collection().GetValue(0, row) == Value(entry.expected));
 		}
 		auto plan = BindExportQuery(connection, entry.sql);
 		auto alias = FindExpression(*plan, [](const Expression &expression) {
@@ -810,7 +810,7 @@ TEST_CASE("Bound expression SQL export preserves ordering before physical aggreg
 	}
 	auto expected = connection.Query("SELECT first(i ORDER BY i DESC)" + from);
 	REQUIRE_NO_FAIL(*expected);
-	REQUIRE(expected->GetValue(0, 0) == Value::INTEGER(2));
+	REQUIRE(expected->Collection().GetValue(0, 0) == Value::INTEGER(2));
 	// Physical lowering consumes the ordering; such execution expressions are outside the export API contract.
 	auto lowered = expression->Copy();
 	vector<unique_ptr<Expression>> groups;
@@ -1072,7 +1072,7 @@ TEST_CASE("Incremental scalar registration preserves live SQL identity", "[bound
 		REQUIRE_NO_FAIL(*rebound);
 		REQUIRE(rebound->GetTypes() == vector<LogicalType> {value.type()});
 		REQUIRE(rebound->RowCount() == 1);
-		REQUIRE(rebound->GetValue(0, 0) == value);
+		REQUIRE(rebound->Collection().GetValue(0, 0) == value);
 	}
 	auto standalone = make_function(LogicalType::INTEGER);
 	standalone.SetCatalogName(Identifier::SystemCatalog());
@@ -1322,11 +1322,11 @@ TEST_CASE("Standalone function binding does not autoload catalog collisions",
 		    "SELECT installed, loaded FROM duckdb_extensions() WHERE extension_name = 'core_functions'");
 		REQUIRE_FALSE(extension_state->HasError());
 		REQUIRE(extension_state->RowCount() == 1);
-		REQUIRE(extension_state->GetValue(0, 0) == Value::BOOLEAN(false));
-		REQUIRE(extension_state->GetValue(1, 0) == Value::BOOLEAN(false));
+		REQUIRE(extension_state->Collection().GetValue(0, 0) == Value::BOOLEAN(false));
+		REQUIRE(extension_state->Collection().GetValue(1, 0) == Value::BOOLEAN(false));
 		auto count_if = connection.Query("SELECT count(*) FROM duckdb_functions() WHERE function_name = 'count_if'");
 		REQUIRE_FALSE(count_if->HasError());
-		REQUIRE(count_if->GetValue(0, 0) == Value::BIGINT(0));
+		REQUIRE(count_if->Collection().GetValue(0, 0) == Value::BIGINT(0));
 	};
 	require_core_functions_absent();
 	connection.BeginTransaction();
@@ -1547,7 +1547,7 @@ TEST_CASE("Bound expression SQL export reconstructs registered casts", "[bound_e
 	auto rebound = registered_connection.Query("SELECT " + exported.GetValue()->ToString());
 	REQUIRE_FALSE(rebound->HasError());
 	REQUIRE(rebound->GetTypes() == vector<LogicalType> {LogicalType::BIGINT});
-	REQUIRE(rebound->GetValue(0, 0) == Value::BIGINT(8));
+	REQUIRE(rebound->Collection().GetValue(0, 0) == Value::BIGINT(8));
 }
 
 TEST_CASE("Bound expression SQL export admits only validated bound operators", "[bound_expression_sql_export]") {
@@ -1619,7 +1619,7 @@ TEST_CASE("Bound expression SQL export rejects TRY around volatile children", "[
 	auto rebound = connection.Query("SELECT " + nonvolatile_result.GetValue()->ToString());
 	REQUIRE_FALSE(rebound->HasError());
 	REQUIRE(rebound->GetTypes() == vector<LogicalType> {LogicalType::INTEGER});
-	REQUIRE(rebound->GetValue(0, 0).IsNull());
+	REQUIRE(rebound->Collection().GetValue(0, 0).IsNull());
 
 	auto random_plan = BindExportQuery(connection, "SELECT random()");
 	auto random = FindExpression(*random_plan, [](const Expression &expression) {
@@ -1785,7 +1785,7 @@ TEST_CASE("Bound expression SQL export preserves qualified operator function ide
 	auto rebound = connection.Query("SELECT " + parsed.ToString());
 	REQUIRE_FALSE(rebound->HasError());
 	REQUIRE(rebound->GetTypes() == vector<LogicalType> {LogicalType::INTEGER});
-	REQUIRE(rebound->GetValue(0, 0) == Value::INTEGER(5));
+	REQUIRE(rebound->Collection().GetValue(0, 0) == Value::INTEGER(5));
 	connection.Rollback();
 }
 
@@ -1915,21 +1915,21 @@ TEST_CASE("Binary function round trips recover represented SQL calls", "[bound_e
 	REQUIRE(result->GetTypes() ==
 	        vector<LogicalType> {LogicalType::DOUBLE, LogicalType::LIST(LogicalType::INTEGER), LogicalType::DOUBLE});
 	REQUIRE(result->RowCount() == 2);
-	REQUIRE(result->GetValue(0, 0) == Value::DOUBLE(3));
-	REQUIRE(result->GetValue(1, 0) == Value::LIST({Value::INTEGER(5), Value::INTEGER(10)}));
-	REQUIRE(result->GetValue(2, 0) == Value::DOUBLE(1.5));
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::DOUBLE(3));
+	REQUIRE(result->Collection().GetValue(1, 0) == Value::LIST({Value::INTEGER(5), Value::INTEGER(10)}));
+	REQUIRE(result->Collection().GetValue(2, 0) == Value::DOUBLE(1.5));
 	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(connection.Query("INSERT INTO integers VALUES (42), (84)"));
 	auto histogram = connection.Query("SELECT * FROM histogram_values(integers, i, bin_count := 2)");
 	REQUIRE_FALSE(histogram->HasError());
 	REQUIRE(histogram->GetTypes() == vector<LogicalType> {LogicalType::INTEGER, LogicalType::UBIGINT});
 	REQUIRE(histogram->RowCount() == 3);
-	REQUIRE(histogram->GetValue(0, 0) == Value::INTEGER(60));
-	REQUIRE(histogram->GetValue(1, 0) == Value::UBIGINT(1));
-	REQUIRE(histogram->GetValue(0, 1) == Value::INTEGER(80));
-	REQUIRE(histogram->GetValue(1, 1) == Value::UBIGINT(0));
-	REQUIRE(histogram->GetValue(0, 2) == Value::INTEGER(100));
-	REQUIRE(histogram->GetValue(1, 2) == Value::UBIGINT(1));
+	REQUIRE(histogram->Collection().GetValue(0, 0) == Value::INTEGER(60));
+	REQUIRE(histogram->Collection().GetValue(1, 0) == Value::UBIGINT(1));
+	REQUIRE(histogram->Collection().GetValue(0, 1) == Value::INTEGER(80));
+	REQUIRE(histogram->Collection().GetValue(1, 1) == Value::UBIGINT(0));
+	REQUIRE(histogram->Collection().GetValue(0, 2) == Value::INTEGER(100));
+	REQUIRE(histogram->Collection().GetValue(1, 2) == Value::UBIGINT(1));
 	connection.Rollback();
 }
 
@@ -1961,7 +1961,8 @@ TEST_CASE("Rewritten scalar calls fail SQL export as unsupported", "[bound_expre
 	auto result = connection.Query("SELECT [x + c FOR x, i IN l IF i > 2] FROM lists");
 	REQUIRE_FALSE(result->HasError());
 	REQUIRE(result->GetTypes() == vector<LogicalType> {LogicalType::LIST(LogicalType::INTEGER)});
-	REQUIRE(result->GetValue(0, 0) == Value::LIST({Value::INTEGER(13), Value::INTEGER(12), Value::INTEGER(11)}));
+	REQUIRE(result->Collection().GetValue(0, 0) ==
+	        Value::LIST({Value::INTEGER(13), Value::INTEGER(12), Value::INTEGER(11)}));
 	connection.Rollback();
 }
 
@@ -1996,7 +1997,7 @@ TEST_CASE("Live optimized decimal sum exports its logical result", "[bound_expre
 	                               " FROM (VALUES (1.25::DECIMAL(9,2)), (2.50::DECIMAL(9,2))) values_to_sum(i)");
 	REQUIRE_FALSE(result->HasError());
 	REQUIRE(result->GetTypes() == vector<LogicalType> {LogicalType::DECIMAL(38, 2)});
-	REQUIRE(result->GetValue(0, 0) == Value::DECIMAL(hugeint_t(375), 38, 2));
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::DECIMAL(hugeint_t(375), 38, 2));
 	RequireRoundTrip(connection, *aggregate.Copy(), context, " FROM decimal_values", "sum(i)");
 	auto restored = BinaryRoundTrip(*connection.context, aggregate);
 	auto &restored_aggregate = restored->Cast<BoundAggregateExpression>();
@@ -2036,7 +2037,7 @@ TEST_CASE("Widened decimal calls retain execution and fail closed when SQL argum
 		auto result = connection.Query("SELECT round(i, -1) FROM rounding_values");
 		REQUIRE_FALSE(result->HasError());
 		REQUIRE(result->GetTypes() == vector<LogicalType> {result_type});
-		REQUIRE(result->GetValue(0, 0) == Value("1" + string(width, '0')).DefaultCastAs(result_type));
+		REQUIRE(result->Collection().GetValue(0, 0) == Value("1" + string(width, '0')).DefaultCastAs(result_type));
 		auto &column = expression->Cast<BoundFunctionExpression>().GetChildren()[0];
 		vector<SQLBindingEntry> bindings;
 		CollectSQLBindings(*column, bindings);
@@ -2131,7 +2132,7 @@ TEST_CASE("Bound expression SQL export preserves explicit string_agg separators"
 			REQUIRE_FALSE(expected->HasError());
 			REQUIRE(result->Equals(*expected, false));
 			REQUIRE(result->GetTypes() == vector<LogicalType> {LogicalType::VARCHAR});
-			REQUIRE(result->GetValue(0, 0) == Value("a&b"));
+			REQUIRE(result->Collection().GetValue(0, 0) == Value("a&b"));
 		}
 	}
 	connection.Rollback();
@@ -2171,10 +2172,10 @@ TEST_CASE("SQL export recovers calls from supported binary compatibility targets
 	REQUIRE_NO_FAIL(connection.Query("SET debug_verify_serializer=true"));
 	auto result = connection.Query("SELECT abs(-7), log2(8), sum(i), quantile_cont(i, 0.5) FROM compatibility_values");
 	REQUIRE_FALSE(result->HasError());
-	REQUIRE(result->GetValue(0, 0) == Value::INTEGER(7));
-	REQUIRE(result->GetValue(1, 0) == Value::DOUBLE(3));
-	REQUIRE(result->GetValue(2, 0) == Value::HUGEINT(hugeint_t(3)));
-	REQUIRE(result->GetValue(3, 0) == Value::DOUBLE(1.5));
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(7));
+	REQUIRE(result->Collection().GetValue(1, 0) == Value::DOUBLE(3));
+	REQUIRE(result->Collection().GetValue(2, 0) == Value::HUGEINT(hugeint_t(3)));
+	REQUIRE(result->Collection().GetValue(3, 0) == Value::DOUBLE(1.5));
 	connection.Rollback();
 }
 
@@ -2274,7 +2275,7 @@ TEST_CASE("Bound expression SQL export preserves aggregate modifiers", "[bound_e
 	    connection.Query("SELECT " + pre_serialization.GetValue()->ToString() + " FROM aggregate_values AS v");
 	REQUIRE_FALSE(rebound_sum->HasError());
 	REQUIRE(rebound_sum->GetTypes() == vector<LogicalType> {LogicalType::HUGEINT});
-	REQUIRE(rebound_sum->GetValue(0, 0).ToString() == "5");
+	REQUIRE(rebound_sum->Collection().GetValue(0, 0).ToString() == "5");
 
 	auto large_sum_plan = OptimizeExportQuery(connection, "SELECT sum(i) FROM large_sum_values");
 	auto large_sum = FindExpression(*large_sum_plan, [](const Expression &expression) {

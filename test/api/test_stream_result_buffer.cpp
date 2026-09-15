@@ -3,7 +3,9 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/buffered_data/batched_buffered_data.hpp"
+#include "duckdb/main/buffered_data/simple_buffered_data.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/result_unit.hpp"
 #include "result_wait_helpers.hpp"
 #include "duckdb/main/query_result_stream.hpp"
 
@@ -23,7 +25,7 @@ string PhysicalPlanText(Connection &con, const string &query) {
 	}
 	string plan;
 	for (idx_t row = 0; row < explain_result->RowCount(); row++) {
-		plan += explain_result->GetValue(1, row).ToString();
+		plan += explain_result->Collection().GetValue(1, row).ToString();
 	}
 	return plan;
 }
@@ -73,7 +75,7 @@ TEST_CASE("A blocking fetch on a batched stream observes an interrupt with chunk
 	auto &stream = *result;
 	// Wait until at least one chunk is observably buffered, then cancel before fetching
 	Deadline deadline;
-	while (!stream.GetBufferedData().HasObservableChunk()) {
+	while (!stream.GetBufferedData().HasObservableUnit()) {
 		REQUIRE(!IsTerminal(stream.ExecuteTask()));
 		REQUIRE(!deadline.Passed());
 		std::this_thread::sleep_for(std::chrono::microseconds(100));
@@ -110,8 +112,8 @@ TEST_CASE("Completing a batched undecided query retains every row in order", "[a
 	handle->Complete();
 	REQUIRE(!handle->HasError());
 	REQUIRE(handle->RowCount() == 500000);
-	REQUIRE(handle->GetValue(0, 0).GetValue<int64_t>() == 0);
-	REQUIRE(handle->GetValue(0, 499999).GetValue<int64_t>() == 499999);
+	REQUIRE(handle->Collection().GetValue(0, 0).GetValue<int64_t>() == 0);
+	REQUIRE(handle->Collection().GetValue(0, 499999).GetValue<int64_t>() == 499999);
 }
 
 TEST_CASE("Completing an erroring query surfaces the execution error", "[api][stream_buffer]") {
@@ -313,7 +315,7 @@ TEST_CASE("A batched stream result never exceeds the buffer cap", "[api][stream_
 	REQUIRE(stream.GetBufferedData().Cast<BatchedBufferedData>().PeakBufferedBytes() <= 250000 + 100000);
 
 	// The peak surfaces as a query-level profiling metric, carrying the real value
-	auto peak = stream.GetBufferedData().Cast<BatchedBufferedData>().PeakBufferedBytes();
+	auto peak = stream.GetBufferedData().Cast<BatchedBufferedData>().PeakStreamingBytes();
 	auto profile = QueryProfiler::Get(*con.context).ToJSON();
 	auto key_pos = profile.find("\"peak_streaming_buffer_size\"");
 	REQUIRE(key_pos != string::npos);
@@ -375,31 +377,70 @@ TEST_CASE("A parked read-ahead batch does not report the batched buffer waiting 
 	// chunk, so a read-ahead batch parks on its fourth chunk with nothing in the read queue
 	const auto chunk_bytes = BufferedData::CopyForBuffering(chunk)->GetDataSize();
 	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='" + to_string(4 * chunk_bytes) + " bytes'"));
-	BatchedBufferedData buffered(*con.context, ResultLifetime::DRAINING);
+	ResultFormatContext format_context {
+	    {LogicalType::BIGINT}, {Identifier("i")}, ClientProperties(), ResultOrdering::BATCH_INDEX_ORDERED};
+	BatchedBufferedData buffered(*con.context, ResultLifetime::DRAINING, std::move(format_context));
 	auto signal = make_shared_ptr<InterruptDoneSignalState>();
 	weak_ptr<InterruptDoneSignalState> weak_signal(signal);
 	InterruptState read_ahead(weak_signal);
 
+	auto chunk_unit = [&chunk](idx_t batch) {
+		auto unit = make_uniq<ChunkUnit>(BufferedData::CopyForBuffering(chunk));
+		unit->batch_index = batch;
+		return unit;
+	};
+
 	idx_t appended = 0;
-	while (!buffered.AppendOrBlock(chunk, 1, read_ahead)) {
+	while (!buffered.AppendOrBlock(chunk_unit(1), read_ahead)) {
 		appended++;
 		REQUIRE(appended <= 4);
 	}
 	REQUIRE(appended == 3);
 	REQUIRE(buffered.HasBlockedSink());
-	REQUIRE(!buffered.HasObservableChunk());
+	REQUIRE(!buffered.HasObservableUnit());
+	// Nothing was deposited yet: the cap only ever saw the queued units, the metric also sees the held one
+	REQUIRE(buffered.PeakBufferedBytes() == appended * chunk_bytes);
+	REQUIRE(buffered.PeakStreamingBytes() == (appended + 1) * chunk_bytes);
 	// The park waits on the minimum batch, not on the consumer: reporting otherwise makes a consumer
 	// that waits for a task spin until the minimum batch delivers
 	REQUIRE(!buffered.WaitsOnConsumer());
 
-	// The minimum batch always gets its reserve, and its chunk is what the consumer pops
+	// The minimum batch always gets its reserve, and its unit is what the consumer pops
 	InterruptState minimum(weak_signal);
-	REQUIRE(!buffered.AppendOrBlock(chunk, 0, minimum));
-	REQUIRE(buffered.HasObservableChunk());
+	REQUIRE(!buffered.AppendOrBlock(chunk_unit(0), minimum));
+	REQUIRE(buffered.HasObservableUnit());
 	REQUIRE(buffered.WaitsOnConsumer());
 	REQUIRE(buffered.Scan());
-	REQUIRE(!buffered.HasObservableChunk());
+	REQUIRE(!buffered.HasObservableUnit());
 	REQUIRE(!buffered.WaitsOnConsumer());
+}
+
+TEST_CASE("The simple buffer's peak counts the unit a parked producer holds", "[api][stream_buffer]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	DataChunk chunk;
+	chunk.Initialize(Allocator::DefaultAllocator(), {LogicalType::BIGINT});
+	chunk.SetChildCardinality(STANDARD_VECTOR_SIZE);
+	// Two units fill the cap exactly, so the third producer parks holding its unit
+	const auto chunk_bytes = BufferedData::CopyForBuffering(chunk)->GetDataSize();
+	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='" + to_string(2 * chunk_bytes) + " bytes'"));
+	ResultFormatContext format_context {
+	    {LogicalType::BIGINT}, {Identifier("i")}, ClientProperties(), ResultOrdering::UNORDERED};
+	SimpleBufferedData buffered(*con.context, ResultLifetime::DRAINING, std::move(format_context));
+	auto signal = make_shared_ptr<InterruptDoneSignalState>();
+	weak_ptr<InterruptDoneSignalState> weak_signal(signal);
+	InterruptState parked(weak_signal);
+
+	idx_t appended = 0;
+	while (!buffered.AppendOrBlock(make_uniq<ChunkUnit>(BufferedData::CopyForBuffering(chunk)), parked)) {
+		appended++;
+		REQUIRE(appended <= 2);
+	}
+	REQUIRE(appended == 2);
+	REQUIRE(buffered.HasBlockedSink());
+	// Nothing was deposited yet: the cap only ever saw the queued units, the metric also sees the held one
+	REQUIRE(buffered.PeakBufferedBytes() == appended * chunk_bytes);
+	REQUIRE(buffered.PeakStreamingBytes() == (appended + 1) * chunk_bytes);
 }
 
 TEST_CASE("Poll on a draining stream reports READY exactly when a chunk is poppable", "[api][stream_buffer]") {
@@ -419,7 +460,7 @@ TEST_CASE("Poll on a draining stream reports READY exactly when a chunk is poppa
 		idx_t unparked_polls = 0;
 		while (true) {
 			// Nothing but this thread pops, so a chunk observed here is still there for the poll
-			const bool observable = buffered.HasObservableChunk();
+			const bool observable = buffered.HasObservableUnit();
 			const bool engine_waits = buffered.WaitsOnConsumer();
 			const auto polled = stream.Poll();
 			if (observable) {
@@ -429,7 +470,7 @@ TEST_CASE("Poll on a draining stream reports READY exactly when a chunk is poppa
 				}
 			}
 			if (polled == QueryResultState::READY) {
-				REQUIRE(buffered.HasObservableChunk());
+				REQUIRE(buffered.HasObservableUnit());
 			}
 			unique_ptr<DataChunk> chunk;
 			auto state = stream.TryFetch(chunk);
@@ -489,8 +530,8 @@ TEST_CASE("Completing a fresh submission stages nothing in the buffer", "[api][s
 		handle->Complete();
 		REQUIRE(!handle->HasError());
 		REQUIRE(handle->RowCount() == 500000);
-		REQUIRE(handle->GetValue(0, 0).GetValue<int64_t>() == 0);
-		REQUIRE(handle->GetValue(0, 499999).GetValue<int64_t>() == 499999);
+		REQUIRE(handle->Collection().GetValue(0, 0).GetValue<int64_t>() == 0);
+		REQUIRE(handle->Collection().GetValue(0, 499999).GetValue<int64_t>() == 499999);
 		// Producers appended into the collection directly: the streaming buffer never held a byte
 		REQUIRE(handle->GetBufferedData().Lifetime() == ResultLifetime::RETAINED);
 		REQUIRE(handle->GetBufferedData().PeakBufferedBytes() == 0);

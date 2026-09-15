@@ -82,9 +82,9 @@ unique_ptr<QueryResult> Connection::Query(const string &query) {
 	return context->Query(query, QueryParameters());
 }
 
-unique_ptr<QueryResult> Connection::Query(unique_ptr<SQLStatement> statement, QueryResultMemoryType memory_type) {
+unique_ptr<QueryResult> Connection::Query(unique_ptr<SQLStatement> statement, shared_ptr<ResultFormat> format) {
 	QueryParameters query_parameters;
-	query_parameters.memory_type = memory_type;
+	query_parameters.format = std::move(format);
 	return context->Query(std::move(statement), query_parameters);
 }
 
@@ -141,7 +141,6 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, ve
 	auto named_params = ConvertParamListToMap(values);
 	QueryParameters parameters;
 	parameters.statement_args = named_params;
-	parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
 	parameters.result_eagerness = ResultEagerness::FORCED;
 	return context->Query(query, parameters);
 }
