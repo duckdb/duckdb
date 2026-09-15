@@ -522,6 +522,17 @@ void FSSTStorage::FinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
+static void VerifyFSSTDictionaryString(const StringDictionaryContainer &dict, idx_t block_size, int32_t dict_offset,
+                                       uint32_t string_length) {
+	// dict.end comes from the segment header, dict_offset and string_length from the bitpacked index buffer. The string
+	// is read from baseptr + dict.end - dict_offset for string_length bytes, so keep that range inside the block.
+	if (dict.end > block_size || dict_offset < 0 || UnsafeNumericCast<uint32_t>(dict_offset) > dict.end ||
+	    string_length > UnsafeNumericCast<uint32_t>(dict_offset)) {
+		throw IOException("Failed to scan FSST string - dictionary offset out of range. Database file appears to be "
+		                  "corrupted");
+	}
+}
+
 struct FSSTScanState : public StringScanState {
 	explicit FSSTScanState(const idx_t string_block_limit) {
 		ResetStoredDelta();
@@ -531,6 +542,7 @@ struct FSSTScanState : public StringScanState {
 	buffer_ptr<void> duckdb_fsst_decoder;
 	void *duckdb_fsst_decoder_ptr = nullptr;
 
+	idx_t block_size = 0;
 	vector<unsigned char> decompress_buffer;
 	bitpacking_width_t current_width;
 
@@ -557,9 +569,9 @@ struct FSSTScanState : public StringScanState {
 	                                 const bp_delta_offsets_t &offsets, idx_t index,
 	                                 VectorStringBuffer &str_buffer) const {
 		uint32_t str_len = bitunpack_buffer[offsets.scan_offset + index];
-		auto str_ptr = FSSTStorage::FetchStringPointer(
-		    dict, baseptr,
-		    UnsafeNumericCast<int32_t>(delta_decode_buffer[index + offsets.unused_delta_decoded_values]));
+		auto dict_offset = UnsafeNumericCast<int32_t>(delta_decode_buffer[index + offsets.unused_delta_decoded_values]);
+		VerifyFSSTDictionaryString(dict, block_size, dict_offset, str_len);
+		auto str_ptr = FSSTStorage::FetchStringPointer(dict, baseptr, dict_offset);
 
 		if (str_len == 0) {
 			return string_t(nullptr, 0);
@@ -576,6 +588,7 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(const QueryContext &con
 	auto block_size = segment.GetBlockSize();
 	auto string_block_limit = StringUncompressed::GetStringBlockLimit(block_size);
 	auto state = make_uniq<FSSTScanState>(string_block_limit);
+	state->block_size = block_size;
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	state->handle = buffer_manager.Pin(segment.block);
 	auto base_ptr = state->handle.Ptr() + segment.GetBlockOffset();
@@ -687,10 +700,10 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		// Lookup decompressed offsets in dict
 		for (idx_t i = 0; i < scan_count; i++) {
 			uint32_t string_length = bitunpack_buffer[i + offsets.scan_offset];
-			result_data[i] = UncompressedStringStorage::FetchStringFromDict(
-			    segment, dict.end, result, baseptr,
-			    UnsafeNumericCast<int32_t>(delta_decode_buffer[i + offsets.unused_delta_decoded_values]),
-			    string_length);
+			auto dict_offset = UnsafeNumericCast<int32_t>(delta_decode_buffer[i + offsets.unused_delta_decoded_values]);
+			VerifyFSSTDictionaryString(dict, segment.GetBlockSize(), dict_offset, string_length);
+			result_data[i] = UncompressedStringStorage::FetchStringFromDict(segment, dict.end, result, baseptr,
+			                                                                dict_offset, string_length);
 			FSSTVector::SetCount(result, scan_count);
 		}
 	} else {
@@ -767,10 +780,11 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 	                   offsets.total_delta_decode_count, 0);
 
 	uint32_t string_length = bitunpack_buffer[offsets.scan_offset];
+	auto dict_offset = UnsafeNumericCast<int32_t>(delta_decode_buffer[offsets.unused_delta_decoded_values]);
+	VerifyFSSTDictionaryString(dict, block_size, dict_offset, string_length);
 
-	string_t compressed_string = UncompressedStringStorage::FetchStringFromDict(
-	    segment, dict.end, result, base_ptr,
-	    UnsafeNumericCast<int32_t>(delta_decode_buffer[offsets.unused_delta_decoded_values]), string_length);
+	string_t compressed_string =
+	    UncompressedStringStorage::FetchStringFromDict(segment, dict.end, result, base_ptr, dict_offset, string_length);
 
 	auto &str_buffer = StringVector::GetStringBuffer(result);
 	result_data[result_idx] = FSSTPrimitives::DecompressValue((void *)&decoder, str_buffer, compressed_string.GetData(),
