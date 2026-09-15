@@ -39,3 +39,13 @@ statement error
 SELECT count(*) FROM initialize_temporary_directory(cleanup := false, silent := true);
 ----
 <REGEX>:.*covers being second, not being overruled.*
+
+statement error
+SELECT count(*) FROM initialize_temporary_directory(cleanup := NULL);
+----
+<REGEX>:Binder Error.*cleanup cannot be NULL.*
+
+statement error
+SELECT count(*) FROM initialize_temporary_directory(silent := NULL);
+----
+<REGEX>:Binder Error.*silent cannot be NULL.*

@@ -1,3 +1,4 @@
+#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -38,6 +39,13 @@ static void TemporaryFilesFunction(ClientContext &context, TableFunctionInput &d
 }
 
 //! Whether to describe the whole directory or only what this instance owns.
+static bool BooleanParameter(const char *function, const char *name, const Value &value) {
+	if (value.IsNull()) {
+		throw BinderException("%s: %s cannot be NULL", function, name);
+	}
+	return BooleanValue::Get(value.DefaultCastAs(LogicalType::BOOLEAN));
+}
+
 struct TemporaryFilesBindData : public FunctionData {
 	bool external = false;
 
@@ -57,7 +65,7 @@ static unique_ptr<FunctionData> DuckDBTemporaryFilesBind(ClientContext &context,
 	auto result = make_uniq<TemporaryFilesBindData>();
 	for (auto &entry : input.named_parameters) {
 		if (entry.first == "external") {
-			result->external = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
+			result->external = BooleanParameter("duckdb_temporary_files", "external", entry.second);
 		}
 	}
 	return std::move(result);
@@ -112,9 +120,9 @@ static unique_ptr<FunctionData> InitializeTemporaryDirectoryBind(ClientContext &
 	auto result = make_uniq<InitializeTemporaryDirectoryData>();
 	for (auto &entry : input.named_parameters) {
 		if (entry.first == "cleanup") {
-			result->cleanup = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
+			result->cleanup = BooleanParameter("initialize_temporary_directory", "cleanup", entry.second);
 		} else if (entry.first == "silent") {
-			result->silent = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
+			result->silent = BooleanParameter("initialize_temporary_directory", "silent", entry.second);
 		}
 	}
 	return std::move(result);

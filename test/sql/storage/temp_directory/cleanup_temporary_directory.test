@@ -50,3 +50,8 @@ SELECT column_name, column_type FROM (DESCRIBE FROM cleanup_temporary_directory(
 ----
 path	VARCHAR
 size	BIGINT
+
+statement error
+SELECT count(*) FROM duckdb_temporary_files(external := NULL);
+----
+<REGEX>:Binder Error.*external cannot be NULL.*
