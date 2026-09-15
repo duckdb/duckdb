@@ -2,21 +2,29 @@ name: Staged Upload
 on:
   workflow_call:
     inputs:
-      target_git_describe:
+      duckdb_commit:
+        type: string
+      duckdb_version:
         type: string
   workflow_dispatch:
     inputs:
-      target_git_describe:
+      duckdb_commit:
+        type: string
+      duckdb_version:
         type: string
 
 jobs:
  staged-upload:
    runs-on: ubuntu-latest
-   if: ${{ inputs.target_git_describe != '' }}
+   if: ${{ inputs.duckdb_version != '' }}
+   env:
+     DUCKDB_COMMIT: ${{ inputs.duckdb_commit || github.sha }}
+     DUCKDB_VERSION: ${{ inputs.duckdb_version }}
    steps:
      - uses: actions/checkout@v6
        with:
          fetch-depth: 0
+         ref: ${{ inputs.duckdb_commit || github.sha }}
 
      - uses: actions/setup-python@v6
        with:
@@ -33,15 +41,15 @@ jobs:
          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
        run: |
-          TARGET=$(git log -1 --format=%H | cut -c1-10)
+          TARGET=$(printf '%s' "$DUCKDB_COMMIT" | cut -c1-10)
           mkdir to_be_uploaded
           rclone copy \
             --no-traverse \
-            ":s3,provider=AWS,env_auth=true,endpoint=${AWS_ENDPOINT_URL}:duckdb-staging/$TARGET/${{ inputs.target_git_describe }}/$GITHUB_REPOSITORY/github_release/" \
+            ":s3,provider=AWS,env_auth=true,endpoint=${AWS_ENDPOINT_URL}:duckdb-staging/$TARGET/$DUCKDB_VERSION/$GITHUB_REPOSITORY/github_release/" \
             to_be_uploaded/
 
      - name: Deploy
-       if: ${{ inputs.target_git_describe != '' }}
+       if: ${{ inputs.duckdb_version != '' }}
        shell: bash
        env:
          AWS_ENDPOINT_URL: ${{ secrets.DUCKDB_INSTALL_S3_ENDPOINT }}
@@ -54,4 +62,4 @@ jobs:
            --no-traverse \
            --header-upload "Content-Type: application/octet-stream" \
            to_be_uploaded/ \
-           ":s3,provider=AWS,env_auth=true,endpoint=${AWS_ENDPOINT_URL}:duckdb-install/${{ inputs.target_git_describe }}/"
+           ":s3,provider=AWS,env_auth=true,endpoint=${AWS_ENDPOINT_URL}:duckdb-install/$DUCKDB_VERSION/"

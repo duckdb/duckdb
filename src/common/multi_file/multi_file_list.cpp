@@ -356,7 +356,20 @@ bool LazyMultiFileList::ExpandNextPathInternal() const {
 //===--------------------------------------------------------------------===//
 // GlobMultiFileList
 //===--------------------------------------------------------------------===//
+static vector<OpenFileInfo> PathsToFiles(vector<string> paths) {
+	vector<OpenFileInfo> result;
+	result.reserve(paths.size());
+	for (auto &path : paths) {
+		result.emplace_back(std::move(path));
+	}
+	return result;
+}
+
 GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<string> globs_p, FileGlobInput glob_input_p)
+    : GlobMultiFileList(context_p, PathsToFiles(std::move(globs_p)), std::move(glob_input_p)) {
+}
+
+GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<OpenFileInfo> globs_p, FileGlobInput glob_input_p)
     : LazyMultiFileList(&context_p), context(context_p), globs(std::move(globs_p)), glob_input(std::move(glob_input_p)),
       current_glob(0) {
 }
@@ -377,13 +390,23 @@ bool GlobMultiFileList::ExpandNextPath() const {
 	if (current_glob >= globs.size()) {
 		return false;
 	}
+	auto &current_entry = globs[current_glob];
+	if (current_entry.extended_info) {
+		// the file was specified together with the options to open it with - use it as-is
+		expanded_files.push_back(current_entry);
+		current_glob++;
+		return true;
+	}
 	if (current_glob >= file_lists.size()) {
+		file_lists.resize(current_glob + 1);
+	}
+	if (!file_lists[current_glob]) {
 		// glob is not yet started for this file - start it and initiate the scan over this file
 		auto &fs = FileSystem::GetFileSystem(context);
-		auto glob_result = fs.GlobFileList(globs[current_glob], glob_input);
+		auto glob_result = fs.GlobFileList(current_entry.path, glob_input);
 		scan_state = MultiFileListScanData();
 		glob_result->InitializeScan(scan_state);
-		file_lists.push_back(std::move(glob_result));
+		file_lists[current_glob] = std::move(glob_result);
 	}
 	// get the next batch of files we can fetch through the glob
 	auto &glob_list = *file_lists[current_glob];

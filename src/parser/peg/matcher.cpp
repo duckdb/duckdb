@@ -1,4 +1,5 @@
 #include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/matcher_stack.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/peg/matcher_factory.hpp"
 #include "duckdb/main/database.hpp"
@@ -17,20 +18,52 @@
 
 namespace duckdb {
 
-MatcherResult Matcher::MatchParseResult(MatchState &state) const {
-	state.rule = rule;
-	if (state.packrat_cache && IsPackratMemoized()) {
-		return state.packrat_cache->Match(*this, state);
+static MatcherResult ExecuteRecursive(MatchInput input) {
+	auto &matcher = input.matcher;
+	auto &state = input.state;
+	state.rule = matcher.GetRule();
+	PackratMatchState packrat_state;
+	if (PackratMatchState::IsEnabled(matcher, state)) {
+		auto cached_result = packrat_state.TryLoadCachedResult(matcher, state);
+		if (cached_result) {
+			return *cached_result;
+		}
 	}
-	return MatchParseResultInternal(state);
+
+	auto process = matcher.StartMatch(state);
+	optional<MatcherResult> child_result;
+	while (true) {
+		auto step = process->Resume(child_result);
+		child_result.reset();
+		auto child = step.GetChild();
+		if (!child) {
+			auto result = step.GetResult();
+			packrat_state.StoreResult(matcher, state, result);
+			return result;
+		}
+		child_result = ExecuteRecursive(*child);
+	}
+}
+
+MatcherResult Matcher::MatchParseResult(MatchState &state) const {
+	MatchInput input {*this, state};
+	if (state.context.use_heap_based_parser) {
+		MatchStack stack;
+		return stack.Execute(input);
+	}
+	return ExecuteRecursive(input);
 }
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
-	auto entry = state.added_suggestions.find(*this);
-	if (entry != state.added_suggestions.end()) {
+	if (!state.added_suggestions) {
+		state.added_suggestions = make_uniq<reference_set_t<const Matcher>>();
+	}
+	auto &added_suggestions = *state.added_suggestions;
+	auto entry = added_suggestions.find(*this);
+	if (entry != added_suggestions.end()) {
 		return SuggestionType::MANDATORY;
 	}
-	state.added_suggestions.insert(*this);
+	added_suggestions.insert(*this);
 	return AddSuggestionInternal(state);
 }
 
@@ -46,7 +79,7 @@ void Matcher::Print() const {
 }
 
 void MatchState::AddSuggestion(MatcherSuggestion suggestion) {
-	suggestions.push_back(std::move(suggestion));
+	context.suggestions.push_back(std::move(suggestion));
 }
 
 Matcher &MatcherAllocator::Allocate(unique_ptr<Matcher> matcher) {

@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "duckdb/common/compressed_file_system.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/fstream.hpp"
@@ -703,6 +704,40 @@ TEST_CASE("filesystem concurrent access and deletion", "[file_system]") {
 	REQUIRE(!fs->FileExists(fname));
 }
 
+TEST_CASE("Moving over an open file preserves existing handles", "[file_system]") {
+	auto fs = FileSystem::CreateLocal();
+	auto source = TestCreatePath("move_over_open_file_source");
+	auto target = TestCreatePath("move_over_open_file_target");
+	const vector<char> source_data {'s', 'o', 'u', 'r', 'c', 'e'};
+	const vector<char> target_data {'t', 'a', 'r', 'g', 'e', 't'};
+
+	auto write = [&](const string &path, vector<char> data) {
+		auto handle = fs->OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+		handle->Write(data.data(), data.size());
+	};
+	auto read = [](FileHandle &handle, idx_t size) {
+		vector<char> data(size);
+		handle.Read(data.data(), data.size());
+		return data;
+	};
+
+	fs->TryRemoveFile(source);
+	fs->TryRemoveFile(target);
+	write(source, source_data);
+	write(target, target_data);
+
+	auto open_target = fs->OpenFile(target, FileFlags::FILE_FLAGS_READ);
+	fs->MoveFile(source, target);
+
+	REQUIRE(!fs->FileExists(source));
+	REQUIRE(fs->FileExists(target));
+	REQUIRE(read(*open_target, target_data.size()) == target_data);
+	REQUIRE(read(*fs->OpenFile(target, FileFlags::FILE_FLAGS_READ), source_data.size()) == source_data);
+
+	open_target.reset();
+	fs->RemoveFile(target);
+}
+
 // ------------------------------------------------------------------------------------------------
 // Path struct tests
 // ------------------------------------------------------------------------------------------------
@@ -854,11 +889,14 @@ TEST_CASE("Path::FromString/ToString round-trips", "[file_system]") {
 		    make_tuple(OK_, "file:/a",      "file:/a"),
 		    make_tuple(OK_, "file:/a/b",    "file:/a/b"),
 
+		    make_tuple(OK_, "file://localhost",     "file://localhost/"),
 		    make_tuple(OK_, "file://localhost/",    "file://localhost/"),
 		    make_tuple(OK_, "file://localhost/a",   "file://localhost/a"),
 		    make_tuple(OK_, "file://localhost/a/b", "file://localhost/a/b"),
 
 		    make_tuple(ERR, "file://otherhost/a/b", ""),
+		    make_tuple(ERR, "file://otherhost",     ""),
+		    make_tuple(ERR, "file://",              ""),
 
 		    make_tuple(OK_, "file:///",     "file:///"),
 		    make_tuple(OK_, "file:///a",    "file:///a"),

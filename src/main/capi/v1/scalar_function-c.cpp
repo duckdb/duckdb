@@ -528,6 +528,9 @@ duckdb_state duckdb_register_scalar_function_set(duckdb_connection connection, d
 		}
 	}
 
+	scalar_function_set.ApplyToFunctions(
+	    [](duckdb::ScalarFunction &scalar_function) { scalar_function.SetFallible(); });
+
 	try {
 		auto con = reinterpret_cast<duckdb::Connection *>(connection);
 		con->context->RunFunctionInTransaction([&]() {

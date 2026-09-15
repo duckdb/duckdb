@@ -109,6 +109,16 @@ static Value NumericStatsValue(const LogicalType &type, hugeint_t value) {
 	return Value::Numeric(type, value);
 }
 
+static Value NumericStatsValue(const LogicalType &type, uint64_t value) {
+	D_ASSERT(type.IsNumeric());
+	return Value::Numeric(type, uhugeint_t(value));
+}
+
+static Value NumericStatsValue(const LogicalType &type, uhugeint_t value) {
+	D_ASSERT(type.IsNumeric());
+	return Value::Numeric(type, value);
+}
+
 template <class T>
 static bool WidenFloatingBounds(const LogicalType &type, Value &new_min, Value &new_max) {
 	auto min = new_min.GetValue<T>();
@@ -227,6 +237,26 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 		case PhysicalType::INT128:
 			potential_overflow =
 			    PROPAGATE::template Operation<hugeint_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
+			break;
+		case PhysicalType::UINT8:
+			potential_overflow =
+			    PROPAGATE::template Operation<uint8_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
+			break;
+		case PhysicalType::UINT16:
+			potential_overflow =
+			    PROPAGATE::template Operation<uint16_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
+			break;
+		case PhysicalType::UINT32:
+			potential_overflow =
+			    PROPAGATE::template Operation<uint32_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
+			break;
+		case PhysicalType::UINT64:
+			potential_overflow =
+			    PROPAGATE::template Operation<uint64_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
+			break;
+		case PhysicalType::UINT128:
+			potential_overflow =
+			    PROPAGATE::template Operation<uhugeint_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
 			break;
 		default:
 			return nullptr;
@@ -611,6 +641,25 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 	// LCOV_EXCL_STOP
 }
 
+// The overloads built up in this file leave their signature's parameter names at the auto-generated "colN"
+// default; name unary/binary numeric operators consistently with the rest of the catalog (x / left,right)
+// without touching overloads (e.g. list_concat, merged into "+") that already have real names.
+static void NameOperatorParameters(ScalarFunction &fun) {
+	auto &sig = fun.GetSignature();
+	if (sig.GetParameterCount() == 1) {
+		if (sig.GetParameter(0).GetName() == "col0") {
+			sig.GetParameter(0).SetName("x");
+		}
+	} else if (sig.GetParameterCount() == 2) {
+		if (sig.GetParameter(0).GetName() == "col0") {
+			sig.GetParameter(0).SetName("left");
+		}
+		if (sig.GetParameter(1).GetName() == "col1") {
+			sig.GetParameter(1).SetName("right");
+		}
+	}
+}
+
 ScalarFunctionSet OperatorAddFun::GetFunctions() {
 	ScalarFunctionSet add("+");
 	for (auto &type : LogicalType::Numeric()) {
@@ -651,6 +700,7 @@ ScalarFunctionSet OperatorAddFun::GetFunctions() {
 	// we can add bignums together
 	add.AddFunction(AddFunction::GetFunction(LogicalType::BIGNUM, LogicalType::BIGNUM));
 
+	add.ApplyToFunctions(NameOperatorParameters);
 	return add;
 }
 
@@ -921,6 +971,7 @@ ScalarFunctionSet OperatorSubtractFun::GetFunctions() {
 	// we can negate intervals
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::INTERVAL));
 
+	subtract.ApplyToFunctions(NameOperatorParameters);
 	return subtract;
 }
 
@@ -1073,6 +1124,7 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
 	multiply.SetFallible();
 
+	multiply.ApplyToFunctions(NameOperatorParameters);
 	return multiply;
 }
 
@@ -1326,6 +1378,7 @@ ScalarFunctionSet OperatorFloatDivideFun::GetFunctions() {
 	fp_divide.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::DOUBLE}, LogicalType::INTERVAL, nullptr,
 	                                     BindIntervalDivide));
 	fp_divide.SetFallible();
+	fp_divide.ApplyToFunctions(NameOperatorParameters);
 	return fp_divide;
 }
 
@@ -1342,6 +1395,7 @@ ScalarFunctionSet OperatorIntegerDivideFun::GetFunctions() {
 		}
 	}
 	full_divide.SetFallible();
+	full_divide.ApplyToFunctions(NameOperatorParameters);
 	return full_divide;
 }
 
@@ -1399,6 +1453,7 @@ ScalarFunctionSet OperatorModuloFun::GetFunctions() {
 	}
 	modulo.SetFallible();
 
+	modulo.ApplyToFunctions(NameOperatorParameters);
 	return modulo;
 }
 

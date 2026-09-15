@@ -1,0 +1,39 @@
+# name: test/sql/storage/encryption/temp_files/encrypted_temp_file_size_accounting.test
+# description: Verify encrypted temp-file accounting matches the on-disk footprint
+# group: [temp_files]
+
+# httpfs is required to enable temp file encryption
+require httpfs
+
+require block_size 262144
+
+load {TEST_DIR}/encrypted_temp_file_size_accounting.db
+
+# Isolate the temp directory so `duckdb_temporary_files()` only reports this test's spill
+statement ok
+SET temp_directory='{TEST_DIR}/encrypted_temp_file_size_accounting_tmp'
+
+statement ok
+SET temp_file_encryption=true
+
+statement ok
+SET memory_limit='16MB'
+
+# Force a spill. A TEMPORARY table keeps the payload alive after CREATE completes,
+# so both accounting sources have data to report when we probe them below.
+statement ok
+CREATE TEMPORARY TABLE big AS
+    SELECT i AS k, repeat('x', 200)::VARCHAR AS v
+    FROM range(500000) t(i)
+
+query I
+SELECT count(*) > 0 FROM duckdb_temporary_files()
+----
+true
+
+query I
+SELECT
+    (SELECT COALESCE(sum(size), 0)::BIGINT FROM duckdb_temporary_files())
+  = (SELECT COALESCE(sum(temporary_storage_bytes), 0)::BIGINT FROM duckdb_memory())
+----
+true

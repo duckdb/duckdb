@@ -5,6 +5,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -392,6 +393,48 @@ void ReplaceWithBoundReference(unique_ptr<Expression> &root_expr) {
 	    });
 }
 
+static unique_ptr<ExpressionFilter> TryCreateMultiColumnExpressionFilter(LogicalGet &get, const Expression &expr,
+                                                                         const vector<ColumnBinding> &bindings) {
+	vector<ColumnBinding> distinct_bindings;
+	distinct_bindings.reserve(bindings.size());
+	// Maps column bindings to dense BoundReference indexes.
+	column_binding_map_t<idx_t> binding_indexes;
+	for (const auto &binding : bindings) {
+		const auto insert_result = binding_indexes.emplace(binding, distinct_bindings.size());
+		if (insert_result.second) {
+			distinct_bindings.push_back(binding);
+		}
+	}
+	if (distinct_bindings.size() <= 1) {
+		return nullptr;
+	}
+
+	vector<ProjectionIndex> column_indexes;
+	column_indexes.reserve(distinct_bindings.size());
+	for (const auto &binding : distinct_bindings) {
+		if (binding.table_index != get.table_index || binding.column_index >= get.GetColumnIds().size() ||
+		    get.GetColumnIds()[binding.column_index].IsVirtualColumn()) {
+			return nullptr;
+		}
+		column_indexes.emplace_back(binding.column_index);
+	}
+
+	auto filter_expr = expr.Copy();
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+	    filter_expr, [&](BoundColumnRefExpression &column_ref, unique_ptr<Expression> &child) {
+		    const auto entry = binding_indexes.find(column_ref.Binding());
+		    D_ASSERT(entry != binding_indexes.end());
+		    child =
+		        make_uniq<BoundReferenceExpression>(column_ref.GetAlias(), column_ref.GetReturnType(), entry->second);
+	    });
+	// Remove query-specific metadata so equivalent filters serialize identically for common-subplan matching.
+	ExpressionIterator::EnumerateExpression(filter_expr, [](Expression &expr) {
+		expr.ClearAlias();
+		expr.SetQueryLocation(optional_idx());
+	});
+	return make_uniq<ExpressionFilter>(std::move(filter_expr), std::move(column_indexes));
+}
+
 FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &get, Expression &expr) {
 	if (!get.function.pushdown_expression) {
 		// the scan does not support pushing down generic expressions
@@ -403,48 +446,23 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 	if (bindings.empty()) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	auto table = get.GetTable();
-	if (bindings.size() == 2 && bindings[0] != bindings[1] && table && table->IsDuckTable() &&
-	    BoundComparisonExpression::IsComparison(expr)) {
-		const auto &comparison = expr.Cast<BoundFunctionExpression>();
-		const auto &left = BoundComparisonExpression::Left(comparison);
-		const auto &right = BoundComparisonExpression::Right(comparison);
-		const auto comparison_type = comparison.GetExpressionType();
-		const bool supported_comparison = comparison_type == ExpressionType::COMPARE_EQUAL ||
-		                                  comparison_type == ExpressionType::COMPARE_NOTEQUAL ||
-		                                  comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-		                                  comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
-		                                  comparison_type == ExpressionType::COMPARE_LESSTHAN ||
-		                                  comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
-		if (!supported_comparison || left.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
-		    right.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF || !left.GetReturnType().IsNumeric() ||
-		    !right.GetReturnType().IsNumeric()) {
-			return FilterPushdownResult::NO_PUSHDOWN;
+	bool has_multiple_bindings = false;
+	for (idx_t binding_idx = 1; binding_idx < bindings.size(); ++binding_idx) {
+		if (bindings[binding_idx] != bindings[0]) {
+			has_multiple_bindings = true;
+			break;
 		}
-		const auto &left_ref = left.Cast<BoundColumnRefExpression>();
-		const auto &right_ref = right.Cast<BoundColumnRefExpression>();
-		if (left_ref.Binding().table_index != get.table_index || right_ref.Binding().table_index != get.table_index ||
-		    left_ref.Binding().column_index >= get.GetColumnIds().size() ||
-		    right_ref.Binding().column_index >= get.GetColumnIds().size() ||
-		    get.GetColumnIds()[left_ref.Binding().column_index].IsVirtualColumn() ||
-		    get.GetColumnIds()[right_ref.Binding().column_index].IsVirtualColumn()) {
-			return FilterPushdownResult::NO_PUSHDOWN;
-		}
-
-		auto left_bound_ref = make_uniq<BoundReferenceExpression>(left_ref.GetAlias(), left_ref.GetReturnType(), 0);
-		auto right_bound_ref = make_uniq<BoundReferenceExpression>(right_ref.GetAlias(), right_ref.GetReturnType(), 1);
-		auto filter_expr =
-		    BoundComparisonExpression::Create(comparison_type, std::move(left_bound_ref), std::move(right_bound_ref));
-		vector<ProjectionIndex> column_indexes {left_ref.Binding().column_index, right_ref.Binding().column_index};
-		get.table_filters.PushMultiColumnFilter(
-		    make_uniq<ExpressionFilter>(std::move(filter_expr), std::move(column_indexes)));
-		return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 	}
-	// we can only pushdown expressions that refer to exactly one column
-	for (idx_t i = 1; i < bindings.size(); i++) {
-		if (bindings[i] != bindings[0]) {
-			return FilterPushdownResult::NO_PUSHDOWN;
+	if (has_multiple_bindings) {
+		auto table = get.GetTable();
+		if (table && table->IsDuckTable() && ExpressionFilter::CanPropagateExpressionStatistics(expr)) {
+			auto filter = TryCreateMultiColumnExpressionFilter(get, expr, bindings);
+			if (filter) {
+				get.table_filters.PushMultiColumnFilter(std::move(filter));
+				return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
+			}
 		}
+		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	if (!get.function.pushdown_expression(context, get, expr)) {
 		// the scan does not support pushing down THIS expression

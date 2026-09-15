@@ -52,6 +52,7 @@ void ParquetColumnDefinition::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<LogicalType>(103, "type", type);
 	serializer.WriteProperty<Value>(104, "default_value", default_value);
 	serializer.WritePropertyWithDefault<Value>(105, "identifier", identifier, Value());
+	serializer.WritePropertyWithDefault<vector<ParquetColumnDefinition>>(106, "children", children, vector<ParquetColumnDefinition>());
 }
 
 ParquetColumnDefinition ParquetColumnDefinition::Deserialize(Deserializer &deserializer) {
@@ -61,6 +62,7 @@ ParquetColumnDefinition ParquetColumnDefinition::Deserialize(Deserializer &deser
 	deserializer.ReadProperty<LogicalType>(103, "type", result.type);
 	deserializer.ReadProperty<Value>(104, "default_value", result.default_value);
 	deserializer.ReadPropertyWithExplicitDefault<Value>(105, "identifier", result.identifier, Value());
+	deserializer.ReadPropertyWithExplicitDefault<vector<ParquetColumnDefinition>>(106, "children", result.children, vector<ParquetColumnDefinition>());
 	return result;
 }
 

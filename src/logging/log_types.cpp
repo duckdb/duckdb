@@ -1,7 +1,8 @@
 #include "duckdb/logging/log_type.hpp"
 
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_opener.hpp"
-#include "duckdb/common/http_util.hpp"
+#include "duckdb/main/http/http_util.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/logging/file_system_logger.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -94,6 +95,14 @@ static Value CreateHTTPHeadersValue(const HTTPHeaders &headers) {
 	return Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, keys, values);
 }
 
+static string HTTPStatusToLogString(HTTPStatusCode status) {
+	try {
+		return EnumUtil::ToString(status);
+	} catch (const NotImplementedException &) {
+		return to_string(static_cast<uint16_t>(status));
+	}
+}
+
 string HTTPLogType::ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPResponse> response) {
 	child_list_t<Value> request_child_list = {
 	    {"type", Value(EnumUtil::ToString(request.type))},
@@ -109,7 +118,7 @@ string HTTPLogType::ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPR
 	Value response_value;
 	if (response) {
 		child_list_t<Value> response_child_list = {
-		    {"status", Value(EnumUtil::ToString(response->status))},
+		    {"status", Value(HTTPStatusToLogString(response->status))},
 		    {"reason", Value(response->reason.empty() ? response->GetRequestError() : response->reason)},
 		    {"headers", CreateHTTPHeadersValue(response->headers)},
 		};

@@ -240,12 +240,18 @@ hugeint_t DecimalSubtractOverflowCheck::Operation(hugeint_t left, hugeint_t righ
 //===--------------------------------------------------------------------===//
 template <>
 dtime_t SubtractTimeOperator::Operation(dtime_t left, interval_t right) {
+	if (right.micros == NumericLimits<int64_t>::Minimum()) {
+		throw OutOfRangeException("Interval micros value out of range");
+	}
 	right.micros = -right.micros;
 	return AddTimeOperator::Operation<dtime_t, interval_t, dtime_t>(left, right);
 }
 
 template <>
 dtime_tz_t SubtractTimeOperator::Operation(dtime_tz_t left, interval_t right) {
+	if (right.micros == NumericLimits<int64_t>::Minimum()) {
+		throw OutOfRangeException("Interval micros value out of range");
+	}
 	right.micros = -right.micros;
 	return AddTimeOperator::Operation<dtime_tz_t, interval_t, dtime_tz_t>(left, right);
 }

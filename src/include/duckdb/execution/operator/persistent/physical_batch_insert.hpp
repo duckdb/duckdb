@@ -11,6 +11,7 @@
 #include "duckdb/execution/operator/persistent/physical_insert.hpp"
 
 namespace duckdb {
+class SchemaCatalogEntry;
 class DuckTableEntry;
 
 class PhysicalBatchInsert : public PhysicalOperator {

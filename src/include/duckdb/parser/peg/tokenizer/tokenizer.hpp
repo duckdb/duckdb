@@ -14,8 +14,6 @@
 
 namespace duckdb {
 
-struct ParserCache;
-
 enum class TokenizeState {
 	STANDARD = 0,
 	SINGLE_LINE_COMMENT,
@@ -47,12 +45,11 @@ public:
 		return TokenType::END_OF_INPUT;
 	}
 
-protected:
+public:
 	const string &sql;
 	vector<MatcherToken> &tokens;
 	bool has_block_comment = false;
 	idx_t last_block_comment_position = 0;
-	friend class Tokenizer;
 };
 
 class Tokenizer {
@@ -63,6 +60,13 @@ public:
 public:
 	//! Tokenize the behavior's input and return whether autocomplete can be offered.
 	virtual bool TokenizeInput(TokenizerBehavior &behavior) const;
+
+protected:
+	virtual bool BackslashEscapesStringLiterals() const;
+	virtual bool IsQuotedIdentifierDelimiter(char character) const;
+	virtual void PushOperatorToken(TokenizerBehavior &behavior, idx_t start, idx_t end) const;
+	virtual void HandleLastToken(TokenizerBehavior &behavior, TokenizeState state, const string &sql,
+	                             idx_t last_pos) const;
 
 private:
 	//! Core tokenization loop. Returns true on a clean exit, false if the input ended inside an

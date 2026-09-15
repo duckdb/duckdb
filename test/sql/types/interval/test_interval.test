@@ -84,6 +84,18 @@ SELECT interval '-2147483648 months' AS without_ago,
 ----
 AGO interval value is out of range
 
+# Issue #25072: negating INT64_MIN with ago is out of range
+statement error
+SELECT '-9223372036854775800 microseconds -8 microseconds ago'::INTERVAL;
+----
+AGO interval value is out of range
+
+query II
+SELECT INTERVAL '-9223372036854775807 microseconds ago' = INTERVAL '9223372036854775807 microseconds',
+       INTERVAL '9223372036854775807 microseconds ago' = INTERVAL '-9223372036854775807 microseconds';
+----
+true	true
+
 # months and hours, with optional @
 query T
 SELECT INTERVAL '@2mons 1H';

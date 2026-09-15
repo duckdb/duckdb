@@ -323,7 +323,7 @@ TEST_CASE("Test default value appender", "[appender]") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i iNTEGER, j TIMESTAMPTZ DEFAULT now())"));
 		con.Query("BEGIN TRANSACTION");
 		result = con.Query("select now()");
-		auto &materialized_result = result->Cast<MaterializedQueryResult>();
+		auto &materialized_result = *result;
 		auto current_time = materialized_result.GetValue(0, 0);
 		{
 			Appender appender(con, "integers");

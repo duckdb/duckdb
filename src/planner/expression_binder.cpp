@@ -25,8 +25,8 @@ ExpressionBinder::~ExpressionBinder() {
 
 void ExpressionBinder::InitializeStackCheck() {
 	static constexpr idx_t INITIAL_DEPTH = 5;
-	if (binder.HasActiveBinder()) {
-		stack_depth = binder.GetActiveBinder().stack_depth + INITIAL_DEPTH;
+	if (binder.HasEnclosingScope()) {
+		stack_depth = binder.GetInnermostScope().stack_depth + INITIAL_DEPTH;
 	} else {
 		stack_depth = INITIAL_DEPTH;
 	}
@@ -91,6 +91,9 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindPositionalReference(expr, depth, root_expression);
 	case ExpressionClass::STAR:
 		return BindResult(BinderException::Unsupported(expr_ref, "STAR expression is not supported here"));
+	case ExpressionClass::WINDOW:
+		// a binder that does not handle windows itself reports that they are unsupported here
+		return BindUnsupportedExpression(expr_ref, depth, UnsupportedWindowMessage());
 	default:
 		return BindResult(
 		    NotImplementedException("Unimplemented expression class in ExpressionBinder::BindExpression: %s",
@@ -98,145 +101,64 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 	}
 }
 
-//! Reconstruct the source location from an error's extra info (prefers "location" so the length is kept)
-static QueryLocation ExtractLocation(const unordered_map<string, string> &info) {
-	auto pos_entry = info.find("position");
-	if (pos_entry == info.end()) {
-		return QueryLocation();
+BindResult ExpressionBinder::DispatchToScope(idx_t scope, unique_ptr<ParsedExpression> &expr_ptr, idx_t base_depth) {
+	auto result = ScopeAt(scope).BindExpression(expr_ptr, base_depth + scope, false);
+	if (!result.HasError()) {
+		// the reference reaches out of this scope: record it as a correlated column of this binder
+		ExtractCorrelatedExpressions(binder, *result.expression);
 	}
-	uint64_t start;
-	if (!TryCast::Operation<string_t, uint64_t>(string_t(pos_entry->second), start)) {
-		return QueryLocation();
-	}
-	uint64_t length = 0;
-	auto location_entry = info.find("location");
-	if (location_entry != info.end()) {
-		// value is formatted as "[start,length]"
-		auto comma = location_entry->second.find(',');
-		if (comma != string::npos) {
-			auto len_str = location_entry->second.substr(comma + 1);
-			if (!len_str.empty() && len_str.back() == ']') {
-				len_str.pop_back();
-			}
-			TryCast::Operation<string_t, uint64_t>(string_t(len_str), length);
-		}
-	}
-	return QueryLocation(start, length);
+	return result;
 }
 
-static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
-	auto &current_info = current.ExtraInfo();
-	auto &new_info = new_error.ExtraInfo();
-	auto current_entry = current_info.find("error_subtype");
-	auto new_entry = new_info.find("error_subtype");
-	if (current_entry == current_info.end() || new_entry == new_info.end()) {
-		// no subtype info in either expression
-		return false;
-	}
-	if (current_entry->second != "COLUMN_NOT_FOUND" || new_entry->second != "COLUMN_NOT_FOUND") {
-		// either info is not a `COLUMN_NOT_FOUND`
-		return false;
-	}
-	current_entry = current_info.find("name");
-	new_entry = new_info.find("name");
-	if (current_entry == current_info.end() || new_entry == new_info.end()) {
-		// no candidate info in either column
-		return false;
-	}
-	if (current_entry->second != new_entry->second) {
-		// error does not concern the same name/column
-		return false;
-	}
-	auto column_name = current_entry->second;
-	current_entry = current_info.find("candidates");
-	new_entry = new_info.find("candidates");
-	if (current_entry == current_info.end()) {
-		// no current candidates - use new candidates
-		current = std::move(new_error);
-		return true;
-	}
-	if (new_entry == new_info.end()) {
-		// no new candidates - use current candidates
-		return true;
-	}
-	// both errors have candidates - combine the candidates
-	auto current_candidates = StringUtil::Split(current_entry->second, ",");
-	auto new_candidates = StringUtil::Split(new_entry->second, ",");
-	current_candidates.insert(current_candidates.end(), new_candidates.begin(), new_candidates.end());
-
-	// run the similarity ranking on both sets of candidates
-	unordered_set<string> candidates;
-	vector<pair<string, double>> scores;
-	for (auto &candidate : current_candidates) {
-		// split by "." since the candidates might be in the form "table.column"
-		auto column_splits = StringUtil::Split(candidate, ".");
-		if (column_splits.empty()) {
-			continue;
-		}
-		auto &candidate_column = column_splits.back();
-		auto entry = candidates.find(candidate);
-		if (entry != candidates.end()) {
-			// already found
-			continue;
-		}
-		auto score = StringUtil::SimilarityRating(candidate_column, column_name);
-		candidates.insert(candidate);
-		scores.emplace_back(std::move(candidate), score);
-	}
-	// get a new top-n
-	auto top_candidates = StringUtil::TopNStrings(scores);
-	// get query location (prefer the current error's location, fall back to the new error's)
-	auto location = ExtractLocation(current_info);
-	if (!location.IsValid()) {
-		location = ExtractLocation(new_info);
-	}
-	QueryErrorContext context(location);
-	// generate a new (combined) error
-	current = BinderException::ColumnNotFound(Identifier(column_name), StringsToIdentifiers(top_candidates), context);
-	return true;
-}
-
-static void CombineErrors(ErrorData &current, ErrorData new_error) {
-	// try to combine missing column exceptions in order to pick the most relevant one
-	if (CombineMissingColumns(current, new_error)) {
-		// keep the old info
-		return;
-	}
-
-	// override the error with the new one
-	current = std::move(new_error);
-}
-
-BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, ErrorData error_message) {
-	// try to bind in one of the outer queries, if the binding error occurred in a subquery
-	auto &active_binders = binder.GetActiveBinders();
-	// make a copy of the set of binders, so we can restore it later
-	auto binders = active_binders;
-	auto bind_error = std::move(error_message);
-	idx_t depth = 1;
-	while (!active_binders.empty()) {
-		auto &next_binder = active_binders.back().get();
-		ExpressionBinder::QualifyColumnNames(next_binder.binder, expr);
-		auto next_error = next_binder.Bind(expr, depth);
-		if (!next_error.HasError()) {
-			bind_error = std::move(next_error);
+BindResult ExpressionBinder::BindInEnclosingScope(ColumnRefExpression &col_ref, idx_t depth,
+                                                  unique_ptr<ParsedExpression> &expr_ptr, ErrorData local_error) {
+	auto bind_error = std::move(local_error);
+	// the index of a scope is a depth, so a scope pushed or popped while the search is running would
+	// shift every index underneath it
+	const auto initial_scope_count = ScopeCount();
+	idx_t scope = 1;
+	while (scope < initial_scope_count) {
+		D_ASSERT(ScopeCount() == initial_scope_count);
+		auto resolution = ResolveColumn(col_ref, scope);
+		if (!resolution.found) {
+			// no scope reaches the name: report it against every scope that was searched
+			CombineErrors(bind_error, std::move(resolution.error));
 			break;
 		}
-		CombineErrors(bind_error, std::move(next_error));
-		depth++;
-		active_binders.pop_back();
+		// bind the qualified form the scope produced, so that it is recognised by that scope, e.g. a reference to one
+		// of its groups. The original is kept so the search can go on.
+		auto original = std::move(expr_ptr);
+		if (resolution.qualified) {
+			expr_ptr = std::move(resolution.qualified);
+		} else {
+			expr_ptr = original->Copy();
+		}
+		auto result = DispatchToScope(resolution.depth, expr_ptr, depth);
+		if (!result.HasError()) {
+			return result;
+		}
+		// the scope reaches the name but cannot bind it, e.g. a column shadowing a table alias, so the scopes outside
+		// it still get their turn
+		expr_ptr = std::move(original);
+		CombineErrors(bind_error, std::move(result.error));
+		scope = resolution.depth + 1;
 	}
-	active_binders = binders;
-	return BindResult(bind_error);
+	bind_error.AddQueryLocation(col_ref);
+	return BindResult(std::move(bind_error));
 }
 
-void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, ErrorData &error) {
-	if (expr) {
-		ErrorData bind_error = Bind(expr, depth);
-		if (!error.HasError()) {
-			error = std::move(bind_error);
-		}
+unique_ptr<Expression> ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, ErrorData &error) {
+	if (!expr) {
+		return nullptr;
 	}
+	auto result = Bind(expr, depth);
+	if (result.HasError()) {
+		if (!error.HasError()) {
+			error = std::move(result.error);
+		}
+		return nullptr;
+	}
+	return std::move(result.expression);
 }
 
 void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &expr) {
@@ -328,23 +250,12 @@ LogicalType ExpressionBinder::ExchangeNullType(const LogicalType &type) {
 
 unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, optional_ptr<LogicalType> result_type,
                                               bool root_expression) {
-	// bind the main expression
-	auto error_msg = Bind(expr, 0, root_expression);
-	if (error_msg.HasError()) {
-		// Try binding the correlated column. If binding the correlated column
-		// has error messages, those should be propagated up. So for the test case
-		// having subquery failed to bind:14 the real error message should be something like
-		// aggregate with constant input must be bound to a root node.
-		auto result = BindCorrelatedColumns(expr, error_msg);
-		if (result.HasError()) {
-			CombineErrors(error_msg, std::move(result.error));
-			error_msg.Throw();
-		}
-		auto &bound_expr = expr->Cast<BoundExpression>();
-		ExtractCorrelatedExpressions(binder, *bound_expr.expr);
+	// bind the main expression - a name that reaches out of this scope is resolved where it occurs
+	auto bind_result = Bind(expr, 0, root_expression);
+	if (bind_result.HasError()) {
+		bind_result.error.Throw();
 	}
-	auto &bound_expr = expr->Cast<BoundExpression>();
-	unique_ptr<Expression> result = std::move(bound_expr.expr);
+	unique_ptr<Expression> result = std::move(bind_result.expression);
 	if (target_type.id() != LogicalTypeId::INVALID) {
 		// the binder has a specific target type: add a cast to that type
 		result = BoundCastExpression::AddCastToType(context, std::move(result), target_type);
@@ -367,39 +278,19 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	return result;
 }
 
-ErrorData ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) {
-	// bind the node, but only if it has not been bound yet
+BindResult ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) {
 	auto query_location = expr->GetQueryLocation();
-	auto &expression = *expr;
-	auto alias = expression.GetAlias();
-	if (expression.GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
-		// already bound, don't bind it again
-		return ErrorData();
-	}
-	if (expression.GetExpressionClass() == ExpressionClass::WINDOW) {
-		auto &w = expression.Cast<WindowExpression>();
-		if (w.HasBoundedParts()) {
-			BindResult result =
-			    BindResult(BinderException::Unsupported(*expr, "window expression is not supported here"));
-			if (result.HasError()) {
-				return std::move(result.error);
-			}
-		}
-	}
-	// bind the expression
+	auto alias = expr->GetAlias();
 	BindResult result = BindExpression(expr, depth, root_expression);
 	if (result.HasError()) {
-		return std::move(result.error);
+		return result;
 	}
-	// successfully bound: replace the node with a BoundExpression
+	// carry the location and alias of the parsed node over to the bound expression
 	result.expression->SetQueryLocation(query_location);
-	expr = make_uniq<BoundExpression>(std::move(result.expression));
-	auto &be = expr->Cast<BoundExpression>();
-	be.SetAlias(alias);
 	if (!alias.empty()) {
-		be.expr->SetAlias(alias);
+		result.expression->SetAlias(alias);
 	}
-	return ErrorData();
+	return result;
 }
 
 BindResult ExpressionBinder::BindUnsupportedExpression(ParsedExpression &expr, idx_t depth, const string &message) {
@@ -407,8 +298,10 @@ BindResult ExpressionBinder::BindUnsupportedExpression(ParsedExpression &expr, i
 	// since that error might be more descriptive
 	// bind all children
 	ErrorData result;
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](unique_ptr<ParsedExpression> &child) { BindChild(child, depth, result); });
+	ParsedExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<ParsedExpression> &child) {
+		// the children are bound only to surface their errors - the expression itself is unsupported
+		(void)BindChild(child, depth, result);
+	});
 	if (result.HasError()) {
 		return BindResult(std::move(result));
 	}

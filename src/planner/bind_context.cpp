@@ -55,7 +55,7 @@ optional_ptr<Binding> BindContext::GetMatchingBinding(const Identifier &column_n
 			continue;
 		}
 		if (binding.HasMatchingBinding(column_name)) {
-			if (result || is_using_binding) {
+			if (result) {
 				throw BinderException(context,
 				                      "Ambiguous reference to column name %s (use: '%s.%s' "
 				                      "or '%s.%s')",
@@ -502,34 +502,34 @@ unique_ptr<ColumnRefExpression> BindContext::PositionToColumn(PositionalReferenc
 	return make_uniq<ColumnRefExpression>(column_name, table_name);
 }
 
-struct ExclusionListInfo {
-	explicit ExclusionListInfo(vector<unique_ptr<ParsedExpression>> &new_select_list)
-	    : new_select_list(new_select_list) {
+struct StarBindState {
+	explicit StarBindState(vector<unique_ptr<ParsedExpression>> &new_select_list) : new_select_list(new_select_list) {
 	}
 
 	vector<unique_ptr<ParsedExpression>> &new_select_list;
 	identifier_set_t excluded_columns;
 	qualified_column_set_t excluded_qualified_columns;
 	identifier_set_t replaced_columns;
+	vector<Identifier> candidate_columns;
 };
 
-bool CheckExclusionList(StarExpression &expr, const QualifiedColumnName &qualified_name, ExclusionListInfo &info) {
+bool CheckExclusionList(StarExpression &expr, const QualifiedColumnName &qualified_name, StarBindState &state) {
 	if (expr.ExcludeList().find(qualified_name) != expr.ExcludeList().end()) {
-		info.excluded_qualified_columns.insert(qualified_name);
+		state.excluded_qualified_columns.insert(qualified_name);
 		return true;
 	}
 	return false;
 }
 
 bool HandleRename(StarExpression &expr, const QualifiedColumnName &qualified_name,
-                  unique_ptr<ParsedExpression> &new_expr, ExclusionListInfo &info) {
+                  unique_ptr<ParsedExpression> &new_expr, StarBindState &state) {
 	auto replace_entry = expr.ReplaceList().find(qualified_name.column);
 	if (replace_entry != expr.ReplaceList().end()) {
-		if (info.replaced_columns.find(replace_entry->first) == info.replaced_columns.end()) {
+		if (state.replaced_columns.find(replace_entry->first) == state.replaced_columns.end()) {
 			new_expr = replace_entry->second->Copy();
 			new_expr->SetAlias(replace_entry->first);
-			info.replaced_columns.insert(replace_entry->first);
-			info.excluded_columns.insert(replace_entry->first);
+			state.replaced_columns.insert(replace_entry->first);
+			state.excluded_columns.insert(replace_entry->first);
 		} else {
 			return false;
 		}
@@ -541,12 +541,26 @@ bool HandleRename(StarExpression &expr, const QualifiedColumnName &qualified_nam
 	return true;
 }
 
+string CandidateColumnMessage(const vector<Identifier> &candidate_columns, const Identifier &missing_column) {
+	identifier_set_t unique_columns;
+	vector<Identifier> candidates;
+	for (auto &candidate_column : candidate_columns) {
+		if (unique_columns.find(candidate_column) != unique_columns.end()) {
+			continue;
+		}
+		unique_columns.insert(candidate_column);
+		candidates.push_back(candidate_column);
+	}
+	auto closest_candidates = StringUtil::TopNJaroWinkler(IdentifiersToStrings(candidates), missing_column);
+	return StringUtil::CandidatesMessage(closest_candidates, "Candidate bindings");
+}
+
 void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
                                                vector<unique_ptr<ParsedExpression>> &new_select_list) {
 	if (bindings_list.empty()) {
 		throw BinderException("* expression without FROM clause!");
 	}
-	ExclusionListInfo exclusion_info(new_select_list);
+	StarBindState star_state(new_select_list);
 	if (expr.RelationName().empty()) {
 		// SELECT * case
 		// bind all expressions of each table in-order
@@ -556,8 +570,9 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			auto &column_names = binding.GetColumnNames();
 			auto &binding_alias = binding.GetBindingAlias();
 			for (auto &column_name : column_names) {
+				star_state.candidate_columns.push_back(column_name);
 				QualifiedColumnName qualified_column(binding_alias, column_name);
-				if (CheckExclusionList(expr, qualified_column, exclusion_info)) {
+				if (CheckExclusionList(expr, qualified_column, star_state)) {
 					continue;
 				}
 				// check if this column is a USING column
@@ -580,14 +595,14 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 							    make_uniq<ColumnRefExpression>(column_name, child_binding));
 						}
 						coalesce->SetAlias(column_name);
-						if (HandleRename(expr, qualified_column, coalesce, exclusion_info)) {
+						if (HandleRename(expr, qualified_column, coalesce, star_state)) {
 							new_select_list.push_back(std::move(coalesce));
 						}
 					} else {
 						// primary binding: output the qualified column ref
 						auto new_expr = make_uniq_base<ParsedExpression, ColumnRefExpression>(
 						    column_name, using_binding.primary_binding);
-						if (HandleRename(expr, qualified_column, new_expr, exclusion_info)) {
+						if (HandleRename(expr, qualified_column, new_expr, star_state)) {
 							new_select_list.push_back(std::move(new_expr));
 						}
 					}
@@ -596,7 +611,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 				}
 				auto new_expr =
 				    CreateColumnReference(binding_alias, column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
-				if (HandleRename(expr, qualified_column, new_expr, exclusion_info)) {
+				if (HandleRename(expr, qualified_column, new_expr, star_state)) {
 					new_select_list.push_back(std::move(new_expr));
 				}
 			}
@@ -630,25 +645,27 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			column_names[0] = binding->GetAlias();
 			column_names[1] = expr.RelationName();
 			for (auto &child : struct_children) {
+				star_state.candidate_columns.push_back(child.first);
 				QualifiedColumnName qualified_name(child.first);
-				if (CheckExclusionList(expr, qualified_name, exclusion_info)) {
+				if (CheckExclusionList(expr, qualified_name, star_state)) {
 					continue;
 				}
 				column_names[2] = child.first;
 				unique_ptr<ParsedExpression> new_expr = make_uniq<ColumnRefExpression>(column_names);
-				if (HandleRename(expr, qualified_name, new_expr, exclusion_info)) {
+				if (HandleRename(expr, qualified_name, new_expr, star_state)) {
 					new_select_list.push_back(std::move(new_expr));
 				}
 			}
 		} else {
 			for (auto &column_name : column_names) {
+				star_state.candidate_columns.push_back(column_name);
 				QualifiedColumnName qualified_name(binding_alias, column_name);
-				if (CheckExclusionList(expr, qualified_name, exclusion_info)) {
+				if (CheckExclusionList(expr, qualified_name, star_state)) {
 					continue;
 				}
 				auto new_expr =
 				    CreateColumnReference(binding_alias, column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
-				if (HandleRename(expr, qualified_name, new_expr, exclusion_info)) {
+				if (HandleRename(expr, qualified_name, new_expr, star_state)) {
 					new_select_list.push_back(std::move(new_expr));
 				}
 			}
@@ -665,19 +682,22 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 
 	//! Verify correctness of the exclude list
 	for (auto &excluded : expr.ExcludeList()) {
-		if (exclusion_info.excluded_qualified_columns.find(excluded) ==
-		    exclusion_info.excluded_qualified_columns.end()) {
-			throw BinderException("Column \"%s\" in EXCLUDE list not found in %s", excluded.ToString(),
-			                      expr.RelationName().empty() ? "FROM clause" : expr.RelationName().c_str());
+		if (star_state.excluded_qualified_columns.find(excluded) == star_state.excluded_qualified_columns.end()) {
+			auto candidate_str = CandidateColumnMessage(star_state.candidate_columns, excluded.column);
+			throw BinderException("Column %s in EXCLUDE list not found in %s%s", excluded.ToDisplayString(),
+			                      expr.RelationName().empty() ? "FROM clause" : expr.RelationName().c_str(),
+			                      candidate_str);
 		}
 	}
 
 	//! Verify correctness of the replace list
 	for (auto &entry : expr.ReplaceList()) {
-		if (exclusion_info.excluded_columns.find(entry.first) == exclusion_info.excluded_columns.end()) {
-			throw BinderException("Column %s in REPLACE list not found in %s", entry.first,
+		if (star_state.excluded_columns.find(entry.first) == star_state.excluded_columns.end()) {
+			auto candidate_str = CandidateColumnMessage(star_state.candidate_columns, entry.first);
+			throw BinderException("Column %s in REPLACE list not found in %s%s", entry.first,
 			                      expr.RelationName().empty() ? string("FROM clause")
-			                                                  : expr.RelationName().GetIdentifierName());
+			                                                  : expr.RelationName().GetIdentifierName(),
+			                      candidate_str);
 		}
 	}
 }

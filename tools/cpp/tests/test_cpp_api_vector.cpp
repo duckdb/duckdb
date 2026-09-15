@@ -252,6 +252,7 @@ TEST_CASE("Stable C++API: VectorView CONSTANT without flatten", "[cpp_api]") {
 }
 #endif
 
+#if (STANDARD_VECTOR_SIZE > 3)
 TEST_CASE("Stable C++API: VectorView DICTIONARY resolves validity through sel", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
@@ -297,6 +298,7 @@ TEST_CASE("Stable C++API: VectorView DICTIONARY resolves validity through sel", 
 	// The view did not flatten the parent.
 	REQUIRE(vec.GetVectorType() == VectorType::DICTIONARY);
 }
+#endif
 
 #if (STANDARD_VECTOR_SIZE > 3)
 TEST_CASE("Stable C++API: MakeSequence and MakeConstant round-trip", "[cpp_api]") {

@@ -8,6 +8,12 @@ void DuckDBKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	};
 	initialized = true;
 
+	auto &reserved_keyword_map = keyword_maps.reserved_keyword_map;
+	auto &unreserved_keyword_map = keyword_maps.unreserved_keyword_map;
+	auto &colname_keyword_map = keyword_maps.colname_keyword_map;
+	auto &typefunc_keyword_map = keyword_maps.typefunc_keyword_map;
+	auto &typename_keyword_map = keyword_maps.typename_keyword_map;
+
 	// Populating reserved_keyword_map
 	reserved_keyword_map.insert("all");
 	reserved_keyword_map.insert("analyse");

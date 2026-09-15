@@ -10,6 +10,11 @@
 
 #include "duckdb/common/constants.hpp"
 
+// <langinfo.h>, pulled in by libc++ locale support, defines ERA as a macro
+#ifdef ERA
+#undef ERA
+#endif
+
 namespace duckdb {
 
 enum class DatePartSpecifier : uint8_t {

@@ -131,10 +131,12 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 					// there are multiple conditions: erase this condition
 					join.conditions.erase_at(i);
 					i--;
+					removed_expressions = true;
 					continue;
 				}
 				// this is the only condition and it is always true: all conditions are true
 				if (HandleJoinAlwaysMatches(join, node_ptr)) {
+					removed_expressions = true;
 					return;
 				}
 				break;
