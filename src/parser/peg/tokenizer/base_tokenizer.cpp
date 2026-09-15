@@ -375,7 +375,7 @@ bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
 					last_pos = i;
 					break;
 				}
-				// special operator - push the special operator
+				// Push the compound colon token
 				tokens.emplace_back(sql.substr(i, token_length), last_pos, TokenType::OPERATOR);
 				i += token_length - 1;
 				last_pos = i + 1;

@@ -234,7 +234,7 @@ class MatcherOverride:
             "number_literal",
             "string_literal",
             "operator",
-            "any_operator",
+            "all_operators",
             "identifier_string",
         )
 
