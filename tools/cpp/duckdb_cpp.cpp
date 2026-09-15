@@ -214,7 +214,7 @@ auto CheckedAPICall(F &&func, ARGS &&... args) -> void {
 		duckdb_v2_str raw_view = {nullptr, 0};
 		if (err) {
 			duckdb_v2_error_info_get_text(err, &message_view);
-			duckdb_v2_error_info_get_raw_message(err, &raw_view);
+			duckdb_v2_error_info_get_raw_text(err, &raw_view);
 		}
 		std::string message = message_view.ptr ? std::string(message_view.ptr, message_view.len) : "unknown error";
 		std::string raw = raw_view.ptr ? std::string(raw_view.ptr, raw_view.len) : "";
@@ -360,7 +360,7 @@ Environment::Environment() {
 
 Environment::~Environment() {
 	auto _h = handle();
-	duckdb_v2_destroy_environment(&_h);
+	duckdb_v2_environment_destroy(&_h);
 }
 
 auto Environment::GetOpenDatabaseCount() const -> size_t {

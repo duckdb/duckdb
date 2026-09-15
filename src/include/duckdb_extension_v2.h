@@ -197,14 +197,13 @@ typedef struct {
 	(duckdb_v2_database_handle db, idx_t *out_count, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_database_option_set)
 	(duckdb_v2_database_handle db, duckdb_v2_option_handle option, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR (*duckdb_v2_destroy_environment)(duckdb_v2_environment_handle *env);
 	DUCKDB_V2_ERROR (*duckdb_v2_disconnect)(duckdb_v2_connection_handle *conn);
 	DUCKDB_V2_ERROR(*duckdb_v2_environment_database_count)
 	(duckdb_v2_environment_handle env, idx_t *out_count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_environment_destroy)(duckdb_v2_environment_handle *env);
 	DUCKDB_V2_ERROR (*duckdb_v2_error_info_destroy)(duckdb_v2_error_info_handle *info);
 	DUCKDB_V2_ERROR (*duckdb_v2_error_info_get_code)(duckdb_v2_error_info_handle info, DUCKDB_V2_ERROR *out_code);
-	DUCKDB_V2_ERROR(*duckdb_v2_error_info_get_raw_message)
-	(duckdb_v2_error_info_handle info, duckdb_v2_str *out_raw_message);
+	DUCKDB_V2_ERROR (*duckdb_v2_error_info_get_raw_text)(duckdb_v2_error_info_handle info, duckdb_v2_str *out_raw_text);
 	DUCKDB_V2_ERROR (*duckdb_v2_error_info_get_text)(duckdb_v2_error_info_handle info, duckdb_v2_str *out_text);
 	DUCKDB_V2_ERROR (*duckdb_v2_error_info_set_code)(duckdb_v2_error_info_handle info, DUCKDB_V2_ERROR code);
 	DUCKDB_V2_ERROR (*duckdb_v2_error_info_set_text)(duckdb_v2_error_info_handle info, duckdb_v2_str text);
@@ -1392,12 +1391,12 @@ typedef struct {
 #define duckdb_v2_database_option_get_by_index      duckdb_ext_api.duckdb_v2_database_option_get_by_index
 #define duckdb_v2_database_option_get_count         duckdb_ext_api.duckdb_v2_database_option_get_count
 #define duckdb_v2_database_option_set               duckdb_ext_api.duckdb_v2_database_option_set
-#define duckdb_v2_destroy_environment               duckdb_ext_api.duckdb_v2_destroy_environment
 #define duckdb_v2_disconnect                        duckdb_ext_api.duckdb_v2_disconnect
 #define duckdb_v2_environment_database_count        duckdb_ext_api.duckdb_v2_environment_database_count
+#define duckdb_v2_environment_destroy               duckdb_ext_api.duckdb_v2_environment_destroy
 #define duckdb_v2_error_info_destroy                duckdb_ext_api.duckdb_v2_error_info_destroy
 #define duckdb_v2_error_info_get_code               duckdb_ext_api.duckdb_v2_error_info_get_code
-#define duckdb_v2_error_info_get_raw_message        duckdb_ext_api.duckdb_v2_error_info_get_raw_message
+#define duckdb_v2_error_info_get_raw_text           duckdb_ext_api.duckdb_v2_error_info_get_raw_text
 #define duckdb_v2_error_info_get_text               duckdb_ext_api.duckdb_v2_error_info_get_text
 #define duckdb_v2_error_info_set_code               duckdb_ext_api.duckdb_v2_error_info_set_code
 #define duckdb_v2_error_info_set_text               duckdb_ext_api.duckdb_v2_error_info_set_text
