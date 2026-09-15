@@ -2,7 +2,7 @@ diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/r
 index 7469bcd..7393f1c 100644
 --- a/src/spatial/index/rtree/rtree_index.cpp
 +++ b/src/spatial/index/rtree/rtree_index.cpp
-@@ -280,5 +280,5 @@
+@@ -280,7 +280,7 @@ IndexStorageInfo RTreeIndex::SerializeToWAL(const case_insensitive_map_t<Value>
  	return info;
  }
  
@@ -15,7 +15,10 @@ diff --git a/src/spatial/index/rtree/rtree_index.hpp b/src/spatial/index/rtree/r
 index 8af3ba3..dc2335d 100644
 --- a/src/spatial/index/rtree/rtree_index.hpp
 +++ b/src/spatial/index/rtree/rtree_index.hpp
-@@ -62,4 +62,4 @@
+@@ -59,7 +59,7 @@ public:
+ 	//! Serializes RTree memory to the WAL and returns the index storage information.
+ 	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
+ 
 -	idx_t GetInMemorySize(IndexLock &state) override;
 +	idx_t GetInMemorySize(IndexLock &state) const override;
  

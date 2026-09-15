@@ -36,10 +36,10 @@ index e35f303..5d9ab9f 100644
 \ No newline at end of file
 +} // namespace duckdb
 diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
-index f793b05..bfff3ed 100644
+index ff55d44..767130a 100644
 --- a/src/spatial/index/rtree/rtree_index.cpp
 +++ b/src/spatial/index/rtree/rtree_index.cpp
-@@ -8,6 +8,7 @@
+@@ -9,6 +9,7 @@
  #include "duckdb/common/serializer/binary_deserializer.hpp"
  #include "duckdb/common/serializer/binary_serializer.hpp"
  #include "duckdb/execution/index/fixed_size_allocator.hpp"
@@ -47,7 +47,7 @@ index f793b05..bfff3ed 100644
  #include "duckdb/storage/table/scan_state.hpp"
  #include "duckdb/main/database.hpp"
  #include "spatial/spatial_types.hpp"
-@@ -126,6 +127,29 @@ RTreeIndex::RTreeIndex(const Identifier &name, IndexConstraintType index_constra
+@@ -127,6 +128,29 @@ RTreeIndex::RTreeIndex(const Identifier &name, IndexConstraintType index_constra
  	key_chunk.Initialize(context, {GeoTypes::BOX_2DF()});
  }
  
@@ -77,7 +77,7 @@ index f793b05..bfff3ed 100644
  unique_ptr<IndexScanState> RTreeIndex::InitializeScan(const RTreeBounds &query) const {
  	auto state = make_uniq<RTreeIndexScanState>();
  	state->query_bounds = query;
-@@ -234,32 +258,27 @@ void RTreeIndex::Delete(IndexLock &lock, DataChunk &input, Vector &row_vec) {
+@@ -235,32 +259,27 @@ void RTreeIndex::Delete(IndexLock &lock, DataChunk &input, Vector &row_vec) {
  	ConvertToEntries(box_vec, row_vec, count, [&](const RTreeEntry &entry) { tree->Delete(entry); });
  }
  
@@ -125,7 +125,7 @@ index f793b05..bfff3ed 100644
  	IndexStorageInfo info;
  	info.name = name;
 diff --git a/src/spatial/index/rtree/rtree_index.hpp b/src/spatial/index/rtree/rtree_index.hpp
-index 0f51959..f4ce858 100644
+index dc2335d..a6b8a30 100644
 --- a/src/spatial/index/rtree/rtree_index.hpp
 +++ b/src/spatial/index/rtree/rtree_index.hpp
 @@ -23,6 +23,12 @@ public:
@@ -151,6 +151,5 @@ index 0f51959..f4ce858 100644
 -	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
 +	IndexStorageInfo SerializeToWAL(StorageVersion target_version) override;
  
- 	idx_t GetInMemorySize(IndexLock &state) override;
+ 	idx_t GetInMemorySize(IndexLock &state) const override;
  
-

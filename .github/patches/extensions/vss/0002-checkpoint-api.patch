@@ -144,4 +144,3 @@ index 28dc8cd..f85c86e 100644
  	bool is_dirty = false;
  	mutable StorageLock rwlock;
  	atomic<idx_t> index_size = {0};
-
