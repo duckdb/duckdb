@@ -138,7 +138,7 @@ unique_ptr<Expression> CMHelper::CreateDefaultStatsAwareCast(ClientContext &cont
 		throw InternalException("Expected a cast in CMHelper::CreateDefaultStatsAwareCast");
 	} // LCOV_EXCL_STOP
 	auto &cast = result->Cast<BoundFunctionExpression>();
-	cast.compression_origin = CompressedMaterializationOrigin::CAST;
+	CMUtils::MarkCast(cast);
 	result_stats = BoundCastExpression::PropagateStatistics(cast, input_stats, context);
 	if (!result_stats) { // LCOV_EXCL_START
 		throw InternalException("Could not propagate cast statistics in compressed materialization");
@@ -342,7 +342,6 @@ unique_ptr<CompressExpression> CMHelper::CreateIntegralFunctionCompress(unique_p
 	BoundScalarFunction bound_function(compress_function);
 	bound_function.SetReturnType(target_type);
 	auto compress_expr = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
-	compress_expr->compression_origin = CompressedMaterializationOrigin::COMPRESS;
 
 	auto compress_stats = BaseStatistics::CreateEmpty(target_type);
 	compress_stats.CopyBase(stats);
@@ -794,7 +793,6 @@ unique_ptr<CompressExpression> CMHelper::CreateStringFunctionCompress(unique_ptr
 	bound_function.SetReturnType(target_type);
 
 	auto compress_expr = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
-	compress_expr->compression_origin = CompressedMaterializationOrigin::COMPRESS;
 	return make_uniq<CompressExpression>(std::move(compress_expr), std::move(compress_stats),
 	                                     CompressedMaterializationType::FUNCTION);
 }
@@ -841,7 +839,6 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetGeometryCompress(un
 	BoundScalarFunction bound_function(compress_function);
 	bound_function.SetReturnType(target_type);
 	auto compress_expr = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
-	compress_expr->compression_origin = CompressedMaterializationOrigin::COMPRESS;
 
 	auto compress_stats = BaseStatistics::CreateEmpty(target_type);
 	compress_stats.CopyBase(stats);
@@ -997,7 +994,6 @@ unique_ptr<Expression> CompressedMaterialization::GetGeometryDecompress(unique_p
 	BoundScalarFunction bound_function(decompress_function);
 	bound_function.SetReturnType(result_type);
 	auto result = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
-	result->compression_origin = CompressedMaterializationOrigin::DECOMPRESS;
 	return std::move(result);
 }
 
@@ -1015,7 +1011,6 @@ unique_ptr<Expression> CompressedMaterialization::GetIntegralDecompress(unique_p
 	bound_function.SetReturnType(result_type);
 
 	auto result = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
-	result->compression_origin = CompressedMaterializationOrigin::DECOMPRESS;
 	return std::move(result);
 }
 
@@ -1031,7 +1026,6 @@ unique_ptr<Expression> CompressedMaterialization::GetStringDecompress(unique_ptr
 	bound_function.SetReturnType(result_type);
 
 	auto result = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
-	result->compression_origin = CompressedMaterializationOrigin::DECOMPRESS;
 	return std::move(result);
 }
 

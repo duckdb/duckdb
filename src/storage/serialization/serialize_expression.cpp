@@ -135,7 +135,7 @@ unique_ptr<Expression> BoundConjunctionExpression::Deserialize(Deserializer &des
 
 void BoundConstantExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
-	serializer.WriteProperty<Value>(200, "value", value.WithType(return_type));
+	serializer.WriteProperty<Value>(200, "value", value);
 }
 
 unique_ptr<Expression> BoundConstantExpression::Deserialize(Deserializer &deserializer) {

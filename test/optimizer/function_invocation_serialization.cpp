@@ -1,3 +1,10 @@
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/window_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_window_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "catch.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
@@ -7,6 +14,9 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/parser/statement/logical_plan_statement.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/planner/logical_operator.hpp"
@@ -14,30 +24,12 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 
 using namespace duckdb;
 
 namespace {
-
-class LegacyFunctionReader {
-public:
-	explicit LegacyFunctionReader(ScalarFunctionCatalogEntry &entry_p)
-	    : entry(entry_p), functions(entry.functions.functions) {
-		entry.functions.ApplyToFunctions([](ScalarFunction &function) {
-			function.SetSerializeCallback(nullptr);
-			function.SetDeserializeCallback(nullptr);
-			function.SetLegacySerializeCallback(nullptr);
-		});
-	}
-	~LegacyFunctionReader() {
-		entry.functions.functions = std::move(functions);
-	}
-
-private:
-	ScalarFunctionCatalogEntry &entry;
-	vector<shared_ptr<const ScalarFunction>> functions;
-};
 
 static void RequireSameValues(MaterializedQueryResult &expected, MaterializedQueryResult &actual) {
 	REQUIRE_NO_FAIL(actual);
@@ -51,53 +43,6 @@ static void RequireSameValues(MaterializedQueryResult &expected, MaterializedQue
 }
 
 } // namespace
-
-TEST_CASE("Legacy function serialization supports readers without bind-data callbacks",
-          "[serialization][function_invocation]") {
-	DuckDB db(nullptr);
-	Connection connection(db);
-	REQUIRE_NO_FAIL(connection.Query("SET threads=1; SET debug_disable_optimizer=true; "
-	                                 "CREATE TABLE legacy_input(i INTEGER, l INTEGER[]); "
-	                                 "INSERT INTO legacy_input VALUES (1,[2,NULL,1,2]),(2,[]),(3,NULL)"));
-	connection.BeginTransaction();
-	for (const auto &name : {"alias", "list_sort", "list_reverse_sort", "list_grade_up"}) {
-		auto &entry =
-		    Catalog::GetEntry<ScalarFunctionCatalogEntry>(*connection.context, QualifiedName("system", "main", name));
-		vector<string> arguments = {"l", "l, 'DESC'", "l, 'DESC', 'NULLS FIRST'"};
-		if (string(name) == "alias") {
-			arguments = {"i"};
-		} else if (string(name) == "list_reverse_sort") {
-			arguments = {"l", "l, 'NULLS FIRST'"};
-		}
-		for (auto &argument : arguments) {
-			auto sql = "SELECT " + string(name) + "(" + argument + ") AS output FROM legacy_input ORDER BY i";
-			INFO(sql);
-			auto expected = connection.Query(sql);
-			REQUIRE_NO_FAIL(*expected);
-			Parser parser(connection.context->GetParserOptions());
-			parser.ParseQuery(sql);
-			Planner planner(*connection.context);
-			planner.CreatePlan(std::move(parser.statements[0]));
-			MemoryStream stream(Allocator::Get(*connection.context));
-			SerializationOptions options;
-			options.storage_compatibility = StorageCompatibility::FromIndex(StorageVersion::V1_5_0);
-			BinarySerializer::Serialize(*planner.plan, stream, options);
-			stream.Rewind();
-			for (auto &function : entry.functions.functions) {
-				REQUIRE(function->GetSerializeCallback());
-				REQUIRE(function->GetDeserializeCallback());
-			}
-			// Emulate the legacy catalog definitions, which had no bind-data deserializer.
-			LegacyFunctionReader legacy_reader(entry);
-			bound_parameter_map_t parameters;
-			auto copy = BinaryDeserializer::Deserialize<LogicalOperator>(stream, *connection.context, parameters);
-			copy->ResolveOperatorTypes();
-			auto actual = connection.Query(make_uniq<LogicalPlanStatement>(std::move(copy)));
-			RequireSameValues(*expected, *actual);
-		}
-	}
-	connection.Rollback();
-}
 
 TEST_CASE("Current list serialization preserves bound ordering across repeated copies",
           "[serialization][function_invocation]") {
@@ -149,13 +94,14 @@ static void CheckCompressionOrigins(ClientContext &context, LogicalOperator &pla
 	LogicalOperatorVisitor::EnumerateExpressions(plan, [&](unique_ptr<Expression> *root) {
 		ExpressionIterator::VisitExpression<BoundFunctionExpression>(
 		    **root, [&](const BoundFunctionExpression &expression) {
-			    seen[idx_t(expression.compression_origin)] = true;
+			    seen[idx_t(CMUtils::GetExpressionType(expression))] = true;
 			    MemoryStream stream(Allocator::Get(context));
 			    BinarySerializer::Serialize(expression, stream);
 			    stream.Rewind();
 			    bound_parameter_map_t parameters;
 			    auto copy = BinaryDeserializer::Deserialize<Expression>(stream, context, parameters);
-			    REQUIRE(copy->Cast<BoundFunctionExpression>().compression_origin == expression.compression_origin);
+			    REQUIRE(CMUtils::GetExpressionType(copy->Cast<BoundFunctionExpression>()) ==
+			            CMUtils::GetExpressionType(expression));
 		    });
 	});
 	for (auto &child : plan.children) {
@@ -163,7 +109,7 @@ static void CheckCompressionOrigins(ClientContext &context, LogicalOperator &pla
 	}
 }
 
-TEST_CASE("Compression origins survive serialization and omitted origins default to NONE",
+TEST_CASE("Compressed materialization functions retain their identity across copies and serialization",
           "[serialization][function_invocation]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
@@ -243,5 +189,105 @@ TEST_CASE("Secure-view caller predicates retain source positions across pruning 
 	auto result = connection.Query(make_uniq<LogicalPlanStatement>(std::move(plan)));
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(CHECK_COLUMN(result, 0, {"a", "a"}));
+	connection.Rollback();
+}
+
+TEST_CASE("Function unbind callbacks reconstruct retained invocation data", "[function_invocation]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	connection.BeginTransaction();
+	for (const auto &sql : {"SELECT struct_insert({'a': 1}, \"new field\" := 2)", "SELECT alias(42)",
+	                        "SELECT ([1,2,3])[:2]", "SELECT ([1,2,3])[2:]"}) {
+		CAPTURE(sql);
+		Parser parser(connection.context->GetParserOptions());
+		parser.ParseQuery(sql);
+		Planner planner(*connection.context);
+		planner.CreatePlan(std::move(parser.statements[0]));
+		auto &expression = *planner.plan->expressions[0];
+		REQUIRE(expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION);
+		auto &function = expression.Cast<BoundFunctionExpression>();
+		auto &definition = *function.Function().GetDefinition();
+		REQUIRE(definition.HasUnbindCallback());
+		vector<unique_ptr<ParsedExpression>> children;
+		for (auto &child : function.GetChildren()) {
+			children.push_back(
+			    ConstantExpression::FromValue(ExpressionExecutor::EvaluateScalar(*connection.context, *child)));
+		}
+		FunctionUnbindInput input(function, std::move(children));
+		auto parsed = definition.GetUnbindCallback()(input);
+		REQUIRE(parsed);
+		auto expected = connection.Query(sql);
+		auto actual = connection.Query("SELECT " + parsed->ToString());
+		REQUIRE_NO_FAIL(*expected);
+		RequireSameValues(*expected, *actual);
+	}
+	connection.Rollback();
+}
+TEST_CASE("Nested function qualification survives plan copies", "[serialization][function_invocation]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	connection.BeginTransaction();
+	REQUIRE_NO_FAIL(connection.Query("CREATE SCHEMA parent; CREATE SCHEMA parent.child"));
+	auto &context = *connection.context;
+	auto &catalog = Catalog::GetCatalog(context, Identifier("memory"));
+	auto install = [&](CreateFunctionInfo &info) {
+		info.internal = false;
+		info.SetQualifiedName(QualifiedName({catalog.GetName(), Identifier("parent"), Identifier("child")},
+		                                    info.GetQualifiedName().Name()));
+		catalog.CreateFunction(context, info);
+	};
+	auto &scalar = Catalog::GetEntry<ScalarFunctionCatalogEntry>(context, QualifiedName("system", "main", "abs"));
+	CreateScalarFunctionInfo scalar_info(scalar.functions);
+	install(scalar_info);
+	auto &aggregate = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, QualifiedName("system", "main", "min"));
+	CreateAggregateFunctionInfo aggregate_info(aggregate.functions);
+	install(aggregate_info);
+	auto &window =
+	    Catalog::GetEntry<WindowFunctionCatalogEntry>(context, QualifiedName("system", "main", "row_number"));
+	CreateWindowFunctionInfo window_info(window.functions);
+	install(window_info);
+	auto &table = Catalog::GetEntry<TableFunctionCatalogEntry>(context, QualifiedName("system", "main", "range"));
+	CreateTableFunctionInfo table_info(table.functions);
+	install(table_info);
+	const string sql = "SELECT memory.parent.child.abs(i), memory.parent.child.min(i) OVER (), "
+	                   "memory.parent.child.row_number() OVER () FROM memory.parent.child.range(3) r(i)";
+	Parser parser(context.GetParserOptions());
+	parser.ParseQuery(sql);
+	Planner planner(context);
+	planner.CreatePlan(std::move(parser.statements[0]));
+	auto copy = planner.plan->Copy(context);
+	copy = copy->Copy(context);
+	copy->ResolveOperatorTypes();
+	auto expected = connection.Query(sql);
+	auto actual = connection.Query(make_uniq<LogicalPlanStatement>(std::move(copy)));
+	REQUIRE_NO_FAIL(*expected);
+	RequireSameValues(*expected, *actual);
+	connection.Rollback();
+}
+
+TEST_CASE("Custom scan serialization retains invocation inputs", "[serialization][function_invocation]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	auto file = TestCreatePath("retained_scan_arguments.parquet");
+	REQUIRE_NO_FAIL(connection.Query("COPY (SELECT 42 AS i) TO " + Value(file).ToSQLString() + " (FORMAT PARQUET)"));
+	connection.BeginTransaction();
+	auto plan =
+	    PlanAndOptimize(connection, "SELECT * FROM read_parquet(" + Value(file).ToSQLString() + ", filename := true)");
+	std::function<void(LogicalOperator &)> check = [&](LogicalOperator &op) {
+		if (op.type == LogicalOperatorType::LOGICAL_GET) {
+			auto &get = op.Cast<LogicalGet>();
+			REQUIRE(get.parameters.size() == 1);
+			REQUIRE(get.parameters[0] == Value(file));
+			REQUIRE(get.named_parameters.at("filename") == Value::BOOLEAN(true));
+		}
+		for (auto &child : op.children) {
+			check(*child);
+		}
+	};
+	check(*plan);
+	for (idx_t i = 0; i < 2; i++) {
+		plan = plan->Copy(*connection.context);
+		check(*plan);
+	}
 	connection.Rollback();
 }

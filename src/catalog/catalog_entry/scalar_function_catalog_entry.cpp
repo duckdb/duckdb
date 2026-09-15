@@ -16,24 +16,12 @@ ScalarFunctionCatalogEntry::ScalarFunctionCatalogEntry(Catalog &catalog, SchemaC
 	for (auto &function : functions.functions) {
 		function = FinalizeFunction(*function);
 	}
-	registered_functions = functions.functions;
 }
 
 shared_ptr<const ScalarFunction> ScalarFunctionCatalogEntry::FinalizeFunction(ScalarFunction function) const {
 	auto result = make_shared_ptr<ScalarFunction>(std::move(function));
-	result->SetName(name);
-	result->SetCatalogName(catalog.GetAttached().GetName());
-	result->SetSchemaName(schema.name);
+	result->SetQualifiedName(schema.GetQualifiedName(name));
 	return result;
-}
-
-bool ScalarFunctionCatalogEntry::IsRegisteredFunction(const shared_ptr<const ScalarFunction> &function) const {
-	for (const auto &registered_function : registered_functions) {
-		if (registered_function == function) {
-			return true;
-		}
-	}
-	return false;
 }
 
 unique_ptr<CatalogEntry> ScalarFunctionCatalogEntry::AlterEntry(CatalogTransaction transaction, AlterInfo &info) {

@@ -11,6 +11,7 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
@@ -113,10 +114,10 @@ public:
 	}
 	void RetainSQLRange(optional_ptr<const Expression> start, optional_ptr<const Expression> end,
 	                    const LogicalType &order_type);
-	const unique_ptr<Expression> &SQLRangeStart() const {
+	const unique_ptr<ParsedExpression> &SQLRangeStart() const {
 		return sql_range_start;
 	}
-	const unique_ptr<Expression> &SQLRangeEnd() const {
+	const unique_ptr<ParsedExpression> &SQLRangeEnd() const {
 		return sql_range_end;
 	}
 	const LogicalType &SQLRangeOrderType() const {
@@ -201,8 +202,8 @@ private:
 	unique_ptr<Expression> end_expr;
 
 	//! Literal SQL offsets before endpoint arithmetic; these are not execution children.
-	unique_ptr<Expression> sql_range_start;
-	unique_ptr<Expression> sql_range_end;
+	unique_ptr<ParsedExpression> sql_range_start;
+	unique_ptr<ParsedExpression> sql_range_end;
 	LogicalType sql_range_order_type = LogicalType::INVALID;
 
 	//! The set of argument ordering clauses

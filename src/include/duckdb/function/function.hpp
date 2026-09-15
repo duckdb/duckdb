@@ -41,10 +41,6 @@ class WindowFunction;
 class WindowFunctionSet;
 class BoundSimpleFunction;
 
-struct BoundBetweenExpression;
-struct BoundCastExpression;
-struct BetweenFunctionData;
-struct CastFunctionData;
 struct PragmaInfo;
 
 //! The default null handling is NULL in, NULL out
@@ -68,23 +64,6 @@ enum class FunctionCollationHandling : uint8_t {
 
 struct FunctionData {
 public:
-	FunctionData() = default;
-	FunctionData(const FunctionData &) : internal_kind(InternalKind::GENERIC) {
-	}
-	FunctionData(FunctionData &&) noexcept : internal_kind(InternalKind::GENERIC) {
-	}
-	FunctionData &operator=(const FunctionData &other) {
-		if (this != &other) {
-			internal_kind = InternalKind::GENERIC;
-		}
-		return *this;
-	}
-	FunctionData &operator=(FunctionData &&other) noexcept {
-		if (this != &other) {
-			internal_kind = InternalKind::GENERIC;
-		}
-		return *this;
-	}
 	DUCKDB_API virtual ~FunctionData();
 
 	DUCKDB_API virtual unique_ptr<FunctionData> Copy() const = 0;
@@ -107,25 +86,6 @@ public:
 	TARGET &CastNoConst() const {
 		return const_cast<TARGET &>(Cast<TARGET>()); // NOLINT: FIXME
 	}
-
-private:
-	enum InternalKind : uint8_t { GENERIC = 0, BOUND_CAST, BOUND_BETWEEN, ARRAY_SLICE, ALIAS };
-
-	explicit FunctionData(InternalKind internal_kind_p) : internal_kind(internal_kind_p) {
-	}
-	InternalKind GetInternalKind() const {
-		return internal_kind;
-	}
-
-	InternalKind internal_kind = InternalKind::GENERIC;
-
-	friend struct BoundBetweenExpression;
-	friend struct BoundCastExpression;
-	friend struct BetweenFunctionData;
-	friend struct CastFunctionData;
-	friend struct ListSliceBindData;
-	friend struct AliasBindData;
-	friend class BoundExpressionSQLExportState;
 };
 
 struct TableFunctionData : public FunctionData {
@@ -556,9 +516,7 @@ public:
 
 class BoundSimpleFunction {
 protected:
-	Identifier name;
-	Identifier schema_name;
-	Identifier catalog_name;
+	QualifiedName qualified_name;
 	string extra_info;
 
 	//! The set of arguments of the function
@@ -568,17 +526,24 @@ protected:
 
 public:
 	void SetName(Identifier name_p) {
-		name = std::move(name_p);
+		qualified_name = qualified_name.WithName(std::move(name_p));
 	}
 
 	const Identifier &GetName() const {
-		return name;
+		return qualified_name.Name();
 	}
 	const Identifier &GetSchemaName() const {
-		return schema_name;
+		return qualified_name.Schema();
 	}
 	const Identifier &GetCatalogName() const {
-		return catalog_name;
+		return qualified_name.Catalog();
+	}
+
+	const QualifiedName &GetQualifiedName() const {
+		return qualified_name;
+	}
+	void SetQualifiedName(QualifiedName name_p) {
+		qualified_name = std::move(name_p);
 	}
 
 	const string &GetExtraInfo() const {

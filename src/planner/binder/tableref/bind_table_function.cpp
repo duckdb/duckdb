@@ -206,8 +206,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
                                                  vector<Value> parameters, named_parameter_map_t named_parameters,
                                                  vector<LogicalType> input_table_types,
                                                  vector<Identifier> input_table_names,
-                                                 optional_ptr<unique_ptr<LogicalOperator>> input_plan,
-                                                 unique_ptr<TableRef> table_function_ref) {
+                                                 optional_ptr<unique_ptr<LogicalOperator>> input_plan) {
 	auto function_name = GetAlias(ref);
 	auto &column_name_alias = ref.column_name_alias;
 	auto bind_index = GenerateTableIndex();
@@ -317,7 +316,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	                                 virtual_columns);
 	get->parameters = parameters;
 	get->named_parameters = named_parameters;
-	get->table_function_ref = std::move(table_function_ref);
+	get->source_ordinality = ref.with_ordinality;
 	get->input_table_types = input_table_types;
 	get->input_table_names = input_table_names;
 	if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY && !correlated_columns.empty()) {
@@ -385,7 +384,6 @@ BoundStatement Binder::BindTableFunction(TableFunction &function, vector<Value> 
 
 BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	QueryErrorContext error_context(ref.query_location);
-	auto table_function_ref = ref.Copy();
 
 	D_ASSERT(ref.function->GetExpressionType() == ExpressionType::FUNCTION);
 	auto &fexpr = ref.function->Cast<FunctionExpression>();
@@ -497,8 +495,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	BoundStatement get;
 	try {
 		get = BindTableFunctionInternal(table_function, ref, std::move(parameters), std::move(named_parameters),
-		                                std::move(input_table_types), std::move(input_table_names), &subquery.plan,
-		                                std::move(table_function_ref));
+		                                std::move(input_table_types), std::move(input_table_names), &subquery.plan);
 	} catch (std::exception &ex) {
 		error = ErrorData(ex);
 		// if the error does not already contain a query location, add one

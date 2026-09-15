@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/function/scalar_function.hpp"
-#include "duckdb/common/enums/compressed_materialization_origin.hpp"
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
@@ -50,8 +49,6 @@ public:
 		return is_operator;
 	}
 	bool RequiresOrderedExecution() const;
-	//! Representation changes introduced by compressed materialization.
-	CompressedMaterializationOrigin compression_origin = CompressedMaterializationOrigin::NONE;
 
 	bool IsVolatile() const override;
 	bool IsConsistent() const override;
@@ -67,8 +64,6 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
-	//! Serialize without bind data for legacy readers that rebind the function.
-	static unique_ptr<Expression> SerializeAsLegacyRebind(FunctionToStringInput &input);
 
 private:
 	static ExpressionType GetFunctionExpressionType(const BoundScalarFunction &bound_function,

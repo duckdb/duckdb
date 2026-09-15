@@ -2,8 +2,17 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
+
+FunctionUnbindInput::FunctionUnbindInput(const BoundFunctionExpression &expression_p,
+                                         vector<unique_ptr<ParsedExpression>> children_p)
+    : expression(expression_p), children(std::move(children_p)) {
+}
+
+FunctionUnbindInput::~FunctionUnbindInput() {
+}
 
 void ThrowNonFallibleFunctionError(const Identifier &name, std::exception &ex) {
 	ErrorData error(ex);
@@ -19,7 +28,7 @@ bool ScalarFunctionCallbacks::operator==(const ScalarFunctionCallbacks &rhs) con
 	return bind == rhs.bind && init_local_state == rhs.init_local_state && statistics == rhs.statistics &&
 	       bind_lambda == rhs.bind_lambda && bind_expression == rhs.bind_expression &&
 	       get_modified_databases == rhs.get_modified_databases && serialize == rhs.serialize &&
-	       deserialize == rhs.deserialize && filter_prune == rhs.filter_prune;
+	       deserialize == rhs.deserialize && filter_prune == rhs.filter_prune && unbind == rhs.unbind;
 }
 
 bool ScalarFunctionCallbacks::operator!=(const ScalarFunctionCallbacks &rhs) const {
@@ -125,9 +134,7 @@ BoundScalarFunction::BoundScalarFunction(const ScalarFunction &function)
 BoundScalarFunction::BoundScalarFunction(shared_ptr<const ScalarFunction> function_p)
     : definition(std::move(function_p)) {
 	auto &function = *definition;
-	name = function.name;
-	schema_name = function.GetSchemaName();
-	catalog_name = function.GetCatalogName();
+	qualified_name = function.GetQualifiedName();
 	extra_info = function.extra_info;
 	return_type = function.GetReturnType();
 	callbacks = function.GetCallbacks();
@@ -145,7 +152,7 @@ BoundScalarFunction::BoundScalarFunction(shared_ptr<const ScalarFunction> functi
 }
 
 bool BoundScalarFunction::operator==(const BoundScalarFunction &rhs) const {
-	return callbacks == rhs.callbacks && properties == rhs.properties && name == rhs.name &&
+	return callbacks == rhs.callbacks && properties == rhs.properties && GetName() == rhs.GetName() &&
 	       return_type == rhs.return_type && arguments == rhs.arguments;
 }
 bool BoundScalarFunction::operator!=(const BoundScalarFunction &rhs) const {

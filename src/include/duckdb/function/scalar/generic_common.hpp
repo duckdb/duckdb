@@ -17,22 +17,6 @@
 namespace duckdb {
 class BoundFunctionExpression;
 
-struct AliasBindData final : public FunctionData {
-	explicit AliasBindData(Identifier alias_p) : FunctionData(InternalKind::ALIAS), alias(std::move(alias_p)) {
-	}
-
-	Identifier alias;
-
-	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<AliasBindData>(alias);
-	}
-
-	bool Equals(const FunctionData &other_p) const override {
-		auto &other = other_p.Cast<AliasBindData>();
-		return alias == other.alias;
-	}
-};
-
 struct ConstantOrNull {
 	static bool IsConstantOrNull(BoundFunctionExpression &expr, const Value &val);
 };

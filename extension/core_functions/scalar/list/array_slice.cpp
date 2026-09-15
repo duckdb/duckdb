@@ -1,3 +1,4 @@
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/swap.hpp"
@@ -6,15 +7,14 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
 
 namespace duckdb {
 
 struct ListSliceBindData : public FunctionData {
 	ListSliceBindData(const LogicalType &return_type_p, bool begin_is_empty_p, bool end_is_empty_p)
-	    : FunctionData(InternalKind::ARRAY_SLICE), return_type(return_type_p), begin_is_empty(begin_is_empty_p),
-	      end_is_empty(end_is_empty_p) {
+	    : return_type(return_type_p), begin_is_empty(begin_is_empty_p), end_is_empty(end_is_empty_p) {
 	}
 	LogicalType return_type;
 	bool begin_is_empty;
@@ -420,6 +420,40 @@ unique_ptr<BaseStatistics> ArraySlicePropagateStats(ClientContext &context, Func
 	return PropagateStringSliceStats(input, start_character_index, character_count);
 }
 
+unique_ptr<ParsedExpression> ArraySliceUnbind(FunctionUnbindInput &input) {
+	if ((input.children.size() != 3 && input.children.size() != 4) || !input.expression.BindInfo()) {
+		return nullptr;
+	}
+	auto &data = input.expression.BindInfo()->Cast<ListSliceBindData>();
+	for (idx_t i = 1; i < 3; i++) {
+		auto &child = *input.expression.GetChildren()[i];
+		if (child.GetReturnType().id() != LogicalTypeId::LIST) {
+			continue;
+		}
+		if (child.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+			auto &value = child.Cast<BoundConstantExpression>().GetValue();
+			if (!value.IsNull() && ListValue::GetChildren(value).empty()) {
+				continue;
+			}
+		} else if (child.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+			auto &function = child.Cast<BoundFunctionExpression>();
+			auto &definition = function.Function().GetDefinition();
+			if (definition && definition->GetQualifiedName() == QualifiedName("system", "main", "list_value") &&
+			    function.GetChildren().empty()) {
+				continue;
+			}
+		}
+		return nullptr;
+	}
+	if (data.begin_is_empty) {
+		input.children[1] = OperatorExpression::EmptySliceBound();
+	}
+	if (data.end_is_empty) {
+		input.children[2] = OperatorExpression::EmptySliceBound();
+	}
+	return make_uniq<OperatorExpression>(ExpressionType::ARRAY_SLICE, std::move(input.children));
+}
+
 } // namespace
 ScalarFunctionSet ListSliceFun::GetFunctions() {
 	// the arguments and return types are actually set in the binder function
@@ -429,6 +463,7 @@ ScalarFunctionSet ListSliceFun::GetFunctions() {
 	    .AddParameter("begin", LogicalType::ANY)
 	    .AddParameter("end", LogicalType::ANY);
 	fun.SetStatisticsCallback(ArraySlicePropagateStats);
+	fun.SetUnbindCallback(ArraySliceUnbind);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetFallible();
 	ScalarFunctionSet set;
