@@ -170,9 +170,6 @@ typedef void (*compression_select_t)(ColumnSegment &segment, ColumnScanState &st
 typedef void (*compression_filter_t)(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
                                      SelectionVector &sel, idx_t &sel_count, const TableFilter &filter,
                                      TableFilterState &filter_state);
-//! Function prototype used for reading a single value
-typedef void (*compression_fetch_row_t)(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
-                                        idx_t result_idx);
 
 //! Maps each unique fetched row to positions relative to the fetch result offset.
 struct FetchRowMapping {
@@ -190,10 +187,27 @@ struct FetchRowMapping {
 };
 
 //! Read strictly increasing segment-relative row offsets; a null mapping writes consecutive result positions.
-typedef void (*compression_fetch_rows_t)(ColumnSegment &segment, ColumnFetchState &state,
-                                         const unsafe_array_ptr<row_t> &row_ids,
-                                         optional_ptr<const FetchRowMapping> mapping, Vector &result,
-                                         idx_t result_offset);
+typedef void (*compression_fetch_row_t)(ColumnSegment &segment, ColumnFetchState &state,
+                                        const unsafe_array_ptr<row_t> &row_ids,
+                                        optional_ptr<const FetchRowMapping> mapping, Vector &result,
+                                        idx_t result_offset);
+//! Adapt single-row decoding to the batch fetch interface.
+template <auto FETCH_ROW>
+void FetchRowsFromSingle(ColumnSegment &segment, ColumnFetchState &state, const unsafe_array_ptr<row_t> &row_ids,
+                         optional_ptr<const FetchRowMapping> mapping, Vector &result, idx_t result_offset) {
+	if (!mapping) {
+		for (idx_t idx = 0; idx < row_ids.size(); idx++) {
+			FETCH_ROW(segment, state, row_ids[idx], result, result_offset + idx);
+		}
+	} else {
+		for (idx_t idx = 0; idx < row_ids.size(); idx++) {
+			for (const auto result_index : mapping->GetResultIndexes(idx)) {
+				FETCH_ROW(segment, state, row_ids[idx], result, result_offset + result_index);
+			}
+		}
+	}
+}
+
 //! Function prototype used for skipping 'skip_count' values, non-trivial if random-access is not supported for the
 //! compressed data.
 typedef void (*compression_skip_t)(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count);
@@ -293,11 +307,10 @@ public:
 	compression_select_t select;
 	//! Scan and apply a filter to a vector while scanning
 	compression_filter_t filter;
-	//! fetch an individual row from the compressed vector
-	//! used for index lookups
+	//! Fetch rows from the compressed vector, used for index lookups.
 	compression_fetch_row_t fetch_row;
-	//! Optional batch fetch; codecs without this callback retain single-row fetches.
-	compression_fetch_rows_t fetch_rows = nullptr;
+	//! Whether collecting batches benefits this codec.
+	bool prefers_batch_fetch = false;
 	//! Skip forward in the compressed segment
 	compression_skip_t skip;
 

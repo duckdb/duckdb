@@ -676,13 +676,6 @@ void RLEFetchRows(ColumnSegment &segment, ColumnFetchState &state, const unsafe_
 	}
 }
 
-template <class T>
-void RLEFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	D_ASSERT(row_id >= 0);
-	D_ASSERT(NumericCast<idx_t>(row_id) < segment.count);
-	RLEFetchRows<T>(segment, state, unsafe_array_ptr<row_t>(row_id), nullptr, result, result_idx);
-}
-
 //===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
@@ -692,9 +685,9 @@ CompressionFunction GetRLEFunction(PhysicalType data_type) {
 	    CompressionFunction(CompressionType::COMPRESSION_RLE, data_type, RLEInitAnalyze<T>, RLEAnalyze<T>,
 	                        RLEFinalAnalyze<T>, RLEInitCompression<T, WRITE_STATISTICS>,
 	                        RLECompress<T, WRITE_STATISTICS>, RLEFinalizeCompress<T, WRITE_STATISTICS>, RLEInitScan<T>,
-	                        RLEScan<T>, RLEScanPartial<T>, RLEFetchRow<T>, RLESkip<T>, nullptr, nullptr, nullptr,
+	                        RLEScan<T>, RLEScanPartial<T>, RLEFetchRows<T>, RLESkip<T>, nullptr, nullptr, nullptr,
 	                        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, RLESelect<T>, RLEFilter<T>);
-	function.fetch_rows = RLEFetchRows<T>;
+	function.prefers_batch_fetch = true;
 	return function;
 }
 

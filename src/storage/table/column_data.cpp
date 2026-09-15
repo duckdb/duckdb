@@ -742,7 +742,7 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 	idx_t segment_start = 0;
 	idx_t segment_end = 0;
 	vector<row_t> batch_offsets;
-	bool supports_batch = false;
+	bool prefers_batch_fetch = false;
 	for (idx_t idx = 0; idx < fetch_count;) {
 		const idx_t offset = offsets[sel.get_index(idx)];
 		if (offset >= count) {
@@ -753,18 +753,18 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 			current_segment = data.GetSegment(offset);
 			segment_start = current_segment->GetRowStart();
 			segment_end = segment_start + current_segment->GetNode().count;
-			supports_batch = current_segment->GetNode().GetCompressionFunction().fetch_rows != nullptr;
+			prefers_batch_fetch = current_segment->GetNode().GetCompressionFunction().prefers_batch_fetch;
 		}
 		auto &segment = current_segment->GetNode();
 		// A single lookup cannot reuse decoding state; retain the allocation-free fetch path.
-		if (!supports_batch || fetch_count == 1) {
+		if (!prefers_batch_fetch || fetch_count == 1) {
 			segment.FetchRow(state, NumericCast<row_t>(offset - segment_start), result, result_offset + idx);
 			idx++;
 			continue;
 		}
 
-		// Only batch capable codecs pay for collecting offsets. Keep each batch bounded and preserve selection
-		// order, including duplicates and backwards requests; a segment change ends the current batch.
+		// Collect offsets only for codecs that benefit from batching. Preserve selection order, including
+		// duplicates and backwards requests; a size limit or segment change ends the current batch.
 		batch_offsets.clear();
 		const auto batch_start = idx;
 		while (idx < fetch_count && batch_offsets.size() < STANDARD_VECTOR_SIZE) {

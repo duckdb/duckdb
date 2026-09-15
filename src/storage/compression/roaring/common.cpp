@@ -318,7 +318,7 @@ CompressionFunction GetCompressionFunction(PhysicalType data_type) {
 		compress = roaring::RoaringCompress<PhysicalType::BIT>;
 		scan = roaring::RoaringScan;
 		scan_partial = roaring::RoaringScanPartial;
-		fetch_row = roaring::RoaringFetchRow;
+		fetch_row = FetchRowsFromSingle<roaring::RoaringFetchRow>;
 		break;
 	}
 	case PhysicalType::BOOL: {
@@ -326,7 +326,7 @@ CompressionFunction GetCompressionFunction(PhysicalType data_type) {
 		compress = roaring::RoaringCompress<PhysicalType::BOOL>;
 		scan = roaring::RoaringScanBoolean;
 		scan_partial = roaring::RoaringScanPartialBoolean;
-		fetch_row = roaring::RoaringFetchRowBoolean;
+		fetch_row = FetchRowsFromSingle<roaring::RoaringFetchRowBoolean>;
 		break;
 	}
 	default:

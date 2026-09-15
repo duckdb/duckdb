@@ -14,14 +14,14 @@
 
 using namespace duckdb;
 
-TEST_CASE("RLE batch fetch preserves arbitrary offsets and output boundaries", "[storage][rle]") {
+static void TestBatchFetch(const string &compression, CompressionType compression_type) {
 	auto config = GetTestConfig();
 	auto path = TestCreatePath("rle_batch_offsets.db");
 	DeleteDatabase(path);
 	{
 		DuckDB db(path, config.get());
 		Connection con(db);
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(v BIGINT USING COMPRESSION rle)"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(v BIGINT USING COMPRESSION " + compression + ")"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t SELECT i//4 FROM range(20000) t(i)"));
 		REQUIRE_NO_FAIL(con.Query("CHECKPOINT"));
 		REQUIRE_NO_FAIL(con.Query("BEGIN"));
@@ -34,7 +34,7 @@ TEST_CASE("RLE batch fetch preserves arbitrary offsets and output boundaries", "
 		auto node = column.GetSegmentTree().GetRootSegment();
 		REQUIRE(node);
 		auto &segment = node->GetNode();
-		REQUIRE(segment.GetCompressionFunction().type == CompressionType::COMPRESSION_RLE);
+		REQUIRE(segment.GetCompressionFunction().type == compression_type);
 		REQUIRE(segment.count > STANDARD_VECTOR_SIZE + 1);
 		ColumnFetchState state;
 		state.context = context;
@@ -113,6 +113,30 @@ TEST_CASE("RLE batch fetch preserves arbitrary offsets and output boundaries", "
 			REQUIRE(mapped_data[request.size() + 1] == -1);
 		}
 
+		// Exercise the common callback contract even for codecs dispatched one row at a time.
+		vector<row_t> unique_ids {3, 4, 8};
+		FetchRowMapping mapping;
+		mapping.offsets = {0, 2, 3, 5};
+		mapping.result_indexes = {1, 4, 3, 0, 2};
+		Vector callback_result(LogicalType::BIGINT, 7);
+		for (idx_t i = 0; i < 7; i++) {
+			callback_result.SetValue(i, Value::BIGINT(-1));
+		}
+		segment.GetCompressionFunction().fetch_row(
+		    segment, state, unsafe_array_ptr<row_t>(unique_ids.data(), unique_ids.size()), mapping, callback_result, 1);
+		vector<int64_t> expected {-1, 2, 0, 2, 1, 0, -1};
+		for (idx_t i = 0; i < expected.size(); i++) {
+			REQUIRE(callback_result.GetValue(i) == Value::BIGINT(expected[i]));
+		}
+
+		segment.GetCompressionFunction().fetch_row(
+		    segment, state, unsafe_array_ptr<row_t>(unique_ids.data(), unique_ids.size()), nullptr, callback_result, 1);
+		for (idx_t i = 0; i < unique_ids.size(); i++) {
+			REQUIRE(callback_result.GetValue(i + 1) == Value::BIGINT(unique_ids[i] / 4));
+		}
+		REQUIRE(callback_result.GetValue(0) == Value::BIGINT(-1));
+		REQUIRE(callback_result.GetValue(4) == Value::BIGINT(1));
+
 #ifndef DUCKDB_CRASH_ON_ASSERT
 		// Invalid later requests must be rejected before any result is written.
 		vector<row_t> invalid_ids {8, 3, row_t(segment.count)};
@@ -149,4 +173,16 @@ TEST_CASE("RLE batch fetch preserves arbitrary offsets and output boundaries", "
 		REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
 	}
 	DeleteDatabase(path);
+}
+
+TEST_CASE("Batch fetch preserves arbitrary offsets and output boundaries", "[storage][rle]") {
+	SECTION("RLE") {
+		TestBatchFetch("rle", CompressionType::COMPRESSION_RLE);
+	}
+	SECTION("Bitpacking") {
+		TestBatchFetch("bitpacking", CompressionType::COMPRESSION_BITPACKING);
+	}
+	SECTION("Uncompressed") {
+		TestBatchFetch("uncompressed", CompressionType::COMPRESSION_UNCOMPRESSED);
+	}
 }

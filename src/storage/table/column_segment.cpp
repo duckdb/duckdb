@@ -187,7 +187,7 @@ void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &resu
 	if (row_id < 0 || NumericCast<idx_t>(row_id) >= count) {
 		throw InternalException("ColumnSegment::FetchRow - row_id out of range for segment");
 	}
-	function.get().fetch_row(*this, state, row_id, result, result_idx);
+	function.get().fetch_row(*this, state, unsafe_array_ptr<row_t>(row_id), nullptr, result, result_idx);
 }
 
 void ColumnSegment::FetchRows(ColumnFetchState &state, const unsafe_array_ptr<row_t> &row_ids, idx_t fetch_count,
@@ -208,9 +208,9 @@ void ColumnSegment::FetchRows(ColumnFetchState &state, const unsafe_array_ptr<ro
 		}
 	}
 	auto &compression = function.get();
-	if (compression.fetch_rows) {
+	if (compression.prefers_batch_fetch) {
 		if (strictly_increasing) {
-			compression.fetch_rows(*this, state, row_ids.SubArray(0, fetch_count), nullptr, result, result_offset);
+			compression.fetch_row(*this, state, row_ids.SubArray(0, fetch_count), nullptr, result, result_offset);
 			return;
 		}
 
@@ -235,11 +235,11 @@ void ColumnSegment::FetchRows(ColumnFetchState &state, const unsafe_array_ptr<ro
 			}
 		}
 		mapping.offsets.push_back(fetch_count);
-		compression.fetch_rows(*this, state, unsafe_array_ptr<row_t>(unique_row_ids.data(), unique_row_ids.size()),
-		                       mapping, result, result_offset);
+		compression.fetch_row(*this, state, unsafe_array_ptr<row_t>(unique_row_ids.data(), unique_row_ids.size()),
+		                      mapping, result, result_offset);
 	} else {
 		for (idx_t i = 0; i < fetch_count; i++) {
-			compression.fetch_row(*this, state, row_ids[i], result, result_offset + i);
+			compression.fetch_row(*this, state, row_ids.SubArray(i, 1), nullptr, result, result_offset + i);
 		}
 	}
 }

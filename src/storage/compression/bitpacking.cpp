@@ -1172,7 +1172,7 @@ CompressionFunction GetBitpackingFunction(PhysicalType data_type) {
 	    CompressionType::COMPRESSION_BITPACKING, data_type, BitpackingInitAnalyze<T>, BitpackingAnalyze<T>,
 	    BitpackingFinalAnalyze<T>, BitpackingInitCompression<T, WRITE_STATISTICS>,
 	    BitpackingCompress<T, WRITE_STATISTICS>, BitpackingFinalizeCompress<T, WRITE_STATISTICS>, BitpackingInitScan<T>,
-	    BitpackingScan<T>, BitpackingScanPartial<T>, BitpackingFetchRow<T>, BitpackingSkip<T>);
+	    BitpackingScan<T>, BitpackingScanPartial<T>, FetchRowsFromSingle<BitpackingFetchRow<T>>, BitpackingSkip<T>);
 	bitpacking.get_segment_info = BitpackingGetSegmentInfo<T>;
 	return bitpacking;
 }
