@@ -483,7 +483,7 @@ IndexStorageInfo IndexEntry::SerializeToWAL(const case_insensitive_map_t<Value> 
 	return owned_index->Cast<BoundIndex>().SerializeToWAL(options);
 }
 
-void IndexEntry::MergeCheckpointDeltas(const transaction_t checkpoint_id) {
+void IndexEntry::MergeCheckpointDeltas(const optional_idx checkpoint_id) {
 	auto entry_lock = lock.GetExclusiveLock();
 	// Merge any data appended to the index while the checkpoint was running.
 	if (!owned_index->IsBound()) {
@@ -571,7 +571,7 @@ ErrorData IndexDeltas::MergeCheckpointDeltas(BoundIndex &index) {
 	return ErrorData();
 }
 
-void IndexDeltas::MarkWritten(const transaction_t checkpoint_id) {
+void IndexDeltas::MarkWritten(const optional_idx checkpoint_id) {
 	checkpoint.last_written_checkpoint = checkpoint_id;
 }
 

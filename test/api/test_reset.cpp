@@ -4,7 +4,7 @@
 #include "duckdb/common/enums/dialect_compatibility_mode.hpp"
 #include "duckdb/common/enums/table_function_identifier_conversion.hpp"
 #include "duckdb/common/enums/show_behavior.hpp"
-#include "duckdb/parser/dialect_extension.hpp"
+#include "duckdb/parser/peg/dialect_extension.hpp"
 #include "test_helpers.hpp"
 
 #include <iostream>
@@ -145,7 +145,6 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"storage_block_prefetch", {"always_prefetch"}},
 	    {"operator_memory_limit", {"4.0 GiB"}},
 	    {"pin_threads", {"off"}},
-	    {"current_dialect", {"test"}},
 	    {"current_transaction_invalidation_policy", {"SYNTACTIC_ERRORS_DO_NOT_INVALIDATE"}},
 	    {"default_transaction_invalidation_policy", {"SYNTACTIC_ERRORS_DO_NOT_INVALIDATE"}},
 	    {"checkpoint_on_detach", {"ENABLED"}},
@@ -181,10 +180,12 @@ bool OptionIsExcludedFromTest(const string &name) {
 	static unordered_set<string> excluded_options = {
 	    "__delta_only_variant_encoding_enabled",
 	    "access_mode",
+	    "active_grammar_extensions",
 	    "allowed_configs",
 	    "allowed_directories",
 	    "allowed_paths",
 	    "schema",
+	    "current_dialect",
 	    "search_path",
 	    "debug_window_mode",
 	    "experimental_parallel_csv",
@@ -201,7 +202,8 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "temp_file_encryption",
 	    "enable_object_cache",
 	    "force_variant_shredding",
-	    "streaming_buffer_size",
+	    "max_streaming_buffer_size",
+	    "streaming_buffer_size", // alias of max_streaming_buffer_size
 	    "log_query_path",
 	    "password",
 	    "username",
@@ -261,7 +263,6 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 	// Create a connection
 	DBConfig config;
 	config.options.load_extensions = false;
-	DialectExtension::Register(config, DialectExtension("test"));
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 	con.Query("BEGIN TRANSACTION");

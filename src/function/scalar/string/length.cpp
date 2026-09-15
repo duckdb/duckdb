@@ -269,58 +269,89 @@ unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(BindScalarFunctionInput &in
 
 ScalarFunctionSet LengthFun::GetFunctions() {
 	ScalarFunctionSet length("length");
-	length.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                                  ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator>, nullptr,
-	                                  LengthPropagateStats<true>));
-	length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
-	                                  ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>));
-	length.AddFunction(
-	    ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBind));
+
+	ScalarFunction string_fun({}, LogicalType::BIGINT,
+	                          ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator>, nullptr,
+	                          LengthPropagateStats<true>);
+	string_fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	length.AddFunction(string_fun);
+
+	ScalarFunction bit_fun({}, LogicalType::BIGINT,
+	                       ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>);
+	bit_fun.GetSignature().AddParameter("bit", LogicalType::BIT);
+	length.AddFunction(bit_fun);
+
+	ScalarFunction list_fun({}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBind);
+	list_fun.GetSignature().AddParameter("list", LogicalType::LIST(LogicalType::ANY));
+	length.AddFunction(list_fun);
+
 	return (length);
 }
 
 ScalarFunctionSet LengthGraphemeFun::GetFunctions() {
 	ScalarFunctionSet length_grapheme("length_grapheme");
-	length_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                                           ScalarFunction::UnaryFunction<string_t, int64_t, GraphemeCountOperator>,
-	                                           nullptr, LengthPropagateStats<false>));
+	ScalarFunction fun({}, LogicalType::BIGINT, ScalarFunction::UnaryFunction<string_t, int64_t, GraphemeCountOperator>,
+	                   nullptr, LengthPropagateStats<false>);
+	fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	length_grapheme.AddFunction(fun);
 	return (length_grapheme);
 }
 
 ScalarFunctionSet ArrayLengthFun::GetFunctions() {
 	ScalarFunctionSet array_length("array_length");
-	array_length.AddFunction(
-	    ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBind));
-	array_length.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT},
-	                                        LogicalType::BIGINT, nullptr, ArrayOrListLengthBinaryBind));
+
+	ScalarFunction unary({}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBind);
+	unary.GetSignature().AddParameter("list", LogicalType::LIST(LogicalType::ANY));
+	array_length.AddFunction(unary);
+
+	ScalarFunction binary({}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBinaryBind);
+	binary.GetSignature()
+	    .AddParameter("list", LogicalType::LIST(LogicalType::ANY))
+	    .AddParameter("dimension", LogicalType::BIGINT);
+	array_length.AddFunction(binary);
+
 	array_length.SetFallible();
 	return (array_length);
 }
 
 ScalarFunction StrlenFun::GetFunction() {
-	return ScalarFunction("strlen", {LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                      ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>, nullptr,
-	                      ByteLengthPropagateStats);
+	ScalarFunction fun("strlen", {}, LogicalType::BIGINT,
+	                   ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>, nullptr,
+	                   ByteLengthPropagateStats);
+	fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	return fun;
 }
 
 ScalarFunctionSet BitLengthFun::GetFunctions() {
 	ScalarFunctionSet bit_length("bit_length");
-	bit_length.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                                      ScalarFunction::UnaryFunction<string_t, int64_t, BitLenOperator>, nullptr,
-	                                      BitLengthPropagateStats));
-	bit_length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
-	                                      ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>));
+
+	ScalarFunction string_fun({}, LogicalType::BIGINT, ScalarFunction::UnaryFunction<string_t, int64_t, BitLenOperator>,
+	                          nullptr, BitLengthPropagateStats);
+	string_fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	bit_length.AddFunction(string_fun);
+
+	ScalarFunction bit_fun({}, LogicalType::BIGINT,
+	                       ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>);
+	bit_fun.GetSignature().AddParameter("bit", LogicalType::BIT);
+	bit_length.AddFunction(bit_fun);
+
 	return (bit_length);
 }
 
 ScalarFunctionSet OctetLengthFun::GetFunctions() {
 	// length for BLOB type
 	ScalarFunctionSet octet_length("octet_length");
-	octet_length.AddFunction(ScalarFunction({LogicalType::BLOB}, LogicalType::BIGINT,
-	                                        ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>, nullptr,
-	                                        ByteLengthPropagateStats));
-	octet_length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
-	                                        ScalarFunction::UnaryFunction<string_t, int64_t, OctetLenOperator>));
+
+	ScalarFunction blob_fun({}, LogicalType::BIGINT, ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>,
+	                        nullptr, ByteLengthPropagateStats);
+	blob_fun.GetSignature().AddParameter("blob", LogicalType::BLOB);
+	octet_length.AddFunction(blob_fun);
+
+	ScalarFunction bitstring_fun({}, LogicalType::BIGINT,
+	                             ScalarFunction::UnaryFunction<string_t, int64_t, OctetLenOperator>);
+	bitstring_fun.GetSignature().AddParameter("bitstring", LogicalType::BIT);
+	octet_length.AddFunction(bitstring_fun);
+
 	return (octet_length);
 }
 

@@ -11,6 +11,8 @@ struct AddColumnEntry {
 	LogicalType type;
 	vector<Identifier> column_path;
 	unique_ptr<ParsedExpression> default_value;
+	CompressionType compression_type = CompressionType::COMPRESSION_AUTO;
+	bool is_not_null = false;
 };
 
 } // namespace duckdb

@@ -15,7 +15,7 @@ TokenIterator::TokenIterator(unique_ptr<vector<MatcherToken>> owned_tokens_p)
 TokenIterator::TokenIterator(vector<MatcherToken> &tokens_p) : tokens(tokens_p) {
 }
 
-TokenIterator::TokenIterator(TokenIterator &other) : tokens(other.tokens), position(other.position) {
+TokenIterator::TokenIterator(const TokenIterator &other) : tokens(other.tokens), position(other.position) {
 }
 
 TokenIterator::TokenIterator(TokenIterator &&other) noexcept

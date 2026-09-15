@@ -36,6 +36,7 @@
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"
@@ -407,6 +408,14 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 	auto &scheduler = TaskScheduler::GetScheduler(*this);
 	scheduler.RelaunchThreads();
 
+	if (result && result->GetResultType() == QueryResultType::STREAM_RESULT) {
+		// Record the streaming buffer peak while the profiler is still running
+		auto &stream_result = static_cast<StreamQueryResult &>(*result);
+		if (stream_result.HasBufferedData()) {
+			QueryProfiler::Get(*this).SetStreamingPeakBufferSize(stream_result.GetBufferedData().PeakBufferedBytes());
+		}
+	}
+
 	optional_ptr<ErrorData> passed_error = nullptr;
 	if (result && result->HasError()) {
 		passed_error = result->GetErrorObject();
@@ -443,10 +452,8 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	D_ASSERT(active_query->IsOpenResult(pending));
 	D_ASSERT(active_query->prepared);
 	auto &executor = GetExecutor();
-	auto &prepared = *active_query->prepared;
-	bool create_stream_result =
-	    prepared.properties.output_type == QueryResultOutputType::ALLOW_STREAMING && pending.allow_stream_result;
-	const bool keep_result_open = create_stream_result || executor.HasStreamingResultCollector();
+	// A streaming request always plans a streaming sink, so the collector alone decides
+	const bool keep_result_open = executor.HasStreamingResultCollector();
 	unique_ptr<QueryResult> result;
 	D_ASSERT(executor.HasResultCollector());
 	// we have a result collector - fetch the result directly from the result collector
@@ -679,7 +686,12 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock,
 }
 
 void ClientContext::WaitForTask(ClientContextLock &lock, BaseQueryResult &result) {
-	active_query->executor->WaitForTask();
+	auto &executor = *active_query->executor;
+	if (executor.HasTaskInProgress()) {
+		// This thread is holding a partially processed task, the next step resumes it without waiting.
+		return;
+	}
+	executor.WaitForTask();
 }
 
 bool ClientContext::ErrorInvalidatesTransaction(ExceptionType type) {
@@ -1377,6 +1389,86 @@ void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 	});
 }
 
+void ClientContext::RunTransactionStatementInternal(const TransactionInfo &info) {
+	auto type = info.type;
+	if (type == TransactionType::COMMIT && transaction.HasActiveTransaction() &&
+	    ValidChecker::IsInvalidated(ActiveTransaction())) {
+		// transaction is invalidated - turn COMMIT into ROLLBACK
+		type = TransactionType::ROLLBACK;
+	}
+	switch (type) {
+	case TransactionType::BEGIN_TRANSACTION: {
+		if (!transaction.IsAutoCommit()) {
+			throw TransactionException("cannot start a transaction within a transaction");
+		}
+		transaction.SetAutoCommit(false);
+		if (info.modifier == TransactionModifierType::TRANSACTION_READ_ONLY) {
+			transaction.SetReadOnly();
+		}
+		transaction.SetInvalidationPolicy(info.invalidation_policy);
+		transaction.SetAutoRollback(info.auto_rollback);
+		if (Settings::Get<ImmediateTransactionModeSetting>(*this)) {
+			auto databases = DatabaseManager::Get(*this).GetDatabases(*this);
+			for (auto &attached : databases) {
+				if (ValidChecker::IsInvalidated(*attached)) {
+					continue;
+				}
+				transaction.ActiveTransaction().GetTransaction(*attached);
+			}
+		}
+		break;
+	}
+	case TransactionType::COMMIT:
+		if (transaction.IsAutoCommit()) {
+			throw TransactionException("cannot commit - no transaction is active");
+		}
+		transaction.Commit();
+		// The commit is irreversible, so ignore interrupts until the next query.
+		SuppressInterrupts();
+		break;
+	case TransactionType::ROLLBACK: {
+		if (transaction.IsAutoCommit()) {
+			throw TransactionException("cannot rollback - no transaction is active");
+		}
+		auto &valid_checker = ValidChecker::Get(transaction.ActiveTransaction());
+		if (valid_checker.IsInvalidated()) {
+			ErrorData error(ExceptionType::TRANSACTION, valid_checker.InvalidatedMessage());
+			transaction.Rollback(error);
+		} else {
+			transaction.Rollback(nullptr);
+		}
+		break;
+	}
+	default:
+		throw NotImplementedException("Unrecognized transaction type!");
+	}
+}
+
+void ClientContext::RunTransactionStatement(const TransactionInfo &info) {
+	auto lock = LockContext();
+	InitialCleanup(*lock);
+	if (is_connected) {
+		auto statement = make_uniq<TransactionStatement>(info.Copy());
+		statement->query = info.ToString();
+		PendingQueryParameters parameters;
+		parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+		auto result = RunStatementInternal(*lock, std::move(statement), parameters);
+		if (result->HasError()) {
+			if (transaction.HasActiveTransaction() && transaction.GetAutoRollback()) {
+				transaction.Rollback(result->GetErrorObject());
+			}
+			ClearInterrupt();
+			result->ThrowError();
+		}
+		return;
+	}
+	auto &db_instance = DatabaseInstance::GetDatabase(*this);
+	if (ValidChecker::IsInvalidated(db_instance)) {
+		throw ErrorManager::InvalidatedDatabase(*this, ValidChecker::InvalidatedMessage(db_instance));
+	}
+	RunTransactionStatementInternal(info);
+}
+
 void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, const std::function<void(void)> &fun,
                                                      bool requires_valid_transaction) {
 	if (requires_valid_transaction && transaction.HasActiveTransaction() &&
@@ -1599,7 +1691,7 @@ SettingLookupResult ClientContext::TryGetCurrentUserSetting(idx_t setting_index,
 	return config.user_settings.TryGetSetting(db_config.user_settings, setting_index, result);
 }
 
-ParserOptions ClientContext::GetParserOptions() const {
+ParserOptions ClientContext::GetParserOptions() {
 	ParserOptions options;
 	options.identifier_case_mode = Settings::Get<PreserveIdentifierCaseSetting>(*this);
 	options.integer_division = Settings::Get<IntegerDivisionSetting>(*this);
@@ -1608,7 +1700,7 @@ ParserOptions ClientContext::GetParserOptions() const {
 	options.max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(*this);
 	options.extensions = DBConfig::GetConfig(*this).GetCallbackManager();
 	options.parser_override_setting = Settings::Get<AllowParserOverrideExtensionSetting>(*this);
-	options.parser_cache = &db->GetParserCache();
+	options.compiled_grammar = CompiledGrammar::Get(*this);
 	return options;
 }
 

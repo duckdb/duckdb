@@ -1,0 +1,97 @@
+# name: test/sql/transactions/test_alter_preserves_delete_indexes.test
+# description: Same-transaction DELETE then ALTER must keep delete indexes so deleted unique keys can be reinserted
+# group: [transactions]
+
+statement ok
+CREATE TABLE t_add (id INTEGER PRIMARY KEY, val INTEGER)
+
+statement ok
+INSERT INTO t_add VALUES (1, 10), (2, 20)
+
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM t_add WHERE id = 1
+
+statement ok
+ALTER TABLE t_add ADD COLUMN extra INTEGER DEFAULT 0
+
+statement ok
+INSERT INTO t_add VALUES (1, 30, 0)
+
+query III
+SELECT * FROM t_add ORDER BY id
+----
+1	30	0
+2	20	0
+
+statement ok
+COMMIT
+
+query III
+SELECT * FROM t_add ORDER BY id
+----
+1	30	0
+2	20	0
+
+statement error
+INSERT INTO t_add VALUES (2, 40, 0)
+----
+<REGEX>:Constraint Error:.*violates primary key constraint.*
+
+# Same gap on DROP COLUMN.
+statement ok
+CREATE TABLE t_drop (id INTEGER PRIMARY KEY, val INTEGER, extra INTEGER)
+
+statement ok
+INSERT INTO t_drop VALUES (1, 10, 0), (2, 20, 0)
+
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM t_drop WHERE id = 1
+
+statement ok
+ALTER TABLE t_drop DROP COLUMN extra
+
+statement ok
+INSERT INTO t_drop VALUES (1, 30)
+
+query II
+SELECT * FROM t_drop ORDER BY id
+----
+1	30
+2	20
+
+statement ok
+COMMIT
+
+# Same gap on ALTER TYPE.
+statement ok
+CREATE TABLE t_type (id INTEGER PRIMARY KEY, val INTEGER)
+
+statement ok
+INSERT INTO t_type VALUES (1, 10), (2, 20)
+
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM t_type WHERE id = 1
+
+statement ok
+ALTER TABLE t_type ALTER val TYPE BIGINT
+
+statement ok
+INSERT INTO t_type VALUES (1, 30)
+
+query II
+SELECT * FROM t_type ORDER BY id
+----
+1	30
+2	20
+
+statement ok
+COMMIT

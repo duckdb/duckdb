@@ -7,15 +7,19 @@
 #include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/common/process_util.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/thread.hpp"
 #include "duckdb/common/windows.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/logging/file_system_logger.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 
+#include <algorithm>
 #include <climits>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <sys/stat.h>
@@ -60,12 +64,9 @@ namespace duckdb {
 bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
 	if (!filename.empty()) {
 		auto normalized_file = ExpandPath(filename, opener);
-		if (access(normalized_file.c_str(), 0) == 0) {
-			struct stat status;
-			stat(normalized_file.c_str(), &status);
-			if (S_ISREG(status.st_mode)) {
-				return true;
-			}
+		struct stat status;
+		if (stat(normalized_file.c_str(), &status) == 0 && S_ISREG(status.st_mode)) {
+			return true;
 		}
 	}
 	// if any condition fails
@@ -75,12 +76,9 @@ bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener
 bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
 	if (!filename.empty()) {
 		auto normalized_file = ExpandPath(filename, opener);
-		if (access(normalized_file.c_str(), 0) == 0) {
-			struct stat status;
-			stat(normalized_file.c_str(), &status);
-			if (S_ISFIFO(status.st_mode) || S_ISCHR(status.st_mode)) {
-				return true;
-			}
+		struct stat status;
+		if (stat(normalized_file.c_str(), &status) == 0 && (S_ISFIFO(status.st_mode) || S_ISCHR(status.st_mode))) {
+			return true;
 		}
 	}
 	// if any condition fails
@@ -148,7 +146,9 @@ static std::wstring NormalizePathAndConvertToUnicode(FileSystem &fs, const strin
 	}
 
 	if (abs_path.find(L"\\\\") == 0) {
-		return WINDOWS_UNC_LONG_PATH_PREFIX + abs_path;
+		// Extended UNC paths use "\\?\UNC\server\share", so remove the original leading "\\".
+		// See https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file#namespaces
+		return WINDOWS_UNC_LONG_PATH_PREFIX + abs_path.substr(2);
 	}
 
 	return WINDOWS_LOCAL_LONG_PATH_PREFIX + abs_path;
@@ -157,24 +157,18 @@ static std::wstring NormalizePathAndConvertToUnicode(FileSystem &fs, const strin
 bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, filename, opener);
 	const wchar_t *wpath = unicode_path.c_str();
-	if (_waccess(wpath, 0) == 0) {
-		struct _stati64 status; // typos:ignore
-		_wstati64(wpath, &status);
-		if (status.st_mode & S_IFREG) {
-			return true;
-		}
+	struct _stati64 status; // typos:ignore
+	if (_wstati64(wpath, &status) == 0 && (status.st_mode & S_IFREG)) {
+		return true;
 	}
 	return false;
 }
 bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, filename, opener);
 	const wchar_t *wpath = unicode_path.c_str();
-	if (_waccess(wpath, 0) == 0) {
-		struct _stati64 status; // typos:ignore
-		_wstati64(wpath, &status);
-		if (status.st_mode & _S_IFCHR) {
-			return true;
-		}
+	struct _stati64 status; // typos:ignore
+	if (_wstati64(wpath, &status) == 0 && (status.st_mode & _S_IFCHR)) {
+		return true;
 	}
 	return false;
 }
@@ -190,6 +184,26 @@ bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> op
 #ifndef O_DIRECT
 #define O_DIRECT 0
 #endif
+
+static idx_t GetLocalFileSystemDelay(optional_ptr<DatabaseInstance> db) {
+	if (!db) {
+		return 0;
+	}
+	return Settings::Get<DebugLocalFileSystemDelayMsSetting>(*db);
+}
+
+static void ApplyLocalFileSystemDelay(optional_ptr<DatabaseInstance> db) {
+#ifndef DUCKDB_NO_THREADS
+	auto delay_ms = GetLocalFileSystemDelay(db);
+	if (delay_ms > 0) {
+		ThreadUtil::SleepMs(delay_ms);
+	}
+#endif
+}
+
+static void ApplyLocalFileSystemDelay(optional_ptr<FileOpener> opener) {
+	ApplyLocalFileSystemDelay(FileOpener::TryGetDatabase(opener));
+}
 
 struct UnixFileHandle : public FileHandle {
 public:
@@ -376,10 +390,8 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		// need Read or Write
 		D_ASSERT(flags.OpenForWriting());
 		open_flags |= O_CLOEXEC;
-		if (flags.CreateFileIfNotExists()) {
+		if (flags.CreateFileIfNotExists() || flags.OverwriteExistingFile()) {
 			open_flags |= O_CREAT;
-		} else if (flags.OverwriteExistingFile()) {
-			open_flags |= O_CREAT | O_TRUNC;
 		}
 		if (flags.OpenForAppending()) {
 			open_flags |= O_APPEND;
@@ -410,6 +422,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	}
 
 	// Open the file
+	ApplyLocalFileSystemDelay(opener);
 	int fd = open(path.c_str(), open_flags, filesec);
 
 	if (fd == -1) {
@@ -439,6 +452,9 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	TryAcquireFileLock(*this, fd, path, flags);
 
 	auto file_handle = make_uniq<UnixFileHandle>(*this, path, fd, flags, FileOpener::TryGetDatabase(opener));
+	if (flags.OverwriteExistingFile() && StatsInternal(fd, path).file_type == FileType::FILE_TYPE_REGULAR) {
+		Truncate(*file_handle, 0);
+	}
 	if (opener) {
 		file_handle->TryAddLogger(*opener);
 		DUCKDB_LOG_FILE_SYSTEM_OPEN((*file_handle));
@@ -468,6 +484,7 @@ idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
 void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	auto bytes_to_read = nr_bytes;
 	auto &unix_handle = handle.Cast<UnixFileHandle>();
+	ApplyLocalFileSystemDelay(unix_handle.db);
 	int fd = unix_handle.fd;
 	auto read_buffer = char_ptr_cast(buffer);
 	while (nr_bytes > 0) {
@@ -492,6 +509,7 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 
 int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto &unix_handle = handle.Cast<UnixFileHandle>();
+	ApplyLocalFileSystemDelay(unix_handle.db);
 	int fd = unix_handle.fd;
 	int64_t bytes_read = read(fd, buffer, UnsafeNumericCast<size_t>(nr_bytes));
 	if (bytes_read == -1) {
@@ -507,6 +525,7 @@ int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes
 
 void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	auto &unix_handle = handle.Cast<UnixFileHandle>();
+	ApplyLocalFileSystemDelay(unix_handle.db);
 	int fd = unix_handle.fd;
 	auto write_buffer = char_ptr_cast(buffer);
 
@@ -516,7 +535,7 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 	while (bytes_to_write > 0) {
 		int64_t bytes_written = pwrite(fd, write_buffer, UnsafeNumericCast<size_t>(bytes_to_write),
 		                               UnsafeNumericCast<off_t>(current_location));
-		if (bytes_written < 0) {
+		if (bytes_written < 0 || bytes_written > bytes_to_write) {
 			throw IOException({{"errno", std::to_string(errno)}}, "Could not write file \"%s\": %s", handle.path,
 			                  strerror(errno));
 		}
@@ -535,6 +554,7 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto &unix_handle = handle.Cast<UnixFileHandle>();
+	ApplyLocalFileSystemDelay(unix_handle.db);
 	int fd = unix_handle.fd;
 
 	auto bytes_to_write = nr_bytes;
@@ -542,7 +562,7 @@ int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 		auto bytes_to_write_this_call =
 		    MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(bytes_to_write));
 		int64_t current_bytes_written = write(fd, buffer, bytes_to_write_this_call);
-		if (current_bytes_written <= 0) {
+		if (current_bytes_written <= 0 || idx_t(current_bytes_written) > bytes_to_write_this_call) {
 			throw IOException({{"errno", std::to_string(errno)}}, "Could not write file \"%s\": %s", handle.path,
 			                  strerror(errno));
 		}
@@ -608,14 +628,13 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 }
 
 bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
+	ApplyLocalFileSystemDelay(opener);
+
 	if (!directory.empty()) {
 		auto normalized_dir = ExpandPath(directory, opener);
-		if (access(normalized_dir.c_str(), 0) == 0) {
-			struct stat status;
-			stat(normalized_dir.c_str(), &status);
-			if (S_ISDIR(status.st_mode)) {
-				return true;
-			}
+		struct stat status;
+		if (stat(normalized_dir.c_str(), &status) == 0 && S_ISDIR(status.st_mode)) {
+			return true;
 		}
 	}
 	// if any condition fails
@@ -638,6 +657,7 @@ bool LocalFileSystem::CreateDirectoryExtended(const string &directory, const Cre
 	if (options.mode != CreateDirectoryMode::SINGLE) {
 		throw InternalException("Unknown CreateDirectoryMode");
 	}
+	ApplyLocalFileSystemDelay(opener);
 	auto normalized_dir = ExpandPath(directory, opener);
 	if (mkdir(normalized_dir.c_str(), 0755) == 0) {
 		return true;
@@ -1332,7 +1352,7 @@ static int64_t FSWrite(FileHandle &handle, HANDLE hFile, void *buffer, int64_t n
 	while (nr_bytes > 0) {
 		auto bytes_to_write = MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(nr_bytes));
 		DWORD current_bytes_written = FSInternalWrite(handle, hFile, buffer, bytes_to_write, location);
-		if (current_bytes_written <= 0) {
+		if (current_bytes_written <= 0 || current_bytes_written > bytes_to_write) {
 			throw IOException({{"errno", std::to_string(errno)}}, "Could not write file \"%s\": %s", handle.path,
 			                  strerror(errno));
 		}
@@ -1571,13 +1591,53 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 	}
 }
 
+static bool TryMoveFileWithPosixSemantics(HANDLE source_handle, const std::wstring &target) {
+	constexpr auto file_rename_info_ex = static_cast<FILE_INFO_BY_HANDLE_CLASS>(22); // FileRenameInfoEx
+	const auto file_name_length = target.size() * sizeof(WCHAR);
+	const auto rename_info_size = offsetof(FILE_RENAME_INFO, FileName) + file_name_length + sizeof(WCHAR);
+	const auto rename_info_size_dw = NumericCast<DWORD>(rename_info_size);
+	auto rename_info_buffer = make_uniq_array<data_t>(rename_info_size);
+	auto rename_info = reinterpret_cast<FILE_RENAME_INFO *>(rename_info_buffer.get());
+	rename_info->Flags = FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS;
+	rename_info->RootDirectory = nullptr;
+	rename_info->FileNameLength = NumericCast<DWORD>(file_name_length);
+	std::copy(target.c_str(), target.c_str() + target.size() + 1, rename_info->FileName);
+
+	return SetFileInformationByHandle(source_handle, file_rename_info_ex, rename_info, rename_info_size_dw);
+}
+
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
 	auto source_unicode = NormalizePathAndConvertToUnicode(*this, source, opener);
 	auto target_unicode = NormalizePathAndConvertToUnicode(*this, target, opener);
-	DWORD flags = MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH;
 
+	// FileRenameInfoEx renames the file identified by a handle opened with DELETE access.
+	// See https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_rename_info
+	constexpr DWORD delete_access = 0x00010000L; // DELETE
+	auto raw_source_handle =
+	    CreateFileW(source_unicode.c_str(), delete_access, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+	                nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+	if (raw_source_handle == INVALID_HANDLE_VALUE) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Could not move file \"%s\" to \"%s\": failed to open source file: %s", source, target,
+		                  error);
+	}
+	unique_ptr<void, decltype(&CloseHandle)> source_handle(raw_source_handle, CloseHandle);
+
+	if (TryMoveFileWithPosixSemantics(source_handle.get(), target_unicode)) {
+		return;
+	}
+	auto error_code = GetLastError();
+	source_handle.reset();
+
+	if (error_code != ERROR_INVALID_PARAMETER && error_code != ERROR_NOT_SUPPORTED &&
+	    error_code != ERROR_INVALID_FUNCTION) {
+		SetLastError(error_code);
+		throw IOException("Could not move file \"%s\" to \"%s\": %s", source, target, GetLastErrorAsString());
+	}
+
+	DWORD flags = MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH;
 	if (!MoveFileExW(source_unicode.c_str(), target_unicode.c_str(), flags)) {
-		throw IOException("Could not move file: %s", GetLastErrorAsString());
+		throw IOException("Could not move file \"%s\" to \"%s\": %s", source, target, GetLastErrorAsString());
 	}
 }
 

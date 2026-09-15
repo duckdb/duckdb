@@ -8,6 +8,9 @@ unzip data/storage/corrupt/alp_corrupt_exponent.db.gz {TEST_DIR}/alp_corrupt_exp
 
 load {TEST_DIR}/alp_corrupt_exponent.db readonly
 
+statement ok
+USE alp_corrupt_exponent
+
 query I
 SELECT compression FROM pragma_storage_info('t') WHERE column_name='a' AND compression='ALP';
 ----

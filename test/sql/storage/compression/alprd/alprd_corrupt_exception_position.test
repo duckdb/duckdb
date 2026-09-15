@@ -8,6 +8,9 @@ unzip data/storage/corrupt/alprd_corrupt_exception_position.db.gz {TEST_DIR}/alp
 
 load {TEST_DIR}/alprd_corrupt_exception_position.db readonly
 
+statement ok
+USE alprd_corrupt_exception_position
+
 query I
 SELECT compression FROM pragma_storage_info('two_alp') WHERE compression='ALPRD';
 ----

@@ -42,7 +42,7 @@ public:
 	BoundIndex &GetOrCreate(BoundIndex &index, IndexDeltaType type);
 	bool ShouldUse(optional_idx active_checkpoint) const;
 	ErrorData MergeCheckpointDeltas(BoundIndex &index);
-	void MarkWritten(transaction_t checkpoint_id);
+	void MarkWritten(optional_idx checkpoint_id);
 	void Reset();
 
 private:
@@ -166,7 +166,7 @@ public:
 	//! Serializes the bound physical index for the write-ahead log.
 	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options);
 	//! Merges checkpoint deltas into the bound physical index and marks the checkpoint as written.
-	void MergeCheckpointDeltas(transaction_t checkpoint_id);
+	void MergeCheckpointDeltas(optional_idx checkpoint_id);
 	//! Adds transaction-local copies of the physical index to the target lists when required.
 	void InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const;
 
