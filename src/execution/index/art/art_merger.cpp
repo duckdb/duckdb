@@ -4,6 +4,7 @@
 #include "duckdb/execution/index/art/base_leaf.hpp"
 #include "duckdb/execution/index/art/node256_leaf.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
+#include "duckdb/execution/index/art/prefix_handle.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
@@ -274,21 +275,18 @@ void ARTMerger::MergePrefixes(NodeEntry &entry) {
 		// We split the left prefix, and reduce the right prefix.
 		// Then, we insert both remainders into a new Node4.
 		// Then, we are done.
-		const auto cast_pos = UnsafeNumericCast<uint8_t>(pos.GetIndex());
-		const auto l_byte = Prefix::GetByte(art, entry.left, cast_pos);
-		const auto r_byte = Prefix::GetByte(art, entry.right, cast_pos);
+		const auto split_pos = UnsafeNumericCast<uint8_t>(pos.GetIndex());
+		const auto l_byte = Prefix::GetByte(art, entry.left, split_pos);
+		const auto r_byte = Prefix::GetByte(art, entry.right, split_pos);
 
 		// Split and reduce.
-		reference<NodePtr> left_ref(entry.left);
-		NodePtr l_child;
-		const auto status = Prefix::Split(art, left_ref, l_child, cast_pos);
-		Prefix::Reduce(art, entry.right, cast_pos);
+		NodePtr branching_node4;
+		Node4::New(art, branching_node4);
+		auto l_child = PrefixHandle::Split(art, entry.left, branching_node4, split_pos);
+		Prefix::Reduce(art, entry.right, split_pos);
 
-		Node4::New(art, left_ref);
-		left_ref.get().SetGateStatus(status);
-
-		Node4::InsertChild(art, left_ref, l_byte, l_child);
-		Node4::InsertChild(art, left_ref, r_byte, entry.right);
+		Node4::InsertChild(art, branching_node4, l_byte, l_child);
+		Node4::InsertChild(art, branching_node4, r_byte, entry.right);
 		entry.right.Clear();
 		return;
 	}

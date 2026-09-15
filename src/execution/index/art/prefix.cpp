@@ -67,40 +67,6 @@ void Prefix::New(ART &art, reference<NodePtr> &node_ref, const ARTKey &key, cons
 	}
 }
 
-PrefixHandle PrefixHandle::NewInternal(ART &art, NodePtr &node, const_data_ptr_t data, const uint8_t count,
-                                       const idx_t offset) {
-	node = NodePtr::GetAllocator(art, PREFIX).New();
-	node.SetMetadata(static_cast<uint8_t>(PREFIX));
-
-	PrefixHandle prefix(NodeHandle(art, node));
-	prefix.SetCount(art, count);
-	if (data) {
-		D_ASSERT(count);
-		memcpy(prefix.Data(), data + offset, count);
-	}
-	prefix.Child(art).Clear();
-	return prefix;
-}
-
-PrefixChain PrefixHandle::New(ART &art, const ARTKey &key, const idx_t depth, const idx_t count) {
-	D_ASSERT(count > 0);
-
-	NodePtr root;
-	auto first_count = UnsafeNumericCast<uint8_t>(MinValue<idx_t>(art.PrefixCount(), count));
-	auto prefix = NewInternal(art, root, key.data, first_count, depth);
-	auto tail = std::move(prefix).IntoChild(art);
-
-	idx_t offset = first_count;
-	while (offset < count) {
-		auto this_count = UnsafeNumericCast<uint8_t>(MinValue<idx_t>(art.PrefixCount(), count - offset));
-		auto next = NewInternal(art, tail.Get(), key.data, this_count, depth + offset);
-		tail = std::move(next).IntoChild(art);
-
-		offset += this_count;
-	}
-	return {root, std::move(tail)};
-}
-
 void Prefix::Concat(ART &art, NodePtr &parent, NodePtr &node4, const NodePtr child, uint8_t byte,
                     const GateStatus node4_status, const GateStatus status) {
 	// We have four situations from which we enter here:
@@ -152,71 +118,6 @@ void Prefix::Reduce(ART &art, NodePtr &node, const idx_t pos) {
 
 	prefix.data[art.PrefixCount()] -= pos + 1;
 	prefix.Append(art, *prefix.child_slot);
-}
-
-GateStatus Prefix::Split(ART &art, reference<NodePtr> &node_ref, NodePtr &child, const uint8_t pos) {
-	D_ASSERT(node_ref.get().HasMetadata());
-
-	Prefix prefix(art, node_ref, true);
-
-	// The split is at the last prefix byte, and the prefix is full.
-	// We decrease the count and return.
-	// We get:
-	// [this prefix minus its last byte] ->
-	// [new node at split byte] ->
-	// [child at split byte: prefix.child_slot].
-	if (pos + 1 == art.PrefixCount()) {
-		prefix.data[art.PrefixCount()]--;
-		node_ref = *prefix.child_slot;
-		child = *prefix.child_slot;
-		return GateStatus::GATE_NOT_SET;
-	}
-
-	if (pos + 1 < prefix.data[art.PrefixCount()]) {
-		// The split is not at the last prefix byte.
-		// We get:
-		// [this prefix minus split byte, minus remaining bytes] ->
-		// [new node at split byte] ->
-		// [child with remaining bytes, and possibly remaining prefix nodes].
-
-		// Create a new prefix and
-		// 1. copy the remaining bytes of this prefix.
-		// 2. append remaining prefix nodes.
-		auto new_prefix = NewInternal(art, child, nullptr, 0, 0);
-		new_prefix.data[art.PrefixCount()] = prefix.data[art.PrefixCount()] - pos - 1;
-		memcpy(new_prefix.data, prefix.data + pos + 1, new_prefix.data[art.PrefixCount()]);
-
-		if (prefix.child_slot->GetType() == PREFIX && prefix.child_slot->GetGateStatus() == GateStatus::GATE_NOT_SET) {
-			new_prefix.Append(art, *prefix.child_slot);
-		} else {
-			*new_prefix.child_slot = *prefix.child_slot;
-		}
-
-	} else {
-		D_ASSERT(pos + 1 == prefix.data[art.PrefixCount()]);
-		// The split is at the last prefix byte, but the prefix is not full.
-		// There are no other bytes or prefixes after the split.
-		// We get:
-		// [this prefix minus split byte (can be its only byte, then we free it)] ->
-		// [new node at split byte] ->
-		// [child at split byte: prefix.child_slot].
-		child = *prefix.child_slot;
-	}
-
-	// Set the new count of this node (can be empty).
-	prefix.data[art.PrefixCount()] = pos;
-
-	// No bytes left before the split, free this node.
-	if (pos == 0) {
-		auto old_status = node_ref.get().GetGateStatus();
-		NodePtr::FreeNode(art, node_ref);
-		return old_status;
-	}
-
-	// There are bytes left before the split.
-	// The subsequent node replaces the split byte.
-	node_ref = *prefix.child_slot;
-	return GateStatus::GATE_NOT_SET;
 }
 
 Prefix Prefix::Append(ART &art, const uint8_t byte) {
