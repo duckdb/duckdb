@@ -1,0 +1,14 @@
+# name: test/sql/aggregate/aggregates/test_approx_top_k_overflow.test_slow
+# description: test for approx_top_k heap buffer overflow on strings whose size > UINT32_MAX
+# group: [aggregates]
+
+statement ok
+SET threads = 1;
+
+statement ok
+SET memory_limit = '3GB';
+
+statement error
+SELECT approx_top_k(repeat('A', 2147483649), 3);
+----
+Out of Memory
