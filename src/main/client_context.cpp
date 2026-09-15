@@ -650,8 +650,6 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 		query_progress.Restart();
 	}
 
-	statement_data.memory_type = parameters.memory_type;
-
 	// Decide how to get the result collector.
 	get_result_collector_t get_collector = PhysicalResultCollector::GetResultCollector;
 	auto &client_config = ClientConfig::GetConfig(*this);
@@ -664,9 +662,15 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 	D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
 	// A custom hook can hand back the default sink, which is then served like any other query
 	const bool delegating = collector->Cast<PhysicalResultCollector>().BuildsOwnResult();
-	if (delegating && parameters.format && !parameters.format->IsChunk()) {
-		// The collector builds its own result, which the format would never reach
-		throw InvalidInputException("A result format cannot be combined with a custom result collector");
+	if (delegating && parameters.format) {
+		if (!parameters.format->IsChunk()) {
+			// The collector builds its own result, which the format would never reach
+			throw InvalidInputException("A result format cannot be combined with a custom result collector");
+		}
+		if (parameters.format->Cast<ChunkFormat>().MemoryType() == QueryResultMemoryType::BUFFER_MANAGED) {
+			// The collector chooses its own store, so the request would be silently downgraded
+			throw InvalidInputException("A buffer-managed result cannot be combined with a custom result collector");
+		}
 	}
 
 	// Read before Initialize starts the workers: a SET statement writes the settings from a task
