@@ -10,6 +10,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
+#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 
 namespace duckdb {
 
@@ -149,6 +150,10 @@ public:
 	unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) override;
 
 	BlockManager &GetBlockManager();
+	//! Register table index results until all checkpoint metadata has been written.
+	void RegisterIndexWriter(TableIndexWriter &writer);
+	//! Make a partial block scope for an index that persists immediately.
+	PartialBlockManager CreateIsolatedIndexPartialBlockManager();
 	CheckpointOptions GetCheckpointOptions() const {
 		return options;
 	}

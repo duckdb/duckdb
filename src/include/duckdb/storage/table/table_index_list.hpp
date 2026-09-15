@@ -11,6 +11,8 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/enums/index_removal_type.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/storage/table/index_entry.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/storage/index.hpp"
@@ -32,18 +34,6 @@ struct CheckpointedIndex;
 template <class T>
 class TableIndexIterationHelper;
 class TableIndexWriter;
-
-struct IndexSerializationInfo {
-	case_insensitive_map_t<Value> options;
-};
-
-// IndexStorageInfo is move-only. Keep every serialized info in owned_infos and expose stable ordered references.
-struct IndexSerializationResult {
-	//! The ordered list of references to serialize - preserves iteration order of index_entries
-	vector<reference<const IndexStorageInfo>> ordered_infos;
-	//! Storage for index infos to keep the references in ordered_infos alive.
-	vector<IndexStorageInfo> owned_infos;
-};
 
 class TableIndexList {
 public:
@@ -133,20 +123,18 @@ public:
 	//! Verify a foreign key constraint.
 	void VerifyForeignKey(optional_ptr<const TableIndexList> delete_indexes, const vector<PhysicalIndex> &fk_keys,
 	                      DataChunk &chunk, ConflictManager &conflict_manager);
-	void CheckPoint(TableIndexWriter &writer);
+	vector<shared_ptr<const IndexStorageInfo>> CheckPoint(TableIndexWriter &writer);
 	//! Returns the physical table columns referenced by any index.
 	unordered_set<column_t> GetIndexedColumns() const;
 	//! Returns the column sets of unique indexes matching the conflict target.
 	vector<unordered_set<column_t>> GetConflictTargetColumns(const ConflictInfo &conflict_info) const;
 	//! Get the combined column ids of the unique indexes.
 	unordered_set<column_t> GetUniqueIndexColumns() const;
-	//! Serialize all indexes of the table.
-	IndexSerializationResult SerializeToDisk(QueryContext context, const IndexSerializationInfo &info);
 	//! Serializes the index matching the name for the write-ahead log, if it exists.
-	unique_ptr<IndexStorageInfo> SerializeToWAL(const Identifier &name, const case_insensitive_map_t<Value> &options);
+	unique_ptr<IndexStorageInfo> SerializeToWAL(const Identifier &name, const StorageVersion version);
 
 public:
-	static void Serialize(const vector<CheckpointedIndex> &result, Serializer &serializer);
+	static void Serialize(const vector<shared_ptr<const IndexStorageInfo>> &infos, Serializer &serializer);
 	//! Initialize an index_chunk from a table.
 	static void InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,
 	                                 vector<StorageIndex> &mapped_column_ids, DataTableInfo &data_table_info);

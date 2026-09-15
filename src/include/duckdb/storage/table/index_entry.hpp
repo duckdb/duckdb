@@ -12,7 +12,9 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 #include "duckdb/storage/index.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 
 #include <functional>
@@ -163,13 +165,11 @@ public:
 	//! Returns the in-memory size of the physical index, or zero if it is unbound.
 	idx_t GetInMemorySize() const;
 	//! Serializes the physical index into the checkpoint writer and registers its shadow index.
-	void Checkpoint(TableIndexWriter &writer);
+	CheckpointedIndex Checkpoint(TableIndexWriter &writer);
 	//! Installs the shadow index produced by Checkpoint.
-	void CommitCheckpoint(unique_ptr<BoundIndex> shadow_index);
-	//! Serializes the physical index for a checkpoint.
-	IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options);
+	void Swap(unique_ptr<BoundIndex> shadow_index);
 	//! Serializes the bound physical index for the write-ahead log.
-	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options);
+	IndexStorageInfo SerializeToWAL(const StorageVersion version);
 	//! Merges checkpoint deltas into the bound physical index and marks the checkpoint as written.
 	void MergeCheckpointDeltas(optional_idx checkpoint_id);
 	//! Adds transaction-local copies of the physical index to the target lists when required.

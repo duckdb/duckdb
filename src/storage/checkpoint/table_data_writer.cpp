@@ -1,4 +1,5 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
 #include "duckdb/storage/checkpoint/table_index_writer.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
@@ -11,7 +12,9 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
+#include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/data_table.hpp"
 
@@ -90,8 +93,7 @@ void SingleFileTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer,
 
 unique_ptr<TableIndexWriter> SingleFileTableDataWriter::GetTableIndexWriter(StorageVersion version) {
 	const auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetDatabase());
-	return make_uniq<SingleFileTableIndexWriter>(checkpoint_manager, checkpoint_manager.index_partial_block_manager,
-	                                             version, debug_verify_blocks);
+	return make_uniq<SingleFileTableIndexWriter>(checkpoint_manager, version, debug_verify_blocks);
 }
 
 void SingleFileTableDataWriter::FlushPartialBlocks() {
@@ -100,7 +102,8 @@ void SingleFileTableDataWriter::FlushPartialBlocks() {
 
 void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info,
                                               RowGroupCollection &collection,
-                                              optional_ptr<TableIndexWriter> index_writer, Serializer &serializer) {
+                                              vector<shared_ptr<const IndexStorageInfo>> &index_infos,
+                                              Serializer &serializer) {
 	MetaBlockPointer pointer;
 	idx_t total_rows;
 	idx_t next_row_id;
@@ -194,8 +197,9 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteProperty(101, "table_pointer", pointer);
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
-	D_ASSERT(index_writer);
-	index_writer->Serialize(serializer);
+	if (debug_verify_blocks) {
+	}
+	TableIndexList::Serialize(index_infos, serializer);
 
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WriteProperty(105, "next_row_id", next_row_id);

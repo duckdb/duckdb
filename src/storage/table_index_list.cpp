@@ -1,10 +1,16 @@
 #include "duckdb/storage/table/table_index_list.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/storage/checkpoint/table_index_writer.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/storage/index_storage_info.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
@@ -15,6 +21,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include <utility>
 
 namespace duckdb {
 
@@ -486,20 +493,27 @@ unordered_set<column_t> TableIndexList::GetIndexedColumns() const {
 	return column_ids;
 }
 
-void TableIndexList::CheckPoint(TableIndexWriter &writer) {
+vector<shared_ptr<const IndexStorageInfo>> TableIndexList::CheckPoint(TableIndexWriter &writer) {
 	annotated_lock_guard lock(index_entries_lock);
 
+	vector<unique_ptr<BoundIndex>> shadows;
+	vector<shared_ptr<const IndexStorageInfo>> infos;
+	shadows.reserve(index_entries.size());
+	infos.reserve(index_entries.size());
+
 	for (const auto &entry : index_entries) {
-		entry->Checkpoint(writer);
+		auto checkpoint = entry->Checkpoint(writer);
+		shadows.push_back(std::move(checkpoint.shadow_index));
+		infos.push_back(std::move(checkpoint.storage_info));
 	}
 
-	// Flush before swapping the live indexes, so we don't reference blocks that do not exist
 	writer.Flush();
 
-	idx_t index_idx = 0;
-	for (const auto &entry : index_entries) {
-		entry->CommitCheckpoint(writer.TakeShadowIndex(index_idx++));
+	for (idx_t i = 0; i < index_entries.size(); i++) {
+		index_entries[i]->Swap(std::move(shadows[i]));
 	}
+
+	return infos;
 }
 
 vector<unordered_set<column_t>> TableIndexList::GetConflictTargetColumns(const ConflictInfo &conflict_info) const {
@@ -530,27 +544,11 @@ unordered_set<column_t> TableIndexList::GetUniqueIndexColumns() const {
 	return result;
 }
 
-IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, const IndexSerializationInfo &info) {
-	annotated_lock_guard<annotated_mutex> lock(index_entries_lock);
-
-	IndexSerializationResult result;
-
-	result.owned_infos.reserve(index_entries.size());
-	for (const auto &entry : index_entries) {
-		auto storage_info = entry->SerializeToDisk(context, info.options);
-		D_ASSERT(!storage_info.name.empty());
-		result.owned_infos.push_back(std::move(storage_info));
-		result.ordered_infos.push_back(result.owned_infos.back());
-	}
-	return result;
-}
-
-unique_ptr<IndexStorageInfo> TableIndexList::SerializeToWAL(const Identifier &name,
-                                                            const case_insensitive_map_t<Value> &options) {
+unique_ptr<IndexStorageInfo> TableIndexList::SerializeToWAL(const Identifier &name, const StorageVersion version) {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
 		if (entry->GetName() == name) {
-			return make_uniq<IndexStorageInfo>(entry->SerializeToWAL(options));
+			return make_uniq<IndexStorageInfo>(entry->SerializeToWAL(version));
 		}
 	}
 	return nullptr;
@@ -563,12 +561,12 @@ void TableIndexList::MergeCheckpointDeltas(const optional_idx checkpoint_id) con
 	}
 }
 
-void TableIndexList::Serialize(const vector<CheckpointedIndex> &result, Serializer &serializer) {
+void TableIndexList::Serialize(const vector<shared_ptr<const IndexStorageInfo>> &infos, Serializer &serializer) {
 	// write empty block pointers for forwards compatibility
 	const vector<BlockPointer> compat_block_pointers;
 	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
-	serializer.WriteList(104, "index_storage_infos", result.size(),
-	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(*result[i].storage_info); });
+	serializer.WriteList(104, "index_storage_infos", infos.size(),
+	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(*infos[i]); });
 }
 
 void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,

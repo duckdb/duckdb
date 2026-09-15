@@ -1,4 +1,5 @@
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/main/attached_database.hpp"
 
 #include "duckdb/common/types/conflict_manager.hpp"
@@ -23,7 +24,9 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
+#include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
@@ -31,6 +34,7 @@
 #include "duckdb/storage/checkpoint/table_index_writer.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
+#include <utility>
 
 namespace duckdb {
 
@@ -136,11 +140,6 @@ ART::ART(const ART &src, shared_ptr<AllocatorArray> allocators_ptr)
       tree(src.tree), allocators(std::move(allocators_ptr)), owns_data(true), storage_version(src.storage_version),
       prefix_count(src.prefix_count) {
 	D_ASSERT(allocators);
-}
-
-unique_ptr<BoundIndex> ART::CreateShadow(shared_ptr<AllocatorArray> new_allocators) {
-	auto art = make_uniq<ART>(*this, std::move(new_allocators));
-	return std::move(art);
 }
 
 uint8_t ART::GetAllocatorCount(const ARTSerializationFormat format) {
@@ -1071,35 +1070,36 @@ ARTSerializationFormat ART::GetSerializationFormat(const StorageVersion storage_
 	return ARTSerializationFormat::CURRENT;
 }
 
-static StorageVersion GetTargetStorageVersion(const case_insensitive_map_t<Value> &options) {
-	auto v1_0_0_option = options.find("v1_0_0_storage");
-	const bool v1_0_0_storage = v1_0_0_option == options.end() || v1_0_0_option->second != Value(false);
-	return v1_0_0_storage ? StorageVersion::V1_0_0 : StorageVersion::V1_2_0;
-}
+// TODO: do we need to grab the internal lock here?
+// void ART::Checkpoint(TableIndexWriter &writer) {
+// 	const auto target_format = GetSerializationFormat(writer.GetStorageVersion());
+// 	// This may mutate the live ART into a deprecated representation, but we accept this to prevent double copying.
+// 	auto storage_info = PrepareSerialize(target_format);
+//
+// 	auto &partial_block_manager = writer.GetPartialBlockManager();
+// 	const auto new_allocators = make_shared_ptr<AllocatorArray>();
+// 	const auto allocator_count = GetAllocatorCount(target_format);
+//
+// 	// We allocate all allocators, but serialize in accordance with the target format.
+// 	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
+// 		auto &new_allocator = (*new_allocators)[i];
+//
+// 		new_allocator = (*allocators)[i]->Persist(partial_block_manager);
+//
+// 		if (i < allocator_count) {
+// 			storage_info.allocator_infos.push_back(new_allocator->GetInfo());
+// 		}
+// 	}
+//
+// 	auto shadow = make_uniq<ART>(*this, new_allocators);
+// 	writer.AddBoundIndex(std::move(storage_info), std::move(shadow));
+// }
 
-IndexStorageInfo ART::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
-	lock_guard<mutex> guard(lock);
-
-	const auto target_version = GetTargetStorageVersion(options);
-	const auto target_format = GetSerializationFormat(target_version);
-	auto info = PrepareSerialize(target_format);
-	PartialBlockManager partial_block_manager(context, table_io_manager.GetIndexBlockManager(),
-	                                           PartialBlockType::FULL_CHECKPOINT);
-	const auto allocator_count = GetAllocatorCount(target_format);
-	for (idx_t i = 0; i < allocator_count; i++) {
-		auto persisted_allocator = (*allocators)[i]->Persist(partial_block_manager);
-		info.allocator_infos.push_back(persisted_allocator->GetInfo());
-	}
-	partial_block_manager.FlushPartialBlocks();
-	return info;
-}
-
-BoundCheckpointedIndex ART::CreateCheckpoint(IndexLock &l, TableIndexWriter &writer) {
-	const auto target_format = GetSerializationFormat(writer.GetStorageVersion());
+CheckpointedIndex ART::Checkpoint(PartialBlockManager &partial_block_manager, const StorageVersion version) {
+	const auto target_format = GetSerializationFormat(version);
 	// This may mutate the live ART into a deprecated representation, but we accept this to prevent double copying.
 	auto storage_info = PrepareSerialize(target_format);
 
-	auto &partial_block_manager = writer.GetPartialBlockManager();
 	const auto new_allocators = make_shared_ptr<AllocatorArray>();
 	const auto allocator_count = GetAllocatorCount(target_format);
 
@@ -1114,12 +1114,8 @@ BoundCheckpointedIndex ART::CreateCheckpoint(IndexLock &l, TableIndexWriter &wri
 		}
 	}
 
-	auto shadow = CreateShadow(new_allocators);
-	return {(std::move(storage_info)), std::move(shadow)};
-}
-
-IndexStorageInfo ART::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
-	return SerializeToWAL(GetTargetStorageVersion(options));
+	auto shadow = make_uniq<ART>(*this, new_allocators);
+	return {make_shared_ptr<IndexStorageInfo>(std::move(storage_info)), std::move(shadow)};
 }
 
 IndexStorageInfo ART::SerializeToWAL(const StorageVersion target_version) {

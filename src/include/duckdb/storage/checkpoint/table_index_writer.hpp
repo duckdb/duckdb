@@ -8,12 +8,16 @@
 
 #pragma once
 
-#include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/storage/index_storage_info.hpp"
 
 namespace duckdb {
 class Serializer;
 class PartialBlockManager;
 class SingleFileCheckpointWriter;
+class BoundIndex;
 
 struct CheckpointedIndex {
 	shared_ptr<const IndexStorageInfo> storage_info;
@@ -26,12 +30,11 @@ public:
 	virtual ~TableIndexWriter();
 
 public:
-	void AddUnboundIndex(shared_ptr<const IndexStorageInfo> info);
-	void AddBoundIndex(IndexStorageInfo info, unique_ptr<BoundIndex> index);
-	unique_ptr<BoundIndex> TakeShadowIndex(idx_t index);
 	PartialBlockManager &GetPartialBlockManager() const {
 		return partial_block_manager;
 	}
+
+	virtual PartialBlockManager CreateIsolatedPartialBlockManager() = 0;
 	virtual void Serialize(Serializer &serializer) = 0;
 	//! Writes the index buffers to disk
 	virtual void Flush() = 0;
@@ -39,24 +42,23 @@ public:
 	StorageVersion GetStorageVersion() const;
 
 protected:
+	//! Used to colocate blocks across indexes, used when index supports deferred checkpointing.
 	PartialBlockManager &partial_block_manager;
 	StorageVersion storage_version;
-
-	vector<CheckpointedIndex> result;
 };
 
 class SingleFileTableIndexWriter : public TableIndexWriter {
 public:
-	explicit SingleFileTableIndexWriter(SingleFileCheckpointWriter &checkpoint_manager,
-	                                    PartialBlockManager &partial_block_manager, StorageVersion version,
+	explicit SingleFileTableIndexWriter(SingleFileCheckpointWriter &checkpoint_manager, StorageVersion version,
 	                                    bool debug_verify_blocks);
 
 public:
+	PartialBlockManager CreateIsolatedPartialBlockManager() override;
 	void Flush() override;
 	void Serialize(Serializer &serializer) override;
 
 private:
-	void VerifyBlockUsage();
+	static void VerifyBlockUsage(const vector<shared_ptr<const IndexStorageInfo>> &infos);
 
 private:
 	SingleFileCheckpointWriter &checkpoint_manager;

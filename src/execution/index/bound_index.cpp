@@ -6,7 +6,6 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/column/column_data_scan_states.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -188,27 +187,7 @@ ErrorData BoundIndex::MergeCheckpointDelta(IndexDeltaType, BoundIndex &) {
 	throw InternalException("BoundIndex::MergeCheckpointDelta is not supported for this index type");
 }
 
-void BoundIndex::Checkpoint(TableIndexWriter &writer) {
-	IndexLock state;
-	InitializeLock(state);
-
-	auto [storage_info, shadow_index] = CreateCheckpoint(state, writer);
-	if (!shadow_index) {
-		throw InternalException("Checkpoint did not produce a shadow index");
-	}
-
-	writer.AddBoundIndex(std::move(storage_info), std::move(shadow_index));
-}
-
-IndexStorageInfo BoundIndex::SerializeToDisk(QueryContext, const case_insensitive_map_t<Value> &) {
-	throw NotImplementedException("The implementation of this index disk serialization does not exist.");
-}
-
-IndexStorageInfo BoundIndex::SerializeToWAL(const StorageVersion storage_version) {
-	throw NotImplementedException("The implementation of this index WAL serialization does not exist.");
-}
-
-IndexStorageInfo BoundIndex::SerializeToWAL(const case_insensitive_map_t<Value> &) {
+IndexStorageInfo BoundIndex::SerializeToWAL(const StorageVersion) {
 	throw NotImplementedException("The implementation of this index WAL serialization does not exist.");
 }
 

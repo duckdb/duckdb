@@ -1,4 +1,9 @@
 #include "duckdb/storage/checkpoint/table_index_writer.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
@@ -12,44 +17,26 @@ TableIndexWriter::TableIndexWriter(PartialBlockManager &partial_block_manager, S
 TableIndexWriter::~TableIndexWriter() {
 }
 
-void TableIndexWriter::AddUnboundIndex(shared_ptr<const IndexStorageInfo> info) {
-	result.push_back({std::move(info), nullptr});
-}
-
-void TableIndexWriter::AddBoundIndex(IndexStorageInfo info, unique_ptr<BoundIndex> index) {
-	result.push_back({make_shared_ptr<const IndexStorageInfo>(std::move(info)), std::move(index)});
-}
-
-unique_ptr<BoundIndex> TableIndexWriter::TakeShadowIndex(idx_t index) {
-	D_ASSERT(index < result.size());
-	return std::move(result[index].shadow_index);
-}
-
 StorageVersion TableIndexWriter::GetStorageVersion() const {
 	return storage_version;
 }
 
 SingleFileTableIndexWriter::SingleFileTableIndexWriter(SingleFileCheckpointWriter &checkpoint_manager,
-                                                       PartialBlockManager &partial_block_manager,
                                                        const StorageVersion version, const bool debug_verify_blocks)
-    : TableIndexWriter(partial_block_manager, version), checkpoint_manager(checkpoint_manager),
+    : TableIndexWriter(checkpoint_manager.index_partial_block_manager, version), checkpoint_manager(checkpoint_manager),
       debug_verify_blocks(debug_verify_blocks) {
+}
+
+PartialBlockManager SingleFileTableIndexWriter::CreateIsolatedPartialBlockManager() {
+	return checkpoint_manager.CreateIsolatedIndexPartialBlockManager();
 }
 
 void SingleFileTableIndexWriter::Flush() {
 	partial_block_manager.FlushPartialBlocks();
 }
 
-void SingleFileTableIndexWriter::Serialize(Serializer &serializer) {
-	if (debug_verify_blocks) {
-		VerifyBlockUsage();
-	}
-
-	TableIndexList::Serialize(result, serializer);
-}
-
-void SingleFileTableIndexWriter::VerifyBlockUsage() {
-	for (const auto &[storage_info, _] : result) {
+void SingleFileTableIndexWriter::VerifyBlockUsage(const vector<shared_ptr<const IndexStorageInfo>> &infos) {
+	for (const auto &storage_info : infos) {
 		for (auto &allocator : storage_info->allocator_infos) {
 			for (auto &block : allocator.block_pointers) {
 				checkpoint_manager.verify_block_usage_count[block.block_id]++;

@@ -1,4 +1,7 @@
 #include "duckdb/storage/table/index_entry.hpp"
+#include "duckdb/storage/index.hpp"
+#include "duckdb/storage/partial_block_manager.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
@@ -469,37 +472,53 @@ idx_t IndexEntry::GetInMemorySize() const {
 	return owned_index->Cast<BoundIndex>().GetInMemorySize();
 }
 
-void IndexEntry::Checkpoint(TableIndexWriter &writer) {
+// TODO: do we need any error handling here?
+CheckpointedIndex IndexEntry::Checkpoint(TableIndexWriter &index_writer) {
 	auto entry_lock = lock.GetExclusiveLock();
-	owned_index->Checkpoint(writer);
+	D_ASSERT(owned_index);
+
+	// what do we want to do here?
+	// we checkpoint the current index, this can mean two things:
+	// 1) the index supports deferred checkpointing, then we can construct an index in the background
+	// 		and swap it with the live index at a later moment. this has the benefit of colocating buffers.
+	// 		deferred indexes are only supported in conjunction with delta indexes, or otherwise state may be lost.
+	// 2) the index only supports immediate checkpointing, this means we must persist the bufffers before releasing
+	// 		the lock of this index.
+
+	auto storage_version = index_writer.GetStorageVersion();
+	if (owned_index->GetCheckpointType() == IndexCheckpointType::DEFERRED) {
+		return owned_index->Checkpoint(index_writer.GetPartialBlockManager(), storage_version);
+	}
+
+	// do we want to split the flow inside the writer? then we can even abstract away the IndexCheckpointType.
+	// but how do we know when to flush then? we can set up a flush call which only triggers in immediate mode,
+	// but this might be slightly misleading for people reading this code. Then doing explicit control flow here
+	// might be easier to understand. -> counter argument is that index entry should not really care about the modes
+	// though. it would save on leaking yet another concept -> maybe we call it FlushImmediate() but that would
+	// still leak internal concepts.
+	auto partial_block_manager = index_writer.CreateIsolatedPartialBlockManager();
+	auto checkpoint = owned_index->Checkpoint(partial_block_manager, storage_version);
+	partial_block_manager.FlushPartialBlocks();
+
+	// TODO: do we want to move the swap outside here?
+	Swap(std::move(checkpoint.shadow_index));
+	return checkpoint;
 }
 
-void IndexEntry::CommitCheckpoint(unique_ptr<BoundIndex> shadow_index) {
+void IndexEntry::Swap(unique_ptr<BoundIndex> shadow_index) {
 	auto entry_lock = lock.GetExclusiveLock();
 	if (!shadow_index) {
-		D_ASSERT(owned_index && !owned_index->IsBound());
 		return;
 	}
 	D_ASSERT(owned_index && owned_index->IsBound());
 	owned_index = std::move(shadow_index);
 }
 
-IndexStorageInfo IndexEntry::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
-	auto entry_lock = lock.GetExclusiveLock();
-	if (owned_index->IsBound()) {
-		return owned_index->Cast<BoundIndex>().SerializeToDisk(context, options);
-	}
-	return owned_index->Cast<UnboundIndex>().CopyStorageInfo();
-}
-
-IndexStorageInfo IndexEntry::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
+IndexStorageInfo IndexEntry::SerializeToWAL(const StorageVersion version) {
 	auto entry_lock = lock.GetExclusiveLock();
 	// We never write an unbound index to the WAL.
 	D_ASSERT(owned_index->IsBound());
-	auto v1_0_0_option = options.find("v1_0_0_storage");
-	const bool v1_0_0_storage = v1_0_0_option == options.end() || v1_0_0_option->second != Value(false);
-	const auto storage_version = v1_0_0_storage ? StorageVersion::V1_0_0 : StorageVersion::V1_2_0;
-	return owned_index->Cast<BoundIndex>().SerializeToWAL(storage_version);
+	return owned_index->Cast<BoundIndex>().SerializeToWAL(version);
 }
 
 void IndexEntry::MergeCheckpointDeltas(const optional_idx checkpoint_id) {

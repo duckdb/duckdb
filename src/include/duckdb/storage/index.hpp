@@ -14,12 +14,20 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 
 namespace duckdb {
 
 class AttachedDatabase;
 class TableIOManager;
 class TableIndexWriter;
+
+//! Describes how an index participates in a checkpoint.
+//!
+//! Most indexes persist their storage while their checkpoint callback runs.  An index
+//! that needs to isolate mutations while the checkpoint is in progress can opt into
+//! DEFERRED and provide a replacement index to the writer instead.
+enum class IndexCheckpointType : uint8_t { IMMEDIATE, DEFERRED };
 
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
@@ -58,8 +66,18 @@ public:
 	//! The index constraint type
 	virtual IndexConstraintType GetConstraintType() const = 0;
 
-	//! Checkpoint an index
-	virtual void Checkpoint(TableIndexWriter &writer) = 0;
+	//! Returns how this index participates in a checkpoint.
+	virtual IndexCheckpointType GetCheckpointType() const {
+		return IndexCheckpointType::IMMEDIATE;
+	}
+
+	//! Checkpoint an index.
+	//!
+	//! Index implementations that persist data must override this method.  The default
+	//! keeps the extension interface source compatible for indexes that do not support
+	//! persistence yet and reports the error when such an index is checkpointed.
+	virtual void Checkpoint(TableIndexWriter &writer);
+	virtual CheckpointedIndex Checkpoint(PartialBlockManager &partial_block_manager, const StorageVersion version);
 
 	//! Returns unique flag
 	bool IsUnique() const {

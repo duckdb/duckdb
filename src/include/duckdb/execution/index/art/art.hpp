@@ -136,11 +136,14 @@ public:
 	//! Vacuums the ART storage.
 	void Vacuum(IndexLock &state) override;
 
-	//! Serializes ART memory to disk and returns the ART storage information.
-	IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) override;
 	//! Serializes ART memory to the WAL and returns the ART storage information.
 	IndexStorageInfo SerializeToWAL(StorageVersion target_version) override;
-	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
+	//! ART checkpoints are deferred so mutations can be routed through checkpoint deltas.
+	IndexCheckpointType GetCheckpointType() const override {
+		return IndexCheckpointType::DEFERRED;
+	}
+	void Checkpoint(TableIndexWriter &writer) override;
+	CheckpointedIndex Checkpoint(PartialBlockManager &partial_block_manager, const StorageVersion version) override;
 
 	//! Returns the in-memory usage of the ART.
 	idx_t GetInMemorySize(IndexLock &index_lock) const override;
@@ -176,16 +179,9 @@ public:
 		return prefix_count;
 	}
 
-protected:
-	//! Produce a shadow ART and its associated metadata, used for checkpointing a bound index.
-	BoundCheckpointedIndex CreateCheckpoint(IndexLock &l, TableIndexWriter &writer) override;
-
 private:
 	//! The number of bytes fitting in the prefix.
 	uint8_t prefix_count;
-
-	//! Create an index which is logically equivalent but backed by potentially different buffers.
-	unique_ptr<BoundIndex> CreateShadow(shared_ptr<AllocatorArray> new_allocators);
 
 	//! Returns how many allocators are used based on the target serialization format.
 	static uint8_t GetAllocatorCount(ARTSerializationFormat format);
