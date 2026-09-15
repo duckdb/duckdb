@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/order/physical_top_n.hpp"
+#include "duckdb/common/atomic.hpp"
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -562,6 +563,7 @@ class TopNGlobalSourceState : public GlobalSourceState {
 public:
 	explicit TopNGlobalSourceState(TopNGlobalSinkState &sink_p) : sink(sink_p), batch_index(0) {
 		sink.heap.InitializeScan(state, true);
+		total_rows = state.scan_order.size() - MinValue<idx_t>(sink.heap.offset, state.scan_order.size());
 	}
 
 	idx_t MaxThreads() override {
@@ -575,10 +577,20 @@ public:
 	TopNGlobalSinkState &sink;
 	TopNScanState state;
 	idx_t batch_index;
+	idx_t total_rows;
+	atomic<idx_t> rows_scanned {0};
 };
 
 unique_ptr<GlobalSourceState> PhysicalTopN::GetGlobalSourceState(ClientContext &context) const {
 	return make_uniq<TopNGlobalSourceState>(this->sink_state->Cast<TopNGlobalSinkState>());
+}
+
+ProgressData PhysicalTopN::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
+	auto &state = gstate.Cast<TopNGlobalSourceState>();
+	if (state.total_rows == 0) {
+		return ProgressData {1.0, 1.0, false};
+	}
+	return ProgressData {double(state.rows_scanned.load()), double(state.total_rows), false};
 }
 
 unique_ptr<LocalSourceState> PhysicalTopN::GetLocalSourceState(ExecutionContext &context,
@@ -605,6 +617,7 @@ SourceResultType PhysicalTopN::GetDataInternal(ExecutionContext &context, DataCh
 	}
 
 	sink.heap.Scan(gstate.state, chunk, lstate.pos);
+	gstate.rows_scanned += chunk.size();
 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
