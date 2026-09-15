@@ -111,6 +111,14 @@ TEST_CASE("Stable C++API: ArrowStream export", "[cpp_api][arrow]") {
 		delete raw;
 	}
 
+	SECTION("a result that already yielded a chunk refuses to export") {
+		auto result = conn.Execute("SELECT i FROM range(1000) t(i)");
+		REQUIRE(result.FetchChunk().GetRowCount() > 0);
+		REQUIRE_THROWS_MATCHES(result.ToArrowStream(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		// The refusal consumed the result, so the connection is free again.
+		REQUIRE(conn.Execute("SELECT 1").Drain() == 0);
+	}
+
 	SECTION("an execution error surfaces from Next") {
 		auto stream = conn.Execute("SELECT CASE WHEN i = 500 THEN error('boom') ELSE i::VARCHAR END "
 		                           "FROM range(1000) t(i)")

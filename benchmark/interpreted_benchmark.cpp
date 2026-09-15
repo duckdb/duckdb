@@ -11,8 +11,8 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/execution/operator/helper/physical_result_collector.hpp"
-#include "duckdb/common/arrow/physical_arrow_collector.hpp"
+#include "duckdb/common/arrow/arrow_format.hpp"
+#include "duckdb/main/query_result_stream.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "debug_fs_extension.hpp"
@@ -166,7 +166,7 @@ BenchmarkQuery InterpretedBenchmark::ReadQueryFromReader(BenchmarkFileReader &re
 }
 
 static void ThrowResultModeError(BenchmarkFileReader &reader) {
-	vector<string> valid_options = {"streaming", "arrow", "materialized"};
+	vector<string> valid_options = {"streaming", "arrow", "arrow_stream", "materialized"};
 	auto error = StringUtil::Format("Invalid argument for resultmode, valid options are: %s",
 	                                StringUtil::Join(valid_options, ", "));
 	throw std::runtime_error(reader.FormatException(error));
@@ -254,17 +254,17 @@ void InterpretedBenchmark::ProcessFile(const string &path) {
 				}
 				discard_stream_result = splits.size() == 3 && splits[2] == "drop";
 				result_mode = BenchmarkResultMode::STREAMING;
-			} else if (splits[1] == "arrow") {
+			} else if (splits[1] == "arrow" || splits[1] == "arrow_stream") {
 				arrow_batch_size = STANDARD_VECTOR_SIZE;
 				if (splits.size() == 3) {
 					auto custom_batch_size = std::stoi(splits[2]);
 					arrow_batch_size = custom_batch_size;
 				}
 				if (splits.size() != 2 && splits.size() != 3) {
-					throw std::runtime_error(reader.FormatException(
-					    "resultmode 'arrow' only takes 1 optional extra parameter (batch_size)"));
+					throw std::runtime_error(reader.FormatException(StringUtil::Format(
+					    "resultmode '%s' only takes 1 optional extra parameter (batch_size)", splits[1])));
 				}
-				result_mode = BenchmarkResultMode::ARROW;
+				result_mode = splits[1] == "arrow" ? BenchmarkResultMode::ARROW : BenchmarkResultMode::ARROW_STREAM;
 			} else if (splits[1] == "materialized") {
 				if (splits.size() != 2) {
 					throw std::runtime_error(
@@ -655,21 +655,6 @@ string InterpretedBenchmark::GetQuery() {
 	return run_query;
 }
 
-ScopedConfigSetting PrepareResultCollector(ClientConfig &config, InterpretedBenchmark &benchmark) {
-	if (benchmark.ResultMode() == BenchmarkResultMode::ARROW) {
-		return ScopedConfigSetting(
-		    config,
-		    [&benchmark](ClientConfig &config) {
-			    config.get_result_collector =
-			        [&benchmark](ClientContext &context, PreparedStatementData &data) -> unique_ptr<PhysicalOperator> {
-				    return PhysicalArrowCollector::Create(context, data, benchmark.ArrowBatchSize());
-			    };
-		    },
-		    [](ClientConfig &config) { config.get_result_collector = nullptr; });
-	}
-	return ScopedConfigSetting(config);
-}
-
 void InterpretedBenchmark::Assert(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
 
@@ -690,8 +675,19 @@ void InterpretedBenchmark::Run(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
 	auto &context = state.con.context;
 
-	auto &config = ClientConfig::GetConfig(*context);
-	auto result_collector_setting = PrepareResultCollector(config, *this);
+	if (result_mode == BenchmarkResultMode::ARROW_STREAM) {
+		auto handle = context->Submit(run_query, QueryParameters());
+		if (handle->HasError()) {
+			state.result = std::move(handle);
+			return;
+		}
+		handle->SetFormat(make_shared_ptr<ArrowFormat>(arrow_batch_size));
+		FormattedResultStream<ArrowFormat> stream(std::move(handle));
+		while (stream.Fetch()) {
+		}
+		state.result = stream.HasError() ? make_uniq<QueryResult>(stream.GetErrorObject()) : nullptr;
+		return;
+	}
 	if (result_mode == BenchmarkResultMode::STREAMING) {
 		auto handle = context->Submit(run_query, QueryParameters());
 		if (handle->HasError()) {
@@ -727,13 +723,16 @@ void InterpretedBenchmark::Run(BenchmarkState *state_p) {
 		}
 		return;
 	}
-	auto temp_result = context->Query(run_query, QueryParameters());
+	QueryParameters parameters;
 	if (result_mode == BenchmarkResultMode::ARROW) {
-		if (temp_result->GetResultType() != QueryResultType::ARROW_RESULT) {
-			throw InternalException("Query did not produce an Arrow result, but %s",
-			                        EnumUtil::ToString(temp_result->GetResultType()));
+		parameters.format = make_shared_ptr<ArrowFormat>(arrow_batch_size);
+	}
+	auto temp_result = context->Query(run_query, parameters);
+	if (result_mode == BenchmarkResultMode::ARROW) {
+		if (temp_result->RowCount() > 0 && temp_result->Collection<ArrowFormat>().UnitCount() == 0) {
+			throw InternalException("Query produced rows but no Arrow record batches");
 		}
-		/* no-op, this is only used to test the overhead of the result collector */
+		/* no-op, this is only used to test the overhead of the conversion */
 		state.result = nullptr;
 		return;
 	}

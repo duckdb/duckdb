@@ -10,6 +10,9 @@
 
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
 
+#include "duckdb/common/arrow/arrow_format.hpp"
+#include "duckdb/main/query_result_stream.hpp"
+
 //! The result state machine, shared by the modules that build a result or consume one wholesale.
 //! Not part of any public surface: only the V2 bridge's own translation units include this.
 //! `capi_v2_result.cpp` owns it and defines the members declared here; `capi_v2_prepared_statement.cpp`
@@ -24,6 +27,7 @@ struct ResultWrapperV2 {
 		// Finalize() (engine cleanup) runs in duckdb_v2_result_destroy, not here:
 		// a destructor must not drive locked engine state behind a catch-all.
 		stream.reset();
+		unit_stream.reset();
 		handle.reset();
 		ReleaseBusySlot();
 	}
@@ -34,6 +38,21 @@ struct ResultWrapperV2 {
 	unique_ptr<QueryResult> handle;
 	//! Live while state == STREAMING, for a statement whose result can be streamed.
 	unique_ptr<QueryResultStream> stream;
+	//! The stream's counterpart on the unit path: live while the principal fragment delivers the
+	//! record batches its worker threads built.
+	unique_ptr<FormattedResultStream<ArrowFormat>> unit_stream;
+
+	//! The format result_to_arrow_stream asked for, applied to the principal fragment when it leaves
+	//! PENDING. Null while this result delivers chunks.
+	shared_ptr<ResultFormat> requested_format;
+	//! The principal fragment's per-query format state: the buffer's when the worker threads convert,
+	//! this result's own when a materialized principal is converted on the consumer.
+	shared_ptr<ResultFormatGlobalState> format_state;
+	//! Conversion state for a materialized principal, whose chunks this result converts itself.
+	unique_ptr<ResultFormatLocalState> format_lstate;
+	//! True once the principal fragment left PENDING. From then on its rows are committed to a
+	//! representation, so a format can no longer be applied.
+	bool principal_settled = false;
 
 	//! Keeps the ClientContext alive for starting subsequent fragments and
 	//! preserves the guarantee that an undrained result survives disconnect:
@@ -105,12 +124,23 @@ struct ResultWrapperV2 {
 	//! then roll back an injected group transaction. May throw; the terminal
 	//! states leave pending/result null, so this is then a no-op.
 	void Finalize() {
-		if (stream) {
-			stream->Close();
+		if (auto active = ActiveStream()) {
+			active->Close();
 		} else if (handle) {
 			handle->Close();
 		}
 		RollbackIncompleteGroup();
+	}
+
+	//! Whichever stream is draining the current fragment, on either path.
+	optional_ptr<ResultStreamBase> ActiveStream() {
+		if (stream) {
+			return *stream;
+		}
+		if (unit_stream) {
+			return *unit_stream;
+		}
+		return nullptr;
 	}
 
 	//! Frees the connection for its next query. Only the current owner can
@@ -139,11 +169,15 @@ struct ResultWrapperV2 {
 	//! Drives one unit of work; never blocks. On CHUNK, out_chunk holds the
 	//! produced chunk; on every other status it is reset.
 	DUCKDB_V2_RESULT_STEP_STATUS Step(unique_ptr<DataChunk> &out_chunk);
+	//! Step on the unit path, for a principal fragment that took a format.
+	DUCKDB_V2_RESULT_STEP_STATUS StepUnit(unique_ptr<ResultUnit> &out_unit);
 	//! Blocks until Step can make progress. No-op on terminal states.
 	void Wait();
 	//! Blocking convenience: steps/waits until a chunk is produced (returned)
 	//! or the stream ends (nullptr). Cancellation throws InterruptException.
 	unique_ptr<DataChunk> FetchChunkBlocking();
+	//! FetchChunkBlocking on the unit path.
+	unique_ptr<ResultUnit> FetchUnitBlocking();
 	//! Throws unless the principal fragment's metadata is available.
 	void RequireMetadata() const;
 
@@ -152,6 +186,13 @@ private:
 	//! (returned as a status), everything else becomes the sticky ERRORED
 	//! state and throws.
 	DUCKDB_V2_RESULT_STEP_STATUS HandleExecutionError(ErrorData error_data);
+	//! The one state machine behind Step and StepUnit: exactly one of the two outputs is filled,
+	//! depending on how the current fragment delivers its rows.
+	DUCKDB_V2_RESULT_STEP_STATUS StepInternal(unique_ptr<DataChunk> &out_chunk, unique_ptr<ResultUnit> &out_unit);
+	//! Leave PENDING on the principal fragment, committing it to the requested format.
+	void SettlePrincipal();
+	//! Convert the chunks of a materialized principal until the format has a unit. Null at the end.
+	unique_ptr<ResultUnit> NextConvertedUnit();
 };
 
 auto Convert(ResultWrapperV2 *wrapper) -> duckdb_v2_result_handle;

@@ -66,26 +66,40 @@ private:
 	const ChunkFormat &ChunkFormatOf(ResultSinkGlobalState &gstate) const;
 	//! The producer's format state, created at its first Append
 	ResultFormatLocalState &LocalFormatState(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
-	//! Append the chunk, and finish the unit when it reached the format's target. Null otherwise
-	unique_ptr<ResultUnit> AppendToUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
-	                                    DataChunk &chunk) const;
-	//! Finish the unit that reached the format's target, or with flush_partial the one under
+	//! Convert the chunk into the format's units
+	void AppendChunk(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, DataChunk &chunk) const;
+	//! Finish the next unit that reached the format's target, or with flush_partial the one under
 	//! construction. Null when there is none
 	unique_ptr<ResultUnit> FinishUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
 	                                  bool flush_partial) const;
 	//! Give a finished unit to the buffer. True when the producer parked holding it
 	bool HandOver(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, unique_ptr<ResultUnit> unit,
 	              const InterruptState &interrupt) const;
-	//! Finish the unit under construction, so no unit spans two batch indexes: hand it to the buffer
-	//! when draining, list it for Combine when retained. True when the producer parked holding it
-	bool FlushPartialUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
-	                      const InterruptState &interrupt) const;
+	//! Hand a finished unit to the buffer when draining, list it for Combine when retained. True when
+	//! the producer parked holding it
+	bool DeliverUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, unique_ptr<ResultUnit> unit,
+	                 const InterruptState &interrupt) const;
+	//! Deliver the units the format has, and with flush_partial the one under construction too. True
+	//! when a hand-over parked the producer
+	bool DrainUnits(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, const InterruptState &interrupt,
+	                bool flush_partial) const;
+	//! Deliver every unit the format finished. One chunk can fill several units, so this drains until
+	//! the format has none ready
+	bool DrainFinishedUnits(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
+	                        const InterruptState &interrupt) const {
+		return DrainUnits(gstate, lstate, interrupt, false);
+	}
+	//! Deliver the finished units and the one under construction, so no unit spans two batch indexes
+	bool FlushUnits(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
+	                const InterruptState &interrupt) const {
+		return DrainUnits(gstate, lstate, interrupt, true);
+	}
 	SinkResultType SinkDraining(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, DataChunk &chunk,
 	                            OperatorSinkInput &input) const;
 	SinkResultType SinkRetained(ExecutionContext &context, ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
 	                            DataChunk &chunk) const;
-	SinkResultType SinkRetainedFormatted(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
-	                                     DataChunk &chunk) const;
+	SinkResultType SinkRetainedFormatted(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, DataChunk &chunk,
+	                                     const InterruptState &interrupt) const;
 	SinkCombineResultType CombineDraining(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
 	SinkCombineResultType CombineRetained(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
 	unique_ptr<QueryResult> GetMaterializedResult(ResultSinkGlobalState &gstate) const;

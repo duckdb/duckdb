@@ -36,6 +36,7 @@ set(TEST_API_OBJECTS
     test_extension_schema_api.cpp
     test_pending_query.cpp
     test_query_result.cpp
+    test_query_result_arrow.cpp
     test_query_result_format.cpp
     test_query_result_format_buffer.cpp
     test_query_result_stream.cpp

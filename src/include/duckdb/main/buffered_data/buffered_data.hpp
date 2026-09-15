@@ -74,6 +74,10 @@ public:
 	const shared_ptr<ResultFormatGlobalState> &SharedFormatState() const {
 		return format_state;
 	}
+	//! The ordering the plan established, as InitGlobal receives it
+	ResultOrdering Ordering() const {
+		return format_context.ordering;
+	}
 	//! Choose draining, as every fetch-shaped call does. Throws when the result is being materialized
 	void DecideDraining();
 	//! Park a producer until the retention is decided. False when it already is
