@@ -397,6 +397,7 @@ static unique_ptr<FunctionData> ListReverseSortBind(BindScalarFunctionInput &inp
 static void SetListSortSerialization(ScalarFunction &function) {
 	function.SetSerializeCallback(ListSortBindData::Serialize);
 	function.SetDeserializeCallback(ListSortBindData::Deserialize);
+	function.SetLegacySerializeCallback(BoundFunctionExpression::SerializeAsLegacyRebind);
 }
 
 ScalarFunctionSet ListSortFun::GetFunctions() {

@@ -32,6 +32,7 @@ ScalarFunction AliasFun::GetFunction() {
 	fun.GetProperties().SetRequiresExpressionNames(true);
 	fun.SetSerializeCallback(AliasSerialize);
 	fun.SetDeserializeCallback(AliasDeserialize);
+	fun.SetLegacySerializeCallback(BoundFunctionExpression::SerializeAsLegacyRebind);
 	return fun;
 }
 

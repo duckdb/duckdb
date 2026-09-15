@@ -151,6 +151,19 @@ void BoundFunctionExpression::Verify() const {
 	D_ASSERT(function.GetDefinition());
 }
 
+unique_ptr<Expression> BoundFunctionExpression::SerializeAsLegacyRebind(FunctionToStringInput &input) {
+	auto function = input.bound_function;
+	function.SetSerializeCallback(nullptr);
+	function.SetDeserializeCallback(nullptr);
+	function.SetLegacySerializeCallback(nullptr);
+	vector<unique_ptr<Expression>> children;
+	for (auto &child : input.children) {
+		children.push_back(child->Copy());
+	}
+	auto bind_data = input.bind_data ? input.bind_data->Copy() : nullptr;
+	return make_uniq<BoundFunctionExpression>(std::move(function), std::move(children), std::move(bind_data));
+}
+
 void BoundFunctionExpression::Serialize(Serializer &serializer) const {
 	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0) && function.HasLegacySerializeCallback()) {
 		// serialize legacy expression for backwards compatibility
@@ -168,8 +181,6 @@ void BoundFunctionExpression::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(201, "children", children);
 	FunctionSerializer::Serialize(serializer, function, bind_info.get());
 	serializer.WriteProperty(202, "is_operator", is_operator);
-	serializer.WritePropertyWithDefault(203, "is_compressed_materialization_cast",
-	                                    compression_origin == CompressedMaterializationOrigin::CAST, false);
 	serializer.WritePropertyWithDefault(204, "compression_origin", compression_origin,
 	                                    CompressedMaterializationOrigin::NONE);
 }
@@ -210,10 +221,8 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 	    deserializer, CatalogType::SCALAR_FUNCTION_ENTRY, children, return_type);
 
 	auto is_operator = deserializer.ReadProperty<bool>(202, "is_operator");
-	auto compression_cast = deserializer.ReadPropertyWithDefault<bool>(203, "is_compressed_materialization_cast");
 	auto compression_origin = deserializer.ReadPropertyWithExplicitDefault<CompressedMaterializationOrigin>(
-	    204, "compression_origin",
-	    compression_cast ? CompressedMaterializationOrigin::CAST : CompressedMaterializationOrigin::NONE);
+	    204, "compression_origin", CompressedMaterializationOrigin::NONE);
 
 	RestoreErasedLambdaChild(entry.first, entry.second.get(), children);
 

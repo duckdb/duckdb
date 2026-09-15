@@ -37,6 +37,7 @@ unique_ptr<CatalogEntry> TableFunctionCatalogEntry::AlterEntry(CatalogTransactio
 		throw BinderException("Failed to add new function overloads to function \"%s\": function already exists", name);
 	}
 	CreateTableFunctionInfo new_info(std::move(new_set));
+	new_info.internal = internal;
 	return make_uniq<TableFunctionCatalogEntry>(catalog, schema, new_info);
 }
 
