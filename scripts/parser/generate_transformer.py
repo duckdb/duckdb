@@ -1225,7 +1225,7 @@ def _matcher_override_expr(rule_name, override):
         return "make_uniq<StringLiteralMatcher>()"
     if matcher == "operator":
         return "make_uniq<OperatorMatcher>()"
-    if matcher == "any_operator":
+    if matcher == "all_operators":
         return "make_uniq<OperatorMatcher>(OperatorMatcherMode::ALL_OPERATORS)"
     raise RuntimeError(f"Unsupported matcher_rule_overrides entry for {rule_name}: {override}")
 

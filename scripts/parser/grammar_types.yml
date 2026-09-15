@@ -1789,7 +1789,7 @@ matcher_rule_overrides:
     matcher: operator
   AnyOperatorLiteral:
     allow_type_overlap: true
-    matcher: any_operator
+    matcher: all_operators
 
 packrat_memoized_rules:
   - Expression
