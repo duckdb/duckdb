@@ -195,6 +195,12 @@ ProgressData PhysicalPerfectHashAggregate::GetProgress(ClientContext &context, G
 	return ProgressData {double(state.scanned_slots.load()), double(gstate.ht->Capacity()), false};
 }
 
+void PhysicalPerfectHashAggregate::SourceFinished(ClientContext &context, GlobalSourceState &gstate_p) const {
+	auto &state = gstate_p.Cast<PerfectHashAggregateState>();
+	auto &gstate = sink_state->Cast<PerfectHashAggregateGlobalState>();
+	state.scanned_slots = gstate.ht->Capacity();
+}
+
 SourceResultType PhysicalPerfectHashAggregate::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                                OperatorSourceInput &input) const {
 	auto &state = input.global_state.Cast<PerfectHashAggregateState>();
