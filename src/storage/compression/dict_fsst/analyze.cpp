@@ -51,10 +51,54 @@ DictFSSTAnalyzeState::DictFSSTAnalyzeState(BlockManager &block_manager) : Analyz
 	fsst_string_size_limit = GetStringSizeLimit(block_size, true);
 }
 
+idx_t DictFSSTAnalyzeState::RequiredSpace(idx_t tuple_count, idx_t unique_count, idx_t dict_size,
+                                          idx_t max_string_length) {
+	// index 0 of the dictionary is reserved for NULL
+	const idx_t dict_count = unique_count + 1;
+
+	const auto string_lengths_width = BitpackingPrimitives::MinimumBitWidth(max_string_length);
+	const auto string_lengths_space = BitpackingPrimitives::GetRequiredSize(dict_count, string_lengths_width);
+	const auto dictionary_indices_width = BitpackingPrimitives::MinimumBitWidth(dict_count - 1);
+	const auto dictionary_indices_space = BitpackingPrimitives::GetRequiredSize(tuple_count, dictionary_indices_width);
+
+	idx_t required_space = AlignValue<idx_t>(sizeof(dict_fsst_compression_header_t));
+	required_space += dict_size;
+	required_space = AlignValue<idx_t>(required_space);
+	required_space += string_lengths_space;
+	required_space = AlignValue<idx_t>(required_space);
+	required_space += dictionary_indices_space;
+	return required_space;
+}
+
+bool DictFSSTAnalyzeState::FitsInBlock(idx_t tuple_count, idx_t unique_count, idx_t dict_size,
+                                       idx_t max_str_length) const {
+	return RequiredSpace(tuple_count, unique_count, dict_size, max_str_length) <= info.GetBlockSize();
+}
+
+void DictFSSTAnalyzeState::FlushSimulatedBlock() {
+	if (current_unique_count != current_tuple_count) {
+		has_duplicates = true;
+	}
+	segment_count++;
+	current_tuple_count = 0;
+	current_unique_count = 0;
+	current_dict_size = 0;
+	current_max_string_length = 0;
+	current_set.clear();
+	// the strings are only referenced by 'current_set', which we just cleared
+	heap.Destroy();
+}
+
 bool DictFSSTAnalyzeState::Analyze(const Vector &input) {
 	for (auto entry : input.Values<string_t>()) {
 		if (!entry.IsValid()) {
 			contains_nulls = true;
+			// NULL is dictionary index 0, it does not occupy a dictionary entry of its own
+			if (!FitsInBlock(current_tuple_count + 1, current_unique_count, current_dict_size,
+			                 current_max_string_length)) {
+				FlushSimulatedBlock();
+			}
+			current_tuple_count++;
 			continue;
 		}
 		auto &str = entry.GetValue();
@@ -72,13 +116,54 @@ bool DictFSSTAnalyzeState::Analyze(const Vector &input) {
 			// FSST strings may be up to two times larger than their plain equivalent
 			disable_fsst = true;
 		}
+
+		bool new_string = !current_set.count(str);
+		auto next_unique_count = current_unique_count + (new_string ? 1 : 0);
+		auto next_dict_size = current_dict_size + (new_string ? str_len : 0);
+		auto next_max_length = new_string ? MaxValue(current_max_string_length, str_len) : current_max_string_length;
+
+		if (!FitsInBlock(current_tuple_count + 1, next_unique_count, next_dict_size, next_max_length)) {
+			FlushSimulatedBlock();
+			// the next block starts with an empty dictionary, so this value has to be stored again
+			new_string = true;
+			next_unique_count = 1;
+			next_dict_size = str_len;
+			next_max_length = str_len;
+		}
+
+		current_tuple_count++;
+		current_unique_count = next_unique_count;
+		current_dict_size = next_dict_size;
+		current_max_string_length = next_max_length;
+		if (new_string) {
+			current_set.insert(heap.AddBlob(str));
+		}
 	}
 	total_count += input.size();
 	return true;
 }
 
 idx_t DictFSSTAnalyzeState::FinalAnalyze() {
-	return LossyNumericCast<idx_t>((double)total_string_length / 2.0);
+	if (!total_count) {
+		return 0;
+	}
+	if (current_unique_count != current_tuple_count) {
+		has_duplicates = true;
+	}
+
+	if (!disable_fsst && !contains_nulls && !has_duplicates) {
+		// FSST_ONLY does not depend on deduplication at all - it FSST-encodes every value and omits the
+		// selection buffer. It is only reachable when no value repeats and there are no NULLs, see
+		// DictFSSTCompressionState::TryEncode.
+		return LossyNumericCast<idx_t>((double)total_string_length / 2.0);
+	}
+
+	// Every block carries its own dictionary, so a value repeated across blocks is stored once per block.
+	// Charging for the blocks the simulation needed also charges for the space wasted in blocks that a large
+	// dictionary left mostly empty - which a ratio of the raw size cannot express.
+	const idx_t last_block_space =
+	    RequiredSpace(current_tuple_count, current_unique_count, current_dict_size, current_max_string_length);
+	return segment_count * info.GetBlockSize() + last_block_space;
 }
 
 } // namespace dict_fsst
