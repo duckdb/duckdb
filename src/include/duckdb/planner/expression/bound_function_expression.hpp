@@ -67,6 +67,8 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
+	//! Serialize without bind data for legacy readers that rebind the function.
+	static unique_ptr<Expression> SerializeAsLegacyRebind(FunctionToStringInput &input);
 
 private:
 	static ExpressionType GetFunctionExpressionType(const BoundScalarFunction &bound_function,

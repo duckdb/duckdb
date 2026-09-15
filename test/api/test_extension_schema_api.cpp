@@ -107,6 +107,7 @@ TEST_CASE("Table function registration retains canonical qualification", "[api][
 		loader.RegisterFunction(two);
 	}
 	const QualifiedName name("system", "main", "qualified_range");
+	REQUIRE(Catalog::GetEntry<TableFunctionCatalogEntry>(*connection.context, name).internal);
 	CheckTableFunctionQualification(connection, "SELECT * FROM system.main.qualified_range(2)", name, 0);
 	CheckTableFunctionQualification(connection, "SELECT * FROM system.main.qualified_range(2,4)", name, 2);
 	connection.Rollback();
@@ -147,6 +148,7 @@ TEST_CASE("Aliased table function overloads retain catalog identity", "[api][tab
 			info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
 			catalog.CreateFunction(*connection.context, info);
 			auto &entry = Catalog::GetEntry<TableFunctionCatalogEntry>(*connection.context, name);
+			REQUIRE_FALSE(entry.internal);
 			REQUIRE(entry.name == name.Name());
 			REQUIRE(entry.functions.name == name.Name());
 			CheckTableFunctionQualification(connection, "SELECT * FROM " + name.ToString() + "(2)", name, 0);
