@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 

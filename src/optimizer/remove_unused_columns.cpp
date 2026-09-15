@@ -36,6 +36,7 @@
 #include "duckdb/planner/logical_operator_repeatability.hpp"
 #include "duckdb/planner/subquery/column_binding_layout.hpp"
 #include "duckdb/planner/sql_export_helpers.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include <utility>
 
 namespace duckdb {
