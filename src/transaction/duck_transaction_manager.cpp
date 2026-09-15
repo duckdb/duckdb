@@ -623,8 +623,15 @@ DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction, bool sto
 		// If the transaction made any changes, we need to keep it around.
 		if (transaction.commit_id != 0) {
 			// The transaction was committed.
-			// We add it to the list of recently committed transactions.
-			recently_committed_transactions.push_back(std::move(current_transaction));
+			// We add it to the list of recently committed transactions, which is ordered on commit_id.
+			// Commits that awaited a WAL sync leave the active set in the order their threads wake up, so
+			// the position is not necessarily the end.
+			auto position = std::upper_bound(recently_committed_transactions.begin(),
+			                                 recently_committed_transactions.end(), transaction.commit_id,
+			                                 [](transaction_t commit_id, const unique_ptr<DuckTransaction> &entry) {
+				                                 return commit_id < entry->commit_id;
+			                                 });
+			recently_committed_transactions.insert(position, std::move(current_transaction));
 		} else {
 			// The transaction was aborted.
 			cleanup_info->transactions.push_back(std::move(current_transaction));
@@ -661,6 +668,12 @@ idx_t DuckTransactionManager::UpdateLowestVisibilityBound(optional_ptr<DuckTrans
 }
 
 void DuckTransactionManager::SweepCommittedTransactions(DuckCleanupInfo &cleanup_info) noexcept {
+#ifdef DEBUG
+	// the early break below relies on this order
+	for (idx_t k = 1; k < recently_committed_transactions.size(); k++) {
+		D_ASSERT(recently_committed_transactions[k - 1]->commit_id < recently_committed_transactions[k]->commit_id);
+	}
+#endif
 	idx_t i = 0;
 	for (; i < recently_committed_transactions.size(); i++) {
 		D_ASSERT(recently_committed_transactions[i]);
