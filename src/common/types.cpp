@@ -2027,8 +2027,15 @@ bool LogicalType::EqualsWithCollation(const LogicalType &rhs) const {
 	});
 	idx_t index = 0;
 	auto mismatch = TypeVisitor::Contains(rhs, [&](const LogicalType &child) {
-		return child.id() == LogicalTypeId::VARCHAR &&
-		       (index >= collations.size() || collations[index++] != StringType::GetCollation(child));
+		if (child.id() != LogicalTypeId::VARCHAR) {
+			return false;
+		}
+		if (index >= collations.size()) {
+			return true;
+		}
+		auto collation_mismatch = collations[index] != StringType::GetCollation(child);
+		index++;
+		return collation_mismatch;
 	});
 	return !mismatch && index == collations.size();
 }
