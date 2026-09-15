@@ -845,9 +845,8 @@ TEST_CASE("Interrupted QueryAppender flow: interrupt -> clear -> close finishes"
 		ResumeAndWait cleanup {resume_execution, flush};
 		// Query initialization clears interrupts, so wait until execution has begun.
 		reached_execution = started.wait_for(std::chrono::seconds(10)) == std::future_status::ready;
-		if (reached_execution) {
-			con.Interrupt();
-		}
+		// Also request cancellation on timeout before releasing and waiting for the worker.
+		con.Interrupt();
 	}
 	REQUIRE(reached_execution);
 
