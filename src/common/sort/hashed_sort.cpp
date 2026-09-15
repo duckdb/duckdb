@@ -88,6 +88,8 @@ public:
 	// Threading
 	idx_t max_bits;
 	atomic<idx_t> count;
+	//! Whether the sink can no longer receive input
+	atomic<bool> finalized;
 
 private:
 	void Rehash(idx_t cardinality);
@@ -97,7 +99,7 @@ private:
 
 HashedSortGlobalSinkState::HashedSortGlobalSinkState(ClientContext &client, const HashedSort &hashed_sort)
     : client(client), hashed_sort(hashed_sort), buffer_manager(BufferManager::GetBufferManager(client)),
-      allocator(Allocator::Get(client)), fixed_bits(0), max_bits(1), count(0) {
+      allocator(Allocator::Get(client)), fixed_bits(0), max_bits(1), count(0), finalized(false) {
 	if (hashed_sort.can_bypass_single_key_sort) {
 		single_key_tracker = make_uniq<PartitionKeyTracker>(allocator, hashed_sort.partition_key_types);
 	}
@@ -272,31 +274,27 @@ bool HashedSortGlobalSinkState::CanBypassSort(idx_t hash_bin) const {
 }
 
 ProgressData HashedSortGlobalSinkState::GetSinkProgress(ClientContext &client, const ProgressData source) const {
-	ProgressData result;
-	result.done = source.done / 2;
-	result.total = source.total;
-	result.invalid = source.invalid;
-
-	// Sort::GetSinkProgress assumes that there is only 1 sort.
-	// So we just use it to figure out how many rows have been sorted.
-	const ProgressData zero_progress;
 	lock_guard<mutex> guard(lock);
-	const auto &sort = hashed_sort.sort;
+	idx_t sorted_count = 0;
 	for (auto &hash_group : hash_groups) {
 		if (!hash_group || !hash_group->sort_global) {
 			continue;
 		}
-
-		const auto group_progress = sort->GetSinkProgress(client, *hash_group->sort_global, zero_progress);
-		result.done += group_progress.done;
-		result.invalid = result.invalid || group_progress.invalid;
+		sorted_count += CanBypassSort(hash_group->group_idx)
+		                    ? hash_group->count.load()
+		                    : hashed_sort.sort->GetSortedCount(*hash_group->sort_global);
 	}
-
+	const auto input_count = count.load();
+	const auto sorted_fraction = input_count ? double(sorted_count) / double(input_count) : double(finalized.load());
+	ProgressData result = source;
+	result.invalid = !source.IsValid();
+	result.done *= (1.0 + sorted_fraction) / 2.0;
 	return result;
 }
 
 SinkFinalizeType HashedSort::Finalize(ClientContext &client, OperatorSinkFinalizeInput &finalize) const {
 	auto &gsink = finalize.global_state.Cast<HashedSortGlobalSinkState>();
+	gsink.finalized = true;
 
 	//	Did we get any data?
 	if (!gsink.count) {
