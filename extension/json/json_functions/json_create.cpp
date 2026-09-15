@@ -1508,6 +1508,9 @@ ScalarFunction JSONFunctions::GetJSONCopyToJSONFunction() {
 	ScalarFunction fun(JSON_COPY_TO_JSON_INTERNAL_NAME, {LogicalType::ANY, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                   LogicalType::JSON(), JSONCopyToJSONFunction, JSONCopyToJSONBind, nullptr,
 	                   JSONFunctionLocalState::Init);
+	fun.GetSignature().GetParameter(0).SetName("value");
+	fun.GetSignature().GetParameter(1).SetName("date_format");
+	fun.GetSignature().GetParameter(2).SetName("timestamp_format");
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetSerializeCallback(JSONCopyToJSONSerialize);
 	fun.SetDeserializeCallback(JSONCopyToJSONDeserialize);
@@ -1520,6 +1523,12 @@ ScalarFunction JSONFunctions::GetJSONCopyToGeoJSONFunction() {
 	                    LogicalType::VARCHAR, LogicalType::BOOLEAN},
 	                   LogicalType::JSON(), JSONCopyToGeoJSONFunction, JSONCopyToGeoJSONBind, nullptr,
 	                   JSONFunctionLocalState::Init);
+	fun.GetSignature().GetParameter(0).SetName("value");
+	fun.GetSignature().GetParameter(1).SetName("date_format");
+	fun.GetSignature().GetParameter(2).SetName("timestamp_format");
+	fun.GetSignature().GetParameter(3).SetName("geometry_column");
+	fun.GetSignature().GetParameter(4).SetName("id_column");
+	fun.GetSignature().GetParameter(5).SetName("write_bbox");
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
