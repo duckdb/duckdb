@@ -239,7 +239,7 @@ void QueryResult::Close() {
 		buffer->Close();
 	}
 	if (context) {
-		auto lock = LockContext();
+		auto lock = context->LockContext();
 		if (context->IsActiveResult(*lock, *this)) {
 			// Abandoned before the result was consumed: release the active-query state now (matching
 			// InitialCleanup) instead of leaking it until the next query or context teardown
