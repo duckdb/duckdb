@@ -24,10 +24,13 @@ class TableIndexWriter;
 
 //! Describes how an index participates in a checkpoint.
 //!
-//! Most indexes persist their storage while their checkpoint callback runs.  An index
-//! that needs to isolate mutations while the checkpoint is in progress can opt into
-//! DEFERRED and provide a replacement index to the writer instead.
-enum class IndexCheckpointType : uint8_t { IMMEDIATE, DEFERRED };
+//! Indexes which persist their representation to storage can support either of the two modes. When
+//! an index supports DEFERRED mode, we are able to colocate buffers of distinct indexes. This mode is
+//! only supported if the index supports parallel mutations while checkpointing, as well as
+//! the creation of a shadow index which represents the index at the start of the checkpoint, but with
+//! a different physical backing. The default mode is IMMEDIATE, and writes each index into separate buffers.
+//! Bound indexes using DEFERRED mode must support checkpoint delta indexes.
+enum class IndexCheckpointMode : uint8_t { IMMEDIATE, DEFERRED };
 
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
@@ -67,8 +70,8 @@ public:
 	virtual IndexConstraintType GetConstraintType() const = 0;
 
 	//! Returns how this index participates in a checkpoint.
-	virtual IndexCheckpointType GetCheckpointType() const {
-		return IndexCheckpointType::IMMEDIATE;
+	virtual IndexCheckpointMode GetCheckpointMode() const {
+		return IndexCheckpointMode::IMMEDIATE;
 	}
 
 	//! Checkpoint an index.

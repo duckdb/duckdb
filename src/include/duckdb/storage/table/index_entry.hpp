@@ -199,7 +199,7 @@ private:
 	template <class>
 	friend class IndexWriteHandle;
 
-	//! Replace the physical index while holding the exclusive entry lock.
+	//! Replace the physical index, this assumes an exclusive lock on the index is being held.
 	void SwapInternal(unique_ptr<BoundIndex> shadow_index);
 
 private:

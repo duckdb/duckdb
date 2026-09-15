@@ -139,8 +139,8 @@ public:
 	//! Serializes ART memory to the WAL and returns the ART storage information.
 	IndexStorageInfo SerializeToWAL(StorageVersion target_version) override;
 	//! ART checkpoints are deferred so mutations can be routed through checkpoint deltas.
-	IndexCheckpointType GetCheckpointType() const override {
-		return IndexCheckpointType::DEFERRED;
+	IndexCheckpointMode GetCheckpointMode() const override {
+		return IndexCheckpointMode::DEFERRED;
 	}
 	CheckpointedIndex Checkpoint(PartialBlockManager &partial_block_manager, const StorageVersion version) override;
 

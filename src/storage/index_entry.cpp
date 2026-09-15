@@ -472,35 +472,22 @@ idx_t IndexEntry::GetInMemorySize() const {
 	return owned_index->Cast<BoundIndex>().GetInMemorySize();
 }
 
-// TODO: do we need any error handling here?
 CheckpointedIndex IndexEntry::Checkpoint(TableIndexWriter &index_writer) {
 	auto entry_lock = lock.GetExclusiveLock();
 	D_ASSERT(owned_index);
 
-	// what do we want to do here?
-	// we checkpoint the current index, this can mean two things:
-	// 1) the index supports deferred checkpointing, then we can construct an index in the background
-	// 		and swap it with the live index at a later moment. this has the benefit of colocating buffers.
-	// 		deferred indexes are only supported in conjunction with delta indexes, or otherwise state may be lost.
-	// 2) the index only supports immediate checkpointing, this means we must persist the bufffers before releasing
-	// 		the lock of this index.
-
 	auto storage_version = index_writer.GetStorageVersion();
-	if (owned_index->GetCheckpointType() == IndexCheckpointType::DEFERRED) {
+	if (owned_index->GetCheckpointMode() == IndexCheckpointMode::DEFERRED) {
+		if (owned_index->IsBound() && !owned_index->Cast<BoundIndex>().SupportsDeltaIndexes()) {
+			throw InternalException("Deferred index checkpointing requires delta index support");
+		}
 		return owned_index->Checkpoint(index_writer.GetPartialBlockManager(), storage_version);
 	}
 
-	// do we want to split the flow inside the writer? then we can even abstract away the IndexCheckpointType.
-	// but how do we know when to flush then? we can set up a flush call which only triggers in immediate mode,
-	// but this might be slightly misleading for people reading this code. Then doing explicit control flow here
-	// might be easier to understand. -> counter argument is that index entry should not really care about the modes
-	// though. it would save on leaking yet another concept -> maybe we call it FlushImmediate() but that would
-	// still leak internal concepts.
 	auto partial_block_manager = index_writer.CreateIsolatedPartialBlockManager();
 	auto checkpoint = owned_index->Checkpoint(partial_block_manager, storage_version);
 	partial_block_manager.FlushPartialBlocks();
 
-	// TODO: do we want to move the swap outside here?
 	SwapInternal(std::move(checkpoint.shadow_index));
 	return checkpoint;
 }

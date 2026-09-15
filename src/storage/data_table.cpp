@@ -1597,8 +1597,8 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	}
 
 	const auto storage_version = serializer.GetOptions().storage_compatibility.storage_version;
-	vector<shared_ptr<const IndexStorageInfo>> index_infos;
 	const auto index_writer = writer.GetTableIndexWriter(storage_version);
+	vector<shared_ptr<const IndexStorageInfo>> index_infos;
 	if (index_writer) {
 		// Only checkpoint indexes when we write to disk
 		index_infos = info->GetIndexes().CheckPoint(*index_writer);
