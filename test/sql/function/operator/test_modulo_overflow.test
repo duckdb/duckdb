@@ -1,0 +1,28 @@
+# name: test/sql/function/operator/test_modulo_overflow.test
+# description: Modulo by -1 must return 0 even at the numeric minimum (only division, not remainder, has the INT_MIN/-1 overflow)
+# group: [operator]
+
+query I
+SELECT (-128)::TINYINT % (-1)::TINYINT
+----
+0
+
+query I
+SELECT (-32768)::SMALLINT % (-1)::SMALLINT
+----
+0
+
+query I
+SELECT (-2147483648)::INTEGER % (-1)::INTEGER
+----
+0
+
+query I
+SELECT (-9223372036854775808)::BIGINT % (-1)::BIGINT
+----
+0
+
+# division by -1 must still throw
+statement error
+SELECT (-32768)::SMALLINT // (-1)::SMALLINT
+----
