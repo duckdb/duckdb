@@ -26,7 +26,7 @@ create table t as from values
 # [W] == 0
 #
 
-# Case ia
+# count(a), count(*) 
 query II
 explain
 select count(a) over ia, count(*) over ia
@@ -45,7 +45,6 @@ window ia as (rows between current row and current row exclude current row)
 0	0
 0	0
 
-# Case ib
 query II
 explain
 select count(a) over ib, count(*) over ib
@@ -171,9 +170,45 @@ NULL
 
 query II
 explain
+select {func}(a, 1) over ib
+from t
+window ib as (rows between 0 preceding and 0 following exclude current row)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query I
+select {func}(a, 1) over ib
+from t
+window ib as (rows between 0 preceding and 0 following exclude current row)
+----
+NULL
+NULL
+NULL
+NULL
+
+query II
+explain
 select {func}(a, 2) over ia
 from t
 window ia as (rows between current row and current row exclude current row)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query I
+select {func}(a, 2) over ia
+from t
+window ia as (rows between current row and current row exclude current row)
+----
+NULL
+NULL
+NULL
+NULL
+
+query II
+explain
+select {func}(a, 2) over ib
+from t
+window ib as (rows between 0 preceding and 0 following exclude current row)
 ----
 physical_plan	<!REGEX>:.*WINDOW.*
 
@@ -192,3 +227,159 @@ endloop
 #
 # [W] == 1
 #
+
+# first_value(a), last_value(a) 
+foreach func first_value last_value min
+
+query II
+explain
+select {func}(a) over ia
+from t
+window ia as (rows between current row and current row)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query I
+select {func}(a) over ia
+from t
+window ia as (rows between current row and current row)
+----
+a
+b
+c
+d
+
+query II
+explain
+select {func}(a) over ib
+from t
+window ib as (rows between 0 preceding and 0 following)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query I
+select {func}(a) over ib
+from t
+window ib as (rows between 0 preceding and 0 following)
+----
+a
+b
+c
+d
+
+endloop
+
+# nth_value(a, 1), nth_value(a, n), n ≠ 1 
+foreach func nth_value
+
+query II
+explain
+select {func}(a, 1) over ia
+from t
+window ia as (rows between current row and current row)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query I
+select {func}(a, 1) over ia
+from t
+window ia as (rows between current row and current row)
+----
+a
+b
+c
+d
+
+query II
+explain
+select {func}(a, 1) over ib
+from t
+window ib as (rows between 0 preceding and 0 following)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query I
+select {func}(a, 1) over ib
+from t
+window ib as (rows between 0 preceding and 0 following)
+----
+a
+b
+c
+d
+
+query II
+explain
+select {func}(a, 2) over ia
+from t
+window ia as (rows between current row and current row)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query I
+select {func}(a, 2) over ia
+from t
+window ia as (rows between current row and current row)
+----
+NULL
+NULL
+NULL
+NULL
+
+query II
+explain
+select {func}(a, 2) over ib
+from t
+window ib as (rows between 0 preceding and 0 following)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query I
+select {func}(a, 2) over ib
+from t
+window ib as (rows between 0 preceding and 0 following)
+----
+NULL
+NULL
+NULL
+NULL
+
+endloop
+
+# count(a), a nullable
+query II
+explain
+select count(a) over ia, count(*) over ia, count(case when p = 0 then a end) over ia
+from t
+window ia as (rows between current row and current row)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query III
+select count(a) over ia, count(*) over ia, count(case when p = 0 then a end) over ia
+from t
+window ia as (rows between current row and current row)
+----
+1	1	1
+1	1	1
+1	1	0
+1	1	0
+
+query II
+explain
+select count(a) over ib, count(*) over ib, count(case when p = 0 then a end) over ib
+from t
+window ib as (rows between 0 preceding and 0 following)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query III
+select count(a) over ib, count(*) over ib, count(case when p = 0 then a end) over ib
+from t
+window ib as (rows between 0 preceding and 0 following)
+----
+1	1	1
+1	1	1
+1	1	0
+1	1	0
+
