@@ -263,7 +263,8 @@ unique_ptr<TypedTransformResult<T>> TryBridgeTransformResultValue(TransformResul
 
 //! Input to start a transformer execution. The rule can be supplied explicitly for transparent parse nodes.
 struct TransformInput {
-	TransformInput(ParseResult &parse_result_p) : parse_result(parse_result_p) {
+	TransformInput(ParseResult &parse_result_p) // NOLINT(google-explicit-constructor): enables braced PushChild calls.
+	    : parse_result(parse_result_p) {
 	}
 	TransformInput(const CompiledGrammarRule &rule_p, ParseResult &parse_result_p)
 	    : rule(rule_p), parse_result(parse_result_p) {

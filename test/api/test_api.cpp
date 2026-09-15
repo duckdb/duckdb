@@ -4,6 +4,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/main/valid_checker.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/storage/metadata/metadata_manager.hpp"
@@ -550,9 +551,66 @@ TEST_CASE("Test connection API", "[api]") {
 	REQUIRE(con.IsAutoCommit());
 }
 
+TEST_CASE("Test connection transaction API error scenarios", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+
+	// a failed nested BEGIN does not abort the outer transaction
+	REQUIRE_NOTHROW(con.BeginTransaction());
+	REQUIRE_THROWS(con.BeginTransaction());
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (42)"));
+	REQUIRE_NOTHROW(con.Commit());
+	auto result = con.Query("SELECT i FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	// COMMIT on an invalidated transaction rolls back instead of throwing
+	REQUIRE_NOTHROW(con.BeginTransaction());
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (84)"));
+	ValidChecker::Invalidate(con.context->ActiveTransaction(), "test invalidation");
+	REQUIRE_FAIL(con.Query("SELECT 42"));
+	REQUIRE_NOTHROW(con.Commit());
+	// the transaction was rolled back and the connection is usable again
+	REQUIRE(con.IsAutoCommit());
+	result = con.Query("SELECT count(*) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	// no transaction is active anymore - COMMIT and ROLLBACK throw again
+	REQUIRE_THROWS(con.Commit());
+	REQUIRE_THROWS(con.Rollback());
+}
+
 TEST_CASE("Test parser tokenize", "[api]") {
-	Parser parser;
-	REQUIRE_NOTHROW(parser.Tokenize("SELECT * FROM table WHERE i+1=3 AND j='hello'; --tokenize example query"));
+	string sql = "SELECT * FROM table WHERE i+1=3 AND j='hello'; --tokenize example query";
+	auto tokens = Parser::Tokenize(sql);
+
+	using T = SimplifiedTokenType;
+	vector<pair<T, idx_t>> expected {
+	    {T::SIMPLIFIED_TOKEN_KEYWORD, 0},           // SELECT
+	    {T::SIMPLIFIED_TOKEN_OPERATOR, 7},          // *
+	    {T::SIMPLIFIED_TOKEN_KEYWORD, 9},           // FROM
+	    {T::SIMPLIFIED_TOKEN_KEYWORD, 14},          // table
+	    {T::SIMPLIFIED_TOKEN_KEYWORD, 20},          // WHERE
+	    {T::SIMPLIFIED_TOKEN_IDENTIFIER, 26},       // i
+	    {T::SIMPLIFIED_TOKEN_OPERATOR, 27},         // +
+	    {T::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT, 28}, // 1
+	    {T::SIMPLIFIED_TOKEN_OPERATOR, 29},         // =
+	    {T::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT, 30}, // 3
+	    {T::SIMPLIFIED_TOKEN_KEYWORD, 32},          // AND
+	    {T::SIMPLIFIED_TOKEN_IDENTIFIER, 36},       // j
+	    {T::SIMPLIFIED_TOKEN_OPERATOR, 37},         // =
+	    {T::SIMPLIFIED_TOKEN_STRING_CONSTANT, 38},  // 'hello'
+	    {T::SIMPLIFIED_TOKEN_OPERATOR, 45},         // ;
+	    {T::SIMPLIFIED_TOKEN_COMMENT, 47},          // --tokenize example query
+	};
+	REQUIRE(tokens.size() >= expected.size());
+	for (idx_t i = 0; i < expected.size(); i++) {
+		REQUIRE(tokens[i].type == expected[i].first);
+		REQUIRE(tokens[i].start == expected[i].second);
+	}
+	// The end-of-input sentinel is not a token: nothing starts at or past the input length.
+	REQUIRE(tokens.back().start < sql.size());
+	REQUIRE(tokens.size() == expected.size());
 }
 
 TEST_CASE("Test opening an invalid database file", "[api]") {
