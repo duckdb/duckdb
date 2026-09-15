@@ -12,7 +12,7 @@ statement ok
 CREATE TABLE ie_build AS SELECT i b,i+1 d FROM range(20000)t(i);
 
 query TT
-EXPLAIN SELECT __mark_join_marker FROM ie_probe JOIN BY(TYPE MARK) ie_build ON a<b AND c>d;
+EXPLAIN SELECT count(*) FROM (SELECT __mark_join_marker m FROM ie_probe JOIN BY(TYPE MARK) ie_build ON a<b AND c>d) markers WHERE m IS FALSE;
 ----
 physical_plan	<REGEX>:[\s\S]*IE_JOIN[\s\S]*
 
@@ -20,13 +20,9 @@ statement ok
 SET max_execution_time=1000;
 
 query I
-WITH q AS NOT MATERIALIZED (
-    SELECT count(*) n FROM (SELECT __mark_join_marker m FROM ie_probe JOIN BY(TYPE MARK) ie_build ON a<b AND c>d) markers WHERE m IS FALSE
-), r AS NOT MATERIALIZED (FROM q UNION ALL FROM q UNION ALL FROM q UNION ALL FROM q),
-s AS NOT MATERIALIZED (FROM r UNION ALL FROM r UNION ALL FROM r UNION ALL FROM r)
-SELECT sum(n) FROM s;
+SELECT count(*) FROM (SELECT __mark_join_marker m FROM ie_probe JOIN BY(TYPE MARK) ie_build ON a<b AND c>d) markers WHERE m IS FALSE;
 ----
-320000
+20000
 
 statement ok
 RESET max_execution_time;
