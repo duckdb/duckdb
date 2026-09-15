@@ -47,6 +47,12 @@ string MaterializedRelation::GetAlias() {
 	return alias;
 }
 
+string MaterializedRelation::GetQuery() {
+	// the collection only exists in this process, so no SQL reproduces it. Naming it would produce a statement
+	// that binds against whatever else carries that name, so put the description in a comment instead
+	return "SELECT * FROM /* client-side data: " + alias + " */";
+}
+
 const vector<ColumnDefinition> &MaterializedRelation::Columns() {
 	return columns;
 }
