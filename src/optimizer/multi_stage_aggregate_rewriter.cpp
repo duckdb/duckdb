@@ -1,9 +1,10 @@
 #include "duckdb/optimizer/multi_stage_aggregate_rewriter.hpp"
 
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/function/aggregate/distributive_function_utils.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/optimizer/aggregate_rewrite_helper.hpp"
 #include "duckdb/optimizer/aggregate_rewrite.hpp"
+#include "duckdb/optimizer/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
@@ -109,10 +110,10 @@ static void AddOrderExpressions(DistinctAggregateSet &set, const BoundAggregateE
 }
 
 static unique_ptr<BoundAggregateExpression> BindFirst(ClientContext &context, unique_ptr<Expression> child) {
-	auto first_function = FirstFunctionGetter::GetFunction(child->GetReturnType());
+	auto first_function = GetBuiltinAggregateFunction(context, FirstFun::Name, {child->GetReturnType()});
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(child));
-	return first_function.Bind(context, std::move(children));
+	return first_function->Bind(context, std::move(children));
 }
 
 static unique_ptr<BoundAggregateExpression> CreateFinalAggregate(const BoundAggregateExpression &source,
