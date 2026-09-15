@@ -7,6 +7,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 
 namespace duckdb {
 
@@ -89,20 +90,25 @@ static unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, Func
 	return new_stats.ToUnique();
 }
 
-static vector<Identifier> StructInsertArgumentNames(const BoundScalarFunction &function) {
-	auto &arguments = function.GetLogicalArguments();
+static unique_ptr<ParsedExpression> StructInsertUnbind(FunctionUnbindInput &input) {
+	auto &function = input.expression.Function();
+	auto &types = function.GetLogicalArguments();
 	auto &return_type = function.GetLogicalReturnType();
-	D_ASSERT(!arguments.empty());
-	D_ASSERT(arguments[0].id() == LogicalTypeId::STRUCT);
-	D_ASSERT(return_type.id() == LogicalTypeId::STRUCT);
-	auto existing_count = StructType::GetChildCount(arguments[0]);
-	auto &return_children = StructType::GetChildTypes(return_type);
-	D_ASSERT(return_children.size() == existing_count + arguments.size() - 1);
-	vector<Identifier> result(arguments.size());
-	for (idx_t argument_index = 1; argument_index < arguments.size(); argument_index++) {
-		result[argument_index] = return_children[existing_count + argument_index - 1].first;
+	if (types.empty() || types[0].id() != LogicalTypeId::STRUCT || return_type.id() != LogicalTypeId::STRUCT ||
+	    input.children.size() != types.size()) {
+		return nullptr;
 	}
-	return result;
+	auto existing_count = StructType::GetChildCount(types[0]);
+	auto &return_children = StructType::GetChildTypes(return_type);
+	if (return_children.size() != existing_count + types.size() - 1) {
+		return nullptr;
+	}
+	vector<FunctionArgument> arguments;
+	arguments.emplace_back(std::move(input.children[0]));
+	for (idx_t i = 1; i < input.children.size(); i++) {
+		arguments.emplace_back(return_children[existing_count + i - 1].first, std::move(input.children[i]));
+	}
+	return make_uniq<FunctionExpression>(function.GetDefinition()->GetQualifiedName(), std::move(arguments));
 }
 
 ScalarFunction StructInsertFun::GetFunction() {
@@ -112,7 +118,7 @@ ScalarFunction StructInsertFun::GetFunction() {
 	fun.GetProperties().SetRequiresExpressionNames(true);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
-	fun.SetArgumentNamesCallback(StructInsertArgumentNames);
+	fun.SetUnbindCallback(StructInsertUnbind);
 	return fun;
 }
 

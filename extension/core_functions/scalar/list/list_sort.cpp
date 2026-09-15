@@ -1,3 +1,8 @@
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/planner/bound_expression_sql_exporter.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "core_functions/scalar/list_functions.hpp"
@@ -10,6 +15,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/sorting/sort.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -19,7 +25,7 @@ namespace duckdb {
 struct ListSortBindData : public FunctionData {
 	ListSortBindData(OrderType order_type_p, OrderByNullType null_order_p, bool is_grade_up,
 	                 const LogicalType &return_type_p, const LogicalType &child_type_p, ClientContext &context_p,
-	                 unique_ptr<Expression> sort_key_p = nullptr);
+	                 unique_ptr<Expression> sort_key_p = nullptr, optional<string> default_collation_p = {});
 	~ListSortBindData() override;
 
 	OrderType order_type;
@@ -32,6 +38,7 @@ struct ListSortBindData : public FunctionData {
 
 	ClientContext &context;
 	unique_ptr<Expression> sort_key;
+	optional<string> default_collation;
 	unique_ptr<Sort> sort;
 
 public:
@@ -44,9 +51,10 @@ public:
 
 ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_order_p, bool is_grade_up_p,
                                    const LogicalType &return_type_p, const LogicalType &child_type_p,
-                                   ClientContext &context_p, unique_ptr<Expression> sort_key_p)
+                                   ClientContext &context_p, unique_ptr<Expression> sort_key_p,
+                                   optional<string> default_collation_p)
     : order_type(order_type_p), null_order(null_order_p), return_type(return_type_p), child_type(child_type_p),
-      is_grade_up(is_grade_up_p), context(context_p) {
+      is_grade_up(is_grade_up_p), context(context_p), default_collation(std::move(default_collation_p)) {
 	// get the vector types
 	types.emplace_back(LogicalType::USMALLINT);
 	types.emplace_back(child_type);
@@ -56,6 +64,7 @@ ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_
 	// get the BoundOrderByNode
 	auto idx_col_expr = make_uniq_base<Expression, BoundReferenceExpression>(LogicalType::USMALLINT, 0U);
 	if (!sort_key_p) {
+		default_collation = Settings::Get<DefaultCollationSetting>(context);
 		sort_key_p = make_uniq_base<Expression, BoundReferenceExpression>(child_type, 1U);
 		// Normalize the sort key without changing the sorted values (#25108): push the
 		// type's collation (for INTERVAL this wraps the expression in
@@ -75,14 +84,14 @@ ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_
 
 unique_ptr<FunctionData> ListSortBindData::Copy() const {
 	return make_uniq<ListSortBindData>(order_type, null_order, is_grade_up, return_type, child_type, context,
-	                                   sort_key->Copy());
+	                                   sort_key->Copy(), default_collation);
 }
 
 bool ListSortBindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<ListSortBindData>();
 	return order_type == other.order_type && null_order == other.null_order && return_type == other.return_type &&
 	       child_type == other.child_type && is_grade_up == other.is_grade_up &&
-	       Expression::Equals(sort_key, other.sort_key);
+	       Expression::Equals(sort_key, other.sort_key) && default_collation == other.default_collation;
 }
 
 void ListSortBindData::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
@@ -94,6 +103,7 @@ void ListSortBindData::Serialize(Serializer &serializer, const optional_ptr<Func
 	serializer.WriteProperty(103, "child_type", data.child_type);
 	serializer.WriteProperty(104, "is_grade_up", data.is_grade_up);
 	serializer.WriteProperty(105, "sort_key", data.sort_key);
+	serializer.WritePropertyWithDefault(106, "default_collation", data.default_collation);
 }
 
 unique_ptr<FunctionData> ListSortBindData::Deserialize(Deserializer &deserializer, BoundScalarFunction &) {
@@ -103,9 +113,10 @@ unique_ptr<FunctionData> ListSortBindData::Deserialize(Deserializer &deserialize
 	auto child_type = deserializer.ReadProperty<LogicalType>(103, "child_type");
 	auto is_grade_up = deserializer.ReadProperty<bool>(104, "is_grade_up");
 	auto sort_key = deserializer.ReadProperty<unique_ptr<Expression>>(105, "sort_key");
+	auto default_collation = deserializer.ReadPropertyWithDefault<optional<string>>(106, "default_collation");
 	auto &context = deserializer.Get<ClientContext &>();
 	return make_uniq<ListSortBindData>(order_type, null_order, is_grade_up, return_type, child_type, context,
-	                                   std::move(sort_key));
+	                                   std::move(sort_key), std::move(default_collation));
 }
 
 ListSortBindData::~ListSortBindData() {
@@ -396,10 +407,49 @@ static unique_ptr<FunctionData> ListReverseSortBind(BindScalarFunctionInput &inp
 	return ListSortBind(context, bound_function, arguments, order, null_order);
 }
 
+static unique_ptr<ParsedExpression> ListSortUnbind(FunctionUnbindInput &input) {
+	if (input.children.empty() || !input.expression.BindInfo()) {
+		return nullptr;
+	}
+	auto &data = input.expression.BindInfo()->Cast<ListSortBindData>();
+	if (!data.default_collation ||
+	    TypeVisitor::Contains(data.child_type, [](const LogicalType &type) { return type.HasAlias(); })) {
+		return nullptr;
+	}
+	auto type = TypeVisitor::VisitReplace(data.child_type, [&](const LogicalType &child) {
+		if (child.id() == LogicalTypeId::VARCHAR && StringType::GetCollation(child).empty()) {
+			return LogicalType::VARCHAR_COLLATION(data.default_collation->empty() ? "binary" : *data.default_collation);
+		}
+		return child;
+	});
+	auto witness = BoundExpressionSQLExporter::Export(BoundConstantExpression(Value(LogicalType::LIST(type))), {});
+	if (witness.HasError()) {
+		return nullptr;
+	}
+	vector<unique_ptr<ParsedExpression>> cast_children;
+	cast_children.push_back(std::move(input.children[0]));
+	cast_children.push_back(std::move(witness.GetValue()));
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(
+	    make_uniq<FunctionExpression>(QualifiedName("system", "main", "cast_to_type"), std::move(cast_children)));
+	children.push_back(ConstantExpression::String(data.order_type == OrderType::ASCENDING ? "ASC" : "DESC"));
+	children.push_back(
+	    ConstantExpression::String(data.null_order == OrderByNullType::NULLS_FIRST ? "NULLS FIRST" : "NULLS LAST"));
+	auto result_type = BoundExpressionSQLExporter::Export(BoundConstantExpression(Value(data.return_type)), {});
+	if (result_type.HasError()) {
+		return nullptr;
+	}
+	vector<unique_ptr<ParsedExpression>> result;
+	result.push_back(make_uniq<FunctionExpression>(
+	    QualifiedName("system", "main", data.is_grade_up ? "list_grade_up" : "list_sort"), std::move(children)));
+	result.push_back(std::move(result_type.GetValue()));
+	return make_uniq<FunctionExpression>(QualifiedName("system", "main", "cast_to_type"), std::move(result));
+}
+
 static void SetListSortSerialization(ScalarFunction &function) {
+	function.SetUnbindCallback(ListSortUnbind);
 	function.SetSerializeCallback(ListSortBindData::Serialize);
 	function.SetDeserializeCallback(ListSortBindData::Deserialize);
-	function.SetLegacySerializeCallback(BoundFunctionExpression::SerializeAsLegacyRebind);
 }
 
 ScalarFunctionSet ListSortFun::GetFunctions() {

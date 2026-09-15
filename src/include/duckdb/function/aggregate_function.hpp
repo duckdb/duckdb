@@ -861,8 +861,7 @@ public:
 	void SetDefinition(shared_ptr<const AggregateFunction> definition_p) {
 		definition = std::move(definition_p);
 		if (definition) {
-			schema_name = definition->GetSchemaName();
-			catalog_name = definition->GetCatalogName();
+			qualified_name = definition->GetQualifiedName().WithName(GetName());
 		}
 	}
 	const vector<LogicalType> &GetLogicalArguments() const {

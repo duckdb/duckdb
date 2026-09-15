@@ -154,26 +154,12 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() const {
 	auto copy =
 	    make_uniq<BoundFunctionExpression>(function, std::move(new_children), std::move(new_bind_info), is_operator);
 	copy->CopyProperties(*this);
-	copy->compression_origin = compression_origin;
 	return std::move(copy);
 }
 
 void BoundFunctionExpression::Verify() const {
 	D_ASSERT(!function.GetName().empty());
 	D_ASSERT(function.GetDefinition());
-}
-
-unique_ptr<Expression> BoundFunctionExpression::SerializeAsLegacyRebind(FunctionToStringInput &input) {
-	auto function = input.bound_function;
-	function.SetSerializeCallback(nullptr);
-	function.SetDeserializeCallback(nullptr);
-	function.SetLegacySerializeCallback(nullptr);
-	vector<unique_ptr<Expression>> children;
-	for (auto &child : input.children) {
-		children.push_back(child->Copy());
-	}
-	auto bind_data = input.bind_data ? input.bind_data->Copy() : nullptr;
-	return make_uniq<BoundFunctionExpression>(std::move(function), std::move(children), std::move(bind_data));
 }
 
 void BoundFunctionExpression::Serialize(Serializer &serializer) const {
@@ -193,8 +179,6 @@ void BoundFunctionExpression::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(201, "children", children);
 	FunctionSerializer::Serialize(serializer, function, bind_info.get());
 	serializer.WriteProperty(202, "is_operator", is_operator);
-	serializer.WritePropertyWithDefault(204, "compression_origin", compression_origin,
-	                                    CompressedMaterializationOrigin::NONE);
 }
 
 namespace {
@@ -233,34 +217,32 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 	    deserializer, CatalogType::SCALAR_FUNCTION_ENTRY, children, return_type);
 
 	auto is_operator = deserializer.ReadProperty<bool>(202, "is_operator");
-	auto compression_origin = deserializer.ReadPropertyWithExplicitDefault<CompressedMaterializationOrigin>(
-	    204, "compression_origin", CompressedMaterializationOrigin::NONE);
 
 	RestoreErasedLambdaChild(entry.first, entry.second.get(), children);
 
-	unique_ptr<Expression> result;
 	if (entry.first.HasBindExpressionCallback()) {
 		// bind the function expression
 		auto &context = deserializer.Get<ClientContext &>();
 		auto bind_input = FunctionBindExpressionInput(context, entry.first, entry.second, children);
 		// replace the function expression with the bound expression
-		result = entry.first.GetBindExpressionCallback()(bind_input);
+		auto bound_expression = entry.first.GetBindExpressionCallback()(bind_input);
+		if (bound_expression) {
+			if (bound_expression->GetReturnType() != return_type) {
+				return BoundCastExpression::AddCastToType(context, std::move(bound_expression), return_type);
+			}
+			return Expression::PreserveReturnType(return_type, std::move(bound_expression));
+		}
+		// Otherwise, fall through and continue on normally
 	}
-	if (!result) {
-		auto function =
-		    make_uniq<BoundFunctionExpression>(std::move(entry.first), std::move(children), std::move(entry.second));
-		function->is_operator = is_operator;
-		function->compression_origin = compression_origin;
-		result = std::move(function);
-	}
-	if (result->GetReturnType() != return_type) {
+	auto result =
+	    make_uniq<BoundFunctionExpression>(std::move(entry.first), std::move(children), std::move(entry.second));
+	result->is_operator = is_operator;
+	if (result->return_type != return_type) {
 		// return type mismatch - push a cast
 		auto &context = deserializer.Get<ClientContext &>();
 		return BoundCastExpression::AddCastToType(context, std::move(result), return_type);
 	}
-	// Compatible types can still have distinct expression annotations, such as collations.
-	result->SetReturnType(std::move(return_type));
-	return result;
+	return Expression::PreserveReturnType(return_type, std::move(result));
 }
 
 } // namespace duckdb

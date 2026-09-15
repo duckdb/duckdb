@@ -9,20 +9,8 @@ namespace duckdb {
 AggregateFunctionCatalogEntry::AggregateFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
                                                              CreateAggregateFunctionInfo &info)
     : FunctionEntry(CatalogType::AGGREGATE_FUNCTION_ENTRY, catalog, schema, info), functions(info.functions) {
-	functions.ApplyToFunctions([&](AggregateFunction &function) {
-		function.SetCatalogName(catalog.GetAttached().GetName());
-		function.SetSchemaName(schema.name);
-	});
-	registered_functions = functions.functions;
-}
-
-bool AggregateFunctionCatalogEntry::IsRegisteredFunction(const shared_ptr<const AggregateFunction> &function) const {
-	for (const auto &registered_function : registered_functions) {
-		if (registered_function == function) {
-			return true;
-		}
-	}
-	return false;
+	functions.ApplyToFunctions(
+	    [&](AggregateFunction &function) { function.SetQualifiedName(schema.GetQualifiedName(name)); });
 }
 
 } // namespace duckdb

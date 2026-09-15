@@ -597,8 +597,7 @@ private:
 	                                         vector<Value> parameters, named_parameter_map_t named_parameters,
 	                                         vector<LogicalType> input_table_types,
 	                                         vector<Identifier> input_table_names,
-	                                         optional_ptr<unique_ptr<LogicalOperator>> input_plan,
-	                                         unique_ptr<TableRef> table_function_ref = nullptr);
+	                                         optional_ptr<unique_ptr<LogicalOperator>> input_plan);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundJoinRef &ref);
 

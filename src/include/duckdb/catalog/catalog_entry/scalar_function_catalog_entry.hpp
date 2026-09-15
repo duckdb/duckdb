@@ -24,8 +24,6 @@ public:
 public:
 	ScalarFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateScalarFunctionInfo &info);
 
-	bool IsRegisteredFunction(const shared_ptr<const ScalarFunction> &function) const;
-
 	//! The scalar functions
 	ScalarFunctionSet functions;
 
@@ -35,8 +33,5 @@ public:
 private:
 	friend class ExtensionLoader;
 	shared_ptr<const ScalarFunction> FinalizeFunction(ScalarFunction function) const;
-
-	//! The scalar functions installed when the catalog entry was created
-	vector<shared_ptr<const ScalarFunction>> registered_functions;
 };
 } // namespace duckdb
