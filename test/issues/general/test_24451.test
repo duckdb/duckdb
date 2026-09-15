@@ -1,0 +1,20 @@
+# name: test/issues/general/test_24451.test
+# description: Window histograms with row-dependent bins do not combine states outside their frames
+# group: [general]
+
+query IIIII
+SELECT
+    count(*),
+    sum(window_result[0]),
+    sum(window_result[2147483647]),
+    sum(distinct_result[0]),
+    sum(distinct_result[2147483647])
+FROM (
+    SELECT
+        histogram_exact(0, CASE WHEN i < 16 THEN [0] ELSE [1] END) OVER singleton AS window_result,
+        histogram_exact(DISTINCT 0, CASE WHEN i < 16 THEN [0] ELSE [1] END) OVER singleton AS distinct_result
+    FROM range(17) AS t(i)
+    WINDOW singleton AS (ORDER BY i ROWS BETWEEN CURRENT ROW AND CURRENT ROW)
+) windowed;
+----
+17	16	1	16	1
