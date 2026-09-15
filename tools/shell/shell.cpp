@@ -2635,7 +2635,12 @@ MetadataResult ShellState::ToggleTimer(ShellState &state, const vector<string> &
 		return MetadataResult::PRINT_USAGE;
 	}
 	if (args.size() == 3) {
-		timerDigits = std::stoi(args[2]);
+		auto digits = ShellState::StringToInt(args[2]);
+		if (digits < 0 || digits > 9) {
+			state.PrintF(PrintOutput::STDERR, ".timer DIGITS must be between 0 and 9\n");
+			return MetadataResult::FAIL;
+		}
+		timerDigits = static_cast<int>(digits);
 	}
 	enableTimer = state.StringToBool(args[1]);
 	if (enableTimer && !HAS_TIMER) {
