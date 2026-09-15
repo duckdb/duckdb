@@ -285,7 +285,7 @@
     },
     {
         "name": "regexp_full_match",
-        "parameters": "string,regex",
+        "parameters": "string,regex,options",
         "description": "Returns `true` if the entire `string` matches the `regex`. A set of optional regex `options` can be set.",
         "example": "regexp_full_match('anabanana', '(an)*')",
         "categories": ["regex"],
@@ -403,7 +403,7 @@
     },
     {
         "name": "~~",
-        "parameters": "",
+        "parameters": "string,pattern",
         "description": "",
         "example": "",
         "type": "scalar_function",
@@ -411,7 +411,7 @@
     },
     {
         "name": "!~~",
-        "parameters": "",
+        "parameters": "string,pattern",
         "description": "",
         "example": "",
         "type": "scalar_function",
@@ -419,7 +419,7 @@
     },
     {
         "name": "~~~",
-        "parameters": "",
+        "parameters": "string,pattern",
         "description": "",
         "example": "",
         "type": "scalar_function",
@@ -427,7 +427,7 @@
     },
     {
         "name": "~~*",
-        "parameters": "",
+        "parameters": "string,pattern",
         "description": "",
         "example": "",
         "type": "scalar_function",
@@ -435,7 +435,7 @@
     },
     {
         "name": "!~~*",
-        "parameters": "",
+        "parameters": "string,pattern",
         "description": "",
         "example": "",
         "type": "scalar_function",
