@@ -5,8 +5,7 @@ module: database
 #
 #   database_create(env, &db);
 #   database_set_option(db, "access_mode", "READ_ONLY");   // startup option
-#   database_attach(db, "path/to/file.db");                // like ATTACH
-#   database_set_default(db, "path/to/file.db");           // the default database
+#   database_attach(db, "path/to/file.db", NULL, NULL, true); // like ATTACH, and the default database
 #   database_set_option(db, "memory_limit", "4GB");        // SET GLOBAL
 #   connection_create(db, &conn);
 #
@@ -23,9 +22,17 @@ module: database
 # default database (an unqualified CREATE TABLE, say) fail, while everything
 # else binds against the system and temporary catalogs and against databases
 # referred to by name. Each connection binds to the default database in force
-# when it is created; database_set_default changes it for connections created
-# afterwards. database_detach detaches a database again, and clears the
+# when it is created; database_set_default, or attaching with make_default,
+# changes it for connections created afterwards. database_detach detaches a database again, and clears the
 # default for new connections if it was the default.
+handles:
+  attach_options:
+    description: |
+      An opaque, owned handle to the `(KEY value)` options of one
+      database_attach call, as SQL `ATTACH` accepts them. Created from the
+      database handle it will be used with via attach_options_create; destroy
+      it via attach_options_destroy.
+    cleanup_with: attach_options_destroy
 functions:
   database_create:
     lifecycle:
@@ -86,12 +93,20 @@ functions:
           named `memory`.
         - any other path attaches that file, creating it if it does not
           exist, under the name derived from the file's base name.
-      Attaching does not make the database the default; call database_set_default
-      for that. A path that is already attached on this or any other database
-      of the environment returns ERROR_RESOURCE_IN_USE, and a name that is
-      already attached (two files with the same base name, or `:memory:`
-      twice) fails; use SQL `ATTACH ... AS name` for those. Options that only
-      apply at startup must be set before the first attach or connection.
+      `name` is the name to attach under, like `ATTACH ... AS name`; null, or
+      an empty view, uses the name derived from the path. Naming is how two
+      files with
+      the same base name, or `:memory:` twice, attach side by side. `options`
+      may be null; it carries the `(KEY value)` options of SQL `ATTACH`, for
+      per-database options such as READ_ONLY, BLOCK_SIZE or ENCRYPTION_KEY,
+      and must have been created from this database handle. `make_default`
+      makes the attached
+      database the default for connections created afterwards, exactly as a
+      database_set_default call right after the attach would; otherwise the
+      default is left alone. A path that is already attached on this or any
+      other database of the environment returns ERROR_RESOURCE_IN_USE, and a
+      name that is already attached fails. Options that only apply at startup
+      must be set before the first attach or connection.
     role: method
     belongs_to: database
     parameters:
@@ -101,6 +116,16 @@ functions:
       path:
         type: str
         description: "Path to the database file, or `:memory:` / an empty view for an in-memory database."
+      name:
+        type: identifier
+        indirection: 1
+        description: "Optional. The name to attach under; null or an empty view for the name derived from the path. Borrowed and copied."
+      options:
+        type: attach_options
+        description: "Optional attach options created from `db`, or null to attach with defaults under the derived name."
+      make_default:
+        type: bool
+        description: "Whether to make the attached database the default for connections created afterwards."
       err:
         type: error_info
         indirection: 1
@@ -130,7 +155,7 @@ functions:
         description: "The database handle."
       path:
         type: str
-        description: "The path the database was attached from."
+        description: "The path the database was attached from, or the name it is attached under."
       err:
         type: error_info
         indirection: 1
@@ -151,8 +176,10 @@ functions:
       catalog go. It stays the default for new connections until another
       database_set_default call or until it is detached; a connection whose
       default has been detached fails unqualified DDL with a message saying
-      so until it selects another with `USE`. Returns ERROR_INPUT_INVALID
-      when no database attached from that path exists.
+      so until it selects another with `USE`. `path` is either the path that
+      was passed to database_attach or the name the database is attached
+      under; a name match wins. Returns ERROR_INPUT_INVALID when neither
+      matches an attached database.
     role: method
     belongs_to: database
     parameters:
@@ -161,12 +188,87 @@ functions:
         description: "The database handle."
       path:
         type: str
-        description: "The path the database was attached from."
+        description: "The path the database was attached from, or the name it is attached under."
       err:
         type: error_info
         indirection: 1
         kind: OUT
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+    return_type: ERROR
+  attach_options_create:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Creates an empty set of attach options for use with database_attach on
+      `db`.
+
+      Starts empty. The caller destroys it via attach_options_destroy; the
+      options may be destroyed as soon as the attach call returns, and reused
+      for further attaches before that.
+    role: constructor
+    belongs_to: attach_options
+    parameters:
+      db:
+        type: database
+        description: "The database handle the options will be used with."
+      out_options:
+        type: attach_options
+        indirection: 1
+        kind: OUT
+        description: "Receives the new options handle."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+    return_type: ERROR
+  attach_options_set:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Sets one attach option, like a `(KEY value)` entry of SQL `ATTACH`.
+
+      The key is matched case-insensitively, as an unquoted SQL identifier
+      is. The setting is passed on as the text a quoted SQL literal would
+      produce: the engine casts the options it knows (READ_ONLY,
+      RECOVERY_MODE, TYPE, DEFAULT_TABLE, VACUUM_REBUILD_INDEXES, BLOCK_SIZE,
+      ENCRYPTION_KEY, ...) and hands the rest to the storage extension that
+      ends up owning the database, which decides what they mean. Nothing is
+      validated here; an unknown or ill-typed option fails the attach. Both
+      views are borrowed and copied. Setting the same key again replaces it.
+    role: setter
+    belongs_to: attach_options
+    parameters:
+      options:
+        type: attach_options
+        description: "The attach options."
+      key:
+        type: identifier
+        description: "The option name, e.g. READ_ONLY."
+      setting:
+        type: str
+        description: "The option value, in the textual form a quoted SQL literal would carry."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+    return_type: ERROR
+  attach_options_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Destroys an attach options handle.
+
+      On success the slot is set to null. Safe to call on an already-null
+      slot.
+    role: destructor
+    belongs_to: attach_options
+    parameters:
+      options:
+        type: attach_options
+        indirection: 1
+        description: "The attach options to destroy."
     return_type: ERROR
   database_set_option:
     lifecycle:

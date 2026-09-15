@@ -30,6 +30,7 @@
 #include <utility>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <type_traits>
 #include <functional>
 #include <memory>
@@ -827,7 +828,6 @@ private:
 // An open database: the catalog, the storage behind it, and the settings shared by every session on it. Databases are
 // opened through an `Environment` and worked with through the `Connection`s they hand out.
 
-/// An open database. It must outlive every `Connection` opened on it.
 class Database final : public detail::Handle<Database> {
 	friend detail::Factory;
 
@@ -837,22 +837,35 @@ public:
 	Database &operator=(Database &&) noexcept = default;
 
 	/// Attaches a database to this instance, like SQL `ATTACH 'path'`, starting the instance if this is its first
-	/// use. Attaching does not choose the default database; call `SetDefault` for that.
+	/// use.
 	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
+	/// @param make_default Whether to make it the default database for sessions opened afterwards, as `SetDefault`
+	/// would; false leaves the default alone.
 	/// @throws Exception When the path is already attached in this environment, or a database of that name exists.
-	auto Attach(const std::string &path) -> void;
+	auto Attach(const std::string &path, bool make_default = false) -> void;
+
+	/// Attaches a database under a name and with the per-database options SQL `ATTACH` takes, like
+	/// `ATTACH 'path' AS name (KEY value, ...)`.
+	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
+	/// @param name The name to attach under; empty for the name derived from the path.
+	/// @param options The `(KEY value)` options, e.g. `{{"READ_ONLY", "true"}, {"BLOCK_SIZE", "16384"}}`. Keys match
+	/// case-insensitively and values are passed on as the text a quoted SQL literal carries; the engine casts the
+	/// ones it knows and hands the rest to the storage extension owning the database.
+	/// @param make_default Whether to make it the default database for sessions opened afterwards.
+	auto Attach(const std::string &path, const std::string &name,
+	            const std::unordered_map<std::string, std::string> &options, bool make_default = false) -> void;
 
 	/// Detaches the database attached from `path`, like SQL `DETACH`. Connections still using it keep it alive until
 	/// they let go; if it was the default database, new sessions have no default until `SetDefault` names another.
-	/// @param path The path that was passed to `Attach`.
-	/// @throws InvalidInputException When no database attached from that path exists.
+	/// @param path The path that was passed to `Attach`, or the name the database is attached under.
+	/// @throws InvalidInputException When neither matches an attached database.
 	auto Detach(const std::string &path) -> void;
 
 	/// Makes the database attached from `path` the default database for sessions opened from now on: where their
 	/// unqualified DDL and unqualified table lookups that miss the temporary catalog go, unless they `USE` another.
 	/// Sessions already open keep the default they connected with.
-	/// @param path The path that was passed to `Attach`.
-	/// @throws InvalidInputException When no database attached from that path exists.
+	/// @param path The path that was passed to `Attach`, or the name the database is attached under.
+	/// @throws InvalidInputException When neither matches an attached database.
 	auto SetDefault(const std::string &path) -> void;
 
 	/// How many settings this database exposes.

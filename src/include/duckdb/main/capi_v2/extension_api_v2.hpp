@@ -122,7 +122,8 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_data_chunk_get_vector_count)
 	(duckdb_v2_data_chunk_handle chunk, idx_t *out_count, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_database_attach)
-	(duckdb_v2_database_handle db, duckdb_v2_str path, duckdb_v2_error_info_handle *err);
+	(duckdb_v2_database_handle db, duckdb_v2_str path, duckdb_v2_identifier_t *name,
+	 duckdb_v2_attach_options_handle options, bool make_default, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_database_create)
 	(duckdb_v2_environment_handle env, duckdb_v2_database_handle *out_db, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_database_destroy)(duckdb_v2_database_handle *db);
@@ -1263,6 +1264,12 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_tokenize_sql)
 	(duckdb_v2_connection_handle conn, duckdb_v2_str sql, duckdb_v2_token_iterator_handle *out_iterator,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_attach_options_create)
+	(duckdb_v2_database_handle db, duckdb_v2_attach_options_handle *out_options, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_attach_options_destroy)(duckdb_v2_attach_options_handle *options);
+	DUCKDB_V2_ERROR(*duckdb_v2_attach_options_set)
+	(duckdb_v2_attach_options_handle options, duckdb_v2_identifier_t key, duckdb_v2_str setting,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_context_get_option)
 	(duckdb_v2_context_handle ctx, duckdb_v2_identifier_t name, duckdb_v2_option_handle *out_option,
 	 duckdb_v2_error_info_handle *err);
@@ -1833,6 +1840,9 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_token_iterator_ends_unterminated = duckdb_v2_token_iterator_ends_unterminated;
 	result.duckdb_v2_token_iterator_next = duckdb_v2_token_iterator_next;
 	result.duckdb_v2_tokenize_sql = duckdb_v2_tokenize_sql;
+	result.duckdb_v2_attach_options_create = duckdb_v2_attach_options_create;
+	result.duckdb_v2_attach_options_destroy = duckdb_v2_attach_options_destroy;
+	result.duckdb_v2_attach_options_set = duckdb_v2_attach_options_set;
 	result.duckdb_v2_context_get_option = duckdb_v2_context_get_option;
 	result.duckdb_v2_context_get_option_by_index = duckdb_v2_context_get_option_by_index;
 	result.duckdb_v2_context_get_option_count = duckdb_v2_context_get_option_count;

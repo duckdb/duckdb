@@ -2021,6 +2021,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_chunk_get_vector(duckdb_v2_data_chun
 
 /* --- Types for database --- */
 
+/*!
+ * An opaque, owned handle to the `(KEY value)` options of one database_attach call, as SQL `ATTACH` accepts them.
+ * Created from the database handle it will be used with via attach_options_create; destroy it via
+ * attach_options_destroy.
+ */
+typedef struct _duckdb_v2_attach_options {
+	void *internal_ptr;
+} * duckdb_v2_attach_options_handle;
+
 /* --- Constants for database --- */
 
 /* --- Function pointer typedefs for database --- */
@@ -2067,20 +2076,30 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_destroy(duckdb_v2_database_handl
  * Attaches the database at `path` exactly like `ATTACH 'path'`:
  *   - `:memory:` or an empty view attaches a fresh in-memory database named `memory`.
  *   - any other path attaches that file, creating it if it does not exist, under the name derived from the file's base
- * name. Attaching does not make the database the default; call database_set_default for that. A path that is already
- * attached on this or any other database of the environment returns ERROR_RESOURCE_IN_USE, and a name that is already
- * attached (two files with the same base name, or `:memory:` twice) fails; use SQL `ATTACH ... AS name` for those.
- * Options that only apply at startup must be set before the first attach or connection.
+ * name. `name` is the name to attach under, like `ATTACH ... AS name`; null, or an empty view, uses the name derived
+ * from the path. Naming is how two files with the same base name, or `:memory:` twice, attach side by side. `options`
+ * may be null; it carries the `(KEY value)` options of SQL `ATTACH`, for per-database options such as READ_ONLY,
+ * BLOCK_SIZE or ENCRYPTION_KEY, and must have been created from this database handle. `make_default` makes the attached
+ * database the default for connections created afterwards, exactly as a database_set_default call right after the
+ * attach would; otherwise the default is left alone. A path that is already attached on this or any other database of
+ * the environment returns ERROR_RESOURCE_IN_USE, and a name that is already attached fails. Options that only apply at
+ * startup must be set before the first attach or connection.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param db The database handle.
  * @param path Path to the database file, or `:memory:` / an empty view for an in-memory database.
+ * @param name Optional. The name to attach under; null or an empty view for the name derived from the path. Borrowed
+ * and copied.
+ * @param options Optional attach options created from `db`, or null to attach with defaults under the derived name.
+ * @param make_default Whether to make the attached database the default for connections created afterwards.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_attach(duckdb_v2_database_handle db, duckdb_v2_str path,
+                                                       duckdb_v2_identifier_t *name,
+                                                       duckdb_v2_attach_options_handle options, bool make_default,
                                                        duckdb_v2_error_info_handle *err);
 
 /*!
@@ -2097,7 +2116,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_attach(duckdb_v2_database_handle
  * - stable: v2.0.0
  *
  * @param db The database handle.
- * @param path The path the database was attached from.
+ * @param path The path the database was attached from, or the name it is attached under.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
@@ -2111,19 +2130,73 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_detach(duckdb_v2_database_handle
  * default stays what it was when they connected, or what they chose with `USE`. The default is where unqualified DDL
  * and unqualified table lookups that miss the temporary catalog go. It stays the default for new connections until
  * another database_set_default call or until it is detached; a connection whose default has been detached fails
- * unqualified DDL with a message saying so until it selects another with `USE`. Returns ERROR_INPUT_INVALID when no
- * database attached from that path exists.
+ * unqualified DDL with a message saying so until it selects another with `USE`. `path` is either the path that was
+ * passed to database_attach or the name the database is attached under; a name match wins. Returns ERROR_INPUT_INVALID
+ * when neither matches an attached database.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param db The database handle.
- * @param path The path the database was attached from.
+ * @param path The path the database was attached from, or the name it is attached under.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_set_default(duckdb_v2_database_handle db, duckdb_v2_str path,
                                                             duckdb_v2_error_info_handle *err);
+
+/*!
+ * Creates an empty set of attach options for use with database_attach on `db`.
+ *
+ * Starts empty. The caller destroys it via attach_options_destroy; the options may be destroyed as soon as the attach
+ * call returns, and reused for further attaches before that.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param db The database handle the options will be used with.
+ * @param out_options Receives the new options handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_attach_options_create(duckdb_v2_database_handle db,
+                                                             duckdb_v2_attach_options_handle *out_options,
+                                                             duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets one attach option, like a `(KEY value)` entry of SQL `ATTACH`.
+ *
+ * The key is matched case-insensitively, as an unquoted SQL identifier is. The setting is passed on as the text a
+ * quoted SQL literal would produce: the engine casts the options it knows (READ_ONLY, RECOVERY_MODE, TYPE,
+ * DEFAULT_TABLE, VACUUM_REBUILD_INDEXES, BLOCK_SIZE, ENCRYPTION_KEY, ...) and hands the rest to the storage extension
+ * that ends up owning the database, which decides what they mean. Nothing is validated here; an unknown or ill-typed
+ * option fails the attach. Both views are borrowed and copied. Setting the same key again replaces it.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param options The attach options.
+ * @param key The option name, e.g. READ_ONLY.
+ * @param setting The option value, in the textual form a quoted SQL literal would carry.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_attach_options_set(duckdb_v2_attach_options_handle options,
+                                                          duckdb_v2_identifier_t key, duckdb_v2_str setting,
+                                                          duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys an attach options handle.
+ *
+ * On success the slot is set to null. Safe to call on an already-null slot.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param options The attach options to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_attach_options_destroy(duckdb_v2_attach_options_handle *options);
 
 /*!
  * Sets a config option on the database (GLOBAL scope).

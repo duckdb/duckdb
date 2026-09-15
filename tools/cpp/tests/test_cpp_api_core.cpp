@@ -129,6 +129,36 @@ TEST_CASE("Stable C++API: Connection::GetOption by name and the scopeless SetOpt
 	REQUIRE_THROWS_MATCHES(conn.GetOption("no_such_option_xyz"), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
+TEST_CASE("Stable C++API: Database::Attach with a name and options", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	auto path = duckdb::TestCreatePath("cpp_api_attach_options.duckdb");
+	duckdb::DeleteDatabase(path);
+
+	Environment env;
+	auto db = env.CreateDatabase();
+	db.Attach(":memory:", true);
+	db.Attach(path, "named", {{"BLOCK_SIZE", "16384"}});
+	auto conn = db.Connect();
+	conn.Execute("CREATE TABLE named.t(i INTEGER)").Drain();
+	{
+		auto result = conn.Execute("SELECT block_size FROM pragma_database_size() WHERE database_name = 'named'");
+		REQUIRE(result.FetchChunk().GetVector(0).GetValue(0).Get<int64_t>() == 16384);
+	}
+	db.Detach("named");
+
+	// Re-attaching read-only, and as the default for later sessions.
+	db.Attach(path, "named", {{"READ_ONLY", "true"}}, true);
+	auto later = db.Connect();
+	REQUIRE_THROWS_AS(later.Execute("INSERT INTO t VALUES (1)"), Exception);
+	later.Execute("SELECT * FROM t").Drain();
+
+	// An option the engine rejects fails the attach, not the option.
+	REQUIRE_THROWS_AS(db.Attach(":memory:", "other", {{"no_such_attach_option", "1"}}), Exception);
+
+	duckdb::DeleteDatabase(path);
+}
+
 TEST_CASE("Stable C++API: a startup option set before Open enforces read-only", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
@@ -148,8 +178,7 @@ TEST_CASE("Stable C++API: a startup option set before Open enforces read-only", 
 	{
 		auto ro_db = env.CreateDatabase();
 		ro_db.SetOption("access_mode", "READ_ONLY");
-		ro_db.Attach(path);
-		ro_db.SetDefault(path);
+		ro_db.Attach(path, true);
 		auto ro_conn = ro_db.Connect();
 
 		// Reads see the seeded data. Scoped so the live result is released

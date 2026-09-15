@@ -377,8 +377,7 @@ auto Environment::CreateDatabase() -> Database {
 
 auto Environment::Open(const std::string &path) -> Database {
 	auto db = CreateDatabase();
-	db.Attach(path);
-	db.SetDefault(path);
+	db.Attach(path, true);
 	return db;
 }
 
@@ -460,8 +459,27 @@ Database::~Database() {
 	duckdb_v2_database_destroy(&_h);
 }
 
-auto Database::Attach(const std::string &path) -> void {
-	CheckedAPICall(duckdb_v2_database_attach, handle(), ToStr(path));
+auto Database::Attach(const std::string &path, bool make_default) -> void {
+	CheckedAPICall(duckdb_v2_database_attach, handle(), ToStr(path), static_cast<duckdb_v2_identifier_t *>(nullptr),
+	               static_cast<duckdb_v2_attach_options_handle>(nullptr), make_default);
+}
+
+auto Database::Attach(const std::string &path, const std::string &name,
+                      const std::unordered_map<std::string, std::string> &options, bool make_default) -> void {
+	duckdb_v2_attach_options_handle attach_options = nullptr;
+	CheckedAPICall(duckdb_v2_attach_options_create, handle(), &attach_options);
+	try {
+		for (auto &entry : options) {
+			CheckedAPICall(duckdb_v2_attach_options_set, attach_options, ToStr(entry.first), ToStr(entry.second));
+		}
+		auto attach_name = ToStr(name);
+		CheckedAPICall(duckdb_v2_database_attach, handle(), ToStr(path), name.empty() ? nullptr : &attach_name,
+		               attach_options, make_default);
+	} catch (...) {
+		duckdb_v2_attach_options_destroy(&attach_options);
+		throw;
+	}
+	duckdb_v2_attach_options_destroy(&attach_options);
 }
 
 auto Database::Detach(const std::string &path) -> void {

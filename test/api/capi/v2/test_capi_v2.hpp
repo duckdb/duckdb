@@ -54,10 +54,7 @@ inline DUCKDB_V2_ERROR OpenDatabase(duckdb_v2_environment_handle env, duckdb_v2_
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		return rc;
 	}
-	rc = duckdb_v2_database_attach(*out_db, path, err);
-	if (rc == DUCKDB_V2_ERROR_NONE) {
-		rc = duckdb_v2_database_set_default(*out_db, path, err);
-	}
+	rc = duckdb_v2_database_attach(*out_db, path, nullptr, nullptr, true, err);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		duckdb_v2_database_destroy(out_db);
 	}

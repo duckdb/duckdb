@@ -171,6 +171,27 @@ inline auto Convert(duckdb_v2_environment_handle env) -> CV2Environment * {
 }
 
 class CV2Option;
+class CV2Database;
+
+//! The SQL ATTACH `(KEY value)` options of one attach, as the text values a quoted literal produces. Bound to the
+//! database handle it was created from, which is what future per-instance resources (an allocator, say) would be
+//! taken from.
+class CV2AttachOptions {
+public:
+	explicit CV2AttachOptions(CV2Database &db) : db(db) {
+	}
+
+	CV2Database &db;
+	unordered_map<string, Value> options;
+};
+
+inline auto Convert(duckdb_v2_attach_options_handle options) -> CV2AttachOptions * {
+	return reinterpret_cast<CV2AttachOptions *>(options);
+}
+
+inline auto Convert(CV2AttachOptions *options) -> duckdb_v2_attach_options_handle {
+	return reinterpret_cast<duckdb_v2_attach_options_handle>(options);
+}
 
 //! A database handle: a DuckDB instance plus the configuration it starts with. The instance starts on first use
 //! (database_attach or connection_create); until then options are staged in the startup config. Every entry point
@@ -184,11 +205,13 @@ public:
 	}
 	//! Starts the instance if it has not started yet, consuming the staged config.
 	void Start();
-	//! Attaches the database at `path`, like ATTACH; starts the instance first if needed.
-	void Attach(const string &path);
-	//! Detaches the database that was attached from `path`.
+	//! Attaches the database at `path` under `name` (derived from the path when empty), like ATTACH, optionally as
+	//! the default for new connections; starts the instance first if needed.
+	void Attach(const string &path, const Identifier &name, optional_ptr<const CV2AttachOptions> options,
+	            bool make_default);
+	//! Detaches the database attached from `path`, or attached under that name.
 	void Detach(const string &path);
-	//! Makes the database that was attached from `path` the instance's default database.
+	//! Makes the database attached from `path`, or attached under that name, the default for new connections.
 	void SetDefault(const string &path);
 	//! Stages a startup option, or SET GLOBAL once started.
 	void SetOption(const Identifier &name, const string &setting);

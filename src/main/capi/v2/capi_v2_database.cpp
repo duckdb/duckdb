@@ -46,31 +46,51 @@ static void WithTransaction(Connection &connection, T action) {
 	connection.Commit();
 }
 
-void CV2Database::Attach(const string &path) {
+void CV2Database::Attach(const string &path, const Identifier &name,
+                         optional_ptr<const CV2AttachOptions> attach_options, bool make_default) {
+	if (attach_options && &attach_options->db != this) {
+		throw InvalidInputException("the attach options were created from a different database handle");
+	}
 	Start();
 	WithTransaction(*internal_connection, [&](ClientContext &context) {
-		// Mirrors PhysicalAttach for `ATTACH 'path'` without options.
+		// Mirrors PhysicalAttach for `ATTACH 'path' AS name (options)`.
 		auto &instance = *database->instance;
 		AttachInfo info;
 		info.path = path;
-		AttachOptions options(instance.config.options);
+		info.name = name;
+		if (attach_options) {
+			info.options = attach_options->options;
+		}
+		AttachOptions options(info.options, instance.config.options.access_mode);
 		options.original_path = path;
 		if (options.db_type.empty()) {
 			DBPathAndType::ExtractExtensionPrefix(info.path, options.db_type);
 		}
-		info.name = AttachedDatabase::ExtractDatabaseName(info.path, FileSystem::GetFileSystem(instance));
+		if (info.name.empty()) {
+			info.name = AttachedDatabase::ExtractDatabaseName(info.path, FileSystem::GetFileSystem(instance));
+		}
 		// The host opening a file is not external access: allow it the way the main database path is allowed.
 		if (options.db_type.empty() && !DBConfig::IsInMemoryDatabase(info.path.c_str()) &&
 		    !FileSystem::IsRemoteFile(info.path) && !Settings::Get<EnableExternalAccessSetting>(instance)) {
 			instance.config.AddAllowedDatabasePath(info.path);
 		}
-		DatabaseManager::Get(instance).AttachDatabase(context, info, options);
+		auto &db_manager = DatabaseManager::Get(instance);
+		auto attached = db_manager.AttachDatabase(context, info, options);
+		if (make_default) {
+			db_manager.SetDefaultDatabase(attached->GetName());
+		}
 	});
 }
 
-//! Finds the database attached from `path`: by the path it was attached under, disambiguated by the name
-//! database_attach derives from the path. Throws when nothing matches.
+//! Finds the database attached under `path` as a name, else the one attached from it as a path, disambiguated by
+//! the name database_attach derives from the path. Throws when nothing matches.
 static shared_ptr<AttachedDatabase> FindAttachedDatabase(DatabaseInstance &instance, const string &path) {
+	auto &db_manager = DatabaseManager::Get(instance);
+	if (auto by_name = db_manager.GetDatabase(Identifier(path))) {
+		if (!by_name->IsSystem() && !by_name->IsTemporary()) {
+			return by_name;
+		}
+	}
 	auto &fs = FileSystem::GetFileSystem(instance);
 	string stripped = path;
 	string db_type;
@@ -88,7 +108,7 @@ static shared_ptr<AttachedDatabase> FindAttachedDatabase(DatabaseInstance &insta
 
 	shared_ptr<AttachedDatabase> match;
 	idx_t match_count = 0;
-	for (auto &db : DatabaseManager::Get(instance).GetDatabases()) {
+	for (auto &db : db_manager.GetDatabases()) {
 		if (db->IsSystem() || db->IsTemporary()) {
 			continue;
 		}
@@ -109,7 +129,7 @@ static shared_ptr<AttachedDatabase> FindAttachedDatabase(DatabaseInstance &insta
 		}
 	}
 	if (!match) {
-		throw InvalidInputException("no database attached from '%s'", path);
+		throw InvalidInputException("no database is attached from or under '%s'", path);
 	}
 	if (match_count > 1 && match->GetName() != derived_name) {
 		throw InvalidInputException("several databases are attached from '%s'; refer to one by name in SQL", path);
@@ -119,7 +139,7 @@ static shared_ptr<AttachedDatabase> FindAttachedDatabase(DatabaseInstance &insta
 
 void CV2Database::Detach(const string &path) {
 	if (!IsStarted()) {
-		throw InvalidInputException("no database attached from '%s'", path);
+		throw InvalidInputException("no database is attached from or under '%s'", path);
 	}
 	auto &instance = *database->instance;
 	auto attached = FindAttachedDatabase(instance, path);
@@ -131,7 +151,7 @@ void CV2Database::Detach(const string &path) {
 
 void CV2Database::SetDefault(const string &path) {
 	if (!IsStarted()) {
-		throw InvalidInputException("no database attached from '%s'", path);
+		throw InvalidInputException("no database is attached from or under '%s'", path);
 	}
 	auto &instance = *database->instance;
 	auto attached = FindAttachedDatabase(instance, path);
@@ -206,13 +226,54 @@ DUCKDB_V2_ERROR duckdb_v2_database_destroy(duckdb_v2_database_handle *db) {
 }
 
 DUCKDB_V2_ERROR duckdb_v2_database_attach(duckdb_v2_database_handle db, duckdb_v2_str path,
-                                          duckdb_v2_error_info_handle *err) {
+                                          duckdb_v2_identifier_t *name, duckdb_v2_attach_options_handle options,
+                                          bool make_default, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(db);
 	DUCKDB_CHECK_ARG(path);
+	if (name) {
+		DUCKDB_CHECK_ARG(*name);
+	}
 	return WithErrorHandler(err, [&]() {
 		auto &wrapper = *Convert(db);
 		duckdb::lock_guard<duckdb::mutex> guard(wrapper.lock);
-		wrapper.Attach(duckdb::string(Convert(path)));
+		duckdb::Identifier attach_name = name ? duckdb::Identifier(Convert(*name)) : duckdb::Identifier();
+		wrapper.Attach(duckdb::string(Convert(path)), attach_name, Convert(options), make_default);
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_attach_options_create(duckdb_v2_database_handle db,
+                                                duckdb_v2_attach_options_handle *out_options,
+                                                duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(db);
+	DUCKDB_CHECK_ARG(out_options);
+	*out_options = nullptr;
+	return WithErrorHandler(err, [&]() {
+		auto options = duckdb::make_uniq<CV2AttachOptions>(*Convert(db));
+		*out_options = Convert(options.release());
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_attach_options_set(duckdb_v2_attach_options_handle options, duckdb_v2_identifier_t key,
+                                             duckdb_v2_str setting, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(options);
+	DUCKDB_CHECK_ARG(key);
+	DUCKDB_CHECK_ARG(setting);
+	return WithErrorHandler(err, [&]() {
+		// Keys are unquoted SQL identifiers, which the parser lowercases.
+		auto lowered = duckdb::StringUtil::Lower(duckdb::string(Convert(key)));
+		Convert(options)->options[lowered] = duckdb::Value(duckdb::string(Convert(setting)));
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_attach_options_destroy(duckdb_v2_attach_options_handle *options) {
+	return WithErrorHandler(nullptr, [&]() {
+		if (!options) {
+			return;
+		}
+		if (*options) {
+			delete Convert(*options);
+			*options = nullptr;
+		}
 	});
 }
 
