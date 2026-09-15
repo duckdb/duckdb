@@ -180,12 +180,13 @@ static unique_ptr<Expression> CreateCastExpression(unique_ptr<Expression> child,
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(child));
 
+	auto can_throw = BoundCastCanThrow(bound_cast, source_type, target_type, try_cast);
 	auto function_data =
 	    make_uniq<CastFunctionData>(source_type, target_type, std::move(bound_cast), try_cast, is_default_cast);
 
 	auto scalar_function = CastFun::GetFunction();
 	scalar_function.SetReturnType(target_type);
-	if (BoundCastCanThrow(bound_cast, source_type, target_type, try_cast)) {
+	if (can_throw) {
 		scalar_function.SetErrorMode(FunctionErrors::CAN_THROW_RUNTIME_ERROR);
 	}
 	SetCastNullHandling(scalar_function, target_type);
