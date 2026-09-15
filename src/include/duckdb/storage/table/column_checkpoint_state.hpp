@@ -45,6 +45,8 @@ public:
 	virtual shared_ptr<ColumnData> GetFinalResult();
 
 	virtual unique_ptr<BaseStatistics> GetStatistics();
+	//! Incorporate a persistent Segment and its metadata into the checkpoint result
+	void AppendReferencedSegment(shared_ptr<ColumnSegment> segment, idx_t row_start);
 
 	virtual void FlushSegmentInternal(unique_ptr<ColumnSegment> segment, idx_t segment_size);
 	virtual void FlushSegment(unique_ptr<ColumnSegment> segment, BufferHandle handle, idx_t segment_size);

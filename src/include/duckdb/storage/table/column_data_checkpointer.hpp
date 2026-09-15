@@ -68,14 +68,29 @@ public:
 	void FinalizeCheckpoint();
 
 private:
-	void ScanSegments(const std::function<void(Vector &)> &callback);
-	vector<CheckpointAnalyzeResult> DetectBestCompressionMethod();
+	struct SegmentReusePlan;
+
+	void ScanSegments(const ColumnData &column_data, const std::function<void(Vector &)> &callback);
+	void ScanSegment(const ColumnData &column_data, SegmentNode<ColumnSegment> &segment,
+	                 const std::function<void(Vector &)> &callback);
+	vector<CompressionType> PrepareCompressionMethods();
+	vector<unique_ptr<AnalyzeState>> InitAnalyze(idx_t checkpoint_state_idx);
+	void AnalyzeVector(idx_t checkpoint_state_idx, vector<unique_ptr<AnalyzeState>> &states, Vector &scan_vector);
+	CheckpointAnalyzeResult FinalizeAnalyze(idx_t checkpoint_state_idx, vector<unique_ptr<AnalyzeState>> states,
+	                                        CompressionType forced_method);
+	unique_ptr<SegmentReusePlan> TryBuildSegmentReusePlan(const vector<CompressionType> &forced_methods);
+	vector<CheckpointAnalyzeResult> AnalyzeFullColumn(const vector<CompressionType> &forced_methods);
+	void AnalyzeRewriteRanges(SegmentReusePlan &plan, const vector<CompressionType> &forced_methods);
+	bool TryWriteReusedSegments(const vector<CompressionType> &forced_methods);
 	void WriteToDisk();
+	void WriteFullColumn(vector<CheckpointAnalyzeResult> analyze_result);
+	void WriteRewriteRanges(SegmentReusePlan &plan);
+	void WriteValidity(CheckpointAnalyzeResult &analyze_result);
 	void WritePersistentSegments(ColumnCheckpointState &state);
-	bool HasChanges(ColumnData &col_data);
-	void InitAnalyze();
-	void DropSegments();
-	bool ValidityCoveredByBasedata(vector<CheckpointAnalyzeResult> &result);
+	void PreserveUnchangedValidity();
+	void MarkAllSourceBlocksModified();
+	void MarkRewrittenSourceBlocksModified(const SegmentReusePlan &plan);
+	bool ValidityCoveredByBasedata(const vector<CheckpointAnalyzeResult> &result);
 
 private:
 	vector<reference<ColumnCheckpointState>> &checkpoint_states;
@@ -87,8 +102,6 @@ private:
 	bool has_changes = false;
 	//! For every column data that is being checkpointed, the applicable functions
 	vector<vector<optional_ptr<const CompressionFunction>>> compression_functions;
-	//! For every column data that is being checkpointed, the analyze state of functions being tried
-	vector<vector<unique_ptr<AnalyzeState>>> analyze_states;
 };
 
 } // namespace duckdb
