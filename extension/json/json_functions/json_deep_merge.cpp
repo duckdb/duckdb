@@ -22,7 +22,7 @@ static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig_root,
 		yyjson_mut_val *patch_node;
 		yyjson_mut_val *builder;
 	};
-	auto stack = std::vector<stack_item>();
+	auto stack = vector<stack_item>();
 	stack.emplace_back(stack_item {nullptr, orig_root, patch_root, root_builder});
 
 	// loop over each level of nesting
@@ -141,8 +141,9 @@ static void DeepMergeFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 ScalarFunctionSet JSONFunctions::GetDeepMergeFunction() {
-	ScalarFunction fun("json_deep_merge", {LogicalType::JSON(), LogicalType::JSON()}, LogicalType::JSON(),
-	                   DeepMergeFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
+	ScalarFunction fun("json_deep_merge", {}, LogicalType::JSON(), DeepMergeFunction, nullptr, nullptr,
+	                   JSONFunctionLocalState::Init);
+	fun.GetSignature().AddParameter("json1", LogicalType::JSON()).AddParameter("json2", LogicalType::JSON());
 	fun.SetVarArgs(LogicalType::JSON());
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetFallible();

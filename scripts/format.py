@@ -213,6 +213,9 @@ def can_format_file(full_path):
     # check ignored files
     if file_is_ignored(full_path):
         return False
+    # the repository root is not covered by formatted_directories
+    if full_path == 'CMakeLists.txt':
+        return True
     # now check file directory
     for dname in formatted_directories:
         if full_path.startswith(dname):
@@ -429,7 +432,7 @@ def format_directory(directory):
 
 files = []
 if format_all:
-    files.append('CMakeLists.txt')
+    files.append(ToFormatFile('CMakeLists.txt', 'CMakeLists.txt', '.'))
     for direct in formatted_directories:
         files += format_directory(direct)
 
