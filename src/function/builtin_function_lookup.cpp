@@ -1,8 +1,9 @@
-#include "duckdb/optimizer/builtin_function_lookup.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/window_function_catalog_entry.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
@@ -44,6 +45,13 @@ shared_ptr<const AggregateFunction> TryGetBuiltinAggregateFunction(ClientContext
 		return nullptr;
 	}
 	return entry.functions.GetFunctionByOffset(index.GetIndex());
+}
+
+shared_ptr<const WindowFunction> GetBuiltinWindowFunction(ClientContext &context, const Identifier &name,
+                                                          const vector<LogicalType> &arguments) {
+	auto &catalog = Catalog::GetSystemCatalog(context);
+	auto &entry = catalog.GetEntry<WindowFunctionCatalogEntry>(context, BuiltinName(catalog, name));
+	return entry.functions.GetFunctionByArguments(context, arguments);
 }
 
 unique_ptr<BoundFunctionExpression> BindBuiltinScalarFunction(ClientContext &context, const Identifier &name,
