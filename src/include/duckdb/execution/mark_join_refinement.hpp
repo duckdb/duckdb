@@ -104,7 +104,8 @@ private:
 	                  const vector<JoinCondition> &range_conditions, uint64_t probe_mask, uint64_t dropped,
 	                  const mark_key_fetch_t &probe_fetch, idx_t probe_count, AllocatedData &markers);
 	void ApplyMarker(idx_t probe, uint8_t marker);
-	bool RefineOneRange(MarkJoinRefinementGroup &group, idx_t probe, uint64_t dropped, idx_t range_column);
+	void RefineOneRange(MarkJoinRefinementGroup &group, uint64_t probe_mask, uint64_t dropped, idx_t range_column);
+	void RefineWitnessBatch(idx_t id, uint64_t probe_mask);
 	bool RefineExact(MarkJoinRefinementGroup &group, idx_t probe, uint64_t dropped);
 
 	ClientContext &context;

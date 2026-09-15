@@ -7,6 +7,7 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
 
 namespace duckdb {
 
@@ -510,7 +511,7 @@ void MarkPatternRefiner::RefineRangePattern(MarkJoinRefinementGroup &group, idx_
 	}
 }
 
-bool MarkPatternRefiner::RefineOneRange(MarkJoinRefinementGroup &group, idx_t probe, uint64_t dropped,
+void MarkPatternRefiner::RefineOneRange(MarkJoinRefinementGroup &group, uint64_t probe_mask, uint64_t dropped,
                                         idx_t range_column) {
 	auto &index = [&]() -> MarkJoinRefinementIndex & {
 		lock_guard<mutex> guard(lock);
@@ -536,7 +537,7 @@ bool MarkPatternRefiner::RefineOneRange(MarkJoinRefinementGroup &group, idx_t pr
 		}
 		return *cached;
 	}();
-	return RefineWitness(index.witness, probe, dropped);
+	RefineWitnessBatch(index.witness, probe_mask);
 }
 
 bool MarkPatternRefiner::RefineExact(MarkJoinRefinementGroup &group, idx_t probe, uint64_t dropped) {
@@ -589,7 +590,10 @@ void MarkPatternRefiner::Refine() {
 				const auto &selection = *group.selections.begin();
 				finished = RefineWitness(selection.first * STANDARD_VECTOR_SIZE + selection.second[0], probe, dropped);
 			} else if (reduce && classification.applicable_count == 1 && !classification.ranges.empty()) {
-				finished = RefineOneRange(group, probe, dropped, classification.ranges[0]);
+				if (refinement_batches.emplace(probe_mask, entry.first).second) {
+					RefineOneRange(group, probe_mask, dropped, classification.ranges[0]);
+				}
+				finished = matches.get()[probe] || (dropped && !validity.RowIsValid(probe));
 			} else {
 				finished = RefineExact(group, probe, dropped);
 			}
@@ -597,6 +601,38 @@ void MarkPatternRefiner::Refine() {
 				break;
 			}
 		}
+	}
+}
+
+void MarkPatternRefiner::RefineWitnessBatch(idx_t id, uint64_t probe_mask) {
+	SelectionVector selected(STANDARD_VECTOR_SIZE);
+	idx_t count = 0;
+	for (idx_t row = 0; row < keys.size(); row++) {
+		if (!matches.get()[row] && (sorted_probes || validity.RowIsValid(row)) &&
+		    MarkJoinRefinement::NullMask(keys, row, conditions) == probe_mask) {
+			selected.set_index(count++, row);
+		}
+	}
+	if (!count) {
+		return;
+	}
+	Fetch(id / STANDARD_VECTOR_SIZE);
+	DataChunk probes;
+	probes.InitializeEmpty(condition_types);
+	probes.Reference(keys);
+	probes.Slice(selected, count);
+	vector<idx_t> columns;
+	for (idx_t col = 0; col < conditions.size(); col++) {
+		ConstantVector::Reference(candidates.data[col], count_t(count), chunk.data[col], id % STANDARD_VECTOR_SIZE,
+		                          chunk.size());
+		columns.push_back(col);
+	}
+	candidates.SetChildCardinality(count);
+	MarkJoinRowComparison::CompareTail(probes, candidates, conditions, columns, comparison);
+	auto values = comparison.Values<bool>();
+	for (idx_t row = 0; row < count; row++) {
+		auto value = values[row];
+		ApplyMarker(selected[row], !value.IsValid() ? 1 : value.GetValue() ? 2 : 0);
 	}
 }
 
