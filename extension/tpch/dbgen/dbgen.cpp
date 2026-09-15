@@ -353,7 +353,7 @@ static DSS_HUGE PartSuppBridge(DBGenContext *ctx, DSS_HUGE part_key, DSS_HUGE su
 }
 
 static void AppendPartName(tpch_append_information &info, DBGenContext *ctx) {
-	permute_dist(&colors, &ctx->Seed[P_NAME_SD], ctx);
+	permute_dist(&colors, P_NAME_SCL, &ctx->Seed[P_NAME_SD], ctx);
 	idx_t length = 0;
 	for (idx_t i = 0; i < P_NAME_SCL; i++) {
 		length += NumericCast<idx_t>(colors.list[ctx->permute[i]].length);
