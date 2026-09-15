@@ -156,7 +156,7 @@ SinkCombineResultType PhysicalLimit::Combine(ExecutionContext &context, Operator
 //===--------------------------------------------------------------------===//
 class LimitSourceState : public GlobalSourceState {
 public:
-	LimitSourceState() {
+	LimitSourceState() : progress(0), total(0) {
 		initialized = false;
 		current_offset = 0;
 	}
@@ -164,10 +164,23 @@ public:
 	bool initialized;
 	idx_t current_offset;
 	BatchedChunkScanState scan_state;
+	atomic<double> progress;
+	idx_t total;
 };
 
 unique_ptr<GlobalSourceState> PhysicalLimit::GetGlobalSourceState(ClientContext &context) const {
 	return make_uniq<LimitSourceState>();
+}
+
+ProgressData PhysicalLimit::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
+	ProgressData progress;
+	progress.done = gstate.Cast<LimitSourceState>().progress.load(std::memory_order_relaxed);
+	progress.total = 1.0;
+	return progress;
+}
+
+void PhysicalLimit::SourceFinished(ClientContext &context, GlobalSourceState &gstate) const {
+	gstate.Cast<LimitSourceState>().progress.store(1.0, std::memory_order_relaxed);
 }
 
 SourceResultType PhysicalLimit::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
@@ -176,6 +189,7 @@ SourceResultType PhysicalLimit::GetDataInternal(ExecutionContext &context, DataC
 	auto &state = input.global_state.Cast<LimitSourceState>();
 	while (state.current_offset < gstate.limit + gstate.offset) {
 		if (!state.initialized) {
+			state.total = MinValue<idx_t>(gstate.data.Count(), gstate.limit + gstate.offset);
 			gstate.data.InitializeScan(state.scan_state);
 			state.initialized = true;
 		}
@@ -183,7 +197,11 @@ SourceResultType PhysicalLimit::GetDataInternal(ExecutionContext &context, DataC
 		if (chunk.size() == 0) {
 			return SourceResultType::FINISHED;
 		}
-		if (HandleOffset(chunk, state.current_offset, gstate.offset, gstate.limit)) {
+		const auto have_output = HandleOffset(chunk, state.current_offset, gstate.offset, gstate.limit);
+		D_ASSERT(state.total > 0);
+		state.progress.store(double(MinValue<idx_t>(state.current_offset, state.total)) / double(state.total),
+		                     std::memory_order_relaxed);
+		if (have_output) {
 			break;
 		}
 	}
