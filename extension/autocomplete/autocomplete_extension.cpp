@@ -469,11 +469,14 @@ static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context
 	idx_t max_token_index = 0;
 	TokenIterator token_iterator(tokens);
 	auto parser_options = context.GetParserOptions();
-	MatchContext match_context(suggestions, parse_allocator, max_token_index, MatchMode::RECOGNIZE_ONLY,
-	                           parser_options.identifier_case_mode, parser_options.heap_based_parser);
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext match_context(suggestions, parse_allocator, process_allocator, max_token_index,
+	                           MatchMode::RECOGNIZE_ONLY, parser_options.identifier_case_mode,
+	                           parser_options.heap_based_parser);
 	MatchState state(token_iterator, match_context);
 
 	compiled_grammar->ProgramMatcher().MatchParseResult(state);
+	process_allocator.FreeAll();
 
 	return make_uniq<SQLTokenizeFunctionData>(std::move(tokens));
 }
@@ -561,11 +564,14 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	idx_t max_token_index = 0;
 	TokenIterator token_iterator(root_tokens);
 	auto parser_options = context.GetParserOptions();
-	MatchContext match_context(suggestions, parse_allocator, max_token_index, MatchMode::RECOGNIZE_ONLY,
-	                           parser_options.identifier_case_mode, parser_options.heap_based_parser);
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext match_context(suggestions, parse_allocator, process_allocator, max_token_index,
+	                           MatchMode::RECOGNIZE_ONLY, parser_options.identifier_case_mode,
+	                           parser_options.heap_based_parser);
 	MatchState state(token_iterator, match_context);
 
 	auto match_result = compiled_grammar->ProgramMatcher().MatchParseResult(state);
+	process_allocator.FreeAll();
 	// `+ 1` accounts for the EOI sentinel — the matcher walk may report success without
 	// consuming it.
 	if (!match_result.IsSuccess() || state.token_iterator.Position() + 1 < root_tokens.size()) {
@@ -683,11 +689,13 @@ static void LoadInternal(ExtensionLoader &loader) {
 	const auto map_config_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
 	ScalarFunctionSet format_sql_set("duckdb_format_sql");
 	// duckdb_format_sql(sql)
-	format_sql_set.AddFunction(
-	    ScalarFunction({{"sql", LogicalType::VARCHAR}}, LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind));
+	ScalarFunction format_sql_unary({}, LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind);
+	format_sql_unary.GetSignature().AddParameter("sql", LogicalType::VARCHAR);
+	format_sql_set.AddFunction(format_sql_unary);
 	// duckdb_format_sql(sql, config => MAP {'indent_size':'4', 'inline_threshold':'60'})
-	format_sql_set.AddFunction(ScalarFunction({{"sql", LogicalType::VARCHAR}, {"config", map_config_type}},
-	                                          LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind));
+	ScalarFunction format_sql_binary({}, LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind);
+	format_sql_binary.GetSignature().AddParameter("sql", LogicalType::VARCHAR).AddParameter("config", map_config_type);
+	format_sql_set.AddFunction(format_sql_binary);
 	loader.RegisterFunction(format_sql_set);
 }
 

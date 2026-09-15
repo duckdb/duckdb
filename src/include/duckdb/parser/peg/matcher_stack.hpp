@@ -36,7 +36,7 @@ public:
 public:
 	const Matcher &matcher;
 	MatchState &match_state;
-	unique_ptr<MatchProcess> process;
+	arena_ptr<MatchProcess> process;
 	optional<MatcherResult> child_result;
 	optional<MatcherResult> result;
 	PackratMatchState packrat_state;
@@ -53,6 +53,7 @@ private:
 	static constexpr idx_t INITIAL_FRAME_CAPACITY = 64;
 
 	MatcherResult ExecuteAtomicMatcher(MatchInput input);
+	void DestroyTopFrame();
 	void PushFrame(MatchInput input);
 	void InitializeFrame(MatchStackFrame &frame);
 	//! Returns true when the frame has completed.

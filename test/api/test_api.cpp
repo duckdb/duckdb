@@ -4,6 +4,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/main/valid_checker.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/storage/metadata/metadata_manager.hpp"
@@ -548,6 +549,35 @@ TEST_CASE("Test connection API", "[api]") {
 
 	con.SetAutoCommit(true);
 	REQUIRE(con.IsAutoCommit());
+}
+
+TEST_CASE("Test connection transaction API error scenarios", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+
+	// a failed nested BEGIN does not abort the outer transaction
+	REQUIRE_NOTHROW(con.BeginTransaction());
+	REQUIRE_THROWS(con.BeginTransaction());
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (42)"));
+	REQUIRE_NOTHROW(con.Commit());
+	auto result = con.Query("SELECT i FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	// COMMIT on an invalidated transaction rolls back instead of throwing
+	REQUIRE_NOTHROW(con.BeginTransaction());
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (84)"));
+	ValidChecker::Invalidate(con.context->ActiveTransaction(), "test invalidation");
+	REQUIRE_FAIL(con.Query("SELECT 42"));
+	REQUIRE_NOTHROW(con.Commit());
+	// the transaction was rolled back and the connection is usable again
+	REQUIRE(con.IsAutoCommit());
+	result = con.Query("SELECT count(*) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	// no transaction is active anymore - COMMIT and ROLLBACK throw again
+	REQUIRE_THROWS(con.Commit());
+	REQUIRE_THROWS(con.Rollback());
 }
 
 TEST_CASE("Test parser tokenize", "[api]") {

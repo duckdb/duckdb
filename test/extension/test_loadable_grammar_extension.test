@@ -10,11 +10,13 @@ LOAD '{BUILD_DIRECTORY}/test/extension/loadable_grammar_extension_demo.duckdb_ex
 statement ok
 SET active_grammar_extensions = ['pipe_query_syntax'];
 
-statement ok
-SET heap_based_parser=true;
+foreach parser_mode true false
 
 statement ok
-CREATE TABLE produce(item VARCHAR, category VARCHAR, sales INTEGER);
+SET heap_based_parser={parser_mode};
+
+statement ok
+CREATE OR REPLACE TABLE produce(item VARCHAR, category VARCHAR, sales INTEGER);
 
 statement ok
 INSERT INTO produce VALUES
@@ -53,3 +55,5 @@ FROM produce
   |> SELECT item, sales, doubled_sales;
 ----
 cashews	30	60
+
+endloop

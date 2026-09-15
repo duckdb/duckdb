@@ -565,6 +565,10 @@ auto Connection::GetFileSystem() const -> FileSystem {
 	return detail::Factory::Make<FileSystem>(fs);
 }
 
+auto Connection::CreateType(const QualifiedName &name) -> LogicalType {
+	return CreateType(name, {});
+}
+
 auto Connection::CreateType(const QualifiedName &name, const std::vector<TypeParam> &params) -> LogicalType {
 	TypeParamArrays split(params);
 	duckdb_v2_logical_type_handle type = nullptr;
@@ -595,6 +599,31 @@ SqlStatement::SqlStatement(void *impl) : detail::Handle<SqlStatement>(impl) {
 SqlStatement::~SqlStatement() {
 	auto _h = handle();
 	duckdb_v2_sql_statement_destroy(&_h);
+}
+
+auto SqlStatement::GetStatementType() const -> StatementType {
+	DUCKDB_V2_STATEMENT_TYPE type = DUCKDB_V2_STATEMENT_TYPE_INVALID;
+	CheckedAPICall(duckdb_v2_sql_statement_get_type, handle(), &type);
+	return static_cast<StatementType>(type);
+}
+
+auto SqlStatement::GetText() const -> std::string_view {
+	duckdb_v2_str text = {nullptr, 0};
+	CheckedAPICall(duckdb_v2_sql_statement_get_text, handle(), &text);
+	return FromStr(text);
+}
+
+auto SqlStatement::GetParameterNames() const -> std::vector<std::string_view> {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_sql_statement_get_parameter_count, handle(), &count);
+	std::vector<std::string_view> names;
+	names.reserve(count);
+	for (idx_t i = 0; i < count; i++) {
+		duckdb_v2_identifier_t name = {nullptr, 0};
+		CheckedAPICall(duckdb_v2_sql_statement_get_parameter_name, handle(), i, &name);
+		names.push_back(FromStr(name));
+	}
+	return names;
 }
 
 StatementIterator::StatementIterator(void *impl) : detail::Handle<StatementIterator>(impl) {
@@ -802,6 +831,10 @@ auto Context::GetFileSystem() const -> FileSystem {
 	duckdb_v2_file_system_handle fs = nullptr;
 	CheckedAPICall(duckdb_v2_file_system_get_from_context, handle(), &fs);
 	return detail::Factory::Make<FileSystem>(fs);
+}
+
+auto Context::CreateType(const QualifiedName &name) const -> LogicalType {
+	return CreateType(name, {});
 }
 
 auto Context::CreateType(const QualifiedName &name, const std::vector<TypeParam> &params) const -> LogicalType {
@@ -2216,7 +2249,7 @@ static_assert(static_cast<uint8_t>(QueryResult::ResultType::NOTHING) == DUCKDB_V
 
 // StatementType mirrors DUCKDB_V2_STATEMENT_TYPE numerically; every member is pinned.
 #define DUCKDB_CPP_ASSERT_STATEMENT_TYPE(member)                                                                       \
-	static_assert(static_cast<uint8_t>(QueryResult::StatementType::member) == DUCKDB_V2_STATEMENT_TYPE_##member,       \
+	static_assert(static_cast<uint8_t>(StatementType::member) == DUCKDB_V2_STATEMENT_TYPE_##member,                    \
 	              "StatementType::" #member " must mirror DUCKDB_V2_STATEMENT_TYPE_" #member)
 DUCKDB_CPP_ASSERT_STATEMENT_TYPE(INVALID);
 DUCKDB_CPP_ASSERT_STATEMENT_TYPE(SELECT);
@@ -2249,6 +2282,9 @@ DUCKDB_CPP_ASSERT_STATEMENT_TYPE(MULTI);
 DUCKDB_CPP_ASSERT_STATEMENT_TYPE(COPY_DATABASE);
 DUCKDB_CPP_ASSERT_STATEMENT_TYPE(UPDATE_EXTENSIONS);
 DUCKDB_CPP_ASSERT_STATEMENT_TYPE(MERGE_INTO);
+DUCKDB_CPP_ASSERT_STATEMENT_TYPE(CONNECT);
+DUCKDB_CPP_ASSERT_STATEMENT_TYPE(DISCONNECT);
+DUCKDB_CPP_ASSERT_STATEMENT_TYPE(EXTERNAL_RESOURCE);
 #undef DUCKDB_CPP_ASSERT_STATEMENT_TYPE
 
 auto QueryResult::GetResultType() const -> ResultType {

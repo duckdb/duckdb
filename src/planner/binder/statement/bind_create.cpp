@@ -466,16 +466,18 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		}
 
 		// Constant-fold all default parameter expressions
+		identifier_map_t<Value> default_values;
 		identifier_set_t integer_literal_defaults;
 		for (auto &it : function->default_parameters) {
 			auto &param_name = it.first;
 			auto &param_expr = it.second;
 
 			if (param_expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-				auto &value = param_expr->Cast<ConstantExpression>().GetValue();
+				auto value = param_expr->Cast<ConstantExpression>().GetLiteral().ToValue();
 				if (value.type().IsIntegral() && !value.IsNull()) {
 					integer_literal_defaults.insert(param_name);
 				}
+				default_values[param_name] = std::move(value);
 				continue;
 			}
 
@@ -491,9 +493,10 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			auto default_val = ExpressionExecutor::EvaluateScalar(context, *bound_default);
 
 			// Save this back as a constant expression
-			auto const_expr = make_uniq<ConstantExpression>(default_val);
+			auto const_expr = ConstantExpression::FromValue(default_val);
 			const_expr->SetAlias(param_name);
 			it.second = std::move(const_expr);
+			default_values[param_name] = std::move(default_val);
 		}
 
 		// Resolve any user type arguments
@@ -506,17 +509,17 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 				BindLogicalType(type);
 			}
 			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
-			auto it = function->default_parameters.find(param_name);
-			if (it != function->default_parameters.end()) {
-				auto &value = it->second->Cast<ConstantExpression>().GetValue();
+			auto it = default_values.find(param_name);
+			if (it != default_values.end()) {
+				auto &value = it->second;
 				auto val_type = value.type();
 				if (integer_literal_defaults.find(param_name) != integer_literal_defaults.end()) {
 					val_type = LogicalType::INTEGER_LITERAL(value);
 				}
 				if (CastFunctionSet::ImplicitCastCost(context, val_type, type) < 0) {
-					auto msg =
-					    StringUtil::Format("Default value '%s' for parameter '%s' cannot be implicitly cast to '%s'.",
-					                       it->second->ToString(), param_name, type.ToString());
+					auto msg = StringUtil::Format(
+					    "Default value '%s' for parameter '%s' cannot be implicitly cast to '%s'.",
+					    function->default_parameters[param_name]->ToString(), param_name, type.ToString());
 					throw BinderException(msg + " Please add an explicit type cast.");
 				}
 			}
@@ -601,17 +604,17 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	return BindCreateSchema(info);
 }
 
-LogicalType Binder::BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &type_expr) {
+LogicalType Binder::BindLogicalType(const ParsedExpression &type_expr) {
 	ConstantBinder binder(*this, context, "Type binding");
-	auto copy = type_expr->Copy();
+	auto copy = type_expr.Copy();
 	auto expr = binder.Bind(copy);
 
 	if (!expr->IsFoldable()) {
-		throw BinderException(*type_expr, "Type expression is not constant");
+		throw BinderException(type_expr, "Type expression is not constant");
 	}
 
 	if (expr->GetReturnType() != LogicalTypeId::TYPE) {
-		throw BinderException(*type_expr, "Expected a type returning expression, but got expression of type '%s'",
+		throw BinderException(type_expr, "Expected a type returning expression, but got expression of type '%s'",
 		                      expr->GetReturnType().ToString());
 	}
 
@@ -639,7 +642,7 @@ void Binder::BindLogicalType(LogicalType &type) {
 	type = TypeVisitor::VisitReplace(type, [&](const LogicalType &ty) {
 		if (ty.id() == LogicalTypeId::UNBOUND) {
 			auto &type_expr = UnboundType::GetTypeExpression(ty);
-			return BindLogicalTypeInternal(type_expr);
+			return BindLogicalType(*type_expr);
 		}
 
 		return ty;

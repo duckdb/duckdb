@@ -246,6 +246,9 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 	// Re-enqueue alive nodes via producer token — goes into a dedicated sub-queue
 	// that the consumer token has already passed
 	if (alive_count > 0) {
+		if (!purge_producer_token.valid()) {
+			throw OutOfMemoryException("Failed to allocate eviction queue producer");
+		}
 		q.enqueue_bulk(purge_producer_token, purge_nodes.begin(), alive_count);
 	}
 }
@@ -503,7 +506,17 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 			continue;
 		}
 
-		if (!fn(node, handle, lock)) {
+		bool continue_iteration;
+		try {
+			continue_iteration = fn(node, handle, lock);
+		} catch (...) {
+			// The unload failed (e.g. the temporary directory is full) and the block is still loaded.
+			// Give it its queue entry back, or it stays un-evictable until the next unpin.
+			handle->SetHasLiveQueueEntry(lock, true);
+			q.enqueue(std::move(node));
+			throw;
+		}
+		if (!continue_iteration) {
 			break;
 		}
 	}

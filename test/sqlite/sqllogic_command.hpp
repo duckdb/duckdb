@@ -201,6 +201,10 @@ public:
 
 	static SleepUnit ParseUnit(const string &unit);
 
+	bool SupportsConcurrent() const override {
+		return true;
+	}
+
 private:
 	idx_t duration;
 	SleepUnit unit;

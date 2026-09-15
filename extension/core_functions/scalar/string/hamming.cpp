@@ -39,7 +39,8 @@ static void MismatchesFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 ScalarFunction HammingFun::GetFunction() {
-	ScalarFunction function({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BIGINT, MismatchesFunction);
+	ScalarFunction function({}, LogicalType::BIGINT, MismatchesFunction);
+	function.GetSignature().AddParameter("s1", LogicalType::VARCHAR).AddParameter("s2", LogicalType::VARCHAR);
 	// throws if the strings are empty or of unequal length
 	function.SetFallible();
 	return function;

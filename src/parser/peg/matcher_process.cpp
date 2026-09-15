@@ -42,8 +42,8 @@ private:
 	bool completed = false;
 };
 
-unique_ptr<MatchProcess> AtomicMatcher::StartMatch(MatchState &state) const {
-	return make_uniq<AtomicMatchProcess>(*this, state);
+arena_ptr<MatchProcess> AtomicMatcher::StartMatch(MatchState &state) const {
+	return state.Make<AtomicMatchProcess>(*this, state);
 }
 
 class ListMatchProcess : public MatchProcess {
@@ -115,8 +115,8 @@ private:
 	bool awaiting_child = false;
 };
 
-unique_ptr<MatchProcess> ListMatcher::StartMatch(MatchState &state) const {
-	return make_uniq<ListMatchProcess>(*this, state);
+arena_ptr<MatchProcess> ListMatcher::StartMatch(MatchState &state) const {
+	return state.Make<ListMatchProcess>(*this, state);
 }
 
 class ChoiceMatchProcess : public MatchProcess {
@@ -160,8 +160,8 @@ private:
 	bool awaiting_child = false;
 };
 
-unique_ptr<MatchProcess> ChoiceMatcher::StartMatch(MatchState &state) const {
-	return make_uniq<ChoiceMatchProcess>(*this, state);
+arena_ptr<MatchProcess> ChoiceMatcher::StartMatch(MatchState &state) const {
+	return state.Make<ChoiceMatchProcess>(*this, state);
 }
 
 class OptionalMatchProcess : public MatchProcess {
@@ -199,8 +199,8 @@ private:
 	bool awaiting_child = false;
 };
 
-unique_ptr<MatchProcess> OptionalMatcher::StartMatch(MatchState &state) const {
-	return make_uniq<OptionalMatchProcess>(*this, state);
+arena_ptr<MatchProcess> OptionalMatcher::StartMatch(MatchState &state) const {
+	return state.Make<OptionalMatchProcess>(*this, state);
 }
 
 class RepeatMatchProcess : public MatchProcess {
@@ -252,8 +252,8 @@ private:
 	bool awaiting_child = false;
 };
 
-unique_ptr<MatchProcess> RepeatMatcher::StartMatch(MatchState &state) const {
-	return make_uniq<RepeatMatchProcess>(*this, state);
+arena_ptr<MatchProcess> RepeatMatcher::StartMatch(MatchState &state) const {
+	return state.Make<RepeatMatchProcess>(*this, state);
 }
 
 } // namespace duckdb

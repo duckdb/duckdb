@@ -1244,6 +1244,15 @@ typedef struct {
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_projection_pushdown)
 	(duckdb_v2_table_function_handle function, bool enable, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_sql_statement_get_parameter_count)
+	(duckdb_v2_sql_statement_handle statement, idx_t *out_count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_sql_statement_get_parameter_name)
+	(duckdb_v2_sql_statement_handle statement, idx_t index, duckdb_v2_identifier_t *out_name,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_sql_statement_get_text)
+	(duckdb_v2_sql_statement_handle statement, duckdb_v2_str *out_text, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_sql_statement_get_type)
+	(duckdb_v2_sql_statement_handle statement, DUCKDB_V2_STATEMENT_TYPE *out_type, duckdb_v2_error_info_handle *err);
 } duckdb_ext_api_v2;
 
 //===--------------------------------------------------------------------===//
@@ -1796,6 +1805,10 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_table_function_set_filter_pushdown_callback =
 	    duckdb_v2_table_function_set_filter_pushdown_callback;
 	result.duckdb_v2_table_function_set_projection_pushdown = duckdb_v2_table_function_set_projection_pushdown;
+	result.duckdb_v2_sql_statement_get_parameter_count = duckdb_v2_sql_statement_get_parameter_count;
+	result.duckdb_v2_sql_statement_get_parameter_name = duckdb_v2_sql_statement_get_parameter_name;
+	result.duckdb_v2_sql_statement_get_text = duckdb_v2_sql_statement_get_text;
+	result.duckdb_v2_sql_statement_get_type = duckdb_v2_sql_statement_get_type;
 	return result;
 }
 
