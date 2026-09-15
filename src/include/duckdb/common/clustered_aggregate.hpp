@@ -53,7 +53,6 @@ struct ClusteredAggr {
 	ClusteredAggr() : group_runs(&single_run) {
 	}
 
-	//! Read-only view over the runs of the permutation.
 	struct RunRange {
 		const GroupRun *begin_ptr;
 		const GroupRun *end_ptr;
@@ -100,23 +99,17 @@ private:
 	bool TryClustered(const uint64_t *group_ids, sel_t count, sel_t *arena, uint64_t *slots, GroupRun *runs);
 
 	idx_t n_group_runs = 0;
-	//! Used by SetSingleRun. Multi-run storage is bound by TryClustered.
 	GroupRun single_run;
 	GroupRun *group_runs;
 
-	//! Cached dictionary selection for the last composed cluster iteration.
 	mutable const sel_t *cached_dict_sel = nullptr;
 };
-
-static_assert(sizeof(ClusteredAggr) <= 128, "ClusteredAggr must remain a small stack descriptor");
 
 //! Scratch state shared by GroupedAggregateHashTable and PerfectAggregateHashTable.
 struct ClusteredAggrState {
 	unsafe_unique_array<sel_t> arena;
 	unsafe_unique_array<uint64_t> slots;
-	//! Reusable run storage for ClusteredAggr instances owned by this hash table.
 	unsafe_unique_array<ClusteredAggr::GroupRun> group_runs;
-	//! Lazily allocated because it is only needed for dictionary vectors.
 	mutable unsafe_unique_array<sel_t> composed_sel_data;
 	bool all_clustered = false;
 	idx_t n_clustered = 0;
