@@ -83,8 +83,15 @@ static bool MarkJoinTypesMatch(const LogicalType &left, const LogicalType &right
 	});
 	idx_t index = 0;
 	const auto mismatch = TypeVisitor::Contains(right, [&](const LogicalType &type) {
-		return type.id() == LogicalTypeId::VARCHAR &&
-		       (index >= collations.size() || collations[index++] != StringType::GetCollation(type));
+		if (type.id() != LogicalTypeId::VARCHAR) {
+			return false;
+		}
+		if (index >= collations.size()) {
+			return true;
+		}
+		const auto &collation = collations[index];
+		index++;
+		return collation != StringType::GetCollation(type);
 	});
 	return !mismatch && index == collations.size();
 }

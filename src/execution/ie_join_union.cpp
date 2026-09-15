@@ -408,9 +408,9 @@ void IEJoinUnion::InitializeBitmaps(idx_t count) {
 }
 
 IEJoinUnion::IEJoinUnion(IEJoinBuildOrders &build, ColumnDataCollection &ranks)
-    : next_row_func(&IEJoinUnion::NextRankedRow), n(ranks.Count()), i(0), j(0), anti_i(0),
+    : next_row_func(&IEJoinUnion::NextRankedRow), n(ranks.Count()), i(0), j(0),
       first_rank(make_uniq<IEJoinCursor<idx_t>>(ranks, 0)), second_rank(make_uniq<IEJoinCursor<idx_t>>(ranks, 1)),
-      probe_rank(make_uniq<IEJoinCursor<idx_t>>(ranks, 2)), li(*build.row_ids), p(*build.second_positions) {
+      probe_rank(make_uniq<IEJoinCursor<idx_t>>(ranks, 2)), anti_i(0), li(*build.row_ids), p(*build.second_positions) {
 	InitializeBitmaps(build.first->count);
 	NextRankedRow();
 }
