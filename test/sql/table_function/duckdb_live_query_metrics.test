@@ -1,0 +1,27 @@
+# name: test/sql/table_function/duckdb_live_query_metrics.test
+# description: duckdb_live_query_metrics() lists each connection's live query counters by metric name
+# group: [table_function]
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM duckdb_live_query_metrics());
+----
+connection_id	UBIGINT
+metric_name	VARCHAR
+metric_value	VARCHAR
+
+# the connection reports the same metric names as the final profile
+query I
+SELECT bool_or(metric_name = 'io.total_bytes_read') FROM duckdb_live_query_metrics()
+WHERE connection_id = current_connection_id();
+----
+true
+
+# without profiling, the counters still start from zero for every query
+statement ok
+SELECT count(*) FROM (SELECT DISTINCT range FROM range(3000000));
+
+query I
+SELECT metric_value::UBIGINT < 10000000 FROM duckdb_live_query_metrics()
+WHERE connection_id = current_connection_id() AND metric_name = 'system.total_memory_allocated';
+----
+true
