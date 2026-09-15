@@ -958,7 +958,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	const bool render_materialized = renderer->RequireMaterializedResult();
 	if (render_materialized) {
 		// we need to materialize the result prior to rendering
-		result = con.Query(std::move(statement), duckdb::QueryResultMemoryType::BUFFER_MANAGED);
+		result = con.Query(std::move(statement), duckdb::ChunkFormat::BufferManaged());
 	} else {
 		result = con.Submit(std::move(statement));
 	}

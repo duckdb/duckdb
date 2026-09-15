@@ -847,53 +847,70 @@ TEST_CASE("Test SqlStatement::ToString for UPDATE, INSERT, DELETE statements wit
 TEST_CASE("Test buffer managed query result", "[api]") {
 	auto db = make_uniq<DuckDB>(nullptr);
 	auto con = make_uniq<Connection>(*db);
+	auto close_database = [&]() {
+		con.reset();
+		db.reset();
+	};
+	auto reopen_database = [&]() {
+		db = make_uniq<DuckDB>(nullptr);
+		con = make_uniq<Connection>(*db);
+	};
 
-	// Send query with in-memory result
+	// An in-memory result outlives the database
 	QueryParameters parameters;
-	parameters.memory_type = QueryResultMemoryType::IN_MEMORY;
+	parameters.format = ChunkFormat::InMemory();
 	auto result = con->context->Query("SELECT 42;", parameters);
-
-	// Query result is accessible
+	REQUIRE_NOTHROW(result->ToString());
+	close_database();
 	REQUIRE_NOTHROW(result->ToString());
 
-	// Reset connection AND db
-	con.reset();
-	db.reset();
-
-	// Query result is still accessible after resetting
-	REQUIRE_NOTHROW(result->ToString());
-
-	// Do it again with a buffer-managed query result
-	db = make_uniq<DuckDB>(nullptr);
-	con = make_uniq<Connection>(*db);
-	parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
+	// A buffer-managed result dies with the database
+	reopen_database();
+	parameters.format = ChunkFormat::BufferManaged();
 	result = con->context->Query("SELECT 42;", parameters);
-
-	// Query result is accessible
 	REQUIRE_NOTHROW(result->ToString());
-
-	// Reset connection AND db
-	con.reset();
-	db.reset();
-
-	// Query result is no longer accessible
+	close_database();
 	REQUIRE_THROWS(result->ToString());
 
-	// And again with order preservation disabled
-	db = make_uniq<DuckDB>(nullptr);
-	con = make_uniq<Connection>(*db);
-	result = con->Query("SET preserve_insertion_order=false;");
+	// The same without order preservation
+	reopen_database();
+	REQUIRE_NO_FAIL(con->Query("SET preserve_insertion_order=false;"));
 	result = con->context->Query("SELECT 42;", parameters);
-
-	// Query result is accessible
 	REQUIRE_NOTHROW(result->ToString());
-
-	// Reset connection AND db
-	con.reset();
-	db.reset();
-
-	// Query result is no longer accessible
+	close_database();
 	REQUIRE_THROWS(result->ToString());
+
+	// The same for a batch-ordered result
+	reopen_database();
+	REQUIRE_NO_FAIL(con->Query("CREATE TABLE integers AS SELECT range AS i FROM range(10000);"));
+	result = con->context->Query("SELECT * FROM integers;", parameters);
+	REQUIRE(result->RowCount() == 10000);
+	close_database();
+	REQUIRE_THROWS(result->ToString());
+
+	// Chosen on the handle after submission
+	reopen_database();
+	result = con->Submit("SELECT 42;");
+	result->SetFormat(ChunkFormat::BufferManaged());
+	result->Materialize();
+	REQUIRE_NOTHROW(result->ToString());
+	close_database();
+	REQUIRE_THROWS(result->ToString());
+
+	// Through the statement overload the shell uses
+	reopen_database();
+	auto statements = con->ExtractStatements("SELECT 42;");
+	result = con->Query(std::move(statements[0]), ChunkFormat::BufferManaged());
+	REQUIRE_NOTHROW(result->ToString());
+	close_database();
+	REQUIRE_THROWS(result->ToString());
+
+	// The parameterized Query template keeps the in-memory default of the other Query forms
+	reopen_database();
+	result = con->Query("SELECT ?::INTEGER;", 42);
+	REQUIRE_NOTHROW(result->ToString());
+	close_database();
+	REQUIRE_NOTHROW(result->ToString());
 }
 
 TEST_CASE("Test ClientInterruptState suppresses interrupts after irreversible operations", "[api]") {
