@@ -5713,11 +5713,6 @@ public:
 
 	static const case_insensitive_map_t<const TransformFrameOps *> &GeneratedTransformFrameOps();
 
-	// common.gram
-	static unique_ptr<ParsedExpression> TransformNumberLiteral(PEGTransformer &transformer, ParseResult &parse_result);
-	static string TransformStringLiteral(PEGTransformer &transformer, ParseResult &parse_result);
-	static DatePartSpecifier TransformIntervalToIntervalAsType(PEGTransformer &transformer, ParseResult &parse_result);
-
 	static string ExtractFormat(const string &file_path);
 
 	static string TransformIdentifierOrKeyword(PEGTransformer &transformer, ParseResult &parse_result);
