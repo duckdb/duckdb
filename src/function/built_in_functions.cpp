@@ -145,11 +145,22 @@ void BuiltinFunctions::RegisterExtensionOverloads() {
 	ScalarFunctionSet current_set;
 	for (auto &entry : EXTENSION_FUNCTION_OVERLOADS) {
 		vector<LogicalType> arguments;
+		vector<string> argument_names;
 		auto splits = StringUtil::Split(entry.signature, ">");
 		auto return_type = DBConfig::ParseLogicalType(splits[1]);
 		auto parameters = Value(splits[0]).DefaultCastAs(LogicalType::LIST(LogicalType::VARCHAR));
 		for (auto &param : ListValue::GetChildren(parameters)) {
-			arguments.push_back(DBConfig::ParseLogicalType(param.GetValue<string>()));
+			// each parameter is encoded as "name::type" - fall back to an unnamed parameter for
+			// entries generated before parameter names were tracked
+			auto param_str = param.GetValue<string>();
+			auto name_and_type = StringUtil::Split(param_str, "::");
+			if (name_and_type.size() == 2) {
+				argument_names.push_back(name_and_type[0]);
+				arguments.push_back(DBConfig::ParseLogicalType(name_and_type[1]));
+			} else {
+				argument_names.push_back(string());
+				arguments.push_back(DBConfig::ParseLogicalType(param_str));
+			}
 		}
 		if (entry.type != CatalogType::SCALAR_FUNCTION_ENTRY) {
 			throw InternalException(
@@ -159,6 +170,11 @@ void BuiltinFunctions::RegisterExtensionOverloads() {
 
 		ScalarFunction function(entry.name, std::move(arguments), std::move(return_type), nullptr);
 		function.SetBindExpressionCallback(BindExtensionFunction);
+		for (idx_t i = 0; i < argument_names.size(); i++) {
+			if (!argument_names[i].empty()) {
+				function.GetSignature().GetParameter(i).SetName(Identifier(argument_names[i]));
+			}
+		}
 
 		function.SetExtraFunctionInfo<ExtensionFunctionInfo>(entry.extension);
 		if (current_set.name != entry.name) {
