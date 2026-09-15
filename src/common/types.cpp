@@ -2014,6 +2014,25 @@ bool LogicalType::EqualTypeInfo(const LogicalType &rhs) const {
 	}
 }
 
+bool LogicalType::EqualsWithCollation(const LogicalType &rhs) const {
+	if (*this != rhs) {
+		return false;
+	}
+	vector<string> collations;
+	TypeVisitor::Contains(*this, [&](const LogicalType &child) {
+		if (child.id() == LogicalTypeId::VARCHAR) {
+			collations.push_back(StringType::GetCollation(child));
+		}
+		return false;
+	});
+	idx_t index = 0;
+	auto mismatch = TypeVisitor::Contains(rhs, [&](const LogicalType &child) {
+		return child.id() == LogicalTypeId::VARCHAR &&
+		       (index >= collations.size() || collations[index++] != StringType::GetCollation(child));
+	});
+	return !mismatch && index == collations.size();
+}
+
 bool LogicalType::operator==(const LogicalType &rhs) const {
 	if (id_ != rhs.id_) {
 		return false;
