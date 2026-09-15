@@ -1105,6 +1105,16 @@ void JoinHashTable::PrepareBloomFilterForFinalize() {
 	bloom_filter_built_from_sink = false;
 }
 
+static idx_t ExtractRowHashes(TupleDataChunkIterator &iterator, idx_t pointer_offset, Vector &hashes) {
+	const auto row_locations = iterator.GetRowLocations();
+	const auto count = iterator.GetCurrentChunkCount();
+	auto hash_data = FlatVector::Writer<hash_t>(hashes, count_t(count));
+	for (idx_t i = 0; i < count; i++) {
+		hash_data.WriteValue(Load<hash_t>(row_locations[i] + pointer_offset));
+	}
+	return count;
+}
+
 void JoinHashTable::BuildBloomFilterFromSinkCollection() {
 	if (!should_build_bloom_filter) {
 		return;
@@ -1123,16 +1133,10 @@ void JoinHashTable::BuildBloomFilterFromSinkCollection() {
 		if (!partition || partition->Count() == 0) {
 			continue;
 		}
-		// Only one partition's blocks are pinned at a time, so this stays within the memory budget even when
-		// the build side has spilled to disk.
+		// Stream one partition at a time to bound memory when the build side has spilled to disk.
 		TupleDataChunkIterator iterator(*partition, TupleDataPinProperties::UNPIN_AFTER_DONE, false);
 		do {
-			const auto count = iterator.GetCurrentChunkCount();
-			auto row_locations = iterator.GetRowLocations();
-			auto hash_data = FlatVector::Writer<hash_t>(hashes, count_t(count));
-			for (idx_t i = 0; i < count; i++) {
-				hash_data.WriteValue(Load<hash_t>(row_locations[i] + pointer_offset));
-			}
+			ExtractRowHashes(iterator, pointer_offset, hashes);
 			bloom_filter.InsertHashes(hashes);
 		} while (iterator.Next());
 	}
@@ -1155,15 +1159,10 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 
 	TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::KEEP_EVERYTHING_PINNED, chunk_idx_from,
 	                                chunk_idx_to, false);
-	const auto row_locations = iterator.GetRowLocations();
 
 	InsertState insert_state(*this);
 	do {
-		const auto count = iterator.GetCurrentChunkCount();
-		auto hash_data = FlatVector::Writer<hash_t>(hashes, count_t(count));
-		for (idx_t i = 0; i < count; i++) {
-			hash_data.WriteValue(Load<hash_t>(row_locations[i] + pointer_offset));
-		}
+		const auto count = ExtractRowHashes(iterator, pointer_offset, hashes);
 		TupleDataChunkState &chunk_state = iterator.GetChunkState();
 
 		InsertHashes(hashes, chunk_state, insert_state, parallel);
