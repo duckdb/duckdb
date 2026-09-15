@@ -62,7 +62,6 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	if (!input.ref.bind_info) {
 		throw BinderException("arrow_scan requires an ArrowScanFactory bind input");
 	}
-	input.ref.bind_info->Cast<ArrowScanFactory>();
 	auto factory = shared_ptr_cast<TableFunctionInfo, ArrowScanFactory>(input.ref.bind_info);
 	auto res = make_uniq<ArrowScanFunctionData>(std::move(factory));
 	res->factory->GetSchema(res->schema_root.arrow_schema);

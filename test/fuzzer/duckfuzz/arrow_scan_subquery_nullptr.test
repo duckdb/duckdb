@@ -6,3 +6,8 @@ statement error
 SELECT * FROM (SELECT * FROM arrow_scan(NULL, NULL, NULL));
 ----
 No function matches the given name and argument types
+
+statement error
+SELECT * FROM (SELECT * FROM arrow_scan());
+----
+Binder Error: arrow_scan requires an ArrowScanFactory bind input
