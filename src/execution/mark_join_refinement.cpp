@@ -109,6 +109,7 @@ MarkJoinRefinementIndex::BuildHash(ClientContext &context, const PhysicalOperato
 	built->hash->AllocatePointerTable();
 	built->hash->InitializePointerTable(0, built->hash->capacity);
 	built->hash->Finalize(0, built->hash->GetDataCollection().ChunkCount(), false);
+	built->hash->finalized = true;
 	return built;
 }
 
