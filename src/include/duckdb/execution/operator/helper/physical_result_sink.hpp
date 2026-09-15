@@ -15,6 +15,7 @@
 namespace duckdb {
 
 class BufferedData;
+class ChunkFormat;
 class ResultFormatLocalState;
 class ResultUnit;
 
@@ -61,6 +62,8 @@ private:
 	bool DrainsByBatchIndex(ResultSinkGlobalState &gstate) const;
 	//! Whether the settled format is the identity. True for a sink the plan retained, which has no buffer
 	bool UsesChunkFormat(ResultSinkGlobalState &gstate) const;
+	//! The chunk format in effect, which owns the retained store. In-memory for a sink the plan retained
+	const ChunkFormat &ChunkFormatOf(ResultSinkGlobalState &gstate) const;
 	//! The producer's format state, created at its first Append
 	ResultFormatLocalState &LocalFormatState(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
 	//! Append the chunk, and finish the unit when it reached the format's target. Null otherwise
@@ -76,7 +79,8 @@ private:
 	                      const InterruptState &interrupt) const;
 	SinkResultType SinkDraining(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, DataChunk &chunk,
 	                            OperatorSinkInput &input) const;
-	SinkResultType SinkRetained(ExecutionContext &context, ResultSinkLocalState &lstate, DataChunk &chunk) const;
+	SinkResultType SinkRetained(ExecutionContext &context, ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
+	                            DataChunk &chunk) const;
 	SinkResultType SinkRetainedFormatted(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
 	                                     DataChunk &chunk) const;
 	SinkCombineResultType CombineDraining(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;

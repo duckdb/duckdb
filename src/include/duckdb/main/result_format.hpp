@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/enums/query_result_memory_type.hpp"
 #include "duckdb/common/enums/result_ordering.hpp"
 #include "duckdb/common/enums/result_unit_type.hpp"
 #include "duckdb/common/helper.hpp"
@@ -22,6 +23,9 @@
 
 namespace duckdb {
 
+class BatchedDataCollection;
+class ClientContext;
+class ColumnDataCollection;
 class DataChunk;
 
 //! Per-query state of a format, built once when the format is settled.
@@ -98,15 +102,46 @@ public:
 	//! The identity format, shared by every query that asks for no other: a null format anywhere
 	//! means this instance
 	DUCKDB_API static const shared_ptr<ResultFormat> &Chunk();
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
-//! The identity format: one unit per chunk, holding the copy the buffer used to make itself.
+//! The identity format: one unit per chunk, holding the copy the buffer used to make itself. Its
+//! retained store is a ColumnDataCollection, and the format decides where that keeps its rows
 class ChunkFormat : public ResultFormat {
 public:
 	using Unit = DataChunk;
 	using GlobalState = ResultFormatGlobalState;
 	static constexpr const char *NAME = "chunk";
 	static constexpr const ResultUnitType TYPE = ResultUnitType::CHUNK;
+
+public:
+	DUCKDB_API explicit ChunkFormat(QueryResultMemoryType memory_type = QueryResultMemoryType::IN_MEMORY);
+
+public:
+	//! Rows in the default allocator. The same instance as ResultFormat::Chunk()
+	DUCKDB_API static const shared_ptr<ResultFormat> &InMemory();
+	//! Rows in the buffer manager, so a large result counts against memory_limit and can spill. The
+	//! result then throws once the database has closed
+	DUCKDB_API static const shared_ptr<ResultFormat> &BufferManaged();
+
+	DUCKDB_API QueryResultMemoryType MemoryType() const;
+	//! The retained store of a result in this format
+	DUCKDB_API unique_ptr<ColumnDataCollection> CreateCollection(ClientContext &context,
+	                                                             const vector<LogicalType> &types) const;
+	//! The retained store of a batch-ordered result in this format
+	DUCKDB_API unique_ptr<BatchedDataCollection> CreateBatchedCollection(ClientContext &context,
+	                                                                     vector<LogicalType> types) const;
 
 public:
 	DUCKDB_API const char *Name() const override;
@@ -118,6 +153,9 @@ public:
 	DUCKDB_API void Append(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate, DataChunk &chunk) override;
 	DUCKDB_API bool IsFull(ResultFormatLocalState &lstate) override;
 	DUCKDB_API unique_ptr<ResultUnit> Finish(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate) override;
+
+private:
+	QueryResultMemoryType memory_type;
 };
 
 } // namespace duckdb

@@ -176,7 +176,6 @@ TEST_CASE("A retained result sink rejects results after the connection closes", 
 		PreparedStatementData data(StatementType::SELECT_STATEMENT);
 		data.names.emplace_back("value");
 		data.types.emplace_back(LogicalType::INTEGER);
-		data.memory_type = QueryResultMemoryType::IN_MEMORY;
 		data.physical_plan = make_uniq<PhysicalPlan>(Allocator::Get(*connection->context));
 		auto &root = data.physical_plan->Make<PhysicalDummyScan>(data.types, 0);
 		data.physical_plan->SetRoot(root);

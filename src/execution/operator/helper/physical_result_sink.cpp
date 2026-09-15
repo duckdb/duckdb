@@ -95,6 +95,13 @@ bool PhysicalResultSink::UsesChunkFormat(ResultSinkGlobalState &gstate) const {
 	return gstate.buffered_data->Format().IsChunk();
 }
 
+const ChunkFormat &PhysicalResultSink::ChunkFormatOf(ResultSinkGlobalState &gstate) const {
+	if (!gstate.buffered_data) {
+		return ResultFormat::Chunk()->Cast<ChunkFormat>();
+	}
+	return gstate.buffered_data->Format().Cast<ChunkFormat>();
+}
+
 ResultFormatLocalState &PhysicalResultSink::LocalFormatState(ResultSinkGlobalState &gstate,
                                                              ResultSinkLocalState &lstate) const {
 	if (!lstate.format_state) {
@@ -117,23 +124,23 @@ SinkResultType PhysicalResultSink::Sink(ExecutionContext &context, DataChunk &ch
 	}
 	if (current == ResultLifetime::RETAINED) {
 		if (UsesChunkFormat(gstate)) {
-			return SinkRetained(context, lstate, chunk);
+			return SinkRetained(context, gstate, lstate, chunk);
 		}
 		return SinkRetainedFormatted(gstate, lstate, chunk);
 	}
 	return SinkDraining(gstate, lstate, chunk, input);
 }
 
-SinkResultType PhysicalResultSink::SinkRetained(ExecutionContext &context, ResultSinkLocalState &lstate,
-                                                DataChunk &chunk) const {
+SinkResultType PhysicalResultSink::SinkRetained(ExecutionContext &context, ResultSinkGlobalState &gstate,
+                                                ResultSinkLocalState &lstate, DataChunk &chunk) const {
 	if (BatchOrdered()) {
 		if (!lstate.batch_data) {
-			lstate.batch_data = make_uniq<BatchedDataCollection>(context.client, types, memory_type);
+			lstate.batch_data = ChunkFormatOf(gstate).CreateBatchedCollection(context.client, types);
 		}
 		lstate.batch_data->Append(chunk, lstate.partition_info.batch_index.GetIndex());
 	} else {
 		if (!lstate.collection) {
-			lstate.collection = CreateCollection(context.client);
+			lstate.collection = ChunkFormatOf(gstate).CreateCollection(context.client, types);
 			lstate.collection->InitializeAppend(lstate.append_state);
 		}
 		lstate.collection->Append(lstate.append_state, chunk);
@@ -339,7 +346,7 @@ unique_ptr<QueryResult> PhysicalResultSink::GetMaterializedResult(ResultSinkGlob
 		}
 	}
 	if (!collection) {
-		collection = CreateCollection(*cc);
+		collection = ChunkFormatOf(gstate).CreateCollection(*cc, types);
 	}
 	return make_uniq<QueryResult>(statement_type, properties, names, std::move(collection), cc->GetClientProperties());
 }

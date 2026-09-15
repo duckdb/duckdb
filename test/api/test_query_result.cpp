@@ -390,6 +390,32 @@ TEST_CASE("A custom collector refuses a submission that asks for a format", "[ap
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));
 }
 
+TEST_CASE("A custom collector refuses a submission that asks for a buffer-managed result", "[api][query_result]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &config = ClientConfig::GetConfig(*con.context);
+	DrainWatchdog watchdog(con);
+
+	QueryParameters parameters;
+	{
+		auto setting = UseTestStreamingCollector(config);
+		parameters.format = ChunkFormat::BufferManaged();
+		auto refused = con.Submit("SELECT i FROM range(1000) t(i)", parameters);
+		REQUIRE(refused->HasError());
+		REQUIRE(refused->GetErrorType() == ExceptionType::INVALID_INPUT);
+		REQUIRE(StringUtil::Contains(refused->GetError(), "buffer-managed result cannot be combined"));
+
+		// The in-memory chunk format is the store the collector builds anyway
+		parameters.format = ChunkFormat::InMemory();
+		auto accepted = con.Submit("SELECT i FROM range(1000) t(i)", parameters);
+		REQUIRE(!accepted->HasError());
+		REQUIRE(accepted->RowCount() == 1000);
+	}
+	// The connection is usable once the collector is gone
+	auto next = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(next, 0, {42}));
+}
+
 TEST_CASE("A handle destroyed without collecting releases the query", "[api][query_result]") {
 	DuckDB db(nullptr);
 	Connection con(db);

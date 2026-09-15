@@ -634,8 +634,6 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 		query_progress.Restart();
 	}
 
-	statement_data.memory_type = parameters.memory_type;
-
 	// Decide how to get the result collector.
 	get_result_collector_t get_collector = PhysicalResultCollector::GetResultCollector;
 	auto &client_config = ClientConfig::GetConfig(*this);
@@ -644,6 +642,11 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 		if (parameters.format && !parameters.format->IsChunk()) {
 			// The collector builds its own result, which the format would never reach
 			throw InvalidInputException("A result format cannot be combined with a custom result collector");
+		}
+		if (parameters.format &&
+		    parameters.format->Cast<ChunkFormat>().MemoryType() == QueryResultMemoryType::BUFFER_MANAGED) {
+			// The collector chooses its own store, so the request would be silently downgraded
+			throw InvalidInputException("A buffer-managed result cannot be combined with a custom result collector");
 		}
 		get_collector = client_config.get_result_collector;
 	}
