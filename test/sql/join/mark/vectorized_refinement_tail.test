@@ -17,13 +17,13 @@ SET max_execution_time=10000
 foreach probe_count 67 4103
 
 statement ok
-CREATE TABLE probes AS SELECT i id, CASE WHEN i%3=0 THEN NULL ELSE i%5 END k,
+CREATE TEMP TABLE probes AS SELECT i id, CASE WHEN i%3=0 THEN NULL ELSE i%5 END k,
     i%2 bucket, i%13 x, 13-i%13 y,
     CASE WHEN i%7=0 THEN NULL::TUPLE(BIGINT,BIGINT) ELSE row(i%5,NULL::BIGINT) END tag
 FROM range({probe_count}) t(i)
 
 statement ok
-CREATE TABLE builds AS SELECT CASE WHEN i%11=0 THEN NULL ELSE i%5 END k,
+CREATE TEMP TABLE builds AS SELECT CASE WHEN i%11=0 THEN NULL ELSE i%5 END k,
     i%2 bucket, i%13 x, 13-i%13 y,
     CASE WHEN i%17=0 THEN NULL::TUPLE(BIGINT,BIGINT) ELSE row(i%5,NULL::BIGINT) END tag
 FROM range(4170-{probe_count}) t(i)
