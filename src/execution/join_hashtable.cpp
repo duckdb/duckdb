@@ -1104,6 +1104,39 @@ void JoinHashTable::PrepareBloomFilterForFinalize() {
 	bloom_filter.Initialize(context, bloom_filter_init_count);
 }
 
+void JoinHashTable::BuildBloomFilterFromSinkCollection() {
+	if (!should_build_bloom_filter) {
+		return;
+	}
+	const auto sink_count = sink_collection->Count();
+	if (sink_count == 0) {
+		return;
+	}
+
+	bloom_filter.Reset();
+	bloom_filter_init_count = MaxValue<idx_t>(sink_count, 1);
+	bloom_filter.Initialize(context, bloom_filter_init_count);
+
+	Vector hashes(LogicalType::HASH);
+	for (auto &partition : sink_collection->GetPartitions()) {
+		if (!partition || partition->Count() == 0) {
+			continue;
+		}
+		// Only one partition's blocks are pinned at a time, so this stays within the memory budget even when
+		// the build side has spilled to disk.
+		TupleDataChunkIterator iterator(*partition, TupleDataPinProperties::UNPIN_AFTER_DONE, false);
+		do {
+			const auto count = iterator.GetCurrentChunkCount();
+			auto row_locations = iterator.GetRowLocations();
+			auto hash_data = FlatVector::Writer<hash_t>(hashes, count_t(count));
+			for (idx_t i = 0; i < count; i++) {
+				hash_data.WriteValue(Load<hash_t>(row_locations[i] + pointer_offset));
+			}
+			bloom_filter.InsertHashes(hashes);
+		} while (iterator.Next());
+	}
+}
+
 void JoinHashTable::InitializePointerTable(idx_t entry_idx_from, idx_t entry_idx_to) {
 	// initialize HT with all-zero entries
 	auto entries = GetEntries();
