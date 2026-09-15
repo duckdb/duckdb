@@ -269,8 +269,12 @@ public:
 	                                                 const ColumnList &columns);
 	static void VerifyConstraintTimingStorageVersion(const Constraint &constraint, Catalog &catalog, bool temporary);
 
+	BoundStatement BindAlterAddForeignKey(BoundStatement &result, CatalogEntry &entry,
+	                                      unique_ptr<AlterInfo> alter_info);
 	BoundStatement BindAlterAddIndex(BoundStatement &result, CatalogEntry &entry, unique_ptr<AlterInfo> alter_info);
 
+	void BindParsedForeignKeyConstraint(ForeignKeyConstraint &constraint, SchemaCatalogEntry &schema,
+	                                    TableCatalogEntry &table);
 	void SetCatalogLookupCallback(catalog_entry_callback_t callback);
 	void BindCreateViewInfo(CreateViewInfo &base);
 	static void BindView(ClientContext &context, const SelectStatement &stmt, const Identifier &catalog_name,
