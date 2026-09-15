@@ -260,7 +260,7 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 	}
 	// Compatible types can still have distinct expression annotations, such as collations.
 	result->SetReturnType(std::move(return_type));
-	return std::move(result);
+	return result;
 }
 
 } // namespace duckdb
