@@ -490,14 +490,19 @@ Identifier DatabaseManager::TryGetDefaultDatabase(ClientContext &context) {
 		return default_entry.GetCatalog();
 	}
 	auto &manager = DatabaseManager::Get(context);
+	// Callable outside a transaction: only consult the transaction's references when one is active.
+	const bool in_transaction = context.transaction.HasActiveTransaction();
 	if (!IsInvalidCatalog(client_data.default_database)) {
 		// still the default while attached, or while this transaction still references it
-		if (manager.GetDatabase(context, client_data.default_database)) {
+		if (manager.GetDatabase(client_data.default_database)) {
+			return client_data.default_database;
+		}
+		if (in_transaction && MetaTransaction::Get(context).GetReferencedDatabase(client_data.default_database)) {
 			return client_data.default_database;
 		}
 		return Identifier();
 	}
-	if (!manager.HasAttachedDatabase()) {
+	if (in_transaction && !manager.HasAttachedDatabase()) {
 		auto modified_database = MetaTransaction::Get(context).ModifiedDatabase();
 		if (modified_database) {
 			return modified_database->GetName();
