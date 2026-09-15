@@ -1253,6 +1253,15 @@ typedef struct {
 	(duckdb_v2_sql_statement_handle statement, duckdb_v2_str *out_text, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_sql_statement_get_type)
 	(duckdb_v2_sql_statement_handle statement, DUCKDB_V2_STATEMENT_TYPE *out_type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_token_iterator_destroy)(duckdb_v2_token_iterator_handle *iterator);
+	DUCKDB_V2_ERROR(*duckdb_v2_token_iterator_ends_unterminated)
+	(duckdb_v2_token_iterator_handle iterator, bool *out_ends_unterminated, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_token_iterator_next)
+	(duckdb_v2_token_iterator_handle iterator, DUCKDB_V2_TOKEN_TYPE *out_type, idx_t *out_start, idx_t *out_length,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_tokenize_sql)
+	(duckdb_v2_connection_handle conn, duckdb_v2_str sql, duckdb_v2_token_iterator_handle *out_iterator,
+	 duckdb_v2_error_info_handle *err);
 } duckdb_ext_api_v2;
 
 //===--------------------------------------------------------------------===//
@@ -1809,6 +1818,10 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_sql_statement_get_parameter_name = duckdb_v2_sql_statement_get_parameter_name;
 	result.duckdb_v2_sql_statement_get_text = duckdb_v2_sql_statement_get_text;
 	result.duckdb_v2_sql_statement_get_type = duckdb_v2_sql_statement_get_type;
+	result.duckdb_v2_token_iterator_destroy = duckdb_v2_token_iterator_destroy;
+	result.duckdb_v2_token_iterator_ends_unterminated = duckdb_v2_token_iterator_ends_unterminated;
+	result.duckdb_v2_token_iterator_next = duckdb_v2_token_iterator_next;
+	result.duckdb_v2_tokenize_sql = duckdb_v2_tokenize_sql;
 	return result;
 }
 
