@@ -184,8 +184,8 @@ class ExtensionFunctionOverload(NamedTuple):
             parameters = []
             parameter_names = []
             for raw_param in raw_parameters:
-                # parameters are encoded as "name::type" - fall back to a bare type (no name) for
-                # entries generated before parameter names were tracked
+                # parameters are encoded as "name::type"
+                # fallback to type only if no name available
                 name, sep, type_str = raw_param.partition('::')
                 if sep:
                     parameter_names.append(name)
