@@ -64,7 +64,6 @@ public:
 class TestFormat : public ResultFormat {
 public:
 	using Unit = TestUnit;
-	using Collection = ResultUnitCollection;
 	using GlobalState = TestFormatGlobalState;
 	static constexpr const char *NAME = "test";
 	static constexpr const ResultUnitType TYPE = ResultUnitType::EXTENSION;
@@ -139,7 +138,6 @@ public:
 class OtherTestFormat : public ResultFormat {
 public:
 	using Unit = TestUnit;
-	using Collection = ResultUnitCollection;
 	using GlobalState = TestFormatGlobalState;
 	static constexpr const char *NAME = "other";
 	static constexpr const ResultUnitType TYPE = ResultUnitType::EXTENSION;

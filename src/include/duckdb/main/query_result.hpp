@@ -29,8 +29,19 @@ class ClientContextLock;
 class PreparedStatementData;
 class QueryResult;
 
+//! The retained store of a format: the ColumnDataCollection for chunks, the ordered units for every other
+//! format. A format declares its unit, never its store
+template <class FORMAT>
+struct ResultCollectionOf {
+	using type = ResultUnitCollection;
+};
+template <>
+struct ResultCollectionOf<ChunkFormat> {
+	using type = ColumnDataCollection;
+};
+
 //! How an accessor reaches the representation a format declares. The generic form serves every
-//! format whose collection is its ordered units; ChunkFormat specializes it onto the CDC
+//! format whose store is its ordered units; ChunkFormat specializes it onto the CDC
 template <class FORMAT>
 struct ResultAccess;
 
@@ -165,12 +176,12 @@ public:
 	//! Blocking. Same as Complete(), but will return a reference to the settled format's collection when done.
 	//! Throws InvalidInputException when FORMAT is not the settled format
 	template <class FORMAT = ChunkFormat>
-	typename FORMAT::Collection &Collection() {
+	typename ResultCollectionOf<FORMAT>::type &Collection() {
 		return ResultAccess<FORMAT>::Collection(*this);
 	}
 	//! Blocking. Same as Collection() but takes ownership of the collection. The QueryResult is empty afterward.
 	template <class FORMAT = ChunkFormat>
-	unique_ptr<typename FORMAT::Collection> TakeCollection() {
+	unique_ptr<typename ResultCollectionOf<FORMAT>::type> TakeCollection() {
 		return ResultAccess<FORMAT>::TakeCollection(*this);
 	}
 	//! The settled format's per-query state. Throws InvalidInputException before the format is settled,
@@ -389,11 +400,11 @@ struct ResultAccess {
 		unit->Cast<typename FORMAT::Unit>();
 		return unique_ptr<typename FORMAT::Unit>(static_cast<typename FORMAT::Unit *>(unit.release()));
 	}
-	static typename FORMAT::Collection &Collection(QueryResult &result) {
+	static ResultUnitCollection &Collection(QueryResult &result) {
 		result.PrepareCollected(FORMAT::NAME);
 		return *result.unit_collection;
 	}
-	static unique_ptr<typename FORMAT::Collection> TakeCollection(QueryResult &result) {
+	static unique_ptr<ResultUnitCollection> TakeCollection(QueryResult &result) {
 		result.PrepareCollected(FORMAT::NAME);
 		return std::move(result.unit_collection);
 	}
