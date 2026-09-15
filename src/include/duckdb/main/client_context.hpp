@@ -56,7 +56,10 @@ class SimpleBufferedData;
 class BufferedData;
 struct ClientData;
 class ClientContextState;
+class Connection;
+class PhysicalTransaction;
 class RegisteredStateManager;
+struct TransactionInfo;
 
 //! A statement parameter: identifier ($1 -> "1"), binding index, and inferred type (UNKNOWN if not inferred).
 struct StatementParameter {
@@ -85,6 +88,8 @@ class ClientContext : public enable_shared_from_this<ClientContext> {
 	friend class SimpleBufferedData;  // ExecuteTaskInternal, PollInternal
 	friend class BatchedBufferedData; // ExecuteTaskInternal, PollInternal
 	friend class ConnectionManager;
+	friend class Connection;
+	friend class PhysicalTransaction;
 
 public:
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
@@ -272,6 +277,11 @@ public:
 	DUCKDB_API LogicalType ParseLogicalType(const string &type);
 
 private:
+	//! Runs a transaction statement without going through the local query processing pipeline.
+	void RunTransactionStatement(const TransactionInfo &info);
+	//! Same as RunTransactionStatement, but does not obtain a lock or route CONNECT statements.
+	void RunTransactionStatementInternal(const TransactionInfo &info);
+
 	//! Submits a query to the database and returns its handle
 	unique_ptr<QueryResult> SubmitInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                       const QueryParameters &parameters, bool verify = true);

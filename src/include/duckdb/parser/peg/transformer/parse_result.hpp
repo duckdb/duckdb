@@ -431,7 +431,7 @@ public:
 		return result;
 	}
 
-	unique_ptr<ParsedExpression> ToExpression() {
+	virtual unique_ptr<ParsedExpression> ToExpression() {
 		switch (string_type) {
 		case SpecialStringCharacter::STANDARD:
 			return ConstantExpression::String(result);

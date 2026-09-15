@@ -10,6 +10,20 @@ TokenizerBehavior::TokenizerBehavior(const string &sql, vector<MatcherToken> &to
 Tokenizer::Tokenizer(const PEGKeywordHelper &keyword_helper_p) : keyword_helper(keyword_helper_p) {
 }
 
+bool Tokenizer::BackslashEscapesStringLiterals() const {
+	return false;
+}
+
+bool Tokenizer::IsQuotedIdentifierDelimiter(char character) const {
+	return character == '"';
+}
+
+void Tokenizer::HandleLastToken(TokenizerBehavior &behavior, TokenizeState state, const string &sql,
+                                idx_t last_pos) const {
+	string last_word = sql.substr(last_pos, sql.size() - last_pos);
+	behavior.OnLastToken(*this, state, last_word, last_pos);
+}
+
 static bool OperatorEquals(const char *str, const char *op, idx_t len, idx_t &op_len) {
 	for (idx_t i = 0; i < len; i++) {
 		if (str[i] != op[i]) {
@@ -23,6 +37,9 @@ static bool OperatorEquals(const char *str, const char *op, idx_t len, idx_t &op
 bool Tokenizer::IsSpecialOperator(const string &sql, idx_t pos, idx_t &op_len) const {
 	const char *op_start = sql.c_str() + pos;
 	if (pos + 2 < sql.size()) {
+		if (OperatorEquals(op_start, "<->", 3, op_len)) {
+			return true;
+		}
 		if (OperatorEquals(op_start, "->>", 3, op_len)) {
 			return true;
 		}
@@ -245,14 +262,18 @@ bool Tokenizer::TokenizeInput(TokenizerBehavior &behavior) const {
 	auto &sql = behavior.sql;
 	auto &tokens = behavior.tokens;
 	if (TokenizeInputInternal(behavior)) {
-		tokens.emplace_back("", sql.size(), behavior.GetTerminator());
+		auto terminator = behavior.GetTerminator();
+		tokens.emplace_back("", sql.size(), terminator);
+		if (terminator == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+			return true;
+		}
 	} else {
 		tokens.emplace_back("", sql.size(), TokenType::END_OF_INPUT);
 	}
-	return !tokens.empty() && tokens.back().type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
+	return false;
 }
 
-void Tokenizer::PushOperatorToken(TokenizerBehavior &behavior, idx_t start, idx_t end) {
+void Tokenizer::PushOperatorToken(TokenizerBehavior &behavior, idx_t start, idx_t end) const {
 	auto &sql = behavior.sql;
 	auto &tokens = behavior.tokens;
 	// Apply PostgreSQL trimming rule: an operator cannot end in '+' unless
@@ -286,6 +307,7 @@ bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
 	auto state = TokenizeState::STANDARD;
 	idx_t last_pos = 0;
 	bool escape_string = false;
+	char quoted_identifier_delimiter = '"';
 	string dollar_quote_marker;
 	idx_t dollar_marker_start = 0;
 	idx_t multi_line_comment_depth = 0;
@@ -299,8 +321,9 @@ bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
 				escape_string = false;
 				break;
 			}
-			if (c == '"') {
+			if (IsQuotedIdentifierDelimiter(c)) {
 				state = TokenizeState::QUOTED_IDENTIFIER;
+				quoted_identifier_delimiter = c;
 				last_pos = i;
 				break;
 			}
@@ -484,7 +507,7 @@ bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
 			}
 			break;
 		case TokenizeState::STRING_LITERAL:
-			if (escape_string && c == '\\' && i + 1 < sql.size()) {
+			if ((escape_string || BackslashEscapesStringLiterals()) && c == '\\' && i + 1 < sql.size()) {
 				i++;
 				break;
 			}
@@ -501,8 +524,8 @@ bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
 			}
 			break;
 		case TokenizeState::QUOTED_IDENTIFIER:
-			if (c == '"') {
-				if (i + 1 < sql.size() && sql[i + 1] == '"') {
+			if (c == quoted_identifier_delimiter) {
+				if (i + 1 < sql.size() && sql[i + 1] == quoted_identifier_delimiter) {
 					// escaped - skip escape
 					i++;
 				} else {
@@ -589,8 +612,7 @@ bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
 	default:
 		break;
 	}
-	string last_word = sql.substr(last_pos, sql.size() - last_pos);
-	behavior.OnLastToken(*this, state, std::move(last_word), last_pos);
+	HandleLastToken(behavior, state, sql, last_pos);
 	return true;
 }
 
@@ -602,8 +624,8 @@ void TokenizerBehavior::OnLastToken(const Tokenizer &tokenizer, TokenizeState st
 	if (last_word.empty()) {
 		return;
 	}
-	if (state == TokenizeState::KEYWORD) {
-		state = tokenizer.keyword_helper.IsKeyword(last_word) ? TokenizeState::KEYWORD : TokenizeState::STANDARD;
+	if (state == TokenizeState::KEYWORD && !tokenizer.keyword_helper.IsKeyword(last_word)) {
+		state = TokenizeState::STANDARD;
 	}
 
 	bool is_unterminated = Tokenizer::IsUnterminatedState(state);
