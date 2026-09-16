@@ -175,7 +175,16 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
             else()
                 # For GNU we rely on fvisibility=hidden to hide the extension symbols and use -exclude-libs to hide the duckdb symbols
                 set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
-                target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
+                if(DUCKDB_LOADABLE_FROM_ARCHIVE)
+                    # The entry point comes from an archive too, so --exclude-libs,ALL would hide it; export it alone
+                    # through a version script instead.
+                    set(EXPORTS_MAP "${CMAKE_CURRENT_BINARY_DIR}/${NAME}_loadable_exports.map")
+                    file(WRITE "${EXPORTS_MAP}" "{ global: ${NAME}_duckdb_cpp_init; local: *; };\n")
+                    target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--version-script=${EXPORTS_MAP})
+                    set_property(TARGET ${TARGET_NAME} APPEND PROPERTY LINK_DEPENDS "${EXPORTS_MAP}")
+                else()
+                    target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
+                endif()
             endif()
         else()
             message(FATAL_ERROR "EXTENSION static build is only intended for Linux and Windows on MVSC")
@@ -331,6 +340,42 @@ function(build_static_extension NAME PARAMETERS)
     add_library(${NAME}_extension STATIC ${FILES} ${LINK_FILE})
     target_link_libraries(${NAME}_extension duckdb_static)
     set_property(TARGET ${NAME}_extension PROPERTY DUCKDB_EXTENSION_KIND "CPP")
+endfunction()
+
+# Compiles a C++ extension once, into lib<NAME>_extension.a, and links its loadable binary from that archive instead of
+# compiling the same sources a second time. NO_LOADABLE builds the archive only; NO_WARNINGS silences compiler warnings.
+function(build_extension_library NAME)
+    cmake_parse_arguments(PARSE_ARGV 1 ARG "NO_LOADABLE;NO_WARNINGS" "" "")
+    set(FILES ${ARG_UNPARSED_ARGUMENTS})
+    set(PARAMETERS "-warnings")
+    if(ARG_NO_WARNINGS)
+        set(PARAMETERS "-no-warnings")
+    endif()
+
+    build_static_extension(${NAME} ${FILES})
+    if(ARG_NO_WARNINGS)
+        disable_target_warnings(${NAME}_extension)
+    endif()
+    if(ARG_NO_LOADABLE)
+        return()
+    endif()
+    if(EMSCRIPTEN OR WASM_LOADABLE_EXTENSIONS)
+        # the wasm side module is produced from the loadable target's own objects
+        build_loadable_extension(${NAME} "${PARAMETERS}" ${FILES})
+        return()
+    endif()
+
+    # one set of objects serves both products, so compile it the way a loadable extension needs
+    set_target_properties(${NAME}_extension PROPERTIES CXX_VISIBILITY_PRESET hidden)
+    set(LOADABLE_SOURCE "${DuckDB_BINARY_DIR}/codegen/loadable_from_archive.cpp")
+    if(NOT EXISTS "${LOADABLE_SOURCE}")
+        file(WRITE "${LOADABLE_SOURCE}" "// A loadable extension built by build_extension_library takes its code from its static archive.\n")
+    endif()
+    set(DUCKDB_LOADABLE_FROM_ARCHIVE TRUE)
+    string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
+    build_loadable_extension_directory(${NAME} "CPP" "extension/${NAME}" "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION}" "" "${PARAMETERS}" ${LOADABLE_SOURCE})
+    target_link_libraries(${NAME}_loadable_extension ${NAME}_extension)
+    duckdb_link_root(${NAME}_loadable_extension ${NAME}_duckdb_cpp_init)
 endfunction()
 
 function(build_static_extension_capi_internal NAME KIND FILES)
