@@ -44,7 +44,8 @@ select macro_definition from duckdb_functions() where function_name = 'my_range'
 ----
 SELECT * FROM "range"(x)
 
-# all scalar, window, and aggregate functions available to users should have param names registered in the function signature
+# without icu/json loaded, the autoloading placeholder overloads (e.g. the icu TIMESTAMPTZ
+# date part overloads) fall back to auto-generated parameter names like col0
 query I
 SELECT count(*) FROM duckdb_functions()
 WHERE (function_type == 'window' OR function_type == 'scalar' or function_type == 'aggregate')
@@ -52,11 +53,13 @@ AND list_contains(parameters, 'col0')
 ----
 55
 
-# some other stuff
 require json
 
-# require icu
+require icu
 
+# once the extensions are loaded, the real (named) function overloads replace the
+# auto-generated placeholders, so no scalar, window, or aggregate function should have
+# auto-generated param names anymore
 query I
 SELECT count(*) FROM duckdb_functions()
 WHERE (function_type == 'window' OR function_type == 'scalar' or function_type == 'aggregate')
