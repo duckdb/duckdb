@@ -1,0 +1,31 @@
+# name: test/sql/index/art/create_drop/test_art_drop_recreate_if_not_exists.test
+# description: Test recreating a dropped index with IF NOT EXISTS in the same transaction
+# group: [create_drop]
+
+statement ok
+CREATE TABLE t(i INTEGER)
+
+statement ok
+CREATE UNIQUE INDEX idx ON t(i)
+
+statement ok
+BEGIN
+
+statement ok
+DROP INDEX idx
+
+statement ok
+CREATE UNIQUE INDEX IF NOT EXISTS idx ON t(i)
+
+statement ok
+COMMIT
+
+query I
+SELECT count(*) FROM duckdb_indexes() WHERE index_name = 'idx'
+----
+1
+
+statement error
+INSERT INTO t VALUES (1), (1)
+----
+<REGEX>:Constraint Error:.*
