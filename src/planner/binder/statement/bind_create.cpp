@@ -13,6 +13,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/optimizer/remote_pushdown_optimizer.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
@@ -365,6 +366,12 @@ void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const
 }
 
 void Binder::BindCreateViewInfo(CreateViewInfo &base) {
+	// references to the view's own catalog are resolved through the view's search path anyway - drop the qualifier so
+	// the view keeps working when the database is attached under a different alias
+	auto &view_catalog = base.GetQualifiedName().Catalog();
+	if (base.query && !view_catalog.empty()) {
+		RemotePushdownOptimizer::StripCatalogName(*base.query, view_catalog);
+	}
 	if (base.binding_mode == CreateViewBindingMode::SKIP_BINDING) {
 		return;
 	}
