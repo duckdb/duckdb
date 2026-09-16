@@ -105,9 +105,13 @@ void duckdb_extension_vss_root(void);
 #ifdef __cplusplus
 }
 #endif
-// weak, external linkage: every translation unit that includes this header carries one, the linker keeps one
+// weak, so every translation unit that includes this header can carry one and the linker keeps one; extern keeps
+// the const table's linkage external in C++, which a weak definition requires
 // clang-format off
-__attribute__((used, weak)) void (*duckdb_known_extensions[])(void) = {
+#ifdef __cplusplus
+extern
+#endif
+__attribute__((used, weak)) void (*const duckdb_known_extensions[])(void) = {
     duckdb_extension_autocomplete_root,
     duckdb_extension_avro_root,
     duckdb_extension_aws_root,

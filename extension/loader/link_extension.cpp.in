@@ -15,7 +15,7 @@ extern "C" DUCKDB_EXTENSION_API void duckdb_extension_@NAME@_root() {
 
 namespace duckdb {
 
-static LinkedExtensionRegistrar @NAME@_registrar("@NAME@", [](DuckDB &db) {
+static const LinkedExtensionRegistrar @NAME@_registrar("@NAME@", [](DuckDB &db) {
 	@LINK_BODY@
 });
 
