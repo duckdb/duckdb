@@ -46,4 +46,17 @@ def test_custom_highlight_error(shell):
     result.check_stderr("Unknown intensity 'boldXX'")
     result.check_stderr("Usage")
 
+@pytest.mark.skipif(os.name == 'nt', reason="Windows highlighting does not use shell escapes")
+def test_highlight_documented_color_names(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".highlight_results on")
+        .statement(".highlight_colors column_name brightblack")
+        .statement(".highlight_colors string_value brightwhite")
+        .statement("select 'x' AS my_col;")
+    )
+    result = test.run()
+    result.check_stdout('\x1b[90mmy_col\x1b[00m')
+    result.check_stdout('\x1b[97mx\x1b[00m')
+
 # fmt: on

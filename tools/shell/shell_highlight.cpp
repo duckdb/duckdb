@@ -618,6 +618,9 @@ static const HighlightColorInfo highlight_color_info[] = {{"black", 0, 0x00, 0x0
                                                           {"grey85", 253, 0xDA, 0xDA, 0xDA},
                                                           {"grey89", 254, 0xE4, 0xE4, 0xE4},
                                                           {"grey93", 255, 0xEE, 0xEE, 0xEE},
+                                                          // Aliases for the documented names of palette codes 8/15
+                                                          {"brightblack", 8, 0x80, 0x80, 0x80},
+                                                          {"brightwhite", 15, 0xFF, 0xFF, 0xFF},
                                                           {nullptr, 0, 0, 0, 0}};
 
 bool ShellHighlight::IsExtendedColor(PrintColor color) {
@@ -637,7 +640,7 @@ optional_ptr<const HighlightColorInfo> ShellHighlight::GetColorInfo(PrintColor c
 bool ShellHighlight::TryGetPrintColor(const char *name, PrintColor &result, string &error_msg) {
 	for (idx_t i = 0; highlight_color_info[i].color_name; i++) {
 		if (StringUtil::CIEquals(name, highlight_color_info[i].color_name)) {
-			result = static_cast<PrintColor>(i);
+			result = static_cast<PrintColor>(highlight_color_info[i].code);
 			return true;
 		}
 	}
