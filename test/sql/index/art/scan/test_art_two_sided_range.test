@@ -1,0 +1,235 @@
+# name: test/sql/index/art/scan/test_art_two_sided_range.test
+# description: Test using an index scan for a two-sided range filter, e.g., a rewritten BETWEEN.
+# group: [scan]
+
+statement ok
+CREATE TABLE tbl AS SELECT (range * 2654435761) % 500000 AS i FROM range(500000);
+
+statement ok
+CREATE INDEX idx_i ON tbl(i);
+
+query II
+EXPLAIN ANALYZE SELECT i FROM tbl WHERE i BETWEEN 499990 AND 499992 ORDER BY i;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT i FROM tbl WHERE i BETWEEN 499990 AND 499992 ORDER BY i;
+----
+499990
+499991
+499992
+
+query II
+EXPLAIN ANALYZE SELECT i FROM tbl WHERE i >= 499990 AND i <= 499992 ORDER BY i;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT i FROM tbl WHERE i >= 499990 AND i <= 499992 ORDER BY i;
+----
+499990
+499991
+499992
+
+query II
+EXPLAIN ANALYZE SELECT i FROM tbl WHERE i > 499990 AND i < 499992 ORDER BY i;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT i FROM tbl WHERE i > 499990 AND i < 499992 ORDER BY i;
+----
+499991
+
+query II
+EXPLAIN ANALYZE SELECT i FROM tbl WHERE 499990 <= i AND 499992 >= i ORDER BY i;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT i FROM tbl WHERE 499990 <= i AND 499992 >= i ORDER BY i;
+----
+499990
+499991
+499992
+
+query II
+EXPLAIN ANALYZE SELECT i FROM tbl WHERE i <= 2 ORDER BY i;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT i FROM tbl WHERE i <= 2 ORDER BY i;
+----
+0
+1
+2
+
+query I
+SELECT count(*) FROM tbl WHERE i >= 499992 AND i <= 499990;
+----
+0
+
+query I
+SELECT count(*) FROM tbl WHERE i >= 499990 AND i <= NULL;
+----
+0
+
+query I
+SELECT count(*) FROM tbl WHERE i >= NULL AND i <= 499992;
+----
+0
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM tbl WHERE i >= 499900 AND i <= 499999 AND i % 7 = 0;
+----
+analyzed_plan	<REGEX>:.*Type: Sequential Scan.*
+
+query I
+SELECT count(*) FROM tbl WHERE i >= 499900 AND i <= 499999 AND i % 7 = 0;
+----
+14
+
+query II
+EXPLAIN ANALYZE SELECT i FROM tbl WHERE i IS NOT DISTINCT FROM 499991 AND i <= 499992;
+----
+analyzed_plan	<REGEX>:.*Type: Sequential Scan.*
+
+query I
+SELECT i FROM tbl WHERE i IS NOT DISTINCT FROM 499991 AND i <= 499992;
+----
+499991
+
+query I
+SELECT i FROM tbl WHERE i IS NOT DISTINCT FROM 499991 AND i <= 499990;
+----
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM tbl WHERE i >= 100 AND i <= 400000;
+----
+analyzed_plan	<REGEX>:.*Type: Sequential Scan.*
+
+query I
+SELECT count(*) FROM tbl WHERE i >= 100 AND i <= 400000;
+----
+399901
+
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO tbl VALUES (499991), (499993)
+
+query I
+SELECT i FROM tbl WHERE i >= 499990 AND i <= 499992 ORDER BY i;
+----
+499990
+499991
+499991
+499992
+
+statement ok
+ROLLBACK
+
+statement ok
+CREATE TABLE dim AS SELECT range AS i FROM range(499000, 500000);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM tbl JOIN dim USING (i) WHERE tbl.i >= 499990 AND tbl.i <= 499992;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT count(*) FROM tbl JOIN dim USING (i) WHERE tbl.i >= 499990 AND tbl.i <= 499992;
+----
+3
+
+statement ok
+CREATE TABLE strings AS SELECT 'A' || (range % 1000)::VARCHAR AS v FROM range(10000);
+
+statement ok
+CREATE INDEX idx_v ON strings(v);
+
+statement ok
+CREATE INDEX idx_lower_v ON strings(lower(v));
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM strings WHERE lower(v) BETWEEN 'a12' AND 'a13';
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT count(*) FROM strings WHERE lower(v) BETWEEN 'a12' AND 'a13';
+----
+120
+
+query II
+EXPLAIN ANALYZE SELECT v FROM strings WHERE v >= 'A120' AND v <= 'A122' ORDER BY v LIMIT 4;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT v FROM strings WHERE v >= 'A120' AND v <= 'A122' ORDER BY v LIMIT 4;
+----
+A120
+A120
+A120
+A120
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM strings WHERE starts_with(v, 'A12');
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT count(*) FROM strings WHERE starts_with(v, 'A12');
+----
+110
+
+query I
+SELECT count(*) FROM strings WHERE v ^@ 'A99';
+----
+110
+
+query I
+SELECT count(*) FROM strings WHERE starts_with(v, 'zz');
+----
+0
+
+statement ok
+CREATE TABLE guard_expr(s VARCHAR)
+
+statement ok
+INSERT INTO guard_expr SELECT CASE WHEN i % 13 = 0 THEN NULL ELSE 'v' || i END FROM range(5000) t(i)
+
+statement ok
+CREATE INDEX guard_expr_idx ON guard_expr(lower(s))
+
+query I
+SELECT count(*) FROM guard_expr WHERE lower(s) IS NOT DISTINCT FROM NULL
+----
+385
+
+query I
+SELECT count(*) FROM tbl WHERE i IS NOT DISTINCT FROM 4 AND i > 5
+----
+0
+
+query I
+SELECT count(*) FROM tbl WHERE i IS NOT DISTINCT FROM 4 AND i >= 4000
+----
+0
+
+query I
+SELECT count(*) FROM tbl WHERE i < (SELECT 40) AND i < (SELECT 10)
+----
+10
+
+statement ok
+CREATE TABLE guard_join AS SELECT i AS k FROM range(5000) t(i)
+
+query I
+SELECT count(*) FROM tbl JOIN guard_join ON tbl.i = guard_join.k
+----
+5000

@@ -21,8 +21,10 @@
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/execution/index/index_lock.hpp"
@@ -37,10 +39,19 @@ struct ARTIndexScanState : public IndexScanState {
 	//! A single predicate for point lookups, and two predicates for range scans.
 	Value values[2];
 	//! The expressions over the scan predicates.
-	ExpressionType expressions[2];
+	ExpressionType expressions[2] = {ExpressionType::INVALID, ExpressionType::INVALID};
 	bool checked = false;
 	//! All scanned row IDs.
 	set<row_t> row_ids;
+
+	bool TrySetPredicate(const idx_t idx, const Value &value, const ExpressionType expression_type) {
+		if (value.IsNull() || !values[idx].IsNull()) {
+			return false;
+		}
+		values[idx] = value;
+		expressions[idx] = expression_type;
+		return true;
+	}
 };
 
 //===--------------------------------------------------------------------===//
@@ -155,30 +166,85 @@ ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type
 // Initialize Scans
 //===--------------------------------------------------------------------===//
 
-static unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Value &value,
-                                                                const ExpressionType expression_type) {
-	auto result = make_uniq<ARTIndexScanState>();
-	result->values[0] = value;
-	result->expressions[0] = expression_type;
-	return std::move(result);
-}
+static bool TryMatchPredicates(ComparisonExpressionMatcher &matcher, const Expression &expr,
+                               const Expression &filter_expr, ARTIndexScanState &state) {
+	if (ExpressionFilter::IsRootOptionalExpression(filter_expr)) {
+		return true;
+	}
 
-static unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Value &low_value,
-                                                              const ExpressionType low_expression_type,
-                                                              const Value &high_value,
-                                                              const ExpressionType high_expression_type) {
-	auto result = make_uniq<ARTIndexScanState>();
-	result->values[0] = low_value;
-	result->expressions[0] = low_expression_type;
-	result->values[1] = high_value;
-	result->expressions[1] = high_expression_type;
-	return std::move(result);
+	if (filter_expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+		for (const auto &child : filter_expr.Cast<BoundConjunctionExpression>().GetChildren()) {
+			if (!TryMatchPredicates(matcher, expr, *child, state)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	if (filter_expr.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
+		auto &between = filter_expr.Cast<BoundFunctionExpression>();
+		auto &input = BoundBetweenExpression::Input(between);
+		if (!input.Equals(expr)) {
+			// The expression does not match the index expression.
+			return false;
+		}
+		auto &lower_bound = BoundBetweenExpression::LowerBound(between);
+		auto &upper_bound = BoundBetweenExpression::UpperBound(between);
+
+		if (lower_bound.GetExpressionType() != ExpressionType::VALUE_CONSTANT ||
+		    upper_bound.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+			// Not a constant expression.
+			return false;
+		}
+
+		auto lower_inclusive = BoundBetweenExpression::LowerInclusive(between);
+		auto upper_inclusive = BoundBetweenExpression::UpperInclusive(between);
+		return state.TrySetPredicate(0, lower_bound.Cast<BoundConstantExpression>().GetValue(),
+		                             lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO
+		                                             : ExpressionType::COMPARE_GREATERTHAN) &&
+		       state.TrySetPredicate(1, (upper_bound.Cast<BoundConstantExpression>()).GetValue(),
+		                             upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO
+		                                             : ExpressionType::COMPARE_LESSTHAN);
+	}
+
+	// This is a range or equality comparison with a constant value, so we can use the index.
+	// 		bindings[0] = the expression
+	// 		bindings[1] = the index expression
+	// 		bindings[2] = the constant
+	vector<reference<Expression>> bindings;
+	if (!matcher.Match(const_cast<Expression &>(filter_expr), bindings)) { // NOLINT: Match does not alter the expr.
+		return false;
+	}
+	auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
+	auto constant_value = bindings[2].get().Cast<BoundConstantExpression>().GetValue();
+	auto comparison_type = comparison.GetExpressionType();
+
+	auto &left = BoundComparisonExpression::Left(comparison);
+	if (left.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		// The expression is on the right side, we flip the comparison expression.
+		comparison_type = FlipComparisonExpression(comparison_type);
+	}
+
+	switch (comparison_type) {
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		// Table filters discard NULL and false alike, so IS NOT DISTINCT FROM a
+		// non-NULL constant selects the same rows as equality. NULL is not indexed.
+	case ExpressionType::COMPARE_EQUAL:
+		return state.TrySetPredicate(0, constant_value, ExpressionType::COMPARE_EQUAL);
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+	case ExpressionType::COMPARE_GREATERTHAN:
+		// This is a lower bound.
+		return state.TrySetPredicate(0, constant_value, comparison_type);
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_LESSTHAN:
+		// This is an upper bound.
+		return state.TrySetPredicate(1, constant_value, comparison_type);
+	default:
+		return false;
+	}
 }
 
 unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const Expression &filter_expr) const {
-	Value low_value, high_value, equal_value;
-	ExpressionType low_comparison_type = ExpressionType::INVALID, high_comparison_type = ExpressionType::INVALID;
-
 	// Try to find a matching index for any of the filter expressions.
 	ComparisonExpressionMatcher matcher;
 
@@ -190,92 +256,20 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 	matcher.matchers.push_back(make_uniq<ConstantExpressionMatcher>());
 	matcher.policy = SetMatcher::Policy::UNORDERED;
 
-	vector<reference<Expression>> bindings;
-	auto filter_match =
-	    matcher.Match(const_cast<Expression &>(filter_expr), bindings); // NOLINT: Match does not alter the expr.
-	if (filter_match) {
-		// This is a range or equality comparison with a constant value, so we can use the index.
-		// 		bindings[0] = the expression
-		// 		bindings[1] = the index expression
-		// 		bindings[2] = the constant
-		auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
-		auto constant_value = bindings[2].get().Cast<BoundConstantExpression>().GetValue();
-		auto comparison_type = comparison.GetExpressionType();
-
-		auto &left = BoundComparisonExpression::Left(comparison);
-		if (left.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-			// The expression is on the right side, we flip the comparison expression.
-			comparison_type = FlipComparisonExpression(comparison_type);
-		}
-
-		if (comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-			// Table filters discard NULL and false alike, so IS NOT DISTINCT FROM a
-			// non-NULL constant selects the same rows as equality. NULL is not indexed.
-			if (constant_value.IsNull()) {
-				return nullptr;
-			}
-			equal_value = constant_value;
-		} else if (comparison_type == ExpressionType::COMPARE_EQUAL) {
-			// An equality value overrides any other bounds.
-			equal_value = constant_value;
-		} else if (comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
-		           comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
-			// This is a lower bound.
-			low_value = constant_value;
-			low_comparison_type = comparison_type;
-		} else {
-			// This is an upper bound.
-			high_value = constant_value;
-			high_comparison_type = comparison_type;
-		}
-	} else if (filter_expr.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
-		auto &between = filter_expr.Cast<BoundFunctionExpression>();
-		auto &input = BoundBetweenExpression::Input(between);
-		if (!input.Equals(expr)) {
-			// The expression does not match the index expression.
-			return nullptr;
-		}
-		auto &lower_bound = BoundBetweenExpression::LowerBound(between);
-		auto &upper_bound = BoundBetweenExpression::UpperBound(between);
-
-		if (lower_bound.GetExpressionType() != ExpressionType::VALUE_CONSTANT ||
-		    upper_bound.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
-			// Not a constant expression.
-			return nullptr;
-		}
-
-		auto lower_inclusive = BoundBetweenExpression::LowerInclusive(between);
-		auto upper_inclusive = BoundBetweenExpression::UpperInclusive(between);
-		low_value = lower_bound.Cast<BoundConstantExpression>().GetValue();
-		low_comparison_type =
-		    lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO : ExpressionType::COMPARE_GREATERTHAN;
-		high_value = (upper_bound.Cast<BoundConstantExpression>()).GetValue();
-		high_comparison_type =
-		    upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
-	}
-	// FIXME: add another if...else... to match rewritten BETWEEN,
-	// i.e., WHERE i BETWEEN 50 AND 1502 is rewritten to CONJUNCTION_AND.
-
-	// We cannot use an index scan.
-	if (equal_value.IsNull() && low_value.IsNull() && high_value.IsNull()) {
+	auto state = make_uniq<ARTIndexScanState>();
+	if (!TryMatchPredicates(matcher, expr, filter_expr, *state) ||
+	    (state->values[0].IsNull() && state->values[1].IsNull())) {
+		// We cannot use an index scan.
 		return nullptr;
 	}
 
-	// Initialize the index scan state and return it.
-	if (!equal_value.IsNull()) {
-		// Equality predicate.
-		return InitializeScanSinglePredicate(equal_value, ExpressionType::COMPARE_EQUAL);
+	if (state->values[0].IsNull()) {
+		std::swap(state->values[0], state->values[1]);
+		std::swap(state->expressions[0], state->expressions[1]);
+	} else if (!state->values[1].IsNull() && state->expressions[0] == ExpressionType::COMPARE_EQUAL) {
+		return nullptr;
 	}
-	if (!low_value.IsNull() && !high_value.IsNull()) {
-		// Two-sided predicate.
-		return InitializeScanTwoPredicates(low_value, low_comparison_type, high_value, high_comparison_type);
-	}
-	if (!low_value.IsNull()) {
-		// Less-than predicate.
-		return InitializeScanSinglePredicate(low_value, low_comparison_type);
-	}
-	// Greater-than predicate.
-	return InitializeScanSinglePredicate(high_value, high_comparison_type);
+	return std::move(state);
 }
 
 unique_ptr<IndexScanState> ART::InitializeFullScan() {
