@@ -6,7 +6,9 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
+#include "duckdb/parser/parsed_data/set_tags_info.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/main/query_result.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
@@ -40,6 +42,7 @@ void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 	this->comment = info.comment;
 	this->tags = info.tags;
 	this->column_comments = info.column_comments_map;
+	this->column_tags = info.column_tags_map;
 }
 
 ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateViewInfo &info)
@@ -64,6 +67,7 @@ unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 	result->comment = comment;
 	result->tags = tags;
 	result->column_comments_map = column_comments;
+	result->column_tags_map = column_tags;
 	return std::move(result);
 }
 
@@ -101,6 +105,15 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 		return copied_view;
 	}
 
+	if (info.type == AlterType::SET_TAGS && info.Cast<SetTagsInfo>().IsColumn()) {
+		auto &set_tags_info = info.Cast<SetTagsInfo>();
+		auto copied_view = Copy(context);
+		auto resolved_column_name = ResolveTagColumnName(set_tags_info.column_name);
+		auto &copied_view_entry = copied_view->Cast<ViewCatalogEntry>();
+		set_tags_info.Apply(copied_view_entry.column_tags[resolved_column_name]);
+		return copied_view;
+	}
+
 	// PostgreSQL allows `ALTER TABLE ... RENAME TO` on views, so we convert it
 	// to the equivalent ALTER VIEW operation to support tools like dbt-postgres.
 	if (info.type == AlterType::ALTER_TABLE) {
@@ -129,6 +142,32 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 	}
 }
 
+vector<Identifier> ViewCatalogEntry::GetPublicColumnNames() const {
+	auto view_columns = GetColumnInfo();
+	if (!view_columns) {
+		return {};
+	}
+	auto result = view_columns->names;
+	for (idx_t column_index = 0; column_index < aliases.size(); column_index++) {
+		result[column_index] = aliases[column_index];
+	}
+	QueryResult::DeduplicateColumns(result);
+	return result;
+}
+
+Identifier ViewCatalogEntry::ResolveTagColumnName(const Identifier &column_name) const {
+	auto public_names = GetPublicColumnNames();
+	if (public_names.empty()) {
+		return column_name;
+	}
+	for (auto &public_name : public_names) {
+		if (column_name == public_name) {
+			return public_name;
+		}
+	}
+	throw BinderException("View %s does not have a column with name %s", name, column_name);
+}
+
 shared_ptr<ViewColumnInfo> ViewCatalogEntry::GetColumnInfo() const {
 	return view_columns.atomic_load();
 }
@@ -148,6 +187,21 @@ Value ViewCatalogEntry::GetColumnComment(idx_t column_index) {
 		return entry->second;
 	}
 	return Value();
+}
+
+Value ViewCatalogEntry::GetColumnTags(idx_t column_index) {
+	auto public_names = GetPublicColumnNames();
+	if (public_names.empty()) {
+		throw InternalException("ViewCatalogEntry::GetColumnTags called - but view has not been bound yet");
+	}
+	if (column_index >= public_names.size()) {
+		return Value::MAP(InsertionOrderPreservingMap<string>());
+	}
+	auto entry = column_tags.find(public_names[column_index]);
+	if (entry == column_tags.end()) {
+		return Value::MAP(InsertionOrderPreservingMap<string>());
+	}
+	return Value::MAP(entry->second);
 }
 
 void ViewCatalogEntry::BindView(ClientContext &context, BindViewAction action) {

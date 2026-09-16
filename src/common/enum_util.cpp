@@ -201,6 +201,7 @@
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
+#include "duckdb/parser/parsed_data/set_tags_info.hpp"
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/peg/keyword_helper.hpp"
@@ -618,19 +619,20 @@ const StringUtil::EnumStringLiteral *GetAlterTypeValues() {
 		{ static_cast<uint32_t>(AlterType::ALTER_TABLE_FUNCTION), "ALTER_TABLE_FUNCTION" },
 		{ static_cast<uint32_t>(AlterType::SET_COMMENT), "SET_COMMENT" },
 		{ static_cast<uint32_t>(AlterType::SET_COLUMN_COMMENT), "SET_COLUMN_COMMENT" },
-		{ static_cast<uint32_t>(AlterType::ALTER_DATABASE), "ALTER_DATABASE" }
+		{ static_cast<uint32_t>(AlterType::ALTER_DATABASE), "ALTER_DATABASE" },
+		{ static_cast<uint32_t>(AlterType::SET_TAGS), "SET_TAGS" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<AlterType>(AlterType value) {
-	return StringUtil::EnumToString(GetAlterTypeValues(), 10, "AlterType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetAlterTypeValues(), 11, "AlterType", static_cast<uint32_t>(value));
 }
 
 template<>
 AlterType EnumUtil::FromString<AlterType>(const char *value) {
-	return static_cast<AlterType>(StringUtil::StringToEnum(GetAlterTypeValues(), 10, "AlterType", value));
+	return static_cast<AlterType>(StringUtil::StringToEnum(GetAlterTypeValues(), 11, "AlterType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAlterViewTypeValues() {
@@ -6382,6 +6384,24 @@ const char* EnumUtil::ToChars<TableReferenceType>(TableReferenceType value) {
 template<>
 TableReferenceType EnumUtil::FromString<TableReferenceType>(const char *value) {
 	return static_cast<TableReferenceType>(StringUtil::StringToEnum(GetTableReferenceTypeValues(), 13, "TableReferenceType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetTagActionValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TagAction::SET), "SET" },
+		{ static_cast<uint32_t>(TagAction::UNSET), "UNSET" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TagAction>(TagAction value) {
+	return StringUtil::EnumToString(GetTagActionValues(), 2, "TagAction", static_cast<uint32_t>(value));
+}
+
+template<>
+TagAction EnumUtil::FromString<TagAction>(const char *value) {
+	return static_cast<TagAction>(StringUtil::StringToEnum(GetTagActionValues(), 2, "TagAction", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTaskExecutionModeValues() {

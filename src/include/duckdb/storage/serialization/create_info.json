@@ -279,6 +279,13 @@
         "type": "ViewSecurityType",
         "default": "ViewSecurityType::REGULAR_VIEW",
         "version": "v2.0.0"
+      },
+      {
+        "id": 208,
+        "name": "column_tags_map",
+        "type": "identifier_map_t<InsertionOrderPreservingMap<string>>",
+        "default": "identifier_map_t<InsertionOrderPreservingMap<string>>()",
+        "version": "v2.0.0"
       }
     ],
     "constructor": [

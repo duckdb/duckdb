@@ -2899,6 +2899,29 @@ static const TransformFrameOps SET_ASSIGNMENT_OPS = {"SetAssignment",
 static const TransformFrameOps VARIABLE_LIST_OPS = {"VariableList",
                                                     &PEGTransformerFactory::InitializeVariableListTrampoline,
                                                     &PEGTransformerFactory::FinalizeVariableListTrampoline};
+static const TransformFrameOps TAG_STATEMENT_OPS = {"TagStatement",
+                                                    &PEGTransformerFactory::InitializeTagStatementTrampoline,
+                                                    &PEGTransformerFactory::FinalizeTagStatementTrampoline};
+static const TransformFrameOps TAG_ON_TYPE_OPS = {"TagOnType", &PEGTransformerFactory::InitializeTagOnTypeTrampoline,
+                                                  &PEGTransformerFactory::FinalizeTagOnTypeTrampoline};
+static const TransformFrameOps TAG_ACTION_INFO_OPS = {"TagActionInfo",
+                                                      &PEGTransformerFactory::InitializeTagActionInfoTrampoline,
+                                                      &PEGTransformerFactory::FinalizeTagActionInfoTrampoline};
+static const TransformFrameOps TAG_SET_ACTION_OPS = {"TagSetAction",
+                                                     &PEGTransformerFactory::InitializeTagSetActionTrampoline,
+                                                     &PEGTransformerFactory::FinalizeTagSetActionTrampoline};
+static const TransformFrameOps TAG_UNSET_ACTION_OPS = {"TagUnsetAction",
+                                                       &PEGTransformerFactory::InitializeTagUnsetActionTrampoline,
+                                                       &PEGTransformerFactory::FinalizeTagUnsetActionTrampoline};
+static const TransformFrameOps TAG_ASSIGNMENT_LIST_OPS = {"TagAssignmentList",
+                                                          &PEGTransformerFactory::InitializeTagAssignmentListTrampoline,
+                                                          &PEGTransformerFactory::FinalizeTagAssignmentListTrampoline};
+static const TransformFrameOps TAG_NAME_LIST_OPS = {"TagNameList",
+                                                    &PEGTransformerFactory::InitializeTagNameListTrampoline,
+                                                    &PEGTransformerFactory::FinalizeTagNameListTrampoline};
+static const TransformFrameOps TAG_ASSIGNMENT_OPS = {"TagAssignment",
+                                                     &PEGTransformerFactory::InitializeTagAssignmentTrampoline,
+                                                     &PEGTransformerFactory::FinalizeTagAssignmentTrampoline};
 static const TransformFrameOps TRANSACTION_STATEMENT_OPS = {
     "TransactionStatement", &PEGTransformerFactory::InitializeTransactionStatementTrampoline,
     &PEGTransformerFactory::FinalizeTransactionStatementTrampoline};
@@ -4012,6 +4035,14 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"GlobalScope", &GLOBAL_SCOPE_OPS},
 	    {"SetAssignment", &SET_ASSIGNMENT_OPS},
 	    {"VariableList", &VARIABLE_LIST_OPS},
+	    {"TagStatement", &TAG_STATEMENT_OPS},
+	    {"TagOnType", &TAG_ON_TYPE_OPS},
+	    {"TagActionInfo", &TAG_ACTION_INFO_OPS},
+	    {"TagSetAction", &TAG_SET_ACTION_OPS},
+	    {"TagUnsetAction", &TAG_UNSET_ACTION_OPS},
+	    {"TagAssignmentList", &TAG_ASSIGNMENT_LIST_OPS},
+	    {"TagNameList", &TAG_NAME_LIST_OPS},
+	    {"TagAssignment", &TAG_ASSIGNMENT_OPS},
 	    {"TransactionStatement", &TRANSACTION_STATEMENT_OPS},
 	    {"BeginTransaction", &BEGIN_TRANSACTION_OPS},
 	    {"RollbackTransaction", &ROLLBACK_TRANSACTION_OPS},
@@ -24121,6 +24152,153 @@ PEGTransformerFactory::FinalizeVariableListTrampoline(PEGTransformer &transforme
 	}
 	auto result = TransformVariableList(transformer, std::move(expression));
 	return make_uniq<TypedTransformResult<vector<unique_ptr<ParsedExpression>>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeTagStatementTrampoline(PEGTransformer &transformer,
+                                                             GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(3);
+	process.PushChild({transformer.GetRule("TagActionInfo"), list_pr.GetChild(4)}, 2);
+	process.PushChild({transformer.GetRule("DottedIdentifier"), list_pr.GetChild(3)}, 1);
+	process.PushChild({transformer.GetRule("TagOnType"), list_pr.GetChild(2)}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeTagStatementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+	auto tag_on_type = process.TakeResult<CatalogType>(0);
+	auto dotted_identifier = process.TakeResult<vector<string>>(1);
+	auto tag_action_info = process.TakeResult<TagActionInfo>(2);
+	auto result = TransformTagStatement(transformer, tag_on_type, dotted_identifier, std::move(tag_action_info));
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeTagOnTypeTrampoline(PEGTransformer &transformer,
+                                                          GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.name);
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeTagOnTypeTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<CatalogType>(0);
+	return make_uniq<TypedTransformResult<CatalogType>>(result);
+}
+
+void PEGTransformerFactory::InitializeTagActionInfoTrampoline(PEGTransformer &transformer,
+                                                              GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.name);
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeTagActionInfoTrampoline(PEGTransformer &transformer,
+                                                       GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<TagActionInfo>(0);
+	return make_uniq<TypedTransformResult<TagActionInfo>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeTagSetActionTrampoline(PEGTransformer &transformer,
+                                                             GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("TagAssignmentList"), list_pr.GetChild(1)}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeTagSetActionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+	auto tag_assignment_list = process.TakeResult<vector<pair<string, string>>>(0);
+	auto result = TransformTagSetAction(transformer, std::move(tag_assignment_list));
+	return make_uniq<TypedTransformResult<TagActionInfo>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeTagUnsetActionTrampoline(PEGTransformer &transformer,
+                                                               GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("TagNameList"), list_pr.GetChild(1)}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeTagUnsetActionTrampoline(PEGTransformer &transformer,
+                                                        GeneratedTransformProcess &process) {
+	auto tag_name_list = process.TakeResult<vector<string>>(0);
+	auto result = TransformTagUnsetAction(transformer, std::move(tag_name_list));
+	return make_uniq<TypedTransformResult<TagActionInfo>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeTagAssignmentListTrampoline(PEGTransformer &transformer,
+                                                                  GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto list_items = ExtractParseResultsFromList(list_pr.GetChild(1));
+	auto dynamic_child_count = list_items.size();
+	process.ReserveChildSlots(1 + dynamic_child_count - 1);
+	for (idx_t i = list_items.size(); i > 0; i--) {
+		auto child_idx = i - 1;
+		process.PushChild({transformer.GetRule("TagAssignment"), list_items[child_idx].get()}, 0 + child_idx);
+	}
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeTagAssignmentListTrampoline(PEGTransformer &transformer,
+                                                           GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(1));
+	auto dynamic_child_count = dynamic_list_items.size();
+	vector<pair<string, string>> tag_assignment;
+	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
+		tag_assignment.push_back(process.TakeResult<pair<string, string>>(i));
+	}
+	auto result = TransformTagAssignmentList(transformer, std::move(tag_assignment));
+	return make_uniq<TypedTransformResult<vector<pair<string, string>>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeTagNameListTrampoline(PEGTransformer &transformer,
+                                                            GeneratedTransformProcess &process) {
+	process.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeTagNameListTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	vector<string> string_literal;
+	auto string_literal_items = ExtractParseResultsFromList(list_pr.GetChild(1));
+	for (auto &string_literal_item : string_literal_items) {
+		auto string_literal_value = TransformStringLiteral(transformer, string_literal_item.get());
+		string_literal.push_back(string_literal_value);
+	}
+	auto result = TransformTagNameList(transformer, string_literal);
+	return make_uniq<TypedTransformResult<vector<string>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeTagAssignmentTrampoline(PEGTransformer &transformer,
+                                                              GeneratedTransformProcess &process) {
+	process.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeTagAssignmentTrampoline(PEGTransformer &transformer,
+                                                       GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(0));
+	auto string_literal_1 = TransformStringLiteral(transformer, list_pr.GetChild(2));
+	auto result = TransformTagAssignment(transformer, string_literal, string_literal_1);
+	return make_uniq<TypedTransformResult<pair<string, string>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeTransactionStatementTrampoline(PEGTransformer &transformer,
