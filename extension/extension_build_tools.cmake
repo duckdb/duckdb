@@ -1,3 +1,8 @@
+# Kept so that extensions calling it still configure. It used to add compile definitions and include
+# directories derived from the extension list to everything built after it; nothing needs them any more.
+function(add_extension_definitions)
+    message(DEPRECATION "add_extension_definitions() no longer does anything and can be removed")
+endfunction()
 
 function(add_extension_dependencies LIBRARY)
     foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
