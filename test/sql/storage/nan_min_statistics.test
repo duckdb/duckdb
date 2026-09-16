@@ -45,3 +45,35 @@ SELECT MIN(x) = -42, isnan(MAX(x)) FROM t;
 1	1
 
 endloop
+
+# This database was written by DuckDB v1.5.5 and contains only NULL floating-point values
+unzip data/storage/nan_min_statistics_v1_5_5.db.gz {TEST_DIR}/nan_min_statistics_v1_5_5.db
+
+statement ok
+ATTACH '{TEST_DIR}/nan_min_statistics_v1_5_5.db' AS legacy_nan_stats;
+
+statement ok
+INSERT INTO legacy_nan_stats.legacy_nan_stats VALUES ('nan'::FLOAT, 'nan'::DOUBLE);
+
+query IIII
+SELECT isnan(((stats(f)).min)::FLOAT), isnan(((stats(f)).max)::FLOAT),
+       isnan(((stats(d)).min)::DOUBLE), isnan(((stats(d)).max)::DOUBLE)
+FROM legacy_nan_stats.legacy_nan_stats LIMIT 1;
+----
+1	1	1	1
+
+statement ok
+CHECKPOINT legacy_nan_stats;
+
+statement ok
+DETACH legacy_nan_stats;
+
+statement ok
+ATTACH '{TEST_DIR}/nan_min_statistics_v1_5_5.db' AS legacy_nan_stats (READ_ONLY);
+
+query IIII
+SELECT isnan(((stats(f)).min)::FLOAT), isnan(((stats(f)).max)::FLOAT),
+       isnan(((stats(d)).min)::DOUBLE), isnan(((stats(d)).max)::DOUBLE)
+FROM legacy_nan_stats.legacy_nan_stats LIMIT 1;
+----
+1	1	1	1
