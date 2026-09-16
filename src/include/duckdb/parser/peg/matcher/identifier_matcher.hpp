@@ -169,7 +169,7 @@ private:
 
 	SuggestionState suggestion_type;
 	const GrammarLiteralTable &literal_table;
-	const uint32_t identifier_mask;
+	const uint8_t identifier_mask;
 };
 
 class ReservedIdentifierMatcher : public IdentifierMatcher {

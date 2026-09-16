@@ -36,7 +36,8 @@ enum class KeywordCategory : uint8_t {
 	KEYWORD_UNRESERVED,
 	KEYWORD_TYPE_FUNC,
 	KEYWORD_COL_NAME,
-	KEYWORD_NONE
+	KEYWORD_NONE,
+	KEYWORD_TYPE_NAME
 };
 
 struct ParserKeyword {

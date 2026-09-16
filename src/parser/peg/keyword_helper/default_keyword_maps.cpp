@@ -9,7 +9,7 @@ static constexpr uint8_t KEYWORD_TYPE_FUNC = uint8_t(1) << 2;
 static constexpr uint8_t KEYWORD_COL_NAME = uint8_t(1) << 3;
 static constexpr uint8_t KEYWORD_TYPE_NAME = uint8_t(1) << 4;
 
-LiteralInfo DefaultKeywordMaps::LookupKeyword(const string &text, uint32_t literal_id) const {
+LiteralInfo DefaultKeywordMaps::LookupKeyword(const string &text, uint16_t literal_id) const {
 	uint8_t flags = 0;
 	if (unreserved_keyword_map.count(text)) {
 		flags |= KEYWORD_UNRESERVED;
@@ -29,7 +29,7 @@ LiteralInfo DefaultKeywordMaps::LookupKeyword(const string &text, uint32_t liter
 	return LiteralInfo(literal_id, flags);
 }
 
-uint32_t DefaultKeywordMaps::GetIdentifierMask(SuggestionState type) {
+uint8_t DefaultKeywordMaps::GetIdentifierMask(SuggestionState type) {
 	switch (type) {
 	case SuggestionState::SUGGEST_TYPE_NAME:
 		return KEYWORD_UNRESERVED | KEYWORD_TYPE_NAME;
@@ -42,19 +42,31 @@ uint32_t DefaultKeywordMaps::GetIdentifierMask(SuggestionState type) {
 }
 
 KeywordCategory DefaultKeywordMaps::GetKeywordCategory(LiteralInfo info) {
+	auto categories = GetKeywordCategories(info);
+	if (categories.empty()) {
+		return KeywordCategory::KEYWORD_NONE;
+	}
+	return categories[0];
+}
+
+vector<KeywordCategory> DefaultKeywordMaps::GetKeywordCategories(LiteralInfo info) {
+	vector<KeywordCategory> result;
 	if (info.HasAnyFlags(KEYWORD_RESERVED)) {
-		return KeywordCategory::KEYWORD_RESERVED;
+		result.push_back(KeywordCategory::KEYWORD_RESERVED);
 	}
 	if (info.HasAnyFlags(KEYWORD_UNRESERVED)) {
-		return KeywordCategory::KEYWORD_UNRESERVED;
+		result.push_back(KeywordCategory::KEYWORD_UNRESERVED);
 	}
 	if (info.HasAnyFlags(KEYWORD_TYPE_FUNC)) {
-		return KeywordCategory::KEYWORD_TYPE_FUNC;
+		result.push_back(KeywordCategory::KEYWORD_TYPE_FUNC);
 	}
 	if (info.HasAnyFlags(KEYWORD_COL_NAME)) {
-		return KeywordCategory::KEYWORD_COL_NAME;
+		result.push_back(KeywordCategory::KEYWORD_COL_NAME);
 	}
-	return KeywordCategory::KEYWORD_NONE;
+	if (info.HasAnyFlags(KEYWORD_TYPE_NAME)) {
+		result.push_back(KeywordCategory::KEYWORD_TYPE_NAME);
+	}
+	return result;
 }
 
 case_insensitive_map_t<LiteralInfo> DefaultKeywordMaps::ToLiteralMap() const {

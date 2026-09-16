@@ -4,21 +4,30 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/peg/dialect_extension.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/parsed_grammar.hpp"
 #include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 
 using namespace duckdb;
 
 class EmptyKeywordHelper final : public PEGKeywordHelper {
 public:
-	bool KeywordCategoryType(const string &, PEGKeywordCategory) const override {
-		return false;
+	EmptyKeywordHelper() : literal_table(ParsedGrammar(), {}) {
 	}
-	bool IsKeyword(const string &) const override {
-		return false;
+	const GrammarLiteralTable &GetLiteralTable() const override {
+		return literal_table;
+	}
+	uint8_t GetIdentifierMask(SuggestionState) const override {
+		return 0;
+	}
+	KeywordCategory GetKeywordCategory(const string &) const override {
+		return KeywordCategory::KEYWORD_NONE;
 	}
 	vector<ParserKeyword> KeywordList() const override {
 		return {};
 	}
+
+private:
+	GrammarLiteralTable literal_table;
 };
 
 class HookTokenizer final : public Tokenizer {

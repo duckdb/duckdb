@@ -217,52 +217,80 @@ TEST_CASE("Literal dispatch leaves mixed and unregistered alternatives unchanged
 	}
 }
 
-TEST_CASE("Literal IDs and category flags are independent", "[api][grammar_extension]") {
+TEST_CASE("Literal IDs and opaque flags are independent", "[api][grammar_extension]") {
 	REQUIRE(sizeof(LiteralInfo) == sizeof(uint32_t));
 	REQUIRE(sizeof(LiteralInfo().LiteralId()) == sizeof(uint16_t));
 	LiteralInfo missing;
 	REQUIRE(missing.LiteralId() == 0);
 	REQUIRE_FALSE(missing.IsKeyword());
-	LiteralInfo literal(LiteralInfo::MAX_LITERAL_ID);
-	LiteralInfo original(literal);
-	REQUIRE(literal.LiteralId() == 65535);
-	REQUIRE_FALSE(literal.IsKeyword());
-	for (auto category : {PEGKeywordCategory::KEYWORD_UNRESERVED, PEGKeywordCategory::KEYWORD_RESERVED,
-	                      PEGKeywordCategory::KEYWORD_TYPE_FUNC, PEGKeywordCategory::KEYWORD_COL_NAME,
-	                      PEGKeywordCategory::KEYWORD_TYPE_NAME}) {
-		REQUIRE_FALSE(literal.HasCategory(category));
-		literal.AddCategory(category);
-		REQUIRE(literal.HasCategory(category));
+	REQUIRE_FALSE(missing.HasAnyFlags(0xFF));
+	LiteralInfo original(LiteralInfo::MAX_LITERAL_ID);
+	REQUIRE(original.LiteralId() == 65535);
+	REQUIRE_FALSE(original.IsKeyword());
+	for (idx_t bit = 0; bit < 8; bit++) {
+		auto flag = static_cast<uint8_t>(1U << bit);
+		LiteralInfo literal(LiteralInfo::MAX_LITERAL_ID, flag);
+		REQUIRE(literal.HasAnyFlags(flag));
+		REQUIRE_FALSE(literal.HasAnyFlags(static_cast<uint8_t>(~flag)));
+		REQUIRE_FALSE(literal.HasAnyFlags(0));
 		REQUIRE(literal.IsKeyword());
 		REQUIRE(literal.LiteralId() == original.LiteralId());
+		REQUIRE_FALSE(literal == original);
+		LiteralInfo copy(literal);
+		REQUIRE(copy == literal);
+		auto unassigned = literal.WithLiteralId(0);
+		REQUIRE(unassigned.LiteralId() == 0);
+		REQUIRE(unassigned.IsKeyword());
+		REQUIRE(unassigned.HasAnyFlags(flag));
+		REQUIRE(unassigned.WithLiteralId(LiteralInfo::MAX_LITERAL_ID) == literal);
 	}
-	REQUIRE_FALSE(literal == original);
-	LiteralInfo copy(literal);
-	REQUIRE(copy == literal);
-	copy.AddCategory(PEGKeywordCategory::KEYWORD_NONE);
-	copy.AddCategory(static_cast<PEGKeywordCategory>(255));
-	REQUIRE(copy == literal);
-	REQUIRE_FALSE(copy.HasCategory(PEGKeywordCategory::KEYWORD_NONE));
-	REQUIRE_FALSE(copy.HasCategory(static_cast<PEGKeywordCategory>(255)));
+}
+
+TEST_CASE("Default keyword categories decode independently of literal IDs", "[api][grammar_extension]") {
+	DefaultKeywordMaps maps;
+	vector<KeywordCategory> expected;
+	REQUIRE(DefaultKeywordMaps::GetKeywordCategories(LiteralInfo()).empty());
+	REQUIRE(DefaultKeywordMaps::GetKeywordCategories(LiteralInfo(LiteralInfo::MAX_LITERAL_ID)).empty());
+	vector<pair<KeywordCategory, reference<case_insensitive_set_t>>> categories {
+	    {KeywordCategory::KEYWORD_RESERVED, maps.reserved_keyword_map},
+	    {KeywordCategory::KEYWORD_UNRESERVED, maps.unreserved_keyword_map},
+	    {KeywordCategory::KEYWORD_TYPE_FUNC, maps.typefunc_keyword_map},
+	    {KeywordCategory::KEYWORD_COL_NAME, maps.colname_keyword_map},
+	    {KeywordCategory::KEYWORD_TYPE_NAME, maps.typename_keyword_map}};
+	for (auto &category : categories) {
+		category.second.get().insert("overlapping");
+		expected.push_back(category.first);
+		auto single_word = "category_" + to_string(expected.size());
+		category.second.get().insert(single_word);
+		REQUIRE(DefaultKeywordMaps::GetKeywordCategories(maps.LookupKeyword(single_word)) ==
+		        vector<KeywordCategory> {category.first});
+		for (auto id : {uint16_t(0), uint16_t(1), LiteralInfo::MAX_LITERAL_ID}) {
+			auto info = maps.LookupKeyword("OVERLAPPING", id);
+			REQUIRE(info.LiteralId() == id);
+			REQUIRE(DefaultKeywordMaps::GetKeywordCategories(info) == expected);
+		}
+	}
 }
 
 TEST_CASE("Grammar literal IDs reject overflow", "[api][grammar_extension]") {
 	auto grammar = ParsedGrammar::Parse("LiteralTest <- '('");
-	DefaultKeywordMaps categories;
+	case_insensitive_map_t<LiteralInfo> keywords;
+	const uint8_t flags = 0xC0;
 	for (idx_t i = 1; i < LiteralInfo::MAX_LITERAL_ID; i++) {
-		categories.unreserved_keyword_map.insert("literal_limit_" + to_string(i));
+		keywords.emplace("literal_limit_" + to_string(i), LiteralInfo(0, flags));
 	}
-	categories.typename_keyword_map.insert("literal_limit_1");
-	GrammarLiteralTable table(grammar, categories);
+	GrammarLiteralTable table(grammar, keywords);
 	idx_t max_id = table.Lookup("(").LiteralId();
-	for (auto &word : categories.unreserved_keyword_map) {
-		max_id = MaxValue<idx_t>(max_id, table.Lookup(word).LiteralId());
+	for (auto &entry : keywords) {
+		auto info = table.Lookup(entry.first);
+		REQUIRE(info.LiteralId() != 0);
+		REQUIRE(info.HasAnyFlags(0x40));
+		REQUIRE(info.HasAnyFlags(0x80));
+		max_id = MaxValue<idx_t>(max_id, info.LiteralId());
 	}
 	REQUIRE(max_id == LiteralInfo::MAX_LITERAL_ID);
-	REQUIRE(table.Lookup("literal_limit_1").HasCategory(PEGKeywordCategory::KEYWORD_UNRESERVED));
-	REQUIRE(table.Lookup("literal_limit_1").HasCategory(PEGKeywordCategory::KEYWORD_TYPE_NAME));
-	categories.unreserved_keyword_map.insert("one_literal_too_many");
-	REQUIRE_THROWS_WITH(GrammarLiteralTable(grammar, categories),
+	keywords.emplace("one_literal_too_many", LiteralInfo());
+	REQUIRE_THROWS_WITH(GrammarLiteralTable(grammar, keywords),
 	                    Catch::Matchers::Contains("Grammar has too many distinct literals"));
 }
 
@@ -280,20 +308,20 @@ TEST_CASE("Grammar literal IDs include category-only words and overlapping categ
 	REQUIRE(table.Lookup("(").LiteralId() != 0);
 	REQUIRE_FALSE(table.Lookup("(").IsKeyword());
 	REQUIRE(table.Lookup("category_only").LiteralId() != 0);
-	REQUIRE(table.Lookup("category_only")
-	            .HasAnyFlags(DefaultKeywordMaps::GetIdentifierMask(SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME)));
-	REQUIRE(table.Lookup("category_only")
-	            .HasAnyFlags(DefaultKeywordMaps::GetIdentifierMask(SuggestionState::SUGGEST_TYPE_NAME)));
-	REQUIRE_FALSE(table.Lookup("category_only")
-	                  .HasAnyFlags(DefaultKeywordMaps::GetIdentifierMask(SuggestionState::SUGGEST_COLUMN_NAME)));
+	vector<KeywordCategory> expected {KeywordCategory::KEYWORD_TYPE_FUNC, KeywordCategory::KEYWORD_TYPE_NAME};
+	REQUIRE(DefaultKeywordMaps::GetKeywordCategories(table.Lookup("category_only")) == expected);
+	REQUIRE(DefaultKeywordMaps::GetKeywordCategories(table.Lookup("SELECT")) ==
+	        vector<KeywordCategory> {KeywordCategory::KEYWORD_RESERVED});
+	REQUIRE(DefaultKeywordMaps::GetKeywordCategories(table.Lookup("(")).empty());
+	REQUIRE(DefaultKeywordMaps::GetKeywordCategories(table.Lookup("missing")).empty());
 	REQUIRE(table.Lookup("missing").LiteralId() == 0);
 	REQUIRE_FALSE(table.Lookup("missing").IsKeyword());
 }
 
 TEST_CASE("Grammar literal tables preserve dialect-defined flags", "[api][grammar_extension]") {
 	auto grammar = ParsedGrammar::Parse("LiteralTest <- 'SHARED' / 'shared' / 'plain'");
-	const uint32_t first_flag = uint32_t(1) << 30;
-	const uint32_t second_flag = uint32_t(1) << 31;
+	const uint8_t first_flag = uint8_t(1) << 6;
+	const uint8_t second_flag = uint8_t(1) << 7;
 	case_insensitive_map_t<LiteralInfo> keywords;
 	keywords.emplace("shared", LiteralInfo(0, first_flag | second_flag));
 	keywords.emplace("category_only", LiteralInfo(0, second_flag));
@@ -362,7 +390,7 @@ public:
 	const GrammarLiteralTable &GetLiteralTable() const override {
 		return literal_table;
 	}
-	uint32_t GetIdentifierMask(SuggestionState type) const override {
+	uint8_t GetIdentifierMask(SuggestionState type) const override {
 		return DefaultKeywordMaps::GetIdentifierMask(type);
 	}
 	KeywordCategory GetKeywordCategory(const string &text) const override {

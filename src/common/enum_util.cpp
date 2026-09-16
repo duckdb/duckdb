@@ -3229,19 +3229,20 @@ const StringUtil::EnumStringLiteral *GetKeywordCategoryValues() {
 		{ static_cast<uint32_t>(KeywordCategory::KEYWORD_UNRESERVED), "KEYWORD_UNRESERVED" },
 		{ static_cast<uint32_t>(KeywordCategory::KEYWORD_TYPE_FUNC), "KEYWORD_TYPE_FUNC" },
 		{ static_cast<uint32_t>(KeywordCategory::KEYWORD_COL_NAME), "KEYWORD_COL_NAME" },
-		{ static_cast<uint32_t>(KeywordCategory::KEYWORD_NONE), "KEYWORD_NONE" }
+		{ static_cast<uint32_t>(KeywordCategory::KEYWORD_NONE), "KEYWORD_NONE" },
+		{ static_cast<uint32_t>(KeywordCategory::KEYWORD_TYPE_NAME), "KEYWORD_TYPE_NAME" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<KeywordCategory>(KeywordCategory value) {
-	return StringUtil::EnumToString(GetKeywordCategoryValues(), 5, "KeywordCategory", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetKeywordCategoryValues(), 6, "KeywordCategory", static_cast<uint32_t>(value));
 }
 
 template<>
 KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value) {
-	return static_cast<KeywordCategory>(StringUtil::StringToEnum(GetKeywordCategoryValues(), 5, "KeywordCategory", value));
+	return static_cast<KeywordCategory>(StringUtil::StringToEnum(GetKeywordCategoryValues(), 6, "KeywordCategory", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLambdaSyntaxValues() {
