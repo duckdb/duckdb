@@ -8,6 +8,36 @@ namespace duckdb {
 
 static const TransformFrameOps STATEMENT_OPS = {"Statement", &PEGTransformerFactory::InitializeStatementTrampoline,
                                                 &PEGTransformerFactory::FinalizeStatementTrampoline};
+static const TransformFrameOps PRAGMA_NAME_OPS = {"PragmaName",
+                                                  &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+                                                  &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
+static const TransformFrameOps TYPE_NAME_OPS = {"TypeName",
+                                                &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+                                                &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
+static const TransformFrameOps PLAIN_IDENTIFIER_OPS = {"PlainIdentifier",
+                                                       &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+                                                       &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
+static const TransformFrameOps QUOTED_IDENTIFIER_OPS = {"QuotedIdentifier",
+                                                        &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+                                                        &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
+static const TransformFrameOps RESERVED_KEYWORD_OPS = {"ReservedKeyword",
+                                                       &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+                                                       &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
+static const TransformFrameOps UNRESERVED_KEYWORD_OPS = {
+    "UnreservedKeyword", &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+    &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
+static const TransformFrameOps COLUMN_NAME_KEYWORD_OPS = {
+    "ColumnNameKeyword", &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+    &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
+static const TransformFrameOps FUNC_NAME_KEYWORD_OPS = {"FuncNameKeyword",
+                                                        &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+                                                        &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
+static const TransformFrameOps TYPE_NAME_KEYWORD_OPS = {"TypeNameKeyword",
+                                                        &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+                                                        &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
+static const TransformFrameOps SETTING_NAME_OPS = {"SettingName",
+                                                   &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+                                                   &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
 static const TransformFrameOps ALTER_STATEMENT_OPS = {"AlterStatement",
                                                       &PEGTransformerFactory::InitializeAlterStatementTrampoline,
                                                       &PEGTransformerFactory::FinalizeAlterStatementTrampoline};
@@ -2964,6 +2994,16 @@ static const TransformFrameOps NAME_LIST_OPS = {"NameList", &PEGTransformerFacto
 const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::GeneratedTransformFrameOps() {
 	static const case_insensitive_map_t<const TransformFrameOps *> result = {
 	    {"Statement", &STATEMENT_OPS},
+	    {"PragmaName", &PRAGMA_NAME_OPS},
+	    {"TypeName", &TYPE_NAME_OPS},
+	    {"PlainIdentifier", &PLAIN_IDENTIFIER_OPS},
+	    {"QuotedIdentifier", &QUOTED_IDENTIFIER_OPS},
+	    {"ReservedKeyword", &RESERVED_KEYWORD_OPS},
+	    {"UnreservedKeyword", &UNRESERVED_KEYWORD_OPS},
+	    {"ColumnNameKeyword", &COLUMN_NAME_KEYWORD_OPS},
+	    {"FuncNameKeyword", &FUNC_NAME_KEYWORD_OPS},
+	    {"TypeNameKeyword", &TYPE_NAME_KEYWORD_OPS},
+	    {"SettingName", &SETTING_NAME_OPS},
 	    {"AlterStatement", &ALTER_STATEMENT_OPS},
 	    {"AlterOptions", &ALTER_OPTIONS_OPS},
 	    {"AlterTableStmt", &ALTER_TABLE_STMT_OPS},
@@ -4027,6 +4067,18 @@ PEGTransformerFactory::FinalizeStatementTrampoline(PEGTransformer &transformer, 
 	}
 	result->has_anonymous_parameters = transformer.has_anonymous_parameters;
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline(PEGTransformer &transformer,
+                                                                    GeneratedTransformProcess &process) {
+	process.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline(PEGTransformer &transformer,
+                                                             GeneratedTransformProcess &process) {
+	auto result = TransformIdentifierOrKeyword(transformer, process.parse_result);
+	return make_uniq<TypedTransformResult<string>>(result);
 }
 
 void PEGTransformerFactory::InitializeAlterStatementTrampoline(PEGTransformer &transformer,

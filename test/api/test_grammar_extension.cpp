@@ -183,9 +183,6 @@ TEST_CASE("Grammar extensions apply in registration order", "[api][grammar_exten
 	RegisterGrammarExtensionTestSyntax(*db.instance);
 	Connection con(db);
 	ActivateGrammarExtensionTestSyntax(con);
-	REQUIRE_NO_FAIL(*con.Query("SET heap_based_parser = false"));
-	CheckGrammarExtensionTestSyntax(con);
-	REQUIRE_NO_FAIL(*con.Query("SET heap_based_parser = true"));
 	CheckGrammarExtensionTestSyntax(con);
 }
 
@@ -270,7 +267,7 @@ private:
 	MatchProcessLifetimeState &lifetime;
 };
 
-TEST_CASE("Heap matcher vector growth preserves custom process lifetimes", "[api][grammar_extension]") {
+TEST_CASE("Matcher stack vector growth preserves custom process lifetimes", "[api][grammar_extension]") {
 	vector<MatcherToken> tokens;
 	TokenIterator iterator(tokens);
 	vector<MatcherSuggestion> suggestions;
@@ -411,36 +408,33 @@ private:
 };
 
 TEST_CASE("MatchState allocates processes through its shared context", "[api][grammar_extension]") {
-	for (bool heap : {false, true}) {
-		vector<MatcherToken> tokens;
-		TokenIterator iterator(tokens);
-		vector<MatcherSuggestion> suggestions;
-		ParseResultAllocator parse_results;
-		ArenaAllocator process_allocator(Allocator::DefaultAllocator());
-		idx_t max_token_index = 0;
-		MatchContext context(suggestions, parse_results, process_allocator, max_token_index);
-		context.use_heap_based_parser = heap;
-		MatchState state(iterator, context);
-		MatchState child_state(state);
-		MatchProcessLifetimeState lifetime;
-		lifetime.depth = 3;
-		ArenaNestedTestMatcher matcher(lifetime);
-		auto parent = state.Make<ArenaNestedTestMatchProcess<9000>>(matcher, state, lifetime);
-		auto parent_bytes = process_allocator.SizeInBytes();
-		REQUIRE(parent_bytes >= sizeof(ArenaNestedTestMatchProcess<9000>));
-		REQUIRE(&child_state.context.process_allocator == &process_allocator);
-		REQUIRE(matcher.MatchParseResult(child_state).IsSuccess());
-		REQUIRE(process_allocator.SizeInBytes() > parent_bytes);
-		REQUIRE(lifetime.active == 1);
-		parent.reset();
-		REQUIRE(lifetime.active == 0);
-		REQUIRE(lifetime.storage_valid);
-		REQUIRE(lifetime.state_valid);
-		REQUIRE(lifetime.destroyed == vector<idx_t> {3, 2, 1});
-	}
+	vector<MatcherToken> tokens;
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator parse_results;
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	idx_t max_token_index = 0;
+	MatchContext context(suggestions, parse_results, process_allocator, max_token_index);
+	MatchState state(iterator, context);
+	MatchState child_state(state);
+	MatchProcessLifetimeState lifetime;
+	lifetime.depth = 3;
+	ArenaNestedTestMatcher matcher(lifetime);
+	auto parent = state.Make<ArenaNestedTestMatchProcess<9000>>(matcher, state, lifetime);
+	auto parent_bytes = process_allocator.SizeInBytes();
+	REQUIRE(parent_bytes >= sizeof(ArenaNestedTestMatchProcess<9000>));
+	REQUIRE(&child_state.context.process_allocator == &process_allocator);
+	REQUIRE(matcher.MatchParseResult(child_state).IsSuccess());
+	REQUIRE(process_allocator.SizeInBytes() > parent_bytes);
+	REQUIRE(lifetime.active == 1);
+	parent.reset();
+	REQUIRE(lifetime.active == 0);
+	REQUIRE(lifetime.storage_valid);
+	REQUIRE(lifetime.state_valid);
+	REQUIRE(lifetime.destroyed == vector<idx_t> {3, 2, 1});
 }
 
-TEST_CASE("Matcher drivers preserve overrides on derived built-in matchers", "[api][grammar_extension]") {
+TEST_CASE("Matcher driver preserves overrides on derived built-in matchers", "[api][grammar_extension]") {
 	vector<MatcherToken> tokens;
 	TokenIterator iterator(tokens);
 	vector<MatcherSuggestion> suggestions;
@@ -452,19 +446,13 @@ TEST_CASE("Matcher drivers preserve overrides on derived built-in matchers", "[a
 	MatchProcessLifetimeState lifetime;
 	lifetime.depth = 130;
 	DerivedListTestMatcher matcher(lifetime);
-	SECTION("Heap driver") {
-		context.use_heap_based_parser = true;
-	}
-	SECTION("Recursive driver") {
-		context.use_heap_based_parser = false;
-	}
 	REQUIRE(matcher.MatchParseResult(state).IsSuccess());
 	REQUIRE(lifetime.started == lifetime.depth);
 	REQUIRE(lifetime.active == 0);
 	REQUIRE(lifetime.destroyed.size() == lifetime.depth);
 }
 
-TEST_CASE("Heap matcher supports variable-sized aligned arena processes", "[api][grammar_extension]") {
+TEST_CASE("Matcher stack supports variable-sized aligned arena processes", "[api][grammar_extension]") {
 	vector<MatcherToken> tokens;
 	TokenIterator iterator(tokens);
 	vector<MatcherSuggestion> suggestions;
@@ -527,53 +515,6 @@ TEST_CASE("Heap matcher supports variable-sized aligned arena processes", "[api]
 			REQUIRE(lifetime.destroyed[i] == lifetime.depth - i);
 		}
 	}
-}
-
-TEST_CASE("Recursive matcher preserves arena process storage and unwinds safely", "[api][grammar_extension]") {
-	vector<MatcherToken> tokens;
-	TokenIterator iterator(tokens);
-	vector<MatcherSuggestion> suggestions;
-	ParseResultAllocator parse_results;
-	idx_t max_token_index = 0;
-	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
-	MatchContext context(suggestions, parse_results, process_allocator, max_token_index);
-	context.use_heap_based_parser = false;
-	MatchState state(iterator, context);
-	MatchProcessLifetimeState lifetime;
-	lifetime.depth = 130;
-	lifetime.destroyed.reserve(lifetime.depth);
-	ArenaNestedTestMatcher matcher(lifetime);
-
-	SECTION("Siblings preserve storage while their parent remains alive") {
-		lifetime.root_children = 2;
-	}
-	SECTION("Failed matches destroy every process") {
-		lifetime.fail_at_leaf = true;
-	}
-	SECTION("Resume exceptions unwind children before parents") {
-		lifetime.throw_at_leaf = true;
-	}
-	SECTION("Constructor exceptions unwind children before parents") {
-		lifetime.throw_in_constructor = true;
-	}
-
-	if (lifetime.throw_at_leaf || lifetime.throw_in_constructor) {
-		REQUIRE_THROWS_AS(matcher.MatchParseResult(state), InvalidInputException);
-	} else {
-		REQUIRE(matcher.MatchParseResult(state).IsSuccess() == !lifetime.fail_at_leaf);
-	}
-	auto child_count = lifetime.depth - 1;
-	REQUIRE(lifetime.active == 0);
-	REQUIRE(lifetime.storage_valid);
-	REQUIRE(lifetime.state_valid);
-	REQUIRE(lifetime.started == 1 + lifetime.root_children * child_count);
-	REQUIRE(lifetime.destroyed.size() == lifetime.started);
-	for (idx_t sibling = 0; sibling < lifetime.root_children; sibling++) {
-		for (idx_t i = 0; i < child_count; i++) {
-			REQUIRE(lifetime.destroyed[sibling * child_count + i] == lifetime.depth - i);
-		}
-	}
-	REQUIRE(lifetime.destroyed.back() == 1);
 }
 
 TEST_CASE("Packrat results outlive reset process arenas", "[api][grammar_extension]") {
