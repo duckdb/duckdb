@@ -98,7 +98,7 @@ def load_grammar_types(types_file):
 
     # Top-level overrides: RuleName -> "type" string OR {type, by_value, default_initializer} dict.
     # default_initializer usually names an enum member (e.g. "INNER"), but full C++ initializers
-    # that start with "=" or "{" are also accepted by generate_transformer.py.
+    # that start with "=" or "{" are also accepted by generate_transformer_trampoline.py.
     overrides = data.get("overrides", {})
     if isinstance(overrides, dict):
         for name, value in overrides.items():

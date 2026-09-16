@@ -193,10 +193,6 @@ option(
   EXTENSION_STATIC_BUILD
   "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
   TRUE)
-option(
-  DISABLE_GCC_FUNCTION_SECTIONS
-  "Do not allow to use '-ffunction-sections -fdata-sections' GCC compile flags."
-  FALSE)
 
 if(ZOS)
   set(EXTENSION_STATIC_BUILD TRUE)
@@ -207,16 +203,13 @@ if(WIN32)
   add_definitions(-D_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS=1)
 endif()
 
-# This option allows --gc-sections flag during extension linking to discard any
-# unused functions or data
-if(EXTENSION_STATIC_BUILD)
-  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU"
-     AND NOT DISABLE_GCC_FUNCTION_SECTIONS)
-    set(CMAKE_CXX_FLAGS_RELEASE
-        "${CMAKE_CXX_FLAGS_RELEASE} -ffunction-sections -fdata-sections")
-  elseif(WIN32 AND MSVC)
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Gy")
-  endif()
+# Split functions and data into separate sections in release builds so unused
+# sections can be discarded by the linker
+if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU|Clang" AND NOT MSVC)
+  set(CMAKE_CXX_FLAGS_RELEASE
+      "${CMAKE_CXX_FLAGS_RELEASE} -ffunction-sections -fdata-sections")
+elseif(WIN32 AND MSVC)
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Gy")
 endif()
 
 option(SHADOW_FORBIDDEN_FUNCTIONS

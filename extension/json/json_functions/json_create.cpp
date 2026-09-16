@@ -31,12 +31,6 @@ struct StructNames {
 		values[name] = make_uniq<Vector>(Value(name), count_t(0ULL));
 	}
 
-	Vector &Get(const string &name, idx_t count) const {
-		auto &result = *values.at(name);
-		FlatVector::SetSize(result, count);
-		return result;
-	}
-
 	StructNames Copy() const {
 		StructNames result;
 		// Have to do this because we can't implicitly copy Vector
@@ -626,7 +620,8 @@ static void CreateValuesStruct(const StructNames &names, yyjson_mut_doc *doc, yy
 	// Add the key/value pairs to the values
 	auto &entries = StructVector::GetEntries(value_v);
 	for (idx_t entry_i = 0; entry_i < entries.size(); entry_i++) {
-		auto &struct_key_v = names.Get(StructType::GetChildName(value_v.GetType(), entry_i).GetIdentifierName(), count);
+		Vector struct_key_v(Value(StructType::GetChildName(value_v.GetType(), entry_i).GetIdentifierName()),
+		                    count_t(count));
 		auto &struct_val_v = entries[entry_i];
 		CreateKeyValuePairs(names, doc, vals, nested_vals, struct_key_v, struct_val_v, count, options);
 	}
@@ -733,8 +728,8 @@ static void CreateValuesUnion(const StructNames &names, yyjson_mut_doc *doc, yyj
 	// Add the key/value pairs to the values
 	for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(value_v.GetType()); member_idx++) {
 		auto &member_val_v = UnionVector::GetMember(value_v, member_idx);
-		auto &member_key_v =
-		    names.Get(UnionType::GetMemberName(value_v.GetType(), member_idx).GetIdentifierName(), count);
+		Vector member_key_v(Value(UnionType::GetMemberName(value_v.GetType(), member_idx).GetIdentifierName()),
+		                    count_t(count));
 
 		// This implementation is not optimal since we convert the entire member vector,
 		// and then skip the rows not matching the tag afterwards.
@@ -1277,7 +1272,7 @@ static void JSONCopyToGeoJSONFunction(DataChunk &args, ExpressionState &state, V
 	}
 
 	for (const auto property_index : info.property_indices) {
-		auto &key_v = names.Get(StructType::GetChildName(payload_type, property_index).GetIdentifierName(), count);
+		Vector key_v(Value(StructType::GetChildName(payload_type, property_index).GetIdentifierName()), count_t(count));
 		CreateKeyValuePairs(names, doc, properties, nested_vals, key_v, entries[property_index], count, options);
 	}
 	for (idx_t i = 0; i < count; i++) {
