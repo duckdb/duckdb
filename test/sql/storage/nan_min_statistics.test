@@ -12,17 +12,36 @@ CREATE OR REPLACE TABLE t(x {type});
 statement ok
 INSERT INTO t VALUES ('nan'::{type});
 
-query I
-SELECT (stats(x)).min FROM t LIMIT 1;
+query II
+SELECT (stats(x)).min, (stats(x)).max FROM t LIMIT 1;
 ----
-nan
+nan	nan
 
 statement ok
 CHECKPOINT;
 
-query I
-SELECT MIN(x) FROM t;
+query II
+SELECT MIN(x), MAX(x) FROM t;
 ----
-nan
+nan	nan
+
+statement ok
+CREATE OR REPLACE TABLE t(x {type});
+
+statement ok
+INSERT INTO t VALUES ('nan'::{type}), (42), (-42);
+
+query II
+SELECT ((stats(x)).min)::{type} = -42, isnan(((stats(x)).max)::{type}) FROM t LIMIT 1;
+----
+1	1
+
+statement ok
+CHECKPOINT;
+
+query II
+SELECT MIN(x) = -42, isnan(MAX(x)) FROM t;
+----
+1	1
 
 endloop

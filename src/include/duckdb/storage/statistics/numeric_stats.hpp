@@ -35,7 +35,7 @@ struct NumericStatsData {
 struct NumericStats {
 	//! Unknown statistics - i.e. "has_min" is false, "has_max" is false
 	DUCKDB_API static BaseStatistics CreateUnknown(LogicalType type);
-	//! Empty statistics - i.e. "min = MaxValue<type>, max = MinValue<type>"
+	//! Empty statistics - min and max are initialized to the domain's maximum and minimum
 	DUCKDB_API static BaseStatistics CreateEmpty(LogicalType type);
 
 	//! Returns true if the stats has a constant value
@@ -85,11 +85,6 @@ struct NumericStats {
 
 	template <class T>
 	static inline void UpdateValue(T new_value, T &min, T &max) {
-		// Assign initial values to min and max if they are not set
-		if (GreaterThan::Operation(min, max)) {
-			min = max = new_value;
-			return;
-		}
 		min = LessThan::Operation(new_value, min) ? new_value : min;
 		max = GreaterThan::Operation(new_value, max) ? new_value : max;
 	}
