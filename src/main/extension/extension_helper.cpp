@@ -1,5 +1,6 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
+#include "duckdb/main/extension/linked_extension_registry.hpp"
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -54,43 +55,22 @@
 #define DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED false
 #endif
 
-// Load the generated header file containing our list of extension headers
-#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS
-#include "duckdb/main/extension/generated_extension_loader.hpp"
-#else
-// TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds, after that
-//		 these can be removed
-#if DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED
-#include "core_functions_extension.hpp"
-#endif
-
-#if DUCKDB_EXTENSION_ICU_LINKED
-#include "icu_extension.hpp"
-#endif
-
-#if DUCKDB_EXTENSION_PARQUET_LINKED
-#include "parquet_extension.hpp"
-#endif
-
-#if DUCKDB_EXTENSION_TPCH_LINKED
-#include "tpch_extension.hpp"
-#endif
-
-#if DUCKDB_EXTENSION_TPCDS_LINKED
-#include "tpcds_extension.hpp"
-#endif
-
-#if DUCKDB_EXTENSION_JSON_LINKED
-#include "json_extension.hpp"
-#endif
-
-#if DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED
-#include "autocomplete_extension.hpp"
-#endif
-
-#endif
-
 namespace duckdb {
+
+void ExtensionHelper::RegisterLinkedExtensions(DBConfig &config) {
+	for (auto &linked : LinkedExtensionRegistry::Get()) {
+		bool present = false;
+		for (auto &existing : config.linked_extensions) {
+			if (StringUtil::CIEquals(existing.name, linked.name)) {
+				present = true;
+				break;
+			}
+		}
+		if (!present) {
+			config.linked_extensions.push_back(linked);
+		}
+	}
+}
 
 //! Loads an extension that was linked into the binary, via the registry the config carries. This is
 //! deliberately not generated code: an extension with its own copy of DuckDB links no generated

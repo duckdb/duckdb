@@ -747,7 +747,6 @@ jobs:
           -Isrc/include \
           examples/embedded-c/main.c \
           build/release/src/libduckdb_static.a \
-          build/release/extension/libdummy_static_extension_loader.a \
           -ldl -lpthread -lm -lstdc++ \
           -o build/release/gcc-static-library-smoke
         build/release/gcc-static-library-smoke
