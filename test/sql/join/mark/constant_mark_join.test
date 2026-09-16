@@ -128,3 +128,34 @@ query I
 SELECT last_value FROM duckdb_sequences() WHERE sequence_name='scalar_operand';
 ----
 NULL
+
+# A constant quantified operand must remain a comparison when rendered as an explicit MARK join.
+query I
+SELECT 1 = ANY(SELECT 1);
+----
+true
+
+query I
+SELECT __mark_join_marker FROM (SELECT NULL::INTEGER AS dummy) l JOIN BY(TYPE MARK) (SELECT 1 AS i) r ON 1=r.i;
+----
+true
+
+query I
+SELECT NULL::INTERVAL IN(SELECT INTERVAL 1 DAY);
+----
+NULL
+
+query I
+SELECT __mark_join_marker FROM (SELECT NULL::INTEGER AS dummy) l JOIN BY(TYPE MARK) (SELECT INTERVAL 1 DAY AS i) r ON NULL::INTERVAL=r.i;
+----
+NULL
+
+query I
+SELECT 'ABC' COLLATE nocase IN(SELECT 'aBc');
+----
+true
+
+query I
+SELECT __mark_join_marker FROM (SELECT NULL::INTEGER AS dummy) l JOIN BY(TYPE MARK) (SELECT 'aBc' AS s) r ON 'ABC' COLLATE nocase=r.s;
+----
+true
