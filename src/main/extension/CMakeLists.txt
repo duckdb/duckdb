@@ -1,3 +1,5 @@
+add_subdirectory(autolink)
+
 add_library(
   duckdb_main_extension OBJECT
   extension_alias.cpp

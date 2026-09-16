@@ -935,6 +935,7 @@ generate-files: $(CAPIGEN_SETUP_DEPS)
 	$(PYTHON) scripts/generate_util.py
 	$(PYTHON) scripts/generate_storage_info.py
 	$(PYTHON) scripts/generate_enum_util.py
+	$(PYTHON) scripts/generate_autolink.py
 	$(PYTHON) scripts/generate_html_template.py
 	$(MAKE) parser-grammar
 # Run the formatter again after (re)generating the files

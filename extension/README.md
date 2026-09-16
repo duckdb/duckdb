@@ -213,3 +213,24 @@ USE_MERGED_VCPKG_MANIFEST=1 VCPKG_TOOLCHAIN_PATH="/path/to/your/vcpkg/installati
 ```
 which will use the merged manifest to install all required dependencies, build `extension_1` and `extension_2`, build DuckDB, 
 and finally link both extensions into DuckDB.
+
+# Linking the static archives by hand
+Outside of CMake, a program links the engine archive plus one archive per extension it wants:
+```shell
+cc main.c libparquet_extension.a libjson_extension.a libduckdb_static.a
+```
+Each extension archive carries a link member that registers the extension with the engine, and the table in
+`duckdb_autolink.h` (included by `duckdb.hpp`; C programs include it next to `duckdb.h`) makes the program want that
+member for every extension DuckDB knows, so putting an archive on the line is enough to link the extension in. The
+engine archive must come last: it defines a no-op for every known name whose archive is absent, and the linker keeps the
+first definition it meets, so an engine listed before an extension silently wins. An extension that is not in
+`extension/known_extensions.txt` is linked with `-u <name>_link` (`/INCLUDE:<name>_link` on MSVC), and
+`DUCKDB_NO_AUTOLINK` turns the table off for programs that want to pick with `-u` only.
+
+A loadable extension is the same archive linked as a shared library with its entry point exported, next to the
+engine archive when it is built to carry its own copy of DuckDB:
+```shell
+c++ -shared -o parquet.duckdb_extension libparquet_extension.a libduckdb_static.a -Wl,-exported_symbol,_parquet_duckdb_cpp_init
+```
+The link member is never taken there, since nothing names it, so a loadable registers nothing into the engine copy it
+carries.

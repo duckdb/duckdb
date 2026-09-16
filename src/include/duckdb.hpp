@@ -13,3 +13,5 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/query_result_stream.hpp"
 #include "duckdb/main/appender.hpp"
+
+#include "duckdb_autolink.h"

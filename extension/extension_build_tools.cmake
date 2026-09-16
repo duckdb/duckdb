@@ -72,6 +72,18 @@ function(duckdb_link_root TARGET SYMBOL)
     endif()
 endfunction()
 
+# Extensions a client links in just by putting their archive on the link line (see duckdb_autolink.h)
+file(STRINGS ${DUCKDB_MODULE_BASE_DIR}/extension/known_extensions.txt DUCKDB_KNOWN_EXTENSIONS REGEX "^[a-z0-9_]+$")
+
+# Makes LIBRARY define <name>_link for every known extension: the real one for each extension linked into
+# it, the engine's no-op for the rest. A client of the shared library references all of them.
+function(export_known_extension_links LIBRARY)
+    foreach(EXT_NAME IN LISTS DUCKDB_KNOWN_EXTENSIONS)
+        duckdb_link_root(${LIBRARY} ${EXT_NAME}_link)
+    endforeach()
+    target_link_libraries(${LIBRARY} PRIVATE duckdb_autolink_fallbacks_archive)
+endfunction()
+
 function(link_extension_libraries LIBRARY LINKAGE)
     get_statically_linked_extensions("${DUCKDB_EXTENSION_NAMES}" STATICALLY_LINKED_EXTENSIONS)
     foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
@@ -774,11 +786,14 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
         add_definitions(-DEXT_VERSION_${EXT_NAME_UPPERCASE}="${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}")
     endif()
 
+    # extension code never takes part in automatic extension linking, only clients do
+    add_definitions(-DDUCKDB_NO_AUTOLINK)
     if (DEFINED DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH)
         add_subdirectory(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH} extension/${EXT_NAME})
     else()
         message(FATAL_ERROR "No path found for registered extension '${EXT_NAME}'")
     endif()
+    remove_definitions(-DDUCKDB_NO_AUTOLINK)
 
     if (NOT "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}" STREQUAL "")
         remove_definitions(-DEXT_VERSION_${EXT_NAME_UPPERCASE}="${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}")

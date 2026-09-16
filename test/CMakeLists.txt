@@ -9,6 +9,17 @@ add_definitions(-DDUCKDB_PATCH_VERSION=${DUCKDB_PATCH_VERSION})
 
 set(UNITTEST_OBJECT_FILES)
 
+if(TARGET parquet_extension)
+  # Automatic extension linking: the parquet archive before the engine and
+  # nothing else, no -u and no generated loader; the table duckdb_autolink.h
+  # carries has to select it.
+  add_executable(autolink_smoke autolink/autolink_smoke.c)
+  target_link_libraries(autolink_smoke $<TARGET_FILE:parquet_extension>
+                        duckdb_static)
+  add_dependencies(autolink_smoke parquet_extension)
+  add_test(NAME autolink_smoke COMMAND autolink_smoke)
+endif()
+
 if(${ENABLE_UNITTEST_CPP_TESTS})
   add_subdirectory(api)
   add_subdirectory(appender)
