@@ -325,8 +325,7 @@ TableFunctionMultiFileWrapper::InitializeBindData(MultiFileBindData &multi_file_
 	auto result = make_uniq<TableFunctionMultiFileData>();
 	// the options carry the expected schema when it is known upfront (COPY takes it from the target table)
 	result->options = std::move(options_p->Cast<TableFunctionFileReaderOptions>());
-	result->options.multi_file_scan =
-	    multi_file_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES;
+	result->options.multi_file_scan = multi_file_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES;
 	return std::move(result);
 }
 

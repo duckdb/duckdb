@@ -12,7 +12,12 @@ MultiFileGlobalState::MultiFileGlobalState(unique_ptr<MultiFileList> owned_file_
     : file_list(*owned_file_list_p), owned_file_list(std::move(owned_file_list_p)) {
 }
 
-MultiFileGlobalState::~MultiFileGlobalState() = default;
+MultiFileGlobalState::~MultiFileGlobalState() {
+	if (read_ahead) {
+		// the file opens scheduled on the async pool reference this state - wait for them before it goes away
+		read_ahead->CancelAndDrain();
+	}
+}
 
 MultiFileReaderInterface::~MultiFileReaderInterface() {
 }

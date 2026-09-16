@@ -408,8 +408,8 @@ public:
 		return OpenMarkedFile(context, bind_data, global_state, current_reader_data, current_file_index, parallel_lock);
 	}
 
-	//! Record an error of an async file open. The read-ahead is gone when the scan is torn down while an open is
-	//! still in flight - the query is then already failing, and there is nobody left to report the error to
+	//! Record an error of an async file open. Read-ahead is optional, and a scan drains the opens it scheduled
+	//! before it goes away - without a read-ahead to report to, the error only marks the scan as failed
 	static void PushAsyncOpenError(MultiFileGlobalState &gstate, ErrorData error) {
 		if (gstate.read_ahead) {
 			gstate.read_ahead->PushError(std::move(error));
