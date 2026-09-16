@@ -390,7 +390,7 @@ private:
 			// Outside of gates, we create a prefix for the inlined leaf.
 			auto count = key.len - depth - 1;
 			auto chain = PrefixHandle::New(art, key, depth + 1, count);
-			Leaf::New(chain.tail.Get(), row_id.GetRowId());
+			Leaf::New(chain.tail.Child(art), row_id.GetRowId());
 			leaf = chain.root;
 		} else {
 			Leaf::New(leaf, row_id.GetRowId());
@@ -404,14 +404,12 @@ private:
 		const auto cast_pos = UnsafeNumericCast<uint8_t>(pos);
 		const auto byte = Prefix::GetByte(art, node_ref, cast_pos);
 
-		NodePtr child;
-		const auto split_status = Prefix::Split(art, node_ref, child, cast_pos);
+		NodePtr branching_node4;
+		Node4::New(art, branching_node4);
+		auto child = PrefixHandle::Split(art, node_ref, branching_node4, cast_pos);
 
-		Node4::New(art, node_ref);
-		node_ref.get().SetGateStatus(split_status);
-
-		Node4::InsertChild(art, node_ref, byte, child);
-		InsertIntoNode(art, node_ref, key, row_id, depth, status);
+		Node4::InsertChild(art, branching_node4, byte, child);
+		InsertIntoNode(art, branching_node4, key, row_id, depth, status);
 	}
 };
 
