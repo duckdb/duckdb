@@ -426,6 +426,7 @@ TEST_CASE("GetStatsIfExists returns path metadata", "[file_system]") {
 	{
 		auto handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 		handle->Write(payload.data(), payload.size());
+		handle->Sync();
 	}
 
 	auto metadata = fs->GetStatsIfExists(fname);
@@ -434,6 +435,10 @@ TEST_CASE("GetStatsIfExists returns path metadata", "[file_system]") {
 	REQUIRE(metadata->file_type == FileType::FILE_TYPE_REGULAR);
 	REQUIRE(metadata->last_modification_time > timestamp_t {-1});
 	REQUIRE(!metadata->version_tag.empty());
+	auto handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_READ);
+	auto handle_metadata = handle->Stats();
+	REQUIRE(metadata->file_id == handle_metadata.file_id);
+	REQUIRE(metadata->version_tag == handle_metadata.version_tag);
 	REQUIRE(!fs->GetStatsIfExists(fname + ".missing").has_value());
 
 	fs->RemoveFile(fname);

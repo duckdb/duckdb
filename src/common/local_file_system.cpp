@@ -1063,23 +1063,6 @@ static timestamp_t FiletimeToTimeStamp(FILETIME file_time) {
 	return Timestamp::FromEpochSeconds(fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
 }
 
-static FileMetadata StatsFromStruct(struct _stati64 status) { // typos:ignore
-	FileMetadata file_metadata;
-	file_metadata.file_size = status.st_size;
-	file_metadata.last_modification_time = Timestamp::FromEpochSeconds(status.st_mtime);
-	file_metadata.device_id = static_cast<idx_t>(status.st_dev);
-	file_metadata.file_id = static_cast<idx_t>(status.st_ino);
-
-	if (status.st_mode & S_IFREG) {
-		file_metadata.file_type = FileType::FILE_TYPE_REGULAR;
-	} else if (status.st_mode & S_IFDIR) {
-		file_metadata.file_type = FileType::FILE_TYPE_DIR;
-	} else if (status.st_mode & _S_IFCHR) {
-		file_metadata.file_type = FileType::FILE_TYPE_CHARDEV;
-	}
-	return file_metadata;
-}
-
 static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
 	FileMetadata file_metadata;
 
@@ -1696,17 +1679,19 @@ optional<FileMetadata> LocalFileSystem::GetStatsIfExists(const OpenFileInfo &fil
 		return nullopt;
 	}
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, path_p, opener);
-	struct _stati64 status; // typos:ignore
-	if (_wstati64(unicode_path.c_str(), &status) != 0) {
-		auto retained_errno = errno;
-		if (retained_errno == ENOENT || retained_errno == ENOTDIR) {
+	auto raw_handle = CreateFileW(unicode_path.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+	                              OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+	if (raw_handle == INVALID_HANDLE_VALUE) {
+		auto error_code = GetLastError();
+		if (error_code == ERROR_FILE_NOT_FOUND || error_code == ERROR_PATH_NOT_FOUND) {
 			return nullopt;
 		}
-		throw IOException({{"errno", std::to_string(retained_errno)}}, "Failed to get stats for path \"%s\": %s",
-		                  path_p, strerror(retained_errno));
+		SetLastError(error_code);
+		throw IOException("Failed to get stats for path \"%s\": %s", path_p, GetLastErrorAsString());
 	}
+	unique_ptr<void, decltype(&CloseHandle)> handle(raw_handle, CloseHandle);
 
-	auto file_metadata = StatsFromStruct(status);
+	auto file_metadata = StatsInternal(handle.get(), path_p);
 	file_metadata.version_tag = VersionTagFromMetadata(file_metadata);
 	return file_metadata;
 }
