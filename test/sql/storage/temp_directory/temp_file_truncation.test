@@ -4,6 +4,10 @@
 
 require block_size 262144
 
+require vector_size 2048
+
+require notwindows
+
 statement ok
 SET threads = 1;
 
@@ -25,10 +29,14 @@ SELECT count(*) > 0 FROM duckdb_temporary_files();
 ----
 true
 
-# Spill transient query intermediates on top of t's blocks; they are freed when the query
-# finishes, which truncates the files back down to t's top block
+# Spill a second table on top of t's blocks, then free it to truncate the files back
+# down to t's top block
 statement ok
-SELECT count(*) FROM (SELECT md5(i::VARCHAR) AS x, count(*) FROM range(1000000) t(i) GROUP BY 1);
+CREATE TEMPORARY TABLE tail AS
+SELECT i, md5(i::VARCHAR) AS x FROM range(1000000) t(i) ORDER BY x;
+
+statement ok
+DROP TABLE tail;
 
 # Spilling is done; raise the limit so the accounting query below cannot trigger more evictions
 statement ok
