@@ -87,28 +87,17 @@ void Leaf::TransformToNested(ART &art, NodePtr &node) {
 	// Move all row IDs into the nested leaf.
 	NodePtr current = node;
 	while (current.HasMetadata()) {
-		uint8_t count;
-		row_t row_ids[LEAF_SIZE];
-		NodePtr next;
-		{
-			ConstNodeHandle handle(art, current);
-			auto &leaf = handle.Get<Leaf>();
-			count = leaf.count;
-			for (uint8_t i = 0; i < count; i++) {
-				row_ids[i] = leaf.row_ids[i];
-			}
-			next = leaf.next_leaf;
-		}
-
-		for (uint8_t i = 0; i < count; i++) {
-			auto row_id = ARTKey::CreateARTKey<row_t>(arena, row_ids[i]);
+		ConstNodeHandle handle(art, current);
+		auto &leaf = handle.Get<Leaf>();
+		for (uint8_t i = 0; i < leaf.count; i++) {
+			auto row_id = ARTKey::CreateARTKey<row_t>(arena, leaf.row_ids[i]);
 			auto conflict_type = ARTOperator::Insert(arena, art, root, row_id, 0, row_id, GateStatus::GATE_SET,
 			                                         DeleteIndexInfo(), IndexAppendMode::INSERT_DUPLICATES);
 			if (conflict_type != ARTConflictType::NO_CONFLICT) {
 				throw InternalException("invalid conflict type in Leaf::TransformToNested");
 			}
 		}
-		current = next;
+		current = leaf.next_leaf;
 	}
 
 	root.SetGateStatus(GateStatus::GATE_SET);
