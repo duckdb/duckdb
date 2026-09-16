@@ -40,9 +40,8 @@ public:
 	BatchedBufferedData(ClientContext &context, ResultLifetime lifetime);
 
 public:
-	//! Buffer the finished unit under its batch index, or block the sink when the unit does not fit. Returns true
-	//! on block.
-	bool AppendOrBlock(unique_ptr<ResultUnit> unit, const InterruptState &blocked_sink);
+	//! Buffer the finished unit under its batch, or block the sink when the unit does not fit. Returns true on block.
+	bool AppendOrBlock(unique_ptr<ResultUnit> unit, idx_t batch, const InterruptState &blocked_sink);
 
 	unique_ptr<ResultUnit> Scan() override;
 	void UpdateMinBatchIndex(idx_t min_batch_index);

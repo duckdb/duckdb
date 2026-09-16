@@ -381,14 +381,12 @@ TEST_CASE("A parked read-ahead batch does not report the batched buffer waiting 
 	weak_ptr<InterruptDoneSignalState> weak_signal(signal);
 	InterruptState read_ahead(weak_signal);
 
-	auto chunk_unit = [&chunk](idx_t batch) {
-		auto unit = make_uniq<ChunkUnit>(BufferedData::CopyForBuffering(chunk));
-		unit->batch_index = batch;
-		return unit;
+	auto chunk_unit = [&chunk]() {
+		return make_uniq<ChunkUnit>(BufferedData::CopyForBuffering(chunk));
 	};
 
 	idx_t appended = 0;
-	while (!buffered.AppendOrBlock(chunk_unit(1), read_ahead)) {
+	while (!buffered.AppendOrBlock(chunk_unit(), 1, read_ahead)) {
 		appended++;
 		REQUIRE(appended <= 4);
 	}
@@ -401,7 +399,7 @@ TEST_CASE("A parked read-ahead batch does not report the batched buffer waiting 
 
 	// The minimum batch always gets its reserve, and its unit is what the consumer pops
 	InterruptState minimum(weak_signal);
-	REQUIRE(!buffered.AppendOrBlock(chunk_unit(0), minimum));
+	REQUIRE(!buffered.AppendOrBlock(chunk_unit(), 0, minimum));
 	REQUIRE(buffered.HasObservableUnit());
 	REQUIRE(buffered.WaitsOnConsumer());
 	REQUIRE(buffered.Scan());

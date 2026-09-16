@@ -113,11 +113,9 @@ SinkResultType PhysicalResultSink::SinkRetained(ExecutionContext &context, Resul
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-static unique_ptr<ResultUnit> FinishChunkUnit(DataChunk &chunk, idx_t batch_index) {
+static unique_ptr<ResultUnit> FinishChunkUnit(DataChunk &chunk) {
 	// Built outside the buffer's lock, so parallel producers copy concurrently
-	auto unit = make_uniq<ChunkUnit>(BufferedData::CopyForBuffering(chunk));
-	unit->batch_index = batch_index;
-	return std::move(unit);
+	return make_uniq<ChunkUnit>(BufferedData::CopyForBuffering(chunk));
 }
 
 SinkResultType PhysicalResultSink::SinkDraining(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
@@ -132,14 +130,14 @@ SinkResultType PhysicalResultSink::SinkDraining(ResultSinkGlobalState &gstate, R
 		lstate.current_batch = batch;
 		auto &buffered_data = gstate.buffered_data->Cast<BatchedBufferedData>();
 		buffered_data.UpdateMinBatchIndex(min_batch_index);
-		if (buffered_data.AppendOrBlock(FinishChunkUnit(chunk, batch), input.interrupt_state)) {
+		if (buffered_data.AppendOrBlock(FinishChunkUnit(chunk), batch, input.interrupt_state)) {
 			lstate.chunk_deposited = true;
 			return SinkResultType::BLOCKED;
 		}
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 	auto &buffered_data = gstate.buffered_data->Cast<SimpleBufferedData>();
-	if (buffered_data.AppendOrBlock(FinishChunkUnit(chunk, DConstants::INVALID_INDEX), input.interrupt_state)) {
+	if (buffered_data.AppendOrBlock(FinishChunkUnit(chunk), input.interrupt_state)) {
 		lstate.chunk_deposited = true;
 		return SinkResultType::BLOCKED;
 	}

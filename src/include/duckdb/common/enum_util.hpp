@@ -480,8 +480,6 @@ enum class ResultModifierType : uint8_t;
 
 enum class ResultOrdering : uint8_t;
 
-enum class ResultUnitType : uint8_t;
-
 enum class RowGroupAppendMode : uint8_t;
 
 enum class RowIdHandling : uint8_t;
@@ -1318,9 +1316,6 @@ const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
 
 template<>
 const char* EnumUtil::ToChars<ResultOrdering>(ResultOrdering value);
-
-template<>
-const char* EnumUtil::ToChars<ResultUnitType>(ResultUnitType value);
 
 template<>
 const char* EnumUtil::ToChars<RowGroupAppendMode>(RowGroupAppendMode value);
@@ -2240,9 +2235,6 @@ ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);
 
 template<>
 ResultOrdering EnumUtil::FromString<ResultOrdering>(const char *value);
-
-template<>
-ResultUnitType EnumUtil::FromString<ResultUnitType>(const char *value);
 
 template<>
 RowGroupAppendMode EnumUtil::FromString<RowGroupAppendMode>(const char *value);

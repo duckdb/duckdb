@@ -12,8 +12,7 @@ BatchedBufferedData::BatchedBufferedData(ClientContext &context, ResultLifetime 
       min_batch(0) {
 }
 
-bool BatchedBufferedData::AppendOrBlock(unique_ptr<ResultUnit> unit, const InterruptState &blocked_sink) {
-	const idx_t batch = unit->batch_index;
+bool BatchedBufferedData::AppendOrBlock(unique_ptr<ResultUnit> unit, idx_t batch, const InterruptState &blocked_sink) {
 	const idx_t unit_data_size = unit->byte_size;
 	annotated_lock_guard<annotated_mutex> lock(glock);
 	D_ASSERT(batch != DConstants::INVALID_INDEX);
