@@ -132,6 +132,8 @@ public:
 	Identifier GetName() const;
 	//! Returns the physical index type.
 	string GetIndexType() const;
+	//! Returns whether an unbound index has buffered WAL operations.
+	bool HasBufferedReplays() const;
 	//! Destroys the physical index.
 	void Retire();
 	//! Binds the unbound physical index without replacing it.
