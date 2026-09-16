@@ -2,11 +2,13 @@
 
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/sorting/sort_strategy.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/vector/vector_writer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
@@ -112,6 +114,8 @@ struct PendingFileState {
 struct PartitionDirectory {
 	string path;
 	vector<string> directories;
+	//! The directory relative to the COPY target, with "/" separators
+	string relative_path;
 };
 
 enum class CopyDirectoryState : uint8_t { PENDING, COMPLETE, FAILED };
@@ -675,6 +679,9 @@ public:
 	ReservationLock LockForReservation() DUCKDB_EXCLUDES(lock);
 	PartitionFileStateReservation ReserveFileState(ReservationLock &reservation_lock, const vector<Value> &values,
 	                                               FileCreationReason reason) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
+	//! Claims the directory of a partition, throws if it equals, contains or is inside another partition's directory
+	void ClaimDirectory(ReservationLock &reservation_lock, const vector<Value> &values,
+	                    const string &directory) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 	FileStateHandle TryTakeInactiveFileState(const vector<Value> &values) DUCKDB_EXCLUDES(lock);
 	vector<FileStateHandle> TakeOpenFileStates() DUCKDB_EXCLUDES(lock);
 
@@ -689,6 +696,9 @@ private:
 	ActiveWrites active_writes DUCKDB_GUARDED_BY(lock);
 	vector_of_value_map_t<idx_t> previous_partitions DUCKDB_GUARDED_BY(lock);
 	idx_t global_offset DUCKDB_GUARDED_BY(lock) = 0;
+	//! The claimed directory of each partition, and the partition owning each directory
+	vector_of_value_map_t<string> partition_directories DUCKDB_GUARDED_BY(lock);
+	map<string, vector<Value>> directory_partitions DUCKDB_GUARDED_BY(lock);
 
 	friend class PartitionWriteLease;
 };
@@ -1381,7 +1391,10 @@ public:
 	vector<LogicalType> write_types;
 	vector<column_t> raw_columns;
 
-	//! Directory of a partition's files relative to the COPY target: PARTITION_PATH, or the hive layout by default
+	//! Expression describing the directories of a partition's files relative to the COPY target:
+	//! PARTITION_PATH, or the hive layout by default
+	//! useful if partitions are registered in locations that do not follow hive partition naming
+	//! structures
 	unique_ptr<Expression> partition_path;
 
 	//! Partition/sort strategy with PhysicalOperator-like interface
@@ -1465,8 +1478,22 @@ private:
 // Utility Helpers
 //===--------------------------------------------------------------------===//
 static bool UsePerPartitionFileOffsets(const PhysicalCopyToFile &op) {
-	// with a partition path, multiple partitions can share a directory
-	return op.hive_file_pattern && !op.partition_path_expression;
+	// every partition has a directory of its own, unless all files are written to the COPY target
+	return op.hive_file_pattern || op.partition_path_expression;
+}
+
+//! One directory of the hive layout, e.g. year=2024 - the arguments are the column name and its partition value
+static void HivePartitionComponentFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	// type-erased, as the partition value can have any type
+	auto writer = FlatVector::Writer<string_t>(result, args.size());
+	for (idx_t row = 0; row < args.size(); row++) {
+		auto value = args.data[1].GetValue(row);
+		// escaping the name and the value is what url_encode does, NULL goes into the default partition
+		auto component = HivePartitioning::Escape(args.data[0].GetValue(row).ToString()) + "=";
+		component +=
+		    value.IsNull() ? HivePartitioning::DEFAULT_PARTITION_NAME : HivePartitioning::EscapeValue(value.ToString());
+		writer.WriteValue(string_t(component.c_str(), UnsafeNumericCast<uint32_t>(component.size())));
+	}
 }
 
 //! The hive layout, e.g. year=2024/month=1, as an expression over the partition values
@@ -1474,7 +1501,10 @@ static unique_ptr<Expression> CreateHivePartitionPath(ClientContext &context, co
 	if (op.partition_columns.empty()) {
 		return nullptr;
 	}
-	auto component_function = HivePartitionComponentFun::GetFunction();
+	ScalarFunction component_function("hive_partition_component", {LogicalType::VARCHAR, LogicalType::ANY},
+	                                  LogicalType::VARCHAR, HivePartitionComponentFunction);
+	// a NULL partition value has a directory of its own
+	component_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 
 	FunctionBinder function_binder(context);
 	vector<unique_ptr<Expression>> components;
@@ -1486,6 +1516,16 @@ static unique_ptr<Expression> CreateHivePartitionPath(ClientContext &context, co
 		components.push_back(function_binder.BindScalarFunction(component_function, std::move(children)));
 	}
 	return function_binder.BindScalarFunction(PathJoinFun::GetFunction(), std::move(components));
+}
+
+//! e.g. "year=2024, month=NULL"
+static string PartitionValuesToString(const PhysicalCopyToFile &op, const vector<Value> &values) {
+	string result;
+	for (idx_t i = 0; i < values.size(); i++) {
+		result += i > 0 ? ", " : "";
+		result += op.names[op.partition_columns[i]].GetIdentifierName() + "=" + values[i].ToString();
+	}
+	return result;
 }
 
 static string EvaluatePartitionPath(ClientContext &context, const PhysicalCopyToFile &op,
@@ -1507,12 +1547,8 @@ static string EvaluatePartitionPath(ClientContext &context, const PhysicalCopyTo
 	executor.ExecuteExpression(partition_values, result);
 	auto path = result.GetValue(0);
 	if (path.IsNull()) {
-		string partition;
-		for (idx_t i = 0; i < values.size(); i++) {
-			partition += i > 0 ? ", " : "";
-			partition += op.names[op.partition_columns[i]].GetIdentifierName() + "=" + values[i].ToString();
-		}
-		throw InvalidInputException("PARTITION_PATH evaluated to NULL for partition %s", partition);
+		throw InvalidInputException("PARTITION_PATH evaluated to NULL for partition %s",
+		                            PartitionValuesToString(op, values));
 	}
 	return StringValue::Get(path);
 }
@@ -1852,6 +1888,50 @@ PartitionWriteLease PartitionWriteManager::Acquire(const vector<Value> &values) 
 
 PartitionWriteManager::ReservationLock PartitionWriteManager::LockForReservation() {
 	return ReservationLock(lock);
+}
+
+void PartitionWriteManager::ClaimDirectory(ReservationLock &reservation_lock, const vector<Value> &values,
+                                           const string &directory) DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
+	D_ASSERT(reservation_lock.guard.owns_lock());
+	auto claimed = partition_directories.find(values);
+	if (claimed != partition_directories.end() && claimed->second == directory) {
+		return;
+	}
+	auto throw_overlap = [&](const string &other_directory, const vector<Value> &other_values) {
+		auto display = [](const string &dir) {
+			return dir.empty() ? string(".") : dir;
+		};
+		if (other_directory == directory) {
+			throw InvalidInputException("PARTITION_PATH puts partitions (%s) and (%s) in the same directory \"%s\"",
+			                            PartitionValuesToString(op, other_values), PartitionValuesToString(op, values),
+			                            display(directory));
+		}
+		throw InvalidInputException(
+		    "PARTITION_PATH puts partitions (%s) and (%s) in overlapping directories \"%s\" and \"%s\"",
+		    PartitionValuesToString(op, other_values), PartitionValuesToString(op, values), display(other_directory),
+		    display(directory));
+	};
+	// the same directory, or a directory containing it - the COPY target contains every directory
+	string ancestor;
+	auto owner = directory_partitions.find(ancestor);
+	if (owner != directory_partitions.end()) {
+		throw_overlap(owner->first, owner->second);
+	}
+	for (auto &component : StringUtil::Split(directory, '/')) {
+		ancestor += ancestor.empty() ? component : "/" + component;
+		owner = directory_partitions.find(ancestor);
+		if (owner != directory_partitions.end()) {
+			throw_overlap(owner->first, owner->second);
+		}
+	}
+	// a directory inside it - "/" sorts before any character a directory name can continue with
+	auto descendant = directory_partitions.lower_bound(directory.empty() ? directory : directory + "/");
+	if (descendant != directory_partitions.end() &&
+	    (directory.empty() || StringUtil::StartsWith(descendant->first, directory + "/"))) {
+		throw_overlap(descendant->first, descendant->second);
+	}
+	directory_partitions.emplace(directory, values);
+	partition_directories[values] = directory;
 }
 
 PartitionFileStateReservation
@@ -3063,6 +3143,10 @@ optional<PartitionFileRequest> PartitionFileRequestBuilder::Build() {
 	if (file_state) {
 		return nullopt;
 	}
+	if (op.partition_path_expression) {
+		// claimed before reserving, which can take evicted file states that must not get lost when this throws
+		partitioned_copy.partition_writes.ClaimDirectory(reservation_lock, values, directory.relative_path);
+	}
 
 	reservation = partitioned_copy.partition_writes.ReserveFileState(reservation_lock, values, reason);
 
@@ -3094,6 +3178,7 @@ PartitionDirectory PartitionFileRequestBuilder::BuildDirectory(string path) cons
 		                            partition_path);
 	}
 	auto separator = fs.PathSeparator(partition_path);
+	vector<string> components;
 	for (auto &component : StringUtil::Split(fs.ConvertSeparators(partition_path), separator)) {
 		if (component.empty() || component == ".") {
 			continue;
@@ -3101,9 +3186,11 @@ PartitionDirectory PartitionFileRequestBuilder::BuildDirectory(string path) cons
 		if (component == "..") {
 			throw InvalidInputException("PARTITION_PATH cannot contain \"..\", but got \"%s\"", partition_path);
 		}
+		components.push_back(component);
 		result.path = fs.JoinPath(result.path, component);
 		result.directories.push_back(result.path);
 	}
+	result.relative_path = StringUtil::Join(components, "/");
 	return result;
 }
 

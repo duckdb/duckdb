@@ -25,10 +25,10 @@ europe	4
 region=unknown	3
 region=us	3
 
-# nested directories, with multiple partitions sharing a directory
+# nested directories
 statement ok
-COPY sales TO '{TEST_DIR}/partition_path_date' (FORMAT parquet, PARTITION_BY (d),
-PARTITION_PATH format('{}/{:02d}', year(d), month(d)));
+COPY (SELECT *, year(d) AS y, month(d) AS m FROM sales) TO '{TEST_DIR}/partition_path_date' (FORMAT parquet,
+PARTITION_BY (y, m), PARTITION_PATH format('{}/{:02d}', y, m));
 
 query III
 SELECT dir, count(*), count(DISTINCT filename) FROM (
@@ -37,11 +37,11 @@ SELECT dir, count(*), count(DISTINCT filename) FROM (
 ) GROUP BY dir ORDER BY dir;
 ----
 2024/01	1	1
-2024/02	2	2
+2024/02	2	1
 2024/03	1	1
-2024/04	2	2
+2024/04	2	1
 2024/05	1	1
-2024/06	2	2
+2024/06	2	1
 2024/07	1	1
 
 # multiple partition columns, writing the partition columns
@@ -92,27 +92,55 @@ PARTITION_PATH 'region=' || region || '/other_col=' || other_col);
 ----
 PARTITION_PATH evaluated to NULL for partition region=us, other_col=NULL
 
-# a constant path puts all partitions in the same directory
-statement ok
+# partitions cannot share a directory
+statement error
 COPY sales TO '{TEST_DIR}/partition_path_const' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH 'all');
-
-query II
-SELECT count(*), count(DISTINCT filename) FROM read_parquet('{TEST_DIR}/partition_path_const/all/*.parquet');
 ----
-10	3
+in the same directory "all"
 
-# an empty path writes to the COPY target itself
+# an empty path writes to the COPY target itself, which contains the directory of any other partition
 statement ok
-COPY sales TO '{TEST_DIR}/partition_path_empty' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH '');
+COPY (FROM sales WHERE region = 'eu') TO '{TEST_DIR}/partition_path_empty' (FORMAT parquet, PARTITION_BY (region),
+PARTITION_PATH '');
 
 query II
 SELECT count(*), count(DISTINCT filename) FROM read_parquet('{TEST_DIR}/partition_path_empty/*.parquet');
 ----
-10	3
+4	1
+
+statement error
+COPY sales TO '{TEST_DIR}/partition_path_empty_error' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH '');
+----
+in the same directory "."
+
+# a partition directory cannot contain the directory of another partition
+statement ok
+CREATE TABLE countries AS SELECT * FROM (VALUES (1, 'eu', NULL), (2, 'eu', 'de'), (3, 'us', NULL)) v(id, region, country);
+
+statement error
+COPY countries TO '{TEST_DIR}/partition_path_nested' (FORMAT parquet, PARTITION_BY (region, country),
+PARTITION_PATH CASE WHEN country IS NULL THEN region ELSE region || '/' || country END);
+----
+in overlapping directories
+
+# directories are compared by whole components, eu does not contain europe
+statement ok
+COPY (FROM (VALUES (1, 'eu'), (2, 'europe'), (3, 'eu-west')) v(id, region)) TO '{TEST_DIR}/partition_path_prefix'
+(FORMAT parquet, PARTITION_BY (region), PARTITION_PATH region);
+
+query II
+SELECT regexp_extract(replace(filename, '\', '/'), 'partition_path_prefix/(.*)/[^/]*$', 1) AS dir, count(*)
+FROM read_parquet('{TEST_DIR}/partition_path_prefix/*/*.parquet', hive_partitioning = false)
+GROUP BY dir ORDER BY dir;
+----
+eu	1
+eu-west	1
+europe	1
 
 # non-VARCHAR results are cast, parentheses are allowed
 statement ok
-COPY sales TO '{TEST_DIR}/partition_path_int' (FORMAT parquet, PARTITION_BY (d), PARTITION_PATH (month(d)));
+COPY (SELECT *, month(d) AS m FROM sales) TO '{TEST_DIR}/partition_path_int' (FORMAT parquet, PARTITION_BY (m),
+PARTITION_PATH (m));
 
 query II
 SELECT regexp_extract(replace(filename, '\', '/'), 'partition_path_int/(.*)/[^/]*$', 1) AS dir, count(*)
@@ -140,7 +168,7 @@ eu	4
 none	3
 us	3
 
-# file rotation within custom directories keeps file names unique
+# file rotation within custom directories
 statement ok
 COPY (SELECT i % 2 AS p, i AS v FROM range(20000) t(i)) TO '{TEST_DIR}/partition_path_rotation'
 (FORMAT parquet, PARTITION_BY (p), PARTITION_PATH 'part_' || p::VARCHAR, ROW_GROUP_SIZE 1024, FILE_SIZE_BYTES '1kb');
@@ -154,15 +182,46 @@ GROUP BY dir ORDER BY dir;
 part_0	10000	true
 part_1	10000	true
 
+# every partition has a directory of its own, so the file names start over for each partition
 query I
-SELECT count(DISTINCT filename) = count(DISTINCT parse_filename(filename))
-FROM read_parquet('{TEST_DIR}/partition_path_rotation/*/*.parquet', hive_partitioning = false);
+SELECT count(*) FROM glob('{TEST_DIR}/partition_path_rotation/part_*/data_0.parquet');
 ----
-true
+2
+
+# a partition can reopen its directory after its file was closed to stay under the open file limit
+statement ok
+SET partitioned_write_flush_threshold=64;
+
+statement ok
+SET partitioned_write_max_open_files=1;
+
+statement ok
+COPY (SELECT i % 5 AS p, i AS v FROM range(10000) t(i)) TO '{TEST_DIR}/partition_path_reopen'
+(FORMAT parquet, PARTITION_BY (p), PARTITION_PATH 'part_' || p::VARCHAR);
+
+# every partition was reopened, so it has more than one file
+query III
+SELECT regexp_extract(replace(filename, '\', '/'), 'partition_path_reopen/(.*)/[^/]*$', 1) AS dir, count(*),
+       count(DISTINCT filename) > 1
+FROM read_parquet('{TEST_DIR}/partition_path_reopen/*/*.parquet', hive_partitioning = false)
+GROUP BY dir ORDER BY dir;
+----
+part_0	2000	true
+part_1	2000	true
+part_2	2000	true
+part_3	2000	true
+part_4	2000	true
+
+statement ok
+RESET partitioned_write_flush_threshold;
+
+statement ok
+RESET partitioned_write_max_open_files;
 
 # OVERWRITE
 statement ok
-COPY sales TO '{TEST_DIR}/partition_path_case' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH 'all', OVERWRITE);
+COPY sales TO '{TEST_DIR}/partition_path_case' (FORMAT parquet, PARTITION_BY (region),
+PARTITION_PATH coalesce(region, 'none'), OVERWRITE);
 
 query I
 SELECT count(*) FROM read_parquet('{TEST_DIR}/partition_path_case/**/*.parquet', hive_partitioning = false);
