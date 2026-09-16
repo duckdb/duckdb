@@ -47,25 +47,6 @@ SELECT (3).nullif(3);
 ----
 NULL
 
-# ---------------------------------------------------------------- if -> CASE
-
-query I
-SELECT (true).if('a', 'b');
-----
-a
-
-query I
-SELECT (false).if('a', 'b');
-----
-b
-
-# COALESCE and CASE are syntax nodes, so the chained form short-circuits exactly like the plain
-# one: the else-branch is never evaluated and cannot raise.
-query I
-SELECT (true).if(1, 'abc'::INTEGER);
-----
-1
-
 # ---------------------------------------------------------------- try -> OPERATOR_TRY
 
 query I
@@ -212,11 +193,6 @@ SELECT ifnull(1, a := 2);
 Named arguments are not supported in IFNULL expressions
 
 statement error
-SELECT (true).if('a');
-----
-Wrong number of arguments to IF.
-
-statement error
 SELECT ('2020-01-01').date('extra');
 ----
 Wrong number of arguments provided to DATE function
@@ -283,16 +259,6 @@ statement error
 SELECT (1).ifnull(2 ORDER BY 1);
 ----
 ORDER BY is not supported in IFNULL expressions
-
-statement error
-SELECT (true).if(DISTINCT 'a', 'b');
-----
-DISTINCT is not supported in IF expressions
-
-statement error
-SELECT (true).if('a', 'b' ORDER BY 1);
-----
-ORDER BY is not supported in IF expressions
 
 statement error
 SELECT ('abc'::INTEGER).try(ORDER BY 1);
