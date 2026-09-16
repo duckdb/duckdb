@@ -1,0 +1,28 @@
+# name: test/sql/storage/nan_min_statistics.test
+# description: Test min statistics when column contains NaN values
+# group: [storage]
+
+load {TEST_DIR}/test_nan_min_stats.db
+
+foreach type FLOAT DOUBLE
+
+statement ok
+CREATE OR REPLACE TABLE t(x {type});
+
+statement ok
+INSERT INTO t VALUES ('nan'::{type});
+
+query I
+SELECT (stats(x)).min FROM t LIMIT 1;
+----
+nan
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT MIN(x) FROM t;
+----
+nan
+
+endloop
