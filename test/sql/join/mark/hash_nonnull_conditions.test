@@ -1,0 +1,43 @@
+# name: test/sql/join/mark/hash_nonnull_conditions.test
+# description: MARK switches from nonnullable scalar matching to exact NULL comparisons
+# group: [mark]
+
+statement ok
+SET threads=1; SET max_execution_time=10000
+
+statement ok
+CREATE TABLE nonnull_probes AS
+SELECT i id, CASE WHEN i=2048 THEN NULL ELSE i%19 END a,
+       CASE WHEN i=2049 THEN NULL ELSE i%23 END b
+FROM range(2051) t(i)
+
+foreach external false true
+
+statement ok
+SET debug_force_external={external}
+
+foreach nullable_build false true
+
+statement ok
+CREATE OR REPLACE TABLE nonnull_builds AS
+SELECT i a, CASE WHEN {nullable_build} AND i=18 THEN NULL ELSE i+1 END b
+FROM range(19) t(i)
+
+query I
+WITH actual AS (
+    SELECT p.id,__mark_join_marker marker
+    FROM nonnull_probes p JOIN BY(TYPE MARK) nonnull_builds r ON p.a=r.a AND p.b<r.b
+), expected AS (
+    SELECT p.id,max(CASE WHEN p.a=r.a AND p.b<r.b THEN 2
+                        WHEN (p.a=r.a AND p.b<r.b) IS NULL THEN 1 ELSE 0 END) marker
+    FROM nonnull_probes p CROSS JOIN nonnull_builds r GROUP BY p.id
+)
+SELECT count(*) FROM actual FULL JOIN expected USING(id)
+WHERE actual.id IS NULL OR expected.id IS NULL
+   OR CASE WHEN actual.marker THEN 2 WHEN actual.marker IS NULL THEN 1 ELSE 0 END<>expected.marker
+----
+0
+
+endloop
+
+endloop

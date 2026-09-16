@@ -174,6 +174,28 @@ CreateRecursiveKeyProbeNormalizers(ClientContext &context, const PhysicalRecursi
 	return normalizers;
 }
 
+static bool RequiresNestedLoopMark(const LogicalComparisonJoin &op) {
+	if (op.join_type != JoinType::MARK) {
+		return false;
+	}
+	idx_t comparison_count = 0;
+	for (auto &condition : op.conditions) {
+		if (!condition.IsComparison()) {
+			continue;
+		}
+		comparison_count++;
+	}
+	if (!op.mark_types.empty() && comparison_count == op.mark_types.size() + 1) {
+		// Correlated MARK joins require the hash join's per-group counts.
+		return false;
+	}
+	vector<LogicalType> group_types;
+	if (op.mark_types.empty() && op.TryGetMarkJoinGroupTypes(group_types)) {
+		return false;
+	}
+	return op.HasArbitraryConditions();
+}
+
 PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoin &op) {
 	// now visit the children
 	D_ASSERT(op.children.size() == 2);
@@ -216,6 +238,10 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 		// no conditions: insert a cross product
 		return Make<PhysicalCrossProduct>(op.types, left, right, op.estimated_cardinality);
 	}
+	if (RequiresNestedLoopMark(op)) {
+		return Make<PhysicalNestedLoopJoin>(op, left, right, std::move(op.conditions), op.join_type,
+		                                    op.estimated_cardinality, std::move(op.filter_pushdown));
+	}
 
 	idx_t has_range = 0;
 	bool has_equality = op.HasEquality(has_range);
@@ -240,9 +266,13 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	bool prefer_range_joins = Settings::Get<PreferRangeJoinsSetting>(context);
 	prefer_range_joins = prefer_range_joins && can_iejoin;
 	if (has_equality && !prefer_range_joins) {
+		auto mark_types = std::move(op.mark_types);
+		if (mark_types.empty()) {
+			op.TryGetMarkJoinGroupTypes(mark_types);
+		}
 		// pass separately to PhysicalHashJoin
 		auto &join = Make<PhysicalHashJoin>(op, left, right, std::move(op.conditions), op.join_type,
-		                                    op.left_projection_map, op.right_projection_map, std::move(op.mark_types),
+		                                    op.left_projection_map, op.right_projection_map, std::move(mark_types),
 		                                    op.estimated_cardinality, std::move(op.filter_pushdown));
 		return join;
 	}

@@ -716,8 +716,14 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 		for (auto &condition : conditions) {
 			all_equal = all_equal && condition.GetComparisonType() == ExpressionType::COMPARE_EQUAL;
 		}
+		bool all_null_safe = true;
+		for (auto &condition : conditions) {
+			all_null_safe &= condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+		}
 		if (all_equal) {
 			result->InitializeUncorrelatedMarkJoin();
+		} else if (!all_null_safe) {
+			result->InitializeUncorrelatedMarkJoin(true);
 		}
 	}
 	return result;
@@ -2081,7 +2087,8 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 	D_ASSERT(!sink.scanned_data);
 
 	if (sink.hash_table->Count() == 0) {
-		if (sink.hash_table->HasUncorrelatedMarkJoin()) {
+		if (sink.hash_table->HasUncorrelatedMarkJoin() &&
+		    sink.hash_table->mark_join_info.uncorrelated_condition_rows->Count() != 0) {
 			state.lhs_join_keys.Reset();
 			state.probe_executor.Execute(input, state.lhs_join_keys);
 			state.lhs_probe_data.ReferenceColumns(input, lhs_probe_columns.col_idxs);

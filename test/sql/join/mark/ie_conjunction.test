@@ -1,0 +1,118 @@
+# name: test/sql/join/mark/ie_conjunction.test
+# description: IE MARK conjunctions distinguish false and unknown without scanning all NULL probe pairs
+# group: [mark]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+CREATE TABLE ie_probe AS SELECT i a,i c FROM range(20000)t(i);
+
+statement ok
+CREATE TABLE ie_build AS SELECT i b,i+1 d FROM range(20000)t(i);
+
+query TT
+EXPLAIN SELECT count(*) FROM (SELECT __mark_join_marker m FROM ie_probe JOIN BY(TYPE MARK) ie_build ON a<b AND c>d) markers WHERE m IS FALSE;
+----
+physical_plan	<REGEX>:[\s\S]*IE_JOIN[\s\S]*
+
+statement ok
+SET max_execution_time=1000;
+
+query I
+SELECT count(*) FROM (SELECT __mark_join_marker m FROM ie_probe JOIN BY(TYPE MARK) ie_build ON a<b AND c>d) markers WHERE m IS FALSE;
+----
+20000
+
+statement ok
+RESET max_execution_time;
+
+foreach external false true
+
+statement ok
+SET debug_force_external={external};
+
+statement ok
+SET nested_loop_join_threshold=0;
+
+statement ok
+SET merge_join_threshold=0;
+
+statement ok
+SET prefer_range_joins=true;
+
+statement ok
+CREATE OR REPLACE TABLE range_probe AS SELECT i id, CASE WHEN i%1000=0 THEN NULL ELSE i END a,0 c FROM range(3000)t(i);
+
+statement ok
+CREATE OR REPLACE TABLE range_build AS SELECT i b,CASE WHEN i=2997 THEN NULL ELSE 1 END d FROM range(3000)t(i);
+
+query IIII
+WITH native AS (
+    SELECT id,__mark_join_marker m FROM range_probe JOIN BY(TYPE MARK) range_build ON a<b AND c>d
+), oracle AS (
+    SELECT id,max(CASE WHEN a<b AND c>d THEN 2 WHEN (a<b AND c>d) IS NULL THEN 1 ELSE 0 END) m
+    FROM range_probe CROSS JOIN range_build GROUP BY id
+)
+SELECT count(*) FILTER(WHERE native.m),count(*) FILTER(WHERE native.m IS NULL),count(*) FILTER(WHERE native.m IS FALSE),
+       count(*) FILTER(WHERE CASE WHEN native.m THEN 2 WHEN native.m IS NULL THEN 1 ELSE 0 END<>oracle.m)
+FROM native JOIN oracle USING(id);
+----
+0	2997	3	0
+
+# Refinement uses the original key, including when evaluating it changes state.
+statement ok
+CREATE OR REPLACE SEQUENCE ie_key_sequence;
+
+query I
+SELECT __mark_join_marker FROM (VALUES (0)) l(c) JOIN BY(TYPE MARK) (VALUES (1,1)) r(b,d)
+ON CASE WHEN nextval('ie_key_sequence')=1 THEN NULL ELSE 0 END < b AND c<d;
+----
+NULL
+
+query I
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='ie_key_sequence';
+----
+1
+
+foreach left_null 0 1 2 3
+
+foreach right_null 0 1 2 3
+
+# Include NULL-only first keys, second keys and both keys on each input.
+query I
+WITH l AS (
+    SELECT i id,CASE WHEN {left_null}&1 THEN NULL ELSE i END a,CASE WHEN {left_null}&2 THEN NULL ELSE i END c FROM range(5)t(i)
+), r AS (
+    SELECT CASE WHEN {right_null}&1 THEN NULL ELSE i END b,CASE WHEN {right_null}&2 THEN NULL ELSE i END d FROM range(5)t(i)
+), native AS (SELECT id,__mark_join_marker m FROM l JOIN BY(TYPE MARK) r ON a<b AND c>d),
+oracle AS (
+    SELECT id,max(CASE WHEN a<b AND c>d THEN 2 WHEN (a<b AND c>d) IS NULL THEN 1 ELSE 0 END) m FROM l CROSS JOIN r GROUP BY id
+)
+SELECT count(*) FROM native JOIN oracle USING(id)
+WHERE CASE WHEN native.m THEN 2 WHEN native.m IS NULL THEN 1 ELSE 0 END<>oracle.m;
+----
+0
+
+endloop
+
+endloop
+
+query I
+SELECT __mark_join_marker FROM (VALUES (NULL::INTEGER,0)) l(a,c) JOIN BY(TYPE MARK) (SELECT 1 b,1 d WHERE false) r ON a<b AND c>d;
+----
+false
+
+endloop
+
+statement ok
+RESET debug_force_external;
+
+statement ok
+RESET nested_loop_join_threshold;
+
+statement ok
+RESET merge_join_threshold;
+
+statement ok
+RESET prefer_range_joins;
