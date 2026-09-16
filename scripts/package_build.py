@@ -320,7 +320,7 @@ def build_package(
             if line and not line.startswith('#'):
                 known_extensions.append(line)
     ext_root_fallbacks = ''.join(
-        f'DUCKDB_EXTENSION_API __attribute__((weak)) void duckdb_extension_{ext}_root(void) {{\n}}\n'
+        f'DUCKDB_EXTENSION_API DUCKDB_ROOT_FALLBACK_WEAK void duckdb_extension_{ext}_root(void) {{\n}}\n'
         for ext in known_extensions
     )
 
@@ -332,6 +332,11 @@ def build_package(
         + ext_headers
         + ext_capi_declarations
         + '#include "duckdb/common/winapi.hpp"\n'
+        + "\n#if defined(__GNUC__) || defined(__clang__)\n"
+        + "#define DUCKDB_ROOT_FALLBACK_WEAK __attribute__((weak))\n"
+        + "#else\n"
+        + "#define DUCKDB_ROOT_FALLBACK_WEAK\n"
+        + "#endif\n"
         + "\nextern \"C\" {\n"
         + ext_root_fallbacks
         + "}\n"
