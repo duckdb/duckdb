@@ -26,14 +26,15 @@ Sort::Sort(ClientContext &client_context_p, const vector<BoundOrderByNode> &orde
 	vector<OrderModifiers> decode_modifiers;
 	for (idx_t col_idx = 0; col_idx < orders.size(); col_idx++) {
 		const auto &order = orders[col_idx];
+		const auto order_modifier = order.GetOrderModifier();
 
 		// Create: for each column we have two arguments: 1. the column, 2. sort specifier
 		create_children.emplace_back(order.expression->Copy());
-		create_children.emplace_back(make_uniq<BoundConstantExpression>(Value(order.GetOrderModifier())));
+		create_children.emplace_back(make_uniq<BoundConstantExpression>(Value(order_modifier)));
 
-		// Decode: one struct field per key, bound from the type directly so nothing is parsed
+		// Decode: bind field types directly and use the same modifiers as the encoder
 		decode_columns.emplace_back(StringUtil::Format("c%llu", col_idx), order.expression->GetReturnType());
-		decode_modifiers.emplace_back(order.type, order.null_order);
+		decode_modifiers.push_back(OrderModifiers::Parse(order_modifier));
 	}
 
 	ErrorData error;
