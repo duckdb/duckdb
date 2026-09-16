@@ -11,7 +11,7 @@ INSERT INTO copy_file_name VALUES (1), (2);
 statement ok
 SET file_search_path='{TEST_DIR}';
 
-foreach suffix csv header integer
+foreach suffix csv header integer csv.gz header.csv.gz integer.header.csv.gz
 
 # EXPLAIN checks fully unquoted output names without writing outside the test directory.
 statement ok
@@ -40,6 +40,29 @@ SELECT * FROM copy_file_name_result ORDER BY a;
 
 endloop
 
+# Compression and CSV format are inferred from the repeated suffixes.
+statement ok
+COPY copy_file_name TO "{TEST_DIR}/copy_file_name_auto".csv.gz;
+
+statement ok
+CREATE OR REPLACE TABLE copy_file_name_compressed(a INTEGER);
+
+query I
+COPY copy_file_name_compressed FROM copy_file_name_auto.csv.gz;
+----
+2
+
+query I
+SELECT * FROM copy_file_name_compressed ORDER BY a;
+----
+1
+2
+
+query I
+SELECT starts_with(hex(content), '1F8B') FROM read_blob('{TEST_DIR}/copy_file_name_auto.csv.gz');
+----
+true
+
 # Quoted and undotted filenames, including specialized options, remain valid.
 statement ok
 EXPLAIN COPY copy_file_name TO 'parity.csv' (FORMAT CSV);
@@ -60,27 +83,25 @@ SELECT count(*) FROM copy_file_name_result;
 ----
 4
 
-# Only a single suffix is allowed for unquoted filenames.
+# Every dot must be followed by a filename component.
 foreach direction TO FROM
 
 statement error
-COPY copy_file_name {direction} parity.csv.gz (FORMAT CSV);
+COPY copy_file_name {direction} parity.csv. (FORMAT CSV);
 ----
-Parser Error
+Parser Error: syntax error at or near "("
 
 statement error
 COPY copy_file_name {direction} parity. (FORMAT CSV);
 ----
-Parser Error
+Parser Error: syntax error at or near "("
 
 endloop
 
 statement ok
-COPY (SELECT 3 AS a) TO "{TEST_DIR}/copy_select_file_name".csv (FORMAT CSV);
+COPY (SELECT 3 AS a) TO "{TEST_DIR}/copy_select_file_name".csv.gz (FORMAT CSV);
 
 query I
-SELECT * FROM read_csv('{TEST_DIR}/copy_select_file_name.csv');
+SELECT * FROM read_csv('{TEST_DIR}/copy_select_file_name.csv.gz');
 ----
 3
-
-endloop

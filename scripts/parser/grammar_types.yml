@@ -1701,6 +1701,7 @@ IdentifierType:
     - StringLiteralIdentifier
     - TypeFuncName
     - IdentifierColId
+    - CopyFileNameSuffix
     - ReservedIdentifierOrStringLiteral
     - AttachAlias
     - CollationName

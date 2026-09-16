@@ -1631,8 +1631,21 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIdentifierColId
                                                                                          ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto identifier = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
-	auto col_id = transformer.Transform<Identifier>(list_pr.GetChild(2));
-	auto result = TransformIdentifierColId(transformer, identifier, col_id);
+	vector<Identifier> copy_file_name_suffix;
+	auto &copy_file_name_suffix_repeat = list_pr.GetChild(1).Cast<RepeatParseResult>();
+	for (auto &copy_file_name_suffix_item : copy_file_name_suffix_repeat.GetChildren()) {
+		auto copy_file_name_suffix_value = transformer.Transform<Identifier>(copy_file_name_suffix_item.get());
+		copy_file_name_suffix.push_back(copy_file_name_suffix_value);
+	}
+	auto result = TransformIdentifierColId(transformer, identifier, copy_file_name_suffix);
+	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCopyFileNameSuffixInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto col_id = transformer.Transform<Identifier>(list_pr.GetChild(1));
+	auto result = col_id;
 	return make_uniq<TypedTransformResult<Identifier>>(result);
 }
 
@@ -11240,6 +11253,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"CopyFileNameIdentifier", &PEGTransformerFactory::TransformCopyFileNameIdentifierInternal},
 	    {"CopyFileNameIdentifierColId", &PEGTransformerFactory::TransformCopyFileNameIdentifierColIdInternal},
 	    {"IdentifierColId", &PEGTransformerFactory::TransformIdentifierColIdInternal},
+	    {"CopyFileNameSuffix", &PEGTransformerFactory::TransformCopyFileNameSuffixInternal},
 	    {"CopyOptions", &PEGTransformerFactory::TransformCopyOptionsInternal},
 	    {"CopyOptionList", &PEGTransformerFactory::TransformCopyOptionListInternal},
 	    {"SpecializedOptionList", &PEGTransformerFactory::TransformSpecializedOptionListInternal},
