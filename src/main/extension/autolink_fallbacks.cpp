@@ -37,8 +37,6 @@ DUCKDB_EXTENSION_API __attribute__((weak)) void duckdb_extension_json_root(void)
 }
 DUCKDB_EXTENSION_API __attribute__((weak)) void duckdb_extension_lance_root(void) {
 }
-DUCKDB_EXTENSION_API __attribute__((weak)) void duckdb_extension_motherduck_root(void) {
-}
 DUCKDB_EXTENSION_API __attribute__((weak)) void duckdb_extension_mysql_scanner_root(void) {
 }
 DUCKDB_EXTENSION_API __attribute__((weak)) void duckdb_extension_odbc_scanner_root(void) {
@@ -56,8 +54,6 @@ DUCKDB_EXTENSION_API __attribute__((weak)) void duckdb_extension_sqlite_scanner_
 DUCKDB_EXTENSION_API __attribute__((weak)) void duckdb_extension_tpcds_root(void) {
 }
 DUCKDB_EXTENSION_API __attribute__((weak)) void duckdb_extension_tpch_root(void) {
-}
-DUCKDB_EXTENSION_API __attribute__((weak)) void duckdb_extension_ui_root(void) {
 }
 DUCKDB_EXTENSION_API __attribute__((weak)) void duckdb_extension_unity_catalog_root(void) {
 }

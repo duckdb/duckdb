@@ -28,7 +28,6 @@
 #pragma comment(linker, "/include:_duckdb_extension_inet_root")
 #pragma comment(linker, "/include:_duckdb_extension_json_root")
 #pragma comment(linker, "/include:_duckdb_extension_lance_root")
-#pragma comment(linker, "/include:_duckdb_extension_motherduck_root")
 #pragma comment(linker, "/include:_duckdb_extension_mysql_scanner_root")
 #pragma comment(linker, "/include:_duckdb_extension_odbc_scanner_root")
 #pragma comment(linker, "/include:_duckdb_extension_parquet_root")
@@ -38,7 +37,6 @@
 #pragma comment(linker, "/include:_duckdb_extension_sqlite_scanner_root")
 #pragma comment(linker, "/include:_duckdb_extension_tpcds_root")
 #pragma comment(linker, "/include:_duckdb_extension_tpch_root")
-#pragma comment(linker, "/include:_duckdb_extension_ui_root")
 #pragma comment(linker, "/include:_duckdb_extension_unity_catalog_root")
 #pragma comment(linker, "/include:_duckdb_extension_vortex_root")
 #pragma comment(linker, "/include:_duckdb_extension_vss_root")
@@ -59,7 +57,6 @@
 #pragma comment(linker, "/include:duckdb_extension_inet_root")
 #pragma comment(linker, "/include:duckdb_extension_json_root")
 #pragma comment(linker, "/include:duckdb_extension_lance_root")
-#pragma comment(linker, "/include:duckdb_extension_motherduck_root")
 #pragma comment(linker, "/include:duckdb_extension_mysql_scanner_root")
 #pragma comment(linker, "/include:duckdb_extension_odbc_scanner_root")
 #pragma comment(linker, "/include:duckdb_extension_parquet_root")
@@ -69,7 +66,6 @@
 #pragma comment(linker, "/include:duckdb_extension_sqlite_scanner_root")
 #pragma comment(linker, "/include:duckdb_extension_tpcds_root")
 #pragma comment(linker, "/include:duckdb_extension_tpch_root")
-#pragma comment(linker, "/include:duckdb_extension_ui_root")
 #pragma comment(linker, "/include:duckdb_extension_unity_catalog_root")
 #pragma comment(linker, "/include:duckdb_extension_vortex_root")
 #pragma comment(linker, "/include:duckdb_extension_vss_root")
@@ -94,7 +90,6 @@ void duckdb_extension_icu_root(void);
 void duckdb_extension_inet_root(void);
 void duckdb_extension_json_root(void);
 void duckdb_extension_lance_root(void);
-void duckdb_extension_motherduck_root(void);
 void duckdb_extension_mysql_scanner_root(void);
 void duckdb_extension_odbc_scanner_root(void);
 void duckdb_extension_parquet_root(void);
@@ -104,7 +99,6 @@ void duckdb_extension_spatial_root(void);
 void duckdb_extension_sqlite_scanner_root(void);
 void duckdb_extension_tpcds_root(void);
 void duckdb_extension_tpch_root(void);
-void duckdb_extension_ui_root(void);
 void duckdb_extension_unity_catalog_root(void);
 void duckdb_extension_vortex_root(void);
 void duckdb_extension_vss_root(void);
@@ -130,7 +124,6 @@ __attribute__((used, weak)) void (*duckdb_known_extensions[])(void) = {
     duckdb_extension_inet_root,
     duckdb_extension_json_root,
     duckdb_extension_lance_root,
-    duckdb_extension_motherduck_root,
     duckdb_extension_mysql_scanner_root,
     duckdb_extension_odbc_scanner_root,
     duckdb_extension_parquet_root,
@@ -140,7 +133,6 @@ __attribute__((used, weak)) void (*duckdb_known_extensions[])(void) = {
     duckdb_extension_sqlite_scanner_root,
     duckdb_extension_tpcds_root,
     duckdb_extension_tpch_root,
-    duckdb_extension_ui_root,
     duckdb_extension_unity_catalog_root,
     duckdb_extension_vortex_root,
     duckdb_extension_vss_root,
