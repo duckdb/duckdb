@@ -30,6 +30,7 @@ class ParseResultAllocator;
 class Matcher;
 class MatcherAllocator;
 class MatchProcess;
+class MatchProcessInlineStorage;
 
 enum class SuggestionState : uint8_t {
 	SUGGEST_KEYWORD,
@@ -163,6 +164,8 @@ struct MatchContext {
 	idx_t &max_token_index;
 	IdentifierCaseMode identifier_case_mode;
 	ParserPackratCache *packrat_cache;
+	//! Optional storage supplied by the iterative driver while constructing a stack frame.
+	optional_ptr<MatchProcessInlineStorage> process_inline_storage;
 	MatchMode mode;
 	bool use_heap_based_parser;
 };
@@ -250,6 +253,34 @@ public:
 	//! Resume matching, optionally with the result of the previously requested child.
 	virtual MatchStep Resume(optional<MatcherResult> child_result) = 0;
 };
+
+//! Non-owning storage offered by the iterative driver for a single MatchProcess.
+class MatchProcessInlineStorage {
+public:
+	MatchProcessInlineStorage(data_ptr_t data_p, idx_t capacity_p, idx_t alignment_p)
+	    : data(data_p), capacity(capacity_p), alignment(alignment_p) {
+	}
+
+	template <class PROCESS, class... ARGS>
+	PROCESS *Make(ARGS &&... args) {
+		if (occupied || sizeof(PROCESS) > capacity || alignof(PROCESS) > alignment) {
+			return nullptr;
+		}
+		auto result = new (data) PROCESS(std::forward<ARGS>(args)...);
+		occupied = true;
+		return result;
+	}
+
+private:
+	data_ptr_t data;
+	idx_t capacity;
+	idx_t alignment;
+	bool occupied = false;
+};
+
+//! Size and alignment required to inline every built-in non-atomic MatchProcess.
+idx_t BuiltinMatchProcessSize();
+idx_t BuiltinMatchProcessAlignment();
 
 enum class MatcherType {
 	KEYWORD,
@@ -380,6 +411,12 @@ private:
 template <class PROCESS, class... ARGS>
 arena_ptr<MatchProcess> MatchState::Make(ARGS &&... args) {
 	static_assert(std::is_base_of<MatchProcess, PROCESS>::value, "Expected a matcher process");
+	if (context.process_inline_storage) {
+		auto process = context.process_inline_storage->Make<PROCESS>(std::forward<ARGS>(args)...);
+		if (process) {
+			return arena_ptr<MatchProcess>(process);
+		}
+	}
 	return arena_ptr<MatchProcess>(context.process_allocator.Make<PROCESS>(std::forward<ARGS>(args)...));
 }
 
