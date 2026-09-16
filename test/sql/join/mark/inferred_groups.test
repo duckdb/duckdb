@@ -1,0 +1,50 @@
+# name: test/sql/join/mark/inferred_groups.test
+# description: MARK group inference preserves group-local UNKNOWN and empty-group FALSE
+# group: [mark]
+
+statement ok
+CREATE TABLE probes(id INTEGER, g INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO probes VALUES (0,0,NULL),(1,1,7),(2,2,5),(3,3,4),(4,4,7),(5,NULL,9),(6,5,NULL);
+
+statement ok
+CREATE TABLE candidates(g INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO candidates VALUES (1,NULL),(2,5),(2,5),(3,NULL),(3,6),(4,8),(NULL,9);
+
+query II
+SELECT id,__mark_join_marker FROM probes p JOIN BY (TYPE MARK) candidates c ON p.g IS NOT DISTINCT FROM c.g AND p.v=c.v ORDER BY id;
+----
+0	false
+1	NULL
+2	true
+3	NULL
+4	false
+5	true
+6	false
+
+query II
+SELECT id,__mark_join_marker FROM probes p JOIN BY (TYPE MARK) candidates c ON p.v=c.v AND p.g IS NOT DISTINCT FROM c.g ORDER BY id;
+----
+0	false
+1	NULL
+2	true
+3	NULL
+4	false
+5	true
+6	false
+
+query TT
+EXPLAIN SELECT __mark_join_marker FROM probes p JOIN BY (TYPE MARK) candidates c ON p.g IS NOT DISTINCT FROM c.g AND p.v=c.v;
+----
+physical_plan	<REGEX>:.*Hash Join.*
+
+statement ok
+DELETE FROM candidates;
+
+query I
+SELECT count(*) FROM (SELECT __mark_join_marker AS marker FROM probes p JOIN BY (TYPE MARK) candidates c ON p.g IS NOT DISTINCT FROM c.g AND p.v=c.v) q WHERE marker IS NOT FALSE;
+----
+0

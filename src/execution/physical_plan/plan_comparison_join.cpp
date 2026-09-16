@@ -240,9 +240,13 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	bool prefer_range_joins = Settings::Get<PreferRangeJoinsSetting>(context);
 	prefer_range_joins = prefer_range_joins && can_iejoin;
 	if (has_equality && !prefer_range_joins) {
+		auto mark_types = std::move(op.mark_types);
+		if (mark_types.empty()) {
+			op.TryGetMarkJoinGroupTypes(mark_types);
+		}
 		// pass separately to PhysicalHashJoin
 		auto &join = Make<PhysicalHashJoin>(op, left, right, std::move(op.conditions), op.join_type,
-		                                    op.left_projection_map, op.right_projection_map, std::move(op.mark_types),
+		                                    op.left_projection_map, op.right_projection_map, std::move(mark_types),
 		                                    op.estimated_cardinality, std::move(op.filter_pushdown));
 		return join;
 	}
