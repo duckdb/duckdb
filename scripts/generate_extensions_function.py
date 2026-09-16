@@ -184,8 +184,8 @@ class ExtensionFunctionOverload(NamedTuple):
             parameters = []
             parameter_names = []
             for raw_param in raw_parameters:
-                # parameters are encoded as "name::type"
-                # fallback to type only if no name available
+                # parameters are encoded as "name::type" - fall back to a bare type (no name) for
+                # entries generated before parameter names were tracked
                 name, sep, type_str = raw_param.partition('::')
                 if sep:
                     parameter_names.append(name)
@@ -626,12 +626,7 @@ Please double check if '{args.extension_repository}' is the right location to lo
             for overload in function_overloads:
                 extension_overloads.append(
                     ExtensionFunctionOverload(
-                        extension_name,
-                        overload.name,
-                        overload.type,
-                        overload.parameters,
-                        overload.parameter_names,
-                        overload.return_type,
+                        extension_name, overload.name, overload.type, overload.parameters, overload.parameter_names, overload.return_type
                     )
                 )
             result[function] = extension_overloads

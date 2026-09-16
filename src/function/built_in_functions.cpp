@@ -150,6 +150,8 @@ void BuiltinFunctions::RegisterExtensionOverloads() {
 		auto return_type = DBConfig::ParseLogicalType(splits[1]);
 		auto parameters = Value(splits[0]).DefaultCastAs(LogicalType::LIST(LogicalType::VARCHAR));
 		for (auto &param : ListValue::GetChildren(parameters)) {
+			// each parameter is encoded as "name::type" - fall back to an unnamed parameter for
+			// entries generated before parameter names were tracked
 			auto param_str = param.GetValue<string>();
 			auto name_and_type = StringUtil::Split(param_str, "::");
 			if (name_and_type.size() == 2) {
