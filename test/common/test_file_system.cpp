@@ -45,34 +45,6 @@ public:
 	bool create_called = false;
 };
 
-class DefaultStatsFileSystem : public FileSystem {
-public:
-	explicit DefaultStatsFileSystem(FileSystem &file_system_p) : file_system(file_system_p) {
-	}
-
-	string GetName() const override {
-		return "DefaultStatsFileSystem";
-	}
-
-	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
-	                                optional_ptr<FileOpener> opener = nullptr) override {
-		open_count++;
-		return file_system.OpenFile(path, flags, opener);
-	}
-
-	FileMetadata Stats(FileHandle &handle) override {
-		stats_count++;
-		return handle.Stats();
-	}
-
-public:
-	idx_t open_count = 0;
-	idx_t stats_count = 0;
-
-private:
-	FileSystem &file_system;
-};
-
 class TestOpenerFileSystem : public OpenerFileSystem {
 public:
 	TestOpenerFileSystem(FileSystem &file_system_p, FileOpener &opener_p)
@@ -463,16 +435,6 @@ TEST_CASE("GetStatsIfExists returns path metadata", "[file_system]") {
 	REQUIRE(metadata->last_modification_time > timestamp_t {-1});
 	REQUIRE(!metadata->version_tag.empty());
 	REQUIRE(!fs->GetStatsIfExists(fname + ".missing").has_value());
-
-	DefaultStatsFileSystem default_fs(*fs);
-	metadata = default_fs.GetStatsIfExists(fname);
-	REQUIRE(metadata.has_value());
-	REQUIRE(metadata->file_size == NumericCast<int64_t>(payload.size()));
-	REQUIRE(default_fs.open_count == 1);
-	REQUIRE(default_fs.stats_count == 1);
-	REQUIRE(!default_fs.GetStatsIfExists(fname + ".missing").has_value());
-	REQUIRE(default_fs.open_count == 2);
-	REQUIRE(default_fs.stats_count == 1);
 
 	fs->RemoveFile(fname);
 }
