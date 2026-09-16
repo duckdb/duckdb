@@ -71,8 +71,8 @@ struct ResultFormatContext {
 //! Turns the chunks a query produces into units. Every subclass declares Unit, GlobalState and a
 //! NAME. NAME is what the result's accessors and the stream constructors check against the settled
 //! format, and the only identity a unit has: a format defines its own unit type.
-//! Append, IsFull and Finish run concurrently on worker threads that share the format object and the
-//! global state, so a format may mutate only its local state without synchronization
+//! Append and Finish run concurrently on worker threads that share the format object and the global
+//! state, so a format may mutate only its local state without synchronization
 class ResultFormat {
 public:
 	DUCKDB_API virtual ~ResultFormat();
@@ -89,10 +89,12 @@ public:
 	virtual unique_ptr<ResultFormatLocalState> InitLocal(ResultFormatGlobalState &gstate) = 0;
 	//! Convert one chunk into the unit under construction. Runs on a worker thread
 	virtual void Append(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate, DataChunk &chunk) = 0;
-	//! Whether the unit under construction reached the format's size target
-	virtual bool IsFull(ResultFormatLocalState &lstate) = 0;
-	//! Hand over the unit under construction with row_count and byte_size set. Null when there is none
-	virtual unique_ptr<ResultUnit> Finish(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate) = 0;
+	//! Hand over the next unit that reached the format's size target, with row_count and byte_size set.
+	//! With flush_partial the unit under construction is handed over short of the target: the sink
+	//! flushes at a batch boundary and at a producer's end of input, so no unit spans two batch
+	//! indexes. Null when there is nothing to hand over
+	virtual unique_ptr<ResultUnit> Finish(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate,
+	                                      bool flush_partial) = 0;
 
 public:
 	//! Whether this is the identity format
@@ -148,8 +150,8 @@ public:
 	                                                          ResultOrdering ordering) override;
 	DUCKDB_API unique_ptr<ResultFormatLocalState> InitLocal(ResultFormatGlobalState &gstate) override;
 	DUCKDB_API void Append(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate, DataChunk &chunk) override;
-	DUCKDB_API bool IsFull(ResultFormatLocalState &lstate) override;
-	DUCKDB_API unique_ptr<ResultUnit> Finish(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate) override;
+	DUCKDB_API unique_ptr<ResultUnit> Finish(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate,
+	                                         bool flush_partial) override;
 
 private:
 	QueryResultMemoryType memory_type;

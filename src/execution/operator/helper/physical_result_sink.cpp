@@ -160,18 +160,16 @@ unique_ptr<ResultUnit> PhysicalResultSink::AppendToUnit(ResultSinkGlobalState &g
 	auto &format_gstate = gstate.buffered_data->FormatState();
 	auto &format_lstate = LocalFormatState(gstate, lstate);
 	format.Append(format_gstate, format_lstate, chunk);
-	if (!format.IsFull(format_lstate)) {
-		return nullptr;
-	}
-	return FinishUnit(gstate, lstate);
+	return FinishUnit(gstate, lstate, false);
 }
 
-unique_ptr<ResultUnit> PhysicalResultSink::FinishUnit(ResultSinkGlobalState &gstate,
-                                                      ResultSinkLocalState &lstate) const {
+unique_ptr<ResultUnit> PhysicalResultSink::FinishUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
+                                                      bool flush_partial) const {
 	if (!lstate.format_state) {
 		return nullptr;
 	}
-	return gstate.buffered_data->Format().Finish(gstate.buffered_data->FormatState(), *lstate.format_state);
+	auto &format = gstate.buffered_data->Format();
+	return format.Finish(gstate.buffered_data->FormatState(), *lstate.format_state, flush_partial);
 }
 
 SinkResultType PhysicalResultSink::SinkRetainedFormatted(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
@@ -218,7 +216,7 @@ SinkResultType PhysicalResultSink::SinkDraining(ResultSinkGlobalState &gstate, R
 
 bool PhysicalResultSink::FlushPartialUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
                                           const InterruptState &interrupt) const {
-	auto unit = FinishUnit(gstate, lstate);
+	auto unit = FinishUnit(gstate, lstate, true);
 	if (!unit) {
 		return false;
 	}

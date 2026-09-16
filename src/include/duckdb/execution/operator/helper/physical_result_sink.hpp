@@ -69,8 +69,10 @@ private:
 	//! Append the chunk, and finish the unit when it reached the format's target. Null otherwise
 	unique_ptr<ResultUnit> AppendToUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
 	                                    DataChunk &chunk) const;
-	//! Finish the unit under construction. Null when there is none
-	unique_ptr<ResultUnit> FinishUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
+	//! Finish the unit that reached the format's target, or with flush_partial the one under
+	//! construction. Null when there is none
+	unique_ptr<ResultUnit> FinishUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
+	                                  bool flush_partial) const;
 	//! Give a finished unit to the buffer. True when the producer parked holding it
 	bool HandOver(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, unique_ptr<ResultUnit> unit,
 	              const InterruptState &interrupt) const;
