@@ -70,10 +70,6 @@ uint8_t ParsedGrammarKeywordHelper::GetIdentifierMask(SuggestionState type) cons
 	return DefaultKeywordMaps::GetIdentifierMask(type);
 }
 
-KeywordCategory ParsedGrammarKeywordHelper::GetKeywordCategory(const string &text) const {
-	return DefaultKeywordMaps::GetKeywordCategory(LookupKeyword(text));
-}
-
 vector<ParserKeyword> ParsedGrammarKeywordHelper::KeywordList() const {
 	return keyword_maps.ToList();
 }

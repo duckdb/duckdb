@@ -19,9 +19,6 @@ public:
 	uint8_t GetIdentifierMask(SuggestionState) const override {
 		return 0;
 	}
-	KeywordCategory GetKeywordCategory(const string &) const override {
-		return KeywordCategory::KEYWORD_NONE;
-	}
 	vector<ParserKeyword> KeywordList() const override {
 		return {};
 	}

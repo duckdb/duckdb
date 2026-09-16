@@ -14,7 +14,7 @@ public:
 
 public:
 	uint8_t GetIdentifierMask(SuggestionState type) const override;
-	KeywordCategory GetKeywordCategory(const string &text) const override;
+	KeywordCategory GetKeywordCategory(const string &text) const;
 	vector<ParserKeyword> KeywordList() const override;
 	const GrammarLiteralTable &GetLiteralTable() const override {
 		return literal_table;

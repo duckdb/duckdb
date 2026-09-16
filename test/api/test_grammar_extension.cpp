@@ -393,9 +393,6 @@ public:
 	uint8_t GetIdentifierMask(SuggestionState type) const override {
 		return DefaultKeywordMaps::GetIdentifierMask(type);
 	}
-	KeywordCategory GetKeywordCategory(const string &text) const override {
-		return DefaultKeywordMaps::GetKeywordCategory(LookupKeyword(text));
-	}
 	vector<ParserKeyword> KeywordList() const override {
 		return {};
 	}
@@ -566,7 +563,8 @@ public:
 		changes.push_back(GrammarChange::AddChoice("UnreservedKeyword", "'ANSWER'"));
 		changes.push_back(GrammarChange::AddTerminalRuleOverride(
 		    "GrammarExtensionTestValue", [](const PEGKeywordHelper &keyword_helper) {
-			    if (keyword_helper.GetKeywordCategory("ANSWER") != KeywordCategory::KEYWORD_UNRESERVED) {
+			    if (DefaultKeywordMaps::GetKeywordCategory(keyword_helper.LookupKeyword("ANSWER")) !=
+			        KeywordCategory::KEYWORD_UNRESERVED) {
 				    throw InternalException("Parser change keyword is missing from the compiled keyword helper");
 			    }
 			    return make_uniq<GrammarExtensionTestMatcher>();
