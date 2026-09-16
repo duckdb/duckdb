@@ -72,8 +72,7 @@ TEST_CASE("Literal choice dispatch retains autocomplete metadata", "[api][gramma
 	}
 }
 
-static LiteralChoiceTestResult MatchLiteralChoiceTest(const Matcher &matcher, const string &text, bool heap,
-                                                      MatchMode mode) {
+static LiteralChoiceTestResult MatchLiteralChoiceTest(const Matcher &matcher, const string &text, MatchMode mode) {
 	vector<MatcherToken> tokens;
 	if (!text.empty()) {
 		tokens.emplace_back(text, 0, TokenType::KEYWORD);
@@ -85,7 +84,7 @@ static LiteralChoiceTestResult MatchLiteralChoiceTest(const Matcher &matcher, co
 	idx_t max_position = 0;
 	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
 	MatchContext context(suggestions, allocator, process_allocator, max_position, mode,
-	                     IdentifierCaseMode::PRESERVE_CASE, heap, &packrat);
+	                     IdentifierCaseMode::PRESERVE_CASE, &packrat);
 	MatchState state(iterator, context);
 	auto result = matcher.MatchParseResult(state);
 	return {result.IsSuccess(), state.token_iterator.Position(), max_position,
@@ -123,16 +122,14 @@ TEST_CASE("Literal choice dispatch preserves ordered choice results", "[api][gra
 			REQUIRE_FALSE(step.GetResult().IsSuccess());
 		}
 	}
-	for (bool heap : {false, true}) {
-		for (auto mode : {MatchMode::BUILD_PARSE_RESULT, MatchMode::RECOGNIZE_ONLY}) {
-			for (auto &text : vector<string> {"select", "FROM", "where", "(", "unknown_literal", ""}) {
-				auto actual = MatchLiteralChoiceTest(choice, text, heap, mode);
-				auto expected = MatchLiteralChoiceTest(sequential, text, heap, mode);
-				REQUIRE(actual.success == expected.success);
-				REQUIRE(actual.position == expected.position);
-				REQUIRE(actual.max_position == expected.max_position);
-				REQUIRE(actual.tree == expected.tree);
-			}
+	for (auto mode : {MatchMode::BUILD_PARSE_RESULT, MatchMode::RECOGNIZE_ONLY}) {
+		for (auto &text : vector<string> {"select", "FROM", "where", "(", "unknown_literal", ""}) {
+			auto actual = MatchLiteralChoiceTest(choice, text, mode);
+			auto expected = MatchLiteralChoiceTest(sequential, text, mode);
+			REQUIRE(actual.success == expected.success);
+			REQUIRE(actual.position == expected.position);
+			REQUIRE(actual.max_position == expected.max_position);
+			REQUIRE(actual.tree == expected.tree);
 		}
 	}
 }
@@ -183,13 +180,10 @@ TEST_CASE("Literal dispatch does not assume custom keyword matcher semantics", "
 	idx_t calls = 0;
 	DispatchOverrideMatcherFactory factory(allocator, grammar, rules, compiled->GetKeywordHelper(), calls);
 	auto &root = factory.CreateRootMatcher("Program");
-	for (bool heap : {false, true}) {
-		calls = 0;
-		auto result = MatchLiteralChoiceTest(root, "FROM", heap, MatchMode::RECOGNIZE_ONLY);
-		REQUIRE(result.success);
-		REQUIRE(result.position == 1);
-		REQUIRE(calls == 1);
-	}
+	auto result = MatchLiteralChoiceTest(root, "FROM", MatchMode::RECOGNIZE_ONLY);
+	REQUIRE(result.success);
+	REQUIRE(result.position == 1);
+	REQUIRE(calls == 1);
 }
 
 TEST_CASE("Literal dispatch leaves mixed and unregistered alternatives unchanged", "[api][grammar_extension]") {
@@ -204,15 +198,13 @@ TEST_CASE("Literal dispatch leaves mixed and unregistered alternatives unchanged
 		auto &choice = root.matchers[0].get().Cast<ChoiceMatcher>();
 		vector<reference<Matcher>> children = choice.matchers;
 		ChoiceMatcher sequential(std::move(children));
-		for (bool heap : {false, true}) {
-			for (auto &text : vector<string> {"SELECT", "FROM", "unregistered_dispatch_word", "missing"}) {
-				auto actual = MatchLiteralChoiceTest(choice, text, heap, MatchMode::BUILD_PARSE_RESULT);
-				auto expected = MatchLiteralChoiceTest(sequential, text, heap, MatchMode::BUILD_PARSE_RESULT);
-				REQUIRE(actual.success == expected.success);
-				REQUIRE(actual.position == expected.position);
-				REQUIRE(actual.max_position == expected.max_position);
-				REQUIRE(actual.tree == expected.tree);
-			}
+		for (auto &text : vector<string> {"SELECT", "FROM", "unregistered_dispatch_word", "missing"}) {
+			auto actual = MatchLiteralChoiceTest(choice, text, MatchMode::BUILD_PARSE_RESULT);
+			auto expected = MatchLiteralChoiceTest(sequential, text, MatchMode::BUILD_PARSE_RESULT);
+			REQUIRE(actual.success == expected.success);
+			REQUIRE(actual.position == expected.position);
+			REQUIRE(actual.max_position == expected.max_position);
+			REQUIRE(actual.tree == expected.tree);
 		}
 	}
 }
