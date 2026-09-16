@@ -305,7 +305,7 @@ def build_package(
 
         ext_registrars += (
             f"#if {ext_linked_define}\n"
-            f"static LinkedExtensionRegistrar {ext}_registrar(\"{ext}\", [](DuckDB &db) {{\n"
+            f"static const LinkedExtensionRegistrar {ext}_registrar(\"{ext}\", [](DuckDB &db) {{\n"
             f"\t{load_body}\n"
             "});\n"
             "#endif\n\n"
