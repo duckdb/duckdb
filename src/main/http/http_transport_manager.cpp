@@ -213,7 +213,8 @@ HTTPTransportManager::~HTTPTransportManager() {
 	D_ASSERT(clients.IsEmpty());
 }
 
-idx_t HTTPTransportManager::CalculateCapacity(idx_t system_concurrency, optional_idx file_descriptor_limit) {
+idx_t HTTPTransportManager::CalculateCapacity(idx_t system_concurrency, optional_idx file_descriptor_limit,
+                                              idx_t io_concurrency) {
 	idx_t cpu_target;
 	if (system_concurrency >= 128) {
 		cpu_target = HTTP_TRANSPORT_MAX_CAPACITY;
@@ -221,6 +222,8 @@ idx_t HTTPTransportManager::CalculateCapacity(idx_t system_concurrency, optional
 		cpu_target = system_concurrency * 2;
 		cpu_target = MaxValue<idx_t>(cpu_target, 16);
 	}
+	// every async I/O thread can hold a client at once, so do not let the pool be the smaller of the two
+	cpu_target = MaxValue<idx_t>(cpu_target, io_concurrency);
 	if (!file_descriptor_limit.IsValid()) {
 		return cpu_target;
 	}
@@ -255,8 +258,8 @@ bool HTTPTransportManager::AdvanceConnectionEpoch(uint64_t &connection_epoch, bo
 	return false;
 }
 
-void HTTPTransportManager::Initialize(idx_t system_concurrency) {
-	auto new_capacity = CalculateCapacity(system_concurrency, GetFileDescriptorLimit());
+void HTTPTransportManager::Initialize(idx_t system_concurrency, idx_t io_concurrency) {
+	auto new_capacity = CalculateCapacity(system_concurrency, GetFileDescriptorLimit(), io_concurrency);
 	HTTPClientPool new_clients(new_capacity);
 
 	annotated_lock_guard<annotated_mutex> guard(lock);
