@@ -136,6 +136,9 @@ static unique_ptr<FunctionData> ReadSingleCSVFileBind(ClientContext &context, Ta
 		}
 	}
 	options.file_path = result->file.path;
+	// when several files are read, options like "names" describe the scan and not this file - the sniffer is then
+	// lenient about a file whose columns do not line up with them exactly
+	options.multi_file_reader = input.multi_file_scan;
 	options.Verify(file_options);
 
 	// when the columns are known upfront the options are resolved against them before this file is sniffed, so

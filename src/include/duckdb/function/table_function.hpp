@@ -140,6 +140,9 @@ struct TableFunctionBindInput {
 	//! combined with the other files of the scan - e.g. whether their columns are unified by name, in which case a
 	//! type that could not be determined should be reported as SQLNULL so the other files can determine it
 	optional_ptr<const MultiFileOptions> multi_file_options;
+	//! Whether the caller reads several files with this function. Options that describe the schema then describe the
+	//! scan rather than this one file, so the bind should not hold this file to them exactly
+	bool multi_file_scan = false;
 
 	bool HasExpectedSchema() const {
 		return expected_names && expected_types;

@@ -67,6 +67,7 @@ void TableFunctionFileReader::BindFunction(ClientContext &context, const TableFu
 	TableFunctionBindInput bind_input(inputs, parameters, input_table_types, input_table_names,
 	                                  function.function_info.get(), nullptr, function, empty_ref);
 	bind_input.multi_file_options = file_options;
+	bind_input.multi_file_scan = options.multi_file_scan;
 	if (!options.expected_names.empty()) {
 		// the schema of the scan is known upfront - bind this file against that schema
 		bind_input.expected_names = options.expected_names;
@@ -324,6 +325,8 @@ TableFunctionMultiFileWrapper::InitializeBindData(MultiFileBindData &multi_file_
 	auto result = make_uniq<TableFunctionMultiFileData>();
 	// the options carry the expected schema when it is known upfront (COPY takes it from the target table)
 	result->options = std::move(options_p->Cast<TableFunctionFileReaderOptions>());
+	result->options.multi_file_scan =
+	    multi_file_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES;
 	return std::move(result);
 }
 

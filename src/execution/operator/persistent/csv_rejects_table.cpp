@@ -58,6 +58,8 @@ shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context,
 }
 
 void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData &data) {
+	// every file of a scan initializes the table it reports its rejects to, and files are opened in parallel
+	const lock_guard<mutex> lock(write_lock);
 	// (Re)Create the temporary rejects table
 	auto &catalog = Catalog::GetCatalog(context, Identifier::TempCatalog());
 

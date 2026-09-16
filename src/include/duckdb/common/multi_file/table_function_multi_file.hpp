@@ -23,6 +23,8 @@ public:
 	vector<LogicalType> expected_types;
 	//! The bind data that determined the schema above, if it came from binding a file of this same scan
 	shared_ptr<FunctionData> schema_bind_data;
+	//! Whether the scan reads several files
+	bool multi_file_scan = false;
 };
 
 //! Bind data of a multi-file function that wraps a single-file table function

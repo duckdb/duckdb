@@ -102,7 +102,7 @@ SELECT count(*) FROM read_csv('data/csv/error/mismatch/*.csv', ignore_errors=tru
 34968
 
 # which rows are skipped by ignore_errors does not depend on the columns that are projected - reading no column
-# of the file at all (only the filename) skips the same rows as reading all of them
+# of the file at all (only the filename) skips the same rows as counting them
 query I
 SELECT count(*) FROM read_csv('data/csv/error/mismatch/*.csv', ignore_errors=true, filename=true)
 ----
@@ -113,10 +113,12 @@ SELECT count(filename) FROM read_csv('data/csv/error/mismatch/*.csv', ignore_err
 ----
 34968
 
-query I
-SELECT count(*) FROM (SELECT * FROM read_csv('data/csv/error/mismatch/*.csv', ignore_errors=true, filename=true))
+# these files have different columns, so a scan that reads them all is a schema mismatch - "ignore_errors" only
+# skips the rows that cannot be read, it does not unify the schemas
+statement error
+SELECT * FROM read_csv('data/csv/error/mismatch/*.csv', ignore_errors=true, filename=true)
 ----
-34968
+<REGEX>:.*schema mismatch in glob.*
 
 # rows that cannot be read are stored in the rejects table rather than failing the scan
 query I
