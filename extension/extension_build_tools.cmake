@@ -75,11 +75,11 @@ endfunction()
 # Extensions a client links in just by putting their archive on the link line (see duckdb_autolink.h)
 file(STRINGS ${DUCKDB_MODULE_BASE_DIR}/extension/known_extensions.txt DUCKDB_KNOWN_EXTENSIONS REGEX "^[a-z0-9_]+$")
 
-# Makes LIBRARY define <name>_link for every known extension: the real one for each extension linked into
+# Makes LIBRARY define duckdb_extension_<name>_root for every known extension: the real one for each extension linked into
 # it, the engine's no-op for the rest. A client of the shared library references all of them.
 function(export_known_extension_links LIBRARY)
     foreach(EXT_NAME IN LISTS DUCKDB_KNOWN_EXTENSIONS)
-        duckdb_link_root(${LIBRARY} ${EXT_NAME}_link)
+        duckdb_link_root(${LIBRARY} duckdb_extension_${EXT_NAME}_root)
     endforeach()
     target_link_libraries(${LIBRARY} PRIVATE duckdb_autolink_fallbacks_archive)
 endfunction()
@@ -90,7 +90,7 @@ function(link_extension_libraries LIBRARY LINKAGE)
         string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
         if (${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
             target_link_libraries(${LIBRARY} ${LINKAGE} ${EXT_NAME}_extension)
-            duckdb_link_root(${LIBRARY} ${EXT_NAME}_link)
+            duckdb_link_root(${LIBRARY} duckdb_extension_${EXT_NAME}_root)
         endif()
     endforeach()
 endfunction()
@@ -314,7 +314,7 @@ function(build_loadable_extension_capi_internal NAME VERSION ABI_TYPE PARAMETERS
     build_loadable_extension_directory(${NAME} ${ABI_TYPE} "extension/${NAME}" "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION}" "${VERSION}" "${PARAMETERS}" ${FILES})
 endfunction()
 
-# Generates the link member of a static extension archive: the object that -u <NAME>_link extracts, and
+# Generates the root member of a static extension archive: the object that -u duckdb_extension_<NAME>_root extracts, and
 # whose registrar publishes the extension to the engine. KIND is CPP, CAPI or CAPI_V2.
 function(duckdb_extension_link_member NAME KIND OUT_FILE)
     set(LINK_INCLUDES "")
