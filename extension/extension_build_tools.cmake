@@ -1,24 +1,9 @@
 
 function(add_extension_definitions)
-    include_directories(${PROJECT_SOURCE_DIR}/extension)
 
     if(${DISABLE_BUILTIN_EXTENSIONS})
         add_definitions(-DDISABLE_BUILTIN_EXTENSIONS=${DISABLE_BUILTIN_EXTENSIONS})
     endif()
-
-    # Include paths for any registered out-of-tree extensions
-    foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
-        string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
-        if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
-            if (DEFINED DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_INCLUDE_PATH)
-                include_directories("${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_INCLUDE_PATH}")
-            else()
-                # We try the default locations for headers
-                include_directories("${PROJECT_SOURCE_DIR}/extension_external/${EXT_NAME}/src/include")
-                include_directories("${PROJECT_SOURCE_DIR}/extension_external/${EXT_NAME}/include")
-            endif()
-        endif()
-    endforeach()
 endfunction()
 
 function(add_extension_dependencies LIBRARY)
