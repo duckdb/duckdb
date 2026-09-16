@@ -81,8 +81,8 @@ SinkFinalizeType PhysicalReservoirSample::Finalize(Pipeline &pipeline, Event &ev
 //===--------------------------------------------------------------------===//
 class SampleGlobalSourceState : public GlobalSourceState {
 public:
-	idx_t total_rows = 0;
-	idx_t rows_scanned = 0;
+	atomic<idx_t> total_rows {0};
+	atomic<idx_t> rows_scanned {0};
 	atomic<double> progress {0.0};
 };
 
@@ -120,7 +120,7 @@ SourceResultType PhysicalReservoirSample::GetDataInternal(ExecutionContext &cont
 	}
 	chunk.Move(*sample_chunk);
 	state.rows_scanned += chunk.size();
-	state.progress = double(state.rows_scanned) / double(state.total_rows);
+	state.progress = double(state.rows_scanned.load()) / double(state.total_rows.load());
 
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
