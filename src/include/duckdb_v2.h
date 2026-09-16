@@ -3252,6 +3252,139 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_schema_destroy(duckdb_v2_schema_handle *s
 /* --- Struct definitions for schema --- */
 
 /* ============================================================================
+ * MODULE: tokenizer
+ * ============================================================================ */
+
+/* --- Enums for tokenizer --- */
+
+//! The lexical class of a token.
+typedef enum DUCKDB_V2_TOKEN_TYPE {
+	//! Not an actual token class; out_type is set to this when `duckdb_v2_token_iterator_next()` fails.
+	DUCKDB_V2_TOKEN_TYPE_INVALID = 0,
+
+	//! A keyword of the connection's grammar.
+	DUCKDB_V2_TOKEN_TYPE_KEYWORD = 1,
+
+	//! A bare or double-quoted identifier, quotes included.
+	DUCKDB_V2_TOKEN_TYPE_IDENTIFIER = 2,
+
+	//! A quoted or dollar-quoted string, delimiters included.
+	DUCKDB_V2_TOKEN_TYPE_STRING_LITERAL = 3,
+
+	//! A numeric literal.
+	DUCKDB_V2_TOKEN_TYPE_NUMBER_LITERAL = 4,
+
+	//! An operator or punctuation run other than the statement terminator.
+	DUCKDB_V2_TOKEN_TYPE_OPERATOR = 5,
+
+	//! A line or block comment, delimiters included.
+	DUCKDB_V2_TOKEN_TYPE_COMMENT = 6,
+
+	//! A statement-terminating semicolon.
+	DUCKDB_V2_TOKEN_TYPE_TERMINATOR = 7,
+
+	/*!
+	 * Not a token; reported by token_iterator_next once the input is exhausted, with start equal to the input length
+	 * and length 0.
+	 */
+	DUCKDB_V2_TOKEN_TYPE_END_OF_INPUT = 8,
+	DUCKDB_V2_TOKEN_TYPE_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_TOKEN_TYPE;
+
+/* --- Struct forward declarations for tokenizer --- */
+
+/* --- Types for tokenizer --- */
+
+//! An opaque, owned handle to an iterator over the tokens of a SQL string, produced by tokenize_sql.
+typedef struct _duckdb_v2_token_iterator {
+	void *internal_ptr;
+} * duckdb_v2_token_iterator_handle;
+
+/* --- Constants for tokenizer --- */
+
+/* --- Function pointer typedefs for tokenizer --- */
+
+/* --- Functions for tokenizer --- */
+
+/*!
+ * Tokenizes a SQL string into an iterator over its tokens.
+ *
+ * Lexical tokenization, in the context of whatever grammar extensions are loaded on the given connection. Closing the
+ * connection or changing settings afterwards does not affect the tokens. The SQL string is borrowed for the call only,
+ * the caller may free it once this call returns. Whitespace is not a token. Malformed input is not an error;
+ * `duckdb_v2_token_iterator_ends_unterminated()` reports whether the input ended inside an open token.
+ *
+ * *out_iterator is set to NULL on failure.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection supplying the grammar.
+ * @param sql The SQL text. Borrowed for the call only; may contain interior null bytes. {NULL, 0} is the empty input.
+ * @param out_iterator Receives the new iterator handle. Destroy via token_iterator_destroy.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_tokenize_sql(duckdb_v2_connection_handle conn, duckdb_v2_str sql,
+                                                    duckdb_v2_token_iterator_handle *out_iterator,
+                                                    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Yields the next token, or END_OF_INPUT once exhausted.
+ *
+ * On success writes the token's class, byte offset and byte length into the out-parameters. The lexeme is the input
+ * bytes [start, start + length). Once the input is exhausted, every call gives TOKEN_TYPE_END_OF_INPUT with start equal
+ * to the input length and length 0. On failure out params are set to TOKEN_TYPE_INVALID, 0, 0.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param iterator The iterator to advance.
+ * @param out_type Receives the token's class, or TOKEN_TYPE_END_OF_INPUT once exhausted.
+ * @param out_start Receives the token's byte offset into the input; the input length for END_OF_INPUT.
+ * @param out_length Receives the token's byte length; 0 for END_OF_INPUT.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_token_iterator_next(duckdb_v2_token_iterator_handle iterator,
+                                                           DUCKDB_V2_TOKEN_TYPE *out_type, idx_t *out_start,
+                                                           idx_t *out_length, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Reports whether the input ended before the closing delimiter of its last token.
+ *
+ * True when the input ends inside an open string, quoted identifier, block comment or dollar-quoted string, or in a
+ * line comment with no trailing newline; false otherwise, including for empty or whitespace-only input. Equivalently,
+ * the last token `duckdb_v2_token_iterator_next()` yields before TOKEN_TYPE_END_OF_INPUT is the open one, so its class
+ * and lexeme say which delimiter is missing. A property of the input, not of the iterator position: the answer is the
+ * same before, during and after draining. The only failure is a null argument.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param iterator The iterator.
+ * @param out_ends_unterminated Receives whether the input ended inside an open token.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_token_iterator_ends_unterminated(duckdb_v2_token_iterator_handle iterator,
+                                                                        bool *out_ends_unterminated,
+                                                                        duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys a token iterator handle.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param iterator The iterator to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_token_iterator_destroy(duckdb_v2_token_iterator_handle *iterator);
+
+/* --- Struct definitions for tokenizer --- */
+
+/* ============================================================================
  * MODULE: vector
  * ============================================================================ */
 
@@ -8825,6 +8958,45 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_destroy(duckdb_v2_scalar_
 
 /* --- Enums for sql_statement --- */
 
+//! SQL statement type of a parsed statement or an executed query.
+typedef enum DUCKDB_V2_STATEMENT_TYPE {
+	DUCKDB_V2_STATEMENT_TYPE_INVALID = 0,
+	DUCKDB_V2_STATEMENT_TYPE_SELECT = 1,
+	DUCKDB_V2_STATEMENT_TYPE_INSERT = 2,
+	DUCKDB_V2_STATEMENT_TYPE_UPDATE = 3,
+	DUCKDB_V2_STATEMENT_TYPE_CREATE = 4,
+	DUCKDB_V2_STATEMENT_TYPE_DELETE = 5,
+	DUCKDB_V2_STATEMENT_TYPE_PREPARE = 6,
+	DUCKDB_V2_STATEMENT_TYPE_EXECUTE = 7,
+	DUCKDB_V2_STATEMENT_TYPE_ALTER = 8,
+	DUCKDB_V2_STATEMENT_TYPE_TRANSACTION = 9,
+	DUCKDB_V2_STATEMENT_TYPE_COPY = 10,
+	DUCKDB_V2_STATEMENT_TYPE_ANALYZE = 11,
+	DUCKDB_V2_STATEMENT_TYPE_VARIABLE_SET = 12,
+	DUCKDB_V2_STATEMENT_TYPE_CREATE_FUNC = 13,
+	DUCKDB_V2_STATEMENT_TYPE_EXPLAIN = 14,
+	DUCKDB_V2_STATEMENT_TYPE_DROP = 15,
+	DUCKDB_V2_STATEMENT_TYPE_EXPORT = 16,
+	DUCKDB_V2_STATEMENT_TYPE_PRAGMA = 17,
+	DUCKDB_V2_STATEMENT_TYPE_VACUUM = 18,
+	DUCKDB_V2_STATEMENT_TYPE_CALL = 19,
+	DUCKDB_V2_STATEMENT_TYPE_SET = 20,
+	DUCKDB_V2_STATEMENT_TYPE_LOAD = 21,
+	DUCKDB_V2_STATEMENT_TYPE_RELATION = 22,
+	DUCKDB_V2_STATEMENT_TYPE_EXTENSION = 23,
+	DUCKDB_V2_STATEMENT_TYPE_LOGICAL_PLAN = 24,
+	DUCKDB_V2_STATEMENT_TYPE_ATTACH = 25,
+	DUCKDB_V2_STATEMENT_TYPE_DETACH = 26,
+	DUCKDB_V2_STATEMENT_TYPE_MULTI = 27,
+	DUCKDB_V2_STATEMENT_TYPE_COPY_DATABASE = 28,
+	DUCKDB_V2_STATEMENT_TYPE_UPDATE_EXTENSIONS = 29,
+	DUCKDB_V2_STATEMENT_TYPE_MERGE_INTO = 30,
+	DUCKDB_V2_STATEMENT_TYPE_CONNECT = 31,
+	DUCKDB_V2_STATEMENT_TYPE_DISCONNECT = 32,
+	DUCKDB_V2_STATEMENT_TYPE_EXTERNAL_RESOURCE = 33,
+	DUCKDB_V2_STATEMENT_TYPE_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_STATEMENT_TYPE;
+
 /* --- Struct forward declarations for sql_statement --- */
 
 /* --- Types for sql_statement --- */
@@ -8926,6 +9098,87 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_bind(duckdb_v2_connection_handl
                                                       duckdb_v2_schema_handle *out_schema,
                                                       duckdb_v2_schema_handle *out_parameters,
                                                       duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the statement's type as classified by the parser.
+ *
+ * This gives the type before the statement-level rewrites that `duckdb_v2_statement_execute()` applies, if any. So a
+ * PRAGMA reports PRAGMA even where execution rewrites it into a SELECT or a CALL.
+ * `duckdb_v2_result_get_statement_type()` on the executed result reports the rewritten type. A statement the parser
+ * expands into a group reports MULTI. Its parts are not visible here, and statement_bind rejects it.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param statement The statement.
+ * @param out_type Receives the statement type.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_sql_statement_get_type(duckdb_v2_sql_statement_handle statement,
+                                                              DUCKDB_V2_STATEMENT_TYPE *out_type,
+                                                              duckdb_v2_error_info_handle *err);
+
+/*!
+ * Borrows the statement's own SQL text.
+ *
+ * The slice of the parsed string that belongs to this statement. A trailing terminator and the whitespace after it are
+ * included, whitespace and comments before the first token are not. The statement holds its own copy, so the view
+ * outlives the SQL string passed to parse_sql and the iterator, and stays valid until the statement is destroyed. A
+ * statement produced by a parser extension that overrides parsing carries whatever text the extension recorded.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param statement The statement.
+ * @param out_text Receives a borrowed view of the statement text, valid until the statement is destroyed.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_sql_statement_get_text(duckdb_v2_sql_statement_handle statement,
+                                                              duckdb_v2_str *out_text,
+                                                              duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the number of distinct parameters the statement declares.
+ *
+ * This counts the parameters the parser found ($1, ?, $name, ...), so it needs no catalog and no binding; only the
+ * parameter types wait for `duckdb_v2_statement_bind()`. Repeated uses of one parameter count once.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param statement The statement.
+ * @param out_count Receives the number of distinct parameters.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_sql_statement_get_parameter_count(duckdb_v2_sql_statement_handle statement,
+                                                                         idx_t *out_count,
+                                                                         duckdb_v2_error_info_handle *err);
+
+/*!
+ * Borrows the name of one parameter, in binding order.
+ *
+ * Parse-time metadata. Positions follow the parameters' binding indices, the order of `duckdb_v2_statement_bind()`'s
+ * parameter schema, so position i here names field i there. The name is the binding key that
+ * `duckdb_v2_statement_execute()` accepts: "1", "2", ... for a positional parameter ($1 or ?), the identifier for a
+ * named one ($name). Positional indices may be gapped ($1 and $3 without $2), in which case the names are "1" and "3"
+ * at positions 0 and 1. The view is valid until the statement is destroyed. An index outside [0, count) is rejected
+ * with ERROR_INPUT_OUT_OF_RANGE.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param statement The statement.
+ * @param index Zero-based position in binding order.
+ * @param out_name Receives a borrowed view of the parameter name, valid until the statement is destroyed.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_sql_statement_get_parameter_name(duckdb_v2_sql_statement_handle statement,
+                                                                        idx_t index, duckdb_v2_identifier_t *out_name,
+                                                                        duckdb_v2_error_info_handle *err);
 
 /*!
  * Destroys a statement handle.
@@ -11367,48 +11620,6 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_destroy(duckdb_v2_prep
  * ============================================================================ */
 
 /* --- Enums for query_result --- */
-
-/*!
- * SQL statement type for an executed query. Every statement type DuckDB recognizes is surfaced here, under the same
- * numeric value, so no translation happens on the way out.
- */
-typedef enum DUCKDB_V2_STATEMENT_TYPE {
-	DUCKDB_V2_STATEMENT_TYPE_INVALID = 0,
-	DUCKDB_V2_STATEMENT_TYPE_SELECT = 1,
-	DUCKDB_V2_STATEMENT_TYPE_INSERT = 2,
-	DUCKDB_V2_STATEMENT_TYPE_UPDATE = 3,
-	DUCKDB_V2_STATEMENT_TYPE_CREATE = 4,
-	DUCKDB_V2_STATEMENT_TYPE_DELETE = 5,
-	DUCKDB_V2_STATEMENT_TYPE_PREPARE = 6,
-	DUCKDB_V2_STATEMENT_TYPE_EXECUTE = 7,
-	DUCKDB_V2_STATEMENT_TYPE_ALTER = 8,
-	DUCKDB_V2_STATEMENT_TYPE_TRANSACTION = 9,
-	DUCKDB_V2_STATEMENT_TYPE_COPY = 10,
-	DUCKDB_V2_STATEMENT_TYPE_ANALYZE = 11,
-	DUCKDB_V2_STATEMENT_TYPE_VARIABLE_SET = 12,
-	DUCKDB_V2_STATEMENT_TYPE_CREATE_FUNC = 13,
-	DUCKDB_V2_STATEMENT_TYPE_EXPLAIN = 14,
-	DUCKDB_V2_STATEMENT_TYPE_DROP = 15,
-	DUCKDB_V2_STATEMENT_TYPE_EXPORT = 16,
-	DUCKDB_V2_STATEMENT_TYPE_PRAGMA = 17,
-	DUCKDB_V2_STATEMENT_TYPE_VACUUM = 18,
-	DUCKDB_V2_STATEMENT_TYPE_CALL = 19,
-	DUCKDB_V2_STATEMENT_TYPE_SET = 20,
-	DUCKDB_V2_STATEMENT_TYPE_LOAD = 21,
-	DUCKDB_V2_STATEMENT_TYPE_RELATION = 22,
-	DUCKDB_V2_STATEMENT_TYPE_EXTENSION = 23,
-	DUCKDB_V2_STATEMENT_TYPE_LOGICAL_PLAN = 24,
-	DUCKDB_V2_STATEMENT_TYPE_ATTACH = 25,
-	DUCKDB_V2_STATEMENT_TYPE_DETACH = 26,
-	DUCKDB_V2_STATEMENT_TYPE_MULTI = 27,
-	DUCKDB_V2_STATEMENT_TYPE_COPY_DATABASE = 28,
-	DUCKDB_V2_STATEMENT_TYPE_UPDATE_EXTENSIONS = 29,
-	DUCKDB_V2_STATEMENT_TYPE_MERGE_INTO = 30,
-	DUCKDB_V2_STATEMENT_TYPE_CONNECT = 31,
-	DUCKDB_V2_STATEMENT_TYPE_DISCONNECT = 32,
-	DUCKDB_V2_STATEMENT_TYPE_EXTERNAL_RESOURCE = 33,
-	DUCKDB_V2_STATEMENT_TYPE_MAX_ENUM = 0x7FFFFFFF,
-} DUCKDB_V2_STATEMENT_TYPE;
 
 /*!
  * Shape of a query result. QUERY_RESULT carries rows and columns; CHANGED_ROWS carries an affected row count, as an

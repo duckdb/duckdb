@@ -18,6 +18,7 @@
 
 // The vtable global the redirects reference. It is *defined* by the extension's entrypoint, which is what populates it,
 // so this archive only declares it. Outside the loadable flavor nothing references it and the declaration is inert.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 DUCKDB_EXTENSION_EXTERN
 
 #include <type_traits>
@@ -601,6 +602,31 @@ SqlStatement::~SqlStatement() {
 	duckdb_v2_sql_statement_destroy(&_h);
 }
 
+auto SqlStatement::GetStatementType() const -> StatementType {
+	DUCKDB_V2_STATEMENT_TYPE type = DUCKDB_V2_STATEMENT_TYPE_INVALID;
+	CheckedAPICall(duckdb_v2_sql_statement_get_type, handle(), &type);
+	return static_cast<StatementType>(type);
+}
+
+auto SqlStatement::GetText() const -> std::string_view {
+	duckdb_v2_str text = {nullptr, 0};
+	CheckedAPICall(duckdb_v2_sql_statement_get_text, handle(), &text);
+	return FromStr(text);
+}
+
+auto SqlStatement::GetParameterNames() const -> std::vector<std::string_view> {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_sql_statement_get_parameter_count, handle(), &count);
+	std::vector<std::string_view> names;
+	names.reserve(count);
+	for (idx_t i = 0; i < count; i++) {
+		duckdb_v2_identifier_t name = {nullptr, 0};
+		CheckedAPICall(duckdb_v2_sql_statement_get_parameter_name, handle(), i, &name);
+		names.push_back(FromStr(name));
+	}
+	return names;
+}
+
 StatementIterator::StatementIterator(void *impl) : detail::Handle<StatementIterator>(impl) {
 }
 
@@ -620,6 +646,49 @@ auto Connection::ParseSQL(const char *sql) -> StatementIterator {
 	duckdb_v2_statement_iterator_handle iterator = nullptr;
 	CheckedAPICall(duckdb_v2_parse_sql, handle(), sql, &iterator);
 	return detail::Factory::Make<StatementIterator>(iterator);
+}
+
+// TokenType mirrors DUCKDB_V2_TOKEN_TYPE numerically; every member is pinned. END_OF_INPUT has no C++ member: it
+// is the C iterator's exhaustion marker, and the vector simply ends.
+static_assert(static_cast<uint8_t>(TokenType::INVALID) == DUCKDB_V2_TOKEN_TYPE_INVALID,
+              "TokenType must mirror DUCKDB_V2_TOKEN_TYPE");
+static_assert(static_cast<uint8_t>(TokenType::KEYWORD) == DUCKDB_V2_TOKEN_TYPE_KEYWORD,
+              "TokenType must mirror DUCKDB_V2_TOKEN_TYPE");
+static_assert(static_cast<uint8_t>(TokenType::IDENTIFIER) == DUCKDB_V2_TOKEN_TYPE_IDENTIFIER,
+              "TokenType must mirror DUCKDB_V2_TOKEN_TYPE");
+static_assert(static_cast<uint8_t>(TokenType::STRING_LITERAL) == DUCKDB_V2_TOKEN_TYPE_STRING_LITERAL,
+              "TokenType must mirror DUCKDB_V2_TOKEN_TYPE");
+static_assert(static_cast<uint8_t>(TokenType::NUMBER_LITERAL) == DUCKDB_V2_TOKEN_TYPE_NUMBER_LITERAL,
+              "TokenType must mirror DUCKDB_V2_TOKEN_TYPE");
+static_assert(static_cast<uint8_t>(TokenType::OPERATOR) == DUCKDB_V2_TOKEN_TYPE_OPERATOR,
+              "TokenType must mirror DUCKDB_V2_TOKEN_TYPE");
+static_assert(static_cast<uint8_t>(TokenType::COMMENT) == DUCKDB_V2_TOKEN_TYPE_COMMENT,
+              "TokenType must mirror DUCKDB_V2_TOKEN_TYPE");
+static_assert(static_cast<uint8_t>(TokenType::TERMINATOR) == DUCKDB_V2_TOKEN_TYPE_TERMINATOR,
+              "TokenType must mirror DUCKDB_V2_TOKEN_TYPE");
+
+auto Connection::Tokenize(std::string_view sql) const -> TokenList {
+	duckdb_v2_token_iterator_handle iterator = nullptr;
+	CheckedAPICall(duckdb_v2_tokenize_sql, handle(), ToStr(sql), &iterator);
+	TokenList list;
+	try {
+		while (true) {
+			auto type = DUCKDB_V2_TOKEN_TYPE_INVALID;
+			idx_t start = 0;
+			idx_t length = 0;
+			CheckedAPICall(duckdb_v2_token_iterator_next, iterator, &type, &start, &length);
+			if (type == DUCKDB_V2_TOKEN_TYPE_END_OF_INPUT) {
+				break;
+			}
+			list.tokens.push_back(Token {static_cast<TokenType>(type), start, length});
+		}
+		CheckedAPICall(duckdb_v2_token_iterator_ends_unterminated, iterator, &list.ends_unterminated);
+	} catch (...) {
+		duckdb_v2_token_iterator_destroy(&iterator);
+		throw;
+	}
+	duckdb_v2_token_iterator_destroy(&iterator);
+	return list;
 }
 
 auto Connection::Execute(const SqlStatement &statement, const Value *parameters, idx_t parameter_count) -> QueryResult {
@@ -2154,6 +2223,7 @@ auto ColumnDataCollection::Clear() -> void {
 	CheckedAPICall(duckdb_v2_column_data_collection_clear, handle());
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved)
 auto ColumnDataCollection::Combine(ColumnDataCollection &&source) -> void {
 	auto source_handle = source.handle();
 	CheckedAPICall(duckdb_v2_column_data_collection_combine, handle(), &source_handle);
@@ -2224,7 +2294,7 @@ static_assert(static_cast<uint8_t>(QueryResult::ResultType::NOTHING) == DUCKDB_V
 
 // StatementType mirrors DUCKDB_V2_STATEMENT_TYPE numerically; every member is pinned.
 #define DUCKDB_CPP_ASSERT_STATEMENT_TYPE(member)                                                                       \
-	static_assert(static_cast<uint8_t>(QueryResult::StatementType::member) == DUCKDB_V2_STATEMENT_TYPE_##member,       \
+	static_assert(static_cast<uint8_t>(StatementType::member) == DUCKDB_V2_STATEMENT_TYPE_##member,                    \
 	              "StatementType::" #member " must mirror DUCKDB_V2_STATEMENT_TYPE_" #member)
 DUCKDB_CPP_ASSERT_STATEMENT_TYPE(INVALID);
 DUCKDB_CPP_ASSERT_STATEMENT_TYPE(SELECT);
@@ -2257,6 +2327,9 @@ DUCKDB_CPP_ASSERT_STATEMENT_TYPE(MULTI);
 DUCKDB_CPP_ASSERT_STATEMENT_TYPE(COPY_DATABASE);
 DUCKDB_CPP_ASSERT_STATEMENT_TYPE(UPDATE_EXTENSIONS);
 DUCKDB_CPP_ASSERT_STATEMENT_TYPE(MERGE_INTO);
+DUCKDB_CPP_ASSERT_STATEMENT_TYPE(CONNECT);
+DUCKDB_CPP_ASSERT_STATEMENT_TYPE(DISCONNECT);
+DUCKDB_CPP_ASSERT_STATEMENT_TYPE(EXTERNAL_RESOURCE);
 #undef DUCKDB_CPP_ASSERT_STATEMENT_TYPE
 
 auto QueryResult::GetResultType() const -> ResultType {
@@ -2775,7 +2848,7 @@ auto ScalarFunction::Register() -> void {
 	                         detail::TypedEquals<ScalarFunctionInfo>};
 	CheckedAPICall(duckdb_v2_scalar_function_set_user_data, handle(), &opaque);
 	// The function owns the table now.
-	info.release();
+	info.release(); // NOLINT(bugprone-unused-return-value)
 
 	CheckedAPICall(duckdb_v2_scalar_function_register, handle());
 }
@@ -3224,7 +3297,7 @@ auto AggregateFunction::Register() -> void {
 	                         detail::TypedEquals<AggregateFunctionInfo>};
 	CheckedAPICall(duckdb_v2_aggregate_function_set_user_data, handle(), &opaque);
 	// The function owns the table now.
-	info.release();
+	info.release(); // NOLINT(bugprone-unused-return-value)
 
 	CheckedAPICall(duckdb_v2_aggregate_function_register, handle());
 }
@@ -3757,7 +3830,7 @@ auto TableFunction::Register() -> void {
 	                         detail::TypedEquals<TableFunctionInfo>};
 	CheckedAPICall(duckdb_v2_table_function_set_user_data, handle(), &opaque);
 	// The function owns the table now.
-	info.release();
+	info.release(); // NOLINT(bugprone-unused-return-value)
 
 	CheckedAPICall(duckdb_v2_table_function_register, handle());
 }
@@ -4570,7 +4643,7 @@ auto CopyFunction::Register() -> void {
 	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<CopyFunctionInfo>, detail::TypedEquals<CopyFunctionInfo>};
 	CheckedAPICall(duckdb_v2_copy_function_set_user_data, handle(), &opaque);
 	// The function owns the table now.
-	info.release();
+	info.release(); // NOLINT(bugprone-unused-return-value)
 
 	CheckedAPICall(duckdb_v2_copy_function_register, handle());
 }
@@ -5106,7 +5179,7 @@ auto CastFunction::Register() -> void {
 	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<CastFunctionInfo>, detail::TypedEquals<CastFunctionInfo>};
 	CheckedAPICall(duckdb_v2_cast_function_set_user_data, handle(), &opaque);
 	// The cast owns the table now.
-	info.release();
+	info.release(); // NOLINT(bugprone-unused-return-value)
 
 	CheckedAPICall(duckdb_v2_cast_function_register, handle());
 }
@@ -5454,7 +5527,7 @@ auto ReplacementScan::Register() -> void {
 	                         detail::TypedEquals<ReplacementScanInfo>};
 	CheckedAPICall(duckdb_v2_replacement_scan_set_user_data, handle(), &opaque);
 	// The scan owns the table now.
-	info.release();
+	info.release(); // NOLINT(bugprone-unused-return-value)
 
 	CheckedAPICall(duckdb_v2_replacement_scan_register, handle());
 }
@@ -5552,7 +5625,7 @@ auto ParseSingleStatement(Connection &conn, const std::string &sql) -> SqlStatem
 }
 
 // Names the buffers the table constructor generates, so two appenders on one connection never collide.
-std::atomic<uint64_t> appender_buffer_counter {0};
+std::atomic<uint64_t> appender_buffer_counter {0}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 } // namespace
 

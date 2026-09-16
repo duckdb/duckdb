@@ -179,4 +179,28 @@ void PEGTransformerFactory::SplitGenericOptions(const vector<GenericCopyOption> 
 	}
 }
 
+void PEGTransformerFactory::CollectGenericOptions(const vector<GenericCopyOption> &options_in,
+                                                  case_insensitive_map_t<unique_ptr<ParsedExpression>> &options,
+                                                  const char *statement_name) {
+	for (const auto &option : options_in) {
+		auto name = option.name.GetIdentifierName();
+		if (option.expression) {
+			options[name] = option.expression->Copy();
+			continue;
+		}
+		if (option.children.empty()) {
+			// Bare flag (e.g. `(SPOT)`) binds to boolean true, as in SplitGenericOptions.
+			options[name] = ConstantExpression::Boolean(true);
+		} else if (option.children.size() == 1) {
+			if (option.children[0].IsNull()) {
+				throw BinderException("NULL is not supported as a valid option for %s option %s", statement_name,
+				                      option.name);
+			}
+			options[name] = ConstantExpression::FromValue(option.children[0]);
+		} else {
+			throw ParserException("Option %s can only have one argument", option.name);
+		}
+	}
+}
+
 } // namespace duckdb

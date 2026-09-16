@@ -149,7 +149,7 @@ static bool PushNestedCollation(ClientContext &context, unique_ptr<Expression> &
 	}
 
 	auto bound_lambda =
-	    make_uniq<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA, std::move(lambda_body), 1);
+	    make_uniq<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA, std::move(lambda_body), idx_t(1));
 	bound_lambda->SetParameterNames({lambda_parameter});
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(source));
