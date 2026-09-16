@@ -193,6 +193,7 @@ static TableFunction GetFunction() {
 	table_function.named_parameters.erase("union_by_name");
 	table_function.named_parameters.erase("hive_types");
 	table_function.named_parameters.erase("hive_types_autocast");
+	table_function.named_parameters.erase("hive_sample_size");
 	return table_function;
 }
 
