@@ -55,6 +55,8 @@ struct RenderingQueryResult {
 		return metadata.ColumnCount();
 	}
 	bool TryConvertChunk();
+	//! Runs the result to completion without rendering it. Stops early on an interrupt
+	void Drain(ShellState &state);
 
 public:
 	RenderingResultIterator begin(); // NOLINT: match stl API
