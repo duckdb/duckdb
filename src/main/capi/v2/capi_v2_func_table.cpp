@@ -60,7 +60,55 @@ class CV2TableLocalState final : public LocalTableFunctionState {
 public:
 	CV2UserData handle;
 
-	// get_partition_data guards: the batch index must not decrease and values may only change with it.
+	// Requested partition columns as declared columns, fixed for the lifetime of the local state's pipeline.
+	const vector<column_t> &PartitionColumns(const OperatorPartitionInfo &partition_info,
+	                                         const vector<column_t> &scan_columns) {
+		if (!partition_columns_resolved) {
+			for (auto scan_position : partition_info.partition_columns) {
+				D_ASSERT(scan_position < scan_columns.size());
+				partition_columns.push_back(scan_columns[scan_position]);
+			}
+			partition_columns_resolved = true;
+		}
+		D_ASSERT(partition_columns.size() == partition_info.partition_columns.size());
+		return partition_columns;
+	}
+
+	void CheckPartitionData(const Identifier &function_name, const OperatorPartitionData &data) {
+		if (last_batch_index.IsValid()) {
+			auto last_index = last_batch_index.GetIndex();
+			// The engine would otherwise raise an InternalException, which invalidates the database.
+			if (data.batch_index < last_index) {
+				throw InvalidInputException(
+				    "The partition data callback of table function \"%s\" reported batch index %llu after "
+				    "previously reporting %llu on the same thread; the batch index must not decrease.",
+				    function_name, data.batch_index, last_index);
+			}
+			// The engine only reads the values when the batch index changes; a changed value would silently be ignored.
+			if (data.batch_index == last_index) {
+				D_ASSERT(data.partition_data.size() == last_partition_values.size());
+				for (idx_t i = 0; i < last_partition_values.size(); i++) {
+					if (Value::NotDistinctFrom(data.partition_data[i].min_val, last_partition_values[i])) {
+						continue;
+					}
+					throw InvalidInputException(
+					    "The partition data callback of table function \"%s\" reported a different partitioning "
+					    "column value at index %llu without changing the batch index.",
+					    function_name, i);
+				}
+				return;
+			}
+		}
+		last_batch_index = data.batch_index;
+		last_partition_values.clear();
+		for (auto &entry : data.partition_data) {
+			last_partition_values.push_back(entry.min_val);
+		}
+	}
+
+private:
+	bool partition_columns_resolved = false;
+	vector<column_t> partition_columns;
 	optional_idx last_batch_index;
 	vector<Value> last_partition_values;
 };
@@ -179,11 +227,10 @@ public:
 	void *in_global_state = nullptr;
 	void *in_local_state = nullptr;
 	const OperatorPartitionInfo *in_partition_info = nullptr;
-	vector<column_t> in_partition_columns;
+	const vector<column_t> *in_partition_columns = nullptr;
 	const vector<LogicalType> *in_column_types = nullptr;
 
-	bool out_batch_index_set = false;
-	idx_t out_batch_index = 0;
+	optional_idx out_batch_index;
 	vector<bool> out_partition_value_set;
 	vector<Value> out_partition_values;
 };
@@ -514,6 +561,25 @@ static auto CV2TableFilterPushdown(ClientContext &context, LogicalGet &get, Func
 }
 
 //! Batch index is required on every call, even when unrequested: the pipeline range-checks it regardless.
+static auto CV2TakePartitionData(CV2TablePartitionDataInfo &args, const Identifier &function_name)
+    -> OperatorPartitionData {
+	if (!args.out_batch_index.IsValid()) {
+		throw InvalidInputException("The partition data callback of table function \"%s\" did not set a batch index.",
+		                            function_name);
+	}
+	OperatorPartitionData result(args.out_batch_index.GetIndex());
+	result.partition_data.reserve(args.out_partition_values.size());
+	for (idx_t i = 0; i < args.out_partition_values.size(); i++) {
+		if (!args.out_partition_value_set[i]) {
+			throw InvalidInputException("The partition data callback of table function \"%s\" did not set the "
+			                            "partitioning column value at index %llu.",
+			                            function_name, i);
+		}
+		result.partition_data.emplace_back(std::move(args.out_partition_values[i]));
+	}
+	return result;
+}
+
 static auto CV2TableGetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input)
     -> OperatorPartitionData {
 	const auto &bind_data = input.bind_data->Cast<CV2TableFunctionData>();
@@ -530,13 +596,10 @@ static auto CV2TableGetPartitionData(ClientContext &context, TableFunctionGetPar
 	args.in_partition_info = &input.partition_info;
 	// The planner resolves these to scan positions, unlike get_partition_info's, which it resolves to declared
 	// columns; the callback is promised declared columns in both.
-	for (auto scan_position : input.partition_info.partition_columns) {
-		D_ASSERT(scan_position < global_state.scan_columns.size());
-		args.in_partition_columns.push_back(global_state.scan_columns[scan_position]);
-	}
+	args.in_partition_columns = &local_state.PartitionColumns(input.partition_info, global_state.scan_columns);
 	args.in_column_types = &bind_data.column_types;
-	args.out_partition_value_set.resize(args.in_partition_columns.size(), false);
-	args.out_partition_values.resize(args.in_partition_columns.size());
+	args.out_partition_value_set.resize(args.in_partition_columns->size(), false);
+	args.out_partition_values.resize(args.in_partition_columns->size());
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
@@ -546,51 +609,8 @@ static auto CV2TableGetPartitionData(ClientContext &context, TableFunctionGetPar
 		err.ThrowAsException();
 	}
 
-	if (!args.out_batch_index_set) {
-		throw InvalidInputException("The partition data callback of table function \"%s\" did not set a batch index.",
-		                            info.name);
-	}
-
-	vector<Value> partition_values;
-	for (idx_t i = 0; i < args.out_partition_value_set.size(); i++) {
-		if (!args.out_partition_value_set[i]) {
-			throw InvalidInputException("The partition data callback of table function \"%s\" did not set the "
-			                            "partitioning column value at index %llu.",
-			                            info.name, i);
-		}
-		partition_values.push_back(std::move(args.out_partition_values[i]));
-	}
-
-	// A decreasing batch index would otherwise surface as an InternalException, which invalidates the database on
-	// materialized queries; a changed value under the same batch index would silently fold into the previous partition.
-	if (local_state.last_batch_index.IsValid()) {
-		if (args.out_batch_index < local_state.last_batch_index.GetIndex()) {
-			throw InvalidInputException(
-			    "The partition data callback of table function \"%s\" reported batch index %llu after "
-			    "previously reporting %llu on the same thread; the batch index must not decrease.",
-			    info.name, args.out_batch_index, local_state.last_batch_index.GetIndex());
-		}
-		if (args.out_batch_index == local_state.last_batch_index.GetIndex() &&
-		    partition_values.size() == local_state.last_partition_values.size()) {
-			for (idx_t i = 0; i < partition_values.size(); i++) {
-				if (Value::NotDistinctFrom(partition_values[i], local_state.last_partition_values[i])) {
-					continue;
-				}
-				throw InvalidInputException(
-				    "The partition data callback of table function \"%s\" reported a different partitioning "
-				    "column value at index %llu without changing the batch index.",
-				    info.name, i);
-			}
-		}
-	}
-	local_state.last_batch_index = args.out_batch_index;
-	local_state.last_partition_values = partition_values;
-
-	OperatorPartitionData result(args.out_batch_index);
-	result.partition_data.reserve(partition_values.size());
-	for (auto &value : partition_values) {
-		result.partition_data.emplace_back(std::move(value));
-	}
+	auto result = CV2TakePartitionData(args, info.name);
+	local_state.CheckPartitionData(info.name, result);
 	return result;
 }
 
@@ -1274,7 +1294,7 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_get_partition_column_cou
     duckdb_v2_table_function_partition_data_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(count);
-	return WithErrorHandler(err, [&]() { *count = Convert(info)->in_partition_columns.size(); });
+	return WithErrorHandler(err, [&]() { *count = Convert(info)->in_partition_columns->size(); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_get_partition_column_index(
@@ -1283,7 +1303,7 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_get_partition_column_ind
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(column_index);
 	return WithErrorHandler(err, [&]() {
-		const auto &columns = Convert(info)->in_partition_columns;
+		const auto &columns = *Convert(info)->in_partition_columns;
 		if (index >= columns.size()) {
 			throw duckdb::InvalidInputException(
 			    "Index out of bounds in duckdb_v2_table_function_partition_data_get_partition_column_index");
@@ -1304,9 +1324,7 @@ duckdb_v2_table_function_partition_data_set_batch_index(duckdb_v2_table_function
 			    "%llu",
 			    batch_index, duckdb::PipelineBuildState::BATCH_INCREMENT - 2);
 		}
-		auto &args = *Convert(info);
-		args.out_batch_index = batch_index;
-		args.out_batch_index_set = true;
+		Convert(info)->out_batch_index = batch_index;
 	});
 }
 
@@ -1322,7 +1340,7 @@ duckdb_v2_table_function_partition_data_set_partition_value(duckdb_v2_table_func
 			throw duckdb::InvalidInputException(
 			    "Index out of bounds in duckdb_v2_table_function_partition_data_set_partition_value");
 		}
-		const auto &expected_type = (*args.in_column_types)[args.in_partition_columns[index]];
+		const auto &expected_type = (*args.in_column_types)[(*args.in_partition_columns)[index]];
 		const auto &actual = *Convert(value);
 		if (actual.type() != expected_type) {
 			throw duckdb::InvalidInputException(
