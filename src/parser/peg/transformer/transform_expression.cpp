@@ -1206,7 +1206,7 @@ static unique_ptr<ParsedExpression> TransformOperatorFunction(const string &oper
 	    QualifiedName(Identifier(), Identifier(std::move(schema_name)), Identifier(std::move(function_name))),
 	    std::move(children));
 	result->IsOperatorMutable() = true;
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression>
