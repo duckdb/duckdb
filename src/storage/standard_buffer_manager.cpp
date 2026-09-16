@@ -806,7 +806,7 @@ vector<TemporaryFileInformation> StandardBufferManager::GetTemporaryFiles(bool e
 		}
 
 		TemporaryFileInformation info;
-		info.path = path;
+		info.path = std::move(path);
 		info.size = NumericCast<idx_t>(fs.GetFileSize(*handle));
 		handle.reset();
 		result.push_back(info);
