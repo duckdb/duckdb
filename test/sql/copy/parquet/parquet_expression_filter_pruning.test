@@ -154,8 +154,8 @@ SkipRowGroup	9
 statement ok
 CALL truncate_duckdb_logs()
 
-# can_have_nan=true disables stats pruning entirely (NaN compares larger than anything),
-# but the NaN row must still survive the filter
+# Explicit zero counts in the other nine groups override can_have_nan=true.
+# The NaN-containing group must still survive the filter.
 statement ok
 CALL enable_logging('PhysicalOperator')
 
@@ -170,7 +170,8 @@ CALL disable_logging()
 query II
 SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
 ----
-ReadRowGroup	10
+ReadRowGroup	1
+SkipRowGroup	9
 
 statement ok
 CALL truncate_duckdb_logs()
