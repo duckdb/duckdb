@@ -1,5 +1,5 @@
 # name: test/sql/storage/temp_directory/temp_file_truncation.test
-# description: When tail blocks are freed the temp file must be truncated to exactly the highest live block, leaving no extra block on disk
+# description: When tail blocks are freed the temp file must end after the highest live block, leaving no extra block on disk
 # group: [temp_directory]
 
 require block_size 262144
@@ -7,6 +7,9 @@ require block_size 262144
 require vector_size 2048
 
 require notwindows
+
+statement ok
+SET debug_force_external = false;
 
 statement ok
 SET threads = 1;
