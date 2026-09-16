@@ -410,8 +410,6 @@ enum class PartitionedTupleDataType : uint8_t;
 
 enum class PatternMatchType : uint8_t;
 
-enum class PendingExecutionResult : uint8_t;
-
 enum class PhysicalOperatorType : uint8_t;
 
 enum class PhysicalTableScanExecutionStrategy : uint8_t;
@@ -452,7 +450,7 @@ enum class QueryNodeType : uint8_t;
 
 enum class QueryResultMemoryType : uint8_t;
 
-enum class QueryResultOutputType : uint8_t;
+enum class QueryResultState : uint8_t;
 
 enum class QueryResultType : uint8_t;
 
@@ -475,6 +473,8 @@ enum class RemoveUnusedColumnsMode : uint8_t;
 enum class RenderMode : uint8_t;
 
 enum class RequestType : uint8_t;
+
+enum class ResultEagerness : uint8_t;
 
 enum class ResultLifetime : uint8_t;
 
@@ -559,8 +559,6 @@ enum class StorageIndexType : uint8_t;
 enum class StorageVersion : uint64_t;
 
 enum class StrTimeSpecifier : uint8_t;
-
-enum class StreamExecutionResult : uint8_t;
 
 enum class SubqueryType : uint8_t;
 
@@ -1217,9 +1215,6 @@ template<>
 const char* EnumUtil::ToChars<PatternMatchType>(PatternMatchType value);
 
 template<>
-const char* EnumUtil::ToChars<PendingExecutionResult>(PendingExecutionResult value);
-
-template<>
 const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value);
 
 template<>
@@ -1280,7 +1275,7 @@ template<>
 const char* EnumUtil::ToChars<QueryResultMemoryType>(QueryResultMemoryType value);
 
 template<>
-const char* EnumUtil::ToChars<QueryResultOutputType>(QueryResultOutputType value);
+const char* EnumUtil::ToChars<QueryResultState>(QueryResultState value);
 
 template<>
 const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value);
@@ -1314,6 +1309,9 @@ const char* EnumUtil::ToChars<RenderMode>(RenderMode value);
 
 template<>
 const char* EnumUtil::ToChars<RequestType>(RequestType value);
+
+template<>
+const char* EnumUtil::ToChars<ResultEagerness>(ResultEagerness value);
 
 template<>
 const char* EnumUtil::ToChars<ResultLifetime>(ResultLifetime value);
@@ -1440,9 +1438,6 @@ const char* EnumUtil::ToChars<StorageVersion>(StorageVersion value);
 
 template<>
 const char* EnumUtil::ToChars<StrTimeSpecifier>(StrTimeSpecifier value);
-
-template<>
-const char* EnumUtil::ToChars<StreamExecutionResult>(StreamExecutionResult value);
 
 template<>
 const char* EnumUtil::ToChars<SubqueryType>(SubqueryType value);
@@ -2142,9 +2137,6 @@ template<>
 PatternMatchType EnumUtil::FromString<PatternMatchType>(const char *value);
 
 template<>
-PendingExecutionResult EnumUtil::FromString<PendingExecutionResult>(const char *value);
-
-template<>
 PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *value);
 
 template<>
@@ -2205,7 +2197,7 @@ template<>
 QueryResultMemoryType EnumUtil::FromString<QueryResultMemoryType>(const char *value);
 
 template<>
-QueryResultOutputType EnumUtil::FromString<QueryResultOutputType>(const char *value);
+QueryResultState EnumUtil::FromString<QueryResultState>(const char *value);
 
 template<>
 QueryResultType EnumUtil::FromString<QueryResultType>(const char *value);
@@ -2239,6 +2231,9 @@ RenderMode EnumUtil::FromString<RenderMode>(const char *value);
 
 template<>
 RequestType EnumUtil::FromString<RequestType>(const char *value);
+
+template<>
+ResultEagerness EnumUtil::FromString<ResultEagerness>(const char *value);
 
 template<>
 ResultLifetime EnumUtil::FromString<ResultLifetime>(const char *value);
@@ -2365,9 +2360,6 @@ StorageVersion EnumUtil::FromString<StorageVersion>(const char *value);
 
 template<>
 StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value);
-
-template<>
-StreamExecutionResult EnumUtil::FromString<StreamExecutionResult>(const char *value);
 
 template<>
 SubqueryType EnumUtil::FromString<SubqueryType>(const char *value);

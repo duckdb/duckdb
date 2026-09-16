@@ -352,7 +352,7 @@ public:
 	shared_ptr<EncryptionUtil> encryption_util;
 	bool can_use_metadata_statistics = false;
 	//! How many rows have been read from this file
-	atomic<idx_t> rows_read;
+	atomic<idx_t> rows_read {0};
 	ParquetIntervalBloomFilterVersion interval_bloom_filter_version {};
 	//! Storage indices of columns where expressions like strlen/octet_length are pushed down
 	unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions;

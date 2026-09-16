@@ -21,7 +21,7 @@ optional<MatchInput> MatchStep::GetChild() {
 MatcherResult MatchStep::GetResult() const {
 	D_ASSERT(!child);
 	D_ASSERT(result);
-	return *result;
+	return result.value();
 }
 
 class AtomicMatchProcess : public MatchProcess {
@@ -133,7 +133,7 @@ public:
 			awaiting_child = false;
 			D_ASSERT(child_state);
 			if (child_result->IsSuccess()) {
-				state.token_iterator.SetPosition(child_state->token_iterator);
+				state.token_iterator.SetPosition(child_state.value().token_iterator);
 				if (!child_result->HasParseResult()) {
 					return MatchStep::Complete(MatcherResult::Success());
 				}

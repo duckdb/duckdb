@@ -824,7 +824,7 @@ public:
 
 	const vector<Value> &Values() const {
 		D_ASSERT(values);
-		return *values;
+		return values.value();
 	}
 
 	idx_t AddCollectionSlot(PartitionedCopyCollectionSchema schema, idx_t row_count) {
