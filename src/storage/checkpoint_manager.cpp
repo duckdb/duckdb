@@ -69,6 +69,8 @@ void ActiveCheckpointWrapper::GetCheckpointTransaction(CheckpointOptions &option
 	auto &transaction = DuckTransaction::Get(*checkpoint_context, db);
 	transaction.SetIsCheckpointTransaction();
 	checkpoint_transaction = &transaction;
+	// the checkpoint sees every commit before it started
+	D_ASSERT(transaction.view.visibility_bound == VisibilityBound::Before(transaction.start_time));
 	options.checkpoint_id = transaction_manager.NextCheckpointId();
 	options.visibility_bound = transaction.view.visibility_bound;
 	transaction_manager.SetActiveCheckpoint(options.checkpoint_id.GetIndex());
