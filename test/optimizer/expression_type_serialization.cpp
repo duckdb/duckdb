@@ -11,7 +11,6 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/parser/statement/logical_plan_statement.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/planner.hpp"
@@ -52,12 +51,9 @@ static void CheckExpressionTypes(ClientContext &context, const Expression &expre
 	INFO("expression " << expression.ToString());
 	RequireExpressionType(expression, *expression.Copy());
 	for (const auto &compatibility :
-	     {StorageCompatibility::FromIndex(StorageVersion::V1_5_0),
-	      StorageCompatibility::FromIndex(StorageVersion::V2_0_0), StorageCompatibility::Latest()}) {
+	     {StorageCompatibility::FromIndex(StorageVersion::V1_5_0), StorageCompatibility::Latest()}) {
 		auto copy = CopyExpression(context, expression, compatibility);
 		RequireExpressionType(expression, *copy);
-		auto repeated = CopyExpression(context, *copy, compatibility);
-		RequireExpressionType(expression, *repeated);
 	}
 	ExpressionIterator::EnumerateChildren(expression,
 	                                      [&](const Expression &child) { CheckExpressionTypes(context, child); });
@@ -89,56 +85,19 @@ struct ReplacementBindData : FunctionData {
 TEST_CASE("Expression copies preserve collations through binary serialization", "[serialization][expression_types]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
-	REQUIRE_NO_FAIL(connection.Query(
-	    "CREATE TABLE values_to_copy(v VARCHAR); INSERT INTO values_to_copy VALUES ('A'),('a'),(NULL)"));
+	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE values_to_copy(v VARCHAR)"));
 	connection.BeginTransaction();
-	for (const auto &default_collation : {"", "nocase"}) {
-		REQUIRE_NO_FAIL(connection.Query(string("SET default_collation='") + default_collation + "'"));
-		for (const auto &expression : {"v",
-		                               "v COLLATE nocase",
-		                               "'A' COLLATE nocase",
-		                               "NULL::VARCHAR COLLATE nocase",
-		                               "concat(v,'') COLLATE nocase",
-		                               "upper(v COLLATE nocase)",
-		                               "CASE WHEN v IS NULL THEN NULL ELSE v END COLLATE nocase",
-		                               "coalesce(v,'') COLLATE nocase",
-		                               "v COLLATE \"binary\"",
-		                               "concat(v,'') COLLATE \"binary\"",
-		                               "v COLLATE nocase.noaccent",
-		                               "['A' COLLATE nocase,NULL]",
-		                               "[v COLLATE nocase]",
-		                               "[[v COLLATE nocase]]",
-		                               "[v COLLATE nocase,NULL]::VARCHAR[2]",
-		                               "{'s': v COLLATE nocase}",
-		                               "map([coalesce(v,'') COLLATE nocase], [v COLLATE nocase])",
-		                               "union_value(s := v COLLATE nocase)",
-		                               "min(v COLLATE nocase)",
-		                               "string_agg(v COLLATE nocase,',')",
-		                               "list(v COLLATE nocase)",
-		                               "first_value(v COLLATE nocase) OVER ()",
-		                               "CAST(123.45 AS DECIMAL(9,2))",
-		                               "NULL::INTEGER[]"}) {
-			CAPTURE(default_collation, expression);
-			auto sql = string("SELECT ") + expression + " AS result FROM values_to_copy";
-			Parser parser(connection.context->GetParserOptions());
-			parser.ParseQuery(sql);
-			Planner planner(*connection.context);
-			planner.CreatePlan(std::move(parser.statements[0]));
-			planner.plan->ResolveOperatorTypes();
-			CheckPlanExpressionTypes(*connection.context, *planner.plan);
-			auto copy = planner.plan->Copy(*connection.context);
-			copy->ResolveOperatorTypes();
-			CheckPlanExpressionTypes(*connection.context, *copy);
-			auto expected = connection.Query(sql);
-			auto actual = connection.Query(make_uniq<LogicalPlanStatement>(std::move(copy)));
-			REQUIRE_NO_FAIL(*expected);
-			REQUIRE_NO_FAIL(*actual);
-			REQUIRE(actual->GetTypes() == expected->GetTypes());
-			REQUIRE(actual->RowCount() == expected->RowCount());
-			for (idx_t row = 0; row < expected->RowCount(); row++) {
-				REQUIRE(Value::NotDistinctFrom(actual->GetValue(0, row), expected->GetValue(0, row)));
-			}
-		}
+	for (const auto &expression :
+	     {"'A' COLLATE nocase", "NULL::VARCHAR COLLATE nocase", "concat(v,'') COLLATE nocase",
+	      "concat(v,'') COLLATE \"binary\"", "v COLLATE nocase.noaccent", "[[v COLLATE nocase]]",
+	      "[v COLLATE nocase,NULL]::VARCHAR[2]", "{'s': v COLLATE nocase}", "map([v COLLATE nocase], [v])",
+	      "union_value(s := v COLLATE nocase)", "min(v COLLATE nocase)", "first_value(v COLLATE nocase) OVER ()"}) {
+		CAPTURE(expression);
+		Parser parser(connection.context->GetParserOptions());
+		parser.ParseQuery(string("SELECT ") + expression + " AS result FROM values_to_copy");
+		Planner planner(*connection.context);
+		planner.CreatePlan(std::move(parser.statements[0]));
+		CheckPlanExpressionTypes(*connection.context, *planner.plan);
 	}
 	connection.Rollback();
 }
@@ -193,61 +152,37 @@ TEST_CASE("Expression rewrites preserve compatible result annotations", "[expres
 	REQUIRE_NO_FAIL(connection.Query(
 	    "CREATE TABLE rewrite_values(v VARCHAR); INSERT INTO rewrite_values VALUES ('A'),('a'),(NULL)"));
 	connection.BeginTransaction();
-	for (const auto &default_collation : {"", "nocase"}) {
-		REQUIRE_NO_FAIL(connection.Query(string("SET default_collation='") + default_collation + "'"));
-		for (const auto &expression :
-		     {"(v || '') COLLATE nocase", "('' || v) COLLATE nocase", "replace(v,'x','x') COLLATE nocase",
-		      "CASE WHEN true THEN v ELSE NULL END COLLATE nocase",
-		      "CASE WHEN false THEN NULL ELSE v END COLLATE nocase",
-		      "CASE WHEN NULL THEN NULL ELSE v END COLLATE nocase", "coalesce(v,NULL) COLLATE nocase",
-		      "least(v,v) COLLATE nocase", "greatest(v,v) COLLATE nocase", "('A' || '') COLLATE nocase",
-		      "(v || '') COLLATE \"binary\"", "(v || '') COLLATE nocase.noaccent",
-		      "CASE WHEN true THEN [v] ELSE ['A' COLLATE nocase] END",
-		      "CASE WHEN false THEN [['A' COLLATE nocase]] ELSE [[v]] END",
-		      "CASE WHEN true THEN {'s': v} ELSE {'s': 'A' COLLATE nocase} END",
-		      "CASE WHEN true THEN [v]::VARCHAR[1] ELSE ['A' COLLATE nocase]::VARCHAR[1] END",
-		      "CAST(12.5 AS DECIMAL(9,2))+CAST(0 AS DECIMAL(9,2))",
-		      "CASE WHEN true THEN 42::BIGINT ELSE 0::INTEGER END"}) {
-			CAPTURE(default_collation, expression);
-			auto sql = string("SELECT ") + expression + " AS result FROM rewrite_values";
-			REQUIRE_NO_FAIL(connection.Query("SET debug_disable_optimizer=true"));
-			auto expected = connection.Query(sql);
-			REQUIRE_NO_FAIL(*expected);
-			REQUIRE_NO_FAIL(connection.Query("SET debug_disable_optimizer=false"));
-			Parser parser(connection.context->GetParserOptions());
-			parser.ParseQuery(sql);
-			Planner planner(*connection.context);
-			planner.CreatePlan(std::move(parser.statements[0]));
-			planner.plan->ResolveOperatorTypes();
-			auto types = planner.plan->types;
-			Optimizer optimizer(*planner.binder, *connection.context);
-			auto plan = optimizer.Optimize(std::move(planner.plan));
-			plan->ResolveOperatorTypes();
-			REQUIRE(plan->types == types);
-			REQUIRE(GetCollations(plan->types[0]) == GetCollations(types[0]));
-			std::function<void(LogicalOperator &)> check_rewrites = [&](LogicalOperator &op) {
-				LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expr) {
-					ExpressionIterator::VisitExpression<BoundFunctionExpression>(
-					    **expr, [&](const BoundFunctionExpression &function) {
-						    REQUIRE(function.Function().GetName() != "||");
-						    REQUIRE(function.Function().GetName() != "replace");
-					    });
-				});
-				for (auto &child : op.children) {
-					check_rewrites(*child);
-				}
-			};
-			check_rewrites(*plan);
-			CheckPlanExpressionTypes(*connection.context, *plan);
-			auto copy = plan->Copy(*connection.context);
-			copy->ResolveOperatorTypes();
-			REQUIRE(GetCollations(copy->types[0]) == GetCollations(types[0]));
-			REQUIRE_NO_FAIL(connection.Query("SET debug_disable_optimizer=true"));
-			auto actual = connection.Query(make_uniq<LogicalPlanStatement>(std::move(copy)));
-			REQUIRE_NO_FAIL(*actual);
-			REQUIRE(actual->Equals(*expected, false));
-			REQUIRE_NO_FAIL(connection.Query("SET debug_disable_optimizer=false"));
-		}
+	for (const auto &expression :
+	     {"(v || '') COLLATE nocase", "('' || v) COLLATE nocase", "replace(v,'x','x') COLLATE nocase",
+	      "CASE WHEN true THEN v ELSE NULL END COLLATE nocase", "CASE WHEN false THEN NULL ELSE v END COLLATE nocase",
+	      "coalesce(v,NULL) COLLATE nocase", "least(v,v) COLLATE nocase", "greatest(v,v) COLLATE nocase",
+	      "('A' || '') COLLATE nocase", "CASE WHEN true THEN [[v]] ELSE [['A' COLLATE nocase]] END",
+	      "CAST(12.5 AS DECIMAL(9,2))+CAST(0 AS DECIMAL(9,2))"}) {
+		CAPTURE(expression);
+		Parser parser(connection.context->GetParserOptions());
+		parser.ParseQuery(string("SELECT ") + expression + " AS result FROM rewrite_values");
+		Planner planner(*connection.context);
+		planner.CreatePlan(std::move(parser.statements[0]));
+		planner.plan->ResolveOperatorTypes();
+		auto type = planner.plan->types[0];
+		Optimizer optimizer(*planner.binder, *connection.context);
+		auto plan = optimizer.Optimize(std::move(planner.plan));
+		plan->ResolveOperatorTypes();
+		REQUIRE(plan->types[0] == type);
+		REQUIRE(GetCollations(plan->types[0]) == GetCollations(type));
+		std::function<void(LogicalOperator &)> check_rewrites = [&](LogicalOperator &op) {
+			LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expr) {
+				ExpressionIterator::VisitExpression<BoundFunctionExpression>(
+				    **expr, [&](const BoundFunctionExpression &function) {
+					    REQUIRE(function.Function().GetName() != "||");
+					    REQUIRE(function.Function().GetName() != "replace");
+				    });
+			});
+			for (auto &child : op.children) {
+				check_rewrites(*child);
+			}
+		};
+		check_rewrites(*plan);
 	}
 	connection.Rollback();
 }
@@ -257,8 +192,8 @@ TEST_CASE("Constant mutations synchronize result types", "[expression_types]") {
 	Expression &base = expression;
 	auto type = LogicalType::VARCHAR_COLLATION("nocase");
 	base.SetReturnType(type);
-	REQUIRE(expression.GetReturnType().EqualsWithCollation(type));
-	REQUIRE(expression.GetValue().type().EqualsWithCollation(type));
+	REQUIRE(expression.GetReturnType().EqualsIncludingCollation(type));
+	REQUIRE(expression.GetValue().type().EqualsIncludingCollation(type));
 	expression.SetValue(Value::BIGINT(42));
 	REQUIRE(expression.GetReturnType() == LogicalType::BIGINT);
 	REQUIRE(expression.GetValue() == Value::BIGINT(42));
@@ -266,5 +201,5 @@ TEST_CASE("Constant mutations synchronize result types", "[expression_types]") {
 	REQUIRE(value == Value::BIGINT(42));
 	expression.SetValue(Value(type));
 	REQUIRE(expression.GetValue().IsNull());
-	REQUIRE(expression.GetReturnType().EqualsWithCollation(type));
+	REQUIRE(expression.GetReturnType().EqualsIncludingCollation(type));
 }

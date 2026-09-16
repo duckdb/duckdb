@@ -2014,7 +2014,7 @@ bool LogicalType::EqualTypeInfo(const LogicalType &rhs) const {
 	}
 }
 
-bool LogicalType::EqualsWithCollation(const LogicalType &rhs) const {
+bool LogicalType::EqualsIncludingCollation(const LogicalType &rhs) const {
 	if (*this != rhs) {
 		return false;
 	}

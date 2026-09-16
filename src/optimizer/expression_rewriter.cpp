@@ -31,7 +31,7 @@ static unique_ptr<Expression> ApplyRule(LogicalOperator &op, const vector<refere
 			auto result = rule.get().Apply(op, bindings, rule_made_change, is_root);
 			if (result) {
 				D_ASSERT(result->GetReturnType() != return_type ||
-				         result->GetReturnType().EqualsWithCollation(return_type));
+				         result->GetReturnType().EqualsIncludingCollation(return_type));
 				changes_made = true;
 				// the base node changed: the rule applied changes
 				if (!alias.empty()) {
