@@ -619,6 +619,25 @@ FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
 	return file_metadata;
 }
 
+optional<FileMetadata> LocalFileSystem::GetStatsIfExists(const string &path_p, optional_ptr<FileOpener> opener) {
+	if (path_p.empty()) {
+		return nullopt;
+	}
+	auto path = ExpandPath(path_p, opener);
+	struct stat status;
+	if (stat(path.c_str(), &status) != 0) {
+		auto retained_errno = errno;
+		if (retained_errno == ENOENT || retained_errno == ENOTDIR) {
+			return nullopt;
+		}
+		throw IOException({{"errno", std::to_string(retained_errno)}}, "Failed to get stats for path \"%s\": %s",
+		                  path_p, strerror(retained_errno));
+	}
+	auto file_metadata = StatsFromStruct(status);
+	file_metadata.version_tag = VersionTagFromMetadata(file_metadata);
+	return file_metadata;
+}
+
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	if (ftruncate(fd, new_size) != 0) {
@@ -1041,6 +1060,23 @@ static timestamp_t FiletimeToTimeStamp(FILETIME file_time) {
 	const auto WINDOWS_TICK = 10000000;
 	const auto SEC_TO_UNIX_EPOCH = 11644473600LL;
 	return Timestamp::FromEpochSeconds(fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
+}
+
+static FileMetadata StatsFromStruct(struct _stati64 status) { // typos:ignore
+	FileMetadata file_metadata;
+	file_metadata.file_size = status.st_size;
+	file_metadata.last_modification_time = Timestamp::FromEpochSeconds(status.st_mtime);
+	file_metadata.device_id = static_cast<idx_t>(status.st_dev);
+	file_metadata.file_id = static_cast<idx_t>(status.st_ino);
+
+	if (status.st_mode & S_IFREG) {
+		file_metadata.file_type = FileType::FILE_TYPE_REGULAR;
+	} else if (status.st_mode & S_IFDIR) {
+		file_metadata.file_type = FileType::FILE_TYPE_DIR;
+	} else if (status.st_mode & _S_IFCHR) {
+		file_metadata.file_type = FileType::FILE_TYPE_CHARDEV;
+	}
+	return file_metadata;
 }
 
 static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
@@ -1649,6 +1685,26 @@ FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
 	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	auto file_metadata = StatsInternal(hFile, handle.GetPath());
+	file_metadata.version_tag = VersionTagFromMetadata(file_metadata);
+	return file_metadata;
+}
+
+optional<FileMetadata> LocalFileSystem::GetStatsIfExists(const string &path_p, optional_ptr<FileOpener> opener) {
+	if (path_p.empty()) {
+		return nullopt;
+	}
+	auto unicode_path = NormalizePathAndConvertToUnicode(*this, path_p, opener);
+	struct _stati64 status; // typos:ignore
+	if (_wstati64(unicode_path.c_str(), &status) != 0) {
+		auto retained_errno = errno;
+		if (retained_errno == ENOENT || retained_errno == ENOTDIR) {
+			return nullopt;
+		}
+		throw IOException({{"errno", std::to_string(retained_errno)}}, "Failed to get stats for path \"%s\": %s",
+		                  path_p, strerror(retained_errno));
+	}
+
+	auto file_metadata = StatsFromStruct(status);
 	file_metadata.version_tag = VersionTagFromMetadata(file_metadata);
 	return file_metadata;
 }

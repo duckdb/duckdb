@@ -170,6 +170,10 @@ FileMetadata DebugFileSystem::Stats(FileHandle &handle) {
 	return inner.file_system.Stats(inner);
 }
 
+optional<FileMetadata> DebugFileSystem::GetStatsIfExists(const string &path, optional_ptr<FileOpener> opener) {
+	return inner_fs->GetStatsIfExists(path, opener);
+}
+
 void DebugFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	auto &inner = *handle.Cast<DebugFileHandle>().inner;
 	inner.file_system.Truncate(inner, new_size);

@@ -221,6 +221,10 @@ FileMetadata CachingFileSystemWrapper::Stats(FileHandle &handle) {
 	return underlying_file_system.Stats(*file_handle);
 }
 
+optional<FileMetadata> CachingFileSystemWrapper::GetStatsIfExists(const string &path, optional_ptr<FileOpener> opener) {
+	return underlying_file_system.GetStatsIfExists(path, opener);
+}
+
 //===----------------------------------------------------------------------===//
 // Directory Operations
 //===----------------------------------------------------------------------===//
