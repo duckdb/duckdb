@@ -1,4 +1,5 @@
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/vector/vector_writer.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -647,17 +648,32 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 // Fetch
 //===--------------------------------------------------------------------===//
 template <class T>
-void RLEFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	D_ASSERT(row_id >= 0);
-	auto row_index = NumericCast<idx_t>(row_id);
-	D_ASSERT(row_index < segment.count);
+void RLEFetchRows(ColumnSegment &segment, ColumnFetchState &state, const unsafe_array_ptr<row_t> &row_ids,
+                  optional_ptr<const FetchRowMapping> mapping, Vector &result, idx_t result_offset) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto writer = FlatVector::ScatterWriter<T>(result);
 	auto handle = buffer_manager.Pin(state.context, segment.GetBlockHandle());
 	RLEScanState<T> scan_state(std::move(handle), segment);
-	scan_state.Skip(segment, row_index);
-
-	auto result_data = FlatVector::GetDataMutable<T>(result);
-	result_data[result_idx] = scan_state.ValidateAndGetCurrentRun().value;
+	idx_t position = 0;
+	auto read_value = [&](idx_t idx) {
+		const auto target = NumericCast<idx_t>(row_ids[idx]);
+		D_ASSERT(idx == 0 || target > position);
+		scan_state.Skip(segment, target - position);
+		position = target;
+		return scan_state.ValidateAndGetCurrentRun().value;
+	};
+	if (!mapping) {
+		for (idx_t idx = 0; idx < row_ids.size(); idx++) {
+			writer[result_offset + idx] = read_value(idx);
+		}
+	} else {
+		for (idx_t idx = 0; idx < row_ids.size(); idx++) {
+			const auto value = read_value(idx);
+			for (const auto result_index : mapping->GetResultIndexes(idx)) {
+				writer[result_offset + result_index] = value;
+			}
+		}
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -665,12 +681,14 @@ void RLEFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, 
 //===--------------------------------------------------------------------===//
 template <class T, bool WRITE_STATISTICS = true>
 CompressionFunction GetRLEFunction(PhysicalType data_type) {
-	return CompressionFunction(CompressionType::COMPRESSION_RLE, data_type, RLEInitAnalyze<T>, RLEAnalyze<T>,
-	                           RLEFinalAnalyze<T>, RLEInitCompression<T, WRITE_STATISTICS>,
-	                           RLECompress<T, WRITE_STATISTICS>, RLEFinalizeCompress<T, WRITE_STATISTICS>,
-	                           RLEInitScan<T>, RLEScan<T>, RLEScanPartial<T>, RLEFetchRow<T>, RLESkip<T>, nullptr,
-	                           nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, RLESelect<T>,
-	                           RLEFilter<T>);
+	auto function =
+	    CompressionFunction(CompressionType::COMPRESSION_RLE, data_type, RLEInitAnalyze<T>, RLEAnalyze<T>,
+	                        RLEFinalAnalyze<T>, RLEInitCompression<T, WRITE_STATISTICS>,
+	                        RLECompress<T, WRITE_STATISTICS>, RLEFinalizeCompress<T, WRITE_STATISTICS>, RLEInitScan<T>,
+	                        RLEScan<T>, RLEScanPartial<T>, RLEFetchRows<T>, RLESkip<T>, nullptr, nullptr, nullptr,
+	                        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, RLESelect<T>, RLEFilter<T>);
+	function.prefers_batch_fetch = true;
+	return function;
 }
 
 CompressionFunction RLEFun::GetFunction(PhysicalType type) {
