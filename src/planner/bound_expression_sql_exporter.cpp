@@ -225,6 +225,7 @@ public:
 		case ExpressionClass::POSITIONAL_REFERENCE:
 		case ExpressionClass::BETWEEN:
 		case ExpressionClass::LAMBDA_REF:
+		case ExpressionClass::PATTERN:
 		case ExpressionClass::TYPE:
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Expression export requires a final bound class"));

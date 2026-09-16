@@ -56,7 +56,7 @@ TableAliasColon <- ColIdOrString ':'
 ValuesRef <- TableAliasColon? ValuesClause TableAlias?
 ParensTableRef <- TableAliasColon? Parens(TableRef) TableAlias? SampleClause?
 
-JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
+JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause / TableMatchRecognizeClause
 
 TablePivotClause <- 'PIVOT' Parens(TablePivotClauseBody) TableAlias?
 TablePivotClauseBody <- TargetList 'FOR' PivotValueList+ PivotGroupByList?
