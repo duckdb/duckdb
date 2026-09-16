@@ -30,8 +30,7 @@ int ArrowTestFactory::ArrowArrayStreamGetSchema(struct ArrowArrayStream *stream,
 	return 0;
 }
 
-static int NextFromMaterialized(MaterializedQueryResult &res, bool big, ClientProperties properties,
-                                struct ArrowArray *out) {
+static int NextFromMaterialized(QueryResult &res, bool big, ClientProperties properties, struct ArrowArray *out) {
 	auto &types = res.GetTypes();
 	unordered_map<idx_t, const duckdb::shared_ptr<ArrowTypeExtensionData>> extension_type_cast;
 	if (big) {
@@ -82,7 +81,7 @@ int ArrowTestFactory::ArrowArrayStreamGetNext(struct ArrowArrayStream *stream, s
 	}
 	auto &data = *((ArrowArrayStreamData *)stream->private_data);
 	if (data.factory.result->GetResultType() == QueryResultType::MATERIALIZED_RESULT) {
-		auto &materialized_result = data.factory.result->Cast<MaterializedQueryResult>();
+		auto &materialized_result = *data.factory.result;
 		return NextFromMaterialized(materialized_result, data.factory.big_result, data.options, out);
 	} else {
 		D_ASSERT(data.factory.result->GetResultType() == QueryResultType::ARROW_RESULT);
@@ -244,7 +243,7 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 		    [](ClientConfig &config) { config.get_result_collector = nullptr; });
 
 		// run the query
-		initial_result = con.context->Query(query, false);
+		initial_result = con.context->Query(query, QueryParameters());
 		if (initial_result->HasError()) {
 			initial_result->Print();
 			printf("Query: %s\n", query.c_str());

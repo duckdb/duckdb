@@ -48,15 +48,13 @@ add_library_unity(
   extension_callback_manager.cpp
   extension_install_info.cpp
   extension_manager.cpp
-  materialized_query_result.cpp
-  pending_query_result.cpp
   prepared_statement.cpp
   prepared_statement_data.cpp
   relation.cpp
   query_profiler.cpp
   query_result.cpp
+  query_result_stream.cpp
   result_set_manager.cpp
-  stream_query_result.cpp
   user_settings.cpp
   valid_checker.cpp)
 set(ALL_OBJECT_FILES

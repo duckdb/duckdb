@@ -1,4 +1,5 @@
 #include "duckdb/common/multi_file/multi_file_column_mapper.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -318,7 +319,7 @@ static ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColu
 		default_expressions.push_back(std::move(child_map.default_value));
 
 		// auto default_type = LogicalType::STRUCT(std::move(default_type_list));
-		result.default_value = StructPackFun::GetFunction().Bind(context, std::move(default_expressions));
+		result.default_value = BindBuiltinScalarFunction(context, StructPackFun::Name, std::move(default_expressions));
 	}
 	result.column_index = make_uniq<ColumnIndex>(local_id.GetIndex(), std::move(child_indexes));
 	result.mapping = std::move(mapping);
@@ -439,7 +440,7 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 	}
 	if (!default_expressions.empty()) {
 		// we have default values at a previous level wrap it in a "list"
-		result.default_value = StructPackFun::GetFunction().Bind(context, std::move(default_expressions));
+		result.default_value = BindBuiltinScalarFunction(context, StructPackFun::Name, std::move(default_expressions));
 	}
 	vector<ColumnIndex> map_indexes;
 	map_indexes.emplace_back(0, std::move(child_indexes));
@@ -544,7 +545,7 @@ static ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileCo
 	}
 
 	if (!default_expressions.empty()) {
-		result.default_value = StructPackFun::GetFunction().Bind(context, std::move(default_expressions));
+		result.default_value = BindBuiltinScalarFunction(context, StructPackFun::Name, std::move(default_expressions));
 	}
 	result.column_index = make_uniq<ColumnIndex>(local_id.GetIndex(), std::move(child_indexes));
 	if (global_index.HasType()) {
@@ -625,7 +626,7 @@ static unique_ptr<Expression> ConstructMapExpression(ClientContext &context, Mul
 	} else {
 		children.push_back(std::move(mapping.default_value));
 	}
-	return RemapStructFun::GetFunction().Bind(context, std::move(children));
+	return BindBuiltinScalarFunction(context, RemapStructFun::Name, std::move(children));
 }
 
 ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const ColumnMapper &mapper) {

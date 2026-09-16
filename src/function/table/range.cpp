@@ -42,7 +42,7 @@ struct RangeFunctionBindData : public TableFunctionData {
 		GetParameters(values, inputs.size(), start, end, increment);
 		if (generate_series) {
 			// generate_series has inclusive bounds on the RHS
-			end += 1;
+			end += increment < 0 ? -1 : 1;
 		}
 
 		cardinality = Hugeint::Cast<idx_t>((end - start) / increment);

@@ -911,7 +911,7 @@ jobs:
         tar -xzf build/release-artifact.tar.gz -C build
 
     - name: Run all release unit tests
-      run: make allunit
+      run: make allunit T="--test-flags='--thread-stack-size 131072'"
 
     - name: Tools Tests
       run: python -m pytest tools/shell/tests --shell-binary build/release/duckdb
@@ -1140,7 +1140,6 @@ jobs:
           DESTROY_UNPINNED_BLOCKS: 1
           ALTERNATIVE_VERIFY: 1
           DISABLE_POINTER_SALT: 1
-          DISABLE_GCC_FUNCTION_SECTIONS: 1
         with:
           build-type: relassert
           build: python3 scripts/ci/retry.py -- make relassert
