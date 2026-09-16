@@ -340,7 +340,7 @@ TemporaryFileInformation TemporaryFileHandle::GetTemporaryFile() {
 	TemporaryFileLock lock(file_lock);
 	TemporaryFileInformation info;
 	info.path = path;
-	info.size = GetPositionInFile(index_manager.GetUsedBlockCount());
+	info.size = GetPositionInFile(index_manager.GetMaxIndex());
 	return info;
 }
 
