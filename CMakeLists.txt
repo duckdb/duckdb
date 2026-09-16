@@ -210,7 +210,8 @@ endif()
 # This option allows --gc-sections flag during extension linking to discard any
 # unused functions or data
 if(EXTENSION_STATIC_BUILD)
-  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU"
+  if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU|Clang"
+     AND NOT MSVC
      AND NOT DISABLE_GCC_FUNCTION_SECTIONS)
     set(CMAKE_CXX_FLAGS_RELEASE
         "${CMAKE_CXX_FLAGS_RELEASE} -ffunction-sections -fdata-sections")
