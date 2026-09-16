@@ -1556,6 +1556,31 @@ TEST_CASE("V2: ENUM values build via value_cast from VARCHAR", "[capi_v2][value]
 	duckdb_v2_logical_type_destroy(&enum_type);
 }
 
+TEST_CASE("V2: value_get_uint on an ENUM reports the cast failure", "[capi_v2][value][typed][enum]") {
+	EnvFixture f;
+	QueryResult r;
+	ExecSQL(f.conn, "CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')");
+	REQUIRE(Query(f.conn, "SELECT 'sad'::mood AS a, 'ok'::mood AS b, 'happy'::mood AS c", &r) == DUCKDB_V2_ERROR_NONE);
+	auto chunk = StepChunk(r);
+	REQUIRE(chunk != nullptr);
+
+	// The engine refuses ENUM -> integer (the SQL cast errors the same way), so
+	// the getter must surface that failure rather than a made-up constant.
+	for (idx_t col = 0; col < 3; col++) {
+		duckdb_v2_vector_handle vec = nullptr;
+		REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, col, &vec, nullptr) == DUCKDB_V2_ERROR_NONE);
+		duckdb_v2_value_handle cell = nullptr;
+		REQUIRE(duckdb_v2_vector_get_value(vec, 0, &cell, nullptr) == DUCKDB_V2_ERROR_NONE);
+		uint32_t out = 0;
+		duckdb_v2_error_info_handle err = nullptr;
+		REQUIRE(duckdb_v2_value_get_uint(cell, &out, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(err != nullptr);
+		duckdb_v2_error_info_destroy(&err);
+		duckdb_v2_value_destroy(&cell);
+	}
+	duckdb_v2_data_chunk_destroy(&chunk);
+}
+
 TEST_CASE("V2: value_cast null-arg refusals", "[capi_v2][value][cast]") {
 	EnvFixture f;
 	duckdb_v2_value_handle out = nullptr;
