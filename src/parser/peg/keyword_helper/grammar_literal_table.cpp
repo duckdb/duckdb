@@ -31,21 +31,20 @@ GrammarLiteralTable::GrammarLiteralTable(const ParsedGrammar &grammar,
 		}
 	}
 	for (auto &entry : keywords) {
-		Register(entry.first, entry.second);
+		Register(entry.first, entry.second.CategoryFlags());
 	}
 }
 
-void GrammarLiteralTable::Register(const string &text, LiteralInfo info) {
+void GrammarLiteralTable::Register(const string &text, uint8_t category_flags) {
 	auto entry = literals.find(text);
 	if (entry == literals.end()) {
 		if (literals.size() >= LiteralInfo::MAX_LITERAL_ID) {
 			throw InvalidInputException("Grammar has too many distinct literals");
 		}
 		auto id = static_cast<uint16_t>(literals.size() + 1);
-		literals.emplace(text, info.WithLiteralId(id));
-	} else {
-		entry->second = info.WithLiteralId(entry->second.LiteralId());
+		entry = literals.emplace(text, LiteralInfo(id)).first;
 	}
+	entry->second.AddCategories(category_flags);
 }
 
 } // namespace duckdb

@@ -31,7 +31,7 @@ public:
 	}
 
 private:
-	void Register(const string &text, LiteralInfo info = LiteralInfo());
+	void Register(const string &text, uint8_t category_flags = 0);
 
 private:
 	const uint64_t cache_id;

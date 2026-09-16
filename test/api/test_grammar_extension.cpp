@@ -227,6 +227,8 @@ TEST_CASE("Literal IDs and opaque flags are independent", "[api][grammar_extensi
 	LiteralInfo original(LiteralInfo::MAX_LITERAL_ID);
 	REQUIRE(original.LiteralId() == 65535);
 	REQUIRE_FALSE(original.IsKeyword());
+	LiteralInfo accumulated(LiteralInfo::MAX_LITERAL_ID);
+	uint8_t expected_flags = 0;
 	for (idx_t bit = 0; bit < 8; bit++) {
 		auto flag = static_cast<uint8_t>(1U << bit);
 		LiteralInfo literal(LiteralInfo::MAX_LITERAL_ID, flag);
@@ -238,11 +240,19 @@ TEST_CASE("Literal IDs and opaque flags are independent", "[api][grammar_extensi
 		REQUIRE_FALSE(literal == original);
 		LiteralInfo copy(literal);
 		REQUIRE(copy == literal);
-		auto unassigned = literal.WithLiteralId(0);
+		LiteralInfo unassigned;
+		unassigned.AddCategories(flag);
 		REQUIRE(unassigned.LiteralId() == 0);
 		REQUIRE(unassigned.IsKeyword());
-		REQUIRE(unassigned.HasAnyFlags(flag));
-		REQUIRE(unassigned.WithLiteralId(LiteralInfo::MAX_LITERAL_ID) == literal);
+		REQUIRE(unassigned.CategoryFlags() == flag);
+		accumulated.AddCategories(flag);
+		expected_flags |= flag;
+		REQUIRE(accumulated.LiteralId() == LiteralInfo::MAX_LITERAL_ID);
+		REQUIRE(accumulated.CategoryFlags() == expected_flags);
+		LiteralInfo before(accumulated);
+		accumulated.AddCategories(flag);
+		accumulated.AddCategories(0);
+		REQUIRE(accumulated == before);
 	}
 }
 

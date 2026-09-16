@@ -30,8 +30,12 @@ public:
 		return literal_id;
 	}
 
-	LiteralInfo WithLiteralId(uint16_t id) const {
-		return LiteralInfo(id, category_flags);
+	uint8_t CategoryFlags() const {
+		return category_flags;
+	}
+
+	void AddCategories(uint8_t flags) {
+		category_flags |= flags;
 	}
 
 	bool IsKeyword() const {
