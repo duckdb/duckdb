@@ -30,6 +30,9 @@ BoundCastInfo DefaultCasts::TimeCastSwitch(BindCastInput &input, const LogicalTy
 	case LogicalTypeId::VARCHAR:
 		// time to varchar
 		return BoundCastInfo(&VectorCastHelpers::StringCast<dtime_t, duckdb::StringCast>);
+	case LogicalTypeId::TIME_NS:
+		// time (us) to time (ns)
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<dtime_t, dtime_ns_t, duckdb::TryCast>);
 	case LogicalTypeId::TIME_TZ:
 		// time to time with time zone
 		return BoundCastInfo(&VectorCastHelpers::TemplatedCastLoop<dtime_t, dtime_tz_t, duckdb::Cast>);
