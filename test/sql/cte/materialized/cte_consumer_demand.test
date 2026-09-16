@@ -1,0 +1,330 @@
+# name: test/sql/cte/materialized/cte_consumer_demand.test
+# description: Shared CTE filters with row and key-existence consumers
+# group: [materialized]
+
+statement ok
+CREATE TABLE demand_source(k INTEGER, p INTEGER);
+
+statement ok
+INSERT INTO demand_source VALUES (1,3),(1,3),(1,9),(2,9),(NULL,3),(NULL,9);
+
+# Distinct key witnesses preserve duplicates and NULLs
+query II rowsort
+WITH RECURSIVE r AS MATERIALIZED (SELECT * FROM demand_source),
+d AS (SELECT DISTINCT k FROM r)
+SELECT r.k,r.p FROM r JOIN d ON r.k IS NOT DISTINCT FROM d.k
+WHERE r.p=3;
+----
+1	3
+1	3
+NULL	3
+
+# Independent recursive partitions with a non-key filter
+query III rowsort
+WITH RECURSIVE r AS MATERIALIZED (SELECT * FROM demand_source),
+walk(k,n) AS (SELECT k,0 FROM (SELECT DISTINCT k FROM r)
+UNION ALL SELECT k,n+1 FROM walk
+WHERE n<2)
+SELECT r.k,r.p,w.n FROM r JOIN walk w ON r.k IS NOT DISTINCT FROM w.k
+WHERE r.p=3;
+----
+1	3	0
+1	3	0
+1	3	1
+1	3	1
+1	3	2
+1	3	2
+NULL	3	0
+NULL	3	1
+NULL	3	2
+
+# SUM needs every row in its key partition
+query II rowsort
+WITH RECURSIVE r AS MATERIALIZED (SELECT * FROM demand_source),
+d AS (SELECT k,sum(p) s FROM r GROUP BY k)
+SELECT r.k,d.s FROM r JOIN d ON r.k IS NOT DISTINCT FROM d.k
+WHERE r.p=3;
+----
+1	15
+1	15
+NULL	12
+
+# A further unfiltered consumer prevents pruning
+query I rowsort
+WITH RECURSIVE r AS MATERIALIZED (SELECT * FROM demand_source),
+d AS (SELECT DISTINCT k FROM r)
+SELECT count(*) FROM r JOIN d ON r.k IS NOT DISTINCT FROM d.k
+WHERE r.p=3
+UNION ALL SELECT count(*) FROM r;
+----
+3
+6
+
+# Filtering the auxiliary keys invalidates selected-row witnesses
+query II rowsort
+WITH RECURSIVE r AS MATERIALIZED (SELECT * FROM demand_source),
+d AS (SELECT DISTINCT k FROM r
+WHERE p=9)
+SELECT r.k,r.p FROM r JOIN d ON r.k IS NOT DISTINCT FROM d.k
+WHERE r.p=3;
+----
+1	3
+1	3
+NULL	3
+
+# A global limit prevents partition pruning
+query II rowsort
+WITH RECURSIVE r AS MATERIALIZED (SELECT * FROM demand_source),
+d AS (SELECT DISTINCT k FROM r ORDER BY k NULLS LAST LIMIT 2)
+SELECT r.k,r.p FROM r JOIN d ON r.k IS NOT DISTINCT FROM d.k
+WHERE r.p=3;
+----
+1	3
+1	3
+
+# A partial grouping key does not certify existence
+query II rowsort
+WITH RECURSIVE r AS MATERIALIZED (SELECT * FROM demand_source),
+d AS (SELECT DISTINCT k,p FROM r)
+SELECT r.k,d.p FROM r JOIN d ON r.k IS NOT DISTINCT FROM d.k
+WHERE r.p=3;
+----
+1	3
+1	3
+1	9
+1	9
+NULL	3
+NULL	9
+
+# Changing recursive keys prevents partition pruning
+query II rowsort
+WITH RECURSIVE r AS MATERIALIZED (SELECT * FROM demand_source),
+walk(k,n) AS (SELECT k,0 FROM (SELECT DISTINCT k FROM r)
+UNION ALL SELECT k-1,n+1 FROM walk
+WHERE n<2)
+SELECT r.k,w.n FROM r JOIN walk w ON r.k IS NOT DISTINCT FROM w.k
+WHERE r.p=3;
+----
+1	0
+1	0
+1	1
+1	1
+NULL	0
+NULL	1
+NULL	2
+
+# Window numbering depends on all partitions
+query II rowsort
+WITH RECURSIVE r AS MATERIALIZED (SELECT * FROM demand_source),
+d AS (SELECT k,row_number() OVER (ORDER BY k,p) n FROM r)
+SELECT r.k,d.n FROM r JOIN d ON r.k IS NOT DISTINCT FROM d.k
+WHERE r.p=3;
+----
+1	1
+1	1
+1	2
+1	2
+1	3
+1	3
+NULL	5
+NULL	6
+
+# Multiple filtered row consumers retain their union
+query II rowsort
+WITH RECURSIVE r AS MATERIALIZED (SELECT * FROM demand_source),
+d AS (SELECT DISTINCT k FROM r)
+SELECT r.k,r.p FROM r JOIN d ON r.k IS NOT DISTINCT FROM d.k
+WHERE r.p=3
+UNION ALL SELECT k,p FROM r
+WHERE p=9;
+----
+1	3
+1	3
+1	9
+2	9
+NULL	3
+NULL	9
+
+# Shared auxiliary output has an independent observer
+query I rowsort
+WITH RECURSIVE r AS MATERIALIZED (SELECT * FROM demand_source),
+d AS MATERIALIZED (SELECT DISTINCT k FROM r)
+SELECT r.k FROM r JOIN d ON r.k IS NOT DISTINCT FROM d.k
+WHERE r.p=3
+UNION ALL SELECT k FROM d;
+----
+1
+1
+1
+2
+NULL
+NULL
+
+# Correlated recursive query
+query II rowsort
+SELECT input.k,expanded.n FROM demand_source input CROSS JOIN LATERAL (WITH RECURSIVE walk(n) AS (SELECT 0+input.k*0
+UNION ALL SELECT n+1 FROM walk
+WHERE n<2) SELECT n FROM walk) expanded
+WHERE input.p=3;
+----
+1	0
+1	0
+1	1
+1	1
+1	2
+1	2
+NULL	NULL
+
+
+statement ok
+SET explain_output='optimized_only';
+
+# The predicate is on p, while recursion is partitioned by k.
+query II
+EXPLAIN WITH RECURSIVE r AS MATERIALIZED (SELECT * FROM demand_source),
+walk(k,n) AS (
+    SELECT k,0 FROM (SELECT DISTINCT k FROM r)
+    UNION ALL SELECT k,n+1 FROM walk WHERE n<2
+)
+SELECT r.k,r.p,w.n FROM r JOIN walk w ON r.k IS NOT DISTINCT FROM w.k WHERE r.p=3;
+----
+logical_opt	<REGEX>:.*Filters: p = 3.*
+
+# The same rewrite also applies without recursion.
+query II
+EXPLAIN WITH r AS MATERIALIZED (SELECT * FROM demand_source), d AS (SELECT DISTINCT k FROM r)
+SELECT r.k FROM r JOIN d ON r.k IS NOT DISTINCT FROM d.k WHERE r.p=3;
+----
+logical_opt	<REGEX>:.*Filters: p = 3.*
+
+# Full row demand cannot be discharged with key witnesses.
+query II
+EXPLAIN WITH r AS MATERIALIZED (SELECT * FROM demand_source), d AS (SELECT k,sum(p) s FROM r GROUP BY k)
+SELECT r.k,d.s FROM r JOIN d ON r.k IS NOT DISTINCT FROM d.k WHERE r.p=3;
+----
+logical_opt	<!REGEX>:.*Filters: p = 3.*
+
+statement ok
+CREATE TABLE demand_keys(domain INTEGER, k INTEGER, p INTEGER);
+
+statement ok
+INSERT INTO demand_keys VALUES (1,1,3),(1,1,9),(2,1,9),(NULL,1,3),(NULL,1,9),(1,NULL,3),(1,NULL,9);
+
+# Multiple correlation columns must all be preserved by the recursive transition.
+query III rowsort
+WITH RECURSIVE r AS MATERIALIZED (SELECT * FROM demand_keys),
+walk(domain,k,n) AS (
+    SELECT domain,k,0 FROM (SELECT DISTINCT domain,k FROM r)
+    UNION ALL SELECT domain,k,n+1 FROM walk WHERE n<1
+)
+SELECT r.domain,r.k,w.n FROM r JOIN walk w
+ON r.domain IS NOT DISTINCT FROM w.domain AND r.k IS NOT DISTINCT FROM w.k WHERE r.p=3;
+----
+1	1	0
+1	1	1
+1	NULL	0
+1	NULL	1
+NULL	1	0
+NULL	1	1
+
+query II
+EXPLAIN WITH RECURSIVE r AS MATERIALIZED (SELECT * FROM demand_keys),
+walk(domain,k,n) AS (
+    SELECT domain,k,0 FROM (SELECT DISTINCT domain,k FROM r)
+    UNION ALL SELECT domain,k,n+1 FROM walk WHERE n<1
+)
+SELECT r.domain,r.k,w.n FROM r JOIN walk w
+ON r.domain IS NOT DISTINCT FROM w.domain AND r.k IS NOT DISTINCT FROM w.k WHERE r.p=3;
+----
+logical_opt	<REGEX>:.*Filters: p = 3.*
+
+# Omitting a correlation column would lose another domain's contribution.
+query I
+WITH RECURSIVE r AS MATERIALIZED (SELECT * FROM demand_keys),
+walk(domain,k,n) AS (
+    SELECT domain,k,0 FROM (SELECT DISTINCT domain,k FROM r)
+    UNION ALL SELECT domain,k,n+1 FROM walk WHERE n<1
+)
+SELECT count(*) FROM r JOIN walk w ON r.k IS NOT DISTINCT FROM w.k WHERE r.p=3;
+----
+14
+
+# Volatile auxiliary expressions must still observe all original distinct keys.
+statement ok
+CREATE SEQUENCE demand_sequence;
+
+query I
+WITH r AS MATERIALIZED (SELECT * FROM demand_source),
+d AS MATERIALIZED (SELECT k,nextval('demand_sequence') n FROM (SELECT DISTINCT k FROM r))
+SELECT count(d.n) FROM r JOIN d ON r.k IS NOT DISTINCT FROM d.k WHERE r.p=3;
+----
+3
+
+query I
+SELECT currval('demand_sequence');
+----
+3
+
+# A copied volatile predicate would add observable sequence evaluations.
+statement ok
+CREATE SEQUENCE demand_filter_sequence;
+
+query I
+WITH r AS MATERIALIZED (SELECT * FROM demand_source)
+SELECT count(*) FROM r WHERE nextval('demand_filter_sequence') % 2 = 0;
+----
+3
+
+query I
+SELECT currval('demand_filter_sequence');
+----
+6
+
+# Recursion may expand rows through a static relation while preserving the full correlation key.
+statement ok
+CREATE TABLE demand_edges(src INTEGER, dst INTEGER);
+
+statement ok
+INSERT INTO demand_edges VALUES (1,2),(1,2),(2,3);
+
+query I
+WITH RECURSIVE r AS MATERIALIZED (SELECT * FROM demand_keys),
+walk(domain,k,dst,n) AS (
+    SELECT domain,k,k,0 FROM (SELECT DISTINCT domain,k FROM r)
+    UNION ALL
+    SELECT w.domain,w.k,e.dst,w.n+1 FROM walk w JOIN demand_edges e ON w.dst=e.src WHERE w.n<2
+)
+SELECT count(*) FROM r JOIN walk w
+ON r.domain IS NOT DISTINCT FROM w.domain AND r.k IS NOT DISTINCT FROM w.k WHERE r.p=3;
+----
+11
+
+query II
+EXPLAIN WITH RECURSIVE r AS MATERIALIZED (SELECT * FROM demand_keys),
+walk(domain,k,dst,n) AS (
+    SELECT domain,k,k,0 FROM (SELECT DISTINCT domain,k FROM r)
+    UNION ALL
+    SELECT w.domain,w.k,e.dst,w.n+1 FROM walk w JOIN demand_edges e ON w.dst=e.src WHERE w.n<2
+)
+SELECT count(*) FROM r JOIN walk w
+ON r.domain IS NOT DISTINCT FROM w.domain AND r.k IS NOT DISTINCT FROM w.k WHERE r.p=3;
+----
+logical_opt	<REGEX>:.*Filters: p = 3.*
+
+# Producer side effects assign values before its shared consumers apply their filters.
+statement ok
+CREATE SEQUENCE demand_producer_sequence;
+
+query II rowsort
+WITH r AS MATERIALIZED (SELECT *,nextval('demand_producer_sequence') v FROM demand_source),
+d AS (SELECT DISTINCT k FROM r)
+SELECT r.k,r.v FROM r JOIN d ON r.k IS NOT DISTINCT FROM d.k WHERE r.p=3;
+----
+1	1
+1	2
+NULL	5
+
+query I
+SELECT currval('demand_producer_sequence');
+----
+6

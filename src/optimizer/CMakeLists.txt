@@ -24,6 +24,7 @@ add_library_unity(
   common_subplan_optimizer.cpp
   compressed_materialization.cpp
   cse_optimizer.cpp
+  cte_filter_analysis.cpp
   cte_filter_pusher.cpp
   cte_inlining.cpp
   deliminator.cpp

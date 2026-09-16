@@ -1,4 +1,6 @@
 #include "duckdb/optimizer/cte_filter_pusher.hpp"
+#include "duckdb/optimizer/cte_filter_analysis.hpp"
+#include "duckdb/planner/expression/expression_barrier.hpp"
 
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
@@ -23,7 +25,7 @@ unique_ptr<LogicalOperator> CTEFilterPusher::Optimize(unique_ptr<LogicalOperator
 
 	// Iterate once over all materialized CTEs
 	for (auto it = ctes.rbegin(); it != ctes.rend(); it++) {
-		if (!it->second->all_cte_refs_are_filtered) {
+		if (it->second->filters.empty()) {
 			continue;
 		}
 
@@ -32,7 +34,12 @@ unique_ptr<LogicalOperator> CTEFilterPusher::Optimize(unique_ptr<LogicalOperator
 		cte_info_map = InsertionOrderPreservingMap<unique_ptr<MaterializedCTEInfo>>();
 		FindCandidates(*op);
 
-		PushFilterIntoCTE(*cte_info_map[it->first]);
+		auto &info = *cte_info_map[it->first];
+		if (!info.all_cte_refs_are_filtered &&
+		    !CTEFilterAnalysis::CanRestrict(*op, info.materialized_cte.Cast<LogicalMaterializedCTE>(), info.filters)) {
+			continue;
+		}
+		PushFilterIntoCTE(info);
 	}
 	return op;
 }
@@ -71,6 +78,16 @@ void CTEFilterPusher::PushFilterIntoCTE(MaterializedCTEInfo &info) {
 	D_ASSERT(info.materialized_cte.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE);
 	if (info.filters.empty()) {
 		return;
+	}
+
+	// Copied predicates must not add observable evaluations or move throwing predicates.
+	// Keep each consumer's full predicate in the OR; dropping an unsafe consumer is unsound.
+	for (auto &filter : info.filters) {
+		for (auto &expr : filter.get().expressions) {
+			if (expr->IsVolatile() || expr->CanThrow() || ExpressionBarrier::Contains(*expr)) {
+				return;
+			}
+		}
 	}
 
 	// Create an OR expression with all the filters on all references of the CTE
