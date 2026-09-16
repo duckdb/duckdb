@@ -1,12 +1,6 @@
 
 function(add_extension_definitions)
     include_directories(${PROJECT_SOURCE_DIR}/extension)
-    if(NOT "${TEST_WITH_LOADABLE_EXTENSION}" STREQUAL "")
-        string(REPLACE ";"  "," COMMA_SEPARATED_EXTENSIONS "${TEST_WITH_LOADABLE_EXTENSION}")
-        # Note: weird commas are for easy substring matching in c++
-        add_definitions(-DDUCKDB_EXTENSIONS_TEST_WITH_LOADABLE=\",${COMMA_SEPARATED_EXTENSIONS},\")
-        add_definitions(-DDUCKDB_EXTENSIONS_BUILD_PATH="${CMAKE_BINARY_DIR}/extension")
-    endif()
 
     if(${DISABLE_BUILTIN_EXTENSIONS})
         add_definitions(-DDISABLE_BUILTIN_EXTENSIONS=${DISABLE_BUILTIN_EXTENSIONS})
@@ -733,14 +727,6 @@ if(DUCKDB_ALL_LINKED_LIBS)
     file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/linked_libs.txt" "${LINKED_LIBS_CONTENT}")
 endif()
 
-# For extensions whose tests were loaded, but not linked into duckdb, we need to ensure they are registered to have
-# the sqllogictest "require" statement load the loadable extensions instead of the baked in static one
-foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
-    string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
-    if (NOT "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK}" AND "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_LOAD_TESTS}")
-        list(APPEND TEST_WITH_LOADABLE_EXTENSION ${EXT_NAME})
-    endif()
-endforeach()
 
 
 
