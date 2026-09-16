@@ -101,13 +101,10 @@ public:
 		lstate.chunks.push_back(std::move(copy));
 	}
 
-	bool IsFull(ResultFormatLocalState &lstate_p) override {
-		return lstate_p.Cast<TestFormatLocalState>().rows >= unit_rows;
-	}
-
-	unique_ptr<ResultUnit> Finish(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate_p) override {
+	unique_ptr<ResultUnit> Finish(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate_p,
+	                              bool flush_partial) override {
 		auto &lstate = lstate_p.Cast<TestFormatLocalState>();
-		if (lstate.chunks.empty()) {
+		if (lstate.chunks.empty() || (lstate.rows < unit_rows && !flush_partial)) {
 			return nullptr;
 		}
 		if (throw_in_finish) {
@@ -156,11 +153,8 @@ public:
 	void Append(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate, DataChunk &chunk) override {
 	}
 
-	bool IsFull(ResultFormatLocalState &lstate) override {
-		return false;
-	}
-
-	unique_ptr<ResultUnit> Finish(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate) override {
+	unique_ptr<ResultUnit> Finish(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate,
+	                              bool flush_partial) override {
 		return nullptr;
 	}
 };

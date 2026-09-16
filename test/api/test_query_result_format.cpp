@@ -83,7 +83,7 @@ TEST_CASE("No unit spans two batch indexes", "[api][query_result_format]") {
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(500000)"));
 
-	// A row target well past one row group makes NextBatch, not IsFull, finish most units
+	// A row target well past one row group makes the batch boundary, not the target, finish most units
 	auto handle = SubmitFormatted(con, "SELECT i FROM t", 400000);
 	DrainWatchdog watchdog(con);
 	FormattedResultStream<TestFormat> stream(std::move(handle));
