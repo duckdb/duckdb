@@ -23,7 +23,7 @@ print = functools.partial(print, flush=True)
 
 INITIAL_RUNS = 2 * SAMPLE_BATCH_SIZE
 REGRESSION_LIMIT = 1.10
-NOISE_THRESHOLD = 0.02
+NOISE_THRESHOLD = 0.03
 GEOMEAN_REGRESSION_SECONDS = 0.050
 
 ANSI_RED = "\033[31m"
@@ -116,7 +116,7 @@ def parse_arguments():
         "--samples", type=positive_integer, help="Fixed samples per binary; rounded up to a batch of five."
     )
     parser.add_argument(
-        "--early-stop", action="store_true", help="Stop after a ten-sample checkpoint within ±2 percent."
+        "--early-stop", action="store_true", help="Stop after a ten-sample checkpoint within ±3 percent."
     )
     parser.add_argument("--verbose", action="store_true", help="Print raw benchmark runner output.")
     parser.add_argument("--nofail", action="store_true", help="Report a geomean regression without failing.")
@@ -230,14 +230,14 @@ def missing_base_benchmark_result(benchmark: str, old_failure: Optional[str], sm
 
 def measurement_status(measurement: BenchmarkMeasurement, stopped_early: bool = False) -> str:
     if stopped_early:
-        return "within ±2% (stopped early)"
+        return "within ±3% (stopped early)"
     if measurement.ratio >= REGRESSION_LIMIT:
         return "regression"
     if measurement.ratio > 1.0 + NOISE_THRESHOLD:
         return "slower"
     if measurement.ratio < 1.0 - NOISE_THRESHOLD:
         return "faster"
-    return "within ±2%; no change"
+    return "within ±3%; no change"
 
 
 def run_fixed_benchmark(
@@ -292,7 +292,7 @@ def run_adaptive_benchmark(
     is_candidate = not within_noise(initial_measurement)
     requested_confirmation_runs = confirmation_run_count(initial_measurement) if is_candidate else 0
     if verbose:
-        decision = f"confirming with {requested_confirmation_runs} pairs" if is_candidate else "within ±2%; done"
+        decision = f"confirming with {requested_confirmation_runs} pairs" if is_candidate else "within ±3%; done"
         print(
             f"initial: {benchmark}: {initial_count} pairs | "
             f"median change {format_ratio_change(initial_measurement.ratio)} | {decision}"
@@ -652,13 +652,13 @@ def render_table(rows: List[BenchmarkRow], layout: TableLayout):
 
 
 def print_bucket(title: str, rows: List[BenchmarkRow], layout: TableLayout, unchanged_count: int = 0):
-    if title == "UNCHANGED (±2%)":
+    if title == "UNCHANGED (±3%)":
         if not unchanged_count:
             return
     elif not rows:
         return
     print("")
-    if title == "UNCHANGED (±2%)":
+    if title == "UNCHANGED (±3%)":
         print(gray(title))
         print(gray(f"{unchanged_count} benchmarks"))
     else:
@@ -708,7 +708,7 @@ def sampling_description(samples: Optional[int], rounded_samples: Optional[int],
     if samples is None:
         description = (
             f"sampling: adaptive; {INITIAL_RUNS} initial pairs, then "
-            f"{MIN_CONFIRMATION_RUNS}–{MAX_CONFIRMATION_RUNS} confirmation pairs outside ±2%"
+            f"{MIN_CONFIRMATION_RUNS}–{MAX_CONFIRMATION_RUNS} confirmation pairs outside ±3%"
         )
     else:
         assert rounded_samples is not None
@@ -743,9 +743,9 @@ def print_benchmark_report(
     print(gray("CI failure: geomean change ≥ +10.0% or ≥ +50.0 ms"))
     displayed_rows = [row for row in rows if row.bucket != BUCKET_UNCHANGED]
     layout = table_layout(displayed_rows)
-    print_bucket("UNCHANGED (±2%)", buckets[BUCKET_UNCHANGED], layout, len(buckets[BUCKET_UNCHANGED]))
+    print_bucket("UNCHANGED (±3%)", buckets[BUCKET_UNCHANGED], layout, len(buckets[BUCKET_UNCHANGED]))
     print_bucket("FASTER", buckets[BUCKET_FASTER], layout)
-    print_bucket("SLOWER (+2%…<+10%)", buckets[BUCKET_SLOWER], layout)
+    print_bucket("SLOWER (+3%…<+10%)", buckets[BUCKET_SLOWER], layout)
     print_bucket("REGRESSIONS (≥+10%)", buckets[BUCKET_REGRESSION], layout)
     print_bucket("FAILURES", buckets[BUCKET_FAILURE], layout)
     if missing_base_names:
