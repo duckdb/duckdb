@@ -135,6 +135,12 @@ struct TableFunctionBindInput {
 	//! function. This lets the bind read the file exactly the way the schema was determined, rather than deriving
 	//! that from the names and types alone
 	optional_ptr<const FunctionData> expected_bind_data;
+	//! Optional comments for the columns produced by the table function
+	vector<Value> column_comments;
+	//! Optional tags for the columns produced by the table function
+	vector<InsertionOrderPreservingMap<string>> column_tags;
+
+	void CheckBindResult(const vector<LogicalType> &return_types, const vector<Identifier> &names) const;
 
 	bool HasExpectedSchema() const {
 		return expected_names && expected_types;

@@ -10,6 +10,7 @@
 #include "duckdb/planner/binder.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/json_document.hpp"
 #include "duckdb/common/limits.hpp"
 
 #include <algorithm>
@@ -102,6 +103,26 @@ struct PragmaTableInfoHelper {
 };
 
 struct PragmaShowHelper {
+	static Value ColumnExtraInfo(const Value &comment, const InsertionOrderPreservingMap<string> &tags) {
+		if (comment.IsNull() && tags.empty()) {
+			return Value();
+		}
+		JSONWriter writer;
+		auto result = writer.CreateObject();
+		if (!comment.IsNull()) {
+			result.AddString("comment", comment.GetValue<string>());
+		}
+		if (!tags.empty()) {
+			auto tags_object = writer.CreateObject();
+			for (auto &tag : tags) {
+				tags_object.AddString(tag.first, tag.second);
+			}
+			result.Add("tags", tags_object);
+		}
+		writer.SetRoot(result);
+		return Value(writer.ToString(JSONWriteFlags::ALLOW_INVALID_UNICODE));
+	}
+
 	static void GetSchema(vector<LogicalType> &return_types, vector<Identifier> &names) {
 		names.emplace_back("column_name");
 		return_types.emplace_back(LogicalType::VARCHAR);
@@ -139,10 +160,15 @@ struct PragmaShowHelper {
 		// "default", VARCHAR
 		output.data[4].Append(DefaultValue(column));
 		// "extra", VARCHAR
-		output.data[5].Append(Value());
+		output.data[5].Append(ColumnExtraInfo(column.Comment(), column.Tags()));
 	}
 
 	static void GetViewColumns(idx_t i, const Identifier &name, const LogicalType &type, DataChunk &output) {
+		GetViewColumns(name, type, Value(), InsertionOrderPreservingMap<string>(), output);
+	}
+
+	static void GetViewColumns(const Identifier &name, const LogicalType &type, const Value &comment,
+	                           const InsertionOrderPreservingMap<string> &tags, DataChunk &output) {
 		// "column_name", VARCHAR
 		output.data[0].Append(Value(name));
 		// "column_type", VARCHAR
@@ -154,7 +180,7 @@ struct PragmaShowHelper {
 		// "default", VARCHAR
 		output.data[4].Append(Value());
 		// "extra", VARCHAR
-		output.data[5].Append(Value());
+		output.data[5].Append(ColumnExtraInfo(comment, tags));
 	}
 };
 
@@ -218,6 +244,19 @@ static ColumnConstraintInfo CheckConstraints(TableCatalogEntry &table, const Col
 void PragmaTableInfo::GetColumnInfo(TableCatalogEntry &table, const ColumnDefinition &column, DataChunk &output) {
 	auto constraint_info = CheckConstraints(table, column);
 	PragmaShowHelper::GetTableColumns(column, constraint_info, output);
+}
+
+void PragmaTableInfo::GetShowSchema(vector<LogicalType> &return_types, vector<Identifier> &names) {
+	PragmaShowHelper::GetSchema(return_types, names);
+}
+
+Value PragmaTableInfo::GetColumnExtraInfo(const Value &comment, const InsertionOrderPreservingMap<string> &tags) {
+	return PragmaShowHelper::ColumnExtraInfo(comment, tags);
+}
+
+void PragmaTableInfo::GetColumnInfo(const Identifier &name, const LogicalType &type, const Value &comment,
+                                    const InsertionOrderPreservingMap<string> &tags, DataChunk &output) {
+	PragmaShowHelper::GetViewColumns(name, type, comment, tags, output);
 }
 
 static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntry &table, DataChunk &output,
