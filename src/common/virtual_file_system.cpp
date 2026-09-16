@@ -259,8 +259,8 @@ FileMetadata VirtualFileSystem::Stats(FileHandle &handle) {
 	return handle.file_system.Stats(handle);
 }
 
-optional<FileMetadata> VirtualFileSystem::GetStatsIfExists(const string &path, optional_ptr<FileOpener> opener) {
-	return FindFileSystem(path, opener).GetStatsIfExists(path, opener);
+optional<FileMetadata> VirtualFileSystem::GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
+	return FindFileSystem(file.path, opener).GetStatsIfExists(file, opener);
 }
 
 void VirtualFileSystem::Truncate(FileHandle &handle, int64_t new_size) {

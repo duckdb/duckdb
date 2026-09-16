@@ -619,7 +619,8 @@ FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
 	return file_metadata;
 }
 
-optional<FileMetadata> LocalFileSystem::GetStatsIfExists(const string &path_p, optional_ptr<FileOpener> opener) {
+optional<FileMetadata> LocalFileSystem::GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
+	const auto &path_p = file.path;
 	if (path_p.empty()) {
 		return nullopt;
 	}
@@ -1689,7 +1690,8 @@ FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
 	return file_metadata;
 }
 
-optional<FileMetadata> LocalFileSystem::GetStatsIfExists(const string &path_p, optional_ptr<FileOpener> opener) {
+optional<FileMetadata> LocalFileSystem::GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
+	const auto &path_p = file.path;
 	if (path_p.empty()) {
 		return nullopt;
 	}

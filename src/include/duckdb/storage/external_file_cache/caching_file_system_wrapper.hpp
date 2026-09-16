@@ -73,7 +73,7 @@ public:
 	DUCKDB_API string GetVersionTag(FileHandle &handle) override;
 	DUCKDB_API FileType GetFileType(FileHandle &handle) override;
 	DUCKDB_API FileMetadata Stats(FileHandle &handle) override;
-	DUCKDB_API optional<FileMetadata> GetStatsIfExists(const string &path,
+	DUCKDB_API optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file,
 	                                                   optional_ptr<FileOpener> opener = nullptr) override;
 	DUCKDB_API void Truncate(FileHandle &handle, int64_t new_size) override;
 	DUCKDB_API void FileSync(FileHandle &handle) override;

@@ -74,7 +74,7 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 		flags.SetCachingMode(CachingMode::CACHE_REMOTE_ONLY);
 		file_handle = fs.OpenFile(file, flags);
 	} else if (state.requires_file_metadata) {
-		file_metadata = fs.GetStatsIfExists(file.path);
+		file_metadata = fs.GetStatsIfExists(file);
 		if (!file_metadata) {
 			done = true;
 			return SourceResultType::FINISHED;

@@ -503,8 +503,8 @@ FileMetadata FileSystem::Stats(FileHandle &handle) {
 	return metadata;
 }
 
-optional<FileMetadata> FileSystem::GetStatsIfExists(const string &path, optional_ptr<FileOpener> opener) {
-	auto handle = OpenFile(path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS, opener);
+optional<FileMetadata> FileSystem::GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
+	auto handle = OpenFile(file, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS, opener);
 	if (!handle) {
 		return nullopt;
 	}
