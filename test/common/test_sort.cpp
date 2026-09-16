@@ -31,11 +31,15 @@ TEST_CASE("Sort decodes keys with default order modifiers", "[sort]") {
 				const auto low = type == LogicalType::INTEGER ? Value::INTEGER(-7) : Value("a");
 				const auto high = type == LogicalType::INTEGER ? Value::INTEGER(42) : Value("z");
 				duckdb::vector<Value> values {high, Value(type), low, high};
-				for (const auto &value : values) {
-					input.data[0].Append(value);
+				for (idx_t offset = 0; offset < values.size(); offset += STANDARD_VECTOR_SIZE) {
+					input.Reset();
+					const auto count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, values.size() - offset);
+					for (idx_t row = 0; row < count; row++) {
+						input.data[0].Append(values[offset + row]);
+					}
+					input.CheckCardinality(count);
+					sort.Sink(context, input, sink);
 				}
-				input.CheckCardinality(values.size());
-				sort.Sink(context, input, sink);
 				OperatorSinkCombineInput combine {*global_sink, *local_sink, interrupt};
 				sort.Combine(context, combine);
 				OperatorSinkFinalizeInput finalize {*global_sink, interrupt};
