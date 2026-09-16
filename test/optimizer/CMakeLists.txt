@@ -8,7 +8,6 @@ add_library_unity(
   column_binding_rewrite.cpp
   common_subplan_nonserializable.cpp
   filter_pushdown_alias.cpp
-  join_condition_extraction.cpp
   join_order_conflict_detector.cpp
   logical_plan_verification.cpp
   relation_statistics.cpp
