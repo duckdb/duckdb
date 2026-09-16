@@ -8,7 +8,7 @@
 // to opt out; the engine itself and extensions never take part.
 #pragma once
 
-#if !defined(DUCKDB_NO_AUTOLINK) && !defined(DUCKDB_EXTENSION_NAME) && !defined(DUCKDB_BUILD_LOADABLE_EXTENSION)
+#if !defined(DUCKDB_NO_AUTOLINK) && !defined(DUCKDB_EXTENSION_NAME)
 #if defined(_MSC_VER)
 // an /include directive is the linker's own way of wanting a symbol nobody references
 #if defined(_M_IX86)
