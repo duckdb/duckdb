@@ -1,11 +1,4 @@
 
-function(add_extension_definitions)
-
-    if(${DISABLE_BUILTIN_EXTENSIONS})
-        add_definitions(-DDISABLE_BUILTIN_EXTENSIONS=${DISABLE_BUILTIN_EXTENSIONS})
-    endif()
-endfunction()
-
 function(add_extension_dependencies LIBRARY)
     foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
         string(TOUPPER ${EXT_NAME} EXTENSION_NAME_UPPERCASE)
