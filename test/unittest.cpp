@@ -263,6 +263,7 @@ static bool ConfigureThreadStackSize(int argc, char *argv[], string &error) {
 #ifdef DUCKDB_UNITTEST_HAS_DEFAULT_PTHREAD_ATTRIBUTES
 	return SetThreadStackSize(requested_stack_size, error);
 #else
+	(void)requested_stack_size;
 	error = "--thread-stack-size is only supported on Linux with glibc 2.18 or newer";
 	return false;
 #endif
