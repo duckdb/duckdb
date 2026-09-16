@@ -2,6 +2,7 @@
 #include "test_helpers.hpp"
 #include "duckdb/planner/sql_export_helpers.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/main/extension/linked_extension_registry.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/type_visitor.hpp"
@@ -1304,9 +1305,14 @@ TEST_CASE("Function deserialization restores enclosing context after callback ex
 	connection.Rollback();
 }
 
-#ifndef DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED
 TEST_CASE("Standalone function binding does not autoload catalog collisions",
           "[bound_expression_sql_export][logical_plan_verification][dont_link]") {
+	for (auto &linked : LinkedExtensionRegistry::Get()) {
+		if (linked.name == "core_functions") {
+			SUCCEED("core_functions is linked into this binary, nothing to autoload");
+			return;
+		}
+	}
 	auto extension_directory = TestJoinPath(TestDirectoryPath(), "stage02_standalone_bind_extensions");
 	TestDeleteDirectory(extension_directory);
 	TestCreateDirectory(extension_directory);
@@ -1354,7 +1360,6 @@ TEST_CASE("Standalone function binding does not autoload catalog collisions",
 	connection.Commit();
 	require_core_functions_absent();
 }
-#endif
 
 TEST_CASE("Bound expression SQL export trusts native function definitions", "[bound_expression_sql_export]") {
 	DuckDB db;

@@ -26,7 +26,6 @@ enum class ExtensionLoadResult : uint8_t { LOADED_EXTENSION = 0, EXTENSION_UNKNO
 struct DefaultExtension {
 	const char *name;
 	const char *description;
-	bool statically_loaded;
 };
 
 struct ExtensionAlias {
