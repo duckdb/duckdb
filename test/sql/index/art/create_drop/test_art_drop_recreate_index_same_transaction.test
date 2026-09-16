@@ -1,4 +1,4 @@
-# name: test/sql/index/art/create_drop/test_art_drop_recreate_if_not_exists.test
+# name: test/sql/index/art/create_drop/test_art_drop_recreate_index_same_transaction.test
 # description: Test recreating a dropped index with IF NOT EXISTS in the same transaction
 # group: [create_drop]
 
