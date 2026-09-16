@@ -17,6 +17,8 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -1025,10 +1027,12 @@ unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
 	idx_t constant_size = 0;
 	child_list_t<LogicalType> children;
 	auto result = make_uniq<SortKeyBindData>();
+	ParserOptions parser_options;
+	parser_options.compiled_grammar = DatabaseInstance::GetDatabase(context).GetParserCache().GetMatcher();
 	for (idx_t i = 1; i < arguments.size(); i += 2) {
 		// Parse column definition
 		Value col = input.GetConstant(i);
-		const auto col_list = Parser::ParseColumnList(col.ToString());
+		const auto col_list = Parser::ParseColumnList(col.ToString(), parser_options);
 		if (col_list.LogicalColumnCount() != 1) {
 			throw BinderException("decode_sort_key col must contain exactly one column");
 		}

@@ -1,6 +1,7 @@
 #include "duckdb/common/types/type_manager.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -12,13 +13,15 @@ CastFunctionSet &TypeManager::GetCastFunctions() {
 	return *cast_functions;
 }
 
-static LogicalType TransformStringToUnboundType(const string &str) {
+static LogicalType TransformStringToUnboundType(const string &str, ClientContext &context) {
 	if (StringUtil::Lower(str) == "null") {
 		return LogicalType::SQLNULL;
 	}
+	ParserOptions parser_options;
+	parser_options.compiled_grammar = DatabaseInstance::GetDatabase(context).GetParserCache().GetMatcher();
 	ColumnList column_list;
 	try {
-		column_list = Parser::ParseColumnList("dummy " + str);
+		column_list = Parser::ParseColumnList("dummy " + str, parser_options);
 	} catch (const std::runtime_error &e) {
 		const vector<string> suggested_types {"BIGINT",
 		                                      "INT8",
@@ -82,7 +85,7 @@ static LogicalType TransformStringToUnboundType(const string &str) {
 // This has to be called with a level of indirection (through "parse_function") in order to avoid being included in
 // extensions that statically link the core DuckDB library.
 static LogicalType ParseLogicalTypeInternal(const string &type_str, ClientContext &context) {
-	auto type = TransformStringToUnboundType(type_str);
+	auto type = TransformStringToUnboundType(type_str, context);
 	if (type.IsUnbound()) {
 		if (!context.transaction.HasActiveTransaction()) {
 			throw InternalException(
