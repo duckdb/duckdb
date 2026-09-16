@@ -1040,7 +1040,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(VariantColumnWriter::GetTransformFunction());
 
 	// bytes_to_variant
-	loader.RegisterFunction(ParquetVariantConversion::GetBytesToVariantFunction());
+	loader.RegisterFunction(VariantColumnWriter::GetBytesToVariantFunction());
 
 	CopyFunction function("parquet");
 	function.copy_to_select = ParquetWriteSelect;

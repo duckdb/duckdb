@@ -180,4 +180,16 @@ ScalarFunction VariantColumnWriter::GetTransformFunction() {
 	return transform;
 }
 
+static void VariantBytesToVariantFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	ParquetVariantConversion::ConvertBinary(input.data[0], result, input.size());
+}
+
+ScalarFunction VariantColumnWriter::GetBytesToVariantFunction() {
+	ScalarFunction function("variant_bytes_to_variant", {}, LogicalType::VARIANT(), VariantBytesToVariantFunction);
+	function.GetSignature().AddParameter("blob", LogicalType::BLOB);
+	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	function.SetFallible();
+	return function;
+}
+
 } // namespace duckdb

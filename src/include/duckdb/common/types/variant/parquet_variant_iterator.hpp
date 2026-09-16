@@ -249,9 +249,6 @@ public:
 	//! Convert binary Variant values (each row being the metadata blob followed by the value blob) into the
 	//! canonical VARIANT 'result' in a single pass
 	DUCKDB_API static void ConvertBinary(Vector &metadata_and_value, Vector &result, idx_t count);
-	//! 'variant_bytes_to_variant': decode a binary Variant value (metadata followed by value) into a VARIANT.
-	//! The inverse of 'variant_to_parquet_variant'.
-	DUCKDB_API static ScalarFunction GetBytesToVariantFunction();
 
 	//! Convert VARIANT values into the Parquet Variant layout declared by 'result's type —
 	//! struct<metadata BLOB, value BLOB[, typed_value ...]>. This is 'variant_to_parquet_variant's
