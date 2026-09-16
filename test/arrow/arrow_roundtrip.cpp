@@ -13,7 +13,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 
-#include <atomic>
+#include "duckdb/common/atomic.hpp"
 
 using namespace duckdb;
 
