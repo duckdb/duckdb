@@ -946,7 +946,6 @@ bundle-setup:
 	mkdir -p bundle && \
 	cp src/libduckdb_static.a bundle/. && \
 	cp third_party/*/libduckdb_*.a bundle/. && \
-	cp extension/libduckdb_generated_extension_loader.a bundle/. && \
 	cp extension/*/lib*_extension.a bundle/. && \
 	mkdir -p vcpkg_installed && \
 	find vcpkg_installed -name '*.a' -exec cp {} bundle/. \; && \
@@ -983,7 +982,6 @@ gather-libs:
 	mkdir -p libs && \
 	cp src/$(GATHER_LIBS_PREFIX)duckdb_static.$(GATHER_LIBS_EXTENSION) libs/. && \
 	cp third_party/*/$(GATHER_LIBS_PREFIX)duckdb_*.$(GATHER_LIBS_EXTENSION) libs/. && \
-	cp extension/$(GATHER_LIBS_PREFIX)duckdb_generated_extension_loader.$(GATHER_LIBS_EXTENSION) libs/. && \
 	cp extension/*/$(GATHER_LIBS_PREFIX)*_extension.$(GATHER_LIBS_EXTENSION) libs/.
 
 #### Setup VCPKG to correct version 2026.06.24 tag is cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3

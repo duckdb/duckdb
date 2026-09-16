@@ -29,6 +29,7 @@
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/encoding_function.hpp"
+#include "duckdb/main/extension/linked_extension_registry.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/logging/logging.hpp"
@@ -52,10 +53,6 @@ class ClientContext;
 class DuckDB;
 
 //! An extension linked into the binary, and how to load it into a database.
-struct LinkedExtension {
-	string name;
-	std::function<void(DuckDB &)> load;
-};
 class ErrorManager;
 class CompressionFunction;
 class TableFunctionRef;
