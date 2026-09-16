@@ -48,7 +48,8 @@ ErrorData CastError(F &&cast) {
 
 unique_ptr<DataChunk> MakeChunk(idx_t rows) {
 	auto chunk = make_uniq<DataChunk>();
-	chunk->Initialize(Allocator::DefaultAllocator(), {LogicalType::BIGINT, LogicalType::VARCHAR});
+	chunk->Initialize(Allocator::DefaultAllocator(), {LogicalType::BIGINT, LogicalType::VARCHAR},
+	                  MaxValue<idx_t>(rows, 1));
 	for (idx_t i = 0; i < rows; i++) {
 		chunk->data[0].SetValue(i, Value::BIGINT(NumericCast<int64_t>(i)));
 		chunk->data[1].SetValue(i, Value(string(i, 'x')));
@@ -78,6 +79,10 @@ TEST_CASE("A chunk unit takes its rows and bytes from the chunk it holds", "[api
 TEST_CASE("A cast to a unit type with another tag throws", "[api][result_unit]") {
 	unique_ptr<ResultUnit> chunk_unit = make_uniq<ChunkUnit>(MakeChunk(1));
 	unique_ptr<ResultUnit> other_unit = make_uniq<OtherUnit>();
+	REQUIRE(!other_unit->Is<ChunkUnit>());
+	REQUIRE(!chunk_unit->Is<OtherUnit>());
+// A failed cast throws an InternalException, which aborts instead under DUCKDB_CRASH_ON_ASSERT
+#ifndef DUCKDB_CRASH_ON_ASSERT
 	auto to_chunk = CastError([&]() { other_unit->Cast<ChunkUnit>(); });
 	REQUIRE(to_chunk.Type() == ExceptionType::INTERNAL);
 	REQUIRE(to_chunk.RawMessage() == "Failed to cast result unit of type \"other\" to \"chunk\"");
@@ -86,6 +91,7 @@ TEST_CASE("A cast to a unit type with another tag throws", "[api][result_unit]")
 	REQUIRE(to_other.RawMessage() == "Failed to cast result unit of type \"chunk\" to \"other\"");
 	const ResultUnit &const_other = *other_unit;
 	REQUIRE_THROWS_AS(const_other.Cast<ChunkUnit>(), InternalException);
+#endif
 	REQUIRE(other_unit->Is<OtherUnit>());
 	REQUIRE(string(other_unit->Cast<OtherUnit>().TypeTag()) == OtherUnit::TAG);
 }
