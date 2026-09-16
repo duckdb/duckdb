@@ -12,9 +12,11 @@ module: sql_statement
 # Passing a statement to statement_execute does not consume it — a copy is
 # what runs — so the same statement can be executed again, possibly with a
 # different set of parameter values, and the caller always destroys it via
-# sql_statement_destroy. The statement handle is fully opaque; the
-# introspection that matters for execution (result type, statement type,
-# column schema) lives on the result handle.
+# sql_statement_destroy.
+#
+# A statement object holds parse-time metadata, including its type, its own
+# text, and the names of its parameters. Each has its own getter. For
+# properties that need binding, use `[[statement_bind]]`.
 #
 # A parse error surfaces either from parse_sql, when the implementation parses
 # eagerly and so reports it up front and yields no statements, or from the
@@ -35,6 +37,79 @@ handles:
       string, produced by parse_sql. Destroy it via statement_iterator_destroy;
       statements it already yielded are independently owned and unaffected.
     cleanup_with: statement_iterator_destroy
+enums:
+  STATEMENT_TYPE:
+    description: |
+      SQL statement type of a parsed statement or an executed query.
+    values:
+      STATEMENT_TYPE_INVALID:
+        value: 0
+      STATEMENT_TYPE_SELECT:
+        value: 1
+      STATEMENT_TYPE_INSERT:
+        value: 2
+      STATEMENT_TYPE_UPDATE:
+        value: 3
+      STATEMENT_TYPE_CREATE:
+        value: 4
+      STATEMENT_TYPE_DELETE:
+        value: 5
+      STATEMENT_TYPE_PREPARE:
+        value: 6
+      STATEMENT_TYPE_EXECUTE:
+        value: 7
+      STATEMENT_TYPE_ALTER:
+        value: 8
+      STATEMENT_TYPE_TRANSACTION:
+        value: 9
+      STATEMENT_TYPE_COPY:
+        value: 10
+      STATEMENT_TYPE_ANALYZE:
+        value: 11
+      STATEMENT_TYPE_VARIABLE_SET:
+        value: 12
+      STATEMENT_TYPE_CREATE_FUNC:
+        value: 13
+      STATEMENT_TYPE_EXPLAIN:
+        value: 14
+      STATEMENT_TYPE_DROP:
+        value: 15
+      STATEMENT_TYPE_EXPORT:
+        value: 16
+      STATEMENT_TYPE_PRAGMA:
+        value: 17
+      STATEMENT_TYPE_VACUUM:
+        value: 18
+      STATEMENT_TYPE_CALL:
+        value: 19
+      STATEMENT_TYPE_SET:
+        value: 20
+      STATEMENT_TYPE_LOAD:
+        value: 21
+      STATEMENT_TYPE_RELATION:
+        value: 22
+      STATEMENT_TYPE_EXTENSION:
+        value: 23
+      STATEMENT_TYPE_LOGICAL_PLAN:
+        value: 24
+      STATEMENT_TYPE_ATTACH:
+        value: 25
+      STATEMENT_TYPE_DETACH:
+        value: 26
+      STATEMENT_TYPE_MULTI:
+        value: 27
+      STATEMENT_TYPE_COPY_DATABASE:
+        value: 28
+      STATEMENT_TYPE_UPDATE_EXTENSIONS:
+        value: 29
+      STATEMENT_TYPE_MERGE_INTO:
+        value: 30
+      STATEMENT_TYPE_CONNECT:
+        value: 31
+      STATEMENT_TYPE_DISCONNECT:
+        value: 32
+      STATEMENT_TYPE_EXTERNAL_RESOURCE:
+        value: 33
 functions:
   parse_sql:
     lifecycle:
@@ -213,6 +288,129 @@ functions:
 #        kind: OUT
 #        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
 #    return_type: ERROR
+
+  sql_statement_get_type:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-11" ]
+    description: |
+      Returns the statement's type as classified by the parser.
+
+      This gives the type before the statement-level rewrites that
+      `[[statement_execute]]` applies, if any. So a PRAGMA reports PRAGMA even
+      where execution rewrites it into a SELECT or a CALL.
+      `[[result_get_statement_type]]` on the executed result reports the
+      rewritten type. A statement the parser expands into a group reports
+      MULTI. Its parts are not visible here, and statement_bind rejects it.
+    role: getter
+    belongs_to: sql_statement
+    parameters:
+      statement:
+        type: sql_statement
+        description: The statement.
+      out_type:
+        type: STATEMENT_TYPE
+        indirection: 1
+        kind: OUT
+        description: Receives the statement type.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  sql_statement_get_text:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-11" ]
+    description: |
+      Borrows the statement's own SQL text.
+
+      The slice of the parsed string that belongs to this statement. A
+      trailing terminator and the whitespace after it are included, whitespace
+      and comments before the first token are not. The statement holds its own
+      copy, so the view outlives the SQL string passed to parse_sql and the
+      iterator, and stays valid until the statement is destroyed. A statement
+      produced by a parser extension that overrides parsing carries whatever
+      text the extension recorded.
+    role: getter
+    belongs_to: sql_statement
+    parameters:
+      statement:
+        type: sql_statement
+        description: The statement.
+      out_text:
+        type: str
+        indirection: 1
+        kind: OUT_BORROW
+        description: Receives a borrowed view of the statement text, valid until the statement is destroyed.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  sql_statement_get_parameter_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-11" ]
+    description: |
+      Returns the number of distinct parameters the statement declares.
+
+      This counts the parameters the parser found ($1, ?, $name, ...), so it
+      needs no catalog and no binding; only the parameter types wait for
+      `[[statement_bind]]`. Repeated uses of one parameter count once.
+    role: getter
+    belongs_to: sql_statement
+    parameters:
+      statement:
+        type: sql_statement
+        description: The statement.
+      out_count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of distinct parameters.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  sql_statement_get_parameter_name:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-11" ]
+    description: |
+      Borrows the name of one parameter, in binding order.
+
+      Parse-time metadata. Positions follow the parameters' binding indices,
+      the order of `[[statement_bind]]`'s parameter schema, so position i here
+      names field i there. The name is the binding key that
+      `[[statement_execute]]` accepts: "1", "2", ... for a positional parameter
+      ($1 or ?), the identifier for a named one ($name). Positional indices may
+      be gapped ($1 and $3 without $2), in which case the names are "1" and "3"
+      at positions 0 and 1. The view is valid until the statement is destroyed.
+      An index outside [0, count) is rejected with ERROR_INPUT_OUT_OF_RANGE.
+    role: getter
+    belongs_to: sql_statement
+    parameters:
+      statement:
+        type: sql_statement
+        description: The statement.
+      index:
+        type: idx
+        description: Zero-based position in binding order.
+      out_name:
+        type: identifier
+        indirection: 1
+        kind: OUT_BORROW
+        description: Receives a borrowed view of the parameter name, valid until the statement is destroyed.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
 
   sql_statement_destroy:
     lifecycle:

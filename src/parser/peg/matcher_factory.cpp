@@ -107,6 +107,14 @@ Matcher &MatcherFactory::CreateMatcher(const PEGExpression &expression, const st
 	}
 }
 
+optional_ptr<const CompiledGrammarRule> MatcherFactory::GetRule(const string &rule_name) const {
+	auto entry = rules.find(rule_name);
+	if (entry == rules.end()) {
+		return nullptr;
+	}
+	return *entry->second;
+}
+
 Matcher &MatcherFactory::CreateMatcher(string_t rule_name, vector<reference<Matcher>> &parameters) {
 	bool is_function_call = !parameters.empty();
 	auto matcher_entry = matchers.find(rule_name);
@@ -148,7 +156,7 @@ Matcher &MatcherFactory::CreateMatcher(string_t rule_name, vector<reference<Matc
 	}
 
 	auto rule_name_str = rule_name.GetString();
-	auto rule_p = compiled.GetRule(rule_name_str);
+	auto rule_p = GetRule(rule_name_str);
 	if (!rule_p) {
 		throw InvalidInputException("Failed to compile rule '%s', no registered data exists for it", rule_name_str);
 	}
@@ -174,7 +182,7 @@ void MatcherFactory::AddRuleOverride(const char *name, unique_ptr<Matcher> &&mat
 		matcher.SetPackratMemoized();
 	}
 	if (grammar.GetRule(name)) {
-		auto rule_p = compiled.GetRule(name);
+		auto rule_p = GetRule(name);
 		if (!rule_p) {
 			throw InvalidInputException("No registered data exists for rule '%s', failed to set RuleOverride", name);
 		}
@@ -192,9 +200,10 @@ void MatcherFactory::SuppressSuggestions(const char *name) {
 	no_suggestion_rules.insert(name);
 }
 
-MatcherFactory::MatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar_p, CompiledGrammar &compiled_p,
+MatcherFactory::MatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar_p,
+                               const compiled_rules_map_t &rules, const PEGKeywordHelper &keyword_helper_p,
                                terminal_rule_overrides_t terminal_rule_overrides_p)
-    : allocator(allocator), grammar(grammar_p), compiled(compiled_p),
+    : allocator(allocator), grammar(grammar_p), rules(rules), keyword_helper(keyword_helper_p),
       terminal_rule_overrides(std::move(terminal_rule_overrides_p)) {
 }
 
@@ -272,7 +281,7 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 }
 
 unique_ptr<KeywordMatcher> MatcherFactory::CreateKeyword(const string &keyword, const KeywordInfo &info) const {
-	return make_uniq<CompiledKeywordMatcher>(keyword, info, compiled.GetKeywordHelper());
+	return make_uniq<CompiledKeywordMatcher>(keyword, info, keyword_helper);
 }
 
 unique_ptr<ListMatcher> MatcherFactory::CreateList() const {
@@ -280,7 +289,7 @@ unique_ptr<ListMatcher> MatcherFactory::CreateList() const {
 }
 
 unique_ptr<ChoiceMatcher> MatcherFactory::CreateChoice(vector<reference<Matcher>> &&matchers) const {
-	auto &table = compiled.GetKeywordHelper().GetLiteralTable();
+	auto &table = keyword_helper.GetLiteralTable();
 	if (matchers.size() > 1) {
 		unordered_map<uint32_t, idx_t> literal_children;
 		for (idx_t i = 0; i < matchers.size(); i++) {

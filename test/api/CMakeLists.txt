@@ -40,10 +40,13 @@ set(TEST_API_OBJECTS
     test_operator_memory_limit.cpp
     test_query_profiler.cpp
     test_read_ahead_abandon.cpp
+    test_read_ahead_progress.cpp
+    test_read_ahead_failure.cpp
     test_row_id_deduplicator.cpp
     test_dbdir.cpp
     test_pending_with_parameters.cpp
     test_parse_statement_iterator.cpp
+    test_dialect_extension.cpp
     test_grammar_extension.cpp
     test_progress_bar.cpp
     test_uuid.cpp

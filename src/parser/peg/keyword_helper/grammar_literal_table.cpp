@@ -41,10 +41,8 @@ void GrammarLiteralTable::Register(const string &text, LiteralInfo info) {
 		if (literals.size() >= LiteralInfo::MAX_LITERAL_ID) {
 			throw InvalidInputException("Grammar has too many distinct literals");
 		}
-		auto id = static_cast<uint32_t>(literals.size() + 1);
-		literals.emplace(text, info.WithLiteralId(id));
-	} else {
-		entry->second = info.WithLiteralId(entry->second.LiteralId());
+		auto id = static_cast<uint16_t>(literals.size() + 1);
+		entry = literals.emplace(text, id).first;
 	}
 }
 

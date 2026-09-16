@@ -514,7 +514,11 @@ class UseGramPreviewEmitter:
     def emit_source(self):
         lines = []
         lines.append(GENERATED_HEADER)
-        lines.append('\n#include "duckdb/parser/peg/transformer/peg_transformer.hpp"\n\n')
+        lines.append(
+            '\n#include "duckdb/parser/peg/transformer/peg_transformer.hpp"\n'
+            '#include "duckdb/parser/expression/star_expression.hpp"\n'
+            '#include "duckdb/parser/expression/columnref_expression.hpp"\n\n'
+        )
         lines.append("namespace duckdb {\n\n")
         lines.append("")
         for rule_name in self.emitted_ops_rules():

@@ -155,6 +155,7 @@ static idx_t SelectivityOptionalFilterSelect(DataChunk &args, ExpressionState &s
 
 ScalarFunction SelectivityOptionalFilterScalarFun::GetFunction(const LogicalType &input_type) {
 	ScalarFunction func(NAME, {input_type}, LogicalType::BOOLEAN, nullptr, TableFilterFunctions::Bind);
+	func.GetSignature().GetParameter(0).SetName("col");
 	func.SetInitStateCallback(SelectivityOptionalFilterInitLocalState);
 	func.SetSelectCallback(SelectivityOptionalFilterSelect);
 	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);

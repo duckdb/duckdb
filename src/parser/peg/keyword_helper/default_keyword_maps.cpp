@@ -3,14 +3,14 @@
 
 namespace duckdb {
 
-static constexpr uint32_t KEYWORD_UNRESERVED = uint32_t(1) << 24;
-static constexpr uint32_t KEYWORD_RESERVED = uint32_t(1) << 25;
-static constexpr uint32_t KEYWORD_TYPE_FUNC = uint32_t(1) << 26;
-static constexpr uint32_t KEYWORD_COL_NAME = uint32_t(1) << 27;
-static constexpr uint32_t KEYWORD_TYPE_NAME = uint32_t(1) << 28;
+static constexpr uint8_t KEYWORD_UNRESERVED = uint8_t(1) << 0;
+static constexpr uint8_t KEYWORD_RESERVED = uint8_t(1) << 1;
+static constexpr uint8_t KEYWORD_TYPE_FUNC = uint8_t(1) << 2;
+static constexpr uint8_t KEYWORD_COL_NAME = uint8_t(1) << 3;
+static constexpr uint8_t KEYWORD_TYPE_NAME = uint8_t(1) << 4;
 
 LiteralInfo DefaultKeywordMaps::LookupKeyword(const string &text, uint32_t literal_id) const {
-	uint32_t flags = 0;
+	uint8_t flags = 0;
 	if (unreserved_keyword_map.count(text)) {
 		flags |= KEYWORD_UNRESERVED;
 	}

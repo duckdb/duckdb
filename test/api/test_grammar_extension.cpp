@@ -26,6 +26,16 @@ struct LiteralChoiceTestResult {
 	string tree;
 };
 
+static compiled_rules_map_t CompileTestProgramRule(const ParsedGrammar &grammar) {
+	compiled_rules_map_t rules;
+	auto rule = grammar.GetRule("Program");
+	if (!rule) {
+		throw InternalException("Test grammar is missing the Program rule");
+	}
+	rules.emplace(rule->name, make_uniq<CompiledGrammarRule>(rule->name, rule->transform_process));
+	return rules;
+}
+
 static vector<MatcherSuggestion> GetLiteralChoiceSuggestions(const Matcher &matcher) {
 	vector<MatcherToken> tokens;
 	TokenIterator iterator(tokens);
@@ -42,8 +52,9 @@ static vector<MatcherSuggestion> GetLiteralChoiceSuggestions(const Matcher &matc
 TEST_CASE("Literal choice dispatch retains autocomplete metadata", "[api][grammar_extension]") {
 	auto compiled = CompiledGrammar::Create();
 	auto grammar = ParsedGrammar::Parse("Program <- 'TABLE' / '(' / '.' / 'table'");
+	auto rules = CompileTestProgramRule(grammar);
 	MatcherAllocator allocator;
-	MatcherFactory factory(allocator, grammar, *compiled, {});
+	MatcherFactory factory(allocator, grammar, rules, compiled->GetKeywordHelper(), {});
 	auto &root = factory.CreateRootMatcher("Program").Cast<ListMatcher>();
 	auto &choice = root.matchers[0].get().Cast<ChoiceMatcher>();
 	vector<reference<Matcher>> children = choice.matchers;
@@ -84,8 +95,9 @@ static LiteralChoiceTestResult MatchLiteralChoiceTest(const Matcher &matcher, co
 TEST_CASE("Literal choice dispatch preserves ordered choice results", "[api][grammar_extension]") {
 	auto compiled = CompiledGrammar::Create();
 	auto grammar = ParsedGrammar::Parse("Program <- 'SELECT' / 'FROM' / 'select' / 'WHERE' / '('");
+	auto rules = CompileTestProgramRule(grammar);
 	MatcherAllocator allocator;
-	MatcherFactory factory(allocator, grammar, *compiled, {});
+	MatcherFactory factory(allocator, grammar, rules, compiled->GetKeywordHelper(), {});
 	auto &root = factory.CreateRootMatcher("Program").Cast<ListMatcher>();
 	auto &choice = root.matchers[0].get().Cast<ChoiceMatcher>();
 	vector<reference<Matcher>> children = choice.matchers;
@@ -149,9 +161,9 @@ private:
 
 class DispatchOverrideMatcherFactory final : public MatcherFactory {
 public:
-	DispatchOverrideMatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar, CompiledGrammar &compiled,
-	                               idx_t &calls_p)
-	    : MatcherFactory(allocator, grammar, compiled, {}), helper(compiled.GetKeywordHelper()), calls(calls_p) {
+	DispatchOverrideMatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar,
+	                               const compiled_rules_map_t &rules, const PEGKeywordHelper &helper_p, idx_t &calls_p)
+	    : MatcherFactory(allocator, grammar, rules, helper_p, {}), helper(helper_p), calls(calls_p) {
 	}
 
 private:
@@ -166,9 +178,10 @@ private:
 TEST_CASE("Literal dispatch does not assume custom keyword matcher semantics", "[api][grammar_extension]") {
 	auto compiled = CompiledGrammar::Create();
 	auto grammar = ParsedGrammar::Parse("Program <- 'SELECT' / 'FROM'");
+	auto rules = CompileTestProgramRule(grammar);
 	MatcherAllocator allocator;
 	idx_t calls = 0;
-	DispatchOverrideMatcherFactory factory(allocator, grammar, *compiled, calls);
+	DispatchOverrideMatcherFactory factory(allocator, grammar, rules, compiled->GetKeywordHelper(), calls);
 	auto &root = factory.CreateRootMatcher("Program");
 	for (bool heap : {false, true}) {
 		calls = 0;
@@ -184,8 +197,9 @@ TEST_CASE("Literal dispatch leaves mixed and unregistered alternatives unchanged
 	for (auto &definition : vector<string> {"Program <- 'SELECT' / ('FROM' 'WHERE')",
 	                                        "Program <- 'SELECT' / 'unregistered_dispatch_word'"}) {
 		auto grammar = ParsedGrammar::Parse(definition);
+		auto rules = CompileTestProgramRule(grammar);
 		MatcherAllocator allocator;
-		MatcherFactory factory(allocator, grammar, *compiled, {});
+		MatcherFactory factory(allocator, grammar, rules, compiled->GetKeywordHelper(), {});
 		auto &root = factory.CreateRootMatcher("Program").Cast<ListMatcher>();
 		auto &choice = root.matchers[0].get().Cast<ChoiceMatcher>();
 		vector<reference<Matcher>> children = choice.matchers;
@@ -201,6 +215,55 @@ TEST_CASE("Literal dispatch leaves mixed and unregistered alternatives unchanged
 			}
 		}
 	}
+}
+
+TEST_CASE("Literal IDs and category flags are independent", "[api][grammar_extension]") {
+	REQUIRE(sizeof(LiteralInfo) == sizeof(uint32_t));
+	REQUIRE(sizeof(LiteralInfo().LiteralId()) == sizeof(uint16_t));
+	LiteralInfo missing;
+	REQUIRE(missing.LiteralId() == 0);
+	REQUIRE_FALSE(missing.IsKeyword());
+	LiteralInfo literal(LiteralInfo::MAX_LITERAL_ID);
+	LiteralInfo original(literal);
+	REQUIRE(literal.LiteralId() == 65535);
+	REQUIRE_FALSE(literal.IsKeyword());
+	for (auto category : {PEGKeywordCategory::KEYWORD_UNRESERVED, PEGKeywordCategory::KEYWORD_RESERVED,
+	                      PEGKeywordCategory::KEYWORD_TYPE_FUNC, PEGKeywordCategory::KEYWORD_COL_NAME,
+	                      PEGKeywordCategory::KEYWORD_TYPE_NAME}) {
+		REQUIRE_FALSE(literal.HasCategory(category));
+		literal.AddCategory(category);
+		REQUIRE(literal.HasCategory(category));
+		REQUIRE(literal.IsKeyword());
+		REQUIRE(literal.LiteralId() == original.LiteralId());
+	}
+	REQUIRE_FALSE(literal == original);
+	LiteralInfo copy(literal);
+	REQUIRE(copy == literal);
+	copy.AddCategory(PEGKeywordCategory::KEYWORD_NONE);
+	copy.AddCategory(static_cast<PEGKeywordCategory>(255));
+	REQUIRE(copy == literal);
+	REQUIRE_FALSE(copy.HasCategory(PEGKeywordCategory::KEYWORD_NONE));
+	REQUIRE_FALSE(copy.HasCategory(static_cast<PEGKeywordCategory>(255)));
+}
+
+TEST_CASE("Grammar literal IDs reject overflow", "[api][grammar_extension]") {
+	auto grammar = ParsedGrammar::Parse("LiteralTest <- '('");
+	DefaultKeywordMaps categories;
+	for (idx_t i = 1; i < LiteralInfo::MAX_LITERAL_ID; i++) {
+		categories.unreserved_keyword_map.insert("literal_limit_" + to_string(i));
+	}
+	categories.typename_keyword_map.insert("literal_limit_1");
+	GrammarLiteralTable table(grammar, categories);
+	idx_t max_id = table.Lookup("(").LiteralId();
+	for (auto &word : categories.unreserved_keyword_map) {
+		max_id = MaxValue<idx_t>(max_id, table.Lookup(word).LiteralId());
+	}
+	REQUIRE(max_id == LiteralInfo::MAX_LITERAL_ID);
+	REQUIRE(table.Lookup("literal_limit_1").HasCategory(PEGKeywordCategory::KEYWORD_UNRESERVED));
+	REQUIRE(table.Lookup("literal_limit_1").HasCategory(PEGKeywordCategory::KEYWORD_TYPE_NAME));
+	categories.unreserved_keyword_map.insert("one_literal_too_many");
+	REQUIRE_THROWS_WITH(GrammarLiteralTable(grammar, categories),
+	                    Catch::Matchers::Contains("Grammar has too many distinct literals"));
 }
 
 TEST_CASE("Grammar literal IDs include category-only words and overlapping categories", "[api][grammar_extension]") {
@@ -356,6 +419,23 @@ TEST_CASE("Custom keyword helpers and standalone literal matchers keep their sem
 	REQUIRE_FALSE(MatchLiteralTestToken(unregistered, "another_word"));
 }
 
+struct RegisteredTransformResult {
+	idx_t value;
+};
+
+namespace duckdb {
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.test.RegisteredTransformResult", ::RegisteredTransformResult);
+} // namespace duckdb
+
+TEST_CASE("Transform result types use stable registered names", "[api][grammar_extension]") {
+	TypedTransformResult<RegisteredTransformResult> result({42});
+	auto copied_type_name = string(TransformResultTypeName<RegisteredTransformResult>());
+
+	REQUIRE(result.GetValuePointer(copied_type_name.c_str()) == &result.value);
+	REQUIRE(TryGetTransformResult<RegisteredTransformResult>(result) == &result.value);
+	REQUIRE(TryGetTransformResult<bool>(result) == nullptr);
+}
+
 class GrammarExtensionTestValueTransformProcess final : public TransformProcess {
 public:
 	TransformStep Resume(unique_ptr<TransformResultValue> child_result) override {
@@ -378,7 +458,7 @@ public:
 		D_ASSERT(TryGetTransformResult<bool>(*child_result));
 		auto statement = make_uniq<SelectStatement>();
 		auto select_node = make_uniq<SelectNode>();
-		select_node->select_list.push_back(make_uniq<ConstantExpression>(Value::INTEGER(42)));
+		select_node->select_list.push_back(ConstantExpression::Integer(42));
 		select_node->from_table = make_uniq<EmptyTableRef>();
 		statement->node = std::move(select_node);
 		return TransformStep::Complete(
@@ -1096,7 +1176,6 @@ TEST_CASE("The parser cache only holds the base grammar", "[api][grammar_extensi
 	Connection con(db);
 	REQUIRE_NO_FAIL(*con.Query("SELECT 1"));
 	auto base_grammar = CompiledGrammar::Get(*con.context);
-	REQUIRE_FALSE(base_grammar->HasGrammarChanges());
 	REQUIRE(base_grammar == CompiledGrammar::Get(*con.context));
 
 	RegisterGrammarExtensionTestSyntax(*db.instance);
@@ -1104,7 +1183,6 @@ TEST_CASE("The parser cache only holds the base grammar", "[api][grammar_extensi
 	ActivateGrammarExtensionTestSyntax(con);
 	CheckGrammarExtensionTestSyntax(con);
 	auto extension_grammar = CompiledGrammar::Get(*con.context);
-	REQUIRE(extension_grammar->HasGrammarChanges());
 	REQUIRE(extension_grammar == CompiledGrammar::Get(*con.context));
 }
 

@@ -1389,6 +1389,86 @@ void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 	});
 }
 
+void ClientContext::RunTransactionStatementInternal(const TransactionInfo &info) {
+	auto type = info.type;
+	if (type == TransactionType::COMMIT && transaction.HasActiveTransaction() &&
+	    ValidChecker::IsInvalidated(ActiveTransaction())) {
+		// transaction is invalidated - turn COMMIT into ROLLBACK
+		type = TransactionType::ROLLBACK;
+	}
+	switch (type) {
+	case TransactionType::BEGIN_TRANSACTION: {
+		if (!transaction.IsAutoCommit()) {
+			throw TransactionException("cannot start a transaction within a transaction");
+		}
+		transaction.SetAutoCommit(false);
+		if (info.modifier == TransactionModifierType::TRANSACTION_READ_ONLY) {
+			transaction.SetReadOnly();
+		}
+		transaction.SetInvalidationPolicy(info.invalidation_policy);
+		transaction.SetAutoRollback(info.auto_rollback);
+		if (Settings::Get<ImmediateTransactionModeSetting>(*this)) {
+			auto databases = DatabaseManager::Get(*this).GetDatabases(*this);
+			for (auto &attached : databases) {
+				if (ValidChecker::IsInvalidated(*attached)) {
+					continue;
+				}
+				transaction.ActiveTransaction().GetTransaction(*attached);
+			}
+		}
+		break;
+	}
+	case TransactionType::COMMIT:
+		if (transaction.IsAutoCommit()) {
+			throw TransactionException("cannot commit - no transaction is active");
+		}
+		transaction.Commit();
+		// The commit is irreversible, so ignore interrupts until the next query.
+		SuppressInterrupts();
+		break;
+	case TransactionType::ROLLBACK: {
+		if (transaction.IsAutoCommit()) {
+			throw TransactionException("cannot rollback - no transaction is active");
+		}
+		auto &valid_checker = ValidChecker::Get(transaction.ActiveTransaction());
+		if (valid_checker.IsInvalidated()) {
+			ErrorData error(ExceptionType::TRANSACTION, valid_checker.InvalidatedMessage());
+			transaction.Rollback(error);
+		} else {
+			transaction.Rollback(nullptr);
+		}
+		break;
+	}
+	default:
+		throw NotImplementedException("Unrecognized transaction type!");
+	}
+}
+
+void ClientContext::RunTransactionStatement(const TransactionInfo &info) {
+	auto lock = LockContext();
+	InitialCleanup(*lock);
+	if (is_connected) {
+		auto statement = make_uniq<TransactionStatement>(info.Copy());
+		statement->query = info.ToString();
+		PendingQueryParameters parameters;
+		parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+		auto result = RunStatementInternal(*lock, std::move(statement), parameters);
+		if (result->HasError()) {
+			if (transaction.HasActiveTransaction() && transaction.GetAutoRollback()) {
+				transaction.Rollback(result->GetErrorObject());
+			}
+			ClearInterrupt();
+			result->ThrowError();
+		}
+		return;
+	}
+	auto &db_instance = DatabaseInstance::GetDatabase(*this);
+	if (ValidChecker::IsInvalidated(db_instance)) {
+		throw ErrorManager::InvalidatedDatabase(*this, ValidChecker::InvalidatedMessage(db_instance));
+	}
+	RunTransactionStatementInternal(info);
+}
+
 void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, const std::function<void(void)> &fun,
                                                      bool requires_valid_transaction) {
 	if (requires_valid_transaction && transaction.HasActiveTransaction() &&

@@ -80,9 +80,9 @@ void ParseLogMessageFunction(DataChunk &args, ExpressionState &state, Vector &re
 } // namespace
 
 ScalarFunction ParseLogMessage::GetFunction() {
-	auto fun = ScalarFunction({{"type", LogicalType::VARCHAR}, {"message", LogicalType::VARCHAR}}, LogicalType::ANY,
-	                          ParseLogMessageFunction, ParseLogMessageBind, nullptr, nullptr,
+	auto fun = ScalarFunction({}, LogicalType::ANY, ParseLogMessageFunction, ParseLogMessageBind, nullptr, nullptr,
 	                          LogicalType(LogicalTypeId::INVALID));
+	fun.GetSignature().AddParameter("type", LogicalType::VARCHAR).AddParameter("message", LogicalType::VARCHAR);
 	fun.SetErrorMode(FunctionErrors::CAN_THROW_RUNTIME_ERROR);
 	return fun;
 }

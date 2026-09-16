@@ -689,11 +689,13 @@ static void LoadInternal(ExtensionLoader &loader) {
 	const auto map_config_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
 	ScalarFunctionSet format_sql_set("duckdb_format_sql");
 	// duckdb_format_sql(sql)
-	format_sql_set.AddFunction(
-	    ScalarFunction({{"sql", LogicalType::VARCHAR}}, LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind));
+	ScalarFunction format_sql_unary({}, LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind);
+	format_sql_unary.GetSignature().AddParameter("sql", LogicalType::VARCHAR);
+	format_sql_set.AddFunction(format_sql_unary);
 	// duckdb_format_sql(sql, config => MAP {'indent_size':'4', 'inline_threshold':'60'})
-	format_sql_set.AddFunction(ScalarFunction({{"sql", LogicalType::VARCHAR}, {"config", map_config_type}},
-	                                          LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind));
+	ScalarFunction format_sql_binary({}, LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind);
+	format_sql_binary.GetSignature().AddParameter("sql", LogicalType::VARCHAR).AddParameter("config", map_config_type);
+	format_sql_set.AddFunction(format_sql_binary);
 	loader.RegisterFunction(format_sql_set);
 }
 

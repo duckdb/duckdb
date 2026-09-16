@@ -291,7 +291,7 @@ public:
 		auto result = make_uniq<MockHTTPParams>(*this);
 		result->Initialize(opener);
 		result->retries = state->retries;
-		return result;
+		return unique_ptr<HTTPParams>(std::move(result));
 	}
 
 	unique_ptr<HTTPClient> InitializeClientExtended(HTTPParams &, const string &origin,

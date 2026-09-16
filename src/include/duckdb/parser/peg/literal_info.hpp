@@ -19,37 +19,32 @@ public:
 
 public:
 	//! Zero denotes an unknown literal with no keyword flags, such as a non-keyword identifier.
-	LiteralInfo() : value(0) {
+	LiteralInfo() : literal_id(0) {
 	}
-	explicit LiteralInfo(uint32_t literal_id, uint32_t flags = 0) : value(literal_id | flags) {
-		D_ASSERT(literal_id <= MAX_LITERAL_ID);
-		D_ASSERT((flags & MAX_LITERAL_ID) == 0);
+	explicit LiteralInfo(uint16_t literal_id, uint8_t category_flags = 0)
+	    : literal_id(literal_id), category_flags(category_flags) {
 	}
 
 	//! Zero means no grammar-local ID has been assigned; keyword flags may still be present.
-	uint32_t LiteralId() const {
-		return value & MAX_LITERAL_ID;
-	}
-
-	LiteralInfo WithLiteralId(uint32_t literal_id) const {
-		return LiteralInfo(literal_id, value & ~MAX_LITERAL_ID);
+	uint16_t LiteralId() const {
+		return literal_id;
 	}
 
 	bool IsKeyword() const {
-		return (value & ~MAX_LITERAL_ID) != 0;
+		return category_flags != 0;
 	}
 
 	bool HasAnyFlags(uint32_t mask) const {
-		return (value & mask & ~MAX_LITERAL_ID) != 0;
+		return (category_flags & mask & ~MAX_LITERAL_ID) != 0;
 	}
 
 	bool operator==(const LiteralInfo &other) const {
-		return value == other.value;
+		return literal_id == other.literal_id && category_flags == other.category_flags;
 	}
 
 private:
-	//! The zero sentinel keeps missing lookups compact and lets flag checks run without an absence branch.
-	uint32_t value;
+	uint16_t literal_id = 0;
+	uint8_t category_flags = 0;
 };
 
 } // namespace duckdb
