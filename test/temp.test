@@ -1,4 +1,0 @@
-query I
-select list_sort([3, 2]);
-----
-[2, 3]

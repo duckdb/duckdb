@@ -70,9 +70,6 @@ class CatalogType(str, Enum):
 
 parameter_type_map = {"TIMESTAMP WITH TIME ZONE": "TIMESTAMPTZ", "TIME WITH TIME ZONE": "TIMETZ"}
 
-# must match the `signature` field size of ExtensionFunctionOverloadEntry in write_header()
-SIGNATURE_BUFFER_SIZE = 192
-
 
 def log(message: str):
     print(message, file=sys.stderr, flush=True)
@@ -159,7 +156,6 @@ class FunctionOverload(NamedTuple):
     name: str
     type: CatalogType
     parameters: Tuple
-    parameter_names: Tuple[str, ...]
     return_type: LogicalType
 
 
@@ -168,7 +164,6 @@ class ExtensionFunctionOverload(NamedTuple):
     name: str
     type: CatalogType
     parameters: Tuple
-    parameter_names: Tuple[str, ...]
     return_type: LogicalType
 
     @staticmethod
@@ -180,22 +175,8 @@ class ExtensionFunctionOverload(NamedTuple):
             signature = x[3]
             splits = signature.split('>')
             return_type = LogicalType(splits[1])
-            raw_parameters = [param for param in splits[0][1:-1].split(',') if len(param) > 0]
-            parameters = []
-            parameter_names = []
-            for raw_param in raw_parameters:
-                # parameters are encoded as "name::type" - fall back to a bare type (no name) for
-                # entries generated before parameter names were tracked
-                name, sep, type_str = raw_param.partition('::')
-                if sep:
-                    parameter_names.append(name)
-                    parameters.append(LogicalType(type_str))
-                else:
-                    parameter_names.append('')
-                    parameters.append(LogicalType(raw_param))
-            extension_function = ExtensionFunctionOverload(
-                x[1], function.name, function.type, tuple(parameters), tuple(parameter_names), return_type
-            )
+            parameters = [LogicalType(param) for param in splits[0][1:-1].split(',')]
+            extension_function = ExtensionFunctionOverload(x[1], function.name, function.type, parameters, return_type)
             if function not in output:
                 output[function] = []
             output[function].append(extension_function)
@@ -399,17 +380,11 @@ def transform_parameters(parameters) -> FunctionOverload:
     return tuple(transform_parameter(param) for param in parameters)
 
 
-def transform_parameter_names(parameter_names) -> Tuple[str, ...]:
-    names = [x for x in parameter_names.lstrip('[').rstrip(']').split(', ') if len(x) > 0]
-    return tuple(names)
-
-
 def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverload]]):
     GET_FUNCTIONS_QUERY = """
         select distinct
             function_name,
             function_type,
-            parameters,
             parameter_types,
             return_type
         from duckdb_functions()
@@ -424,19 +399,13 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
     for func in results:
         function_name = func["function_name"].lower()
         function_type = func["function_type"]
-        parameter_names = func["parameters"]
         parameter_types = func["parameter_types"]
         return_type = func["return_type"]
         function_parameters = transform_parameters(parameter_types)
-        function_parameter_names = transform_parameter_names(parameter_names)
         function_return = transform_parameter(return_type)
         function = Function(function_name, catalog_type_from_string(function_type))
         function_overload = FunctionOverload(
-            function_name,
-            catalog_type_from_string(function_type),
-            function_parameters,
-            function_parameter_names,
-            function_return,
+            function_name, catalog_type_from_string(function_type), function_parameters, function_return
         )
         if function not in functions:
             functions.add(function)
@@ -626,7 +595,7 @@ Please double check if '{args.extension_repository}' is the right location to lo
             for overload in function_overloads:
                 extension_overloads.append(
                     ExtensionFunctionOverload(
-                        extension_name, overload.name, overload.type, overload.parameters, overload.parameter_names, overload.return_type
+                        extension_name, overload.name, overload.type, overload.parameters, overload.return_type
                     )
                 )
             result[function] = extension_overloads
@@ -720,22 +689,9 @@ static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] =
             for overload in overloads:
                 result += "\t{"
                 result += f'"{overload.name}", "{overload.extension}", {overload.type.value}, "'
-                names = overload.parameter_names if overload.parameter_names else tuple()
-                param_tokens = []
-                for i, parameter in enumerate(overload.parameters):
-                    name = names[i] if i < len(names) else ''
-                    if name:
-                        param_tokens.append(f"{name}::{parameter.type}")
-                    else:
-                        param_tokens.append(parameter.type)
                 signature = "["
-                signature += ",".join(param_tokens)
+                signature += ",".join([parameter.type for parameter in overload.parameters])
                 signature += "]>" + overload.return_type.type
-                if len(signature) >= SIGNATURE_BUFFER_SIZE:
-                    raise Exception(
-                        f"Generated signature for {overload.extension}.{overload.name} is {len(signature)} chars, "
-                        f"which does not fit in the {SIGNATURE_BUFFER_SIZE}-char signature buffer: {signature!r}"
-                    )
                 result += signature
                 result += '"},\n'
         result += "}; // END_OF_EXTENSION_FUNCTION_OVERLOADS\n"
@@ -834,7 +790,7 @@ struct ExtensionFunctionOverloadEntry {
     char name[48];
     char extension[48];
     CatalogType type;
-    char signature[192];
+    char signature[96];
 };
 """
 

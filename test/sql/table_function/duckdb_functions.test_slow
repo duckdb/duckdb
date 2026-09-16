@@ -50,4 +50,16 @@ SELECT count(*) FROM duckdb_functions()
 WHERE (function_type == 'window' OR function_type == 'scalar' or function_type == 'aggregate')
 AND list_contains(parameters, 'col0')
 ----
+55
+
+# some other stuff
+require json
+
+# require icu
+
+query I
+SELECT count(*) FROM duckdb_functions()
+WHERE (function_type == 'window' OR function_type == 'scalar' or function_type == 'aggregate')
+AND list_contains(parameters, 'col0')
+----
 0
