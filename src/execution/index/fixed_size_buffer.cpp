@@ -80,17 +80,6 @@ FixedSizeBuffer::~FixedSizeBuffer() {
 	}
 }
 
-// Takes ownership of a reserved block reference, including when buffer construction fails.
-static unique_ptr<FixedSizeBuffer> AdoptPersistedBuffer(BlockManager &block_manager, idx_t segment_count,
-                                                        idx_t allocation_size, const BlockPointer &block_pointer) {
-	try {
-		return make_uniq<FixedSizeBuffer>(block_manager, segment_count, allocation_size, block_pointer);
-	} catch (...) {
-		block_manager.MarkBlockAsModified(block_pointer.block_id);
-		throw;
-	}
-}
-
 unique_ptr<FixedSizeBuffer> FixedSizeBuffer::Persist(PartialBlockManager &partial_block_manager,
                                                      const idx_t available_segments, const idx_t segment_size,
                                                      const idx_t bitmask_offset) {
@@ -102,20 +91,20 @@ unique_ptr<FixedSizeBuffer> FixedSizeBuffer::Persist(PartialBlockManager &partia
 			throw InternalException("invalid or missing buffer in FixedSizeAllocator");
 		}
 		block_manager.IncreaseBlockReferenceCount(block_pointer.block_id);
-		return AdoptPersistedBuffer(block_manager, segment_count, allocation_size, block_pointer);
+		return make_uniq<FixedSizeBuffer>(block_manager, segment_count, allocation_size, block_pointer);
 	}
 
 	// Early-out, if the buffer is already on disk and not dirty.
 	if (!dirty && OnDisk()) {
 		block_manager.IncreaseBlockReferenceCount(block_pointer.block_id);
-		return AdoptPersistedBuffer(block_manager, segment_count, allocation_size, block_pointer);
+		return make_uniq<FixedSizeBuffer>(block_manager, segment_count, allocation_size, block_pointer);
 	}
 
 	const auto new_allocation_size = GetNewAllocationSize(available_segments, segment_size, bitmask_offset);
 	auto allocation = partial_block_manager.GetBlockAllocation(NumericCast<uint32_t>(new_allocation_size));
 
 	BlockPointer new_block_pointer(allocation.state.block_id, allocation.state.offset);
-	auto result = AdoptPersistedBuffer(block_manager, segment_count, new_allocation_size, new_block_pointer);
+	auto result = make_uniq<FixedSizeBuffer>(block_manager, segment_count, new_allocation_size, new_block_pointer);
 	auto &buffer_manager = block_manager.buffer_manager;
 
 	if (allocation.partial_block) {
