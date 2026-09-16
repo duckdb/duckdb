@@ -9,6 +9,7 @@
 
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/array.hpp"
 #include <functional>
 #include "duckdb/common/set.hpp"
 #include "duckdb/planner/joinside.hpp"
@@ -64,6 +65,7 @@ struct MarkJoinRefinement {
 	idx_t SizeInBytes() const;
 
 	map<uint64_t, MarkJoinRefinementGroup> groups;
+	vector<array<idx_t, 3>> chunks;
 };
 
 class MarkPatternRefiner {

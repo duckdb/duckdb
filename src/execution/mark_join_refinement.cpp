@@ -122,7 +122,7 @@ void MarkJoinRefinement::AddChunk(const DataChunk &keys, idx_t chunk, const vect
 }
 
 idx_t MarkJoinRefinement::SizeInBytes() const {
-	idx_t size = sizeof(*this);
+	idx_t size = sizeof(*this) + chunks.capacity() * sizeof(chunks[0]);
 	for (auto &entry : groups) {
 		size += sizeof(entry);
 		for (auto &selection : entry.second.selections) {
