@@ -630,6 +630,57 @@ else:
         self.assertIn("::error title=Geomean benchmark regression::", process.stdout)
         self.assertIn("+50.0 ms (+5.0%)", process.stdout)
 
+    def test_missing_base_benchmark_warns_and_smoke_tests_pr_once(self):
+        process, order, summary = self.run_regression_test(
+            self.missing_base_runner_source,
+            ci=True,
+            benchmarks=["new_query.benchmark"],
+            step_summary=True,
+        )
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertEqual(order, ["old:5", "new:1"])
+        self.assertIn("::warning title=Benchmark missing from Linux Base::", process.stdout)
+        self.assertIn("SKIPPED (missing from Base)", process.stdout)
+        self.assertIn("new_query: PR smoke test passed", process.stdout)
+        self.assertIn("geomean: unavailable", process.stdout)
+        self.assertIn("1 benchmark skipped (missing from Base)", process.stdout)
+        self.assertIn("## Benchmarks Missing From Base: `benchmarks`", summary)
+        self.assertIn("| `new_query.benchmark` | passed |", summary)
+
+    def test_missing_base_query_does_not_exclude_supported_queries(self):
+        process, order, _ = self.run_regression_test(
+            self.missing_base_runner_source,
+            benchmarks=["stable.benchmark", "new_query.benchmark"],
+        )
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertEqual(order, ["old:5", "new:5", "new:5", "old:5", "old:5", "new:1"])
+        self.assertIn("UNCHANGED (±2%)", process.stdout)
+        self.assertIn("geomean: 1.0 s -> 1.0 s", process.stdout)
+        self.assertIn("new_query: PR smoke test passed", process.stdout)
+
+    def test_missing_base_benchmark_does_not_hide_pr_failure(self):
+        for benchmark in ("broken_query.benchmark", "missing_everywhere.benchmark"):
+            with self.subTest(benchmark=benchmark):
+                process, order, _ = self.run_regression_test(
+                    self.missing_base_runner_source,
+                    ci=True,
+                    benchmarks=[benchmark],
+                )
+                self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+                self.assertEqual(order, ["old:5", "new:1"])
+                self.assertIn("::error title=Regression benchmark failure::", process.stdout)
+                self.assertNotIn("::warning title=Benchmark missing from Linux Base::", process.stdout)
+
+    def test_other_base_errors_still_fail(self):
+        process, order, _ = self.run_regression_test(
+            self.missing_base_runner_source,
+            benchmarks=["base_error.benchmark"],
+        )
+        self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+        self.assertEqual(order, ["old:5", "new:5"])
+        self.assertIn("Base benchmark setup failed.", process.stdout)
+        self.assertIn("benchmark failure", process.stdout)
+
     def test_nofail_suppresses_only_geomean_gate(self):
         process, _, _ = self.run_regression_test(
             self.stable_runner_source, old_timing="1", new_timing="1.1", ci=True, extra_args=["--nofail"]

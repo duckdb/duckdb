@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from benchmark import BenchmarkRunner, create_isolated_benchmark_root
+from benchmark import BenchmarkRunner, benchmark_not_found, create_isolated_benchmark_root
 from comparison import (
     MAX_CONFIRMATION_RUNS,
     MIN_CONFIRMATION_RUNS,
@@ -41,6 +41,7 @@ BUCKET_FAILURE = "failure"
 OUTCOME_NO_REGRESSION = "no_regression"
 OUTCOME_REGRESSION = "regression"
 OUTCOME_FAILURE = "failure"
+OUTCOME_MISSING_BASE = "missing_base"
 
 
 @dataclass
@@ -160,7 +161,8 @@ def run_paired_samples(
             second_runner = old_runner
 
         first_batch, first_failure = first_runner.run(benchmark, batch_size)
-        second_batch, second_failure = second_runner.run(benchmark, batch_size)
+        second_runs = 1 if first_runner is old_runner and benchmark_not_found(first_failure) else batch_size
+        second_batch, second_failure = second_runner.run(benchmark, second_runs)
         if first_runner is old_runner:
             old_batch, old_failure = first_batch, first_failure
             new_batch, new_failure = second_batch, second_failure
@@ -178,6 +180,9 @@ def run_paired_samples(
 
         old_batch = old_batch or []
         new_batch = new_batch or []
+        if benchmark_not_found(old_failure) and not new_failure:
+            new_timings.extend(new_batch)
+            return old_timings, new_timings, old_failure, None, batch_index, False
         if old_failure or new_failure:
             return old_timings, new_timings, old_failure, new_failure, batch_index, False
         if len(old_batch) != len(new_batch):
@@ -214,6 +219,15 @@ def failed_benchmark_result(
     )
 
 
+def missing_base_benchmark_result(benchmark: str, old_failure: Optional[str], smoke_test_runs: int) -> BenchmarkResult:
+    return BenchmarkResult(
+        benchmark=benchmark,
+        old_failure=old_failure,
+        initial_runs=smoke_test_runs,
+        outcome=OUTCOME_MISSING_BASE,
+    )
+
+
 def measurement_status(measurement: BenchmarkMeasurement, stopped_early: bool = False) -> str:
     if stopped_early:
         return "within ±2% (stopped early)"
@@ -239,6 +253,8 @@ def run_fixed_benchmark(
     )
     run_count = min(len(old_timings), len(new_timings))
     if old_failure or new_failure:
+        if benchmark_not_found(old_failure) and not new_failure:
+            return missing_base_benchmark_result(benchmark, old_failure, len(new_timings))
         return failed_benchmark_result(benchmark, old_failure, new_failure, None, run_count, 0)
 
     measurement = benchmark_measurement(old_timings, new_timings)
@@ -268,6 +284,8 @@ def run_adaptive_benchmark(
     )
     initial_count = min(len(old_initial), len(new_initial))
     if old_failure or new_failure:
+        if benchmark_not_found(old_failure) and not new_failure:
+            return missing_base_benchmark_result(benchmark, old_failure, len(new_initial))
         return failed_benchmark_result(benchmark, old_failure, new_failure, None, initial_count, 0)
 
     initial_measurement = benchmark_measurement(old_initial, new_initial)
@@ -706,6 +724,7 @@ def sampling_description(samples: Optional[int], rounded_samples: Optional[int],
 
 def print_benchmark_report(
     rows: List[BenchmarkRow],
+    missing_base_names: List[str],
     common_prefix: str,
     samples: Optional[int],
     rounded_samples: Optional[int],
@@ -716,7 +735,8 @@ def print_benchmark_report(
         for bucket in (BUCKET_UNCHANGED, BUCKET_FASTER, BUCKET_SLOWER, BUCKET_REGRESSION, BUCKET_FAILURE)
     }
     print("")
-    suite_text = f"{common_prefix} ({len(rows)} benchmarks)" if common_prefix else f"{len(rows)} benchmarks"
+    benchmark_count = len(rows) + len(missing_base_names)
+    suite_text = f"{common_prefix} ({benchmark_count} benchmarks)" if common_prefix else f"{benchmark_count} benchmarks"
     print(gray(f"suite: {suite_text}"))
     print(gray(sampling_description(samples, rounded_samples, early_stop)))
     print(gray("query regression: median change ≥ +10.0% (warning)"))
@@ -728,6 +748,11 @@ def print_benchmark_report(
     print_bucket("SLOWER (+2%…<+10%)", buckets[BUCKET_SLOWER], layout)
     print_bucket("REGRESSIONS (≥+10%)", buckets[BUCKET_REGRESSION], layout)
     print_bucket("FAILURES", buckets[BUCKET_FAILURE], layout)
+    if missing_base_names:
+        print("")
+        print("SKIPPED (missing from Base)")
+        for name in missing_base_names:
+            print(f"{name}: PR smoke test passed")
 
 
 def markdown_row(result: BenchmarkResult) -> str:
@@ -781,6 +806,25 @@ def report_failures(results: List[BenchmarkResult], suite: str):
     append_step_summary(summary_lines + [""])
 
 
+def report_missing_base(results: List[BenchmarkResult], suite: str):
+    if not results:
+        return
+    summary_lines = [
+        f"## Benchmarks Missing From Base: `{suite}`",
+        "",
+        "| Benchmark | PR smoke test |",
+        "| --- | --- |",
+    ]
+    for result in results:
+        emit_github_warning(
+            "Benchmark missing from Linux Base",
+            f"{suite}: {result.benchmark} does not exist in Linux Base; "
+            "skipped comparison after a successful PR smoke test",
+        )
+        summary_lines.append(f"| `{result.benchmark}` | passed |")
+    append_step_summary(summary_lines + [""])
+
+
 def report_geomean_regression(old_geomean: float, new_geomean: float, nofail: bool):
     delta = new_geomean - old_geomean
     ratio = new_geomean / old_geomean
@@ -823,24 +867,36 @@ def query_regression_text(count: int) -> str:
     return f"{count} query regressions"
 
 
-def print_result(execution_failed: bool, gate_failed: bool, nofail: bool, query_regressions: int):
+def print_result(
+    execution_failed: bool,
+    gate_failed: bool,
+    nofail: bool,
+    query_regressions: int,
+    missing_base_count: int,
+):
     query_text = query_regression_text(query_regressions)
+    if missing_base_count == 1:
+        missing_base_text = "; 1 benchmark skipped (missing from Base)"
+    elif missing_base_count:
+        missing_base_text = f"; {missing_base_count} benchmarks skipped (missing from Base)"
+    else:
+        missing_base_text = ""
     colored_query_text = (
         f"{ANSI_YELLOW}{query_text}{ANSI_RESET}" if query_regressions else f"{ANSI_GRAY}{query_text}{ANSI_RESET}"
     )
     if execution_failed:
-        print(f"result: {ANSI_RED}failed; benchmark failure{ANSI_RESET}; {colored_query_text}")
+        print(f"result: {ANSI_RED}failed; benchmark failure{ANSI_RESET}; {colored_query_text}{missing_base_text}")
     elif gate_failed and nofail:
         print(
             f"result: {ANSI_GREEN}passed (--nofail){ANSI_RESET}; "
-            f"{ANSI_RED}geomean regression{ANSI_RESET}; {colored_query_text}"
+            f"{ANSI_RED}geomean regression{ANSI_RESET}; {colored_query_text}{missing_base_text}"
         )
     elif gate_failed:
-        print(f"result: {ANSI_RED}failed; geomean regression{ANSI_RESET}; {colored_query_text}")
+        print(f"result: {ANSI_RED}failed; geomean regression{ANSI_RESET}; {colored_query_text}{missing_base_text}")
     elif query_regressions:
-        print(f"result: {ANSI_GREEN}passed{ANSI_RESET}; {colored_query_text}")
+        print(f"result: {ANSI_GREEN}passed{ANSI_RESET}; {colored_query_text}{missing_base_text}")
     else:
-        print(f"result: {ANSI_GREEN}passed; no query regressions{ANSI_RESET}")
+        print(f"result: {ANSI_GREEN}passed; no query regressions{ANSI_RESET}{missing_base_text}")
 
 
 def main() -> int:
@@ -900,11 +956,18 @@ def main() -> int:
 
     execution_failures = [result for result in results if result.outcome == OUTCOME_FAILURE]
     query_regressions = [result for result in results if result.outcome == OUTCOME_REGRESSION]
+    missing_base = [result for result in results if result.outcome == OUTCOME_MISSING_BASE]
     report_failures(execution_failures, suite)
     report_query_regressions(query_regressions, suite)
+    report_missing_base(missing_base, suite)
 
     display_names = benchmark_display_names([result.benchmark for result in results])
-    rows = [benchmark_row(result, display_names[result.benchmark]) for result in results]
+    rows = [
+        benchmark_row(result, display_names[result.benchmark])
+        for result in results
+        if result.outcome != OUTCOME_MISSING_BASE
+    ]
+    missing_base_names = [display_names[result.benchmark] for result in missing_base]
     rows.sort(key=row_sort_key)
     geomean_measurements = [
         result.initial_measurement if args.samples is None else result.measurement
@@ -920,6 +983,7 @@ def main() -> int:
 
     print_benchmark_report(
         rows,
+        missing_base_names,
         benchmark_common_prefix([result.benchmark for result in results]),
         args.samples,
         rounded_samples,
@@ -933,7 +997,7 @@ def main() -> int:
     else:
         sample_text = f"({rounded_samples} samples)"
     print_geomean_summary(old_geomean, new_geomean, sample_text)
-    print_result(bool(execution_failures), gate_failed, args.nofail, len(query_regressions))
+    print_result(bool(execution_failures), gate_failed, args.nofail, len(query_regressions), len(missing_base))
 
     exit_code = 1 if execution_failures or (gate_failed and not args.nofail) else 0
     isolated_directories.cleanup()
