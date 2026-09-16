@@ -173,17 +173,6 @@ unique_ptr<ParsedExpression> ConstantExpression::FromValue(const Value &value) {
 		return StructExpression(value);
 	case LogicalTypeId::VARIANT: {
 		auto payload = VariantValue::GetValue(value);
-		if (payload.type().id() == LogicalTypeId::STRUCT) {
-			child_list_t<Value> children;
-			auto &values = StructValue::GetChildren(payload);
-			for (idx_t i = 0; i < values.size(); i++) {
-				children.emplace_back(StructType::GetChildName(payload.type(), i),
-				                      values[i].DefaultCastAs(LogicalType::VARIANT()));
-			}
-			payload = Value::STRUCT(std::move(children));
-		} else if (payload.type().id() == LogicalTypeId::LIST) {
-			payload = Value::LIST(LogicalType::VARIANT(), ListValue::GetChildren(payload));
-		}
 		return CastTo(type, CastTo(payload.type(), FromValue(payload)));
 	}
 	case LogicalTypeId::LIST: {

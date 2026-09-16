@@ -126,7 +126,7 @@ idx_t StandardBufferManager::GetOperatorMemoryLimit() const {
 template <typename... ARGS>
 TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(QueryContext context, MemoryTag tag,
                                                                     idx_t memory_delta, unique_ptr<FileBuffer> *buffer,
-                                                                    ARGS... args) {
+                                                                    const ARGS &...args) {
 	auto r = buffer_pool.EvictBlocks(context, tag, memory_delta, buffer_pool.maximum_memory, buffer);
 	if (!r.success) {
 		string extra_text = StringUtil::Format(" (%s/%s used)", StringUtil::BytesToHumanReadableString(GetUsedMemory()),
@@ -745,13 +745,14 @@ vector<TemporaryFileInformation> StandardBufferManager::GetTemporaryFiles() {
 		}
 
 		// Another process or thread can delete the file before we can get its file size.
-		auto handle = fs.OpenFile(name, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+		auto path = fs.JoinPath(temporary_directory.path, name);
+		auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
 		if (!handle) {
 			return;
 		}
 
 		TemporaryFileInformation info;
-		info.path = name;
+		info.path = std::move(path);
 		info.size = NumericCast<idx_t>(fs.GetFileSize(*handle));
 		handle.reset();
 		result.push_back(info);

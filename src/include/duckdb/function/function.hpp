@@ -70,7 +70,7 @@ public:
 	FunctionData() = default;
 	FunctionData(const FunctionData &) : internal_kind(InternalKind::GENERIC) {
 	}
-	FunctionData(FunctionData &&) : internal_kind(InternalKind::GENERIC) {
+	FunctionData(FunctionData &&) noexcept : internal_kind(InternalKind::GENERIC) {
 	}
 	FunctionData &operator=(const FunctionData &other) {
 		if (this != &other) {
@@ -78,7 +78,7 @@ public:
 		}
 		return *this;
 	}
-	FunctionData &operator=(FunctionData &&other) {
+	FunctionData &operator=(FunctionData &&other) noexcept {
 		if (this != &other) {
 			internal_kind = InternalKind::GENERIC;
 		}

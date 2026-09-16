@@ -65,14 +65,15 @@ private:
 
 struct RecursiveCTEScheduleStage {
 	RecursiveCTEScheduleStage(PipelineScheduleStageType type_p, Pipeline &pipeline_p, bool has_source_tasks_p,
-	                          RecursiveCTEPipelineMetricType metric_type_p)
-	    : type(type_p), pipeline(pipeline_p), has_source_tasks(has_source_tasks_p), metric_type(metric_type_p),
-	      dependency_count(0) {
+	                          RecursiveCTEPipelineMetricType metric_type_p, bool is_invariant_build_p)
+	    : type(type_p), pipeline(pipeline_p), has_source_tasks(has_source_tasks_p),
+	      is_invariant_build(is_invariant_build_p), metric_type(metric_type_p), dependency_count(0) {
 	}
 
 	PipelineScheduleStageType type;
 	reference<Pipeline> pipeline;
 	bool has_source_tasks;
+	bool is_invariant_build;
 	RecursiveCTEPipelineMetricType metric_type;
 	vector<idx_t> dependents;
 	idx_t dependency_count;
@@ -100,6 +101,8 @@ struct RecursiveCTEMetricDistribution {
 };
 
 struct RecursiveCTEEpochMetrics {
+	void RecordPipelineWorkers(idx_t workers);
+
 	void Record(idx_t frontier_rows, idx_t workers, idx_t tasks, idx_t elapsed_us, idx_t frontier_storage_bytes,
 	            idx_t frontier_allocation_bytes);
 	void RecordDirectProbeLookup(idx_t elapsed_ns);
@@ -119,6 +122,8 @@ struct RecursiveCTEEpochMetrics {
 	void RecordDistinctGrouping(idx_t candidate_rows, idx_t inserted_rows, idx_t elapsed_ns);
 	void RecordPipelineExecution(RecursiveCTEPipelineMetricType metric_type, idx_t elapsed_ns);
 
+	//! Maximum scheduled worker count of one EXECUTE stage across this invocation.
+	atomic<idx_t> max_pipeline_workers {1};
 	RecursiveCTEMetricDistribution frontier_rows;
 	RecursiveCTEMetricDistribution workers;
 	RecursiveCTEMetricDistribution tasks;
