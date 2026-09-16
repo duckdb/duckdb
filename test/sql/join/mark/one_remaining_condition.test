@@ -1,0 +1,42 @@
+# name: test/sql/join/mark/one_remaining_condition.test
+# description: MARK NULL probes with one remaining inequality use exact build bounds
+# group: [mark]
+
+foreach external false true
+
+statement ok
+SET debug_force_external={external};
+
+foreach type INTEGER BIGINT DOUBLE DECIMAL(12,2) VARCHAR
+
+foreach comparison < <= > >=
+
+foreach build_null false true
+
+query I
+WITH l AS (
+    SELECT i id,NULL::INTEGER a,i::{type} c FROM range(8)t(i)
+), r AS (
+    SELECT i b,CASE WHEN {build_null} AND i=1 THEN NULL ELSE i::{type} END d FROM range(1,7)t(i)
+), native AS (
+    SELECT id,__mark_join_marker m FROM l JOIN BY(TYPE MARK) r ON a=b AND c {comparison} d
+), oracle AS (
+    SELECT id,max(CASE WHEN a=b AND c {comparison} d THEN 2
+                      WHEN (a=b AND c {comparison} d) IS NULL THEN 1 ELSE 0 END)m
+    FROM l CROSS JOIN r GROUP BY id
+)
+SELECT count(*) FROM native JOIN oracle USING(id)
+WHERE CASE WHEN native.m THEN 2 WHEN native.m IS NULL THEN 1 ELSE 0 END<>oracle.m;
+----
+0
+
+endloop
+
+endloop
+
+endloop
+
+endloop
+
+statement ok
+RESET debug_force_external;
