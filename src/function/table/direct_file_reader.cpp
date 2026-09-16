@@ -148,6 +148,7 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 			} break;
 			case ReadFileBindData::FILE_SIZE_COLUMN: {
 				auto &file_size_vector = output.data[col_idx];
+				D_ASSERT(file_metadata.has_value() || file_handle);
 				auto file_size =
 				    file_metadata ? file_metadata->file_size : NumericCast<int64_t>(file_handle->GetFileSize());
 				FlatVector::GetDataMutable<int64_t>(file_size_vector)[out_idx] = file_size;
@@ -157,6 +158,7 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 				// This can sometimes fail (e.g. httpfs file system cant always parse the last modified time
 				// correctly)
 				try {
+					D_ASSERT(file_metadata.has_value() || file_handle);
 					const auto timestamp_seconds =
 					    file_metadata ? file_metadata->last_modification_time : fs.GetLastModifiedTime(*file_handle);
 					FlatVector::GetDataMutable<timestamp_tz_t>(last_modified_vector)[out_idx] =
