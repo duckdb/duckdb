@@ -628,6 +628,13 @@ struct ArrowVariant {
 			// GetArrowLogicalType, not GetTypeFromSchema: a dictionary-encoded child carries its value
 			// type in schema.dictionary, which only this entry point resolves.
 			children.push_back(ArrowType::GetArrowLogicalType(context, *schema.children[i]));
+			// Both fields are binary by the spec. Without this check a non-binary field would be
+			// declared BLOB storage here and then reinterpreted as bytes by the decode.
+			const auto child_type = children.back()->GetDuckType(true);
+			if (child_type.id() != LogicalTypeId::BLOB) {
+				throw InvalidInputException("arrow.parquet.variant field '%s' must be a binary type, got %s",
+				                            schema.children[i]->name, child_type.ToString());
+			}
 			storage_children.emplace_back(schema.children[i]->name, LogicalType::BLOB);
 		}
 		auto result = make_uniq<ArrowType>(LogicalType::VARIANT(), make_uniq<ArrowStructInfo>(std::move(children)));
@@ -697,43 +704,27 @@ struct ArrowVariant {
 	//! binary form) and decode through the Parquet Variant binary decode.
 	static void ArrowToDuck(ClientContext &, Vector &source, Vector &result, idx_t count) {
 		source.Flatten();
-		// The storage vector's type records the incoming schema's own field order (see GetType) — resolve
-		// the two fields by NAME, as the spec allows them in any order.
+		// The storage vector's type records the incoming schema's own field order (see GetType,
+		// which already established that these are exactly the two fields) - so only their order
+		// is open here, the spec allowing them either way round.
 		auto &source_children = StructType::GetChildTypes(source.GetType());
-		idx_t metadata_idx = DConstants::INVALID_INDEX;
-		idx_t value_idx = DConstants::INVALID_INDEX;
-		for (idx_t i = 0; i < source_children.size(); i++) {
-			if (source_children[i].first == "metadata") {
-				metadata_idx = i;
-			} else if (source_children[i].first == "value") {
-				value_idx = i;
-			}
-		}
-		if (metadata_idx == DConstants::INVALID_INDEX || value_idx == DConstants::INVALID_INDEX) {
-			throw InternalException("arrow.parquet.variant storage struct is missing its metadata/value fields");
-		}
+		const idx_t metadata_idx = source_children[0].first == "metadata" ? 0 : 1;
+		const idx_t value_idx = 1 - metadata_idx;
 		auto &entries = StructVector::GetEntries(source);
 		Vector &metadata = entries[metadata_idx];
 		Vector &value = entries[value_idx];
 		metadata.Flatten();
 		value.Flatten();
 
-		// The binary decoder does not consult validity, so NULL rows are substituted with the minimal
-		// valid encoding (metadata v1 with an empty dictionary + a Variant null value) and the SQL NULL
-		// is re-applied on the result afterwards.
-		static constexpr const char MINIMAL_NULL_VARIANT[] = "\x01\x00\x00\x00";
-
 		Vector blob(LogicalType::BLOB, count);
 		auto blob_data = FlatVector::GetDataMutable<string_t>(blob);
 		auto metadata_data = FlatVector::GetData<string_t>(metadata);
 		auto value_data = FlatVector::GetData<string_t>(value);
-		vector<bool> is_null(count, false);
-		bool has_nulls = false;
 		for (idx_t i = 0; i < count; i++) {
 			if (FlatVector::IsNull(source, i) || FlatVector::IsNull(metadata, i) || FlatVector::IsNull(value, i)) {
-				blob_data[i] = string_t(MINIMAL_NULL_VARIANT, 4);
-				is_null[i] = true;
-				has_nulls = true;
+				// The decode reads the blob's validity and answers a Variant null for an invalid
+				// row, so the slot itself is never read.
+				FlatVector::SetNull(blob, i, true);
 				continue;
 			}
 			auto &metadata_bytes = metadata_data[i];
@@ -748,14 +739,6 @@ struct ArrowVariant {
 		}
 
 		ParquetVariantConversion::ConvertBinary(blob, result, count);
-		if (has_nulls) {
-			result.Flatten();
-			for (idx_t i = 0; i < count; i++) {
-				if (is_null[i]) {
-					FlatVector::SetNull(result, i, true);
-				}
-			}
-		}
 	}
 };
 
