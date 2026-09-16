@@ -83,7 +83,8 @@ public:
 	//! The default database new connections start with; empty when none is set.
 	Identifier GetDefaultDatabase();
 	//! Sets the default database for new connections, which must be attached; the empty identifier clears it. Set to
-	//! the main database at startup, cleared when it is detached, and never set implicitly by an attach otherwise.
+	//! the main database at startup and never set implicitly by an attach; detaching it falls back to the oldest
+	//! remaining database, if any.
 	void SetDefaultDatabase(const Identifier &name);
 
 	//! Inserts a path to name mapping to the database paths map

@@ -394,7 +394,19 @@ shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const Identifier &n
 		attached_db = std::move(entry->second);
 		databases.erase(entry);
 		if (default_database == name) {
+			// Fall back to the oldest remaining database (OIDs are assigned in attach order)
+			// Arguably, this should not be required - we should just leave the default database unset.
+			// The default used to be defined as the oldest attached database, so detaching the current default changed
+			// the new default to "unset". Keep the previous observable behavior rather than leave new connections
+			// without a default db, since SQL has no way to set the default database at the instance level.
 			default_database = Identifier();
+			idx_t oldest_oid = DConstants::INVALID_INDEX;
+			for (auto &other : databases) {
+				if (other.second->oid < oldest_oid) {
+					oldest_oid = other.second->oid;
+					default_database = other.first;
+				}
+			}
 		}
 	}
 	if (attached_db && attached_db->GetCatalog().Supports(RemoteCapability::IS_REMOTE)) {
