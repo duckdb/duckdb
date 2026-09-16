@@ -1,11 +1,11 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
-#include "duckdb/common/query_parameters.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/buffered_data/batched_buffered_data.hpp"
 #include "duckdb/main/query_profiler.hpp"
-#include "duckdb/main/stream_query_result.hpp"
+#include "result_wait_helpers.hpp"
+#include "duckdb/main/query_result_stream.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -14,40 +14,6 @@
 using namespace duckdb;
 
 namespace {
-
-//! Bounds every drain loop, so a liveness bug fails the test instead of hanging the suite
-struct Deadline {
-	std::chrono::steady_clock::time_point expiry = std::chrono::steady_clock::now() + std::chrono::seconds(60);
-
-	bool Passed() const {
-		return std::chrono::steady_clock::now() >= expiry;
-	}
-};
-
-//! Interrupts the connection when the guarded scope outlives the deadline, so a hung
-//! blocking drain fails its test instead of hanging the suite
-class DrainWatchdog {
-public:
-	explicit DrainWatchdog(Connection &con)
-	    : watcher([this, &con]() {
-		      Deadline deadline;
-		      while (!done.load() && !deadline.Passed()) {
-			      std::this_thread::sleep_for(std::chrono::milliseconds(100));
-		      }
-		      if (!done.load()) {
-			      con.Interrupt();
-		      }
-	      }) {
-	}
-	~DrainWatchdog() {
-		done = true;
-		watcher.join();
-	}
-
-private:
-	std::atomic<bool> done {false};
-	std::thread watcher;
-};
 
 //! Render the physical plan text so tests can assert the plan shape
 string PhysicalPlanText(Connection &con, const string &query) {
@@ -62,23 +28,29 @@ string PhysicalPlanText(Connection &con, const string &query) {
 	return plan;
 }
 
-unique_ptr<StreamQueryResult> ExecuteStreaming(Connection &con, const string &query) {
-	auto pending = con.PendingQuery(query, QueryParameters(true));
-	if (pending->HasError()) {
-		FAIL(pending->GetError());
+unique_ptr<QueryResultStream> ExecuteStreaming(Connection &con, const string &query) {
+	auto handle = con.Submit(query);
+	if (handle->HasError()) {
+		FAIL(handle->GetError());
 	}
-	auto result = pending->Execute();
-	REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
-	return unique_ptr_cast<QueryResult, StreamQueryResult>(std::move(result));
+	return make_uniq<QueryResultStream>(std::move(handle));
+}
+
+//! Submit a query, leaving the retention undecided
+unique_ptr<QueryResult> Submit(Connection &con, const string &query) {
+	auto handle = con.Submit(query);
+	if (handle->HasError()) {
+		FAIL(handle->GetError());
+	}
+	return handle;
 }
 
 //! Drive the non-blocking API until execution reaches a terminal state
-StreamExecutionResult PollToTerminal(StreamQueryResult &stream) {
+QueryResultState PollToTerminal(QueryResultStream &stream) {
 	Deadline deadline;
 	while (true) {
 		auto result = stream.ExecuteTask();
-		if (result == StreamExecutionResult::EXECUTION_ERROR || result == StreamExecutionResult::EXECUTION_CANCELLED ||
-		    result == StreamExecutionResult::EXECUTION_FINISHED) {
+		if (IsTerminal(result)) {
 			return result;
 		}
 		REQUIRE(!deadline.Passed());
@@ -97,14 +69,12 @@ TEST_CASE("A blocking fetch on a batched stream observes an interrupt with chunk
 	// A buffer large enough that chunks stay buffered when the interrupt arrives
 	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='100MB'"));
 
-	auto pending = con.PendingQuery("SELECT i FROM t", QueryParameters(true));
-	REQUIRE(!pending->HasError());
-	auto result = pending->Execute();
-	REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
-	auto &stream = result->Cast<StreamQueryResult>();
+	auto result = ExecuteStreaming(con, "SELECT i FROM t");
+	auto &stream = *result;
 	// Wait until at least one chunk is observably buffered, then cancel before fetching
 	Deadline deadline;
-	while (stream.ExecuteTask() != StreamExecutionResult::CHUNK_READY) {
+	while (!stream.GetBufferedData().HasObservableChunk()) {
+		REQUIRE(!IsTerminal(stream.ExecuteTask()));
 		REQUIRE(!deadline.Passed());
 		std::this_thread::sleep_for(std::chrono::microseconds(100));
 	}
@@ -117,80 +87,59 @@ TEST_CASE("A blocking fetch on a batched stream observes an interrupt with chunk
 	REQUIRE(StringUtil::Contains(stream.GetError(), "INTERRUPT"));
 }
 
-TEST_CASE("Blocking materialization of a simple stream result", "[api][stream_buffer]") {
+TEST_CASE("Completing a simple undecided query retains every row", "[api][stream_buffer]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='100KB'"));
 
-	auto stream = ExecuteStreaming(con, "SELECT i FROM range(500000) t(i)");
+	auto handle = Submit(con, "SELECT i FROM range(500000) t(i)");
 	DrainWatchdog watchdog(con);
-	auto materialized = stream->Materialize();
-	REQUIRE(!materialized->HasError());
-	REQUIRE(materialized->RowCount() == 500000);
+	handle->Complete();
+	REQUIRE(!handle->HasError());
+	REQUIRE(handle->RowCount() == 500000);
 }
 
-TEST_CASE("Blocking materialization of a batched stream result", "[api][stream_buffer]") {
+TEST_CASE("Completing a batched undecided query retains every row in order", "[api][stream_buffer]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(500000)"));
 	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='100KB'"));
 
-	auto stream = ExecuteStreaming(con, "SELECT i FROM t");
+	auto handle = Submit(con, "SELECT i FROM t");
 	DrainWatchdog watchdog(con);
-	auto materialized = stream->Materialize();
-	REQUIRE(!materialized->HasError());
-	REQUIRE(materialized->RowCount() == 500000);
-	REQUIRE(materialized->GetValue(0, 0).GetValue<int64_t>() == 0);
-	REQUIRE(materialized->GetValue(0, 499999).GetValue<int64_t>() == 499999);
+	handle->Complete();
+	REQUIRE(!handle->HasError());
+	REQUIRE(handle->RowCount() == 500000);
+	REQUIRE(handle->GetValue(0, 0).GetValue<int64_t>() == 0);
+	REQUIRE(handle->GetValue(0, 499999).GetValue<int64_t>() == 499999);
 }
 
-TEST_CASE("Materialize after a partial drain returns the remainder", "[api][stream_buffer]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='100KB'"));
-
-	auto stream = ExecuteStreaming(con, "SELECT i FROM range(500000) t(i)");
-	DrainWatchdog watchdog(con);
-	idx_t drained = 0;
-	while (drained < 50000) {
-		auto chunk = stream->Fetch();
-		REQUIRE(chunk);
-		drained += chunk->size();
-	}
-	// The fetch already chose the stream, so the remainder is copied out under the cap
-	auto materialized = stream->Materialize();
-	REQUIRE(!materialized->HasError());
-	REQUIRE(materialized->RowCount() == 500000 - drained);
-	REQUIRE(materialized->GetValue(0, 0).GetValue<int64_t>() == NumericCast<int64_t>(drained));
-	REQUIRE(stream->GetBufferedData().Cast<SimpleBufferedData>().PeakBufferedBytes() <= 100000);
-}
-
-TEST_CASE("Materialize of an erroring stream surfaces the execution error", "[api][stream_buffer]") {
+TEST_CASE("Completing an erroring query surfaces the execution error", "[api][stream_buffer]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='100KB'"));
 
 	// The cast fails at a late row, after the stream has produced chunks
-	auto stream = ExecuteStreaming(
-	    con, "SELECT (CASE WHEN i = 400000 THEN 'boom' ELSE i::VARCHAR END)::INT FROM range(500000) t(i)");
+	auto handle =
+	    Submit(con, "SELECT (CASE WHEN i = 400000 THEN 'boom' ELSE i::VARCHAR END)::INT FROM range(500000) t(i)");
 	DrainWatchdog watchdog(con);
-	auto materialized = stream->Materialize();
-	REQUIRE(materialized->HasError());
-	REQUIRE(StringUtil::Contains(materialized->GetError(), "boom"));
+	handle->Complete();
+	REQUIRE(handle->HasError());
+	REQUIRE(StringUtil::Contains(handle->GetError(), "boom"));
 }
 
-TEST_CASE("Materialize of an erroring batched stream surfaces the execution error", "[api][stream_buffer]") {
+TEST_CASE("Completing an erroring batched query surfaces the execution error", "[api][stream_buffer]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(500000)"));
 	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='100KB'"));
 
 	// Batched producers park under the cap before the late failing row
-	auto stream = ExecuteStreaming(con, "SELECT (CASE WHEN i = 400000 THEN 'boom' ELSE i::VARCHAR END)::INT FROM t");
+	auto handle = Submit(con, "SELECT (CASE WHEN i = 400000 THEN 'boom' ELSE i::VARCHAR END)::INT FROM t");
 	DrainWatchdog watchdog(con);
-	auto materialized = stream->Materialize();
-	REQUIRE(materialized->HasError());
-	REQUIRE(StringUtil::Contains(materialized->GetError(), "boom"));
+	handle->Complete();
+	REQUIRE(handle->HasError());
+	REQUIRE(StringUtil::Contains(handle->GetError(), "boom"));
 }
 
 TEST_CASE("A blocking drain of an erroring stream ends with the error", "[api][stream_buffer]") {
@@ -223,7 +172,7 @@ TEST_CASE("A simple stream reports an execution error while a chunk is still buf
 	                                        to_string(4 * STANDARD_VECTOR_SIZE) + ") t(i)");
 	// The pop wakes the parked producer, whose next chunk fails on the worker thread
 	REQUIRE(stream->Fetch());
-	REQUIRE(PollToTerminal(*stream) == StreamExecutionResult::EXECUTION_ERROR);
+	REQUIRE(PollToTerminal(*stream) == QueryResultState::EXECUTION_ERROR);
 	REQUIRE(stream->HasError());
 	REQUIRE(StringUtil::Contains(stream->GetError(), "boom"));
 }
@@ -239,7 +188,7 @@ TEST_CASE("A batched stream reports an execution error while a chunk is still bu
 	auto stream = ExecuteStreaming(con, "SELECT (CASE WHEN i = " + to_string(2 * STANDARD_VECTOR_SIZE) +
 	                                        " THEN 'boom' ELSE i::VARCHAR END)::INT FROM t");
 	REQUIRE(stream->Fetch());
-	REQUIRE(PollToTerminal(*stream) == StreamExecutionResult::EXECUTION_ERROR);
+	REQUIRE(PollToTerminal(*stream) == QueryResultState::EXECUTION_ERROR);
 	REQUIRE(stream->HasError());
 	REQUIRE(StringUtil::Contains(stream->GetError(), "boom"));
 }
@@ -343,11 +292,8 @@ TEST_CASE("A batched stream result never exceeds the buffer cap", "[api][stream_
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl AS SELECT 'padding-padding-' || i AS s FROM range(200000) t(i)"));
 	REQUIRE_NO_FAIL(con.Query("PRAGMA enable_profiling='no_output'"));
 
-	auto pending = con.PendingQuery("SELECT * FROM tbl", QueryParameters(true));
-	REQUIRE(!pending->HasError());
-	auto result = pending->Execute();
-	REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
-	auto &stream = result->Cast<StreamQueryResult>();
+	auto result = ExecuteStreaming(con, "SELECT * FROM tbl");
+	auto &stream = *result;
 	DrainWatchdog watchdog(con);
 	idx_t row_count = 0;
 	while (auto chunk = stream.Fetch()) {
@@ -385,11 +331,8 @@ TEST_CASE("A batched stream survives a cap below one chunk", "[api][stream_buffe
 	// Every chunk exceeds the cap: each admission is the oversized-into-empty-queue case
 	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='1000b'"));
 
-	auto pending = con.PendingQuery("SELECT i FROM t", QueryParameters(true));
-	REQUIRE(!pending->HasError());
-	auto result = pending->Execute();
-	REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
-	auto &stream = result->Cast<StreamQueryResult>();
+	auto result = ExecuteStreaming(con, "SELECT i FROM t");
+	auto &stream = *result;
 	DrainWatchdog watchdog(con);
 	int64_t expected = 0;
 	while (auto chunk = stream.Fetch()) {
@@ -410,11 +353,8 @@ TEST_CASE("A simple stream result never exceeds the buffer cap", "[api][stream_b
 	// an exactly-full one, or the size-aware block spins the replenish loop
 	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='100000b'"));
 
-	auto pending = con.PendingQuery("SELECT i FROM range(500000) t(i)", QueryParameters(true));
-	REQUIRE(!pending->HasError());
-	auto result = pending->Execute();
-	REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
-	auto &stream = result->Cast<StreamQueryResult>();
+	auto result = ExecuteStreaming(con, "SELECT i FROM range(500000) t(i)");
+	auto &stream = *result;
 	DrainWatchdog watchdog(con);
 	idx_t row_count = 0;
 	while (auto chunk = stream.Fetch()) {
@@ -424,21 +364,112 @@ TEST_CASE("A simple stream result never exceeds the buffer cap", "[api][stream_b
 	REQUIRE(stream.GetBufferedData().Cast<SimpleBufferedData>().PeakBufferedBytes() <= 100000);
 }
 
-TEST_CASE("Execute returns before any chunk is buffered", "[api][stream_buffer]") {
+TEST_CASE("A parked read-ahead batch does not report the batched buffer waiting on the consumer",
+          "[api][stream_buffer]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	DataChunk chunk;
+	chunk.Initialize(Allocator::DefaultAllocator(), {LogicalType::BIGINT});
+	chunk.SetChildCardinality(STANDARD_VECTOR_SIZE);
+	// The cap counts the buffered copy. Four chunks fit and the reserve for the minimum batch is one
+	// chunk, so a read-ahead batch parks on its fourth chunk with nothing in the read queue
+	const auto chunk_bytes = BufferedData::CopyForBuffering(chunk)->GetDataSize();
+	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='" + to_string(4 * chunk_bytes) + " bytes'"));
+	BatchedBufferedData buffered(*con.context, ResultLifetime::DRAINING);
+	auto signal = make_shared_ptr<InterruptDoneSignalState>();
+	weak_ptr<InterruptDoneSignalState> weak_signal(signal);
+	InterruptState read_ahead(weak_signal);
+
+	idx_t appended = 0;
+	while (!buffered.AppendOrBlock(chunk, 1, read_ahead)) {
+		appended++;
+		REQUIRE(appended <= 4);
+	}
+	REQUIRE(appended == 3);
+	REQUIRE(buffered.HasBlockedSink());
+	REQUIRE(!buffered.HasObservableChunk());
+	// The park waits on the minimum batch, not on the consumer: reporting otherwise makes a consumer
+	// that waits for a task spin until the minimum batch delivers
+	REQUIRE(!buffered.WaitsOnConsumer());
+
+	// The minimum batch always gets its reserve, and its chunk is what the consumer pops
+	InterruptState minimum(weak_signal);
+	REQUIRE(!buffered.AppendOrBlock(chunk, 0, minimum));
+	REQUIRE(buffered.HasObservableChunk());
+	REQUIRE(buffered.WaitsOnConsumer());
+	REQUIRE(buffered.Scan());
+	REQUIRE(!buffered.HasObservableChunk());
+	REQUIRE(!buffered.WaitsOnConsumer());
+}
+
+TEST_CASE("Poll on a draining stream reports READY exactly when a chunk is poppable", "[api][stream_buffer]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(2000000)"));
+	// A small buffer keeps producers parking for the whole drain
+	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='64KB'"));
+
+	// The unordered plan uses the simple store, the table scan the batched one
+	for (auto query : {"SELECT i FROM range(2000000) t(i)", "SELECT i FROM t"}) {
+		auto result = ExecuteStreaming(con, query);
+		auto &stream = *result;
+		auto &buffered = stream.GetBufferedData();
+		Deadline deadline;
+		idx_t row_count = 0;
+		idx_t unparked_polls = 0;
+		while (true) {
+			// Nothing but this thread pops, so a chunk observed here is still there for the poll
+			const bool observable = buffered.HasObservableChunk();
+			const bool engine_waits = buffered.WaitsOnConsumer();
+			const auto polled = stream.Poll();
+			if (observable) {
+				REQUIRE(polled == QueryResultState::READY);
+				if (!engine_waits) {
+					unparked_polls++;
+				}
+			}
+			if (polled == QueryResultState::READY) {
+				REQUIRE(buffered.HasObservableChunk());
+			}
+			unique_ptr<DataChunk> chunk;
+			auto state = stream.TryFetch(chunk);
+			if (state == QueryResultState::READY) {
+				row_count += chunk->size();
+				continue;
+			}
+			if (IsTerminal(state)) {
+				REQUIRE(state == QueryResultState::FINISHED);
+				break;
+			}
+			REQUIRE(!deadline.Passed());
+		}
+		REQUIRE(row_count == 2000000);
+		// The engine reports READY only for a parked producer: the trailing chunks of a finished
+		// execution are poppable with no producer left, and only the buffer's poll announces them
+		REQUIRE(unparked_polls > 0);
+	}
+}
+
+TEST_CASE("Submit returns before any chunk is buffered", "[api][stream_buffer]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(500000)"));
 	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='100KB'"));
 
 	for (auto query : {"SELECT i FROM range(500000) t(i)", "SELECT i FROM t"}) {
-		auto stream = ExecuteStreaming(con, query);
-		auto &buffered = stream->GetBufferedData();
+		auto handle = Submit(con, query);
+		auto &buffered = handle->GetBufferedData();
 		// The first producer parks with its chunk unconsumed until the consumer chooses
+		Deadline deadline;
+		while (!buffered.WaitsOnConsumer()) {
+			REQUIRE(!deadline.Passed());
+			std::this_thread::sleep_for(std::chrono::microseconds(100));
+		}
 		REQUIRE(buffered.Lifetime() == ResultLifetime::UNDECIDED);
-		REQUIRE(buffered.HasParkedProducer());
 		REQUIRE(buffered.PeakBufferedBytes() == 0);
 		DrainWatchdog watchdog(con);
-		auto chunk = stream->Fetch();
+		QueryResultStream stream(std::move(handle));
+		auto chunk = stream.Fetch();
 		REQUIRE(chunk);
 		REQUIRE(chunk->size() > 0);
 		REQUIRE(buffered.Lifetime() == ResultLifetime::DRAINING);
@@ -446,38 +477,38 @@ TEST_CASE("Execute returns before any chunk is buffered", "[api][stream_buffer]"
 	}
 }
 
-TEST_CASE("Materialize of a fresh stream stages nothing in the buffer", "[api][stream_buffer]") {
+TEST_CASE("Completing a fresh submission stages nothing in the buffer", "[api][stream_buffer]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(500000)"));
 	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='100KB'"));
 
 	for (auto query : {"SELECT i FROM range(500000) t(i)", "SELECT i FROM t"}) {
-		auto stream = ExecuteStreaming(con, query);
+		auto handle = Submit(con, query);
 		DrainWatchdog watchdog(con);
-		auto materialized = stream->Materialize();
-		REQUIRE(!materialized->HasError());
-		REQUIRE(materialized->RowCount() == 500000);
-		REQUIRE(materialized->GetValue(0, 0).GetValue<int64_t>() == 0);
-		REQUIRE(materialized->GetValue(0, 499999).GetValue<int64_t>() == 499999);
+		handle->Complete();
+		REQUIRE(!handle->HasError());
+		REQUIRE(handle->RowCount() == 500000);
+		REQUIRE(handle->GetValue(0, 0).GetValue<int64_t>() == 0);
+		REQUIRE(handle->GetValue(0, 499999).GetValue<int64_t>() == 499999);
 		// Producers appended into the collection directly: the streaming buffer never held a byte
-		REQUIRE(stream->GetBufferedData().Lifetime() == ResultLifetime::RETAINED);
-		REQUIRE(stream->GetBufferedData().PeakBufferedBytes() == 0);
+		REQUIRE(handle->GetBufferedData().Lifetime() == ResultLifetime::RETAINED);
+		REQUIRE(handle->GetBufferedData().PeakBufferedBytes() == 0);
 	}
 }
 
-TEST_CASE("A zero-row batch-ordered stream materializes and drains", "[api][stream_buffer]") {
+TEST_CASE("A zero-row batch-ordered query completes and drains", "[api][stream_buffer]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(500000)"));
 
 	// No chunk ever reaches the sink, so the query finishes before the consumer decides
 	{
-		auto stream = ExecuteStreaming(con, "SELECT i FROM t WHERE i < 0");
-		REQUIRE_NOTHROW(stream->GetBufferedData().Cast<BatchedBufferedData>());
-		auto materialized = stream->Materialize();
-		REQUIRE(!materialized->HasError());
-		REQUIRE(materialized->RowCount() == 0);
+		auto handle = Submit(con, "SELECT i FROM t WHERE i < 0");
+		REQUIRE_NOTHROW(handle->GetBufferedData().Cast<BatchedBufferedData>());
+		handle->Complete();
+		REQUIRE(!handle->HasError());
+		REQUIRE(handle->RowCount() == 0);
 	}
 	{
 		auto stream = ExecuteStreaming(con, "SELECT i FROM t WHERE i < 0");
@@ -499,25 +530,25 @@ TEST_CASE("Empty partitions under a parallel retained sink", "[api][stream_buffe
 		REQUIRE(!result->HasError());
 		REQUIRE(result->RowCount() == 10);
 
-		auto stream = ExecuteStreaming(con, "SELECT i FROM t WHERE i < 10");
-		auto materialized = stream->Materialize();
-		REQUIRE(!materialized->HasError());
-		REQUIRE(materialized->RowCount() == 10);
+		auto handle = Submit(con, "SELECT i FROM t WHERE i < 10");
+		handle->Complete();
+		REQUIRE(!handle->HasError());
+		REQUIRE(handle->RowCount() == 10);
 	}
 }
 
-TEST_CASE("An interrupt during a retained materialize surfaces the interrupt", "[api][stream_buffer]") {
+TEST_CASE("An interrupt during a retained completion surfaces the interrupt", "[api][stream_buffer]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	auto stream = ExecuteStreaming(con, "SELECT i FROM range(100000000000) t(i) WHERE i % 10 = 0");
+	auto handle = Submit(con, "SELECT i FROM range(100000000000) t(i) WHERE i % 10 = 0");
 	std::thread interrupter([&con]() {
 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 		con.Interrupt();
 	});
-	auto materialized = stream->Materialize();
+	handle->Complete();
 	interrupter.join();
-	REQUIRE(materialized->HasError());
-	REQUIRE(StringUtil::Contains(materialized->GetError(), "INTERRUPT"));
+	REQUIRE(handle->HasError());
+	REQUIRE(StringUtil::Contains(handle->GetError(), "INTERRUPT"));
 }
 
 #endif

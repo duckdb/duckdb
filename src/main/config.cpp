@@ -102,7 +102,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(CatalogErrorMaxSchemasSetting),
     DUCKDB_SETTING_CALLBACK(CheckpointOnDetachSetting),
     DUCKDB_GLOBAL(CheckpointThresholdSetting),
-    DUCKDB_SETTING_CALLBACK(CurrentDialectSetting),
+    DUCKDB_LOCAL(CurrentDialectSetting),
     DUCKDB_SETTING_CALLBACK(CurrentTransactionInvalidationPolicySetting),
     DUCKDB_SETTING(CustomExtensionRepositorySetting),
     DUCKDB_GLOBAL(CustomUserAgentSetting),
@@ -166,6 +166,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(EnableProgressBarPrintSetting),
     DUCKDB_SETTING(EnableViewDependenciesSetting),
     DUCKDB_GLOBAL(EnabledLogTypes),
+    DUCKDB_SETTING_CALLBACK(ErrorOnDivisionByZeroSetting),
     DUCKDB_SETTING(ErrorsAsJSONSetting),
     DUCKDB_SETTING_CALLBACK(ExperimentalMetadataReuseSetting),
     DUCKDB_SETTING_CALLBACK(ExplainOutputSetting),
@@ -209,7 +210,6 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(MaxVacuumTasksSetting),
     DUCKDB_SETTING(MergeJoinThresholdSetting),
     DUCKDB_SETTING(NestedLoopJoinThresholdSetting),
-    DUCKDB_SETTING_CALLBACK(NullOnDivisionByZeroSetting),
     DUCKDB_SETTING_CALLBACK(OldImplicitCastingSetting),
     DUCKDB_LOCAL(OperatorMemoryLimitSetting),
     DUCKDB_SETTING(OrderByNonIntegerLiteralSetting),
@@ -549,9 +549,10 @@ bool DBConfig::TryGetExtensionOption(const Identifier &name, ExtensionOption &re
 }
 
 void DBConfig::AddExtensionOption(const Identifier &name, string description, LogicalType parameter,
-                                  const Value &default_value, set_option_callback_t function, SetScope default_scope) {
+                                  const Value &default_value, set_option_callback_t function, SetScope default_scope,
+                                  bool is_debug, bool is_deprecated) {
 	ExtensionOption extension_option(std::move(description), std::move(parameter), function, default_value,
-	                                 default_scope);
+	                                 default_scope, is_debug, is_deprecated);
 	auto setting_index = user_settings.AddExtensionOption(name, std::move(extension_option));
 	// copy over unrecognized options, if they match the new extension option
 	auto iter = options.unrecognized_options.find(name);

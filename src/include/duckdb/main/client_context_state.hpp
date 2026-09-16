@@ -21,7 +21,6 @@ class ErrorData;
 class MetaTransaction;
 class PreparedStatementData;
 class SQLStatement;
-struct PendingQueryParameters;
 class RegisteredStateManager;
 
 enum class RebindQueryInfo { DO_NOT_REBIND, ATTEMPT_TO_REBIND };

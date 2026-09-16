@@ -34,6 +34,9 @@
 # transformer generator should treat only `identifier` and `reserved_identifier`
 # entries as direct IdentifierParseResult-producing rules.
 #
+# additional_transform_result_types: result types used by transformer infrastructure
+# rather than as the declared return type of a grammar rule.
+#
 # packrat_memoized_rules: named grammar rules that should use packrat
 # memoization in MatchParseResult. Keep this selective because cache lookup and
 # parse-result sharing are only worthwhile for rules with repeated backtracking.
@@ -41,6 +44,10 @@
 # ---------------------------------------------------------------------------
 # unique_ptr<T> categories
 # ---------------------------------------------------------------------------
+
+additional_transform_result_types:
+  - "unique_ptr<TransformResultValue>"
+  - "vector<Identifier>"
 
 SQLStatementList:
   type: "vector<unique_ptr<SQLStatement>>"
@@ -102,6 +109,8 @@ SQLStatement:
     - UseStatement
     - VacuumStatement
     - PragmaAssignOrFunction
+    - AttachToExternalResource
+    - ConnectToExternalResource
     - ExternalResourceStatement
     - CreateExternalResourceStmt
     - RegisterExternalResourceStmt
@@ -718,6 +727,14 @@ StringList:
     - OptionalParensNameList
     - ParenthesizedNameList
     - BareNameList
+
+ExternalResourceOptionsPtr:
+  type: "unique_ptr<ExternalResourceOptions>"
+  by_value: true
+  rules:
+    - ExternalResourceSource
+    - ExternalResourceCreateClause
+    - ExternalResourceReferenceClause
 
 GenericCopyOptionList:
   type: "vector<GenericCopyOption>"
@@ -1815,6 +1832,8 @@ packrat_memoized_rules:
 # ---------------------------------------------------------------------------
 
 excluded_rules:
+  # Syntax only: the 'EXTERNAL' 'RESOURCE' keyword pair, shared by every singular form.
+  - ExternalResourceKeyword
   # Suggestion-only: exists so autocomplete offers the special SHOW forms as keywords; parsing of e.g.
   # "SHOW databases" resolves through ShowSettingName (the identifier), which the transformer special-cases.
   - ShowSpecialForm

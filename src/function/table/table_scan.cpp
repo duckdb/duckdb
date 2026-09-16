@@ -1,4 +1,6 @@
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
@@ -574,10 +576,10 @@ public:
 		auto &l_state = input.local_state->Cast<TableScanLocalState>();
 		// with read-ahead the assignment being decoded lives in the claimed job's scan state
 		auto &scan_state = l_state.job ? *l_state.job->scan_state : l_state.scan_state;
-		if (scan_state.table_state.row_group) {
+		if (scan_state.table_state.GetRowGroup()) {
 			return OperatorPartitionData(scan_state.table_state.batch_index);
 		}
-		if (scan_state.local_state.row_group) {
+		if (scan_state.local_state.GetRowGroup()) {
 			return OperatorPartitionData(scan_state.table_state.batch_index + scan_state.local_state.batch_index);
 		}
 		return OperatorPartitionData(0);

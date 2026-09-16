@@ -235,7 +235,7 @@ public:
 
 private:
 	MatchStep(optional<MatchInput> child_p, optional<MatcherResult> result_p)
-	    : child(std::move(child_p)), result(std::move(result_p)) {
+	    : child(std::move(child_p)), result(result_p) {
 	}
 
 private:

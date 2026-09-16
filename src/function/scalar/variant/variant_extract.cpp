@@ -291,10 +291,11 @@ ScalarFunctionSet VariantExtractFun::GetFunctions() {
 	                               VariantExtractPropagateStats);
 
 	variant_extract.GetSignature().AddParameter("input_variant", variant_type);
-	variant_extract.GetSignature().AddParameter("path", LogicalType::VARCHAR);
+	variant_extract.GetSignature().AddParameter("field", LogicalType::VARCHAR);
 	fun_set.AddFunction(variant_extract);
 
 	variant_extract.GetSignature().GetParameter(1).SetType(LogicalType::UINTEGER);
+	variant_extract.GetSignature().GetParameter(1).SetName("index");
 	fun_set.AddFunction(variant_extract);
 	return fun_set;
 }

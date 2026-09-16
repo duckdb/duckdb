@@ -245,6 +245,9 @@ string AddColumnInfo::ToString() const {
 		result += " DEFAULT ";
 		result += this->new_column.DefaultValue().ToString();
 	}
+	if (this->new_column.CompressionType() != CompressionType::COMPRESSION_AUTO) {
+		result += " USING COMPRESSION " + CompressionTypeToString(this->new_column.CompressionType());
+	}
 	result += ";";
 	return result;
 }

@@ -63,6 +63,7 @@ blacklist = [
     "ReservationKind",
     "RowGroupBatchType",
     "RuntimeFilterCastMode",
+    "SkippedTo",
     "SourceFinishNotificationState",
     "WatermarkState",
     "WriterWakeMode",

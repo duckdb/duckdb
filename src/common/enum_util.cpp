@@ -58,14 +58,16 @@
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/enums/ordinality_request_type.hpp"
 #include "duckdb/common/enums/output_type.hpp"
-#include "duckdb/common/enums/pending_execution_result.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
 #include "duckdb/common/enums/preserve_order.hpp"
 #include "duckdb/common/enums/profiling_coverage.hpp"
 #include "duckdb/common/enums/quantile_enum.hpp"
+#include "duckdb/common/enums/query_result_memory_type.hpp"
+#include "duckdb/common/enums/query_result_state.hpp"
 #include "duckdb/common/enums/regex_match_operator_semantics.hpp"
 #include "duckdb/common/enums/relation_type.hpp"
+#include "duckdb/common/enums/result_eagerness.hpp"
 #include "duckdb/common/enums/result_lifetime.hpp"
 #include "duckdb/common/enums/row_group_append_mode.hpp"
 #include "duckdb/common/enums/row_id_handling.hpp"
@@ -75,7 +77,6 @@
 #include "duckdb/common/enums/show_behavior.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/enums/storage_block_prefetch.hpp"
-#include "duckdb/common/enums/stream_execution_result.hpp"
 #include "duckdb/common/enums/subquery_type.hpp"
 #include "duckdb/common/enums/table_function_identifier_conversion.hpp"
 #include "duckdb/common/enums/tableref_type.hpp"
@@ -100,7 +101,6 @@
 #include "duckdb/common/multi_file/multi_file_states.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/query_parameters.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/column/column_data_scan_states.hpp"
@@ -189,6 +189,7 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/grammar_change.hpp"
+#include "duckdb/parser/literal.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
@@ -3321,6 +3322,31 @@ LimitValueType EnumUtil::FromString<LimitValueType>(const char *value) {
 	return static_cast<LimitValueType>(StringUtil::StringToEnum(GetLimitValueTypeValues(), 2, "LimitValueType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetLiteralKindValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LiteralKind::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(LiteralKind::NULL_LITERAL), "NULL_LITERAL" },
+		{ static_cast<uint32_t>(LiteralKind::BOOLEAN), "BOOLEAN" },
+		{ static_cast<uint32_t>(LiteralKind::INTEGER), "INTEGER" },
+		{ static_cast<uint32_t>(LiteralKind::NUMERIC), "NUMERIC" },
+		{ static_cast<uint32_t>(LiteralKind::STRING), "STRING" },
+		{ static_cast<uint32_t>(LiteralKind::HEX), "HEX" },
+		{ static_cast<uint32_t>(LiteralKind::BIT), "BIT" },
+		{ static_cast<uint32_t>(LiteralKind::POINTER), "POINTER" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LiteralKind>(LiteralKind value) {
+	return StringUtil::EnumToString(GetLiteralKindValues(), 9, "LiteralKind", static_cast<uint32_t>(value));
+}
+
+template<>
+LiteralKind EnumUtil::FromString<LiteralKind>(const char *value) {
+	return static_cast<LiteralKind>(StringUtil::StringToEnum(GetLiteralKindValues(), 9, "LiteralKind", value));
+}
+
 const StringUtil::EnumStringLiteral *GetLoadTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(LoadType::LOAD), "LOAD" },
@@ -4108,19 +4134,20 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::TYPE_PUSHDOWN), "TYPE_PUSHDOWN" },
 		{ static_cast<uint32_t>(OptimizerType::SCALAR_FN_PUSHDOWN), "SCALAR_FN_PUSHDOWN" },
 		{ static_cast<uint32_t>(OptimizerType::DISTINCT_AGGREGATE_REWRITE), "DISTINCT_AGGREGATE_REWRITE" },
-		{ static_cast<uint32_t>(OptimizerType::AGGREGATE_REUSE), "AGGREGATE_REUSE" }
+		{ static_cast<uint32_t>(OptimizerType::AGGREGATE_REUSE), "AGGREGATE_REUSE" },
+		{ static_cast<uint32_t>(OptimizerType::PROJECTION_PLACEMENT), "PROJECTION_PLACEMENT" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
-	return StringUtil::EnumToString(GetOptimizerTypeValues(), 45, "OptimizerType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetOptimizerTypeValues(), 46, "OptimizerType", static_cast<uint32_t>(value));
 }
 
 template<>
 OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
-	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 45, "OptimizerType", value));
+	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 46, "OptimizerType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOrderByColumnTypeValues() {
@@ -4419,28 +4446,6 @@ const char* EnumUtil::ToChars<PatternMatchType>(PatternMatchType value) {
 template<>
 PatternMatchType EnumUtil::FromString<PatternMatchType>(const char *value) {
 	return static_cast<PatternMatchType>(StringUtil::StringToEnum(GetPatternMatchTypeValues(), 2, "PatternMatchType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetPendingExecutionResultValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(PendingExecutionResult::RESULT_READY), "RESULT_READY" },
-		{ static_cast<uint32_t>(PendingExecutionResult::RESULT_NOT_READY), "RESULT_NOT_READY" },
-		{ static_cast<uint32_t>(PendingExecutionResult::EXECUTION_ERROR), "EXECUTION_ERROR" },
-		{ static_cast<uint32_t>(PendingExecutionResult::BLOCKED), "BLOCKED" },
-		{ static_cast<uint32_t>(PendingExecutionResult::NO_TASKS_AVAILABLE), "NO_TASKS_AVAILABLE" },
-		{ static_cast<uint32_t>(PendingExecutionResult::EXECUTION_FINISHED), "EXECUTION_FINISHED" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<PendingExecutionResult>(PendingExecutionResult value) {
-	return StringUtil::EnumToString(GetPendingExecutionResultValues(), 6, "PendingExecutionResult", static_cast<uint32_t>(value));
-}
-
-template<>
-PendingExecutionResult EnumUtil::FromString<PendingExecutionResult>(const char *value) {
-	return static_cast<PendingExecutionResult>(StringUtil::StringToEnum(GetPendingExecutionResultValues(), 6, "PendingExecutionResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPhysicalOperatorTypeValues() {
@@ -4937,29 +4942,31 @@ QueryResultMemoryType EnumUtil::FromString<QueryResultMemoryType>(const char *va
 	return static_cast<QueryResultMemoryType>(StringUtil::StringToEnum(GetQueryResultMemoryTypeValues(), 2, "QueryResultMemoryType", value));
 }
 
-const StringUtil::EnumStringLiteral *GetQueryResultOutputTypeValues() {
+const StringUtil::EnumStringLiteral *GetQueryResultStateValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(QueryResultOutputType::FORCE_MATERIALIZED), "FORCE_MATERIALIZED" },
-		{ static_cast<uint32_t>(QueryResultOutputType::ALLOW_STREAMING), "ALLOW_STREAMING" }
+		{ static_cast<uint32_t>(QueryResultState::READY), "READY" },
+		{ static_cast<uint32_t>(QueryResultState::NOT_READY), "NOT_READY" },
+		{ static_cast<uint32_t>(QueryResultState::BLOCKED), "BLOCKED" },
+		{ static_cast<uint32_t>(QueryResultState::NO_TASKS_AVAILABLE), "NO_TASKS_AVAILABLE" },
+		{ static_cast<uint32_t>(QueryResultState::FINISHED), "FINISHED" },
+		{ static_cast<uint32_t>(QueryResultState::EXECUTION_ERROR), "EXECUTION_ERROR" }
 	};
 	return values;
 }
 
 template<>
-const char* EnumUtil::ToChars<QueryResultOutputType>(QueryResultOutputType value) {
-	return StringUtil::EnumToString(GetQueryResultOutputTypeValues(), 2, "QueryResultOutputType", static_cast<uint32_t>(value));
+const char* EnumUtil::ToChars<QueryResultState>(QueryResultState value) {
+	return StringUtil::EnumToString(GetQueryResultStateValues(), 6, "QueryResultState", static_cast<uint32_t>(value));
 }
 
 template<>
-QueryResultOutputType EnumUtil::FromString<QueryResultOutputType>(const char *value) {
-	return static_cast<QueryResultOutputType>(StringUtil::StringToEnum(GetQueryResultOutputTypeValues(), 2, "QueryResultOutputType", value));
+QueryResultState EnumUtil::FromString<QueryResultState>(const char *value) {
+	return static_cast<QueryResultState>(StringUtil::StringToEnum(GetQueryResultStateValues(), 6, "QueryResultState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetQueryResultTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(QueryResultType::MATERIALIZED_RESULT), "MATERIALIZED_RESULT" },
-		{ static_cast<uint32_t>(QueryResultType::STREAM_RESULT), "STREAM_RESULT" },
-		{ static_cast<uint32_t>(QueryResultType::PENDING_RESULT), "PENDING_RESULT" },
 		{ static_cast<uint32_t>(QueryResultType::ARROW_RESULT), "ARROW_RESULT" }
 	};
 	return values;
@@ -4967,12 +4974,12 @@ const StringUtil::EnumStringLiteral *GetQueryResultTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value) {
-	return StringUtil::EnumToString(GetQueryResultTypeValues(), 4, "QueryResultType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetQueryResultTypeValues(), 2, "QueryResultType", static_cast<uint32_t>(value));
 }
 
 template<>
 QueryResultType EnumUtil::FromString<QueryResultType>(const char *value) {
-	return static_cast<QueryResultType>(StringUtil::StringToEnum(GetQueryResultTypeValues(), 4, "QueryResultType", value));
+	return static_cast<QueryResultType>(StringUtil::StringToEnum(GetQueryResultTypeValues(), 2, "QueryResultType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetRecoveryModeValues() {
@@ -5191,6 +5198,24 @@ const char* EnumUtil::ToChars<RequestType>(RequestType value) {
 template<>
 RequestType EnumUtil::FromString<RequestType>(const char *value) {
 	return static_cast<RequestType>(StringUtil::StringToEnum(GetRequestTypeValues(), 6, "RequestType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetResultEagernessValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ResultEagerness::FORCED), "FORCED" },
+		{ static_cast<uint32_t>(ResultEagerness::AUTO), "AUTO" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ResultEagerness>(ResultEagerness value) {
+	return StringUtil::EnumToString(GetResultEagernessValues(), 2, "ResultEagerness", static_cast<uint32_t>(value));
+}
+
+template<>
+ResultEagerness EnumUtil::FromString<ResultEagerness>(const char *value) {
+	return static_cast<ResultEagerness>(StringUtil::StringToEnum(GetResultEagernessValues(), 2, "ResultEagerness", value));
 }
 
 const StringUtil::EnumStringLiteral *GetResultLifetimeValues() {
@@ -6173,29 +6198,6 @@ const char* EnumUtil::ToChars<StrTimeSpecifier>(StrTimeSpecifier value) {
 template<>
 StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value) {
 	return static_cast<StrTimeSpecifier>(StringUtil::StringToEnum(GetStrTimeSpecifierValues(), 36, "StrTimeSpecifier", value));
-}
-
-const StringUtil::EnumStringLiteral *GetStreamExecutionResultValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(StreamExecutionResult::CHUNK_READY), "CHUNK_READY" },
-		{ static_cast<uint32_t>(StreamExecutionResult::CHUNK_NOT_READY), "CHUNK_NOT_READY" },
-		{ static_cast<uint32_t>(StreamExecutionResult::EXECUTION_ERROR), "EXECUTION_ERROR" },
-		{ static_cast<uint32_t>(StreamExecutionResult::EXECUTION_CANCELLED), "EXECUTION_CANCELLED" },
-		{ static_cast<uint32_t>(StreamExecutionResult::BLOCKED), "BLOCKED" },
-		{ static_cast<uint32_t>(StreamExecutionResult::NO_TASKS_AVAILABLE), "NO_TASKS_AVAILABLE" },
-		{ static_cast<uint32_t>(StreamExecutionResult::EXECUTION_FINISHED), "EXECUTION_FINISHED" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<StreamExecutionResult>(StreamExecutionResult value) {
-	return StringUtil::EnumToString(GetStreamExecutionResultValues(), 7, "StreamExecutionResult", static_cast<uint32_t>(value));
-}
-
-template<>
-StreamExecutionResult EnumUtil::FromString<StreamExecutionResult>(const char *value) {
-	return static_cast<StreamExecutionResult>(StringUtil::StringToEnum(GetStreamExecutionResultValues(), 7, "StreamExecutionResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSubqueryTypeValues() {

@@ -144,7 +144,12 @@ struct ICUCalendarSub : public ICUDateFunc {
 
 	template <typename TA>
 	static ScalarFunction GetFunction(const LogicalTypeId &type) {
-		return ScalarFunction({LogicalType::VARCHAR, type, type}, LogicalType::BIGINT, ICUDateSubFunction<TA>, Bind);
+		ScalarFunction fun({}, LogicalType::BIGINT, ICUDateSubFunction<TA>, Bind);
+		fun.GetSignature()
+		    .AddParameter("part", LogicalType::VARCHAR)
+		    .AddParameter("startdate", type)
+		    .AddParameter("enddate", type);
+		return fun;
 	}
 
 	static void AddFunctions(const Identifier &name, ExtensionLoader &loader) {
@@ -308,7 +313,12 @@ struct ICUCalendarDiff : public ICUDateFunc {
 
 	template <typename TA>
 	static ScalarFunction GetFunction(const LogicalTypeId &type) {
-		return ScalarFunction({LogicalType::VARCHAR, type, type}, LogicalType::BIGINT, ICUDateDiffFunction<TA>, Bind);
+		ScalarFunction fun({}, LogicalType::BIGINT, ICUDateDiffFunction<TA>, Bind);
+		fun.GetSignature()
+		    .AddParameter("part", LogicalType::VARCHAR)
+		    .AddParameter("startdate", type)
+		    .AddParameter("enddate", type);
+		return fun;
 	}
 
 	static void AddFunctions(const Identifier &name, ExtensionLoader &loader) {
