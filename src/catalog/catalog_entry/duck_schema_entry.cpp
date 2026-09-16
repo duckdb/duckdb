@@ -297,7 +297,8 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(CatalogTransaction trans
 	// constraint indexes only exist in table storage, so they need a separate conflict check
 	if (!table.GetStorage().IndexNameIsUnique(info.GetIndexName().GetIdentifierName())) {
 		if (info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
-			throw CatalogException("An index with the name %s already exists!", info.GetIndexName());
+			throw CatalogException("An index with the name %s already exists!",
+			                       info.GetIndexName().GetIdentifierName());
 		}
 		auto &indexes = GetCatalogSet(CatalogType::INDEX_ENTRY);
 		auto entry = indexes.GetHeadEntry(info.GetIndexName());
