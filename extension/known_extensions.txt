@@ -20,7 +20,6 @@ icu
 inet
 json
 lance
-motherduck
 mysql_scanner
 odbc_scanner
 parquet
@@ -30,7 +29,6 @@ spatial
 sqlite_scanner
 tpcds
 tpch
-ui
 unity_catalog
 vortex
 vss
