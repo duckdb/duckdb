@@ -3,6 +3,8 @@
 #include "duckdb_v2.h"
 #include "test_cpp_api.hpp"
 
+#include "duckdb/common/vector_size.hpp"
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -669,15 +671,16 @@ bool RefusedAsInvalid(F &&f) {
 }
 
 // ---------------------------------------------------------------------------
-// cpp_part(n): BIGINT part_col and val, n groups of three rows, one group per batch; part_col carries the group and val
-// group * 10 + row. The partition data callback reports the group as both batch index and partition value.
+// cpp_part(n): BIGINT part_col and val, n groups of three rows, one group per batch, spanning several chunks when the
+// vector size is smaller than a group; part_col carries the group and val group * 10 + row. The partition data callback
+// reports the group as both batch index and partition value.
 // ---------------------------------------------------------------------------
 
 struct PartBind {
 	int64_t groups = 0;
 };
 struct PartGlobal {
-	int64_t next_group = 0;
+	int64_t position = 0;
 	int64_t last_group = -1;
 };
 
@@ -704,19 +707,22 @@ void PartExec(TableFunction::ExecInput &input) {
 	auto &global = input.GetGlobalState<PartGlobal>();
 	auto chunk = input.GetOutputChunk();
 	auto part_vec = chunk.GetVector(0);
-	if (global.next_group >= bind.groups) {
+	if (global.position >= bind.groups * PART_ROWS_PER_GROUP) {
 		part_vec.SetSize(0);
 		return;
 	}
-	auto group = global.next_group++;
+	auto group = global.position / PART_ROWS_PER_GROUP;
+	auto offset = global.position % PART_ROWS_PER_GROUP;
+	auto rows = std::min<int64_t>(PART_ROWS_PER_GROUP - offset, STANDARD_VECTOR_SIZE);
 	global.last_group = group;
 	auto *part = part_vec.GetDataMutable<int64_t>();
 	auto *val = chunk.GetVector(1).GetDataMutable<int64_t>();
-	for (int64_t i = 0; i < PART_ROWS_PER_GROUP; i++) {
+	for (int64_t i = 0; i < rows; i++) {
 		part[i] = group;
-		val[i] = group * 10 + i;
+		val[i] = group * 10 + offset + i;
 	}
-	part_vec.SetSize(static_cast<idx_t>(PART_ROWS_PER_GROUP));
+	global.position += rows;
+	part_vec.SetSize(static_cast<idx_t>(rows));
 }
 
 void PartData(TableFunction::PartitionDataInput &input) {
@@ -817,15 +823,18 @@ void ProjPartExec(TableFunction::ExecInput &input) {
 	const auto &bind = input.GetBindData<PartBind>();
 	auto &global = input.GetGlobalState<PartGlobal>();
 	auto chunk = input.GetOutputChunk();
-	if (global.next_group >= bind.groups) {
+	if (global.position >= bind.groups * PART_ROWS_PER_GROUP) {
 		chunk.GetVector(0).SetSize(0);
 		return;
 	}
-	auto group = global.next_group++;
+	auto group = global.position / PART_ROWS_PER_GROUP;
+	auto offset = global.position % PART_ROWS_PER_GROUP;
+	auto rows = std::min<int64_t>(PART_ROWS_PER_GROUP - offset, STANDARD_VECTOR_SIZE);
 	global.last_group = group;
+	global.position += rows;
 	for (idx_t i = 0; i < input.GetColumnCount(); i++) {
 		auto vec = chunk.GetVector(i);
-		for (int64_t row = 0; row < PART_ROWS_PER_GROUP; row++) {
+		for (int64_t row = 0; row < rows; row++) {
 			switch (input.GetColumnIndex(i)) {
 			case 0:
 				vec.GetDataMutable<int32_t>()[row] = -1;
@@ -834,12 +843,12 @@ void ProjPartExec(TableFunction::ExecInput &input) {
 				vec.GetDataMutable<int64_t>()[row] = group;
 				break;
 			default:
-				vec.GetDataMutable<int64_t>()[row] = group * 10 + row;
+				vec.GetDataMutable<int64_t>()[row] = group * 10 + offset + row;
 				break;
 			}
 		}
 		if (i == 0) {
-			vec.SetSize(static_cast<idx_t>(PART_ROWS_PER_GROUP));
+			vec.SetSize(static_cast<idx_t>(rows));
 		}
 	}
 }

@@ -2,6 +2,7 @@
 
 #include "duckdb/parallel/pipeline.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstring>
@@ -57,6 +58,12 @@ int64_t QueryI64(duckdb_v2_connection_handle conn, const char *sql) {
 	REQUIRE(chunk != nullptr);
 	duckdb_v2_vector_handle vec = nullptr;
 	duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, nullptr);
+	duckdb_v2_logical_type_handle type = nullptr;
+	REQUIRE(duckdb_v2_vector_get_logical_type(vec, &type, nullptr) == DUCKDB_V2_ERROR_NONE);
+	DUCKDB_V2_LOGICAL_TYPE_ID type_id = DUCKDB_V2_LOGICAL_TYPE_ID_INVALID;
+	REQUIRE(duckdb_v2_logical_type_get_id(type, &type_id, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_logical_type_destroy(&type);
+	REQUIRE(type_id == DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
 	duckdb_v2_vector_view view {};
 	duckdb_v2_vector_get_view(vec, &view, nullptr);
 	auto out = static_cast<const int64_t *>(view.data)[SelAt(view.sel, 0)];
@@ -576,7 +583,7 @@ TEST_CASE("V2 table: register on connection and scan", "[capi_v2][table_function
 	RegisterRange(fx.conn);
 
 	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM my_range(10)") == 10);
-	REQUIRE(QueryI64(fx.conn, "SELECT sum(i) FROM my_range(10)") == 45);
+	REQUIRE(QueryI64(fx.conn, "SELECT sum(i)::BIGINT FROM my_range(10)") == 45);
 	// A scan spanning several batches, and one producing nothing at all.
 	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM my_range(5000)") == 5000);
 	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM my_range(0)") == 0);
@@ -614,7 +621,7 @@ TEST_CASE("V2 table: multiple result columns share the batch row count", "[capi_
 
 	// Both columns carry all four rows: the count set on "a" reached "b".
 	REQUIRE(QueryI64(fx.conn, "SELECT count(b) FROM my_pairs(4)") == 4);
-	REQUIRE(QueryI64(fx.conn, "SELECT sum(a) FROM my_pairs(4)") == 6);
+	REQUIRE(QueryI64(fx.conn, "SELECT sum(a)::BIGINT FROM my_pairs(4)") == 6);
 
 	duckdb_v2_result_handle text = nullptr;
 	REQUIRE(Query(fx.conn, "SELECT string_agg(b, ',' ORDER BY a) FROM my_pairs(3)", &text) == DUCKDB_V2_ERROR_NONE);
@@ -699,7 +706,7 @@ TEST_CASE("V2 table: user data, global state and local state reach exec", "[capi
 	duckdb_v2_table_function_destroy(&function);
 
 	// The bind data seeded the global counter with 3 rows, each carrying the local state's tag.
-	REQUIRE(QueryI64(fx.conn, "SELECT sum(v) FROM my_state()") == 126);
+	REQUIRE(QueryI64(fx.conn, "SELECT sum(v)::BIGINT FROM my_state()") == 126);
 	REQUIRE(state_probe.init_global_calls == 1);
 	REQUIRE(state_probe.init_local_calls >= 1);
 	REQUIRE(state_probe.local_saw_global);
@@ -1470,7 +1477,7 @@ struct PartProbeBind {
 	int64_t groups = 0;
 };
 struct PartProbeGlobal {
-	int64_t next_group = 0;
+	int64_t position = 0;
 	int64_t last_group = -1;
 };
 
@@ -1545,18 +1552,21 @@ void PartProbeExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_c
 		return;
 	}
 
-	if (global.next_group >= bind.groups) {
+	if (global.position >= bind.groups * PART_PROBE_ROWS_PER_GROUP) {
 		duckdb_v2_vector_set_size(part_vec, 0, err);
 		return;
 	}
-	auto group = global.next_group;
+	// A group spans several chunks when the vector size is smaller than a group.
+	auto group = global.position / PART_PROBE_ROWS_PER_GROUP;
+	auto offset = global.position % PART_PROBE_ROWS_PER_GROUP;
+	auto rows = std::min<int64_t>(PART_PROBE_ROWS_PER_GROUP - offset, STANDARD_VECTOR_SIZE);
 	global.last_group = group;
-	global.next_group++;
-	for (int64_t i = 0; i < PART_PROBE_ROWS_PER_GROUP; i++) {
+	for (int64_t i = 0; i < rows; i++) {
 		static_cast<int64_t *>(part_raw)[i] = group;
-		static_cast<int64_t *>(val_raw)[i] = group * 10 + i;
+		static_cast<int64_t *>(val_raw)[i] = group * 10 + offset + i;
 	}
-	duckdb_v2_vector_set_size(part_vec, static_cast<idx_t>(PART_PROBE_ROWS_PER_GROUP), err);
+	global.position += rows;
+	duckdb_v2_vector_set_size(part_vec, static_cast<idx_t>(rows), err);
 }
 
 void PartProbeGetPartitionDataCb(duckdb_v2_table_function_partition_data_info_handle info,
@@ -1805,14 +1815,13 @@ void ProjPartProbeExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_
 	auto &bind = *static_cast<PartProbeBind *>(bind_ptr);
 	auto &global = *static_cast<PartProbeGlobal *>(global_ptr);
 
-	idx_t rows = static_cast<idx_t>(PART_PROBE_ROWS_PER_GROUP);
-	if (global.next_group >= bind.groups) {
-		rows = 0;
-	}
-	auto group = global.next_group;
-	if (rows > 0) {
+	int64_t rows = 0;
+	auto group = global.position / PART_PROBE_ROWS_PER_GROUP;
+	auto offset = global.position % PART_PROBE_ROWS_PER_GROUP;
+	if (global.position < bind.groups * PART_PROBE_ROWS_PER_GROUP) {
+		rows = std::min<int64_t>(PART_PROBE_ROWS_PER_GROUP - offset, STANDARD_VECTOR_SIZE);
 		global.last_group = group;
-		global.next_group++;
+		global.position += rows;
 	}
 	for (idx_t i = 0; i < count; i++) {
 		idx_t column = 0;
@@ -1823,17 +1832,17 @@ void ProjPartProbeExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_
 		    duckdb_v2_vector_get_data_mutable(vec, &raw, err) != DUCKDB_V2_ERROR_NONE) {
 			return;
 		}
-		for (idx_t row = 0; row < rows; row++) {
+		for (int64_t row = 0; row < rows; row++) {
 			if (column == 0) {
 				static_cast<int32_t *>(raw)[row] = -1;
 			} else if (column == PROJ_PART_PROBE_PART_COL_INDEX) {
 				static_cast<int64_t *>(raw)[row] = group;
 			} else {
-				static_cast<int64_t *>(raw)[row] = group * 10 + static_cast<int64_t>(row);
+				static_cast<int64_t *>(raw)[row] = group * 10 + offset + row;
 			}
 		}
 		if (i == 0) {
-			duckdb_v2_vector_set_size(vec, rows, err);
+			duckdb_v2_vector_set_size(vec, static_cast<idx_t>(rows), err);
 		}
 	}
 }
@@ -1963,7 +1972,7 @@ TEST_CASE("V2 table: partition_data restores batch order", "[capi_v2][table_func
 	// Without the callback the scan cannot support batch ordering, so the sink falls back to SOURCE_ORDERED; the
 	// query still succeeds and produces the same rows, with no order guaranteed.
 	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM batch_order_probe_nopart()") == 2);
-	REQUIRE(QueryI64(fx.conn, "SELECT sum(b) FROM batch_order_probe_nopart()") == 1);
+	REQUIRE(QueryI64(fx.conn, "SELECT sum(b)::BIGINT FROM batch_order_probe_nopart()") == 1);
 }
 
 TEST_CASE("V2 table: partition_data and partitioning feed a partitioned aggregate", "[capi_v2][table_function]") {
@@ -1998,7 +2007,7 @@ TEST_CASE("V2 table: partition_data batch index must not decrease on the same th
 
 	// The connection stays usable: the guard reports a clear, function-named error instead of the engine-internal
 	// one PipelineExecutor::NextBatch would otherwise raise for the same decreasing index.
-	REQUIRE(QueryI64(fx.conn, "SELECT 1") == 1);
+	REQUIRE(QueryI64(fx.conn, "SELECT 1::BIGINT") == 1);
 }
 
 TEST_CASE("V2 table: partition_data partition value must not change without the batch index",
