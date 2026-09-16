@@ -15,7 +15,7 @@ statement ok
 SET temp_directory = '{TEST_DIR}/tmp_truncation';
 
 statement ok
-SET memory_limit = '20MB';
+SET memory_limit = '20MiB';
 
 statement ok
 SET preserve_insertion_order = false;
