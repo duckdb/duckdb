@@ -90,17 +90,32 @@ string HivePartitioning::EscapeValue(const string &input) {
 	auto result = Escape(input);
 	// the comparison is case-insensitive because on a case-insensitive file system a value that differs only in
 	// case still lands in the directory that is reserved for NULL values
-	if (!StringUtil::CIEquals(result, DEFAULT_PARTITION_NAME)) {
-		return result;
+	if (StringUtil::CIEquals(result, DEFAULT_PARTITION_NAME)) {
+		// percent-encode the first character so the value gets its own directory while still unescaping back to the
+		// original value
+		static constexpr const char *HEX_DIGIT = "0123456789ABCDEF";
+		const auto first = static_cast<unsigned char>(result[0]);
+		string escaped = "%";
+		escaped += HEX_DIGIT[first >> 4];
+		escaped += HEX_DIGIT[first & 15];
+		escaped += result.substr(1);
+		return escaped;
 	}
-	// percent-encode the first character so the value gets its own directory while still unescaping back to the
-	// original value
+
+	// Percent-encode uppercase characters to keep partition directories distinct on case-insensitive file systems.
 	static constexpr const char *HEX_DIGIT = "0123456789ABCDEF";
-	const auto first = static_cast<unsigned char>(result[0]);
-	string escaped = "%";
-	escaped += HEX_DIGIT[first >> 4];
-	escaped += HEX_DIGIT[first & 15];
-	escaped += result.substr(1);
+	string escaped;
+	escaped.reserve(result.size());
+	for (idx_t i = 0; i < input.size(); i++) {
+		const auto character = static_cast<unsigned char>(input[i]);
+		if (character < 'A' || character > 'Z') {
+			escaped += Escape(string(1, input[i]));
+			continue;
+		}
+		escaped += '%';
+		escaped += HEX_DIGIT[character >> 4];
+		escaped += HEX_DIGIT[character & 15];
+	}
 	return escaped;
 }
 

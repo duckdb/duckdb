@@ -180,3 +180,30 @@ query I
 select count(*) from glob('{TEST_DIR}/hive-default-collision-case/p=__HIVE_DEFAULT_PARTITION__/*.parquet');
 ----
 1
+
+# partition values that differ only by case must use distinct directories
+statement ok
+COPY (
+    SELECT * FROM (
+        VALUES ('a', 1), ('A', 2)
+    ) v(p, id)
+) TO '{TEST_DIR}/hive-partition-case-collision'
+(FORMAT PARQUET, PARTITION_BY (p), OVERWRITE);
+
+query II
+SELECT p, id
+FROM read_parquet('{TEST_DIR}/hive-partition-case-collision/**/*.parquet', hive_partitioning=true)
+ORDER BY id
+----
+a	1
+A	2
+
+query I
+select count(*) from glob('{TEST_DIR}/hive-partition-case-collision/p=a/*.parquet');
+----
+1
+
+query I
+select count(*) from glob('{TEST_DIR}/hive-partition-case-collision/p=%41/*.parquet');
+----
+1
