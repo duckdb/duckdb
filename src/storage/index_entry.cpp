@@ -1,20 +1,16 @@
 #include "duckdb/storage/table/index_entry.hpp"
+#include "duckdb/storage/index.hpp"
+#include "duckdb/storage/partial_block_manager.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
-#include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/storage/table/data_table_info.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -468,19 +464,44 @@ idx_t IndexEntry::GetInMemorySize() const {
 	return owned_index->Cast<BoundIndex>().GetInMemorySize();
 }
 
-IndexStorageInfo IndexEntry::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
+CheckpointedIndex IndexEntry::Checkpoint(TableIndexWriter &index_writer) {
 	auto entry_lock = lock.GetExclusiveLock();
-	if (owned_index->IsBound()) {
-		return owned_index->Cast<BoundIndex>().SerializeToDisk(context, options);
+	D_ASSERT(owned_index);
+
+	auto storage_version = index_writer.GetStorageVersion();
+	if (owned_index->GetCheckpointMode() == IndexCheckpointMode::DEFERRED) {
+		if (owned_index->IsBound() && !owned_index->Cast<BoundIndex>().SupportsDeltaIndexes()) {
+			throw InternalException("Deferred index checkpointing requires delta index support");
+		}
+		return owned_index->Checkpoint(index_writer.GetPartialBlockManager(), storage_version);
 	}
-	return owned_index->Cast<UnboundIndex>().CopyStorageInfo();
+
+	auto partial_block_manager = index_writer.CreateIsolatedPartialBlockManager();
+	auto checkpoint = owned_index->Checkpoint(partial_block_manager, storage_version);
+	partial_block_manager.FlushPartialBlocks();
+
+	SwapInternal(std::move(checkpoint.shadow_index));
+	return checkpoint;
 }
 
-IndexStorageInfo IndexEntry::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
+void IndexEntry::Swap(unique_ptr<BoundIndex> shadow_index) {
+	auto entry_lock = lock.GetExclusiveLock();
+	SwapInternal(std::move(shadow_index));
+}
+
+void IndexEntry::SwapInternal(unique_ptr<BoundIndex> shadow_index) {
+	if (!shadow_index) {
+		return;
+	}
+	D_ASSERT(owned_index && owned_index->IsBound());
+	owned_index = std::move(shadow_index);
+}
+
+IndexStorageInfo IndexEntry::SerializeToWAL(const StorageVersion version) {
 	auto entry_lock = lock.GetExclusiveLock();
 	// We never write an unbound index to the WAL.
 	D_ASSERT(owned_index->IsBound());
-	return owned_index->Cast<BoundIndex>().SerializeToWAL(options);
+	return owned_index->Cast<BoundIndex>().SerializeToWAL(version);
 }
 
 void IndexEntry::MergeCheckpointDeltas(const optional_idx checkpoint_id) {
