@@ -189,6 +189,8 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
             endif()
         endif()
     endif()
+    # a loadable extension is linked into the host at runtime, never selected through the autolink table
+    target_compile_definitions(${TARGET_NAME} PRIVATE DUCKDB_NO_AUTOLINK)
     if(MSVC)
         target_compile_options(${TARGET_NAME} PRIVATE /UDUCKDB_BUILD_LIBRARY)
     else()
