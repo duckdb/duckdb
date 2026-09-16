@@ -144,7 +144,7 @@ SELECT [(COLUMNS(*).unpack())] FROM integers ORDER BY ALL;
 
 # ---------------------------------------------------------------- a rewrite outranks a same-named macro
 # This is a behaviour change: before, the chained form reached the macro while the plain form did
-# not. The two paths now agree, which is the point of the shared rewrite.
+# not. The chained form now takes the rewrite, like the plain one, which is the point of sharing it.
 
 statement ok
 CREATE MACRO "try"(x) AS 999;
@@ -159,7 +159,7 @@ SELECT (1)."try"();
 ----
 1
 
-# a name with no rewrite still reaches the macro from either form
+# a name with no rewrite still reaches the macro through the chain
 statement ok
 CREATE MACRO chain_probe(x) AS 999;
 
@@ -197,7 +197,7 @@ SELECT ('2020-01-01').date('extra');
 ----
 Wrong number of arguments provided to DATE function
 
-# an unknown name is still an ordinary catalog lookup, chained or not
+# an unknown name is still an ordinary catalog lookup through the chain
 statement error
 SELECT (1).no_such_function_xyz();
 ----
@@ -237,8 +237,11 @@ SELECT (NULL::INTEGER).coalesce(1);
 
 # ---------------------------------------------------------------- modifiers a syntax node cannot carry
 # The method grammar accepts DISTINCT and ORDER BY on every call, but a rewritten name becomes a
-# syntax node with nowhere to put them. The equivalent plain forms are parse errors, so the chained
-# forms must reject rather than silently drop them.
+# syntax node with nowhere to put them, so the chained form rejects them rather than dropping them
+# silently. This is the one place the two paths deliberately differ: the plain path returns the
+# rewrite BEFORE it reaches its modifier handling, so `ifnull(1, 2 ORDER BY 3)` discards the
+# modifier instead of complaining. Making the plain path reject too would change behaviour that
+# has nothing to do with this issue.
 
 statement error
 SELECT (NULL).coalesce(DISTINCT 5);
