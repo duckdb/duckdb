@@ -1208,6 +1208,20 @@ struct EnableFSSTVectorsSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct EnableFsyncSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "enable_fsync";
+	static constexpr const char *Description =
+	    "Whether to synchronize database file changes to stable storage. Disabling this setting may cause database "
+	    "corruption after an operating system or hardware crash.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct EnableHTTPMetadataCacheSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_http_metadata_cache";

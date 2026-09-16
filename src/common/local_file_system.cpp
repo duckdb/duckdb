@@ -794,7 +794,11 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 }
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
-	int fd = handle.Cast<UnixFileHandle>().fd;
+	auto &unix_handle = handle.Cast<UnixFileHandle>();
+	if (unix_handle.db && !Settings::Get<EnableFsyncSetting>(*unix_handle.db)) {
+		return;
+	}
+	int fd = unix_handle.fd;
 
 #ifdef F_FULLFSYNC
 	// On macOS and iOS, fsync() doesn't guarantee durability past power failures. fcntl(F_FULLFSYNC) is required for
@@ -1110,8 +1114,9 @@ static FileMetadata StatsFromDirInfo(const FILE_ID_BOTH_DIR_INFO &entry) {
 
 struct WindowsFileHandle : public FileHandle {
 public:
-	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd, FileOpenFlags flags)
-	    : FileHandle(file_system, path, flags), position(0), fd(fd) {
+	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd, FileOpenFlags flags,
+	                  optional_ptr<DatabaseInstance> db)
+	    : FileHandle(file_system, path, flags), position(0), fd(fd), db(db) {
 	}
 	~WindowsFileHandle() override {
 		Close();
@@ -1119,6 +1124,7 @@ public:
 
 	idx_t position;
 	HANDLE fd;
+	optional_ptr<DatabaseInstance> db;
 
 public:
 	void Close() override {
@@ -1269,7 +1275,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
 		throw IOException("Cannot open file \"%s\": %s%s", abs_path, error, extended_error);
 	}
-	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile, flags);
+	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile, flags, FileOpener::TryGetDatabase(opener));
 	if (flags.OpenForAppending()) {
 		auto file_size = GetFileSize(*handle);
 		SetFilePointer(*handle, file_size);
@@ -1585,7 +1591,11 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 }
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
-	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
+	auto &windows_handle = handle.Cast<WindowsFileHandle>();
+	if (windows_handle.db && !Settings::Get<EnableFsyncSetting>(*windows_handle.db)) {
+		return;
+	}
+	HANDLE hFile = windows_handle.fd;
 	if (FlushFileBuffers(hFile) == 0) {
 		throw IOException("Could not flush file handle to disk!");
 	}
