@@ -108,6 +108,9 @@ static bool ConstantCastIsInvertible(ClientContext &context, BoundFunctionExpres
 	if (cast_constant.IsNull() || BoundCastExpression::CastIsInvertible(cast_expression.GetReturnType(), target_type)) {
 		return true;
 	}
+	if (cast_expression.GetReturnType().IsIntegral() && target_type.IsIntegral()) {
+		return true;
+	}
 	// The constant must survive the integral round-trip exactly; the column side is checked by the caller.
 	if (IsLosslessIntegralToFloatingCast(target_type, cast_expression.GetReturnType())) {
 		string error_message;
