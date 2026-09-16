@@ -378,7 +378,7 @@ static auto CV2CopyToBatchSize(ClientContext &context, FunctionData &bind_data) 
 	if (err.HasError()) {
 		err.ThrowAsException();
 	}
-	if (args.out_target == 0) {
+	if (args.out_target.IsValid() && args.out_target == 0) {
 		throw InvalidInputException("The batch size callback must set a target greater than 0.");
 	}
 	return args.out_target;
