@@ -387,6 +387,33 @@ else:
         print(f"{sys.argv[1]}\\t{run}\\t1.0", file=sys.stderr)
 """
 
+    missing_base_runner_source = """#!/usr/bin/env python3
+import os
+import sys
+
+label = os.path.basename(sys.argv[0])
+benchmark = sys.argv[1]
+runs = int(sys.argv[sys.argv.index("--timed-runs") + 1])
+with open(os.environ["BENCHMARK_ORDER_LOG"], "a", encoding="utf-8") as order_log:
+    order_log.write(f"{label}:{runs}\\n")
+base_missing = benchmark in ("new_query.benchmark", "broken_query.benchmark", "missing_everywhere.benchmark")
+if label == "old" and base_missing:
+    print("Benchmark to run could not be found.", file=sys.stderr)
+    raise SystemExit(1)
+if label == "old" and benchmark == "base_error.benchmark":
+    print("Base benchmark setup failed.", file=sys.stderr)
+    raise SystemExit(1)
+if label == "new" and benchmark == "broken_query.benchmark":
+    print("PR benchmark setup failed.", file=sys.stderr)
+    raise SystemExit(1)
+if label == "new" and benchmark == "missing_everywhere.benchmark":
+    print("Benchmark to run could not be found.", file=sys.stderr)
+    raise SystemExit(1)
+print("name\\trun\\ttiming", file=sys.stderr)
+for run in range(1, runs + 1):
+    print(f"{benchmark}\\t{run}\\t1.0", file=sys.stderr)
+"""
+
     def run_regression_test(
         self,
         runner_source,
