@@ -17,6 +17,7 @@ add_library_unity(
   expression_executor_state.cpp
   ie_join_union.cpp
   join_hashtable.cpp
+  mark_join_refinement.cpp
   mark_join_row_comparison.cpp
   perfect_aggregate_hashtable.cpp
   physical_operator.cpp

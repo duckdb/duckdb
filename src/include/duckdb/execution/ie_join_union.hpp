@@ -15,7 +15,7 @@ namespace duckdb {
 template <typename T, typename VECTOR_TYPE = T>
 class IEJoinCursor {
 public:
-	explicit IEJoinCursor(ColumnDataCollection &collection) : collection(collection) {
+	explicit IEJoinCursor(ColumnDataCollection &collection, idx_t column = 0) : collection(collection), column(column) {
 		collection.InitializeScan(state);
 		collection.InitializeScanChunk(state, chunk);
 	}
@@ -28,7 +28,7 @@ public:
 	//! Read a typed cell
 	const T &operator[](idx_t row_idx) {
 		auto index = Seek(row_idx);
-		const auto &source = chunk.data[0];
+		const auto &source = chunk.data[column];
 		const auto data_ptr = reinterpret_cast<const T *>(FlatVector::GetData<VECTOR_TYPE>(source));
 		return data_ptr[index];
 	}
@@ -57,10 +57,20 @@ private:
 
 	//! The pageable data
 	const ColumnDataCollection &collection;
+	const idx_t column;
 	//! The state used for reading the collection
 	ColumnDataScanState state;
 	//! The data chunk read into
 	DataChunk chunk;
+};
+
+struct IEJoinBuildOrders {
+	unique_ptr<PhysicalRangeJoin::GlobalSortedTable> first;
+	unique_ptr<PhysicalRangeJoin::GlobalSortedTable> second;
+	unique_ptr<ColumnDataCollection> row_ids;
+	unique_ptr<ColumnDataCollection> second_positions;
+
+	idx_t SizeInBytes() const;
 };
 
 struct IEJoinUnion {
@@ -156,9 +166,25 @@ struct IEJoinUnion {
 	IEJoinUnion(SortedTable &l2, ColumnDataCollection &li, ColumnDataCollection &p,
 	            const vector<JoinCondition> &conditions, const ChunkRange &chunks);
 
+	IEJoinUnion(IEJoinBuildOrders &build, ColumnDataCollection &ranks);
+
 	static void InitializeTables(ClientContext &client, const PhysicalComparisonJoin &op,
 	                             const vector<JoinCondition> &conditions, unique_ptr<SortedTable> &l1,
 	                             unique_ptr<SortedTable> &l2);
+
+	static unique_ptr<SortedTable> SortInput(ExecutionContext &context, const PhysicalComparisonJoin &op,
+	                                         const vector<JoinCondition> &conditions, ColumnDataCollection &keys,
+	                                         bool reverse = false);
+
+	static unique_ptr<IEJoinBuildOrders> PrepareBuild(ExecutionContext &context, const PhysicalComparisonJoin &op,
+	                                                  const vector<JoinCondition> &conditions,
+	                                                  unique_ptr<SortedTable> first);
+	static unique_ptr<ColumnDataCollection> PrepareRanks(ExecutionContext &context, const PhysicalComparisonJoin &op,
+	                                                     const vector<JoinCondition> &conditions, SortedTable &probes,
+	                                                     IEJoinBuildOrders &build);
+
+	void InitializeBitmaps(idx_t count);
+	bool NextRankedRow();
 
 	//! Start the current row.
 	//! Returns false if there are no more rows to process
@@ -196,6 +222,11 @@ struct IEJoinUnion {
 	unique_ptr<UnionIterator> op2;
 	unique_ptr<UnionIterator> off2;
 	int64_t lrid = std::numeric_limits<int64_t>::max();
+
+	unique_ptr<IEJoinCursor<idx_t>> first_rank;
+	unique_ptr<IEJoinCursor<idx_t>> second_rank;
+	unique_ptr<IEJoinCursor<idx_t>> probe_rank;
+	idx_t activated = 0;
 
 	//! ANTI JOIN bookmark
 	idx_t anti_i;

@@ -1,4 +1,6 @@
 #include "duckdb/execution/mark_join_row_comparison.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
@@ -78,6 +80,68 @@ void MarkJoinRowComparison::CompareEquality(const Vector &left, idx_t left_row, 
 	}
 }
 
+template <class T>
+static Value MarkRangeExtreme(const Vector &key, bool maximum, idx_t &null_count) {
+	auto values = key.Values<T>();
+	idx_t best = DConstants::INVALID_INDEX;
+	for (idx_t row = 0; row < values.size(); row++) {
+		auto entry = values[row];
+		if (!entry.IsValid()) {
+			null_count++;
+		} else if (best == DConstants::INVALID_INDEX ||
+		           (maximum ? GreaterThan::Operation(entry.GetValue(), values[best].GetValue())
+		                    : LessThan::Operation(entry.GetValue(), values[best].GetValue()))) {
+			best = row;
+		}
+	}
+	return best == DConstants::INVALID_INDEX ? Value(key.GetType()) : key.GetValue(best);
+}
+
+void MarkJoinRowComparison::UpdateRangeBound(const Vector &key, ExpressionType comparison, Value &bound,
+                                             idx_t &null_count) {
+	const bool maximum =
+	    comparison == ExpressionType::COMPARE_LESSTHAN || comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO;
+	D_ASSERT(maximum || comparison == ExpressionType::COMPARE_GREATERTHAN ||
+	         comparison == ExpressionType::COMPARE_GREATERTHANOREQUALTO);
+	Value value;
+	switch (key.GetType().InternalType()) {
+#define MARK_RANGE_EXTREME(TYPE, CPP_TYPE)                                                                             \
+	case PhysicalType::TYPE:                                                                                           \
+		value = MarkRangeExtreme<CPP_TYPE>(key, maximum, null_count);                                                  \
+		break;
+		MARK_RANGE_EXTREME(BOOL, bool)
+		MARK_RANGE_EXTREME(INT8, int8_t)
+		MARK_RANGE_EXTREME(INT16, int16_t)
+		MARK_RANGE_EXTREME(INT32, int32_t)
+		MARK_RANGE_EXTREME(INT64, int64_t)
+		MARK_RANGE_EXTREME(INT128, hugeint_t)
+		MARK_RANGE_EXTREME(UINT8, uint8_t)
+		MARK_RANGE_EXTREME(UINT16, uint16_t)
+		MARK_RANGE_EXTREME(UINT32, uint32_t)
+		MARK_RANGE_EXTREME(UINT64, uint64_t)
+		MARK_RANGE_EXTREME(UINT128, uhugeint_t)
+		MARK_RANGE_EXTREME(FLOAT, float)
+		MARK_RANGE_EXTREME(DOUBLE, double)
+		MARK_RANGE_EXTREME(VARCHAR, string_t)
+		MARK_RANGE_EXTREME(INTERVAL, interval_t)
+#undef MARK_RANGE_EXTREME
+	default:
+		for (idx_t row = 0; row < key.size(); row++) {
+			auto entry = key.GetValue(row);
+			if (entry.IsNull()) {
+				null_count++;
+			} else if (value.IsNull() || (maximum ? ValueOperations::GreaterThan(entry, value)
+			                                      : ValueOperations::LessThan(entry, value))) {
+				value = std::move(entry);
+			}
+		}
+	}
+	if (!value.IsNull() && (bound.IsNull() || (maximum ? ValueOperations::GreaterThan(value, bound)
+	                                                   : ValueOperations::LessThan(value, bound)))) {
+		bound = std::move(value);
+	}
+}
+
 void MarkJoinRowComparison::Compare(const Vector &left, const Vector &right, ExpressionType comparison_type,
                                     Vector &result) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -104,7 +168,8 @@ void MarkJoinRowComparison::Compare(const Vector &left, const Vector &right, Exp
 	}
 }
 
-MarkJoinRowComparison::MarkJoinRowComparison(const DataChunk &left) : comparison(LogicalType::BOOLEAN) {
+MarkJoinRowComparison::MarkJoinRowComparison(const DataChunk &left, Mode mode)
+    : comparison(LogicalType::BOOLEAN), mode(mode) {
 	left_reference.Initialize(Allocator::DefaultAllocator(), left.GetTypes());
 }
 
@@ -119,7 +184,7 @@ void MarkJoinRowComparison::CompareConjunction(DataChunk &left, idx_t left_row, 
 	bool pair_is_unknown[STANDARD_VECTOR_SIZE] = {false};
 	for (idx_t condition_idx = 0; condition_idx < conditions.size(); condition_idx++) {
 		const auto type = conditions[condition_idx].GetComparisonType();
-		if (left.data[condition_idx].GetType().id() == LogicalTypeId::TUPLE &&
+		if (mode == Mode::NESTED_LOOP && left.data[condition_idx].GetType().id() == LogicalTypeId::TUPLE &&
 		    (type == ExpressionType::COMPARE_EQUAL || type == ExpressionType::COMPARE_NOTEQUAL)) {
 			bool is_false[STANDARD_VECTOR_SIZE] = {false};
 			bool is_unknown[STANDARD_VECTOR_SIZE] = {false};
@@ -161,6 +226,30 @@ void MarkJoinRowComparison::CompareConjunction(DataChunk &left, idx_t left_row, 
 		} else {
 			writer.WriteValue(true);
 		}
+	}
+}
+
+void MarkJoinRowComparison::CompareTail(DataChunk &left, DataChunk &right, const vector<JoinCondition> &conditions,
+                                        const vector<idx_t> &tail, Vector &result) {
+	D_ASSERT(left.size() == right.size());
+	D_ASSERT(left.size() <= STANDARD_VECTOR_SIZE);
+	if (tail.empty()) {
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+		FlatVector::ValidityMutable(result).Reset(left.size());
+		auto writer = FlatVector::Writer<bool>(result, left.size());
+		for (idx_t row = 0; row < left.size(); row++) {
+			writer.WriteValue(true);
+		}
+		return;
+	}
+	const auto first = tail[0];
+	Compare(left.data[first], right.data[first], conditions[first].GetComparisonType(), result);
+	for (idx_t i = 1; i < tail.size(); i++) {
+		const auto col = tail[i];
+		Vector comparison(LogicalType::BOOLEAN), conjunction(LogicalType::BOOLEAN);
+		Compare(left.data[col], right.data[col], conditions[col].GetComparisonType(), comparison);
+		VectorOperations::And(result, comparison, conjunction);
+		result.Reference(conjunction);
 	}
 }
 

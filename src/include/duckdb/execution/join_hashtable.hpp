@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/execution/mark_join_refinement.hpp"
+
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/column/column_data_consumer.hpp"
@@ -110,9 +112,11 @@ public:
 
 		// whether or not the given tuple has found a match
 		unsafe_unique_array<bool> found_match;
+		unsafe_unique_array<bool> found_unknown;
 		JoinHashTable &ht;
 		bool finished;
 		bool is_null;
+		bool null_free_mark = false;
 		bool has_null_value_filter = false;
 
 		// it records the RHS pointers for the result chunk
@@ -174,6 +178,8 @@ public:
 		                  const idx_t count, const idx_t col_idx);
 		void GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count, const idx_t col_idx);
 		void GatherResult(Vector &result, const idx_t count, const idx_t col_idx);
+		idx_t ResolveMarkPredicates(DataChunk &keys, SelectionVector &match_sel,
+		                            optional_ptr<SelectionVector> no_match_sel);
 		idx_t ResolvePredicates(DataChunk &keys, DataChunk &probe_data, SelectionVector &match_sel,
 		                        optional_ptr<SelectionVector> no_match_sel);
 	};
@@ -269,11 +275,15 @@ public:
 	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
 	//! Enable selective NULL refinement for an uncorrelated multi-column MARK join
-	void InitializeUncorrelatedMarkJoin();
+	void InitializeUncorrelatedMarkJoin(bool compare_conditions = false);
+	void RefineMarkPatterns(DataChunk &keys, bool matches[], ValidityMask &validity);
+	bool HasMarkJoinConjunction() const;
+	idx_t MarkJoinSize() const;
 	bool HasUncorrelatedMarkJoin() const;
 	//! Construct a MARK result, including selective UNKNOWN refinement when enabled
 	void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result,
-	                             optional_ptr<const bool> found_match = nullptr);
+	                             optional_ptr<const bool> found_match = nullptr,
+	                             optional_ptr<const bool> found_unknown = nullptr);
 	//! Scan the HT to construct the full outer join result
 	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result) const;
 
@@ -309,9 +319,7 @@ public:
 	}
 	idx_t SizeInBytes() const {
 		idx_t size = data_collection ? data_collection->SizeInBytes() : 0;
-		if (mark_join_info.uncorrelated_condition_rows) {
-			size += mark_join_info.uncorrelated_condition_rows->SizeInBytes();
-		}
+		size += MarkJoinSize();
 		return size;
 	}
 
@@ -441,8 +449,11 @@ public:
 		DataChunk result_chunk;
 		//! Whether an RHS condition can produce UNKNOWN during equality comparison
 		bool uncorrelated_has_null = false;
+		bool conditions_can_be_unknown = false;
 		//! All RHS condition rows, used only for uncorrelated row equality NULL refinement
 		unique_ptr<ColumnDataCollection> uncorrelated_condition_rows;
+		bool compare_conditions = false;
+		unique_ptr<MarkJoinRefinement> refinement;
 	} mark_join_info;
 
 private:
