@@ -361,7 +361,7 @@ void TemporaryFileHandle::RemoveTempBlockIndex(TemporaryFileLock &, idx_t index)
 #ifndef WIN32 // this ended up causing issues when sorting
 		auto max_index = index_manager.GetMaxIndex();
 		auto &fs = FileSystem::GetFileSystem(db);
-		fs.Truncate(*handle, NumericCast<int64_t>(GetPositionInFile(max_index + 1)));
+		fs.Truncate(*handle, NumericCast<int64_t>(GetPositionInFile(max_index)));
 #endif
 	}
 }

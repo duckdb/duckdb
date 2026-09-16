@@ -1,0 +1,43 @@
+# name: test/sql/storage/temp_directory/temp_file_truncation.test
+# description: When tail blocks are freed the temp file must be truncated to exactly the highest live block, leaving no extra block on disk
+# group: [temp_directory]
+
+require block_size 262144
+
+statement ok
+SET threads = 1;
+
+statement ok
+SET temp_directory = '{TEST_DIR}/tmp_truncation';
+
+statement ok
+SET memory_limit = '20MB';
+
+statement ok
+SET preserve_insertion_order = false;
+
+# Spill a table; its blocks are all live and occupy [0, max_index) with no holes
+statement ok
+CREATE TEMPORARY TABLE t AS SELECT i, repeat('t', 80)::VARCHAR AS s FROM range(500000) t(i);
+
+query I
+SELECT count(*) > 0 FROM duckdb_temporary_files();
+----
+true
+
+# Spill transient query intermediates on top of t's blocks; they are freed when the query
+# finishes, which truncates the files back down to t's top block
+statement ok
+SELECT count(*) FROM (SELECT md5(i::VARCHAR) AS x, count(*) FROM range(1000000) t(i) GROUP BY 1);
+
+# Spilling is done; raise the limit so the accounting query below cannot trigger more evictions
+statement ok
+SET memory_limit = '1GB';
+
+# The files must be truncated to exactly their live extent: reported size == physical size.
+# Before the fix truncation left one extra block on disk (physical = reported + stride).
+query I
+SELECT (SELECT coalesce(sum(size), 0)::BIGINT FROM duckdb_temporary_files())
+     = (SELECT coalesce(sum(size), 0)::BIGINT FROM read_blob('{TEST_DIR}/tmp_truncation/*.tmp'));
+----
+true
