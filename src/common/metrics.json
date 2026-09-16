@@ -78,6 +78,11 @@
 			"description": "The total number of read operations issued to storage",
 			"unit": "operations"
 		},
+		"total_read_time": {
+			"metric_type": "double",
+			"description": "The total time spent reading from storage",
+			"unit": "seconds"
+		},
 		"total_bytes_written": {
 			"metric_type": "uint64",
 			"description": "The total amount of bytes written to storage",
@@ -87,6 +92,11 @@
 			"metric_type": "uint64",
 			"description": "The total number of write operations issued to storage",
 			"unit": "operations"
+		},
+		"total_write_time": {
+			"metric_type": "double",
+			"description": "The total time spent writing to storage",
+			"unit": "seconds"
 		}
 	},
 	"storage": {
