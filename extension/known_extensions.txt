@@ -1,0 +1,36 @@
+# Extensions a client can link in just by putting their static archive on the link line.
+# One name per line. scripts/generate_autolink.py turns this into src/include/duckdb_autolink.h, which
+# makes any client that includes duckdb.hpp or duckdb.h reference <name>_link for every name here, and
+# into src/main/extension/autolink/, one weak no-op definition per name for the archives that are absent.
+# Adding a name costs one tiny object in the engine archive; an extension not listed here is linked with
+# -u <name>_link instead. Run `make generate-files` after editing.
+autocomplete
+avro
+aws
+azure
+core_functions
+delta
+ducklake
+encodings
+excel
+fts
+httpfs
+iceberg
+icu
+inet
+json
+lance
+motherduck
+mysql_scanner
+odbc_scanner
+parquet
+postgres_scanner
+quack
+spatial
+sqlite_scanner
+tpcds
+tpch
+ui
+unity_catalog
+vortex
+vss
