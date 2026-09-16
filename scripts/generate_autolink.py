@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # Generates the automatic extension linking files from extension/known_extensions.txt:
-#  - src/include/duckdb_autolink.h: makes a client translation unit reference <name>_link for every known
-#    extension, so the linker takes each extension archive that is on the link line
-#  - src/main/extension/autolink/<name>_link_fallback.cpp: a weak no-op <name>_link per name, each in its own
-#    object so the engine archive supplies exactly the names whose archive was absent
+#  - src/include/duckdb_autolink.h: makes a client translation unit reference duckdb_extension_<name>_root for every
+#    known extension
+#  - src/main/extension/autolink/<name>_root_fallback.cpp: a weak no-op duckdb_extension_<name>_root per name, each in
+#    its own object so the engine archive supplies exactly the names whose archive was absent
 #  - src/main/extension/autolink/CMakeLists.txt: the object library holding those files
 import os
 
@@ -37,7 +37,7 @@ def write_if_changed(path, content):
 def generate_header(names):
     out = GENERATED
     out += '''//
-// Automatic extension linking. A translation unit that includes this header references the link member
+// Automatic extension linking. A translation unit that includes this header references the root member
 // of every extension DuckDB knows, so the linker takes each extension archive that is on the link line
 // and registers the extension with the engine. libduckdb must come after the extension archives: it
 // defines a no-op for every name whose archive is absent, and the linker keeps the first definition it
@@ -51,10 +51,10 @@ def generate_header(names):
 #if defined(_M_IX86)
 '''
     for name in names:
-        out += f'#pragma comment(linker, "/include:_{name}_link")\n'
+        out += f'#pragma comment(linker, "/include:_duckdb_extension_{name}_root")\n'
     out += '#else\n'
     for name in names:
-        out += f'#pragma comment(linker, "/include:{name}_link")\n'
+        out += f'#pragma comment(linker, "/include:duckdb_extension_{name}_root")\n'
     out += '''#endif
 #elif defined(__GNUC__) || defined(__clang__)
 #ifdef __cplusplus
@@ -62,7 +62,7 @@ extern "C" {
 #endif
 '''
     for name in names:
-        out += f'void {name}_link(void);\n'
+        out += f'void duckdb_extension_{name}_root(void);\n'
     out += '''#ifdef __cplusplus
 }
 #endif
@@ -71,7 +71,7 @@ extern "C" {
 __attribute__((used, weak)) void (*duckdb_known_extensions[])(void) = {
 '''
     for name in names:
-        out += f'    {name}_link,\n'
+        out += f'    duckdb_extension_{name}_root,\n'
     out += '''};
 // clang-format on
 #endif
@@ -84,10 +84,10 @@ def generate_fallbacks(names):
     os.makedirs(FALLBACK_DIR, exist_ok=True)
     expected = set()
     for name in names:
-        fname = f'{name}_link_fallback.cpp'
+        fname = f'{name}_root_fallback.cpp'
         expected.add(fname)
         content = GENERATED
-        content += f'''// Stands in for the {name} extension's link member when its archive is not on the link line. It lives in
+        content += f'''// Stands in for the {name} extension's root member when its archive is not on the link line. It lives in
 // its own object so that the linker takes it for this name only.
 #include "duckdb/common/winapi.hpp"
 
@@ -97,12 +97,12 @@ def generate_fallbacks(names):
 #define DUCKDB_AUTOLINK_WEAK
 #endif
 
-extern "C" DUCKDB_EXTENSION_API DUCKDB_AUTOLINK_WEAK void {name}_link(void) {{
+extern "C" DUCKDB_EXTENSION_API DUCKDB_AUTOLINK_WEAK void duckdb_extension_{name}_root(void) {{
 }}
 '''
         write_if_changed(os.path.join(FALLBACK_DIR, fname), content)
     for fname in os.listdir(FALLBACK_DIR):
-        if fname.endswith('_link_fallback.cpp') and fname not in expected:
+        if fname.endswith('_root_fallback.cpp') and fname not in expected:
             os.remove(os.path.join(FALLBACK_DIR, fname))
 
     # laid out the way cmake-format leaves it, so `make format-fix` is a no-op on this file
@@ -113,7 +113,7 @@ extern "C" DUCKDB_EXTENSION_API DUCKDB_AUTOLINK_WEAK void {name}_link(void) {{
 add_library(
   duckdb_autolink_fallbacks OBJECT
 '''
-    cmake += '\n'.join(f'  {name}_link_fallback.cpp' for name in names) + ')\n'
+    cmake += '\n'.join(f'  {name}_root_fallback.cpp' for name in names) + ')\n'
     cmake += '''
 # The same objects as an archive, for links that need them after the extension
 # archives rather than as always-included objects (the shared library exports
