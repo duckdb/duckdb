@@ -5192,6 +5192,18 @@ public:
 	static unique_ptr<SQLStatement> TransformShowExternalResourcesStmt(PEGTransformer &transformer,
 	                                                                   const optional<bool> &show_all_modifier);
 	static bool TransformShowAllModifier(PEGTransformer &transformer);
+	static unique_ptr<SQLStatement> TransformAttachToExternalResource(
+	    PEGTransformer &transformer, unique_ptr<ExternalResourceOptions> external_resource_source,
+	    const Identifier &attach_alias, const optional<vector<GenericCopyOption>> &attach_options);
+	static unique_ptr<SQLStatement>
+	TransformConnectToExternalResource(PEGTransformer &transformer,
+	                                   unique_ptr<ExternalResourceOptions> external_resource_source,
+	                                   const optional<vector<GenericCopyOption>> &attach_options);
+	static unique_ptr<ExternalResourceOptions> TransformExternalResourceCreateClause(
+	    PEGTransformer &transformer, const string &string_literal,
+	    const optional<vector<GenericCopyOption>> &external_resource_creation_options);
+	static unique_ptr<ExternalResourceOptions> TransformExternalResourceReferenceClause(PEGTransformer &transformer,
+	                                                                                    const Identifier &col_id);
 	static unique_ptr<SQLStatement>
 	TransformInsertStatement(PEGTransformer &transformer, optional<CommonTableExpressionMap> with_clause,
 	                         const optional<OnConflictAction> &or_action, unique_ptr<BaseTableRef> insert_target,
