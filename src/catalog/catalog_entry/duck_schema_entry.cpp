@@ -301,8 +301,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(CatalogTransaction trans
 		}
 		auto &indexes = GetCatalogSet(CatalogType::INDEX_ENTRY);
 		auto entry = indexes.GetHeadEntry(info.GetIndexName());
-		if (!entry || entry->type != CatalogType::DELETED_ENTRY ||
-		    entry->timestamp != transaction.GetTransactionId()) {
+		if (!entry) {
 			return nullptr;
 		}
 	}
