@@ -682,6 +682,9 @@ TEST_CASE("Test Arrow VARIANT roundtrip", "[arrow]") {
 	    "SELECT 42::VARIANT AS v",
 	    "SELECT {'a': i, 'b': 'x' || i::VARCHAR}::VARIANT AS v FROM range(3000) t(i)",
 	    "SELECT [i, i + 1, NULL]::VARIANT AS v FROM range(100) t(i)",
+	    // a nested VARIANT child is sized by its parent list, not by STANDARD_VECTOR_SIZE
+	    "SELECT [x::VARIANT FOR x IN range(5000)] AS v",
+	    "SELECT {'k': [x::VARIANT FOR x IN range(3000)]} AS v",
 	    // mixed types, no NULLs
 	    "SELECT CASE WHEN i % 2 = 0 THEN i::VARIANT ELSE ('s' || i::VARCHAR)::VARIANT END AS v FROM range(10) t(i)",
 	    "SELECT CASE WHEN i % 2 = 0 THEN NULL ELSE i::VARIANT END AS v FROM range(10) t(i)",
