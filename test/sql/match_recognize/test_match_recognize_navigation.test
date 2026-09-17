@@ -413,3 +413,118 @@ FROM (VALUES (1), (2), (3), (4)) t(x) MATCH_RECOGNIZE (
 )
 ----
 4
+
+# What a navigation reports is an expression of the clause's own, so a pattern variable may sit
+# anywhere inside it rather than only in front of it. The row navigated to is the variable's; the
+# expression is then evaluated on that row.
+
+statement ok
+create table nav_expr(i integer, v integer);
+
+statement ok
+insert into nav_expr values (1,3),(2,-7),(3,5),(4,-1);
+
+query IIIII
+SELECT f, l, o, d, u FROM nav_expr MATCH_RECOGNIZE(
+    ORDER BY i MEASURES FIRST(abs(A.v)) AS f, LAST(abs(A.v)) AS l, LAST(abs(A.v), 1) AS o,
+                        FIRST(A.v * 2) AS d, FIRST(abs(v)) AS u
+    ONE ROW PER MATCH PATTERN (A+) DEFINE A AS true
+)
+----
+3	1	5	6	3
+
+# the expression reads the rows of the variable it names, not the rows of the match
+statement ok
+create table nav_mixed(i integer, v integer);
+
+statement ok
+insert into nav_mixed values (1,1),(2,100),(3,3),(4,200),(5,5);
+
+query III
+SELECT fa, lb, sa FROM nav_mixed MATCH_RECOGNIZE(
+    ORDER BY i MEASURES FIRST(A.v * 1000) AS fa, LAST(B.v * 1000) AS lb, LAST(A.v || 'x') AS sa
+    ONE ROW PER MATCH PATTERN ((A B)+ A) DEFINE A AS v < 50, B AS v >= 50
+)
+----
+1000	200000	5x
+
+# a NULL the expression computes is the value of the row navigated to, and not a reason to walk on
+statement ok
+create table nav_nulls(i integer, v integer);
+
+statement ok
+insert into nav_nulls values (1,NULL),(2,10),(3,NULL),(4,20);
+
+query IIII
+SELECT fb, fe, fn, le FROM nav_nulls MATCH_RECOGNIZE(
+    ORDER BY i MEASURES FIRST(A.v) AS fb, FIRST(A.v + 0) AS fe,
+                        FIRST(CASE WHEN A.v IS NULL THEN 99 END) AS fn, LAST(A.v * 2) AS le
+    ONE ROW PER MATCH PATTERN (A+) DEFINE A AS true
+)
+----
+NULL	NULL	99	40
+
+# the same holds in DEFINE, where the expression decides which rows match at all
+statement ok
+create table nav_define(i integer, v integer);
+
+statement ok
+insert into nav_define values (1,-5),(2,3),(3,10);
+
+query II
+SELECT n, s FROM nav_define MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS n, FIRST(i) AS s
+    ONE ROW PER MATCH PATTERN (A B+) DEFINE A AS true, B AS v > FIRST(-A.v)
+)
+----
+2	2
+
+# negating inside the navigation is what moved the bound: reading the column itself matches more
+query II
+SELECT n, s FROM nav_define MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS n, FIRST(i) AS s
+    ONE ROW PER MATCH PATTERN (A B+) DEFINE A AS true, B AS v > FIRST(A.v)
+)
+----
+3	1
+
+# a navigation reads one row, so its expression cannot name two variables to read it from
+statement error
+SELECT m FROM nav_mixed MATCH_RECOGNIZE(
+    ORDER BY i MEASURES FIRST(A.v + B.v) AS m
+    ONE ROW PER MATCH PATTERN ((A B)+ A) DEFINE A AS v < 50, B AS v >= 50
+)
+----
+<REGEX>:.*FIRST\(\) reads one row of the match.*
+
+statement error
+SELECT n FROM nav_mixed MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS n
+    ONE ROW PER MATCH PATTERN ((A B)+ A) DEFINE A AS v < 50, B AS v >= 50 AND v > LAST(A.v + B.v)
+)
+----
+<REGEX>:.*LAST\(\) reads one row of the match.*
+
+# a lambda parameter spelled like a pattern variable is still the lambda's
+statement ok
+create table nav_lambda(i integer, xs struct(v integer)[]);
+
+statement ok
+insert into nav_lambda values (1, [{'v': 1}, {'v': 2}]), (2, [{'v': 10}]);
+
+query I
+SELECT m FROM nav_lambda MATCH_RECOGNIZE(
+    ORDER BY i MEASURES FIRST(list_transform(A.xs, lambda A: A.v + 100)) AS m
+    ONE ROW PER MATCH PATTERN (A+) DEFINE A AS true
+)
+----
+[101, 102]
+
+# and a table qualifier inside a navigation is not a pattern variable either
+query I
+FROM (VALUES (1, 7), (2, 8)) AS t(i, v) MATCH_RECOGNIZE(
+    ORDER BY i MEASURES FIRST(abs(t.v)) AS m
+    ONE ROW PER MATCH PATTERN (A+) DEFINE A AS true
+)
+----
+7
