@@ -90,6 +90,20 @@ EXPLAIN SELECT id FROM t ORDER BY id, CAST(payload AS INTEGER);
 ----
 physical_plan	<REGEX>:.*Order By: id ASC +│.*
 
+query II
+EXPLAIN SELECT CAST(id AS BOOLEAN) AS b, payload FROM t ORDER BY b, payload;
+----
+physical_plan	<REGEX>:.*Order By: [^\n]*, [^\n]*│.*
+
+query II
+SELECT CAST(id AS BOOLEAN) AS b, payload FROM t ORDER BY b, payload NULLS FIRST;
+----
+true	NULL
+true	a
+true	a
+true	b
+true	c
+
 # filter below the sort
 query II
 EXPLAIN SELECT id FROM t WHERE grp = 1 ORDER BY id, payload;
