@@ -59,7 +59,7 @@
         "test/sql/copy/parquet/parquet_glob_cache.test",
         "test/optimizer/joins/fkpk_composite_key_ce.test",
         "test/sql/cast/signed_cast_repro.test",
-        "test/optimizer/remove_redundant_order_keys.test"
+        "test/optimizer/remove_redundant_order_keys_side_effects.test"
       ]
     },
     {
