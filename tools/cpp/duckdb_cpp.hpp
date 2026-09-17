@@ -73,6 +73,7 @@ class Arena;
 class DataChunk;
 class ColumnDataCollection;
 class QueryResult;
+class ResultStream;
 class PreparedStatement;
 class ArrowStream;
 class ArrowImporter;
@@ -605,6 +606,50 @@ struct TokenList {
 	bool ends_unterminated = false;
 };
 
+/// When DuckDB decides how a result's rows are kept.
+enum class ResultEagerness : uint8_t {
+	/// Leave the decision to the statement and to the consumer's first call on the result.
+	AUTO = 0,
+	/// Keep every row, settled before execution starts, so no producer ever waits. The result cannot be streamed.
+	FORCED = 1,
+};
+
+/// The options one execution runs under: the statement's parameter values and its eagerness.
+/// Values are copied in, so the same args can drive any number of executions and the `Value`s passed to it
+/// may be destroyed straight away.
+class ExecuteArgs final : public detail::Handle<ExecuteArgs> {
+	friend detail::Factory;
+
+public:
+	/// Empty args: no parameters, AUTO eagerness.
+	ExecuteArgs();
+
+	ExecuteArgs(ExecuteArgs &&) noexcept = default;
+	ExecuteArgs &operator=(ExecuteArgs &&) noexcept = default;
+
+	~ExecuteArgs() override;
+
+	/// Binds the statement's parameters positionally ($1 = parameters[0]), replacing any previous set.
+	/// @param parameters Values for the statement's parameters.
+	/// @param parameter_count How many values `parameters` points at.
+	auto SetParameters(const Value *parameters, idx_t parameter_count) -> ExecuteArgs &;
+
+	/// `std::vector` overload of the positional `SetParameters`.
+	auto SetParameters(const std::vector<Value> &parameters) -> ExecuteArgs &;
+
+	/// Binds by name, replacing any previous set. A binding with an empty name stays positional, and a statement
+	/// cannot mix named and positional parameters.
+	/// @param parameters One binding per parameter.
+	auto SetParameters(const std::vector<NamedParam> &parameters) -> ExecuteArgs &;
+
+	/// Whether the execution is submitted eagerly. FORCED keeps every row from submission on, so the result cannot
+	/// be streamed but the engine's worker threads can run it to the end unattended.
+	auto SetEagerness(ResultEagerness eagerness) -> ExecuteArgs &;
+
+private:
+	explicit ExecuteArgs(void *impl);
+};
+
 /// A statement bound and planned once, executable repeatedly. Produced by `Connection::Prepare`.
 /// Where `Connection::Execute` re-binds on every call, this may run the plan it built at prepare time; ask
 /// `ReusesPlan` which one you got. Execution returns the same `QueryResult`, with identical behaviour.
@@ -618,13 +663,17 @@ public:
 
 	~PreparedStatement() override;
 
-	/// Executes with positional parameters ($1 = parameters[0]), returning a lazy streaming result.
-	/// Non-consuming: execute the same statement again, with the same values or different ones.
-	/// @param parameters Values for the statement's parameters, bound positionally.
-	/// @param parameter_count How many values `parameters` points at.
-	/// @return A streaming result. Execution is deferred until the result is read; binding errors throw here.
+	/// Executes under the given arguments, returning the handle of the submitted query.
+	/// Non-consuming: execute the same statement again, with the same args or different ones.
+	/// @param args The parameter values and eagerness for this execution. Borrowed.
+	/// @return The result handle. Nothing has run to completion yet; binding errors throw here.
 	/// @throws Exception While an earlier result on the connection is still live. A failed execution leaves the
 	/// prepared statement usable.
+	auto Execute(const ExecuteArgs &args) -> QueryResult;
+
+	/// Sugar over `Execute(args)` for positional parameters ($1 = parameters[0]).
+	/// @param parameters Values for the statement's parameters, bound positionally.
+	/// @param parameter_count How many values `parameters` points at.
 	auto Execute(const Value *parameters, idx_t parameter_count) -> QueryResult;
 
 	/// Executes a statement that takes no parameters.
@@ -727,12 +776,18 @@ public:
 	/// @return The tokens in input order, and whether the input ended inside an open token.
 	auto Tokenize(std::string_view sql) const -> TokenList;
 
-	/// Executes a statement, borrowing it rather than consuming it, so the same statement can be executed again.
+	/// Executes a statement under the given arguments, borrowing it rather than consuming it, so the same statement
+	/// can be executed again.
 	/// @param statement The statement to execute.
-	/// @param parameters Values for the statement's parameters, bound positionally ($1 = parameters[0]).
-	/// @param parameter_count How many values `parameters` points at.
-	/// @return A streaming result. Execution is deferred until the result is read; binding errors throw here.
+	/// @param args The parameter values and eagerness for this execution. Borrowed.
+	/// @return The result handle. Nothing has run to completion yet; binding errors throw here.
 	/// @throws Exception While an earlier result on this connection is still live.
+	auto Execute(const SqlStatement &statement, const ExecuteArgs &args) -> QueryResult;
+
+	/// Sugar over `Execute(statement, args)` for positional parameters ($1 = parameters[0]).
+	/// @param statement The statement to execute.
+	/// @param parameters Values for the statement's parameters, bound positionally.
+	/// @param parameter_count How many values `parameters` points at.
 	auto Execute(const SqlStatement &statement, const Value *parameters, idx_t parameter_count) -> QueryResult;
 
 	/// Executes a statement that takes no parameters.
@@ -2312,6 +2367,11 @@ public:
 	/// The `Context` flavor of the connection-scoped constructor, inside a callback.
 	DataChunk(const Context &ctx, const std::vector<LogicalType> &types);
 
+	/// An empty chunk holding no handle, to be assigned to: what `ResultStream::TryFetch` writes into.
+	/// `operator bool` reports whether it holds one.
+	DataChunk() : detail::Handle<DataChunk>(nullptr), owned(false) {
+	}
+
 	DataChunk(DataChunk &&other) noexcept {
 		std::swap(impl, other.impl);
 		std::swap(owned, other.owned);
@@ -2416,8 +2476,15 @@ public:
 	/// The `Context` flavor, inside a callback.
 	ColumnDataCollection(const Context &ctx, const std::vector<LogicalType> &types);
 
-	ColumnDataCollection(ColumnDataCollection &&) noexcept = default;
-	ColumnDataCollection &operator=(ColumnDataCollection &&) noexcept = default;
+	ColumnDataCollection(ColumnDataCollection &&other) noexcept {
+		std::swap(impl, other.impl);
+		std::swap(owned, other.owned);
+	}
+	ColumnDataCollection &operator=(ColumnDataCollection &&other) noexcept {
+		std::swap(impl, other.impl);
+		std::swap(owned, other.owned);
+		return *this;
+	}
 
 	~ColumnDataCollection() override;
 
@@ -2478,7 +2545,10 @@ public:
 	auto Scan(SharedScanState &shared, WorkerScanState &worker, DataChunk &chunk) const -> bool;
 
 private:
-	explicit ColumnDataCollection(void *impl);
+	explicit ColumnDataCollection(void *impl, bool owned);
+
+	/// False for a collection borrowed from a `QueryResult`, which owns it.
+	bool owned = false;
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -2738,49 +2808,107 @@ private:
 //----------------------------------------------------------------------------------------------------------------------
 // Result
 //----------------------------------------------------------------------------------------------------------------------
-// A `QueryResult` is a lazily executed stream of chunks, produced by a query.
-// Execution is deferred until the result is asked for its first chunk, and only one result may be live on a connection
-// at a time, so read a result to the end (or destroy it) before executing again.
+// `Connection::Execute` returns a `QueryResult` at once, before the query has finished. The first call on it picks
+// how the rows are read: a `ResultStream` takes them a chunk at a time and throws each away, while `Materialize`,
+// `Complete`, `Fetch` and `GetCollection` keep every row for as long as the result lives. `CanStream` says whether
+// that choice is still open.
 //
-// There are two ways to consume a result, synchronously or asynchronously
-// - `FetchChunk` blocks until the next chunk is ready, and is what most callers probably want.
-// - `Step` performs a bounded amount of work and reports what came of it, which allows an async runtime to drive a
-// query without necessarily occupying a thread indefinitely.
+// `Step` runs a piece of the query on the calling thread and never blocks, `Poll` only reports where it stands, and
+// `Wait` blocks until `Step` can do something. `Complete` and `Fetch` do all of that for you.
+//
+// Only one result or stream may be live on a connection at a time, and each is read from one thread at a time.
 
-/// A streaming query result.
+/// The shape of a result.
+enum class ResultType : uint8_t {
+	/// Produces rows: SELECT, EXPLAIN, RETURNING, and other row-producing statements.
+	QUERY_RESULT = 0,
+	/// Carries a count of affected rows: INSERT / UPDATE / DELETE and the like, without RETURNING.
+	CHANGED_ROWS = 1,
+	/// Produces no rows: most DDL and utility statements.
+	NOTHING = 2,
+};
+
+/// Where a result or a stream stands.
+enum class ResultStatus : uint8_t {
+	/// Work is outstanding; call again.
+	NOT_READY = 0,
+	/// The engine is waiting on you: decide how rows are kept, or take the chunk `TryFetch` produced.
+	READY = 1,
+	/// Nothing for this thread to run until something else happens, such as I/O. `Wait`, then step.
+	BLOCKED = 2,
+	/// Nothing for this thread to run; the rest runs elsewhere. `Wait`, then step.
+	NO_TASKS_AVAILABLE = 3,
+	/// Done. On a stream, reported once nothing is left to take. Sticky.
+	FINISHED = 4,
+	/// The query was canceled. Sticky.
+	CANCELLED = 5,
+};
+
+/// A result whose rows are being drained: chunks flow through a bounded buffer and are gone once taken, so there is
+/// no random access and no second pass.
+class ResultStream final : public detail::Handle<ResultStream> {
+	friend detail::Factory;
+
+public:
+	/// The shape of a result; see `cxx::ResultType`.
+	using ResultType = cxx::ResultType;
+	/// The kind of SQL statement a result came from; see `cxx::StatementType`.
+	using StatementType = cxx::StatementType;
+
+	/// Settles a result on draining and takes it over: `result` is left empty on success and on failure alike.
+	/// @param result The result to stream.
+	/// @throws InvalidInputException When the rows are already settled on being kept, or the statement was
+	/// submitted eagerly. `CanStream` answers that in advance.
+	explicit ResultStream(QueryResult &&result);
+
+	ResultStream(ResultStream &&) noexcept = default;
+	ResultStream &operator=(ResultStream &&) noexcept = default;
+
+	~ResultStream() override;
+
+	/// The streamed result's columns, their names and types, as one owned `Schema`.
+	auto GetSchema() const -> Schema;
+
+	/// The shape of the streamed result.
+	auto GetResultType() const -> ResultType;
+
+	/// The kind of SQL statement this stream came from.
+	auto GetStatementType() const -> StatementType;
+
+	/// Runs one task of the query on the calling thread and returns without blocking. Chunks go into the stream's
+	/// buffer; `TryFetch` takes them.
+	/// @throws Exception On an execution error; the error is sticky.
+	auto Step() -> ResultStatus;
+
+	/// Reports where the stream stands, running no work and never blocking.
+	/// @throws Exception On an execution error; the error is sticky.
+	auto Poll() -> ResultStatus;
+
+	/// Blocks until `Step` may be able to make progress. Runs no work and takes no chunk.
+	auto Wait() -> void;
+
+	/// Takes a buffered chunk if one is waiting, and never blocks.
+	/// @param out_chunk Receives the chunk when the status is READY, and is left empty otherwise.
+	/// @return Where the stream stands.
+	/// @throws Exception On an execution error; the error is sticky.
+	auto TryFetch(DataChunk &out_chunk) -> ResultStatus;
+
+	/// Runs tasks on the calling thread until a chunk is ready, and returns it.
+	/// @return The chunk, or an empty one at the end of the stream; calling it again then keeps returning empty.
+	/// @throws InterruptException When the query was canceled.
+	auto Fetch() -> DataChunk;
+
+private:
+	explicit ResultStream(void *impl);
+};
+
+/// The handle of a submitted query.
 class QueryResult final : public detail::Handle<QueryResult> {
 	friend detail::Factory;
 
 public:
-	/// The status of one `Step`.
-	enum class StepStatus : uint8_t {
-		/// No chunk was produced by this step; call `Wait`, or come back later.
-		WAITING = 0,
-		/// A chunk was produced.
-		CHUNK = 1,
-		/// The result is exhausted. Sticky.
-		FINISHED = 2,
-		/// The query was canceled. Sticky.
-		CANCELLED = 3,
-	};
-
-	/// The outcome of one `Step`.
-	struct StepResult {
-		/// What the step accomplished.
-		StepStatus status;
-		/// The chunk produced, empty unless `status` is CHUNK.
-		DataChunk chunk;
-	};
-
 	/// The shape of a result.
-	enum class ResultType : uint8_t {
-		/// Produces rows: SELECT, EXPLAIN, RETURNING, and other row-producing statements.
-		QUERY_RESULT = 0,
-		/// Carries a count of affected rows: INSERT / UPDATE / DELETE and the like, without RETURNING.
-		CHANGED_ROWS = 1,
-		/// Produces no rows: most DDL and utility statements.
-		NOTHING = 2,
-	};
+	using ResultType = cxx::ResultType;
 
 	/// The kind of SQL statement a result came from; see `cxx::StatementType`.
 	using StatementType = cxx::StatementType;
@@ -2794,7 +2922,7 @@ public:
 	/// @throws InvalidInputException When the schema is not available yet; step the result first.
 	auto GetSchema() const -> Schema;
 
-	/// The shape of the result, so a caller can decide between consuming rows and draining without inspecting the SQL.
+	/// The shape of the result, so a caller can tell rows from a changed-row count without inspecting the SQL.
 	/// @throws InvalidInputException When the shape is not available yet; step the result first.
 	auto GetResultType() const -> ResultType;
 
@@ -2802,28 +2930,55 @@ public:
 	/// @throws InvalidInputException When the kind is not available yet; step the result first.
 	auto GetStatementType() const -> StatementType;
 
-	/// Does a bounded amount of work and returns without blocking.
-	/// @return What the step accomplished, and the chunk if it produced one.
-	/// @throws Exception On an execution error; the error is sticky, and later `Step`s rethrow it.
-	auto Step() -> StepResult;
+	/// Runs one task of the query on the calling thread and returns without blocking. It decides nothing: a result
+	/// whose rows are not yet settled keeps reporting READY, running nothing, until a decision is made.
+	/// @return Where the result stands.
+	/// @throws Exception On an execution error; the error is sticky, and later calls rethrow it.
+	auto Step() -> ResultStatus;
+
+	/// Reports where the result stands, running no work and never blocking.
+	/// @return Where the result stands.
+	/// @throws Exception On an execution error; the error is sticky.
+	auto Poll() -> ResultStatus;
 
 	/// Blocks until `Step` may be able to make progress, returning immediately once the result is finished or
 	/// canceled. May not block at all.
 	/// @throws Exception On an execution error.
 	auto Wait() -> void;
 
-	/// The next chunk, blocking until it is ready.
-	/// @return The chunk, or an empty one at the end of the stream; calling it again then keeps returning empty.
-	/// @throws InterruptException When the query was canceled.
-	auto FetchChunk() -> DataChunk;
+	/// Settles the result on keeping every row, without running any work. Frees the producers parked for that
+	/// decision, so the engine's worker threads (or `Step`) can run the query to the end. The result cannot be
+	/// streamed afterwards.
+	auto Materialize() -> void;
 
-	/// Runs the result to the end, applying its side effects and discarding any rows.
-	/// @return The number of rows affected for a CHANGED_ROWS result, 0 otherwise.
+	/// Runs the result to completion on the calling thread, keeping every row, so every side effect is applied.
 	/// @throws InterruptException When the query was canceled.
-	auto Drain() -> idx_t;
+	auto Complete() -> void;
 
-	/// Renders the result as the boxed table the CLI prints, consuming it. Whatever has not been read yet is
-	/// materialized in memory first.
+	/// A cursor over the kept rows: the first call completes the result, every call after it hands back one chunk.
+	/// @return The chunk, or an empty one at the end of the cursor; calling it again then keeps returning empty.
+	/// @throws InterruptException When the query was canceled.
+	auto Fetch() -> DataChunk;
+
+	/// Completes the result and borrows the collection holding its rows, which can be scanned as often as you like.
+	/// @return A borrowed collection, valid while this result owns it. Never destroy it.
+	/// @throws InvalidInputException When the rows were handed over with `TakeCollection`, or the result holds none.
+	auto GetCollection() -> ColumnDataCollection;
+
+	/// Completes the result and hands over the collection holding its rows. It outlives the result, the connection
+	/// and the database, and the result is finished afterwards.
+	/// @throws InvalidInputException When the rows were already taken, or the result holds none.
+	auto TakeCollection() -> ColumnDataCollection;
+
+	/// Whether a stream can still be opened on this result: true until the first call that settles how the rows are
+	/// kept, and false from the start for a statement the engine submits eagerly. Construct a `ResultStream` from
+	/// the result to open one.
+	/// @throws InvalidInputException When the statement expanded into a group whose row-producing statement has not
+	/// been prepared yet; step the result first.
+	auto CanStream() const -> bool;
+
+	/// Completes the result and renders its rows as the boxed table the CLI prints. Non-consuming: the rows stay, and
+	/// a second call renders the same text.
 	/// @param max_rows How many rows to print before eliding the middle, 0 for the default.
 	/// @param max_width How wide the table may be, 0 for the default.
 	/// @param max_col_width How wide a single column may be, 0 for the default.
@@ -2841,7 +2996,14 @@ public:
 	auto ToArrowStream(idx_t batch_size = 0) -> ArrowStream;
 
 private:
+	friend class ResultStream;
+
 	explicit QueryResult(void *impl);
+
+	/// @internal Detaches the handle for `ResultStream`, which takes the result over.
+	auto Detach() -> void * {
+		return release();
+	}
 };
 
 //----------------------------------------------------------------------------------------------------------------------

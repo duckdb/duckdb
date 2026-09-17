@@ -18,7 +18,7 @@ using namespace duckdb::cxx;
 // Collect a single BIGINT column, asserting every row valid.
 std::vector<int64_t> CollectScanBigints(QueryResult result) {
 	std::vector<int64_t> out;
-	while (auto chunk = result.FetchChunk()) {
+	while (auto chunk = result.Fetch()) {
 		auto view = chunk.GetVector(0).GetView();
 		for (idx_t i = 0; i < chunk.GetRowCount(); i++) {
 			REQUIRE(view.IsValid(i));
@@ -133,14 +133,14 @@ TEST_CASE("Stable C++API: replacement scan reports the unresolved name", "[cpp_a
 
 	// An unqualified reference is a single part -- absence is a shorter path, not an empty placeholder.
 	scan_observed = ScanObserved();
-	conn.Execute("SELECT * FROM plain_name").Drain();
+	conn.Execute("SELECT * FROM plain_name").Complete();
 	REQUIRE(scan_observed.calls == 1);
 	REQUIRE(scan_observed.parts == std::vector<std::string> {"plain_name"});
 	REQUIRE(scan_observed.rendered == "plain_name");
 
 	// A fully qualified one carries all three, outermost first.
 	scan_observed = ScanObserved();
-	conn.Execute("SELECT * FROM memory.main.qualified_name").Drain();
+	conn.Execute("SELECT * FROM memory.main.qualified_name").Complete();
 	REQUIRE(scan_observed.calls == 1);
 	REQUIRE(scan_observed.parts == std::vector<std::string> {"memory", "main", "qualified_name"});
 	REQUIRE(scan_observed.rendered == "memory.main.qualified_name");
@@ -187,7 +187,7 @@ TEST_CASE("Stable C++API: replacement scan reports the name and can decline", "[
 	scan.Register();
 
 	// Declining leaves the reference unresolved.
-	REQUIRE_THROWS_AS(conn.Execute("SELECT * FROM missing_table").Drain(), Exception);
+	REQUIRE_THROWS_AS(conn.Execute("SELECT * FROM missing_table").Complete(), Exception);
 }
 
 TEST_CASE("Stable C++API: replacement scan claims a column data collection", "[cpp_api]") {
@@ -209,12 +209,12 @@ TEST_CASE("Stable C++API: replacement scan claims a column data collection", "[c
 	        std::vector<int64_t> {10, 20});
 
 	// The motivating case: a client-side buffer as the source of an INSERT.
-	conn.Execute("CREATE TABLE sink (v BIGINT)").Drain();
-	conn.Execute("INSERT INTO sink SELECT * FROM my_batch").Drain();
+	conn.Execute("CREATE TABLE sink (v BIGINT)").Complete();
+	conn.Execute("INSERT INTO sink SELECT * FROM my_batch").Complete();
 	REQUIRE(CollectScanBigints(conn.Execute("SELECT v FROM sink ORDER BY v")) == std::vector<int64_t> {10, 20});
 
 	// Names it does not recognise are declined.
-	REQUIRE_THROWS_AS(conn.Execute("SELECT * FROM some_other_name").Drain(), Exception);
+	REQUIRE_THROWS_AS(conn.Execute("SELECT * FROM some_other_name").Complete(), Exception);
 }
 
 TEST_CASE("Stable C++API: replacement scan claims a subquery", "[cpp_api]") {
@@ -241,7 +241,7 @@ TEST_CASE("Stable C++API: replacement scan scoping", "[cpp_api]") {
 
 	// Visible on the registering connection only.
 	REQUIRE(CollectScanBigints(conn.Execute("SELECT v::BIGINT FROM anything")) == std::vector<int64_t> {42});
-	REQUIRE_THROWS_AS(other.Execute("SELECT * FROM anything").Drain(), Exception);
+	REQUIRE_THROWS_AS(other.Execute("SELECT * FROM anything").Complete(), Exception);
 
 	// A database-scoped scan reaches every connection.
 	auto db_scan = ReplacementScan::Create(db);
@@ -259,7 +259,7 @@ TEST_CASE("Stable C++API: replacement scan errors", "[cpp_api]") {
 		auto scan = ReplacementScan::Create(conn);
 		scan.SetCallback(ThrowingScan);
 		scan.Register();
-		REQUIRE_THROWS_MATCHES(conn.Execute("SELECT * FROM anything").Drain(), Exception,
+		REQUIRE_THROWS_MATCHES(conn.Execute("SELECT * FROM anything").Complete(), Exception,
 		                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
 	SECTION("registration requires a callback, and happens once") {

@@ -182,12 +182,12 @@ functions:
     description: |
       Interrupts the query currently executing on the connection.
 
-      The cross-thread (but not cross-connection) cancellation entry point 
-      for streaming results: safe to call from any thread within the execution
-      of a query through a connection, including while another thread steps 
-      the query's result. A no-op when no query is active. Cancellation surfaces 
-      on the consuming side as step status CANCELLED (result_step), or as
-      ERROR_RUNTIME_INTERRUPT (result_fetch_chunk).
+      The one call that may be used from another thread while a query runs on
+      this connection, including while that thread is reading its result. It
+      cancels only this connection's query, and is a no-op when none is
+      running. The cancellation reaches the reader as status CANCELLED from
+      result_step, result_poll and result_stream_try_fetch, and as
+      ERROR_RUNTIME_INTERRUPT from the calls that block.
     role: method
     belongs_to: connection
     parameters:

@@ -19,7 +19,7 @@ using namespace duckdb::cxx;
 // Collect a single INTEGER column, asserting every row valid.
 std::vector<int32_t> CollectInts(QueryResult result) {
 	std::vector<int32_t> out;
-	while (auto chunk = result.FetchChunk()) {
+	while (auto chunk = result.Fetch()) {
 		auto view = chunk.GetVector(0).GetView();
 		for (idx_t i = 0; i < chunk.GetRowCount(); i++) {
 			REQUIRE(view.IsValid(i));
@@ -32,7 +32,7 @@ std::vector<int32_t> CollectInts(QueryResult result) {
 // Collect a single BIGINT column, asserting every row valid.
 std::vector<int64_t> CollectBigInts(QueryResult result) {
 	std::vector<int64_t> out;
-	while (auto chunk = result.FetchChunk()) {
+	while (auto chunk = result.Fetch()) {
 		auto view = chunk.GetVector(0).GetView();
 		for (idx_t i = 0; i < chunk.GetRowCount(); i++) {
 			REQUIRE(view.IsValid(i));
@@ -401,7 +401,7 @@ TEST_CASE("Stable C++API: aggregate function bind reads argument types and const
 	REQUIRE_FALSE(agg_arg_probe.tried_non_constant);
 
 	// ...while GetConstantArgument fails the query with the binder's own error.
-	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT cpp_agg_arg_probe('hello', b) FROM (VALUES (21)) t(b)").Drain(),
+	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT cpp_agg_arg_probe('hello', b) FROM (VALUES (21)) t(b)").Complete(),
 	                       Exception, HasErrorCode(DUCKDB_V2_ERROR_QUERY_BINDER));
 }
 
@@ -421,7 +421,7 @@ TEST_CASE("Stable C++API: aggregate function callback errors fail the query", "[
 	failing.GetSignature().AddParameter("a", integer).SetReturnType(integer);
 	failing.Register();
 
-	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT cpp_agg_fail(1)").Drain(), InvalidInputException,
+	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT cpp_agg_fail(1)").Complete(), InvalidInputException,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 
 	// GetUserData when nothing was planted reports the misuse rather than derefing null.
@@ -435,7 +435,7 @@ TEST_CASE("Stable C++API: aggregate function callback errors fail the query", "[
 	no_data.GetSignature().AddParameter("a", integer).SetReturnType(integer);
 	no_data.Register();
 
-	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT cpp_agg_no_user_data(1)").Drain(), Exception,
+	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT cpp_agg_no_user_data(1)").Complete(), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
 

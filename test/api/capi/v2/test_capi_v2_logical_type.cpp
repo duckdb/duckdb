@@ -971,7 +971,7 @@ TEST_CASE("V2: type construction does not disturb a live streaming result",
 
 	QueryResult r;
 	REQUIRE(Query(f.conn, "SELECT * FROM range(10000)", &r) == DUCKDB_V2_ERROR_NONE);
-	auto first = StepChunk(r);
+	auto first = FetchChunk(r);
 	REQUIRE(first != nullptr);
 	idx_t seen = 0;
 	duckdb_v2_data_chunk_get_size(first, &seen, nullptr);

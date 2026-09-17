@@ -47,7 +47,7 @@ void AggSigParam(duckdb_v2_function_signature_handle sig, const char *name, duck
 int64_t AggQueryI64(duckdb_v2_connection_handle conn, const char *sql) {
 	duckdb_v2_result_handle result = nullptr;
 	REQUIRE(Query(conn, sql, &result) == DUCKDB_V2_ERROR_NONE);
-	auto chunk = StepChunk(result);
+	auto chunk = FetchChunk(result);
 	REQUIRE(chunk != nullptr);
 	duckdb_v2_vector_handle vec = nullptr;
 	duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, nullptr);
@@ -456,7 +456,7 @@ TEST_CASE("V2 aggregate: bind callback resolves ANY return and bind data flows",
 	agg_flow = {};
 	duckdb_v2_result_handle result = nullptr;
 	REQUIRE(Query(fx.conn, "SELECT any_double(21) AS d", &result) == DUCKDB_V2_ERROR_NONE);
-	auto chunk = StepChunk(result);
+	auto chunk = FetchChunk(result);
 	REQUIRE(chunk != nullptr);
 	// The bind callback resolved the ANY return type to INTEGER.
 	RequireColumn(result, 0, "d", DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
@@ -511,7 +511,7 @@ TEST_CASE("V2 aggregate: bind reads argument count, types and constants", "[capi
 	agg_arg_probe = {};
 	duckdb_v2_result_handle result = nullptr;
 	REQUIRE(Query(fx.conn, "SELECT agg_arg_probe('hello', 21) AS d", &result) == DUCKDB_V2_ERROR_NONE);
-	auto chunk = StepChunk(result);
+	auto chunk = FetchChunk(result);
 	REQUIRE(chunk != nullptr);
 	RequireColumn(result, 0, "d", DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	duckdb_v2_vector_handle vec = nullptr;
@@ -564,19 +564,8 @@ TEST_CASE("V2 aggregate: update error propagates to the result", "[capi_v2][aggr
 
 	duckdb_v2_result_handle result = nullptr;
 	REQUIRE(Query(fx.conn, "SELECT agg_always_fails(1)", &result) == DUCKDB_V2_ERROR_NONE);
-	// Execution is lazy: the failure surfaces while stepping.
-	auto rc = DUCKDB_V2_ERROR_NONE;
-	auto status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
-	for (int i = 0; i < 100000 && rc == DUCKDB_V2_ERROR_NONE && status != DUCKDB_V2_RESULT_STEP_STATUS_FINISHED; i++) {
-		duckdb_v2_data_chunk_handle chunk = nullptr;
-		rc = duckdb_v2_result_step(result, &chunk, &status, nullptr);
-		if (chunk) {
-			duckdb_v2_data_chunk_destroy(&chunk);
-		}
-		if (rc == DUCKDB_V2_ERROR_NONE && status == DUCKDB_V2_RESULT_STEP_STATUS_WAITING) {
-			rc = duckdb_v2_result_wait(result, nullptr);
-		}
-	}
+	// Execution is deferred: the failure surfaces while the result runs.
+	auto rc = duckdb_v2_result_complete(result, nullptr);
 	duckdb_v2_result_destroy(&result);
 	// The callback's code round-trips through the engine's exception machinery.
 	REQUIRE(rc == DUCKDB_V2_ERROR_IO_GENERAL);

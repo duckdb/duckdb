@@ -31,12 +31,24 @@ private:
 	int32_t code;
 };
 
+inline int64_t ChangedRows(duckdb::cxx::QueryResult result) {
+	if (result.GetResultType() != duckdb::cxx::ResultType::CHANGED_ROWS) {
+		result.Complete();
+		return 0;
+	}
+	auto chunk = result.Fetch();
+	REQUIRE(chunk);
+	REQUIRE(chunk.GetRowCount() == 1);
+	auto view = chunk.GetVector(0).GetView();
+	return view.Data<int64_t>()[view.SelAt(0)];
+}
+
 // Collect two columns of a result into rows, reading each column as its C
 // type. Callers pass non-NULL columns; every row is asserted valid.
 template <class TA, class TB>
 std::vector<std::pair<TA, TB>> Collect2(duckdb::cxx::QueryResult result, idx_t a, idx_t b) {
 	std::vector<std::pair<TA, TB>> rows;
-	while (auto chunk = result.FetchChunk()) {
+	while (auto chunk = result.Fetch()) {
 		auto va = chunk.GetVector(a).GetView();
 		auto vb = chunk.GetVector(b).GetView();
 		auto pa = va.Data<TA>();

@@ -1182,7 +1182,7 @@ TEST_CASE("V2: vector_get_value is the VARIANT cell path", "[capi_v2][vector_wri
 	QueryResult r;
 
 	REQUIRE(Query(f.conn, "SELECT 42::VARIANT AS v", &r) == DUCKDB_V2_ERROR_NONE);
-	auto chunk = StepChunk(r);
+	auto chunk = FetchChunk(r);
 	REQUIRE(chunk != nullptr);
 	duckdb_v2_vector_handle vec = nullptr;
 	REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, nullptr) == DUCKDB_V2_ERROR_NONE);

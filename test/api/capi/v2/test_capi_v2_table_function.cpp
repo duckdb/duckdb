@@ -54,7 +54,7 @@ void TableSigParam(duckdb_v2_function_signature_handle sig, const char *name, du
 int64_t QueryI64(duckdb_v2_connection_handle conn, const char *sql) {
 	duckdb_v2_result_handle result = nullptr;
 	REQUIRE(Query(conn, sql, &result) == DUCKDB_V2_ERROR_NONE);
-	auto chunk = StepChunk(result);
+	auto chunk = FetchChunk(result);
 	REQUIRE(chunk != nullptr);
 	duckdb_v2_vector_handle vec = nullptr;
 	duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, nullptr);
@@ -88,20 +88,9 @@ std::string QueryError(duckdb_v2_connection_handle conn, const char *sql) {
 	duckdb_v2_result_handle result = nullptr;
 	duckdb_v2_error_info_handle err = nullptr;
 	auto rc = Query(conn, sql, &result, &err);
-	// Streaming execution is lazy: the failure only surfaces once stepping reaches it, which may
-	// take several rounds. Drain until something fails or the stream ends.
-	while (rc == DUCKDB_V2_ERROR_NONE) {
-		duckdb_v2_data_chunk_handle chunk = nullptr;
-		DUCKDB_V2_RESULT_STEP_STATUS status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
-		rc = duckdb_v2_result_step(result, &chunk, &status, &err);
-		duckdb_v2_data_chunk_destroy(&chunk);
-		if (rc != DUCKDB_V2_ERROR_NONE || status == DUCKDB_V2_RESULT_STEP_STATUS_FINISHED ||
-		    status == DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED) {
-			break;
-		}
-		if (status == DUCKDB_V2_RESULT_STEP_STATUS_WAITING) {
-			rc = duckdb_v2_result_wait(result, &err);
-		}
+	// Execution is deferred: the failure only surfaces once the result runs.
+	if (rc == DUCKDB_V2_ERROR_NONE) {
+		rc = duckdb_v2_result_complete(result, &err);
 	}
 	duckdb_v2_result_destroy(&result);
 	std::string message;
@@ -625,7 +614,7 @@ TEST_CASE("V2 table: multiple result columns share the batch row count", "[capi_
 
 	duckdb_v2_result_handle text = nullptr;
 	REQUIRE(Query(fx.conn, "SELECT string_agg(b, ',' ORDER BY a) FROM my_pairs(3)", &text) == DUCKDB_V2_ERROR_NONE);
-	auto chunk = StepChunk(text);
+	auto chunk = FetchChunk(text);
 	REQUIRE(chunk != nullptr);
 	duckdb_v2_vector_handle vec = nullptr;
 	duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, nullptr);
@@ -846,28 +835,7 @@ TEST_CASE("V2 table: progress callback reports scan progress", "[capi_v2][table_
 	duckdb_v2_result_handle r = nullptr;
 	REQUIRE(Query(fx.conn, "SELECT * FROM my_progress(1000000)", &r, nullptr) == DUCKDB_V2_ERROR_NONE);
 
-	// The round count is timing-dependent, so the loop latches instead of asserting.
-	auto step_rc = DUCKDB_V2_ERROR_NONE;
-	idx_t rows = 0;
-	while (true) {
-		duckdb_v2_data_chunk_handle chunk = nullptr;
-		DUCKDB_V2_RESULT_STEP_STATUS status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
-		step_rc = duckdb_v2_result_step(r, &chunk, &status, nullptr);
-		if (step_rc != DUCKDB_V2_ERROR_NONE) {
-			break;
-		}
-		if (chunk) {
-			idx_t size = 0;
-			duckdb_v2_data_chunk_get_size(chunk, &size, nullptr);
-			rows += size;
-			duckdb_v2_data_chunk_destroy(&chunk);
-		}
-		if (status == DUCKDB_V2_RESULT_STEP_STATUS_FINISHED) {
-			break;
-		}
-	}
-	REQUIRE(step_rc == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(rows == 1000000);
+	REQUIRE(DrainRowCount(r) == 1000000);
 	REQUIRE(hook_probe.progress_calls >= 1);
 	REQUIRE(hook_probe.progress_saw_global_state);
 
@@ -1039,7 +1007,7 @@ template <class FN>
 void ForEachCell(duckdb_v2_connection_handle conn, const char *sql, FN fn) {
 	duckdb_v2_result_handle result = nullptr;
 	REQUIRE(Query(conn, sql, &result) == DUCKDB_V2_ERROR_NONE);
-	while (auto chunk = StepChunk(result)) {
+	while (auto chunk = FetchChunk(result)) {
 		idx_t columns = 0;
 		idx_t rows = 0;
 		duckdb_v2_data_chunk_get_vector_count(chunk, &columns, nullptr);

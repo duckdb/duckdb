@@ -94,26 +94,15 @@ TEST_CASE("V2: a max_execution_time timeout surfaces as an error, not CANCELLED"
 	REQUIRE(Query(fx.conn, "SELECT count(*) FROM range(100000000) t1, range(1000) t2", &r, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 
-	// Step until the timeout fires. It must arrive as an error return code, not
+	// Run until the timeout fires. It must arrive as an error return code, not
 	// as the CANCELLED status. On the buggy code the timeout was conflated with
 	// a consumer cancellation and surfaced as a message-less CANCELLED.
-	DUCKDB_V2_ERROR rc = DUCKDB_V2_ERROR_NONE;
 	duckdb_v2_error_info_handle err = nullptr;
-	DUCKDB_V2_RESULT_STEP_STATUS status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
-	for (int i = 0; i < 1000000; i++) {
-		duckdb_v2_data_chunk_handle chunk = nullptr;
-		status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
-		rc = duckdb_v2_result_step(r, &chunk, &status, &err);
-		if (chunk) {
-			duckdb_v2_data_chunk_destroy(&chunk);
-		}
-		// Stop on any terminal outcome: an error (expected), a cancellation
-		// (the bug), or a finish (should not happen at this scale).
-		if (rc != DUCKDB_V2_ERROR_NONE || status == DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED ||
-		    status == DUCKDB_V2_RESULT_STEP_STATUS_FINISHED) {
-			break;
-		}
-	}
+	auto rc = duckdb_v2_result_complete(r, &err);
+
+	// The status channel must report it as a sticky error too, never as CANCELLED.
+	DUCKDB_V2_RESULT_STATUS status = DUCKDB_V2_RESULT_STATUS_NOT_READY;
+	auto status_rc = duckdb_v2_result_step(r, &status, nullptr);
 
 	// The timeout must never be reported as a cancellation. CHECK, not REQUIRE:
 	// a REQUIRE aborts the case on the rare run where the timeout did not land,
@@ -126,7 +115,8 @@ TEST_CASE("V2: a max_execution_time timeout surfaces as an error, not CANCELLED"
 		msg = Convert(text);
 	}
 	INFO("timeout error detail: " << (!msg.empty() ? msg : "(none)"));
-	CHECK(status != DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED);
+	CHECK(status != DUCKDB_V2_RESULT_STATUS_CANCELLED);
+	CHECK(status_rc == DUCKDB_V2_ERROR_RUNTIME_INTERRUPT);
 	CHECK(rc == DUCKDB_V2_ERROR_RUNTIME_INTERRUPT);
 	CHECK(err != nullptr);
 	CHECK(msg.find("Query exceeded maximum execution time") != string::npos);
@@ -140,17 +130,15 @@ TEST_CASE("V2: a consumer interrupt still surfaces as CANCELLED, not an error", 
 	duckdb_v2_result_handle r = nullptr;
 	REQUIRE(Query(fx.conn, "SELECT i FROM range(10000000) t(i)", &r, nullptr) == DUCKDB_V2_ERROR_NONE);
 
-	// Consume the first chunk so the stream is genuinely mid-flight.
-	auto first = StepChunk(r);
-	REQUIRE(first != nullptr);
-	duckdb_v2_data_chunk_destroy(&first);
+	// Drive the query far enough that the interrupt lands mid-execution.
+	REQUIRE(duckdb_v2_result_materialize(r, nullptr) == DUCKDB_V2_ERROR_NONE);
+	DUCKDB_V2_RESULT_STATUS status = DUCKDB_V2_RESULT_STATUS_NOT_READY;
+	REQUIRE(duckdb_v2_result_step(r, &status, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	REQUIRE(duckdb_v2_connection_interrupt(fx.conn, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	// The interrupt surfaces as the CANCELLED status, never as an error.
-	DUCKDB_V2_RESULT_STEP_STATUS status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
-	status = StepUntilCancelled(r);
-	REQUIRE(status == DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED);
+	REQUIRE(StepUntilCancelled(r) == DUCKDB_V2_RESULT_STATUS_CANCELLED);
 
 	duckdb_v2_result_destroy(&r);
 }

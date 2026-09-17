@@ -155,7 +155,7 @@ public:
 			return true;
 		}
 		try {
-			current_chunk = wrapper.FetchChunkBlocking();
+			current_chunk = wrapper.NextChunk();
 		} catch (std::exception &ex) {
 			scan_error = ErrorData(ex);
 			has_scan_error = true;
@@ -404,23 +404,20 @@ DUCKDB_V2_ERROR duckdb_v2_result_to_arrow_stream(duckdb_v2_result_handle *result
 			// The schema must be built while the query's transaction is live, so advance to the principal fragment if
 			// its metadata is not available yet. No rows can be produced before that fragment is prepared, so stepping
 			// here never drops data.
-			while (!wrapper->metadata_available) {
-				duckdb::unique_ptr<duckdb::DataChunk> discard;
-				auto status = wrapper->Step(discard);
-				if (status == DUCKDB_V2_RESULT_STEP_STATUS_WAITING) {
+			while (!wrapper->metadata_available && !wrapper->IsTerminalState()) {
+				auto status = wrapper->Step();
+				if (status == DUCKDB_V2_RESULT_STATUS_BLOCKED || status == DUCKDB_V2_RESULT_STATUS_NO_TASKS_AVAILABLE) {
 					wrapper->Wait();
-					continue;
 				}
-				if (status == DUCKDB_V2_RESULT_STEP_STATUS_CHUNK) {
-					throw duckdb::InternalException(
-					    "arrow stream: a row was produced before result metadata was available");
-				}
-				break; // FINISHED / CANCELLED: no row-producing fragment.
 			}
+			wrapper->RequireLive();
 			if (!wrapper->context) {
 				throw duckdb::InvalidInputException("result is not associated with an active context");
 			}
 			auto &context = *wrapper->context;
+			if (wrapper->metadata_available && wrapper->CanStream()) {
+				wrapper->OpenStream();
+			}
 
 			auto self = duckdb::make_uniq<CV2ArrowStream>();
 			self->batch_size = batch_size == 0 ? CV2_DEFAULT_ARROW_BATCH_SIZE : batch_size;

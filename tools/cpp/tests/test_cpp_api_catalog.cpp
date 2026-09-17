@@ -21,9 +21,9 @@ TEST_CASE("Stable C++API: table description resolves and reports columns", "[cpp
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	conn.Execute("CREATE SCHEMA s").Drain();
+	conn.Execute("CREATE SCHEMA s").Complete();
 	conn.Execute("CREATE TABLE s.\"Facts\"(i INTEGER, j VARCHAR DEFAULT 'x', k INTEGER GENERATED ALWAYS AS (i + 1))")
-	    .Drain();
+	    .Complete();
 
 	// A partial name resolves to its full location, with the casing the table was created with.
 	auto desc = conn.DescribeTable(QualifiedName::Create({"s", "facts"}));
@@ -50,7 +50,7 @@ TEST_CASE("Stable C++API: table description resolves and reports columns", "[cpp
 	REQUIRE(columns[2].HasGenerated());
 
 	// The description is a snapshot: it outlives the table.
-	conn.Execute("DROP TABLE s.\"Facts\"").Drain();
+	conn.Execute("DROP TABLE s.\"Facts\"").Complete();
 	REQUIRE(desc.GetColumnCount() == 3);
 	REQUIRE(desc.GetColumn(1).GetType().ToText() == "VARCHAR");
 
@@ -62,7 +62,7 @@ TEST_CASE("Stable C++API: table description rejects missing tables and views", "
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	conn.Execute("CREATE VIEW v AS SELECT 42 AS i").Drain();
+	conn.Execute("CREATE VIEW v AS SELECT 42 AS i").Complete();
 
 	REQUIRE_THROWS_MATCHES(conn.DescribeTable(QualifiedName::Create({"no_such_table"})), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_DATABASE_CATALOG));

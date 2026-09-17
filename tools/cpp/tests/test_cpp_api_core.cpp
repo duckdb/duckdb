@@ -145,8 +145,8 @@ TEST_CASE("Stable C++API: Environment::Open with pre-open options enforces read-
 		// slot for the read-only reopen.
 		auto db = env.Open(path);
 		auto conn = db.Connect();
-		conn.Execute("CREATE TABLE t(i INTEGER)").Drain();
-		conn.Execute("INSERT INTO t VALUES (1), (2)").Drain();
+		conn.Execute("CREATE TABLE t(i INTEGER)").Complete();
+		conn.Execute("INSERT INTO t VALUES (1), (2)").Complete();
 	}
 
 	{
@@ -159,7 +159,7 @@ TEST_CASE("Stable C++API: Environment::Open with pre-open options enforces read-
 		// before the write attempts below.
 		{
 			auto result = ro_conn.Execute("SELECT count(*) FROM t");
-			auto chunk = result.FetchChunk();
+			auto chunk = result.Fetch();
 			REQUIRE(chunk.GetVector(0).GetValue(0).Get<int64_t>() == 2);
 		}
 
@@ -169,7 +169,7 @@ TEST_CASE("Stable C++API: Environment::Open with pre-open options enforces read-
 
 		// The data is unchanged after the rejected write attempts.
 		auto after = ro_conn.Execute("SELECT count(*) FROM t");
-		REQUIRE(after.FetchChunk().GetVector(0).GetValue(0).Get<int64_t>() == 2);
+		REQUIRE(after.Fetch().GetVector(0).GetValue(0).Get<int64_t>() == 2);
 	}
 
 	duckdb::DeleteDatabase(path);

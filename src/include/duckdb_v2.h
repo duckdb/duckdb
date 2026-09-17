@@ -251,15 +251,17 @@ typedef struct _duckdb_v2_value {
 } * duckdb_v2_value_handle;
 
 /*!
- * An opaque, owned handle to the streaming result of a query. Carries the schema (column names and logical types), the
- * statement type, and the result type from prepare time; row data is produced incrementally by stepping (result_step)
- * or draining (result_fetch_chunk). Single consumer: step from one thread at a time.
+ * An owned handle to a running query, returned before the query has finished. It carries the schema (column names and
+ * types), the statement type and the result type, and is read from one thread at a time.
  *
- * A result is a cursor on the connection's execution, not a box of data. While it is live — not finished, cancelled,
- * errored, or destroyed — the connection refuses new queries with ERROR_RESOURCE_IN_USE, and the query's transaction
- * stays open, deferring version cleanup and checkpointing, so drain or destroy it promptly. Side-effecting statements
- * (PRAGMA, ALTER, ...) take effect only once the result is drained. Always destroy via result_destroy, which is safe
- * even on a partially consumed stream.
+ * The first call on it picks how the rows are read: result_stream_create takes them one chunk at a time and forgets
+ * each one, while result_materialize, result_complete, result_fetch and result_get_collection keep every row for as
+ * long as the result lives.
+ *
+ * While a result is live — not finished, cancelled, failed, or destroyed — the connection refuses new queries with
+ * ERROR_RESOURCE_IN_USE and holds the query's transaction open, so finish or destroy it promptly. A statement that
+ * changes something (PRAGMA, ALTER, ...) has not changed it until the result has run to the end. Always destroy via
+ * result_destroy, which is safe at any point in its life.
  */
 typedef struct _duckdb_v2_result {
 	void *internal_ptr;
@@ -1224,6 +1226,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_data_collection_clear(duckdb_v2_co
  *
  * Cleans up the collection and all resources associated with it, including all contained chunks. Sets the collection
  * handle to NULL.
+ *
+ * Only for a collection you own. The one result_get_collection lends out belongs to its result and is destroyed with
+ * it; result_take_collection is what hands ownership over.
  *
  * history:
  * - stable: v2.0.0
@@ -5602,10 +5607,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_option_get_by_index(duckdb_v2_
 /*!
  * Interrupts the query currently executing on the connection.
  *
- * The cross-thread (but not cross-connection) cancellation entry point for streaming results: safe to call from any
- * thread within the execution of a query through a connection, including while another thread steps the query's result.
- * A no-op when no query is active. Cancellation surfaces on the consuming side as step status CANCELLED (result_step),
- * or as ERROR_RUNTIME_INTERRUPT (result_fetch_chunk).
+ * The one call that may be used from another thread while a query runs on this connection, including while that thread
+ * is reading its result. It cancels only this connection's query, and is a no-op when none is running. The cancellation
+ * reaches the reader as status CANCELLED from result_step, result_poll and result_stream_try_fetch, and as
+ * ERROR_RUNTIME_INTERRUPT from the calls that block.
  *
  * history:
  * - stable: v2.0.0
@@ -9003,16 +9008,16 @@ typedef enum DUCKDB_V2_STATEMENT_TYPE {
 /* --- Types for sql_statement --- */
 
 /*!
- * An opaque, owned handle to a single parsed SQL statement, produced by statement_iterator_next. statement_execute runs
- * it without consuming it; the caller always destroys it via sql_statement_destroy.
+ * An owned handle to a single parsed SQL statement, produced by statement_iterator_next. Binding, preparing and
+ * executing it all work from a copy, so the caller always destroys it via sql_statement_destroy.
  */
 typedef struct _duckdb_v2_sql_statement {
 	void *internal_ptr;
 } * duckdb_v2_sql_statement_handle;
 
 /*!
- * An opaque, owned handle to an iterator over the statements of a SQL string, produced by parse_sql. Destroy it via
- * statement_iterator_destroy; statements it already yielded are independently owned and unaffected.
+ * An owned handle to an iterator over the statements of a SQL string, produced by parse_sql. Destroy it via
+ * statement_iterator_destroy; statements it already handed out are owned separately and unaffected.
  */
 typedef struct _duckdb_v2_statement_iterator {
 	void *internal_ptr;
@@ -9025,12 +9030,12 @@ typedef struct _duckdb_v2_statement_iterator {
 /* --- Functions for sql_statement --- */
 
 /*!
- * Parses a SQL string into an iterator over its statements.
+ * Parses a SQL string into an iterator over its statements. Does not block.
  *
- * Parses and nothing more: no binding, no catalog access, no transaction. The connection supplies the parser options
- * and parser extensions, and is not otherwise touched. Statements are raw parser output; statement-level rewrites
- * happen inside statement_execute. The SQL string is copied, so the caller may free it once this call returns. An input
- * with no statements — empty, whitespace, or separators only — yields an iterator that is immediately exhausted.
+ * Parses and nothing more: no tables are looked up, no transaction is started, and the connection is otherwise
+ * untouched. The SQL string is copied, so the caller may free it once this call returns. An input with no statements —
+ * empty, whitespace, or separators only — yields an iterator that is immediately exhausted. A parse error may come back
+ * here or from statement_iterator_next.
  *
  * history:
  * - stable: v2.0.0
@@ -9046,12 +9051,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_parse_sql(duckdb_v2_connection_handle con
                                                  duckdb_v2_error_info_handle *err);
 
 /*!
- * Yields the next statement, or NULL when exhausted.
+ * Returns the next statement, or NULL when there are none left. Does not block.
  *
- * On success *out_statement receives the next owned statement, or NULL once the iterator is exhausted — repeatedly, so
- * calling again is harmless. A parse error within the input surfaces no later than the call that reaches the failing
- * statement: an implementation that parses eagerly reports it from parse_sql instead and yields no statements at all,
- * while an incremental one yields the statements ahead of the failure first. On failure *out_statement is set to NULL.
+ * *out_statement receives an owned statement, which the caller destroys via sql_statement_destroy, or NULL once the
+ * iterator is exhausted — and it keeps reporting NULL, so calling again is harmless. A parse error comes back no later
+ * than the call that reaches the failing statement, and *out_statement is then set to NULL.
  *
  * history:
  * - stable: v2.0.0
@@ -9066,20 +9070,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_iterator_next(duckdb_v2_stateme
                                                                duckdb_v2_error_info_handle *err);
 
 /*!
- * Binds a parsed statement without executing, yielding its schema signature.
+ * Works out the statement's columns and parameter types without running it. Blocks only for as long as that takes.
  *
- * Preprocesses and binds the statement exactly as execution would, but runs nothing: the result is the statement's
- * signature as two schemas, not a query result. The statement is borrowed, not consumed, so it can be bound as often as
- * you like and executed later. out_schema receives the output schema (result columns) and is never empty, since a
- * non-SELECT reports a single status column: a BIGINT changed-rows count, or a BOOLEAN success. out_parameters, when
- * non-NULL, receives the input schema (parameter types, ordered by binding index). Both are owned; destroy them via
- * schema_destroy.
+ * out_schema receives the columns the statement would produce. It is never empty: a non-SELECT reports a single status
+ * column, either a BIGINT changed-rows count or a BOOLEAN success. out_parameters, when non-NULL, receives the
+ * parameter types in binding order. Both are owned; destroy them via schema_destroy.
  *
- * Binding is read-only and does not disturb a live result: it begins no query, claims no cursor, reuses an active
- * transaction read-only, and runs alongside a paused stream. It is single-consumer like the stepping functions, so bind
- * concurrently only on a second connection. Prepare-time errors — binder, catalog, preprocessing — surface here. A
- * statement that preprocessing expands into a group (a dynamic PIVOT, or statement-expanding DDL such as ALTER ADD
- * COLUMN with a non-constant DEFAULT) cannot be bound and is rejected with ERROR_INPUT_INVALID; execute it instead.
+ * The statement is borrowed, so it can be bound again and executed later. Binding does not start a query and does not
+ * disturb a result or stream that is already live on the connection. Unknown tables, type errors and the like come back
+ * here, as they would from statement_execute. A statement that expands into several (see the query_result module)
+ * cannot be bound and is rejected with ERROR_INPUT_INVALID; execute it instead.
  *
  * *out_schema and *out_parameters are set to NULL on failure.
  *
@@ -9101,12 +9101,12 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_bind(duckdb_v2_connection_handl
                                                       duckdb_v2_error_info_handle *err);
 
 /*!
- * Returns the statement's type as classified by the parser.
+ * Returns the statement's type as the parser classified it.
  *
- * This gives the type before the statement-level rewrites that `duckdb_v2_statement_execute()` applies, if any. So a
- * PRAGMA reports PRAGMA even where execution rewrites it into a SELECT or a CALL.
- * `duckdb_v2_result_get_statement_type()` on the executed result reports the rewritten type. A statement the parser
- * expands into a group reports MULTI. Its parts are not visible here, and statement_bind rejects it.
+ * This is the type before execution rewrites the statement, if it does: a PRAGMA reports PRAGMA even where it runs as a
+ * SELECT or a CALL, and `duckdb_v2_result_get_statement_type()` on the result reports what it became. A statement the
+ * parser splits into several reports MULTI; its parts are not visible here, and `duckdb_v2_statement_bind()` rejects
+ * it.
  *
  * history:
  * - stable: v2.0.0
@@ -9123,10 +9123,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_sql_statement_get_type(duckdb_v2_sql_stat
 /*!
  * Borrows the statement's own SQL text.
  *
- * The slice of the parsed string that belongs to this statement. A trailing terminator and the whitespace after it are
- * included, whitespace and comments before the first token are not. The statement holds its own copy, so the view
- * outlives the SQL string passed to parse_sql and the iterator, and stays valid until the statement is destroyed. A
- * statement produced by a parser extension that overrides parsing carries whatever text the extension recorded.
+ * The slice of the parsed string that belongs to this statement: a trailing terminator and the whitespace after it are
+ * included, whitespace and comments before the first token are not. The statement holds its own copy, so the view stays
+ * valid after the SQL string and the iterator are gone, until the statement is destroyed.
  *
  * history:
  * - stable: v2.0.0
@@ -9141,10 +9140,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_sql_statement_get_text(duckdb_v2_sql_stat
                                                               duckdb_v2_error_info_handle *err);
 
 /*!
- * Returns the number of distinct parameters the statement declares.
+ * Returns how many distinct parameters the statement declares. Does not block.
  *
- * This counts the parameters the parser found ($1, ?, $name, ...), so it needs no catalog and no binding; only the
- * parameter types wait for `duckdb_v2_statement_bind()`. Repeated uses of one parameter count once.
+ * Counts the parameters the parser found ($1, ?, $name, ...); repeated uses of one parameter count once. The parameter
+ * types come from `duckdb_v2_statement_bind()`.
  *
  * history:
  * - stable: v2.0.0
@@ -9159,14 +9158,13 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_sql_statement_get_parameter_count(duckdb_
                                                                          duckdb_v2_error_info_handle *err);
 
 /*!
- * Borrows the name of one parameter, in binding order.
+ * Borrows the name of one parameter, in binding order. Does not block.
  *
- * Parse-time metadata. Positions follow the parameters' binding indices, the order of `duckdb_v2_statement_bind()`'s
- * parameter schema, so position i here names field i there. The name is the binding key that
- * `duckdb_v2_statement_execute()` accepts: "1", "2", ... for a positional parameter ($1 or ?), the identifier for a
- * named one ($name). Positional indices may be gapped ($1 and $3 without $2), in which case the names are "1" and "3"
- * at positions 0 and 1. The view is valid until the statement is destroyed. An index outside [0, count) is rejected
- * with ERROR_INPUT_OUT_OF_RANGE.
+ * Positions match `duckdb_v2_statement_bind()`'s parameter schema, so position i here names field i there. The name is
+ * the key `duckdb_v2_execute_args_set_statement_params()` binds by: "1", "2", ... for a positional parameter ($1 or ?),
+ * the identifier for a named one ($name). Positional indices may be gapped ($1 and $3 without $2), in which case the
+ * names are "1" and "3" at positions 0 and 1. The view is valid until the statement is destroyed. An index outside [0,
+ * count) is rejected with ERROR_INPUT_OUT_OF_RANGE.
  *
  * history:
  * - stable: v2.0.0
@@ -9184,8 +9182,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_sql_statement_get_parameter_name(duckdb_v
 /*!
  * Destroys a statement handle.
  *
- * Null-safe: passing nullptr or a slot already set to nullptr is a no-op. statement_execute does not consume a
- * statement, so every statement is destroyed here once it is no longer needed. On success the slot is set to nullptr.
+ * Null-safe: passing nullptr or a slot already set to nullptr is a no-op. Statements are borrowed, never consumed, so
+ * every one is destroyed here once it is no longer needed. On success the slot is set to nullptr.
  *
  * history:
  * - stable: v2.0.0
@@ -11461,162 +11459,6 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_to_string(duckdb_v2_value_handle va
 /* --- Struct definitions for value --- */
 
 /* ============================================================================
- * MODULE: prepared_statement
- * ============================================================================ */
-
-/* --- Enums for prepared_statement --- */
-
-/* --- Struct forward declarations for prepared_statement --- */
-
-/* --- Types for prepared_statement --- */
-
-/*!
- * An owned handle to a statement bound and planned once, executable repeatedly via
- * `duckdb_v2_prepared_statement_execute()`. Construct with `duckdb_v2_prepared_statement_create()` and destroy with
- * `duckdb_v2_prepared_statement_destroy()`. It keeps its connection's session alive, so it stays usable across
- * executions and even after the connection is disconnected.
- */
-typedef struct _duckdb_v2_prepared_statement {
-	void *internal_ptr;
-} * duckdb_v2_prepared_statement_handle;
-
-/* --- Constants for prepared_statement --- */
-
-/* --- Function pointer typedefs for prepared_statement --- */
-
-/* --- Functions for prepared_statement --- */
-
-/*!
- * Prepares a parsed statement into a reusable handle. Non-consuming.
- *
- * Copies the statement's AST, then binds and plans it once. Binder and catalog errors surface here, exactly as they
- * would from `duckdb_v2_statement_execute()`. The statement is borrowed rather than consumed, since a copy is what gets
- * prepared, so it can be prepared again or executed directly; the caller destroys it with
- * `duckdb_v2_sql_statement_destroy()`.
- *
- * By default this succeeds for any preparable statement, whether or not its plan will be reused; ask
- * `duckdb_v2_prepared_statement_reuses_plan()` which one you got. Setting `require_cacheable` instead fails with
- * `ERROR_INPUT_INVALID` when the plan would not be reused, so a caller who wants the handle only for the speedup finds
- * out here rather than after silently taking the slow path.
- *
- * Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result. Drain, destroy, or interrupt that result
- * first, or prepare on another connection. `*out_prepared` is set to NULL on failure.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection supplying the catalog, transaction, and parser state. The prepared statement belongs to
- * it.
- * @param statement The statement to prepare. Borrowed and copied, not consumed; destroy it with
- * `duckdb_v2_sql_statement_destroy()`.
- * @param require_cacheable When true, fail with `ERROR_INPUT_INVALID` unless the prepared plan will be reused across
- * executions, as `duckdb_v2_prepared_statement_reuses_plan()` would report it.
- * @param out_prepared On success, receives the new prepared statement. Owned by the caller; destroy via
- * `duckdb_v2_prepared_statement_destroy()`.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_create(duckdb_v2_connection_handle conn,
-                                                                 duckdb_v2_sql_statement_handle statement,
-                                                                 bool require_cacheable,
-                                                                 duckdb_v2_prepared_statement_handle *out_prepared,
-                                                                 duckdb_v2_error_info_handle *err);
-
-/*!
- * Executes a prepared statement, streaming its result. Non-consuming.
- *
- * Returns a result without executing anything: execution happens incrementally as the result is stepped or drained,
- * exactly as with `duckdb_v2_statement_execute()`. The handle returned is an ordinary result, with identical behaviour
- * throughout -- streaming, draining, the changed-row count of a DML statement, the output schema, the statement type,
- * and the result type.
- *
- * `parameter_values` binds the statement's parameters as constants for this execution. Binding is positional by default
- * ($1 = element 0); supply `parameter_names` to bind by name instead, where a non-empty entry binds its value to that
- * named parameter ($name, matched case-insensitively) and a {NULL, 0} entry stays positional. Pass NULL for both
- * arrays, or a count of 0, for a statement without parameters. Both arrays are borrowed and copied in, so the caller
- * still owns and destroys them. A key set that does not match the statement's parameters is rejected with
- * `ERROR_INPUT_INVALID`, with one exception: a named parameter left without a value reads the session variable of the
- * same name (`SET VARIABLE`) when one exists.
- *
- * Not consumed: execute the same handle again, with the same values or different ones, as often as you like. Values are
- * bound per execution and nothing carries over between them. A catalog change since the statement was prepared, or a
- * parameter type that differs from the one the cached plan assumed, triggers a re-bind that is invisible apart from its
- * cost.
- *
- * Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result; drain, destroy, or interrupt it first,
- * or execute on another connection. A failed execution, at any stage, leaves the prepared statement usable.
- * `*out_result` is set to NULL on failure.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param prepared The prepared statement to execute. Borrowed; not consumed.
- * @param parameter_names Optional. An array of `parameter_count` parameter names; a non-empty entry binds its value to
- * the named parameter ($name, case-insensitive), a {NULL, 0} entry keeps it positional ($1 = element 0). Pass NULL to
- * bind everything positionally.
- * @param parameter_values Optional. An array of `parameter_count` values. Each binds by name when `parameter_names`
- * supplies one, and positionally ($1 = element 0) otherwise. Borrowed and copied in. Pass NULL for a statement without
- * parameters.
- * @param parameter_count The number of entries in `parameter_names` and `parameter_values`. Pass 0 for a statement
- * without parameters.
- * @param out_result On success, receives the new result. Owned by the caller; destroy via `duckdb_v2_result_destroy()`.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_execute(duckdb_v2_prepared_statement_handle prepared,
-                                                                  const duckdb_v2_identifier_t *parameter_names,
-                                                                  const duckdb_v2_value_handle *parameter_values,
-                                                                  idx_t parameter_count,
-                                                                  duckdb_v2_result_handle *out_result,
-                                                                  duckdb_v2_error_info_handle *err);
-
-/*!
- * Reports whether the prepared statement reuses its compiled plan across executions.
- *
- * True when executions reuse the plan built at prepare time, provided the supplied values match the planned parameter
- * types and nothing the plan depends on has changed; false when the statement re-binds on every execution, making it no
- * faster than `duckdb_v2_statement_execute()`. A plan is reused only when all parameter types were resolved at prepare
- * time and the plan is cacheable: `SELECT 42` reuses, `SELECT $1::INTEGER + 1` reuses, a statement reading a base table
- * does not (it re-binds so a catalog change is picked up), and `SELECT $1 + $2` does not (the types are unknown until
- * values arrive).
- *
- * A static property of the built plan, fixed when the statement was prepared and independent of the values later passed
- * to `duckdb_v2_prepared_statement_execute()`.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param prepared The prepared statement to inspect.
- * @param out_reuses Receives true when the compiled plan is reused across executions, false when the statement re-binds
- * each time.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_reuses_plan(duckdb_v2_prepared_statement_handle prepared,
-                                                                      bool *out_reuses,
-                                                                      duckdb_v2_error_info_handle *err);
-
-/*!
- * Destroys a prepared statement.
- *
- * Null-safe: passing NULL, or a slot already set to NULL, is a no-op. A result produced by
- * `duckdb_v2_prepared_statement_execute()` is independently owned and keeps the session alive itself, so the prepared
- * statement may be destroyed while results made from it are still live. On success the slot is set to NULL.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param prepared The prepared statement to destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_destroy(duckdb_v2_prepared_statement_handle *prepared);
-
-/* --- Struct definitions for prepared_statement --- */
-
-/* ============================================================================
  * MODULE: query_result
  * ============================================================================ */
 
@@ -11634,28 +11476,67 @@ typedef enum DUCKDB_V2_RESULT_TYPE {
 } DUCKDB_V2_RESULT_TYPE;
 
 /*!
- * Outcome of a result_step call. WAITING is the 0-value, so a zero-initialized out-param reads as "no work product yet"
- * rather than CHUNK, the same convention VECTOR_TYPE_OTHER follows. The four states are the ones a consumer acts on;
- * they are deliberately not a projection of any internal enum.
+ * Whether an execution keeps every row from the start. AUTO is the 0-value and the default, so a zero-initialized args
+ * handle behaves as if nothing was set.
  */
-typedef enum DUCKDB_V2_RESULT_STEP_STATUS {
-	//! No chunk yet; step again, or block in result_wait.
-	DUCKDB_V2_RESULT_STEP_STATUS_WAITING = 0,
+typedef enum DUCKDB_V2_RESULT_EAGERNESS {
+	//! Leave the choice to the statement and to the first call on the result.
+	DUCKDB_V2_RESULT_EAGERNESS_AUTO = 0,
 
-	//! A caller-owned chunk was written to *out_chunk.
-	DUCKDB_V2_RESULT_STEP_STATUS_CHUNK = 1,
+	//! Keep every row. The result cannot be turned into a stream.
+	DUCKDB_V2_RESULT_EAGERNESS_FORCED = 1,
+	DUCKDB_V2_RESULT_EAGERNESS_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_RESULT_EAGERNESS;
 
-	//! Stream exhausted. Sticky.
-	DUCKDB_V2_RESULT_STEP_STATUS_FINISHED = 2,
+/*!
+ * Where a result or a stream stands, as step, poll and try_fetch report it. NOT_READY is the 0-value, so a
+ * zero-initialized out-param reads as "not done". Execution errors come back as the return code, never as a status.
+ */
+typedef enum DUCKDB_V2_RESULT_STATUS {
+	//! Not done yet; call again.
+	DUCKDB_V2_RESULT_STATUS_NOT_READY = 0,
 
-	//! Query was interrupted. Sticky.
-	DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED = 3,
-	DUCKDB_V2_RESULT_STEP_STATUS_MAX_ENUM = 0x7FFFFFFF,
-} DUCKDB_V2_RESULT_STEP_STATUS;
+	//! Your turn — choose how the rows are read, or take the chunk try_fetch just wrote.
+	DUCKDB_V2_RESULT_STATUS_READY = 1,
+
+	//! Nothing to run on this thread until something else happens, such as I/O. Wait, then step.
+	DUCKDB_V2_RESULT_STATUS_BLOCKED = 2,
+
+	//! Nothing to run on this thread; other threads are running the rest. Wait, then step.
+	DUCKDB_V2_RESULT_STATUS_NO_TASKS_AVAILABLE = 3,
+
+	//! Done. On a stream, reported once nothing is left to take. Sticky.
+	DUCKDB_V2_RESULT_STATUS_FINISHED = 4,
+
+	//! Interrupted through connection_interrupt. Sticky.
+	DUCKDB_V2_RESULT_STATUS_CANCELLED = 5,
+	DUCKDB_V2_RESULT_STATUS_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_RESULT_STATUS;
 
 /* --- Struct forward declarations for query_result --- */
 
 /* --- Types for query_result --- */
+
+/*!
+ * An owned handle to the settings one execution runs under: the parameter values to bind, and whether the result keeps
+ * every row from the start. Build it with `duckdb_v2_execute_args_create()`, pass it to `duckdb_v2_statement_execute()`
+ * or `duckdb_v2_prepared_statement_execute()`, and destroy it with `duckdb_v2_execute_args_destroy()`. It is copied,
+ * not consumed, so the same handle serves any number of executions; passing NULL means no parameters and AUTO
+ * eagerness.
+ */
+typedef struct _duckdb_v2_execute_args {
+	void *internal_ptr;
+} * duckdb_v2_execute_args_handle;
+
+/*!
+ * An owned handle to a result read one chunk at a time. Each chunk is gone once taken, so there is no random access and
+ * no second pass. Made only by `duckdb_v2_result_stream_create()`, which takes over the result it is given. Destroy it
+ * with `duckdb_v2_result_stream_destroy()`, which frees the connection for its next query. Like a result, it stays
+ * usable after the connection is disconnected.
+ */
+typedef struct _duckdb_v2_result_stream {
+	void *internal_ptr;
+} * duckdb_v2_result_stream_handle;
 
 /* --- Constants for query_result --- */
 
@@ -11664,38 +11545,108 @@ typedef enum DUCKDB_V2_RESULT_STEP_STATUS {
 /* --- Functions for query_result --- */
 
 /*!
- * Executes a parsed statement on the connection, streaming its result. Non-consuming.
+ * Creates an empty set of execution arguments: no parameters, AUTO eagerness. Does not block.
  *
- * Takes a statement produced by the sql_statement module (parse_sql / statement_iterator_next), preprocesses and
- * prepares it, and returns a result handle without executing anything: execution happens incrementally as the result is
- * stepped (result_step) or drained (result_fetch_chunk). This call reports only the errors detectable at prepare time —
- * binder, catalog, pragma preprocessing — while errors raised during execution surface from the stepping functions.
+ * Set what you need with `duckdb_v2_execute_args_set_statement_params()` and `duckdb_v2_execute_args_set_eagerness()`,
+ * then pass the handle to as many executions as you like. Destroy it with `duckdb_v2_execute_args_destroy()`.
  *
- * The statement is borrowed, not consumed, since a copy is what executes. It can be executed again, for example with a
- * different set of values, and the caller destroys it with sql_statement_destroy.
+ * *out_args is set to NULL on failure.
  *
- * parameter_values binds the statement's parameters as constants for this execution. Binding is positional by default:
- * the i-th value binds $(i+1), matching SQL's own convention, so dense $1..$N and ? placeholders work directly. Supply
- * parameter_names to bind by name instead — a non-empty name binds its value to that named parameter ($name, matched
- * case-insensitively), while a {NULL, 0} entry leaves that value positional. The parameter schema from statement_bind
- * lists the names to use. Both arrays are borrowed and copied in; the caller still owns and destroys them. Pass NULL
- * for both, or a count of 0, for an unparameterized statement. A key set that does not match the statement's parameters
- * — names for a positional statement, or the reverse — is rejected with ERROR_INPUT_INVALID, and named and positional
- * parameters cannot be mixed within one statement. Parameters and statement expansion are mutually exclusive: passing
- * values for a statement that preprocesses into a group is rejected with ERROR_INPUT_INVALID.
+ * history:
+ * - stable: v2.0.0
  *
- * Preprocessing can expand one statement into a group — a dynamic PIVOT, or statement-expanding DDL such as ALTER ...
- * ADD COLUMN with a non-constant DEFAULT. The group executes as one result through the same steps, and the stream
- * surfaces the first row-producing statement of the group, or the last statement when none produces rows. An expansion
- * with more than one row-producing statement cannot be streamed as a single result and reports
- * ERROR_QUERY_NOT_IMPLEMENTED; no known expansion produces one.
+ * @param out_args Receives the new args handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_execute_args_create(duckdb_v2_execute_args_handle *out_args,
+                                                           duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys an args handle.
  *
- * One live result per connection: this refuses with ERROR_RESOURCE_IN_USE while the connection already has a live
- * result. Drain, destroy, or interrupt that one first, or open another connection.
+ * Null-safe: passing NULL, or a slot already set to NULL, is a no-op. Results made with it are unaffected. On success
+ * the slot is set to NULL.
  *
- * Schema metadata — result type, statement type, column count, names, logical types — is available on the returned
- * handle immediately, before the first step.
+ * history:
+ * - stable: v2.0.0
  *
+ * @param args The args to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_execute_args_destroy(duckdb_v2_execute_args_handle *args);
+
+/*!
+ * Sets the values an execution binds to the statement's parameters, replacing any set before. Does not block.
+ *
+ * Binding is positional by default: the i-th value binds $(i+1), so dense $1..$N and ? placeholders work directly.
+ * Supply parameter_names to bind by name instead — a non-empty name binds its value to $name, matched
+ * case-insensitively, and a {NULL, 0} entry leaves that value positional. The parameter schema from statement_bind
+ * lists the names to use.
+ *
+ * Both arrays are copied in, so the caller keeps and destroys them. A count of 0 clears the parameters. Whether the
+ * values fit the statement is checked by the execute call, not here.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param args The args to write to.
+ * @param parameter_names Optional. An array of parameter_count parameter names; a non-empty entry binds its value to
+ * the named parameter ($name, case-insensitive), a {NULL, 0} entry keeps it positional ($1 = element 0). Pass NULL for
+ * all-positional binding.
+ * @param parameter_values An array of parameter_count value handles. Each binds by name when parameter_names supplies
+ * one, otherwise positionally ($1 = element 0). Copied in. May be NULL only when parameter_count is 0.
+ * @param parameter_count The number of parameters in parameter_names and parameter_values. Pass 0 to clear the
+ * parameters.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_execute_args_set_statement_params(duckdb_v2_execute_args_handle args,
+                                                                         const duckdb_v2_identifier_t *parameter_names,
+                                                                         const duckdb_v2_value_handle *parameter_values,
+                                                                         idx_t parameter_count,
+                                                                         duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets whether the execution keeps every row from the start. Does not block.
+ *
+ * FORCED lets DuckDB's own threads run the query to the end without the caller doing anything, at the cost of holding
+ * the whole result in memory. Such a result cannot be turned into a stream: result_can_stream reports false and
+ * result_stream_create fails.
+ *
+ * AUTO, the default, leaves the choice to the statement and to the first call on the result. It is not a promise that a
+ * stream can be opened: DuckDB runs anything that is not a plain SELECT eagerly by itself.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param args The args to write to.
+ * @param eagerness AUTO to leave the choice open, FORCED to keep every row from the start.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_execute_args_set_eagerness(duckdb_v2_execute_args_handle args,
+                                                                  DUCKDB_V2_RESULT_EAGERNESS eagerness,
+                                                                  duckdb_v2_error_info_handle *err);
+
+/*!
+ * Starts a parsed statement on the connection and returns its result handle without waiting for it to finish.
+ * Non-consuming.
+ *
+ * Takes a statement produced by the sql_statement module (parse_sql / statement_iterator_next) and prepares it, which
+ * is where syntax, catalog and type errors come back from. Errors raised while the query runs come back from the calls
+ * that read the result.
+ *
+ * The statement is borrowed, not consumed: it can be executed again, and the caller destroys it with
+ * sql_statement_destroy. args carries the parameter values and the eagerness for this one execution and is borrowed
+ * too; pass NULL for no parameters and AUTO. Parameters are rejected with ERROR_INPUT_INVALID for a statement that
+ * expands into several.
+ *
+ * Refuses with ERROR_RESOURCE_IN_USE while the connection already has a result or a stream: finish, destroy or
+ * interrupt that one first, or open another connection.
+ *
+ * The schema, the statement type and the result type are available on the returned handle immediately, except for a
+ * statement that expands into several, where they wait for the row-producing one (see this module's introduction).
  * *out_result is set to nullptr on failure.
  *
  * history:
@@ -11703,32 +11654,26 @@ typedef enum DUCKDB_V2_RESULT_STEP_STATUS {
  *
  * @param conn The connection on which to execute the statement.
  * @param statement The statement to execute. Borrowed and copied; not consumed. Destroy it with sql_statement_destroy.
- * @param parameter_names Optional. An array of parameter_count parameter names; a non-empty entry binds its value to
- * the named parameter ($name, case-insensitive), a {NULL, 0} entry keeps it positional ($1 = element 0). Pass NULL for
- * all-positional binding. Named and positional parameters cannot be mixed within one statement.
- * @param parameter_values Optional. An array of parameter_count value handles. Each binds by name when parameter_names
- * supplies one, otherwise positionally ($1 = element 0). Borrowed (copied in). Pass NULL for an unparameterized
- * statement.
- * @param parameter_count The number of parameters in parameter_names and parameter_values. Pass 0 for an
- * unparameterized statement.
+ * @param args Optional. The parameter values and eagerness for this execution. Borrowed; not consumed. NULL selects no
+ * parameters and AUTO.
  * @param out_result Receives the new result handle.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_execute(duckdb_v2_connection_handle conn,
                                                          duckdb_v2_sql_statement_handle statement,
-                                                         const duckdb_v2_identifier_t *parameter_names,
-                                                         const duckdb_v2_value_handle *parameter_values,
-                                                         idx_t parameter_count, duckdb_v2_result_handle *out_result,
+                                                         duckdb_v2_execute_args_handle args,
+                                                         duckdb_v2_result_handle *out_result,
                                                          duckdb_v2_error_info_handle *err);
 
 /*!
  * Destroys a result handle.
  *
  * Null-safe: passing nullptr or a slot already set to nullptr is a no-op. Frees the memory the result owns and releases
- * the connection for its next query. Safe at any point in the stream's life, though destroying a partially consumed
- * result abandons the remaining execution, including side effects not yet applied. Chunks already fetched are
- * caller-owned and stay valid. On success the slot is set to nullptr.
+ * the connection for its next query. Safe at any point, though destroying a result that has not finished abandons the
+ * rest of the query, including changes it had not made yet. A result that has finished keeps what its statement did,
+ * whether or not its rows were ever read. Chunks and collections already handed out stay valid. On success the slot is
+ * set to nullptr.
  *
  * history:
  * - stable: v2.0.0
@@ -11739,68 +11684,68 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_execute(duckdb_v2_connection_ha
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_destroy(duckdb_v2_result_handle *result);
 
 /*!
- * Runs one bounded unit of query execution and returns without blocking.
+ * Runs a piece of the query on the calling thread and returns without blocking.
  *
- * The streaming primitive: a step does a bounded amount of execution work, mostly without blocking, and returns control
- * to the caller, so an event loop stays responsive and can interleave other work between steps. The conveniences —
- * result_wait, result_fetch_chunk, result_drain — block, and are for synchronous callers. out_status reports the
- * outcome:
+ * The call an event loop drives: it does a bounded amount of work and hands control back, so other work can happen in
+ * between. It does not choose how the rows are read — until that choice is made it reports READY, doing nothing,
+ * however often it is called.
  *
- * - CHUNK: *out_chunk receives a caller-owned chunk (destroy via data_chunk_destroy). Written only for this status;
- * nullptr otherwise.
- * - WAITING: no chunk yet, but work was done. Transient: keep stepping and it resolves to CHUNK, FINISHED, CANCELLED,
- * or an error. Block in result_wait rather than busy-stepping.
- * - FINISHED: stream exhausted. Sticky.
- * - CANCELLED: query interrupted via connection_interrupt. Sticky. Cancellation is a status here, not an error;
- * result_fetch_chunk, which has no status out-param, reports it as ERROR_RUNTIME_INTERRUPT.
+ * out_status is where the result stands: NOT_READY (keep stepping), READY, BLOCKED or NO_TASKS_AVAILABLE (nothing to
+ * run right now: block in result_wait, then step again), FINISHED or CANCELLED (both sticky).
  *
- * Execution errors come back as the return code plus err, never as a status; out_status is then unspecified and
- * *out_chunk is nullptr. Errors are sticky, so later steps report the same code.
+ * FINISHED means the query has run, not that the result is done with: its rows are still there to be read, and the
+ * connection is free again only once they have been taken (result_complete, result_fetch, result_get_collection,
+ * result_take_collection) or the result is destroyed. Stepping does not take them, so a result stepped to FINISHED can
+ * still be turned into a stream.
+ *
+ * For a statement that expands into several, stepping also runs the ones the caller never sees, reporting NOT_READY
+ * while it does, and can come back with an error from preparing the next one.
+ *
+ * Execution errors come back as the return code plus err, never as a status, and are sticky, so later calls report the
+ * same code.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param result The result to step.
- * @param out_chunk Receives an owned chunk if *out_status is CHUNK; set to nullptr otherwise.
- * @param out_status Receives the step status.
+ * @param out_status Receives where the result stands.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_step(duckdb_v2_result_handle result,
-                                                   duckdb_v2_data_chunk_handle *out_chunk,
-                                                   DUCKDB_V2_RESULT_STEP_STATUS *out_status,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_step(duckdb_v2_result_handle result, DUCKDB_V2_RESULT_STATUS *out_status,
                                                    duckdb_v2_error_info_handle *err);
 
 /*!
- * Blocks until the next chunk is available and returns it.
+ * Reports where the result stands, without running any of the query and without blocking.
  *
- * A convenience over result_step: blocks until a chunk is produced or the stream ends. On success *out_chunk receives a
- * caller-owned chunk (destroy via data_chunk_destroy), or nullptr at end-of-stream. End-of-stream is sticky, so later
- * calls keep succeeding with *out_chunk set to nullptr.
+ * The call for a caller that leaves the work to DuckDB's own threads: poll until FINISHED, then read the rows. With the
+ * `threads` setting at 1 there are no such threads, so polling alone never finishes; use result_step.
  *
- * An interrupted query returns ERROR_RUNTIME_INTERRUPT — the same event result_step reports as status CANCELLED,
- * carried on the error channel because this function has no status out-param.
+ * FINISHED carries the same meaning as it does for result_step: the rows are still there to be read, and the connection
+ * is free again only once they have been taken or the result is destroyed.
  *
- * On failure *out_chunk is set to nullptr. Errors are sticky, so later calls report the same code.
+ * For a statement that expands into several, polling also finishes the ones the caller never sees and prepares the
+ * next, reporting NOT_READY while it does, and can come back with an error from that preparation.
+ *
+ * Execution errors come back as the return code plus err, never as a status, and are sticky.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param result The result to fetch from.
- * @param out_chunk Receives an owned chunk, or nullptr at end-of-stream.
+ * @param result The result to poll.
+ * @param out_status Receives where the result stands.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_fetch_chunk(duckdb_v2_result_handle result,
-                                                          duckdb_v2_data_chunk_handle *out_chunk,
-                                                          duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_poll(duckdb_v2_result_handle result, DUCKDB_V2_RESULT_STATUS *out_status,
+                                                   duckdb_v2_error_info_handle *err);
 
 /*!
- * Blocks until result_step can make progress.
+ * Blocks until result_step can do something, or until the result is waiting on the caller.
  *
- * A convenience over result_step: blocks until a step is worth issuing again, that is, until a unit of execution work
- * can run on the calling thread. Never produces or consumes chunks. Waiting on a terminal result — FINISHED, CANCELLED,
- * or a sticky error — returns immediately; it is a no-op, never an error.
+ * Runs none of the query and reads nothing. It may return at once, and does so on a result that is already FINISHED,
+ * CANCELLED or failed, where it is a no-op rather than an error. A failure it notices while checking where the result
+ * stands comes back as the return code plus err, and is sticky.
  *
  * history:
  * - stable: v2.0.0
@@ -11812,70 +11757,175 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_fetch_chunk(duckdb_v2_result_handl
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_wait(duckdb_v2_result_handle result, duckdb_v2_error_info_handle *err);
 
 /*!
- * Renders the result as a box table, consuming it.
+ * Chooses to keep every row, without running any of the query and without blocking.
  *
- * Drains the result into a column data collection and renders it with the same renderer the DuckDB CLI uses, so every
- * client displays results identically without reimplementing table formatting. The result is consumed by transfer: the
- * slot is set to NULL on success and on failure alike, as with result_to_arrow_stream. A partially consumed result is
- * accepted, and the remainder is what gets rendered.
+ * The non-blocking half of result_complete: it makes the choice and returns, leaving the query to result_step and
+ * result_wait, or to DuckDB's own threads while the caller polls. The result cannot be turned into a stream afterwards.
  *
- * The whole remaining result materializes in memory before rendering. max_rows bounds what is DISPLAYED, not what is
- * read, so with limit 0 the footer's row count is exact. A caller who cannot afford full materialization should bound
- * the query itself (e.g. LIMIT n) and pass n as limit; the footer then renders "? rows" whenever the result fills that
- * bound, since the true total is unknown at that point.
- *
- * Zero selects the renderer default for each sizing knob: max_rows 20, max_width the probed terminal width or 80 when
- * that is unavailable, max_col_width 20. An empty null_value renders NULL cells as the default "NULL" text.
- *
- * The rendered text goes to sink rather than being returned: a box can be large, and this way nothing allocates a
- * buffer the caller has to free. The sink is called exactly once with the whole box, so its view carries the full
- * length — write it straight to a stream, or copy it into your own string. sink must not be NULL.
+ * A no-op when the choice was already made and on a result that has finished.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param result The result to render; consumed and set to NULL. Left intact only when the call rejects null arguments.
+ * @param result The result to materialize.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_materialize(duckdb_v2_result_handle result,
+                                                          duckdb_v2_error_info_handle *err);
+
+/*!
+ * Runs the query to the end, keeping every row. Blocks until it is done.
+ *
+ * Uses the calling thread as well as DuckDB's own, so it finishes whatever the `threads` setting is, and every change
+ * the statement makes has been made when it returns. The rows stay readable through result_fetch, result_get_collection
+ * and result_render_box.
+ *
+ * Completing a result that already finished succeeds and does nothing. An interrupted query reports
+ * ERROR_RUNTIME_INTERRUPT; errors are sticky.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param result The result to complete.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_complete(duckdb_v2_result_handle result,
+                                                       duckdb_v2_error_info_handle *err);
+
+/*!
+ * Reads the next chunk of rows. Blocks on the first call.
+ *
+ * A cursor over the kept rows, not a stream: the first call runs the query to the end the way result_complete does, and
+ * every call after that hands back one chunk, or NULL once there are no more. Reaching the end leaves the rows in
+ * place, so result_get_collection and result_take_collection still work, and further calls keep reporting NULL.
+ *
+ * Chunks are owned by the caller (destroy via data_chunk_destroy) and stay valid after the result, the connection and
+ * the database are gone.
+ *
+ * An interrupted query reports ERROR_RUNTIME_INTERRUPT; errors are sticky, and *out_chunk is set to NULL on failure.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param result The result to read from.
+ * @param out_chunk Receives an owned chunk, or NULL once there are no more.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_fetch(duckdb_v2_result_handle result,
+                                                    duckdb_v2_data_chunk_handle *out_chunk,
+                                                    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Runs the query to the end and lends out the collection holding its rows. Blocks.
+ *
+ * The random-access counterpart to result_fetch: the whole result as one column data collection, which the
+ * column_data_collection module scans, as often as you like. Borrowed, not owned — do not destroy it, and do not use it
+ * after the result is destroyed. Use result_take_collection to keep it longer.
+ *
+ * Fails with ERROR_INPUT_INVALID once the rows have been handed over with result_take_collection. An interrupted query
+ * reports ERROR_RUNTIME_INTERRUPT; errors are sticky, and *out_collection is set to NULL on failure.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param result The result to read from.
+ * @param out_collection Receives the borrowed collection. Valid while the result owns it; never destroy it.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_get_collection(duckdb_v2_result_handle result,
+                                                             duckdb_v2_column_data_collection_handle *out_collection,
+                                                             duckdb_v2_error_info_handle *err);
+
+/*!
+ * Runs the query to the end and hands over the collection holding its rows. Blocks.
+ *
+ * As result_get_collection, but the collection becomes the caller's, who destroys it with
+ * column_data_collection_destroy. It stays valid after the result, the connection and the database are gone. A handle
+ * obtained earlier from result_get_collection refers to this same collection and must not be destroyed separately. The
+ * result holds no rows afterwards: the calls that drive it report FINISHED, result_fetch reports NULL, and the two
+ * collection getters fail with ERROR_INPUT_INVALID.
+ *
+ * An interrupted query reports ERROR_RUNTIME_INTERRUPT; errors are sticky, and *out_collection is set to NULL on
+ * failure.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param result The result to take the rows from.
+ * @param out_collection Receives the owned collection. Destroy via column_data_collection_destroy.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_take_collection(duckdb_v2_result_handle result,
+                                                              duckdb_v2_column_data_collection_handle *out_collection,
+                                                              duckdb_v2_error_info_handle *err);
+
+/*!
+ * Reports whether result_stream_create can still succeed. Runs nothing and does not block.
+ *
+ * True until the first call that chooses to keep the rows, and false from the start for a statement DuckDB runs eagerly
+ * and for an execution that asked for FORCED eagerness. The result type is not a substitute: INSERT ... RETURNING and
+ * CALL produce rows and are still eager.
+ *
+ * For a statement that expands into several this fails with ERROR_INPUT_INVALID until stepping has prepared the
+ * row-producing one, as the metadata getters do. *out_can_stream is set to false on failure.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param result The result to inspect.
+ * @param out_can_stream Receives true while result_stream_create can still succeed.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_can_stream(duckdb_v2_result_handle result, bool *out_can_stream,
+                                                         duckdb_v2_error_info_handle *err);
+
+/*!
+ * Runs the query to the end and renders its rows as a box table. Blocks. Non-consuming: the rows stay, and a second
+ * call renders the same text.
+ *
+ * Uses the same renderer the DuckDB CLI uses, so every client displays results identically without reimplementing table
+ * formatting. The whole result is in memory before rendering, as it is for every call that keeps the rows. max_rows
+ * bounds what is DISPLAYED, not what is read, so with limit 0 the footer's row count is exact. A caller who cannot
+ * afford that should bound the query itself (e.g. LIMIT n) and pass n as limit; the footer then reads "? rows" whenever
+ * the result fills that bound.
+ *
+ * Zero selects the renderer default for each sizing knob: max_rows 20, max_width the terminal width or 80 when that is
+ * unknown, max_col_width 20. An empty null_value renders NULL cells as the default "NULL" text.
+ *
+ * The rendered text goes to sink rather than being returned, so nothing allocates a buffer the caller has to free. The
+ * sink is called exactly once with the whole box. sink must not be NULL.
+ *
+ * Fails with ERROR_INPUT_INVALID once the rows have been handed over with result_take_collection, and with
+ * ERROR_RUNTIME_INTERRUPT on an interrupted query.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param result The result to render. Borrowed; not consumed.
  * @param max_rows Maximum rows displayed; 0 selects the renderer default (20).
  * @param max_width Maximum total width in characters; 0 selects the renderer default.
  * @param max_col_width Maximum width of one column; 0 selects the renderer default (20).
  * @param null_value Text rendered for NULL cells; empty selects "NULL".
  * @param render_mode 0 renders rows (records down the page); 1 renders columns; other values are rejected with
  * INVALID_INPUT.
- * @param limit The row limit the caller applied to the query before rendering; 0 means none. When the materialized
- * result holds exactly this many rows the true total is unknown, so the footer renders "? rows" instead of an exact
- * count.
+ * @param limit The row limit the caller applied to the query before rendering; 0 means none. When the result holds
+ * exactly this many rows the true total is unknown, so the footer renders "? rows" instead of an exact count.
  * @param sink Receives the whole rendered box in a single call. Borrowed for the duration of that call; see text_sink
  * for the full contract.
  * @param user_data Opaque pointer passed through to sink untouched. May be NULL.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_render_box(duckdb_v2_result_handle *result, idx_t max_rows,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_render_box(duckdb_v2_result_handle result, idx_t max_rows,
                                                          idx_t max_width, idx_t max_col_width, duckdb_v2_str null_value,
                                                          idx_t render_mode, idx_t limit, duckdb_v2_text_sink_fn sink,
                                                          void *user_data, duckdb_v2_error_info_handle *err);
-
-/*!
- * Runs the result to completion and reports the changed-row count.
- *
- * A convenience over result_step: blocks until the stream is fully consumed, so every side effect is applied. Rows of a
- * row-producing result are discarded. For a CHANGED_ROWS result *out_rows_changed receives the affected row count; for
- * every other result type, and for a stream whose Count chunk was already consumed, it receives 0.
- *
- * The result type (result_get_result_type) is prepare-time metadata, so a caller can choose between consuming rows and
- * draining without inspecting the SQL. Draining an already FINISHED result succeeds. Cancellation surfaces as
- * ERROR_RUNTIME_INTERRUPT; errors are sticky, and on failure *out_rows_changed is unspecified.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param result The result to drain.
- * @param out_rows_changed Receives the affected row count for CHANGED_ROWS results, 0 otherwise.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_drain(duckdb_v2_result_handle result, idx_t *out_rows_changed,
-                                                    duckdb_v2_error_info_handle *err);
 
 /*!
  * Returns the shape of the result: query, changed rows, or nothing.
@@ -11883,8 +11933,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_drain(duckdb_v2_result_handle resu
  * QUERY_RESULT for statements that produce rows (SELECT, RETURNING, EXPLAIN), CHANGED_ROWS for an INSERT, UPDATE, or
  * DELETE without RETURNING, NOTHING for DDL and other statements with no row output.
  *
- * Prepare-time metadata: available from statement_execute on, except for a statement that preprocessing expands into a
- * group, where it fails with ERROR_INPUT_INVALID until stepping has prepared the row-producing fragment.
+ * Available from statement_execute on, except for a statement that expands into several, where it fails with
+ * ERROR_INPUT_INVALID until stepping has prepared the row-producing one.
  *
  * history:
  * - stable: v2.0.0
@@ -11901,8 +11951,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_get_result_type(duckdb_v2_result_h
 /*!
  * Returns the SQL statement type that produced the result.
  *
- * Prepare-time metadata: available from statement_execute on, except for a statement that preprocessing expands into a
- * group, where it fails with ERROR_INPUT_INVALID until stepping has prepared the row-producing fragment.
+ * Available from statement_execute on, except for a statement that expands into several, where it fails with
+ * ERROR_INPUT_INVALID until stepping has prepared the row-producing one.
  *
  * history:
  * - stable: v2.0.0
@@ -11920,9 +11970,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_get_statement_type(duckdb_v2_resul
  * Returns the result's output schema as a single schema handle.
  *
  * Builds an owned schema of the result's column names and types into *out_schema; destroy it via schema_destroy.
- * Prepare-time metadata, available before the first step, or for an expanding statement once stepping has prepared the
- * row-producing fragment. Never empty: a non-SELECT reports a single status column, either a BIGINT changed-rows count
- * or a BOOLEAN success.
+ * Available before the first call, or for a statement that expands into several once stepping has prepared the
+ * row-producing one. Never empty: a non-SELECT reports a single status column, either a BIGINT changed-rows count or a
+ * BOOLEAN success.
  *
  * This schema is the authoritative source for the column types of the chunks the result produces; vectors do not carry
  * their own type.
@@ -11940,6 +11990,195 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_get_statement_type(duckdb_v2_resul
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_get_schema(duckdb_v2_result_handle result,
                                                          duckdb_v2_schema_handle *out_schema,
                                                          duckdb_v2_error_info_handle *err);
+
+/*!
+ * Turns a result into a stream, taking it over. May block briefly.
+ *
+ * From here the rows are read one chunk at a time, and each chunk is gone once taken. The result is consumed: on
+ * success *result is NULL and the stream owns the query.
+ *
+ * On failure the result is destroyed as well — *result is NULL and the connection is free again. A stream cannot be
+ * opened once the rows are kept, on a statement DuckDB runs eagerly, on an execution that asked for FORCED eagerness,
+ * or on a result that already failed. Ask result_can_stream first if you are unsure. *out_stream is set to NULL on
+ * failure.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param result The result to stream; consumed and set to NULL on success and on failure alike. Left intact only when
+ * the call rejects null arguments.
+ * @param out_stream Receives the new stream handle. Destroy via result_stream_destroy.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_stream_create(duckdb_v2_result_handle *result,
+                                                            duckdb_v2_result_stream_handle *out_stream,
+                                                            duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys a stream handle.
+ *
+ * Null-safe: passing nullptr or a slot already set to nullptr is a no-op. Frees the memory the stream owns and releases
+ * the connection for its next query. Safe at any point, though destroying a stream that has not ended abandons the rest
+ * of the query, including changes it had not made yet. Chunks already taken stay valid. On success the slot is set to
+ * nullptr.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param stream The stream to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_stream_destroy(duckdb_v2_result_stream_handle *stream);
+
+/*!
+ * Runs a piece of the query on the calling thread and returns without blocking.
+ *
+ * What result_step is for a result. It readies chunks rather than handing them out; result_stream_try_fetch takes them.
+ * READY means a chunk is waiting, and FINISHED is reported only once nothing is left to take.
+ *
+ * Execution errors come back as the return code plus err, never as a status, and are sticky.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param stream The stream to step.
+ * @param out_status Receives where the stream stands.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_stream_step(duckdb_v2_result_stream_handle stream,
+                                                          DUCKDB_V2_RESULT_STATUS *out_status,
+                                                          duckdb_v2_error_info_handle *err);
+
+/*!
+ * Reports where the stream stands, without running any of the query and without blocking.
+ *
+ * READY means a chunk is waiting for result_stream_try_fetch; FINISHED is reported only once nothing is left to take.
+ *
+ * Execution errors come back as the return code plus err, never as a status, and are sticky.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param stream The stream to poll.
+ * @param out_status Receives where the stream stands.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_stream_poll(duckdb_v2_result_stream_handle stream,
+                                                          DUCKDB_V2_RESULT_STATUS *out_status,
+                                                          duckdb_v2_error_info_handle *err);
+
+/*!
+ * Blocks until result_stream_step can do something, or until the stream is waiting on the caller.
+ *
+ * What result_wait is for a result: runs none of the query, takes no chunk, and returns at once on a stream that has
+ * ended.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param stream The stream to wait on.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_stream_wait(duckdb_v2_result_stream_handle stream,
+                                                          duckdb_v2_error_info_handle *err);
+
+/*!
+ * Takes the next chunk if one is ready, and never blocks.
+ *
+ * Runs none of the query itself: chunks are readied by DuckDB's own threads or by result_stream_step on the calling
+ * thread. *out_chunk receives an owned chunk (destroy via data_chunk_destroy) exactly when *out_status is READY, and is
+ * NULL otherwise. FINISHED is reported once nothing is left to take.
+ *
+ * Execution errors come back as the return code plus err, never as a status, and are sticky.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param stream The stream to take from.
+ * @param out_chunk Receives an owned chunk if *out_status is READY; set to NULL otherwise.
+ * @param out_status Receives where the stream stands.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_stream_try_fetch(duckdb_v2_result_stream_handle stream,
+                                                               duckdb_v2_data_chunk_handle *out_chunk,
+                                                               DUCKDB_V2_RESULT_STATUS *out_status,
+                                                               duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the next chunk, blocking until one is ready or the stream ends.
+ *
+ * Uses the calling thread as well as DuckDB's own, so it works whatever the `threads` setting is. *out_chunk receives
+ * an owned chunk (destroy via data_chunk_destroy), or NULL at the end of the stream; later calls keep reporting NULL.
+ *
+ * An interrupted query reports ERROR_RUNTIME_INTERRUPT; errors are sticky, and *out_chunk is set to NULL on failure.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param stream The stream to fetch from.
+ * @param out_chunk Receives an owned chunk, or NULL at the end of the stream.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_stream_fetch(duckdb_v2_result_stream_handle stream,
+                                                           duckdb_v2_data_chunk_handle *out_chunk,
+                                                           duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the shape of the streamed result: query, changed rows, or nothing. The same value result_get_result_type
+ * reported before the result became a stream.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param stream The stream.
+ * @param out_type Receives the result shape.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_stream_get_result_type(duckdb_v2_result_stream_handle stream,
+                                                                     DUCKDB_V2_RESULT_TYPE *out_type,
+                                                                     duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the SQL statement type that produced the streamed result. The same value result_get_statement_type reported.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param stream The stream.
+ * @param out_type Receives the statement type.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_stream_get_statement_type(duckdb_v2_result_stream_handle stream,
+                                                                        DUCKDB_V2_STATEMENT_TYPE *out_type,
+                                                                        duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the streamed result's output schema as a single schema handle.
+ *
+ * The same owned schema result_get_schema builds; destroy it via schema_destroy. It is the authoritative source for the
+ * column types of the chunks the stream hands out.
+ *
+ * *out_schema is set to NULL on failure.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param stream The stream.
+ * @param out_schema Receives the owned output schema. Destroy via schema_destroy.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_stream_get_schema(duckdb_v2_result_stream_handle stream,
+                                                                duckdb_v2_schema_handle *out_schema,
+                                                                duckdb_v2_error_info_handle *err);
 
 /* --- Struct definitions for query_result --- */
 
@@ -13390,6 +13629,141 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_register(duckdb_v2_table_f
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_destroy(duckdb_v2_table_function_handle *function);
 
 /* --- Struct definitions for table --- */
+
+/* ============================================================================
+ * MODULE: prepared_statement
+ * ============================================================================ */
+
+/* --- Enums for prepared_statement --- */
+
+/* --- Struct forward declarations for prepared_statement --- */
+
+/* --- Types for prepared_statement --- */
+
+/*!
+ * An owned handle to a statement that was prepared once and can be executed repeatedly via
+ * `duckdb_v2_prepared_statement_execute()`. Construct it with `duckdb_v2_prepared_statement_create()` and destroy it
+ * with `duckdb_v2_prepared_statement_destroy()`. It keeps its connection's session alive, so it stays usable across
+ * executions and after the connection is disconnected.
+ */
+typedef struct _duckdb_v2_prepared_statement {
+	void *internal_ptr;
+} * duckdb_v2_prepared_statement_handle;
+
+/* --- Constants for prepared_statement --- */
+
+/* --- Function pointer typedefs for prepared_statement --- */
+
+/* --- Functions for prepared_statement --- */
+
+/*!
+ * Prepares a parsed statement into a handle that can be executed repeatedly. Blocks only for as long as preparing
+ * takes.
+ *
+ * Unknown tables, type errors and the like come back here, exactly as they would from `duckdb_v2_statement_execute()`.
+ * The statement is borrowed, so it can be prepared again or executed directly; the caller destroys it with
+ * `duckdb_v2_sql_statement_destroy()`.
+ *
+ * By default this succeeds whether or not the plan will be reused; `duckdb_v2_prepared_statement_reuses_plan()` says
+ * which one you got. Set `require_cacheable` to fail with `ERROR_INPUT_INVALID` instead when it would not be, so a
+ * caller who only wants the handle for the speedup finds out here.
+ *
+ * Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result or stream. `*out_prepared` is set to NULL
+ * on failure.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection the prepared statement belongs to.
+ * @param statement The statement to prepare. Borrowed; not consumed. Destroy it with
+ * `duckdb_v2_sql_statement_destroy()`.
+ * @param require_cacheable When true, fail with `ERROR_INPUT_INVALID` unless the prepared plan will be reused across
+ * executions, as `duckdb_v2_prepared_statement_reuses_plan()` would report it.
+ * @param out_prepared On success, receives the new prepared statement. Owned by the caller; destroy via
+ * `duckdb_v2_prepared_statement_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_create(duckdb_v2_connection_handle conn,
+                                                                 duckdb_v2_sql_statement_handle statement,
+                                                                 bool require_cacheable,
+                                                                 duckdb_v2_prepared_statement_handle *out_prepared,
+                                                                 duckdb_v2_error_info_handle *err);
+
+/*!
+ * Starts the prepared statement and returns its result handle without waiting for it to finish. Non-consuming.
+ *
+ * The handle returned is an ordinary result: everything the query_result module says applies to it. `args` carries the
+ * parameter values and the eagerness for this one execution and is borrowed; pass NULL for a statement without
+ * parameters. A set of values that does not match the statement's parameters is rejected with `ERROR_INPUT_INVALID`,
+ * with one exception: a named parameter left without a value reads the session variable of the same name (`SET
+ * VARIABLE`) when one exists.
+ *
+ * Execute the same handle again, with the same values or different ones, as often as you like; nothing carries over
+ * between executions. A change to the tables the statement reads, or a value of a different type than before, makes it
+ * work out how to run the statement again, which costs time but changes nothing else.
+ *
+ * Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result or stream. A failed execution leaves the
+ * prepared statement usable. `*out_result` is set to NULL on failure.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param prepared The prepared statement to execute. Borrowed; not consumed.
+ * @param args Optional. The parameter values and eagerness for this execution, built with
+ * `duckdb_v2_execute_args_create()`. Borrowed; not consumed. NULL selects no parameters and AUTO eagerness.
+ * @param out_result On success, receives the new result. Owned by the caller; destroy via `duckdb_v2_result_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_execute(duckdb_v2_prepared_statement_handle prepared,
+                                                                  duckdb_v2_execute_args_handle args,
+                                                                  duckdb_v2_result_handle *out_result,
+                                                                  duckdb_v2_error_info_handle *err);
+
+/*!
+ * Reports whether executions reuse the work done at prepare time. Does not block.
+ *
+ * True when they do, provided the values passed match the parameter types the preparation assumed and nothing the
+ * statement depends on has changed; false when every execution works the statement out again, making it no faster than
+ * `duckdb_v2_statement_execute()`. `SELECT 42` and `SELECT $1::INTEGER + 1` reuse; a statement reading a table does
+ * not, because a change to that table has to be picked up, and `SELECT $1 + $2` does not, because the types are unknown
+ * until values arrive.
+ *
+ * Fixed when the statement was prepared, and independent of the values later passed to
+ * `duckdb_v2_prepared_statement_execute()`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param prepared The prepared statement to inspect.
+ * @param out_reuses Receives true when executions reuse the work done at prepare time, false when each one repeats it.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_reuses_plan(duckdb_v2_prepared_statement_handle prepared,
+                                                                      bool *out_reuses,
+                                                                      duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys a prepared statement.
+ *
+ * Null-safe: passing NULL, or a slot already set to NULL, is a no-op. A result made by
+ * `duckdb_v2_prepared_statement_execute()` is owned separately and keeps the session alive itself, so the prepared
+ * statement may be destroyed while results made from it are still live. On success the slot is set to NULL.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param prepared The prepared statement to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_destroy(duckdb_v2_prepared_statement_handle *prepared);
+
+/* --- Struct definitions for prepared_statement --- */
 
 #ifdef __cplusplus
 }

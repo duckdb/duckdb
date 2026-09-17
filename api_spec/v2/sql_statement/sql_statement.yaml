@@ -1,41 +1,37 @@
 module: sql_statement
 #
 # Turn a SQL string into individual statements. parse_sql parses and nothing
-# more: no binding, no catalog access, no transaction. The connection supplies
-# the parser state — its options and the parser extensions loaded on it — so a
-# statement parsed on one connection should be executed on that connection.
-# Statements are raw parser output; statement-level rewrites (pragma
-# reparsing, statement expansion, transaction wrapping) happen inside
-# statement_execute, so one user statement is always one handle.
+# more: no tables are looked up, no transaction is started, nothing runs. The
+# connection supplies the parser's settings and any parser extensions loaded on
+# it, so a statement parsed on one connection is meant for that connection.
 #
-# The iterator yields one owned statement per statement_iterator_next call.
-# Passing a statement to statement_execute does not consume it — a copy is
-# what runs — so the same statement can be executed again, possibly with a
-# different set of parameter values, and the caller always destroys it via
-# sql_statement_destroy.
+# The iterator hands out one owned statement per statement_iterator_next call.
+# A parse error comes back either from parse_sql, which then yields no
+# statements at all, or from the statement_iterator_next call that reaches the
+# failing statement; check every return code.
 #
-# A statement object holds parse-time metadata, including its type, its own
-# text, and the names of its parameters. Each has its own getter. For
-# properties that need binding, use `[[statement_bind]]`.
+# Statements are borrowed, not consumed: statement_bind, statement_execute and
+# prepared_statement_create all work from a copy, so the same statement can be
+# used again — with different parameter values, say — and the caller always
+# destroys it with sql_statement_destroy. That is what "borrowed" means
+# wherever this API uses the word.
 #
-# A parse error surfaces either from parse_sql, when the implementation parses
-# eagerly and so reports it up front and yields no statements, or from the
-# statement_iterator_next call that reaches the failing statement, when the
-# implementation is incremental and so yields the statements before it.
-# Callers must handle both, by checking every return code.
+# A statement carries what the parser knows: its type, its own text, and the
+# names of its parameters, each with its own getter. Anything that needs the
+# catalog — result columns, parameter types — comes from statement_bind.
 
 handles:
   sql_statement:
     description: |
-      An opaque, owned handle to a single parsed SQL statement, produced by
-      statement_iterator_next. statement_execute runs it without consuming it;
-      the caller always destroys it via sql_statement_destroy.
+      An owned handle to a single parsed SQL statement, produced by
+      statement_iterator_next. Binding, preparing and executing it all work
+      from a copy, so the caller always destroys it via sql_statement_destroy.
     cleanup_with: sql_statement_destroy
   statement_iterator:
     description: |
-      An opaque, owned handle to an iterator over the statements of a SQL
-      string, produced by parse_sql. Destroy it via statement_iterator_destroy;
-      statements it already yielded are independently owned and unaffected.
+      An owned handle to an iterator over the statements of a SQL string,
+      produced by parse_sql. Destroy it via statement_iterator_destroy;
+      statements it already handed out are owned separately and unaffected.
     cleanup_with: statement_iterator_destroy
 enums:
   STATEMENT_TYPE:
@@ -115,15 +111,14 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Parses a SQL string into an iterator over its statements.
+      Parses a SQL string into an iterator over its statements. Does not block.
 
-      Parses and nothing more: no binding, no catalog access, no transaction.
-      The connection supplies the parser options and parser extensions, and is
-      not otherwise touched. Statements are raw parser output; statement-level
-      rewrites happen inside statement_execute. The SQL string is copied, so
-      the caller may free it once this call returns. An input with no
-      statements — empty, whitespace, or separators only — yields an iterator
-      that is immediately exhausted.
+      Parses and nothing more: no tables are looked up, no transaction is
+      started, and the connection is otherwise untouched. The SQL string is
+      copied, so the caller may free it once this call returns. An input with
+      no statements — empty, whitespace, or separators only — yields an
+      iterator that is immediately exhausted. A parse error may come back here
+      or from statement_iterator_next.
     role: constructor
     belongs_to: statement_iterator
     parameters:
@@ -151,15 +146,14 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Yields the next statement, or NULL when exhausted.
+      Returns the next statement, or NULL when there are none left. Does not
+      block.
 
-      On success *out_statement receives the next owned statement, or NULL once
-      the iterator is exhausted — repeatedly, so calling again is harmless. A
-      parse error within the input surfaces no later than the call that reaches
-      the failing statement: an implementation that parses eagerly reports it
-      from parse_sql instead and yields no statements at all, while an
-      incremental one yields the statements ahead of the failure first. On
-      failure *out_statement is set to NULL.
+      *out_statement receives an owned statement, which the caller destroys via
+      sql_statement_destroy, or NULL once the iterator is exhausted — and it
+      keeps reporting NULL, so calling again is harmless. A parse error comes
+      back no later than the call that reaches the failing statement, and
+      *out_statement is then set to NULL.
     role: method
     belongs_to: statement_iterator
     parameters:
@@ -182,27 +176,21 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Binds a parsed statement without executing, yielding its schema signature.
+      Works out the statement's columns and parameter types without running it.
+      Blocks only for as long as that takes.
 
-      Preprocesses and binds the statement exactly as execution would, but runs
-      nothing: the result is the statement's signature as two schemas, not a
-      query result. The statement is borrowed, not consumed, so it can be bound
-      as often as you like and executed later. out_schema receives the output
-      schema (result columns) and is never empty, since a non-SELECT reports a
-      single status column: a BIGINT changed-rows count, or a BOOLEAN success.
-      out_parameters, when non-NULL, receives the input schema (parameter
-      types, ordered by binding index). Both are owned; destroy them via
-      schema_destroy.
+      out_schema receives the columns the statement would produce. It is never
+      empty: a non-SELECT reports a single status column, either a BIGINT
+      changed-rows count or a BOOLEAN success. out_parameters, when non-NULL,
+      receives the parameter types in binding order. Both are owned; destroy
+      them via schema_destroy.
 
-      Binding is read-only and does not disturb a live result: it begins no
-      query, claims no cursor, reuses an active transaction read-only, and runs
-      alongside a paused stream. It is single-consumer like the stepping
-      functions, so bind concurrently only on a second connection.
-      Prepare-time errors — binder, catalog, preprocessing — surface here. A
-      statement that preprocessing expands into a group (a dynamic PIVOT, or
-      statement-expanding DDL such as ALTER ADD COLUMN with a non-constant
-      DEFAULT) cannot be bound and is rejected with ERROR_INPUT_INVALID;
-      execute it instead.
+      The statement is borrowed, so it can be bound again and executed later.
+      Binding does not start a query and does not disturb a result or stream
+      that is already live on the connection. Unknown tables, type errors and
+      the like come back here, as they would from statement_execute. A
+      statement that expands into several (see the query_result module) cannot
+      be bound and is rejected with ERROR_INPUT_INVALID; execute it instead.
 
       *out_schema and *out_parameters are set to NULL on failure.
     role: method
@@ -293,14 +281,13 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-11" ]
     description: |
-      Returns the statement's type as classified by the parser.
+      Returns the statement's type as the parser classified it.
 
-      This gives the type before the statement-level rewrites that
-      `[[statement_execute]]` applies, if any. So a PRAGMA reports PRAGMA even
-      where execution rewrites it into a SELECT or a CALL.
-      `[[result_get_statement_type]]` on the executed result reports the
-      rewritten type. A statement the parser expands into a group reports
-      MULTI. Its parts are not visible here, and statement_bind rejects it.
+      This is the type before execution rewrites the statement, if it does: a
+      PRAGMA reports PRAGMA even where it runs as a SELECT or a CALL, and
+      `[[result_get_statement_type]]` on the result reports what it became. A
+      statement the parser splits into several reports MULTI; its parts are not
+      visible here, and `[[statement_bind]]` rejects it.
     role: getter
     belongs_to: sql_statement
     parameters:
@@ -325,13 +312,11 @@ functions:
     description: |
       Borrows the statement's own SQL text.
 
-      The slice of the parsed string that belongs to this statement. A
-      trailing terminator and the whitespace after it are included, whitespace
-      and comments before the first token are not. The statement holds its own
-      copy, so the view outlives the SQL string passed to parse_sql and the
-      iterator, and stays valid until the statement is destroyed. A statement
-      produced by a parser extension that overrides parsing carries whatever
-      text the extension recorded.
+      The slice of the parsed string that belongs to this statement: a trailing
+      terminator and the whitespace after it are included, whitespace and
+      comments before the first token are not. The statement holds its own
+      copy, so the view stays valid after the SQL string and the iterator are
+      gone, until the statement is destroyed.
     role: getter
     belongs_to: sql_statement
     parameters:
@@ -354,11 +339,12 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-11" ]
     description: |
-      Returns the number of distinct parameters the statement declares.
+      Returns how many distinct parameters the statement declares. Does not
+      block.
 
-      This counts the parameters the parser found ($1, ?, $name, ...), so it
-      needs no catalog and no binding; only the parameter types wait for
-      `[[statement_bind]]`. Repeated uses of one parameter count once.
+      Counts the parameters the parser found ($1, ?, $name, ...); repeated uses
+      of one parameter count once. The parameter types come from
+      `[[statement_bind]]`.
     role: getter
     belongs_to: sql_statement
     parameters:
@@ -381,16 +367,16 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-11" ]
     description: |
-      Borrows the name of one parameter, in binding order.
+      Borrows the name of one parameter, in binding order. Does not block.
 
-      Parse-time metadata. Positions follow the parameters' binding indices,
-      the order of `[[statement_bind]]`'s parameter schema, so position i here
-      names field i there. The name is the binding key that
-      `[[statement_execute]]` accepts: "1", "2", ... for a positional parameter
-      ($1 or ?), the identifier for a named one ($name). Positional indices may
-      be gapped ($1 and $3 without $2), in which case the names are "1" and "3"
-      at positions 0 and 1. The view is valid until the statement is destroyed.
-      An index outside [0, count) is rejected with ERROR_INPUT_OUT_OF_RANGE.
+      Positions match `[[statement_bind]]`'s parameter schema, so position i
+      here names field i there. The name is the key
+      `[[execute_args_set_statement_params]]` binds by: "1", "2", ... for a
+      positional parameter ($1 or ?), the identifier for a named one ($name).
+      Positional indices may be gapped ($1 and $3 without $2), in which case
+      the names are "1" and "3" at positions 0 and 1. The view is valid until
+      the statement is destroyed. An index outside [0, count) is rejected with
+      ERROR_INPUT_OUT_OF_RANGE.
     role: getter
     belongs_to: sql_statement
     parameters:
@@ -419,9 +405,8 @@ functions:
       Destroys a statement handle.
 
       Null-safe: passing nullptr or a slot already set to nullptr is a no-op.
-      statement_execute does not consume a statement, so every statement is
-      destroyed here once it is no longer needed. On success the slot is set to
-      nullptr.
+      Statements are borrowed, never consumed, so every one is destroyed here
+      once it is no longer needed. On success the slot is set to nullptr.
     role: destructor
     belongs_to: sql_statement
     parameters:

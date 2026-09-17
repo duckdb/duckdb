@@ -207,7 +207,7 @@ void RegisterTemperatureCasts(duckdb_v2_connection_handle conn, duckdb_v2_logica
 std::string CastQueryText(duckdb_v2_connection_handle conn, const char *sql) {
 	duckdb_v2_result_handle result = nullptr;
 	REQUIRE(Query(conn, sql, &result) == DUCKDB_V2_ERROR_NONE);
-	auto chunk = StepChunk(result);
+	auto chunk = FetchChunk(result);
 	REQUIRE(chunk != nullptr);
 	duckdb_v2_vector_handle vec = nullptr;
 	duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, nullptr);
@@ -219,29 +219,13 @@ std::string CastQueryText(duckdb_v2_connection_handle conn, const char *sql) {
 	return out;
 }
 
-// Runs a query to exhaustion, returning the code the failure surfaced with (execution is lazy, so a runtime
-// failure only shows up while stepping).
+// Runs a query to completion, returning the code the failure surfaced with (execution is deferred, so a
+// runtime failure only shows up once the result runs).
 DUCKDB_V2_ERROR CastQueryError(duckdb_v2_connection_handle conn, const char *sql) {
 	duckdb_v2_result_handle result = nullptr;
 	auto rc = Query(conn, sql, &result);
-	if (rc != DUCKDB_V2_ERROR_NONE) {
-		duckdb_v2_result_destroy(&result);
-		return rc;
-	}
-	auto status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
-	while (rc == DUCKDB_V2_ERROR_NONE) {
-		duckdb_v2_data_chunk_handle chunk = nullptr;
-		rc = duckdb_v2_result_step(result, &chunk, &status, nullptr);
-		if (chunk) {
-			duckdb_v2_data_chunk_destroy(&chunk);
-		}
-		if (rc != DUCKDB_V2_ERROR_NONE || status == DUCKDB_V2_RESULT_STEP_STATUS_FINISHED ||
-		    status == DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED) {
-			break;
-		}
-		if (status == DUCKDB_V2_RESULT_STEP_STATUS_WAITING) {
-			rc = duckdb_v2_result_wait(result, nullptr);
-		}
+	if (rc == DUCKDB_V2_ERROR_NONE) {
+		rc = duckdb_v2_result_complete(result, nullptr);
 	}
 	duckdb_v2_result_destroy(&result);
 	return rc;

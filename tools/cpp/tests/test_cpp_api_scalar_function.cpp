@@ -19,7 +19,7 @@ using namespace duckdb::cxx;
 // Collect a single INTEGER column, asserting every row valid.
 std::vector<int32_t> CollectInts(QueryResult result) {
 	std::vector<int32_t> out;
-	while (auto chunk = result.FetchChunk()) {
+	while (auto chunk = result.Fetch()) {
 		auto view = chunk.GetVector(0).GetView();
 		for (idx_t i = 0; i < chunk.GetRowCount(); i++) {
 			REQUIRE(view.IsValid(i));
@@ -305,8 +305,8 @@ TEST_CASE("Stable C++API: scalar function bind reads argument types and constant
 	REQUIRE_FALSE(arg_probe.tried_non_constant);
 
 	// ...while GetConstantArgument fails the query with the binder's own error.
-	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT cpp_arg_probe('hello', b) FROM (VALUES (21)) t(b)").Drain(), Exception,
-	                       HasErrorCode(DUCKDB_V2_ERROR_QUERY_BINDER));
+	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT cpp_arg_probe('hello', b) FROM (VALUES (21)) t(b)").Complete(),
+	                       Exception, HasErrorCode(DUCKDB_V2_ERROR_QUERY_BINDER));
 }
 
 TEST_CASE("Stable C++API: scalar function callback errors fail the query", "[cpp_api]") {
@@ -320,7 +320,7 @@ TEST_CASE("Stable C++API: scalar function callback errors fail the query", "[cpp
 	failing.GetSignature().AddParameter("a", integer).SetReturnType(integer);
 	failing.Register();
 
-	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT cpp_fail(1)").Drain(), InvalidInputException,
+	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT cpp_fail(1)").Complete(), InvalidInputException,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 
 	// GetUserData when nothing was planted reports the misuse rather than derefing null.
@@ -329,7 +329,7 @@ TEST_CASE("Stable C++API: scalar function callback errors fail the query", "[cpp
 	no_data.GetSignature().AddParameter("a", integer).SetReturnType(integer);
 	no_data.Register();
 
-	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT cpp_no_user_data(1)").Drain(), Exception,
+	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT cpp_no_user_data(1)").Complete(), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
 
@@ -373,7 +373,7 @@ namespace {
 // Collect a single INTEGER column, keeping NULLs as (false, 0).
 std::vector<std::pair<bool, int32_t>> CollectNullableInts(QueryResult result) {
 	std::vector<std::pair<bool, int32_t>> out;
-	while (auto chunk = result.FetchChunk()) {
+	while (auto chunk = result.Fetch()) {
 		auto view = chunk.GetVector(0).GetView();
 		for (idx_t i = 0; i < chunk.GetRowCount(); i++) {
 			const auto valid = view.IsValid(i);
@@ -463,7 +463,7 @@ TEST_CASE("Stable C++API: ScalarExecutor refuses an arity mismatch", "[cpp_api]"
 	function.GetSignature().AddParameter("a", integer).SetReturnType(integer);
 	function.Register();
 
-	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT exec_wrong_arity(1)").Drain(), InvalidInputException,
+	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT exec_wrong_arity(1)").Complete(), InvalidInputException,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
 

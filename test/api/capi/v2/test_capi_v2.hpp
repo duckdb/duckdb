@@ -288,7 +288,7 @@ inline DUCKDB_V2_ERROR Query(duckdb_v2_connection_handle conn, const char *sql, 
 		}
 	}
 	if (rc == DUCKDB_V2_ERROR_NONE) {
-		rc = duckdb_v2_statement_execute(conn, stmt, nullptr, nullptr, 0, out_result, err);
+		rc = duckdb_v2_statement_execute(conn, stmt, nullptr, out_result, err);
 	}
 	// The statement is always still alive (it executes a copy), so destroy it unconditionally.
 	duckdb_v2_sql_statement_destroy(&stmt);
@@ -296,55 +296,62 @@ inline DUCKDB_V2_ERROR Query(duckdb_v2_connection_handle conn, const char *sql, 
 	return rc;
 }
 
-// Drains the next chunk out of a streaming result, returning a caller-owned chunk, or nullptr at end-of-stream.
-//
-// The WAITING poll runs a timing-dependent number of rounds, so it asserts
-// nothing: a per-round REQUIRE would make the suite's assertion count differ
-// between runs. Failures are latched and checked once on the way out, which
-// costs the same four assertions per call no matter how long the poll ran.
-inline duckdb_v2_data_chunk_handle StepChunk(duckdb_v2_result_handle r) {
-	duckdb_v2_data_chunk_handle chunk = nullptr;
-	auto step_rc = DUCKDB_V2_ERROR_NONE;
-	auto wait_rc = DUCKDB_V2_ERROR_NONE;
-	auto status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
-	bool cancelled = false;
-	bool chunk_matches_status = true;
-
-	while (true) {
-		chunk = nullptr;
-		step_rc = duckdb_v2_result_step(r, &chunk, &status, nullptr);
-		if (step_rc != DUCKDB_V2_ERROR_NONE) {
-			break;
-		}
-		if (status == DUCKDB_V2_RESULT_STEP_STATUS_CHUNK) {
-			chunk_matches_status = (chunk != nullptr);
-			break;
-		}
-		if (status == DUCKDB_V2_RESULT_STEP_STATUS_FINISHED) {
-			chunk_matches_status = (chunk == nullptr);
-			break;
-		}
-		if (status == DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED) {
-			cancelled = true;
-			break;
-		}
-		wait_rc = duckdb_v2_result_wait(r, nullptr);
-		if (wait_rc != DUCKDB_V2_ERROR_NONE) {
-			break;
-		}
+struct ExecuteArgs {
+	duckdb_v2_execute_args_handle handle = nullptr;
+	ExecuteArgs() {
+		REQUIRE(duckdb_v2_execute_args_create(&handle, nullptr) == DUCKDB_V2_ERROR_NONE);
 	}
+	ExecuteArgs(const ExecuteArgs &) = delete;
+	ExecuteArgs &operator=(const ExecuteArgs &) = delete;
+	~ExecuteArgs() {
+		duckdb_v2_execute_args_destroy(&handle);
+	}
+	operator duckdb_v2_execute_args_handle() const { // NOLINT: implicit by design
+		return handle;
+	}
+};
 
-	REQUIRE(step_rc == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(wait_rc == DUCKDB_V2_ERROR_NONE);
-	REQUIRE_FALSE(cancelled); // unexpected CANCELLED status while draining a result
-	REQUIRE(chunk_matches_status);
-	return status == DUCKDB_V2_RESULT_STEP_STATUS_CHUNK ? chunk : nullptr;
+// The first failure of the set-then-execute pair is what comes back.
+inline DUCKDB_V2_ERROR ExecuteWithParams(duckdb_v2_connection_handle conn, duckdb_v2_sql_statement_handle stmt,
+                                         const duckdb_v2_identifier_t *names, const duckdb_v2_value_handle *values,
+                                         idx_t count, duckdb_v2_result_handle *out_result,
+                                         duckdb_v2_error_info_handle *err) {
+	ExecuteArgs args;
+	auto rc = duckdb_v2_execute_args_set_statement_params(args, names, values, count, err);
+	if (rc != DUCKDB_V2_ERROR_NONE) {
+		if (out_result) {
+			*out_result = nullptr;
+		}
+		return rc;
+	}
+	return duckdb_v2_statement_execute(conn, stmt, args, out_result, err);
 }
 
-// Drains a result to exhaustion via the step primitive, destroying each chunk, returning the total row count.
+inline DUCKDB_V2_ERROR ExecutePreparedWithParams(duckdb_v2_prepared_statement_handle prepared,
+                                                 const duckdb_v2_identifier_t *names,
+                                                 const duckdb_v2_value_handle *values, idx_t count,
+                                                 duckdb_v2_result_handle *out_result,
+                                                 duckdb_v2_error_info_handle *err) {
+	ExecuteArgs args;
+	auto rc = duckdb_v2_execute_args_set_statement_params(args, names, values, count, err);
+	if (rc != DUCKDB_V2_ERROR_NONE) {
+		if (out_result) {
+			*out_result = nullptr;
+		}
+		return rc;
+	}
+	return duckdb_v2_prepared_statement_execute(prepared, args, out_result, err);
+}
+
+inline duckdb_v2_data_chunk_handle FetchChunk(duckdb_v2_result_handle r) {
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	REQUIRE(duckdb_v2_result_fetch(r, &chunk, nullptr) == DUCKDB_V2_ERROR_NONE);
+	return chunk;
+}
+
 inline idx_t DrainRowCount(duckdb_v2_result_handle r) {
 	idx_t total = 0;
-	while (auto chunk = StepChunk(r)) {
+	while (auto chunk = FetchChunk(r)) {
 		idx_t size = 0;
 		duckdb_v2_data_chunk_get_size(chunk, &size, nullptr);
 		duckdb_v2_data_chunk_destroy(&chunk);
@@ -353,10 +360,9 @@ inline idx_t DrainRowCount(duckdb_v2_result_handle r) {
 	return total;
 }
 
-// Reads the affected-row count of a CHANGED_ROWS result by draining its single-row BIGINT Count chunk.
-// Returns -1 if the stream yields no chunk.
+// The changed-row count of a CHANGED_ROWS result, or -1 when it holds no rows.
 inline int64_t DrainChangedRows(duckdb_v2_result_handle r) {
-	auto chunk = StepChunk(r);
+	auto chunk = FetchChunk(r);
 	if (!chunk) {
 		return -1;
 	}
@@ -366,47 +372,33 @@ inline int64_t DrainChangedRows(duckdb_v2_result_handle r) {
 	duckdb_v2_vector_get_view(vec, &view, nullptr);
 	int64_t count = view.data ? reinterpret_cast<const int64_t *>(view.data)[0] : -1;
 	duckdb_v2_data_chunk_destroy(&chunk);
-	// The Count chunk is the stream's only payload; pin end-of-stream.
-	auto trailing = StepChunk(r);
+	// The Count row is the result's only payload; pin the end of the cursor.
+	auto trailing = FetchChunk(r);
 	if (trailing) {
 		duckdb_v2_data_chunk_destroy(&trailing);
-		FAIL("CHANGED_ROWS stream yielded more than one chunk");
+		FAIL("CHANGED_ROWS result yielded more than one chunk");
 	}
 	return count;
 }
 
-// Steps a result until it reports CANCELLED, destroying any chunk handed over
-// on the way. How many rounds that takes is timing-dependent, so the loop
-// asserts nothing; one assertion per call, and the caller checks the returned
-// status. `out_saw_chunk` reports whether any chunk arrived before the cancel.
-inline DUCKDB_V2_RESULT_STEP_STATUS StepUntilCancelled(duckdb_v2_result_handle r, bool *out_saw_chunk = nullptr) {
-	auto status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
+// How many rounds this takes is timing-dependent, so the loop asserts nothing.
+inline DUCKDB_V2_RESULT_STATUS StepUntilCancelled(duckdb_v2_result_handle r) {
+	auto status = DUCKDB_V2_RESULT_STATUS_NOT_READY;
 	auto step_rc = DUCKDB_V2_ERROR_NONE;
-	bool saw_chunk = false;
-	for (int i = 0; i < 1000 && status != DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED; i++) {
-		duckdb_v2_data_chunk_handle chunk = nullptr;
-		step_rc = duckdb_v2_result_step(r, &chunk, &status, nullptr);
-		saw_chunk = saw_chunk || status == DUCKDB_V2_RESULT_STEP_STATUS_CHUNK;
-		if (chunk) {
-			duckdb_v2_data_chunk_destroy(&chunk);
-		}
+	for (int i = 0; i < 1000 && status != DUCKDB_V2_RESULT_STATUS_CANCELLED; i++) {
+		step_rc = duckdb_v2_result_step(r, &status, nullptr);
 		if (step_rc != DUCKDB_V2_ERROR_NONE) {
 			break;
 		}
-	}
-	if (out_saw_chunk) {
-		*out_saw_chunk = saw_chunk;
 	}
 	REQUIRE(step_rc == DUCKDB_V2_ERROR_NONE);
 	return status;
 }
 
-// Executes a side-effecting statement (DDL, DML, SET, ...) to completion (query + drain + destroy).
-// Streaming execution is lazy, so a statement only takes effect once its result is stepped.
 inline void ExecSQL(duckdb_v2_connection_handle conn, const char *sql) {
 	duckdb_v2_result_handle r = nullptr;
 	REQUIRE(Query(conn, sql, &r) == DUCKDB_V2_ERROR_NONE);
-	DrainRowCount(r);
+	REQUIRE(duckdb_v2_result_complete(r, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_result_destroy(&r);
 }
 
@@ -464,6 +456,20 @@ inline QueryProgress ReadProgress(duckdb_v2_connection_handle conn) {
 // Resolve a logical row through a selection vector
 inline idx_t SelAt(const duckdb_v2_sel_t *sel, idx_t i) {
 	return sel ? static_cast<idx_t>(sel[i]) : i;
+}
+
+// The single BIGINT cell of a one-row, one-column result.
+inline int64_t ScalarBigint(duckdb_v2_result_handle r) {
+	auto chunk = FetchChunk(r);
+	REQUIRE(chunk != nullptr);
+	duckdb_v2_vector_handle vec = nullptr;
+	duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, nullptr);
+	duckdb_v2_vector_view view {};
+	duckdb_v2_vector_get_view(vec, &view, nullptr);
+	REQUIRE(view.data != nullptr);
+	int64_t value = reinterpret_cast<const int64_t *>(view.data)[SelAt(view.sel, 0)];
+	duckdb_v2_data_chunk_destroy(&chunk);
+	return value;
 }
 
 // Check if a vector view's row is valid

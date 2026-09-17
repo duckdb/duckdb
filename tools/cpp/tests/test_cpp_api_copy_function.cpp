@@ -44,7 +44,7 @@ std::string ReadFile(const std::string &path) {
 // Collect a single BIGINT column, asserting every row valid.
 std::vector<int64_t> CollectBigints(QueryResult result) {
 	std::vector<int64_t> out;
-	while (auto chunk = result.FetchChunk()) {
+	while (auto chunk = result.Fetch()) {
 		auto view = chunk.GetVector(0).GetView();
 		for (idx_t i = 0; i < chunk.GetRowCount(); i++) {
 			REQUIRE(view.IsValid(i));
@@ -332,7 +332,7 @@ TEST_CASE("Stable C++API: copy function writes through COPY TO", "[cpp_api]") {
 	auto conn = db.Connect();
 
 	// One sink thread and a batch size beyond the input: the whole copy arrives as a single batch.
-	conn.Execute("SET threads = 1").Drain();
+	conn.Execute("SET threads = 1").Complete();
 	auto function = CopyFunction::Create(conn);
 	function.SetName("cpp_copy")
 	    .SetCopyToBindCallback(SummaryBind)
@@ -346,8 +346,8 @@ TEST_CASE("Stable C++API: copy function writes through COPY TO", "[cpp_api]") {
 	summary_seen.Reset();
 	const auto path = duckdb::TestCreatePath("cpp_copy_summary.txt");
 	// COPY reports the number of rows written.
-	REQUIRE(conn.Execute(CopyToStatement("SELECT r AS i FROM range(5000) t(r)", path, "cpp_copy", ", TAG 'x', FLAG"))
-	            .Drain() == 5000);
+	REQUIRE(ChangedRows(conn.Execute(
+	            CopyToStatement("SELECT r AS i FROM range(5000) t(r)", path, "cpp_copy", ", TAG 'x', FLAG"))) == 5000);
 
 	// Bind saw the SELECT's single BIGINT column and the function's own options.
 	REQUIRE(summary_seen.column_count == 1);
@@ -368,7 +368,7 @@ TEST_CASE("Stable C++API: copy function reads through COPY FROM", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	conn.Execute("CREATE TABLE target(i BIGINT)").Drain();
+	conn.Execute("CREATE TABLE target(i BIGINT)").Complete();
 
 	auto function = CopyFunction::Create(conn);
 	function.SetName("cpp_reader")
@@ -380,8 +380,8 @@ TEST_CASE("Stable C++API: copy function reads through COPY FROM", "[cpp_api]") {
 	function.Register();
 
 	reader_seen.Reset();
-	REQUIRE(conn.Execute(CopyFromStatement("target", "some/where.cpp", "cpp_reader", ", ROWS 25, PAIR (1, 'two')"))
-	            .Drain() == 25);
+	REQUIRE(ChangedRows(conn.Execute(
+	            CopyFromStatement("target", "some/where.cpp", "cpp_reader", ", ROWS 25, PAIR (1, 'two')"))) == 25);
 
 	// Bind saw the path as written, the target's column and the options; a parenthesized option is a tuple.
 	REQUIRE(reader_seen.path == "some/where.cpp");
@@ -399,7 +399,7 @@ TEST_CASE("Stable C++API: copy function reads through COPY FROM", "[cpp_api]") {
 	}
 
 	// A COPY FROM only function cannot be written to.
-	REQUIRE_THROWS(conn.Execute(CopyToStatement("SELECT 1", "nowhere", "cpp_reader")).Drain());
+	REQUIRE_THROWS(conn.Execute(CopyToStatement("SELECT 1", "nowhere", "cpp_reader")).Complete());
 }
 
 // ---------------------------------------------------------------------------
@@ -410,7 +410,7 @@ TEST_CASE("Stable C++API: copy function data flows through the phases", "[cpp_ap
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	conn.Execute("CREATE TABLE target(i BIGINT)").Drain();
+	conn.Execute("CREATE TABLE target(i BIGINT)").Complete();
 	const auto path = duckdb::TestCreatePath("cpp_copy_user_data.txt");
 
 	auto function = CopyFunction::Create(conn);
@@ -426,8 +426,8 @@ TEST_CASE("Stable C++API: copy function data flows through the phases", "[cpp_ap
 	function.Register();
 
 	user_data_seen.Reset();
-	conn.Execute(CopyToStatement("SELECT r FROM range(3) t(r)", path, "cpp_copy_user_data")).Drain();
-	conn.Execute(CopyFromStatement("target", path, "cpp_copy_user_data")).Drain();
+	conn.Execute(CopyToStatement("SELECT r FROM range(3) t(r)", path, "cpp_copy_user_data")).Complete();
+	conn.Execute(CopyFromStatement("target", path, "cpp_copy_user_data")).Complete();
 
 	// One object, visible in every phase of both sides.
 	const std::string *seen = user_data_seen.in_bind;
@@ -458,8 +458,8 @@ TEST_CASE("Stable C++API: copy function data flows through the phases", "[cpp_ap
 	    .SetCopyToFlushCallback(NoopFlush);
 	no_bind_data.Register();
 	REQUIRE_THROWS_MATCHES(
-	    conn.Execute(CopyToStatement("SELECT r FROM range(3) t(r)", path, "cpp_copy_no_bind_data")).Drain(), Exception,
-	    HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	    conn.Execute(CopyToStatement("SELECT r FROM range(3) t(r)", path, "cpp_copy_no_bind_data")).Complete(),
+	    Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 
 	auto no_init_data = CopyFunction::Create(conn);
 	no_init_data.SetName("cpp_copy_no_init_data")
@@ -468,8 +468,8 @@ TEST_CASE("Stable C++API: copy function data flows through the phases", "[cpp_ap
 	    .SetCopyToFlushCallback(NoopFlush);
 	no_init_data.Register();
 	REQUIRE_THROWS_MATCHES(
-	    conn.Execute(CopyToStatement("SELECT r FROM range(3) t(r)", path, "cpp_copy_no_init_data")).Drain(), Exception,
-	    HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	    conn.Execute(CopyToStatement("SELECT r FROM range(3) t(r)", path, "cpp_copy_no_init_data")).Complete(),
+	    Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 
 	auto no_batch_data = CopyFunction::Create(conn);
 	no_batch_data.SetName("cpp_copy_no_batch_data")
@@ -477,15 +477,15 @@ TEST_CASE("Stable C++API: copy function data flows through the phases", "[cpp_ap
 	    .SetCopyToFlushCallback(NoBatchDataFlush);
 	no_batch_data.Register();
 	REQUIRE_THROWS_MATCHES(
-	    conn.Execute(CopyToStatement("SELECT r FROM range(3) t(r)", path, "cpp_copy_no_batch_data")).Drain(), Exception,
-	    HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	    conn.Execute(CopyToStatement("SELECT r FROM range(3) t(r)", path, "cpp_copy_no_batch_data")).Complete(),
+	    Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 
 	auto no_global_state = CopyFunction::Create(conn);
 	no_global_state.SetName("cpp_copy_no_global_state")
 	    .SetCopyFromBindCallback(NoopFromBind)
 	    .SetCopyFromExecCallback(NoGlobalStateExec);
 	no_global_state.Register();
-	REQUIRE_THROWS_MATCHES(conn.Execute(CopyFromStatement("target", path, "cpp_copy_no_global_state")).Drain(),
+	REQUIRE_THROWS_MATCHES(conn.Execute(CopyFromStatement("target", path, "cpp_copy_no_global_state")).Complete(),
 	                       Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
 
@@ -504,7 +504,7 @@ TEST_CASE("Stable C++API: copy SetUserData is consumed by Register", "[cpp_api]"
 	function.Register();
 
 	user_data_seen.Reset();
-	conn.Execute(CopyToStatement("SELECT r FROM range(3) t(r)", path, "cpp_copy_consumed")).Drain();
+	conn.Execute(CopyToStatement("SELECT r FROM range(3) t(r)", path, "cpp_copy_consumed")).Complete();
 	REQUIRE(user_data_seen.in_bind.load() != nullptr);
 	REQUIRE(*user_data_seen.in_bind.load() == "first");
 
@@ -523,21 +523,22 @@ TEST_CASE("Stable C++API: copy function callback errors fail the query", "[cpp_a
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	conn.Execute("CREATE TABLE target(i BIGINT)").Drain();
+	conn.Execute("CREATE TABLE target(i BIGINT)").Complete();
 	const auto path = duckdb::TestCreatePath("cpp_copy_fails.txt");
 
 	auto function = CopyFunction::Create(conn);
 	function.SetName("cpp_copy_fails").SetCopyToBatchCallback(FailingBatch).SetCopyToFlushCallback(NoopFlush);
 	function.Register();
-	REQUIRE_THROWS_MATCHES(conn.Execute(CopyToStatement("SELECT r FROM range(3) t(r)", path, "cpp_copy_fails")).Drain(),
-	                       InvalidInputException, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(
+	    conn.Execute(CopyToStatement("SELECT r FROM range(3) t(r)", path, "cpp_copy_fails")).Complete(),
+	    InvalidInputException, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 
 	auto reader_fails = CopyFunction::Create(conn);
 	reader_fails.SetName("cpp_reader_fails")
 	    .SetCopyFromBindCallback(NoopFromBind)
 	    .SetCopyFromExecCallback(FailingFromExec);
 	reader_fails.Register();
-	REQUIRE_THROWS_MATCHES(conn.Execute(CopyFromStatement("target", path, "cpp_reader_fails")).Drain(),
+	REQUIRE_THROWS_MATCHES(conn.Execute(CopyFromStatement("target", path, "cpp_reader_fails")).Complete(),
 	                       InvalidInputException, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 
 	auto empty_batch_size = CopyFunction::Create(conn);
@@ -554,7 +555,7 @@ TEST_CASE("Stable C++API: copy function callback errors fail the query", "[cpp_a
 	take_twice.SetName("cpp_copy_take_twice").SetCopyToBatchCallback(TakeTwiceBatch).SetCopyToFlushCallback(NoopFlush);
 	take_twice.Register();
 	REQUIRE_THROWS_MATCHES(
-	    conn.Execute(CopyToStatement("SELECT r FROM range(3) t(r)", path, "cpp_copy_take_twice")).Drain(),
+	    conn.Execute(CopyToStatement("SELECT r FROM range(3) t(r)", path, "cpp_copy_take_twice")).Complete(),
 	    InvalidInputException, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
 

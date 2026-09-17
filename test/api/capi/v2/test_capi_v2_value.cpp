@@ -1585,7 +1585,7 @@ TEST_CASE("V2: VARIANT cells are read by casting them", "[capi_v2][value][varian
 	QueryResult r;
 
 	REQUIRE(Query(f.conn, "SELECT 42::VARIANT AS v, NULL::VARIANT AS n", &r) == DUCKDB_V2_ERROR_NONE);
-	auto chunk = StepChunk(r);
+	auto chunk = FetchChunk(r);
 	REQUIRE(chunk != nullptr);
 	duckdb_v2_vector_handle value_vec = nullptr;
 	duckdb_v2_vector_handle null_vec = nullptr;
