@@ -10,6 +10,9 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/transaction/shared_transaction_lock.hpp"
 
 namespace duckdb {
 
@@ -21,7 +24,8 @@ TransactionContext::TransactionContext(ClientContext &context)
 TransactionContext::~TransactionContext() {
 	if (current_transaction) {
 		try {
-			Rollback(nullptr);
+			// Destruction cannot wait for participants; hand the transaction over instead.
+			Rollback(nullptr, true);
 		} catch (std::exception &ex) {
 			ErrorData data(ex);
 			try {
@@ -64,6 +68,8 @@ void TransactionContext::Commit() {
 		throw TransactionException("failed to commit: no transaction active");
 	}
 	autocheckpoint_error = ErrorData();
+	// Hold the statement lock across the commit: it can end a shared transaction, and no participant may be reading it.
+	auto guard = context.LockSharedTransactionForFinalize(*current_transaction);
 	auto transaction = std::move(current_transaction);
 	ClearTransaction();
 	auto error = transaction->Commit();
@@ -100,17 +106,21 @@ void TransactionContext::SetReadOnly() {
 	current_transaction->SetReadOnly();
 }
 
-void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
+void TransactionContext::Rollback(optional_ptr<ErrorData> error, bool allow_hand_off) {
 	if (!current_transaction) {
 		throw TransactionException("failed to rollback: no transaction active");
 	}
+	// Hold the statement lock across the rollback: it can end a shared transaction, and no participant may be
+	// reading it. Automatic rollback of a failed statement reaches this after the query released its own guard.
+	bool hand_off = false;
+	auto guard = context.LockSharedTransactionForFinalize(*current_transaction, allow_hand_off, &hand_off);
 	auto transaction = std::move(current_transaction);
 	ClearTransaction();
 	context.client_data->profiler->Reset();
 
 	ErrorData rollback_error;
 	try {
-		transaction->Rollback();
+		transaction->Rollback(hand_off);
 	} catch (std::exception &ex) {
 		rollback_error = ErrorData(ex);
 	}
@@ -127,6 +137,48 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 void TransactionContext::ClearTransaction() {
 	SetAutoCommit(true);
 	current_transaction = nullptr;
+}
+
+void TransactionContext::SetTransactionSnapshot(const string &snapshot_id) {
+	if (auto_commit || !current_transaction) {
+		throw TransactionException("SET TRANSACTION SNAPSHOT can only be used inside an explicit transaction");
+	}
+	if (snapshot_id.empty()) {
+		throw TransactionException("SET TRANSACTION SNAPSHOT requires a non-empty snapshot id");
+	}
+	if (ValidChecker::IsInvalidated(*current_transaction)) {
+		throw TransactionException("Cannot set the transaction snapshot of an invalidated transaction");
+	}
+	if (current_transaction->SharedDatabase()) {
+		throw TransactionException("Cannot set the transaction snapshot: this connection already takes part in a "
+		                           "shared transaction for database %s",
+		                           current_transaction->SharedDatabase()->GetName());
+	}
+
+	auto &database_manager = DatabaseManager::Get(context);
+	auto database = database_manager.GetSharedTransactionDatabase(snapshot_id);
+	if (!database) {
+		throw TransactionException("Snapshot is no longer available");
+	}
+	if (ValidChecker::IsInvalidated(*database)) {
+		throw TransactionException("Cannot set the transaction snapshot: %s",
+		                           ValidChecker::InvalidatedMessage(*database));
+	}
+	auto &transaction_manager = database->GetTransactionManager();
+	if (!transaction_manager.IsDuckTransactionManager()) {
+		throw TransactionException("Database %s does not support transaction snapshots", database->GetName());
+	}
+	auto &duck_manager = transaction_manager.Cast<DuckTransactionManager>();
+	// Hold the statement lock before looking the transaction up so its owner cannot end it underneath us.
+	context.GuardSharedTransaction(duck_manager.GetSharedTransactionState(snapshot_id)->GetStatementLock(),
+	                               SharedTransactionGuardMode::ACQUIRE_SHARED);
+	auto &transaction = duck_manager.JoinTransaction(snapshot_id);
+	try {
+		current_transaction->AdoptTransaction(*database, transaction);
+	} catch (...) {
+		transaction.GetSharedState()->AbandonJoin();
+		throw;
+	}
 }
 
 idx_t TransactionContext::GetActiveQuery() {

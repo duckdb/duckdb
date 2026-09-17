@@ -166,6 +166,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(DecimalDivisionFun),
 	DUCKDB_WINDOW_FUNCTION(DenseRankFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(DivideFun),
+	DUCKDB_SCALAR_FUNCTION(ExportTransactionSnapshotFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(EndsWithFun),
 	DUCKDB_SCALAR_FUNCTION(ErrorFun),
 	DUCKDB_WINDOW_FUNCTION(FillFun),

@@ -269,7 +269,7 @@ void DataTable::InitializeScan(ClientContext &context, DuckTransaction &transact
 	auto &local_storage = LocalStorage::Get(transaction);
 	state.Initialize(column_ids, context, table_filters);
 	row_groups->InitializeScan(context, state.table_state, column_ids, table_filters);
-	local_storage.InitializeScan(*this, state.local_state, table_filters);
+	local_storage.InitializeScan(context, *this, state.local_state, table_filters);
 }
 
 void DataTable::InitializeScanWithOffset(DuckTransaction &transaction, TableScanState &state,
@@ -515,12 +515,14 @@ void DataTable::Fetch(DuckTransaction &transaction, DataChunk &result, const vec
 	D_ASSERT(result.size() == committed_count);
 
 	// Fetch local rows into a separate chunk.
-	auto &allocator = Allocator::Get(local_storage.GetClientContext());
+	// The table's database outlives every reader, unlike the connection that created the local storage.
+	auto &allocator = Allocator::Get(db);
 	DataChunk local_chunk;
 	local_chunk.Initialize(allocator, result.GetTypes());
 	Vector local_row_ids(row_identifiers, local_sel, local_count);
 	local_row_ids.Flatten();
 	ColumnFetchState local_fetch_state;
+	local_fetch_state.context = state.context;
 	local_storage.FetchChunk(*this, local_row_ids, local_count, column_ids, local_chunk, local_fetch_state);
 
 	// Append local rows after committed rows in the result.

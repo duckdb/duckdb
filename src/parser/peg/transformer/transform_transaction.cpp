@@ -36,4 +36,11 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformRollbackTransaction(PEG
                                                                              const bool &has_result) {
 	return make_uniq<TransactionStatement>(make_uniq<TransactionInfo>(TransactionType::ROLLBACK));
 }
+
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformSetTransactionSnapshot(PEGTransformer &transformer,
+                                                                                const string &string_literal) {
+	auto info = make_uniq<TransactionInfo>(TransactionType::SET_TRANSACTION_SNAPSHOT);
+	info->snapshot_id = string_literal;
+	return make_uniq<TransactionStatement>(std::move(info));
+}
 } // namespace duckdb

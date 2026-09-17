@@ -516,6 +516,10 @@ enum class SetType : uint8_t;
 
 enum class SettingScope : uint8_t;
 
+enum class SharedTransactionGuardMode : uint8_t;
+
+enum class SharedTransactionGuardWait : uint8_t;
+
 enum class ShowBehaviorType : uint8_t;
 
 enum class ShowType : uint8_t;
@@ -1370,6 +1374,12 @@ const char* EnumUtil::ToChars<SetType>(SetType value);
 
 template<>
 const char* EnumUtil::ToChars<SettingScope>(SettingScope value);
+
+template<>
+const char* EnumUtil::ToChars<SharedTransactionGuardMode>(SharedTransactionGuardMode value);
+
+template<>
+const char* EnumUtil::ToChars<SharedTransactionGuardWait>(SharedTransactionGuardWait value);
 
 template<>
 const char* EnumUtil::ToChars<ShowBehaviorType>(ShowBehaviorType value);
@@ -2289,6 +2299,12 @@ SetType EnumUtil::FromString<SetType>(const char *value);
 
 template<>
 SettingScope EnumUtil::FromString<SettingScope>(const char *value);
+
+template<>
+SharedTransactionGuardMode EnumUtil::FromString<SharedTransactionGuardMode>(const char *value);
+
+template<>
+SharedTransactionGuardWait EnumUtil::FromString<SharedTransactionGuardWait>(const char *value);
 
 template<>
 ShowBehaviorType EnumUtil::FromString<ShowBehaviorType>(const char *value);
