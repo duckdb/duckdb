@@ -21,7 +21,7 @@ module: virtual file system
 # are how the callbacks can grow without changing their signatures.
 #
 # Absence is reported one way per kind of operation: a query reports a missing path by its result
-# (`path type` reports `FILE_TYPE_INVALID`, `list` and `glob` add nothing), while `open` and every
+# (`stat path` leaves the stat untouched, `list` and `glob` add nothing), while `open` and every
 # mutation report it as `ERROR_IO_FILE_NOT_FOUND`.
 #
 # Lifetimes. Opens may run concurrently, and so may the path callbacks. Per-file callbacks on one
@@ -451,14 +451,16 @@ callbacks:
         description: Borrowed error info handle to use to report errors that occur during the callback.
     return_type: void
 
-  virtual_file_system_path_type_callback:
+  virtual_file_system_stat_path_callback:
     description: |
-      Reports what a path refers to, without opening it.
+      Reports what is known about a path, without opening it.
 
-      A regular file, a directory, a pipe, something else, or `FILE_TYPE_INVALID` when nothing is there, which
-      is a result rather than an error. This is how the engine checks whether a file or directory exists
-      before creating or overwriting it, and whether it is about to write to a pipe. What else the file system
-      knows about the path is learned when the file is opened, through the "stat" callback.
+      Fills `stat_info` in with the type of the path, and for a regular file whatever else is known: size,
+      modification time and version tag are optional, and whatever is filled in is what `[[file_system_stat]]`
+      reports for the path. Leaving `stat_info` untouched reports that the path does not exist, which is not
+      an error. This is how the engine checks whether a file or directory exists before creating or
+      overwriting it, whether it is about to write to a pipe, and how it learns a file's size without opening
+      it. A file system that leaves this callback unset is asked by opening the file instead.
     parameters:
       info:
         type: virtual_file_system_info
@@ -466,11 +468,9 @@ callbacks:
       path:
         type: virtual_file_path_info
         description: Borrowed opaque handle to the path operation. Valid only for the duration of the callback.
-      type:
-        type: FILE_TYPE
-        indirection: 1
-        kind: OUT
-        description: Receives what the path refers to. Starts out `FILE_TYPE_INVALID`, which reports absence.
+      stat_info:
+        type: file_stat
+        description: Borrowed opaque handle to fill in. Valid only for the duration of the callback.
       err:
         type: error_info
         indirection: 1
@@ -1028,20 +1028,21 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # Callbacks: paths
   #---------------------------------------------------------------------------------------------------------------------
-  virtual_file_system_set_path_type_callback:
+  virtual_file_system_set_stat_path_callback:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
-      Sets the optional "path type" callback of the virtual file system.
+      Sets the optional "stat path" callback of the virtual file system.
 
-      The callback reports what a path refers to; see `[[virtual_file_system_path_type_callback]]`. Without it,
-      the engine cannot tell whether a path exists, which writing to the file system needs.
+      The callback reports what is known about a path; see `[[virtual_file_system_stat_path_callback]]`.
+      Without it, the engine cannot tell whether a path exists, which writing to the file system needs, and
+      opens a file to learn its size.
     parameters:
       file_system:
         type: virtual_file_system
         description: The file system to set the callback of.
       callback:
-        type: virtual_file_system_path_type_callback
+        type: virtual_file_system_stat_path_callback
         description: The callback to set.
       err:
         type: error_info

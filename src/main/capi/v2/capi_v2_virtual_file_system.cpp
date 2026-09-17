@@ -27,7 +27,7 @@ struct CV2VirtualFileSystemCallbacks {
 	duckdb_v2_virtual_file_system_stat_callback_fn stat = nullptr;
 	duckdb_v2_virtual_file_system_sync_callback_fn sync = nullptr;
 	duckdb_v2_virtual_file_system_truncate_callback_fn truncate = nullptr;
-	duckdb_v2_virtual_file_system_path_type_callback_fn path_type = nullptr;
+	duckdb_v2_virtual_file_system_stat_path_callback_fn stat_path = nullptr;
 	duckdb_v2_virtual_file_system_list_callback_fn list = nullptr;
 	duckdb_v2_virtual_file_system_glob_callback_fn glob = nullptr;
 	duckdb_v2_virtual_file_system_remove_file_callback_fn remove_file = nullptr;
@@ -438,20 +438,39 @@ public:
 	//===--------------------------------------------------------------------===//
 	// Paths
 	//===--------------------------------------------------------------------===//
+	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) override {
+		if (!config.callbacks.stat_path) {
+			// The engine's own way: open the file and ask it.
+			return FileSystem::GetStatsIfExists(file, opener);
+		}
+		auto stat = StatPath(file.path, opener);
+		if (stat.type == DUCKDB_V2_FILE_TYPE_INVALID) {
+			return nullopt;
+		}
+		FileMetadata metadata;
+		metadata.file_size = stat.size ? NumericCast<int64_t>(*stat.size) : -1;
+		metadata.last_modification_time = stat.LastModified();
+		metadata.file_type = CV2FileStat::ToEngineType(stat.type);
+		if (stat.version_tag) {
+			metadata.version_tag = *stat.version_tag;
+		}
+		return metadata;
+	}
+
 	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override {
-		return PathType(filename, opener) == DUCKDB_V2_FILE_TYPE_REGULAR;
+		return StatPath(filename, opener).type == DUCKDB_V2_FILE_TYPE_REGULAR;
 	}
 
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override {
-		return PathType(directory, opener) == DUCKDB_V2_FILE_TYPE_DIRECTORY;
+		return StatPath(directory, opener).type == DUCKDB_V2_FILE_TYPE_DIRECTORY;
 	}
 
 	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override {
-		// Asked on every open; a file system that cannot type paths has no pipes to report.
-		if (!config.callbacks.path_type) {
+		// Asked on every open; a file system that cannot stat paths has no pipes to report.
+		if (!config.callbacks.stat_path) {
 			return false;
 		}
-		return PathType(filename, opener) == DUCKDB_V2_FILE_TYPE_PIPE;
+		return StatPath(filename, opener).type == DUCKDB_V2_FILE_TYPE_PIPE;
 	}
 
 	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override {
@@ -550,7 +569,7 @@ public:
 			}
 		} else if (!HasGlob(path)) {
 			// A plain path names one file. Without a stat callback there is no way to check, so let the open fail.
-			if (!cb.path_type || FileExists(path, opener)) {
+			if (!cb.stat_path || FileExists(path, opener)) {
 				result.emplace_back(path);
 			}
 		} else if (cb.list) {
@@ -618,14 +637,15 @@ private:
 		return info;
 	}
 
-	DUCKDB_V2_FILE_TYPE PathType(const string &path_p, optional_ptr<FileOpener> opener) {
+	CV2FileStat StatPath(const string &path_p, optional_ptr<FileOpener> opener) {
 		auto &cb = config.callbacks;
-		RequireCallback(cb.path_type, "path type");
+		RequireCallback(cb.stat_path, "stat path");
 		auto path = PathInfo(path_p, opener);
-		DUCKDB_V2_FILE_TYPE type = DUCKDB_V2_FILE_TYPE_INVALID;
-		InvokeCallback(
-		    [&](duckdb_v2_error_info_handle err) { cb.path_type(Convert(this), Convert(&path), &type, &err); });
-		return type;
+		CV2FileStat info;
+		InvokeCallback([&](duckdb_v2_error_info_handle err) {
+			cb.stat_path(Convert(this), Convert(&path), Convert(&info), &err);
+		});
+		return info;
 	}
 
 	CV2FileListing List(const string &directory, optional_ptr<FileOpener> opener) {
@@ -711,7 +731,7 @@ private:
 			auto child = JoinSegment(current, segment);
 			if (!is_last) {
 				ExpandSegments(child, segments, index + 1, opener, result);
-			} else if (!config.callbacks.path_type || FileExists(child, opener)) {
+			} else if (!config.callbacks.stat_path || FileExists(child, opener)) {
 				result.emplace_back(std::move(child));
 			}
 			return;
@@ -1013,11 +1033,11 @@ duckdb_v2_virtual_file_system_set_truncate_callback(duckdb_v2_virtual_file_syste
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_virtual_file_system_set_path_type_callback(duckdb_v2_virtual_file_system_handle file_system,
-                                                     duckdb_v2_virtual_file_system_path_type_callback_fn callback,
+duckdb_v2_virtual_file_system_set_stat_path_callback(duckdb_v2_virtual_file_system_handle file_system,
+                                                     duckdb_v2_virtual_file_system_stat_path_callback_fn callback,
                                                      duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
-	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.path_type = callback; });
+	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.stat_path = callback; });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_set_list_callback(duckdb_v2_virtual_file_system_handle file_system,

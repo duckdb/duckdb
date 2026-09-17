@@ -93,11 +93,11 @@ handles:
 
   file_stat:
     description: |
-      An opaque handle to what is known about one file: its type, and when known its size, modification time
-      and version tag. Produced owned by `[[file_get_stat]]`, to be destroyed with `[[file_stat_destroy]]`; handed
-      out borrowed to a virtual file system's callbacks and by `[[file_listing_get_entry_stat]]`, where it must
-      not be destroyed. Read with the `file_stat_get_*` functions, filled in with the `file_stat_set_*`
-      functions.
+      An opaque handle to what is known about one file or directory: its type, and when known its size,
+      modification time and version tag. Produced owned by `[[file_system_stat]]` and `[[file_get_stat]]`, to be
+      destroyed with `[[file_stat_destroy]]`; handed out borrowed to a virtual file system's callbacks and by
+      `[[file_listing_get_entry_stat]]`, where it must not be destroyed. Read with the `file_stat_get_*`
+      functions, filled in with the `file_stat_set_*` functions.
 
   file_listing:
     description: |
@@ -532,6 +532,35 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # File System: paths
   #---------------------------------------------------------------------------------------------------------------------
+  file_system_stat:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Reports what is known about a path, without opening it.
+
+      Routed to whichever file system handles the path. The type is always answered: a regular file, a
+      directory, a pipe, something else, or `FILE_TYPE_INVALID` when nothing is there, which is a result rather
+      than an error. Size, modification time and version tag are filled in as far as the file system knows
+      them by path; each getter reports whether its field is known. The local file system answers all of them
+      from one system call, and a virtual file system answers whatever its "stat path" callback reports.
+    parameters:
+      file_system:
+        type: file_system
+        description: The file system to ask.
+      path:
+        type: str
+        description: The path to report on. Borrowed for the call only.
+      stat:
+        type: file_stat
+        indirection: 1
+        kind: OUT
+        description: On success, receives the stat. Owned by the caller; destroy via `[[file_stat_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   file_system_list:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
@@ -690,7 +719,7 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
-      Reads what the file is, `FILE_TYPE_INVALID` when nothing was reported.
+      Reads what the path refers to, `FILE_TYPE_INVALID` when nothing is there.
     parameters:
       stat:
         type: file_stat
@@ -785,11 +814,12 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
-      Sets what the file is.
+      Sets what the path refers to.
 
-      From a virtual file system's "stat" callback, `FILE_TYPE_PIPE` makes the engine treat the open file as a
-      pipe and anything else as a regular file. On a listing entry it replaces the type the entry was added
-      with.
+      From a virtual file system's "stat path" callback this is what reports existence: until it is called the
+      path is reported as not existing, and `FILE_TYPE_INVALID` says the same explicitly. From the "stat"
+      callback, `FILE_TYPE_PIPE` makes the engine treat the open file as a pipe and anything else as a regular
+      file. On a listing entry it replaces the type the entry was added with.
     parameters:
       stat:
         type: file_stat
@@ -869,7 +899,8 @@ functions:
     description: |
       Destroys a stat the caller owns, releasing its resources.
 
-      Only for stats produced by `[[file_get_stat]]`; a borrowed one must not be passed here. Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on
+      Only for stats produced by `[[file_system_stat]]` and `[[file_get_stat]]`; a borrowed one must not be
+      passed here. Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on
       return to prevent double-destruction.
     parameters:
       stat:

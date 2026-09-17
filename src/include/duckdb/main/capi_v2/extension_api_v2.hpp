@@ -1348,6 +1348,9 @@ typedef struct {
 	(duckdb_v2_file_system_handle file_system, duckdb_v2_str path, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_file_system_remove_file)
 	(duckdb_v2_file_system_handle file_system, duckdb_v2_str path, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_system_stat)
+	(duckdb_v2_file_system_handle file_system, duckdb_v2_str path, duckdb_v2_file_stat_handle *stat,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_virtual_file_info_get_file_data)
 	(duckdb_v2_virtual_file_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_virtual_file_info_get_path)
@@ -1424,9 +1427,6 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_virtual_file_system_set_open_callback)
 	(duckdb_v2_virtual_file_system_handle file_system, duckdb_v2_virtual_file_system_open_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_virtual_file_system_set_path_type_callback)
-	(duckdb_v2_virtual_file_system_handle file_system, duckdb_v2_virtual_file_system_path_type_callback_fn callback,
-	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_virtual_file_system_set_read_at_callback)
 	(duckdb_v2_virtual_file_system_handle file_system, duckdb_v2_virtual_file_system_read_at_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
@@ -1444,6 +1444,9 @@ typedef struct {
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_virtual_file_system_set_stat_callback)
 	(duckdb_v2_virtual_file_system_handle file_system, duckdb_v2_virtual_file_system_stat_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_virtual_file_system_set_stat_path_callback)
+	(duckdb_v2_virtual_file_system_handle file_system, duckdb_v2_virtual_file_system_stat_path_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_virtual_file_system_set_sync_callback)
 	(duckdb_v2_virtual_file_system_handle file_system, duckdb_v2_virtual_file_system_sync_callback_fn callback,
@@ -2074,6 +2077,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_file_system_move = duckdb_v2_file_system_move;
 	result.duckdb_v2_file_system_remove_directory = duckdb_v2_file_system_remove_directory;
 	result.duckdb_v2_file_system_remove_file = duckdb_v2_file_system_remove_file;
+	result.duckdb_v2_file_system_stat = duckdb_v2_file_system_stat;
 	result.duckdb_v2_virtual_file_info_get_file_data = duckdb_v2_virtual_file_info_get_file_data;
 	result.duckdb_v2_virtual_file_info_get_path = duckdb_v2_virtual_file_info_get_path;
 	result.duckdb_v2_virtual_file_info_has_flag = duckdb_v2_virtual_file_info_has_flag;
@@ -2105,7 +2109,6 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_virtual_file_system_set_move_callback = duckdb_v2_virtual_file_system_set_move_callback;
 	result.duckdb_v2_virtual_file_system_set_name = duckdb_v2_virtual_file_system_set_name;
 	result.duckdb_v2_virtual_file_system_set_open_callback = duckdb_v2_virtual_file_system_set_open_callback;
-	result.duckdb_v2_virtual_file_system_set_path_type_callback = duckdb_v2_virtual_file_system_set_path_type_callback;
 	result.duckdb_v2_virtual_file_system_set_read_at_callback = duckdb_v2_virtual_file_system_set_read_at_callback;
 	result.duckdb_v2_virtual_file_system_set_read_callback = duckdb_v2_virtual_file_system_set_read_callback;
 	result.duckdb_v2_virtual_file_system_set_remove_directory_callback =
@@ -2114,6 +2117,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	    duckdb_v2_virtual_file_system_set_remove_file_callback;
 	result.duckdb_v2_virtual_file_system_set_seek_callback = duckdb_v2_virtual_file_system_set_seek_callback;
 	result.duckdb_v2_virtual_file_system_set_stat_callback = duckdb_v2_virtual_file_system_set_stat_callback;
+	result.duckdb_v2_virtual_file_system_set_stat_path_callback = duckdb_v2_virtual_file_system_set_stat_path_callback;
 	result.duckdb_v2_virtual_file_system_set_sync_callback = duckdb_v2_virtual_file_system_set_sync_callback;
 	result.duckdb_v2_virtual_file_system_set_tell_callback = duckdb_v2_virtual_file_system_set_tell_callback;
 	result.duckdb_v2_virtual_file_system_set_truncate_callback = duckdb_v2_virtual_file_system_set_truncate_callback;

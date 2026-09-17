@@ -476,10 +476,41 @@ public:
 		return info;
 	}
 
-	//! What the engine reports about an open file.
-	static CV2FileStat FromMetadata(const FileMetadata &metadata) {
+	//! The C type for the engine's, which distinguishes more kinds than the C API cares about.
+	static DUCKDB_V2_FILE_TYPE ToType(FileType type, bool open_file) {
+		switch (type) {
+		case FileType::FILE_TYPE_REGULAR:
+			return DUCKDB_V2_FILE_TYPE_REGULAR;
+		case FileType::FILE_TYPE_DIR:
+			return DUCKDB_V2_FILE_TYPE_DIRECTORY;
+		case FileType::FILE_TYPE_FIFO:
+			return DUCKDB_V2_FILE_TYPE_PIPE;
+		case FileType::FILE_TYPE_INVALID:
+			// The engine's default for a handle it cannot classify; an open file is a file.
+			return open_file ? DUCKDB_V2_FILE_TYPE_REGULAR : DUCKDB_V2_FILE_TYPE_OTHER;
+		default:
+			return DUCKDB_V2_FILE_TYPE_OTHER;
+		}
+	}
+
+	//! The engine's type for the C one.
+	static FileType ToEngineType(DUCKDB_V2_FILE_TYPE type) {
+		switch (type) {
+		case DUCKDB_V2_FILE_TYPE_REGULAR:
+			return FileType::FILE_TYPE_REGULAR;
+		case DUCKDB_V2_FILE_TYPE_DIRECTORY:
+			return FileType::FILE_TYPE_DIR;
+		case DUCKDB_V2_FILE_TYPE_PIPE:
+			return FileType::FILE_TYPE_FIFO;
+		default:
+			return FileType::FILE_TYPE_INVALID;
+		}
+	}
+
+	//! What the engine reports about a file: an open one, or one found by path.
+	static CV2FileStat FromMetadata(const FileMetadata &metadata, bool open_file) {
 		CV2FileStat info;
-		info.type = DUCKDB_V2_FILE_TYPE_REGULAR;
+		info.type = ToType(metadata.file_type, open_file);
 		if (metadata.file_size >= 0) {
 			info.size = NumericCast<idx_t>(metadata.file_size);
 		}

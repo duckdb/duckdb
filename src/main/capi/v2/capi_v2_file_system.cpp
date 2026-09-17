@@ -176,6 +176,23 @@ DUCKDB_V2_ERROR duckdb_v2_file_system_open(duckdb_v2_file_system_handle file_sys
 // Path operations
 //----------------------------------------------------------------------------------------------------------------------
 
+DUCKDB_V2_ERROR duckdb_v2_file_system_stat(duckdb_v2_file_system_handle file_system, duckdb_v2_str path,
+                                           duckdb_v2_file_stat_handle *stat, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(file_system);
+	DUCKDB_CHECK_ARG(path);
+	DUCKDB_CHECK_ARG(stat);
+	*stat = nullptr;
+	return WithErrorHandler(err, [&]() {
+		auto &slot = *Convert(file_system);
+		auto metadata = slot.fs->GetStatsIfExists(duckdb::OpenFileInfo(duckdb::string(Convert(path))));
+		auto result = duckdb::make_uniq<CV2FileStat>();
+		if (metadata) {
+			*result = CV2FileStat::FromMetadata(*metadata, false);
+		}
+		*stat = Convert(result.release());
+	});
+}
+
 DUCKDB_V2_ERROR duckdb_v2_file_system_list(duckdb_v2_file_system_handle file_system, duckdb_v2_str path,
                                            duckdb_v2_file_listing_handle *listing, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
@@ -320,7 +337,7 @@ DUCKDB_V2_ERROR duckdb_v2_file_get_stat(duckdb_v2_file_handle file, duckdb_v2_fi
 	DUCKDB_CHECK_ARG(stat);
 	*stat = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto result = duckdb::make_uniq<CV2FileStat>(CV2FileStat::FromMetadata(Convert(file)->Handle().Stats()));
+		auto result = duckdb::make_uniq<CV2FileStat>(CV2FileStat::FromMetadata(Convert(file)->Handle().Stats(), true));
 		*stat = Convert(result.release());
 	});
 }

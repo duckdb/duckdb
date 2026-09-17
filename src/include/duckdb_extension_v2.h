@@ -1413,6 +1413,9 @@ typedef struct {
 	(duckdb_v2_file_system_handle file_system, duckdb_v2_str path, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_file_system_remove_file)
 	(duckdb_v2_file_system_handle file_system, duckdb_v2_str path, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_system_stat)
+	(duckdb_v2_file_system_handle file_system, duckdb_v2_str path, duckdb_v2_file_stat_handle *stat,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_virtual_file_info_get_file_data)
 	(duckdb_v2_virtual_file_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_virtual_file_info_get_path)
@@ -1489,9 +1492,6 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_virtual_file_system_set_open_callback)
 	(duckdb_v2_virtual_file_system_handle file_system, duckdb_v2_virtual_file_system_open_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_virtual_file_system_set_path_type_callback)
-	(duckdb_v2_virtual_file_system_handle file_system, duckdb_v2_virtual_file_system_path_type_callback_fn callback,
-	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_virtual_file_system_set_read_at_callback)
 	(duckdb_v2_virtual_file_system_handle file_system, duckdb_v2_virtual_file_system_read_at_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
@@ -1509,6 +1509,9 @@ typedef struct {
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_virtual_file_system_set_stat_callback)
 	(duckdb_v2_virtual_file_system_handle file_system, duckdb_v2_virtual_file_system_stat_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_virtual_file_system_set_stat_path_callback)
+	(duckdb_v2_virtual_file_system_handle file_system, duckdb_v2_virtual_file_system_stat_path_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_virtual_file_system_set_sync_callback)
 	(duckdb_v2_virtual_file_system_handle file_system, duckdb_v2_virtual_file_system_sync_callback_fn callback,
@@ -2187,6 +2190,7 @@ typedef struct {
 #define duckdb_v2_file_system_move                       duckdb_ext_api.duckdb_v2_file_system_move
 #define duckdb_v2_file_system_remove_directory           duckdb_ext_api.duckdb_v2_file_system_remove_directory
 #define duckdb_v2_file_system_remove_file                duckdb_ext_api.duckdb_v2_file_system_remove_file
+#define duckdb_v2_file_system_stat                       duckdb_ext_api.duckdb_v2_file_system_stat
 #define duckdb_v2_virtual_file_info_get_file_data        duckdb_ext_api.duckdb_v2_virtual_file_info_get_file_data
 #define duckdb_v2_virtual_file_info_get_path             duckdb_ext_api.duckdb_v2_virtual_file_info_get_path
 #define duckdb_v2_virtual_file_info_has_flag             duckdb_ext_api.duckdb_v2_virtual_file_info_has_flag
@@ -2221,8 +2225,6 @@ typedef struct {
 #define duckdb_v2_virtual_file_system_set_move_callback duckdb_ext_api.duckdb_v2_virtual_file_system_set_move_callback
 #define duckdb_v2_virtual_file_system_set_name          duckdb_ext_api.duckdb_v2_virtual_file_system_set_name
 #define duckdb_v2_virtual_file_system_set_open_callback duckdb_ext_api.duckdb_v2_virtual_file_system_set_open_callback
-#define duckdb_v2_virtual_file_system_set_path_type_callback                                                           \
-	duckdb_ext_api.duckdb_v2_virtual_file_system_set_path_type_callback
 #define duckdb_v2_virtual_file_system_set_read_at_callback                                                             \
 	duckdb_ext_api.duckdb_v2_virtual_file_system_set_read_at_callback
 #define duckdb_v2_virtual_file_system_set_read_callback duckdb_ext_api.duckdb_v2_virtual_file_system_set_read_callback
@@ -2232,6 +2234,8 @@ typedef struct {
 	duckdb_ext_api.duckdb_v2_virtual_file_system_set_remove_file_callback
 #define duckdb_v2_virtual_file_system_set_seek_callback duckdb_ext_api.duckdb_v2_virtual_file_system_set_seek_callback
 #define duckdb_v2_virtual_file_system_set_stat_callback duckdb_ext_api.duckdb_v2_virtual_file_system_set_stat_callback
+#define duckdb_v2_virtual_file_system_set_stat_path_callback                                                           \
+	duckdb_ext_api.duckdb_v2_virtual_file_system_set_stat_path_callback
 #define duckdb_v2_virtual_file_system_set_sync_callback duckdb_ext_api.duckdb_v2_virtual_file_system_set_sync_callback
 #define duckdb_v2_virtual_file_system_set_tell_callback duckdb_ext_api.duckdb_v2_virtual_file_system_set_tell_callback
 #define duckdb_v2_virtual_file_system_set_truncate_callback                                                            \
