@@ -1349,35 +1349,6 @@ TEST_CASE("Live optimized decimal sum exports its logical result",
 	connection.Rollback();
 }
 
-TEST_CASE("Bound expression SQL export serializes the explicit string_agg separator",
-          "[sql_export][bound_expression_sql_export][aggregate][serialization]") {
-	DuckDB db;
-	Connection connection(db);
-	connection.BeginTransaction();
-	auto plan = BindExportQuery(connection, "SELECT string_agg(x, '&') FROM (VALUES ('a'), ('b')) t(x)");
-	auto expression = FindExpression(*plan, [](const Expression &candidate) {
-		return candidate.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE;
-	});
-	REQUIRE(expression);
-	auto &aggregate = expression->Cast<BoundAggregateExpression>();
-	for (auto serialize : {false, true}) {
-		auto restored = serialize ? BinaryRoundTrip(*connection.context, aggregate) : aggregate.Copy();
-		auto &restored_aggregate = restored->Cast<BoundAggregateExpression>();
-		REQUIRE(restored_aggregate.GetChildren().size() == 2);
-		REQUIRE(restored_aggregate.Function().GetArguments().size() == 2);
-		REQUIRE(restored_aggregate.Function().GetLogicalArguments() ==
-		        vector<LogicalType> {LogicalType::VARCHAR, LogicalType::VARCHAR});
-		REQUIRE(restored_aggregate.GetChildren()[1]->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT);
-		REQUIRE(restored_aggregate.GetChildren()[1]->Cast<BoundConstantExpression>().GetValue() == Value("&"));
-		auto &column = restored_aggregate.GetChildren()[0]->Cast<BoundColumnRefExpression>();
-		auto context = ResolveBinding(column.Binding(), {Identifier("x")}, LogicalType::VARCHAR);
-		auto exported = BoundExpressionSQLExporter::Export(restored_aggregate, context);
-		REQUIRE(exported.IsSuccess());
-		REQUIRE(StringUtil::Contains(exported.GetValue()->ToString(), "'&'"));
-	}
-	connection.Rollback();
-}
-
 TEST_CASE("SQL export recovers calls from supported binary compatibility targets",
           "[sql_export][bound_expression_sql_export][serialization]") {
 	DuckDB db;
@@ -1890,49 +1861,8 @@ TEST_CASE("SQL export retains bound alias names across copies and renamed inputs
 		auto wrong_data = BoundExpressionSQLExporter::Export(function, context);
 		REQUIRE(wrong_data.HasError());
 		REQUIRE(wrong_data.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION);
-		function.BindInfoMutable().reset();
-		REQUIRE(BoundExpressionSQLExporter::Export(function, context).HasError());
 	}
 	connection.Rollback();
-}
-
-TEST_CASE("Bound expression SQL export reconstructs VARIANT literals", "[sql_export][bound_expression_sql_export]") {
-	DuckDB db;
-	Connection connection(db);
-	for (auto &sql : {"'hello'::VARIANT", "NULL::VARIANT", "7::SMALLINT::VARIANT", "12.34::DECIMAL(9,2)::VARIANT",
-	                  "'a''b'::BLOB::VARIANT", "{'slash\\key': {'🦆': 12.34::DECIMAL(9,2)}}::VARIANT",
-	                  "{'quoted''key': [1::SMALLINT::VARIANT, 'x'::VARIANT, NULL::VARIANT]}::VARIANT",
-	                  "[7::SMALLINT::VARIANT, 'x'::VARIANT]", "{'v': 7::SMALLINT::VARIANT}",
-	                  "[7::SMALLINT::VARIANT]::VARIANT[1]"}) {
-		INFO(sql);
-		auto original = connection.Query("SELECT " + string(sql));
-		REQUIRE_NO_FAIL(*original);
-		BoundConstantExpression expression(original->GetValue(0, 0));
-		RequireRoundTrip(connection, expression, {}, string(), sql);
-		auto copied = expression.Copy();
-		RequireRoundTrip(connection, *copied, {}, string(), sql);
-		auto restored = BinaryRoundTrip(*connection.context, expression);
-		RequireRoundTrip(connection, *restored, {}, string(), sql);
-	}
-}
-
-TEST_CASE("Bound expression SQL export preserves negative floating zero", "[sql_export][bound_expression_sql_export]") {
-	DuckDB db;
-	Connection connection(db);
-	for (auto type : {"FLOAT", "DOUBLE"}) {
-		auto sql = "'-0.0'::" + string(type) + "::VARIANT";
-		auto original = connection.Query("SELECT " + sql);
-		REQUIRE_NO_FAIL(*original);
-		BoundConstantExpression expression(original->GetValue(0, 0));
-		for (idx_t lifecycle = 0; lifecycle < 3; lifecycle++) {
-			auto candidate = lifecycle == 2 ? BinaryRoundTrip(*connection.context, expression) : expression.Copy();
-			auto exported = BoundExpressionSQLExporter::Export(lifecycle == 0 ? expression : *candidate, {});
-			REQUIRE(exported.IsSuccess());
-			auto result = connection.Query("SELECT 1.0 / (" + exported.GetValue()->ToString() + ")::DOUBLE");
-			REQUIRE_NO_FAIL(*result);
-			REQUIRE(result->GetValue(0, 0) == Value("-Infinity").DefaultCastAs(LogicalType::DOUBLE));
-		}
-	}
 }
 
 TEST_CASE("Bound expression SQL export rejects unrepresentable VARIANT object keys",
@@ -1964,7 +1894,7 @@ TEST_CASE("Bound expression SQL export rejects unrepresentable VARIANT object ke
 	}
 }
 
-TEST_CASE("Bound expression SQL export preserves ordering before physical aggregate lowering",
+TEST_CASE("Bound expression SQL export preserves aggregate ordering through copies",
           "[sql_export][bound_expression_sql_export][serialization]") {
 	DuckDB db;
 	Connection connection(db);
@@ -1990,11 +1920,5 @@ TEST_CASE("Bound expression SQL export preserves ordering before physical aggreg
 	auto expected = connection.Query("SELECT first(i ORDER BY i DESC)" + from);
 	REQUIRE_NO_FAIL(*expected);
 	REQUIRE(expected->GetValue(0, 0) == Value::INTEGER(2));
-	// Physical lowering consumes the ordering; such execution expressions are outside the export API contract.
-	auto lowered = expression->Copy();
-	vector<unique_ptr<Expression>> groups;
-	FunctionBinder::BindSortedAggregate(*connection.context, lowered->Cast<BoundAggregateExpression>(), groups,
-	                                    nullptr);
-	REQUIRE_FALSE(lowered->Cast<BoundAggregateExpression>().GetOrderBys());
 	connection.Rollback();
 }

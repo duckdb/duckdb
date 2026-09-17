@@ -103,3 +103,39 @@ query TTT
 SELECT variant_extract_string(v, ''), variant_typeof(v.a[1]), variant_typeof(v.a[2].b) FROM (VALUES ({'a': [7::SMALLINT::VARIANT, {'b': 2::TINYINT, 'a': 3}::VARIANT]}::VARIANT)) t(v);
 ----
 {"a":[7,{"a":3,"b":2}]}	INT16	INT8
+
+foreach serializer false true
+
+statement ok
+SET debug_verify_serializer={serializer};
+
+query TTTTTTTTTTTT
+WITH literals AS MATERIALIZED (
+	SELECT
+		'hello'::VARIANT v0,
+		NULL::VARIANT v1,
+		7::SMALLINT::VARIANT v2,
+		12.34::DECIMAL(9,2)::VARIANT v3,
+		'a''b'::BLOB::VARIANT v4,
+		{'slash\key': {'🦆': 12.34::DECIMAL(9,2)}}::VARIANT v5,
+		{'quoted''key': [1::SMALLINT::VARIANT, 'x'::VARIANT, NULL::VARIANT]}::VARIANT v6,
+		[7::SMALLINT::VARIANT, 'x'::VARIANT] v7,
+		{'v': 7::SMALLINT::VARIANT} v8,
+		[7::SMALLINT::VARIANT]::VARIANT[1] v9
+)
+SELECT *,variant_typeof(v3),variant_typeof(v5."slash\key"."🦆") FROM literals;
+----
+hello	NULL	7	12.34	a\x27b	{'slash\\key': {'🦆': 12.34}}	{'quoted\'key': [1, x, NULL]}	[7, x]	{'v': 7}	[7]	DECIMAL(9, 2)	DECIMAL(9, 2)
+
+query RR
+WITH zeros AS MATERIALIZED (
+    SELECT '-0.0'::FLOAT::VARIANT f, '-0.0'::DOUBLE::VARIANT d
+)
+SELECT 1.0/f::DOUBLE,1.0/d::DOUBLE FROM zeros;
+----
+-inf	-inf
+
+endloop
+
+statement ok
+SET debug_verify_serializer=false;
