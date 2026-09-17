@@ -152,6 +152,24 @@ struct ExtensionAccess {
 //===--------------------------------------------------------------------===//
 // Static C API Extension Loading
 //===--------------------------------------------------------------------===//
+void DuckDB::LoadStaticCppExtension(const string &name, const string &version, ext_init_cpp_fun_t init_fun) {
+	auto &manager = ExtensionManager::Get(*instance);
+	auto load_info = manager.BeginLoad({name});
+	if (!load_info) {
+		// already loaded
+		return;
+	}
+
+	ExtensionLoader loader(*load_info);
+	(*init_fun)(loader);
+	loader.FinalizeLoad();
+
+	ExtensionInstallInfo install_info;
+	install_info.mode = ExtensionInstallMode::STATICALLY_LINKED;
+	install_info.version = version;
+	load_info->FinishLoad(install_info);
+}
+
 void DuckDB::LoadStaticCAPIExtension(const string &name, ext_init_c_api_fun_t init_fun) {
 	auto &manager = ExtensionManager::Get(*instance);
 	auto load_info = manager.BeginLoad({name});
