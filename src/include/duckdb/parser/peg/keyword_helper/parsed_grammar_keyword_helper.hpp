@@ -13,7 +13,7 @@ public:
 	explicit ParsedGrammarKeywordHelper(const ParsedGrammar &grammar);
 
 public:
-	uint8_t GetIdentifierMask(SuggestionState type) const override;
+	keyword_categories_t GetIdentifierMask(SuggestionState type) const override;
 	vector<ParserKeyword> KeywordList() const override;
 	const GrammarLiteralTable &GetLiteralTable() const override {
 		return literal_table;

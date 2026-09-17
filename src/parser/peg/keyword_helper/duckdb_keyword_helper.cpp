@@ -13,7 +13,7 @@ const DuckDBKeywordHelper &DuckDBKeywordHelper::Instance() {
 	return instance;
 }
 
-uint8_t DuckDBKeywordHelper::GetIdentifierMask(SuggestionState type) const {
+keyword_categories_t DuckDBKeywordHelper::GetIdentifierMask(SuggestionState type) const {
 	return DefaultKeywordMaps::GetIdentifierMask(type);
 }
 

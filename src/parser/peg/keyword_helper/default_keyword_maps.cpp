@@ -3,14 +3,14 @@
 
 namespace duckdb {
 
-static constexpr uint8_t KEYWORD_UNRESERVED = uint8_t(1) << 0;
-static constexpr uint8_t KEYWORD_RESERVED = uint8_t(1) << 1;
-static constexpr uint8_t KEYWORD_TYPE_FUNC = uint8_t(1) << 2;
-static constexpr uint8_t KEYWORD_COL_NAME = uint8_t(1) << 3;
-static constexpr uint8_t KEYWORD_TYPE_NAME = uint8_t(1) << 4;
+static constexpr keyword_categories_t KEYWORD_UNRESERVED = keyword_categories_t(1) << 0;
+static constexpr keyword_categories_t KEYWORD_RESERVED = keyword_categories_t(1) << 1;
+static constexpr keyword_categories_t KEYWORD_TYPE_FUNC = keyword_categories_t(1) << 2;
+static constexpr keyword_categories_t KEYWORD_COL_NAME = keyword_categories_t(1) << 3;
+static constexpr keyword_categories_t KEYWORD_TYPE_NAME = keyword_categories_t(1) << 4;
 
 LiteralInfo DefaultKeywordMaps::LookupKeyword(const string &text, uint16_t literal_id) const {
-	uint8_t flags = 0;
+	keyword_categories_t flags = 0;
 	if (unreserved_keyword_map.count(text)) {
 		flags |= KEYWORD_UNRESERVED;
 	}
@@ -29,7 +29,7 @@ LiteralInfo DefaultKeywordMaps::LookupKeyword(const string &text, uint16_t liter
 	return LiteralInfo(literal_id, flags);
 }
 
-uint8_t DefaultKeywordMaps::GetIdentifierMask(SuggestionState type) {
+keyword_categories_t DefaultKeywordMaps::GetIdentifierMask(SuggestionState type) {
 	switch (type) {
 	case SuggestionState::SUGGEST_TYPE_NAME:
 		return KEYWORD_UNRESERVED | KEYWORD_TYPE_NAME;

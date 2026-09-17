@@ -16,7 +16,7 @@ public:
 	const GrammarLiteralTable &GetLiteralTable() const override {
 		return literal_table;
 	}
-	uint8_t GetIdentifierMask(SuggestionState) const override {
+	keyword_categories_t GetIdentifierMask(SuggestionState) const override {
 		return 0;
 	}
 	vector<ParserKeyword> KeywordList() const override {

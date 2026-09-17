@@ -35,7 +35,7 @@ GrammarLiteralTable::GrammarLiteralTable(const ParsedGrammar &grammar,
 	}
 }
 
-void GrammarLiteralTable::Register(const string &text, uint8_t category_flags) {
+void GrammarLiteralTable::Register(const string &text, keyword_categories_t categories) {
 	auto entry = literals.find(text);
 	if (entry == literals.end()) {
 		if (literals.size() >= LiteralInfo::MAX_LITERAL_ID) {
@@ -44,7 +44,7 @@ void GrammarLiteralTable::Register(const string &text, uint8_t category_flags) {
 		auto id = static_cast<uint16_t>(literals.size() + 1);
 		entry = literals.emplace(text, LiteralInfo(id)).first;
 	}
-	entry->second.AddCategories(category_flags);
+	entry->second.AddCategories(categories);
 }
 
 } // namespace duckdb

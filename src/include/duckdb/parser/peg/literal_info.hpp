@@ -12,6 +12,9 @@
 
 namespace duckdb {
 
+//! Opaque, dialect-defined keyword category flags.
+using keyword_categories_t = uint8_t;
+
 //! A grammar-local literal ID and opaque keyword properties.
 class LiteralInfo {
 public:
@@ -21,7 +24,7 @@ public:
 	//! Zero denotes an unknown literal with no keyword flags, such as a non-keyword identifier.
 	LiteralInfo() : literal_id(0) {
 	}
-	explicit LiteralInfo(uint16_t literal_id, uint8_t category_flags = 0)
+	explicit LiteralInfo(uint16_t literal_id, keyword_categories_t category_flags = 0)
 	    : literal_id(literal_id), category_flags(category_flags) {
 	}
 
@@ -30,11 +33,11 @@ public:
 		return literal_id;
 	}
 
-	uint8_t CategoryFlags() const {
+	keyword_categories_t CategoryFlags() const {
 		return category_flags;
 	}
 
-	void AddCategories(uint8_t flags) {
+	void AddCategories(keyword_categories_t flags) {
 		category_flags |= flags;
 	}
 
@@ -42,7 +45,7 @@ public:
 		return category_flags != 0;
 	}
 
-	bool HasAnyFlags(uint8_t mask) const {
+	bool HasAnyFlags(keyword_categories_t mask) const {
 		return (category_flags & mask) != 0;
 	}
 
@@ -52,7 +55,7 @@ public:
 
 private:
 	uint16_t literal_id = 0;
-	uint8_t category_flags = 0;
+	keyword_categories_t category_flags = 0;
 };
 
 } // namespace duckdb

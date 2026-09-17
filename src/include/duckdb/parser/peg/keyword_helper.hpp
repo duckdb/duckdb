@@ -31,7 +31,7 @@ public:
 		return LookupKeyword(text).IsKeyword();
 	}
 	//! Opaque flags accepted in this identifier position, computed when creating a matcher.
-	virtual uint8_t GetIdentifierMask(SuggestionState type) const = 0;
+	virtual keyword_categories_t GetIdentifierMask(SuggestionState type) const = 0;
 	virtual vector<ParserKeyword> KeywordList() const = 0;
 	//! Every helper provides an immutable table containing its literals and keyword flags.
 	virtual const GrammarLiteralTable &GetLiteralTable() const = 0;

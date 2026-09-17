@@ -13,7 +13,7 @@ public:
 	static const DuckDBKeywordHelper &Instance();
 
 public:
-	uint8_t GetIdentifierMask(SuggestionState type) const override;
+	keyword_categories_t GetIdentifierMask(SuggestionState type) const override;
 	KeywordCategory GetKeywordCategory(const string &text) const;
 	vector<ParserKeyword> KeywordList() const override;
 	const GrammarLiteralTable &GetLiteralTable() const override {

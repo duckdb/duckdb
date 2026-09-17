@@ -11,7 +11,7 @@ enum class SuggestionState : uint8_t;
 class DefaultKeywordMaps {
 public:
 	DUCKDB_API LiteralInfo LookupKeyword(const string &text, uint16_t literal_id = 0) const;
-	DUCKDB_API static uint8_t GetIdentifierMask(SuggestionState type);
+	DUCKDB_API static keyword_categories_t GetIdentifierMask(SuggestionState type);
 	DUCKDB_API static KeywordCategory GetKeywordCategory(LiteralInfo info);
 	//! All recognized categories, in reserved, unreserved, type-function, column-name, type-name order.
 	DUCKDB_API static vector<KeywordCategory> GetKeywordCategories(LiteralInfo info);

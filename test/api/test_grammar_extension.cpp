@@ -220,12 +220,12 @@ TEST_CASE("Literal IDs and opaque flags are independent", "[api][grammar_extensi
 	REQUIRE(original.LiteralId() == 65535);
 	REQUIRE_FALSE(original.IsKeyword());
 	LiteralInfo accumulated(LiteralInfo::MAX_LITERAL_ID);
-	uint8_t expected_flags = 0;
+	keyword_categories_t expected_flags = 0;
 	for (idx_t bit = 0; bit < 8; bit++) {
-		auto flag = static_cast<uint8_t>(1U << bit);
+		auto flag = static_cast<keyword_categories_t>(1U << bit);
 		LiteralInfo literal(LiteralInfo::MAX_LITERAL_ID, flag);
 		REQUIRE(literal.HasAnyFlags(flag));
-		REQUIRE_FALSE(literal.HasAnyFlags(static_cast<uint8_t>(~flag)));
+		REQUIRE_FALSE(literal.HasAnyFlags(static_cast<keyword_categories_t>(~flag)));
 		REQUIRE_FALSE(literal.HasAnyFlags(0));
 		REQUIRE(literal.IsKeyword());
 		REQUIRE(literal.LiteralId() == original.LiteralId());
@@ -277,7 +277,7 @@ TEST_CASE("Default keyword categories decode independently of literal IDs", "[ap
 TEST_CASE("Grammar literal IDs reject overflow", "[api][grammar_extension]") {
 	auto grammar = ParsedGrammar::Parse("LiteralTest <- '('");
 	case_insensitive_map_t<LiteralInfo> keywords;
-	const uint8_t flags = 0xC0;
+	const keyword_categories_t flags = 0xC0;
 	for (idx_t i = 1; i < LiteralInfo::MAX_LITERAL_ID; i++) {
 		keywords.emplace("literal_limit_" + to_string(i), LiteralInfo(0, flags));
 	}
@@ -322,8 +322,8 @@ TEST_CASE("Grammar literal IDs include category-only words and overlapping categ
 
 TEST_CASE("Grammar literal tables preserve dialect-defined flags", "[api][grammar_extension]") {
 	auto grammar = ParsedGrammar::Parse("LiteralTest <- 'SHARED' / 'shared' / 'plain'");
-	const uint8_t first_flag = uint8_t(1) << 6;
-	const uint8_t second_flag = uint8_t(1) << 7;
+	const keyword_categories_t first_flag = keyword_categories_t(1) << 6;
+	const keyword_categories_t second_flag = keyword_categories_t(1) << 7;
 	case_insensitive_map_t<LiteralInfo> keywords;
 	keywords.emplace("shared", LiteralInfo(0, first_flag | second_flag));
 	keywords.emplace("category_only", LiteralInfo(0, second_flag));
@@ -392,7 +392,7 @@ public:
 	const GrammarLiteralTable &GetLiteralTable() const override {
 		return literal_table;
 	}
-	uint8_t GetIdentifierMask(SuggestionState type) const override {
+	keyword_categories_t GetIdentifierMask(SuggestionState type) const override {
 		return DefaultKeywordMaps::GetIdentifierMask(type);
 	}
 	vector<ParserKeyword> KeywordList() const override {
