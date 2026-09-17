@@ -3,8 +3,7 @@
 // Roots the @NAME@ extension into a binary. Nothing references this object, so a link names it with
 // -u duckdb_extension_@NAME@_root (see duckdb_link_root in extension_build_tools.cmake); that extracts it from the
 // extension's archive, and its registrar then publishes the extension to the engine before main.
-// A loadable extension never names it, so this object stays out of it. Clients that include
-// duckdb_autolink.h name every known extension, so putting the archive on the link line is enough.
+// A loadable extension never names it, so this object stays out of it.
 
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension/linked_extension_registry.hpp"

@@ -777,8 +777,7 @@ jobs:
             src/include/duckdb.h \
             src/include/duckdb_v2.h \
             src/include/duckdb_extension.h \
-            src/include/duckdb_extension_v2.h \
-            src/include/duckdb_autolink.h
+            src/include/duckdb_extension_v2.h
           assets+=(libduckdb-src.zip)
         fi
         if [[ "${{ matrix.config.publish_static }}" == "true" ]]; then

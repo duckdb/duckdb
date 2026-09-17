@@ -67,7 +67,6 @@ class PackageReleaseArtifactTest(unittest.TestCase):
                         "duckdb_v2.h",
                         "duckdb_extension.h",
                         "duckdb_extension_v2.h",
-                        "duckdb_autolink.h",
                     },
                 )
                 self.assertTrue(members["libduckdb.so"].issym())
@@ -102,7 +101,6 @@ class PackageReleaseArtifactTest(unittest.TestCase):
                         "duckdb_v2.h",
                         "duckdb_extension.h",
                         "duckdb_extension_v2.h",
-                        "duckdb_autolink.h",
                     },
                 )
                 self.assertEqual(archive.extractfile(members["libduckdb_static.a"]).read(), b"library")

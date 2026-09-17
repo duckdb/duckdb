@@ -677,6 +677,18 @@ cli-release-artifact:
 shared-libs-release-artifact:
 	bash scripts/package_release_artifact.sh shared-libs "$(ARTIFACT_SUFFIX)" $(SHARED_LIBRARIES)
 
+# Writes a C source that links statically built extensions into a program: compile it next to your own sources and put
+# the extension archives before libduckdb_static.a. LINK_EXTENSIONS picks the extensions (space or semicolon
+# separated); without it, every extension archive in LINK_HELPER_BUILD_DIR is used.
+LINK_HELPER_BUILD_DIR ?= build/release
+LINK_HELPER_FILE ?= $(LINK_HELPER_BUILD_DIR)/link_helper.c
+
+.PHONY: link_helper
+link_helper:
+	$(PYTHON) scripts/generate_extension_roots.py --output "$(LINK_HELPER_FILE)" \
+		$(if $(LINK_EXTENSIONS),"$(LINK_EXTENSIONS)",$(patsubst lib%_extension.a,%,$(notdir $(wildcard $(LINK_HELPER_BUILD_DIR)/extension/*/lib*_extension.a))))
+	@echo "Wrote $(LINK_HELPER_FILE)"
+
 .PHONY: static-libs-release-artifact
 
 static-libs-release-artifact:
@@ -935,7 +947,6 @@ generate-files: $(CAPIGEN_SETUP_DEPS)
 	$(PYTHON) scripts/generate_util.py
 	$(PYTHON) scripts/generate_storage_info.py
 	$(PYTHON) scripts/generate_enum_util.py
-	$(PYTHON) scripts/generate_autolink.py
 	$(PYTHON) scripts/generate_html_template.py
 	$(MAKE) parser-grammar
 # Run the formatter again after (re)generating the files

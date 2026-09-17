@@ -57,9 +57,6 @@ endfunction()
 
 add_definitions(-DDUCKDB_MAIN_LIBRARY)
 
-# the engine never takes part in automatic extension linking, only clients do
-add_definitions(-DDUCKDB_NO_AUTOLINK)
-
 add_subdirectory(optimizer)
 add_subdirectory(planner)
 add_subdirectory(parser)
@@ -94,9 +91,7 @@ foreach(LINK_LIB ${DUCKDB_LINK_LIBS})
   list(APPEND LINK_OBJECTS $<TARGET_OBJECTS:${LINK_LIB}>)
 endforeach(LINK_LIB)
 
-# one weak no-op <name>_link per known extension, as on-demand members
-add_library(duckdb_static STATIC ${ALL_OBJECT_FILES} ${LINK_OBJECTS}
-                                 $<TARGET_OBJECTS:duckdb_autolink_fallbacks>)
+add_library(duckdb_static STATIC ${ALL_OBJECT_FILES} ${LINK_OBJECTS})
 target_link_libraries(duckdb_static PUBLIC ${DUCKDB_SYSTEM_LIBS})
 link_threads(duckdb_static PUBLIC)
 
@@ -110,7 +105,6 @@ link_threads(duckdb_static PUBLIC)
 add_library(duckdb SHARED ${ALL_OBJECT_FILES} ${LINK_OBJECTS})
 target_link_libraries(duckdb PUBLIC ${DUCKDB_SYSTEM_LIBS})
 link_extension_libraries(duckdb PRIVATE)
-export_known_extension_links(duckdb)
 
 link_threads(duckdb PUBLIC)
 

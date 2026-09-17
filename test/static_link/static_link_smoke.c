@@ -1,7 +1,6 @@
-// Links the parquet archive with no -u and no generated loader: the table that duckdb.h carries has to
-// select it, with the engine archive last on the link line. Exits non-zero if parquet is not loaded.
+// Links the parquet archive and names only its root: the root member has to register parquet with the engine. Exits
+// non-zero if parquet is not loaded.
 #include "duckdb.h"
-#include "duckdb_autolink.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -32,7 +31,7 @@ int main(void) {
 	duckdb_disconnect(&con);
 	duckdb_close(&db);
 	if (!found) {
-		fprintf(stderr, "parquet was on the link line but is not loaded: automatic linking is broken\n");
+		fprintf(stderr, "parquet was on the link line but is not loaded: its root member did not register it\n");
 		return 1;
 	}
 	return 0;
