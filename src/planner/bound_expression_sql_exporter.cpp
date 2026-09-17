@@ -284,6 +284,15 @@ static unique_ptr<ParsedExpression> IntervalSQLConstant(const interval_t &value)
 }
 
 class BoundExpressionSQLExportState {
+	struct ChildExpression {
+		ChildExpression(optional_ptr<const Expression> expression_p, optional<LogicalType> expected_type_p = {})
+		    : expression(expression_p), expected_type(std::move(expected_type_p)) {
+		}
+
+		optional_ptr<const Expression> expression;
+		optional<LogicalType> expected_type;
+	};
+
 public:
 	explicit BoundExpressionSQLExportState(const BoundExpressionSQLExportContext &context_p) : context(context_p) {
 	}
@@ -505,36 +514,31 @@ private:
 			    path, "window_range_offset", "The RANGE endpoint does not retain its SQL offset and ordering operand"));
 		}
 
-		vector<optional_ptr<const Expression>> source_children;
-		vector<optional<LogicalType>> expected_types;
-		auto add_child = [&](optional_ptr<const Expression> child, optional<LogicalType> type = {}) {
-			source_children.push_back(child.get());
-			expected_types.push_back(std::move(type));
-		};
+		vector<ChildExpression> source_children;
 		for (auto &partition : expression.Partitions()) {
-			add_child(partition.get());
+			source_children.emplace_back(partition.get());
 		}
 		for (auto &order : expression.OrderBy()) {
-			add_child(sql_order ? sql_order : order.expression.get());
+			source_children.emplace_back(sql_order ? sql_order : order.expression.get());
 		}
 		for (idx_t i = 0; i < expression.GetChildren().size(); i++) {
-			add_child(expression.GetChildren()[i].get());
+			source_children.emplace_back(expression.GetChildren()[i].get());
 		}
 		if (expression.Filter()) {
-			add_child(expression.Filter().get(), LogicalType::BOOLEAN);
+			source_children.emplace_back(expression.Filter().get(), LogicalType::BOOLEAN);
 		}
 		if (expression.StartExpr()) {
-			add_child(start);
+			source_children.emplace_back(start);
 		}
 		if (expression.EndExpr()) {
-			add_child(end);
+			source_children.emplace_back(end);
 		}
 		for (auto &order : expression.ArgOrders()) {
-			add_child(order.expression.get());
+			source_children.emplace_back(order.expression.get());
 		}
 		vector<unique_ptr<ParsedExpression>> children;
 		vector<LogicalPlanVerificationIssue> issues;
-		ExportChildren(source_children, path, children, issues, expected_types);
+		ExportChildren(source_children, path, children, issues);
 		if (!issues.empty()) {
 			return BoundExpressionSQLExportResult::Failure(std::move(issues));
 		}
@@ -1087,20 +1091,16 @@ private:
 		if (!IsSQLValueType(expression.GetReturnType()) || expression.CaseChecks().empty()) {
 			return Failure(InternalExpressionInvariant(path, expression, "Bound CASE has malformed type or arity"));
 		}
-		vector<optional_ptr<const Expression>> source_children;
-		vector<optional<LogicalType>> expected_types;
+		vector<ChildExpression> source_children;
 		for (auto &check : expression.CaseChecks()) {
-			source_children.push_back(check.when_expr.get());
-			expected_types.push_back(LogicalType::BOOLEAN);
-			source_children.push_back(check.then_expr.get());
-			expected_types.push_back(expression.GetReturnType());
+			source_children.emplace_back(check.when_expr.get(), LogicalType::BOOLEAN);
+			source_children.emplace_back(check.then_expr.get(), expression.GetReturnType());
 		}
-		source_children.push_back(expression.ElseExpression().get());
-		expected_types.push_back(expression.GetReturnType());
+		source_children.emplace_back(expression.ElseExpression().get(), expression.GetReturnType());
 
 		vector<unique_ptr<ParsedExpression>> children;
 		vector<LogicalPlanVerificationIssue> issues;
-		ExportChildren(source_children, path, children, issues, expected_types);
+		ExportChildren(source_children, path, children, issues);
 		if (!issues.empty()) {
 			return BoundExpressionSQLExportResult::Failure(std::move(issues));
 		}
@@ -1438,15 +1438,12 @@ private:
 			return AggregateFailure(UnsupportedFunction(
 			    path, std::move(identity), "The bound aggregate requires argument aliases that are not retained"));
 		}
-		vector<optional_ptr<const Expression>> source_children;
-		vector<optional<LogicalType>> expected_types;
+		vector<ChildExpression> source_children;
 		for (idx_t child_index = 0; child_index < expression.GetChildren().size(); child_index++) {
-			source_children.push_back(expression.GetChildren()[child_index].get());
-			expected_types.emplace_back();
+			source_children.emplace_back(expression.GetChildren()[child_index].get());
 		}
 		if (expression.GetFilter()) {
-			source_children.push_back(expression.GetFilter().get());
-			expected_types.push_back(LogicalType::BOOLEAN);
+			source_children.emplace_back(expression.GetFilter().get(), LogicalType::BOOLEAN);
 		}
 		if (expression.GetOrderBys()) {
 			for (auto &order : expression.GetOrderBys()->orders) {
@@ -1456,14 +1453,13 @@ private:
 					return AggregateFailure(
 					    InternalExpressionInvariant(path, expression, "Bound aggregate has an invalid ordering mode"));
 				}
-				source_children.push_back(order.expression.get());
-				expected_types.emplace_back();
+				source_children.emplace_back(order.expression.get());
 			}
 		}
 
 		vector<unique_ptr<ParsedExpression>> children;
 		vector<LogicalPlanVerificationIssue> issues;
-		ExportChildren(source_children, path, children, issues, expected_types);
+		ExportChildren(source_children, path, children, issues);
 		if (!issues.empty()) {
 			return BoundAggregateSQLExportResult::Failure(std::move(issues));
 		}
@@ -1531,33 +1527,29 @@ private:
 	void ExportChildren(const vector<unique_ptr<Expression>> &source, const LogicalPlanVerificationPath &path,
 	                    vector<unique_ptr<ParsedExpression>> &result, vector<LogicalPlanVerificationIssue> &issues,
 	                    const optional<LogicalType> &expected_type = {}) {
-		vector<optional_ptr<const Expression>> source_refs;
-		vector<optional<LogicalType>> expected_types;
+		vector<ChildExpression> source_children;
 		for (auto &child : source) {
-			source_refs.push_back(child.get());
-			expected_types.push_back(expected_type);
+			source_children.emplace_back(child.get(), expected_type);
 		}
-		ExportChildren(source_refs, path, result, issues, expected_types);
+		ExportChildren(source_children, path, result, issues);
 	}
 
-	void ExportChildren(const vector<optional_ptr<const Expression>> &source, const LogicalPlanVerificationPath &path,
-	                    vector<unique_ptr<ParsedExpression>> &result, vector<LogicalPlanVerificationIssue> &issues,
-	                    const vector<optional<LogicalType>> &expected_types) {
-		D_ASSERT(source.size() == expected_types.size());
+	void ExportChildren(const vector<ChildExpression> &source, const LogicalPlanVerificationPath &path,
+	                    vector<unique_ptr<ParsedExpression>> &result, vector<LogicalPlanVerificationIssue> &issues) {
 		result.resize(source.size());
 		for (idx_t child_index = 0; child_index < source.size(); child_index++) {
 			auto child_path = ChildPath(path, child_index);
-			if (!source[child_index]) {
+			auto &input = source[child_index];
+			if (!input.expression) {
 				issues.push_back(InternalInvariant(child_path, "Bound expression has a null child"));
 				continue;
 			}
-			if (expected_types[child_index].has_value() &&
-			    source[child_index]->GetReturnType() != expected_types[child_index].value()) {
-				issues.push_back(InternalExpressionInvariant(child_path, *source[child_index],
+			if (input.expected_type && input.expression->GetReturnType() != *input.expected_type) {
+				issues.push_back(InternalExpressionInvariant(child_path, *input.expression,
 				                                             "Bound expression child has an unexpected type"));
 				continue;
 			}
-			auto child = Export(*source[child_index], child_path);
+			auto child = Export(*input.expression, child_path);
 			if (child.HasError()) {
 				for (auto &issue : child.GetIssues()) {
 					issues.push_back(issue);
