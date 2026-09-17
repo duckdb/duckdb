@@ -26,6 +26,10 @@ namespace duckdb {
 enum class TablePartitionInfo : uint8_t;
 struct PartitionStatistics;
 struct MultiFileOptions;
+class DeleteFilter;
+struct BaseFileReaderExpression;
+struct MultiFileGlobalIndex;
+struct MultiFileColumnDefinition;
 
 //! Controls how a table function manages parallelism.
 enum class TableFunctionParallelism : uint8_t {
@@ -183,6 +187,19 @@ struct TableFunctionInitInput {
 	//! bound to. Only set for functions that declare "supports_cast_map" - the function converts to these types
 	//! while reading, rather than having the conversion applied to its output
 	optional_ptr<const unordered_map<column_t, LogicalType>> cast_map;
+	//! (Optional) The index each of the filters above has in the scan - a function that keeps state per filter
+	//! across the files of a scan (like an adaptive filter order) identifies them by these
+	optional_ptr<const vector<MultiFileGlobalIndex>> filter_global_indices;
+	//! (Optional) Expressions the function must evaluate on the columns of its file before the filters above are
+	//! applied - the caller uses these when a filter could not be expressed in the types the file stores
+	optional_ptr<const unordered_map<ProjectionIndex, BaseFileReaderExpression>> expression_map;
+	//! (Optional) The rows the caller has deleted from this file, which the function must not produce. The caller
+	//! keeps ownership of the filter - it outlives the scan the function initializes here
+	optional_ptr<DeleteFilter> deletion_filter;
+	//! (Optional) The virtual columns among the column indexes above, as a map of the index the caller projects
+	//! them in to the virtual column id it wants there. A caller that reads several files with this function gives
+	//! a virtual column an index of its own, past the columns the function bound
+	optional_ptr<const unordered_map<column_t, column_t>> virtual_columns;
 	//! (Optional) When the caller reads several files with this function, the index of the file this scan reads
 	//! and the number of files it reads in total. "op" is then the operator all those files are read for
 	optional_idx file_index;
@@ -444,6 +461,11 @@ typedef virtual_column_map_t (*table_function_get_virtual_columns_t)(ClientConte
 typedef vector<column_t> (*table_function_get_row_id_columns)(ClientContext &context,
                                                               optional_ptr<FunctionData> bind_data);
 
+//! The columns of the file a function reads, with their nested structure and identifiers. A multi-file caller maps
+//! the files of a scan onto one another with these, so reporting only names and types is not enough
+typedef vector<MultiFileColumnDefinition> (*table_function_get_file_columns_t)(ClientContext &context,
+                                                                               const FunctionData &bind_data);
+
 typedef void (*table_function_set_scan_order)(unique_ptr<RowGroupOrderOptions> order_options,
                                               optional_ptr<FunctionData> bind_data);
 
@@ -547,6 +569,8 @@ public:
 	//! (Optional) combines the schemas of several files that were bound individually into a single schema
 	//! Used when this function reads a single file and is wrapped into a multi-file function
 	table_function_combine_schema_t combine_schema;
+	//! (Optional) the columns of the file this function reads - see table_function_get_file_columns_t
+	table_function_get_file_columns_t get_file_columns;
 	//! (Optional) claims the next batch for a local state - see table_function_claim_batch_t
 	table_function_claim_batch_t claim_batch;
 	//! (Optional) called when a local state will not scan any more batches - see table_function_finish_batch_t
@@ -595,6 +619,10 @@ public:
 	//! Whether or not the table function supports projection pushdown. If not supported a projection will be added
 	//! that filters out unused columns.
 	bool projection_pushdown;
+	//! Whether one local state may be used to scan several files in turn. A multi-file caller then keeps the state
+	//! it created rather than making a new one per file, so that what the function learns while reading a file
+	//! (like the order its filters are best applied in) carries over to the next
+	bool reuses_local_state;
 	//! Whether the function can produce columns as a different type than it bound them - see
 	//! TableFunctionInitInput::cast_map. A function that reads one file of a multi-file scan uses this to report the
 	//! schema of its own file, and still produce the types of the scan
@@ -616,6 +644,10 @@ public:
 	StatementReturnType call_return_type = StatementReturnType::QUERY_RESULT;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
+	//! (Optional) For a multi-file function that wraps a single-file one: the wrapped function and how it is
+	//! exposed. This is kept apart from "function_info" above, which callers of a multi-file function replace with
+	//! info of their own (e.g. DuckLake scanning parquet files it manages)
+	shared_ptr<TableFunctionInfo> multi_file_info;
 	//! The order preservation type of the table function
 	OrderPreservationType order_preservation_type = OrderPreservationType::INSERTION_ORDER;
 

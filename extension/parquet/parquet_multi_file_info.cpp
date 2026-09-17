@@ -1,4 +1,5 @@
 #include "parquet_multi_file_info.hpp"
+#include "duckdb/common/multi_file/table_function_multi_file.hpp"
 #include "duckdb/main/client_context.hpp"
 
 #include <stdint.h>
@@ -88,23 +89,6 @@ private:
 	bool attempted_to_load_caches = false;
 };
 
-struct ParquetReadGlobalState : public GlobalTableFunctionState {
-	explicit ParquetReadGlobalState(optional_ptr<const PhysicalOperator> op_p) : row_group_index(0), op(op_p) {
-	}
-	//! Index of row group within file currently up for scanning
-	idx_t row_group_index;
-	//! (Optional) pointer to physical operator performing the scan
-	optional_ptr<const PhysicalOperator> op;
-	//! Row groups read but not yet reported to the profiler
-	atomic<idx_t> row_groups_scanned_unreported {0};
-	//! Total considered, across all scan states
-	atomic<idx_t> total_row_groups_to_scan {0};
-};
-
-struct ParquetReadLocalState : public LocalTableFunctionState {
-	ParquetReaderScanState scan_state;
-	idx_t group_index;
-};
 
 static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, ParquetOptions &options,
                                      vector<LogicalType> &return_types, vector<Identifier> &names) {
@@ -119,10 +103,8 @@ static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, Parquet
 	}
 }
 
-static void BindSchema(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
-                       MultiFileBindData &bind_data) {
-	auto &parquet_bind = bind_data.bind_data->Cast<ParquetReadBindData>();
-	auto &options = parquet_bind.GetParquetOptions();
+static void BindSchema(ClientContext &context, ParquetOptions &options, vector<LogicalType> &return_types,
+                       vector<Identifier> &names, MultiFileBindData &bind_data) {
 	D_ASSERT(!options.schema.empty());
 
 	auto &file_options = bind_data.file_options;
@@ -196,7 +178,7 @@ void ParquetMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType
 	auto &parquet_bind = bind_data.bind_data->Cast<ParquetReadBindData>();
 	auto &options = parquet_bind.GetParquetOptions();
 	if (!options.schema.empty()) {
-		BindSchema(context, return_types, names, bind_data);
+		BindSchema(context, options, return_types, names, bind_data);
 	} else {
 		bind_data.reader_bind =
 		    bind_data.multi_file_reader->BindReader(context, return_types, names, *bind_data.file_list, bind_data,
@@ -512,8 +494,7 @@ static vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &conte
 	return result;
 }
 
-TableFunctionSet ParquetScanFunction::GetFunctionSet() {
-	MultiFileFunction<ParquetMultiFileInfo> table_function("parquet_scan");
+void ParquetScanFunction::AddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["file_row_number"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["debug_use_openssl"] = LogicalType::BOOLEAN;
@@ -525,6 +506,67 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	table_function.named_parameters["can_have_nan"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["prefetch_strategy"] = LogicalType::VARCHAR;
 	table_function.named_parameters["utf8_validation"] = LogicalType::VARCHAR;
+}
+
+//! The parquet "schema" option describes the schema of the scan - every file is mapped onto it, by field id or by
+//! name. Returns false when the option was not given, which binds the schema from the files as usual
+static bool ParquetBindScanSchema(ClientContext &context, MultiFileBindData &bind_data,
+                                  const named_parameter_map_t &named_parameters, vector<LogicalType> &return_types,
+                                  vector<Identifier> &names) {
+	ParquetMultiFileInfo interface;
+	ParquetFileReaderOptions options(context);
+	for (auto &named_parameter : named_parameters) {
+		interface.ParseOption(context, named_parameter.first, named_parameter.second, bind_data.file_options, options);
+	}
+	if (options.options.schema.empty()) {
+		return false;
+	}
+	BindSchema(context, options.options, return_types, names, bind_data);
+	return true;
+}
+
+static TableFunctionMultiFileSettings ParquetMultiFileSettings() {
+	TableFunctionMultiFileSettings settings;
+	settings.glob_input = FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "parquet");
+	settings.reader_type = "Parquet";
+	settings.bind_scan_schema = ParquetBindScanSchema;
+	return settings;
+}
+
+//! Bind a parquet scan. The wrapped single-file function is resolved here rather than taken from the function that
+//! is being bound - callers that manage parquet files themselves (e.g. DuckLake) bind this through a TableFunction
+//! they construct, which carries none of our info
+static unique_ptr<FunctionData> ParquetMultiFileBind(ClientContext &context, TableFunctionBindInput &input,
+                                                     vector<LogicalType> &return_types, vector<Identifier> &names) {
+	return TableFunctionMultiFileWrapper::MultiFileBindWith(context, input, return_types, names,
+	                                                        ParquetScanFunction::GetSingleFileFunction(),
+	                                                        ParquetMultiFileSettings());
+}
+
+TableFunction ParquetScanFunction::GetMultiFileFunction(Identifier name) {
+	// the multi-file parquet reader is the single-file parquet reader wrapped into a multi-file function
+	auto result =
+	    TableFunctionMultiFileWrapper::CreateFunction(GetSingleFileFunction(), std::move(name),
+	                                                  ParquetMultiFileSettings());
+	result.bind = ParquetMultiFileBind;
+	// the callbacks below describe the scan rather than one of its files, so they are set on the wrapper
+	result.get_row_id_columns = ParquetGetRowIdColumns;
+	result.supports_pushdown_extract = ParquetScanSupportPushdownExtract;
+	result.pushdown_expression = ParquetScanPushdownExpression;
+	// NOTE: several callbacks of the multi-file parquet reader are deliberately NOT set here, because they read
+	// the parquet reader out of the scan - "initial_reader" is a TableFunctionFileReader through the wrapper, and
+	// the bind data it holds is that of the wrapper rather than ParquetReadBindData:
+	//  * "get_metrics" would report row groups scanned, which live in the reader's own global state
+	//  * "projection_expression_pushdown" pushes strlen/octet_length into the reader of the (single) file
+	//  * "supports_pushdown_extract" and "pushdown_expression" only pay off with the pushdown above, and produce
+	//    wrongly typed columns without it
+	//  * "get_partition_stats" reads the row group statistics of the reader
+	return result;
+}
+
+TableFunctionSet ParquetScanFunction::GetFunctionSet() {
+	MultiFileFunction<ParquetMultiFileInfo> table_function("parquet_scan");
+	AddNamedParameters(table_function);
 	table_function.statistics_extended = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStatsExtended;
 	table_function.get_metrics = ParquetScanGetMetrics;
 	table_function.projection_expression_pushdown = ParquetProjectionExpressionPushdown;

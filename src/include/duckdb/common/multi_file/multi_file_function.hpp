@@ -1065,6 +1065,23 @@ public:
 
 	static unique_ptr<BaseStatistics> MultiFileScanStatsExtended(ClientContext &context,
 	                                                             TableFunctionGetStatisticsInput &input) {
+		auto result = MultiFileScanStatsInternal(context, input);
+		if (!result) {
+			return nullptr;
+		}
+		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
+		auto &column_index = input.column_index;
+		if (!column_index.IsVirtualColumn() && !column_index.IsPushdownExtract() &&
+		    result->GetType() != bind_data.types[column_index.GetPrimaryIndex()]) {
+			// the column is read as a type other than the one the file stores it as - the statistics of the file
+			// describe the stored type, so they say nothing about the column the scan produces
+			return nullptr;
+		}
+		return result;
+	}
+
+	static unique_ptr<BaseStatistics> MultiFileScanStatsInternal(ClientContext &context,
+	                                                            TableFunctionGetStatisticsInput &input) {
 		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
 		auto &column_index = input.column_index;
 

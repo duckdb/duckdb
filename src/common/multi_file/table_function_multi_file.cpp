@@ -19,6 +19,18 @@ public:
 	//! The operator the files are scanned for, and how many files that scan reads
 	optional_ptr<const PhysicalOperator> op;
 	idx_t file_count = 1;
+	//! What the wrapped function has reported for the files of this scan. A reader is released once its file is
+	//! done, so the metrics of a file are collected here before that happens.
+	//! "scanned" is handed over and cleared on every report - the profiler sums what each thread reports, so a
+	//! scanned row group must be handed over exactly once. "total" is the size of the scan, which every thread
+	//! reports identically and the profiler does not sum, so it is never cleared
+	mutex metrics_lock;
+	idx_t collected_scanned = 0;
+	idx_t finished_total = 0;
+	//! The largest size the scan has been seen to have. The size grows as row groups are registered, and the
+	//! profiler keeps whichever value was reported last rather than the largest - so a thread reporting while the
+	//! scan is still growing must not report less than one that reported before it
+	idx_t total_high_water = 0;
 };
 
 class TableFunctionMultiFileLocalState : public LocalTableFunctionState {
@@ -82,7 +94,13 @@ void TableFunctionFileReader::BindFunction(ClientContext &context, const TableFu
 	names.clear();
 	types.clear();
 	bind_data = function.bind(context, bind_input, types, names);
-	columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(names, types);
+	if (function.get_file_columns && bind_data) {
+		// the function describes the columns of its file itself - names and types alone would lose their nested
+		// structure and the identifiers that map the files of a scan onto one another
+		columns = function.get_file_columns(context, *bind_data);
+	} else {
+		columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(names, types);
+	}
 
 	cardinality = optional_idx();
 	if (function.cardinality) {
@@ -119,7 +137,27 @@ unique_ptr<BaseStatistics> TableFunctionFileReader::GetStatistics(ClientContext 
 }
 
 void TableFunctionFileReader::AddVirtualColumn(column_t virtual_column_id) {
-	throw NotImplementedException("Table function %s does not support reading virtual columns", function.name);
+	if (!function.get_virtual_columns) {
+		throw NotImplementedException("Table function %s does not support reading virtual columns", function.name);
+	}
+	// our caller has given this virtual column an index of its own, past the columns the function bound - the
+	// function is told which virtual column that index stands for when it is initialized
+	D_ASSERT(!columns.empty());
+	virtual_columns[columns.size() - 1] = virtual_column_id;
+}
+
+void TableFunctionFileReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) {
+	if (!function.get_metrics || !global_state) {
+		return;
+	}
+	// this reader is about to be released - collect what the wrapped function reported for its file
+	auto &gstate = gstate_p.Cast<TableFunctionMultiFileGlobalState>();
+	OperatorMetrics file_metrics;
+	TableFunctionGetMetricsInput input(context, bind_data.get(), nullptr, global_state.get(), file_metrics);
+	function.get_metrics(input);
+	lock_guard<mutex> guard(gstate.metrics_lock);
+	gstate.collected_scanned += file_metrics.row_groups_scanned;
+	gstate.finished_total += file_metrics.total_row_groups_to_scan;
 }
 
 TableFunctionInitInput TableFunctionFileReader::GetInitInput() const {
@@ -127,6 +165,18 @@ TableFunctionInitInput TableFunctionFileReader::GetInitInput() const {
 	// (local) columns it is asked for, in order
 	vector<idx_t> projection_ids;
 	TableFunctionInitInput input(bind_data.get(), column_indexes, projection_ids, filters.get());
+	if (!virtual_columns.empty()) {
+		input.virtual_columns = virtual_columns;
+	}
+	if (deletion_filter) {
+		input.deletion_filter = *deletion_filter;
+	}
+	if (!expression_map.empty()) {
+		input.expression_map = expression_map;
+	}
+	if (!filter_global_indices.empty()) {
+		input.filter_global_indices = filter_global_indices;
+	}
 	input.file_index = file_list_idx;
 	input.file_count = scan_file_count;
 	input.op = scan_op;
@@ -181,8 +231,9 @@ bool TableFunctionFileReader::TryInitializeScan(ClientContext &context, GlobalTa
 			return false;
 		}
 		lstate.local_state = nullptr;
-	} else if (lstate.reader.get() != this) {
-		// we are moving to a new file - initialize a local state for it
+	} else if (lstate.reader.get() != this && !(function.reuses_local_state && lstate.local_state)) {
+		// we are moving to a new file - initialize a local state for it, unless the function carries what it has
+		// learned so far over to the next file in the one it already has
 		auto init_input = GetInitInput();
 		ExecutionContext execution_context(context, lstate.thread_context, nullptr);
 		lstate.local_state = function.init_local(execution_context, init_input, global_state.get());
@@ -389,6 +440,18 @@ void TableFunctionMultiFileWrapper::CombineSchemas(ClientContext &context,
 	ReleaseBindData(union_data);
 }
 
+void TableFunctionMultiFileWrapper::GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data,
+                                                      virtual_column_map_t &result) {
+	if (!function.get_virtual_columns) {
+		return;
+	}
+	// the virtual columns of the scan are those the wrapped function can produce for a file of it
+	auto &data = bind_data.bind_data->Cast<TableFunctionMultiFileData>();
+	for (auto &entry : function.get_virtual_columns(context, data.options.schema_bind_data.get())) {
+		result.insert(entry);
+	}
+}
+
 void TableFunctionMultiFileWrapper::FinalizeBindData(MultiFileBindData &multi_file_data) {
 	if (!schema_combined || !combined_bind_data) {
 		// either the schema comes from a single file, or the schemas were combined by type. In the latter case every
@@ -420,6 +483,11 @@ void TableFunctionMultiFileWrapper::ReleaseBindData(const vector<shared_ptr<Base
 void TableFunctionMultiFileWrapper::BindReader(ClientContext &context, vector<LogicalType> &return_types,
                                                vector<Identifier> &names, MultiFileBindData &bind_data) {
 	auto &data = bind_data.bind_data->Cast<TableFunctionMultiFileData>();
+	if (settings.bind_scan_schema && settings.bind_scan_schema(context, bind_data, data.options.named_parameters,
+	                                                           return_types, names)) {
+		// the options describe the schema of the scan - every file is mapped onto it, so no file determines it
+		return;
+	}
 	if (data.HasExpectedSchema()) {
 		// the schema is already known (COPY) - there is no need to sample any files to determine it
 		bind_data.file_options.maximum_sample_files = 1;
@@ -519,22 +587,75 @@ unique_ptr<NodeStatistics> TableFunctionMultiFileWrapper::GetCardinality(ClientC
 //===--------------------------------------------------------------------===//
 using TableFunctionMultiFileFunction = MultiFileFunction<TableFunctionMultiFileWrapper>;
 
+unique_ptr<FunctionData> TableFunctionMultiFileWrapper::MultiFileBindWith(ClientContext &context,
+                                                                         TableFunctionBindInput &input,
+                                                                         vector<LogicalType> &return_types,
+                                                                         vector<Identifier> &names,
+                                                                         TableFunction single_file_function,
+                                                                         TableFunctionMultiFileSettings settings) {
+	return TableFunctionMultiFileFunction::MultiFileBindInterface(
+	    context, input, return_types, names,
+	    make_uniq<TableFunctionMultiFileWrapper>(std::move(single_file_function), std::move(settings)));
+}
+
 static unique_ptr<FunctionData> TableFunctionMultiFileBind(ClientContext &context, TableFunctionBindInput &input,
                                                            vector<LogicalType> &return_types,
                                                            vector<Identifier> &names) {
-	auto &info = input.info->Cast<TableFunctionMultiFileInfo>();
-	return TableFunctionMultiFileFunction::MultiFileBindInterface(
-	    context, input, return_types, names, make_uniq<TableFunctionMultiFileWrapper>(info.function, info.settings));
+	auto &info = input.table_function.multi_file_info->Cast<TableFunctionMultiFileInfo>();
+	return TableFunctionMultiFileWrapper::MultiFileBindWith(context, input, return_types, names, info.function,
+	                                                        info.settings);
 }
 
 unique_ptr<FunctionData> TableFunctionMultiFileWrapper::MultiFileBindCopy(ClientContext &context,
                                                                           CopyFromFunctionBindInput &input,
                                                                           vector<Identifier> &expected_names,
                                                                           vector<LogicalType> &expected_types) {
-	auto &info = input.tf.function_info->Cast<TableFunctionMultiFileInfo>();
+	auto &info = input.tf.multi_file_info->Cast<TableFunctionMultiFileInfo>();
 	return TableFunctionMultiFileFunction::MultiFileBindCopyInterface(
 	    context, input, expected_names, expected_types,
 	    make_uniq<TableFunctionMultiFileWrapper>(info.function, info.settings));
+}
+
+//! Report the metrics of the scan: the shared multi-file ones, plus those the wrapped function keeps for each of
+//! the files that have been opened
+static void TableFunctionMultiFileGetMetrics(TableFunctionGetMetricsInput &input) {
+	TableFunctionMultiFileFunction::MultiFileGetMetrics(input);
+	if (!input.global_state) {
+		return;
+	}
+	auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
+	if (!gstate.global_state) {
+		return;
+	}
+	auto &scan_state = gstate.global_state->Cast<TableFunctionMultiFileGlobalState>();
+	// what the files that are still open have to report, on top of the ones that have been finished with
+	OperatorMetrics open_metrics;
+	{
+		lock_guard<mutex> guard(gstate.lock);
+		for (auto &reader_data : gstate.readers) {
+			if (!reader_data || !reader_data->reader) {
+				continue;
+			}
+			auto &reader = reader_data->reader->Cast<TableFunctionFileReader>();
+			auto function_state = reader.GetFunctionState();
+			auto &function = reader.GetFunction();
+			if (!function_state || !function.get_metrics) {
+				continue;
+			}
+			TableFunctionGetMetricsInput file_input(input.context, reader.bind_data.get(), nullptr, function_state,
+			                                        open_metrics);
+			function.get_metrics(file_input);
+		}
+	}
+	lock_guard<mutex> metrics_guard(scan_state.metrics_lock);
+	scan_state.collected_scanned += open_metrics.row_groups_scanned;
+	// the row groups scanned are handed over once - the profiler sums what every thread reports
+	input.operator_metrics.row_groups_scanned += scan_state.collected_scanned;
+	scan_state.collected_scanned = 0;
+	// the size of the scan is reported as-is - it is not summed across the threads that report it
+	const idx_t total = scan_state.finished_total + open_metrics.total_row_groups_to_scan;
+	scan_state.total_high_water = MaxValue<idx_t>(scan_state.total_high_water, total);
+	input.operator_metrics.total_row_groups_to_scan = scan_state.total_high_water;
 }
 
 TableFunction TableFunctionMultiFileWrapper::CreateFunction(TableFunction single_file_function, Identifier name,
@@ -558,7 +679,19 @@ TableFunction TableFunctionMultiFileWrapper::CreateFunction(TableFunction single
 	result.filter_pushdown = single_file_function.filter_pushdown;
 	result.filter_prune = single_file_function.filter_prune;
 	result.supports_pushdown_type = single_file_function.supports_pushdown_type;
-	result.function_info =
+	result.late_materialization = single_file_function.late_materialization;
+	if (single_file_function.get_metrics) {
+		// the metrics of the scan include those the wrapped function keeps per file
+		result.get_metrics = TableFunctionMultiFileGetMetrics;
+	}
+	if (single_file_function.statistics) {
+		// the statistics of the scan are those of its files, combined
+		result.statistics_extended = TableFunctionMultiFileFunction::MultiFileScanStatsExtended;
+	}
+	// NOTE: callbacks that take bind data are NOT forwarded - through the wrapper they are handed the bind data of
+	// the multi-file scan, not the bind data the wrapped function produced for a file. A format that wants one sets
+	// it on the function this returns
+	result.multi_file_info =
 	    make_shared_ptr<TableFunctionMultiFileInfo>(std::move(single_file_function), std::move(settings));
 	return std::move(result);
 }

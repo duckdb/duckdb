@@ -38,6 +38,13 @@ struct TableFunctionMultiFileData : public TableFunctionData {
 	bool HasExpectedSchema() const {
 		return !options.expected_names.empty();
 	}
+
+	unique_ptr<FunctionData> Copy() const override {
+		auto result = make_uniq<TableFunctionMultiFileData>();
+		result->options = options;
+		result->cardinality = cardinality;
+		return std::move(result);
+	}
 };
 
 //! Settings of a multi-file wrapper - how the wrapped single-file function is exposed as a multi-file function
@@ -53,6 +60,12 @@ struct TableFunctionMultiFileSettings {
 	//! Whether the schemas of the sampled files are combined into a union of their columns - files are then allowed
 	//! to be missing columns of the combined schema
 	bool sampled_schema_is_union = true;
+	//! (Optional) Binds the schema of the scan from its options rather than from its files - a format whose options
+	//! can describe the schema (e.g. parquet's "schema") uses this. Returns false when they do not, which binds the
+	//! schema from the files as usual
+	bool (*bind_scan_schema)(ClientContext &context, MultiFileBindData &bind_data,
+	                         const named_parameter_map_t &named_parameters, vector<LogicalType> &return_types,
+	                         vector<Identifier> &names) = nullptr;
 };
 
 //! The function info of a multi-file wrapper - holds the single-file function that is wrapped
@@ -94,6 +107,7 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name) override;
 	void AddVirtualColumn(column_t virtual_column_id) override;
 	void PrepareReader(ClientContext &context, GlobalTableFunctionState &gstate) override;
+	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) override;
 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;
 	AsyncResult ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,
@@ -126,9 +140,21 @@ public:
 	vector<LogicalType> types;
 	//! The cardinality estimate of the wrapped function for this file (if it has one)
 	optional_idx cardinality;
+	//! The virtual columns that are read, as a map of the index they are projected in to their virtual column id
+	unordered_map<column_t, column_t> virtual_columns;
 	//! The operator this file is scanned for, and the number of files that scan reads
 	optional_ptr<const PhysicalOperator> scan_op;
 	idx_t scan_file_count = 1;
+
+public:
+	//! The state of the wrapped function for this file, if it has been initialized
+	optional_ptr<GlobalTableFunctionState> GetFunctionState() {
+		return global_state.get();
+	}
+	//! The wrapped single-file function
+	const TableFunction &GetFunction() const {
+		return function;
+	}
 
 private:
 	//! Take the operator and file count of the scan this file is read for from its state
@@ -169,6 +195,14 @@ public:
 	CreateFunctionSet(TableFunction single_file_function, Identifier name,
 	                  TableFunctionMultiFileSettings settings = TableFunctionMultiFileSettings());
 
+	//! Bind a multi-file scan over the given single-file function. Use this to build a "bind" of your own when the
+	//! function may be bound through a TableFunction that is not the one this wrapper created - the wrapped
+	//! function is then taken from here rather than from the function being bound
+	static unique_ptr<FunctionData> MultiFileBindWith(ClientContext &context, TableFunctionBindInput &input,
+	                                                  vector<LogicalType> &return_types, vector<Identifier> &names,
+	                                                  TableFunction single_file_function,
+	                                                  TableFunctionMultiFileSettings settings);
+
 	//! Binds a COPY ... FROM over the wrapped function - assign this to CopyFunction::copy_from_bind, together with
 	//! the wrapped multi-file function as CopyFunction::copy_from_function
 	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyFromFunctionBindInput &input,
@@ -198,6 +232,8 @@ public:
 	void CombineSchemas(ClientContext &context, const vector<shared_ptr<BaseUnionData>> &union_data, bool union_by_name,
 	                    vector<LogicalType> &return_types, vector<Identifier> &names) override;
 	void FinalizeBindData(MultiFileBindData &multi_file_data) override;
+	void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data,
+	                       virtual_column_map_t &result) override;
 	unique_ptr<GlobalTableFunctionState> InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data,
 	                                                           MultiFileGlobalState &global_state) override;
 	unique_ptr<LocalTableFunctionState> InitializeLocalState(ClientContext &context,
