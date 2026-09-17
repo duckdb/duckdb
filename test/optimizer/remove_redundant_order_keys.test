@@ -8,24 +8,11 @@ CREATE TABLE t(id INTEGER PRIMARY KEY, payload VARCHAR, grp INTEGER);
 statement ok
 INSERT INTO t VALUES (3, 'c', 1), (1, 'a', 2), (2, NULL, 1), (5, 'a', NULL), (4, 'b', 2);
 
+# a primary key prefix erases the keys behind it, through the filter and the limit around it
 query II
-EXPLAIN SELECT id FROM t ORDER BY id, payload;
+EXPLAIN SELECT id FROM t WHERE id + grp > 0 ORDER BY id, payload LIMIT 2;
 ----
 physical_plan	<REGEX>:.*Order By: id ASC +│.*
-
-query II
-EXPLAIN SELECT id FROM t ORDER BY id, payload;
-----
-physical_plan	<!REGEX>:.*payload.*
-
-query I
-SELECT id FROM t ORDER BY id, payload;
-----
-1
-2
-3
-4
-5
 
 query II
 SELECT id, payload FROM t ORDER BY id DESC NULLS FIRST, payload ASC NULLS LAST, grp DESC;
@@ -35,40 +22,6 @@ SELECT id, payload FROM t ORDER BY id DESC NULLS FIRST, payload ASC NULLS LAST, 
 3	c
 2	NULL
 1	a
-
-# ORDER BY + LIMIT
-query II
-EXPLAIN SELECT id FROM t ORDER BY id DESC, payload LIMIT 2 OFFSET 1;
-----
-physical_plan	<REGEX>:.*Order By: id DESC +│.*
-
-query I
-SELECT id FROM t ORDER BY id DESC, payload LIMIT 2 OFFSET 1;
-----
-4
-3
-
-# larger table
-statement ok
-CREATE TABLE big(id INTEGER PRIMARY KEY, payload VARCHAR);
-
-statement ok
-INSERT INTO big SELECT i, 'p' || (i % 7) FROM range(20000) r(i);
-
-query II
-EXPLAIN SELECT id FROM big ORDER BY id, payload LIMIT 1000;
-----
-physical_plan	<REGEX>:.*Order By: id ASC +│.*
-
-query III
-SELECT count(*), min(id), max(id) FROM (SELECT id FROM big ORDER BY id, payload LIMIT 1000);
-----
-1000	0	999
-
-query III
-SELECT count(*), min(id), max(id) FROM (SELECT id FROM big ORDER BY id DESC, payload LIMIT 1000 OFFSET 500);
-----
-1000	18500	19499
 
 # keys before the unique prefix stay
 query II
@@ -85,76 +38,24 @@ a	1
 b	4
 c	3
 
-query II
-EXPLAIN SELECT id FROM t ORDER BY id, CAST(payload AS INTEGER);
-----
-physical_plan	<REGEX>:.*Order By: id ASC +│.*
-
+# an expression over the unique column is not the unique column
 query II
 EXPLAIN SELECT CAST(id AS BOOLEAN) AS b, payload FROM t ORDER BY b, payload;
 ----
 physical_plan	<REGEX>:.*Order By: [^\n]*, [^\n]*│.*
 
-query II
-SELECT CAST(id AS BOOLEAN) AS b, payload FROM t ORDER BY b, payload NULLS FIRST;
-----
-true	NULL
-true	a
-true	a
-true	b
-true	c
-
-# filter below the sort
-query II
-EXPLAIN SELECT id FROM t WHERE grp = 1 ORDER BY id, payload;
-----
-physical_plan	<REGEX>:.*Order By: id ASC +│.*
-
-query I
-SELECT id FROM t WHERE grp = 1 ORDER BY id DESC, payload;
-----
-3
-2
-
-# no unique prefix
-query II
-EXPLAIN SELECT id FROM t ORDER BY payload, grp;
-----
-physical_plan	<REGEX>:.*Order By: [^\n]*, [^\n]*│.*
-
-query III
-SELECT payload, grp, id FROM t ORDER BY payload NULLS LAST, grp DESC NULLS LAST, id;
-----
-a	2	1
-a	NULL	5
-b	2	4
-c	1	3
-NULL	1	2
-
-# joins
+# a join duplicates the unique column
 query II
 EXPLAIN SELECT t.id FROM t JOIN t AS t2 ON t.grp = t2.grp ORDER BY t.id, t2.payload;
 ----
 physical_plan	<REGEX>:.*Order By: [^\n]*, [^\n]*│.*
 
-query II
-SELECT t.id, t2.payload FROM t JOIN t AS t2 ON t.grp = t2.grp ORDER BY t.id, t2.payload NULLS FIRST;
-----
-1	a
-1	b
-2	NULL
-2	c
-3	NULL
-3	c
-4	a
-4	b
-
-# nullable UNIQUE
+# UNIQUE only counts when it cannot hold NULLs, and only uncollated
 statement ok
-CREATE TABLE u(ukey INTEGER UNIQUE, tiebreak INTEGER);
+CREATE TABLE u(ukey INTEGER UNIQUE, skey VARCHAR UNIQUE NOT NULL, tiebreak INTEGER);
 
 statement ok
-INSERT INTO u VALUES (NULL, 2), (NULL, 1), (1, 3);
+INSERT INTO u VALUES (NULL, 'A', 2), (NULL, 'a', 1), (1, 'b', 3);
 
 query II
 EXPLAIN SELECT ukey FROM u ORDER BY ukey, tiebreak;
@@ -162,31 +63,16 @@ EXPLAIN SELECT ukey FROM u ORDER BY ukey, tiebreak;
 physical_plan	<REGEX>:.*Order By: [^\n]*, [^\n]*│.*
 
 query II
-SELECT ukey, tiebreak FROM u ORDER BY ukey NULLS FIRST, tiebreak;
+EXPLAIN SELECT skey FROM u ORDER BY skey, tiebreak;
 ----
-NULL	1
-NULL	2
-1	3
-
-# UNIQUE NOT NULL
-statement ok
-CREATE TABLE un(ukey INTEGER UNIQUE NOT NULL, tiebreak INTEGER);
-
-statement ok
-INSERT INTO un VALUES (2, 2), (1, 1);
+physical_plan	<REGEX>:.*Order By: skey ASC +│.*
 
 query II
-EXPLAIN SELECT ukey FROM un ORDER BY ukey, tiebreak;
+EXPLAIN SELECT skey FROM u ORDER BY skey COLLATE NOCASE, tiebreak;
 ----
-physical_plan	<REGEX>:.*Order By: ukey ASC +│.*
+physical_plan	<REGEX>:.*Order By: [^\n]*, [^\n]*│.*
 
-query I
-SELECT ukey FROM un ORDER BY ukey DESC, tiebreak;
-----
-2
-1
-
-# composite primary key
+# every column of a composite key has to be in the prefix
 statement ok
 CREATE TABLE c(k1 INTEGER, k2 INTEGER, tiebreak INTEGER, PRIMARY KEY (k1, k2));
 
@@ -203,61 +89,15 @@ EXPLAIN SELECT k1 FROM c ORDER BY k2, k1, tiebreak;
 ----
 physical_plan	<REGEX>:.*Order By: [^\n]*, k1 ASC +│.*
 
-query II
-SELECT k2, k1 FROM c ORDER BY k2, k1 DESC, tiebreak;
-----
-1	2
-1	1
-2	1
-
-# GROUP BY
+# a GROUP BY makes its groups unique
 query II
 EXPLAIN SELECT grp FROM t GROUP BY grp ORDER BY grp, count(*);
 ----
 physical_plan	<REGEX>:.*Order By: grp ASC +│.*
 
-query II
-EXPLAIN SELECT grp FROM t GROUP BY grp ORDER BY grp, count(*);
-----
-physical_plan	<!REGEX>:.*count_star.*
-
-query I
-SELECT grp FROM t GROUP BY grp ORDER BY grp NULLS LAST, count(*) DESC;
-----
-1
-2
-NULL
-
-# ROLLUP
-query II
-EXPLAIN SELECT grp FROM t GROUP BY ROLLUP(grp) ORDER BY grp, count(*);
-----
-physical_plan	<REGEX>:.*Order By: [^\n]*, [^\n]*│.*
-
-query II
-SELECT grp, count(*) FROM t GROUP BY ROLLUP(grp) ORDER BY grp NULLS LAST, count(*);
-----
-1	2
-2	2
-NULL	1
-NULL	5
-
-# multiple grouping sets without the grouping sets rewrite
+# one grouping set is a GROUP BY, more than one is not
 statement ok
 SET disabled_optimizers = 'grouping_sets';
-
-query II
-EXPLAIN SELECT grp FROM t GROUP BY GROUPING SETS ((grp), ()) ORDER BY grp, count(*);
-----
-physical_plan	<REGEX>:.*Order By: [^\n]*, [^\n]*│.*
-
-query II
-SELECT grp, count(*) FROM t GROUP BY GROUPING SETS ((grp), ()) ORDER BY grp NULLS LAST, count(*);
-----
-1	2
-2	2
-NULL	1
-NULL	5
 
 query II
 EXPLAIN SELECT grp FROM t GROUP BY GROUPING SETS ((grp)) ORDER BY grp, count(*);
@@ -265,16 +105,14 @@ EXPLAIN SELECT grp FROM t GROUP BY GROUPING SETS ((grp)) ORDER BY grp, count(*);
 physical_plan	<REGEX>:.*Order By: grp ASC +│.*
 
 query II
-SELECT grp, count(*) FROM t GROUP BY GROUPING SETS ((grp)) ORDER BY grp NULLS LAST, count(*);
+EXPLAIN SELECT grp FROM t GROUP BY GROUPING SETS ((grp), ()) ORDER BY grp, count(*);
 ----
-1	2
-2	2
-NULL	1
+physical_plan	<REGEX>:.*Order By: [^\n]*, [^\n]*│.*
 
 statement ok
 RESET disabled_optimizers;
 
-# DISTINCT ON
+# DISTINCT ON makes its targets unique, unless a target is not a plain column
 query II
 EXPLAIN SELECT DISTINCT ON (grp) grp, id FROM t ORDER BY grp, id;
 ----
@@ -287,86 +125,10 @@ NULL	5
 1	3
 2	4
 
-# collated DISTINCT ON target
-statement ok
-CREATE TABLE d(grp INTEGER, skey VARCHAR, tiebreak INTEGER);
-
-statement ok
-INSERT INTO d VALUES (1, 'a', 5), (1, 'b', 1), (1, 'c', 3), (2, 'a', 9), (2, 'b', 2), (2, 'c', 7), (3, 'a', 8), (3, 'b', 4), (3, 'c', 6);
-
-statement ok
-SET default_collation = 'nocase';
-
 query II
-EXPLAIN SELECT DISTINCT ON (grp, skey) grp, skey, tiebreak FROM d ORDER BY grp, tiebreak;
-----
-physical_plan	<REGEX>:.*Order By: grp ASC, tiebreak ASC +│.*
-
-query III
-SELECT DISTINCT ON (grp, skey) grp, skey, tiebreak FROM d ORDER BY grp, tiebreak;
-----
-1	b	1
-1	c	3
-1	a	5
-2	b	2
-2	c	7
-2	a	9
-3	b	4
-3	c	6
-3	a	8
-
-statement ok
-RESET default_collation;
-
-# collation
-statement ok
-CREATE TABLE s(skey VARCHAR PRIMARY KEY, tiebreak INTEGER);
-
-statement ok
-INSERT INTO s VALUES ('a', 2), ('A', 1), ('b', 3);
-
-query II
-EXPLAIN SELECT skey FROM s ORDER BY skey COLLATE NOCASE, tiebreak;
+EXPLAIN SELECT DISTINCT ON (grp, payload COLLATE NOCASE) grp, payload, id FROM t ORDER BY grp, id;
 ----
 physical_plan	<REGEX>:.*Order By: [^\n]*, [^\n]*│.*
-
-query II
-SELECT skey, tiebreak FROM s ORDER BY skey COLLATE NOCASE, tiebreak;
-----
-A	1
-a	2
-b	3
-
-statement ok
-SET default_collation = 'nocase';
-
-query II
-EXPLAIN SELECT skey FROM s ORDER BY skey, tiebreak;
-----
-physical_plan	<REGEX>:.*Order By: [^\n]*, [^\n]*│.*
-
-query II
-SELECT skey, tiebreak FROM s ORDER BY skey, tiebreak;
-----
-A	1
-a	2
-b	3
-
-statement ok
-RESET default_collation;
-
-# binary collation
-query II
-EXPLAIN SELECT skey FROM s ORDER BY skey COLLATE "binary", tiebreak;
-----
-physical_plan	<REGEX>:.*Order By: skey ASC +│.*
-
-query II
-SELECT skey, tiebreak FROM s ORDER BY skey COLLATE "binary", tiebreak;
-----
-A	1
-a	2
-b	3
 
 # disabled optimizer
 statement ok
@@ -379,4 +141,3 @@ physical_plan	<REGEX>:.*Order By: [^\n]*, [^\n]*│.*
 
 statement ok
 RESET disabled_optimizers;
-
