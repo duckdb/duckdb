@@ -1327,6 +1327,7 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_tokenize_sql)
 	(duckdb_v2_connection_handle conn, duckdb_v2_str sql, duckdb_v2_token_iterator_handle *out_iterator,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_validate_utf8)(duckdb_v2_str text, duckdb_v2_error_info_handle *err);
 	// capigen:end appended
 } duckdb_ext_api_v2;
 
@@ -1931,6 +1932,7 @@ typedef struct {
 #define duckdb_v2_token_iterator_ends_unterminated       duckdb_ext_api.duckdb_v2_token_iterator_ends_unterminated
 #define duckdb_v2_token_iterator_next                    duckdb_ext_api.duckdb_v2_token_iterator_next
 #define duckdb_v2_tokenize_sql                           duckdb_ext_api.duckdb_v2_tokenize_sql
+#define duckdb_v2_validate_utf8                          duckdb_ext_api.duckdb_v2_validate_utf8
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION
 

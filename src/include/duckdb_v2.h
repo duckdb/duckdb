@@ -391,6 +391,10 @@ typedef void (*duckdb_v2_opaque_destroy_fn)(void *data);
  * "valid until the owning handle is destroyed"). `{NULL, 0}` is the canonical empty view, and `ptr` must not be
  * dereferenced when `len` is 0. Not to be confused with `bytes`, the transparent 16-byte *storage* format for a
  * variable-size value in a vector.
+ *
+ * When used for text, callers must supply valid UTF-8 unless the function explicitly documents otherwise. The view does
+ * not validate its contents, and callers must not assume that API calls validate UTF-8. Functions that use this view
+ * for binary data, such as BLOB values, accept arbitrary bytes.
  */
 struct duckdb_v2_str {
 	const char *ptr;
@@ -1309,8 +1313,9 @@ duckdb_v2_column_data_collection_append_state_destroy(duckdb_v2_column_data_coll
  * Appends a data chunk to the collection.
  *
  * Appends a copy of the given chunk to the end of the collection. The chunk's column count and types must equal the
- * collection's exactly; a mismatch is rejected with INVALID_INPUT before anything is copied. Complex-typed vectors may
- * be flattened in place by the copy.
+ * collection's exactly; a mismatch is rejected with INVALID_INPUT before anything is copied. VARCHAR values must
+ * already contain valid UTF-8; this function does not validate text. Complex-typed vectors may be flattened in place by
+ * the copy.
  *
  * history:
  * - stable: v2.0.0
@@ -3872,6 +3877,19 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_bignum_decode(const uint8_t *in_data, idx
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_bignum_encode(const uint8_t *in_data, idx_t in_length, bool is_negative,
                                                      uint8_t *out_data, idx_t out_capacity, idx_t *out_length,
                                                      duckdb_v2_error_info_handle *err);
+
+/*!
+ * Validates a byte string as UTF-8, returning ERROR_INPUT_INVALID for malformed text. The explicit byte length
+ * preserves embedded NUL characters. A NULL pointer is allowed only for an empty string.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param text The bytes to validate.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_validate_utf8(duckdb_v2_str text, duckdb_v2_error_info_handle *err);
 
 /* --- Struct definitions for vector --- */
 

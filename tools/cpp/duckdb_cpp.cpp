@@ -2055,10 +2055,27 @@ auto Vector::CheckWriteRange(idx_t start, idx_t count) const -> void {
 	}
 }
 
+auto Vector::ValidateString(std::string_view data) const -> void {
+	duckdb_v2_logical_type_handle type = nullptr;
+	CheckedAPICall(duckdb_v2_vector_get_logical_type, handle(), &type);
+	auto logical_type = detail::Factory::Make<LogicalType>(type);
+	if (logical_type.GetTypeId() == LogicalTypeId::VARCHAR) {
+		ValidateUTF8(data);
+	}
+}
+
 auto Vector::AssignString(idx_t index, std::string_view data) -> void {
+	if (data.size() > std::numeric_limits<uint32_t>::max()) {
+		throw InvalidInputException("String exceeds the maximum size of 4 GiB");
+	}
+	ValidateString(data);
+	AssignStringUnsafe(index, data);
+}
+
+auto Vector::AssignStringUnsafe(idx_t index, std::string_view data) -> void {
 	CheckWriteRange(index, 1);
 	auto heap = GetHeap();
-	GetDataMutable<blob_t>()[index] = heap.AddString(data);
+	GetDataMutable<blob_t>()[index] = heap.AddStringUnsafe(data);
 }
 
 auto Vector::GetHeap() -> Arena {
@@ -2068,8 +2085,17 @@ auto Vector::GetHeap() -> Arena {
 }
 
 auto Vector::SetString(idx_t index, varchar_t value) -> void {
+	ValidateString(value.view());
+	SetStringUnsafe(index, value);
+}
+
+auto Vector::SetStringUnsafe(idx_t index, varchar_t value) -> void {
 	CheckWriteRange(index, 1);
 	GetDataMutable<varchar_t>()[index] = value;
+}
+
+void ValidateUTF8(std::string_view text) {
+	CheckedAPICall(duckdb_v2_validate_utf8, ToStr(text));
 }
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -114,6 +114,11 @@ structs:
       and `ptr` must not be dereferenced when `len` is 0. Not to be confused
       with `bytes`, the transparent 16-byte *storage* format for a
       variable-size value in a vector.
+
+      When used for text, callers must supply valid UTF-8 unless the function
+      explicitly documents otherwise. The view does not validate its contents,
+      and callers must not assume that API calls validate UTF-8. Functions that
+      use this view for binary data, such as BLOB values, accept arbitrary bytes.
     fields:
       - {name: ptr, type: char, pointer: 1, const: true}
       - {name: len, type: idx}

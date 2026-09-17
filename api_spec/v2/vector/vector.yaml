@@ -884,3 +884,20 @@ functions:
         kind: OUT
         description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
     return_type: ERROR
+
+  validate_utf8:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-17" ]
+    description: |
+      Validates a byte string as UTF-8, returning ERROR_INPUT_INVALID for malformed text.
+      The explicit byte length preserves embedded NUL characters. A NULL pointer is allowed only for an empty string.
+    parameters:
+      text:
+        type: str
+        description: The bytes to validate.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR

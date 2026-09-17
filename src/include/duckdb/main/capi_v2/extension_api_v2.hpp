@@ -1262,6 +1262,7 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_tokenize_sql)
 	(duckdb_v2_connection_handle conn, duckdb_v2_str sql, duckdb_v2_token_iterator_handle *out_iterator,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_validate_utf8)(duckdb_v2_str text, duckdb_v2_error_info_handle *err);
 } duckdb_ext_api_v2;
 
 //===--------------------------------------------------------------------===//
@@ -1822,6 +1823,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_token_iterator_ends_unterminated = duckdb_v2_token_iterator_ends_unterminated;
 	result.duckdb_v2_token_iterator_next = duckdb_v2_token_iterator_next;
 	result.duckdb_v2_tokenize_sql = duckdb_v2_tokenize_sql;
+	result.duckdb_v2_validate_utf8 = duckdb_v2_validate_utf8;
 	return result;
 }
 
