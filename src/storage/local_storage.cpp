@@ -560,6 +560,7 @@ void LocalStorage::Update(DataTable &table, DuckTableEntry &table_entry, Vector 
 
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state) {
 	if (storage.is_dropped) {
+		storage.Rollback();
 		return;
 	}
 	if (storage.GetCollection().GetTotalRows() <= storage.deleted_rows) {

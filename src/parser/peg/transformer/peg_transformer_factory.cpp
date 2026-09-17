@@ -20,19 +20,6 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransformer &transformer,
-                                                                   ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.GetResult());
-	if (!transformer.named_parameter_map.empty()) {
-		// Avoid overriding a previous move with nothing
-		result->named_param_map = transformer.named_parameter_map;
-	}
-	result->has_anonymous_parameters = transformer.has_anonymous_parameters;
-	return result;
-}
-
 static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &transformer,
                                                              const TokenIterator &token_iterator, ParseResult &stmt_pr,
                                                              optional_idx terminator_offset) {
@@ -70,8 +57,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	idx_t max_token_index = token_iterator.Position();
 	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
 	MatchContext match_context(suggestions, parse_result_allocator, process_allocator, max_token_index,
-	                           MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode, options.heap_based_parser,
-	                           &packrat_cache);
+	                           MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode, &packrat_cache);
 	MatchState state(token_iterator, match_context);
 	auto match_result = grammar.TopLevelStatementMatcher().MatchParseResult(state);
 	process_allocator.FreeAll();
@@ -123,64 +109,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	return ExtractAndTransformStatement(transformer, token_iterator, stmt_opt.GetResult(), terminator_offset);
 }
 
-#define REGISTER_TRANSFORM(FUNCTION) Register(string(#FUNCTION).substr(9), &FUNCTION)
-
-void PEGTransformerFactory::RegisterCommon() {
-	// common.gram
-	REGISTER_TRANSFORM(TransformNumberLiteral);
-	REGISTER_TRANSFORM(TransformStringLiteral);
-	REGISTER_TRANSFORM(TransformIntervalToIntervalAsType);
-}
-
-void PEGTransformerFactory::RegisterCreateTable() {
-	// create_table.gram
-	REGISTER_TRANSFORM(TransformIdentifier);
-}
-
-void PEGTransformerFactory::RegisterExpression() {
-	// expression.gram
-	REGISTER_TRANSFORM(TransformPrefixExpression);
-	REGISTER_TRANSFORM(TransformOverClause);
-}
-
-void PEGTransformerFactory::RegisterPivot() {
-	// PivotStatement and UnpivotStatement measure parameter usage while transforming
-	// the source table, so their top-level wrappers remain manual.
-	REGISTER_TRANSFORM(TransformPivotStatement);
-	REGISTER_TRANSFORM(TransformUnpivotStatement);
-}
-
-void PEGTransformerFactory::RegisterSelect() {
-	// select.gram rules that remain manual after generated wrappers are registered.
-	Register("SelectStatementInternal", &TransformSelectStatementInternalRule);
-	REGISTER_TRANSFORM(TransformSimpleSelect);
-	REGISTER_TRANSFORM(TransformTableRef);
-	REGISTER_TRANSFORM(TransformWithClause);
-	REGISTER_TRANSFORM(TransformWindowDefinition);
-}
-
-void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
-	Register("PragmaName", &TransformIdentifierOrKeyword);
-	Register("TypeName", &TransformIdentifierOrKeyword);
-	Register("PlainIdentifier", &TransformIdentifierOrKeyword);
-	Register("QuotedIdentifier", &TransformIdentifierOrKeyword);
-	Register("ReservedKeyword", &TransformIdentifierOrKeyword);
-	Register("UnreservedKeyword", &TransformIdentifierOrKeyword);
-	Register("ColumnNameKeyword", &TransformIdentifierOrKeyword);
-	Register("FuncNameKeyword", &TransformIdentifierOrKeyword);
-	Register("TypeNameKeyword", &TransformIdentifierOrKeyword);
-	Register("SettingName", &TransformIdentifierOrKeyword);
-}
-
 PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar(grammar_p) {
-	RegisterGenerated();
-	REGISTER_TRANSFORM(TransformStatement);
-	RegisterCommon();
-	RegisterCreateTable();
-	RegisterExpression();
-	RegisterPivot();
-	RegisterSelect();
-	RegisterKeywordsAndIdentifiers();
 	for (auto &entry : GeneratedTransformFrameOps()) {
 		auto process_info = entry.second;
 		grammar.SetTransformProcess(

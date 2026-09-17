@@ -18,6 +18,7 @@
 
 // The vtable global the redirects reference. It is *defined* by the extension's entrypoint, which is what populates it,
 // so this archive only declares it. Outside the loadable flavor nothing references it and the declaration is inert.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 DUCKDB_EXTENSION_EXTERN
 
 #include <type_traits>
@@ -2222,6 +2223,7 @@ auto ColumnDataCollection::Clear() -> void {
 	CheckedAPICall(duckdb_v2_column_data_collection_clear, handle());
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved)
 auto ColumnDataCollection::Combine(ColumnDataCollection &&source) -> void {
 	auto source_handle = source.handle();
 	CheckedAPICall(duckdb_v2_column_data_collection_combine, handle(), &source_handle);
@@ -2846,7 +2848,7 @@ auto ScalarFunction::Register() -> void {
 	                         detail::TypedEquals<ScalarFunctionInfo>};
 	CheckedAPICall(duckdb_v2_scalar_function_set_user_data, handle(), &opaque);
 	// The function owns the table now.
-	info.release();
+	info.release(); // NOLINT(bugprone-unused-return-value)
 
 	CheckedAPICall(duckdb_v2_scalar_function_register, handle());
 }
@@ -3295,7 +3297,7 @@ auto AggregateFunction::Register() -> void {
 	                         detail::TypedEquals<AggregateFunctionInfo>};
 	CheckedAPICall(duckdb_v2_aggregate_function_set_user_data, handle(), &opaque);
 	// The function owns the table now.
-	info.release();
+	info.release(); // NOLINT(bugprone-unused-return-value)
 
 	CheckedAPICall(duckdb_v2_aggregate_function_register, handle());
 }
@@ -3828,7 +3830,7 @@ auto TableFunction::Register() -> void {
 	                         detail::TypedEquals<TableFunctionInfo>};
 	CheckedAPICall(duckdb_v2_table_function_set_user_data, handle(), &opaque);
 	// The function owns the table now.
-	info.release();
+	info.release(); // NOLINT(bugprone-unused-return-value)
 
 	CheckedAPICall(duckdb_v2_table_function_register, handle());
 }
@@ -4641,7 +4643,7 @@ auto CopyFunction::Register() -> void {
 	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<CopyFunctionInfo>, detail::TypedEquals<CopyFunctionInfo>};
 	CheckedAPICall(duckdb_v2_copy_function_set_user_data, handle(), &opaque);
 	// The function owns the table now.
-	info.release();
+	info.release(); // NOLINT(bugprone-unused-return-value)
 
 	CheckedAPICall(duckdb_v2_copy_function_register, handle());
 }
@@ -5177,7 +5179,7 @@ auto CastFunction::Register() -> void {
 	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<CastFunctionInfo>, detail::TypedEquals<CastFunctionInfo>};
 	CheckedAPICall(duckdb_v2_cast_function_set_user_data, handle(), &opaque);
 	// The cast owns the table now.
-	info.release();
+	info.release(); // NOLINT(bugprone-unused-return-value)
 
 	CheckedAPICall(duckdb_v2_cast_function_register, handle());
 }
@@ -5525,7 +5527,7 @@ auto ReplacementScan::Register() -> void {
 	                         detail::TypedEquals<ReplacementScanInfo>};
 	CheckedAPICall(duckdb_v2_replacement_scan_set_user_data, handle(), &opaque);
 	// The scan owns the table now.
-	info.release();
+	info.release(); // NOLINT(bugprone-unused-return-value)
 
 	CheckedAPICall(duckdb_v2_replacement_scan_register, handle());
 }
@@ -5623,7 +5625,7 @@ auto ParseSingleStatement(Connection &conn, const std::string &sql) -> SqlStatem
 }
 
 // Names the buffers the table constructor generates, so two appenders on one connection never collide.
-std::atomic<uint64_t> appender_buffer_counter {0};
+std::atomic<uint64_t> appender_buffer_counter {0}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 } // namespace
 
