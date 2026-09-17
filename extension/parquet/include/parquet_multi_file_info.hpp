@@ -75,6 +75,9 @@ struct ParquetMultiFileInfo : MultiFileReaderInterface {
 	bool SupportsReadAhead(const MultiFileBindData &bind_data) const override {
 		return true;
 	}
+	bool SupportsClaimAhead(const MultiFileBindData &bind_data) const override {
+		return true;
+	}
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                        BaseUnionData &union_data, const MultiFileBindData &bind_data_p) override;
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,

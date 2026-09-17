@@ -10,6 +10,7 @@
 
 #include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/condition_variable.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
@@ -170,6 +171,10 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	//! Signal to other threads that a file failed to open, letting every thread abort.
 	//! Atomic because a cancelled file open settles it while the scheduling thread may hold the lock.
 	atomic<bool> error_opening_file {false};
+	//! Wakes scans when a file finishes opening
+	condition_variable file_opened_cv;
+	//! Whether unordered scans can claim work from later files
+	bool claim_ahead = false;
 
 	//! Index of file currently up for scanning
 	atomic<idx_t> file_index;

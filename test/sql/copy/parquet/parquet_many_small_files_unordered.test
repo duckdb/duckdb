@@ -1,0 +1,29 @@
+# name: test/sql/copy/parquet/parquet_many_small_files_unordered.test
+# description: Unordered scans retain every row group across files
+# group: [parquet]
+
+require parquet
+
+statement ok
+SET threads=4
+
+statement ok
+SET async_threads=2
+
+statement ok
+SET read_ahead_depth=4
+
+loop i 0 16
+
+statement ok
+COPY (SELECT range + {i} * 4096 AS i FROM range(4096)) TO '{TEST_DIR}/many_small_f{i}.parquet' (ROW_GROUP_SIZE 2048)
+
+endloop
+
+statement ok
+SET preserve_insertion_order=false
+
+query III
+SELECT count(*), count(DISTINCT i), sum(i) FROM read_parquet('{TEST_DIR}/many_small_f*.parquet')
+----
+65536	65536	2147450880

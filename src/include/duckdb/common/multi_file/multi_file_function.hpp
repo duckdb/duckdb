@@ -11,6 +11,7 @@
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/main/profiler/profiling_node.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -20,6 +21,8 @@
 #include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+
+#include <chrono>
 #include <numeric>
 
 namespace duckdb {
@@ -58,6 +61,10 @@ struct MultiFileReaderInterface {
 	virtual unique_ptr<LocalTableFunctionState> InitializeLocalState(ClientContext &, GlobalTableFunctionState &) = 0;
 
 	virtual bool SupportsReadAhead(const MultiFileBindData &bind_data) const {
+		return false;
+	}
+	//! Whether each reader tracks its scan position independently
+	virtual bool SupportsClaimAhead(const MultiFileBindData &bind_data) const {
 		return false;
 	}
 	virtual shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
@@ -387,13 +394,16 @@ public:
 				// release the reader so its file handle is closed; skipped files are
 				// never scanned, so nothing else needs the reader
 				current_reader_data.reader = nullptr;
+				global_state.file_opened_cv.notify_all();
 				return false;
 			}
 			current_reader_data.file_state = MultiFileFileState::OPEN;
+			global_state.file_opened_cv.notify_all();
 			return true;
 		} catch (...) {
 			parallel_lock.lock();
 			global_state.error_opening_file = true;
+			global_state.file_opened_cv.notify_all();
 			throw;
 		}
 	}
@@ -459,6 +469,7 @@ public:
 					    [&gstate]() {
 						    // the reader stays in OPENING, so tell every waiter to stop instead of polling forever
 						    gstate.error_opening_file = true;
+						    gstate.file_opened_cv.notify_all();
 					    });
 				}
 				progress_guaranteed = true;
@@ -537,21 +548,25 @@ public:
 		}
 	}
 
-	//! Wait for the front file's async open. Parallel lock should be locked when calling, it is held on return.
-	static void WaitForAsyncOpen(ClientContext &context, MultiFileGlobalState &gstate,
+	static bool WaitForAsyncOpen(ClientContext &context, MultiFileGlobalState &gstate,
+	                             ScanReadAheadJobWrapper<MultiFileScanJobState> &job,
 	                             unique_lock<mutex> &parallel_lock) {
 		D_ASSERT(parallel_lock.owns_lock());
-		auto &read_ahead = *gstate.read_ahead;
 		while (HasFilesToRead(gstate, parallel_lock) && !gstate.error_opening_file &&
 		       gstate.readers[gstate.file_index]->file_state == MultiFileFileState::OPENING) {
-			parallel_lock.unlock();
-			// the open may be queued behind other async work or the async pool may be gone, so run tasks inline
-			if (!read_ahead.TryRunPendingTask()) {
-				context.InterruptCheck();
-				TaskScheduler::YieldThread();
+			if (gstate.claim_ahead && TryClaimAhead(context, gstate, job, parallel_lock)) {
+				return true;
 			}
-			parallel_lock.lock();
+			if (gstate.file_opened_cv.wait_for(parallel_lock, std::chrono::milliseconds(5)) ==
+			    std::cv_status::timeout) {
+				// Run queued tasks if the async pool stalls or shuts down
+				parallel_lock.unlock();
+				gstate.read_ahead->TryRunPendingTask();
+				parallel_lock.lock();
+			}
+			context.InterruptCheck();
 		}
+		return false;
 	}
 
 	static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &lstate,
@@ -639,6 +654,31 @@ public:
 		lstate.scan_chunk_file_index = job.file_index;
 	}
 
+	static bool TryClaimFromFile(ClientContext &context, MultiFileGlobalState &gstate, idx_t file_index,
+	                             ScanReadAheadJobWrapper<MultiFileScanJobState> &job,
+	                             unique_lock<mutex> &parallel_lock) {
+		D_ASSERT(parallel_lock.owns_lock());
+		auto &reader_data = *gstate.readers[file_index];
+		D_ASSERT(reader_data.file_state == MultiFileFileState::OPEN);
+		if (reader_data.reader->TryInitializeScan(context, *gstate.global_state, *job.scan_state)) {
+			job.reader = reader_data.reader;
+			if (!job.reader) {
+				throw InternalException("MultiFileReader was moved");
+			}
+			job.reader_data = reader_data;
+			job.batch_index = gstate.batch_index++;
+			job.file_index = file_index;
+			parallel_lock.unlock();
+			job.reader->PrepareScan(context, *gstate.global_state, *job.scan_state);
+			return true;
+		}
+		reader_data.file_state = MultiFileFileState::CLOSED;
+		reader_data.reader->FinishFile(context, *gstate.global_state);
+		reader_data.closed_reader = reader_data.reader;
+		reader_data.reader = nullptr;
+		return false;
+	}
+
 	static MultiFileClaimResult ClaimNextJobInternal(ClientContext &context, const MultiFileBindData &bind_data,
 	                                                 MultiFileGlobalState &gstate,
 	                                                 ScanReadAheadJobWrapper<MultiFileScanJobState> &job) {
@@ -661,34 +701,13 @@ public:
 
 			auto &current_reader_data = *gstate.readers[gstate.file_index];
 			if (current_reader_data.file_state == MultiFileFileState::OPEN) {
-				if (current_reader_data.reader->TryInitializeScan(context, *gstate.global_state, *job.scan_state)) {
-					job.reader = current_reader_data.reader;
-					if (!job.reader) {
-						throw InternalException("MultiFileReader was moved");
-					}
-					// The current reader has data left to be scanned
-					job.reader_data = current_reader_data;
-					job.batch_index = gstate.batch_index++;
-					job.file_index = gstate.file_index;
-					parallel_lock.unlock();
-					job.reader->PrepareScan(context, *gstate.global_state, *job.scan_state);
+				if (TryClaimFromFile(context, gstate, gstate.file_index, job, parallel_lock)) {
 					return MultiFileClaimResult::CLAIMED;
-				} else {
-					// Set state to the next file
-					++gstate.file_index;
-
-					// Close current file
-					current_reader_data.file_state = MultiFileFileState::CLOSED;
-
-					//! Finish processing the file
-					current_reader_data.reader->FinishFile(context, *gstate.global_state);
-					current_reader_data.closed_reader = current_reader_data.reader;
-					current_reader_data.reader = nullptr;
-					continue;
 				}
-			} else if (current_reader_data.file_state == MultiFileFileState::SKIPPED) {
-				//! This file does not need to be opened or closed, the filters have determined that this file can be
-				//! skipped entirely
+				++gstate.file_index;
+				continue;
+			} else if (current_reader_data.file_state == MultiFileFileState::SKIPPED ||
+			           current_reader_data.file_state == MultiFileFileState::CLOSED) {
 				++gstate.file_index;
 				continue;
 			}
@@ -703,7 +722,9 @@ public:
 			// Check if the current file is being opened, in that case we need to wait for it.
 			if (current_reader_data.file_state == MultiFileFileState::OPENING) {
 				if (gstate.read_ahead) {
-					WaitForAsyncOpen(context, gstate, parallel_lock);
+					if (WaitForAsyncOpen(context, gstate, job, parallel_lock)) {
+						return MultiFileClaimResult::CLAIMED;
+					}
 				} else {
 					WaitForFile(gstate.file_index, gstate, parallel_lock);
 				}
@@ -748,6 +769,27 @@ public:
 			return;
 		}
 		gstate.read_ahead = ScanReadAhead::Create(context);
+		if (gstate.read_ahead) {
+			gstate.claim_ahead = bind_data.interface->SupportsClaimAhead(bind_data) &&
+			                     !Settings::Get<PreserveInsertionOrderSetting>(context);
+		}
+	}
+
+	static bool TryClaimAhead(ClientContext &context, MultiFileGlobalState &gstate,
+	                          ScanReadAheadJobWrapper<MultiFileScanJobState> &job, unique_lock<mutex> &parallel_lock) {
+		D_ASSERT(parallel_lock.owns_lock());
+		const idx_t file_index = gstate.file_index;
+		for (idx_t i = file_index + 1; i < gstate.readers.size() && i - file_index <= gstate.read_ahead->OpenWindow();
+		     i++) {
+			auto &reader_data = *gstate.readers[i];
+			if (reader_data.file_state != MultiFileFileState::OPEN) {
+				continue;
+			}
+			if (TryClaimFromFile(context, gstate, i, job, parallel_lock)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	static unique_ptr<GlobalTableFunctionState> MultiFileInitGlobal(ClientContext &context,

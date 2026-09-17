@@ -373,7 +373,6 @@ public:
 	                       LocalTableFunctionState &lstate) override;
 	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 	                 LocalTableFunctionState &local_state, DataChunk &chunk) override;
-	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
 	double GetProgressInFile(ClientContext &context) override;
 	void PrepareReadAhead(ClientContext &context, GlobalTableFunctionState &gstate) override;
 
@@ -485,6 +484,8 @@ private:
 	unique_ptr<CachingFileHandle> OpenScanHandle(ClientContext &context) const;
 
 private:
+	//! Next row group to scan under the global scan lock
+	idx_t next_row_group_index = 0;
 	unique_ptr<CachingFileHandle> file_handle;
 	//! Scan handle pre-opened by PrepareReadAhead while the file was opened, adopted by the first InitializeScan
 	mutable mutex prewarm_lock;

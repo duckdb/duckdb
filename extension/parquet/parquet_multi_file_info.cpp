@@ -89,10 +89,8 @@ private:
 };
 
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
-	explicit ParquetReadGlobalState(optional_ptr<const PhysicalOperator> op_p) : row_group_index(0), op(op_p) {
+	explicit ParquetReadGlobalState(optional_ptr<const PhysicalOperator> op_p) : op(op_p) {
 	}
-	//! Index of row group within file currently up for scanning
-	idx_t row_group_index;
 	//! (Optional) pointer to physical operator performing the scan
 	optional_ptr<const PhysicalOperator> op;
 	//! Row groups read but not yet reported to the profiler
@@ -847,15 +845,14 @@ unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState(C
 
 bool ParquetReader::TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate_p,
                                       LocalTableFunctionState &lstate_p) {
-	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
-	if (gstate.row_group_index >= NumRowGroups()) {
+	if (next_row_group_index >= NumRowGroups()) {
 		// scanned all row groups in this file
 		return false;
 	}
 	// The current reader has rowgroups left to be scanned
-	lstate.group_index = gstate.row_group_index;
-	gstate.row_group_index++;
+	lstate.group_index = next_row_group_index;
+	next_row_group_index++;
 	return true;
 }
 
@@ -880,11 +877,6 @@ AsyncResult ParquetReader::ScheduleIO(ClientContext &context, GlobalTableFunctio
 	gstate.row_groups_scanned_unreported += read;
 	gstate.total_row_groups_to_scan += read + skipped;
 	return ScheduleRowGroupReads(scan_state, strategy);
-}
-
-void ParquetReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) {
-	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
-	gstate.row_group_index = 0;
 }
 
 AsyncResult ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
