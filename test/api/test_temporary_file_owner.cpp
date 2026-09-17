@@ -19,8 +19,8 @@ TEST_CASE("Test temporary file owners", "[api]") {
 				REQUIRE(parsed == written);
 				REQUIRE(TryParseTemporaryFileOwner(prefix + "block-7.block", parsed));
 				REQUIRE(parsed == written);
-				// the marker is swept like any other file of a dead owner, so it must parse too
-				REQUIRE(TryParseTemporaryFileOwner(TemporaryOwnerMarkerName(written), parsed));
+				// the claim is swept like any other file of a dead owner, so it must parse too
+				REQUIRE(TryParseTemporaryFileOwner(TemporaryOwnerClaimName(written), parsed));
 				REQUIRE(parsed == written);
 			}
 		}

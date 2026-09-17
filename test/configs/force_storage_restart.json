@@ -35,6 +35,13 @@
       ]
     },
     {
+      "reason": "Both assert on state that lives exactly as long as the database instance: the file claiming an id in the temporary directory, which is removed when its owner tears down, and whether the once-per-database choice of how to claim it has been spent. force_restart discards the instance after every statement, so no claim outlives the statement that made it and a second call is never second.",
+      "paths": [
+        "test/sql/storage/temp_directory/initialize_temporary_directory.test",
+        "test/sql/storage/temp_directory/cleanup_temporary_directory.test"
+      ]
+    },
+    {
       "reason": "Doesn't OOM when restarting",
       "paths": [
         "test/sql/storage/temp_directory/offloading_block_files.test_slow"
