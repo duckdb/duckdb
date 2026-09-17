@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/time_point.hpp"
-#include "duckdb/logging/log_storage.hpp"
+#include "duckdb/logging/log_sink.hpp"
 #include "shell_state.hpp"
 #include "shell_highlight.hpp"
 

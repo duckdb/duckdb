@@ -1,18 +1,18 @@
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/logging/log_manager.hpp"
-#include "duckdb/logging/log_storage.hpp"
+#include "duckdb/logging/log_sink.hpp"
 
 namespace duckdb {
 
-class CallbackLogStorage : public LogStorage {
+class CallbackLogSink : public LogSink {
 public:
-	CallbackLogStorage(const string &name, duckdb_logger_write_log_entry_t write_log_entry_fun, void *extra_data,
+	CallbackLogSink(const string &name, duckdb_logger_write_log_entry_t write_log_entry_fun, void *extra_data,
 	                   duckdb_delete_callback_t delete_callback)
 	    : name(name), write_log_entry_fun(write_log_entry_fun), extra_data(extra_data),
 	      delete_callback(delete_callback) {
 	}
 
-	~CallbackLogStorage() override {
+	~CallbackLogSink() override {
 		if (!extra_data || !delete_callback) {
 			return;
 		}
@@ -38,7 +38,7 @@ public:
 		return true;
 	}
 
-	const string GetStorageName() override {
+	const string GetSinkName() override {
 		return name;
 	}
 
@@ -49,7 +49,7 @@ private:
 	duckdb_delete_callback_t delete_callback;
 };
 
-struct LogStorageWrapper {
+struct LogSinkWrapper {
 	string name;
 	duckdb_logger_write_log_entry_t write_log_entry = nullptr;
 	void *extra_data = nullptr;
@@ -59,16 +59,16 @@ struct LogStorageWrapper {
 } // namespace duckdb
 
 using duckdb::DatabaseWrapper;
-using duckdb::LogStorageWrapper;
+using duckdb::LogSinkWrapper;
 
 duckdb_log_storage duckdb_create_log_storage() {
-	auto log_storage_wrapper = new LogStorageWrapper();
+	auto log_storage_wrapper = new LogSinkWrapper();
 	return reinterpret_cast<duckdb_log_storage>(log_storage_wrapper);
 }
 
 void duckdb_destroy_log_storage(duckdb_log_storage *log_storage) {
 	if (log_storage && *log_storage) {
-		auto log_storage_wrapper = reinterpret_cast<LogStorageWrapper *>(*log_storage);
+		auto log_storage_wrapper = reinterpret_cast<LogSinkWrapper *>(*log_storage);
 		if (log_storage_wrapper->extra_data && log_storage_wrapper->delete_callback) {
 			log_storage_wrapper->delete_callback(log_storage_wrapper->extra_data);
 		}
@@ -82,7 +82,7 @@ void duckdb_log_storage_set_write_log_entry(duckdb_log_storage log_storage, duck
 		return;
 	}
 
-	auto log_storage_wrapper = reinterpret_cast<LogStorageWrapper *>(log_storage);
+	auto log_storage_wrapper = reinterpret_cast<LogSinkWrapper *>(log_storage);
 	log_storage_wrapper->write_log_entry = function;
 }
 
@@ -92,7 +92,7 @@ void duckdb_log_storage_set_extra_data(duckdb_log_storage log_storage, void *ext
 		return;
 	}
 
-	auto log_storage_wrapper = reinterpret_cast<LogStorageWrapper *>(log_storage);
+	auto log_storage_wrapper = reinterpret_cast<LogSinkWrapper *>(log_storage);
 	log_storage_wrapper->extra_data = extra_data;
 	log_storage_wrapper->delete_callback = delete_callback;
 }
@@ -101,7 +101,7 @@ void duckdb_log_storage_set_name(duckdb_log_storage log_storage, const char *nam
 	if (!log_storage || !name) {
 		return;
 	}
-	auto log_storage_wrapper = reinterpret_cast<LogStorageWrapper *>(log_storage);
+	auto log_storage_wrapper = reinterpret_cast<LogSinkWrapper *>(log_storage);
 	log_storage_wrapper->name = name;
 }
 
@@ -111,18 +111,18 @@ duckdb_state duckdb_register_log_storage(duckdb_database database, duckdb_log_st
 	}
 
 	const auto db_wrapper = reinterpret_cast<DatabaseWrapper *>(database);
-	auto log_storage_wrapper = reinterpret_cast<LogStorageWrapper *>(log_storage);
+	auto log_storage_wrapper = reinterpret_cast<LogSinkWrapper *>(log_storage);
 	if (log_storage_wrapper->name.empty() || log_storage_wrapper->write_log_entry == nullptr) {
 		return DuckDBError;
 	}
 
 	const auto &db = *db_wrapper->database;
-	auto shared_storage_ptr = duckdb::make_shared_ptr<duckdb::CallbackLogStorage>(
+	auto shared_storage_ptr = duckdb::make_shared_ptr<duckdb::CallbackLogSink>(
 	    log_storage_wrapper->name, log_storage_wrapper->write_log_entry, log_storage_wrapper->extra_data,
 	    log_storage_wrapper->delete_callback);
-	duckdb::shared_ptr<duckdb::LogStorage> storage_ptr = shared_storage_ptr;
+	duckdb::shared_ptr<duckdb::LogSink> storage_ptr = shared_storage_ptr;
 
-	const auto success = db.instance->GetLogManager().RegisterLogStorage(log_storage_wrapper->name, storage_ptr);
+	const auto success = db.instance->GetLogManager().RegisterLogSink(log_storage_wrapper->name, storage_ptr);
 	if (!success) {
 		return DuckDBError;
 	}

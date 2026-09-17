@@ -44,7 +44,7 @@
 #endif
 
 #include <stdlib.h>
-#include "duckdb/logging/log_storage.hpp"
+#include "duckdb/logging/log_sink.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/statement_iterator.hpp"
 #include <string.h>

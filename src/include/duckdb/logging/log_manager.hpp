@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/logging/logger.hpp"
-#include "duckdb/logging/log_storage.hpp"
+#include "duckdb/logging/log_sink.hpp"
 #include "duckdb/logging/log_sink.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -38,7 +38,7 @@ public:
 
 	RegisteredLoggingContext RegisterLoggingContext(LoggingContext &context);
 
-	DUCKDB_API bool RegisterLogStorage(const string &name, shared_ptr<LogStorage> &storage);
+	//DUCKDB_API bool RegisterLogStorage(const string &name, shared_ptr<LogStorage> &storage);
 	DUCKDB_API bool RegisterLogSink(const string &name, shared_ptr<LogSink> &storage);
 
 	//! The global logger can be used when
@@ -48,8 +48,8 @@ public:
 	//! Flush everything
 	DUCKDB_API void Flush();
 
-	//! Get a shared_ptr to the log storage (For example, to scan it)
-	DUCKDB_API shared_ptr<LogStorage> GetLogStorage();
+	//! Get a shared_ptr to the log sink (For example, to scan it)
+	//DUCKDB_API shared_ptr<LogStorage> GetLogStorage();
 	DUCKDB_API shared_ptr<LogSink> GetLogSink();
 	DUCKDB_API bool CanScan(LoggingTargetTable table);
 
@@ -100,14 +100,14 @@ protected:
 	LogConfig config;
 
 	shared_ptr<Logger> global_logger;
-	shared_ptr<LogStorage> log_storage;
+	//shared_ptr<LogStorage> log_storage;
 	shared_ptr<LogSink> log_sink;
 	DatabaseInstance &db_instance;
 
 	idx_t next_registered_logging_context_index = 0;
 
-	// Any additional LogStorages registered (by extensions for example)
-	case_insensitive_map_t<shared_ptr<LogStorage>> registered_log_storages;
+	// Any additional LogSinks registered (by extensions for example)
+	//case_insensitive_map_t<shared_ptr<LogStorage>> registered_log_storages;
 	case_insensitive_map_t<shared_ptr<LogSink>> registered_log_sinks;
 	case_insensitive_map_t<unique_ptr<LogType>> registered_log_types;
 	case_insensitive_map_t<shared_ptr<LogSink>> enabled_sinks_by_name;
