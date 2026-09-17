@@ -7,13 +7,10 @@
 
 #pragma once
 
-#include "duckdb/common/assert.hpp"
+#include "duckdb/parser/peg/keyword_categories.hpp"
 #include <cstdint>
 
 namespace duckdb {
-
-//! Opaque, dialect-defined keyword category flags.
-using keyword_categories_t = uint8_t;
 
 //! A grammar-local literal ID and opaque keyword properties.
 class LiteralInfo {
@@ -24,7 +21,7 @@ public:
 	//! Zero denotes an unknown literal with no keyword flags, such as a non-keyword identifier.
 	LiteralInfo() : literal_id(0) {
 	}
-	explicit LiteralInfo(uint16_t literal_id, keyword_categories_t category_flags = 0)
+	explicit LiteralInfo(uint16_t literal_id, keyword_categories_t category_flags = keyword_categories_t())
 	    : literal_id(literal_id), category_flags(category_flags) {
 	}
 
@@ -42,11 +39,11 @@ public:
 	}
 
 	bool IsKeyword() const {
-		return category_flags != 0;
+		return category_flags != keyword_categories_t();
 	}
 
 	bool HasAnyFlags(keyword_categories_t mask) const {
-		return (category_flags & mask) != 0;
+		return (category_flags & mask) != keyword_categories_t();
 	}
 
 	bool operator==(const LiteralInfo &other) const {
@@ -55,7 +52,7 @@ public:
 
 private:
 	uint16_t literal_id = 0;
-	keyword_categories_t category_flags = 0;
+	keyword_categories_t category_flags = keyword_categories_t();
 };
 
 } // namespace duckdb

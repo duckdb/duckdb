@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include <type_traits>
 #include "test_helpers.hpp"
 
 #include "duckdb/main/settings.hpp"
@@ -209,24 +210,42 @@ TEST_CASE("Literal dispatch leaves mixed and unregistered alternatives unchanged
 	}
 }
 
+TEST_CASE("Keyword category masks require explicit conversions and valid IDs", "[api][grammar_extension]") {
+	static_assert(!std::is_convertible<uint8_t, keyword_categories_t>::value, "Category masks must be explicit");
+	static_assert(!std::is_convertible<keyword_categories_t, uint8_t>::value, "Category masks must stay opaque");
+	static_assert(!std::is_assignable<keyword_categories_t &, uint8_t>::value, "Raw masks must be explicit");
+	constexpr auto first = keyword_categories_t::CreateCategory(0);
+	constexpr auto last = keyword_categories_t::CreateCategory(keyword_categories_t::MAX_CATEGORY_ID - 1);
+	static_assert(sizeof(keyword_categories_t) == sizeof(uint8_t), "Category masks must remain compact");
+	REQUIRE(static_cast<uint8_t>(first) == 1);
+	REQUIRE(static_cast<uint8_t>(last) == 128);
+	REQUIRE(keyword_categories_t(static_cast<uint8_t>(first)) == first);
+	REQUIRE((first & last) == keyword_categories_t());
+	REQUIRE(((first | last) & first) == first);
+	REQUIRE(first != keyword_categories_t());
+	REQUIRE_THROWS_AS(keyword_categories_t::CreateCategory(keyword_categories_t::MAX_CATEGORY_ID),
+	                  InvalidInputException);
+	REQUIRE_THROWS_AS(keyword_categories_t::CreateCategory(256), InvalidInputException);
+}
+
 TEST_CASE("Literal IDs and opaque flags are independent", "[api][grammar_extension]") {
 	REQUIRE(sizeof(LiteralInfo) == sizeof(uint32_t));
 	REQUIRE(sizeof(LiteralInfo().LiteralId()) == sizeof(uint16_t));
 	LiteralInfo missing;
 	REQUIRE(missing.LiteralId() == 0);
 	REQUIRE_FALSE(missing.IsKeyword());
-	REQUIRE_FALSE(missing.HasAnyFlags(0xFF));
+	REQUIRE_FALSE(missing.HasAnyFlags(~keyword_categories_t()));
 	LiteralInfo original(LiteralInfo::MAX_LITERAL_ID);
 	REQUIRE(original.LiteralId() == 65535);
 	REQUIRE_FALSE(original.IsKeyword());
 	LiteralInfo accumulated(LiteralInfo::MAX_LITERAL_ID);
-	keyword_categories_t expected_flags = 0;
-	for (idx_t bit = 0; bit < 8; bit++) {
-		auto flag = static_cast<keyword_categories_t>(1U << bit);
+	keyword_categories_t expected_flags;
+	for (idx_t id = 0; id < keyword_categories_t::MAX_CATEGORY_ID; id++) {
+		auto flag = keyword_categories_t::CreateCategory(id);
 		LiteralInfo literal(LiteralInfo::MAX_LITERAL_ID, flag);
 		REQUIRE(literal.HasAnyFlags(flag));
-		REQUIRE_FALSE(literal.HasAnyFlags(static_cast<keyword_categories_t>(~flag)));
-		REQUIRE_FALSE(literal.HasAnyFlags(0));
+		REQUIRE_FALSE(literal.HasAnyFlags(~flag));
+		REQUIRE_FALSE(literal.HasAnyFlags(keyword_categories_t()));
 		REQUIRE(literal.IsKeyword());
 		REQUIRE(literal.LiteralId() == original.LiteralId());
 		REQUIRE_FALSE(literal == original);
@@ -243,7 +262,7 @@ TEST_CASE("Literal IDs and opaque flags are independent", "[api][grammar_extensi
 		REQUIRE(accumulated.CategoryFlags() == expected_flags);
 		LiteralInfo before(accumulated);
 		accumulated.AddCategories(flag);
-		accumulated.AddCategories(0);
+		accumulated.AddCategories(keyword_categories_t());
 		REQUIRE(accumulated == before);
 	}
 }
@@ -277,7 +296,7 @@ TEST_CASE("Default keyword categories decode independently of literal IDs", "[ap
 TEST_CASE("Grammar literal IDs reject overflow", "[api][grammar_extension]") {
 	auto grammar = ParsedGrammar::Parse("LiteralTest <- '('");
 	case_insensitive_map_t<LiteralInfo> keywords;
-	const keyword_categories_t flags = 0xC0;
+	const auto flags = keyword_categories_t::CreateCategory(6) | keyword_categories_t::CreateCategory(7);
 	for (idx_t i = 1; i < LiteralInfo::MAX_LITERAL_ID; i++) {
 		keywords.emplace("literal_limit_" + to_string(i), LiteralInfo(0, flags));
 	}
@@ -286,8 +305,8 @@ TEST_CASE("Grammar literal IDs reject overflow", "[api][grammar_extension]") {
 	for (auto &entry : keywords) {
 		auto info = table.Lookup(entry.first);
 		REQUIRE(info.LiteralId() != 0);
-		REQUIRE(info.HasAnyFlags(0x40));
-		REQUIRE(info.HasAnyFlags(0x80));
+		REQUIRE(info.HasAnyFlags(keyword_categories_t::CreateCategory(6)));
+		REQUIRE(info.HasAnyFlags(keyword_categories_t::CreateCategory(7)));
 		max_id = MaxValue<idx_t>(max_id, info.LiteralId());
 	}
 	REQUIRE(max_id == LiteralInfo::MAX_LITERAL_ID);
@@ -322,8 +341,8 @@ TEST_CASE("Grammar literal IDs include category-only words and overlapping categ
 
 TEST_CASE("Grammar literal tables preserve dialect-defined flags", "[api][grammar_extension]") {
 	auto grammar = ParsedGrammar::Parse("LiteralTest <- 'SHARED' / 'shared' / 'plain'");
-	const keyword_categories_t first_flag = keyword_categories_t(1) << 6;
-	const keyword_categories_t second_flag = keyword_categories_t(1) << 7;
+	const keyword_categories_t first_flag = keyword_categories_t::CreateCategory(6);
+	const keyword_categories_t second_flag = keyword_categories_t::CreateCategory(7);
 	case_insensitive_map_t<LiteralInfo> keywords;
 	keywords.emplace("shared", LiteralInfo(0, first_flag | second_flag));
 	keywords.emplace("category_only", LiteralInfo(0, second_flag));

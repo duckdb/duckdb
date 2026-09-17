@@ -31,7 +31,7 @@ public:
 	}
 
 private:
-	void Register(const string &text, keyword_categories_t categories = 0);
+	void Register(const string &text, keyword_categories_t categories = keyword_categories_t());
 
 private:
 	const uint64_t cache_id;

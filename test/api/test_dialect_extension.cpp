@@ -17,7 +17,7 @@ public:
 		return literal_table;
 	}
 	keyword_categories_t GetIdentifierMask(SuggestionState) const override {
-		return 0;
+		return keyword_categories_t();
 	}
 	vector<ParserKeyword> KeywordList() const override {
 		return {};

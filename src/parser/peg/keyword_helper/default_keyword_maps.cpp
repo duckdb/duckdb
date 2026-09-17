@@ -3,14 +3,14 @@
 
 namespace duckdb {
 
-static constexpr keyword_categories_t KEYWORD_UNRESERVED = keyword_categories_t(1) << 0;
-static constexpr keyword_categories_t KEYWORD_RESERVED = keyword_categories_t(1) << 1;
-static constexpr keyword_categories_t KEYWORD_TYPE_FUNC = keyword_categories_t(1) << 2;
-static constexpr keyword_categories_t KEYWORD_COL_NAME = keyword_categories_t(1) << 3;
-static constexpr keyword_categories_t KEYWORD_TYPE_NAME = keyword_categories_t(1) << 4;
+static constexpr keyword_categories_t KEYWORD_UNRESERVED = keyword_categories_t::CreateCategory(0);
+static constexpr keyword_categories_t KEYWORD_RESERVED = keyword_categories_t::CreateCategory(1);
+static constexpr keyword_categories_t KEYWORD_TYPE_FUNC = keyword_categories_t::CreateCategory(2);
+static constexpr keyword_categories_t KEYWORD_COL_NAME = keyword_categories_t::CreateCategory(3);
+static constexpr keyword_categories_t KEYWORD_TYPE_NAME = keyword_categories_t::CreateCategory(4);
 
 LiteralInfo DefaultKeywordMaps::LookupKeyword(const string &text, uint16_t literal_id) const {
-	keyword_categories_t flags = 0;
+	keyword_categories_t flags;
 	if (unreserved_keyword_map.count(text)) {
 		flags |= KEYWORD_UNRESERVED;
 	}
