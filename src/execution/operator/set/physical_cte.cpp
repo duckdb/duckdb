@@ -607,9 +607,9 @@ ProgressData PhysicalCTE::GetSinkProgress(ClientContext &context, GlobalSinkStat
 		return ProgressData {0, 1, true};
 	}
 	auto count = double(state.ordered_data ? state.ordered_data->Count() : state.working_table_ref->Count());
-	ProgressData progress;
-	progress.done = count;
-	progress.total = count + source_progress.total;
+	auto progress = source_progress;
+	progress.done += count;
+	progress.total += count;
 	return progress;
 }
 

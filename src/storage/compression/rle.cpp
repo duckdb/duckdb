@@ -14,6 +14,22 @@ namespace duckdb {
 
 using rle_count_t = uint16_t;
 
+template <class T>
+bool RLEValueEqual(const T &lhs, const T &rhs) {
+	return lhs == rhs;
+}
+
+template <>
+bool RLEValueEqual(const float &lhs, const float &rhs) {
+	// IEEE == collapses +0 and -0; compare the bit pattern instead.
+	return Load<uint32_t>(const_data_ptr_cast(&lhs)) == Load<uint32_t>(const_data_ptr_cast(&rhs));
+}
+
+template <>
+bool RLEValueEqual(const double &lhs, const double &rhs) {
+	return Load<uint64_t>(const_data_ptr_cast(&lhs)) == Load<uint64_t>(const_data_ptr_cast(&rhs));
+}
+
 //===--------------------------------------------------------------------===//
 // Analyze
 //===--------------------------------------------------------------------===//
@@ -53,7 +69,7 @@ public:
 				seen_count++;
 				last_seen_count++;
 				all_null = false;
-			} else if (last_value == data[idx]) {
+			} else if (RLEValueEqual(last_value, data[idx])) {
 				// the last value is identical to this value: increment the last_seen_count
 				last_seen_count++;
 			} else {

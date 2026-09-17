@@ -5,7 +5,7 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
-#include "duckdb/optimizer/builtin_function_lookup.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
@@ -27,6 +27,7 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
@@ -353,6 +354,43 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 	const bool analyze = mode == RemoveUnusedColumnsMode::ANALYZE;
 	auto &op = *op_ref;
 	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_WINDOW: {
+		auto &window = op.Cast<LogicalWindow>();
+		// Preserve volatile evaluation within the window expression, even when its output is unused.
+		// Column references do not propagate volatility from their producers.
+		if (!everything_referenced) {
+			for (idx_t i = 0; i < window.expressions.size(); i++) {
+				if (window.expressions[i]->IsVolatile()) {
+					column_references.emplace(ColumnBinding(window.window_index, ProjectionIndex(i)),
+					                          ReferencedColumn());
+				}
+			}
+		}
+		if (analyze) {
+			// Windows also pass through child columns, so retain the existing references.
+			for (idx_t i = 0; i < window.expressions.size(); i++) {
+				auto binding = ColumnBinding(window.window_index, ProjectionIndex(i));
+				if (everything_referenced || column_references.find(binding) != column_references.end()) {
+					VisitExpression(&window.expressions[i]);
+				}
+			}
+			VisitOperator(window.children[0]);
+			return;
+		}
+		if (!everything_referenced) {
+			ClearUnusedExpressions(window.expressions, window.window_index);
+		}
+		if (window.expressions.empty()) {
+			// A window with no remaining outputs preserves its child's rows and bindings.
+			auto child = std::move(window.children[0]);
+			op_ref = std::move(child);
+			VisitOperator(op_ref);
+			return;
+		}
+		VisitOperatorExpressions(window);
+		VisitPrunableChildren(window);
+		return;
+	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		// aggregate
 		auto &aggr = op.Cast<LogicalAggregate>();
@@ -619,11 +657,13 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			// need to implicitly reference everything.
 			break;
 		}
-		// distinct, all projected columns are used for the DISTINCT computation
-		// mark all columns as used and continue to the children
-		// FIXME: DISTINCT with expression list does not implicitly reference everything
+		// Preserve all DISTINCT inputs without affecting sibling branches.
+		const auto previous_everything_referenced = everything_referenced;
 		everything_referenced = true;
-		break;
+		LogicalOperatorVisitor::VisitOperatorExpressions(op);
+		VisitPrunableChildren(op);
+		everything_referenced = previous_everything_referenced;
+		return;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
 		if (analyze) {
@@ -1135,19 +1175,24 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 			filter_expr = std::move(column_ref);
 		}
 		filter_expressions.push_back(std::move(filter_expr));
-		//! Now visit the filter to add to the 'column_references'
-		VisitExpression(&filter_expressions.back());
 	}
+	for (auto &filter_expression : filter_expressions) {
+		//! Now visit the filter to add to the 'column_references'
+		VisitExpression(&filter_expression);
+	}
+	//! The 'column_references' hold references to these expressions, so they have to stay alive
+	vector<unique_ptr<Expression>> multi_filter_columns;
 	for (const auto &filter : get.table_filters.GetMultiColumnFilters()) {
 		const auto &expression_filter = ExpressionFilter::GetExpressionFilter(*filter, "RemoveUnusedColumns::VisitGet");
 		for (const auto &filter_idx : expression_filter.column_indexes) {
 			const auto &col_id = get.GetColumnIndex(filter_idx);
 			auto column_type = get.GetColumnType(col_id);
 			ColumnBinding filter_binding(get.table_index, filter_idx);
-			unique_ptr<Expression> column_ref =
-			    make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
-			VisitExpression(&column_ref);
+			multi_filter_columns.push_back(make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding));
 		}
+	}
+	for (auto &column_ref : multi_filter_columns) {
+		VisitExpression(&column_ref);
 	}
 
 	//! Check with the LogicalGet whether pushdown-extract is supported

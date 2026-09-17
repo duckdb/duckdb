@@ -18,7 +18,7 @@
 
 namespace duckdb {
 
-class StreamQueryResult;
+class QueryResult;
 
 class SimpleBufferedData : public BufferedData {
 public:
@@ -36,6 +36,7 @@ public:
 	//! The highest number of bytes the buffer ever held.
 	idx_t PeakBufferedBytes() override;
 	bool HasBlockedSink() override;
+	bool HasObservableChunk() override;
 	void UnblockSinks() override;
 	void AssertNoBlockedSinks() override;
 	unique_ptr<DataChunk> Scan() override;

@@ -43,6 +43,15 @@ build_loadable_extension_directory(
   loadable_grammar_extension_demo.cpp)
 
 build_loadable_extension_directory(
+  loadable_dialect_extension_demo
+  "CPP"
+  test/extension
+  "default-version"
+  ""
+  ${PARAMETERS}
+  loadable_dialect_extension_demo.cpp)
+
+build_loadable_extension_directory(
   explicit_extension_schema
   "CPP"
   test/extension
