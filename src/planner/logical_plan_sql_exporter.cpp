@@ -2,11 +2,9 @@
 #include "duckdb/planner/logical_plan_sql_exporter.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/limits.hpp"
-#include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
@@ -587,23 +585,6 @@ static bool OrdersAggregateArguments(ClientContext &context, const BoundAggregat
 	return true;
 }
 
-static bool IsCurrentCoreAggregate(ClientContext &context, const AggregateFunction &definition,
-                                   const vector<LogicalType> &arguments) {
-	try {
-		auto &entry = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, definition.GetQualifiedName());
-		if (!entry.internal || entry.extension_name != Identifier("core_functions")) {
-			return false;
-		}
-		ErrorData error;
-		FunctionBinder function_binder(context);
-		auto function_index = function_binder.BindFunction(entry.name, entry.functions, arguments, error);
-		return function_index.IsValid() &&
-		       *entry.functions.GetFunctionByOffset(function_index.GetIndex()) == definition;
-	} catch (const Exception &) {
-		return false;
-	}
-}
-
 static bool HasSafePredicates(const LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_EXPRESSION_GET) {
 		return !HasEffectfulExpressions(op) &&
@@ -697,108 +678,6 @@ static bool IsIdentityProjection(const LogicalProjection &projection, const vect
 		}
 	}
 	return true;
-}
-
-static bool ExtractConstantPivotRows(LogicalOperator &op, vector<vector<Value>> &rows) {
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
-		if (!op.children.empty() || op.types.size() != 1) {
-			return false;
-		}
-		rows.emplace_back();
-		return true;
-	case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
-		return op.children.size() == 1;
-	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
-		auto &values = op.Cast<LogicalExpressionGet>();
-		if (values.children.size() != 1) {
-			return false;
-		}
-		vector<vector<Value>> child_rows;
-		if (!ExtractConstantPivotRows(*values.children[0], child_rows) || child_rows.size() != 1) {
-			return false;
-		}
-		for (auto &input_row : values.expressions) {
-			if (input_row.size() != values.expr_types.size()) {
-				return false;
-			}
-			vector<Value> row;
-			for (idx_t column_idx = 0; column_idx < input_row.size(); column_idx++) {
-				auto &expression = input_row[column_idx];
-				if (!expression || expression->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
-				    !SQLExportHelpers::SQLTypesMatch(expression->GetReturnType(), values.expr_types[column_idx])) {
-					return false;
-				}
-				row.push_back(expression->Cast<BoundConstantExpression>().GetValue());
-			}
-			rows.push_back(std::move(row));
-		}
-		return true;
-	}
-	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		auto &projection = op.Cast<LogicalProjection>();
-		if (projection.children.size() != 1 || projection.expressions.size() != projection.types.size()) {
-			return false;
-		}
-		vector<vector<Value>> child_rows;
-		if (!ExtractConstantPivotRows(*projection.children[0], child_rows)) {
-			return false;
-		}
-		auto child_bindings = projection.children[0]->GetColumnBindings();
-		for (auto &child_row : child_rows) {
-			vector<Value> row;
-			for (idx_t column_idx = 0; column_idx < projection.expressions.size(); column_idx++) {
-				auto &expression = projection.expressions[column_idx];
-				if (!expression ||
-				    !SQLExportHelpers::SQLTypesMatch(expression->GetReturnType(), projection.types[column_idx])) {
-					return false;
-				}
-				if (expression->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-					row.push_back(expression->Cast<BoundConstantExpression>().GetValue());
-					continue;
-				}
-				if (expression->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-					return false;
-				}
-				auto &column = expression->Cast<BoundColumnRefExpression>();
-				if (column.Depth() != 0) {
-					return false;
-				}
-				auto child_column = std::find(child_bindings.begin(), child_bindings.end(), column.Binding());
-				if (child_column == child_bindings.end() ||
-				    NumericCast<idx_t>(child_column - child_bindings.begin()) >= child_row.size()) {
-					return false;
-				}
-				row.push_back(child_row[NumericCast<idx_t>(child_column - child_bindings.begin())]);
-			}
-			rows.push_back(std::move(row));
-		}
-		return true;
-	}
-	case LogicalOperatorType::LOGICAL_UNION: {
-		auto &set_operation = op.Cast<LogicalSetOperation>();
-		if (!set_operation.setop_all || set_operation.children.empty() ||
-		    set_operation.column_count != op.types.size()) {
-			return false;
-		}
-		for (auto &child : set_operation.children) {
-			if (child->types.size() != op.types.size()) {
-				return false;
-			}
-			for (idx_t column_idx = 0; column_idx < op.types.size(); column_idx++) {
-				if (!SQLExportHelpers::SQLTypesMatch(child->types[column_idx], op.types[column_idx])) {
-					return false;
-				}
-			}
-			if (!ExtractConstantPivotRows(*child, rows)) {
-				return false;
-			}
-		}
-		return true;
-	}
-	default:
-		return false;
-	}
 }
 
 class LogicalPlanSQLExportState {
@@ -2070,95 +1949,6 @@ private:
 		return LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>::Success(std::move(result.GetValue()));
 	}
 
-	LogicalPlanVerificationResult<bool> VerifyPivotListSource(LogicalPivot &pivot,
-	                                                          const LogicalPlanVerificationPath &path) {
-		auto failure = [&](const string &message) {
-			return LogicalPlanVerificationResult<bool>::Failure(
-			    {PlanUnsupportedFeature(path, "pivot_list_source", message)});
-		};
-		auto &info = pivot.bound_pivot;
-		vector<vector<Value>> constant_rows;
-		if (ExtractConstantPivotRows(*pivot.children[0], constant_rows)) {
-			if (pivot.children[0]->types.size() != info.group_count + info.aggregates.size() + 1) {
-				return failure("The supplied PIVOT child has an unexpected layout");
-			}
-			for (auto &row : constant_rows) {
-				if (row.size() != info.group_count + info.aggregates.size() + 1) {
-					return failure("The supplied PIVOT child has an unexpected layout");
-				}
-				idx_t list_length = 0;
-				for (idx_t list_idx = info.group_count; list_idx < row.size(); list_idx++) {
-					auto &list = row[list_idx];
-					if (list.IsNull() || list.type().id() != LogicalTypeId::LIST) {
-						return failure("The supplied PIVOT child has a NULL or non-list value");
-					}
-					auto current_length = ListValue::GetChildren(list).size();
-					if (list_idx == info.group_count) {
-						list_length = current_length;
-					} else if (current_length != list_length) {
-						return failure("The supplied PIVOT child lists are not aligned");
-					}
-				}
-			}
-			return LogicalPlanVerificationResult<bool>::Success(true);
-		}
-		optional_ptr<LogicalOperator> source_op = pivot.children[0].get();
-		auto bindings = source_op->GetColumnBindings();
-		if (bindings.size() != info.group_count + info.aggregates.size() + 1) {
-			return failure("The PIVOT child has an unexpected layout");
-		}
-		bindings.erase(bindings.begin(), bindings.begin() + info.group_count);
-		while (source_op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-			auto &projection = source_op->Cast<LogicalProjection>();
-			auto outputs = projection.GetColumnBindings();
-			for (auto &binding : bindings) {
-				auto entry = std::find(outputs.begin(), outputs.end(), binding);
-				if (entry == outputs.end()) {
-					return failure("The PIVOT list projection has an unresolved input");
-				}
-				auto &expression = *projection.expressions[NumericCast<idx_t>(entry - outputs.begin())];
-				if (expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
-				    expression.Cast<BoundColumnRefExpression>().Depth() != 0) {
-					return failure("The PIVOT child projection computes a new list");
-				}
-				binding = expression.Cast<BoundColumnRefExpression>().Binding();
-			}
-			source_op = projection.children[0].get();
-		}
-		if (source_op->type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
-			return failure("The PIVOT child list alignment is not represented");
-		}
-		auto &source = source_op->Cast<LogicalAggregate>();
-		if (source.grouping_sets.size() > 1 ||
-		    (!source.grouping_sets.empty() && source.grouping_sets[0].size() != source.groups.size())) {
-			return failure("The PIVOT list source uses unrepresented grouping sets");
-		}
-		auto outputs = source.GetColumnBindings();
-		for (auto &binding : bindings) {
-			auto entry = std::find(outputs.begin(), outputs.end(), binding);
-			if (entry == outputs.end() || NumericCast<idx_t>(entry - outputs.begin()) < source.groups.size()) {
-				return failure("The PIVOT list column is not an aggregate output");
-			}
-			auto index = NumericCast<idx_t>(entry - outputs.begin()) - source.groups.size();
-			if (index >= source.expressions.size() ||
-			    source.expressions[index]->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
-				return failure("The PIVOT list column is not an aggregate output");
-			}
-			auto &aggregate = source.expressions[index]->Cast<BoundAggregateExpression>();
-			auto &definition = aggregate.Function().GetDefinition();
-			if (!definition || definition->GetQualifiedName() != QualifiedName("system", "main", "list") ||
-			    aggregate.Function().GetName() != Identifier("list") || aggregate.GetChildren().size() != 1 ||
-			    aggregate.GetFilter() || aggregate.IsDistinct() ||
-			    aggregate.StateExportMode() != AggregateStateExportMode::NONE) {
-				return failure("The PIVOT child lists do not cover the same input rows");
-			}
-			if (!IsCurrentCoreAggregate(context, *definition, {aggregate.GetChildren()[0]->GetReturnType()})) {
-				return failure("The PIVOT list source uses a modified aggregate definition");
-			}
-		}
-		return LogicalPlanVerificationResult<bool>::Success(true);
-	}
-
 	LogicalPlanSQLExportResult ExportPivot(LogicalPivot &pivot, const LogicalPlanVerificationPath &path) {
 		D_ASSERT(pivot.children.size() == 1);
 		auto fields = CreateFields(pivot, path);
@@ -2176,10 +1966,6 @@ private:
 		auto target_count = (fields.GetValue().size() - info.group_count) / aggregate_count;
 		if (target_count == 0) {
 			return PlanFailure(PlanUnsupportedFeature(path, "pivot_layout", "The PIVOT has no output targets"));
-		}
-		auto list_source = VerifyPivotListSource(pivot, path);
-		if (list_source.HasError()) {
-			return LogicalPlanSQLExportResult::Failure(list_source.GetIssues());
 		}
 
 		auto defaults = make_uniq<SelectNode>();

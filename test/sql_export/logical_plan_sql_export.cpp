@@ -1170,6 +1170,7 @@ TEST_CASE("Logical plan SQL export validates noncanonical PIVOT defaults and lis
 		         "SELECT 'g' g,[10::HUGEINT,NULL] v,['a','a'] k",
 		         "SELECT 'g1' g,[10::HUGEINT] v,['a'] k UNION ALL SELECT 'g2',[20::HUGEINT],['b']",
 		         "SELECT 'g' g,[10::HUGEINT,20::HUGEINT] v,['a','a'] k",
+		         "SELECT i::VARCHAR g,[i::HUGEINT,NULL,i::HUGEINT+10] v,['a','x','a'] k FROM range(3) t(i)",
 		     }) {
 			for (bool binary : {false, true}) {
 				CAPTURE(child_sql, binary);
