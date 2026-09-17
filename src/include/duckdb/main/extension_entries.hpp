@@ -1317,6 +1317,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"hf_max_per_page", "httpfs"},
     {"hnsw_ef_search", "vss"},
     {"hnsw_enable_experimental_persistence", "vss"},
+    {"hnsw_prefilter", "vss"},
     {"http_keep_alive", "httpfs"},
     {"http_retries", "httpfs"},
     {"http_retry_backoff", "httpfs"},
