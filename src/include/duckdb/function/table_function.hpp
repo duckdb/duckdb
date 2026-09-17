@@ -432,12 +432,20 @@ struct TableFunctionToSQLResult {
 	string unsupported_reason;
 };
 
-//! Return owned SQL for GetColumnIds followed by projected_input, before table_filters and projection_ids.
-//! The optional input has positional column aliases. Use relation_alias for the source relation.
-//! Unsupported sources return a reason without a query.
+struct TableFunctionToSQLInput {
+	unique_ptr<TableRef> child;
+	Identifier relation_alias;
+	//! Append one ordinality column to replace a surrounding row-number window.
+	bool source_ordinality = false;
+	//! Borrowed predicates bound to TableIndex(0) and unprojected returned_types positions.
+	optional_ptr<const vector<unique_ptr<Expression>>> file_filters;
+};
+
+//! Return owned SQL for GetColumnIds, projected_input, then the requested extra ordinality column.
+//! The child has positional aliases. Apply file_filters before outer filters and projections.
+//! Honor the complete request or return a reason without a query; do not retain borrowed input.
 typedef TableFunctionToSQLResult (*table_function_to_sql_t)(ClientContext &context, const LogicalGet &get,
-                                                            unique_ptr<TableRef> input,
-                                                            const Identifier &relation_alias);
+                                                            TableFunctionToSQLInput input);
 
 typedef void (*table_function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                            const TableFunction &function);
@@ -648,12 +656,7 @@ public:
 	DUCKDB_API bool operator!=(const TableFunction &rhs) const;
 	//! SQL callback for sources fully reconstructed by their retained constant arguments.
 	DUCKDB_API static TableFunctionToSQLResult ToSQLFunctionCall(ClientContext &context, const LogicalGet &get,
-	                                                             unique_ptr<TableRef> input,
-	                                                             const Identifier &relation_alias);
-	DUCKDB_API static TableFunctionToSQLResult ToSQLFunctionCallWithOrdinality(ClientContext &context,
-	                                                                           const LogicalGet &get,
-	                                                                           unique_ptr<TableRef> input,
-	                                                                           const Identifier &relation_alias);
+	                                                             TableFunctionToSQLInput input);
 };
 
 } // namespace duckdb

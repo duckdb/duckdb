@@ -1298,9 +1298,12 @@ static string TableScanToSQLGuard(const LogicalGet &get, bool has_input) {
 	return string();
 }
 
-static TableFunctionToSQLResult TableScanToSQL(ClientContext &, const LogicalGet &get, unique_ptr<TableRef> input,
-                                               const Identifier &relation_alias) {
-	auto guard = TableScanToSQLGuard(get, input != nullptr);
+static TableFunctionToSQLResult TableScanToSQL(ClientContext &, const LogicalGet &get, TableFunctionToSQLInput input) {
+	if (input.source_ordinality || (input.file_filters && !input.file_filters->empty())) {
+		return {nullptr, "table_scan_source_modifiers"};
+	}
+	const auto &relation_alias = input.relation_alias;
+	auto guard = TableScanToSQLGuard(get, input.child != nullptr);
 	if (!guard.empty()) {
 		return {nullptr, std::move(guard)};
 	}

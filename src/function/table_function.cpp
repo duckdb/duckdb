@@ -214,9 +214,11 @@ static unique_ptr<ParsedExpression> TableFunctionColumn(const LogicalGet &get, c
 	return std::move(column);
 }
 
-static TableFunctionToSQLResult SQLFunctionCall(ClientContext &context, const LogicalGet &get,
-                                                unique_ptr<TableRef> input, const Identifier &relation_alias,
-                                                bool source_ordinality) {
+TableFunctionToSQLResult TableFunction::ToSQLFunctionCall(ClientContext &context, const LogicalGet &get,
+                                                          TableFunctionToSQLInput request) {
+	auto input = std::move(request.child);
+	const auto &relation_alias = request.relation_alias;
+	auto source_ordinality = request.source_ordinality;
 	auto guard = SQLFunctionCallGuard(get, input != nullptr);
 	if (!guard.empty()) {
 		return {nullptr, std::move(guard)};
@@ -306,7 +308,7 @@ static TableFunctionToSQLResult SQLFunctionCall(ClientContext &context, const Lo
 		select->select_list.push_back(
 		    make_uniq<ColumnRefExpression>(function_ref.column_name_alias.back(), function_ref.alias));
 	}
-	if (get.extra_info.file_filter_expressions) {
+	if (request.file_filters) {
 		BoundExpressionSQLExportContext export_context;
 		export_context.client_context = &context;
 		export_context.resolve_binding = [&](const ColumnBinding &binding) -> optional<ResolvedSQLColumnReference> {
@@ -317,7 +319,7 @@ static TableFunctionToSQLResult SQLFunctionCall(ClientContext &context, const Lo
 			return ResolvedSQLColumnReference {{function_ref.alias, function_ref.column_name_alias[index]},
 			                                   get.returned_types[index]};
 		};
-		for (auto &predicate : *get.extra_info.file_filter_expressions) {
+		for (auto &predicate : *request.file_filters) {
 			auto exported = BoundExpressionSQLExporter::Export(*predicate, export_context);
 			if (exported.HasError()) {
 				return {nullptr, "to_sql_callback_declined_without_guard"};
@@ -340,18 +342,6 @@ static TableFunctionToSQLResult SQLFunctionCall(ClientContext &context, const Lo
 	join->right = std::move(function);
 	select->from_table = std::move(join);
 	return {std::move(select), {}};
-}
-
-TableFunctionToSQLResult TableFunction::ToSQLFunctionCall(ClientContext &context, const LogicalGet &get,
-                                                          unique_ptr<TableRef> input,
-                                                          const Identifier &relation_alias) {
-	return SQLFunctionCall(context, get, std::move(input), relation_alias, false);
-}
-
-TableFunctionToSQLResult TableFunction::ToSQLFunctionCallWithOrdinality(ClientContext &context, const LogicalGet &get,
-                                                                        unique_ptr<TableRef> input,
-                                                                        const Identifier &relation_alias) {
-	return SQLFunctionCall(context, get, std::move(input), relation_alias, true);
 }
 
 bool TableFunction::Equal(const TableFunction &rhs) const {

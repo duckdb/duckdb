@@ -1016,9 +1016,8 @@ private:
 		    op.children[0]->type == LogicalOperatorType::LOGICAL_GET) {
 			auto &get = op.children[0]->Cast<LogicalGet>();
 			if (get.source_ordinality == OrdinalityType::WITH_ORDINALITY && !get.ordinality_idx.IsValid()) {
-				bool supported = op.expressions.size() == 1 && !get.table_filters.HasFilters() &&
-				                 !get.extra_info.sample_options &&
-				                 (!get.function.to_sql || get.function.to_sql == TableFunction::ToSQLFunctionCall);
+				bool supported =
+				    op.expressions.size() == 1 && !get.table_filters.HasFilters() && !get.extra_info.sample_options;
 				if (supported) {
 					auto &window = op.expressions[0]->Cast<BoundWindowExpression>();
 					supported = window.GetExpressionType() == ExpressionType::WINDOW_ROW_NUMBER &&
@@ -1289,8 +1288,7 @@ private:
 			return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
 		}
 		if ((!get.extra_info.file_filters.empty() || get.extra_info.total_files.IsValid()) &&
-		    (!get.extra_info.file_filter_expressions ||
-		     (get.function.to_sql && get.function.to_sql != TableFunction::ToSQLFunctionCall))) {
+		    !get.extra_info.file_filter_expressions) {
 			return PlanFailure(PlanUnsupportedFeature(
 			    path, "file_filter_residual", "The source does not retain the SQL predicate used for file pruning"));
 		}
@@ -1337,15 +1335,14 @@ private:
 			return PlanFailure(UnsupportedSource(path, LogicalSourceIdentity(get), "to_sql_callback"));
 		}
 		if (ordinality) {
-			if (to_sql != TableFunction::ToSQLFunctionCall) {
-				return PlanFailure(UnsupportedSource(path, LogicalSourceIdentity(get), "source_ordinality"));
-			}
 			fields.GetValue().push_back(*ordinality);
 			scan_fields.push_back(*ordinality);
-			to_sql = TableFunction::ToSQLFunctionCallWithOrdinality;
 		}
 		auto relation_alias = NextRelationAlias();
-		auto source_sql = to_sql(context, get, std::move(input), relation_alias);
+		auto source_sql =
+		    to_sql(context, get,
+		           {std::move(input), relation_alias, bool(ordinality),
+		            get.extra_info.file_filter_expressions ? &*get.extra_info.file_filter_expressions : nullptr});
 		if (!source_sql.query) {
 			auto guard =
 			    source_sql.unsupported_reason.empty() ? "to_sql_callback_declined" : source_sql.unsupported_reason;

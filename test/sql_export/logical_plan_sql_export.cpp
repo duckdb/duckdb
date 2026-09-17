@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
@@ -543,8 +544,8 @@ TEST_CASE("Logical plan SQL export rejects opaque table sources",
 		auto plan = OptimizeLogicalPlanExportQuery(connection, "SELECT * FROM range(1)");
 		auto get = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_GET);
 		REQUIRE(get);
-		get->Cast<LogicalGet>().function.to_sql = [](ClientContext &, const LogicalGet &, unique_ptr<TableRef>,
-		                                             const Identifier &) -> TableFunctionToSQLResult {
+		get->Cast<LogicalGet>().function.to_sql = [](ClientContext &, const LogicalGet &,
+		                                             TableFunctionToSQLInput) -> TableFunctionToSQLResult {
 			return {nullptr, "test_opaque"};
 		};
 		auto result = LogicalPlanSQLExporter::Export(*connection.context, *get);
@@ -568,6 +569,98 @@ TEST_CASE("Logical plan SQL export rejects opaque table sources",
 		auto unsupported = LogicalPlanSQLExporter::Export(*connection.context, *copy);
 		REQUIRE(unsupported.HasError());
 		REQUIRE(unsupported.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_SOURCE);
+	}
+	connection.Rollback();
+}
+
+TEST_CASE("Source SQL callbacks can wrap invocation reconstruction",
+          "[sql_export][logical_plan_sql_export][table_source_sql]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	ExtensionLoader loader(*db.instance, "sql_export_wrapper");
+	auto register_wrapper = [&](const Identifier &original, const Identifier &name, const LogicalType &argument) {
+		auto &entry = loader.GetTableFunction(original);
+		auto function = *entry.functions.GetFunctionByArguments(*connection.context, {argument});
+		function.name = name;
+		function.to_sql = [](ClientContext &context, const LogicalGet &get, TableFunctionToSQLInput input) {
+			return TableFunction::ToSQLFunctionCall(context, get, std::move(input));
+		};
+		loader.RegisterFunction(std::move(function));
+	};
+	register_wrapper("range", "export_wrapped_range", LogicalType::BIGINT);
+	string sql;
+	bool ordinal = false;
+	bool file_filter = false;
+	SECTION("ordinary invocation") {
+		sql = "SELECT * FROM export_wrapped_range(3)";
+	}
+	SECTION("ordinality window fusion") {
+		sql = "SELECT * FROM export_wrapped_range(3) WITH ORDINALITY";
+		ordinal = true;
+	}
+#ifdef DUCKDB_EXTENSION_PARQUET_LINKED
+	SECTION("file pruning residual") {
+		register_wrapper("read_parquet", "export_wrapped_parquet", LogicalType::VARCHAR);
+		auto directory = TestJoinPath(TestDirectoryPath(), "sql_export_wrapper");
+		TestCreateDirectory(directory);
+		REQUIRE_NO_FAIL(connection.Query("COPY (SELECT 1 id) TO '" + directory + "/a.parquet' (FORMAT PARQUET)"));
+		REQUIRE_NO_FAIL(connection.Query("COPY (SELECT 2 id) TO '" + directory + "/b.parquet' (FORMAT PARQUET)"));
+		sql = "SELECT id FROM export_wrapped_parquet('" + directory +
+		      "/*.parquet', filename=true) WHERE filename LIKE '%/a.parquet'";
+		file_filter = true;
+	}
+#endif
+	auto native = connection.Query(sql);
+	REQUIRE_NO_FAIL(*native);
+	connection.BeginTransaction();
+	auto plan = OptimizeLogicalPlanExportQuery(connection, sql);
+	auto get_op = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_GET);
+	REQUIRE(get_op);
+	auto &get = get_op->Cast<LogicalGet>();
+	if (ordinal) {
+		REQUIRE(FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_WINDOW));
+		REQUIRE(get.source_ordinality == OrdinalityType::WITH_ORDINALITY);
+		REQUIRE_FALSE(get.ordinality_idx.IsValid());
+	}
+	if (file_filter) {
+		REQUIRE(get.extra_info.file_filter_expressions);
+		REQUIRE_FALSE(get.extra_info.file_filter_expressions->empty());
+		REQUIRE_FALSE(get.extra_info.file_filters.empty());
+	}
+	for (bool copy : {false, true}) {
+		CAPTURE(copy);
+		if (copy) {
+			plan = plan->Copy(*connection.context);
+			plan->ResolveOperatorTypes();
+		}
+		auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
+		REQUIRE(exported.IsSuccess());
+		auto generated_sql = exported.GetValue().query->ToString();
+		if (ordinal) {
+			REQUIRE(StringUtil::Contains(generated_sql, "WITH ORDINALITY"));
+		}
+		auto generated = connection.Query(generated_sql);
+		REQUIRE_NO_FAIL(*generated);
+		REQUIRE(generated->GetTypes() == native->GetTypes());
+		REQUIRE(generated->RowCount() == native->RowCount());
+		for (idx_t row = 0; row < native->RowCount(); row++) {
+			for (idx_t column = 0; column < native->ColumnCount(); column++) {
+				REQUIRE(Value::NotDistinctFrom(generated->GetValue(column, row), native->GetValue(column, row)));
+			}
+		}
+	}
+	if (ordinal || file_filter) {
+		auto &source = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_GET)->Cast<LogicalGet>();
+		source.function.to_sql = [](ClientContext &, const LogicalGet &,
+		                            TableFunctionToSQLInput input) -> TableFunctionToSQLResult {
+			REQUIRE((input.source_ordinality || (input.file_filters && !input.file_filters->empty())));
+			return {nullptr, "unsupported_source_modifier"};
+		};
+		auto rejected = LogicalPlanSQLExporter::Export(*connection.context, *plan);
+		REQUIRE(rejected.HasError());
+		REQUIRE(rejected.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_SOURCE);
+		REQUIRE(
+		    (rejected.GetIssues()[0].facts[0] == pair<string, Value> {"guard", Value("unsupported_source_modifier")}));
 	}
 	connection.Rollback();
 }
@@ -2728,7 +2821,7 @@ TEST_CASE("Table row number SQL export guards filtered numbering",
 	auto plan = OptimizeLogicalPlanExportQuery(connection, "SELECT i,row_number() OVER () FROM filtered_numbers");
 	auto &get = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_GET)->Cast<LogicalGet>();
 	get.dynamic_filters = make_shared_ptr<DynamicTableFilterSet>();
-	REQUIRE_FALSE(get.function.to_sql(*connection.context, get, nullptr, Identifier("scan")).query);
+	REQUIRE_FALSE(get.function.to_sql(*connection.context, get, {nullptr, Identifier("scan")}).query);
 	connection.Rollback();
 }
 

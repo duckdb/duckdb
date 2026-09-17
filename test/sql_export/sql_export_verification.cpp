@@ -49,8 +49,7 @@ void RegisterSQLExportOpaqueSource(DuckDB &db, Connection &con) {
 	auto &range = loader.GetTableFunction("range");
 	auto function = *range.functions.GetFunctionByArguments(*con.context, {LogicalType::BIGINT});
 	function.name = Identifier("sql_export_opaque_source");
-	function.to_sql = [](ClientContext &, const LogicalGet &, unique_ptr<TableRef>,
-	                     const Identifier &) -> TableFunctionToSQLResult {
+	function.to_sql = [](ClientContext &, const LogicalGet &, TableFunctionToSQLInput) -> TableFunctionToSQLResult {
 		return {nullptr, "test_opaque"};
 	};
 	loader.RegisterFunction(std::move(function));
