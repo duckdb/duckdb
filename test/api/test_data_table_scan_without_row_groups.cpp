@@ -1,8 +1,10 @@
 #include "catch.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
@@ -16,7 +18,8 @@ namespace {
 //! read their staged tables: DataTable::InitializeScan followed by a DataTable::Scan loop.
 idx_t ScanTableThroughStorage(Connection &con, const string &table_name) {
 	auto &context = *con.context;
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, table_name);
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(
+	    context, QualifiedName(Identifier::InvalidCatalog(), Identifier::DefaultSchema(), Identifier(table_name)));
 	auto &storage = table.GetStorage();
 	auto &transaction = DuckTransaction::Get(context, table.ParentCatalog());
 
