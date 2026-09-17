@@ -270,6 +270,8 @@ def build_package(
     ext_loader_defines = ''
     ext_roots = ''
     ext_registrations = ''
+    with open(os.path.join(scripts_dir, '..', 'extension', 'loader', 'extension_root.c.in')) as root_template_file:
+        root_template = root_template_file.read()
     for ext in extensions:
         ext_path = os.path.join(scripts_dir, '..', 'extension', ext)
         ext_kind = include_package(ext, ext_path, include_files, include_list, source_list)
@@ -281,34 +283,35 @@ def build_package(
             f"#ifndef {ext_linked_define}\n" f"#define {ext_linked_define} {ext_linked_default}\n" "#endif\n\n"
         )
 
-        # mirrors duckdb_extension_link_member in extension/extension_build_tools.cmake
+        # the same root duckdb_add_extension_root generates in extension/extension_build_tools.cmake
         if ext_kind == 'CAPI':
             entry_name, entry_field = f'{ext}_init_c_api', 'entry_capi_v1'
             entry_declaration = (
-                f'bool {entry_name}(duckdb_extension_info info, struct duckdb_extension_access *access);'
+                f'extern "C" bool {entry_name}(duckdb_extension_info info, struct duckdb_extension_access *access);'
             )
         elif ext_kind == 'CAPI_V2':
             entry_name, entry_field = f'{ext}_init_c_api_v2', 'entry_capi_v2'
-            entry_declaration = f'void {entry_name}(struct duckdb_v2_extension_input *input);'
+            entry_declaration = f'extern "C" void {entry_name}(struct duckdb_v2_extension_input *input);'
         else:
             entry_name, entry_field = f'{ext}_duckdb_cpp_init', 'entry_cpp'
-            entry_declaration = f'void {entry_name}(duckdb::ExtensionLoader &loader);'
+            entry_declaration = f'extern "C" void {entry_name}(duckdb::ExtensionLoader &loader);'
+        version_define = f'EXT_VERSION_{ext.upper()}'
+        root = root_template
+        for key, value in {
+            'NAME': ext,
+            'ENTRY_DECLARATION': entry_declaration,
+            'ENTRY_NAME': entry_name,
+            'ENTRY_FIELD': entry_field,
+            'EXTENSION_VERSION': version_define,
+        }.items():
+            root = root.replace(f'@{key}@', value)
 
         ext_roots += (
             f"#if {ext_linked_define}\n"
-            f'extern "C" {entry_declaration}\n'
-            f'static int32_t duckdb_extension_{ext}_root(duckdb_extension_descriptor *descriptor) {{\n'
-            "\tif (descriptor->version < 1) {\n"
-            "\t\treturn 1;\n"
-            "\t}\n"
-            "\tdescriptor->version = 1;\n"
-            f'\tdescriptor->name = "{ext}";\n'
-            f"#ifdef EXT_VERSION_{ext.upper()}\n"
-            f"\tdescriptor->extension_version = EXT_VERSION_{ext.upper()};\n"
+            f"#ifndef {version_define}\n"
+            f'#define {version_define} ""\n'
             "#endif\n"
-            f"\tdescriptor->{entry_field} = reinterpret_cast<void (*)(void)>({entry_name});\n"
-            "\treturn 0;\n"
-            "}\n"
+            f"{root}"
             "#endif\n\n"
         )
         ext_registrations += (
