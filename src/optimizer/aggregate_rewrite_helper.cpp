@@ -140,4 +140,18 @@ unique_ptr<LogicalOperator> AggregateRewriteHelper::CreateCTERef(Optimizer &opti
 	return make_uniq<LogicalCTERef>(cte_ref_index, cte_index, input_types, input_names);
 }
 
+unique_ptr<LogicalOperator> AggregateRewriteHelper::PinColumnOrder(Optimizer &optimizer,
+                                                                   unique_ptr<LogicalOperator> definition,
+                                                                   const vector<LogicalType> &types,
+                                                                   const vector<ColumnBinding> &bindings) {
+	vector<unique_ptr<Expression>> expressions;
+	expressions.reserve(bindings.size());
+	for (idx_t col_idx = 0; col_idx < bindings.size(); col_idx++) {
+		expressions.push_back(make_uniq<BoundColumnRefExpression>(types[col_idx], bindings[col_idx]));
+	}
+	auto projection = make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(), std::move(expressions));
+	projection->children.push_back(std::move(definition));
+	return std::move(projection);
+}
+
 } // namespace duckdb

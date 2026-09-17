@@ -376,7 +376,7 @@ TEST_CASE("V2: destroying a result polled to FINISHED commits it too", "[capi_v2
 	ExecSQL(fx.conn, "CREATE TABLE t (i INTEGER)");
 
 	duckdb_v2_connection_handle observer = nullptr;
-	REQUIRE(duckdb_v2_connect(fx.db, &observer, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create(fx.db, &observer, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_sql_statement_handle stmt = nullptr;
 	duckdb_v2_statement_iterator_handle iter = nullptr;
@@ -411,7 +411,7 @@ TEST_CASE("V2: destroying a result polled to FINISHED commits it too", "[capi_v2
 	REQUIRE(Query(observer, "SELECT count(*) FROM t", &after, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(ScalarBigint(after) == 3);
 	duckdb_v2_result_destroy(&after);
-	duckdb_v2_disconnect(&observer);
+	duckdb_v2_connection_destroy(&observer);
 }
 
 #if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
@@ -453,7 +453,7 @@ TEST_CASE("V2: a result polled to FINISHED commits when its rows are taken", "[c
 	ExecSQL(fx.conn, "CREATE TABLE t (i INTEGER)");
 
 	duckdb_v2_connection_handle observer = nullptr;
-	REQUIRE(duckdb_v2_connect(fx.db, &observer, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create(fx.db, &observer, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_sql_statement_handle stmt = nullptr;
 	duckdb_v2_statement_iterator_handle iter = nullptr;
@@ -497,7 +497,7 @@ TEST_CASE("V2: a result polled to FINISHED commits when its rows are taken", "[c
 	REQUIRE(Query(observer, "SELECT count(*) FROM t", &after, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(ScalarBigint(after) == 2);
 	duckdb_v2_result_destroy(&after);
-	duckdb_v2_disconnect(&observer);
+	duckdb_v2_connection_destroy(&observer);
 }
 
 #if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
@@ -1273,9 +1273,9 @@ TEST_CASE("V2: a fetched chunk and a taken collection outlive result, connection
 	duckdb_v2_environment_handle env = nullptr;
 	duckdb_v2_database_handle db = nullptr;
 	duckdb_v2_connection_handle conn = nullptr;
-	REQUIRE(duckdb_v2_create_environment(&env, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_open(env, duckdb_v2_str {nullptr, 0}, nullptr, 0, &db, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connect(db, &conn, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_environment_create(&env, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(OpenDatabase(env, duckdb_v2_str {nullptr, 0}, &db, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create(db, &conn, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_result_handle r = nullptr;
 	REQUIRE(Query(conn, "SELECT i, 'row-' || i AS s FROM range(100) t(i)", &r, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -1285,8 +1285,8 @@ TEST_CASE("V2: a fetched chunk and a taken collection outlive result, connection
 	REQUIRE(duckdb_v2_result_take_collection(r, &collection, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_result_destroy(&r);
-	duckdb_v2_disconnect(&conn);
-	duckdb_v2_close(&db);
+	duckdb_v2_connection_destroy(&conn);
+	duckdb_v2_database_destroy(&db);
 	duckdb_v2_environment_destroy(&env);
 
 	// The chunk owns its data; producers are all gone.
@@ -1311,16 +1311,16 @@ TEST_CASE("V2: an unfinished result survives disconnect and close", "[capi_v2][q
 	duckdb_v2_environment_handle env = nullptr;
 	duckdb_v2_database_handle db = nullptr;
 	duckdb_v2_connection_handle conn = nullptr;
-	REQUIRE(duckdb_v2_create_environment(&env, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_open(env, duckdb_v2_str {nullptr, 0}, nullptr, 0, &db, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connect(db, &conn, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_environment_create(&env, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(OpenDatabase(env, duckdb_v2_str {nullptr, 0}, &db, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create(db, &conn, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_result_handle r = nullptr;
 	REQUIRE(Query(conn, "SELECT i FROM range(100000) t(i)", &r, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_result_materialize(r, nullptr) == DUCKDB_V2_ERROR_NONE);
 
-	duckdb_v2_disconnect(&conn);
-	duckdb_v2_close(&db);
+	duckdb_v2_connection_destroy(&conn);
+	duckdb_v2_database_destroy(&db);
 
 	// Metadata still reads off the handle, and consumption still works: the result keeps the
 	// session alive itself.
@@ -1523,7 +1523,7 @@ TEST_CASE("V2: a busy connection does not affect a second connection", "[capi_v2
 	EnvFixture fx;
 
 	duckdb_v2_connection_handle conn2 = nullptr;
-	REQUIRE(duckdb_v2_connect(fx.db, &conn2, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create(fx.db, &conn2, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_result_handle live = nullptr;
 	REQUIRE(Query(fx.conn, "SELECT i FROM range(100000) t(i)", &live, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -1534,7 +1534,7 @@ TEST_CASE("V2: a busy connection does not affect a second connection", "[capi_v2
 	duckdb_v2_result_destroy(&other);
 
 	duckdb_v2_result_destroy(&live);
-	duckdb_v2_disconnect(&conn2);
+	duckdb_v2_connection_destroy(&conn2);
 }
 #endif
 
