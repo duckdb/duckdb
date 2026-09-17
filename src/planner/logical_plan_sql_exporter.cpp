@@ -33,6 +33,7 @@
 #include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/bound_expression_sql_exporter.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -212,13 +213,6 @@ static LogicalPlanSQLFieldResult CreateFields(LogicalOperator &op, const Logical
 	return LogicalPlanSQLFieldResult::Success(std::move(fields));
 }
 
-struct LogicalPlanSQLBindingEntry {
-	ColumnBinding binding;
-	LogicalType type;
-	optional<LogicalType> optimizer_type;
-	vector<Identifier> names;
-};
-
 struct LogicalPlanSQLExportedChild {
 	LogicalPlanSQLExportRelation relation;
 	Identifier relation_alias;
@@ -228,7 +222,7 @@ static BoundExpressionSQLExportContext
 CreateBindingContext(ClientContext &context, const vector<reference<const LogicalPlanSQLExportedChild>> &children,
                      const vector<optional_ptr<const SelectNode>> &plain_scopes = {}) {
 	D_ASSERT(plain_scopes.empty() || plain_scopes.size() == children.size());
-	vector<LogicalPlanSQLBindingEntry> entries;
+	column_binding_map_t<ResolvedSQLColumnReference> entries;
 	for (idx_t child_index = 0; child_index < children.size(); child_index++) {
 		auto &child = children[child_index].get();
 		auto plain = plain_scopes.empty() ? nullptr : plain_scopes[child_index];
@@ -236,7 +230,8 @@ CreateBindingContext(ClientContext &context, const vector<reference<const Logica
 			auto &field = child.relation.fields[i];
 			auto names = plain ? plain->select_list[i]->Cast<ColumnRefExpression>().ColumnNames()
 			                   : vector<Identifier> {child.relation_alias, FieldIdentifier(i)};
-			entries.push_back({field.source_binding, field.type, field.optimizer_type, std::move(names)});
+			entries.emplace(field.source_binding,
+			                ResolvedSQLColumnReference {std::move(names), field.type, field.optimizer_type});
 		}
 	}
 	BoundExpressionSQLExportContext result;
@@ -244,10 +239,9 @@ CreateBindingContext(ClientContext &context, const vector<reference<const Logica
 	result.discard_optimizer_metadata = true;
 	result.resolve_binding =
 	    [entries = std::move(entries)](const ColumnBinding &binding) -> optional<ResolvedSQLColumnReference> {
-		for (auto &entry : entries) {
-			if (entry.binding == binding) {
-				return ResolvedSQLColumnReference {entry.names, entry.type, entry.optimizer_type};
-			}
+		auto entry = entries.find(binding);
+		if (entry != entries.end()) {
+			return entry->second;
 		}
 		return {};
 	};
@@ -555,34 +549,6 @@ static bool HasChunkSensitiveConsumer(ClientContext &context, LogicalOperator &o
 		}
 	}
 	return false;
-}
-
-static bool OrdersAggregateArguments(ClientContext &context, const BoundAggregateExpression &aggregate) {
-	if (aggregate.Function().GetOrderDependent() == AggregateOrderDependent::NOT_ORDER_DEPENDENT) {
-		return true;
-	}
-	if (!aggregate.GetOrderBys()) {
-		return false;
-	}
-	for (auto &argument : aggregate.GetChildren()) {
-		if (argument->IsScalar()) {
-			continue;
-		}
-		if (!OrderDistinguishesValues(context, argument->GetReturnType())) {
-			return false;
-		}
-		bool found = false;
-		for (auto &order : aggregate.GetOrderBys()->orders) {
-			if (argument->Equals(*order.expression)) {
-				found = true;
-				break;
-			}
-		}
-		if (!found) {
-			return false;
-		}
-	}
-	return true;
 }
 
 static bool HasSafePredicates(const LogicalOperator &op) {

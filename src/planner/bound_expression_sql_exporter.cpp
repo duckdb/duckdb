@@ -247,33 +247,6 @@ static bool IsOptimizerFunctionQualification(const FUNCTION &function) {
 	return function.GetCatalogName() == "system" && function.GetSchemaName() == "main";
 }
 
-static vector<LogicalType> ScalarFunctionArguments(const ScalarFunction &function) {
-	vector<LogicalType> result;
-	for (auto &parameter : function.GetSignature().GetParameters()) {
-		result.push_back(parameter.GetType());
-	}
-	return result;
-}
-
-static bool IsArraySliceDefinition(const ScalarFunction &definition) {
-	if (definition.GetCatalogName() != Identifier::SystemCatalog() ||
-	    definition.GetSchemaName() != Identifier::DefaultSchema() || definition.GetName() != "array_slice" ||
-	    !definition.HasBindCallback() || definition.GetReturnType() != LogicalType::ANY) {
-		return false;
-	}
-	auto arguments = ScalarFunctionArguments(definition);
-	if (arguments.size() != 3 && arguments.size() != 4) {
-		return false;
-	}
-	for (idx_t argument_index = 0; argument_index < arguments.size(); argument_index++) {
-		auto expected = argument_index == 3 ? LogicalType::BIGINT : LogicalType::ANY;
-		if (arguments[argument_index] != expected) {
-			return false;
-		}
-	}
-	return true;
-}
-
 static LogicalType SQLCastType(const LogicalType &type) {
 	// Scalar collations are applied by COLLATE, outside the cast's type expression.
 	return type.id() == LogicalTypeId::VARCHAR && !type.HasAlias() ? LogicalType::VARCHAR : type;
@@ -735,10 +708,10 @@ private:
 		D_ASSERT(expression.GetExpressionType() == ExpressionType::VALUE_CONSTANT);
 		auto &return_type = expression.GetReturnType();
 		auto &value = expression.GetValue();
-		if (!IsSQLValueType(return_type) || !IsSQLValueType(value.type())) {
+		D_ASSERT(return_type == value.type());
+		if (!IsSQLValueType(return_type)) {
 			return Failure(InternalExpressionInvariant(path, expression, "Bound constant has an unexportable type"));
 		}
-		D_ASSERT(return_type == value.type());
 		if (TypeVisitor::Contains(return_type, LogicalTypeId::VARIANT) && HasUnsupportedVariantKeys(value)) {
 			return Failure(UnsupportedFeature(path, "variant_literal",
 			                                  "VARIANT object keys cannot be represented by a struct literal"));
