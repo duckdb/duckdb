@@ -12,10 +12,10 @@ DUCKDB_V2_ERROR duckdb_v2_create_environment(duckdb_v2_environment_handle *out_e
 	});
 }
 
-// destroy_environment keeps a manual return path so the open-databases case
+// environment_destroy keeps a manual return path so the open-databases case
 // can surface as RESOURCE_IN_USE — there is no ExceptionType that maps to
 // that V2 code, so routing it through WithErrorHandler would degrade it.
-DUCKDB_V2_ERROR duckdb_v2_destroy_environment(duckdb_v2_environment_handle *env) {
+DUCKDB_V2_ERROR duckdb_v2_environment_destroy(duckdb_v2_environment_handle *env) {
 	if (!env || !*env) {
 		return DUCKDB_V2_ERROR_NONE;
 	}

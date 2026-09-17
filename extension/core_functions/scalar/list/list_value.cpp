@@ -316,6 +316,7 @@ ScalarFunctionSet ListValueFun::GetFunctions() {
 	auto element_type = LogicalType::TEMPLATE("T");
 	ScalarFunction value_fun({element_type}, LogicalType::LIST(element_type), ListValueFunction, ListValueBind,
 	                         ListValueStats);
+	value_fun.GetSignature().GetParameter(0).SetName("value");
 	value_fun.SetVarArgs(element_type);
 	value_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	set.AddFunction(value_fun);

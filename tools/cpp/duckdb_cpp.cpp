@@ -214,7 +214,7 @@ auto CheckedAPICall(F &&func, ARGS &&... args) -> void {
 		duckdb_v2_str raw_view = {nullptr, 0};
 		if (err) {
 			duckdb_v2_error_info_get_text(err, &message_view);
-			duckdb_v2_error_info_get_raw_message(err, &raw_view);
+			duckdb_v2_error_info_get_raw_text(err, &raw_view);
 		}
 		std::string message = message_view.ptr ? std::string(message_view.ptr, message_view.len) : "unknown error";
 		std::string raw = raw_view.ptr ? std::string(raw_view.ptr, raw_view.len) : "";
@@ -360,7 +360,7 @@ Environment::Environment() {
 
 Environment::~Environment() {
 	auto _h = handle();
-	duckdb_v2_destroy_environment(&_h);
+	duckdb_v2_environment_destroy(&_h);
 }
 
 auto Environment::GetOpenDatabaseCount() const -> size_t {
@@ -3575,22 +3575,29 @@ struct TableFunctionInfo {
 	TableFunction::ExecCallback exec_callback = nullptr;
 	TableFunction::ProgressCallback progress_callback = nullptr;
 	TableFunction::FilterPushdownCallback filter_pushdown_callback = nullptr;
+	TableFunction::PartitionDataCallback partition_data_callback = nullptr;
+	TableFunction::PartitioningCallback partitioning_callback = nullptr;
 	detail::UserData user_data;
 
 	TableFunctionInfo(TableFunction::BindCallback bind_callback, TableFunction::InitGlobalCallback init_global_callback,
 	                  TableFunction::InitLocalCallback init_local_callback, TableFunction::ExecCallback exec_callback,
 	                  TableFunction::ProgressCallback progress_callback,
-	                  TableFunction::FilterPushdownCallback filter_pushdown_callback, detail::UserData user_data)
+	                  TableFunction::FilterPushdownCallback filter_pushdown_callback,
+	                  TableFunction::PartitionDataCallback partition_data_callback,
+	                  TableFunction::PartitioningCallback partitioning_callback, detail::UserData user_data)
 	    : bind_callback(bind_callback), init_global_callback(init_global_callback),
 	      init_local_callback(init_local_callback), exec_callback(exec_callback), progress_callback(progress_callback),
-	      filter_pushdown_callback(filter_pushdown_callback), user_data(std::move(user_data)) {
+	      filter_pushdown_callback(filter_pushdown_callback), partition_data_callback(partition_data_callback),
+	      partitioning_callback(partitioning_callback), user_data(std::move(user_data)) {
 	}
 
 	bool operator==(const TableFunctionInfo &other) const {
 		return bind_callback == other.bind_callback && init_global_callback == other.init_global_callback &&
 		       init_local_callback == other.init_local_callback && exec_callback == other.exec_callback &&
 		       progress_callback == other.progress_callback &&
-		       filter_pushdown_callback == other.filter_pushdown_callback && user_data.get() == other.user_data.get();
+		       filter_pushdown_callback == other.filter_pushdown_callback &&
+		       partition_data_callback == other.partition_data_callback &&
+		       partitioning_callback == other.partitioning_callback && user_data.get() == other.user_data.get();
 	}
 };
 
@@ -3815,6 +3822,56 @@ auto TableFunction::SetFilterPushdownCallback(FilterPushdownCallback callback) &
 	return *this;
 }
 
+auto TableFunction::SetPartitionDataCallback(PartitionDataCallback callback) & -> TableFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_table_function_set_partition_data_callback, handle(), nullptr);
+		partition_data_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_table_function_partition_data_info_handle info,
+	                            duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_table_function_partition_data_get_user_data, info, &user_data);
+			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
+
+			auto input =
+			    detail::Factory::Make<PartitionDataInput>(static_cast<void *>(info), static_cast<void *>(context));
+			function.partition_data_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_table_function_set_partition_data_callback, handle(), trampoline);
+	partition_data_callback = callback;
+	return *this;
+}
+
+auto TableFunction::SetPartitioningCallback(PartitioningCallback callback) & -> TableFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_table_function_set_partitioning_callback, handle(), nullptr);
+		partitioning_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_table_function_partitioning_info_handle info,
+	                            duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_table_function_partitioning_get_user_data, info, &user_data);
+			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
+
+			auto input =
+			    detail::Factory::Make<PartitioningInput>(static_cast<void *>(info), static_cast<void *>(context));
+			function.partitioning_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_table_function_set_partitioning_callback, handle(), trampoline);
+	partitioning_callback = callback;
+	return *this;
+}
+
 auto TableFunction::SetProjectionPushdown(bool enable) & -> TableFunction & {
 	CheckedAPICall(duckdb_v2_table_function_set_projection_pushdown, handle(), enable);
 	return *this;
@@ -3823,9 +3880,9 @@ auto TableFunction::SetProjectionPushdown(bool enable) & -> TableFunction & {
 auto TableFunction::Register() -> void {
 	// The callback table rides the C user_data slot so the trampolines can find
 	// it; the user's own data (SetUserData, moved out here) rides inside it.
-	auto info = std::unique_ptr<TableFunctionInfo>(
-	    new TableFunctionInfo(bind_callback, init_global_callback, init_local_callback, exec_callback,
-	                          progress_callback, filter_pushdown_callback, std::move(user_data)));
+	auto info = std::unique_ptr<TableFunctionInfo>(new TableFunctionInfo(
+	    bind_callback, init_global_callback, init_local_callback, exec_callback, progress_callback,
+	    filter_pushdown_callback, partition_data_callback, partitioning_callback, std::move(user_data)));
 	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<TableFunctionInfo>,
 	                         detail::TypedEquals<TableFunctionInfo>};
 	CheckedAPICall(duckdb_v2_table_function_set_user_data, handle(), &opaque);
@@ -4111,6 +4168,129 @@ auto TableFunction::FilterPushdownInput::GetColumnIndex(idx_t index) const -> id
 }
 
 auto TableFunction::FilterPushdownInput::GetContext() const -> Context {
+	return detail::Factory::Make<Context>(context);
+}
+
+void *TableFunction::PartitionDataInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_partition_data_get_bind_data,
+	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &bind_data);
+	return RequireTableBindData(bind_data);
+}
+
+void *TableFunction::PartitionDataInput::GetGlobalStateInternal() const {
+	void *global_state = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_partition_data_get_global_state,
+	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &global_state);
+	return RequireGlobalState(global_state);
+}
+
+void *TableFunction::PartitionDataInput::GetLocalStateInternal() const {
+	void *local_state = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_partition_data_get_local_state,
+	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &local_state);
+	return RequireLocalState(local_state);
+}
+
+void *TableFunction::PartitionDataInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_partition_data_get_user_data,
+	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
+	return RequireTableUserData(function.user_data);
+}
+
+auto TableFunction::PartitionDataInput::RequiresBatchIndex() const -> bool {
+	bool required = false;
+	CheckedAPICall(duckdb_v2_table_function_partition_data_requires_batch_index,
+	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &required);
+	return required;
+}
+
+auto TableFunction::PartitionDataInput::RequiresPartitionColumns() const -> bool {
+	bool required = false;
+	CheckedAPICall(duckdb_v2_table_function_partition_data_requires_partition_columns,
+	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &required);
+	return required;
+}
+
+auto TableFunction::PartitionDataInput::GetPartitionColumnCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_table_function_partition_data_get_partition_column_count,
+	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), &count);
+	return count;
+}
+
+auto TableFunction::PartitionDataInput::GetPartitionColumnIndex(idx_t index) const -> idx_t {
+	idx_t column_index = 0;
+	CheckedAPICall(duckdb_v2_table_function_partition_data_get_partition_column_index,
+	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), index, &column_index);
+	return column_index;
+}
+
+auto TableFunction::PartitionDataInput::SetBatchIndex(idx_t batch_index) -> void {
+	CheckedAPICall(duckdb_v2_table_function_partition_data_set_batch_index,
+	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), batch_index);
+}
+
+auto TableFunction::PartitionDataInput::SetPartitionValue(idx_t index, const Value &value) -> void {
+	CheckedAPICall(duckdb_v2_table_function_partition_data_set_partition_value,
+	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), index, value.handle());
+}
+
+auto TableFunction::PartitionDataInput::GetContext() const -> Context {
+	return detail::Factory::Make<Context>(context);
+}
+
+void *TableFunction::PartitioningInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_partitioning_get_bind_data,
+	               static_cast<duckdb_v2_table_function_partitioning_info_handle>(args), &bind_data);
+	return RequireTableBindData(bind_data);
+}
+
+void *TableFunction::PartitioningInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_partitioning_get_user_data,
+	               static_cast<duckdb_v2_table_function_partitioning_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
+	return RequireTableUserData(function.user_data);
+}
+
+auto TableFunction::PartitioningInput::GetPartitionColumnCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_table_function_partitioning_get_partition_column_count,
+	               static_cast<duckdb_v2_table_function_partitioning_info_handle>(args), &count);
+	return count;
+}
+
+auto TableFunction::PartitioningInput::GetPartitionColumnIndex(idx_t index) const -> idx_t {
+	idx_t column_index = 0;
+	CheckedAPICall(duckdb_v2_table_function_partitioning_get_partition_column_index,
+	               static_cast<duckdb_v2_table_function_partitioning_info_handle>(args), index, &column_index);
+	return column_index;
+}
+
+static_assert(static_cast<uint8_t>(TableFunction::PartitionInfo::NOT_PARTITIONED) ==
+                  DUCKDB_V2_TABLE_PARTITION_INFO_NOT_PARTITIONED,
+              "PartitionInfo::NOT_PARTITIONED mismatch");
+static_assert(static_cast<uint8_t>(TableFunction::PartitionInfo::SINGLE_VALUE_PARTITIONS) ==
+                  DUCKDB_V2_TABLE_PARTITION_INFO_SINGLE_VALUE_PARTITIONS,
+              "PartitionInfo::SINGLE_VALUE_PARTITIONS mismatch");
+static_assert(static_cast<uint8_t>(TableFunction::PartitionInfo::OVERLAPPING_PARTITIONS) ==
+                  DUCKDB_V2_TABLE_PARTITION_INFO_OVERLAPPING_PARTITIONS,
+              "PartitionInfo::OVERLAPPING_PARTITIONS mismatch");
+static_assert(static_cast<uint8_t>(TableFunction::PartitionInfo::DISJOINT_PARTITIONS) ==
+                  DUCKDB_V2_TABLE_PARTITION_INFO_DISJOINT_PARTITIONS,
+              "PartitionInfo::DISJOINT_PARTITIONS mismatch");
+
+auto TableFunction::PartitioningInput::SetPartitionInfo(PartitionInfo partition_info) -> void {
+	CheckedAPICall(duckdb_v2_table_function_partitioning_set_partition_info,
+	               static_cast<duckdb_v2_table_function_partitioning_info_handle>(args),
+	               static_cast<DUCKDB_V2_TABLE_PARTITION_INFO>(partition_info));
+}
+
+auto TableFunction::PartitioningInput::GetContext() const -> Context {
 	return detail::Factory::Make<Context>(context);
 }
 
