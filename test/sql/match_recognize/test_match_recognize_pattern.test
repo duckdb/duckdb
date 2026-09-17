@@ -615,6 +615,26 @@ FROM range(4) t(x) MATCH_RECOGNIZE (
 ----
 4
 
+# A variable the PATTERN mentions but no DEFINE defines matches any row, and mentioning the same
+# undefined variable twice still declares it once.
+query I
+FROM range(4) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (Z Z)
+)
+----
+2
+2
+
+query II
+FROM range(4) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES CLASSIFIER() AS c ALL ROWS PER MATCH
+    AFTER MATCH SKIP PAST LAST ROW PATTERN (Z Y Z)
+) ORDER BY x
+----
+0	Z
+1	Y
+2	Z
+
 # two patterns that differ only in their bounds are not the same pattern
 query II
 SELECT (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (

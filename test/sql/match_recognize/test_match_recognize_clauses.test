@@ -491,3 +491,77 @@ FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
 )
 ----
 2
+
+# Two scalar subqueries that spell the same thing are computed once, which is settled by comparing
+# the clauses - so every part of a MATCH_RECOGNIZE that changes what it means has to make the
+# comparison say so. Each pair below differs in exactly one clause and answers differently.
+
+# ROWS PER MATCH
+query II
+SELECT (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x MEASURES count(*) AS n ONE ROW PER MATCH
+            AFTER MATCH SKIP PAST LAST ROW PATTERN (A{2})))) AS a,
+       (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x MEASURES count(*) AS n ALL ROWS PER MATCH
+            AFTER MATCH SKIP PAST LAST ROW PATTERN (A{2})))) AS b
+----
+6	9
+
+# AFTER MATCH SKIP
+query II
+SELECT (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (A{2})))) AS a,
+       (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP TO NEXT ROW PATTERN (A{2})))) AS b
+----
+6	10
+
+# MEASURES
+query II
+SELECT (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (A{2})))) AS a,
+       (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x MEASURES count(*) + 1 AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (A{2})))) AS b
+----
+6	9
+
+# ORDER BY, in direction and in how many keys it has
+query II
+SELECT (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW
+            PATTERN (A+) DEFINE A AS coalesce(x > PREV(x), true)))) AS a,
+       (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x DESC MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW
+            PATTERN (A+) DEFINE A AS coalesce(x > PREV(x), true)))) AS b
+----
+6	1
+
+query II
+SELECT (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW
+            PATTERN (A+) DEFINE A AS coalesce(x > PREV(x), true)))) AS a,
+       (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x % 2, x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW
+            PATTERN (A+) DEFINE A AS coalesce(x > PREV(x), true)))) AS b
+----
+6	5
+
+# SUBSET membership
+query II
+SELECT (SELECT sum(u) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x MEASURES sum(U.x) AS u AFTER MATCH SKIP PAST LAST ROW
+            PATTERN (A B) SUBSET U = (A) DEFINE A AS x % 2 = 0, B AS x % 2 = 1))) AS a,
+       (SELECT sum(u) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x MEASURES sum(U.x) AS u AFTER MATCH SKIP PAST LAST ROW
+            PATTERN (A B) SUBSET U = (A, B) DEFINE A AS x % 2 = 0, B AS x % 2 = 1))) AS b
+----
+6	15
+
+# and the input the clause is applied to
+query II
+SELECT (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
+            ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (A{2})))) AS a,
+       (SELECT sum(n) FROM (FROM range(5) t(x) MATCH_RECOGNIZE (
+            ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (A{2})))) AS b
+----
+6	4

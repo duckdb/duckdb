@@ -175,6 +175,29 @@ SELECT * FROM events MATCH_RECOGNIZE (
 3	-5	NULL
 4	15	NULL
 
+# an excluded row and an empty match are two different reasons for a row not to be reported, and a
+# clause may ask for both: SHOW EMPTY MATCHES keeps the rows that started an empty match, OMIT EMPTY
+# MATCHES drops them, and either way the rows inside a {- -} are gone
+query I
+SELECT x FROM range(6) t(x) MATCH_RECOGNIZE (
+    ORDER BY x ALL ROWS PER MATCH SHOW EMPTY MATCHES AFTER MATCH SKIP PAST LAST ROW
+    PATTERN ({- A -}* B*) DEFINE A AS x % 3 = 0, B AS x % 3 = 1
+) ORDER BY x
+----
+1
+2
+4
+5
+
+query I
+SELECT x FROM range(6) t(x) MATCH_RECOGNIZE (
+    ORDER BY x ALL ROWS PER MATCH OMIT EMPTY MATCHES AFTER MATCH SKIP PAST LAST ROW
+    PATTERN ({- A -}* B*) DEFINE A AS x % 3 = 0, B AS x % 3 = 1
+) ORDER BY x
+----
+1
+4
+
 # ONE ROW PER MATCH takes none of them
 statement error
 SELECT count(*) FROM events MATCH_RECOGNIZE (
