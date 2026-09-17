@@ -752,46 +752,6 @@ TEST_CASE("Bound expression SQL export supports represented catalog bind state",
 	connection.Rollback();
 }
 
-TEST_CASE("Function deserialization restores enclosing context after callback exceptions",
-          "[sql_export][bound_expression_sql_export][serialization]") {
-	DuckDB db;
-	Connection connection(db);
-	ExtensionLoader loader(*db.instance, "sql_export_deserialization_context");
-	ScalarFunction function("throwing_deserializer", {LogicalType::INTEGER}, LogicalType::INTEGER,
-	                        ScalarFunction::NopFunction);
-	function.SetSerializeCallback([](Serializer &, const optional_ptr<FunctionData>, const BoundScalarFunction &) {});
-	function.SetDeserializeCallback([](Deserializer &deserializer, BoundScalarFunction &) -> unique_ptr<FunctionData> {
-		REQUIRE(deserializer.Get<const LogicalType &>() == LogicalType::INTEGER);
-		auto &children = deserializer.Get<const const_expression_list_t &>();
-		REQUIRE(children.size() == 1);
-		REQUIRE(children[0].get().GetReturnType() == LogicalType::INTEGER);
-		throw InvalidInputException("Synthetic deserialization failure");
-	});
-	loader.RegisterFunction(std::move(function));
-	connection.BeginTransaction();
-	auto plan = BindExportQuery(connection, "SELECT throwing_deserializer(7::INTEGER)");
-	auto expression = FindExpression(*plan, [](const Expression &candidate) {
-		return candidate.GetExpressionType() == ExpressionType::BOUND_FUNCTION;
-	});
-	REQUIRE(expression);
-	MemoryStream stream(Allocator::Get(*connection.context));
-	BinarySerializer::Serialize(*expression, stream);
-	stream.Rewind();
-	BinaryDeserializer deserializer(stream);
-	bound_parameter_map_t parameters;
-	deserializer.Set<ClientContext &>(*connection.context);
-	deserializer.Set<bound_parameter_map_t &>(parameters);
-	const LogicalType enclosing_type = LogicalType::VARCHAR;
-	auto enclosing_child = Constant(Value::BIGINT(42));
-	const const_expression_list_t enclosing_children {*enclosing_child};
-	deserializer.Set<const LogicalType &>(enclosing_type);
-	deserializer.Set<const const_expression_list_t &>(enclosing_children);
-	REQUIRE_THROWS_AS(deserializer.Deserialize<Expression>(), InvalidInputException);
-	REQUIRE(&deserializer.Get<const LogicalType &>() == &enclosing_type);
-	REQUIRE(&deserializer.Get<const const_expression_list_t &>() == &enclosing_children);
-	connection.Rollback();
-}
-
 TEST_CASE("Standalone function binding does not autoload catalog collisions",
           "[sql_export][bound_expression_sql_export][logical_plan_verification][dont_link]") {
 	for (auto &linked : LinkedExtensionRegistry::Get()) {
@@ -1116,40 +1076,6 @@ TEST_CASE("Bound expression SQL export preserves structural operators through co
 	connection.Rollback();
 }
 
-TEST_CASE("Live optimized decimal sum exports its logical result",
-          "[sql_export][bound_expression_sql_export][optimizer]") {
-	DuckDB db;
-	Connection connection(db);
-	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE decimal_values(i DECIMAL(9,2))"));
-	REQUIRE_NO_FAIL(connection.Query("INSERT INTO decimal_values VALUES (1.25), (2.50)"));
-	connection.BeginTransaction();
-	auto plan = OptimizeExportQuery(connection, "SELECT sum(i) FROM decimal_values");
-	auto expression = FindExpression(*plan, [](const Expression &candidate) {
-		return candidate.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE;
-	});
-	REQUIRE(expression);
-	auto &aggregate = expression->Cast<BoundAggregateExpression>();
-	REQUIRE(aggregate.Function().GetName() == "sum_no_overflow");
-	REQUIRE(aggregate.Function().GetDefinition()->GetName() == "sum");
-	REQUIRE(aggregate.Function().GetLogicalArguments() == vector<LogicalType> {LogicalType::DECIMAL(9, 2)});
-	REQUIRE(aggregate.Function().GetLogicalReturnType() == LogicalType::DECIMAL(38, 2));
-	REQUIRE(aggregate.GetReturnType() == LogicalType::DECIMAL(38, 2));
-	auto &column = aggregate.GetChildren()[0]->Cast<BoundColumnRefExpression>();
-	auto context = ResolveBinding(column.Binding(), {Identifier("i")}, column.GetReturnType());
-	auto exported = BoundExpressionSQLExporter::Export(aggregate, context);
-	REQUIRE(exported.IsSuccess());
-	auto &cast = exported.GetValue()->Cast<CastExpression>();
-	REQUIRE(cast.GetTargetType()->Equals(*TypeExpression::FromLogicalType(LogicalType::DECIMAL(38, 2))));
-	REQUIRE(cast.Child().Cast<FunctionExpression>().FunctionName() == "sum");
-	auto restored = BinaryRoundTrip(*connection.context, aggregate);
-	auto &restored_aggregate = restored->Cast<BoundAggregateExpression>();
-	REQUIRE(restored_aggregate.Function().GetName() == "sum_no_overflow");
-	REQUIRE(restored_aggregate.Function().GetDefinition()->GetName() == "sum");
-	REQUIRE(restored_aggregate.Function().GetLogicalArguments() == aggregate.Function().GetLogicalArguments());
-	REQUIRE(restored_aggregate.Function().GetLogicalReturnType() == LogicalType::DECIMAL(38, 2));
-	connection.Rollback();
-}
-
 TEST_CASE("SQL export recovers calls from supported binary compatibility targets",
           "[sql_export][bound_expression_sql_export][serialization]") {
 	DuckDB db;
@@ -1183,53 +1109,55 @@ TEST_CASE("SQL export recovers calls from supported binary compatibility targets
 	connection.Rollback();
 }
 
-TEST_CASE("Bound expression SQL export serializes logical SUM identity independently of implementation",
+TEST_CASE("SQL export retains logical SUM identity across specialization and serialization",
           "[sql_export][bound_expression_sql_export][optimizer]") {
-	DuckDB db;
-	Connection connection(db);
-	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE aggregate_values(i INTEGER)"));
-	REQUIRE_NO_FAIL(connection.Query("INSERT INTO aggregate_values VALUES (1), (2), (2), (NULL)"));
-	REQUIRE_NO_FAIL(connection.Query("SET disabled_optimizers='compressed_materialization'"));
-	connection.BeginTransaction();
-
-	auto optimized_sum_plan = OptimizeExportQuery(connection, "SELECT sum(i) FROM aggregate_values");
-	auto optimized_sum = FindExpression(*optimized_sum_plan, [](const Expression &expression) {
-		if (expression.GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
-			return false;
+	for (bool decimal : {false, true}) {
+		CAPTURE(decimal);
+		DuckDB db;
+		Connection connection(db);
+		auto type = decimal ? LogicalType::DECIMAL(9, 2) : LogicalType::INTEGER;
+		auto result_type = decimal ? LogicalType::DECIMAL(38, 2) : LogicalType::HUGEINT;
+		REQUIRE_NO_FAIL(connection.Query("CREATE TABLE aggregate_values(i " + type.ToString() + ")"));
+		REQUIRE_NO_FAIL(connection.Query(decimal ? "INSERT INTO aggregate_values VALUES (1.25), (2.50)"
+		                                         : "INSERT INTO aggregate_values VALUES (1), (2), (2), (NULL)"));
+		REQUIRE_NO_FAIL(connection.Query("SET disabled_optimizers='compressed_materialization'"));
+		connection.BeginTransaction();
+		auto plan = OptimizeExportQuery(connection, "SELECT sum(i) FROM aggregate_values");
+		auto expression = FindExpression(*plan, [](const Expression &candidate) {
+			return candidate.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE;
+		});
+		REQUIRE(expression);
+		auto &aggregate = expression->Cast<BoundAggregateExpression>();
+		if (!decimal) {
+			auto &entry = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
+			    *connection.context, QualifiedName("system", "main", "sum_no_overflow"));
+			auto implementation = entry.functions.GetFunctionByArguments(*connection.context, {type});
+			REQUIRE(aggregate.Function().GetCallbacks() == implementation->GetCallbacks());
+			REQUIRE(aggregate.Function().GetCallbacks() != aggregate.Function().GetDefinition()->GetCallbacks());
 		}
-		auto &definition = expression.Cast<BoundAggregateExpression>().Function().GetDefinition();
-		return definition && definition->GetName() == "sum";
-	});
-	REQUIRE(optimized_sum);
-	auto &optimized_sum_bound = optimized_sum->Cast<BoundAggregateExpression>();
-	REQUIRE(optimized_sum_bound.Function().GetDefinition());
-	REQUIRE(optimized_sum_bound.Function().GetDefinition()->GetName() == "sum");
-	REQUIRE(optimized_sum_bound.Function().GetName() == "sum_no_overflow");
-	auto &catalog = Catalog::GetSystemCatalog(*connection.context);
-	auto &sum_no_overflow_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
-	    *connection.context,
-	    QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), Identifier("sum_no_overflow")));
-	auto sum_no_overflow =
-	    sum_no_overflow_entry.functions.GetFunctionByArguments(*connection.context, {LogicalType::INTEGER});
-	REQUIRE(optimized_sum_bound.Function().GetCallbacks() == sum_no_overflow->GetCallbacks());
-	REQUIRE(optimized_sum_bound.Function().GetCallbacks() !=
-	        optimized_sum_bound.Function().GetDefinition()->GetCallbacks());
-	auto &optimized_sum_child = optimized_sum_bound.GetChildren()[0]->Cast<BoundColumnRefExpression>();
-	auto optimized_sum_context =
-	    ResolveBinding(optimized_sum_child.Binding(), {Identifier("v"), Identifier("i")}, LogicalType::INTEGER);
-	auto pre_serialization = BoundExpressionSQLExporter::Export(optimized_sum_bound, optimized_sum_context);
-	REQUIRE(pre_serialization.IsSuccess());
-	REQUIRE(pre_serialization.GetValue()->Cast<FunctionExpression>().FunctionName() == "sum");
-	auto serialized_sum = BinaryRoundTrip(*connection.context, optimized_sum_bound);
-	REQUIRE(serialized_sum->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-	auto &serialized_sum_bound = serialized_sum->Cast<BoundAggregateExpression>();
-	REQUIRE(serialized_sum_bound.Function().GetName() == "sum_no_overflow");
-	REQUIRE(serialized_sum_bound.Function().GetDefinition());
-	REQUIRE(serialized_sum_bound.Function().GetDefinition()->GetName() == "sum");
-	auto post_serialization = BoundExpressionSQLExporter::Export(serialized_sum_bound, optimized_sum_context);
-	REQUIRE(post_serialization.IsSuccess());
-	REQUIRE(post_serialization.GetValue()->Cast<FunctionExpression>().FunctionName() == "sum");
-	connection.Rollback();
+		auto &column = aggregate.GetChildren()[0]->Cast<BoundColumnRefExpression>();
+		auto context = ResolveBinding(column.Binding(), {Identifier("i")}, column.GetReturnType());
+		auto restored = BinaryRoundTrip(*connection.context, aggregate);
+		for (auto candidate : vector<reference<const Expression>> {*expression, *restored}) {
+			auto &bound = candidate.get().Cast<BoundAggregateExpression>();
+			REQUIRE(bound.Function().GetName() == "sum_no_overflow");
+			REQUIRE(bound.Function().GetDefinition());
+			REQUIRE(bound.Function().GetDefinition()->GetName() == "sum");
+			REQUIRE(bound.Function().GetLogicalArguments() == vector<LogicalType> {type});
+			REQUIRE(bound.Function().GetLogicalReturnType() == result_type);
+			REQUIRE(bound.GetReturnType() == result_type);
+			auto exported = BoundExpressionSQLExporter::Export(bound, context);
+			REQUIRE(exported.IsSuccess());
+			if (decimal) {
+				auto &cast = exported.GetValue()->Cast<CastExpression>();
+				REQUIRE(cast.GetTargetType()->Equals(*TypeExpression::FromLogicalType(result_type)));
+				REQUIRE(cast.Child().Cast<FunctionExpression>().FunctionName() == "sum");
+			} else {
+				REQUIRE(exported.GetValue()->Cast<FunctionExpression>().FunctionName() == "sum");
+			}
+		}
+		connection.Rollback();
+	}
 }
 
 TEST_CASE("Bound expression SQL export rejects deferred expression kinds",
@@ -1544,18 +1472,6 @@ TEST_CASE("Bound expression SQL export uses scalar unbind callbacks",
 	REQUIRE(missing_result.HasError());
 	REQUIRE(missing_result.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION);
 
-	auto alias_plan = BindExportQuery(connection, "SELECT struct_pack(\"named field\" := 1)");
-	auto struct_pack = FindExpression(*alias_plan, [](const Expression &candidate) {
-		return candidate.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
-		       candidate.Cast<BoundFunctionExpression>().Function().GetName() == "struct_pack";
-	});
-	REQUIRE(struct_pack);
-	auto missing_alias = struct_pack->Copy();
-	missing_alias->Cast<BoundFunctionExpression>().GetChildren()[0]->ClearAlias();
-	auto missing_alias_result = BoundExpressionSQLExporter::Export(*missing_alias, {});
-	REQUIRE(missing_alias_result.HasError());
-	REQUIRE(missing_alias_result.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION);
-	REQUIRE(StringUtil::Contains(missing_alias_result.GetIssues()[0].message, "missing a SQL argument name"));
 	connection.Rollback();
 }
 

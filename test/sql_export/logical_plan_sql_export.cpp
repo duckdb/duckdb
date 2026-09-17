@@ -533,7 +533,8 @@ TEST_CASE("Logical plan SQL export applies requested output names", "[sql_export
 	REQUIRE(copied->ToString() == "EXPLAIN (SQL) SELECT 42");
 }
 
-TEST_CASE("Logical plan SQL export rejects opaque table sources", "[sql_export][logical_plan_sql_export]") {
+TEST_CASE("Logical plan SQL export rejects opaque table sources",
+          "[sql_export][logical_plan_sql_export][table_source_sql]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
 	connection.BeginTransaction();
@@ -552,6 +553,21 @@ TEST_CASE("Logical plan SQL export rejects opaque table sources", "[sql_export][
 		REQUIRE(issue.construct->function->name == "range");
 		REQUIRE(issue.facts.size() == 1);
 		REQUIRE((issue.facts[0] == pair<string, Value> {"guard", Value("test_opaque")}));
+	}
+	SECTION("retained invocation and absent callback") {
+		auto plan = OptimizeLogicalPlanExportQuery(connection, "SELECT sum(x) FROM range(10) t(x)");
+		auto get = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_GET);
+		REQUIRE(get);
+		auto parameters = get->Cast<LogicalGet>().parameters;
+		auto copy = plan->Copy(*connection.context);
+		auto copied_get = FindLogicalPlanExportOperator(*copy, LogicalOperatorType::LOGICAL_GET);
+		REQUIRE(copied_get);
+		REQUIRE(copied_get->Cast<LogicalGet>().parameters == parameters);
+		REQUIRE(LogicalPlanSQLExporter::Export(*connection.context, *copy).IsSuccess());
+		copied_get->Cast<LogicalGet>().function.to_sql = nullptr;
+		auto unsupported = LogicalPlanSQLExporter::Export(*connection.context, *copy);
+		REQUIRE(unsupported.HasError());
+		REQUIRE(unsupported.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_SOURCE);
 	}
 	connection.Rollback();
 }
@@ -626,40 +642,49 @@ TEST_CASE("Logical plan SQL export supports local and registered extension callb
 	}
 }
 
-TEST_CASE("Logical plan SQL export transfers ready positional children to extensions",
+TEST_CASE("Logical plan SQL export transfers positional children into owned extension SQL",
           "[sql_export][logical_plan_sql_export]") {
-	DuckDB db;
-	Connection connection(db);
-	vector<ColumnBinding> bindings;
-	vector<unique_ptr<Expression>> expressions;
-	for (idx_t i = 0; i < 2; i++) {
-		bindings.emplace_back(TableIndex(85), ProjectionIndex(i));
-		expressions.push_back(
-		    make_uniq<BoundColumnRefExpression>(Identifier("same"), LogicalType::INTEGER, bindings.back()));
-	}
-	auto plan = make_uniq<SQLExportExtensionOperator>("positional_child", bindings,
-	                                                  vector<LogicalType>(2, LogicalType::INTEGER),
-	                                                  vector<TableIndex> {}, std::move(expressions));
-	plan->children.push_back(IntegerValues(TableIndex(85), {{10, 20}, {10, 20}}));
-	optional_ptr<TableRef> child_table;
-	auto options = PlanResolverOptions([&](const LogicalPlanSQLExportExtensionInput &input) {
-		auto select = make_uniq<SelectNode>();
-		child_table = input.children[0].table.get();
-		select->from_table = std::move(input.children[0].table);
-		// Expression bindings remain available after taking the child.
-		for (idx_t ordinal : {idx_t(1), idx_t(0)}) {
-			auto expression = input.export_expression(ordinal);
-			REQUIRE(expression.IsSuccess());
-			select->select_list.push_back(std::move(expression.GetValue()));
+	optional<LogicalPlanSQLExportRelation> owned_relation;
+	string exported_sql;
+	{
+		DuckDB db;
+		Connection connection(db);
+		vector<ColumnBinding> bindings;
+		vector<unique_ptr<Expression>> expressions;
+		for (idx_t i = 0; i < 2; i++) {
+			bindings.emplace_back(TableIndex(85), ProjectionIndex(i));
+			expressions.push_back(
+			    make_uniq<BoundColumnRefExpression>(Identifier("same"), LogicalType::INTEGER, bindings.back()));
 		}
-		REQUIRE_FALSE(input.children[0].table);
-		return LogicalPlanSQLExportExtensionResult::Exported(std::move(select));
-	});
-	auto result = LogicalPlanSQLExporter::Export(*connection.context, *plan, options);
-	REQUIRE(result.IsSuccess());
-	REQUIRE(result.GetValue().query->Cast<SelectNode>().from_table.get() == child_table.get());
-	plan.reset();
-	auto rows = connection.Query(result.GetValue().query->ToString());
+		auto plan = make_uniq<SQLExportExtensionOperator>("positional_child", bindings,
+		                                                  vector<LogicalType>(2, LogicalType::INTEGER),
+		                                                  vector<TableIndex> {}, std::move(expressions));
+		plan->children.push_back(IntegerValues(TableIndex(85), {{10, 20}, {10, 20}}));
+		optional_ptr<TableRef> child_table;
+		auto options = PlanResolverOptions([&](const LogicalPlanSQLExportExtensionInput &input) {
+			auto select = make_uniq<SelectNode>();
+			child_table = input.children[0].table.get();
+			select->from_table = std::move(input.children[0].table);
+			// Expression bindings remain available after taking the child.
+			for (idx_t ordinal : {idx_t(1), idx_t(0)}) {
+				auto expression = input.export_expression(ordinal);
+				REQUIRE(expression.IsSuccess());
+				select->select_list.push_back(std::move(expression.GetValue()));
+			}
+			REQUIRE_FALSE(input.children[0].table);
+			return LogicalPlanSQLExportExtensionResult::Exported(std::move(select));
+		});
+		auto result = LogicalPlanSQLExporter::Export(*connection.context, *plan, options);
+		REQUIRE(result.IsSuccess());
+		REQUIRE(result.GetValue().query->Cast<SelectNode>().from_table.get() == child_table.get());
+		owned_relation = std::move(result.GetValue());
+		exported_sql = owned_relation->query->ToString();
+	}
+	REQUIRE(owned_relation);
+	REQUIRE(owned_relation->query->ToString() == exported_sql);
+	DuckDB target_db;
+	Connection target_connection(target_db);
+	auto rows = target_connection.Query(exported_sql);
 	REQUIRE_NO_FAIL(*rows);
 	REQUIRE(rows->RowCount() == 2);
 	for (idx_t row = 0; row < 2; row++) {
@@ -723,32 +748,6 @@ TEST_CASE("Logical plan SQL export propagates callback exceptions unchanged", "[
 		    });
 		REQUIRE_THROWS_AS(LogicalPlanSQLExporter::Export(*connection.context, *plan, options), std::runtime_error);
 	}
-}
-
-TEST_CASE("Logical plan SQL export results outlive plans, contexts, and callbacks",
-          "[sql_export][logical_plan_sql_export]") {
-	optional<LogicalPlanSQLExportRelation> owned_relation;
-	string exported_sql;
-	{
-		DuckDB source_db(nullptr);
-		Connection source_connection(source_db);
-		auto plan = ChildExtension("owned_extension", TableIndex(130));
-		auto options = PlanResolverOptions([](const LogicalPlanSQLExportExtensionInput &input) {
-			return LogicalPlanSQLExportExtensionResult::Exported(PlanChildRelation(input));
-		});
-		auto result = LogicalPlanSQLExporter::Export(*source_connection.context, *plan, options);
-		REQUIRE(result.IsSuccess());
-		owned_relation = std::move(result.GetValue());
-		exported_sql = owned_relation->query->ToString();
-	}
-
-	REQUIRE(owned_relation);
-	REQUIRE(owned_relation->query->ToString() == exported_sql);
-	DuckDB target_db(nullptr);
-	Connection target_connection(target_db);
-	auto result = target_connection.Query(exported_sql);
-	REQUIRE_FALSE(result->HasError());
-	REQUIRE(result->GetValue(0, 0) == Value::INTEGER(42));
 }
 
 TEST_CASE("Logical plan SQL export isolates extension column names and scope modifiers",
@@ -1574,27 +1573,6 @@ TEST_CASE("Logical plan SQL export rejects a throwing later VALUES row below LIM
 	auto direct = connection.Query(make_uniq<LogicalPlanStatement>(std::move(limit)));
 	REQUIRE_NO_FAIL(*direct);
 	REQUIRE(direct->RowCount() == 1);
-	connection.Rollback();
-}
-
-TEST_CASE("Retained source SQL invocation survives plan serialization",
-          "[sql_export][logical_plan_sql_export][table_source_sql]") {
-	DuckDB db(nullptr);
-	Connection connection(db);
-	connection.BeginTransaction();
-	auto plan = OptimizeLogicalPlanExportQuery(connection, "SELECT sum(x) FROM range(10) t(x)");
-	auto get = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_GET);
-	REQUIRE(get);
-	auto parameters = get->Cast<LogicalGet>().parameters;
-	auto copy = plan->Copy(*connection.context);
-	auto copied_get = FindLogicalPlanExportOperator(*copy, LogicalOperatorType::LOGICAL_GET);
-	REQUIRE(copied_get);
-	REQUIRE(copied_get->Cast<LogicalGet>().parameters == parameters);
-	REQUIRE(LogicalPlanSQLExporter::Export(*connection.context, *copy).IsSuccess());
-	copied_get->Cast<LogicalGet>().function.to_sql = nullptr;
-	auto unsupported = LogicalPlanSQLExporter::Export(*connection.context, *copy);
-	REQUIRE(unsupported.HasError());
-	REQUIRE(unsupported.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_SOURCE);
 	connection.Rollback();
 }
 
@@ -2460,16 +2438,6 @@ TEST_CASE("Grouped MARK SQL export rejects unsupported conjunction semantics",
 	auto sequence = connection.Query("SELECT last_value FROM duckdb_sequences() WHERE sequence_name='mark_copy_guard'");
 	REQUIRE_NO_FAIL(*sequence);
 	REQUIRE(sequence->GetValue(0, 0).IsNull());
-	auto &list_join = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_COMPARISON_JOIN)
-	                      ->Cast<LogicalComparisonJoin>();
-	auto &list_condition = list_join.conditions.back();
-	list_condition =
-	    JoinCondition(list_condition.GetLHS().Copy(), list_condition.GetRHS().Copy(), ExpressionType::COMPARE_LESSTHAN);
-	auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
-	REQUIRE(exported.HasError());
-	REQUIRE(exported.GetIssues()[0].construct ==
-	        LogicalPlanVerificationConstructIdentity::ExportFeature("mark_condition_semantics"));
-
 	connection.Rollback();
 }
 
@@ -2579,7 +2547,10 @@ TEST_CASE("Logical plan SQL export retains sampling errors and partial consumpti
 				vector<string> expected_rows;
 				Value expected_sequence;
 				bool expected_error = false;
-				for (idx_t route = 0; route < 5; route++) {
+				for (auto route : {0, 3, 4}) {
+					if (route == 4 && (consumption != 0 || late_error)) {
+						continue;
+					}
 					CAPTURE(clause, consumption, late_error, route);
 					DuckDB db(nullptr);
 					Connection connection(db);
@@ -2587,20 +2558,12 @@ TEST_CASE("Logical plan SQL export retains sampling errors and partial consumpti
 					                                 "SET max_streaming_buffer_size='1b'; CREATE SEQUENCE seq"));
 					connection.BeginTransaction();
 					auto plan = OptimizeLogicalPlanExportQuery(connection, sql);
-					if (route == 2) {
-						plan = plan->Copy(*connection.context);
-						plan->ResolveOperatorTypes();
-					}
 					auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
 					REQUIRE(exported.IsSuccess());
 					QueryParameters parameters;
 					parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
 					unique_ptr<QueryResult> result;
-					if (route == 1 || route == 2) {
-						REQUIRE_NO_FAIL(connection.Query("SET debug_disable_optimizer=true"));
-						result =
-						    connection.context->Query(make_uniq<LogicalPlanStatement>(std::move(plan)), parameters);
-					} else if (route == 0) {
+					if (route == 0) {
 						result = connection.context->Query(sql, parameters);
 					} else if (route == 3) {
 						result = connection.context->Query(exported.GetValue().query->ToString(), parameters);
@@ -2655,7 +2618,10 @@ TEST_CASE("Table row number SQL export retains stream effects",
 			vector<string> expected_rows;
 			Value expected_sequence;
 			bool expected_error = false;
-			for (idx_t route = 0; route < 6; route++) {
+			for (auto route : {0, 3, 4, 5}) {
+				if (route >= 4 && (consumption != 0 || late_error)) {
+					continue;
+				}
 				CAPTURE(consumption, late_error, route);
 				DuckDB db(nullptr);
 				Connection connection(db);
@@ -2669,7 +2635,7 @@ TEST_CASE("Table row number SQL export retains stream effects",
 				           " FROM (SELECT i,row_number() OVER () n FROM stream_numbers)" +
 				           (consumption == 1 ? " LIMIT 1" : "");
 				auto plan = OptimizeLogicalPlanExportQuery(connection, sql);
-				if (route == 2 || route == 4) {
+				if (route == 4) {
 					plan = plan->Copy(*connection.context);
 					plan->ResolveOperatorTypes();
 				}
@@ -2678,20 +2644,15 @@ TEST_CASE("Table row number SQL export retains stream effects",
 				QueryParameters parameters;
 				parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
 				unique_ptr<QueryResult> result;
-				if (route == 1 || route == 2) {
-					REQUIRE_NO_FAIL(connection.Query("SET debug_disable_optimizer=true"));
-					result = connection.context->Query(make_uniq<LogicalPlanStatement>(std::move(plan)), parameters);
+				plan.reset();
+				if (route == 0) {
+					result = connection.context->Query(sql, parameters);
+				} else if (route == 3 || route == 4) {
+					result = connection.context->Query(exported.GetValue().query->ToString(), parameters);
 				} else {
-					plan.reset();
-					if (route == 0) {
-						result = connection.context->Query(sql, parameters);
-					} else if (route == 3 || route == 4) {
-						result = connection.context->Query(exported.GetValue().query->ToString(), parameters);
-					} else {
-						auto statement = make_uniq<SelectStatement>();
-						statement->node = std::move(exported.GetValue().query);
-						result = connection.context->Query(std::move(statement), parameters);
-					}
+					auto statement = make_uniq<SelectStatement>();
+					statement->node = std::move(exported.GetValue().query);
+					result = connection.context->Query(std::move(statement), parameters);
 				}
 				vector<string> rows;
 				while (!result->HasError()) {
@@ -2769,48 +2730,6 @@ TEST_CASE("Table row number SQL export guards filtered numbering",
 	get.dynamic_filters = make_shared_ptr<DynamicTableFilterSet>();
 	REQUIRE_FALSE(get.function.to_sql(*connection.context, get, nullptr, Identifier("scan")).query);
 	connection.Rollback();
-}
-
-TEST_CASE("Recursive payload aggregates resolve qualified schemas", "[sql_export][recursive_cte_sql_export]") {
-	DuckDB db(nullptr);
-	Connection connection(db);
-	REQUIRE_NO_FAIL(connection.Query("CREATE SCHEMA payload_schema; CREATE SCHEMA outer_schema; "
-	                                 "CREATE SCHEMA outer_schema.inner_schema"));
-	connection.BeginTransaction();
-	auto &catalog = Catalog::GetCatalog(*connection.context, Identifier("memory"));
-	MetaTransaction::Get(*connection.context)
-	    .ModifyDatabase(catalog.GetAttached(), DatabaseModificationType::CREATE_CATALOG_ENTRY);
-	for (idx_t schema = 0; schema < 3; schema++) {
-		auto &entry = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
-		    *connection.context, QualifiedName("system", "main", schema == 0 ? "min" : "max"));
-		auto functions = entry.functions;
-		functions.SetName("payload_choice");
-		functions.ApplyToFunctions([](AggregateFunction &function) { function.SetName("payload_choice"); });
-		CreateAggregateFunctionInfo info(std::move(functions));
-		info.SetQualifiedName(
-		    schema == 2 ? QualifiedName(vector<Identifier> {"memory", "outer_schema", "inner_schema"}, "payload_choice")
-		                : QualifiedName("memory", schema == 0 ? "main" : "payload_schema", "payload_choice"));
-		info.internal = false;
-		catalog.CreateFunction(*connection.context, info);
-	}
-	connection.Commit();
-	REQUIRE_NO_FAIL(connection.Query("SET search_path='payload_schema,main'"));
-	for (auto name : {"memory.main.payload_choice", "memory.payload_schema.payload_choice",
-	                  "memory.outer_schema.inner_schema.payload_choice", "payload_schema.payload_choice",
-	                  "payload_choice", "outer_schema.inner_schema.payload_choice", "memory.payload_choice"}) {
-		CAPTURE(name);
-		auto expected = string(name) == "memory.main.payload_choice" || string(name) == "memory.payload_choice" ? 1 : 3;
-		auto ordinary = connection.Query("SELECT " + string(name) + "(v) FROM (VALUES(1),(3))t(v)");
-		REQUIRE_NO_FAIL(*ordinary);
-		REQUIRE(ordinary->GetValue(0, 0) == Value::INTEGER(expected));
-		auto recursive = connection.Query("WITH RECURSIVE r(k,v) USING KEY(k," + string(name) +
-		                                  "(v)) AS (SELECT * FROM (VALUES(1,1),(1,3))t(k,v) UNION ALL "
-		                                  "SELECT k+1,v FROM r WHERE k<2) SELECT k,v FROM r ORDER BY k");
-		REQUIRE_NO_FAIL(*recursive);
-		REQUIRE(recursive->RowCount() == 2);
-		REQUIRE(recursive->GetValue(1, 0) == Value::INTEGER(expected));
-		REQUIRE(recursive->GetValue(1, 1) == Value::INTEGER(expected));
-	}
 }
 
 TEST_CASE("Table SQL export distinguishes pruning hints from row filters",

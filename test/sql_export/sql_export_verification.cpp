@@ -136,33 +136,6 @@ TEST_CASE("SQL export verification excludes control and prepare paths", "[sql_ex
 	REQUIRE(TakeSQLExportRecord(*observer).outcome == SQLExportOutcome::STRUCTURALLY_VALIDATED);
 }
 
-TEST_CASE("SQL export verification propagates optimizer exceptions and restores invocation state",
-          "[sql_export][sql_export_verification]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-	auto observer = SQLExportVerificationState::GetOrCreate(*con.context);
-	SetSQLExportMode(con, *observer, "report");
-	auto counter = make_shared_ptr<SQLExportOptimizerCounter>();
-	counter->throw_on_second = true;
-	OptimizerExtension extension;
-	extension.optimizer_info = counter;
-	extension.optimize_function = CountSQLExportOptimization;
-	OptimizerExtension::Register(DBConfig::GetConfig(*con.context), extension);
-	REQUIRE_FAIL(con.Query("VALUES (1)"));
-	auto record = TakeSQLExportRecord(*observer);
-	REQUIRE(counter->calls == 2);
-	REQUIRE(record.export_count == 1);
-	REQUIRE(record.outcome == SQLExportOutcome::REOPTIMIZE_ERROR);
-	REQUIRE(record.propagated_error);
-	REQUIRE_FALSE(record.strict_failure);
-	REQUIRE(record.route == SQLExportExecutionRoute::NONE);
-	counter->throw_on_second = false;
-	counter->calls = 0;
-	REQUIRE_NO_FAIL(con.Query("VALUES (2)"));
-	REQUIRE(counter->calls == 2);
-	REQUIRE(TakeSQLExportRecord(*observer).outcome == SQLExportOutcome::STRUCTURALLY_VALIDATED);
-}
-
 namespace {
 
 class SQLExportRetryState : public ClientContextState {
@@ -415,28 +388,46 @@ TEST_CASE("SQL export streaming observations are published only on completion",
 	}
 }
 
-TEST_CASE("SQL export propagates parser and binder hook exceptions", "[sql_export][sql_export_verification]") {
-	for (auto mode : {"report", "strict"}) {
-		for (bool parse_error : {false, true}) {
+TEST_CASE("SQL export propagates generated planning failures and recovers", "[sql_export][sql_export_verification]") {
+	for (auto source : {"parser", "binder", "rebind", "optimizer"}) {
+		for (auto mode : {"report", "strict"}) {
+			if (string(source) == "optimizer" && string(mode) == "strict") {
+				continue;
+			}
+			CAPTURE(source, mode);
 			DuckDB db(nullptr);
 			Connection con(db);
 			REQUIRE_NO_FAIL(con.Query("SET allow_parser_override_extension='fallback'"));
 			auto observer = SQLExportVerificationState::GetOrCreate(*con.context);
 			SetSQLExportMode(con, *observer, mode);
-			if (parse_error) {
-				auto info = make_shared_ptr<SQLExportParseHook>();
-				info->throw_on_second = true;
-				ParserExtension extension;
-				extension.parser_info = info;
-				extension.parser_override = SQLExportReplaceGeneratedParse;
-				ParserExtension::Register(DBConfig::GetConfig(*con.context), extension);
-			} else {
+			auto expected = SQLExportOutcome::REBIND_ERROR;
+			auto counter = make_shared_ptr<SQLExportOptimizerCounter>();
+			if (string(source) == "optimizer") {
+				counter->throw_on_second = true;
+				OptimizerExtension extension;
+				extension.optimizer_info = counter;
+				extension.optimize_function = CountSQLExportOptimization;
+				OptimizerExtension::Register(DBConfig::GetConfig(*con.context), extension);
+				expected = SQLExportOutcome::REOPTIMIZE_ERROR;
+			} else if (string(source) == "binder") {
 				auto info = make_shared_ptr<SQLExportBindHook>();
 				info->throw_on_second = true;
 				PlannerExtension extension;
 				extension.planner_info = info;
 				extension.post_bind_function = SQLExportChangeGeneratedSchema;
 				PlannerExtension::Register(DBConfig::GetConfig(*con.context), extension);
+			} else {
+				auto info = make_shared_ptr<SQLExportParseHook>();
+				if (string(source) == "parser") {
+					info->throw_on_second = true;
+					expected = SQLExportOutcome::REPARSE_ERROR;
+				} else {
+					info->replacement = "SELECT missing_column";
+				}
+				ParserExtension extension;
+				extension.parser_info = info;
+				extension.parser_override = SQLExportReplaceGeneratedParse;
+				ParserExtension::Register(DBConfig::GetConfig(*con.context), extension);
 			}
 			auto retry = make_shared_ptr<SQLExportRetryState>();
 			retry->retry_errors = true;
@@ -446,40 +437,26 @@ TEST_CASE("SQL export propagates parser and binder hook exceptions", "[sql_expor
 			REQUIRE(record.propagated_error);
 			REQUIRE(record.export_count == 1);
 			REQUIRE(record.route == SQLExportExecutionRoute::NONE);
-			REQUIRE(record.outcome == (parse_error ? SQLExportOutcome::REPARSE_ERROR : SQLExportOutcome::REBIND_ERROR));
+			REQUIRE(record.outcome == expected);
 			REQUIRE(record.strict_failure == (string(mode) == "strict"));
 			REQUIRE(retry->errors == 0);
+			if (string(source) == "rebind") {
+				REQUIRE(record.code == "REBIND_EXCEPTION");
+			}
+			if (string(source) == "optimizer") {
+				REQUIRE(counter->calls == 2);
+				counter->throw_on_second = false;
+				counter->calls = 0;
+			}
 			con.context->registered_state->Remove("sql_export_retry");
 			REQUIRE_NO_FAIL(con.Query("VALUES (43)"));
-			REQUIRE(TakeSQLExportRecord(*observer).route == SQLExportExecutionRoute::GENERATED);
+			auto recovered = TakeSQLExportRecord(*observer);
+			REQUIRE(recovered.route == SQLExportExecutionRoute::GENERATED);
+			REQUIRE(recovered.outcome == SQLExportOutcome::STRUCTURALLY_VALIDATED);
+			if (string(source) == "optimizer") {
+				REQUIRE(counter->calls == 2);
+			}
 		}
-	}
-}
-
-TEST_CASE("SQL export thrown binding failures propagate without speculative fallback",
-          "[sql_export][sql_export_verification]") {
-	for (auto mode : {"report", "strict"}) {
-		DuckDB db(nullptr);
-		Connection con(db);
-		REQUIRE_NO_FAIL(con.Query("SET allow_parser_override_extension='fallback'"));
-		auto observer = SQLExportVerificationState::GetOrCreate(*con.context);
-		SetSQLExportMode(con, *observer, mode);
-		auto info = make_shared_ptr<SQLExportParseHook>();
-		info->replacement = "SELECT missing_column";
-		ParserExtension extension;
-		extension.parser_info = info;
-		extension.parser_override = SQLExportReplaceGeneratedParse;
-		ParserExtension::Register(DBConfig::GetConfig(*con.context), extension);
-		auto result = con.Query("VALUES (42)");
-		auto record = TakeSQLExportRecord(*observer);
-		REQUIRE(record.outcome == SQLExportOutcome::REBIND_ERROR);
-		REQUIRE(record.code == "REBIND_EXCEPTION");
-		REQUIRE(record.propagated_error);
-		REQUIRE(result->HasError());
-		REQUIRE(record.route == SQLExportExecutionRoute::NONE);
-		REQUIRE(record.strict_failure == (string(mode) == "strict"));
-		REQUIRE_NO_FAIL(con.Query("VALUES (43)"));
-		REQUIRE(TakeSQLExportRecord(*observer).route == SQLExportExecutionRoute::GENERATED);
 	}
 }
 
