@@ -102,8 +102,9 @@ SELECT count(*) FROM perm MATCH_RECOGNIZE(
 # third and fourth can start at row 1. The third is the one the list order asks for, and it is the
 # only one where the reluctant C?? has to give up what it prefers: matching nothing would put A on
 # row 2 and the trailing B on row 3, which is not a B, so taking the C shifts the rest along and it
-# fits. Oracle answers the fourth for the PERMUTE and the third for the same six written out, which
-# are different rows from the same engine for what is meant to be the same pattern.
+# fits. The reference implementation answers the fourth for the PERMUTE and the third for the same
+# six written out, which are different rows from the same engine for what is meant to be the same
+# pattern.
 
 statement ok
 create table perm3(i integer, v integer);
@@ -142,8 +143,9 @@ SELECT i, cls FROM perm3 MATCH_RECOGNIZE(
 3	A
 4	B
 
-# the same pattern with a greedy quantifier, where nothing has to be given up. Oracle agrees here,
-# which is what says the reluctance is the part it does not carry through an arrangement.
+# the same pattern with a greedy quantifier, where nothing has to be given up. The reference
+# implementation agrees here, which is what says the reluctance is the part it does not carry
+# through an arrangement.
 query IT
 SELECT i, cls FROM perm3 MATCH_RECOGNIZE(
     ORDER BY i MEASURES CLASSIFIER() AS cls

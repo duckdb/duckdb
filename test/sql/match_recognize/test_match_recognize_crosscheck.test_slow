@@ -1,11 +1,11 @@
-# name: test/sql/match_recognize/test_match_recognize_oracle.test_slow
-# description: MATCH_RECOGNIZE results checked against Oracle
+# name: test/sql/match_recognize/test_match_recognize_crosscheck.test_slow
+# description: MATCH_RECOGNIZE results checked against a reference implementation
 # group: [match_recognize]
 
-# Every expected result below was produced by Oracle AI Database 26ai Free (23.26.3.0.0) running the
-# query above it, unchanged. The clause order is Oracle's fixed one and nothing engine specific
-# appears in the queries, so the same text runs on both and a difference in the output would be a
-# difference in the implementations rather than in how the question was asked.
+# Every expected result below was produced by a reference implementation running the query above it,
+# unchanged. The clause order is the fixed one that implementation requires and nothing engine
+# specific appears in the queries, so the same text runs on both and a difference in the output would
+# be a difference in the implementations rather than in how the question was asked.
 #
 # The data is small enough to check by hand: AAA walks down, up, along a plateau, down, up, a second
 # plateau, then spikes, so one partition carries falls, rises, ties and reversals. BBB carries a tie

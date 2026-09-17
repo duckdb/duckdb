@@ -1,9 +1,10 @@
 # name: test/sql/match_recognize/test_match_recognize_standard.test
-# description: MATCH_RECOGNIZE - SQL:2016 spellings checked against Oracle
+# description: MATCH_RECOGNIZE - SQL:2016 spellings checked against a reference implementation
 # group: [match_recognize]
 
 # These are the shapes JSqlParser's MATCH_RECOGNIZE fixtures cover, each of which was executed
-# against Oracle 23ai. The data is theirs too, so the answers can be compared with a real one.
+# against a reference implementation. The data is theirs too, so the answers can be compared with a
+# real one.
 
 statement ok
 PRAGMA enable_verification

@@ -251,7 +251,7 @@ statement ok
 insert into skips values (1,'a'),(2,'a'),(3,'b'),(4,'a'),(5,'c');
 
 # Resuming at the row the match started on would find the same match again and never move, so it is
-# refused rather than looped. Oracle refuses it too.
+# refused rather than looped. The reference implementation refuses it too.
 statement error
 SELECT count(*) FROM skips MATCH_RECOGNIZE(
     ORDER BY seq MEASURES count(*) AS n AFTER MATCH SKIP TO FIRST A
@@ -268,8 +268,8 @@ SELECT count(*) FROM skips MATCH_RECOGNIZE(
 ----
 <REGEX>:Invalid Input Error:.*SKIP TO A resumes at the row the match started on.*
 
-# An optional variable that took no rows leaves the skip with nowhere to go. Oracle answers
-# ORA-62514, "AFTER MATCH SKIP TO variable is not bounded in the match found".
+# An optional variable that took no rows leaves the skip with nowhere to go. The reference
+# implementation refuses it too, saying the variable is not bounded in the match found.
 statement error
 SELECT count(*) FROM skips MATCH_RECOGNIZE(
     ORDER BY seq MEASURES count(*) AS n AFTER MATCH SKIP TO LAST B

@@ -450,3 +450,52 @@ FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
 )
 ----
 reads the rows of one pattern variable
+
+# COUNT(X.*) counts the rows the variable matched, which is not the size of the match
+query IIII
+SELECT c, ca, cb, s FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS c, count(A.*) AS ca, count(B.*) AS cb, sum(i) AS s
+    ONE ROW PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
+) ORDER BY s
+----
+3	1	2	6
+2	1	1	9
+
+# and it accumulates row by row like any other aggregate under ALL ROWS PER MATCH
+query IIII
+SELECT i, c, ca, cb FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS c, count(A.*) AS ca, count(B.*) AS cb
+    ALL ROWS PER MATCH PATTERN (A B+) DEFINE A as v=1, B as v=0
+) ORDER BY i
+----
+1	1	1	0
+2	2	1	1
+3	3	1	2
+4	1	1	0
+5	2	1	1
+
+# a SUBSET stands for all of its members, so its star covers every row they matched
+query II
+SELECT c, cs FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS c, count(S.*) AS cs
+    ONE ROW PER MATCH PATTERN (A B+) SUBSET S = (A, B) DEFINE A as v=1, B as v=0
+) ORDER BY c
+----
+2	2
+3	3
+
+# a star only counts rows, so there is nothing for DISTINCT to be applied to
+statement error
+SELECT c FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(DISTINCT A.*) AS c PATTERN (A B+) DEFINE A as v=1, B as v=0
+)
+----
+<REGEX>:Binder Error:.*STAR expression.*
+
+# a name that is not a pattern variable does not scope anything
+statement error
+SELECT c FROM ev MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(NOPE.*) AS c PATTERN (A B+) DEFINE A as v=1, B as v=0
+)
+----
+<REGEX>:Binder Error:.*STAR expression.*

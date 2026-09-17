@@ -1,0 +1,469 @@
+# name: test/sql/match_recognize/test_match_recognize_usecases.test
+# description: MATCH_RECOGNIZE over the event shapes the operator is normally reached for
+# group: [match_recognize]
+
+# Five sequences that are awkward to phrase as window functions: a run of rejected sign-ins inside a
+# window pinned to the first of them, a dip answered by a recovery, a basket filled and then left, a
+# machine that warms up before it shakes, and a stream of hits cut into visits at its gaps.
+
+statement ok
+pragma threads=1;
+
+# Password guessing: rejections within an hour of the first one, closed by an acceptance
+
+statement ok
+create table signin_log(account varchar, attempted_at timestamp, outcome varchar);
+
+statement ok
+insert into signin_log values
+    -- an ordinary sign-in, then five rejections inside the hour and a way in
+    ('ana', '2026-03-01 13:20:00', 'GRANTED'),
+    ('ana', '2026-03-01 14:07:00', 'DENIED'),
+    ('ana', '2026-03-01 14:19:00', 'DENIED'),
+    ('ana', '2026-03-01 14:28:00', 'DENIED'),
+    ('ana', '2026-03-01 14:41:00', 'DENIED'),
+    ('ana', '2026-03-01 14:58:00', 'DENIED'),
+    ('ana', '2026-03-01 15:02:00', 'GRANTED'),
+    -- four rejections is one short
+    ('bo', '2026-03-01 16:00:00', 'DENIED'),
+    ('bo', '2026-03-01 16:06:00', 'DENIED'),
+    ('bo', '2026-03-01 16:12:00', 'DENIED'),
+    ('bo', '2026-03-01 16:18:00', 'DENIED'),
+    ('bo', '2026-03-01 16:22:00', 'GRANTED'),
+    -- six rejections and a way in, but they are spread over a hundred minutes
+    ('cyd', '2026-03-01 09:12:00', 'DENIED'),
+    ('cyd', '2026-03-01 09:24:00', 'DENIED'),
+    ('cyd', '2026-03-01 09:33:00', 'DENIED'),
+    ('cyd', '2026-03-01 09:47:00', 'DENIED'),
+    ('cyd', '2026-03-01 10:41:00', 'DENIED'),
+    ('cyd', '2026-03-01 10:52:00', 'DENIED'),
+    ('cyd', '2026-03-01 10:58:00', 'GRANTED'),
+    -- seven rejections, none of them outside the hour
+    ('dee', '2026-03-01 07:03:00', 'DENIED'),
+    ('dee', '2026-03-01 07:11:00', 'DENIED'),
+    ('dee', '2026-03-01 07:19:00', 'DENIED'),
+    ('dee', '2026-03-01 07:26:00', 'DENIED'),
+    ('dee', '2026-03-01 07:34:00', 'DENIED'),
+    ('dee', '2026-03-01 07:42:00', 'DENIED'),
+    ('dee', '2026-03-01 07:51:00', 'DENIED'),
+    ('dee', '2026-03-01 07:58:00', 'GRANTED');
+
+# FIRST(BAD.attempted_at) inside DEFINE pins the window to the first rejection of the run being
+# assembled, so the run ends the moment a rejection falls past it
+query IIIII
+SELECT account, opened_at, closed_at, let_in_at, tries FROM signin_log MATCH_RECOGNIZE(
+    PARTITION BY account
+    ORDER BY attempted_at
+    MEASURES
+        FIRST(BAD.attempted_at) AS opened_at,
+        LAST(BAD.attempted_at) AS closed_at,
+        GOOD.attempted_at AS let_in_at,
+        count(BAD.attempted_at) AS tries
+    ONE ROW PER MATCH
+    AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (BAD{5,} GOOD)
+    DEFINE
+        BAD AS outcome = 'DENIED'
+           AND (FIRST(BAD.attempted_at) IS NULL
+                OR attempted_at <= FIRST(BAD.attempted_at) + INTERVAL 1 HOUR),
+        GOOD AS outcome = 'GRANTED'
+) ORDER BY account
+----
+ana	2026-03-01 14:07:00	2026-03-01 14:58:00	2026-03-01 15:02:00	5
+dee	2026-03-01 07:03:00	2026-03-01 07:51:00	2026-03-01 07:58:00	7
+
+# the IS NULL arm covers the row that opens the run, where no BAD is bound yet - the row under test
+# already counts as bound here, so leaving the arm out changes nothing
+query II
+SELECT account, tries FROM signin_log MATCH_RECOGNIZE(
+    PARTITION BY account ORDER BY attempted_at
+    MEASURES count(BAD.attempted_at) AS tries
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (BAD{5,} GOOD)
+    DEFINE BAD AS outcome = 'DENIED' AND attempted_at <= FIRST(BAD.attempted_at) + INTERVAL 1 HOUR,
+           GOOD AS outcome = 'GRANTED'
+) ORDER BY account
+----
+ana	5
+dee	7
+
+# tallying rejections per account instead turns up cyd, whose six are nowhere near each other
+query II
+SELECT account, count(*) FROM signin_log WHERE outcome = 'DENIED'
+GROUP BY account HAVING count(*) >= 5 ORDER BY account
+----
+ana	5
+cyd	6
+dee	7
+
+# drop the window and the run is never cut, so cyd matches after all
+query II
+SELECT account, tries FROM signin_log MATCH_RECOGNIZE(
+    PARTITION BY account ORDER BY attempted_at
+    MEASURES count(BAD.attempted_at) AS tries
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (BAD{5,} GOOD)
+    DEFINE BAD AS outcome = 'DENIED', GOOD AS outcome = 'GRANTED'
+) ORDER BY account
+----
+ana	5
+cyd	6
+dee	7
+
+# A dip at least three ticks deep answered by a recovery at least three ticks long
+
+statement ok
+create table tick_feed(ticker varchar, quoted_at timestamp, last_px decimal(6,2));
+
+statement ok
+insert into tick_feed values
+    -- one clean dip and recovery
+    ('AAA', '2026-03-02 09:30:00', 148.00),
+    ('AAA', '2026-03-02 09:31:00', 146.50),
+    ('AAA', '2026-03-02 09:32:00', 143.00),
+    ('AAA', '2026-03-02 09:33:00', 139.00),
+    ('AAA', '2026-03-02 09:34:00', 136.50),
+    ('AAA', '2026-03-02 09:35:00', 141.00),
+    ('AAA', '2026-03-02 09:36:00', 144.00),
+    ('AAA', '2026-03-02 09:37:00', 150.00),
+    ('AAA', '2026-03-02 09:38:00', 149.00),
+    -- a dip only two ticks deep
+    ('BBB', '2026-03-02 09:30:00', 61.00),
+    ('BBB', '2026-03-02 09:31:00', 60.00),
+    ('BBB', '2026-03-02 09:32:00', 59.00),
+    ('BBB', '2026-03-02 09:33:00', 62.00),
+    ('BBB', '2026-03-02 09:34:00', 64.00),
+    ('BBB', '2026-03-02 09:35:00', 66.00),
+    -- two of them back to back
+    ('CCC', '2026-03-02 09:30:00', 33.00),
+    ('CCC', '2026-03-02 09:31:00', 31.50),
+    ('CCC', '2026-03-02 09:32:00', 30.00),
+    ('CCC', '2026-03-02 09:33:00', 28.50),
+    ('CCC', '2026-03-02 09:34:00', 30.25),
+    ('CCC', '2026-03-02 09:35:00', 32.00),
+    ('CCC', '2026-03-02 09:36:00', 34.00),
+    ('CCC', '2026-03-02 09:37:00', 32.50),
+    ('CCC', '2026-03-02 09:38:00', 31.00),
+    ('CCC', '2026-03-02 09:39:00', 29.50),
+    ('CCC', '2026-03-02 09:40:00', 31.00),
+    ('CCC', '2026-03-02 09:41:00', 33.50),
+    ('CCC', '2026-03-02 09:42:00', 36.00);
+
+# open_px is the first tick that had already fallen rather than the high it fell away from, since
+# that high sits one row before the match
+query IIIIII
+SELECT ticker, dip_open_at, rise_close_at, open_px, low_px, close_px
+FROM tick_feed MATCH_RECOGNIZE(
+    PARTITION BY ticker
+    ORDER BY quoted_at
+    MEASURES
+        FIRST(DIP.quoted_at) AS dip_open_at,
+        LAST(RISE.quoted_at) AS rise_close_at,
+        FIRST(DIP.last_px) AS open_px,
+        min(DIP.last_px) AS low_px,
+        LAST(RISE.last_px) AS close_px
+    ONE ROW PER MATCH
+    AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (DIP{3,} RISE{3,})
+    DEFINE
+        DIP AS last_px < PREV(last_px),
+        RISE AS last_px > PREV(last_px)
+) ORDER BY ticker, dip_open_at
+----
+AAA	2026-03-02 09:31:00	2026-03-02 09:37:00	146.50	136.50	150.00
+CCC	2026-03-02 09:31:00	2026-03-02 09:36:00	31.50	28.50	34.00
+CCC	2026-03-02 09:37:00	2026-03-02 09:42:00	32.50	29.50	36.00
+
+# PREV reads the ordered partition, not the match, so the opening tick of a partition has nothing
+# behind it and can never start a dip
+query I
+SELECT count(*) FROM tick_feed MATCH_RECOGNIZE(
+    PARTITION BY ticker ORDER BY quoted_at
+    MEASURES FIRST(DIP.quoted_at) AS dip_open_at
+    PATTERN (^ DIP{3,} RISE{3,})
+    DEFINE DIP AS last_px < PREV(last_px), RISE AS last_px > PREV(last_px)
+)
+----
+0
+
+# "it came back above where it started falling" is a claim about the end of the match, so pinning it
+# to RISE demands it of every tick of the recovery, which no half-finished recovery can meet
+query II
+SELECT ticker, dip_open_at FROM tick_feed MATCH_RECOGNIZE(
+    PARTITION BY ticker ORDER BY quoted_at
+    MEASURES FIRST(DIP.quoted_at) AS dip_open_at
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (DIP{3,} RISE{3,})
+    DEFINE DIP AS last_px < PREV(last_px),
+           RISE AS last_px > PREV(last_px) AND last_px > FIRST(DIP.last_px)
+) ORDER BY ticker, dip_open_at
+----
+
+# giving the claim a variable of its own asks it once, of the closing tick
+query III
+SELECT ticker, dip_open_at, close_px FROM tick_feed MATCH_RECOGNIZE(
+    PARTITION BY ticker ORDER BY quoted_at
+    MEASURES FIRST(DIP.quoted_at) AS dip_open_at, SHUT.last_px AS close_px
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (DIP{3,} RISE{2,} SHUT)
+    DEFINE DIP AS last_px < PREV(last_px), RISE AS last_px > PREV(last_px),
+           SHUT AS last_px > PREV(last_px) AND last_px > FIRST(DIP.last_px)
+) ORDER BY ticker, dip_open_at
+----
+AAA	2026-03-02 09:31:00	150.00
+CCC	2026-03-02 09:31:00	34.00
+CCC	2026-03-02 09:37:00	36.00
+
+# A basket filled and then left: the match has to run all the way to the last event of the visit,
+# and $ is what demands that
+
+statement ok
+create table page_events(visit varchar, happened_at timestamp, action varchar, basket_size integer);
+
+statement ok
+insert into page_events values
+    -- a search, two product pages and a basket, then silence
+    ('s1', '2026-03-03 14:02:00', 'SEARCH_RESULTS', 0),
+    ('s1', '2026-03-03 14:06:00', 'PRODUCT_PAGE', 0),
+    ('s1', '2026-03-03 14:11:00', 'PRODUCT_PAGE', 0),
+    ('s1', '2026-03-03 14:17:00', 'CART_ADD', 2),
+    -- this visit went on to pay
+    ('s2', '2026-03-03 14:00:00', 'PRODUCT_PAGE', 0),
+    ('s2', '2026-03-03 14:04:00', 'PRODUCT_PAGE', 0),
+    ('s2', '2026-03-03 14:08:00', 'CART_ADD', 1),
+    ('s2', '2026-03-03 14:12:00', 'PAID', 1),
+    -- a single product page is not enough
+    ('s3', '2026-03-03 14:00:00', 'PRODUCT_PAGE', 0),
+    ('s3', '2026-03-03 14:05:00', 'CART_ADD', 1),
+    -- the basket came out empty
+    ('s4', '2026-03-03 14:00:00', 'PRODUCT_PAGE', 0),
+    ('s4', '2026-03-03 14:03:00', 'PRODUCT_PAGE', 0),
+    ('s4', '2026-03-03 14:07:00', 'CART_ADD', 0),
+    -- shaped like s1, but far too recent to write off
+    ('s5', '2026-03-03 15:44:00', 'PRODUCT_PAGE', 0),
+    ('s5', '2026-03-03 15:47:00', 'PRODUCT_PAGE', 0),
+    ('s5', '2026-03-03 15:52:00', 'CART_ADD', 3);
+
+query III
+SELECT visit, pages, last_touch_at FROM page_events MATCH_RECOGNIZE(
+    PARTITION BY visit
+    ORDER BY happened_at
+    MEASURES
+        FIRST(LOOK.happened_at) AS arrived_at,
+        count(LOOK.happened_at) AS pages,
+        BASKET.happened_at AS last_touch_at
+    ONE ROW PER MATCH
+    AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (LOOK{2,} BASKET $)
+    DEFINE
+        LOOK AS action = 'PRODUCT_PAGE',
+        BASKET AS action = 'CART_ADD' AND basket_size > 0
+) ORDER BY visit
+----
+s1	2	2026-03-03 14:17:00
+s5	2	2026-03-03 15:52:00
+
+# how long the silence has to last is an ordinary filter over the matches, not part of the pattern
+query II
+SELECT visit, last_touch_at FROM (
+    SELECT * FROM page_events MATCH_RECOGNIZE(
+        PARTITION BY visit ORDER BY happened_at
+        MEASURES FIRST(LOOK.happened_at) AS arrived_at,
+                 count(LOOK.happened_at) AS pages,
+                 BASKET.happened_at AS last_touch_at
+        ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+        PATTERN (LOOK{2,} BASKET $)
+        DEFINE LOOK AS action = 'PRODUCT_PAGE',
+               BASKET AS action = 'CART_ADD' AND basket_size > 0
+    )
+) WHERE last_touch_at < TIMESTAMP '2026-03-03 16:00:00' - INTERVAL 30 MINUTES
+ORDER BY visit
+----
+s1	2026-03-03 14:17:00
+
+# take the anchor away and the visit that paid comes back too, which is the whole thing $ rules out
+query I
+SELECT visit FROM page_events MATCH_RECOGNIZE(
+    PARTITION BY visit ORDER BY happened_at
+    MEASURES BASKET.happened_at AS last_touch_at
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (LOOK{2,} BASKET)
+    DEFINE LOOK AS action = 'PRODUCT_PAGE', BASKET AS action = 'CART_ADD' AND basket_size > 0
+) ORDER BY visit
+----
+s1
+s2
+s5
+
+# A machine that warms up and then shakes
+
+statement ok
+create table pump_readings(pump varchar, sampled_at timestamp, celsius integer, shake decimal(3,2));
+
+statement ok
+insert into pump_readings values
+    -- level, then four warmer samples and a shake
+    ('p1', '2026-03-04 06:00:00', 62, 0.31),
+    ('p1', '2026-03-04 06:05:00', 62, 0.33),
+    ('p1', '2026-03-04 06:10:00', 62, 0.29),
+    ('p1', '2026-03-04 06:15:00', 66, 0.34),
+    ('p1', '2026-03-04 06:20:00', 71, 0.35),
+    ('p1', '2026-03-04 06:25:00', 77, 0.36),
+    ('p1', '2026-03-04 06:30:00', 84, 0.38),
+    ('p1', '2026-03-04 06:35:00', 89, 0.91),
+    ('p1', '2026-03-04 06:40:00', 83, 0.44),
+    ('p1', '2026-03-04 06:45:00', 79, 0.41),
+    -- warms up and never shakes
+    ('p2', '2026-03-04 06:00:00', 62, 0.31),
+    ('p2', '2026-03-04 06:05:00', 67, 0.32),
+    ('p2', '2026-03-04 06:10:00', 72, 0.33),
+    ('p2', '2026-03-04 06:15:00', 77, 0.34),
+    ('p2', '2026-03-04 06:20:00', 83, 0.35),
+    ('p2', '2026-03-04 06:25:00', 80, 0.36),
+    -- shakes, but only three samples after it started warming
+    ('p3', '2026-03-04 06:00:00', 62, 0.31),
+    ('p3', '2026-03-04 06:05:00', 65, 0.32),
+    ('p3', '2026-03-04 06:10:00', 69, 0.33),
+    ('p3', '2026-03-04 06:15:00', 74, 0.34),
+    ('p3', '2026-03-04 06:20:00', 72, 0.95);
+
+# 06:35 is both warmer than the sample before it and the shake itself; WARM is greedy and claims it,
+# and the match only closes once the quantifier hands it back
+query IIIIII
+SELECT pump, warmed_at, shook_at, from_celsius, to_celsius, peak_shake
+FROM pump_readings MATCH_RECOGNIZE(
+    PARTITION BY pump
+    ORDER BY sampled_at
+    MEASURES
+        FIRST(WARM.sampled_at) AS warmed_at,
+        JOLT.sampled_at AS shook_at,
+        FIRST(WARM.celsius) AS from_celsius,
+        LAST(WARM.celsius) AS to_celsius,
+        JOLT.shake AS peak_shake
+    ONE ROW PER MATCH
+    AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (WARM{4,} JOLT)
+    DEFINE
+        WARM AS celsius > PREV(celsius),
+        JOLT AS shake > PREV(shake) * 1.5
+) ORDER BY pump
+----
+p1	2026-03-04 06:15:00	2026-03-04 06:35:00	66	84	0.91
+
+# the rows the match was built from, each tagged with what claimed it
+query IIIII
+SELECT pump, sampled_at, celsius, shake, tag FROM pump_readings MATCH_RECOGNIZE(
+    PARTITION BY pump ORDER BY sampled_at
+    MEASURES CLASSIFIER() AS tag
+    ALL ROWS PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (WARM{4,} JOLT)
+    DEFINE WARM AS celsius > PREV(celsius), JOLT AS shake > PREV(shake) * 1.5
+) ORDER BY pump, sampled_at
+----
+p1	2026-03-04 06:15:00	66	0.34	WARM
+p1	2026-03-04 06:20:00	71	0.35	WARM
+p1	2026-03-04 06:25:00	77	0.36	WARM
+p1	2026-03-04 06:30:00	84	0.38	WARM
+p1	2026-03-04 06:35:00	89	0.91	JOLT
+
+# p3 has three warmer samples, so loosening the quantifier by one brings it in
+query II
+SELECT pump, shook_at FROM pump_readings MATCH_RECOGNIZE(
+    PARTITION BY pump ORDER BY sampled_at
+    MEASURES JOLT.sampled_at AS shook_at
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (WARM{3,} JOLT)
+    DEFINE WARM AS celsius > PREV(celsius), JOLT AS shake > PREV(shake) * 1.5
+) ORDER BY pump
+----
+p1	2026-03-04 06:35:00
+p3	2026-03-04 06:20:00
+
+# Cutting a stream of hits into visits at its gaps
+
+statement ok
+create table hits(reader varchar, seen_at timestamp);
+
+statement ok
+insert into hits values
+    ('r1', '2026-03-05 08:03:00'),
+    ('r1', '2026-03-05 08:12:00'),
+    ('r1', '2026-03-05 08:27:00'),
+    ('r1', '2026-03-05 09:40:00'),
+    ('r1', '2026-03-05 09:44:00'),
+    ('r1', '2026-03-05 11:30:00'),
+    ('r2', '2026-03-05 07:00:00'),
+    ('r2', '2026-03-05 07:05:00');
+
+# OPEN has no definition and so is true of any row, which is how a pattern gets something to hang a
+# greedy tail on; MATCH_NUMBER counts the visits and restarts at 1 in the next partition, and the
+# lone 11:30 hit shows the tail matching nothing at all
+query IIIII
+SELECT reader, visit_no, opened_at, closed_at, hit_count FROM hits MATCH_RECOGNIZE(
+    PARTITION BY reader
+    ORDER BY seen_at
+    MEASURES
+        MATCH_NUMBER() AS visit_no,
+        FIRST(seen_at) AS opened_at,
+        LAST(seen_at) AS closed_at,
+        count(*) AS hit_count
+    ONE ROW PER MATCH
+    AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (OPEN SAME*)
+    DEFINE SAME AS seen_at <= PREV(seen_at) + INTERVAL 20 MINUTES
+) ORDER BY reader, visit_no
+----
+r1	1	2026-03-05 08:03:00	2026-03-05 08:27:00	3
+r1	2	2026-03-05 09:40:00	2026-03-05 09:44:00	2
+r1	3	2026-03-05 11:30:00	2026-03-05 11:30:00	1
+r2	1	2026-03-05 07:00:00	2026-03-05 07:05:00	2
+
+# Two variables with the same definition stay apart
+
+statement ok
+create table wave_feed(ticker varchar, quoted_at timestamp, last_px decimal(6,2));
+
+statement ok
+insert into wave_feed values
+    ('WWW', '2026-03-06 09:30:00', 90.00),
+    ('WWW', '2026-03-06 09:31:00', 84.00),
+    ('WWW', '2026-03-06 09:32:00', 79.00),
+    ('WWW', '2026-03-06 09:33:00', 86.00),
+    ('WWW', '2026-03-06 09:34:00', 91.00),
+    ('WWW', '2026-03-06 09:35:00', 82.00),
+    ('WWW', '2026-03-06 09:36:00', 76.00),
+    ('WWW', '2026-03-06 09:37:00', 88.00),
+    ('WWW', '2026-03-06 09:38:00', 95.00);
+
+# FALL1 and FALL2 test the same thing, so only their place in the pattern tells them apart
+query IIII
+SELECT ticker, opened_at, closed_at, rows_used FROM wave_feed MATCH_RECOGNIZE(
+    PARTITION BY ticker ORDER BY quoted_at
+    MEASURES FIRST(quoted_at) AS opened_at, LAST(quoted_at) AS closed_at, count(*) AS rows_used
+    ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (OPEN FALL1+ CLIMB1+ FALL2+ CLIMB2+)
+    DEFINE FALL1 AS last_px < PREV(last_px), CLIMB1 AS last_px > PREV(last_px),
+           FALL2 AS last_px < PREV(last_px), CLIMB2 AS last_px > PREV(last_px)
+) ORDER BY opened_at
+----
+WWW	2026-03-06 09:30:00	2026-03-06 09:38:00	9
+
+query III
+SELECT ticker, quoted_at, tag FROM wave_feed MATCH_RECOGNIZE(
+    PARTITION BY ticker ORDER BY quoted_at
+    MEASURES CLASSIFIER() AS tag
+    ALL ROWS PER MATCH AFTER MATCH SKIP PAST LAST ROW
+    PATTERN (OPEN FALL1+ CLIMB1+ FALL2+ CLIMB2+)
+    DEFINE FALL1 AS last_px < PREV(last_px), CLIMB1 AS last_px > PREV(last_px),
+           FALL2 AS last_px < PREV(last_px), CLIMB2 AS last_px > PREV(last_px)
+) ORDER BY quoted_at
+----
+WWW	2026-03-06 09:30:00	OPEN
+WWW	2026-03-06 09:31:00	FALL1
+WWW	2026-03-06 09:32:00	FALL1
+WWW	2026-03-06 09:33:00	CLIMB1
+WWW	2026-03-06 09:34:00	CLIMB1
+WWW	2026-03-06 09:35:00	FALL2
+WWW	2026-03-06 09:36:00	FALL2
+WWW	2026-03-06 09:37:00	CLIMB2
+WWW	2026-03-06 09:38:00	CLIMB2

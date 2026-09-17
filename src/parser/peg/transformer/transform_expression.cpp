@@ -188,8 +188,10 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 		filter_expr = std::move(*filter_clause);
 	}
 	if (function_children.size() == 1 && ExpressionIsEmptyStar(*function_children[0].GetExpressionMutable()) &&
-	    !distinct && order_modifier->orders.empty()) {
-		// COUNT(*) gets converted into COUNT()
+	    !distinct && order_modifier->orders.empty() &&
+	    function_children[0].GetExpression().Cast<StarExpression>().RelationName().empty()) {
+		// COUNT(*) gets converted into COUNT(). A qualified star keeps its argument: COUNT(X.*) names
+		// the rows of a MATCH_RECOGNIZE pattern variable rather than all of them.
 		function_children.clear();
 	}
 	auto lowercase_name = StringUtil::Lower(qualified_function.Name().GetIdentifierName());

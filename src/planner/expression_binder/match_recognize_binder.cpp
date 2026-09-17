@@ -8,6 +8,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -445,6 +446,16 @@ static void ScopeToVariable(unique_ptr<ParsedExpression> &expr, const case_insen
 		}
 		return;
 	}
+	// COUNT(X.*) counts the rows X matched, so the variable scopes the star the way it scopes a column
+	if (expr->GetExpressionClass() == ExpressionClass::STAR) {
+		auto &star = expr->Cast<StarExpression>();
+		if (!star.IsColumns() && !star.RelationName().empty() &&
+		    symbols.find(star.RelationName().GetIdentifierName()) != symbols.end()) {
+			scope.insert(star.RelationName().GetIdentifierName());
+			star.RelationNameMutable() = Identifier();
+		}
+		return;
+	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { ScopeToVariable(child, symbols, scope, lambda_parameters); });
 }
@@ -553,6 +564,18 @@ BindResult MatchRecognizeMeasureBinder::BindOverMatch(FunctionExpression &expr, 
 		throw BinderException("An aggregate in MEASURES reads the rows of one pattern variable, so \"%s\" "
 		                      "cannot also read those of \"%s\"",
 		                      *scope.begin(), *std::next(scope.begin()));
+	}
+	// COUNT(X.*) is COUNT(*) once the variable has been lifted off the star, and the filter below is
+	// what narrows it to the rows X matched. DISTINCT keeps its star for the same reason the parser
+	// does: COUNT(DISTINCT *) is not a count of rows.
+	auto &arguments = expr.GetArgumentsMutable();
+	if (!expr.Distinct() && arguments.size() == 1 &&
+	    arguments[0].GetExpression().GetExpressionClass() == ExpressionClass::STAR) {
+		auto &star = arguments[0].GetExpression().Cast<StarExpression>();
+		if (!star.IsColumns() && star.RelationName().empty() && star.ExcludeList().empty() &&
+		    star.ReplaceList().empty()) {
+			arguments.clear();
+		}
 	}
 
 	auto &qualified = expr.GetQualifiedName();
