@@ -379,10 +379,10 @@ void ResultWrapperV2::Wait() {
 namespace {
 
 //! The blocking loop behind both fetches: step until the result produces something or the stream ends.
-template <class OUT, class STEP>
-unique_ptr<OUT> FetchBlocking(ResultWrapperV2 &wrapper, STEP step) {
+template <class OUTPUT, class STEP>
+unique_ptr<OUTPUT> FetchBlocking(ResultWrapperV2 &wrapper, STEP step) {
 	while (true) {
-		unique_ptr<OUT> out;
+		unique_ptr<OUTPUT> out;
 		switch (step(out)) {
 		case DUCKDB_V2_RESULT_STEP_STATUS_CHUNK:
 			return out;
