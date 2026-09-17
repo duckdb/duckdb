@@ -427,4 +427,3 @@ TEST_CASE("Test buffer pool eviction: SetLimit evicts object cache", "[storage][
 	}
 	REQUIRE(evicted_entries == vector<idx_t> {0, 1});
 }
-
