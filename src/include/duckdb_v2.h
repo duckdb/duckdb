@@ -392,9 +392,8 @@ typedef void (*duckdb_v2_opaque_destroy_fn)(void *data);
  * dereferenced when `len` is 0. Not to be confused with `bytes`, the transparent 16-byte *storage* format for a
  * variable-size value in a vector.
  *
- * Text inputs, such as VARCHAR values and names, must contain valid UTF-8 unless the function documents otherwise. The
- * caller is responsible for ensuring this; API functions do not necessarily validate the input. Binary inputs, such as
- * BLOB values, do not require valid UTF-8.
+ * Text inputs, such as VARCHAR values and names, must contain valid UTF-8. The caller is responsible for ensuring this;
+ * API functions do not necessarily validate the input. Binary inputs, such as BLOB values, do not require valid UTF-8.
  */
 struct duckdb_v2_str {
 	const char *ptr;
@@ -3881,8 +3880,13 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_bignum_encode(const uint8_t *in_data, idx
                                                      duckdb_v2_error_info_handle *err);
 
 /*!
- * Validates all text.len bytes as UTF-8, including bytes after embedded NUL characters. Returns ERROR_INPUT_INVALID for
- * malformed UTF-8 or a NULL pointer with a nonzero length.
+ * Validates all text.len bytes as UTF-8, including bytes after embedded NUL characters.
+ *
+ * Returns ERROR_INPUT_INVALID if either:
+ * - text.ptr is NULL and text.len is nonzero.
+ * - The input contains malformed UTF-8.
+ *
+ * A NULL pointer with zero length is valid.
  *
  * history:
  * - stable: v2.0.0

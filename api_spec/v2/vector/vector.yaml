@@ -892,7 +892,12 @@ functions:
       - [ "stable", "v2.0.0", "2026-09-17" ]
     description: |
       Validates all text.len bytes as UTF-8, including bytes after embedded NUL characters.
-      Returns ERROR_INPUT_INVALID for malformed UTF-8 or a NULL pointer with a nonzero length.
+
+      Returns ERROR_INPUT_INVALID if either:
+      - text.ptr is NULL and text.len is nonzero.
+      - The input contains malformed UTF-8.
+
+      A NULL pointer with zero length is valid.
     parameters:
       text:
         type: str
