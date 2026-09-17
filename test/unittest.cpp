@@ -235,7 +235,9 @@ static bool SetThreadStackSize(size_t requested_stack_size, string &error) {
 
 static bool ConfigureThreadStackSize(int argc, char *argv[], string &error) {
 	bool stack_size_specified = false;
+#ifdef DUCKDB_UNITTEST_HAS_DEFAULT_PTHREAD_ATTRIBUTES
 	size_t requested_stack_size = 0;
+#endif
 	for (int i = 1; i < argc; i++) {
 		if (string(argv[i]) != "--thread-stack-size") {
 			continue;
@@ -253,7 +255,9 @@ static bool ConfigureThreadStackSize(int argc, char *argv[], string &error) {
 			error = "--thread-stack-size expected a positive integer size in bytes";
 			return false;
 		}
+#ifdef DUCKDB_UNITTEST_HAS_DEFAULT_PTHREAD_ATTRIBUTES
 		requested_stack_size = parsed_stack_size;
+#endif
 		stack_size_specified = true;
 	}
 	if (!stack_size_specified) {
