@@ -72,8 +72,8 @@ public:
 #ifdef DEBUG
 					D_ASSERT(Checksum(pin.Ptr(), block->nr_bytes) == block->checksum);
 #endif
-					stats.hit_count++;
-					stats.hit_bytes += block->nr_bytes;
+					stats.hit_count.fetch_add(1, std::memory_order_relaxed);
+					stats.hit_bytes.fetch_add(block->nr_bytes, std::memory_order_relaxed);
 					result_pin = std::move(pin);
 					return;
 				}
@@ -101,10 +101,10 @@ public:
 					auto buf =
 					    ExternalFileCache::AllocateCacheBuffer(buffer_manager, caching_file_handle.GetPath(), to_read);
 					caching_file_handle.ReadAndRecord(context, buf.GetDataMutable(), to_read, offset);
-					stats.miss_count++;
-					stats.miss_bytes += to_read;
+					stats.miss_count.fetch_add(1, std::memory_order_relaxed);
+					stats.miss_bytes.fetch_add(to_read, std::memory_order_relaxed);
 					if (was_evicted) {
-						stats.eviction_refetch_count++;
+						stats.eviction_refetch_count.fetch_add(1, std::memory_order_relaxed);
 					}
 					const bool share_block = !caching_file_handle.IsCacheReuseProhibited();
 
@@ -363,7 +363,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	}
 
 	auto current_cached_file = EnsureCachedFileCurrent();
-	external_file_cache.GetStats().requested_bytes += nr_bytes;
+	external_file_cache.GetStats().requested_bytes.fetch_add(nr_bytes, std::memory_order_relaxed);
 	const idx_t block_size = external_file_cache.GetCacheBlockSize(current_cached_file->path);
 	const idx_t first_block = location / block_size;
 	const idx_t last_block = (location + nr_bytes - 1) / block_size;
@@ -406,7 +406,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		remaining -= length;
 		cache_block_bytes += block_valid_bytes;
 	}
-	external_file_cache.GetStats().cache_block_bytes += cache_block_bytes;
+	external_file_cache.GetStats().cache_block_bytes.fetch_add(cache_block_bytes, std::memory_order_relaxed);
 
 	ReconcileCacheAfterRead(*current_cached_file, first_block, blocks);
 

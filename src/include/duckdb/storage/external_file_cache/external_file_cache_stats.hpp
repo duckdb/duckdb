@@ -45,8 +45,13 @@ struct ExternalFileCacheStats {
 	atomic<idx_t> eviction_refetch_count {0};
 
 	ExternalFileCacheStatsInformation GetSnapshot() const {
-		return {requested_bytes, cache_block_bytes,     hit_count, hit_bytes, miss_count,
-		        miss_bytes,      eviction_refetch_count};
+		return {requested_bytes.load(std::memory_order_relaxed),
+		        cache_block_bytes.load(std::memory_order_relaxed),
+		        hit_count.load(std::memory_order_relaxed),
+		        hit_bytes.load(std::memory_order_relaxed),
+		        miss_count.load(std::memory_order_relaxed),
+		        miss_bytes.load(std::memory_order_relaxed),
+		        eviction_refetch_count.load(std::memory_order_relaxed)};
 	}
 };
 
