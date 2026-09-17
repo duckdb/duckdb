@@ -19,31 +19,37 @@ create temp table stats_cold as select * from duckdb_external_file_cache_stats()
 statement ok
 select * from '{TEST_DIR}/test_cache_stats.parquet';
 
-# Cache block bytes expose read amplification.
-query IIIII
-select s.requested_bytes > b.requested_bytes,
-       s.cache_block_bytes > b.cache_block_bytes,
-       s.cache_block_bytes - b.cache_block_bytes >= s.requested_bytes - b.requested_bytes,
+# Cold read performs underlying I/O.
+query III
+select s.read_request_bytes > b.read_request_bytes,
        s.miss_count > b.miss_count,
-       s.miss_bytes > b.miss_bytes
+       s.actual_io_bytes > b.actual_io_bytes
 from duckdb_external_file_cache_stats() s, stats_cold b;
 ----
-true	true	true	true	true
+true	true	true
 
 statement ok
 create temp table stats_warm as select * from duckdb_external_file_cache_stats();
 
-# Warm read: served from the cache, no new misses.
 statement ok
 select * from '{TEST_DIR}/test_cache_stats.parquet';
 
-query IIIIII
-select s.requested_bytes > b.requested_bytes,
-       s.cache_block_bytes > b.cache_block_bytes,
-       s.cache_block_bytes - b.cache_block_bytes >= s.requested_bytes - b.requested_bytes,
-       s.hit_count > b.hit_count,
-       s.hit_bytes > b.hit_bytes,
-       s.miss_bytes = b.miss_bytes
-from duckdb_external_file_cache_stats() s, stats_warm b;
+# Warm byte hit rate is 100%; cumulative byte and block hit rates are at least 50%.
+query IIII
+with rates as (
+    select s.read_request_bytes - w.read_request_bytes warm_read_bytes,
+           s.cache_hit_request_bytes - w.cache_hit_request_bytes warm_hit_bytes,
+           s.read_request_bytes - c.read_request_bytes total_read_bytes,
+           s.cache_hit_request_bytes - c.cache_hit_request_bytes total_hit_bytes,
+           s.hit_count - c.hit_count total_hits,
+           s.miss_count - c.miss_count total_misses,
+           s.actual_io_bytes = w.actual_io_bytes no_warm_io
+    from duckdb_external_file_cache_stats() s, stats_cold c, stats_warm w
+)
+select (100 * warm_hit_bytes / warm_read_bytes)::INTEGER,
+       2 * total_hit_bytes >= total_read_bytes,
+       2 * total_hits >= total_hits + total_misses,
+       no_warm_io
+from rates;
 ----
-true	true	true	true	true	true
+100	true	true	true

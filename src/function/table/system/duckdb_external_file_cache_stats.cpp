@@ -14,22 +14,19 @@ struct DuckDBExternalFileCacheStatsData : public GlobalTableFunctionState {
 static unique_ptr<FunctionData> DuckDBExternalFileCacheStatsBind(ClientContext &context, TableFunctionBindInput &input,
                                                                  vector<LogicalType> &return_types,
                                                                  vector<Identifier> &names) {
-	names.emplace_back("requested_bytes");
+	names.emplace_back("read_request_bytes");
 	return_types.emplace_back(LogicalType::BIGINT);
 
-	names.emplace_back("cache_block_bytes");
+	names.emplace_back("cache_hit_request_bytes");
+	return_types.emplace_back(LogicalType::BIGINT);
+
+	names.emplace_back("actual_io_bytes");
 	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("hit_count");
 	return_types.emplace_back(LogicalType::BIGINT);
 
-	names.emplace_back("hit_bytes");
-	return_types.emplace_back(LogicalType::BIGINT);
-
 	names.emplace_back("miss_count");
-	return_types.emplace_back(LogicalType::BIGINT);
-
-	names.emplace_back("miss_bytes");
 	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("eviction_refetch_count");
@@ -52,13 +49,12 @@ void DuckDBExternalFileCacheStatsFunction(ClientContext &context, TableFunctionI
 	}
 	data.done = true;
 	auto &stats = data.stats;
-	output.data[0].Append(Value::BIGINT(NumericCast<int64_t>(stats.requested_bytes)));
-	output.data[1].Append(Value::BIGINT(NumericCast<int64_t>(stats.cache_block_bytes)));
-	output.data[2].Append(Value::BIGINT(NumericCast<int64_t>(stats.hit_count)));
-	output.data[3].Append(Value::BIGINT(NumericCast<int64_t>(stats.hit_bytes)));
+	output.data[0].Append(Value::BIGINT(NumericCast<int64_t>(stats.read_request_bytes)));
+	output.data[1].Append(Value::BIGINT(NumericCast<int64_t>(stats.cache_hit_request_bytes)));
+	output.data[2].Append(Value::BIGINT(NumericCast<int64_t>(stats.actual_io_bytes)));
+	output.data[3].Append(Value::BIGINT(NumericCast<int64_t>(stats.hit_count)));
 	output.data[4].Append(Value::BIGINT(NumericCast<int64_t>(stats.miss_count)));
-	output.data[5].Append(Value::BIGINT(NumericCast<int64_t>(stats.miss_bytes)));
-	output.data[6].Append(Value::BIGINT(NumericCast<int64_t>(stats.eviction_refetch_count)));
+	output.data[5].Append(Value::BIGINT(NumericCast<int64_t>(stats.eviction_refetch_count)));
 }
 
 void DuckDBExternalFileCacheStatsFun::RegisterFunction(BuiltinFunctions &set) {

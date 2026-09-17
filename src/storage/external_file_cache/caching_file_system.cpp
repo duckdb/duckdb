@@ -54,10 +54,10 @@ class FetchBlockTask : public BaseExecutorTask {
 public:
 	FetchBlockTask(CachingFileHandle &caching_file_handle_p, TaskExecutor &executor, QueryContext context_p,
 	               BufferManager &buffer_manager_p, ExternalFileCacheStats &stats_p, shared_ptr<CacheBlock> block_p,
-	               idx_t block_idx_p, idx_t block_size_p, BufferHandle &result_pin_p)
+	               idx_t block_idx_p, idx_t block_size_p, idx_t request_bytes_p, BufferHandle &result_pin_p)
 	    : BaseExecutorTask(executor), caching_file_handle(caching_file_handle_p), context(context_p),
 	      buffer_manager(buffer_manager_p), stats(stats_p), block(std::move(block_p)), block_idx(block_idx_p),
-	      block_size(block_size_p), result_pin(result_pin_p) {
+	      block_size(block_size_p), request_bytes(request_bytes_p), result_pin(result_pin_p) {
 	}
 
 	void ExecuteTask() override {
@@ -73,7 +73,7 @@ public:
 					D_ASSERT(Checksum(pin.Ptr(), block->nr_bytes) == block->checksum);
 #endif
 					stats.hit_count.fetch_add(1, std::memory_order_relaxed);
-					stats.hit_bytes.fetch_add(block->nr_bytes, std::memory_order_relaxed);
+					stats.cache_hit_request_bytes.fetch_add(request_bytes, std::memory_order_relaxed);
 					result_pin = std::move(pin);
 					return;
 				}
@@ -102,7 +102,7 @@ public:
 					    ExternalFileCache::AllocateCacheBuffer(buffer_manager, caching_file_handle.GetPath(), to_read);
 					caching_file_handle.ReadAndRecord(context, buf.GetDataMutable(), to_read, offset);
 					stats.miss_count.fetch_add(1, std::memory_order_relaxed);
-					stats.miss_bytes.fetch_add(to_read, std::memory_order_relaxed);
+					stats.actual_io_bytes.fetch_add(to_read, std::memory_order_relaxed);
 					if (was_evicted) {
 						stats.eviction_refetch_count.fetch_add(1, std::memory_order_relaxed);
 					}
@@ -154,6 +154,7 @@ private:
 	shared_ptr<CacheBlock> block;
 	idx_t block_idx;
 	idx_t block_size;
+	idx_t request_bytes;
 	BufferHandle &result_pin;
 };
 
@@ -363,7 +364,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	}
 
 	auto current_cached_file = EnsureCachedFileCurrent();
-	external_file_cache.GetStats().requested_bytes.fetch_add(nr_bytes, std::memory_order_relaxed);
+	external_file_cache.GetStats().read_request_bytes.fetch_add(nr_bytes, std::memory_order_relaxed);
 	const idx_t block_size = external_file_cache.GetCacheBlockSize(current_cached_file->path);
 	const idx_t first_block = location / block_size;
 	const idx_t last_block = (location + nr_bytes - 1) / block_size;
@@ -378,17 +379,21 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	auto &scheduler = TaskScheduler::GetScheduler(caching_file_system.db);
 	TaskExecutor executor(scheduler, TaskSchedulerType::ASYNC);
 
+	idx_t remaining_request_bytes = nr_bytes;
 	for (idx_t idx = 0; idx < num_blocks; idx++) {
+		const idx_t offset_in_block = idx == 0 ? location - first_block * block_size : 0;
+		const idx_t request_bytes = MinValue(block_size - offset_in_block, remaining_request_bytes);
+		remaining_request_bytes -= request_bytes;
 		executor.ScheduleTask(make_uniq<FetchBlockTask>(
 		    *this, executor, context, external_file_cache.GetBufferManager(), external_file_cache.GetStats(),
-		    blocks[idx], first_block + idx, block_size, pins[idx]));
+		    blocks[idx], first_block + idx, block_size, request_bytes, pins[idx]));
 	}
+	D_ASSERT(remaining_request_bytes == 0);
 	executor.WorkOnTasks();
 
 	// Build the handle group.
 	vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
 	mem_handles.reserve(num_blocks);
-	idx_t cache_block_bytes = 0;
 	idx_t remaining = nr_bytes;
 	for (idx_t idx = 0; idx < num_blocks; idx++) {
 		const idx_t block_start = (first_block + idx) * block_size;
@@ -404,9 +409,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		const idx_t length = MinValue(available_in_block, remaining);
 		mem_handles.push_back({std::move(pins[idx]), offset_in_block, length});
 		remaining -= length;
-		cache_block_bytes += block_valid_bytes;
 	}
-	external_file_cache.GetStats().cache_block_bytes.fetch_add(cache_block_bytes, std::memory_order_relaxed);
 
 	ReconcileCacheAfterRead(*current_cached_file, first_block, blocks);
 
