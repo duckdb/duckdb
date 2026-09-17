@@ -51,7 +51,7 @@ SELECT a,__mark_join_marker FROM residual_probe JOIN BY (TYPE MARK) residual_bui
 3	false
 NULL	NULL
 
-# Equality and its residual retain the complete MARK predicate truth.
+# Protect the existing hash result for this equality-backed residual.
 query II rowsort
 SELECT a,__mark_join_marker FROM residual_probe JOIN BY (TYPE MARK) residual_build ON a=1 AND a+b=2;
 ----
@@ -88,7 +88,8 @@ SELECT count(*) FROM (SELECT __mark_join_marker m FROM range(2050) l(a) JOIN BY 
 ----
 1
 
-# Residuals run only for comparison candidates.
+# Nested-loop implementation protection: evaluate residuals only for comparison candidates.
+# This does not require other join algorithms to use the same evaluation schedule.
 statement ok
 CREATE OR REPLACE SEQUENCE residual_seq;
 

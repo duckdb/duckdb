@@ -174,24 +174,6 @@ CreateRecursiveKeyProbeNormalizers(ClientContext &context, const PhysicalRecursi
 	return normalizers;
 }
 
-static bool RequiresNestedLoopMark(const LogicalComparisonJoin &op) {
-	if (op.join_type != JoinType::MARK) {
-		return false;
-	}
-	idx_t comparison_count = 0;
-	for (auto &condition : op.conditions) {
-		if (!condition.IsComparison()) {
-			continue;
-		}
-		comparison_count++;
-	}
-	if (!op.mark_types.empty() && comparison_count == op.mark_types.size() + 1) {
-		// Correlated MARK joins require the hash join's per-group counts.
-		return false;
-	}
-	return op.HasArbitraryConditions();
-}
-
 PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoin &op) {
 	// now visit the children
 	D_ASSERT(op.children.size() == 2);
@@ -233,10 +215,6 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	if (op.conditions.empty()) {
 		// no conditions: insert a cross product
 		return Make<PhysicalCrossProduct>(op.types, left, right, op.estimated_cardinality);
-	}
-	if (RequiresNestedLoopMark(op)) {
-		return Make<PhysicalNestedLoopJoin>(op, left, right, std::move(op.conditions), op.join_type,
-		                                    op.estimated_cardinality, std::move(op.filter_pushdown));
 	}
 
 	idx_t has_range = 0;
