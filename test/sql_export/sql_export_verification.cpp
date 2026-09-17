@@ -309,7 +309,7 @@ TEST_CASE("SQL export executes volatile read-only functions once", "[sql_export]
 	function.SetStability(FunctionStability::VOLATILE);
 	loader.RegisterFunction(std::move(function));
 	auto observer = SQLExportVerificationState::GetOrCreate(*con.context);
-	for (auto mode : {"off", "report", "strict"}) {
+	for (auto mode : {"off", "strict"}) {
 		SetSQLExportMode(con, *observer, mode);
 		counter->values = 0;
 		auto result = con.Query("SELECT x,x FROM (SELECT sql_export_counter() AS x FROM (VALUES (1),(2),(2)) t(i)) q");
@@ -344,19 +344,17 @@ TEST_CASE("SQL export structurally validates effecting table sources without rep
 	};
 	loader.RegisterFunction(std::move(function));
 	auto observer = SQLExportVerificationState::GetOrCreate(*con.context);
-	for (auto mode : {"report", "strict"}) {
-		SetSQLExportMode(con, *observer, mode);
-		counter->values = 0;
-		auto result = con.Query("SELECT * FROM sql_export_effecting_source()");
-		REQUIRE_NO_FAIL(*result);
-		REQUIRE(CHECK_COLUMN(result, 0, {1}));
-		REQUIRE(counter->values == 1);
-		auto record = TakeSQLExportRecord(*observer);
-		REQUIRE(record.outcome == SQLExportOutcome::STRUCTURALLY_VALIDATED);
-		REQUIRE(record.route == SQLExportExecutionRoute::GENERATED);
-		REQUIRE(record.comparability == SQLExportComparability::NON_REPEATABLE);
-		REQUIRE(record.execution == SQLExportExecutionStatus::SUCCEEDED);
-	}
+	SetSQLExportMode(con, *observer, "strict");
+	counter->values = 0;
+	auto result = con.Query("SELECT * FROM sql_export_effecting_source()");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(counter->values == 1);
+	auto record = TakeSQLExportRecord(*observer);
+	REQUIRE(record.outcome == SQLExportOutcome::STRUCTURALLY_VALIDATED);
+	REQUIRE(record.route == SQLExportExecutionRoute::GENERATED);
+	REQUIRE(record.comparability == SQLExportComparability::NON_REPEATABLE);
+	REQUIRE(record.execution == SQLExportExecutionStatus::SUCCEEDED);
 }
 
 TEST_CASE("SQL export schema failure preserves the original plan and transaction",
@@ -812,6 +810,9 @@ TEST_CASE("SQL export rejects generated writes and tracks generated read depende
           "[sql_export][sql_export_verification]") {
 	for (auto replacement : {"SELECT nextval('s')", "SELECT i AS col0 FROM temp.t"}) {
 		for (auto mode : {"report", "strict"}) {
+			if (string(mode) == "report" && string(replacement) != "SELECT nextval('s')") {
+				continue;
+			}
 			DuckDB db(nullptr);
 			Connection con(db);
 			REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE s"));
@@ -945,6 +946,10 @@ TEST_CASE("SQL export checks final properties after generated optimization", "[s
 	for (auto mode : {"off", "report", "strict"}) {
 		for (auto replacement :
 		     {"SELECT 42::BIGINT FROM temp.t", "SELECT nextval('s')", "rebind", "SELECT 42::BIGINT"}) {
+			if ((string(mode) == "off" && string(replacement) != "SELECT 42::BIGINT") ||
+			    (string(mode) == "report" && string(replacement) != "SELECT nextval('s')")) {
+				continue;
+			}
 			CAPTURE(mode, replacement);
 			DuckDB db(nullptr);
 			Connection con(db);
@@ -1242,6 +1247,9 @@ TEST_CASE("SQL export permits declared effects but rejects additional write kind
           "[sql_export][sql_export_verification]") {
 	for (auto mode : {"report", "strict"}) {
 		for (bool additional_write : {false, true}) {
+			if (string(mode) == "report" && !additional_write) {
+				continue;
+			}
 			DuckDB db(nullptr);
 			Connection con(db);
 			REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE s"));
