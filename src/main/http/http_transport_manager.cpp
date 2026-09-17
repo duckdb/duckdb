@@ -258,8 +258,13 @@ bool HTTPTransportManager::AdvanceConnectionEpoch(uint64_t &connection_epoch, bo
 	return false;
 }
 
-void HTTPTransportManager::Initialize(idx_t system_concurrency, idx_t io_concurrency) {
-	auto new_capacity = CalculateCapacity(system_concurrency, GetFileDescriptorLimit(), io_concurrency);
+void HTTPTransportManager::Initialize(const DBConfig &config) {
+	auto new_capacity = config.options.http_client_pool_capacity == DConstants::INVALID_INDEX
+	                        ? AutomaticCapacity(config)
+	                        : config.options.http_client_pool_capacity;
+	if (new_capacity == 0) {
+		throw InvalidInputException("The HTTP client pool capacity must be at least 1");
+	}
 	HTTPClientPool new_clients(new_capacity);
 
 	annotated_lock_guard<annotated_mutex> guard(lock);
@@ -271,6 +276,36 @@ void HTTPTransportManager::Initialize(idx_t system_concurrency, idx_t io_concurr
 	}
 	clients = std::move(new_clients);
 	initialized = true;
+}
+
+idx_t HTTPTransportManager::AutomaticCapacity(const DBConfig &config) {
+	auto &fs = *config.file_system;
+	auto io_concurrency = config.options.async_threads == DConstants::INVALID_INDEX
+	                          ? DBConfig::GetSystemMaxAsyncThreads(fs)
+	                          : config.options.async_threads;
+	return CalculateCapacity(DBConfig::GetSystemMaxThreads(fs), GetFileDescriptorLimit(), io_concurrency);
+}
+
+idx_t HTTPTransportManager::GetCapacity() const {
+	annotated_lock_guard<annotated_mutex> guard(lock);
+	return clients.GetCapacity();
+}
+
+void HTTPTransportManager::SetCapacity(idx_t capacity) {
+	if (capacity == 0) {
+		throw InvalidInputException("The HTTP client pool capacity must be at least 1");
+	}
+	{
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		if (!initialized) {
+			throw InternalException("HTTP transport manager capacity was set before initialization");
+		}
+		if (clients.IsClosed()) {
+			return;
+		}
+		clients.SetCapacity(capacity);
+	}
+	DisposeIdle(IdleFilter::EXCESS);
 }
 
 HTTPTransportManager::SessionReservation HTTPTransportManager::ReserveSession() {
@@ -472,8 +507,9 @@ unique_ptr<HTTPResponse> HTTPTransportManager::PerformRequest(Session &session, 
 }
 
 bool HTTPTransportManager::CanReturnClientLocked(const Lease &lease, bool cleanup_succeeded) const {
-	if (!cleanup_succeeded || !lease.reusable || !lease.client || clients.IsClosed() || !lease.state ||
-	    !lease.bucket.IsValid() || !IsStateValidLocked(*lease.state)) {
+	if (!cleanup_succeeded || !lease.reusable || !lease.client || clients.IsClosed() ||
+	    clients.ReservedClients() > clients.GetCapacity() || !lease.state || !lease.bucket.IsValid() ||
+	    !IsStateValidLocked(*lease.state)) {
 		return false;
 	}
 	auto &state = *lease.state;

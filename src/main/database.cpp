@@ -515,11 +515,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	} else {
 		config.file_system = make_uniq<VirtualFileSystem>(FileSystem::CreateLocal());
 	}
-	// the async pool is not sized yet at this point, resolve the automatic value the same way the scheduler will
-	auto io_concurrency = config.options.async_threads == DConstants::INVALID_INDEX
-	                          ? config.GetSystemMaxAsyncThreads(*config.file_system)
-	                          : config.options.async_threads;
-	config.http_transport_manager->Initialize(DBConfig::GetSystemMaxThreads(*config.file_system), io_concurrency);
+	config.http_transport_manager->Initialize(config);
 	if (database_path && !Settings::Get<EnableExternalAccessSetting>(*this)) {
 		config.AddAllowedPath(database_path);
 		config.AddAllowedPath(database_path + string(".wal"));
