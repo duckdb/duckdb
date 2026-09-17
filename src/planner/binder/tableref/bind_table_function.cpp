@@ -314,6 +314,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 
 	auto get = make_uniq<LogicalGet>(bind_index, table_function, std::move(bind_data), return_types, return_names,
 	                                 virtual_columns);
+	get->bind_info = ref.bind_info;
 	get->parameters = parameters;
 	get->named_parameters = named_parameters;
 	get->input_table_types = input_table_types;

@@ -395,14 +395,27 @@ int GetNext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
 	return DuckDBSuccess;
 }
 
-duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> FactoryGetNext(uintptr_t stream_factory_ptr,
-                                                                   duckdb::ArrowStreamParameters &parameters) {
-	auto stream = reinterpret_cast<ArrowArrayStream *>(stream_factory_ptr);
-	auto ret = duckdb::make_uniq<duckdb::ArrowArrayStreamWrapper>();
-	ret->arrow_array_stream = *stream;
-	ret->arrow_array_stream.release = EmptyStreamRelease;
-	return ret;
-}
+class CArrowScanFactory : public duckdb::ArrowScanFactory {
+public:
+	explicit CArrowScanFactory(ArrowArrayStream &stream_p) : stream(stream_p) {
+	}
+
+	void GetSchema(ArrowSchema &schema) override {
+		FactoryGetSchema(&stream.get(), schema);
+	}
+
+	duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper>
+	ProduceStream(duckdb::ArrowStreamParameters &parameters) override {
+		auto result = duckdb::make_uniq<duckdb::ArrowArrayStreamWrapper>();
+		result->arrow_array_stream = stream.get();
+		result->arrow_array_stream.release = EmptyStreamRelease;
+		return result;
+	}
+
+private:
+	//! The caller retains ownership of the stream and its arrays.
+	duckdb::reference<ArrowArrayStream> stream;
+};
 
 // LCOV_EXCL_START
 // This function is never be called, because it's used to construct a stream wrapping around a caller-supplied
@@ -424,10 +437,11 @@ void Release(struct ArrowArrayStream *stream) {
 duckdb_state Ingest(duckdb_connection connection, const char *table_name, struct ArrowArrayStream *input) {
 	try {
 		auto cconn = reinterpret_cast<duckdb::Connection *>(connection);
-		cconn
-		    ->TableFunction("arrow_scan", {duckdb::Value::POINTER((uintptr_t)input),
-		                                   duckdb::Value::POINTER((uintptr_t)FactoryGetNext),
-		                                   duckdb::Value::POINTER((uintptr_t)FactoryGetSchema)})
+		if (!input) {
+			return DuckDBError;
+		}
+		auto factory = duckdb::make_shared_ptr<CArrowScanFactory>(*input);
+		cconn->TableFunction("arrow_scan", {}, {}, std::move(factory))
 		    ->CreateView(duckdb::Identifier(table_name), true, false);
 	} catch (...) { // LCOV_EXCL_START
 		// Tried covering this in tests, but it proved harder than expected. At the time of writing:

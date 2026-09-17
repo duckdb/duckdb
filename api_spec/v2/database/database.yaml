@@ -22,8 +22,7 @@ functions:
       accepted and kept for a later extension to consume. Pass
       `options=nullptr` and `option_count=0` to open with defaults.
 
-      LOCAL_ONLY options are rejected at this scope, as they are by
-      database_option_set.
+      LOCAL_ONLY options are rejected at this scope.
     role: constructor
     belongs_to: database
     parameters:

@@ -784,9 +784,10 @@ static bool TryFromShreddedCast(Vector &variant_vec, Vector &result) {
 	if (ShreddedVector::IsFullyShredded(variant_vec) && shredded_vec.GetType().id() == LogicalTypeId::STRUCT) {
 		// it is! check if the type of the typed_value entry matches
 		auto &shredded_entries = StructVector::GetEntries(shredded_vec);
-		if (shredded_entries[1].GetType() == result.GetType()) {
+		auto &typed_value = shredded_entries[VariantStats::TYPED_VALUE_INDEX];
+		if (typed_value.GetType() == result.GetType()) {
 			// the typed_value matches - directly reference it
-			result.Reference(shredded_entries[1]);
+			result.Reference(typed_value);
 			return true;
 		}
 	}

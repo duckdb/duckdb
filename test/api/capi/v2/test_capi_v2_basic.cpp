@@ -12,7 +12,7 @@ TEST_CASE("V2: env create / destroy", "[capi_v2][env]") {
 	idx_t count = 99;
 	REQUIRE(duckdb_v2_environment_database_count(env, &count, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(count == 0);
-	REQUIRE(duckdb_v2_destroy_environment(&env) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_environment_destroy(&env) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(env == nullptr);
 }
 
@@ -34,7 +34,7 @@ TEST_CASE("V2: open / close in-memory database", "[capi_v2][db]") {
 	duckdb_v2_environment_database_count(env, &count, nullptr);
 	REQUIRE(count == 0);
 
-	duckdb_v2_destroy_environment(&env);
+	duckdb_v2_environment_destroy(&env);
 }
 
 TEST_CASE("V2: destroy_environment refuses while databases are open", "[capi_v2][env]") {
@@ -44,11 +44,11 @@ TEST_CASE("V2: destroy_environment refuses while databases are open", "[capi_v2]
 	duckdb_v2_database_handle db = nullptr;
 	duckdb_v2_open(env, duckdb_v2_str {nullptr, 0}, nullptr, 0, &db, nullptr);
 
-	REQUIRE(duckdb_v2_destroy_environment(&env) == DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+	REQUIRE(duckdb_v2_environment_destroy(&env) == DUCKDB_V2_ERROR_RESOURCE_IN_USE);
 	REQUIRE(env != nullptr); // refusal leaves env intact
 
 	duckdb_v2_close(&db);
-	REQUIRE(duckdb_v2_destroy_environment(&env) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_environment_destroy(&env) == DUCKDB_V2_ERROR_NONE);
 }
 
 TEST_CASE("V2: open with pre-open option handles", "[capi_v2][db][option]") {
@@ -64,7 +64,7 @@ TEST_CASE("V2: open with pre-open option handles", "[capi_v2][db][option]") {
 
 	duckdb_v2_close(&db);
 	duckdb_v2_option_destroy(&opt);
-	duckdb_v2_destroy_environment(&env);
+	duckdb_v2_environment_destroy(&env);
 }
 
 TEST_CASE("V2: file-based open rejects second open of same file", "[capi_v2][db]") {
@@ -93,7 +93,7 @@ TEST_CASE("V2: file-based open rejects second open of same file", "[capi_v2][db]
 	REQUIRE(duckdb_v2_open(env, Convert(path), nullptr, 0, &db_b, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_close(&db_b);
 
-	duckdb_v2_destroy_environment(&env);
+	duckdb_v2_environment_destroy(&env);
 	duckdb::DeleteDatabase(path);
 }
 
@@ -111,7 +111,7 @@ TEST_CASE("V2: connect / disconnect", "[capi_v2][conn]") {
 	REQUIRE(conn == nullptr);
 
 	duckdb_v2_close(&db);
-	duckdb_v2_destroy_environment(&env);
+	duckdb_v2_environment_destroy(&env);
 }
 
 TEST_CASE("V2: null-arg validation on env / db / conn entrypoints", "[capi_v2][env][db][conn]") {
@@ -119,7 +119,7 @@ TEST_CASE("V2: null-arg validation on env / db / conn entrypoints", "[capi_v2][e
 		REQUIRE(duckdb_v2_create_environment(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	}
 	SECTION("destroy_environment with null pointer-to-handle is a no-op") {
-		REQUIRE(duckdb_v2_destroy_environment(nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_environment_destroy(nullptr) == DUCKDB_V2_ERROR_NONE);
 	}
 	SECTION("open rejects null env") {
 		duckdb_v2_database_handle db = nullptr;
@@ -131,7 +131,7 @@ TEST_CASE("V2: null-arg validation on env / db / conn entrypoints", "[capi_v2][e
 		duckdb_v2_create_environment(&env, nullptr);
 		REQUIRE(duckdb_v2_open(env, duckdb_v2_str {nullptr, 0}, nullptr, 0, nullptr, nullptr) ==
 		        DUCKDB_V2_ERROR_INPUT_INVALID);
-		duckdb_v2_destroy_environment(&env);
+		duckdb_v2_environment_destroy(&env);
 	}
 	SECTION("open rejects option_count > 0 with null options") {
 		duckdb_v2_environment_handle env = nullptr;
@@ -139,7 +139,7 @@ TEST_CASE("V2: null-arg validation on env / db / conn entrypoints", "[capi_v2][e
 		duckdb_v2_database_handle db = nullptr;
 		REQUIRE(duckdb_v2_open(env, duckdb_v2_str {nullptr, 0}, nullptr, 1, &db, nullptr) ==
 		        DUCKDB_V2_ERROR_INPUT_INVALID);
-		duckdb_v2_destroy_environment(&env);
+		duckdb_v2_environment_destroy(&env);
 	}
 	SECTION("close with null pointer-to-handle is a no-op") {
 		REQUIRE(duckdb_v2_close(nullptr) == DUCKDB_V2_ERROR_NONE);

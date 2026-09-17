@@ -58,7 +58,7 @@ struct EnvFixture {
 	~EnvFixture() {
 		duckdb_v2_disconnect(&conn);
 		duckdb_v2_close(&db);
-		duckdb_v2_destroy_environment(&env);
+		duckdb_v2_environment_destroy(&env);
 	}
 };
 

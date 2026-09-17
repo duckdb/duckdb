@@ -571,19 +571,20 @@ static vector<Value> ToValueVector(vector<string> &string_vector) {
 template <class T, class OP>
 static Value GetParameterNames(CatalogEntry &entry, idx_t function_idx, FunctionDescription &function_description,
                                Value &parameter_types) {
-	vector<Value> parameter_names;
-	if (!function_description.parameter_names.empty()) {
-		for (idx_t param_idx = 0; param_idx < ListValue::GetChildren(parameter_types).size(); param_idx++) {
+	// default param names from function signature (if it exists),
+	// otherwise fall back to function.json entry
+	auto &function = entry.Cast<T>();
+	vector<Value> parameter_names = OP::GetParameters(function, function_idx);
+	idx_t parameter_count = ListValue::GetChildren(parameter_types).size();
+	if (parameter_names.size() != parameter_count) {
+		parameter_names.clear();
+		for (idx_t param_idx = 0; param_idx < parameter_count; param_idx++) {
 			if (param_idx < function_description.parameter_names.size()) {
 				parameter_names.emplace_back(function_description.parameter_names[param_idx]);
 			} else {
 				parameter_names.emplace_back("col" + to_string(param_idx));
 			}
 		}
-	} else {
-		// fallback
-		auto &function = entry.Cast<T>();
-		parameter_names = OP::GetParameters(function, function_idx);
 	}
 	return Value::LIST(LogicalType::VARCHAR, parameter_names);
 }

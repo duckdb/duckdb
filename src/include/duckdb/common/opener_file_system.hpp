@@ -145,6 +145,9 @@ public:
 	void MoveFile(const string &source, const string &target) {
 		MoveFile(source, target, nullptr);
 	}
+	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file) {
+		return GetStatsIfExists(file, nullptr);
+	}
 	bool FileExists(const string &filename) {
 		return FileExists(filename, nullptr);
 	}
@@ -173,6 +176,12 @@ public:
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(filename);
 		return GetFileSystem().FileExists(filename, GetOpener());
+	}
+
+	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		VerifyCanAccessFile(file.path);
+		return GetFileSystem().GetStatsIfExists(file, GetOpener());
 	}
 
 	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override {

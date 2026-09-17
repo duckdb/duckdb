@@ -1195,7 +1195,7 @@ TEST_CASE("V2: data_chunk outlives result + connection + database", "[capi_v2][d
 		duckdb_v2_result_destroy(&r);
 		duckdb_v2_disconnect(&conn);
 		duckdb_v2_close(&db);
-		duckdb_v2_destroy_environment(&env);
+		duckdb_v2_environment_destroy(&env);
 	}
 
 	// The chunk and its borrowed vectors must still read cleanly.
