@@ -149,6 +149,15 @@ TEST_CASE("Partitioned COPY rejects partition values that differ only in case", 
 	REQUIRE_NO_FAIL(con.Query(PartitionCopy("(SELECT 'p' AS g, 'a' AS k, 1 AS x)", nested, "g, k")));
 	RequireCaseCollision(con.Query(PartitionCopy("(SELECT 'P' AS g, 'a' AS k, 2 AS x)", nested, "g, k")));
 	RequireCaseCollision(con.Query(PartitionCopy("(SELECT 'p' AS g, 'A' AS k, 3 AS x)", nested, "g, k")));
+
+	// the rejected writes leave the partition they collided with intact
+	REQUIRE(CountRows(con, nested) == 1);
+
+	// a colliding pair created inside a run whose parent directory was already listed
+	auto listed = dir.Child("listed");
+	REQUIRE_NO_FAIL(con.Query(PartitionCopy("(SELECT 'z' AS k, 1 AS x)", listed, "k")));
+	RequireCaseCollision(
+	    con.Query(PartitionCopy("(SELECT * FROM (VALUES ('z', 1), ('a', 2), ('A', 3)) v(k, x))", listed, "k")));
 }
 
 TEST_CASE("Partitioned COPY keeps writing partitions that do not collide", "[partition_case_collision]") {
@@ -208,4 +217,8 @@ TEST_CASE("Partitioned COPY handles case-only partition values on the host file 
 	}
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(CountRows(con, out) == 2);
+	auto labels = con.Query("SELECT count(*) FROM read_parquet('" + out +
+	                        "/**/*.parquet', hive_partitioning = true) WHERE (k = 'a') = (x = 1)");
+	REQUIRE_NO_FAIL(*labels);
+	REQUIRE(labels->GetValue(0, 0).GetValue<int64_t>() == 2);
 }
