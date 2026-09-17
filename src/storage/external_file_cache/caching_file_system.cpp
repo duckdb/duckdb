@@ -379,10 +379,9 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	TaskExecutor executor(scheduler, TaskSchedulerType::ASYNC);
 
 	for (idx_t idx = 0; idx < num_blocks; idx++) {
-		executor.ScheduleTask(make_uniq<FetchBlockTask>(*this, executor, context,
-		                                                external_file_cache.GetBufferManager(),
-		                                                external_file_cache.GetStats(), blocks[idx], first_block + idx,
-		                                                block_size, pins[idx]));
+		executor.ScheduleTask(make_uniq<FetchBlockTask>(
+		    *this, executor, context, external_file_cache.GetBufferManager(), external_file_cache.GetStats(),
+		    blocks[idx], first_block + idx, block_size, pins[idx]));
 	}
 	executor.WorkOnTasks();
 
