@@ -228,6 +228,38 @@ SELECT grp, count(*) FROM t GROUP BY ROLLUP(grp) ORDER BY grp NULLS LAST, count(
 NULL	1
 NULL	5
 
+# multiple grouping sets without the grouping sets rewrite
+statement ok
+SET disabled_optimizers = 'grouping_sets';
+
+query II
+EXPLAIN SELECT grp FROM t GROUP BY GROUPING SETS ((grp), ()) ORDER BY grp, count(*);
+----
+physical_plan	<REGEX>:.*Order By: [^\n]*, [^\n]*│.*
+
+query II
+SELECT grp, count(*) FROM t GROUP BY GROUPING SETS ((grp), ()) ORDER BY grp NULLS LAST, count(*);
+----
+1	2
+2	2
+NULL	1
+NULL	5
+
+query II
+EXPLAIN SELECT grp FROM t GROUP BY GROUPING SETS ((grp)) ORDER BY grp, count(*);
+----
+physical_plan	<REGEX>:.*Order By: grp ASC +│.*
+
+query II
+SELECT grp, count(*) FROM t GROUP BY GROUPING SETS ((grp)) ORDER BY grp NULLS LAST, count(*);
+----
+1	2
+2	2
+NULL	1
+
+statement ok
+RESET disabled_optimizers;
+
 # DISTINCT ON
 query II
 EXPLAIN SELECT DISTINCT ON (grp) grp, id FROM t ORDER BY grp, id;
