@@ -777,12 +777,12 @@ jobs:
             src/include/duckdb.h \
             src/include/duckdb_v2.h \
             src/include/duckdb_extension.h \
-            src/include/duckdb_extension_v2.h
+            src/include/duckdb_extension_v2.h \
+            src/include/duckdb_autolink.h
           assets+=(libduckdb-src.zip)
         fi
         if [[ "${{ matrix.config.publish_static }}" == "true" ]]; then
-          make gather-libs
-          make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/libs/*"
+          make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/src/libduckdb_static.a build/release/extension/*/lib*_extension.a"
           assets+=(duckdb-static-libs-${{ matrix.config.artifact_suffix }}.tar.gz)
         fi
         if [[ "${{ matrix.config.is_canonical_build }}" == "true" ]]; then
@@ -994,8 +994,7 @@ jobs:
       run: |
         make cli-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} CLI_BINARY=build/release/duckdb
         make shared-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} SHARED_LIBRARIES="build/release/src/libduckdb.so*"
-        make gather-libs
-        make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/libs/*"
+        make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/src/libduckdb_static.a build/release/extension/*/lib*_extension.a"
         ./scripts/upload-assets-to-staging.sh github_release \
           duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz \
           duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz \

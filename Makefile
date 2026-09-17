@@ -941,50 +941,6 @@ generate-files: $(CAPIGEN_SETUP_DEPS)
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
 
-bundle-setup:
-	cd build/release && \
-	rm -rf bundle && \
-	mkdir -p bundle && \
-	cp src/libduckdb_static.a bundle/. && \
-	cp third_party/*/libduckdb_*.a bundle/. && \
-	cp extension/*/lib*_extension.a bundle/. && \
-	mkdir -p vcpkg_installed && \
-	find vcpkg_installed -name '*.a' -exec cp {} bundle/. \; && \
-	mkdir -p _deps && \
-	if [ -f linked_libs.txt ]; then \
-		while IFS= read -r libline || [ -n "$$libline" ]; do \
-			find _deps -path "*/$$libline" -exec cp {} bundle/. \; 2>/dev/null || true; \
-		done < linked_libs.txt; \
-	fi && \
-	cd bundle && \
-	find . -name '*.a' -exec mkdir -p {}.objects \; -exec mv {} {}.objects \; && \
-	find . -name '*.a' -execdir ${AR} -x {} \;
-
-bundle-library-o: bundle-setup
-	cd build/release/bundle && \
-	echo ./*/*.o | xargs ${AR} cr ../libduckdb_bundle.a
-
-bundle-library-obj: bundle-setup
-	cd build/release/bundle && \
-	echo ./*/*.obj | xargs ${AR} cr ../libduckdb_bundle.a
-
-bundle-library: release
-	make bundle-library-o
-
-.PHONY: gather-libs
-
-GATHER_LIBS_BUILD_DIR ?= build/release
-GATHER_LIBS_PREFIX ?= lib
-GATHER_LIBS_EXTENSION ?= a
-
-gather-libs:
-	cd $(GATHER_LIBS_BUILD_DIR) && \
-	rm -rf libs && \
-	mkdir -p libs && \
-	cp src/$(GATHER_LIBS_PREFIX)duckdb_static.$(GATHER_LIBS_EXTENSION) libs/. && \
-	cp third_party/*/$(GATHER_LIBS_PREFIX)duckdb_*.$(GATHER_LIBS_EXTENSION) libs/. && \
-	cp extension/*/$(GATHER_LIBS_PREFIX)*_extension.$(GATHER_LIBS_EXTENSION) libs/.
-
 #### Setup VCPKG to correct version 2026.06.24 tag is cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3
 vcpkg/scripts/buildsystems/vcpkg.cmake:
 	if [ -d vcpkg/.git ]; then \
