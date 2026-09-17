@@ -502,6 +502,9 @@ static const TransformFrameOps COPY_FILE_NAME_IDENTIFIER_COL_ID_OPS = {
 static const TransformFrameOps IDENTIFIER_COL_ID_OPS = {"IdentifierColId",
                                                         &PEGTransformerFactory::InitializeIdentifierColIdTrampoline,
                                                         &PEGTransformerFactory::FinalizeIdentifierColIdTrampoline};
+static const TransformFrameOps COPY_FILE_NAME_SUFFIX_OPS = {
+    "CopyFileNameSuffix", &PEGTransformerFactory::InitializeCopyFileNameSuffixTrampoline,
+    &PEGTransformerFactory::FinalizeCopyFileNameSuffixTrampoline};
 static const TransformFrameOps COPY_OPTIONS_OPS = {"CopyOptions",
                                                    &PEGTransformerFactory::InitializeCopyOptionsTrampoline,
                                                    &PEGTransformerFactory::FinalizeCopyOptionsTrampoline};
@@ -3170,6 +3173,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"CopyFileNameIdentifier", &COPY_FILE_NAME_IDENTIFIER_OPS},
 	    {"CopyFileNameIdentifierColId", &COPY_FILE_NAME_IDENTIFIER_COL_ID_OPS},
 	    {"IdentifierColId", &IDENTIFIER_COL_ID_OPS},
+	    {"CopyFileNameSuffix", &COPY_FILE_NAME_SUFFIX_OPS},
 	    {"CopyOptions", &COPY_OPTIONS_OPS},
 	    {"CopyOptionList", &COPY_OPTION_LIST_OPS},
 	    {"SpecializedOptionList", &SPECIALIZED_OPTION_LIST_OPS},
@@ -7173,17 +7177,43 @@ PEGTransformerFactory::FinalizeCopyFileNameIdentifierColIdTrampoline(PEGTransfor
 void PEGTransformerFactory::InitializeIdentifierColIdTrampoline(PEGTransformer &transformer,
                                                                 GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(1);
-	process.PushChild({transformer.GetRule("ColId"), list_pr.GetChild(2)}, 0);
+	auto &repeat_pr = list_pr.GetChild(1).Cast<RepeatParseResult>();
+	auto repeat_children = repeat_pr.GetChildren();
+	auto dynamic_child_count = repeat_children.size();
+	process.ReserveChildSlots(1 + dynamic_child_count - 1);
+	for (idx_t i = repeat_children.size(); i > 0; i--) {
+		auto child_idx = i - 1;
+		process.PushChild({transformer.GetRule("CopyFileNameSuffix"), repeat_children[child_idx].get()}, 0 + child_idx);
+	}
 }
 
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeIdentifierColIdTrampoline(PEGTransformer &transformer,
                                                          GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &dynamic_repeat_pr = list_pr.GetChild(1).Cast<RepeatParseResult>();
+	auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
+	auto dynamic_child_count = dynamic_repeat_children.size();
 	auto identifier = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
-	auto col_id = process.TakeResult<Identifier>(0);
-	auto result = TransformIdentifierColId(transformer, identifier, col_id);
+	vector<Identifier> copy_file_name_suffix;
+	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
+		copy_file_name_suffix.push_back(process.TakeResult<Identifier>(i));
+	}
+	auto result = TransformIdentifierColId(transformer, identifier, copy_file_name_suffix);
+	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
+void PEGTransformerFactory::InitializeCopyFileNameSuffixTrampoline(PEGTransformer &transformer,
+                                                                   GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("ColId"), list_pr.GetChild(1)}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeCopyFileNameSuffixTrampoline(PEGTransformer &transformer,
+                                                            GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<Identifier>(0);
 	return make_uniq<TypedTransformResult<Identifier>>(result);
 }
 

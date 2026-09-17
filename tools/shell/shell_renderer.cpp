@@ -371,6 +371,15 @@ unique_ptr<duckdb::DataChunk> ShellRenderer::ConvertChunk(duckdb::DataChunk &chu
 	return varchar_chunk;
 }
 
+void RenderingQueryResult::Drain(ShellState &state) {
+	while (!exhausted_result && !state.seenInterrupt) {
+		auto chunk = stream ? stream->Fetch() : result->Fetch();
+		if (!chunk) {
+			exhausted_result = true;
+		}
+	}
+}
+
 bool RenderingQueryResult::TryConvertChunk() {
 	if (exhausted_result) {
 		return false;
@@ -1741,6 +1750,12 @@ public:
 	}
 
 	SuccessState RenderQueryResult(PrintStream &out, ShellState &state, RenderingQueryResult &result) override {
+		// the rows are discarded, but the query still runs to completion
+		result.Drain(state);
+		if (state.seenInterrupt) {
+			state.PrintF("Interrupt\n");
+			return SuccessState::FAILURE;
+		}
 		return SuccessState::SUCCESS;
 	}
 	bool RequireMaterializedResult() const override {
