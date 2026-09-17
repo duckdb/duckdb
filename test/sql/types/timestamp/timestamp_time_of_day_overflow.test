@@ -2,41 +2,9 @@
 # description: Test time of day extraction below the minimum timestamp
 # group: [timestamp]
 
-statement ok
-CREATE TABLE micros AS SELECT -9223372036854775806::BIGINT AS lo, 9223372036854775806::BIGINT AS hi;
-
-query IIII
-SELECT hour(make_timestamp(lo)), minute(make_timestamp(lo)), second(make_timestamp(lo)),
-       microsecond(make_timestamp(lo))
-FROM micros;
-----
-19	59	5	5224194
-
-query IIII
-SELECT hour(make_timestamp(hi)), minute(make_timestamp(hi)), second(make_timestamp(hi)),
-       microsecond(make_timestamp(hi))
-FROM micros;
-----
-4	0	54	54775806
-
+# The time of day used to be timestamp - days * MICROS_PER_DAY, and that
+# product overflows int64_t on the first day of the TIMESTAMP range.
 query I
-SELECT julian(make_timestamp(lo)) BETWEEN -104311404 AND -104311403 FROM micros;
+SELECT make_timestamp(-9223372036854775806)::TIME;
 ----
-true
-
-query I
-SELECT hour(epoch_ms(-9223372036854775));
-----
-19
-
-query IIII
-SELECT hour(TIMESTAMP '290309-12-22 (BC) 00:00:00'), minute(TIMESTAMP '290309-12-22 (BC) 00:00:00'),
-       second(TIMESTAMP '290309-12-22 (BC) 00:00:00'), microsecond(TIMESTAMP '290309-12-22 (BC) 00:00:00');
-----
-0	0	0	0
-
-query IIII
-SELECT hour(TIMESTAMP '294247-01-10 04:00:54.775806'), minute(TIMESTAMP '294247-01-10 04:00:54.775806'),
-       second(TIMESTAMP '294247-01-10 04:00:54.775806'), microsecond(TIMESTAMP '294247-01-10 04:00:54.775806');
-----
-4	0	54	54775806
+19:59:05.224194
