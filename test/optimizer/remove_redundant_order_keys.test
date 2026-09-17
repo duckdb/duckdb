@@ -334,11 +334,7 @@ physical_plan	<REGEX>:.*Order By: [^\n]*, [^\n]*│.*
 statement ok
 RESET disabled_optimizers;
 
-# dropped keys take their errors and their side effects with them.
-# Same policy as SimplifyWindowedAggregate (window_aggregate_function.cpp), which clears
-# a window aggregate's argument ORDER BY outright when it cannot affect the result.
-# These queries RAISE on a build without this optimizer; see the disabled_optimizers
-# block at the end, which pins the un-optimized behaviour.
+# dropped keys take their errors and side effects with them
 
 statement ok
 CREATE SEQUENCE seq_elide START 1;
@@ -363,7 +359,7 @@ SELECT last_value IS NULL FROM duckdb_sequences() WHERE sequence_name = 'seq_eli
 ----
 true
 
-# a key BEFORE the unique prefix is still evaluated, side effects and all
+# keys before the unique prefix are still evaluated
 
 statement ok
 CREATE SEQUENCE seq_keep START 1;
@@ -377,8 +373,6 @@ query I
 SELECT last_value FROM duckdb_sequences() WHERE sequence_name = 'seq_keep';
 ----
 5
-
-# with the pass disabled the trailing key is evaluated again and the errors come back
 
 statement ok
 SET disabled_optimizers = 'redundant_order_keys';
