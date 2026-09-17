@@ -1,5 +1,8 @@
 #include "parquet_timestamp.hpp"
 
+#include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -14,6 +17,7 @@ static constexpr int64_t JULIAN_TO_UNIX_EPOCH_DAYS = 2440588LL;
 static constexpr int64_t MILLISECONDS_PER_DAY = 86400000LL;
 static constexpr int64_t MICROSECONDS_PER_DAY = MILLISECONDS_PER_DAY * 1000LL;
 static constexpr int64_t NANOSECONDS_PER_MICRO = 1000LL;
+static constexpr int64_t NANOSECONDS_PER_DAY = MICROSECONDS_PER_DAY * 1000LL;
 
 static inline int64_t ImpalaTimestampToDays(const Int96 &impala_timestamp) {
 	return impala_timestamp.value[2] - JULIAN_TO_UNIX_EPOCH_DAYS;
@@ -24,6 +28,26 @@ static int64_t ImpalaTimestampToMicroseconds(const Int96 &impala_timestamp) {
 	auto nanoseconds = Load<int64_t>(const_data_ptr_cast(impala_timestamp.value));
 	auto microseconds = nanoseconds / NANOSECONDS_PER_MICRO;
 	return days_since_epoch * MICROSECONDS_PER_DAY + microseconds;
+}
+
+static int64_t ImpalaTimestampToNanoseconds(const Int96 &impala_timestamp) {
+	int64_t days_since_epoch = ImpalaTimestampToDays(impala_timestamp);
+	auto nanoseconds = Load<int64_t>(const_data_ptr_cast(impala_timestamp.value));
+	int64_t day_nanoseconds;
+	if (!TryMultiplyOperator::Operation(days_since_epoch, NANOSECONDS_PER_DAY, day_nanoseconds)) {
+		throw ConversionException("INT96 timestamp is out of range for TIMESTAMP_NS (int96_as='timestamp_ns')");
+	}
+	int64_t result;
+	if (!TryAddOperator::Operation(day_nanoseconds, nanoseconds, result)) {
+		throw ConversionException("INT96 timestamp is out of range for TIMESTAMP_NS (int96_as='timestamp_ns')");
+	}
+	return result;
+}
+
+timestamp_ns_t ImpalaTimestampToTimestampNS(const Int96 &raw_ts) {
+	timestamp_ns_t result;
+	result.value = ImpalaTimestampToNanoseconds(raw_ts);
+	return result;
 }
 
 timestamp_t ImpalaTimestampToTimestamp(const Int96 &raw_ts) {
