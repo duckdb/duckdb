@@ -16,7 +16,6 @@
 namespace duckdb {
 
 class Planner;
-class LogicalOperator;
 
 enum class SQLExportOutcome : uint8_t {
 	NOT_APPLICABLE,
@@ -103,7 +102,6 @@ public:
 
 private:
 	void Failure(SQLExportOutcome outcome, const string &code);
-	void Inventory(LogicalOperator &root);
 	void RoundTrip(Planner &planner);
 
 private:

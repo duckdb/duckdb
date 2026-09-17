@@ -141,12 +141,13 @@ void SQLExportVerification::Failure(SQLExportOutcome outcome, const string &code
 	record.route = SQLExportExecutionRoute::ORIGINAL_FALLBACK;
 }
 
-void SQLExportVerification::Inventory(LogicalOperator &root) {
-	record.inventory.clear();
+static void CollectSQLExportInventory(const LogicalOperator &root, vector<SQLExportInventoryEntry> &entries,
+                                      optional<LogicalPlanVerificationPath> &input_profile_path) {
+	entries.clear();
 	input_profile_path.reset();
 	std::function<void(const Expression &, const LogicalPlanVerificationPath &)> visit_expression;
 	visit_expression = [&](const Expression &expression, const LogicalPlanVerificationPath &path) {
-		record.inventory.push_back({"expression", EnumUtil::ToString(expression.GetExpressionClass()), path});
+		entries.push_back({"expression", EnumUtil::ToString(expression.GetExpressionClass()), path});
 		if (expression.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY ||
 		    (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
 		     expression.Cast<BoundColumnRefExpression>().Depth() != 0)) {
@@ -156,18 +157,17 @@ void SQLExportVerification::Inventory(LogicalOperator &root) {
 		}
 		if (expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 			auto &function = expression.Cast<BoundFunctionExpression>().Function();
-			record.inventory.push_back({"function", function.GetName().GetIdentifierName(), path});
+			entries.push_back({"function", function.GetName().GetIdentifierName(), path});
 		} else if (expression.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE) {
 			auto &function = expression.Cast<BoundAggregateExpression>().Function();
-			record.inventory.push_back({"function", function.GetName().GetIdentifierName(), path});
+			entries.push_back({"function", function.GetName().GetIdentifierName(), path});
 		} else if (expression.GetExpressionClass() == ExpressionClass::BOUND_WINDOW) {
 			auto &window = expression.Cast<BoundWindowExpression>();
 			if (window.AggregateFunction()) {
-				record.inventory.push_back(
-				    {"function", window.AggregateFunction()->GetName().GetIdentifierName(), path});
+				entries.push_back({"function", window.AggregateFunction()->GetName().GetIdentifierName(), path});
 			}
 			if (window.WindowFunction()) {
-				record.inventory.push_back({"function", window.WindowFunction()->GetName().GetIdentifierName(), path});
+				entries.push_back({"function", window.WindowFunction()->GetName().GetIdentifierName(), path});
 			}
 		}
 		idx_t ordinal = 0;
@@ -199,12 +199,12 @@ void SQLExportVerification::Inventory(LogicalOperator &root) {
 	};
 	std::function<void(const LogicalOperator &, const LogicalPlanVerificationPath &)> visit_operator;
 	visit_operator = [&](const LogicalOperator &op, const LogicalPlanVerificationPath &path) {
-		record.inventory.push_back({"operator", LogicalOperatorToString(op.type), path});
+		entries.push_back({"operator", LogicalOperatorToString(op.type), path});
 		if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN && !input_profile_path) {
 			input_profile_path = path;
 		}
 		if (op.type == LogicalOperatorType::LOGICAL_GET) {
-			record.inventory.push_back({"source", op.Cast<LogicalGet>().function.GetName().GetIdentifierName(), path});
+			entries.push_back({"source", op.Cast<LogicalGet>().function.GetName().GetIdentifierName(), path});
 		}
 		idx_t ordinal = 0;
 		LogicalOperatorVisitor::EnumerateExpressions(op, [&](const unique_ptr<Expression> *expression) {
@@ -363,7 +363,7 @@ void SQLExportVerification::Verify(Planner &planner, StatementType type, bool ha
 	record.code = "INVENTORY_EXCEPTION";
 	record.outcome = SQLExportOutcome::EXPORT_ERROR;
 	try {
-		Inventory(*planner.plan);
+		CollectSQLExportInventory(*planner.plan, record.inventory, input_profile_path);
 		if (record.export_count) {
 			record.phase = "ELIGIBILITY";
 			Failure(SQLExportOutcome::UNSUPPORTED_EXPORT_FEATURE, "PLANNING_RETRY_AFTER_EXPORT");
