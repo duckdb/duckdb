@@ -61,29 +61,29 @@ SET debug_verify_sql_export='strict';
 query TTT nosort version_all
 SELECT * FROM pragma_version();
 
+foreach mode off strict
+
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query TT nosort version_fields
 SELECT source_id,codename FROM pragma_version();
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query TT nosort version_fields
-SELECT source_id,codename FROM pragma_version();
+reset label version_fields
+
+foreach mode off strict
 
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query T nosort platform
 SELECT platform FROM pragma_platform();
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query T nosort platform
-SELECT platform FROM pragma_platform();
+reset label platform
 
 statement ok
 SET debug_verify_sql_export='strict';

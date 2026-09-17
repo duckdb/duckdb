@@ -33,41 +33,41 @@ CREATE TABLE measurements(x DOUBLE, y DOUBLE);
 statement ok
 INSERT INTO measurements VALUES (1, 10), (1, 10), (NULL, 5), (2, NULL);
 
+foreach mode off strict
+
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query TTT rowsort summary_2
 SELECT * FROM summary((SELECT x AS first_value, y AS second_value FROM measurements));
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query TTT rowsort summary_2
-SELECT * FROM summary((SELECT x AS first_value, y AS second_value FROM measurements));
+reset label summary_2
+
+foreach mode off strict
 
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query TTTTTTTTTTTT rowsort summary_3
 SELECT * FROM summary((SELECT x, y FROM measurements WHERE false));
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query TTTTTTTTTTTT rowsort summary_3
-SELECT * FROM summary((SELECT x, y FROM measurements WHERE false));
+reset label summary_3
+
+foreach mode off strict
 
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query TTT rowsort summary_4
 SELECT * FROM summary((SELECT x, sum(y) FROM measurements GROUP BY x));
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query TTT rowsort summary_4
-SELECT * FROM summary((SELECT x, sum(y) FROM measurements GROUP BY x));
+reset label summary_4
 
 query T rowsort
 SELECT to_aggregate_state(12::HUGEINT, 'sum', ['INTEGER']);

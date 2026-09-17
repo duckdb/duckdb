@@ -11,8 +11,10 @@ SET threads=1;
 statement ok
 SET pivot_filter_threshold=0;
 
+foreach threshold 0 3
+
 statement ok
-SET pivot_filter_threshold=0;
+SET pivot_filter_threshold={threshold};
 
 query TTTTTTT
 SELECT * FROM (VALUES ('g','a',10),('g','a',NULL),('g','b',20),('h','a',NULL)) t(g,k,v) PIVOT (sum(v) AS s,count(v) AS c FOR k IN ('a','b','z')) ORDER BY g;
@@ -20,30 +22,19 @@ SELECT * FROM (VALUES ('g','a',10),('g','a',NULL),('g','b',20),('h','a',NULL)) t
 g	10	1	20	1	NULL	0
 h	NULL	0	NULL	0	NULL	0
 
-statement ok
-SET pivot_filter_threshold=3;
+endloop
 
-query TTTTTTT
-SELECT * FROM (VALUES ('g','a',10),('g','a',NULL),('g','b',20),('h','a',NULL)) t(g,k,v) PIVOT (sum(v) AS s,count(v) AS c FOR k IN ('a','b','z')) ORDER BY g;
-----
-g	10	1	20	1	NULL	0
-h	NULL	0	NULL	0	NULL	0
+foreach threshold 0 3
 
 statement ok
-SET pivot_filter_threshold=0;
+SET pivot_filter_threshold={threshold};
 
 query TTT
 FROM (VALUES ('a',1),('b',2)) t(k,v) PIVOT (sum(v) FOR k IN ('a','b','z'));
 ----
 1	2	NULL
 
-statement ok
-SET pivot_filter_threshold=3;
-
-query TTT
-FROM (VALUES ('a',1),('b',2)) t(k,v) PIVOT (sum(v) FOR k IN ('a','b','z'));
-----
-1	2	NULL
+endloop
 
 statement ok
 SET pivot_filter_threshold=0;
@@ -53,597 +44,127 @@ EXPLAIN SELECT a_ok FROM (VALUES ('a',1),('b',2)) t(k,v) PIVOT (sum(v) AS ok,sum
 ----
 physical_plan	<REGEX>:.*Pivot.*
 
+foreach serializer false true
+
 statement ok
-SET debug_verify_serializer=false;
+SET debug_verify_serializer={serializer};
 
 statement error
 SELECT a_ok FROM (VALUES ('a',1),('b',2)) t(k,v) PIVOT (sum(v) AS ok,sum(CASE WHEN v=2 THEN error('pivot export error')::INTEGER ELSE v END) AS effect FOR k IN ('a','b','z'));
 ----
 pivot export error
 
-statement ok
-SET debug_verify_serializer=true;
+endloop
 
-statement error
-SELECT a_ok FROM (VALUES ('a',1),('b',2)) t(k,v) PIVOT (sum(v) AS ok,sum(CASE WHEN v=2 THEN error('pivot export error')::INTEGER ELSE v END) AS effect FOR k IN ('a','b','z'));
-----
-pivot export error
+foreach collation 'nocase' ''
 
 statement ok
-SET default_collation='nocase';
+SET default_collation={collation};
+
+foreach serializer false true
 
 statement ok
-SET debug_verify_serializer=false;
+SET debug_verify_serializer={serializer};
+
+foreach mode off strict
 
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
-query T nosort list_list_sort_nocase_false
+query T nosort list_result
 SELECT list_sort(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query T nosort list_list_sort_nocase_false
-SELECT list_sort(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
+reset label list_result
 
-statement ok
-SET default_collation='nocase';
+foreach mode off strict
 
 statement ok
-SET debug_verify_serializer=true;
+SET debug_verify_sql_export='{mode}';
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_list_sort_nocase_true
-SELECT list_sort(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_list_sort_nocase_true
-SELECT list_sort(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='nocase';
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_array_sort_nocase_false
+query T nosort list_result
 SELECT array_sort(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query T nosort list_array_sort_nocase_false
-SELECT array_sort(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
+reset label list_result
 
-statement ok
-SET default_collation='nocase';
+foreach mode off strict
 
 statement ok
-SET debug_verify_serializer=true;
+SET debug_verify_sql_export='{mode}';
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_array_sort_nocase_true
-SELECT array_sort(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_array_sort_nocase_true
-SELECT array_sort(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='nocase';
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_list_grade_up_nocase_false
+query T nosort list_result
 SELECT list_grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query T nosort list_list_grade_up_nocase_false
-SELECT list_grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
+reset label list_result
 
-statement ok
-SET default_collation='nocase';
+foreach mode off strict
 
 statement ok
-SET debug_verify_serializer=true;
+SET debug_verify_sql_export='{mode}';
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_list_grade_up_nocase_true
-SELECT list_grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_list_grade_up_nocase_true
-SELECT list_grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='nocase';
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_array_grade_up_nocase_false
+query T nosort list_result
 SELECT array_grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query T nosort list_array_grade_up_nocase_false
-SELECT array_grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
+reset label list_result
 
-statement ok
-SET default_collation='nocase';
+foreach mode off strict
 
 statement ok
-SET debug_verify_serializer=true;
+SET debug_verify_sql_export='{mode}';
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_array_grade_up_nocase_true
-SELECT array_grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_array_grade_up_nocase_true
-SELECT array_grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='nocase';
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_grade_up_nocase_false
+query T nosort list_result
 SELECT grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query T nosort list_grade_up_nocase_false
-SELECT grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
+reset label list_result
 
-statement ok
-SET default_collation='nocase';
+foreach mode off strict
 
 statement ok
-SET debug_verify_serializer=true;
+SET debug_verify_sql_export='{mode}';
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_grade_up_nocase_true
-SELECT grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_grade_up_nocase_true
-SELECT grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='nocase';
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_list_reverse_sort_nocase_false
+query T nosort list_result
 SELECT list_reverse_sort(x) FROM (VALUES (['B','b']::VARCHAR[]))t(x);
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query T nosort list_list_reverse_sort_nocase_false
-SELECT list_reverse_sort(x) FROM (VALUES (['B','b']::VARCHAR[]))t(x);
+reset label list_result
 
-statement ok
-SET default_collation='nocase';
+foreach mode off strict
 
 statement ok
-SET debug_verify_serializer=true;
+SET debug_verify_sql_export='{mode}';
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_list_reverse_sort_nocase_true
-SELECT list_reverse_sort(x) FROM (VALUES (['B','b']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_list_reverse_sort_nocase_true
-SELECT list_reverse_sort(x) FROM (VALUES (['B','b']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='nocase';
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_array_reverse_sort_nocase_false
+query T nosort list_result
 SELECT array_reverse_sort(x) FROM (VALUES (['B','b']::VARCHAR[]))t(x);
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query T nosort list_array_reverse_sort_nocase_false
-SELECT array_reverse_sort(x) FROM (VALUES (['B','b']::VARCHAR[]))t(x);
+reset label list_result
 
-statement ok
-SET default_collation='nocase';
+foreach mode off strict
 
 statement ok
-SET debug_verify_serializer=true;
+SET debug_verify_sql_export='{mode}';
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_array_reverse_sort_nocase_true
-SELECT array_reverse_sort(x) FROM (VALUES (['B','b']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_array_reverse_sort_nocase_true
-SELECT array_reverse_sort(x) FROM (VALUES (['B','b']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='nocase';
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_list_sort_list_nocase_false
+query T nosort list_result
 SELECT list_sort(list(x)) FROM (VALUES ('b',0),('B',1))t(x,r);
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query T nosort list_list_sort_list_nocase_false
-SELECT list_sort(list(x)) FROM (VALUES ('b',0),('B',1))t(x,r);
+reset label list_result
 
-statement ok
-SET default_collation='nocase';
+endloop
 
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_list_sort_list_nocase_true
-SELECT list_sort(list(x)) FROM (VALUES ('b',0),('B',1))t(x,r);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_list_sort_list_nocase_true
-SELECT list_sort(list(x)) FROM (VALUES ('b',0),('B',1))t(x,r);
-
-statement ok
-SET default_collation='';
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_list_sort_binary_false
-SELECT list_sort(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_list_sort_binary_false
-SELECT list_sort(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='';
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_list_sort_binary_true
-SELECT list_sort(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_list_sort_binary_true
-SELECT list_sort(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='';
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_array_sort_binary_false
-SELECT array_sort(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_array_sort_binary_false
-SELECT array_sort(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='';
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_array_sort_binary_true
-SELECT array_sort(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_array_sort_binary_true
-SELECT array_sort(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='';
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_list_grade_up_binary_false
-SELECT list_grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_list_grade_up_binary_false
-SELECT list_grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='';
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_list_grade_up_binary_true
-SELECT list_grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_list_grade_up_binary_true
-SELECT list_grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='';
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_array_grade_up_binary_false
-SELECT array_grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_array_grade_up_binary_false
-SELECT array_grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='';
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_array_grade_up_binary_true
-SELECT array_grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_array_grade_up_binary_true
-SELECT array_grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='';
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_grade_up_binary_false
-SELECT grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_grade_up_binary_false
-SELECT grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='';
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_grade_up_binary_true
-SELECT grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_grade_up_binary_true
-SELECT grade_up(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='';
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_list_reverse_sort_binary_false
-SELECT list_reverse_sort(x) FROM (VALUES (['B','b']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_list_reverse_sort_binary_false
-SELECT list_reverse_sort(x) FROM (VALUES (['B','b']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='';
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_list_reverse_sort_binary_true
-SELECT list_reverse_sort(x) FROM (VALUES (['B','b']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_list_reverse_sort_binary_true
-SELECT list_reverse_sort(x) FROM (VALUES (['B','b']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='';
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_array_reverse_sort_binary_false
-SELECT array_reverse_sort(x) FROM (VALUES (['B','b']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_array_reverse_sort_binary_false
-SELECT array_reverse_sort(x) FROM (VALUES (['B','b']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='';
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_array_reverse_sort_binary_true
-SELECT array_reverse_sort(x) FROM (VALUES (['B','b']::VARCHAR[]))t(x);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_array_reverse_sort_binary_true
-SELECT array_reverse_sort(x) FROM (VALUES (['B','b']::VARCHAR[]))t(x);
-
-statement ok
-SET default_collation='';
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_list_sort_list_binary_false
-SELECT list_sort(list(x)) FROM (VALUES ('b',0),('B',1))t(x,r);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_list_sort_list_binary_false
-SELECT list_sort(list(x)) FROM (VALUES ('b',0),('B',1))t(x,r);
-
-statement ok
-SET default_collation='';
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T nosort list_list_sort_list_binary_true
-SELECT list_sort(list(x)) FROM (VALUES ('b',0),('B',1))t(x,r);
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query T nosort list_list_sort_list_binary_true
-SELECT list_sort(list(x)) FROM (VALUES ('b',0),('B',1))t(x,r);
+endloop
 
 statement ok
 SET pivot_limit=3;

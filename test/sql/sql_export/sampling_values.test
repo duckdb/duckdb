@@ -13,8 +13,10 @@ foreach threads 1 4
 statement ok
 SET threads={threads};
 
+foreach mode off strict
+
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
@@ -28,709 +30,509 @@ SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(1000
 query I nosort sample_result_effects
 SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 
-statement ok
-DROP SEQUENCE IF EXISTS seq;
+endloop
 
-statement ok
-CREATE SEQUENCE seq;
+reset label sample_result
 
-statement ok
-SET debug_verify_sql_export='strict';
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 31 (reservoir,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
+reset label sample_result_effects
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 31 (reservoir,42);
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 31 [(]Reservoir, 42[)].*
 
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
+statement ok
+DROP SEQUENCE IF EXISTS seq;
+
+statement ok
+CREATE SEQUENCE seq;
+
+query II nosort sample_result
+SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 31 (reservoir,42);
+
+query I nosort sample_result_effects
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
+
+endloop
+
 reset label sample_result
 
 reset label sample_result_effects
-
-statement ok
-SET debug_verify_sql_export='off';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 31 (reservoir,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 31 (reservoir,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 31 (reservoir,42);
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 31 [(]Reservoir, 42[)].*
 
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
+statement ok
+DROP SEQUENCE IF EXISTS seq;
+
+statement ok
+CREATE SEQUENCE seq;
+
+query II nosort sample_result
+SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 31 (reservoir,42);
+
+query I nosort sample_result_effects
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
+
+endloop
+
 reset label sample_result
 
 reset label sample_result_effects
-
-statement ok
-SET debug_verify_sql_export='off';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 31 (reservoir,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 31 (reservoir,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 31 (reservoir,42);
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 31 [(]Reservoir, 42[)].*
 
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
+statement ok
+DROP SEQUENCE IF EXISTS seq;
+
+statement ok
+CREATE SEQUENCE seq;
+
+query II nosort sample_result
+SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 20% (reservoir,42);
+
+query I nosort sample_result_effects
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
+
+endloop
+
 reset label sample_result
 
 reset label sample_result_effects
-
-statement ok
-SET debug_verify_sql_export='off';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 20% (reservoir,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 20% (reservoir,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 20% (reservoir,42);
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 20[.]0% [(]Reservoir, 42[)].*
 
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
+statement ok
+DROP SEQUENCE IF EXISTS seq;
+
+statement ok
+CREATE SEQUENCE seq;
+
+query II nosort sample_result
+SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 20% (reservoir,42);
+
+query I nosort sample_result_effects
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
+
+endloop
+
 reset label sample_result
 
 reset label sample_result_effects
-
-statement ok
-SET debug_verify_sql_export='off';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 20% (reservoir,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 20% (reservoir,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 20% (reservoir,42);
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 20[.]0% [(]Reservoir, 42[)].*
 
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
+statement ok
+DROP SEQUENCE IF EXISTS seq;
+
+statement ok
+CREATE SEQUENCE seq;
+
+query II nosort sample_result
+SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 20% (reservoir,42);
+
+query I nosort sample_result_effects
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
+
+endloop
+
 reset label sample_result
 
 reset label sample_result_effects
-
-statement ok
-SET debug_verify_sql_export='off';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 20% (reservoir,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 20% (reservoir,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 20% (reservoir,42);
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 20[.]0% [(]Reservoir, 42[)].*
 
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
+statement ok
+DROP SEQUENCE IF EXISTS seq;
+
+statement ok
+CREATE SEQUENCE seq;
+
+query II nosort sample_result
+SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 50% (bernoulli,42);
+
+query I nosort sample_result_effects
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
+
+endloop
+
 reset label sample_result
 
 reset label sample_result_effects
-
-statement ok
-SET debug_verify_sql_export='off';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 50% (bernoulli,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 50% (bernoulli,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 50% (bernoulli,42);
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 50[.]0% [(]Bernoulli, 42[)].*
 
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
+statement ok
+DROP SEQUENCE IF EXISTS seq;
+
+statement ok
+CREATE SEQUENCE seq;
+
+query II nosort sample_result
+SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 50% (bernoulli,42);
+
+query I nosort sample_result_effects
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
+
+endloop
+
 reset label sample_result
 
 reset label sample_result_effects
-
-statement ok
-SET debug_verify_sql_export='off';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 50% (bernoulli,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 50% (bernoulli,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 50% (bernoulli,42);
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 50[.]0% [(]Bernoulli, 42[)].*
 
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
+statement ok
+DROP SEQUENCE IF EXISTS seq;
+
+statement ok
+CREATE SEQUENCE seq;
+
+query II nosort sample_result
+SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 50% (bernoulli,42);
+
+query I nosort sample_result_effects
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
+
+endloop
+
 reset label sample_result
 
 reset label sample_result_effects
-
-statement ok
-SET debug_verify_sql_export='off';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 50% (bernoulli,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 50% (bernoulli,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 50% (bernoulli,42);
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 50[.]0% [(]Bernoulli, 42[)].*
 
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
+statement ok
+DROP SEQUENCE IF EXISTS seq;
+
+statement ok
+CREATE SEQUENCE seq;
+
+query II nosort sample_result
+SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 50% (system,42);
+
+query I nosort sample_result_effects
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
+
+endloop
+
 reset label sample_result
 
 reset label sample_result_effects
-
-statement ok
-SET debug_verify_sql_export='off';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 50% (system,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 50% (system,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 50% (system,42);
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 50[.]0% [(]System, 42[)].*
 
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
+statement ok
+DROP SEQUENCE IF EXISTS seq;
+
+statement ok
+CREATE SEQUENCE seq;
+
+query II nosort sample_result
+SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 50% (system,42);
+
+query I nosort sample_result_effects
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
+
+endloop
+
 reset label sample_result
 
 reset label sample_result_effects
-
-statement ok
-SET debug_verify_sql_export='off';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 50% (system,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 50% (system,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 50% (system,42);
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 50[.]0% [(]System, 42[)].*
 
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
+statement ok
+DROP SEQUENCE IF EXISTS seq;
+
+statement ok
+CREATE SEQUENCE seq;
+
+query II nosort sample_result
+SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 50% (system,42);
+
+query I nosort sample_result_effects
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
+
+endloop
+
 reset label sample_result
 
 reset label sample_result_effects
-
-statement ok
-SET debug_verify_sql_export='off';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 50% (system,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 50% (system,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 50% (system,42);
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 50[.]0% [(]System, 42[)].*
 
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
+statement ok
+DROP SEQUENCE IF EXISTS seq;
+
+statement ok
+CREATE SEQUENCE seq;
+
+query II nosort sample_result
+SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 80% (system,1);
+
+query I nosort sample_result_effects
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
+
+endloop
+
 reset label sample_result
 
 reset label sample_result_effects
-
-statement ok
-SET debug_verify_sql_export='off';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 80% (system,1);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 80% (system,1);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 80% (system,1);
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 80[.]0% [(]System, 1[)].*
 
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
+statement ok
+DROP SEQUENCE IF EXISTS seq;
+
+statement ok
+CREATE SEQUENCE seq;
+
+query II nosort sample_result
+SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 80% (system,1);
+
+query I nosort sample_result_effects
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
+
+endloop
+
 reset label sample_result
 
 reset label sample_result_effects
-
-statement ok
-SET debug_verify_sql_export='off';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 80% (system,1);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 80% (system,1);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 80% (system,1);
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 80[.]0% [(]System, 1[)].*
 
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
+statement ok
+DROP SEQUENCE IF EXISTS seq;
+
+statement ok
+CREATE SEQUENCE seq;
+
+query II nosort sample_result
+SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 80% (system,1);
+
+query I nosort sample_result_effects
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
+
+endloop
+
 reset label sample_result
 
 reset label sample_result_effects
-
-statement ok
-SET debug_verify_sql_export='off';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 80% (system,1);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 80% (system,1);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 80% (system,1);
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 80[.]0% [(]System, 1[)].*
 
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
+statement ok
+DROP SEQUENCE IF EXISTS seq;
+
+statement ok
+CREATE SEQUENCE seq;
+
+query II nosort sample_result
+SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 0 (reservoir,42);
+
+query I nosort sample_result_effects
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
+
+endloop
+
 reset label sample_result
 
 reset label sample_result_effects
-
-statement ok
-SET debug_verify_sql_export='off';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 0 (reservoir,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 0 (reservoir,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v FROM range(10000)t(i) WHERE i%2=0) USING SAMPLE 0 (reservoir,42);
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 0 [(]Reservoir, 42[)].*
 
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
+statement ok
+DROP SEQUENCE IF EXISTS seq;
+
+statement ok
+CREATE SEQUENCE seq;
+
+query II nosort sample_result
+SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 0 (reservoir,42);
+
+query I nosort sample_result_effects
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
+
+endloop
+
 reset label sample_result
 
 reset label sample_result_effects
-
-statement ok
-SET debug_verify_sql_export='off';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 0 (reservoir,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 0 (reservoir,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) USING SAMPLE 0 (reservoir,42);
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 0 [(]Reservoir, 42[)].*
 
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
+statement ok
+DROP SEQUENCE IF EXISTS seq;
+
+statement ok
+CREATE SEQUENCE seq;
+
+query II nosort sample_result
+SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 0 (reservoir,42);
+
+query I nosort sample_result_effects
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
+
+endloop
+
 reset label sample_result
 
 reset label sample_result_effects
-
-statement ok
-SET debug_verify_sql_export='off';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 0 (reservoir,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_sql_export='strict';
-
-query II nosort sample_result
-SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 0 (reservoir,42);
-
-query I nosort sample_result_effects
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 0 (reservoir,42);
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 0 [(]Reservoir, 42[)].*
 
-reset label sample_result
-
-reset label sample_result_effects
-
 endloop
 
 statement ok
 SET threads=1;
 
+foreach mode off strict
+
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query I nosort sample_37
 SELECT * FROM range(10000) USING SAMPLE 31 (system,42);
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query I nosort sample_37
-SELECT * FROM range(10000) USING SAMPLE 31 (system,42);
+reset label sample_37
 
 # The invalid method/count combination fails during generated preparation.
 statement ok
@@ -752,34 +554,34 @@ sql	<REGEX>:.*USING SAMPLE 31 [(]Bernoulli, 42[)].*
 statement ok
 CREATE TABLE sample_source AS SELECT i FROM range(10000) t(i);
 
+foreach mode off strict
+
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query I nosort sample_38
 SELECT * FROM sample_source USING SAMPLE 31 (system,42) ORDER BY i;
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query I nosort sample_38
-SELECT * FROM sample_source USING SAMPLE 31 (system,42) ORDER BY i;
+reset label sample_38
 
 query TT
 EXPLAIN (SQL) SELECT * FROM sample_source USING SAMPLE 31 (system,42) ORDER BY i;
 ----
 sql	<REGEX>:.*USING SAMPLE.*
 
+foreach mode off strict
+
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query I nosort sample_39
 SELECT * FROM sample_source USING SAMPLE 25% (system,42) ORDER BY i;
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query I nosort sample_39
-SELECT * FROM sample_source USING SAMPLE 25% (system,42) ORDER BY i;
+reset label sample_39
 
 query TT
 EXPLAIN (SQL) SELECT * FROM sample_source USING SAMPLE 25% (system,42) ORDER BY i;

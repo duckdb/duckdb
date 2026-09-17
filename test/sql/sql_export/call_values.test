@@ -8,8 +8,10 @@ SET debug_verify_sql_export='strict';
 statement ok
 PRAGMA disable_optimizer;
 
+foreach serializer false true
+
 statement ok
-SET debug_verify_serializer=false;
+SET debug_verify_serializer={serializer};
 
 query I
 SELECT abs(-7::INTEGER);
@@ -42,39 +44,7 @@ SELECT quantile_cont(i, 0.5) OVER () FROM (VALUES (1), (2)) v(i);
 1.5
 1.5
 
-statement ok
-SET debug_verify_serializer=true;
-
-query I
-SELECT abs(-7::INTEGER);
-----
-7
-
-query I
-SELECT abs(-7);
-----
-7
-
-query R
-SELECT log2(8);
-----
-3.0
-
-query T
-SELECT equi_width_bins(0, 10, 2, true);
-----
-[5, 10]
-
-query R
-SELECT quantile_cont(i, 0.5) FROM (VALUES (1), (2)) v(i);
-----
-1.5
-
-query R
-SELECT quantile_cont(i, 0.5) OVER () FROM (VALUES (1), (2)) v(i);
-----
-1.5
-1.5
+endloop
 
 statement ok
 PRAGMA enable_optimizer;
@@ -127,8 +97,10 @@ CREATE OR REPLACE TABLE rounding_values(i DECIMAL(4,0));
 statement ok
 INSERT INTO rounding_values VALUES (9999);
 
+foreach serializer false true
+
 statement ok
-SET debug_verify_serializer=false;
+SET debug_verify_serializer={serializer};
 
 query T
 SELECT round(i, -1) FROM rounding_values;
@@ -140,18 +112,7 @@ SELECT typeof(round(i, -1)) FROM rounding_values;
 ----
 DECIMAL(5,0)
 
-statement ok
-SET debug_verify_serializer=true;
-
-query T
-SELECT round(i, -1) FROM rounding_values;
-----
-10000
-
-query T
-SELECT typeof(round(i, -1)) FROM rounding_values;
-----
-DECIMAL(5,0)
+endloop
 
 statement ok
 CREATE OR REPLACE TABLE rounding_values(i DECIMAL(9,0));
@@ -159,8 +120,10 @@ CREATE OR REPLACE TABLE rounding_values(i DECIMAL(9,0));
 statement ok
 INSERT INTO rounding_values VALUES (999999999);
 
+foreach serializer false true
+
 statement ok
-SET debug_verify_serializer=false;
+SET debug_verify_serializer={serializer};
 
 query T
 SELECT round(i, -1) FROM rounding_values;
@@ -172,18 +135,7 @@ SELECT typeof(round(i, -1)) FROM rounding_values;
 ----
 DECIMAL(10,0)
 
-statement ok
-SET debug_verify_serializer=true;
-
-query T
-SELECT round(i, -1) FROM rounding_values;
-----
-1000000000
-
-query T
-SELECT typeof(round(i, -1)) FROM rounding_values;
-----
-DECIMAL(10,0)
+endloop
 
 statement ok
 CREATE OR REPLACE TABLE rounding_values(i DECIMAL(18,0));
@@ -191,8 +143,10 @@ CREATE OR REPLACE TABLE rounding_values(i DECIMAL(18,0));
 statement ok
 INSERT INTO rounding_values VALUES (999999999999999999);
 
+foreach serializer false true
+
 statement ok
-SET debug_verify_serializer=false;
+SET debug_verify_serializer={serializer};
 
 query T
 SELECT round(i, -1) FROM rounding_values;
@@ -204,18 +158,7 @@ SELECT typeof(round(i, -1)) FROM rounding_values;
 ----
 DECIMAL(19,0)
 
-statement ok
-SET debug_verify_serializer=true;
-
-query T
-SELECT round(i, -1) FROM rounding_values;
-----
-1000000000000000000
-
-query T
-SELECT typeof(round(i, -1)) FROM rounding_values;
-----
-DECIMAL(19,0)
+endloop
 
 statement ok
 CREATE OR REPLACE TABLE rounding_values(i DECIMAL(37,0));
@@ -223,8 +166,10 @@ CREATE OR REPLACE TABLE rounding_values(i DECIMAL(37,0));
 statement ok
 INSERT INTO rounding_values VALUES (9999999999999999999999999999999999999);
 
+foreach serializer false true
+
 statement ok
-SET debug_verify_serializer=false;
+SET debug_verify_serializer={serializer};
 
 query T
 SELECT round(i, -1) FROM rounding_values;
@@ -236,18 +181,7 @@ SELECT typeof(round(i, -1)) FROM rounding_values;
 ----
 DECIMAL(38,0)
 
-statement ok
-SET debug_verify_serializer=true;
-
-query T
-SELECT round(i, -1) FROM rounding_values;
-----
-10000000000000000000000000000000000000
-
-query T
-SELECT typeof(round(i, -1)) FROM rounding_values;
-----
-DECIMAL(38,0)
+endloop
 
 statement ok
 SET debug_verify_serializer=false;

@@ -102,19 +102,18 @@ statement ok
 INSERT INTO lists VALUES ([10, 9, 8, 7, 6], 5);
 
 query T rowsort
-SELECT list_transform(l, lambda x, i: x + c + CAST(i AS INTEGER)) FROM lists;
-----
-[16, 16, 16, 16, 16]
-
-query T rowsort
 SELECT list_transform(l, lambda x: list_transform(l, lambda y: x + y + c)) FROM lists;
 ----
 [[25, 24, 23, 22, 21], [24, 23, 22, 21, 20], [23, 22, 21, 20, 19], [22, 21, 20, 19, 18], [21, 20, 19, 18, 17]]
 
+foreach serializer false true
+
 statement ok
-SET debug_verify_serializer=true;
+SET debug_verify_serializer={serializer};
 
 query T rowsort
 SELECT list_transform(l, lambda x, i: x + c + CAST(i AS INTEGER)) FROM lists;
 ----
 [16, 16, 16, 16, 16]
+
+endloop

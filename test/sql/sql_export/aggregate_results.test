@@ -41,8 +41,10 @@ CREATE TABLE large_sum_values(i BIGINT);
 statement ok
 INSERT INTO large_sum_values SELECT 4000000000000000000 FROM range(5);
 
+foreach serializer false true
+
 statement ok
-SET debug_verify_serializer=false;
+SET debug_verify_serializer={serializer};
 
 statement ok
 PRAGMA enable_optimizer;
@@ -52,582 +54,99 @@ SELECT sum(i),typeof(sum(i)) FROM decimal_values;
 ----
 3.75	DECIMAL(38,2)
 
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-PRAGMA enable_optimizer;
-
-query TT
-SELECT sum(i),typeof(sum(i)) FROM decimal_values;
-----
-3.75	DECIMAL(38,2)
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-PRAGMA enable_optimizer;
-
 query TT
 SELECT sum(i),typeof(sum(i)) FROM (VALUES (1.25::DECIMAL(9,2)),(2.50::DECIMAL(9,2))) values_to_sum(i);
 ----
 3.75	DECIMAL(38,2)
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-PRAGMA enable_optimizer;
-
-query TT
-SELECT sum(i),typeof(sum(i)) FROM (VALUES (1.25::DECIMAL(9,2)),(2.50::DECIMAL(9,2))) values_to_sum(i);
-----
-3.75	DECIMAL(38,2)
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-PRAGMA enable_optimizer;
 
 query T
 SELECT sum(i) FROM aggregate_values;
 ----
 5
 
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT sum(i) FROM aggregate_values;
-----
-5
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-PRAGMA enable_optimizer;
-
 query T
 SELECT avg(i) FROM aggregate_values;
 ----
 1.6666666666666667
 
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT avg(i) FROM aggregate_values;
-----
-1.6666666666666667
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-PRAGMA disable_optimizer;
-
 query T
 SELECT mean(i) FROM aggregate_values;
 ----
 1.6666666666666667
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT mean(i) FROM aggregate_values;
-----
-1.6666666666666667
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-PRAGMA disable_optimizer;
-
-query T
-SELECT mean(i) FROM aggregate_values;
-----
-1.6666666666666667
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT mean(i) FROM aggregate_values;
-----
-1.6666666666666667
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-PRAGMA enable_optimizer;
 
 query T
 SELECT sum(i) FROM large_sum_values;
 ----
 20000000000000000000
 
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT sum(i) FROM large_sum_values;
-----
-20000000000000000000
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-PRAGMA disable_optimizer;
-
-query T
-SELECT sum(DISTINCT i) FILTER (WHERE i>1) FROM aggregate_values;
-----
-2
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT sum(DISTINCT i) FILTER (WHERE i>1) FROM aggregate_values;
-----
-2
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-PRAGMA disable_optimizer;
-
-query T
-SELECT sum(DISTINCT i) FILTER (WHERE i>1) FROM aggregate_values;
-----
-2
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT sum(DISTINCT i) FILTER (WHERE i>1) FROM aggregate_values;
-----
-2
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-PRAGMA disable_optimizer;
-
-query T
-SELECT list(i ORDER BY i DESC NULLS FIRST) FROM aggregate_values;
-----
-[NULL, 2, 2, 1]
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT list(i ORDER BY i DESC NULLS FIRST) FROM aggregate_values;
-----
-[NULL, 2, 2, 1]
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-PRAGMA disable_optimizer;
-
-query T
-SELECT list(i ORDER BY i DESC NULLS FIRST) FROM aggregate_values;
-----
-[NULL, 2, 2, 1]
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT list(i ORDER BY i DESC NULLS FIRST) FROM aggregate_values;
-----
-[NULL, 2, 2, 1]
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-PRAGMA disable_optimizer;
-
-query T
-SELECT quantile_cont(v.exported_0,0.5) FROM (VALUES(1),(2)) v(exported_0);
-----
-1.5
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT quantile_cont(v.exported_0,0.5) FROM (VALUES(1),(2)) v(exported_0);
-----
-1.5
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-PRAGMA disable_optimizer;
-
-query T
-SELECT quantile_cont(v.exported_0,0.5) FROM (VALUES(1),(2)) v(exported_0);
-----
-1.5
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT quantile_cont(v.exported_0,0.5) FROM (VALUES(1),(2)) v(exported_0);
-----
-1.5
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-PRAGMA disable_optimizer;
-
 query T
 SELECT finalize(sum(i) EXPORT_STATE) FROM aggregate_values;
 ----
 5
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT finalize(sum(i) EXPORT_STATE) FROM aggregate_values;
-----
-5
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-PRAGMA disable_optimizer;
-
-query T
-SELECT finalize(sum(i) EXPORT_STATE) FROM aggregate_values;
-----
-5
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT finalize(sum(i) EXPORT_STATE) FROM aggregate_values;
-----
-5
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-PRAGMA enable_optimizer;
 
 query T
 SELECT count(*) FROM count_values;
 ----
 2
 
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-PRAGMA enable_optimizer;
+query T
+SELECT string_agg(x, '&') FROM string_values;
+----
+a&b
 
 query T
-SELECT count(*) FROM count_values;
+SELECT string_agg(x, '&') FILTER (WHERE x IS NOT NULL) FROM string_values;
+----
+a&b
+
+query T
+SELECT string_agg(x, '&' ORDER BY x) FROM string_values;
+----
+a&b
+
+query T
+SELECT finalize(string_agg(x, '&') EXPORT_STATE) FROM string_values;
+----
+a&b
+
+query T
+SELECT finalize(string_agg(x, '&' ORDER BY x) EXPORT_STATE) FROM string_values;
+----
+a&b
+
+foreach disable_optimizer true false
+
+statement ok
+SET debug_disable_optimizer={disable_optimizer};
+
+query T
+SELECT sum(DISTINCT i) FILTER (WHERE i>1) FROM aggregate_values;
 ----
 2
 
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-PRAGMA disable_optimizer;
+query T
+SELECT list(i ORDER BY i DESC NULLS FIRST) FROM aggregate_values;
+----
+[NULL, 2, 2, 1]
 
 query T
-SELECT string_agg(x, '&') FROM string_values;
+SELECT quantile_cont(v.exported_0,0.5) FROM (VALUES(1),(2)) v(exported_0);
 ----
-a&b
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT string_agg(x, '&') FROM string_values;
-----
-a&b
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-PRAGMA disable_optimizer;
-
-query T
-SELECT string_agg(x, '&') FROM string_values;
-----
-a&b
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT string_agg(x, '&') FROM string_values;
-----
-a&b
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-PRAGMA disable_optimizer;
+1.5
 
 query T
 SELECT array_to_string(list_sort(string_split(string_agg(DISTINCT x, '&'), '&')), '&') FROM string_values;
 ----
 a&b
 
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT array_to_string(list_sort(string_split(string_agg(DISTINCT x, '&'), '&')), '&') FROM string_values;
-----
-a&b
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-PRAGMA disable_optimizer;
-
-query T
-SELECT array_to_string(list_sort(string_split(string_agg(DISTINCT x, '&'), '&')), '&') FROM string_values;
-----
-a&b
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT array_to_string(list_sort(string_split(string_agg(DISTINCT x, '&'), '&')), '&') FROM string_values;
-----
-a&b
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-PRAGMA disable_optimizer;
-
-query T
-SELECT string_agg(x, '&') FILTER (WHERE x IS NOT NULL) FROM string_values;
-----
-a&b
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT string_agg(x, '&') FILTER (WHERE x IS NOT NULL) FROM string_values;
-----
-a&b
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-PRAGMA disable_optimizer;
-
-query T
-SELECT string_agg(x, '&') FILTER (WHERE x IS NOT NULL) FROM string_values;
-----
-a&b
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT string_agg(x, '&') FILTER (WHERE x IS NOT NULL) FROM string_values;
-----
-a&b
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-PRAGMA disable_optimizer;
-
-query T
-SELECT string_agg(x, '&' ORDER BY x) FROM string_values;
-----
-a&b
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT string_agg(x, '&' ORDER BY x) FROM string_values;
-----
-a&b
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-PRAGMA disable_optimizer;
-
-query T
-SELECT string_agg(x, '&' ORDER BY x) FROM string_values;
-----
-a&b
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT string_agg(x, '&' ORDER BY x) FROM string_values;
-----
-a&b
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-PRAGMA disable_optimizer;
-
 query T
 SELECT string_agg(DISTINCT x, '&' ORDER BY x) FROM string_values;
 ----
 a&b
 
-statement ok
-PRAGMA enable_optimizer;
+endloop
 
-query T
-SELECT string_agg(DISTINCT x, '&' ORDER BY x) FROM string_values;
-----
-a&b
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-PRAGMA disable_optimizer;
-
-query T
-SELECT string_agg(DISTINCT x, '&' ORDER BY x) FROM string_values;
-----
-a&b
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT string_agg(DISTINCT x, '&' ORDER BY x) FROM string_values;
-----
-a&b
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-PRAGMA disable_optimizer;
-
-query T
-SELECT finalize(string_agg(x, '&') EXPORT_STATE) FROM string_values;
-----
-a&b
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT finalize(string_agg(x, '&') EXPORT_STATE) FROM string_values;
-----
-a&b
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-PRAGMA disable_optimizer;
-
-query T
-SELECT finalize(string_agg(x, '&') EXPORT_STATE) FROM string_values;
-----
-a&b
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT finalize(string_agg(x, '&') EXPORT_STATE) FROM string_values;
-----
-a&b
-
-statement ok
-SET debug_verify_serializer=false;
-
-statement ok
-PRAGMA disable_optimizer;
-
-query T
-SELECT finalize(string_agg(x, '&' ORDER BY x) EXPORT_STATE) FROM string_values;
-----
-a&b
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT finalize(string_agg(x, '&' ORDER BY x) EXPORT_STATE) FROM string_values;
-----
-a&b
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-PRAGMA disable_optimizer;
-
-query T
-SELECT finalize(string_agg(x, '&' ORDER BY x) EXPORT_STATE) FROM string_values;
-----
-a&b
-
-statement ok
-PRAGMA enable_optimizer;
-
-query T
-SELECT finalize(string_agg(x, '&' ORDER BY x) EXPORT_STATE) FROM string_values;
-----
-a&b
+endloop
 
 statement ok
 PRAGMA enable_optimizer;

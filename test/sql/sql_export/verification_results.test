@@ -10,65 +10,65 @@ SELECT count(*) FROM system.main.duckdb_tables();
 ----
 0
 
+foreach mode off strict
+
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT rowsort type_source_0
 SELECT * FROM test_all_types();
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT rowsort type_source_0
-SELECT * FROM test_all_types();
+reset label type_source_0
+
+foreach mode off strict
 
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query T rowsort type_source_1
 SELECT test_vector FROM test_vector_types(NULL::INTEGER);
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query T rowsort type_source_1
-SELECT test_vector FROM test_vector_types(NULL::INTEGER);
+reset label type_source_1
+
+foreach mode off strict
 
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query TT rowsort type_source_2
 SELECT * FROM test_vector_types(NULL::VARCHAR, NULL::INTEGER[], all_flat=true);
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query TT rowsort type_source_2
-SELECT * FROM test_vector_types(NULL::VARCHAR, NULL::INTEGER[], all_flat=true);
+reset label type_source_2
+
+foreach mode off strict
 
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query T rowsort type_source_3
 WITH t AS NOT MATERIALIZED (SELECT * FROM test_all_types()) SELECT count(*) FROM t a, t b;
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query T rowsort type_source_3
-WITH t AS NOT MATERIALIZED (SELECT * FROM test_all_types()) SELECT count(*) FROM t a, t b;
+reset label type_source_3
+
+foreach mode off strict
 
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query T rowsort type_source_4
 WITH t AS MATERIALIZED (SELECT * FROM test_vector_types(NULL::INTEGER)) SELECT count(*) FROM t a, t b;
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query T rowsort type_source_4
-WITH t AS MATERIALIZED (SELECT * FROM test_vector_types(NULL::INTEGER)) SELECT count(*) FROM t a, t b;
+reset label type_source_4
 
 statement ok
 CREATE SEQUENCE type_source_calls;
@@ -164,8 +164,10 @@ CREATE MACRO shadow.prefix(a,b) AS false;
 statement ok
 SET search_path='shadow,main';
 
+foreach serializer false true
+
 statement ok
-SET debug_verify_serializer=false;
+SET debug_verify_serializer={serializer};
 
 query II
 SELECT abs(i),sum(i) OVER () FROM (VALUES (-2),(2)) t(i);
@@ -189,30 +191,7 @@ SELECT s LIKE 'a%' FROM (VALUES ('abc'),('xyz')) t(s);
 true
 false
 
-statement ok
-SET debug_verify_serializer=true;
-
-query II
-SELECT abs(i),sum(i) OVER () FROM (VALUES (-2),(2)) t(i);
-----
-2	0
-2	0
-
-query I
-SELECT sum(abs(i)) FROM (VALUES (-2),(2)) t(i);
-----
-4
-
-query RII
-SELECT avg(i),count(i),count(*) FROM (VALUES (1),(2),(NULL)) t(i);
-----
-1.5	2	3
-
-query I
-SELECT s LIKE 'a%' FROM (VALUES ('abc'),('xyz')) t(s);
-----
-true
-false
+endloop
 
 
 statement ok

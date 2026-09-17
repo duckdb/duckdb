@@ -36,25 +36,23 @@ foreach optimizer '' 'window_rewriter'
 statement ok
 SET disabled_optimizers={optimizer};
 
+foreach mode off strict
+
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query III nosort numbered_result
 SELECT * FROM (SELECT i,v,row_number() OVER () n FROM numbered_scan) WHERE i<10 ORDER BY i;
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query III nosort numbered_result
-SELECT * FROM (SELECT i,v,row_number() OVER () n FROM numbered_scan) WHERE i<10 ORDER BY i;
+reset label numbered_result
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,v,row_number() OVER () n FROM numbered_scan) WHERE i<10 ORDER BY i;
 ----
 sql	<REGEX>:.*"?system"?[.]main[.]row_number[(][)] OVER [(][)].*
 
-reset label numbered_result
-
 endloop
 
 foreach optimizer '' 'window_rewriter'
@@ -62,25 +60,23 @@ foreach optimizer '' 'window_rewriter'
 statement ok
 SET disabled_optimizers={optimizer};
 
+foreach mode off strict
+
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query III nosort numbered_result
 SELECT * FROM (SELECT i,v,row_number() OVER () n FROM numbered_scan) WHERE i>=299990 ORDER BY i;
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query III nosort numbered_result
-SELECT * FROM (SELECT i,v,row_number() OVER () n FROM numbered_scan) WHERE i>=299990 ORDER BY i;
+reset label numbered_result
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,v,row_number() OVER () n FROM numbered_scan) WHERE i>=299990 ORDER BY i;
 ----
 sql	<REGEX>:.*"?system"?[.]main[.]row_number[(][)] OVER [(][)].*
 
-reset label numbered_result
-
 endloop
 
 foreach optimizer '' 'window_rewriter'
@@ -88,25 +84,23 @@ foreach optimizer '' 'window_rewriter'
 statement ok
 SET disabled_optimizers={optimizer};
 
+foreach mode off strict
+
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query III nosort numbered_result
 SELECT * FROM (SELECT i,rowid,row_number() OVER () n FROM numbered_scan) WHERE i>=299990 ORDER BY i;
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query III nosort numbered_result
-SELECT * FROM (SELECT i,rowid,row_number() OVER () n FROM numbered_scan) WHERE i>=299990 ORDER BY i;
+reset label numbered_result
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT i,rowid,row_number() OVER () n FROM numbered_scan) WHERE i>=299990 ORDER BY i;
 ----
 sql	<REGEX>:.*"?system"?[.]main[.]row_number[(][)] OVER [(][)].*
 
-reset label numbered_result
-
 endloop
 
 foreach optimizer '' 'window_rewriter'
@@ -114,25 +108,23 @@ foreach optimizer '' 'window_rewriter'
 statement ok
 SET disabled_optimizers={optimizer};
 
+foreach mode off strict
+
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query II nosort numbered_result
 SELECT * FROM (SELECT s.x,row_number() OVER () n FROM numbered_scan) LIMIT 4097;
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query II nosort numbered_result
-SELECT * FROM (SELECT s.x,row_number() OVER () n FROM numbered_scan) LIMIT 4097;
+reset label numbered_result
 
 query TT
 EXPLAIN (SQL) SELECT * FROM (SELECT s.x,row_number() OVER () n FROM numbered_scan) LIMIT 4097;
 ----
 sql	<REGEX>:.*"?system"?[.]main[.]row_number[(][)] OVER [(][)].*
 
-reset label numbered_result
-
 endloop
 
 foreach optimizer '' 'window_rewriter'
@@ -140,25 +132,23 @@ foreach optimizer '' 'window_rewriter'
 statement ok
 SET disabled_optimizers={optimizer};
 
+foreach mode off strict
+
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query I nosort numbered_result
 SELECT row_number() OVER () n FROM numbered_scan LIMIT 1;
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query I nosort numbered_result
-SELECT row_number() OVER () n FROM numbered_scan LIMIT 1;
+reset label numbered_result
 
 query TT
 EXPLAIN (SQL) SELECT row_number() OVER () n FROM numbered_scan LIMIT 1;
 ----
 sql	<REGEX>:.*"?system"?[.]main[.]row_number[(][)] OVER [(][)].*
 
-reset label numbered_result
-
 endloop
 
 foreach optimizer '' 'window_rewriter'
@@ -166,24 +156,22 @@ foreach optimizer '' 'window_rewriter'
 statement ok
 SET disabled_optimizers={optimizer};
 
+foreach mode off strict
+
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query III nosort numbered_result
 SELECT i,n,n FROM (SELECT i,row_number() OVER () n FROM numbered_scan) LIMIT 3;
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query III nosort numbered_result
-SELECT i,n,n FROM (SELECT i,row_number() OVER () n FROM numbered_scan) LIMIT 3;
+reset label numbered_result
 
 query TT
 EXPLAIN (SQL) SELECT i,n,n FROM (SELECT i,row_number() OVER () n FROM numbered_scan) LIMIT 3;
 ----
 sql	<REGEX>:.*"?system"?[.]main[.]row_number[(][)] OVER [(][)].*
-
-reset label numbered_result
 
 endloop
 
@@ -207,41 +195,41 @@ INSERT INTO offset_rows VALUES (-1);
 statement ok
 SET disabled_optimizers='statistics_propagation';
 
+foreach mode off strict
+
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query I nosort numbered_25
 SELECT i FROM offset_rows ORDER BY i LIMIT 1 OFFSET 1;
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query I nosort numbered_25
-SELECT i FROM offset_rows ORDER BY i LIMIT 1 OFFSET 1;
+reset label numbered_25
+
+foreach mode off strict
 
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query I nosort numbered_26
 SELECT i FROM offset_rows ORDER BY i LIMIT 1 OFFSET 122880;
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query I nosort numbered_26
-SELECT i FROM offset_rows ORDER BY i LIMIT 1 OFFSET 122880;
+reset label numbered_26
+
+foreach mode off strict
 
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query I nosort numbered_27
 SELECT i FROM offset_rows ORDER BY i OFFSET 200000;
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query I nosort numbered_27
-SELECT i FROM offset_rows ORDER BY i OFFSET 200000;
+reset label numbered_27
 
 statement ok
 SET disabled_optimizers='';
@@ -249,29 +237,29 @@ SET disabled_optimizers='';
 statement ok
 CREATE TABLE hinted_scan AS SELECT i,i%7 v FROM range(100)t(i);
 
+foreach mode off strict
+
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query II nosort numbered_28
 SELECT i,v FROM hinted_scan WHERE i>50;
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query II nosort numbered_28
-SELECT i,v FROM hinted_scan WHERE i>50;
+reset label numbered_28
 
 statement ok
 CREATE TABLE hint_groups AS SELECT i,CASE WHEN i<122880 THEN i+1 ELSE i-1 END v FROM range(300000)t(i);
 
+foreach mode off strict
+
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query II nosort numbered_29
 SELECT i,v FROM hint_groups WHERE i>v LIMIT 5;
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query II nosort numbered_29
-SELECT i,v FROM hint_groups WHERE i>v LIMIT 5;
+reset label numbered_29

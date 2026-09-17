@@ -20,14 +20,16 @@ CREATE TABLE l AS SELECT i,(i%5)::DOUBLE g,CASE WHEN i%11=0 THEN NULL ELSE i%13 
 statement ok
 CREATE TABLE r AS SELECT (i%4)::DOUBLE g,CASE WHEN i%7=0 THEN NULL ELSE i%13 END y FROM range(64)t(i);
 
+foreach serializer false true
+
+statement ok
+SET debug_verify_serializer={serializer};
+
 statement ok
 DROP SEQUENCE IF EXISTS seq;
 
 statement ok
 CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_serializer=false;
 
 statement error
 EXPLAIN (SQL) SELECT i,nextval('seq'),x=ANY(SELECT y FROM r WHERE r.g=l.g) m FROM l;
@@ -39,33 +41,18 @@ SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 ----
 NULL
 
-statement ok
-DROP SEQUENCE IF EXISTS seq;
+endloop
+
+foreach serializer false true
 
 statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement error
-EXPLAIN (SQL) SELECT i,nextval('seq'),x=ANY(SELECT y FROM r WHERE r.g=l.g) m FROM l;
-----
-<REGEX>:.*UNSUPPORTED_EXPORT_FEATURE.*The MARK condition requires conjunction execution semantics.*
-
-query I
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-----
-NULL
+SET debug_verify_serializer={serializer};
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
 
 statement ok
 CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_serializer=false;
 
 statement error
 EXPLAIN (SQL) SELECT i,nextval('seq'),x=ANY(SELECT y FROM r WHERE r.g=l.g) m FROM l LIMIT 1;
@@ -77,33 +64,18 @@ SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 ----
 NULL
 
-statement ok
-DROP SEQUENCE IF EXISTS seq;
+endloop
+
+foreach serializer false true
 
 statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement error
-EXPLAIN (SQL) SELECT i,nextval('seq'),x=ANY(SELECT y FROM r WHERE r.g=l.g) m FROM l LIMIT 1;
-----
-<REGEX>:.*UNSUPPORTED_EXPORT_FEATURE.*The MARK condition requires conjunction execution semantics.*
-
-query I
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-----
-NULL
+SET debug_verify_serializer={serializer};
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
 
 statement ok
 CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_serializer=false;
 
 statement error
 EXPLAIN (SQL) SELECT i,CASE WHEN i>=4096 THEN CAST(error('grouped mark stream') AS BIGINT) ELSE nextval('seq') END,x=ANY(SELECT y FROM r WHERE r.g=l.g) m FROM l;
@@ -115,33 +87,18 @@ SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 ----
 NULL
 
-statement ok
-DROP SEQUENCE IF EXISTS seq;
+endloop
+
+foreach serializer false true
 
 statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement error
-EXPLAIN (SQL) SELECT i,CASE WHEN i>=4096 THEN CAST(error('grouped mark stream') AS BIGINT) ELSE nextval('seq') END,x=ANY(SELECT y FROM r WHERE r.g=l.g) m FROM l;
-----
-<REGEX>:.*UNSUPPORTED_EXPORT_FEATURE.*The MARK condition requires conjunction execution semantics.*
-
-query I
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-----
-NULL
+SET debug_verify_serializer={serializer};
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
 
 statement ok
 CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_serializer=false;
 
 statement error
 EXPLAIN (SQL) SELECT i,CASE WHEN i>=4096 THEN CAST(error('grouped mark stream') AS BIGINT) ELSE nextval('seq') END,x=ANY(SELECT y FROM r WHERE r.g=l.g) m FROM l LIMIT 1;
@@ -153,21 +110,4 @@ SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 ----
 NULL
 
-statement ok
-DROP SEQUENCE IF EXISTS seq;
-
-statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement error
-EXPLAIN (SQL) SELECT i,CASE WHEN i>=4096 THEN CAST(error('grouped mark stream') AS BIGINT) ELSE nextval('seq') END,x=ANY(SELECT y FROM r WHERE r.g=l.g) m FROM l LIMIT 1;
-----
-<REGEX>:.*UNSUPPORTED_EXPORT_FEATURE.*The MARK condition requires conjunction execution semantics.*
-
-query I
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
-----
-NULL
+endloop
