@@ -394,7 +394,7 @@ endfunction()
 # Compiles a C++ extension once into lib<NAME>_extension.a and links its loadable from that archive.
 # NO_LOADABLE builds the archive only; NO_WARNINGS silences compiler warnings.
 function(build_extension_library NAME)
-    cmake_parse_arguments(PARSE_ARGV 1 ARG "NO_LOADABLE;NO_WARNINGS" "" "")
+    cmake_parse_arguments(PARSE_ARGV 1 ARG "NO_LOADABLE;NO_WARNINGS;DEFAULT_VISIBILITY" "" "")
     set(FILES ${ARG_UNPARSED_ARGUMENTS})
     set(PARAMETERS "-warnings")
     if(ARG_NO_WARNINGS)
@@ -414,8 +414,10 @@ function(build_extension_library NAME)
         return()
     endif()
 
-    # one set of objects serves both products, so compile it the way a loadable extension needs
-    set_target_properties(${NAME}_extension PROPERTIES CXX_VISIBILITY_PRESET hidden)
+    # the loadable exports only its entry point either way; DEFAULT_VISIBILITY keeps internals visible through libduckdb
+    if(NOT ARG_DEFAULT_VISIBILITY)
+        set_target_properties(${NAME}_extension PROPERTIES CXX_VISIBILITY_PRESET hidden)
+    endif()
     set(LOADABLE_SOURCE "${DuckDB_BINARY_DIR}/codegen/loadable_from_archive.cpp")
     if(NOT EXISTS "${LOADABLE_SOURCE}")
         file(WRITE "${LOADABLE_SOURCE}" "// A loadable extension built by build_extension_library takes its code from its static archive.\n")
