@@ -24,7 +24,7 @@ bool TableFunctionRef::Equals(const TableRef &other_p) const {
 
 const unique_ptr<ParsedExpression> &TableFunctionRef::SerializableFunction() const {
 	if (bind_info) {
-		throw SerializationException("Cannot serialize a table function with process-local bind input");
+		throw NotImplementedException("Cannot serialize a table function with process-local bind input");
 	}
 	return function;
 }

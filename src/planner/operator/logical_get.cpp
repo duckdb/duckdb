@@ -306,7 +306,7 @@ void LogicalGet::SetPartitionsToScan(vector<idx_t> partition_indices) {
 
 void LogicalGet::Serialize(Serializer &serializer) const {
 	if (bind_info) {
-		throw SerializationException("Cannot serialize a table function with process-local bind input");
+		throw NotImplementedException("Cannot serialize a table function with process-local bind input");
 	}
 	LogicalOperator::Serialize(serializer);
 	serializer.WriteProperty(200, "table_index", table_index);
