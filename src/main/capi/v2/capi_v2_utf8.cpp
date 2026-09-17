@@ -6,11 +6,9 @@ using namespace duckdb::capiv2;
 
 DUCKDB_V2_ERROR duckdb_v2_validate_utf8(duckdb_v2_str text, duckdb_v2_error_info_handle *err) {
 	return WithErrorHandler(err, [&]() {
-		if (!text.ptr && text.len) {
-			throw duckdb::InvalidInputException("UTF-8 byte range cannot be null unless it is empty");
-		}
-		if (text.len && duckdb::Utf8Proc::Analyze(text.ptr, text.len) == duckdb::UnicodeType::INVALID) {
-			throw duckdb::InvalidInputException("Invalid UTF-8: VARCHAR must contain valid UTF-8 text");
+		auto bytes = Convert(text);
+		if (!duckdb::Utf8Proc::IsValid(bytes.data(), bytes.size())) {
+			throw duckdb::InvalidInputException("Input is not valid UTF-8");
 		}
 	});
 }

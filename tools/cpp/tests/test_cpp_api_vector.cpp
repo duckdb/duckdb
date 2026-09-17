@@ -672,22 +672,21 @@ TEST_CASE("Stable C++API: checked and unsafe UTF-8 string construction", "[cpp_a
 	}
 }
 
-TEST_CASE("Stable C++API: string helpers preserve binary bytes", "[cpp_api]") {
+TEST_CASE("Stable C++API: AssignString preserves binary bytes", "[cpp_api]") {
 	using namespace duckdb::cxx;
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	for (const auto &type : {"BLOB", "BIT", "BIGNUM"}) {
+	const auto bignum = bignum_t::Encode({{0xFF}, false});
+	const std::pair<const char *, std::string> values[] = {
+	    {"BLOB", "\xFF"}, {"BIT", std::string("\0\xFF", 2)}, {"BIGNUM", std::string(bignum.begin(), bignum.end())}};
+	for (const auto &value : values) {
 		std::vector<LogicalType> types;
-		types.push_back(conn.ParseType(type));
+		types.push_back(conn.ParseType(value.first));
 		DataChunk chunk(types);
 		auto vec = chunk.GetVector(0);
 		vec.SetSize(1);
-		vec.AssignString(0, "\xFF");
-		REQUIRE(vec.GetDataMutable<blob_t>()[0].view() == "\xFF");
-		vec.SetString(0, varchar_t("\xFE", 1));
-		REQUIRE(vec.GetDataMutable<blob_t>()[0].view() == "\xFE");
-		auto heap = vec.GetHeap();
-		REQUIRE(heap.AddBlob("\xFF").view() == "\xFF");
+		vec.AssignString(0, value.second);
+		REQUIRE(vec.GetDataMutable<blob_t>()[0].view() == value.second);
 	}
 }

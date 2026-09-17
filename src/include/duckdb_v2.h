@@ -315,7 +315,7 @@ typedef struct _duckdb_v2_context {
  */
 typedef uint32_t duckdb_v2_sel_t;
 
-//! VARCHAR storage. Read the transparent bytes fields directly.
+//! VARCHAR storage. The bytes must contain valid UTF-8. Read the transparent bytes fields directly.
 typedef duckdb_v2_bytes duckdb_v2_varchar_t;
 
 //! BLOB storage. Read the transparent bytes fields directly.
@@ -3594,6 +3594,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_set_value(duckdb_v2_vector_handle 
  * Any other representation returns ERROR_INPUT_INVALID. The pointer is valid until the owning chunk is destroyed, and
  * the vector's storage shape must not change — through a flatten, say — while it is in use.
  *
+ * When writing VARCHAR values, the caller must ensure that the bytes contain valid UTF-8.
+ *
  * history:
  * - stable: v2.0.0
  *
@@ -3879,8 +3881,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_bignum_encode(const uint8_t *in_data, idx
                                                      duckdb_v2_error_info_handle *err);
 
 /*!
- * Validates a byte string as UTF-8, returning ERROR_INPUT_INVALID for malformed text. The explicit byte length
- * preserves embedded NUL characters. A NULL pointer is allowed only for an empty string.
+ * Validates all text.len bytes as UTF-8, including bytes after embedded NUL characters. Returns ERROR_INPUT_INVALID for
+ * malformed UTF-8 or a NULL pointer with a nonzero length.
  *
  * history:
  * - stable: v2.0.0

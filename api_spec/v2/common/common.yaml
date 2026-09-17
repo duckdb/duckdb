@@ -230,7 +230,9 @@ aliases:
       "sparse" view of the vector's data.
   varchar:
     underlying: bytes
-    description: VARCHAR storage. Read the transparent bytes fields directly.
+    description: |
+      VARCHAR storage. The bytes must contain valid UTF-8.
+      Read the transparent bytes fields directly.
   blob:
     underlying: bytes
     description: BLOB storage. Read the transparent bytes fields directly.
