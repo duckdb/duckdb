@@ -91,13 +91,13 @@ handles:
       `[[file_destroy]]`. Read, write, seek and sync through the `file_*` functions. Only usable while the file
       system it was opened through is still valid.
 
-  file_stat:
+  file_metadata:
     description: |
       An opaque handle to what is known about one file or directory: its type, and when known its size,
-      modification time and version tag. Produced owned by `[[file_system_stat]]` and `[[file_get_stat]]`, to be
-      destroyed with `[[file_stat_destroy]]`; handed out borrowed to a virtual file system's callbacks and by
-      `[[file_listing_get_entry_stat]]`, where it must not be destroyed. Read with the `file_stat_get_*`
-      functions, filled in with the `file_stat_set_*` functions.
+      modification time and version tag. Produced owned by `[[file_system_stat]]` and `[[file_stat]]`, to be
+      destroyed with `[[file_metadata_destroy]]`; handed out borrowed to a virtual file system's callbacks and by
+      `[[file_listing_get_entry_metadata]]`, where it must not be destroyed. Read with the `file_metadata_get_*`
+      functions, filled in with the `file_metadata_set_*` functions.
 
   file_listing:
     description: |
@@ -542,7 +542,7 @@ functions:
       directory, a pipe, something else, or `FILE_TYPE_INVALID` when nothing is there, which is a result rather
       than an error. Size, modification time and version tag are filled in as far as the file system knows
       them by path; each getter reports whether its field is known. The local file system answers all of them
-      from one system call, and a virtual file system answers whatever its "stat path" callback reports.
+      from one system call, and a virtual file system answers whatever its path-level "stat" callback reports.
     parameters:
       file_system:
         type: file_system
@@ -550,11 +550,11 @@ functions:
       path:
         type: str
         description: The path to report on. Borrowed for the call only.
-      stat:
-        type: file_stat
+      metadata:
+        type: file_metadata
         indirection: 1
         kind: OUT
-        description: On success, receives the stat. Owned by the caller; destroy via `[[file_stat_destroy]]`.
+        description: On success, receives the metadata. Owned by the caller; destroy via `[[file_metadata_destroy]]`.
       err:
         type: error_info
         indirection: 1
@@ -692,9 +692,9 @@ functions:
     return_type: ERROR
 
   #---------------------------------------------------------------------------------------------------------------------
-  # File Stat
+  # File Metadata
   #---------------------------------------------------------------------------------------------------------------------
-  file_get_stat:
+  file_stat:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
@@ -704,26 +704,26 @@ functions:
       file:
         type: file
         description: The file to report on.
-      stat:
-        type: file_stat
+      metadata:
+        type: file_metadata
         indirection: 1
         kind: OUT
-        description: On success, receives the stat. Owned by the caller; destroy via `[[file_stat_destroy]]`.
+        description: On success, receives the metadata. Owned by the caller; destroy via `[[file_metadata_destroy]]`.
       err:
         type: error_info
         indirection: 1
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  file_stat_get_type:
+  file_metadata_get_type:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
       Reads what the path refers to, `FILE_TYPE_INVALID` when nothing is there.
     parameters:
-      stat:
-        type: file_stat
-        description: The stat to read.
+      metadata:
+        type: file_metadata
+        description: The metadata to read.
       type:
         type: FILE_TYPE
         indirection: 1
@@ -735,15 +735,15 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  file_stat_get_size:
+  file_metadata_get_size:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
       Reads the size of the file in bytes, and whether one is known at all.
     parameters:
-      stat:
-        type: file_stat
-        description: The stat to read.
+      metadata:
+        type: file_metadata
+        description: The metadata to read.
       size:
         type: idx
         indirection: 1
@@ -760,15 +760,15 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  file_stat_get_last_modified:
+  file_metadata_get_last_modified:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
       Reads when the file was last modified, and whether that is known at all.
     parameters:
-      stat:
-        type: file_stat
-        description: The stat to read.
+      metadata:
+        type: file_metadata
+        description: The metadata to read.
       last_modified:
         type: i64
         indirection: 1
@@ -785,15 +785,15 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  file_stat_get_version_tag:
+  file_metadata_get_version_tag:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
-      Reads the tag that identifies this version of the file's contents, and whether one is known at all. Borrowed; valid as long as the stat is.
+      Reads the tag that identifies this version of the file's contents, and whether one is known at all. Borrowed; valid as long as the metadata is.
     parameters:
-      stat:
-        type: file_stat
-        description: The stat to read.
+      metadata:
+        type: file_metadata
+        description: The metadata to read.
       version_tag:
         type: str
         indirection: 1
@@ -810,20 +810,20 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  file_stat_set_type:
+  file_metadata_set_type:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets what the path refers to.
 
-      From a virtual file system's "stat path" callback this is what reports existence: until it is called the
+      From a virtual file system's path-level "stat" callback this is what reports existence: until it is called the
       path is reported as not existing, and `FILE_TYPE_INVALID` says the same explicitly. From the "stat"
       callback, `FILE_TYPE_PIPE` makes the engine treat the open file as a pipe and anything else as a regular
       file. On a listing entry it replaces the type the entry was added with.
     parameters:
-      stat:
-        type: file_stat
-        description: The stat to fill in.
+      metadata:
+        type: file_metadata
+        description: The metadata to fill in.
       type:
         type: FILE_TYPE
         description: The type to report.
@@ -833,15 +833,15 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  file_stat_set_size:
+  file_metadata_set_size:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the size of the file in bytes. Meaningful for regular files only.
     parameters:
-      stat:
-        type: file_stat
-        description: The stat to fill in.
+      metadata:
+        type: file_metadata
+        description: The metadata to fill in.
       size:
         type: idx
         description: The size of the file in bytes.
@@ -851,7 +851,7 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  file_stat_set_last_modified:
+  file_metadata_set_last_modified:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
@@ -860,9 +860,9 @@ functions:
       Optional. Together with the version tag, this is what lets the engine cache a file's contents across
       queries and tell when they went stale; a file that reports neither is never cached.
     parameters:
-      stat:
-        type: file_stat
-        description: The stat to fill in.
+      metadata:
+        type: file_metadata
+        description: The metadata to fill in.
       last_modified:
         type: i64
         description: The modification time, in microseconds since 1970-01-01 UTC.
@@ -872,7 +872,7 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  file_stat_set_version_tag:
+  file_metadata_set_version_tag:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
@@ -881,9 +881,9 @@ functions:
       Optional. A tag that changes whenever the contents do is the most reliable way for the engine to
       validate what it cached from the file. The tag is borrowed and copied.
     parameters:
-      stat:
-        type: file_stat
-        description: The stat to fill in.
+      metadata:
+        type: file_metadata
+        description: The metadata to fill in.
       version_tag:
         type: str
         description: The version tag. Borrowed and copied.
@@ -893,19 +893,19 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  file_stat_destroy:
+  file_metadata_destroy:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
-      Destroys a stat the caller owns, releasing its resources.
+      Destroys metadata the caller owns, releasing its resources.
 
-      Only for stats produced by `[[file_system_stat]]` and `[[file_get_stat]]`; a borrowed one must not be
+      Only for metadata produced by `[[file_system_stat]]` and `[[file_stat]]`; a borrowed one must not be
       passed here. Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on
       return to prevent double-destruction.
     parameters:
-      stat:
-        type: file_stat
-        description: The stat to destroy.
+      metadata:
+        type: file_metadata
+        description: The metadata to destroy.
         indirection: 1
     return_type: ERROR
 
@@ -922,7 +922,7 @@ functions:
       entry's name relative to the directory listed, from the "glob" callback the full path of a matching
       file. The path is borrowed and copied. Entries are reported in the order they are added.
 
-      The returned stat is for filling in what the listing already knows about the entry, such as its size,
+      The returned metadata is for filling in what the listing already knows about the entry, such as its size,
       modification time and version tag; the engine hands those back when it opens the entry, so the file
       system need not fetch them again. It is borrowed and valid until the callback returns. Pass null to skip
       it.
@@ -936,11 +936,11 @@ functions:
       type:
         type: FILE_TYPE
         description: What the entry is. Directories are descended into by globs and regular files matched by them; a pipe or anything else is listed but never matches a pattern.
-      stat:
-        type: file_stat
+      metadata:
+        type: file_metadata
         indirection: 1
         kind: OUT
-        description: Optional. Receives the borrowed stat of the new entry, to fill in what is known about it. Valid until the callback returns.
+        description: Optional. Receives the borrowed metadata of the new entry, to fill in what is known about it. Valid until the callback returns.
       err:
         type: error_info
         indirection: 1
@@ -1014,7 +1014,7 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  file_listing_get_entry_stat:
+  file_listing_get_entry_metadata:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
@@ -1027,11 +1027,11 @@ functions:
       index:
         type: idx
         description: The index of the entry.
-      stat:
-        type: file_stat
+      metadata:
+        type: file_metadata
         indirection: 1
         kind: OUT
-        description: Receives the borrowed stat.
+        description: Receives the borrowed metadata.
       err:
         type: error_info
         indirection: 1

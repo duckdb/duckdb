@@ -16,12 +16,17 @@ module: virtual file system
 # must come from a file system that owns the cursor. Either way every cursor operation either works
 # or fails; none is silently ignored.
 #
-# Every callback receives a borrowed info handle as its first argument and, where the operation has
-# a subject, a second one describing it: the open request, the open file, or the path. Those handles
-# are how the callbacks can grow without changing their signatures.
+# Callbacks come in two groups, named by their subject. File system callbacks (`claim`, `open`, `stat`,
+# `list`, `glob`, `remove_file`, `create_directory`, `remove_directory`, `move`) act on a path; file
+# callbacks (`close`, `abort`, `read_at`, `write_at`, `read`, `write`, `seek`, `tell`, `stat`, `sync`,
+# `truncate`) act on a file the "open" callback produced. Every callback receives a borrowed info
+# handle for its subject as its first argument -- the file system for `claim`, the open request, the
+# open file, or the path operation -- and the file system's user data and file system are reachable
+# from each. Path callbacks get the path itself as a plain argument next to it. The info handles are
+# how the callbacks can grow without changing their signatures.
 #
 # Absence is reported one way per kind of operation: a query reports a missing path by its result
-# (`stat path` leaves the stat untouched, `list` and `glob` add nothing), while `open` and every
+# (the file system `stat` leaves the metadata untouched, `list` and `glob` add nothing), while `open` and every
 # mutation report it as `ERROR_IO_FILE_NOT_FOUND`.
 #
 # Lifetimes. Opens may run concurrently, and so may the path callbacks. Per-file callbacks on one
@@ -29,8 +34,8 @@ module: virtual file system
 # runs after them. The user data's destructor runs after the last callback of the file system, when
 # the database closes. `claim` can be reached from any thread the moment `register` returns.
 #
-# A file system can delegate: callbacks reach the engine's file system through
-# `[[virtual_file_system_info_get_file_system]]` or a context, and `[[virtual_file_open_info_get_options]]`
+# A file system can delegate: callbacks reach the engine's file system through the `get_file_system`
+# function of their info handle or through a context, and `[[virtual_file_open_info_get_options]]`
 # hands the open request on as options for `[[file_system_open]]`, which is how an overlay -- caching,
 # encrypting, logging -- opens the file underneath with exactly the flags and values it received. An
 # overlay claims paths of its own, such as a scheme of its own, and maps them onto the paths of what it
@@ -88,27 +93,28 @@ handles:
 
   virtual_file_system_info:
     description: |
-      A borrowed opaque handle passed as the first argument to every virtual file system callback. It provides
-      access to the state shared by all callbacks of one file system, such as the user data set via
-      `[[virtual_file_system_set_user_data]]`.
+      A borrowed opaque handle to the file system itself, passed to the "claim" callback, whose whole subject
+      is a bare path. It provides the user data set via `[[virtual_file_system_set_user_data]]` and the
+      engine's file system for delegation.
 
   virtual_file_open_info:
     description: |
-      A borrowed opaque handle to one open request, passed to the "open" callback. The callback can use it to
-      read the path and flags of the file being opened, read the options the caller attached to the open, reach
-      the context of the query opening it, report properties of the file, and attach the per-file state that
-      the other per-file callbacks receive.
+      A borrowed opaque handle to one open request, passed to the "open" callback next to the path. The
+      callback can use it to read the flags of the file being opened, read the options the caller attached
+      to the open, reach the context of the query opening it and the file system's user data, report
+      properties of the file, and attach the per-file state that the file callbacks receive.
 
   virtual_file_info:
     description: |
-      A borrowed opaque handle to one open file, passed to every per-file callback. It provides the per-file
-      state attached by the "open" callback, and the path and flags the file was opened with.
+      A borrowed opaque handle to one open file, passed to every file callback. It provides the per-file state
+      attached by the "open" callback, the path and flags the file was opened with, and the file system's user
+      data.
 
   virtual_file_path_info:
     description: |
-      A borrowed opaque handle to one path operation, passed to the callbacks that act on a path rather than on
-      an open file. It provides the path, for a move the target path as well, and the context of the query
-      performing the operation.
+      A borrowed opaque handle to one path operation, passed next to the path to the callbacks that act on a
+      path rather than on an open file. It provides the context of the query performing the operation, the
+      file system's user data, and the engine's file system for delegation.
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Callbacks
@@ -144,7 +150,7 @@ callbacks:
     description: |
       Opens a file.
 
-      The path, flags, options and context of the request are read from `open_info`. On success the callback
+      The flags, options and context of the request are read from `open_info`. On success the callback
       attaches per-file state via `[[virtual_file_open_info_set_file_data]]`, which every per-file callback then
       receives, and reports any property of the file via `[[virtual_file_open_info_set_property]]`. A file
       opened with `FILE_FLAG_APPEND` starts with its cursor at the end.
@@ -153,19 +159,19 @@ callbacks:
       attaching early and failing later is fine. Reporting `ERROR_IO_FILE_NOT_FOUND` is what lets the engine
       give a precise message, and lets callers that asked for it get a null file instead of an error.
     parameters:
-      info:
-        type: virtual_file_system_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
       open_info:
         type: virtual_file_open_info
         description: Borrowed opaque handle to the open request. Valid only for the duration of the callback.
+      path:
+        type: str
+        description: The path of the file to open. Borrowed for the duration of the callback.
       err:
         type: error_info
         indirection: 1
         description: Borrowed error info handle to use to report errors that occur during the callback.
     return_type: void
 
-  virtual_file_system_close_callback:
+  virtual_file_close_callback:
     description: |
       Closes a file.
 
@@ -179,9 +185,6 @@ callbacks:
       is aborted instead if it was opened for writing and an "abort" callback is set; otherwise it is closed
       here, and a failure reported cannot be raised and is dropped.
     parameters:
-      info:
-        type: virtual_file_system_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
       file:
         type: virtual_file_info
         description: Borrowed opaque handle to the open file. Valid only for the duration of the callback.
@@ -191,7 +194,7 @@ callbacks:
         description: Borrowed error info handle to use to report errors that occur during the callback.
     return_type: void
 
-  virtual_file_system_abort_callback:
+  virtual_file_abort_callback:
     description: |
       Abandons a file being written, without publishing what was written.
 
@@ -201,9 +204,6 @@ callbacks:
       data's destructor still runs afterwards. Without this callback the engine closes the file as usual, and a
       partial file may be left behind.
     parameters:
-      info:
-        type: virtual_file_system_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
       file:
         type: virtual_file_info
         description: Borrowed opaque handle to the open file. Valid only for the duration of the callback.
@@ -213,7 +213,7 @@ callbacks:
         description: Borrowed error info handle to use to report errors that occur during the callback.
     return_type: void
 
-  virtual_file_system_read_at_callback:
+  virtual_file_read_at_callback:
     description: |
       Reads at a fixed offset.
 
@@ -223,9 +223,6 @@ callbacks:
       file has ended. Must not disturb the cursor of a file system that owns one. May be invoked from several
       threads at once on a file opened with `FILE_FLAG_PARALLEL_ACCESS`.
     parameters:
-      info:
-        type: virtual_file_system_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
       file:
         type: virtual_file_info
         description: Borrowed opaque handle to the open file. Valid only for the duration of the callback.
@@ -250,7 +247,7 @@ callbacks:
         description: Borrowed error info handle to use to report errors that occur during the callback.
     return_type: void
 
-  virtual_file_system_write_at_callback:
+  virtual_file_write_at_callback:
     description: |
       Writes at a fixed offset.
 
@@ -258,9 +255,6 @@ callbacks:
       end; anything less is a failure to report. Must not disturb the cursor. May be invoked from several
       threads at once on a file opened with `FILE_FLAG_PARALLEL_ACCESS`, for disjoint ranges.
     parameters:
-      info:
-        type: virtual_file_system_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
       file:
         type: virtual_file_info
         description: Borrowed opaque handle to the open file. Valid only for the duration of the callback.
@@ -281,7 +275,7 @@ callbacks:
         description: Borrowed error info handle to use to report errors that occur during the callback.
     return_type: void
 
-  virtual_file_system_read_callback:
+  virtual_file_read_callback:
     description: |
       Reads from the cursor.
 
@@ -290,9 +284,6 @@ callbacks:
       invoked concurrently on the same file, though offset reads may run alongside it on a file opened with
       `FILE_FLAG_PARALLEL_ACCESS`.
     parameters:
-      info:
-        type: virtual_file_system_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
       file:
         type: virtual_file_info
         description: Borrowed opaque handle to the open file. Valid only for the duration of the callback.
@@ -314,16 +305,13 @@ callbacks:
         description: Borrowed error info handle to use to report errors that occur during the callback.
     return_type: void
 
-  virtual_file_system_write_callback:
+  virtual_file_write_callback:
     description: |
       Writes at the cursor.
 
       Writes all `buffer_size` bytes at the file's current position, advancing it past them; anything less is a
       failure to report. Never invoked concurrently on the same file.
     parameters:
-      info:
-        type: virtual_file_system_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
       file:
         type: virtual_file_info
         description: Borrowed opaque handle to the open file. Valid only for the duration of the callback.
@@ -341,16 +329,13 @@ callbacks:
         description: Borrowed error info handle to use to report errors that occur during the callback.
     return_type: void
 
-  virtual_file_system_seek_callback:
+  virtual_file_seek_callback:
     description: |
       Moves the cursor.
 
       Sets the position the next cursor read or write starts from, as an absolute byte offset. Seeking past the
       end is allowed. Not invoked on a file that reported `FILE_PROPERTY_IS_SEEKABLE` as false.
     parameters:
-      info:
-        type: virtual_file_system_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
       file:
         type: virtual_file_info
         description: Borrowed opaque handle to the open file. Valid only for the duration of the callback.
@@ -363,12 +348,9 @@ callbacks:
         description: Borrowed error info handle to use to report errors that occur during the callback.
     return_type: void
 
-  virtual_file_system_tell_callback:
+  virtual_file_tell_callback:
     description: Reports the cursor's position, as an absolute byte offset from the start of the file.
     parameters:
-      info:
-        type: virtual_file_system_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
       file:
         type: virtual_file_info
         description: Borrowed opaque handle to the open file. Valid only for the duration of the callback.
@@ -383,11 +365,11 @@ callbacks:
         description: Borrowed error info handle to use to report errors that occur during the callback.
     return_type: void
 
-  virtual_file_system_stat_callback:
+  virtual_file_stat_callback:
     description: |
       Reports what is known about an open file.
 
-      Fills `stat_info` in with the file's size, and when known its modification time and version tag; those
+      Fills `metadata` in with the file's size, and when known its modification time and version tag; those
       two are what let the engine cache the file's contents across queries and know when to drop them. A file
       whose size is unknown, such as a forward-only stream, reports none; the engine then finds the end by
       reading, and readers that need the size up front refuse the file. Setting the type to `FILE_TYPE_PIPE`
@@ -395,14 +377,11 @@ callbacks:
       Invoked whenever the engine asks for the size, so it should be cheap: for a file opened for reading,
       report what was learned at open rather than asking the backend again.
     parameters:
-      info:
-        type: virtual_file_system_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
       file:
         type: virtual_file_info
         description: Borrowed opaque handle to the open file. Valid only for the duration of the callback.
-      stat_info:
-        type: file_stat
+      metadata:
+        type: file_metadata
         description: Borrowed opaque handle to fill in. Valid only for the duration of the callback.
       err:
         type: error_info
@@ -410,16 +389,13 @@ callbacks:
         description: Borrowed error info handle to use to report errors that occur during the callback.
     return_type: void
 
-  virtual_file_system_sync_callback:
+  virtual_file_sync_callback:
     description: |
       Flushes buffered writes to persistent storage.
 
       Invoked when the engine needs written data to be durable, and before it closes a written file. A file
       system that leaves it unset treats every write as immediately durable.
     parameters:
-      info:
-        type: virtual_file_system_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
       file:
         type: virtual_file_info
         description: Borrowed opaque handle to the open file. Valid only for the duration of the callback.
@@ -429,16 +405,13 @@ callbacks:
         description: Borrowed error info handle to use to report errors that occur during the callback.
     return_type: void
 
-  virtual_file_system_truncate_callback:
+  virtual_file_truncate_callback:
     description: |
       Truncates an open file to a size no larger than its current one.
 
       Only database and write-ahead-log files are truncated, so a file system that only serves data files can
       leave this unset.
     parameters:
-      info:
-        type: virtual_file_system_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
       file:
         type: virtual_file_info
         description: Borrowed opaque handle to the open file. Valid only for the duration of the callback.
@@ -451,25 +424,25 @@ callbacks:
         description: Borrowed error info handle to use to report errors that occur during the callback.
     return_type: void
 
-  virtual_file_system_stat_path_callback:
+  virtual_file_system_stat_callback:
     description: |
       Reports what is known about a path, without opening it.
 
-      Fills `stat_info` in with the type of the path, and for a regular file whatever else is known: size,
+      Fills `metadata` in with the type of the path, and for a regular file whatever else is known: size,
       modification time and version tag are optional, and whatever is filled in is what `[[file_system_stat]]`
-      reports for the path. Leaving `stat_info` untouched reports that the path does not exist, which is not
+      reports for the path. Leaving `metadata` untouched reports that the path does not exist, which is not
       an error. This is how the engine checks whether a file or directory exists before creating or
       overwriting it, whether it is about to write to a pipe, and how it learns a file's size without opening
       it. A file system that leaves this callback unset is asked by opening the file instead.
     parameters:
-      info:
-        type: virtual_file_system_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
-      path:
+      path_info:
         type: virtual_file_path_info
         description: Borrowed opaque handle to the path operation. Valid only for the duration of the callback.
-      stat_info:
-        type: file_stat
+      path:
+        type: str
+        description: The path to report on. Borrowed for the duration of the callback.
+      metadata:
+        type: file_metadata
         description: Borrowed opaque handle to fill in. Valid only for the duration of the callback.
       err:
         type: error_info
@@ -482,16 +455,14 @@ callbacks:
       Lists the entries of a directory.
 
       Adds one entry per file and subdirectory directly inside the path, by name relative to it (not by full
-      path), with `[[file_listing_add_entry]]`, filling in what the listing already knows about each. Besides
-      serving directory listings, this is what the engine expands glob patterns with when no "glob" callback
-      is set.
+      path), with `[[file_listing_add_entry]]`, filling in what the listing already knows about each.
     parameters:
-      info:
-        type: virtual_file_system_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
-      path:
+      path_info:
         type: virtual_file_path_info
         description: Borrowed opaque handle to the path operation. Valid only for the duration of the callback.
+      path:
+        type: str
+        description: The directory to list. Borrowed for the duration of the callback.
       list_info:
         type: file_listing
         description: Borrowed opaque handle to add entries to. Valid only for the duration of the callback.
@@ -505,18 +476,19 @@ callbacks:
     description: |
       Expands a glob pattern to the files matching it.
 
-      Optional: without it, the engine expands patterns itself by listing directories through the "list"
-      callback, supporting `*`, `?`, `[...]` within a path component and `**` as a whole component. Set it when
-      the backend can match patterns more cheaply than by listing, such as an object store that filters on a
-      prefix. Adds the full path of each matching file with `[[file_listing_add_entry]]`; a pattern
-      matching nothing adds nothing, which is not an error.
+      Optional: without it, a path with glob characters is an error, and one without names that single file.
+      With it, every path the engine reads goes through here, plain or not, so a plain path that exists is
+      added as its own expansion. The engine passes patterns through as written; the built-in file systems
+      support `*`, `?` and `[...]` within a path component and `**` for any number of directories, and a
+      backend that does the same behaves like them. Adds the full path of each matching file with
+      `[[file_listing_add_entry]]`; a pattern matching nothing adds nothing, which is not an error.
     parameters:
-      info:
-        type: virtual_file_system_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
-      pattern:
+      path_info:
         type: virtual_file_path_info
-        description: Borrowed opaque handle to the path operation, whose path is the pattern. Valid only for the duration of the callback.
+        description: Borrowed opaque handle to the path operation. Valid only for the duration of the callback.
+      pattern:
+        type: str
+        description: The pattern to expand. Borrowed for the duration of the callback.
       list_info:
         type: file_listing
         description: Borrowed opaque handle to add the matching files to. Valid only for the duration of the callback.
@@ -534,12 +506,12 @@ callbacks:
       `ERROR_IO_FILE_NOT_FOUND`, which the engine treats as "nothing to remove" where it does not care and as
       an error where it does.
     parameters:
-      info:
-        type: virtual_file_system_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
-      path:
+      path_info:
         type: virtual_file_path_info
         description: Borrowed opaque handle to the path operation. Valid only for the duration of the callback.
+      path:
+        type: str
+        description: The path of the file to remove. Borrowed for the duration of the callback.
       err:
         type: error_info
         indirection: 1
@@ -553,12 +525,12 @@ callbacks:
       Invoked when the engine writes partitioned output or exports a database. An existing directory is not an
       error. A backend with no directories, such as an object store, can leave this a no-op.
     parameters:
-      info:
-        type: virtual_file_system_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
-      path:
+      path_info:
         type: virtual_file_path_info
         description: Borrowed opaque handle to the path operation. Valid only for the duration of the callback.
+      path:
+        type: str
+        description: The path of the directory to create. Borrowed for the duration of the callback.
       err:
         type: error_info
         indirection: 1
@@ -568,12 +540,12 @@ callbacks:
   virtual_file_system_remove_directory_callback:
     description: Removes a directory and everything inside it. Invoked when the engine overwrites partitioned output.
     parameters:
-      info:
-        type: virtual_file_system_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
-      path:
+      path_info:
         type: virtual_file_path_info
         description: Borrowed opaque handle to the path operation. Valid only for the duration of the callback.
+      path:
+        type: str
+        description: The path of the directory to remove. Borrowed for the duration of the callback.
       err:
         type: error_info
         indirection: 1
@@ -584,17 +556,19 @@ callbacks:
     description: |
       Moves a file, replacing any existing target.
 
-      The source is the operation's path and the destination its target path, see
-      `[[virtual_file_path_info_get_target_path]]`; both belong to this file system, since a move to a path it
-      does not claim is refused before the callback is reached. Invoked when the engine renames a file it wrote
+      Both paths belong to this file system, since a move to a path it does not claim is refused before the
+      callback is reached. Invoked when the engine renames a file it wrote
       under a temporary name into place, so it should be atomic where the backend allows it.
     parameters:
-      info:
-        type: virtual_file_system_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
-      path:
+      path_info:
         type: virtual_file_path_info
         description: Borrowed opaque handle to the path operation. Valid only for the duration of the callback.
+      source:
+        type: str
+        description: The path of the file to move. Borrowed for the duration of the callback.
+      target:
+        type: str
+        description: The path to move it to. Borrowed for the duration of the callback.
       err:
         type: error_info
         indirection: 1
@@ -782,20 +756,20 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  virtual_file_system_set_close_callback:
+  virtual_file_system_set_file_close_callback:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional "close" callback of the virtual file system.
 
       The callback is invoked once when the engine closes a file, before the file data's destructor; see
-      `[[virtual_file_system_close_callback]]`.
+      `[[virtual_file_close_callback]]`.
     parameters:
       file_system:
         type: virtual_file_system
         description: The file system to set the callback of.
       callback:
-        type: virtual_file_system_close_callback
+        type: virtual_file_close_callback
         description: The callback to set.
       err:
         type: error_info
@@ -803,19 +777,19 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  virtual_file_system_set_abort_callback:
+  virtual_file_system_set_file_abort_callback:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional "abort" callback of the virtual file system.
 
-      The callback abandons a file whose write failed part-way; see `[[virtual_file_system_abort_callback]]`.
+      The callback abandons a file whose write failed part-way; see `[[virtual_file_abort_callback]]`.
     parameters:
       file_system:
         type: virtual_file_system
         description: The file system to set the callback of.
       callback:
-        type: virtual_file_system_abort_callback
+        type: virtual_file_abort_callback
         description: The callback to set.
       err:
         type: error_info
@@ -826,13 +800,13 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # Callbacks: I/O
   #---------------------------------------------------------------------------------------------------------------------
-  virtual_file_system_set_read_at_callback:
+  virtual_file_system_set_file_read_at_callback:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the "read at" callback of the virtual file system.
 
-      The callback reads at an explicit offset; see `[[virtual_file_system_read_at_callback]]`. It is the one
+      The callback reads at an explicit offset; see `[[virtual_file_read_at_callback]]`. It is the one
       read the engine cannot do without, and must be set before registration unless the file system is a
       write-only sink.
     parameters:
@@ -840,7 +814,7 @@ functions:
         type: virtual_file_system
         description: The file system to set the callback of.
       callback:
-        type: virtual_file_system_read_at_callback
+        type: virtual_file_read_at_callback
         description: The callback to set.
       err:
         type: error_info
@@ -848,13 +822,13 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  virtual_file_system_set_write_at_callback:
+  virtual_file_system_set_file_write_at_callback:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional "write at" callback of the virtual file system.
 
-      The callback writes at an explicit offset; see `[[virtual_file_system_write_at_callback]]`. Required for
+      The callback writes at an explicit offset; see `[[virtual_file_write_at_callback]]`. Required for
       files opened for writing with `FILE_FLAG_PARALLEL_ACCESS`, which is how database files are written; data
       files written by COPY go through the cursor instead. Without it and without a "write" callback the file
       system is read-only, and opening a file for writing fails.
@@ -863,7 +837,7 @@ functions:
         type: virtual_file_system
         description: The file system to set the callback of.
       callback:
-        type: virtual_file_system_write_at_callback
+        type: virtual_file_write_at_callback
         description: The callback to set.
       err:
         type: error_info
@@ -871,13 +845,13 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  virtual_file_system_set_read_callback:
+  virtual_file_system_set_file_read_callback:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional "read" callback of the virtual file system.
 
-      The callback reads from the cursor; see `[[virtual_file_system_read_callback]]`. Setting it makes the file
+      The callback reads from the cursor; see `[[virtual_file_read_callback]]`. Setting it makes the file
       system the owner of the cursor, which then requires "tell" as well, "write" if the file system writes,
       and "seek" for any file that reports `FILE_PROPERTY_IS_SEEKABLE` as true. Without it, and without any
       other cursor callback, the engine keeps the cursor and serves cursor reads through "read at".
@@ -886,7 +860,7 @@ functions:
         type: virtual_file_system
         description: The file system to set the callback of.
       callback:
-        type: virtual_file_system_read_callback
+        type: virtual_file_read_callback
         description: The callback to set.
       err:
         type: error_info
@@ -894,13 +868,13 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  virtual_file_system_set_write_callback:
+  virtual_file_system_set_file_write_callback:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional "write" callback of the virtual file system.
 
-      The callback writes at the cursor; see `[[virtual_file_system_write_callback]]`. This is how COPY writes
+      The callback writes at the cursor; see `[[virtual_file_write_callback]]`. This is how COPY writes
       data files, so a backend that can only append, such as an object store, implements this and not "write
       at". Setting it makes the file system the owner of the cursor, which then requires "tell" as well, and
       "read" if the file system has "read at"; a write-only sink needs neither "read at" nor "read". Without
@@ -911,7 +885,7 @@ functions:
         type: virtual_file_system
         description: The file system to set the callback of.
       callback:
-        type: virtual_file_system_write_callback
+        type: virtual_file_write_callback
         description: The callback to set.
       err:
         type: error_info
@@ -919,13 +893,13 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  virtual_file_system_set_seek_callback:
+  virtual_file_system_set_file_seek_callback:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional "seek" callback of the virtual file system.
 
-      The callback moves the cursor; see `[[virtual_file_system_seek_callback]]`. Only a file system that owns
+      The callback moves the cursor; see `[[virtual_file_seek_callback]]`. Only a file system that owns
       the cursor needs it, and only for files that report `FILE_PROPERTY_IS_SEEKABLE` as true, which the engine
       seeks as a matter of course; a stream-only backend can leave it unset. Seeking a file the file system
       owns the cursor of without it is an error, never a silent no-op.
@@ -934,7 +908,7 @@ functions:
         type: virtual_file_system
         description: The file system to set the callback of.
       callback:
-        type: virtual_file_system_seek_callback
+        type: virtual_file_seek_callback
         description: The callback to set.
       err:
         type: error_info
@@ -942,13 +916,13 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  virtual_file_system_set_tell_callback:
+  virtual_file_system_set_file_tell_callback:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional "tell" callback of the virtual file system.
 
-      The callback reports the cursor's position; see `[[virtual_file_system_tell_callback]]`. Required
+      The callback reports the cursor's position; see `[[virtual_file_tell_callback]]`. Required
       whenever the file system owns the cursor, since the engine asks for the position of every file it
       writes through the cursor.
     parameters:
@@ -956,7 +930,7 @@ functions:
         type: virtual_file_system
         description: The file system to set the callback of.
       callback:
-        type: virtual_file_system_tell_callback
+        type: virtual_file_tell_callback
         description: The callback to set.
       err:
         type: error_info
@@ -964,14 +938,79 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
+  virtual_file_system_set_file_stat_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Sets the file "stat" callback of the virtual file system.
+
+      The callback reports the size and, when known, the modification time and version tag of an open file;
+      see `[[virtual_file_stat_callback]]`. It must be set before registration.
+    parameters:
+      file_system:
+        type: virtual_file_system
+        description: The file system to set the callback of.
+      callback:
+        type: virtual_file_stat_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  virtual_file_system_set_file_sync_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Sets the optional "sync" callback of the virtual file system.
+
+      The callback flushes buffered writes; see `[[virtual_file_sync_callback]]`.
+    parameters:
+      file_system:
+        type: virtual_file_system
+        description: The file system to set the callback of.
+      callback:
+        type: virtual_file_sync_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  virtual_file_system_set_file_truncate_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Sets the optional "truncate" callback of the virtual file system.
+
+      The callback shrinks an open file; see `[[virtual_file_truncate_callback]]`.
+    parameters:
+      file_system:
+        type: virtual_file_system
+        description: The file system to set the callback of.
+      callback:
+        type: virtual_file_truncate_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Callbacks: paths
+  #---------------------------------------------------------------------------------------------------------------------
   virtual_file_system_set_stat_callback:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
-      Sets the "stat" callback of the virtual file system.
+      Sets the optional file system "stat" callback of the virtual file system.
 
-      The callback reports the size and, when known, the modification time and version tag of an open file;
-      see `[[virtual_file_system_stat_callback]]`. It must be set before registration.
+      The callback reports what is known about a path; see `[[virtual_file_system_stat_callback]]`.
+      Without it, the engine cannot tell whether a path exists, which writing to the file system needs, and
+      opens a file to learn its size.
     parameters:
       file_system:
         type: virtual_file_system
@@ -985,79 +1024,13 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  virtual_file_system_set_sync_callback:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
-    description: |
-      Sets the optional "sync" callback of the virtual file system.
-
-      The callback flushes buffered writes; see `[[virtual_file_system_sync_callback]]`.
-    parameters:
-      file_system:
-        type: virtual_file_system
-        description: The file system to set the callback of.
-      callback:
-        type: virtual_file_system_sync_callback
-        description: The callback to set.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  virtual_file_system_set_truncate_callback:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
-    description: |
-      Sets the optional "truncate" callback of the virtual file system.
-
-      The callback shrinks an open file; see `[[virtual_file_system_truncate_callback]]`.
-    parameters:
-      file_system:
-        type: virtual_file_system
-        description: The file system to set the callback of.
-      callback:
-        type: virtual_file_system_truncate_callback
-        description: The callback to set.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  #---------------------------------------------------------------------------------------------------------------------
-  # Callbacks: paths
-  #---------------------------------------------------------------------------------------------------------------------
-  virtual_file_system_set_stat_path_callback:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
-    description: |
-      Sets the optional "stat path" callback of the virtual file system.
-
-      The callback reports what is known about a path; see `[[virtual_file_system_stat_path_callback]]`.
-      Without it, the engine cannot tell whether a path exists, which writing to the file system needs, and
-      opens a file to learn its size.
-    parameters:
-      file_system:
-        type: virtual_file_system
-        description: The file system to set the callback of.
-      callback:
-        type: virtual_file_system_stat_path_callback
-        description: The callback to set.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
   virtual_file_system_set_list_callback:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets the optional "list" callback of the virtual file system.
 
-      The callback lists a directory; see `[[virtual_file_system_list_callback]]`. Without it and without a
-      "glob" callback, only paths without glob characters can be read.
+      The callback lists a directory; see `[[virtual_file_system_list_callback]]`.
     parameters:
       file_system:
         type: virtual_file_system
@@ -1077,8 +1050,8 @@ functions:
     description: |
       Sets the optional "glob" callback of the virtual file system.
 
-      The callback expands a pattern itself instead of leaving that to the engine; see
-      `[[virtual_file_system_glob_callback]]`.
+      The callback expands a pattern; see `[[virtual_file_system_glob_callback]]`. Without it, only paths
+      without glob characters can be read.
     parameters:
       file_system:
         type: virtual_file_system
@@ -1226,19 +1199,45 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # Callback Functions: open request
   #---------------------------------------------------------------------------------------------------------------------
-  virtual_file_open_info_get_path:
+  virtual_file_open_info_get_user_data:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
-    description: Retrieves the path of the file being opened. Borrowed; valid only for the duration of the callback.
+    description: Retrieves the user data set via `[[virtual_file_system_set_user_data]]`.
     parameters:
       info:
         type: virtual_file_open_info
         description: The open info handle.
-      path:
-        type: str
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  virtual_file_open_info_get_file_system:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Borrows the file system of the database this file system is registered on, for delegating to whatever
+      file system claims another path.
+
+      It carries the database's settings and secrets but no query, so a callback that has a context should
+      prefer `[[file_system_get_from_context]]`, which carries the query's as well. A request for a path this
+      file system claims routes back into its own callbacks. Borrowed: valid as long as the registered file
+      system is, and must not be destroyed.
+    parameters:
+      info:
+        type: virtual_file_open_info
+        description: The open info handle.
+      file_system:
+        type: file_system
         indirection: 1
         kind: OUT
-        description: Receives the borrowed path.
+        description: Receives the borrowed file system.
       err:
         type: error_info
         indirection: 1
@@ -1281,7 +1280,7 @@ functions:
 
       These are the values the caller attached with `[[file_open_options_set_value]]`, and what they mean is
       this file system's business. What a listing of this file system reported about the file is read through
-      `[[virtual_file_open_info_get_stat]]` instead. Names are case-sensitive. A name with no value is not an
+      `[[virtual_file_open_info_get_metadata]]` instead. Names are case-sensitive. A name with no value is not an
       error: the value comes back null. The returned value is owned by the caller and must be destroyed via
       `[[value_destroy]]`.
     parameters:
@@ -1310,7 +1309,7 @@ functions:
 
       The context is how a backend reaches a query's settings and secrets. Opens outside a query, such as of
       a database file being attached or opened at startup, have no context and hand back null; the database's
-      settings and secrets are still reachable through `[[virtual_file_system_info_get_file_system]]`.
+      settings and secrets are still reachable through `[[virtual_file_open_info_get_file_system]]`.
       Borrowed; valid only for the duration of the callback.
     parameters:
       info:
@@ -1327,25 +1326,25 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  virtual_file_open_info_get_stat:
+  virtual_file_open_info_get_metadata:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
       Retrieves what a listing of this file system reported about the file being opened.
 
-      When the file was found through the "list" or "glob" callback, whatever that callback filled in about
+      When the file was found through the "glob" callback, whatever that callback filled in about
       the entry -- size, modification time, version tag -- comes back here, so the backend need not fetch it
-      again. Read it with `[[file_stat_get_size]]` and its siblings, each of which reports whether its field is
+      again. Read it with `[[file_metadata_get_size]]` and its siblings, each of which reports whether its field is
       known. Borrowed; valid only for the duration of the callback, and not to be destroyed.
     parameters:
       info:
         type: virtual_file_open_info
         description: The open info handle.
-      stat_info:
-        type: file_stat
+      metadata:
+        type: file_metadata
         indirection: 1
         kind: OUT
-        description: Receives the borrowed stat info, empty when no listing reported anything.
+        description: Receives the borrowed metadata info, empty when no listing reported anything.
       err:
         type: error_info
         indirection: 1
@@ -1431,6 +1430,25 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # Callback Functions: open file
   #---------------------------------------------------------------------------------------------------------------------
+  virtual_file_info_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: Retrieves the user data set via `[[virtual_file_system_set_user_data]]`.
+    parameters:
+      info:
+        type: virtual_file_info
+        description: The file info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   virtual_file_info_get_file_data:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
@@ -1498,46 +1516,45 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # Callback Functions: path operation
   #---------------------------------------------------------------------------------------------------------------------
-  virtual_file_path_info_get_path:
+  virtual_file_path_info_get_user_data:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
-    description: |
-      Retrieves the path the operation acts on.
-
-      For a move this is the source; for a glob it is the pattern. Borrowed; valid only for the duration of
-      the callback.
+    description: Retrieves the user data set via `[[virtual_file_system_set_user_data]]`.
     parameters:
       info:
         type: virtual_file_path_info
         description: The path info handle.
-      path:
-        type: str
-        indirection: 1
+      data:
+        type: void
+        indirection: 2
         kind: OUT
-        description: Receives the borrowed path.
+        description: Receives the user data pointer, or null if none was set.
       err:
         type: error_info
         indirection: 1
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  virtual_file_path_info_get_target_path:
+  virtual_file_path_info_get_file_system:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
-      Retrieves the destination of a move.
+      Borrows the file system of the database this file system is registered on, for delegating to whatever
+      file system claims another path.
 
-      Only a move has one; for any other operation the call fails. Borrowed; valid only for the duration of
-      the callback.
+      It carries the database's settings and secrets but no query, so a callback that has a context should
+      prefer `[[file_system_get_from_context]]`, which carries the query's as well. A request for a path this
+      file system claims routes back into its own callbacks. Borrowed: valid as long as the registered file
+      system is, and must not be destroyed.
     parameters:
       info:
         type: virtual_file_path_info
         description: The path info handle.
-      path:
-        type: str
+      file_system:
+        type: file_system
         indirection: 1
         kind: OUT
-        description: Receives the borrowed destination path.
+        description: Receives the borrowed file system.
       err:
         type: error_info
         indirection: 1
@@ -1552,7 +1569,7 @@ functions:
 
       The context is how a backend reaches a query's settings and secrets. Operations outside a query hand
       back null; the database's settings and secrets are still reachable through
-      `[[virtual_file_system_info_get_file_system]]`. Borrowed; valid only for the duration of the callback.
+      `[[virtual_file_path_info_get_file_system]]`. Borrowed; valid only for the duration of the callback.
     parameters:
       info:
         type: virtual_file_path_info
@@ -1579,7 +1596,7 @@ functions:
 
       The file system is registered on the target given at creation: the connection's database or the loading
       extension's database. Registration requires a name, a prefix or a "claim" callback, the "open" and
-      "stat" callbacks, and "read at" unless the file system is a write-only sink with a "write" or "write at"
+      file "stat" callbacks, and "read at" unless the file system is a write-only sink with a "write" or "write at"
       callback. A file system that owns the cursor by setting any of "read", "write", "seek" or "tell" must
       set "tell", "read" if it has "read at", and "write" if it has "write at". Every other callback is
       optional and its absence is reported as an error only when the engine needs it. The name must not

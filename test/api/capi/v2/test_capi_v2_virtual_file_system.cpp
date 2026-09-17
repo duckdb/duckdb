@@ -59,7 +59,6 @@ struct MemFs {
 	bool last_open_had_context = false;
 	std::string last_open_value;
 	std::map<std::string, idx_t> listed_sizes; // path -> size a listing reported at open
-	DUCKDB_V2_ERROR target_path_rc = DUCKDB_V2_ERROR_NONE;
 
 	bool IsDirectory(const std::string &path) {
 		if (dirs.count(path)) {
@@ -82,9 +81,20 @@ void VfsFail(duckdb_v2_error_info_handle *err, DUCKDB_V2_ERROR code, const std::
 	duckdb_v2_error_info_set_text(*err, Convert(message));
 }
 
-MemFs &VfsOf(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_error_info_handle *err) {
+// The file system's user data, from whichever info handle a callback holds.
+MemFs &VfsOf(duckdb_v2_virtual_file_open_info_handle info, duckdb_v2_error_info_handle *err) {
 	void *data = nullptr;
-	duckdb_v2_virtual_file_system_info_get_user_data(info, &data, err);
+	duckdb_v2_virtual_file_open_info_get_user_data(info, &data, err);
+	return *static_cast<MemFs *>(data);
+}
+MemFs &VfsOf(duckdb_v2_virtual_file_info_handle info, duckdb_v2_error_info_handle *err) {
+	void *data = nullptr;
+	duckdb_v2_virtual_file_info_get_user_data(info, &data, err);
+	return *static_cast<MemFs *>(data);
+}
+MemFs &VfsOf(duckdb_v2_virtual_file_path_info_handle info, duckdb_v2_error_info_handle *err) {
+	void *data = nullptr;
+	duckdb_v2_virtual_file_path_info_get_user_data(info, &data, err);
 	return *static_cast<MemFs *>(data);
 }
 
@@ -92,12 +102,6 @@ MemHandle &VfsFile(duckdb_v2_virtual_file_info_handle file, duckdb_v2_error_info
 	void *data = nullptr;
 	duckdb_v2_virtual_file_info_get_file_data(file, &data, err);
 	return *static_cast<MemHandle *>(data);
-}
-
-std::string VfsPath(duckdb_v2_virtual_file_path_info_handle path, duckdb_v2_error_info_handle *err) {
-	duckdb_v2_str view {nullptr, 0};
-	duckdb_v2_virtual_file_path_info_get_path(path, &view, err);
-	return Convert(view);
 }
 
 // ---------------------------------------------------------------------------
@@ -116,13 +120,9 @@ void MemDestroyHandle(void *data) {
 	delete handle;
 }
 
-void MemOpen(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_open_info_handle open_info,
+void MemOpen(duckdb_v2_virtual_file_open_info_handle open_info, duckdb_v2_str path_view,
              duckdb_v2_error_info_handle *err) {
-	auto &fs = VfsOf(info, err);
-	duckdb_v2_str path_view {nullptr, 0};
-	if (duckdb_v2_virtual_file_open_info_get_path(open_info, &path_view, err) != DUCKDB_V2_ERROR_NONE) {
-		return;
-	}
+	auto &fs = VfsOf(open_info, err);
 	auto path = Convert(path_view);
 
 	bool write = false, append = false, create = false, create_new = false, exclusive = false, parallel = false;
@@ -138,11 +138,11 @@ void MemOpen(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_f
 	    DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
-	duckdb_v2_file_stat_handle listed = nullptr;
-	duckdb_v2_virtual_file_open_info_get_stat(open_info, &listed, err);
+	duckdb_v2_file_metadata_handle listed = nullptr;
+	duckdb_v2_virtual_file_open_info_get_metadata(open_info, &listed, err);
 	idx_t listed_size = 0;
 	bool listed_size_known = false;
-	duckdb_v2_file_stat_get_size(listed, &listed_size, &listed_size_known, err);
+	duckdb_v2_file_metadata_get_size(listed, &listed_size, &listed_size_known, err);
 	duckdb_v2_context_handle context = nullptr;
 	duckdb_v2_virtual_file_open_info_get_context(open_info, &context, err);
 
@@ -189,14 +189,12 @@ void MemOpen(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_f
 	fs.opens++;
 }
 
-void MemClose(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_info_handle,
-              duckdb_v2_error_info_handle *err) {
-	VfsOf(info, err).closes++;
+void MemClose(duckdb_v2_virtual_file_info_handle file, duckdb_v2_error_info_handle *err) {
+	VfsOf(file, err).closes++;
 }
 
-void MemAbort(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_info_handle file,
-              duckdb_v2_error_info_handle *err) {
-	auto &fs = VfsOf(info, err);
+void MemAbort(duckdb_v2_virtual_file_info_handle file, duckdb_v2_error_info_handle *err) {
+	auto &fs = VfsOf(file, err);
 	auto &handle = VfsFile(file, err);
 	fs.aborts++;
 	// Abandon what was written: the file never becomes visible.
@@ -204,9 +202,9 @@ void MemAbort(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_
 	fs.files.erase(handle.path);
 }
 
-void MemReadAt(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_info_handle file, void *buffer,
-               idx_t buffer_size, idx_t location, idx_t *bytes_read, duckdb_v2_error_info_handle *err) {
-	auto &fs = VfsOf(info, err);
+void MemReadAt(duckdb_v2_virtual_file_info_handle file, void *buffer, idx_t buffer_size, idx_t location,
+               idx_t *bytes_read, duckdb_v2_error_info_handle *err) {
+	auto &fs = VfsOf(file, err);
 	auto &handle = VfsFile(file, err);
 	fs.read_at_calls++;
 	std::lock_guard<std::mutex> guard(fs.lock);
@@ -221,9 +219,9 @@ void MemReadAt(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual
 	*bytes_read = count;
 }
 
-void MemWriteAt(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_info_handle file,
-                const void *buffer, idx_t buffer_size, idx_t location, duckdb_v2_error_info_handle *err) {
-	auto &fs = VfsOf(info, err);
+void MemWriteAt(duckdb_v2_virtual_file_info_handle file, const void *buffer, idx_t buffer_size, idx_t location,
+                duckdb_v2_error_info_handle *err) {
+	auto &fs = VfsOf(file, err);
 	auto &handle = VfsFile(file, err);
 	fs.write_at_calls++;
 	std::lock_guard<std::mutex> guard(fs.lock);
@@ -234,9 +232,9 @@ void MemWriteAt(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtua
 	std::memcpy(&data[location], buffer, buffer_size);
 }
 
-void MemRead(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_info_handle file, void *buffer,
-             idx_t buffer_size, idx_t *bytes_read, duckdb_v2_error_info_handle *err) {
-	auto &fs = VfsOf(info, err);
+void MemRead(duckdb_v2_virtual_file_info_handle file, void *buffer, idx_t buffer_size, idx_t *bytes_read,
+             duckdb_v2_error_info_handle *err) {
+	auto &fs = VfsOf(file, err);
 	auto &handle = VfsFile(file, err);
 	fs.read_calls++;
 	std::lock_guard<std::mutex> guard(fs.lock);
@@ -251,9 +249,9 @@ void MemRead(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_f
 	*bytes_read = count;
 }
 
-void MemWrite(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_info_handle file,
-              const void *buffer, idx_t buffer_size, duckdb_v2_error_info_handle *err) {
-	auto &fs = VfsOf(info, err);
+void MemWrite(duckdb_v2_virtual_file_info_handle file, const void *buffer, idx_t buffer_size,
+              duckdb_v2_error_info_handle *err) {
+	auto &fs = VfsOf(file, err);
 	auto &handle = VfsFile(file, err);
 	fs.write_calls++;
 	std::lock_guard<std::mutex> guard(fs.lock);
@@ -265,62 +263,55 @@ void MemWrite(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_
 	handle.cursor += buffer_size;
 }
 
-void MemSeek(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_info_handle file, idx_t position,
-             duckdb_v2_error_info_handle *err) {
-	VfsOf(info, err).seek_calls++;
+void MemSeek(duckdb_v2_virtual_file_info_handle file, idx_t position, duckdb_v2_error_info_handle *err) {
+	VfsOf(file, err).seek_calls++;
 	VfsFile(file, err).cursor = position;
 }
 
-void MemTell(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_info_handle file, idx_t *position,
-             duckdb_v2_error_info_handle *err) {
-	VfsOf(info, err).tell_calls++;
+void MemTell(duckdb_v2_virtual_file_info_handle file, idx_t *position, duckdb_v2_error_info_handle *err) {
+	VfsOf(file, err).tell_calls++;
 	*position = VfsFile(file, err).cursor;
 }
 
-void MemStat(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_info_handle file,
-             duckdb_v2_file_stat_handle stat, duckdb_v2_error_info_handle *err) {
-	auto &fs = VfsOf(info, err);
+void MemStat(duckdb_v2_virtual_file_info_handle file, duckdb_v2_file_metadata_handle metadata,
+             duckdb_v2_error_info_handle *err) {
+	auto &fs = VfsOf(file, err);
 	auto &handle = VfsFile(file, err);
 	std::lock_guard<std::mutex> guard(fs.lock);
-	duckdb_v2_file_stat_set_size(stat, fs.files[handle.path].size(), err);
+	duckdb_v2_file_metadata_set_size(metadata, fs.files[handle.path].size(), err);
 }
 
-void MemSync(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_info_handle,
-             duckdb_v2_error_info_handle *err) {
-	VfsOf(info, err).sync_calls++;
+void MemSync(duckdb_v2_virtual_file_info_handle file, duckdb_v2_error_info_handle *err) {
+	VfsOf(file, err).sync_calls++;
 }
 
-void MemTruncate(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_info_handle file, idx_t size,
-                 duckdb_v2_error_info_handle *err) {
-	auto &fs = VfsOf(info, err);
+void MemTruncate(duckdb_v2_virtual_file_info_handle file, idx_t size, duckdb_v2_error_info_handle *err) {
+	auto &fs = VfsOf(file, err);
 	auto &handle = VfsFile(file, err);
 	std::lock_guard<std::mutex> guard(fs.lock);
 	fs.files[handle.path].resize(size);
 }
 
-void MemStatPath(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_path_info_handle path_info,
-                 duckdb_v2_file_stat_handle stat, duckdb_v2_error_info_handle *err) {
-	auto &fs = VfsOf(info, err);
-	auto path = VfsPath(path_info, err);
-	// Only a move has a target: latch what asking anyway reports.
-	duckdb_v2_str target {nullptr, 0};
-	fs.target_path_rc = duckdb_v2_virtual_file_path_info_get_target_path(path_info, &target, nullptr);
+void MemStatPath(duckdb_v2_virtual_file_path_info_handle path_info, duckdb_v2_str path_view,
+                 duckdb_v2_file_metadata_handle metadata, duckdb_v2_error_info_handle *err) {
+	auto &fs = VfsOf(path_info, err);
+	auto path = Convert(path_view);
 	std::lock_guard<std::mutex> guard(fs.lock);
 	auto file = fs.files.find(path);
 	if (file != fs.files.end()) {
-		duckdb_v2_file_stat_set_type(stat, DUCKDB_V2_FILE_TYPE_REGULAR, err);
-		duckdb_v2_file_stat_set_size(stat, file->second.size(), err);
+		duckdb_v2_file_metadata_set_type(metadata, DUCKDB_V2_FILE_TYPE_REGULAR, err);
+		duckdb_v2_file_metadata_set_size(metadata, file->second.size(), err);
 		return;
 	}
 	if (fs.IsDirectory(path)) {
-		duckdb_v2_file_stat_set_type(stat, DUCKDB_V2_FILE_TYPE_DIRECTORY, err);
+		duckdb_v2_file_metadata_set_type(metadata, DUCKDB_V2_FILE_TYPE_DIRECTORY, err);
 	}
 }
 
-void MemList(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_path_info_handle path_info,
+void MemList(duckdb_v2_virtual_file_path_info_handle path_info, duckdb_v2_str path_view,
              duckdb_v2_file_listing_handle list, duckdb_v2_error_info_handle *err) {
-	auto &fs = VfsOf(info, err);
-	auto prefix = VfsPath(path_info, err);
+	auto &fs = VfsOf(path_info, err);
+	auto prefix = Convert(path_view);
 	if (prefix.back() != '/') {
 		prefix += '/';
 	}
@@ -338,11 +329,11 @@ void MemList(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_f
 		}
 		auto type =
 		    (slash != std::string::npos || is_dir) ? DUCKDB_V2_FILE_TYPE_DIRECTORY : DUCKDB_V2_FILE_TYPE_REGULAR;
-		duckdb_v2_file_stat_handle stat = nullptr;
-		duckdb_v2_file_listing_add_entry(list, Convert(name), type, &stat, err);
-		if (type == DUCKDB_V2_FILE_TYPE_REGULAR && stat) {
+		duckdb_v2_file_metadata_handle metadata = nullptr;
+		duckdb_v2_file_listing_add_entry(list, Convert(name), type, &metadata, err);
+		if (type == DUCKDB_V2_FILE_TYPE_REGULAR && metadata) {
 			// The listing knows the size; hand it along so the open sees it.
-			duckdb_v2_file_stat_set_size(stat, fs.files[full].size(), err);
+			duckdb_v2_file_metadata_set_size(metadata, fs.files[full].size(), err);
 		}
 	};
 	for (auto &entry : fs.files) {
@@ -353,28 +344,70 @@ void MemList(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_f
 	}
 }
 
-void MemRemoveFile(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_path_info_handle path_info,
+// `*` and `?` match within one path component, `**` across components.
+bool VfsMatch(const char *pattern, const char *text) {
+	while (*pattern) {
+		if (*pattern == '*') {
+			const bool deep = pattern[1] == '*';
+			const char *rest = deep ? pattern + 2 : pattern + 1;
+			for (const char *t = text;; t++) {
+				if (VfsMatch(rest, t)) {
+					return true;
+				}
+				if (!*t || (!deep && *t == '/')) {
+					return false;
+				}
+			}
+		}
+		if (!*text || *text == '/' ? *pattern != *text : (*pattern != '?' && *pattern != *text)) {
+			return false;
+		}
+		pattern++;
+		text++;
+	}
+	return !*text;
+}
+
+void MemGlob(duckdb_v2_virtual_file_path_info_handle path_info, duckdb_v2_str pattern_view,
+             duckdb_v2_file_listing_handle list, duckdb_v2_error_info_handle *err) {
+	auto &fs = VfsOf(path_info, err);
+	auto pattern = Convert(pattern_view);
+	std::lock_guard<std::mutex> guard(fs.lock);
+	for (auto &entry : fs.files) {
+		if (!VfsMatch(pattern.c_str(), entry.first.c_str())) {
+			continue;
+		}
+		duckdb_v2_file_metadata_handle metadata = nullptr;
+		duckdb_v2_file_listing_add_entry(list, Convert(entry.first), DUCKDB_V2_FILE_TYPE_REGULAR, &metadata, err);
+		if (metadata) {
+			// The glob knows the size; hand it along so the open sees it.
+			duckdb_v2_file_metadata_set_size(metadata, entry.second.size(), err);
+		}
+	}
+}
+
+void MemRemoveFile(duckdb_v2_virtual_file_path_info_handle path_info, duckdb_v2_str path_view,
                    duckdb_v2_error_info_handle *err) {
-	auto &fs = VfsOf(info, err);
-	auto path = VfsPath(path_info, err);
+	auto &fs = VfsOf(path_info, err);
+	auto path = Convert(path_view);
 	std::lock_guard<std::mutex> guard(fs.lock);
 	if (fs.files.erase(path) == 0) {
 		VfsFail(err, DUCKDB_V2_ERROR_IO_FILE_NOT_FOUND, "mem: no such file: " + path);
 	}
 }
 
-void MemCreateDirectory(duckdb_v2_virtual_file_system_info_handle info,
-                        duckdb_v2_virtual_file_path_info_handle path_info, duckdb_v2_error_info_handle *err) {
-	auto &fs = VfsOf(info, err);
-	auto path = VfsPath(path_info, err);
+void MemCreateDirectory(duckdb_v2_virtual_file_path_info_handle path_info, duckdb_v2_str path_view,
+                        duckdb_v2_error_info_handle *err) {
+	auto &fs = VfsOf(path_info, err);
+	auto path = Convert(path_view);
 	std::lock_guard<std::mutex> guard(fs.lock);
 	fs.dirs.insert(path);
 }
 
-void MemRemoveDirectory(duckdb_v2_virtual_file_system_info_handle info,
-                        duckdb_v2_virtual_file_path_info_handle path_info, duckdb_v2_error_info_handle *err) {
-	auto &fs = VfsOf(info, err);
-	auto path = VfsPath(path_info, err);
+void MemRemoveDirectory(duckdb_v2_virtual_file_path_info_handle path_info, duckdb_v2_str path_view,
+                        duckdb_v2_error_info_handle *err) {
+	auto &fs = VfsOf(path_info, err);
+	auto path = Convert(path_view);
 	auto prefix = path + "/";
 	std::lock_guard<std::mutex> guard(fs.lock);
 	for (auto it = fs.files.begin(); it != fs.files.end();) {
@@ -393,14 +426,10 @@ void MemRemoveDirectory(duckdb_v2_virtual_file_system_info_handle info,
 	}
 }
 
-void MemMove(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_path_info_handle path_info,
+void MemMove(duckdb_v2_virtual_file_path_info_handle path_info, duckdb_v2_str source_view, duckdb_v2_str target_view,
              duckdb_v2_error_info_handle *err) {
-	auto &fs = VfsOf(info, err);
-	auto source = VfsPath(path_info, err);
-	duckdb_v2_str target_view {nullptr, 0};
-	if (duckdb_v2_virtual_file_path_info_get_target_path(path_info, &target_view, err) != DUCKDB_V2_ERROR_NONE) {
-		return;
-	}
+	auto &fs = VfsOf(path_info, err);
+	auto source = Convert(source_view);
 	auto target = Convert(target_view);
 	std::lock_guard<std::mutex> guard(fs.lock);
 	auto it = fs.files.find(source);
@@ -423,7 +452,7 @@ void MemDestroyUserData(void *data) {
 struct MemFsOptions {
 	bool cursor_callbacks = false; // read / write / seek / tell
 	bool write_at = true;
-	bool path_callbacks = true; // stat path / list / remove / mkdir / rmdir / move
+	bool path_callbacks = true; // stat path / list / glob / remove / mkdir / rmdir / move
 	bool close_callback = true;
 	bool abort_callback = false;
 	bool route_by_callback = false; // a claim callback instead of a prefix
@@ -444,29 +473,31 @@ void RegisterMemFs(duckdb_v2_connection_handle conn, MemFs &fs, const MemFsOptio
 	}
 
 	REQUIRE(duckdb_v2_virtual_file_system_set_open_callback(vfs, MemOpen, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_virtual_file_system_set_read_at_callback(vfs, MemReadAt, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_virtual_file_system_set_stat_callback(vfs, MemStat, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_virtual_file_system_set_sync_callback(vfs, MemSync, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_virtual_file_system_set_truncate_callback(vfs, MemTruncate, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_virtual_file_system_set_file_read_at_callback(vfs, MemReadAt, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_virtual_file_system_set_file_stat_callback(vfs, MemStat, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_virtual_file_system_set_file_sync_callback(vfs, MemSync, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_virtual_file_system_set_file_truncate_callback(vfs, MemTruncate, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	if (options.close_callback) {
-		REQUIRE(duckdb_v2_virtual_file_system_set_close_callback(vfs, MemClose, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_virtual_file_system_set_file_close_callback(vfs, MemClose, nullptr) == DUCKDB_V2_ERROR_NONE);
 	}
 	if (options.abort_callback) {
-		REQUIRE(duckdb_v2_virtual_file_system_set_abort_callback(vfs, MemAbort, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_virtual_file_system_set_file_abort_callback(vfs, MemAbort, nullptr) == DUCKDB_V2_ERROR_NONE);
 	}
 	if (options.write_at) {
-		REQUIRE(duckdb_v2_virtual_file_system_set_write_at_callback(vfs, MemWriteAt, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_virtual_file_system_set_file_write_at_callback(vfs, MemWriteAt, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
 	}
 	if (options.cursor_callbacks) {
-		REQUIRE(duckdb_v2_virtual_file_system_set_read_callback(vfs, MemRead, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_virtual_file_system_set_write_callback(vfs, MemWrite, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_virtual_file_system_set_seek_callback(vfs, MemSeek, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_virtual_file_system_set_tell_callback(vfs, MemTell, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_virtual_file_system_set_file_read_callback(vfs, MemRead, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_virtual_file_system_set_file_write_callback(vfs, MemWrite, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_virtual_file_system_set_file_seek_callback(vfs, MemSeek, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_virtual_file_system_set_file_tell_callback(vfs, MemTell, nullptr) == DUCKDB_V2_ERROR_NONE);
 	}
 	if (options.path_callbacks) {
-		REQUIRE(duckdb_v2_virtual_file_system_set_stat_path_callback(vfs, MemStatPath, nullptr) ==
-		        DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_virtual_file_system_set_stat_callback(vfs, MemStatPath, nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(duckdb_v2_virtual_file_system_set_list_callback(vfs, MemList, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_virtual_file_system_set_glob_callback(vfs, MemGlob, nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(duckdb_v2_virtual_file_system_set_remove_file_callback(vfs, MemRemoveFile, nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
 		REQUIRE(duckdb_v2_virtual_file_system_set_create_directory_callback(vfs, MemCreateDirectory, nullptr) ==
@@ -610,15 +641,15 @@ TEST_CASE("V2 virtual file system: registration requires a name, routing and the
 	expect_failure("Open");
 	REQUIRE(duckdb_v2_virtual_file_system_set_open_callback(vfs, MemOpen, nullptr) == DUCKDB_V2_ERROR_NONE);
 	expect_failure("Read at");
-	REQUIRE(duckdb_v2_virtual_file_system_set_read_at_callback(vfs, MemReadAt, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_virtual_file_system_set_file_read_at_callback(vfs, MemReadAt, nullptr) == DUCKDB_V2_ERROR_NONE);
 	expect_failure("Stat");
-	REQUIRE(duckdb_v2_virtual_file_system_set_stat_callback(vfs, MemStat, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_virtual_file_system_set_file_stat_callback(vfs, MemStat, nullptr) == DUCKDB_V2_ERROR_NONE);
 	// Owning the cursor needs tell, and read since the file system has read at.
-	REQUIRE(duckdb_v2_virtual_file_system_set_seek_callback(vfs, MemSeek, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_virtual_file_system_set_file_seek_callback(vfs, MemSeek, nullptr) == DUCKDB_V2_ERROR_NONE);
 	expect_failure("Tell");
-	REQUIRE(duckdb_v2_virtual_file_system_set_tell_callback(vfs, MemTell, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_virtual_file_system_set_file_tell_callback(vfs, MemTell, nullptr) == DUCKDB_V2_ERROR_NONE);
 	expect_failure("Read callback");
-	REQUIRE(duckdb_v2_virtual_file_system_set_read_callback(vfs, MemRead, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_virtual_file_system_set_file_read_callback(vfs, MemRead, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_opaque user_data {&mem, nullptr, nullptr};
 	REQUIRE(duckdb_v2_virtual_file_system_set_user_data(vfs, &user_data, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -693,7 +724,7 @@ TEST_CASE("V2 virtual file system: a stream-like file is read through its cursor
 	REQUIRE(mem.read_at_calls == 0);
 }
 
-TEST_CASE("V2 virtual file system: globs are expanded over the list callback", "[capi_v2][vfs]") {
+TEST_CASE("V2 virtual file system: patterns are expanded by the glob callback", "[capi_v2][vfs]") {
 	EnvFixture fx;
 	MemFs mem;
 	mem.files["mem://data/a.csv"] = CSV_A;
@@ -705,38 +736,29 @@ TEST_CASE("V2 virtual file system: globs are expanded over the list callback", "
 	auto direct = VfsQueryStrings(fx.conn, "SELECT file FROM glob('mem://data/*.csv')");
 	REQUIRE(direct == std::vector<std::string> {"mem://data/a.csv", "mem://data/b.csv"});
 
-	auto question = VfsQueryStrings(fx.conn, "SELECT file FROM glob('mem://data/?.csv')");
-	REQUIRE(question == std::vector<std::string> {"mem://data/a.csv", "mem://data/b.csv"});
-
 	auto nested = VfsQueryStrings(fx.conn, "SELECT file FROM glob('mem://data/*/*.csv')");
 	REQUIRE(nested == std::vector<std::string> {"mem://data/sub/c.csv"});
 
-	auto crawl = VfsQueryStrings(fx.conn, "SELECT file FROM glob('mem://data/**/*.csv')");
+	auto crawl = VfsQueryStrings(fx.conn, "SELECT file FROM glob('mem://data/**.csv')");
 	REQUIRE(crawl == std::vector<std::string> {"mem://data/a.csv", "mem://data/b.csv", "mem://data/sub/c.csv"});
-
-	auto everything = VfsQueryStrings(fx.conn, "SELECT file FROM glob('mem://**')");
-	REQUIRE(everything.size() == 4);
 
 	auto nothing = VfsQueryStrings(fx.conn, "SELECT file FROM glob('mem://data/*.parquet')");
 	REQUIRE(nothing.empty());
 
-	// A plain path that exists is its own expansion; one that does not is no expansion.
+	// The callback sees plain paths too: one that exists is its own expansion, one that does not is none.
 	auto plain = VfsQueryStrings(fx.conn, "SELECT file FROM glob('mem://data/sub/c.csv')");
 	REQUIRE(plain == std::vector<std::string> {"mem://data/sub/c.csv"});
 	auto missing = VfsQueryStrings(fx.conn, "SELECT file FROM glob('mem://data/missing.csv')");
 	REQUIRE(missing.empty());
 
-	// The whole thing feeds a multi-file reader, and what the listing knew reaches the open.
-	auto rows = VfsQueryStrings(fx.conn, "SELECT count(*) FROM read_csv('mem://data/**/*.csv')");
+	// The whole thing feeds a multi-file reader, and what the glob knew reaches the open.
+	auto rows = VfsQueryStrings(fx.conn, "SELECT count(*) FROM read_csv('mem://data/**.csv')");
 	REQUIRE(rows == std::vector<std::string> {"6"});
 	// The first file of a scan is reopened from its bare path for sniffing, so only later files carry it.
 	REQUIRE(mem.listed_sizes["mem://data/sub/c.csv"] == std::strlen(CSV_C));
-
-	// Only a move has a target path.
-	REQUIRE(mem.target_path_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
 }
 
-TEST_CASE("V2 virtual file system: a glob callback replaces the generic expansion", "[capi_v2][vfs]") {
+TEST_CASE("V2 virtual file system: the glob callback decides what a pattern expands to", "[capi_v2][vfs]") {
 	EnvFixture fx;
 	MemFs mem;
 	mem.files["mem://data/a.csv"] = CSV_A;
@@ -749,14 +771,14 @@ TEST_CASE("V2 virtual file system: a glob callback replaces the generic expansio
 	REQUIRE(duckdb_v2_virtual_file_system_set_user_data(vfs, &user_data, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_virtual_file_system_add_prefix(vfs, Convert(SCHEME), nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_virtual_file_system_set_open_callback(vfs, MemOpen, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_virtual_file_system_set_read_at_callback(vfs, MemReadAt, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_virtual_file_system_set_stat_callback(vfs, MemStat, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_virtual_file_system_set_file_read_at_callback(vfs, MemReadAt, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_virtual_file_system_set_file_stat_callback(vfs, MemStat, nullptr) == DUCKDB_V2_ERROR_NONE);
 	// A glob that ignores the pattern and always reports b.csv: proves the callback, not the listing, was used.
 	REQUIRE(duckdb_v2_virtual_file_system_set_glob_callback(
 	            vfs,
-	            [](duckdb_v2_virtual_file_system_info_handle, duckdb_v2_virtual_file_path_info_handle,
-	               duckdb_v2_file_listing_handle list, duckdb_v2_error_info_handle *err) {
-		            // The stat out-parameter is optional.
+	            [](duckdb_v2_virtual_file_path_info_handle, duckdb_v2_str, duckdb_v2_file_listing_handle list,
+	               duckdb_v2_error_info_handle *err) {
+		            // The metadata out-parameter is optional.
 		            duckdb_v2_file_listing_add_entry(list, Convert("mem://data/b.csv"), DUCKDB_V2_FILE_TYPE_REGULAR,
 		                                             nullptr, err);
 	            },
@@ -770,7 +792,7 @@ TEST_CASE("V2 virtual file system: a glob callback replaces the generic expansio
 	REQUIRE(rows == std::vector<std::string> {"three"});
 }
 
-TEST_CASE("V2 virtual file system: a pattern with neither list nor glob callback is an error", "[capi_v2][vfs]") {
+TEST_CASE("V2 virtual file system: a pattern without a glob callback is an error", "[capi_v2][vfs]") {
 	EnvFixture fx;
 	MemFs mem;
 	mem.files["mem://data/a.csv"] = CSV_A;
@@ -778,12 +800,12 @@ TEST_CASE("V2 virtual file system: a pattern with neither list nor glob callback
 	options.path_callbacks = false;
 	RegisterMemFs(fx.conn, mem, options);
 
-	// A plain path still works: it needs no listing.
+	// A plain path still works: it needs no expansion.
 	auto rows = VfsQueryStrings(fx.conn, "SELECT count(*) FROM read_csv('mem://data/a.csv')");
 	REQUIRE(rows == std::vector<std::string> {"2"});
 
 	auto text = VfsQueryError(fx.conn, "SELECT * FROM read_csv('mem://data/*.csv')");
-	REQUIRE(text.find("no list or glob callback") != std::string::npos);
+	REQUIRE(text.find("no glob callback") != std::string::npos);
 }
 
 // ---------------------------------------------------------------------------
@@ -888,7 +910,7 @@ TEST_CASE("V2 virtual file system: a failed COPY aborts the file instead of clos
 TEST_CASE("V2 virtual file system: callback errors surface with their text", "[capi_v2][vfs]") {
 	EnvFixture fx;
 	MemFs mem;
-	// Without a stat path callback a plain path is handed straight to open, whose error is the one reported.
+	// Without a metadata path callback a plain path is handed straight to open, whose error is the one reported.
 	MemFsOptions options;
 	options.path_callbacks = false;
 	RegisterMemFs(fx.conn, mem, options);
@@ -1067,11 +1089,11 @@ TEST_CASE("V2 virtual file system: a cursor owner without a seek callback fails 
 	REQUIRE(duckdb_v2_virtual_file_system_set_user_data(vfs, &user_data, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_virtual_file_system_add_prefix(vfs, Convert(SCHEME), nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_virtual_file_system_set_open_callback(vfs, MemOpen, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_virtual_file_system_set_read_at_callback(vfs, MemReadAt, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_virtual_file_system_set_stat_callback(vfs, MemStat, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_virtual_file_system_set_file_read_at_callback(vfs, MemReadAt, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_virtual_file_system_set_file_stat_callback(vfs, MemStat, nullptr) == DUCKDB_V2_ERROR_NONE);
 	// A stream-only cursor: read and tell, no seek.
-	REQUIRE(duckdb_v2_virtual_file_system_set_read_callback(vfs, MemRead, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_virtual_file_system_set_tell_callback(vfs, MemTell, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_virtual_file_system_set_file_read_callback(vfs, MemRead, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_virtual_file_system_set_file_tell_callback(vfs, MemTell, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_virtual_file_system_register(vfs, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_virtual_file_system_destroy(&vfs);
 	auto fs = VfsEngineFs(fx.conn);
@@ -1181,6 +1203,7 @@ struct Overlay {
 	std::atomic<int> opens {0};
 	std::atomic<int> reads {0};
 	std::atomic<int> lists {0};
+	std::atomic<int> globs {0};
 	std::atomic<int> stats {0};
 };
 
@@ -1190,20 +1213,44 @@ std::string Underneath(duckdb_v2_str path) {
 	return Convert(path).substr(std::strlen(OVERLAY_SCHEME));
 }
 
-Overlay &OverlayOf(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_error_info_handle *err) {
+Overlay &OverlayOf(duckdb_v2_virtual_file_open_info_handle info, duckdb_v2_error_info_handle *err) {
 	void *data = nullptr;
-	duckdb_v2_virtual_file_system_info_get_user_data(info, &data, err);
+	duckdb_v2_virtual_file_open_info_get_user_data(info, &data, err);
+	return *static_cast<Overlay *>(data);
+}
+Overlay &OverlayOf(duckdb_v2_virtual_file_info_handle info, duckdb_v2_error_info_handle *err) {
+	void *data = nullptr;
+	duckdb_v2_virtual_file_info_get_user_data(info, &data, err);
+	return *static_cast<Overlay *>(data);
+}
+Overlay &OverlayOf(duckdb_v2_virtual_file_path_info_handle info, duckdb_v2_error_info_handle *err) {
+	void *data = nullptr;
+	duckdb_v2_virtual_file_path_info_get_user_data(info, &data, err);
 	return *static_cast<Overlay *>(data);
 }
 
-// The file system to delegate to: the context's when the request has one, the database's otherwise.
-duckdb_v2_file_system_handle DelegateFs(duckdb_v2_virtual_file_system_info_handle info,
-                                        duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+// The file system to delegate to: the query's when the request has a context, the database's otherwise.
+duckdb_v2_file_system_handle DelegateFs(duckdb_v2_virtual_file_open_info_handle info,
+                                        duckdb_v2_error_info_handle *err) {
+	duckdb_v2_context_handle context = nullptr;
+	duckdb_v2_virtual_file_open_info_get_context(info, &context, err);
 	duckdb_v2_file_system_handle fs = nullptr;
 	if (context) {
 		duckdb_v2_file_system_get_from_context(context, &fs, err);
 	} else {
-		duckdb_v2_virtual_file_system_info_get_file_system(info, &fs, err);
+		duckdb_v2_virtual_file_open_info_get_file_system(info, &fs, err);
+	}
+	return fs;
+}
+duckdb_v2_file_system_handle DelegateFs(duckdb_v2_virtual_file_path_info_handle info,
+                                        duckdb_v2_error_info_handle *err) {
+	duckdb_v2_context_handle context = nullptr;
+	duckdb_v2_virtual_file_path_info_get_context(info, &context, err);
+	duckdb_v2_file_system_handle fs = nullptr;
+	if (context) {
+		duckdb_v2_file_system_get_from_context(context, &fs, err);
+	} else {
+		duckdb_v2_virtual_file_path_info_get_file_system(info, &fs, err);
 	}
 	return fs;
 }
@@ -1213,21 +1260,16 @@ void OverlayDestroyFile(void *data) {
 	duckdb_v2_file_destroy(&file);
 }
 
-void OverlayOpen(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_open_info_handle open_info,
+void OverlayOpen(duckdb_v2_virtual_file_open_info_handle open_info, duckdb_v2_str path,
                  duckdb_v2_error_info_handle *err) {
-	auto &overlay = OverlayOf(info, err);
-	duckdb_v2_str path {nullptr, 0};
-	duckdb_v2_virtual_file_open_info_get_path(open_info, &path, err);
-	duckdb_v2_context_handle context = nullptr;
-	duckdb_v2_virtual_file_open_info_get_context(open_info, &context, err);
+	auto &overlay = OverlayOf(open_info, err);
 	// Forward the request as received: same flags, same values, path with the overlay's prefix stripped.
 	duckdb_v2_file_open_options_handle options = nullptr;
 	if (duckdb_v2_virtual_file_open_info_get_options(open_info, &options, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	duckdb_v2_file_handle file = nullptr;
-	auto rc =
-	    duckdb_v2_file_system_open(DelegateFs(info, context, err), Convert(Underneath(path)), options, &file, err);
+	auto rc = duckdb_v2_file_system_open(DelegateFs(open_info, err), Convert(Underneath(path)), options, &file, err);
 	duckdb_v2_file_open_options_destroy(&options);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		return;
@@ -1243,10 +1285,9 @@ duckdb_v2_file_handle OverlayFile(duckdb_v2_virtual_file_info_handle file, duckd
 	return static_cast<duckdb_v2_file_handle>(data);
 }
 
-void OverlayReadAt(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_info_handle file,
-                   void *buffer, idx_t buffer_size, idx_t location, idx_t *bytes_read,
-                   duckdb_v2_error_info_handle *err) {
-	OverlayOf(info, err).reads++;
+void OverlayReadAt(duckdb_v2_virtual_file_info_handle file, void *buffer, idx_t buffer_size, idx_t location,
+                   idx_t *bytes_read, duckdb_v2_error_info_handle *err) {
+	OverlayOf(file, err).reads++;
 	// The engine's offset read is all or nothing; clamp to the size to keep pread semantics.
 	auto underneath = OverlayFile(file, err);
 	idx_t size = 0;
@@ -1259,55 +1300,47 @@ void OverlayReadAt(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_vir
 	}
 }
 
-void OverlayStat(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_info_handle file,
-                 duckdb_v2_file_stat_handle stat, duckdb_v2_error_info_handle *err) {
-	duckdb_v2_file_stat_handle underneath = nullptr;
-	if (duckdb_v2_file_get_stat(OverlayFile(file, err), &underneath, err) != DUCKDB_V2_ERROR_NONE) {
+void OverlayStat(duckdb_v2_virtual_file_info_handle file, duckdb_v2_file_metadata_handle metadata,
+                 duckdb_v2_error_info_handle *err) {
+	duckdb_v2_file_metadata_handle underneath = nullptr;
+	if (duckdb_v2_file_stat(OverlayFile(file, err), &underneath, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	idx_t size = 0;
 	bool known = false;
-	duckdb_v2_file_stat_get_size(underneath, &size, &known, err);
+	duckdb_v2_file_metadata_get_size(underneath, &size, &known, err);
 	if (known) {
-		duckdb_v2_file_stat_set_size(stat, size, err);
+		duckdb_v2_file_metadata_set_size(metadata, size, err);
 	}
-	duckdb_v2_file_stat_destroy(&underneath);
+	duckdb_v2_file_metadata_destroy(&underneath);
 }
 
-void OverlayStatPath(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_path_info_handle path_info,
-                     duckdb_v2_file_stat_handle stat, duckdb_v2_error_info_handle *err) {
-	OverlayOf(info, err).stats++;
-	duckdb_v2_str path {nullptr, 0};
-	duckdb_v2_virtual_file_path_info_get_path(path_info, &path, err);
-	duckdb_v2_context_handle context = nullptr;
-	duckdb_v2_virtual_file_path_info_get_context(path_info, &context, err);
-	duckdb_v2_file_stat_handle underneath = nullptr;
-	if (duckdb_v2_file_system_stat(DelegateFs(info, context, err), Convert(Underneath(path)), &underneath, err) !=
+void OverlayStatPath(duckdb_v2_virtual_file_path_info_handle path_info, duckdb_v2_str path,
+                     duckdb_v2_file_metadata_handle metadata, duckdb_v2_error_info_handle *err) {
+	OverlayOf(path_info, err).stats++;
+	duckdb_v2_file_metadata_handle underneath = nullptr;
+	if (duckdb_v2_file_system_stat(DelegateFs(path_info, err), Convert(Underneath(path)), &underneath, err) !=
 	    DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	DUCKDB_V2_FILE_TYPE type = DUCKDB_V2_FILE_TYPE_INVALID;
-	duckdb_v2_file_stat_get_type(underneath, &type, err);
-	duckdb_v2_file_stat_set_type(stat, type, err);
+	duckdb_v2_file_metadata_get_type(underneath, &type, err);
+	duckdb_v2_file_metadata_set_type(metadata, type, err);
 	// What the file system underneath knew by path comes through.
 	idx_t size = 0;
 	bool known = false;
-	duckdb_v2_file_stat_get_size(underneath, &size, &known, err);
+	duckdb_v2_file_metadata_get_size(underneath, &size, &known, err);
 	if (known) {
-		duckdb_v2_file_stat_set_size(stat, size, err);
+		duckdb_v2_file_metadata_set_size(metadata, size, err);
 	}
-	duckdb_v2_file_stat_destroy(&underneath);
+	duckdb_v2_file_metadata_destroy(&underneath);
 }
 
-void OverlayList(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtual_file_path_info_handle path_info,
+void OverlayList(duckdb_v2_virtual_file_path_info_handle path_info, duckdb_v2_str path,
                  duckdb_v2_file_listing_handle list, duckdb_v2_error_info_handle *err) {
-	OverlayOf(info, err).lists++;
-	duckdb_v2_str path {nullptr, 0};
-	duckdb_v2_virtual_file_path_info_get_path(path_info, &path, err);
-	duckdb_v2_context_handle context = nullptr;
-	duckdb_v2_virtual_file_path_info_get_context(path_info, &context, err);
+	OverlayOf(path_info, err).lists++;
 	duckdb_v2_file_listing_handle underneath = nullptr;
-	if (duckdb_v2_file_system_list(DelegateFs(info, context, err), Convert(Underneath(path)), &underneath, err) !=
+	if (duckdb_v2_file_system_list(DelegateFs(path_info, err), Convert(Underneath(path)), &underneath, err) !=
 	    DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
@@ -1323,6 +1356,26 @@ void OverlayList(duckdb_v2_virtual_file_system_info_handle info, duckdb_v2_virtu
 	duckdb_v2_file_listing_destroy(&underneath);
 }
 
+void OverlayGlob(duckdb_v2_virtual_file_path_info_handle path_info, duckdb_v2_str pattern,
+                 duckdb_v2_file_listing_handle list, duckdb_v2_error_info_handle *err) {
+	OverlayOf(path_info, err).globs++;
+	duckdb_v2_file_listing_handle underneath = nullptr;
+	if (duckdb_v2_file_system_glob(DelegateFs(path_info, err), Convert(Underneath(pattern)), &underneath, err) !=
+	    DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	idx_t count = 0;
+	duckdb_v2_file_listing_get_entry_count(underneath, &count, err);
+	for (idx_t i = 0; i < count; i++) {
+		duckdb_v2_str path {nullptr, 0};
+		duckdb_v2_file_listing_get_entry_path(underneath, i, &path, err);
+		// Glob results are full paths: put the overlay's prefix back on.
+		auto prefixed = OVERLAY_SCHEME + Convert(path);
+		duckdb_v2_file_listing_add_entry(list, Convert(prefixed), DUCKDB_V2_FILE_TYPE_REGULAR, nullptr, err);
+	}
+	duckdb_v2_file_listing_destroy(&underneath);
+}
+
 void RegisterOverlay(duckdb_v2_connection_handle conn, Overlay &overlay) {
 	duckdb_v2_virtual_file_system_handle vfs = nullptr;
 	REQUIRE(duckdb_v2_virtual_file_system_create_with_connection(conn, &vfs, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -1331,11 +1384,12 @@ void RegisterOverlay(duckdb_v2_connection_handle conn, Overlay &overlay) {
 	REQUIRE(duckdb_v2_virtual_file_system_set_user_data(vfs, &user_data, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_virtual_file_system_add_prefix(vfs, Convert(OVERLAY_SCHEME), nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_virtual_file_system_set_open_callback(vfs, OverlayOpen, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_virtual_file_system_set_read_at_callback(vfs, OverlayReadAt, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_virtual_file_system_set_stat_callback(vfs, OverlayStat, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_virtual_file_system_set_stat_path_callback(vfs, OverlayStatPath, nullptr) ==
+	REQUIRE(duckdb_v2_virtual_file_system_set_file_read_at_callback(vfs, OverlayReadAt, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_virtual_file_system_set_file_stat_callback(vfs, OverlayStat, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_virtual_file_system_set_stat_callback(vfs, OverlayStatPath, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_virtual_file_system_set_list_callback(vfs, OverlayList, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_virtual_file_system_set_glob_callback(vfs, OverlayGlob, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_virtual_file_system_register(vfs, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_virtual_file_system_destroy(&vfs);
 }
@@ -1361,33 +1415,43 @@ TEST_CASE("V2 virtual file system: an overlay delegates to the file system under
 	REQUIRE(!mem.last_open_for_write);
 	REQUIRE(mem.last_open_path == "mem://data/a.csv");
 
-	// Listings and stats delegate too, so globs through the overlay expand underneath.
+	// Globs delegate too, so a pattern through the overlay expands underneath.
 	auto files = VfsQueryStrings(fx.conn, "SELECT file FROM glob('cached+mem://data/*.csv')");
 	REQUIRE(files == std::vector<std::string> {"cached+mem://data/a.csv", "cached+mem://data/b.csv"});
-	REQUIRE(overlay.lists > 0);
+	REQUIRE(overlay.globs > 0);
 	auto total = VfsQueryStrings(fx.conn, "SELECT count(*) FROM read_csv('cached+mem://data/*.csv')");
 	REQUIRE(total == std::vector<std::string> {"3"});
 
-	// A stat by path routes to the overlay, whose stat path passes on what the file system underneath knew.
+	// So do listings.
 	auto fs = VfsEngineFs(fx.conn);
-	duckdb_v2_file_stat_handle stat = nullptr;
-	REQUIRE(duckdb_v2_file_system_stat(fs, Convert("cached+mem://data/b.csv"), &stat, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_file_listing_handle listing = nullptr;
+	REQUIRE(duckdb_v2_file_system_list(fs, Convert("cached+mem://data"), &listing, nullptr) == DUCKDB_V2_ERROR_NONE);
+	idx_t listed = 0;
+	REQUIRE(duckdb_v2_file_listing_get_entry_count(listing, &listed, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(listed == 2);
+	duckdb_v2_file_listing_destroy(&listing);
+	REQUIRE(overlay.lists > 0);
+
+	// A stat by path routes to the overlay, whose stat passes on what the file system underneath knew.
+	duckdb_v2_file_metadata_handle metadata = nullptr;
+	REQUIRE(duckdb_v2_file_system_stat(fs, Convert("cached+mem://data/b.csv"), &metadata, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	DUCKDB_V2_FILE_TYPE type = DUCKDB_V2_FILE_TYPE_INVALID;
-	REQUIRE(duckdb_v2_file_stat_get_type(stat, &type, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_file_metadata_get_type(metadata, &type, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(type == DUCKDB_V2_FILE_TYPE_REGULAR);
 	idx_t size = 0;
 	bool known = false;
-	REQUIRE(duckdb_v2_file_stat_get_size(stat, &size, &known, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_file_metadata_get_size(metadata, &size, &known, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(known);
 	REQUIRE(size == std::strlen(CSV_B));
-	duckdb_v2_file_stat_destroy(&stat);
+	duckdb_v2_file_metadata_destroy(&metadata);
 	REQUIRE(overlay.stats > 0);
 	// And a path that is not there says so, as a result.
-	REQUIRE(duckdb_v2_file_system_stat(fs, Convert("cached+mem://data/missing.csv"), &stat, nullptr) ==
+	REQUIRE(duckdb_v2_file_system_stat(fs, Convert("cached+mem://data/missing.csv"), &metadata, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_file_stat_get_type(stat, &type, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_file_metadata_get_type(metadata, &type, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(type == DUCKDB_V2_FILE_TYPE_INVALID);
-	duckdb_v2_file_stat_destroy(&stat);
+	duckdb_v2_file_metadata_destroy(&metadata);
 
 	// Every file the overlay opened underneath was closed with it.
 	REQUIRE(mem.opens == mem.closes);
@@ -1404,23 +1468,23 @@ TEST_CASE("V2 file system: path operations on the local file system", "[capi_v2]
 	auto root = duckdb::TestCreatePath("v2_fs_paths");
 	duckdb_v2_file_system_remove_directory(fs, Convert(root), nullptr);
 
-	// Nothing there yet: a stat says so as a result, and listing a directory that does not exist is an error.
-	duckdb_v2_file_stat_handle stat = nullptr;
-	REQUIRE(duckdb_v2_file_system_stat(fs, Convert(root), &stat, nullptr) == DUCKDB_V2_ERROR_NONE);
+	// Nothing there yet: a metadata says so as a result, and listing a directory that does not exist is an error.
+	duckdb_v2_file_metadata_handle metadata = nullptr;
+	REQUIRE(duckdb_v2_file_system_stat(fs, Convert(root), &metadata, nullptr) == DUCKDB_V2_ERROR_NONE);
 	DUCKDB_V2_FILE_TYPE type = DUCKDB_V2_FILE_TYPE_REGULAR;
-	REQUIRE(duckdb_v2_file_stat_get_type(stat, &type, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_file_metadata_get_type(metadata, &type, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(type == DUCKDB_V2_FILE_TYPE_INVALID);
-	duckdb_v2_file_stat_destroy(&stat);
-	REQUIRE(stat == nullptr);
+	duckdb_v2_file_metadata_destroy(&metadata);
+	REQUIRE(metadata == nullptr);
 	duckdb_v2_file_listing_handle listing = nullptr;
 	REQUIRE(duckdb_v2_file_system_list(fs, Convert(root), &listing, nullptr) != DUCKDB_V2_ERROR_NONE);
 
 	// Create a directory tree and a file in it.
 	REQUIRE(duckdb_v2_file_system_create_directory(fs, Convert(root + "/sub"), nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_file_system_stat(fs, Convert(root + "/sub"), &stat, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_file_stat_get_type(stat, &type, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_file_system_stat(fs, Convert(root + "/sub"), &metadata, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_file_metadata_get_type(metadata, &type, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(type == DUCKDB_V2_FILE_TYPE_DIRECTORY);
-	duckdb_v2_file_stat_destroy(&stat);
+	duckdb_v2_file_metadata_destroy(&metadata);
 	idx_t count = 0;
 
 	auto file_path = root + "/sub/data.txt";
@@ -1429,32 +1493,34 @@ TEST_CASE("V2 file system: path operations on the local file system", "[capi_v2]
 		idx_t written = 0;
 		REQUIRE(duckdb_v2_file_write(handle, "hello", 5, &written, nullptr) == DUCKDB_V2_ERROR_NONE);
 		// An open file reports its size, and on local disk its modification time.
-		REQUIRE(duckdb_v2_file_get_stat(handle, &stat, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_file_stat(handle, &metadata, nullptr) == DUCKDB_V2_ERROR_NONE);
 		idx_t size = 0;
 		bool known = false;
-		REQUIRE(duckdb_v2_file_stat_get_size(stat, &size, &known, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_file_metadata_get_size(metadata, &size, &known, nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(known);
 		REQUIRE(size == 5);
 		int64_t modified = 0;
-		REQUIRE(duckdb_v2_file_stat_get_last_modified(stat, &modified, &known, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_file_metadata_get_last_modified(metadata, &modified, &known, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
 		REQUIRE(known);
 		// Whether a version tag is reported is the file system's business; the call itself must work.
 		duckdb_v2_str tag {nullptr, 0};
-		REQUIRE(duckdb_v2_file_stat_get_version_tag(stat, &tag, &known, nullptr) == DUCKDB_V2_ERROR_NONE);
-		duckdb_v2_file_stat_destroy(&stat);
+		REQUIRE(duckdb_v2_file_metadata_get_version_tag(metadata, &tag, &known, nullptr) == DUCKDB_V2_ERROR_NONE);
+		duckdb_v2_file_metadata_destroy(&metadata);
 		duckdb_v2_file_destroy(&handle);
 	}
 
-	// A stat by path sees a regular file, and on local disk knows its size without opening it.
-	REQUIRE(duckdb_v2_file_system_stat(fs, Convert(file_path), &stat, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_file_stat_get_type(stat, &type, nullptr) == DUCKDB_V2_ERROR_NONE);
+	// A metadata by path sees a regular file, and on local disk knows its size without opening it.
+	REQUIRE(duckdb_v2_file_system_stat(fs, Convert(file_path), &metadata, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_file_metadata_get_type(metadata, &type, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(type == DUCKDB_V2_FILE_TYPE_REGULAR);
-	idx_t stat_size = 0;
-	bool stat_size_known = false;
-	REQUIRE(duckdb_v2_file_stat_get_size(stat, &stat_size, &stat_size_known, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(stat_size_known);
-	REQUIRE(stat_size == 5);
-	duckdb_v2_file_stat_destroy(&stat);
+	idx_t metadata_size = 0;
+	bool metadata_size_known = false;
+	REQUIRE(duckdb_v2_file_metadata_get_size(metadata, &metadata_size, &metadata_size_known, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(metadata_size_known);
+	REQUIRE(metadata_size == 5);
+	duckdb_v2_file_metadata_destroy(&metadata);
 
 	// Listing the directory yields the file by name, with its size.
 	REQUIRE(duckdb_v2_file_system_list(fs, Convert(root + "/sub"), &listing, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -1465,11 +1531,12 @@ TEST_CASE("V2 file system: path operations on the local file system", "[capi_v2]
 	REQUIRE(name == "data.txt");
 	REQUIRE(duckdb_v2_file_listing_get_entry_type(listing, 0, &type, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(type == DUCKDB_V2_FILE_TYPE_REGULAR);
-	duckdb_v2_file_stat_handle entry_stat = nullptr;
-	REQUIRE(duckdb_v2_file_listing_get_entry_stat(listing, 0, &entry_stat, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_file_metadata_handle entry_metadata = nullptr;
+	REQUIRE(duckdb_v2_file_listing_get_entry_metadata(listing, 0, &entry_metadata, nullptr) == DUCKDB_V2_ERROR_NONE);
 	idx_t entry_size = 0;
 	bool entry_size_known = false;
-	REQUIRE(duckdb_v2_file_stat_get_size(entry_stat, &entry_size, &entry_size_known, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_file_metadata_get_size(entry_metadata, &entry_size, &entry_size_known, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(entry_size_known);
 	REQUIRE(entry_size == 5);
 	REQUIRE(duckdb_v2_file_listing_get_entry_path(listing, 1, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
@@ -1501,10 +1568,10 @@ TEST_CASE("V2 file system: path operations on the local file system", "[capi_v2]
 	REQUIRE(duckdb_v2_file_system_list(fs, Convert(root), &listing, nullptr) != DUCKDB_V2_ERROR_NONE);
 
 	// Null-safe destroys, null arguments reported.
-	REQUIRE(duckdb_v2_file_stat_destroy(nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_file_metadata_destroy(nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_file_listing_destroy(nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_file_system_list(nullptr, Convert(root), &listing, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_file_system_stat(nullptr, Convert(root), &stat, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_file_system_stat(nullptr, Convert(root), &metadata, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 }
 
 } // namespace test_capi_v2

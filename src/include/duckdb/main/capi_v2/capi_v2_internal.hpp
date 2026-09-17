@@ -422,7 +422,7 @@ inline auto Convert(CV2File *handle) -> duckdb_v2_file_handle {
 }
 
 // What is known about one file or directory. Filled in by a virtual file system's callbacks, read by consumers.
-class CV2FileStat {
+class CV2FileMetadata {
 public:
 	DUCKDB_V2_FILE_TYPE type = DUCKDB_V2_FILE_TYPE_INVALID;
 	optional<idx_t> size;
@@ -447,8 +447,8 @@ public:
 	}
 
 	//! The reverse of FillOptions: what a listing put into the open options.
-	static CV2FileStat FromOptions(const OpenFileInfo &file) {
-		CV2FileStat info;
+	static CV2FileMetadata FromOptions(const OpenFileInfo &file) {
+		CV2FileMetadata info;
 		if (!file.extended_info) {
 			return info;
 		}
@@ -508,8 +508,8 @@ public:
 	}
 
 	//! What the engine reports about a file: an open one, or one found by path.
-	static CV2FileStat FromMetadata(const FileMetadata &metadata, bool open_file) {
-		CV2FileStat info;
+	static CV2FileMetadata FromMetadata(const FileMetadata &metadata, bool open_file) {
+		CV2FileMetadata info;
 		info.type = ToType(metadata.file_type, open_file);
 		if (metadata.file_size >= 0) {
 			info.size = NumericCast<idx_t>(metadata.file_size);
@@ -525,11 +525,11 @@ public:
 	}
 };
 
-inline auto Convert(duckdb_v2_file_stat_handle stat) -> CV2FileStat * {
-	return reinterpret_cast<CV2FileStat *>(stat);
+inline auto Convert(duckdb_v2_file_metadata_handle metadata) -> CV2FileMetadata * {
+	return reinterpret_cast<CV2FileMetadata *>(metadata);
 }
-inline auto Convert(CV2FileStat *stat) -> duckdb_v2_file_stat_handle {
-	return reinterpret_cast<duckdb_v2_file_stat_handle>(stat);
+inline auto Convert(CV2FileMetadata *metadata) -> duckdb_v2_file_metadata_handle {
+	return reinterpret_cast<duckdb_v2_file_metadata_handle>(metadata);
 }
 
 // The entries of one listing or glob. Filled in by a virtual file system's callbacks, read by consumers.
@@ -538,16 +538,16 @@ public:
 	struct Entry {
 		string path;
 		DUCKDB_V2_FILE_TYPE type;
-		CV2FileStat stat;
+		CV2FileMetadata metadata;
 	};
-	//! A deque, so the stat handed out for an entry stays valid while more entries are added.
+	//! A deque, so the metadata handed out for an entry stays valid while more entries are added.
 	std::deque<Entry> entries;
 
 	//! Adds an entry the engine reported, decoding what its options carry.
 	void Add(const OpenFileInfo &info) {
-		auto stat = CV2FileStat::FromOptions(info);
-		auto type = stat.type == DUCKDB_V2_FILE_TYPE_INVALID ? DUCKDB_V2_FILE_TYPE_REGULAR : stat.type;
-		entries.push_back({info.path, type, std::move(stat)});
+		auto metadata = CV2FileMetadata::FromOptions(info);
+		auto type = metadata.type == DUCKDB_V2_FILE_TYPE_INVALID ? DUCKDB_V2_FILE_TYPE_REGULAR : metadata.type;
+		entries.push_back({info.path, type, std::move(metadata)});
 	}
 };
 

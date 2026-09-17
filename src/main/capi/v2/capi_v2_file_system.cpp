@@ -61,7 +61,7 @@ static bool IsFileType(DUCKDB_V2_FILE_TYPE type) {
 	}
 }
 
-static const CV2FileListing::Entry &EntryAt(duckdb_v2_file_listing_handle listing, idx_t index, const char *function) {
+static CV2FileListing::Entry &EntryAt(duckdb_v2_file_listing_handle listing, idx_t index, const char *function) {
 	auto &entries = Convert(listing)->entries;
 	if (index >= entries.size()) {
 		throw InvalidInputException("Index out of bounds in %s", function);
@@ -177,19 +177,19 @@ DUCKDB_V2_ERROR duckdb_v2_file_system_open(duckdb_v2_file_system_handle file_sys
 //----------------------------------------------------------------------------------------------------------------------
 
 DUCKDB_V2_ERROR duckdb_v2_file_system_stat(duckdb_v2_file_system_handle file_system, duckdb_v2_str path,
-                                           duckdb_v2_file_stat_handle *stat, duckdb_v2_error_info_handle *err) {
+                                           duckdb_v2_file_metadata_handle *metadata, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	DUCKDB_CHECK_ARG(path);
-	DUCKDB_CHECK_ARG(stat);
-	*stat = nullptr;
+	DUCKDB_CHECK_ARG(metadata);
+	*metadata = nullptr;
 	return WithErrorHandler(err, [&]() {
 		auto &slot = *Convert(file_system);
-		auto metadata = slot.fs->GetStatsIfExists(duckdb::OpenFileInfo(duckdb::string(Convert(path))));
-		auto result = duckdb::make_uniq<CV2FileStat>();
-		if (metadata) {
-			*result = CV2FileStat::FromMetadata(*metadata, false);
+		auto engine_metadata = slot.fs->GetStatsIfExists(duckdb::OpenFileInfo(duckdb::string(Convert(path))));
+		auto result = duckdb::make_uniq<CV2FileMetadata>();
+		if (engine_metadata) {
+			*result = CV2FileMetadata::FromMetadata(*engine_metadata, false);
 		}
-		*stat = Convert(result.release());
+		*metadata = Convert(result.release());
 	});
 }
 
@@ -331,14 +331,15 @@ DUCKDB_V2_ERROR duckdb_v2_file_size(duckdb_v2_file_handle file, idx_t *size, duc
 	return WithErrorHandler(err, [&]() { *size = Convert(file)->Handle().GetFileSize(); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_file_get_stat(duckdb_v2_file_handle file, duckdb_v2_file_stat_handle *stat,
-                                        duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_file_stat(duckdb_v2_file_handle file, duckdb_v2_file_metadata_handle *metadata,
+                                    duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file);
-	DUCKDB_CHECK_ARG(stat);
-	*stat = nullptr;
+	DUCKDB_CHECK_ARG(metadata);
+	*metadata = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto result = duckdb::make_uniq<CV2FileStat>(CV2FileStat::FromMetadata(Convert(file)->Handle().Stats(), true));
-		*stat = Convert(result.release());
+		auto result =
+		    duckdb::make_uniq<CV2FileMetadata>(CV2FileMetadata::FromMetadata(Convert(file)->Handle().Stats(), true));
+		*metadata = Convert(result.release());
 	});
 }
 
@@ -358,90 +359,92 @@ DUCKDB_V2_ERROR duckdb_v2_file_close(duckdb_v2_file_handle file, duckdb_v2_error
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-// File Stat
+// File Metadata
 //----------------------------------------------------------------------------------------------------------------------
 
-DUCKDB_V2_ERROR duckdb_v2_file_stat_get_type(duckdb_v2_file_stat_handle stat, DUCKDB_V2_FILE_TYPE *type,
-                                             duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(stat);
+DUCKDB_V2_ERROR duckdb_v2_file_metadata_get_type(duckdb_v2_file_metadata_handle metadata, DUCKDB_V2_FILE_TYPE *type,
+                                                 duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(metadata);
 	DUCKDB_CHECK_ARG(type);
-	return WithErrorHandler(err, [&]() { *type = Convert(stat)->type; });
+	return WithErrorHandler(err, [&]() { *type = Convert(metadata)->type; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_file_stat_get_size(duckdb_v2_file_stat_handle stat, idx_t *size, bool *is_known,
-                                             duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(stat);
+DUCKDB_V2_ERROR duckdb_v2_file_metadata_get_size(duckdb_v2_file_metadata_handle metadata, idx_t *size, bool *is_known,
+                                                 duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(metadata);
 	DUCKDB_CHECK_ARG(size);
 	DUCKDB_CHECK_ARG(is_known);
 	return WithErrorHandler(err, [&]() {
-		auto &info = *Convert(stat);
+		auto &info = *Convert(metadata);
 		*is_known = info.size.has_value();
 		*size = info.size ? *info.size : 0;
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_file_stat_get_last_modified(duckdb_v2_file_stat_handle stat, int64_t *last_modified,
-                                                      bool *is_known, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(stat);
+DUCKDB_V2_ERROR duckdb_v2_file_metadata_get_last_modified(duckdb_v2_file_metadata_handle metadata,
+                                                          int64_t *last_modified, bool *is_known,
+                                                          duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(metadata);
 	DUCKDB_CHECK_ARG(last_modified);
 	DUCKDB_CHECK_ARG(is_known);
 	return WithErrorHandler(err, [&]() {
-		auto &info = *Convert(stat);
+		auto &info = *Convert(metadata);
 		*is_known = info.last_modified.has_value();
 		*last_modified = info.last_modified ? *info.last_modified : 0;
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_file_stat_get_version_tag(duckdb_v2_file_stat_handle stat, duckdb_v2_str *version_tag,
-                                                    bool *is_known, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(stat);
+DUCKDB_V2_ERROR duckdb_v2_file_metadata_get_version_tag(duckdb_v2_file_metadata_handle metadata,
+                                                        duckdb_v2_str *version_tag, bool *is_known,
+                                                        duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(metadata);
 	DUCKDB_CHECK_ARG(version_tag);
 	DUCKDB_CHECK_ARG(is_known);
 	return WithErrorHandler(err, [&]() {
-		auto &info = *Convert(stat);
+		auto &info = *Convert(metadata);
 		*is_known = info.version_tag.has_value();
 		*version_tag = info.version_tag ? Convert(*info.version_tag) : duckdb_v2_str {nullptr, 0};
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_file_stat_set_type(duckdb_v2_file_stat_handle stat, DUCKDB_V2_FILE_TYPE type,
-                                             duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(stat);
+DUCKDB_V2_ERROR duckdb_v2_file_metadata_set_type(duckdb_v2_file_metadata_handle metadata, DUCKDB_V2_FILE_TYPE type,
+                                                 duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(metadata);
 	return WithErrorHandler(err, [&]() {
 		if (!IsFileType(type)) {
 			throw duckdb::InvalidInputException("'%d' is not a file type.", static_cast<int>(type));
 		}
-		Convert(stat)->type = type;
+		Convert(metadata)->type = type;
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_file_stat_set_size(duckdb_v2_file_stat_handle stat, idx_t size,
-                                             duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(stat);
-	return WithErrorHandler(err, [&]() { Convert(stat)->size = size; });
+DUCKDB_V2_ERROR duckdb_v2_file_metadata_set_size(duckdb_v2_file_metadata_handle metadata, idx_t size,
+                                                 duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(metadata);
+	return WithErrorHandler(err, [&]() { Convert(metadata)->size = size; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_file_stat_set_last_modified(duckdb_v2_file_stat_handle stat, int64_t last_modified,
-                                                      duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(stat);
-	return WithErrorHandler(err, [&]() { Convert(stat)->last_modified = last_modified; });
+DUCKDB_V2_ERROR duckdb_v2_file_metadata_set_last_modified(duckdb_v2_file_metadata_handle metadata,
+                                                          int64_t last_modified, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(metadata);
+	return WithErrorHandler(err, [&]() { Convert(metadata)->last_modified = last_modified; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_file_stat_set_version_tag(duckdb_v2_file_stat_handle stat, duckdb_v2_str version_tag,
-                                                    duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(stat);
+DUCKDB_V2_ERROR duckdb_v2_file_metadata_set_version_tag(duckdb_v2_file_metadata_handle metadata,
+                                                        duckdb_v2_str version_tag, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(metadata);
 	DUCKDB_CHECK_ARG(version_tag);
-	return WithErrorHandler(err, [&]() { Convert(stat)->version_tag = duckdb::string(Convert(version_tag)); });
+	return WithErrorHandler(err, [&]() { Convert(metadata)->version_tag = duckdb::string(Convert(version_tag)); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_file_stat_destroy(duckdb_v2_file_stat_handle *stat) {
+DUCKDB_V2_ERROR duckdb_v2_file_metadata_destroy(duckdb_v2_file_metadata_handle *metadata) {
 	return WithErrorHandler(nullptr, [&]() {
-		if (!stat) {
+		if (!metadata) {
 			return;
 		}
-		if (*stat) {
-			delete Convert(*stat);
-			*stat = nullptr;
+		if (*metadata) {
+			delete Convert(*metadata);
+			*metadata = nullptr;
 		}
 	});
 }
@@ -451,12 +454,12 @@ DUCKDB_V2_ERROR duckdb_v2_file_stat_destroy(duckdb_v2_file_stat_handle *stat) {
 //----------------------------------------------------------------------------------------------------------------------
 
 DUCKDB_V2_ERROR duckdb_v2_file_listing_add_entry(duckdb_v2_file_listing_handle listing, duckdb_v2_str path,
-                                                 DUCKDB_V2_FILE_TYPE type, duckdb_v2_file_stat_handle *stat,
+                                                 DUCKDB_V2_FILE_TYPE type, duckdb_v2_file_metadata_handle *metadata,
                                                  duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(listing);
 	DUCKDB_CHECK_ARG(path);
-	if (stat) {
-		*stat = nullptr;
+	if (metadata) {
+		*metadata = nullptr;
 	}
 	return WithErrorHandler(err, [&]() {
 		if (!IsFileType(type)) {
@@ -468,9 +471,9 @@ DUCKDB_V2_ERROR duckdb_v2_file_listing_add_entry(duckdb_v2_file_listing_handle l
 		}
 		auto &entries = Convert(listing)->entries;
 		entries.push_back({std::move(entry_path), type, {}});
-		entries.back().stat.type = type;
-		if (stat) {
-			*stat = Convert(&entries.back().stat);
+		entries.back().metadata.type = type;
+		if (metadata) {
+			*metadata = Convert(&entries.back().metadata);
 		}
 	});
 }
@@ -486,26 +489,29 @@ DUCKDB_V2_ERROR duckdb_v2_file_listing_get_entry_path(duckdb_v2_file_listing_han
                                                       duckdb_v2_str *path, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(listing);
 	DUCKDB_CHECK_ARG(path);
-	return WithErrorHandler(err, [&]() { *path = Convert(EntryAt(listing, index, __func__).path); });
+	const char *function = __func__;
+	return WithErrorHandler(err, [&]() { *path = Convert(EntryAt(listing, index, function).path); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_file_listing_get_entry_type(duckdb_v2_file_listing_handle listing, idx_t index,
                                                       DUCKDB_V2_FILE_TYPE *type, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(listing);
 	DUCKDB_CHECK_ARG(type);
-	return WithErrorHandler(err, [&]() { *type = EntryAt(listing, index, __func__).type; });
+	const char *function = __func__;
+	return WithErrorHandler(err, [&]() { *type = EntryAt(listing, index, function).type; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_file_listing_get_entry_stat(duckdb_v2_file_listing_handle listing, idx_t index,
-                                                      duckdb_v2_file_stat_handle *stat,
-                                                      duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_file_listing_get_entry_metadata(duckdb_v2_file_listing_handle listing, idx_t index,
+                                                          duckdb_v2_file_metadata_handle *metadata,
+                                                          duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(listing);
-	DUCKDB_CHECK_ARG(stat);
-	*stat = nullptr;
+	DUCKDB_CHECK_ARG(metadata);
+	*metadata = nullptr;
+	const char *function = __func__;
 	return WithErrorHandler(err, [&]() {
 		// The entries are only ever appended to, so handing out a pointer into them is safe.
-		auto &entry = const_cast<CV2FileListing::Entry &>(EntryAt(listing, index, __func__)); // NOLINT
-		*stat = Convert(&entry.stat);
+		auto &entry = EntryAt(listing, index, function);
+		*metadata = Convert(&entry.metadata);
 	});
 }
 
