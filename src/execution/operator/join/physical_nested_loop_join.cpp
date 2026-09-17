@@ -19,6 +19,11 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, Logi
     : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::NESTED_LOOP_JOIN, std::move(conds), join_type,
                              estimated_cardinality) {
 	filter_pushdown = std::move(pushdown_info_p);
+	track_unknown =
+	    join_type == JoinType::MARK &&
+	    (predicate || conditions.size() > 1 ||
+	     (conditions.size() == 1 && (conditions[0].GetLHS().GetReturnType().id() == LogicalTypeId::TUPLE ||
+	                                 conditions[0].GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM)));
 	children.push_back(left);
 	children.push_back(right);
 	if (join_type == JoinType::MARK) {
@@ -424,7 +429,6 @@ OperatorResultType PhysicalNestedLoopJoin::ExecuteInternal(ExecutionContext &con
 	auto &gstate = sink_state->Cast<NestedLoopJoinGlobalState>();
 	auto &state = state_p.Cast<PhysicalNestedLoopJoinState>();
 	if (join_type == JoinType::MARK) {
-		state.mark_payload.Reset();
 		state.mark_payload.ReferenceColumns(input, mark_projection_map);
 	}
 
@@ -462,6 +466,7 @@ static void ResolveSimpleJoinPredicate(const vector<JoinCondition> &conditions, 
 	gstate.right_condition_data.InitializeScan(state.condition_scan_state);
 	gstate.right_payload_data.InitializeScan(state.payload_scan_state);
 	Vector comparison(LogicalType::BOOLEAN);
+	MarkJoinRowComparison comparer(state.left_condition);
 	VectorCache predicate_cache(state.pred_executor.GetAllocator(), LogicalType::BOOLEAN);
 	Vector predicate_result(predicate_cache);
 	while (gstate.right_condition_data.Scan(state.condition_scan_state, state.right_condition)) {
@@ -473,8 +478,7 @@ static void ResolveSimpleJoinPredicate(const vector<JoinCondition> &conditions, 
 			if (found_match[left_row]) {
 				continue;
 			}
-			MarkJoinRowComparison::CompareConjunction(state.left_condition, left_row, state.right_condition, conditions,
-			                                          comparison, join_type == JoinType::MARK);
+			comparer.CompareConjunction(state.left_condition, left_row, state.right_condition, conditions, comparison);
 			auto comparisons = comparison.Values<bool>();
 			idx_t candidate_count = 0;
 			for (idx_t right_row = 0; right_row < state.right_condition.size(); right_row++) {
@@ -522,11 +526,7 @@ void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataCh
 
 	bool found_match[STANDARD_VECTOR_SIZE] = {false};
 	bool found_unknown[STANDARD_VECTOR_SIZE] = {false};
-	const bool track_unknown =
-	    join_type == JoinType::MARK &&
-	    (predicate || conditions.size() > 1 ||
-	     (conditions.size() == 1 && (conditions[0].GetLHS().GetReturnType().id() == LogicalTypeId::TUPLE ||
-	                                 conditions[0].GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM)));
+
 	if (predicate) {
 		ResolveSimpleJoinPredicate(conditions, join_type, input, state, gstate, found_match, found_unknown);
 	} else {

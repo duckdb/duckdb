@@ -77,6 +77,7 @@ public:
 
 private:
 	vector<idx_t> mark_projection_map;
+	bool track_unknown;
 
 private:
 	// resolve joins that output max N elements (SEMI, ANTI, MARK)

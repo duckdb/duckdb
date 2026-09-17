@@ -196,10 +196,9 @@ void NestedLoopJoinMark::Perform(DataChunk &left, ColumnDataCollection &right, b
 			MarkJoinRowComparison::Perform(left, scan_chunk, found_match, conditions, found_unknown);
 			continue;
 		}
-		for (idx_t i = 0; i < conditions.size(); i++) {
-			MarkJoinComparisonSwitch(left.data[i], scan_chunk.data[i], left.size(), scan_chunk.size(), found_match,
-			                         conditions[i].GetComparisonType(), found_unknown);
-		}
+		D_ASSERT(conditions.size() == 1);
+		MarkJoinComparisonSwitch(left.data[0], scan_chunk.data[0], left.size(), scan_chunk.size(), found_match,
+		                         conditions[0].GetComparisonType(), found_unknown);
 	}
 }
 

@@ -3,7 +3,7 @@
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/joinside.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
@@ -104,28 +104,22 @@ void MarkJoinRowComparison::Compare(const Vector &left, const Vector &right, Exp
 	}
 }
 
-void MarkJoinRowComparison::Compare(const Vector &left, idx_t left_row, const Vector &right,
-                                    ExpressionType comparison_type, Vector &result) {
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	FlatVector::ValidityMutable(result).Reset(right.size());
-	Vector left_reference(left.GetType());
-	ConstantVector::Reference(left_reference, count_t(right.size()), left, left_row, left.size());
-	Compare(left_reference, right, comparison_type, result);
+MarkJoinRowComparison::MarkJoinRowComparison(const DataChunk &left) : comparison(LogicalType::BOOLEAN) {
+	left_reference.Initialize(Allocator::DefaultAllocator(), left.GetTypes());
 }
 
 void MarkJoinRowComparison::CompareConjunction(DataChunk &left, idx_t left_row, DataChunk &right,
-                                               const vector<JoinCondition> &conditions, Vector &result,
-                                               bool nested_loop) {
+                                               const vector<JoinCondition> &conditions, Vector &result) {
 	D_ASSERT(left_row < left.size());
 	D_ASSERT(right.size() <= STANDARD_VECTOR_SIZE);
 	D_ASSERT(left.ColumnCount() == conditions.size());
 	D_ASSERT(right.ColumnCount() == conditions.size());
-	Vector comparison(LogicalType::BOOLEAN);
+	left_reference.Reset();
 	bool pair_is_false[STANDARD_VECTOR_SIZE] = {false};
 	bool pair_is_unknown[STANDARD_VECTOR_SIZE] = {false};
 	for (idx_t condition_idx = 0; condition_idx < conditions.size(); condition_idx++) {
 		const auto type = conditions[condition_idx].GetComparisonType();
-		if (nested_loop && left.data[condition_idx].GetType().id() == LogicalTypeId::TUPLE &&
+		if (left.data[condition_idx].GetType().id() == LogicalTypeId::TUPLE &&
 		    (type == ExpressionType::COMPARE_EQUAL || type == ExpressionType::COMPARE_NOTEQUAL)) {
 			bool is_false[STANDARD_VECTOR_SIZE] = {false};
 			bool is_unknown[STANDARD_VECTOR_SIZE] = {false};
@@ -142,8 +136,9 @@ void MarkJoinRowComparison::CompareConjunction(DataChunk &left, idx_t left_row, 
 				}
 			}
 		} else {
-			MarkJoinRowComparison::Compare(left.data[condition_idx], left_row, right.data[condition_idx],
-			                               conditions[condition_idx].GetComparisonType(), comparison);
+			ConstantVector::Reference(left_reference.data[condition_idx], count_t(right.size()),
+			                          left.data[condition_idx], left_row, left.size());
+			Compare(left_reference.data[condition_idx], right.data[condition_idx], type, comparison);
 		}
 		auto entries = comparison.Values<bool>();
 		for (idx_t right_row = 0; right_row < right.size(); right_row++) {
@@ -172,11 +167,12 @@ void MarkJoinRowComparison::CompareConjunction(DataChunk &left, idx_t left_row, 
 void MarkJoinRowComparison::Perform(DataChunk &left, DataChunk &right, bool found_match[],
                                     const vector<JoinCondition> &conditions, optional_ptr<bool> found_unknown) {
 	Vector comparison(LogicalType::BOOLEAN);
+	MarkJoinRowComparison comparer(left);
 	for (idx_t left_row = 0; left_row < left.size(); left_row++) {
 		if (found_match[left_row]) {
 			continue;
 		}
-		MarkJoinRowComparison::CompareConjunction(left, left_row, right, conditions, comparison, true);
+		comparer.CompareConjunction(left, left_row, right, conditions, comparison);
 		for (auto entry : comparison.Values<bool>()) {
 			if (entry.IsValid()) {
 				if (entry.GetValue()) {
