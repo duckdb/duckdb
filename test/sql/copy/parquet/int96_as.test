@@ -1,0 +1,118 @@
+# name: test/sql/copy/parquet/int96_as.test
+# description: Test the int96_as read option for Parquet INT96 (Impala timestamp) columns
+# group: [parquet]
+
+require parquet
+
+# By default INT96 is read as TIMESTAMP (microseconds), truncating the nanosecond part
+query II
+SELECT typeof(ts), ts::VARCHAR
+FROM read_parquet('{DATA_DIR}/parquet-testing/int96_nanoseconds.parquet')
+ORDER BY ts
+----
+TIMESTAMP	1970-01-02 00:00:00
+TIMESTAMP	2026-09-16 10:20:30.123456
+TIMESTAMP	2200-12-31 23:59:59.987654
+TIMESTAMP	NULL
+
+# int96_as='timestamp' is the explicit default
+query II
+SELECT typeof(ts), ts::VARCHAR
+FROM read_parquet('{DATA_DIR}/parquet-testing/int96_nanoseconds.parquet', int96_as='timestamp')
+ORDER BY ts
+----
+TIMESTAMP	1970-01-02 00:00:00
+TIMESTAMP	2026-09-16 10:20:30.123456
+TIMESTAMP	2200-12-31 23:59:59.987654
+TIMESTAMP	NULL
+
+# int96_as='timestamp_ns' preserves the full nanosecond precision
+query II
+SELECT typeof(ts), ts::VARCHAR
+FROM read_parquet('{DATA_DIR}/parquet-testing/int96_nanoseconds.parquet', int96_as='timestamp_ns')
+ORDER BY ts
+----
+TIMESTAMP_NS	1970-01-02 00:00:00.000000001
+TIMESTAMP_NS	2026-09-16 10:20:30.123456789
+TIMESTAMP_NS	2200-12-31 23:59:59.987654321
+TIMESTAMP_NS	NULL
+
+# the option also works for dictionary-encoded INT96 columns
+query II
+SELECT typeof(ts), ts::VARCHAR
+FROM read_parquet('{DATA_DIR}/parquet-testing/int96_nanoseconds_dictionary.parquet', int96_as='timestamp_ns')
+ORDER BY ts
+----
+TIMESTAMP_NS	1970-01-01 00:00:00.000000001
+TIMESTAMP_NS	2026-09-16 10:20:30.123456789
+TIMESTAMP_NS	2026-09-16 10:20:30.123456789
+TIMESTAMP_NS	2026-09-16 10:20:30.123456789
+TIMESTAMP_NS	NULL
+
+# int96_as='blob' exposes the raw 12-byte INT96 value
+query III
+SELECT typeof(ts), octet_length(ts::BLOB), hex(ts::BLOB)
+FROM read_parquet('{DATA_DIR}/parquet-testing/int96_nanoseconds.parquet', int96_as='blob')
+WHERE ts IS NOT NULL
+ORDER BY ts
+----
+BLOB	12	01000000000000008D3D2500
+BLOB	12	15994850DC210000748E2500
+BLOB	12	B19E9290944E00001E872600
+
+# int96_as is also available on parquet_scan
+query I
+SELECT typeof(ts)
+FROM parquet_scan('{DATA_DIR}/parquet-testing/int96_nanoseconds.parquet', int96_as='timestamp_ns')
+LIMIT 1
+----
+TIMESTAMP_NS
+
+# int96_as also works as a COPY ... FROM option
+statement ok
+CREATE TABLE int96_copy(ts TIMESTAMP_NS)
+
+statement ok
+COPY int96_copy FROM '{DATA_DIR}/parquet-testing/int96_nanoseconds.parquet'
+    (FORMAT parquet, int96_as 'timestamp_ns')
+
+query II
+SELECT typeof(ts), ts::VARCHAR
+FROM int96_copy
+ORDER BY ts
+----
+TIMESTAMP_NS	1970-01-02 00:00:00.000000001
+TIMESTAMP_NS	2026-09-16 10:20:30.123456789
+TIMESTAMP_NS	2200-12-31 23:59:59.987654321
+TIMESTAMP_NS	NULL
+
+# an unrecognized value raises a binder error
+statement error
+SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/int96_nanoseconds.parquet', int96_as='invalid')
+----
+<REGEX>:Binder Error.*Unrecognized int96_as.*
+
+# values outside of the TIMESTAMP_NS range raise a conversion error
+statement ok
+COPY (SELECT TIMESTAMP '9999-12-31 23:59:59.999999' AS ts) TO '{TEST_DIR}/int96_out_of_range.parquet'
+    (FORMAT parquet, write_timestamp_as_int96 true)
+
+query I
+SELECT ts::VARCHAR FROM read_parquet('{TEST_DIR}/int96_out_of_range.parquet')
+----
+9999-12-31 23:59:59.999999
+
+statement error
+SELECT ts::VARCHAR FROM read_parquet('{TEST_DIR}/int96_out_of_range.parquet', int96_as='timestamp_ns')
+----
+<REGEX>:Conversion Error.*out of range.*
+
+# the option has no effect on non-INT96 (INT64) timestamp columns
+statement ok
+COPY (SELECT TIMESTAMP_NS '1992-01-01 12:03:27.123456789' AS ts) TO '{TEST_DIR}/int64_ns.parquet'
+    (FORMAT parquet)
+
+query II
+SELECT typeof(ts), ts::VARCHAR FROM read_parquet('{TEST_DIR}/int64_ns.parquet', int96_as='blob')
+----
+TIMESTAMP_NS	1992-01-01 12:03:27.123456789
