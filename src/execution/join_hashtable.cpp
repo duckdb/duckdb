@@ -166,7 +166,8 @@ bool JoinHashTable::HasUncorrelatedMarkJoin() const {
 }
 
 bool JoinHashTable::HasMarkJoinConjunction() const {
-	return mark_join_info.compare_conditions;
+	return mark_join_info.compare_conditions ||
+	       (join_type == JoinType::MARK && mark_join_info.correlated_types.empty() && residual_predicate);
 }
 
 idx_t JoinHashTable::MarkJoinSize() const {
@@ -1481,7 +1482,7 @@ ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state
 		residual_executor->AddExpression(*ht.residual_predicate);
 
 		// initialize residual state
-		residual_state = make_uniq<ResidualPredicateProbeState>();
+		residual_state = make_uniq<ResidualPredicateProbeState>(Allocator::Get(ht.context));
 
 		// determine column types needed
 		idx_t total_columns = 0;
@@ -1578,7 +1579,7 @@ bool ScanStructure::PointersExhausted() const {
 	return count == 0;
 }
 
-idx_t ScanStructure::ResolveMarkPredicates(DataChunk &keys, SelectionVector &match_sel,
+idx_t ScanStructure::ResolveMarkPredicates(DataChunk &keys, DataChunk &probe_data, SelectionVector &match_sel,
                                            optional_ptr<SelectionVector> no_match_sel) {
 	bool pair_false[STANDARD_VECTOR_SIZE] = {false};
 	bool pair_unknown[STANDARD_VECTOR_SIZE] = {false};
@@ -1595,6 +1596,28 @@ idx_t ScanStructure::ResolveMarkPredicates(DataChunk &keys, SelectionVector &mat
 			auto entry = entries[row];
 			pair_unknown[row] |= !entry.IsValid();
 			pair_false[row] |= entry.IsValid() && !entry.GetValue();
+		}
+	}
+	if (ht.residual_predicate) {
+		SelectionVector candidates(STANDARD_VECTOR_SIZE), candidate_rows(STANDARD_VECTOR_SIZE);
+		idx_t candidate_count = 0;
+		for (idx_t row = 0; row < count; row++) {
+			if (!pair_false[row]) {
+				candidates.set_index(candidate_count, sel_vector.get_index(row));
+				candidate_rows.set_index(candidate_count++, row);
+			}
+		}
+		if (candidate_count) {
+			PrepareResidualInput(probe_data, candidates, candidate_count);
+			residual_state->result.ResetFromCache(residual_state->result_cache);
+			residual_executor->ExecuteExpression(residual_state->eval_chunk, residual_state->result);
+			auto entries = residual_state->result.Values<bool>();
+			for (idx_t candidate = 0; candidate < candidate_count; candidate++) {
+				const auto row = candidate_rows.get_index(candidate);
+				auto entry = entries[candidate];
+				pair_unknown[row] |= !entry.IsValid();
+				pair_false[row] |= entry.IsValid() && !entry.GetValue();
+			}
 		}
 	}
 	idx_t matches = 0;
@@ -1617,7 +1640,7 @@ idx_t ScanStructure::ResolveMarkPredicates(DataChunk &keys, SelectionVector &mat
 idx_t ScanStructure::ResolvePredicates(DataChunk &keys, DataChunk &probe_data, SelectionVector &match_sel,
                                        optional_ptr<SelectionVector> no_match_sel) {
 	if (ht.HasMarkJoinConjunction() && !null_free_mark) {
-		return ResolveMarkPredicates(keys, match_sel, no_match_sel);
+		return ResolveMarkPredicates(keys, probe_data, match_sel, no_match_sel);
 	}
 	// Initialize the found_match array to the current sel_vector
 	for (idx_t i = 0; i < this->count; ++i) {
@@ -1660,20 +1683,19 @@ void ScanStructure::FlushProbeMatches() {
 	local_probe_matches = 0;
 }
 
-idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVector &match_sel, idx_t match_count,
-                                            optional_ptr<SelectionVector> no_match_sel, idx_t no_match_offset) {
+void ScanStructure::PrepareResidualInput(DataChunk &probe_data, const SelectionVector &selection, idx_t count) {
 	D_ASSERT(residual_state);
 	D_ASSERT(residual_executor);
 
 	// reset chunks for reuse (no reallocation!)
 	residual_state->eval_chunk.Reset();
-	residual_state->eval_chunk.SetChildCardinality(match_count);
+	residual_state->eval_chunk.SetChildCardinality(count);
 
 	// copy probe columns at their ORIGINAL positions
 	for (const auto &entry : ht.residual_info->probe_input_to_probe_map) {
 		idx_t orig_idx = entry.first;
 		idx_t probe_data_col = entry.second;
-		residual_state->eval_chunk.data[orig_idx].Slice(probe_data.data[probe_data_col], match_sel, match_count);
+		residual_state->eval_chunk.data[orig_idx].Slice(probe_data.data[probe_data_col], selection, count);
 	}
 
 	// gather RHS columns from hash table
@@ -1682,9 +1704,14 @@ idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVect
 		idx_t col_with_offset = entry.first;
 		idx_t layout_col = entry.second;
 		auto &target_vector = residual_state->eval_chunk.data[col_with_offset];
-		GatherResult(target_vector, match_sel, match_count, layout_col);
-		FlatVector::SetSize(target_vector, count_t(match_count));
+		GatherResult(target_vector, selection, count, layout_col);
+		FlatVector::SetSize(target_vector, count_t(count));
 	}
+}
+
+idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVector &match_sel, idx_t match_count,
+                                            optional_ptr<SelectionVector> no_match_sel, idx_t no_match_offset) {
+	PrepareResidualInput(probe_data, match_sel, match_count);
 
 	SelectionVector &selected_sel = residual_state->selected_sel;
 	SelectionVector &remaining_sel = residual_state->remaining_sel;

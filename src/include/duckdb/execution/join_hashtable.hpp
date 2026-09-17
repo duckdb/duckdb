@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/types/vector_cache.hpp"
+
 #include "duckdb/execution/mark_join_refinement.hpp"
 
 #include "duckdb/common/helper.hpp"
@@ -76,10 +78,14 @@ public:
 	struct ResidualPredicateProbeState {
 		//! Evaluation chunk
 		DataChunk eval_chunk;
+		VectorCache result_cache;
+		Vector result;
 		SelectionVector selected_sel;
 		SelectionVector remaining_sel;
 
-		ResidualPredicateProbeState() : selected_sel(STANDARD_VECTOR_SIZE), remaining_sel(STANDARD_VECTOR_SIZE) {
+		explicit ResidualPredicateProbeState(Allocator &allocator)
+		    : result_cache(allocator, LogicalType::BOOLEAN), result(result_cache), selected_sel(STANDARD_VECTOR_SIZE),
+		      remaining_sel(STANDARD_VECTOR_SIZE) {
 		}
 
 		void Initialize(Allocator &allocator, const vector<LogicalType> &eval_types,
@@ -163,6 +169,8 @@ public:
 		//! Update the data chunk compaction buffer
 		void UpdateCompactionBuffer(idx_t base_count, SelectionVector &result_vector, idx_t result_count);
 
+		void PrepareResidualInput(DataChunk &probe_data, const SelectionVector &selection, idx_t count);
+
 		//! Apply residual predicate filtering
 		idx_t ApplyResidualPredicate(DataChunk &probe_data, SelectionVector &match_sel, idx_t match_count,
 		                             optional_ptr<SelectionVector> no_match_sel, idx_t no_match_offset = 0);
@@ -178,7 +186,7 @@ public:
 		                  const idx_t count, const idx_t col_idx);
 		void GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count, const idx_t col_idx);
 		void GatherResult(Vector &result, const idx_t count, const idx_t col_idx);
-		idx_t ResolveMarkPredicates(DataChunk &keys, SelectionVector &match_sel,
+		idx_t ResolveMarkPredicates(DataChunk &keys, DataChunk &probe_data, SelectionVector &match_sel,
 		                            optional_ptr<SelectionVector> no_match_sel);
 		idx_t ResolvePredicates(DataChunk &keys, DataChunk &probe_data, SelectionVector &match_sel,
 		                        optional_ptr<SelectionVector> no_match_sel);
