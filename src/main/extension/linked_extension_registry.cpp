@@ -34,41 +34,49 @@ void SetDescriptorError(duckdb_extension_descriptor *descriptor, const char *mes
 	error = message ? message : "";
 }
 
-//! Loads through the entry the extension offers, preferring C++, then C API v2, then C API v1.
-std::function<void(DuckDB &)> MakeLoad(const duckdb_extension_descriptor &descriptor, const string &name,
-                                       const string &version) {
-	if (descriptor.entry_cpp) {
-		auto entry = reinterpret_cast<DuckDB::ext_init_cpp_fun_t>(descriptor.entry_cpp);
-		return [name, version, entry](DuckDB &db) {
-			db.LoadStaticCppExtension(name, version, entry);
-		};
-	}
-	if (descriptor.entry_capi_v2) {
-		auto entry = reinterpret_cast<ext_init_c_api_v2_fun_t>(descriptor.entry_capi_v2);
-		return [name, entry](DuckDB &db) {
-			db.LoadStaticCAPIExtensionV2(name, entry);
-		};
-	}
-	auto entry = reinterpret_cast<DuckDB::ext_init_c_api_fun_t>(descriptor.entry_capi_v1);
-	return [name, entry](DuckDB &db) {
-		db.LoadStaticCAPIExtension(name, entry);
-	};
-}
-
 //! Returns an empty string on success, otherwise the reason the registration failed.
 string RegisterRoot(duckdb_extension_root root) {
+	StaticExtensionDescription description;
+	auto error = LinkedExtensionRegistry::Describe(root, description);
+	if (!error.empty()) {
+		return error;
+	}
+	auto &state = GetRegistryState();
+	std::lock_guard<std::mutex> guard(state.lock);
+	for (auto &registered : state.roots) {
+		if (!StringUtil::CIEquals(registered.name, description.name)) {
+			continue;
+		}
+		if (registered.root == root) {
+			return string();
+		}
+		return "extension '" + description.name + "' is registered by two different roots";
+	}
+	state.roots.push_back({description.name, root});
+	state.extensions.push_back({description.name, [root](DuckDB &db) {
+		                            db.LoadStaticExtension(root);
+	                            }});
+	return string();
+}
+
+} // namespace
+
+string LinkedExtensionRegistry::Describe(duckdb_extension_root root, StaticExtensionDescription &result) {
 	if (!root) {
 		return "no root function was given";
 	}
 	string error;
-	duckdb_extension_descriptor descriptor {};
+	auto &descriptor = result.descriptor;
+	descriptor = duckdb_extension_descriptor();
 	descriptor.version = DUCKDB_EXTENSION_DESCRIPTOR_VERSION;
 	descriptor.set_error = SetDescriptorError;
 	descriptor.internal = &error;
 
 	auto status = root(&descriptor);
-	const string name = descriptor.name ? descriptor.name : "";
-	const string subject = name.empty() ? string("an extension") : "extension '" + name + "'";
+	descriptor.internal = nullptr;
+	result.name = descriptor.name ? descriptor.name : "";
+	result.version = descriptor.extension_version ? descriptor.extension_version : "";
+	const string subject = result.name.empty() ? string("an extension") : "extension '" + result.name + "'";
 	if (status != 0) {
 		return subject + " refused to register: " + (error.empty() ? string("no reason given") : error);
 	}
@@ -79,31 +87,14 @@ string RegisterRoot(duckdb_extension_root root) {
 		return StringUtil::Format("%s filled descriptor layout %d, but layout %d was offered", subject,
 		                          descriptor.version, DUCKDB_EXTENSION_DESCRIPTOR_VERSION);
 	}
-	if (name.empty()) {
+	if (result.name.empty()) {
 		return "an extension root did not set a name";
 	}
 	if (!descriptor.entry_cpp && !descriptor.entry_capi_v1 && !descriptor.entry_capi_v2) {
 		return subject + " did not set an entry point";
 	}
-	const string version = descriptor.extension_version ? descriptor.extension_version : "";
-
-	auto &state = GetRegistryState();
-	std::lock_guard<std::mutex> guard(state.lock);
-	for (auto &registered : state.roots) {
-		if (!StringUtil::CIEquals(registered.name, name)) {
-			continue;
-		}
-		if (registered.root == root) {
-			return string();
-		}
-		return subject + " is registered by two different roots";
-	}
-	state.roots.push_back({name, root});
-	state.extensions.push_back({name, MakeLoad(descriptor, name, version)});
 	return string();
 }
-
-} // namespace
 
 vector<LinkedExtension> LinkedExtensionRegistry::Get() {
 	auto &state = GetRegistryState();
