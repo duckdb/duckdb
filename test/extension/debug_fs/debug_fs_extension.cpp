@@ -80,11 +80,50 @@ void OnSetRandomSeed(ClientContext &context, SetScope, Value &parameter) {
 	debug_fs.SetRandomSeed(parameter.GetValue<uint64_t>());
 }
 
+void OnSetAsyncReads(ClientContext &context, SetScope, Value &parameter) {
+	GetDebugFileSystemOrThrow(DatabaseInstance::GetDatabase(context)).SetAsyncReads(parameter.GetValue<bool>());
+}
+
+//! debug_fs_max_concurrent_reads() - highest number of reads that were in flight at the same time
+void MaxConcurrentReadsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &context = state.GetContext();
+	auto &debug_fs = GetDebugFileSystemOrThrow(DatabaseInstance::GetDatabase(context));
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	ConstantVector::GetData<uint64_t>(result)[0] = debug_fs.GetMaxConcurrentReads();
+}
+
+//! debug_fs_async_read_count() - number of reads that were served asynchronously
+void AsyncReadCountFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &context = state.GetContext();
+	auto &debug_fs = GetDebugFileSystemOrThrow(DatabaseInstance::GetDatabase(context));
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	ConstantVector::GetData<uint64_t>(result)[0] = debug_fs.GetAsyncReadCount();
+}
+
+//! debug_fs_reset_read_stats() - clear the counters above
+void ResetReadStatsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &context = state.GetContext();
+	auto &debug_fs = GetDebugFileSystemOrThrow(DatabaseInstance::GetDatabase(context));
+	debug_fs.ResetReadStats();
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	ConstantVector::GetData<bool>(result)[0] = true;
+}
+
 void LoadInternal(ExtensionLoader &loader) {
 	auto &db = loader.GetDatabaseInstance();
 	EnsureDebugFileSystemInstalled(db);
 
+	loader.RegisterFunction(
+	    ScalarFunction("debug_fs_max_concurrent_reads", {}, LogicalType::UBIGINT, MaxConcurrentReadsFunction));
+	loader.RegisterFunction(
+	    ScalarFunction("debug_fs_async_read_count", {}, LogicalType::UBIGINT, AsyncReadCountFunction));
+	loader.RegisterFunction(
+	    ScalarFunction("debug_fs_reset_read_stats", {}, LogicalType::BOOLEAN, ResetReadStatsFunction));
+
 	auto &config = DBConfig::GetConfig(db);
+	config.AddExtensionOption("debug_fs_async_reads",
+	                          "Serve reads asynchronously off a completion thread instead of blocking the caller.",
+	                          LogicalType::BOOLEAN, Value(false), OnSetAsyncReads);
 	config.AddExtensionOption("debug_fs_delay_mean_ms", "Mean latency (ms) for filesystem operations.",
 	                          LogicalType::DOUBLE, Value(0.0), OnSetDelayMeanMs);
 	config.AddExtensionOption("debug_fs_delay_stddev_ms", "Standard deviation (ms) for filesystem operation latency.",
