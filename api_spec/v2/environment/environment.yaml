@@ -26,7 +26,7 @@ functions:
     return_type: ERROR
 
   # Destroy Environment
-  destroy_environment:
+  environment_destroy:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
@@ -52,7 +52,7 @@ functions:
       Returns the number of databases currently open under the environment.
 
       A diagnostic accessor, for tracking down leaked database handles when
-      destroy_environment returns ERROR_RESOURCE_IN_USE. The count is a
+      environment_destroy returns ERROR_RESOURCE_IN_USE. The count is a
       snapshot and may change before the next call.
     role: getter
     belongs_to: environment

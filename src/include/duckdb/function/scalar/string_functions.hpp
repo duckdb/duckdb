@@ -327,7 +327,7 @@ struct RegexpSplitToArrayFun {
 
 struct RegexpFun {
 	static constexpr const char *Name = "regexp_full_match";
-	static constexpr const char *Parameters = "string,regex";
+	static constexpr const char *Parameters = "string,regex,options";
 	static constexpr const char *Description = "Returns `true` if the entire `string` matches the `regex`. A set of optional regex `options` can be set.";
 	static constexpr const char *Example = "regexp_full_match('anabanana', '(an)*')";
 	static constexpr const char *Categories = "regex";
@@ -397,7 +397,7 @@ struct PathJoinFun {
 
 struct LikeFun {
 	static constexpr const char *Name = "~~";
-	static constexpr const char *Parameters = "";
+	static constexpr const char *Parameters = "string,pattern";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
 	static constexpr const char *Categories = "";
@@ -407,7 +407,7 @@ struct LikeFun {
 
 struct NotLikeFun {
 	static constexpr const char *Name = "!~~";
-	static constexpr const char *Parameters = "";
+	static constexpr const char *Parameters = "string,pattern";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
 	static constexpr const char *Categories = "";
@@ -417,7 +417,7 @@ struct NotLikeFun {
 
 struct GlobPatternFun {
 	static constexpr const char *Name = "~~~";
-	static constexpr const char *Parameters = "";
+	static constexpr const char *Parameters = "string,pattern";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
 	static constexpr const char *Categories = "";
@@ -427,7 +427,7 @@ struct GlobPatternFun {
 
 struct ILikeFun {
 	static constexpr const char *Name = "~~*";
-	static constexpr const char *Parameters = "";
+	static constexpr const char *Parameters = "string,pattern";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
 	static constexpr const char *Categories = "";
@@ -437,7 +437,7 @@ struct ILikeFun {
 
 struct NotILikeFun {
 	static constexpr const char *Name = "!~~*";
-	static constexpr const char *Parameters = "";
+	static constexpr const char *Parameters = "string,pattern";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
 	static constexpr const char *Categories = "";
