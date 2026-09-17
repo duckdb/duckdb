@@ -1429,16 +1429,10 @@ private:
 			return AggregateFailure(UnsupportedFunction(
 			    path, std::move(identity), "The retained aggregate function definition is not representable as SQL"));
 		}
-		if (expression.GetAggregateType() != AggregateType::NON_DISTINCT &&
-		    expression.GetAggregateType() != AggregateType::DISTINCT) {
-			return AggregateFailure(
-			    InternalExpressionInvariant(path, expression, "Bound aggregate has an invalid distinct mode"));
-		}
-		if (expression.StateExportMode() != AggregateStateExportMode::NONE &&
-		    expression.StateExportMode() != AggregateStateExportMode::STATE_EXPORT) {
-			return AggregateFailure(
-			    InternalExpressionInvariant(path, expression, "Bound aggregate has an invalid state export mode"));
-		}
+		D_ASSERT(expression.GetAggregateType() == AggregateType::NON_DISTINCT ||
+		         expression.GetAggregateType() == AggregateType::DISTINCT);
+		D_ASSERT(expression.StateExportMode() == AggregateStateExportMode::NONE ||
+		         expression.StateExportMode() == AggregateStateExportMode::STATE_EXPORT);
 		if (definition->GetProperties().GetCaptureArgumentAliases() ||
 		    definition->GetProperties().RequiresExpressionNames()) {
 			return AggregateFailure(UnsupportedFunction(

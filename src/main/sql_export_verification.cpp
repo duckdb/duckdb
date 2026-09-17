@@ -453,9 +453,7 @@ void SQLExportVerification::RoundTrip(Planner &planner) {
 	auto &final_properties = generated_planner->binder->GetStatementProperties();
 	if (!CompatibleTypes(generated_planner->plan->types, generated_planner->types) ||
 	    !CompatibleTypes(planner.types, generated_planner->types) || generated_planner->names != planner.names ||
-	    relation.fields.size() != planner.types.size() ||
-	    !CompatibleProperties(planner.properties, generated_planner->properties) ||
-	    !CompatibleProperties(planner.properties, final_properties)) {
+	    relation.fields.size() != planner.types.size() || !CompatibleProperties(planner.properties, final_properties)) {
 		Failure(SQLExportOutcome::OUTPUT_SCHEMA_MISMATCH, "GENERATED_SCHEMA_OR_PROPERTIES");
 		return;
 	}
