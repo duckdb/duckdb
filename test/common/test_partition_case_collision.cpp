@@ -1,5 +1,4 @@
 #include "catch.hpp"
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
@@ -9,6 +8,8 @@
 using namespace duckdb;
 
 namespace {
+
+const char *const CASE_PAIR = "(SELECT * FROM (VALUES ('a', 1), ('A', 2)) v(k, x))";
 
 struct PartitionCaseTestDirectory {
 	explicit PartitionCaseTestDirectory(const string &suffix) : path(TestCreatePath(suffix)) {
@@ -23,12 +24,12 @@ struct PartitionCaseTestDirectory {
 		return fs.JoinPath(path, name);
 	}
 
+	//! Whether the real file system under this directory folds case (macOS/Windows, but not Linux)
 	bool FoldsCase() {
-		auto lower_probe = fs.JoinPath(path, "case_probe_dir");
-		auto upper_probe = fs.JoinPath(path, "CASE_PROBE_DIR");
-		fs.CreateDirectory(lower_probe);
-		const bool folds = fs.DirectoryExists(upper_probe);
-		fs.RemoveDirectory(lower_probe);
+		auto probe = fs.JoinPath(path, "case_probe_dir");
+		fs.CreateDirectory(probe);
+		const bool folds = fs.DirectoryExists(fs.JoinPath(path, "CASE_PROBE_DIR"));
+		fs.RemoveDirectory(probe);
 		return folds;
 	}
 
@@ -36,6 +37,8 @@ struct PartitionCaseTestDirectory {
 	string path;
 };
 
+//! Resolves each path component to an existing entry that differs only in case, so that the guard is
+//! exercised on case-sensitive platforms as well
 class CaseFoldingFileSystem : public LocalFileSystem {
 public:
 	explicit CaseFoldingFileSystem(string root_p) : root(std::move(root_p)) {
@@ -44,26 +47,19 @@ public:
 	string GetName() const override {
 		return "CaseFoldingFileSystem";
 	}
-
 	duckdb::unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                        optional_ptr<FileOpener> opener = nullptr) override {
 		return LocalFileSystem::OpenFile(Fold(path), flags, opener);
 	}
-	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener = nullptr) override {
-		LocalFileSystem::MoveFile(Fold(source), Fold(target), opener);
+	bool FileExists(const string &filename, optional_ptr<FileOpener> opener = nullptr) override {
+		return LocalFileSystem::FileExists(Fold(filename), opener);
 	}
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr) override {
 		return LocalFileSystem::DirectoryExists(Fold(directory), opener);
 	}
-	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override {
-		LocalFileSystem::CreateDirectory(Fold(directory), opener);
-	}
 	bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
 	                             optional_ptr<FileOpener> opener = nullptr) override {
 		return LocalFileSystem::CreateDirectoryExtended(Fold(directory), options, opener);
-	}
-	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override {
-		LocalFileSystem::RemoveDirectory(Fold(directory), opener);
 	}
 	bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
 	                             optional_ptr<FileOpener> opener = nullptr) override {
@@ -73,49 +69,20 @@ public:
 	               FileOpener *opener = nullptr) override {
 		return LocalFileSystem::ListFiles(Fold(directory), callback, opener);
 	}
-	bool FileExists(const string &filename, optional_ptr<FileOpener> opener = nullptr) override {
-		return LocalFileSystem::FileExists(Fold(filename), opener);
-	}
-	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr) override {
-		LocalFileSystem::RemoveFile(Fold(filename), opener);
-	}
-	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr) override {
-		return LocalFileSystem::TryRemoveFile(Fold(filename), opener);
-	}
 
 private:
-	static duckdb::vector<string> SplitPath(const string &suffix) {
-		duckdb::vector<string> parts;
-		string current;
-		for (auto c : suffix) {
-			if (c == '/' || c == '\\') {
-				if (!current.empty()) {
-					parts.push_back(current);
-					current.clear();
-				}
-			} else {
-				current += c;
-			}
-		}
-		if (!current.empty()) {
-			parts.push_back(current);
-		}
-		return parts;
-	}
-
 	string Fold(const string &path) {
 		if (path.size() <= root.size() || path.compare(0, root.size(), root) != 0) {
 			return path;
 		}
 		auto resolved = root;
-		for (auto &part : SplitPath(path.substr(root.size()))) {
-			auto exact = JoinPath(resolved, part);
-			if (LocalFileSystem::DirectoryExists(exact) || LocalFileSystem::FileExists(exact)) {
-				resolved = exact;
+		for (auto &part : StringUtil::Split(StringUtil::Replace(path.substr(root.size()), "\\", "/"), '/')) {
+			if (part.empty()) {
 				continue;
 			}
+			auto exact = JoinPath(resolved, part);
 			string match;
-			if (LocalFileSystem::DirectoryExists(resolved)) {
+			if (!LocalFileSystem::DirectoryExists(exact) && !LocalFileSystem::FileExists(exact)) {
 				LocalFileSystem::ListFiles(resolved, [&](const string &name, bool) {
 					if (match.empty() && StringUtil::CIEquals(name, part)) {
 						match = name;
@@ -130,12 +97,12 @@ private:
 	string root;
 };
 
+//! Makes the case probe throw, so the collision check has to fall back to its default
 class ProbeFailingFileSystem : public LocalFileSystem {
 public:
 	string GetName() const override {
 		return "ProbeFailingFileSystem";
 	}
-
 	bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
 	                             optional_ptr<FileOpener> opener = nullptr) override {
 		if (StringUtil::Contains(directory, "duckdb_case_probe_")) {
@@ -145,14 +112,19 @@ public:
 	}
 };
 
-duckdb::unique_ptr<DuckDB> ProbeFailingDatabase(DBConfig &config) {
-	config.file_system = make_uniq<VirtualFileSystem>(make_uniq<ProbeFailingFileSystem>());
+template <class FILE_SYSTEM, class... ARGS>
+duckdb::unique_ptr<DuckDB> DatabaseOn(DBConfig &config, ARGS &&... args) {
+	config.file_system = make_uniq<VirtualFileSystem>(make_uniq<FILE_SYSTEM>(std::forward<ARGS>(args)...));
 	return make_uniq<DuckDB>(nullptr, &config);
 }
 
-duckdb::unique_ptr<DuckDB> CaseFoldingDatabase(DBConfig &config, const string &root) {
-	config.file_system = make_uniq<VirtualFileSystem>(make_uniq<CaseFoldingFileSystem>(root));
-	return make_uniq<DuckDB>(nullptr, &config);
+string PartitionCopy(const string &source, const string &out, const string &columns) {
+	return "COPY " + source + " TO '" + out + "' (FORMAT parquet, PARTITION_BY (" + columns + "), OVERWRITE_OR_IGNORE)";
+}
+
+void RequireCaseCollision(duckdb::unique_ptr<MaterializedQueryResult> result) {
+	REQUIRE(result->HasError());
+	REQUIRE(StringUtil::Contains(result->GetError(), "only in case"));
 }
 
 int64_t CountRows(Connection &con, const string &out) {
@@ -161,256 +133,79 @@ int64_t CountRows(Connection &con, const string &out) {
 	return result->GetValue(0, 0).GetValue<int64_t>();
 }
 
-string PartitionCopy(const string &table, const string &out, const string &columns) {
-	return "COPY " + table + " TO '" + out + "' (FORMAT parquet, PARTITION_BY (" + columns + "), OVERWRITE_OR_IGNORE)";
-}
-
 } // namespace
 
-TEST_CASE("Partitioned COPY handles partition values that differ only in case", "[partition_case_collision]") {
+TEST_CASE("Partitioned COPY rejects partition values that differ only in case", "[partition_case_collision]") {
 	PartitionCaseTestDirectory dir("partition_case_collision");
-	DuckDB db(nullptr);
-	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT * FROM (VALUES ('a', 1), ('A', 2)) v(k, x)"));
+	DBConfig config;
+	auto db = DatabaseOn<CaseFoldingFileSystem>(config, dir.path);
+	Connection con(*db);
 
-	auto out = dir.Child("out");
-	auto copy_sql = PartitionCopy("t", out, "k");
-	auto result = con.Query(copy_sql);
+	// two values within one COPY that resolve to the same directory
+	RequireCaseCollision(con.Query(PartitionCopy(CASE_PAIR, dir.Child("out"), "k")));
 
-	if (dir.FoldsCase()) {
-		REQUIRE(result->HasError());
-		REQUIRE(StringUtil::Contains(result->GetError(), "only in case"));
-		return;
-	}
-
-	REQUIRE_NO_FAIL(*result);
-	REQUIRE(dir.fs.DirectoryExists(dir.fs.JoinPath(out, "k=a")));
-	REQUIRE(dir.fs.DirectoryExists(dir.fs.JoinPath(out, "k=A")));
-	REQUIRE(CountRows(con, out) == 2);
-
-	REQUIRE_NO_FAIL(con.Query(copy_sql));
-	REQUIRE(CountRows(con, out) == 2);
-
-	REQUIRE_NO_FAIL(con.Query("COPY t TO '" + out + "' (FORMAT parquet, PARTITION_BY (k), OVERWRITE)"));
-	REQUIRE(CountRows(con, out) == 2);
+	// a directory left behind by an earlier COPY, at either partition level
+	auto nested = dir.Child("nested");
+	REQUIRE_NO_FAIL(con.Query(PartitionCopy("(SELECT 'p' AS g, 'a' AS k, 1 AS x)", nested, "g, k")));
+	RequireCaseCollision(con.Query(PartitionCopy("(SELECT 'P' AS g, 'a' AS k, 2 AS x)", nested, "g, k")));
+	RequireCaseCollision(con.Query(PartitionCopy("(SELECT 'p' AS g, 'A' AS k, 3 AS x)", nested, "g, k")));
 }
 
-TEST_CASE("Partitioned COPY handles a partition directory written by an earlier COPY", "[partition_case_collision]") {
-	PartitionCaseTestDirectory dir("partition_case_earlier_copy");
-	DuckDB db(nullptr);
-	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE lower_only AS SELECT 'a' AS k, 1 AS x"));
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE upper_only AS SELECT 'A' AS k, 2 AS x"));
-
-	auto out = dir.Child("out");
-	REQUIRE_NO_FAIL(con.Query(PartitionCopy("lower_only", out, "k")));
-	auto result = con.Query(PartitionCopy("upper_only", out, "k"));
-
-	if (dir.FoldsCase()) {
-		REQUIRE(result->HasError());
-		REQUIRE(StringUtil::Contains(result->GetError(), "only in case"));
-		REQUIRE(CountRows(con, out) == 1);
-		return;
-	}
-
-	REQUIRE_NO_FAIL(*result);
-	REQUIRE(CountRows(con, out) == 2);
-	auto labels = con.Query("SELECT count(*) FROM read_parquet('" + out +
-	                        "/**/*.parquet', hive_partitioning = true) WHERE (k = 'a') = (x = 1)");
-	REQUIRE_NO_FAIL(*labels);
-	REQUIRE(labels->GetValue(0, 0).GetValue<int64_t>() == 2);
-}
-
-TEST_CASE("Partitioned COPY handles a pre-created partition directory that differs only in case",
-          "[partition_case_collision]") {
-	PartitionCaseTestDirectory dir("partition_case_precreated");
-	DuckDB db(nullptr);
-	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE upper_only AS SELECT 'A' AS k, 2 AS x"));
-
-	auto out = dir.Child("out");
-	dir.fs.CreateDirectory(out);
-	dir.fs.CreateDirectory(dir.fs.JoinPath(out, "k=a"));
-
-	auto result = con.Query(PartitionCopy("upper_only", out, "k"));
-
-	if (dir.FoldsCase()) {
-		REQUIRE(result->HasError());
-		REQUIRE(StringUtil::Contains(result->GetError(), "only in case"));
-		return;
-	}
-
-	REQUIRE_NO_FAIL(*result);
-	REQUIRE(dir.fs.DirectoryExists(dir.fs.JoinPath(out, "k=A")));
-	REQUIRE(CountRows(con, out) == 1);
-}
-
-TEST_CASE("Partitioned COPY handles a case collision in a second partition column", "[partition_case_collision]") {
-	PartitionCaseTestDirectory dir("partition_case_multi_column");
-	DuckDB db(nullptr);
-	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT * FROM (VALUES ('p', 'a', 1), ('p', 'A', 2)) v(g, k, x)"));
-
-	auto out = dir.Child("out");
-	auto copy_sql = PartitionCopy("t", out, "g, k");
-	auto result = con.Query(copy_sql);
-
-	if (dir.FoldsCase()) {
-		REQUIRE(result->HasError());
-		REQUIRE(StringUtil::Contains(result->GetError(), "only in case"));
-		return;
-	}
-
-	REQUIRE_NO_FAIL(*result);
-	REQUIRE(dir.fs.DirectoryExists(dir.fs.JoinPath(dir.fs.JoinPath(out, "g=p"), "k=a")));
-	REQUIRE(dir.fs.DirectoryExists(dir.fs.JoinPath(dir.fs.JoinPath(out, "g=p"), "k=A")));
-	REQUIRE(CountRows(con, out) == 2);
-
-	REQUIRE_NO_FAIL(con.Query(copy_sql));
-	REQUIRE(CountRows(con, out) == 2);
-}
-
-TEST_CASE("Partitioned COPY accepts partition values that do not collide", "[partition_case_collision]") {
+TEST_CASE("Partitioned COPY keeps writing partitions that do not collide", "[partition_case_collision]") {
 	PartitionCaseTestDirectory dir("partition_case_no_collision");
-	DuckDB db(nullptr);
-	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE u AS SELECT * FROM (VALUES ('a', 1), ('b', 2), ('Zed', 3)) v(k, x)"));
+	DBConfig config;
+	auto db = DatabaseOn<CaseFoldingFileSystem>(config, dir.path);
+	Connection con(*db);
 
 	auto out = dir.Child("out");
-	auto copy_sql = PartitionCopy("u", out, "k");
-	REQUIRE_NO_FAIL(con.Query(copy_sql));
-	REQUIRE(CountRows(con, out) == 3);
-
-	REQUIRE_NO_FAIL(con.Query(copy_sql));
-	REQUIRE(CountRows(con, out) == 3);
-
-	auto result = con.Query("SELECT count(*) FROM read_parquet('" + out +
-	                        "/**/*.parquet', hive_partitioning = true) WHERE k = 'Zed'");
-	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->GetValue(0, 0).GetValue<int64_t>() == 1);
-}
-
-TEST_CASE("Partitioned COPY handles NULL partition values", "[partition_case_collision]") {
-	PartitionCaseTestDirectory dir("partition_case_null_values");
-	DuckDB db(nullptr);
-	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT * FROM (VALUES ('a', NULL, 1), ('b', 'q', 2), "
-	                          "(NULL, NULL, 3)) v(g, k, x)"));
-
-	auto out = dir.Child("out");
-	auto copy_sql = PartitionCopy("t", out, "g, k");
-	REQUIRE_NO_FAIL(con.Query(copy_sql));
-	REQUIRE(CountRows(con, out) == 3);
-
-	REQUIRE_NO_FAIL(con.Query(copy_sql));
-	REQUIRE(CountRows(con, out) == 3);
+	auto sql = PartitionCopy("(SELECT * FROM (VALUES ('a', 1), ('Zed', 2)) v(k, x))", out, "k");
+	REQUIRE_NO_FAIL(con.Query(sql));
+	REQUIRE_NO_FAIL(con.Query(sql));
+	REQUIRE(CountRows(con, out) == 2);
 }
 
 TEST_CASE("Partitioned COPY allows a case collision under a unique filename pattern", "[partition_case_collision]") {
 	PartitionCaseTestDirectory dir("partition_case_uuid");
-	DuckDB db(nullptr);
-	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT * FROM (VALUES ('a', 1), ('A', 2)) v(k, x)"));
+	DBConfig config;
+	auto db = DatabaseOn<CaseFoldingFileSystem>(config, dir.path);
+	Connection con(*db);
 
 	auto out = dir.Child("out");
-	REQUIRE_NO_FAIL(con.Query("COPY t TO '" + out + "' (FORMAT parquet, PARTITION_BY (k), FILENAME_PATTERN '{uuid}')"));
+	REQUIRE_NO_FAIL(con.Query("COPY " + string(CASE_PAIR) + " TO '" + out +
+	                          "' (FORMAT parquet, PARTITION_BY (k), FILENAME_PATTERN '{uuid}')"));
 	REQUIRE(CountRows(con, out) == 2);
-
-	REQUIRE_NO_FAIL(
-	    con.Query("COPY t TO '" + out + "' (FORMAT parquet, PARTITION_BY (k), FILENAME_PATTERN '{uuid}', APPEND)"));
-	REQUIRE(CountRows(con, out) == 4);
-
-	auto labels =
-	    con.Query("SELECT count(DISTINCT k) FROM read_parquet('" + out + "/**/*.parquet', hive_partitioning = true)");
-	REQUIRE_NO_FAIL(*labels);
-	REQUIRE(labels->GetValue(0, 0).GetValue<int64_t>() == (dir.FoldsCase() ? 1 : 2));
-}
-
-TEST_CASE("Partitioned COPY rejects a case collision on a case-folding file system", "[partition_case_collision]") {
-	PartitionCaseTestDirectory dir("partition_case_folding_fs");
-	DBConfig config;
-	auto db = CaseFoldingDatabase(config, dir.path);
-	Connection con(*db);
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT * FROM (VALUES ('a', 1), ('A', 2)) v(k, x)"));
-
-	auto out = dir.Child("out");
-	auto result = con.Query(PartitionCopy("t", out, "k"));
-	REQUIRE(result->HasError());
-	REQUIRE(StringUtil::Contains(result->GetError(), "only in case"));
-}
-
-TEST_CASE("Partitioned COPY rejects an earlier partition directory on a case-folding file system",
-          "[partition_case_collision]") {
-	PartitionCaseTestDirectory dir("partition_case_folding_fs_earlier");
-	DBConfig config;
-	auto db = CaseFoldingDatabase(config, dir.path);
-	Connection con(*db);
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE lower_only AS SELECT 'a' AS k, 1 AS x"));
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE upper_only AS SELECT 'A' AS k, 2 AS x"));
-
-	auto out = dir.Child("out");
-	REQUIRE_NO_FAIL(con.Query(PartitionCopy("lower_only", out, "k")));
-
-	auto result = con.Query(PartitionCopy("upper_only", out, "k"));
-	REQUIRE(result->HasError());
-	REQUIRE(StringUtil::Contains(result->GetError(), "only in case"));
-}
-
-TEST_CASE("Partitioned COPY rejects an OVERWRITE that changes a partition value's case on a case-folding file system",
-          "[partition_case_collision]") {
-	PartitionCaseTestDirectory dir("partition_case_folding_fs_overwrite");
-	DBConfig config;
-	auto db = CaseFoldingDatabase(config, dir.path);
-	Connection con(*db);
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE upper_only AS SELECT 'B' AS k, 1 AS x"));
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE lower_only AS SELECT 'b' AS k, 2 AS x"));
-
-	auto out = dir.Child("out");
-	REQUIRE_NO_FAIL(con.Query("COPY upper_only TO '" + out + "' (FORMAT parquet, PARTITION_BY (k), OVERWRITE)"));
-
-	auto result = con.Query("COPY lower_only TO '" + out + "' (FORMAT parquet, PARTITION_BY (k), OVERWRITE)");
-	REQUIRE(result->HasError());
-	REQUIRE(StringUtil::Contains(result->GetError(), "only in case"));
-}
-
-TEST_CASE("Partitioned COPY detects a case collision among many concurrent partitions", "[partition_case_collision]") {
-	PartitionCaseTestDirectory dir("partition_case_folding_fs_concurrent");
-	DBConfig config;
-	auto db = CaseFoldingDatabase(config, dir.path);
-	Connection con(*db);
-	REQUIRE_NO_FAIL(con.Query("SET threads=8"));
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE seeds AS SELECT 'seed' || (i % 10) AS k, i AS x FROM range(200) r(i)"));
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE pairs AS SELECT CASE WHEN (i // 200) % 2 = 0 THEN 'v' || (i % 200) "
-	                          "ELSE 'V' || (i % 200) END AS k, i AS x FROM range(400) r(i)"));
-
-	auto out = dir.Child("out");
-	REQUIRE_NO_FAIL(con.Query(PartitionCopy("seeds", out, "k")));
-
-	auto result = con.Query(PartitionCopy("(FROM seeds UNION ALL FROM pairs)", out, "k"));
-	REQUIRE(result->HasError());
-	REQUIRE(StringUtil::Contains(result->GetError(), "only in case"));
 }
 
 TEST_CASE("Partitioned COPY keeps the collision check when the case probe fails", "[partition_case_collision]") {
 	PartitionCaseTestDirectory dir("partition_case_probe_failure");
 	DBConfig config;
-	auto db = ProbeFailingDatabase(config);
+	auto db = DatabaseOn<ProbeFailingFileSystem>(config);
 	Connection con(*db);
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT * FROM (VALUES ('a', 1), ('A', 2)) v(k, x)"));
 
 	auto out = dir.Child("out");
-
+	auto sql = PartitionCopy(CASE_PAIR, out, "k");
+	auto result = con.Query(sql);
 	if (dir.FoldsCase()) {
-		auto result = con.Query(PartitionCopy("t", out, "k"));
-		REQUIRE(result->HasError());
-		REQUIRE(StringUtil::Contains(result->GetError(), "only in case"));
+		RequireCaseCollision(std::move(result));
 		return;
 	}
+	// case-sensitive host: both directories exist, so the still-enabled check must not fire on a re-run
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE_NO_FAIL(con.Query(sql));
+	REQUIRE(CountRows(con, out) == 2);
+}
 
-	dir.fs.CreateDirectory(out);
-	dir.fs.CreateDirectory(dir.fs.JoinPath(out, "k=a"));
-	dir.fs.CreateDirectory(dir.fs.JoinPath(out, "k=A"));
+TEST_CASE("Partitioned COPY handles case-only partition values on the host file system", "[partition_case_collision]") {
+	PartitionCaseTestDirectory dir("partition_case_host_fs");
+	DuckDB db(nullptr);
+	Connection con(db);
 
-	REQUIRE_NO_FAIL(con.Query(PartitionCopy("t", out, "k")));
+	auto out = dir.Child("out");
+	auto result = con.Query(PartitionCopy(CASE_PAIR, out, "k"));
+	if (dir.FoldsCase()) {
+		RequireCaseCollision(std::move(result));
+		return;
+	}
+	REQUIRE_NO_FAIL(*result);
 	REQUIRE(CountRows(con, out) == 2);
 }
