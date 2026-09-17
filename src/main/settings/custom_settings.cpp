@@ -1161,14 +1161,12 @@ void MaxMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const V
 void MaxMemorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	auto old_memory = config.options.maximum_memory;
 	config.SetDefaultMaxMemory();
+	auto new_memory = config.options.maximum_memory;
+	config.options.maximum_memory = old_memory;
 	if (db) {
-		try {
-			BufferManager::GetBufferManager(*db).SetMemoryLimit(config.options.maximum_memory);
-		} catch (...) {
-			config.options.maximum_memory = old_memory;
-			throw;
-		}
+		BufferManager::GetBufferManager(*db).SetMemoryLimit(new_memory);
 	}
+	config.options.maximum_memory = new_memory;
 }
 
 Value MaxMemorySetting::GetSetting(const ClientContext &context) {
