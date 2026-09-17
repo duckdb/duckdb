@@ -17,6 +17,8 @@ namespace duckdb {
 struct ExternalFileCacheStatsInformation {
 	//! Bytes requested by readers through the cache
 	idx_t requested_bytes;
+	//! Cache block bytes touched by requests
+	idx_t cache_block_bytes;
 	//! Block reads served from the cache (memory or spill)
 	idx_t hit_count;
 	idx_t hit_bytes;
@@ -31,6 +33,8 @@ struct ExternalFileCacheStatsInformation {
 struct ExternalFileCacheStats {
 	//! Bytes requested by readers through the cache
 	atomic<idx_t> requested_bytes {0};
+	//! Cache block bytes touched by requests
+	atomic<idx_t> cache_block_bytes {0};
 	//! Block reads served from the cache (memory or spill)
 	atomic<idx_t> hit_count {0};
 	atomic<idx_t> hit_bytes {0};
@@ -41,7 +45,8 @@ struct ExternalFileCacheStats {
 	atomic<idx_t> eviction_refetch_count {0};
 
 	ExternalFileCacheStatsInformation GetSnapshot() const {
-		return {requested_bytes, hit_count, hit_bytes, miss_count, miss_bytes, eviction_refetch_count};
+		return {requested_bytes, cache_block_bytes,     hit_count, hit_bytes, miss_count,
+		        miss_bytes,      eviction_refetch_count};
 	}
 };
 

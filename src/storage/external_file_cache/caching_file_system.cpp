@@ -388,6 +388,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	// Build the handle group.
 	vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
 	mem_handles.reserve(num_blocks);
+	idx_t cache_block_bytes = 0;
 	idx_t remaining = nr_bytes;
 	for (idx_t idx = 0; idx < num_blocks; idx++) {
 		const idx_t block_start = (first_block + idx) * block_size;
@@ -403,7 +404,9 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		const idx_t length = MinValue(available_in_block, remaining);
 		mem_handles.push_back({std::move(pins[idx]), offset_in_block, length});
 		remaining -= length;
+		cache_block_bytes += block_valid_bytes;
 	}
+	external_file_cache.GetStats().cache_block_bytes += cache_block_bytes;
 
 	ReconcileCacheAfterRead(*current_cached_file, first_block, blocks);
 

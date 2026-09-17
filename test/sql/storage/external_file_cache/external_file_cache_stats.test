@@ -19,23 +19,31 @@ create temp table stats_cold as select * from duckdb_external_file_cache_stats()
 statement ok
 select * from '{TEST_DIR}/test_cache_stats.parquet';
 
-# the cold read requested bytes and fetched them from the file system
-query III
-select s.requested_bytes > b.requested_bytes, s.miss_count > b.miss_count, s.miss_bytes > b.miss_bytes
+# Cache block bytes expose read amplification.
+query IIIII
+select s.requested_bytes > b.requested_bytes,
+       s.cache_block_bytes > b.cache_block_bytes,
+       s.cache_block_bytes - b.cache_block_bytes >= s.requested_bytes - b.requested_bytes,
+       s.miss_count > b.miss_count,
+       s.miss_bytes > b.miss_bytes
 from duckdb_external_file_cache_stats() s, stats_cold b;
 ----
-true	true	true
+true	true	true	true	true
 
 statement ok
 create temp table stats_warm as select * from duckdb_external_file_cache_stats();
 
-# warm read: served from the cache, no new fetches
+# Warm read: served from the cache, no new misses.
 statement ok
 select * from '{TEST_DIR}/test_cache_stats.parquet';
 
-query IIII
-select s.requested_bytes > b.requested_bytes, s.hit_count > b.hit_count, s.hit_bytes > b.hit_bytes,
+query IIIIII
+select s.requested_bytes > b.requested_bytes,
+       s.cache_block_bytes > b.cache_block_bytes,
+       s.cache_block_bytes - b.cache_block_bytes >= s.requested_bytes - b.requested_bytes,
+       s.hit_count > b.hit_count,
+       s.hit_bytes > b.hit_bytes,
        s.miss_bytes = b.miss_bytes
 from duckdb_external_file_cache_stats() s, stats_warm b;
 ----
-true	true	true	true
+true	true	true	true	true	true
