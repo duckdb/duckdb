@@ -44,7 +44,7 @@ struct UserDataProbe {
 } user_data_probe;
 
 void UserDataProbeExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_context_handle context,
-               duckdb_v2_error_info_handle *err) {
+                       duckdb_v2_error_info_handle *err) {
 	if (duckdb_v2_context_get_user_data(context, Convert("host"), &user_data_probe.seen_from_context, err) !=
 	    DUCKDB_V2_ERROR_NONE) {
 		return;
