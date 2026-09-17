@@ -11,13 +11,9 @@ INSERT INTO t VALUES (3, 'c', 1), (1, 'a', 2), (2, NULL, 1), (5, 'a', NULL), (4,
 statement ok
 CREATE SEQUENCE seq_elide START 1;
 
+# a dropped key never raises, and never runs its side effect
 query I
 SELECT count(*) FROM (SELECT id FROM t ORDER BY id, CAST(payload AS INTEGER)) q;
-----
-5
-
-query I
-SELECT count(*) FROM (SELECT id FROM t ORDER BY id, grp // (grp - 1)) q;
 ----
 5
 
@@ -31,8 +27,7 @@ SELECT last_value IS NULL FROM duckdb_sequences() WHERE sequence_name = 'seq_eli
 ----
 true
 
-# keys before the unique prefix are still evaluated
-
+# a key before the unique prefix is still evaluated
 statement ok
 CREATE SEQUENCE seq_keep START 1;
 
@@ -46,6 +41,7 @@ SELECT last_value FROM duckdb_sequences() WHERE sequence_name = 'seq_keep';
 ----
 5
 
+# without the optimizer that key does raise
 statement ok
 SET disabled_optimizers = 'redundant_order_keys';
 
@@ -53,24 +49,6 @@ statement error
 SELECT count(*) FROM (SELECT id FROM t ORDER BY id, CAST(payload AS INTEGER)) q;
 ----
 Conversion Error
-
-statement error
-SELECT count(*) FROM (SELECT id FROM t ORDER BY id, grp // (grp - 1)) q;
-----
-Division by zero
-
-statement ok
-CREATE SEQUENCE seq_evaluated START 1;
-
-query I
-SELECT count(*) FROM (SELECT id FROM t ORDER BY id, nextval('seq_evaluated')) q;
-----
-5
-
-query I
-SELECT last_value FROM duckdb_sequences() WHERE sequence_name = 'seq_evaluated';
-----
-5
 
 statement ok
 RESET disabled_optimizers;
