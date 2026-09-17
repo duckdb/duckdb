@@ -67,6 +67,21 @@ SELECT * FROM t ORDER BY i;
 2	false
 3	false
 
+# The build changes each iteration; stale retained payload would make the last marker NULL.
+query II
+WITH RECURSIVE t(i,m) AS (
+SELECT 0,NULL::BOOLEAN
+UNION ALL
+SELECT p.i+1,__mark_join_marker FROM t p
+JOIN BY(TYPE MARK) (SELECT NULL::INTEGER k,i y FROM t) b
+ON p.i=b.k AND p.i+b.y<3 WHERE p.i<3)
+SELECT * FROM t ORDER BY i;
+----
+0	NULL
+1	NULL
+2	NULL
+3	false
+
 query I
 WITH p(id,a,x)AS (VALUES (0,NULL::UNION(i INTEGER,s VARCHAR),5),(1,union_value(i:=1)::UNION(i INTEGER,s VARCHAR),0),(2,union_value(s:='x')::UNION(i INTEGER,s VARCHAR),10)),
 b(b,y) AS (VALUES (NULL::UNION(i INTEGER,s VARCHAR),1),(union_value(i:=1)::UNION(i INTEGER,s VARCHAR),1),(union_value(s:='x')::UNION(i INTEGER,s VARCHAR),0)),
