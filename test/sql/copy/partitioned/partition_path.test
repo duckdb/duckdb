@@ -98,20 +98,17 @@ COPY sales TO '{TEST_DIR}/partition_path_const' (FORMAT parquet, PARTITION_BY (r
 ----
 in the same directory "all"
 
-# an empty path writes to the COPY target itself, which contains the directory of any other partition
-statement ok
+# every partition needs a directory of its own, so the path cannot be empty
+statement error
 COPY (FROM sales WHERE region = 'eu') TO '{TEST_DIR}/partition_path_empty' (FORMAT parquet, PARTITION_BY (region),
 PARTITION_PATH '');
-
-query II
-SELECT count(*), count(DISTINCT filename) FROM read_parquet('{TEST_DIR}/partition_path_empty/*.parquet');
 ----
-4	1
+PARTITION_PATH evaluated to an empty path for partition region=eu
 
 statement error
-COPY sales TO '{TEST_DIR}/partition_path_empty_error' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH '');
+COPY sales TO '{TEST_DIR}/partition_path_empty_dot' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH './');
 ----
-in the same directory "."
+PARTITION_PATH evaluated to an empty path for partition
 
 # a partition directory cannot contain the directory of another partition
 statement ok
@@ -272,6 +269,48 @@ ORDER BY id;
 us	y	2
 eu	y	3
 
+# the hive layout built with hive_partition_component is readable as hive partitions
+statement ok
+COPY regions TO '{TEST_DIR}/partition_path_hive_component' (FORMAT parquet, PARTITION_BY (region, other_col),
+PARTITION_PATH path_join(hive_partition_component('region', region), hive_partition_component('other_col', other_col)));
+
+query III
+SELECT id, region, other_col
+FROM read_parquet('{TEST_DIR}/partition_path_hive_component/*/*/*.parquet', hive_partitioning = true)
+ORDER BY id;
+----
+1	eu	us-east-1
+2	eu	us-west-2
+3	us	us-east-1
+4	eu	us-east-1
+5	us	NULL
+
+# hive_partition_component escapes like the default hive layout, so both write the same files
+statement ok
+CREATE TABLE hive_values AS SELECT * FROM (VALUES
+	(1, 'a/b', 1), (2, 'c d%', NULL), (3, NULL, 2), (4, '__HIVE_DEFAULT_PARTITION__', 3), (5, '🦆', 1), (6, 'a/b', 1)
+) v(id, k, n);
+
+statement ok
+COPY hive_values TO '{TEST_DIR}/partition_path_hive_default' (FORMAT parquet, PARTITION_BY (k, n));
+
+statement ok
+COPY hive_values TO '{TEST_DIR}/partition_path_hive_expression' (FORMAT parquet, PARTITION_BY (k, n),
+PARTITION_PATH path_join(hive_partition_component('k', k), hive_partition_component('n', n)));
+
+query II
+SELECT count(*), count(*) FILTER (WHERE default_file IS NULL OR expression_file IS NULL)
+FROM (
+	SELECT regexp_extract(replace(file, '\', '/'), 'partition_path_hive_default/(.*)$', 1) AS default_file
+	FROM glob('{TEST_DIR}/partition_path_hive_default/**/*.parquet')
+) d
+FULL OUTER JOIN (
+	SELECT regexp_extract(replace(file, '\', '/'), 'partition_path_hive_expression/(.*)$', 1) AS expression_file
+	FROM glob('{TEST_DIR}/partition_path_hive_expression/**/*.parquet')
+) e ON default_file = expression_file;
+----
+5	0
+
 # a struct partition column is dereferenced with struct_extract
 statement ok
 CREATE TABLE structs AS SELECT 1 AS id, {'x': 'a'} AS p;
@@ -297,6 +336,17 @@ statement error
 COPY sales TO '{TEST_DIR}/partition_path_error' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH);
 ----
 PARTITION_PATH expects an expression
+
+# a parenthesized value is parsed as an ORDER BY list, which may only hold a single expression without modifiers
+statement error
+COPY sales TO '{TEST_DIR}/partition_path_error' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH (region, region));
+----
+PARTITION_PATH expects a single expression
+
+statement error
+COPY sales TO '{TEST_DIR}/partition_path_error' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH (region DESC));
+----
+PARTITION_PATH expects a single expression
 
 statement error
 COPY sales TO '{TEST_DIR}/partition_path_error' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH id::VARCHAR);
@@ -333,6 +383,11 @@ statement error
 COPY sales TO '{TEST_DIR}/partition_path_error' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH (SELECT 'dir'));
 ----
 cannot use subquery in PARTITION_PATH
+
+statement error
+COPY sales TO '{TEST_DIR}/partition_path_error' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH list_transform([region], lambda x: upper(x))[1]);
+----
+lambda functions are not allowed in PARTITION_PATH
 
 statement error
 COPY sales TO '{TEST_DIR}/partition_path_error' (FORMAT parquet, PARTITION_BY (region), PARTITION_PATH 'dir', HIVE_FILE_PATTERN false);

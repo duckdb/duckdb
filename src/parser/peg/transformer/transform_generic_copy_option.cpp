@@ -101,6 +101,7 @@ static GenericCopyOption BuildGenericCopyOption(const Identifier &generic_copy_o
 			copy_option.expression = std::move(generic_copy_option_value->expression);
 			return copy_option;
 		}
+		// an expression wrapped in () will trigger this case
 		auto &orders = generic_copy_option_value->order_list;
 		if (orders.size() != 1 || orders[0].type != OrderType::ORDER_DEFAULT ||
 		    orders[0].null_order != OrderByNullType::ORDER_DEFAULT) {

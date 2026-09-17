@@ -2,13 +2,11 @@
 
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/sorting/sort_strategy.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
-#include "duckdb/common/vector/vector_writer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
@@ -1392,9 +1390,8 @@ public:
 	vector<column_t> raw_columns;
 
 	//! Expression describing the directories of a partition's files relative to the COPY target:
-	//! PARTITION_PATH, or the hive layout by default
-	//! useful if partitions are registered in locations that do not follow hive partition naming
-	//! structures
+	//! PARTITION_PATH, or the hive layout by default. useful if partitions are registered in
+	//! locations that do not follow hive partition naming structures
 	unique_ptr<Expression> partition_path;
 
 	//! Partition/sort strategy with PhysicalOperator-like interface
@@ -1482,29 +1479,12 @@ static bool UsePerPartitionFileOffsets(const PhysicalCopyToFile &op) {
 	return op.hive_file_pattern || op.partition_path_expression;
 }
 
-//! One directory of the hive layout, e.g. year=2024 - the arguments are the column name and its partition value
-static void HivePartitionComponentFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	// type-erased, as the partition value can have any type
-	auto writer = FlatVector::Writer<string_t>(result, args.size());
-	for (idx_t row = 0; row < args.size(); row++) {
-		auto value = args.data[1].GetValue(row);
-		// escaping the name and the value is what url_encode does, NULL goes into the default partition
-		auto component = HivePartitioning::Escape(args.data[0].GetValue(row).ToString()) + "=";
-		component +=
-		    value.IsNull() ? HivePartitioning::DEFAULT_PARTITION_NAME : HivePartitioning::EscapeValue(value.ToString());
-		writer.WriteValue(string_t(component.c_str(), UnsafeNumericCast<uint32_t>(component.size())));
-	}
-}
-
 //! The hive layout, e.g. year=2024/month=1, as an expression over the partition values
 static unique_ptr<Expression> CreateHivePartitionPath(ClientContext &context, const PhysicalCopyToFile &op) {
 	if (op.partition_columns.empty()) {
 		return nullptr;
 	}
-	ScalarFunction component_function("hive_partition_component", {LogicalType::VARCHAR, LogicalType::ANY},
-	                                  LogicalType::VARCHAR, HivePartitionComponentFunction);
-	// a NULL partition value has a directory of its own
-	component_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	auto component_function = HivePartitionComponentFun::GetFunction();
 
 	FunctionBinder function_binder(context);
 	vector<unique_ptr<Expression>> components;
@@ -1893,41 +1873,33 @@ PartitionWriteManager::ReservationLock PartitionWriteManager::LockForReservation
 void PartitionWriteManager::ClaimDirectory(ReservationLock &reservation_lock, const vector<Value> &values,
                                            const string &directory) DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
 	D_ASSERT(reservation_lock.guard.owns_lock());
+	D_ASSERT(!directory.empty());
 	auto claimed = partition_directories.find(values);
 	if (claimed != partition_directories.end() && claimed->second == directory) {
 		return;
 	}
 	auto throw_overlap = [&](const string &other_directory, const vector<Value> &other_values) {
-		auto display = [](const string &dir) {
-			return dir.empty() ? string(".") : dir;
-		};
 		if (other_directory == directory) {
 			throw InvalidInputException("PARTITION_PATH puts partitions (%s) and (%s) in the same directory \"%s\"",
 			                            PartitionValuesToString(op, other_values), PartitionValuesToString(op, values),
-			                            display(directory));
+			                            directory);
 		}
 		throw InvalidInputException(
 		    "PARTITION_PATH puts partitions (%s) and (%s) in overlapping directories \"%s\" and \"%s\"",
-		    PartitionValuesToString(op, other_values), PartitionValuesToString(op, values), display(other_directory),
-		    display(directory));
+		    PartitionValuesToString(op, other_values), PartitionValuesToString(op, values), other_directory, directory);
 	};
-	// the same directory, or a directory containing it - the COPY target contains every directory
+	// the same directory, or a directory containing it
 	string ancestor;
-	auto owner = directory_partitions.find(ancestor);
-	if (owner != directory_partitions.end()) {
-		throw_overlap(owner->first, owner->second);
-	}
 	for (auto &component : StringUtil::Split(directory, '/')) {
 		ancestor += ancestor.empty() ? component : "/" + component;
-		owner = directory_partitions.find(ancestor);
+		auto owner = directory_partitions.find(ancestor);
 		if (owner != directory_partitions.end()) {
 			throw_overlap(owner->first, owner->second);
 		}
 	}
-	// a directory inside it - "/" sorts before any character a directory name can continue with
-	auto descendant = directory_partitions.lower_bound(directory.empty() ? directory : directory + "/");
-	if (descendant != directory_partitions.end() &&
-	    (directory.empty() || StringUtil::StartsWith(descendant->first, directory + "/"))) {
+	// a directory inside it - those all start with the directory and a separator, so they are adjacent in the map
+	auto descendant = directory_partitions.lower_bound(directory + "/");
+	if (descendant != directory_partitions.end() && StringUtil::StartsWith(descendant->first, directory + "/")) {
 		throw_overlap(descendant->first, descendant->second);
 	}
 	directory_partitions.emplace(directory, values);
@@ -3189,6 +3161,11 @@ PartitionDirectory PartitionFileRequestBuilder::BuildDirectory(string path) cons
 		components.push_back(component);
 		result.path = fs.JoinPath(result.path, component);
 		result.directories.push_back(result.path);
+	}
+	if (components.empty()) {
+		// every partition needs a directory of its own
+		throw InvalidInputException("PARTITION_PATH evaluated to an empty path for partition %s",
+		                            PartitionValuesToString(partitioned_copy.op, values));
 	}
 	result.relative_path = StringUtil::Join(components, "/");
 	return result;

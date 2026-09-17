@@ -11,7 +11,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/expression/lambdaref_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
@@ -23,7 +23,6 @@
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/planner/table_binding.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -353,10 +352,15 @@ protected:
 		case ExpressionClass::SUBQUERY:
 			return BindResult(BinderException::Unsupported(expr, "cannot use subquery in PARTITION_PATH"));
 		case ExpressionClass::COLUMN_REF:
-			return BindColumnReference(expr.Cast<ColumnRefExpression>(), depth);
+			return BindColumnReference(expr.Cast<ColumnRefExpression>());
 		default:
 			return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
 		}
+	}
+
+	BindResult BindLambdaFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function,
+	                              idx_t depth) override {
+		return BindResult(BinderException::Unsupported(expr, "lambda functions are not allowed in PARTITION_PATH"));
 	}
 
 	string UnsupportedAggregateMessage() override {
@@ -364,14 +368,7 @@ protected:
 	}
 
 private:
-	BindResult BindColumnReference(ColumnRefExpression &col_ref, idx_t depth) {
-		if (!col_ref.IsQualified()) {
-			auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName());
-			if (lambda_ref) {
-				auto &lambda_expr = lambda_ref->Cast<LambdaRefExpression>();
-				return (*lambda_bindings)[lambda_expr.LambdaIndex()].Bind(lambda_expr, depth);
-			}
-		}
+	BindResult BindColumnReference(ColumnRefExpression &col_ref) {
 		if (col_ref.ColumnNames().size() == 1) {
 			auto &column_name = col_ref.GetColumnName();
 			for (idx_t i = 0; i < partition_columns.size(); i++) {
