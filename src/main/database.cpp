@@ -300,6 +300,36 @@ static duckdb_ext_api_v1 CreateAPIv1Wrapper() {
 }
 
 void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_config) {
+	InitializeInstance(database_path, user_config);
+	if (!db_manager->HasAttachedDatabase()) {
+		CreateMainDatabase();
+	}
+	// The main database is the default; a storage extension may have attached it during startup instead.
+	optional_ptr<AttachedDatabase> main_database;
+	for (auto &attached : db_manager->GetDatabases()) {
+		if (attached->IsSystem()) {
+			continue;
+		}
+		if (!main_database || attached->oid < main_database->oid) {
+			main_database = attached.get();
+		}
+	}
+	db_manager->SetDefaultDatabase(main_database->GetName());
+	StartScheduler();
+}
+
+void DatabaseInstance::InitializeEmpty(DBConfig *user_config) {
+	InitializeInstance(nullptr, user_config);
+	StartScheduler();
+}
+
+void DatabaseInstance::StartScheduler() {
+	scheduler->SetThreads(config.options.maximum_threads, Settings::Get<ExternalThreadsSetting>(config));
+	scheduler->SetAsyncThreads(config.options.async_threads);
+	scheduler->RelaunchThreads();
+}
+
+void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *user_config) {
 	DBConfig default_config;
 	DBConfig *config_ptr = &default_config;
 	if (user_config) {
@@ -361,15 +391,6 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	LoadExtensionSettings();
-
-	if (!db_manager->HasAttachedDatabase()) {
-		CreateMainDatabase();
-	}
-
-	// only increase thread count after storage init because we get races on catalog otherwise
-	scheduler->SetThreads(config.options.maximum_threads, Settings::Get<ExternalThreadsSetting>(config));
-	scheduler->SetAsyncThreads(config.options.async_threads);
-	scheduler->RelaunchThreads();
 }
 
 DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared_ptr<DatabaseInstance>()) {
@@ -381,6 +402,16 @@ DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared_pt
 }
 
 DuckDB::DuckDB(const string &path, DBConfig *config) : DuckDB(path.c_str(), config) {
+}
+
+shared_ptr<DuckDB> DuckDB::CreateEmpty(DBConfig *config) {
+	auto instance = make_shared_ptr<DatabaseInstance>();
+	instance->InitializeEmpty(config);
+	auto db = make_shared_ptr<DuckDB>(*instance);
+	if (instance->config.options.load_extensions) {
+		ExtensionHelper::LoadAllExtensions(*db);
+	}
+	return db;
 }
 
 DuckDB::DuckDB(DatabaseInstance &instance_p) : instance(instance_p.shared_from_this()) {
@@ -517,10 +548,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	}
 	config.http_transport_manager->Initialize(DBConfig::GetSystemMaxThreads(*config.file_system));
 	if (database_path && !Settings::Get<EnableExternalAccessSetting>(*this)) {
-		config.AddAllowedPath(database_path);
-		config.AddAllowedPath(database_path + string(".wal"));
-		config.AddAllowedPath(database_path + string(".wal.checkpoint"));
-		config.AddAllowedPath(database_path + string(".wal.recovery"));
+		config.AddAllowedDatabasePath(database_path);
 		if (!config.options.temporary_directory.empty()) {
 			config.AddAllowedDirectory(config.options.temporary_directory);
 		}

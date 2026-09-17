@@ -132,6 +132,10 @@ ScanReadAhead::ScanReadAhead(ClientContext &context, idx_t read_ahead_depth_p,
 }
 
 ScanReadAhead::~ScanReadAhead() {
+	CancelAndDrain();
+}
+
+void ScanReadAhead::CancelAndDrain() {
 	executor->CancelAndDrain();
 }
 

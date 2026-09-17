@@ -1078,6 +1078,19 @@ def test_mode_trash(shell):
     result = test.run()
     result.check_stdout(None)
 
+def test_mode_trash_runs_to_completion(shell):
+    # the rows are discarded, but the query must still run to completion
+    test = (
+        ShellTest(shell)
+        .statement("CREATE SEQUENCE seq")
+        .statement(".mode trash")
+        .statement("SELECT nextval('seq') FROM range(1000000)")
+        .statement(".mode csv")
+        .statement("SELECT currval('seq')")
+    )
+    result = test.run()
+    result.check_stdout("1000000")
+
 def test_sqlite_comments(shell):
     # Using /* <comment> */
     test = (
