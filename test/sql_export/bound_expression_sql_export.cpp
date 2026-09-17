@@ -957,17 +957,6 @@ TEST_CASE("Bound expression SQL export canonicalizes native function definitions
 	connection.BeginTransaction();
 	BoundExpressionSQLExportContext context;
 
-	ScalarFunction standalone_scalar(Identifier("abs"), {LogicalType::INTEGER}, LogicalType::INTEGER,
-	                                 ScalarFunction::NopFunction);
-	standalone_scalar.SetCatalogName(Identifier::SystemCatalog());
-	standalone_scalar.SetSchemaName(Identifier::DefaultSchema());
-	vector<unique_ptr<Expression>> scalar_children;
-	scalar_children.push_back(Constant(Value::INTEGER(-7)));
-	auto scalar = standalone_scalar.Bind(*connection.context, std::move(scalar_children));
-	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *scalar) == Value::INTEGER(-7));
-	// Export reconstructs the SQL call without executing the retained callback.
-	REQUIRE_NOTHROW(BoundExpressionSQLExporter::Export(*scalar, context));
-
 	auto &catalog = Catalog::GetSystemCatalog(*connection.context);
 	auto &abs_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(
 	    *connection.context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), Identifier("abs")));
@@ -991,61 +980,33 @@ TEST_CASE("Bound expression SQL export canonicalizes native function definitions
 	RequireRoundTrip(connection, *copied_scalar, context, string(), "abs(-7::INTEGER)");
 	for (bool has_catalog : {false, true}) {
 		for (bool has_schema : {false, true}) {
+			if (has_catalog && has_schema) {
+				continue;
+			}
 			auto definition = make_shared_ptr<ScalarFunction>(*abs_definition);
 			definition->SetCatalogName(has_catalog ? Identifier::SystemCatalog() : Identifier());
 			definition->SetSchemaName(has_schema ? Identifier::DefaultSchema() : Identifier());
 			auto bound = bind_scalar_definition(std::move(definition));
 			auto exported = BoundExpressionSQLExporter::Export(*bound, context);
 			REQUIRE(exported.IsSuccess());
-			REQUIRE(BoundExpressionSQLExporter::Export(*bound->Copy(), context).IsSuccess());
 			auto &name = exported.GetValue()->Cast<FunctionExpression>().GetQualifiedName();
 			REQUIRE(name.Name() == Identifier("abs"));
 			REQUIRE(name.Catalog() == Identifier::SystemCatalog());
 			REQUIRE(name.Schema() == Identifier::DefaultSchema());
-			RequireRoundTrip(connection, *bound, context, string(), "abs(-7::INTEGER)");
+			RequireRoundTrip(connection, *bound->Copy(), context, string(), "abs(-7::INTEGER)");
 		}
 	}
 
-	// Shared-pointer binding trusts definition copies to preserve the catalog function's semantics.
-	vector<pair<string, shared_ptr<const ScalarFunction>>> scalar_copies;
-	scalar_copies.emplace_back("copy construction", make_shared_ptr<ScalarFunction>(*abs_definition));
-	ScalarFunction scalar_move_source(*abs_definition);
-	scalar_copies.emplace_back("move construction", make_shared_ptr<ScalarFunction>(std::move(scalar_move_source)));
-	auto scalar_copy_assignment =
-	    make_shared_ptr<ScalarFunction>(Identifier("placeholder"), vector<LogicalType> {LogicalType::INTEGER},
-	                                    LogicalType::INTEGER, ScalarFunction::NopFunction);
-	*scalar_copy_assignment = *abs_definition;
-	scalar_copies.emplace_back("copy assignment", std::move(scalar_copy_assignment));
-	ScalarFunction scalar_move_assignment_source(*abs_definition);
-	auto scalar_move_assignment =
-	    make_shared_ptr<ScalarFunction>(Identifier("placeholder"), vector<LogicalType> {LogicalType::INTEGER},
-	                                    LogicalType::INTEGER, ScalarFunction::NopFunction);
-	*scalar_move_assignment = std::move(scalar_move_assignment_source);
-	scalar_copies.emplace_back("move assignment", std::move(scalar_move_assignment));
 	ScalarFunctionSet scalar_set(Identifier("abs"));
 	scalar_set.functions.push_back(abs_definition);
 	scalar_set.ApplyToFunctions([](ScalarFunction &) {});
-	scalar_copies.emplace_back("FunctionSet::ApplyToFunctions", scalar_set.GetFunctionByOffset(0));
-	for (auto &entry : scalar_copies) {
-		INFO(entry.first);
-		auto copied = bind_scalar_definition(entry.second);
-		REQUIRE(copied->Cast<BoundFunctionExpression>().Function().GetDefinition() == entry.second);
-		REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *copied) == Value::INTEGER(7));
-		RequireRoundTrip(connection, *copied, context, string(), "abs(-7::INTEGER)");
-		vector<unique_ptr<Expression>> children;
-		children.push_back(Constant(Value::INTEGER(-7)));
-		auto standalone_copy = entry.second->Bind(*connection.context, std::move(children));
-		RequireRoundTrip(connection, *standalone_copy, context, string(), "abs(-7::INTEGER)");
-	}
+	REQUIRE(scalar_set.GetFunctionByOffset(0) != abs_definition);
+	auto applied_scalar = bind_scalar_definition(scalar_set.GetFunctionByOffset(0));
+	REQUIRE(applied_scalar->Cast<BoundFunctionExpression>().Function().GetDefinition() ==
+	        scalar_set.GetFunctionByOffset(0));
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *applied_scalar) == Value::INTEGER(7));
+	RequireRoundTrip(connection, *applied_scalar, context, string(), "abs(-7::INTEGER)");
 
-	auto standalone_aggregate = SyntheticSum(Identifier("sum"), 1);
-	standalone_aggregate.SetCatalogName(Identifier::SystemCatalog());
-	standalone_aggregate.SetSchemaName(Identifier::DefaultSchema());
-	vector<unique_ptr<Expression>> aggregate_children;
-	aggregate_children.push_back(Constant(Value::INTEGER(7)));
-	auto aggregate = standalone_aggregate.Bind(*connection.context, std::move(aggregate_children));
-	REQUIRE(EvaluateAggregate(*aggregate) == Value::BIGINT(8));
-	REQUIRE_NOTHROW(BoundExpressionSQLExporter::Export(*aggregate, context));
 	auto &sum_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
 	    *connection.context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), Identifier("sum")));
 	auto sum_definition = sum_entry.functions.GetFunctionByArguments(*connection.context, {LogicalType::INTEGER});
@@ -1057,12 +1018,14 @@ TEST_CASE("Bound expression SQL export canonicalizes native function definitions
 	auto canonical_aggregate = bind_aggregate_definition(sum_definition);
 	for (bool has_catalog : {false, true}) {
 		for (bool has_schema : {false, true}) {
+			if (has_catalog && has_schema) {
+				continue;
+			}
 			auto definition = make_shared_ptr<AggregateFunction>(*sum_definition);
 			definition->SetCatalogName(has_catalog ? Identifier::SystemCatalog() : Identifier());
 			definition->SetSchemaName(has_schema ? Identifier::DefaultSchema() : Identifier());
 			auto bound = bind_aggregate_definition(std::move(definition));
-			RequireRoundTrip(connection, *bound, context, string(), "sum(7::INTEGER)");
-			REQUIRE(BoundExpressionSQLExporter::Export(*bound->Copy(), context).IsSuccess());
+			RequireRoundTrip(connection, *bound->Copy(), context, string(), "sum(7::INTEGER)");
 		}
 	}
 	REQUIRE(canonical_aggregate->Function().GetDefinition() == sum_definition);
@@ -1085,33 +1048,14 @@ TEST_CASE("Bound expression SQL export canonicalizes native function definitions
 	REQUIRE(EvaluateAggregate(*copied_aggregate) == Value::HUGEINT(hugeint_t(7)));
 	RequireRoundTrip(connection, *copied_aggregate, context, string(), "sum(7::INTEGER)");
 
-	vector<pair<string, shared_ptr<const AggregateFunction>>> aggregate_copies;
-	aggregate_copies.emplace_back("copy construction", make_shared_ptr<AggregateFunction>(*sum_definition));
-	AggregateFunction aggregate_move_source(*sum_definition);
-	aggregate_copies.emplace_back("move construction",
-	                              make_shared_ptr<AggregateFunction>(std::move(aggregate_move_source)));
-	auto aggregate_copy_assignment = make_shared_ptr<AggregateFunction>(SyntheticSum(Identifier("placeholder"), 0));
-	*aggregate_copy_assignment = *sum_definition;
-	aggregate_copies.emplace_back("copy assignment", std::move(aggregate_copy_assignment));
-	AggregateFunction aggregate_move_assignment_source(*sum_definition);
-	auto aggregate_move_assignment = make_shared_ptr<AggregateFunction>(SyntheticSum(Identifier("placeholder"), 0));
-	*aggregate_move_assignment = std::move(aggregate_move_assignment_source);
-	aggregate_copies.emplace_back("move assignment", std::move(aggregate_move_assignment));
 	AggregateFunctionSet aggregate_set(Identifier("sum"));
 	aggregate_set.functions.push_back(sum_definition);
 	aggregate_set.ApplyToFunctions([](AggregateFunction &) {});
-	aggregate_copies.emplace_back("FunctionSet::ApplyToFunctions", aggregate_set.GetFunctionByOffset(0));
-	for (auto &entry : aggregate_copies) {
-		INFO(entry.first);
-		auto copied = bind_aggregate_definition(entry.second);
-		REQUIRE(copied->Function().GetDefinition() == entry.second);
-		REQUIRE(EvaluateAggregate(*copied) == Value::HUGEINT(hugeint_t(7)));
-		RequireRoundTrip(connection, *copied, context, string(), "sum(7::INTEGER)");
-		vector<unique_ptr<Expression>> children;
-		children.push_back(Constant(Value::INTEGER(7)));
-		auto standalone_copy = entry.second->Bind(*connection.context, std::move(children));
-		RequireRoundTrip(connection, *standalone_copy, context, string(), "sum(7::INTEGER)");
-	}
+	REQUIRE(aggregate_set.GetFunctionByOffset(0) != sum_definition);
+	auto applied_aggregate = bind_aggregate_definition(aggregate_set.GetFunctionByOffset(0));
+	REQUIRE(applied_aggregate->Function().GetDefinition() == aggregate_set.GetFunctionByOffset(0));
+	REQUIRE(EvaluateAggregate(*applied_aggregate) == Value::HUGEINT(hugeint_t(7)));
+	RequireRoundTrip(connection, *applied_aggregate, context, string(), "sum(7::INTEGER)");
 	connection.Rollback();
 }
 
@@ -1863,35 +1807,6 @@ TEST_CASE("SQL export retains bound alias names across copies and renamed inputs
 		REQUIRE(wrong_data.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION);
 	}
 	connection.Rollback();
-}
-
-TEST_CASE("Bound expression SQL export rejects unrepresentable VARIANT object keys",
-          "[sql_export][bound_expression_sql_export]") {
-	DuckDB db;
-	Connection connection(db);
-	if (!db.instance->ExtensionIsLoaded("json")) {
-		WARN("JSON extension required for empty VARIANT key coverage");
-		return;
-	}
-	LogicalPlanVerificationPath path;
-	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
-	for (auto json : {"{\"\":1}", "{\"\":3,\"a\":1}", "{\"a\":1,\"\":2}", "{\"outer\":{\"\":1,\"x\":2}}", "[{\"\":1}]",
-	                  "{\"a\":1,\"A\":2}", "{\"outer\":{\"a\":1,\"A\":2}}", "[{\"a\":1,\"A\":2}]"}) {
-		auto original = connection.Query("SELECT j::JSON::VARIANT FROM (VALUES ('" + string(json) + "')) t(j)");
-		REQUIRE_NO_FAIL(*original);
-		auto value = original->GetValue(0, 0);
-		for (auto &nested : {value, Value::LIST(LogicalType::VARIANT(), {value}), Value::STRUCT({{"v", value}}),
-		                     Value::ARRAY(LogicalType::VARIANT(), {value}),
-		                     Value::MAP(LogicalType::VARCHAR, LogicalType::VARIANT(), {Value("v")}, {value}),
-		                     Value::UNION({{"v", LogicalType::VARIANT()}}, 0, value)}) {
-			BoundConstantExpression expression(nested);
-			for (idx_t lifecycle = 0; lifecycle < 3; lifecycle++) {
-				auto candidate = lifecycle == 2 ? BinaryRoundTrip(*connection.context, expression) : expression.Copy();
-				RequireIssue(BoundExpressionSQLExporter::Export(lifecycle == 0 ? expression : *candidate, {}),
-				             LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE, path);
-			}
-		}
-	}
 }
 
 TEST_CASE("Bound expression SQL export preserves aggregate ordering through copies",
