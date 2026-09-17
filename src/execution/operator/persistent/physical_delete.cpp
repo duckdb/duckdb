@@ -34,10 +34,12 @@ public:
 			storage.InitializeLocalStorage(delete_index_append_state, table, context, bound_constraints);
 			has_unique_indexes = true;
 		}
+		delete_state = storage.InitializeDelete(table, context, bound_constraints);
 	}
 
 	mutex delete_lock;
 	idx_t deleted_count;
+	unique_ptr<TableDeleteState> delete_state;
 	ColumnDataCollection return_collection;
 	unordered_set<row_t> deleted_row_ids;
 	LocalAppendState delete_index_append_state;
@@ -51,14 +53,10 @@ public:
 		const auto &types = table.GetTypes();
 		auto initialize = vector<bool>(types.size(), false);
 		delete_chunk.Initialize(Allocator::Get(context), types, initialize);
-
-		auto &storage = table.GetStorage();
-		delete_state = storage.InitializeDelete(table, context, bound_constraints);
 	}
 
 public:
 	DataChunk delete_chunk;
-	unique_ptr<TableDeleteState> delete_state;
 };
 
 SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
@@ -70,7 +68,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	lock_guard<mutex> delete_guard(g_state.delete_lock);
 	if (!return_chunk && !g_state.has_unique_indexes) {
-		g_state.deleted_count += table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
+		g_state.deleted_count += table.Delete(*g_state.delete_state, context.client, row_ids, chunk.size());
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
@@ -135,7 +133,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 		storage->AppendToDeleteIndexes(row_ids, l_state.delete_chunk);
 	}
 
-	auto deleted_count = table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
+	auto deleted_count = table.Delete(*g_state.delete_state, context.client, row_ids, chunk.size());
 	g_state.deleted_count += deleted_count;
 
 	// Append the return_chunk to the return collection.
