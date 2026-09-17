@@ -893,6 +893,9 @@ TEST_CASE("Fully cached read skips doesn't open file", "[file_system][caching]")
 	// Second read: all blocks are cached, validation is off, so we should not open the underlying file
 	{
 		auto handle = cfs.OpenFile(make_file_info(), FileFlags::FILE_FLAGS_READ);
+		NetworkThroughputEstimate estimate;
+		REQUIRE_FALSE(handle->TryGetNetworkThroughput(estimate));
+		REQUIRE(counting_fs_ptr->GetOpenCount() == 1);
 		auto group = handle->Read(FILE_SIZE, 0);
 		string result(FILE_SIZE, '\0');
 		group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), FILE_SIZE);

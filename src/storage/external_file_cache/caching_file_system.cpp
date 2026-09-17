@@ -542,7 +542,12 @@ bool ReadThroughputEstimator::TryEstimate(NetworkThroughputEstimate &result) con
 
 bool CachingFileHandle::TryGetNetworkThroughput(NetworkThroughputEstimate &result) {
 	// Remote files measure throughput in their own file system; local files fit it from this handle's own reads.
-	if (GetFileHandle()->TryGetNetworkThroughput(result)) {
+	shared_ptr<FileHandle> current_file_handle;
+	{
+		const annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
+		current_file_handle = file_handle;
+	}
+	if (current_file_handle && current_file_handle->TryGetNetworkThroughput(result)) {
 		return true;
 	}
 	return throughput_estimator.TryEstimate(result);
