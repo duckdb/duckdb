@@ -248,7 +248,7 @@ auto TryGetExceptionTypeFromErrorCode(DUCKDB_V2_ERROR code) -> optional<Exceptio
 	}
 }
 
-auto RenderCaughtError(DUCKDB_V2_ERROR &code, string &text, string &raw_message) noexcept -> void {
+auto RenderCaughtError(DUCKDB_V2_ERROR &code, string &text, optional<string> &raw_message) noexcept -> void {
 	// Set the fallback code first (non-throwing), then render the detail.
 	code = DUCKDB_V2_ERROR_API;
 	try {
@@ -272,11 +272,11 @@ auto RenderCaughtError(DUCKDB_V2_ERROR &code, string &text, string &raw_message)
 		// Rendering the detail exhausted memory: that supersedes the original report.
 		code = DUCKDB_V2_ERROR_RESOURCE_OUT_OF_MEMORY;
 		text.clear();
-		raw_message.clear();
+		raw_message.reset();
 	} catch (...) {
 		// Rendering the detail failed: keep the code produced so far with no detail.
 		text.clear();
-		raw_message.clear();
+		raw_message.reset();
 	}
 }
 
@@ -302,7 +302,7 @@ auto NullArgumentError(duckdb_v2_error_info_handle *err, const char *function, c
 	auto &out = *Convert(*err);
 	out.code = code;
 	out.message.clear();
-	out.raw_message.clear();
+	out.raw_message.reset();
 	try {
 		// Render through ErrorData so message/raw_message match what WithErrorHandler
 		// produces for a thrown InvalidInputException.

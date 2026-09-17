@@ -8,6 +8,36 @@ namespace duckdb {
 
 static const TransformFrameOps STATEMENT_OPS = {"Statement", &PEGTransformerFactory::InitializeStatementTrampoline,
                                                 &PEGTransformerFactory::FinalizeStatementTrampoline};
+static const TransformFrameOps PRAGMA_NAME_OPS = {"PragmaName",
+                                                  &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+                                                  &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
+static const TransformFrameOps TYPE_NAME_OPS = {"TypeName",
+                                                &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+                                                &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
+static const TransformFrameOps PLAIN_IDENTIFIER_OPS = {"PlainIdentifier",
+                                                       &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+                                                       &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
+static const TransformFrameOps QUOTED_IDENTIFIER_OPS = {"QuotedIdentifier",
+                                                        &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+                                                        &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
+static const TransformFrameOps RESERVED_KEYWORD_OPS = {"ReservedKeyword",
+                                                       &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+                                                       &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
+static const TransformFrameOps UNRESERVED_KEYWORD_OPS = {
+    "UnreservedKeyword", &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+    &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
+static const TransformFrameOps COLUMN_NAME_KEYWORD_OPS = {
+    "ColumnNameKeyword", &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+    &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
+static const TransformFrameOps FUNC_NAME_KEYWORD_OPS = {"FuncNameKeyword",
+                                                        &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+                                                        &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
+static const TransformFrameOps TYPE_NAME_KEYWORD_OPS = {"TypeNameKeyword",
+                                                        &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+                                                        &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
+static const TransformFrameOps SETTING_NAME_OPS = {"SettingName",
+                                                   &PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline,
+                                                   &PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline};
 static const TransformFrameOps ALTER_STATEMENT_OPS = {"AlterStatement",
                                                       &PEGTransformerFactory::InitializeAlterStatementTrampoline,
                                                       &PEGTransformerFactory::FinalizeAlterStatementTrampoline};
@@ -472,6 +502,9 @@ static const TransformFrameOps COPY_FILE_NAME_IDENTIFIER_COL_ID_OPS = {
 static const TransformFrameOps IDENTIFIER_COL_ID_OPS = {"IdentifierColId",
                                                         &PEGTransformerFactory::InitializeIdentifierColIdTrampoline,
                                                         &PEGTransformerFactory::FinalizeIdentifierColIdTrampoline};
+static const TransformFrameOps COPY_FILE_NAME_SUFFIX_OPS = {
+    "CopyFileNameSuffix", &PEGTransformerFactory::InitializeCopyFileNameSuffixTrampoline,
+    &PEGTransformerFactory::FinalizeCopyFileNameSuffixTrampoline};
 static const TransformFrameOps COPY_OPTIONS_OPS = {"CopyOptions",
                                                    &PEGTransformerFactory::InitializeCopyOptionsTrampoline,
                                                    &PEGTransformerFactory::FinalizeCopyOptionsTrampoline};
@@ -2964,6 +2997,16 @@ static const TransformFrameOps NAME_LIST_OPS = {"NameList", &PEGTransformerFacto
 const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::GeneratedTransformFrameOps() {
 	static const case_insensitive_map_t<const TransformFrameOps *> result = {
 	    {"Statement", &STATEMENT_OPS},
+	    {"PragmaName", &PRAGMA_NAME_OPS},
+	    {"TypeName", &TYPE_NAME_OPS},
+	    {"PlainIdentifier", &PLAIN_IDENTIFIER_OPS},
+	    {"QuotedIdentifier", &QUOTED_IDENTIFIER_OPS},
+	    {"ReservedKeyword", &RESERVED_KEYWORD_OPS},
+	    {"UnreservedKeyword", &UNRESERVED_KEYWORD_OPS},
+	    {"ColumnNameKeyword", &COLUMN_NAME_KEYWORD_OPS},
+	    {"FuncNameKeyword", &FUNC_NAME_KEYWORD_OPS},
+	    {"TypeNameKeyword", &TYPE_NAME_KEYWORD_OPS},
+	    {"SettingName", &SETTING_NAME_OPS},
 	    {"AlterStatement", &ALTER_STATEMENT_OPS},
 	    {"AlterOptions", &ALTER_OPTIONS_OPS},
 	    {"AlterTableStmt", &ALTER_TABLE_STMT_OPS},
@@ -3130,6 +3173,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"CopyFileNameIdentifier", &COPY_FILE_NAME_IDENTIFIER_OPS},
 	    {"CopyFileNameIdentifierColId", &COPY_FILE_NAME_IDENTIFIER_COL_ID_OPS},
 	    {"IdentifierColId", &IDENTIFIER_COL_ID_OPS},
+	    {"CopyFileNameSuffix", &COPY_FILE_NAME_SUFFIX_OPS},
 	    {"CopyOptions", &COPY_OPTIONS_OPS},
 	    {"CopyOptionList", &COPY_OPTION_LIST_OPS},
 	    {"SpecializedOptionList", &SPECIALIZED_OPTION_LIST_OPS},
@@ -4027,6 +4071,18 @@ PEGTransformerFactory::FinalizeStatementTrampoline(PEGTransformer &transformer, 
 	}
 	result->has_anonymous_parameters = transformer.has_anonymous_parameters;
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeIdentifierOrKeywordTrampoline(PEGTransformer &transformer,
+                                                                    GeneratedTransformProcess &process) {
+	process.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline(PEGTransformer &transformer,
+                                                             GeneratedTransformProcess &process) {
+	auto result = TransformIdentifierOrKeyword(transformer, process.parse_result);
+	return make_uniq<TypedTransformResult<string>>(result);
 }
 
 void PEGTransformerFactory::InitializeAlterStatementTrampoline(PEGTransformer &transformer,
@@ -7121,17 +7177,43 @@ PEGTransformerFactory::FinalizeCopyFileNameIdentifierColIdTrampoline(PEGTransfor
 void PEGTransformerFactory::InitializeIdentifierColIdTrampoline(PEGTransformer &transformer,
                                                                 GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(1);
-	process.PushChild({transformer.GetRule("ColId"), list_pr.GetChild(2)}, 0);
+	auto &repeat_pr = list_pr.GetChild(1).Cast<RepeatParseResult>();
+	auto repeat_children = repeat_pr.GetChildren();
+	auto dynamic_child_count = repeat_children.size();
+	process.ReserveChildSlots(1 + dynamic_child_count - 1);
+	for (idx_t i = repeat_children.size(); i > 0; i--) {
+		auto child_idx = i - 1;
+		process.PushChild({transformer.GetRule("CopyFileNameSuffix"), repeat_children[child_idx].get()}, 0 + child_idx);
+	}
 }
 
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeIdentifierColIdTrampoline(PEGTransformer &transformer,
                                                          GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &dynamic_repeat_pr = list_pr.GetChild(1).Cast<RepeatParseResult>();
+	auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
+	auto dynamic_child_count = dynamic_repeat_children.size();
 	auto identifier = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
-	auto col_id = process.TakeResult<Identifier>(0);
-	auto result = TransformIdentifierColId(transformer, identifier, col_id);
+	vector<Identifier> copy_file_name_suffix;
+	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
+		copy_file_name_suffix.push_back(process.TakeResult<Identifier>(i));
+	}
+	auto result = TransformIdentifierColId(transformer, identifier, copy_file_name_suffix);
+	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
+void PEGTransformerFactory::InitializeCopyFileNameSuffixTrampoline(PEGTransformer &transformer,
+                                                                   GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("ColId"), list_pr.GetChild(1)}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeCopyFileNameSuffixTrampoline(PEGTransformer &transformer,
+                                                            GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<Identifier>(0);
 	return make_uniq<TypedTransformResult<Identifier>>(result);
 }
 
