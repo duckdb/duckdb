@@ -190,8 +190,14 @@ unique_ptr<Expression> FunctionBinder::BindScalarWindowFunction(BoundWindowExpre
 	for (const auto &child : wexpr.GetChildren()) {
 		arguments.emplace_back(child->GetReturnType());
 	}
-	auto func = wexpr.AggregateFunction() ? AggregateScalarFunc : WindowScalarFunc;
+	auto &aggr = wexpr.AggregateFunction();
+	auto func = aggr ? AggregateScalarFunc : WindowScalarFunc;
 	ScalarFunction scalar(wexpr.GetName(), arguments, wexpr.GetReturnType(), func);
+	if (aggr) {
+		scalar.SetProperties(aggr->GetProperties());
+	} else {
+		scalar.SetProperties(wexpr.WindowFunction()->GetProperties());
+	}
 	auto bind_info = make_uniq<ScalarWindowBindData>(context, wexpr);
 	BoundScalarFunction bound(scalar);
 
