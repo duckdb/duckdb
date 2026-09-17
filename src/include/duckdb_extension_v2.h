@@ -1326,6 +1326,46 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_tokenize_sql)
 	(duckdb_v2_connection_handle conn, duckdb_v2_str sql, duckdb_v2_token_iterator_handle *out_iterator,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_partition_data_get_bind_data)
+	(duckdb_v2_table_function_partition_data_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_partition_data_get_global_state)
+	(duckdb_v2_table_function_partition_data_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_partition_data_get_local_state)
+	(duckdb_v2_table_function_partition_data_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_partition_data_get_partition_column_count)
+	(duckdb_v2_table_function_partition_data_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_partition_data_get_partition_column_index)
+	(duckdb_v2_table_function_partition_data_info_handle info, idx_t index, idx_t *column_index,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_partition_data_get_user_data)
+	(duckdb_v2_table_function_partition_data_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_partition_data_requires_batch_index)
+	(duckdb_v2_table_function_partition_data_info_handle info, bool *required, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_partition_data_requires_partition_columns)
+	(duckdb_v2_table_function_partition_data_info_handle info, bool *required, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_partition_data_set_batch_index)
+	(duckdb_v2_table_function_partition_data_info_handle info, idx_t batch_index, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_partition_data_set_partition_value)
+	(duckdb_v2_table_function_partition_data_info_handle info, idx_t index, duckdb_v2_value_handle value,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_partitioning_get_bind_data)
+	(duckdb_v2_table_function_partitioning_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_partitioning_get_partition_column_count)
+	(duckdb_v2_table_function_partitioning_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_partitioning_get_partition_column_index)
+	(duckdb_v2_table_function_partitioning_info_handle info, idx_t index, idx_t *column_index,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_partitioning_get_user_data)
+	(duckdb_v2_table_function_partitioning_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_partitioning_set_partition_info)
+	(duckdb_v2_table_function_partitioning_info_handle info, DUCKDB_V2_TABLE_PARTITION_INFO partition_info,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_partition_data_callback)
+	(duckdb_v2_table_function_handle function, duckdb_v2_table_function_partition_data_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_partitioning_callback)
+	(duckdb_v2_table_function_handle function, duckdb_v2_table_function_partitioning_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
 	// capigen:end appended
 } duckdb_ext_api_v2;
 
@@ -1930,6 +1970,40 @@ typedef struct {
 #define duckdb_v2_token_iterator_ends_unterminated       duckdb_ext_api.duckdb_v2_token_iterator_ends_unterminated
 #define duckdb_v2_token_iterator_next                    duckdb_ext_api.duckdb_v2_token_iterator_next
 #define duckdb_v2_tokenize_sql                           duckdb_ext_api.duckdb_v2_tokenize_sql
+#define duckdb_v2_table_function_partition_data_get_bind_data                                                          \
+	duckdb_ext_api.duckdb_v2_table_function_partition_data_get_bind_data
+#define duckdb_v2_table_function_partition_data_get_global_state                                                       \
+	duckdb_ext_api.duckdb_v2_table_function_partition_data_get_global_state
+#define duckdb_v2_table_function_partition_data_get_local_state                                                        \
+	duckdb_ext_api.duckdb_v2_table_function_partition_data_get_local_state
+#define duckdb_v2_table_function_partition_data_get_partition_column_count                                             \
+	duckdb_ext_api.duckdb_v2_table_function_partition_data_get_partition_column_count
+#define duckdb_v2_table_function_partition_data_get_partition_column_index                                             \
+	duckdb_ext_api.duckdb_v2_table_function_partition_data_get_partition_column_index
+#define duckdb_v2_table_function_partition_data_get_user_data                                                          \
+	duckdb_ext_api.duckdb_v2_table_function_partition_data_get_user_data
+#define duckdb_v2_table_function_partition_data_requires_batch_index                                                   \
+	duckdb_ext_api.duckdb_v2_table_function_partition_data_requires_batch_index
+#define duckdb_v2_table_function_partition_data_requires_partition_columns                                             \
+	duckdb_ext_api.duckdb_v2_table_function_partition_data_requires_partition_columns
+#define duckdb_v2_table_function_partition_data_set_batch_index                                                        \
+	duckdb_ext_api.duckdb_v2_table_function_partition_data_set_batch_index
+#define duckdb_v2_table_function_partition_data_set_partition_value                                                    \
+	duckdb_ext_api.duckdb_v2_table_function_partition_data_set_partition_value
+#define duckdb_v2_table_function_partitioning_get_bind_data                                                            \
+	duckdb_ext_api.duckdb_v2_table_function_partitioning_get_bind_data
+#define duckdb_v2_table_function_partitioning_get_partition_column_count                                               \
+	duckdb_ext_api.duckdb_v2_table_function_partitioning_get_partition_column_count
+#define duckdb_v2_table_function_partitioning_get_partition_column_index                                               \
+	duckdb_ext_api.duckdb_v2_table_function_partitioning_get_partition_column_index
+#define duckdb_v2_table_function_partitioning_get_user_data                                                            \
+	duckdb_ext_api.duckdb_v2_table_function_partitioning_get_user_data
+#define duckdb_v2_table_function_partitioning_set_partition_info                                                       \
+	duckdb_ext_api.duckdb_v2_table_function_partitioning_set_partition_info
+#define duckdb_v2_table_function_set_partition_data_callback                                                           \
+	duckdb_ext_api.duckdb_v2_table_function_set_partition_data_callback
+#define duckdb_v2_table_function_set_partitioning_callback                                                             \
+	duckdb_ext_api.duckdb_v2_table_function_set_partitioning_callback
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION
 

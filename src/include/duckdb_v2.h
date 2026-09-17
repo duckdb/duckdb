@@ -11949,6 +11949,26 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_get_schema(duckdb_v2_result_handle
 
 /* --- Enums for table --- */
 
+/*!
+ * Whether a table function's scan is partitioned by a given set of columns, and how. Reported by
+ * `duckdb_v2_table_function_set_partitioning_callback()` via
+ * `duckdb_v2_table_function_partitioning_set_partition_info()`.
+ */
+typedef enum DUCKDB_V2_TABLE_PARTITION_INFO {
+	//! The scan is not known to be partitioned by the requested columns.
+	DUCKDB_V2_TABLE_PARTITION_INFO_NOT_PARTITIONED = 0,
+
+	//! Each partition the scan produces carries exactly one distinct value for the requested columns.
+	DUCKDB_V2_TABLE_PARTITION_INFO_SINGLE_VALUE_PARTITIONS = 1,
+
+	//! The partitions the scan produces overlap only at their boundaries.
+	DUCKDB_V2_TABLE_PARTITION_INFO_OVERLAPPING_PARTITIONS = 2,
+
+	//! The partitions the scan produces are disjoint ranges.
+	DUCKDB_V2_TABLE_PARTITION_INFO_DISJOINT_PARTITIONS = 3,
+	DUCKDB_V2_TABLE_PARTITION_INFO_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_TABLE_PARTITION_INFO;
+
 /* --- Struct forward declarations for table --- */
 
 /* --- Types for table --- */
@@ -12019,6 +12039,25 @@ typedef struct _duckdb_v2_table_function_filter_pushdown_info {
 	void *internal_ptr;
 } * duckdb_v2_table_function_filter_pushdown_info_handle;
 
+/*!
+ * A borrowed opaque handle to the arguments supplied to a table function during the "partition data" phase. The engine
+ * invokes the callback on the worker thread that just produced a batch of rows, once per batch, only when a downstream
+ * operator needs to know the batch's ordering position, the values of a set of partitioning columns, or both; the
+ * handle reports which of those were actually requested and receives the answer.
+ */
+typedef struct _duckdb_v2_table_function_partition_data_info {
+	void *internal_ptr;
+} * duckdb_v2_table_function_partition_data_info_handle;
+
+/*!
+ * A borrowed opaque handle to the arguments supplied to a table function during the "partitioning" phase of query
+ * optimization. The engine invokes the callback once per candidate `GROUP BY` column set, before execution starts, to
+ * decide whether the scan can feed a partitioned aggregate directly instead of hashing.
+ */
+typedef struct _duckdb_v2_table_function_partitioning_info {
+	void *internal_ptr;
+} * duckdb_v2_table_function_partitioning_info_handle;
+
 /* --- Constants for table --- */
 
 /* --- Function pointer typedefs for table --- */
@@ -12045,6 +12084,14 @@ typedef void (*duckdb_v2_table_function_progress_callback_fn)(duckdb_v2_table_fu
 
 typedef void (*duckdb_v2_table_function_filter_pushdown_callback_fn)(
     duckdb_v2_table_function_filter_pushdown_info_handle info, duckdb_v2_context_handle context,
+    duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_table_function_partition_data_callback_fn)(
+    duckdb_v2_table_function_partition_data_info_handle info, duckdb_v2_context_handle context,
+    duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_table_function_partitioning_callback_fn)(
+    duckdb_v2_table_function_partitioning_info_handle info, duckdb_v2_context_handle context,
     duckdb_v2_error_info_handle *err);
 
 /* --- Functions for table --- */
@@ -12301,6 +12348,52 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_projection_pushdown(du
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_filter_pushdown_callback(
     duckdb_v2_table_function_handle function, duckdb_v2_table_function_filter_pushdown_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the optional "partition data" callback of the table function.
+ *
+ * The callback reports, for the batch the exec callback just produced, an ordering batch index, the values of a set of
+ * partitioning columns, or both, depending on what a downstream operator requires; it runs on the worker thread that
+ * produced the batch. Set `duckdb_v2_table_function_set_partitioning_callback()` too when the function can answer
+ * partitioning-column requests, since the engine only asks a scan for those when that callback reports
+ * `TABLE_PARTITION_INFO_SINGLE_VALUE_PARTITIONS`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the partition data callback of.
+ * @param callback The partition data callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_partition_data_callback(
+    duckdb_v2_table_function_handle function, duckdb_v2_table_function_partition_data_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the optional "partitioning" callback of the table function.
+ *
+ * The callback tells the query optimizer, for a candidate `GROUP BY` column set, whether every partition the scan
+ * produces carries exactly one distinct value for those columns; only `TABLE_PARTITION_INFO_SINGLE_VALUE_PARTITIONS`
+ * unlocks the partitioned aggregate optimization; any other result, or leaving this callback unset, keeps the regular
+ * hash aggregate. It runs on the planning thread, before execution starts, and must be deterministic for a given column
+ * set since it may be called on a plan the optimizer later discards. Registration fails unless
+ * `duckdb_v2_table_function_set_partition_data_callback()` is set too, since the engine asks that callback for the
+ * partitioning column values once this one claims single-value partitions.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the partitioning callback of.
+ * @param callback The partitioning callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_partitioning_callback(
+    duckdb_v2_table_function_handle function, duckdb_v2_table_function_partitioning_callback_fn callback,
     duckdb_v2_error_info_handle *err);
 
 /*!
@@ -12980,6 +13073,286 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_filter_pushdown_get_column
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_filter_pushdown_get_column_index(
     duckdb_v2_table_function_filter_pushdown_info_handle info, idx_t index, idx_t *column_index,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the user data set via `duckdb_v2_table_function_set_user_data()`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The partition data info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_get_user_data(
+    duckdb_v2_table_function_partition_data_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the bind data set by the function's bind callback.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The partition data info handle.
+ * @param data Receives the bind data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_get_bind_data(
+    duckdb_v2_table_function_partition_data_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the global state set by the function's global init callback.
+ *
+ * Shared with every other thread scanning the function; access to it must be synchronized by the function.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The partition data info handle.
+ * @param data Receives the global state pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_get_global_state(
+    duckdb_v2_table_function_partition_data_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the worker-local local state set by the function's local init callback, for the thread that produced the
+ * batch this call reports on. No other thread observes it, so it needs no synchronization.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The partition data info handle.
+ * @param data Receives the local state pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_get_local_state(
+    duckdb_v2_table_function_partition_data_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns whether a downstream operator needs this batch's ordering position.
+ *
+ * `duckdb_v2_table_function_partition_data_set_batch_index()` must still be called even when this is false: the engine
+ * validates the reported value regardless of whether it is actually used for ordering, so `0` is always a safe answer
+ * when this reports false.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The partition data info handle.
+ * @param required Receives whether a batch index is required.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_requires_batch_index(
+    duckdb_v2_table_function_partition_data_info_handle info, bool *required, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns whether a downstream operator needs this batch's values for a set of partitioning columns.
+ *
+ * When true, call `duckdb_v2_table_function_partition_data_set_partition_value()` once for every index in `[0, count)`,
+ * where `count` comes from `duckdb_v2_table_function_partition_data_get_partition_column_count()`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The partition data info handle.
+ * @param required Receives whether partitioning column values are required.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_requires_partition_columns(
+    duckdb_v2_table_function_partition_data_info_handle info, bool *required, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the number of partitioning columns a downstream operator is requesting values for.
+ *
+ * `0` when `duckdb_v2_table_function_partition_data_requires_partition_columns()` is false. Valid indices for
+ * `duckdb_v2_table_function_partition_data_get_partition_column_index()` and
+ * `duckdb_v2_table_function_partition_data_set_partition_value()` are `0` up to (but excluding) this count.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The partition data info handle.
+ * @param count Receives the number of requested partitioning columns.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_get_partition_column_count(
+    duckdb_v2_table_function_partition_data_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns which declared column the requested partitioning column at the given index stands for.
+ *
+ * The result indexes the columns declared with `duckdb_v2_table_function_bind_add_result_column()`, in declaration
+ * order. Fails if the index is out of bounds.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The partition data info handle.
+ * @param index The index of the requested partitioning column.
+ * @param column_index Receives the index of the declared column.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_get_partition_column_index(
+    duckdb_v2_table_function_partition_data_info_handle info, idx_t index, idx_t *column_index,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Reports the ordering position of the batch the exec callback just produced.
+ *
+ * Required on every call, whether or not `duckdb_v2_table_function_partition_data_requires_batch_index()` is true: the
+ * engine validates the reported value regardless. Not calling this before the callback returns fails the query; `0` is
+ * always a safe answer when the batch index is not actually required. Must not decrease across successive calls on the
+ * same thread, must be unique across threads for the ordering to be meaningful, must be less than roughly `10^13`, and,
+ * when partitioning column values are also being reported, must change whenever those values change: the engine only
+ * re-reads them when the batch index changes, so reporting a new value under an unchanged batch index is treated as a
+ * caller error rather than applied. Fails with `ERROR_INPUT_INVALID` for an out-of-range value; a decreasing value or
+ * an unchanged value paired with changed partitioning columns fails the query once the callback returns.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The partition data info handle.
+ * @param batch_index The batch's ordering position.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_set_batch_index(
+    duckdb_v2_table_function_partition_data_info_handle info, idx_t batch_index, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Reports the single value of the partitioning column at the given index, for the batch the exec callback just
+ * produced.
+ *
+ * Every partition reported this way carries exactly one distinct value for the column, so the value serves as both the
+ * minimum and maximum of the partition's range. The value is borrowed and copied, and must be of the declared type of
+ * the corresponding result column. Required once for every index in `[0,
+ * `duckdb_v2_table_function_partition_data_get_partition_column_count()`)` before the callback returns; calling it
+ * again for the same index overwrites the previous value. The reported value only takes effect together with a changed
+ * `duckdb_v2_table_function_partition_data_set_batch_index()`: reporting a different value under an unchanged batch
+ * index fails the query once the callback returns. Fails with `ERROR_INPUT_INVALID` when the index is out of bounds or
+ * the value's type does not match.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The partition data info handle.
+ * @param index The index of the partitioning column being reported.
+ * @param value The single value of the partitioning column. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_set_partition_value(
+    duckdb_v2_table_function_partition_data_info_handle info, idx_t index, duckdb_v2_value_handle value,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the user data set via `duckdb_v2_table_function_set_user_data()`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The partitioning info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partitioning_get_user_data(
+    duckdb_v2_table_function_partitioning_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the bind data set by the function's bind callback.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The partitioning info handle.
+ * @param data Receives the bind data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partitioning_get_bind_data(
+    duckdb_v2_table_function_partitioning_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the number of columns the optimizer is asking about: the candidate `GROUP BY` column set.
+ *
+ * Valid indices for `duckdb_v2_table_function_partitioning_get_partition_column_index()` are `0` up to (but excluding)
+ * this count.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The partitioning info handle.
+ * @param count Receives the number of columns in the candidate set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partitioning_get_partition_column_count(
+    duckdb_v2_table_function_partitioning_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns which declared column the candidate `GROUP BY` column at the given index stands for.
+ *
+ * The result indexes the columns declared with `duckdb_v2_table_function_bind_add_result_column()`, in declaration
+ * order. Fails if the index is out of bounds.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The partitioning info handle.
+ * @param index The index of the candidate column.
+ * @param column_index Receives the index of the declared column.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partitioning_get_partition_column_index(
+    duckdb_v2_table_function_partitioning_info_handle info, idx_t index, idx_t *column_index,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Reports whether every partition the scan produces carries exactly one distinct value for the candidate `GROUP BY`
+ * column set.
+ *
+ * Only `TABLE_PARTITION_INFO_SINGLE_VALUE_PARTITIONS` unlocks the partitioned aggregate optimization; any other value
+ * keeps the regular hash aggregate. A callback that never calls this is treated as reporting
+ * `TABLE_PARTITION_INFO_NOT_PARTITIONED`. Fails with `ERROR_INPUT_INVALID` when partition_info is not one of the enum's
+ * declared values.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The partitioning info handle.
+ * @param partition_info Whether, and how, the scan is partitioned by the candidate column set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partitioning_set_partition_info(
+    duckdb_v2_table_function_partitioning_info_handle info, DUCKDB_V2_TABLE_PARTITION_INFO partition_info,
     duckdb_v2_error_info_handle *err);
 
 /*!
