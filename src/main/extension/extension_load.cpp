@@ -7,6 +7,7 @@
 #include "duckdb/main/capi/extension_api.hpp"
 #include "duckdb/main/capi_v2/extension_load_v2.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/main/extension/linked_extension_registry.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_manager.hpp"
 #include "duckdb/main/extension_repository_manager.hpp"
@@ -152,21 +153,37 @@ struct ExtensionAccess {
 //===--------------------------------------------------------------------===//
 // Static C API Extension Loading
 //===--------------------------------------------------------------------===//
-void DuckDB::LoadStaticCppExtension(const string &name, const string &version, ext_init_cpp_fun_t init_fun) {
+void DuckDB::LoadStaticExtension(duckdb_extension_root root) {
+	StaticExtensionDescription description;
+	auto error = LinkedExtensionRegistry::Describe(root, description);
+	if (!error.empty()) {
+		throw InvalidInputException("Failed to load statically linked extension: %s", error);
+	}
+	// C++ first, then C API v2, then C API v1
+	auto &descriptor = description.descriptor;
+	if (!descriptor.entry_cpp) {
+		if (descriptor.entry_capi_v2) {
+			LoadStaticCAPIExtensionV2(description.name,
+			                          reinterpret_cast<ext_init_c_api_v2_fun_t>(descriptor.entry_capi_v2));
+		} else {
+			LoadStaticCAPIExtension(description.name, reinterpret_cast<ext_init_c_api_fun_t>(descriptor.entry_capi_v1));
+		}
+		return;
+	}
 	auto &manager = ExtensionManager::Get(*instance);
-	auto load_info = manager.BeginLoad({name});
+	auto load_info = manager.BeginLoad({description.name});
 	if (!load_info) {
 		// already loaded
 		return;
 	}
 
 	ExtensionLoader loader(*load_info);
-	(*init_fun)(loader);
+	(*reinterpret_cast<ext_init_cpp_fun_t>(descriptor.entry_cpp))(loader);
 	loader.FinalizeLoad();
 
 	ExtensionInstallInfo install_info;
 	install_info.mode = ExtensionInstallMode::STATICALLY_LINKED;
-	install_info.version = version;
+	install_info.version = description.version;
 	load_info->FinishLoad(install_info);
 }
 
