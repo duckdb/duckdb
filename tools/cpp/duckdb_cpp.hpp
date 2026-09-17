@@ -1333,7 +1333,7 @@ struct decimal_t {
 /// itself; longer ones live elsewhere and the element only points at them.
 ///
 /// A blob never owns its bytes. Constructing one from a `std::string_view` borrows that memory rather than copying it,
-/// so a long blob is only valid while whatever holds the bytes is: use `Arena::AddString` / `Vector::AssignString` to
+/// so a long blob is only valid while whatever holds the bytes is: use `Arena::AddBlob` / `Vector::AssignString` to
 /// put bytes somewhere that lives as long as the vector.
 struct blob_t {
 	/// The longest byte string that fits in a vector element without being stored elsewhere.
@@ -1417,7 +1417,12 @@ struct blob_t {
 	}
 };
 
+/// Validates a byte string, throwing InvalidInputException for malformed UTF-8.
+void ValidateUTF8(std::string_view text);
+
 /// VARCHAR: like `blob_t`, but naming a string of UTF-8 text rather than of arbitrary bytes.
+/// Constructing a `varchar_t` does not validate UTF-8; use `Arena::AddString` or `Vector::AssignString` for checked
+/// construction.
 struct varchar_t : blob_t {
 	using blob_t::blob_t;
 };
@@ -2015,22 +2020,22 @@ public:
 	auto Allocate(idx_t byte_len) -> uint8_t *;
 
 	/// Copies a string into the heap.
-	/// @param data The bytes to copy. Anything up to `varchar_t::INLINE_LENGTH` is kept in the token itself and never
-	/// reaches the heap.
-	/// @return A token to place with `Vector::SetString`, valid as long as the heap is.
-	/// @throws Exception When the data exceeds the 4 GiB an element can describe.
+	/// @param data The bytes to copy. Up to `varchar_t::INLINE_LENGTH` bytes are stored directly in the returned value.
+	/// @return The string as a `varchar_t`, with validated UTF-8, valid as long as the heap is.
+	/// Place it in the vector owning this heap with `Vector::SetString`.
+	/// @throws Exception On malformed UTF-8 or when the data exceeds the 4 GiB an element can describe.
 	auto AddString(std::string_view data) -> varchar_t {
-		// TODO: UTF8-validate
 		if (data.size() > std::numeric_limits<uint32_t>::max()) {
 			ThrowStringTooLong(data.size());
 		}
-		const auto size = static_cast<uint32_t>(data.size());
-		if (size <= varchar_t::INLINE_LENGTH) {
-			return varchar_t(data.data(), size);
-		}
-		auto *bytes = Allocate(size);
-		std::memcpy(bytes, data.data(), size);
-		return varchar_t(reinterpret_cast<char *>(bytes), size);
+		ValidateUTF8(data);
+		return AddStringUnsafe(data);
+	}
+
+	/// Copies text without UTF-8 validation. The caller must ensure that the text is valid.
+	auto AddStringUnsafe(std::string_view data) -> varchar_t {
+		auto bytes = AddBlob(data);
+		return varchar_t(bytes.data(), bytes.size());
 	}
 
 	/// `AddString` for arbitrary bytes rather than text.
@@ -2205,6 +2210,7 @@ public:
 	~Vector() override;
 
 	/// The buffer for writing, typed. The vector must be FLAT or CONSTANT, and `T` must match its type.
+	/// Raw writes to VARCHAR storage must preserve valid UTF-8.
 	template <class T>
 	auto GetDataMutable() -> T * {
 		return static_cast<T *>(GetDataMutable());
@@ -2293,15 +2299,21 @@ public:
 	/// @return The heap. The vector must be of a string-backed type such as VARCHAR, BLOB, BIT or BIGNUM.
 	auto GetHeap() -> Arena;
 
-	/// Copies a string into the vector's heap and writes the resulting element in one step. Looks the heap up per call,
-	/// so flattening in between is safe.
+	/// Copies bytes into the vector's heap and places the string value with `SetString`.
+	/// VARCHAR values are constructed with `Arena::AddString`; binary values are copied without UTF-8 validation.
+	/// Looks the heap up per call, so flattening in between is safe.
 	/// @param index The element to write: any index within the size of a FLAT vector, only 0 for a CONSTANT one.
 	/// @param data The bytes to copy. The vector must be of a string-backed type such as VARCHAR, BLOB, BIT or BIGNUM.
+	/// @throws InvalidInputException On malformed VARCHAR text, before changing the slot.
 	auto AssignString(idx_t index, std::string_view data) -> void;
 
-	/// Writes an element that was written into the heap beforehand.
+	/// Like `AssignString`, but skips UTF-8 validation. The caller must ensure VARCHAR values contain valid UTF-8.
+	auto AssignStringUnsafe(idx_t index, std::string_view data) -> void;
+
+	/// Writes a string value into the vector without UTF-8 validation.
 	/// @param index The element to write: any index within the size of a FLAT vector, only 0 for a CONSTANT one.
-	/// @param value A token from this vector's own heap. A non-inlined token from another vector dangles.
+	/// @param value A string value from this vector's own heap. A non-inlined value from another vector dangles.
+	/// VARCHAR values must contain valid UTF-8.
 	auto SetString(idx_t index, varchar_t value) -> void;
 
 private:
@@ -2475,6 +2487,7 @@ public:
 	/// @param state The append state to append through.
 	/// @param chunk The rows to append. The chunk's column types must equal the collection's exactly, and the chunk is
 	/// only borrowed: it can be reused, refilled and appended again.
+	/// VARCHAR values must already be valid UTF-8; append does not validate text.
 	/// @throws InvalidInputException When the chunk's columns do not match the collection's.
 	auto Append(AppendState &state, const DataChunk &chunk) -> void;
 
@@ -2565,7 +2578,7 @@ public:
 	}
 
 	/// Buffers a whole chunk. Its column types must equal `ColumnTypes()` exactly; a mismatch is refused before
-	/// anything is copied.
+	/// anything is copied. VARCHAR values must already be valid UTF-8; append does not validate text.
 	/// @throws InvalidInputException When the chunk's columns do not match, or a previous buffer operation failed.
 	void AppendChunk(DataChunk &chunk);
 

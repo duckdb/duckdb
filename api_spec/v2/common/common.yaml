@@ -125,6 +125,11 @@ structs:
       and `ptr` must not be dereferenced when `len` is 0. Not to be confused
       with `bytes`, the transparent 16-byte *storage* format for a
       variable-size value in a vector.
+
+      Text inputs, such as VARCHAR values and names, must contain valid UTF-8.
+      The caller is responsible for ensuring this; API functions do not
+      necessarily validate the input.
+      Binary inputs, such as BLOB values, do not require valid UTF-8.
     fields:
       - {name: ptr, type: char, pointer: 1, const: true}
       - {name: len, type: idx}
@@ -236,7 +241,9 @@ aliases:
       "sparse" view of the vector's data.
   varchar:
     underlying: bytes
-    description: VARCHAR storage. Read the transparent bytes fields directly.
+    description: |
+      VARCHAR storage. The bytes must contain valid UTF-8.
+      Read the transparent bytes fields directly.
   blob:
     underlying: bytes
     description: BLOB storage. Read the transparent bytes fields directly.
