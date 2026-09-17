@@ -83,15 +83,7 @@ public:
 		SelectionVector selected_sel;
 		SelectionVector remaining_sel;
 
-		explicit ResidualPredicateProbeState(Allocator &allocator)
-		    : result_cache(allocator, LogicalType::BOOLEAN), result(result_cache), selected_sel(STANDARD_VECTOR_SIZE),
-		      remaining_sel(STANDARD_VECTOR_SIZE) {
-		}
-
-		void Initialize(Allocator &allocator, const vector<LogicalType> &eval_types,
-		                const vector<bool> &initialize_columns) {
-			eval_chunk.Initialize(allocator, eval_types, initialize_columns, STANDARD_VECTOR_SIZE);
-		}
+		explicit ResidualPredicateProbeState(JoinHashTable &ht);
 	};
 
 #ifdef DUCKDB_HASH_ZERO
@@ -284,7 +276,7 @@ public:
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
 	//! Enable selective NULL refinement for an uncorrelated multi-column MARK join
 	void InitializeUncorrelatedMarkJoin(bool compare_conditions = false);
-	void RefineMarkPatterns(DataChunk &keys, bool matches[], ValidityMask &validity);
+	void RefineMarkPatterns(DataChunk &keys, DataChunk &probe_data, bool matches[], ValidityMask &validity);
 	bool HasMarkJoinConjunction() const;
 	idx_t MarkJoinSize() const;
 	bool HasUncorrelatedMarkJoin() const;

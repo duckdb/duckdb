@@ -143,10 +143,11 @@ idx_t MarkJoinRefinement::SizeInBytes() const {
 
 MarkPatternRefiner::MarkPatternRefiner(ClientContext &context, const PhysicalComparisonJoin &op,
                                        MarkJoinRefinement &refinement, mutex &lock, mark_key_fetch_t fetch,
-                                       DataChunk &keys, bool matches[], ValidityMask &validity)
+                                       DataChunk &keys, bool matches[], ValidityMask &validity,
+                                       mark_candidate_finish_t finish_candidates)
     : context(context), op(op), conditions(op.conditions), refinement(refinement), lock(lock), fetch(std::move(fetch)),
-      chunk(this->fetch(0)), keys(keys), matches(matches), validity(validity), comparison(LogicalType::BOOLEAN),
-      comparer(keys, MarkJoinRowComparison::Mode::COMPOSITE) {
+      finish_candidates(std::move(finish_candidates)), chunk(this->fetch(0)), keys(keys), matches(matches),
+      validity(validity), comparison(LogicalType::BOOLEAN), comparer(keys, MarkJoinRowComparison::Mode::COMPOSITE) {
 	condition_types = keys.GetTypes();
 	candidates.InitializeEmpty(condition_types);
 }
@@ -158,8 +159,15 @@ void MarkPatternRefiner::Fetch(idx_t index) {
 	}
 }
 
-bool MarkPatternRefiner::Finish(idx_t probe, uint64_t dropped) {
+bool MarkPatternRefiner::Finish(idx_t probe, uint64_t dropped, const SelectionVector &build_selection) {
 	comparer.CompareConjunction(keys, probe, candidates, conditions, comparison);
+	if (finish_candidates) {
+		SelectionVector probe_selection(STANDARD_VECTOR_SIZE);
+		for (idx_t row = 0; row < candidates.size(); row++) {
+			probe_selection.set_index(row, probe);
+		}
+		finish_candidates(probe_selection, build_selection, candidates.size(), comparison);
+	}
 	for (auto value : comparison.Values<bool>()) {
 		if (!value.IsValid()) {
 			validity.SetInvalid(probe);
@@ -248,6 +256,9 @@ void MarkPatternRefiner::ProbeEqualityIndex(MarkJoinRefinementIndex &index, uint
 				probe_candidates.SetChildCardinality(batch_count);
 				build_candidates.SetChildCardinality(batch_count);
 				MarkJoinRowComparison::CompareTail(probe_candidates, build_candidates, conditions, tail, comparison);
+				if (finish_candidates) {
+					finish_candidates(left_sel, right_sel, batch_count, comparison);
+				}
 				auto values = comparison.Values<bool>();
 				for (idx_t row = 0; row < batch_count; row++) {
 					auto value = values[row];
@@ -388,6 +399,9 @@ void MarkPatternRefiner::RunRangeJoin(ExecutionContext &execution, IEJoinBuildOr
 			probe_candidates.SetChildCardinality(batch_count);
 			build_candidates.SetChildCardinality(batch_count);
 			MarkJoinRowComparison::CompareTail(probe_candidates, build_candidates, conditions, tail, comparison);
+			if (finish_candidates) {
+				finish_candidates(left_sel, right_sel, batch_count, comparison);
+			}
 			auto values = comparison.Values<bool>();
 			for (idx_t row = 0; row < batch_count; row++) {
 				auto &marker = markers.get()[probe_rows[row]];
@@ -510,7 +524,7 @@ bool MarkPatternRefiner::RefineExact(MarkJoinRefinementGroup &group, idx_t probe
 		}
 		candidates.Reference(chunk);
 		candidates.Slice(selected, count);
-		if (Finish(probe, dropped)) {
+		if (Finish(probe, dropped, selected)) {
 			return true;
 		}
 	}
@@ -538,10 +552,11 @@ void MarkPatternRefiner::Refine() {
 			} else if (reduce && classification.ranges.size() >= 2) {
 				RefineRangePattern(group, probe, probe_mask, entry.first, classification.ranges);
 				finished = matches.get()[probe] || !validity.RowIsValid(probe);
-			} else if (reduce && classification.applicable_count == 0) {
+			} else if (!finish_candidates && reduce && classification.applicable_count == 0) {
 				const auto &selection = *group.selections.begin();
 				finished = RefineWitness(selection.first * STANDARD_VECTOR_SIZE + selection.second[0], probe, dropped);
-			} else if (reduce && classification.applicable_count == 1 && !classification.ranges.empty()) {
+			} else if (!finish_candidates && reduce && classification.applicable_count == 1 &&
+			           !classification.ranges.empty()) {
 				if (refinement_batches.emplace(probe_mask, entry.first).second) {
 					RefineOneRange(group, probe_mask, dropped, classification.ranges[0]);
 				}
@@ -594,7 +609,7 @@ bool MarkPatternRefiner::RefineWitness(idx_t id, idx_t probe, uint64_t dropped) 
 	selected.set_index(0, id % STANDARD_VECTOR_SIZE);
 	candidates.Reference(chunk);
 	candidates.Slice(selected, 1);
-	return Finish(probe, dropped);
+	return Finish(probe, dropped, selected);
 }
 
 } // namespace duckdb

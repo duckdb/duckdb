@@ -157,7 +157,11 @@ void JoinHashTable::InitializeUncorrelatedMarkJoin(bool compare_conditions) {
 	D_ASSERT(mark_join_info.correlated_types.empty());
 	mark_join_info.uncorrelated_has_null = false;
 	mark_join_info.conditions_can_be_unknown = false;
-	mark_join_info.uncorrelated_condition_rows = make_uniq<ColumnDataCollection>(context, condition_types);
+	auto retained_types = condition_types;
+	if (residual_predicate) {
+		retained_types.insert(retained_types.end(), build_types.begin(), build_types.end());
+	}
+	mark_join_info.uncorrelated_condition_rows = make_uniq<ColumnDataCollection>(context, retained_types);
 	mark_join_info.compare_conditions = compare_conditions;
 }
 
@@ -684,7 +688,20 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 		    MarkJoinKeysHaveNull(keys, nullptr, HasMarkJoinConjunction() ? &equality_predicates : nullptr);
 		mark_join_info.conditions_can_be_unknown =
 		    mark_join_info.conditions_can_be_unknown || MarkJoinKeysCanBeUnknown(keys);
-		mark_join_info.uncorrelated_condition_rows->Append(keys);
+		if (residual_predicate) {
+			DataChunk retained;
+			retained.InitializeEmpty(mark_join_info.uncorrelated_condition_rows->Types());
+			for (idx_t col = 0; col < keys.ColumnCount(); col++) {
+				retained.data[col].Reference(keys.data[col]);
+			}
+			for (idx_t col = 0; col < payload.ColumnCount(); col++) {
+				retained.data[keys.ColumnCount() + col].Reference(payload.data[col]);
+			}
+			retained.SetChildCardinality(keys.size());
+			mark_join_info.uncorrelated_condition_rows->Append(retained);
+		} else {
+			mark_join_info.uncorrelated_condition_rows->Append(keys);
+		}
 	}
 
 	// build a chunk to append to the data collection [keys, payload, (optional "found" boolean), hash]
@@ -1468,6 +1485,43 @@ bool JoinHashTable::TryProbeConstant(ScanStructure &scan_structure, DataChunk &k
 	return true;
 }
 
+JoinHashTable::ResidualPredicateProbeState::ResidualPredicateProbeState(JoinHashTable &ht)
+    : result_cache(Allocator::Get(ht.context), LogicalType::BOOLEAN), result(result_cache),
+      selected_sel(STANDARD_VECTOR_SIZE), remaining_sel(STANDARD_VECTOR_SIZE) {
+	// determine column types needed
+	idx_t total_columns = 0;
+	for (const auto &entry : ht.residual_info->probe_input_to_probe_map) {
+		total_columns = MaxValue(total_columns, entry.first + 1);
+	}
+	for (const auto &entry : ht.residual_info->build_input_to_layout_map) {
+		total_columns = MaxValue(total_columns, entry.first + 1);
+	}
+
+	vector<LogicalType> eval_types(total_columns, LogicalType::INVALID);
+	vector<bool> initialize_columns(total_columns, false);
+
+	// fill in probe types
+	for (const auto &entry : ht.residual_info->probe_input_to_probe_map) {
+		idx_t orig_idx = entry.first;
+		idx_t probe_data_col = entry.second;
+		eval_types[orig_idx] = ht.residual_info->probe_types[probe_data_col];
+		initialize_columns[orig_idx] = true;
+	}
+
+	// fill in build types
+	for (const auto &entry : ht.residual_info->build_input_to_layout_map) {
+		idx_t col_with_offset = entry.first;
+		idx_t layout_col = entry.second;
+		eval_types[col_with_offset] = layout_col < ht.condition_types.size()
+		                                  ? ht.condition_types[layout_col]
+		                                  : ht.build_types[layout_col - ht.condition_types.size()];
+		initialize_columns[col_with_offset] = true;
+	}
+
+	// initialize chunks ONCE
+	eval_chunk.Initialize(Allocator::Get(ht.context), eval_types, initialize_columns, STANDARD_VECTOR_SIZE);
+}
+
 ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state_p)
     : key_state(key_state_p), pointers(LogicalType::POINTER), count(0), sel_vector(STANDARD_VECTOR_SIZE),
       chain_match_sel_vector(STANDARD_VECTOR_SIZE), chain_no_match_sel_vector(STANDARD_VECTOR_SIZE),
@@ -1482,38 +1536,7 @@ ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state
 		residual_executor->AddExpression(*ht.residual_predicate);
 
 		// initialize residual state
-		residual_state = make_uniq<ResidualPredicateProbeState>(Allocator::Get(ht.context));
-
-		// determine column types needed
-		idx_t total_columns = 0;
-		for (const auto &entry : ht.residual_info->probe_input_to_probe_map) {
-			total_columns = MaxValue(total_columns, entry.first + 1);
-		}
-		for (const auto &entry : ht.residual_info->build_input_to_layout_map) {
-			total_columns = MaxValue(total_columns, entry.first + 1);
-		}
-
-		vector<LogicalType> eval_types(total_columns, LogicalType::INVALID);
-		vector<bool> initialize_columns(total_columns, false);
-
-		// fill in probe types
-		for (const auto &entry : ht.residual_info->probe_input_to_probe_map) {
-			idx_t orig_idx = entry.first;
-			idx_t probe_data_col = entry.second;
-			eval_types[orig_idx] = ht.residual_info->probe_types[probe_data_col];
-			initialize_columns[orig_idx] = true;
-		}
-
-		// fill in build types
-		for (const auto &entry : ht.residual_info->build_input_to_layout_map) {
-			idx_t col_with_offset = entry.first;
-			idx_t layout_col = entry.second;
-			eval_types[col_with_offset] = ht.layout_ptr->GetTypes()[layout_col];
-			initialize_columns[col_with_offset] = true;
-		}
-
-		// initialize chunks ONCE
-		residual_state->Initialize(Allocator::Get(ht.context), eval_types, initialize_columns);
+		residual_state = make_uniq<ResidualPredicateProbeState>(ht);
 	}
 }
 
@@ -2076,7 +2099,78 @@ void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_da
 	finished = true;
 }
 
-void JoinHashTable::RefineMarkPatterns(DataChunk &keys, bool matches[], ValidityMask &validity) {
+struct MarkJoinResidualProbe {
+	MarkJoinResidualProbe(JoinHashTable &ht, DataChunk &keys, DataChunk &probe_data, DataChunk &build_rows)
+	    : ht(ht), keys(keys), probe_data(probe_data), build_rows(build_rows), state(ht), executor(ht.context),
+	      equality_result(LogicalType::BOOLEAN), truth_cache(Allocator::Get(ht.context), LogicalType::BOOLEAN) {
+		executor.AddExpression(*ht.residual_predicate);
+		left_keys.InitializeEmpty(ht.equality_types);
+		right_keys.InitializeEmpty(ht.equality_types);
+	}
+
+	void Evaluate(const SelectionVector &left, const SelectionVector &right, idx_t count, Vector &truth) {
+		left_keys.ReferenceColumns(keys, ht.equality_predicate_columns);
+		left_keys.Slice(left, count);
+		right_keys.ReferenceColumns(build_rows, ht.equality_predicate_columns);
+		right_keys.Slice(right, count);
+		MarkJoinRowComparison::CompareTail(left_keys, right_keys, ht.conditions, ht.equality_predicate_columns,
+		                                   equality_result);
+		auto equalities = equality_result.Values<bool>();
+		auto comparisons = truth.Values<bool>();
+		SelectionVector selected_left(STANDARD_VECTOR_SIZE), selected_right(STANDARD_VECTOR_SIZE);
+		SelectionVector selected_rows(STANDARD_VECTOR_SIZE);
+		idx_t selected_count = 0;
+		for (idx_t row = 0; row < count; row++) {
+			// TRUE equality pairs belong to native probing; only UNKNOWN pairs need refinement.
+			if (equalities[row].IsValid() || (comparisons[row].IsValid() && !comparisons[row].GetValue())) {
+				continue;
+			}
+			selected_left.set_index(selected_count, left.get_index(row));
+			selected_right.set_index(selected_count, right.get_index(row));
+			selected_rows.set_index(selected_count++, row);
+		}
+		bool unknown[STANDARD_VECTOR_SIZE] = {false};
+		if (selected_count) {
+			state.eval_chunk.Reset();
+			state.eval_chunk.SetChildCardinality(selected_count);
+			for (const auto &entry : ht.residual_info->probe_input_to_probe_map) {
+				state.eval_chunk.data[entry.first].Slice(probe_data.data[entry.second], selected_left, selected_count);
+			}
+			for (const auto &entry : ht.residual_info->build_input_to_layout_map) {
+				state.eval_chunk.data[entry.first].Slice(build_rows.data[entry.second], selected_right, selected_count);
+			}
+			state.result.ResetFromCache(state.result_cache);
+			executor.ExecuteExpression(state.eval_chunk, state.result);
+			auto values = state.result.Values<bool>();
+			for (idx_t row = 0; row < selected_count; row++) {
+				auto value = values[row];
+				unknown[selected_rows.get_index(row)] = !value.IsValid() || value.GetValue();
+			}
+		}
+		truth.ResetFromCache(truth_cache);
+		auto writer = FlatVector::Writer<bool>(truth, count);
+		for (idx_t row = 0; row < count; row++) {
+			if (unknown[row]) {
+				writer.WriteNull();
+			} else {
+				writer.WriteValue(false);
+			}
+		}
+	}
+
+	JoinHashTable &ht;
+	DataChunk &keys;
+	DataChunk &probe_data;
+	DataChunk &build_rows;
+	JoinHashTable::ResidualPredicateProbeState state;
+	ExpressionExecutor executor;
+	DataChunk left_keys;
+	DataChunk right_keys;
+	Vector equality_result;
+	VectorCache truth_cache;
+};
+
+void JoinHashTable::RefineMarkPatterns(DataChunk &keys, DataChunk &probe_data, bool matches[], ValidityMask &validity) {
 	auto &rows = *mark_join_info.uncorrelated_condition_rows;
 	if (!mark_join_info.uncorrelated_has_null && !MarkJoinKeysHaveNull(keys, nullptr, &equality_predicates)) {
 		return;
@@ -2114,18 +2208,37 @@ void JoinHashTable::RefineMarkPatterns(DataChunk &keys, bool matches[], Validity
 	rows.InitializeScan(scan);
 	DataChunk chunk;
 	rows.InitializeScanChunk(chunk);
+	DataChunk key_chunk;
+	vector<idx_t> key_columns;
+	if (residual_predicate) {
+		key_chunk.InitializeEmpty(condition_types);
+		for (idx_t col = 0; col < condition_types.size(); col++) {
+			key_columns.push_back(col);
+		}
+	}
 	auto fetch = [&](idx_t index) {
 		chunk.Reset();
 		const auto &location = refinement.chunks[index];
 		rows.ScanAtIndex(scan, local, chunk, location[0], location[1], location[2]);
+		if (residual_predicate) {
+			key_chunk.ReferenceColumns(chunk, key_columns);
+		}
 	};
+	unique_ptr<MarkJoinResidualProbe> residual;
+	mark_candidate_finish_t finish;
+	if (residual_predicate) {
+		residual = make_uniq<MarkJoinResidualProbe>(*this, keys, probe_data, chunk);
+		finish = [&](const SelectionVector &left, const SelectionVector &right, idx_t count, Vector &truth) {
+			residual->Evaluate(left, right, count, truth);
+		};
+	}
 	MarkPatternRefiner refiner(
 	    context, op.Cast<PhysicalHashJoin>(), refinement, mark_join_info.mj_lock,
 	    [&](idx_t index) -> DataChunk & {
 		    fetch(index);
-		    return chunk;
+		    return residual_predicate ? key_chunk : chunk;
 	    },
-	    keys, matches, validity);
+	    keys, matches, validity, std::move(finish));
 	refiner.Refine();
 }
 
@@ -2189,7 +2302,7 @@ void JoinHashTable::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 	    mark_join_info.uncorrelated_condition_rows->Count() == 0) {
 		return;
 	}
-	RefineMarkPatterns(join_keys, bool_result, mask);
+	RefineMarkPatterns(join_keys, probe_data, bool_result, mask);
 }
 
 void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result) {
@@ -2678,7 +2791,8 @@ static void ResetMarkJoinInfo(JoinHashTable &ht) {
 		info.refinement.reset();
 		info.uncorrelated_has_null = false;
 		info.conditions_can_be_unknown = false;
-		info.uncorrelated_condition_rows = make_uniq<ColumnDataCollection>(ht.context, ht.condition_types);
+		auto retained_types = info.uncorrelated_condition_rows->Types();
+		info.uncorrelated_condition_rows = make_uniq<ColumnDataCollection>(ht.context, retained_types);
 	}
 }
 

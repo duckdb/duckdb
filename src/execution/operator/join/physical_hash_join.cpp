@@ -711,7 +711,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 	const bool has_row_equality =
 	    conditions.size() > 1 ||
 	    (conditions.size() == 1 && conditions[0].GetLHS().GetReturnType().id() == LogicalTypeId::TUPLE);
-	if (delim_types.empty() && join_type == JoinType::MARK && has_row_equality) {
+	if (delim_types.empty() && join_type == JoinType::MARK && (has_row_equality || predicate)) {
 		bool all_equal = true;
 		for (auto &condition : conditions) {
 			all_equal = all_equal && condition.GetComparisonType() == ExpressionType::COMPARE_EQUAL;

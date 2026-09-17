@@ -22,6 +22,7 @@ class JoinHashTable;
 struct IEJoinBuildOrders;
 struct MarkJoinRefinementGroup;
 using mark_key_fetch_t = std::function<DataChunk &(idx_t)>;
+using mark_candidate_finish_t = std::function<void(const SelectionVector &, const SelectionVector &, idx_t, Vector &)>;
 
 struct MarkPatternClassification {
 	bool reducible = false;
@@ -71,13 +72,14 @@ struct MarkJoinRefinement {
 class MarkPatternRefiner {
 public:
 	MarkPatternRefiner(ClientContext &context, const PhysicalComparisonJoin &op, MarkJoinRefinement &refinement,
-	                   mutex &lock, mark_key_fetch_t fetch, DataChunk &keys, bool matches[], ValidityMask &validity);
+	                   mutex &lock, mark_key_fetch_t fetch, DataChunk &keys, bool matches[], ValidityMask &validity,
+	                   mark_candidate_finish_t finish_candidates = {});
 	~MarkPatternRefiner();
 	void Refine();
 
 private:
 	void Fetch(idx_t index);
-	bool Finish(idx_t probe, uint64_t dropped);
+	bool Finish(idx_t probe, uint64_t dropped, const SelectionVector &build_selection);
 	bool RefineWitness(idx_t id, idx_t probe, uint64_t dropped);
 	MarkJoinRefinementIndex &BuildEqualityIndex(MarkJoinRefinementGroup &group, uint64_t equality_mask);
 	void ProbeEqualityIndex(MarkJoinRefinementIndex &index, uint64_t probe_mask, uint64_t dropped,
@@ -101,6 +103,7 @@ private:
 	MarkJoinRefinement &refinement;
 	mutex &lock;
 	mark_key_fetch_t fetch;
+	mark_candidate_finish_t finish_candidates;
 	DataChunk &chunk;
 	idx_t cached_chunk = 0;
 	DataChunk &keys;
