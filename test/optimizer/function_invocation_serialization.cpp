@@ -27,11 +27,16 @@
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 
+#include "duckdb/optimizer/remove_unused_columns.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
+
 using namespace duckdb;
 
 namespace {
 
-static void RequireSameValues(MaterializedQueryResult &expected, MaterializedQueryResult &actual) {
+static void RequireSameValues(QueryResult &expected, QueryResult &actual) {
 	REQUIRE_NO_FAIL(actual);
 	REQUIRE(expected.GetTypes() == actual.GetTypes());
 	REQUIRE(expected.RowCount() == actual.RowCount());
@@ -189,6 +194,56 @@ TEST_CASE("Secure-view caller predicates retain source positions across pruning 
 	auto result = connection.Query(make_uniq<LogicalPlanStatement>(std::move(plan)));
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(CHECK_COLUMN(result, 0, {"a", "a"}));
+	connection.Rollback();
+}
+
+TEST_CASE("Secure-view source positions survive window column pruning", "[serialization][secure_view]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	connection.BeginTransaction();
+	for (idx_t retained_window = 0; retained_window < 2; retained_window++) {
+		CAPTURE(retained_window);
+		Parser parser(connection.context->GetParserOptions());
+		parser.ParseQuery("SELECT row_number() OVER (), rank() OVER ()");
+		Planner planner(*connection.context);
+		planner.CreatePlan(std::move(parser.statements[0]));
+		planner.plan->ResolveOperatorTypes();
+		auto window = std::move(planner.plan->children[0]);
+		REQUIRE(window->type == LogicalOperatorType::LOGICAL_WINDOW);
+		REQUIRE(window->expressions.size() == 2);
+		auto bindings = window->GetColumnBindings();
+		auto types = window->types;
+		auto source_position = bindings.size() - 2 + retained_window;
+		vector<unique_ptr<Expression>> outputs;
+		outputs.push_back(make_uniq<BoundColumnRefExpression>(types[source_position], bindings[source_position]));
+		unique_ptr<LogicalOperator> plan =
+		    make_uniq<LogicalProjection>(planner.binder->GenerateTableIndex(), std::move(outputs));
+		plan->children.push_back(make_uniq<LogicalSecureView>(
+		    "window_view", QualifiedName("memory", "main", "window_view"), types, nullptr, std::move(window)));
+		Optimizer optimizer(*planner.binder, *connection.context);
+		RemoveUnusedColumns remove(optimizer);
+		remove.VisitOperator(plan);
+		plan->ResolveOperatorTypes();
+		for (idx_t copy = 0; copy < 2; copy++) {
+			auto view = FindSecureView(*plan);
+			REQUIRE(view);
+			REQUIRE(view->children[0]->type == LogicalOperatorType::LOGICAL_WINDOW);
+			REQUIRE(view->children[0]->expressions.size() == 1);
+			auto selected = plan->expressions[0]->Cast<BoundColumnRefExpression>().Binding();
+			idx_t matches = 0;
+			for (idx_t i = 0; i < view->output_bindings.size(); i++) {
+				if (view->output_bindings[i] != selected) {
+					continue;
+				}
+				auto &source = view->output_expressions[i]->Cast<BoundColumnRefExpression>();
+				REQUIRE(source.Binding() == ColumnBinding(TableIndex(0), ProjectionIndex(source_position)));
+				matches++;
+			}
+			REQUIRE(matches == 1);
+			plan = plan->Copy(*connection.context);
+			plan->ResolveOperatorTypes();
+		}
+	}
 	connection.Rollback();
 }
 

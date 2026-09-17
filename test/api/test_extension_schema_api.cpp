@@ -64,7 +64,7 @@ static void CheckTableFunctionQualification(Connection &connection, const string
 	REQUIRE(copied_get->function.GetQualifiedName() == name);
 	auto direct = connection.Query(make_uniq<LogicalPlanStatement>(std::move(planner.plan)));
 	auto copied = connection.Query(make_uniq<LogicalPlanStatement>(std::move(copy)));
-	for (auto &result_ref : vector<reference<MaterializedQueryResult>> {*direct, *copied}) {
+	for (auto &result_ref : vector<reference<QueryResult>> {*direct, *copied}) {
 		auto &result = result_ref.get();
 		REQUIRE_NO_FAIL(result);
 		REQUIRE(result.GetTypes() == vector<LogicalType> {LogicalType::BIGINT});

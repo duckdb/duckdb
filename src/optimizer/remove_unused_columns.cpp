@@ -518,6 +518,7 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		}
 		if (!everything_referenced) {
 			ClearUnusedExpressions(window.expressions, window.window_index);
+			ApplySecureViewReplacements();
 		}
 		if (window.expressions.empty()) {
 			// A window with no remaining outputs preserves its child's rows and bindings.
