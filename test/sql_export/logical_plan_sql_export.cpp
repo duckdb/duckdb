@@ -509,24 +509,6 @@ TEST_CASE("Logical plan SQL export applies filter predicates and projection maps
 	REQUIRE(chunk->GetValue(1, 0) == Value::INTEGER(20));
 }
 
-TEST_CASE("Logical plan SQL export accepts an explicit empty grouping set", "[sql_export][logical_plan_sql_export]") {
-	DuckDB db(nullptr);
-	Connection connection(db);
-	connection.BeginTransaction();
-
-	SECTION("one empty grouping set") {
-		auto plan = OptimizeLogicalPlanExportQuery(connection, "SELECT sum(i) FROM (VALUES (1), (2)) t(i)");
-		auto aggregate = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY);
-		REQUIRE(aggregate);
-		auto &logical_aggregate = aggregate->Cast<LogicalAggregate>();
-		logical_aggregate.grouping_sets.push_back(GroupingSet());
-		auto result = LogicalPlanSQLExporter::Export(*connection.context, logical_aggregate);
-		REQUIRE(result.IsSuccess());
-		REQUIRE(connection.Query(result.GetValue().query->ToString())->GetValue(0, 0) == Value::HUGEINT(3));
-	}
-	connection.Rollback();
-}
-
 TEST_CASE("Logical plan SQL export applies requested output names", "[sql_export][logical_plan_sql_export]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
@@ -3083,56 +3065,55 @@ TEST_CASE("Logical plan SQL export preserves partial CTE streams and errors",
 	REQUIRE_NO_FAIL(connection.Query("SET threads=1; SET max_streaming_buffer_size='1b'"));
 	REQUIRE_NO_FAIL(connection.Query(
 	    "CREATE TABLE cte_stream AS SELECT CASE WHEN i=4096 THEN 'bad' ELSE '1' END s FROM range(4097)t(i)"));
-	for (bool producer : {false, true}) {
-		for (bool finish : {false, true}) {
-			CAPTURE(producer, finish);
-			connection.BeginTransaction();
-			auto plan = OptimizeLogicalPlanExportQuery(
-			    connection, producer
-			                    ? "WITH c AS MATERIALIZED (SELECT CAST(s AS INTEGER) x FROM cte_stream) SELECT x FROM c"
-			                    : "WITH c AS MATERIALIZED (SELECT s FROM cte_stream) SELECT CAST(s AS INTEGER) FROM c");
-			REQUIRE(FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_MATERIALIZED_CTE));
-			auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
-			REQUIRE(exported.IsSuccess());
-			QueryParameters parameters;
-			parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
-			auto check = [&](unique_ptr<QueryResult> result) {
-				if (producer) {
-					REQUIRE(result->HasError());
-					REQUIRE(result->GetErrorType() == ExceptionType::CONVERSION);
-					return idx_t(0);
+	for (auto scenario : {"producer error", "consumer error", "close consumer"}) {
+		CAPTURE(scenario);
+		const bool producer = string(scenario) == "producer error";
+		const bool finish = string(scenario) == "consumer error";
+		connection.BeginTransaction();
+		auto plan = OptimizeLogicalPlanExportQuery(
+		    connection, producer
+		                    ? "WITH c AS MATERIALIZED (SELECT CAST(s AS INTEGER) x FROM cte_stream) SELECT x FROM c"
+		                    : "WITH c AS MATERIALIZED (SELECT s FROM cte_stream) SELECT CAST(s AS INTEGER) FROM c");
+		REQUIRE(FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_MATERIALIZED_CTE));
+		auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
+		REQUIRE(exported.IsSuccess());
+		QueryParameters parameters;
+		parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
+		auto check = [&](unique_ptr<QueryResult> result) {
+			if (producer) {
+				REQUIRE(result->HasError());
+				REQUIRE(result->GetErrorType() == ExceptionType::CONVERSION);
+				return idx_t(0);
+			}
+			REQUIRE_FALSE(result->HasError());
+			REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+			idx_t count = 0;
+			while (auto chunk = result->Fetch()) {
+				REQUIRE(chunk->size() > 0);
+				REQUIRE(chunk->GetValue(0, 0) == Value::INTEGER(1));
+				count += chunk->size();
+				if (!finish) {
+					result->Cast<StreamQueryResult>().Close();
+					break;
 				}
-				REQUIRE_FALSE(result->HasError());
-				REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
-				idx_t count = 0;
-				while (auto chunk = result->Fetch()) {
-					REQUIRE(chunk->size() > 0);
-					REQUIRE(chunk->GetValue(0, 0) == Value::INTEGER(1));
-					count += chunk->size();
-					if (!finish) {
-						result->Cast<StreamQueryResult>().Close();
-						break;
-					}
-				}
-				REQUIRE(result->HasError() == finish);
-				if (finish) {
-					REQUIRE(result->GetErrorType() == ExceptionType::CONVERSION);
-				}
-				REQUIRE(count > 0);
-				return count;
-			};
-			REQUIRE_NO_FAIL(connection.Query("SET debug_disable_optimizer=true"));
-			auto native_count =
-			    check(connection.context->Query(make_uniq<LogicalPlanStatement>(std::move(plan)), parameters));
-			connection.Rollback();
-			REQUIRE_NO_FAIL(connection.Query("SET debug_disable_optimizer=false"));
-			REQUIRE(check(connection.context->Query(exported.GetValue().query->ToString(), parameters)) ==
-			        native_count);
-			auto statement = make_uniq<SelectStatement>();
-			statement->node = std::move(exported.GetValue().query);
-			REQUIRE(check(connection.context->Query(std::move(statement), parameters)) == native_count);
-			REQUIRE_NO_FAIL(connection.Query("SELECT 42"));
-		}
+			}
+			REQUIRE(result->HasError() == finish);
+			if (finish) {
+				REQUIRE(result->GetErrorType() == ExceptionType::CONVERSION);
+			}
+			REQUIRE(count > 0);
+			return count;
+		};
+		REQUIRE_NO_FAIL(connection.Query("SET debug_disable_optimizer=true"));
+		auto native_count =
+		    check(connection.context->Query(make_uniq<LogicalPlanStatement>(std::move(plan)), parameters));
+		connection.Rollback();
+		REQUIRE_NO_FAIL(connection.Query("SET debug_disable_optimizer=false"));
+		REQUIRE(check(connection.context->Query(exported.GetValue().query->ToString(), parameters)) == native_count);
+		auto statement = make_uniq<SelectStatement>();
+		statement->node = std::move(exported.GetValue().query);
+		REQUIRE(check(connection.context->Query(std::move(statement), parameters)) == native_count);
+		REQUIRE_NO_FAIL(connection.Query("SELECT 42"));
 	}
 }
 
@@ -3546,10 +3527,6 @@ TEST_CASE("Table row number SQL export guards filtered numbering",
 		REQUIRE(native->GetValue(0, 0) == Value::BIGINT(51));
 		REQUIRE(native->GetValue(1, 0) == Value::BIGINT(1));
 		REQUIRE_NO_FAIL(connection.Query("SET debug_disable_optimizer=false"));
-		auto outside =
-		    connection.Query("SELECT i,n FROM (SELECT i,row_number() OVER () n FROM filtered_numbers) WHERE i>50");
-		REQUIRE_NO_FAIL(*outside);
-		REQUIRE(outside->GetValue(1, 0) == Value::BIGINT(52));
 	}
 	auto plan = OptimizeLogicalPlanExportQuery(connection, "SELECT i,row_number() OVER () FROM filtered_numbers");
 	auto &get = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_GET)->Cast<LogicalGet>();

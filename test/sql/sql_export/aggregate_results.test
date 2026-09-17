@@ -41,6 +41,16 @@ CREATE TABLE large_sum_values(i BIGINT);
 statement ok
 INSERT INTO large_sum_values SELECT 4000000000000000000 FROM range(5);
 
+query IT
+SELECT sum(i),typeof(sum(i)) FROM (VALUES (1),(2)) t(i) GROUP BY ();
+----
+3	HUGEINT
+
+query TT
+EXPLAIN (SQL) SELECT sum(i) FROM (VALUES (1),(2)) t(i) GROUP BY ();
+----
+sql	<REGEX>:.*GROUP BY [(][)].*
+
 foreach serializer false true
 
 statement ok

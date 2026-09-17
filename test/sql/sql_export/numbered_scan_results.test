@@ -245,6 +245,12 @@ SET debug_verify_sql_export='{mode}';
 query II nosort numbered_28
 SELECT i,v FROM hinted_scan WHERE i>50;
 
+# Filtering numbered rows must not restart numbering at the first match.
+query I
+SELECT first(n) FROM (SELECT i,row_number() OVER () n FROM hinted_scan) WHERE i>50;
+----
+52
+
 endloop
 
 reset label numbered_28
