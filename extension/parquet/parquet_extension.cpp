@@ -1006,11 +1006,24 @@ static void LoadInternal(ExtensionLoader &loader) {
 	auto &fs = db_instance.GetFileSystem();
 	fs.RegisterCompressionFilesystem(make_uniq<ZStdFileSystem>());
 
-	auto scan_fun = ParquetScanFunction::GetFunctionSet();
+	auto scan_fun = MultiFileReader::CreateFunctionSet(ParquetScanFunction::GetMultiFileFunction("read_parquet"));
 	scan_fun.SetName("read_parquet");
 	loader.RegisterFunction(scan_fun);
 	scan_fun.SetName("parquet_scan");
 	loader.RegisterFunction(scan_fun);
+
+	// TEMPORARY: the old multi-file parquet reader, for comparing behaviour during the migration
+	auto old_fun = ParquetScanFunction::GetFunctionSet();
+	old_fun.SetName("read_parquet_old");
+	loader.RegisterFunction(old_fun);
+
+	// the single-file parquet reader that the multi-file reader above is built on
+	TableFunctionSet single_file_set("read_single_parquet_file");
+	single_file_set.AddFunction(ParquetScanFunction::GetSingleFileFunction());
+	loader.RegisterFunction(std::move(single_file_set));
+	// TEMPORARY: the multi-file reader built by wrapping it, for comparing behaviour during the migration
+	loader.RegisterFunction(
+	    MultiFileReader::CreateFunctionSet(ParquetScanFunction::GetMultiFileFunction("read_parquet_new")));
 
 	// parquet_metadata
 	ParquetMetaDataFunction meta_fun;

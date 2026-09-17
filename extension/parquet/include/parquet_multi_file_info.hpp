@@ -50,6 +50,24 @@ public:
 	ParquetOptions options;
 };
 
+struct ParquetReadGlobalState : public GlobalTableFunctionState {
+	explicit ParquetReadGlobalState(optional_ptr<const PhysicalOperator> op_p) : row_group_index(0), op(op_p) {
+	}
+	//! Index of row group within file currently up for scanning
+	idx_t row_group_index;
+	//! (Optional) pointer to physical operator performing the scan
+	optional_ptr<const PhysicalOperator> op;
+	//! Row groups read but not yet reported to the profiler
+	atomic<idx_t> row_groups_scanned_unreported {0};
+	//! Total considered, across all scan states
+	atomic<idx_t> total_row_groups_to_scan {0};
+};
+
+struct ParquetReadLocalState : public LocalTableFunctionState {
+	ParquetReaderScanState scan_state;
+	idx_t group_index;
+};
+
 struct ParquetMultiFileInfo : MultiFileReaderInterface {
 	static unique_ptr<MultiFileReaderInterface> CreateInterface(ClientContext &context);
 
@@ -93,6 +111,12 @@ struct ParquetMultiFileInfo : MultiFileReaderInterface {
 class ParquetScanFunction {
 public:
 	static TableFunctionSet GetFunctionSet();
+	//! The single-file parquet reader that the multi-file reader is built on
+	static TableFunction GetSingleFileFunction();
+	//! The named parameters that both of the above accept
+	static void AddNamedParameters(TableFunction &table_function);
+	//! The multi-file parquet reader, built by wrapping the single-file reader above
+	static TableFunction GetMultiFileFunction(Identifier name);
 };
 
 } // namespace duckdb
