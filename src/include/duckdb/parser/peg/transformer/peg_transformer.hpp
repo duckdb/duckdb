@@ -3946,6 +3946,10 @@ public:
 	static void InitializeCommitTransactionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeCommitTransactionTrampoline(PEGTransformer &transformer,
 	                                                                            GeneratedTransformProcess &process);
+	static void InitializeSetTransactionSnapshotTrampoline(PEGTransformer &transformer,
+	                                                       GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue>
+	FinalizeSetTransactionSnapshotTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static void InitializeReadOrWriteTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeReadOrWriteTrampoline(PEGTransformer &transformer,
 	                                                                      GeneratedTransformProcess &process);
@@ -5676,6 +5680,8 @@ public:
 	                                                          const optional<TransactionModifierType> &read_or_write);
 	static unique_ptr<SQLStatement> TransformRollbackTransaction(PEGTransformer &transformer, const bool &has_result);
 	static unique_ptr<SQLStatement> TransformCommitTransaction(PEGTransformer &transformer, const bool &has_result);
+	static unique_ptr<SQLStatement> TransformSetTransactionSnapshot(PEGTransformer &transformer,
+	                                                                const string &string_literal);
 	static TransactionModifierType TransformReadOrWrite(PEGTransformer &transformer,
 	                                                    const TransactionModifierType &read_only_or_read_write);
 	static TransactionModifierType TransformReadOnly(PEGTransformer &transformer);

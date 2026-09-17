@@ -24,16 +24,25 @@ class SecretManager;
 class SecretStorage;
 struct DatabaseModificationType;
 class Transaction;
+class DuckTransaction;
+class SharedTransactionState;
 
 enum class TransactionState { UNCOMMITTED, COMMITTED, ROLLED_BACK };
 
 struct TransactionReference {
-	explicit TransactionReference(Transaction &transaction_p)
-	    : state(TransactionState::UNCOMMITTED), transaction(transaction_p) {
+	explicit TransactionReference(Transaction &transaction_p, bool borrowed_p = false)
+	    : state(TransactionState::UNCOMMITTED), transaction(transaction_p), borrowed(borrowed_p) {
 	}
 
 	TransactionState state;
 	Transaction &transaction;
+	//! True when this transaction belongs to another connection, which shared it as a snapshot. This one only
+	//! reads it: it never starts, commits, rolls back, or otherwise controls the lifetime of a borrowed transaction.
+	//!
+	//! The reference stays valid only while this connection holds that transaction's statement lock, because its
+	//! owner takes that lock exclusively to end it. Every path that hands a borrowed transaction out therefore runs
+	//! inside a statement, and asserts as much.
+	bool borrowed;
 };
 
 //! The MetaTransaction manages multiple transactions for different attached databases
@@ -62,9 +71,17 @@ public:
 	Transaction &GetTransaction(AttachedDatabase &db);
 	optional_ptr<Transaction> TryGetTransaction(AttachedDatabase &db);
 	void RemoveTransaction(AttachedDatabase &db);
+	//! Check that this transaction may share its transaction for the given database.
+	void ValidateSharableTransaction(AttachedDatabase &db);
+	//! Record that this transaction shared its transaction for the given database.
+	void SetSharedTransaction(AttachedDatabase &db, shared_ptr<SharedTransactionState> state);
+	//! Take part, read-only, in a transaction shared by another connection.
+	void AdoptTransaction(AttachedDatabase &db, DuckTransaction &transaction);
 
 	ErrorData Commit();
-	void Rollback();
+	//! When allow_hand_off is set, a shared transaction that participants are still reading is handed to the last
+	//! of them instead of being rolled back here, because this connection is going away and cannot wait for them.
+	void Rollback(bool allow_hand_off = false);
 	// Finalize the transaction after a COMMIT of ROLLBACK.
 	void Finalize();
 
@@ -77,6 +94,16 @@ public:
 	optional_ptr<AttachedDatabase> ModifiedDatabase() {
 		return modified_database;
 	}
+	optional_ptr<AttachedDatabase> SharedDatabase() {
+		return shared.database;
+	}
+	shared_ptr<SharedTransactionState> GetSharedTransactionState() const {
+		return shared.state;
+	}
+	//! True when the shared transaction is owned by another connection.
+	bool IsSharedParticipant() const {
+		return shared.is_participant;
+	}
 	const vector<reference<AttachedDatabase>> &OpenedTransactions() const {
 		return all_transactions;
 	}
@@ -84,6 +111,16 @@ public:
 	shared_ptr<AttachedDatabase> GetReferencedDatabaseOwning(const Identifier &name);
 	AttachedDatabase &UseDatabase(shared_ptr<AttachedDatabase> &database);
 	void DetachDatabase(AttachedDatabase &database);
+
+private:
+	//! Retire the shared transaction before this (owning) transaction commits or rolls back.
+	void EndSharedTransaction();
+	//! Drop this connection's participation, rolling the transaction back if it was left to us.
+	void LeaveSharedTransaction();
+	//! Record that the shared transaction is gone, so borrowed references must not be used.
+	void MarkSharedTransactionDestroyed(AttachedDatabase &db);
+	//! Complete a pending hand-off once this connection has finished with the shared transaction.
+	void CompleteSharedHandOff();
 
 private:
 	friend class SecretManager;
@@ -96,6 +133,16 @@ private:
 	vector<reference<AttachedDatabase>> all_transactions;
 	//! The database we are modifying. We can only modify one database per meta transaction.
 	optional_ptr<AttachedDatabase> modified_database;
+	//! This transaction's involvement in a transaction snapshot. All three fields are set together.
+	struct SharedTransactionParticipation {
+		//! The one database the snapshot covers. Null when this transaction neither shared nor joined one.
+		optional_ptr<AttachedDatabase> database;
+		//! State shared with every connection taking part, including the statement lock and the ended flag.
+		shared_ptr<SharedTransactionState> state;
+		//! True when another connection owns the transaction, false when this one does.
+		bool is_participant = false;
+	};
+	SharedTransactionParticipation shared;
 	//! Whether the meta transaction is marked as read only.
 	bool is_read_only;
 	//! Lock for referenced_databases.

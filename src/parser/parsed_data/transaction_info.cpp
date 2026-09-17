@@ -1,5 +1,6 @@
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 
 namespace duckdb {
 
@@ -23,6 +24,9 @@ string TransactionInfo::ToString() const {
 		break;
 	case TransactionType::ROLLBACK:
 		result += "ROLLBACK";
+		break;
+	case TransactionType::SET_TRANSACTION_SNAPSHOT:
+		result += "SET TRANSACTION SNAPSHOT " + SQLString(snapshot_id);
 		break;
 	default: {
 		throw InternalException("ToString for TransactionStatement with type: %s not implemented",
@@ -51,6 +55,7 @@ unique_ptr<TransactionInfo> TransactionInfo::Copy() const {
 	result->modifier = modifier;
 	result->invalidation_policy = invalidation_policy;
 	result->auto_rollback = auto_rollback;
+	result->snapshot_id = snapshot_id;
 	return result;
 }
 

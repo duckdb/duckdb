@@ -14,6 +14,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/transaction/undo_buffer.hpp"
 #include "duckdb/common/enums/active_transaction_state.hpp"
+#include "duckdb/transaction/shared_transaction_state.hpp"
 
 namespace duckdb {
 class CheckpointLock;
@@ -22,6 +23,7 @@ class DuckTableEntry;
 class RowGroupCollection;
 class RowVersionManager;
 class DuckTransactionManager;
+class SharedTransactionLock;
 class StorageLockKey;
 class StorageCommitState;
 struct DataTableInfo;
@@ -97,7 +99,6 @@ public:
 	transaction_t GetTransactionId() const {
 		return view.transaction_id;
 	}
-
 	unique_ptr<StorageLockKey> TryGetCheckpointLock();
 
 	//! Get a shared lock on a table
@@ -107,7 +108,19 @@ public:
 		is_checkpoint_transaction = true;
 	}
 
+	//! Whether this transaction is shared with other connections through a transaction snapshot.
+	bool IsShared() const {
+		return shared_state != nullptr;
+	}
+	shared_ptr<SharedTransactionState> GetSharedState() const {
+		return shared_state;
+	}
+
 private:
+	friend class DuckTransactionManager;
+
+	//! Set once the transaction is shared with other connections. Guarded by the transaction manager lock.
+	shared_ptr<SharedTransactionState> shared_state;
 	//! The undo buffer is used to store old versions of rows that are updated
 	//! or deleted
 	UndoBuffer undo_buffer;

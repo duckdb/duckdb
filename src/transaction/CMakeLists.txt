@@ -4,6 +4,8 @@ add_library_unity(
   duck_transaction_manager.cpp
   duck_transaction.cpp
   meta_transaction.cpp
+  shared_transaction_guard.cpp
+  shared_transaction_state.cpp
   undo_buffer_allocator.cpp
   undo_buffer.cpp
   transaction_context.cpp

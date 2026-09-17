@@ -25,3 +25,101 @@ transaction is launched in read-only mode
 
 statement ok
 COMMIT
+
+statement ok
+CREATE SEQUENCE read_only_sequence
+
+query I
+SELECT nextval('read_only_sequence')
+----
+1
+
+statement ok
+PREPARE read_value AS SELECT $1
+
+# Walk through ordinary functions even when they have no modification callback themselves.
+foreach expression nextval('read_only_sequence') abs(nextval('read_only_sequence')) abs(abs(nextval('read_only_sequence')))
+
+statement ok
+BEGIN TRANSACTION READ ONLY
+
+# Scalar expressions evaluated during binding must also respect the transaction's write restrictions.
+statement error
+EXECUTE read_value({expression})
+----
+transaction is launched in read-only mode
+
+statement ok
+ROLLBACK
+
+statement ok
+BEGIN TRANSACTION READ ONLY
+
+statement error
+SELECT * FROM range({expression})
+----
+transaction is launched in read-only mode
+
+statement ok
+ROLLBACK
+
+query I
+SELECT currval('read_only_sequence')
+----
+1
+
+statement ok
+BEGIN TRANSACTION READ ONLY
+
+statement error
+SET threads = {expression}
+----
+transaction is launched in read-only mode
+
+statement ok
+ROLLBACK
+
+query I
+SELECT currval('read_only_sequence')
+----
+1
+
+endloop
+
+statement ok
+BEGIN TRANSACTION READ ONLY
+
+statement error
+SELECT * FROM range(abs(setval('read_only_sequence', 42)))
+----
+transaction is launched in read-only mode
+
+statement ok
+ROLLBACK
+
+query I
+SELECT currval('read_only_sequence')
+----
+1
+
+statement ok
+BEGIN TRANSACTION READ ONLY
+
+statement error
+SELECT * FROM range(list_transform([1], lambda x: abs(nextval('read_only_sequence')))[1])
+----
+transaction is launched in read-only mode
+
+statement ok
+ROLLBACK
+
+query I
+SELECT currval('read_only_sequence')
+----
+1
+
+# Writable transactions still evaluate nested modifying functions.
+query I
+SELECT count(*) FROM range(list_transform([1], lambda x: abs(nextval('read_only_sequence')))[1])
+----
+2
