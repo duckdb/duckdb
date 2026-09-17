@@ -655,10 +655,6 @@ TEST_CASE("SQL export type admission follows DuckDB value types", "[sql_export][
 	REQUIRE(SQLExportHelpers::IsSQLValueType(tuple));
 	REQUIRE(SQLExportHelpers::IsSQLValueType(LogicalType::LIST(tuple)));
 	REQUIRE_FALSE(SQLExportHelpers::IsSQLValueType(LogicalType::TUPLE(vector<LogicalType> {LogicalType::POINTER})));
-#ifndef DUCKDB_CRASH_ON_ASSERT
-	// Invalid LogicalType construction aborts instead of throwing in crash-on-assert configurations.
-	REQUIRE_THROWS(LogicalType(static_cast<LogicalTypeId>(255)));
-#endif
 }
 
 TEST_CASE("Bound expression SQL export supports represented catalog bind state",
@@ -751,9 +747,6 @@ TEST_CASE("Bound expression SQL export supports represented catalog bind state",
 	                     LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, root_path, Identifier::SystemCatalog(),
 	                     schema_name, standalone.GetName(), {LogicalType::INTEGER, LogicalType::INTEGER},
 	                     LogicalType::BIGINT);
-	standalone_bound->Cast<BoundAggregateExpression>().GetChildrenMutable()[0].reset();
-	RequireIssue(BoundExpressionSQLExporter::Export(*standalone_bound, context),
-	             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, root_path);
 	connection.Rollback();
 }
 

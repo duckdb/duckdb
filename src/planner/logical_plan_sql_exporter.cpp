@@ -2739,25 +2739,15 @@ private:
 	                                                           const string &extension_identifier,
 	                                                           LogicalPlanSQLExportExtensionResult result,
 	                                                           const vector<LogicalPlanSQLExportField> &fields) {
-		auto malformed = [&](string message) {
-			return PlanFailure(ExtensionIssue(LogicalPlanVerificationIssueCode::MALFORMED_EXTENSION_RESULT, path,
-			                                  extension_identifier, std::move(message)));
-		};
 		switch (result.type) {
 		case LogicalPlanSQLExportExtensionResultType::NOT_HANDLED:
 			D_ASSERT(!result.query && result.reason.empty());
 			return {};
 		case LogicalPlanSQLExportExtensionResultType::EXPORTED:
-			D_ASSERT(result.reason.empty());
-			if (!result.query) {
-				return malformed("EXPORTED extension result requires a query");
-			}
+			D_ASSERT(result.query && result.reason.empty());
 			return LogicalPlanSQLExportResult::Success({std::move(result.query), fields});
 		case LogicalPlanSQLExportExtensionResultType::UNSUPPORTED:
-			D_ASSERT(!result.query);
-			if (result.reason.empty()) {
-				return malformed("UNSUPPORTED extension result requires a reason");
-			}
+			D_ASSERT(!result.query && !result.reason.empty());
 			D_ASSERT(IsValidText(result.reason));
 			return PlanFailure(ExtensionIssue(LogicalPlanVerificationIssueCode::UNSUPPORTED_EXTENSION, path,
 			                                  extension_identifier, std::move(result.reason)));

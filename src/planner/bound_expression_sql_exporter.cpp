@@ -105,7 +105,7 @@ static bool HasUnsupportedVariantKeys(const Value &value) {
 	return false;
 }
 
-static bool IsExpressionRootPath(const LogicalPlanVerificationPath &path) {
+static inline bool IsExpressionRootPath(const LogicalPlanVerificationPath &path) {
 	if (!path.IsValid()) {
 		return false;
 	}
@@ -732,19 +732,13 @@ private:
 
 	BoundExpressionSQLExportResult ExportConstant(const BoundConstantExpression &expression,
 	                                              const LogicalPlanVerificationPath &path) {
-		if (expression.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
-			return Failure(
-			    InternalExpressionInvariant(path, expression, "Bound constant has an invalid expression type"));
-		}
+		D_ASSERT(expression.GetExpressionType() == ExpressionType::VALUE_CONSTANT);
 		auto &return_type = expression.GetReturnType();
 		auto &value = expression.GetValue();
 		if (!IsSQLValueType(return_type) || !IsSQLValueType(value.type())) {
 			return Failure(InternalExpressionInvariant(path, expression, "Bound constant has an unexportable type"));
 		}
-		if (return_type != value.type()) {
-			return Failure(
-			    InternalExpressionInvariant(path, expression, "Bound constant value and return types differ"));
-		}
+		D_ASSERT(return_type == value.type());
 		if (TypeVisitor::Contains(return_type, LogicalTypeId::VARIANT) && HasUnsupportedVariantKeys(value)) {
 			return Failure(UnsupportedFeature(path, "variant_literal",
 			                                  "VARIANT object keys cannot be represented by a struct literal"));
@@ -868,10 +862,7 @@ private:
 
 	BoundExpressionSQLExportResult ExportColumnRef(const BoundColumnRefExpression &expression,
 	                                               const LogicalPlanVerificationPath &path) {
-		if (expression.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-			return Failure(
-			    InternalExpressionInvariant(path, expression, "Bound column reference has an invalid expression type"));
-		}
+		D_ASSERT(expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF);
 		auto &binding = expression.Binding();
 		if (!binding.table_index.IsValid() || !binding.column_index.IsValid()) {
 			return Failure(InvalidBinding(path, binding, "Bound column reference has an incomplete binding"));
@@ -1119,9 +1110,7 @@ private:
 
 	BoundExpressionSQLExportResult ExportCase(const BoundCaseExpression &expression,
 	                                          const LogicalPlanVerificationPath &path) {
-		if (expression.GetExpressionType() != ExpressionType::CASE_EXPR) {
-			return Failure(InternalExpressionInvariant(path, expression, "Bound CASE has an invalid expression type"));
-		}
+		D_ASSERT(expression.GetExpressionType() == ExpressionType::CASE_EXPR);
 		if (!IsSQLValueType(expression.GetReturnType()) || expression.CaseChecks().empty()) {
 			return Failure(InternalExpressionInvariant(path, expression, "Bound CASE has malformed type or arity"));
 		}
@@ -1268,11 +1257,6 @@ private:
 	BoundExpressionSQLExportResult ExportScalarFunction(const BoundFunctionExpression &expression,
 	                                                    const LogicalPlanVerificationPath &path) {
 		auto &function = expression.Function();
-		for (auto &child : expression.GetChildren()) {
-			if (!child) {
-				return Failure(InternalExpressionInvariant(path, expression, "Bound scalar function has a null child"));
-			}
-		}
 		auto &definition = function.GetDefinition();
 		if (!definition) {
 			return Failure(
@@ -1442,16 +1426,7 @@ private:
 
 	BoundAggregateSQLExportResult BuildAggregateCall(const BoundAggregateExpression &expression,
 	                                                 const LogicalPlanVerificationPath &path) {
-		for (auto &child : expression.GetChildren()) {
-			if (!child) {
-				return AggregateFailure(
-				    InternalExpressionInvariant(path, expression, "Bound aggregate function has a null child"));
-			}
-		}
-		if (expression.GetExpressionType() != ExpressionType::BOUND_AGGREGATE) {
-			return AggregateFailure(
-			    InternalExpressionInvariant(path, expression, "Bound aggregate has an invalid expression type"));
-		}
+		D_ASSERT(expression.GetExpressionType() == ExpressionType::BOUND_AGGREGATE);
 		auto &function = expression.Function();
 		auto &definition = function.GetDefinition();
 		if (!definition) {
@@ -1641,9 +1616,7 @@ BoundExpressionSQLExporter::Export(const Expression &expression, const BoundExpr
 LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
 BoundExpressionSQLExporter::ExportAtPath(const Expression &expression, const BoundExpressionSQLExportContext &context,
                                          const LogicalPlanVerificationPath &path) {
-	if (!IsExpressionRootPath(path)) {
-		return Failure(InternalInvariant({}, "Expression export requires an already-valid expression root path"));
-	}
+	D_ASSERT(IsExpressionRootPath(path));
 	BoundExpressionSQLExportState state(context);
 	return state.Export(expression, path);
 }
@@ -1652,10 +1625,7 @@ LogicalPlanVerificationResult<unique_ptr<FunctionExpression>>
 BoundExpressionSQLExporter::ExportAggregateCallAtPath(const BoundAggregateExpression &expression,
                                                       const BoundExpressionSQLExportContext &context,
                                                       const LogicalPlanVerificationPath &path) {
-	if (!IsExpressionRootPath(path)) {
-		return AggregateFailure(
-		    InternalInvariant({}, "Expression export requires an already-valid expression root path"));
-	}
+	D_ASSERT(IsExpressionRootPath(path));
 	BoundExpressionSQLExportState state(context);
 	return state.ExportAggregateCall(expression, path);
 }
@@ -1664,9 +1634,7 @@ LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
 BoundExpressionSQLExporter::ExportWindowAtPath(const BoundWindowExpression &expression,
                                                const BoundExpressionSQLExportContext &context,
                                                const LogicalPlanVerificationPath &path) {
-	if (!IsExpressionRootPath(path)) {
-		return Failure(InternalInvariant({}, "Expression export requires an already-valid expression root path"));
-	}
+	D_ASSERT(IsExpressionRootPath(path));
 	BoundExpressionSQLExportState state(context);
 	return state.ExportWindow(expression, path);
 }
@@ -1675,9 +1643,7 @@ LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
 BoundExpressionSQLExporter::ExportUnnestAtPath(const BoundUnnestExpression &expression,
                                                const BoundExpressionSQLExportContext &context,
                                                const LogicalPlanVerificationPath &path) {
-	if (!IsExpressionRootPath(path)) {
-		return Failure(InternalInvariant({}, "Expression export requires an already-valid expression root path"));
-	}
+	D_ASSERT(IsExpressionRootPath(path));
 	BoundExpressionSQLExportState state(context);
 	return state.ExportUnnest(expression, path);
 }

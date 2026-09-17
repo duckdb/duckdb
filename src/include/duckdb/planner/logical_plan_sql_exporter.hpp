@@ -42,7 +42,9 @@ enum class LogicalPlanSQLExportExtensionResultType { NOT_HANDLED, EXPORTED, UNSU
 
 struct LogicalPlanSQLExportExtensionResult {
 	LogicalPlanSQLExportExtensionResultType type = LogicalPlanSQLExportExtensionResultType::NOT_HANDLED;
+	//! EXPORTED requires a query; other results must leave it empty.
 	unique_ptr<QueryNode> query;
+	//! UNSUPPORTED requires a nonempty reason; other results must leave it empty.
 	string reason;
 
 	DUCKDB_API static LogicalPlanSQLExportExtensionResult NotHandled();
