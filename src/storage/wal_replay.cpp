@@ -1306,7 +1306,7 @@ void WriteAheadLogDeserializer::ReplayInsert() {
 		return;
 	}
 	if (!state.current_table) {
-		throw SerializationException("Corrupt WAL: insert without table");
+		throw DataCorruptionException("Corrupt WAL: insert without table");
 	}
 
 	// Append to the current table without constraint verification.
@@ -1334,7 +1334,7 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 		return;
 	}
 	if (!state.current_table) {
-		throw SerializationException("Corrupt WAL: insert without table");
+		throw DataCorruptionException("Corrupt WAL: insert without table");
 	}
 	auto &storage = state.current_table->GetStorage();
 	auto &table_info = storage.GetDataTableInfo();
@@ -1374,7 +1374,7 @@ void WriteAheadLogDeserializer::ReplayDelete() {
 		return;
 	}
 	if (!state.current_table) {
-		throw SerializationException("delete without a table");
+		throw DataCorruptionException("Corrupt WAL: delete without table");
 	}
 
 	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LogicalType::ROW_TYPE);
@@ -1387,7 +1387,7 @@ void WriteAheadLogDeserializer::ReplayDelete() {
 	auto next_row_id = storage.GetNextRowId();
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		if (source_ids[i] >= UnsafeNumericCast<row_t>(next_row_id)) {
-			throw SerializationException("invalid row ID delete in WAL");
+			throw DataCorruptionException("Corrupt WAL: row ID for delete out of bounds");
 		}
 	}
 	TableDeleteState delete_state;
@@ -1404,11 +1404,11 @@ void WriteAheadLogDeserializer::ReplayUpdate() {
 		return;
 	}
 	if (!state.current_table) {
-		throw SerializationException("Corrupt WAL: update without table");
+		throw DataCorruptionException("Corrupt WAL: update without table");
 	}
 
 	if (column_path[0] >= state.current_table->GetColumns().PhysicalColumnCount()) {
-		throw SerializationException("Corrupt WAL: column index for update out of bounds");
+		throw DataCorruptionException("Corrupt WAL: column index for update out of bounds");
 	}
 
 	// remove the row id vector from the chunk
