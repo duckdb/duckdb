@@ -1289,11 +1289,10 @@ struct EnableOptimisticWriteSetting {
 struct EnableOptimizerSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_optimizer";
-	static constexpr const char *Description = "Whether query optimization is enabled. -- TODO: should this be a debug "
-	                                           "setting/combined with debug_disable_optimizer?";
+	static constexpr const char *Description = "Deprecated setting. Set debug_disable_optimizer to false instead.";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr bool IsDebug = false;
-	static constexpr bool IsDeprecated = false;
+	static constexpr bool IsDeprecated = true;
 	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
@@ -2214,8 +2213,8 @@ struct ScalarSubqueryErrorOnMultipleRowsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "scalar_subquery_error_on_multiple_rows";
 	static constexpr const char *Description =
-	    "Throw an error when a scalar subquery returns more than one row. When disabled, an arbitrary row is returned "
-	    "instead. -- TODO: can this be deprecated?";
+	    "Deprecated setting. Throw an error when a scalar subquery returns more than one row. This will become the "
+	    "default behavior. When disabled, an arbitrary row is returned instead.";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;

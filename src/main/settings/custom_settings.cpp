@@ -143,15 +143,15 @@ Value AllocatorBulkDeallocationFlushThresholdSetting::GetSetting(const ClientCon
 //===----------------------------------------------------------------------===//
 // Delta Only Variant Legacy Encoding
 //===----------------------------------------------------------------------===//
-void DeltaOnlyVariantEncodingEnabledSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void DebugDeltaOnlyVariantEncodingEnabledSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	throw InvalidInputException("This setting is not adjustable by a user");
 }
 
-void DeltaOnlyVariantEncodingEnabledSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void DebugDeltaOnlyVariantEncodingEnabledSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	throw InvalidInputException("This setting is not adjustable by a user");
 }
 
-Value DeltaOnlyVariantEncodingEnabledSetting::GetSetting(const ClientContext &context) {
+Value DebugDeltaOnlyVariantEncodingEnabledSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.variant_legacy_encoding);
 }
@@ -569,7 +569,7 @@ Value DisabledFilesystemsSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Disabled Optimizers
 //===----------------------------------------------------------------------===//
-void DisabledOptimizersSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void DebugDisabledOptimizersSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto list = StringUtil::Split(input.ToString(), ",");
 	set<OptimizerType> disabled_optimizers;
 	for (auto &entry : list) {
@@ -583,11 +583,11 @@ void DisabledOptimizersSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 	config.options.disabled_optimizers = std::move(disabled_optimizers);
 }
 
-void DisabledOptimizersSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void DebugDisabledOptimizersSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.disabled_optimizers = DBConfigOptions().disabled_optimizers;
 }
 
-Value DisabledOptimizersSetting::GetSetting(const ClientContext &context) {
+Value DebugDisabledOptimizersSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	string result;
 	for (auto &optimizer : config.options.disabled_optimizers) {
@@ -1009,7 +1009,7 @@ void ExternalThreadsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 //===----------------------------------------------------------------------===//
 // Force Compression
 //===----------------------------------------------------------------------===//
-void ForceCompressionSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+void DebugForceCompressionSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	auto compression = StringUtil::Lower(input.ToString());
 	if (compression == "none" || compression == "auto") {
 		input = "auto";
