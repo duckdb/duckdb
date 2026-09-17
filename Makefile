@@ -681,7 +681,7 @@ shared-libs-release-artifact:
 # the extension archives before libduckdb_static.a. LINK_EXTENSIONS picks the extensions (space or semicolon
 # separated); without it, every extension archive in STATIC_EXTENSION_LOADER_BUILD_DIR is used.
 STATIC_EXTENSION_LOADER_BUILD_DIR ?= build/release
-STATIC_EXTENSION_LOADER_FILE ?= $(STATIC_EXTENSION_LOADER_BUILD_DIR)/static_extension_loader.c
+STATIC_EXTENSION_LOADER_FILE ?= $(STATIC_EXTENSION_LOADER_BUILD_DIR)/static_extension_loader.cpp
 
 .PHONY: static_extension_loader
 static_extension_loader:

@@ -28,7 +28,7 @@ function(get_statically_linked_extensions DUCKDB_EXTENSION_NAMES OUT_VARIABLE)
 endfunction()
 
 # Makes SYMBOL a root of TARGET's link: the archive member defining it is extracted even though nothing
-# references it. This is how a static extension's link member, and with it the extension, enters a binary.
+# references it. A loadable built from an archive uses it for its entrypoint.
 function(duckdb_link_root TARGET SYMBOL)
     if(MSVC)
         if(CMAKE_SIZEOF_VOID_P EQUAL 4)
@@ -47,31 +47,26 @@ function(duckdb_link_root TARGET SYMBOL)
     endif()
 endfunction()
 
-# Writes OUT_FILE from extension/loader/static_extension_loader.c.in: a source referencing the root of each named extension, so a
-# link that compiles it takes those extensions' root members out of their archives. scripts/generate_static_extension_loader.py
-# renders the same template for links outside CMake.
+# Writes OUT_FILE from extension/loader/static_extension_loader.cpp.in: a source that registers each named extension
+# through its root before main. scripts/generate_static_extension_loader.py renders the same template outside CMake.
 function(duckdb_write_static_extension_loader OUT_FILE)
     set(LINK_EXTENSION_LIST "")
-    set(MSVC_X86_INCLUDES "")
-    set(MSVC_INCLUDES "")
     set(ROOT_DECLARATIONS "")
-    set(ROOT_TABLE "")
+    set(ROOT_REGISTRATIONS "")
     foreach(EXT_NAME IN LISTS ARGN)
         string(APPEND LINK_EXTENSION_LIST " ${EXT_NAME}")
-        string(APPEND MSVC_X86_INCLUDES "#pragma comment(linker, \"/include:_duckdb_extension_${EXT_NAME}_root\")\n")
-        string(APPEND MSVC_INCLUDES "#pragma comment(linker, \"/include:duckdb_extension_${EXT_NAME}_root\")\n")
-        string(APPEND ROOT_DECLARATIONS "void duckdb_extension_${EXT_NAME}_root(void);\n")
-        string(APPEND ROOT_TABLE "    duckdb_extension_${EXT_NAME}_root,\n")
+        string(APPEND ROOT_DECLARATIONS "int32_t duckdb_extension_${EXT_NAME}_root(duckdb_extension_descriptor *descriptor);\n")
+        string(APPEND ROOT_REGISTRATIONS "\t\tduckdb_register_static_extension(duckdb_extension_${EXT_NAME}_root);\n")
     endforeach()
     string(STRIP "${LINK_EXTENSION_LIST}" LINK_EXTENSION_LIST)
-    foreach(PART MSVC_X86_INCLUDES MSVC_INCLUDES ROOT_DECLARATIONS ROOT_TABLE)
+    foreach(PART ROOT_DECLARATIONS ROOT_REGISTRATIONS)
         string(REGEX REPLACE "\n$" "" ${PART} "${${PART}}")
     endforeach()
-    configure_file(${DUCKDB_MODULE_BASE_DIR}/extension/loader/static_extension_loader.c.in ${OUT_FILE} @ONLY)
+    configure_file(${DUCKDB_MODULE_BASE_DIR}/extension/loader/static_extension_loader.cpp.in ${OUT_FILE} @ONLY)
 endfunction()
 
 # Links the named extensions into TARGET, in the given order, which is also their load order: their archives, plus a
-# generated <TARGET>_static_extension_loader.c naming their roots. Extensions this build does not build are skipped and reported.
+# generated <TARGET>_static_extension_loader.cpp registering their roots. Extensions this build does not build are skipped and reported.
 # Each target picks its own set, so a shell and a test binary in the same build can link different extensions.
 function(duckdb_link_extensions TARGET)
     set(LINKAGE "")
@@ -98,7 +93,7 @@ function(duckdb_link_extensions TARGET)
     if("${LINKED}" STREQUAL "")
         return()
     endif()
-    set(HELPER "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}_static_extension_loader.c")
+    set(HELPER "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}_static_extension_loader.cpp")
     duckdb_write_static_extension_loader(${HELPER} ${LINKED})
     target_sources(${TARGET} PRIVATE ${HELPER})
 endfunction()
@@ -346,46 +341,27 @@ function(build_loadable_extension_capi_internal NAME VERSION ABI_TYPE PARAMETERS
     build_loadable_extension_directory(${NAME} ${ABI_TYPE} "extension/${NAME}" "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION}" "${VERSION}" "${PARAMETERS}" ${FILES})
 endfunction()
 
-# Generates the root member of a static extension archive: the object that -u duckdb_extension_<NAME>_root extracts, and
-# whose registrar publishes the extension to the engine. KIND is CPP, CAPI or CAPI_V2.
+# Generates the root of a static extension archive, duckdb_extension_<NAME>_root, which describes the extension's
+# entrypoint to duckdb_register_static_extension. KIND is CPP, CAPI or CAPI_V2.
 function(duckdb_extension_link_member NAME KIND OUT_FILE)
-    set(LINK_INCLUDES "")
-    set(LINK_DECLARATIONS "")
     if("${KIND}" STREQUAL "CAPI")
-        set(LINK_DECLARATIONS "extern \"C\" bool ${NAME}_init_c_api(duckdb_extension_info, duckdb_extension_access *);")
-        set(LINK_BODY "db.LoadStaticCAPIExtension(\"${NAME}\", ${NAME}_init_c_api);")
+        set(ENTRY_NAME "${NAME}_init_c_api")
+        set(ENTRY_FIELD "entry_capi_v1")
+        set(ENTRY_DECLARATION "bool ${ENTRY_NAME}(duckdb_extension_info info, struct duckdb_extension_access *access);")
     elseif("${KIND}" STREQUAL "CAPI_V2")
-        set(LINK_DECLARATIONS "extern \"C\" void ${NAME}_init_c_api_v2(struct duckdb_v2_extension_input *);")
-        set(LINK_BODY "db.LoadStaticCAPIExtensionV2(\"${NAME}\", ${NAME}_init_c_api_v2);")
+        set(ENTRY_NAME "${NAME}_init_c_api_v2")
+        set(ENTRY_FIELD "entry_capi_v2")
+        set(ENTRY_DECLARATION "void ${ENTRY_NAME}(struct duckdb_v2_extension_input *input);")
     else()
-        # <name>_extension.hpp declares class <Name>Extension, with each underscore-separated part capitalized
-        string(REPLACE "_" ";" NAME_PARTS ${NAME})
-        set(NAME_CAMELCASE "")
-        foreach(NAME_PART IN LISTS NAME_PARTS)
-            string(SUBSTRING ${NAME_PART} 0 1 FIRST_LETTER)
-            string(SUBSTRING ${NAME_PART} 1 -1 REMAINDER)
-            string(TOUPPER ${FIRST_LETTER} FIRST_LETTER)
-            set(NAME_CAMELCASE "${NAME_CAMELCASE}${FIRST_LETTER}${REMAINDER}")
-        endforeach()
-        set(LINK_HEADER "${NAME}_extension.hpp")
-        string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
-        foreach(INCLUDE_DIR IN LISTS DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH)
-            if(EXISTS "${INCLUDE_DIR}/${NAME}_extension.hpp")
-                set(LINK_HEADER "${INCLUDE_DIR}/${NAME}_extension.hpp")
-                break()
-            endif()
-        endforeach()
-        set(LINK_INCLUDES "#include \"${LINK_HEADER}\"")
-        set(LINK_BODY "db.LoadStaticExtension<${NAME_CAMELCASE}Extension>();")
+        set(ENTRY_NAME "${NAME}_duckdb_cpp_init")
+        set(ENTRY_FIELD "entry_cpp")
+        # takes a duckdb::ExtensionLoader reference, passed as a pointer
+        set(ENTRY_DECLARATION "void ${ENTRY_NAME}(void *loader);")
     endif()
-    set(LINK_FILE "${DuckDB_BINARY_DIR}/codegen/link/${NAME}_link.cpp")
-    configure_file(${DUCKDB_MODULE_BASE_DIR}/extension/loader/link_extension.cpp.in ${LINK_FILE} @ONLY)
-    # The root member includes <NAME>_extension.hpp, so give it the extension's registered include path.
     string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
-    if(DEFINED DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH)
-        set_source_files_properties(${LINK_FILE} PROPERTIES INCLUDE_DIRECTORIES
-                "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH}")
-    endif()
+    string(REGEX REPLACE "[\"\\\\]" "" EXTENSION_VERSION "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION}")
+    set(LINK_FILE "${DuckDB_BINARY_DIR}/codegen/link/${NAME}_root.c")
+    configure_file(${DUCKDB_MODULE_BASE_DIR}/extension/loader/extension_root.c.in ${LINK_FILE} @ONLY)
     set(${OUT_FILE} ${LINK_FILE} PARENT_SCOPE)
 endfunction()
 

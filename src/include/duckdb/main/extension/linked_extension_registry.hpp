@@ -23,19 +23,11 @@ struct LinkedExtension {
 	std::function<void(DuckDB &)> load;
 };
 
-//! The extensions linked into this binary, each registered before main by its LinkedExtensionRegistrar.
+//! The extensions linked into this binary, registered through duckdb_register_static_extension.
 class LinkedExtensionRegistry {
 public:
-	DUCKDB_API static void Register(const string &name, std::function<void(DuckDB &)> load);
-	//! A copy, in registration order
+	//! A copy, in registration order. Throws if a registration failed.
 	DUCKDB_API static vector<LinkedExtension> Get();
-};
-
-//! Instantiate one at namespace scope to register an extension when the object holding it is loaded
-struct LinkedExtensionRegistrar {
-	LinkedExtensionRegistrar(const char *name, std::function<void(DuckDB &)> load) {
-		LinkedExtensionRegistry::Register(name, std::move(load));
-	}
 };
 
 } // namespace duckdb

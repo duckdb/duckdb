@@ -179,6 +179,10 @@ public:
 		load_info->FinishLoad(install_info);
 	}
 
+	// Function pointer type for the C++ extension entrypoint, <name>_duckdb_cpp_init
+	typedef void (*ext_init_cpp_fun_t)(ExtensionLoader &loader);
+	// Load a statically compiled C++ extension through its entrypoint
+	DUCKDB_API void LoadStaticCppExtension(const string &name, const string &version, ext_init_cpp_fun_t init_fun);
 	// Function pointer type for the C API extension init function
 	typedef bool (*ext_init_c_api_fun_t)(duckdb_extension_info info, duckdb_extension_access *access);
 	// Load a statically compiled C API extension by calling its init function directly (no vtable needed)
