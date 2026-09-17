@@ -206,9 +206,14 @@ vector<column_binding_set_t> CollectUniqueColumnSets(LogicalOperator &op) {
 }
 
 void VisitOperator(LogicalOperator &op) {
-	if (op.type == LogicalOperatorType::LOGICAL_ORDER_BY && op.Cast<LogicalOrder>().orders.size() >= 2) {
-		CollectUniqueColumnSets(op);
-		return;
+	if (op.type == LogicalOperatorType::LOGICAL_ORDER_BY) {
+		auto &order = op.Cast<LogicalOrder>();
+		if (order.orders.size() >= 2) {
+			auto unique_sets = CollectUniqueColumnSets(*order.children[0]);
+			RemoveRedundantKeys(order, unique_sets);
+			VisitChildren(op, 1);
+			return;
+		}
 	}
 	VisitChildren(op, 0);
 }
