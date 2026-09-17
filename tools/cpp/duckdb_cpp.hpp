@@ -1395,7 +1395,7 @@ struct blob_t {
 void ValidateUTF8(std::string_view text);
 
 /// VARCHAR: like `blob_t`, but naming a string of UTF-8 text rather than of arbitrary bytes.
-/// This storage token does not validate its bytes; use Arena::AddString or Vector::AssignString for checked
+/// Constructing a `varchar_t` does not validate UTF-8; use `Arena::AddString` or `Vector::AssignString` for checked
 /// construction.
 struct varchar_t : blob_t {
 	using blob_t::blob_t;
@@ -1994,9 +1994,9 @@ public:
 	auto Allocate(idx_t byte_len) -> uint8_t *;
 
 	/// Copies a string into the heap.
-	/// @param data The bytes to copy. Anything up to `varchar_t::INLINE_LENGTH` is kept in the token itself and never
-	/// reaches the heap.
-	/// @return A token to place with `Vector::SetString`, valid as long as the heap is.
+	/// @param data The bytes to copy. Up to `varchar_t::INLINE_LENGTH` bytes are stored directly in the returned value.
+	/// @return The string as a `varchar_t`, with validated UTF-8, valid as long as the heap is.
+	/// Place it in the vector owning this heap with `Vector::SetString`.
 	/// @throws Exception On malformed UTF-8 or when the data exceeds the 4 GiB an element can describe.
 	auto AddString(std::string_view data) -> varchar_t {
 		if (data.size() > std::numeric_limits<uint32_t>::max()) {
@@ -2008,16 +2008,8 @@ public:
 
 	/// Copies text without UTF-8 validation. The caller must ensure that the text is valid.
 	auto AddStringUnsafe(std::string_view data) -> varchar_t {
-		if (data.size() > std::numeric_limits<uint32_t>::max()) {
-			ThrowStringTooLong(data.size());
-		}
-		const auto size = static_cast<uint32_t>(data.size());
-		if (size <= varchar_t::INLINE_LENGTH) {
-			return varchar_t(data.data(), size);
-		}
-		auto *bytes = Allocate(size);
-		std::memcpy(bytes, data.data(), size);
-		return varchar_t(reinterpret_cast<char *>(bytes), size);
+		auto bytes = AddBlob(data);
+		return varchar_t(bytes.data(), bytes.size());
 	}
 
 	/// `AddString` for arbitrary bytes rather than text.
@@ -2281,24 +2273,22 @@ public:
 	/// @return The heap. The vector must be of a string-backed type such as VARCHAR, BLOB, BIT or BIGNUM.
 	auto GetHeap() -> Arena;
 
-	/// Copies a string into the vector's heap and writes the resulting element in one step. Looks the heap up per call,
-	/// so flattening in between is safe.
+	/// Copies bytes into the vector's heap and places the string value with `SetString`.
+	/// VARCHAR values are constructed with `Arena::AddString`; binary values are copied without UTF-8 validation.
+	/// Looks the heap up per call, so flattening in between is safe.
 	/// @param index The element to write: any index within the size of a FLAT vector, only 0 for a CONSTANT one.
 	/// @param data The bytes to copy. The vector must be of a string-backed type such as VARCHAR, BLOB, BIT or BIGNUM.
 	/// @throws InvalidInputException On malformed VARCHAR text, before changing the slot.
 	auto AssignString(idx_t index, std::string_view data) -> void;
 
-	/// Like AssignString, but the caller is responsible for valid UTF-8 in VARCHAR vectors.
+	/// Like `AssignString`, but skips UTF-8 validation. The caller must ensure VARCHAR values contain valid UTF-8.
 	auto AssignStringUnsafe(idx_t index, std::string_view data) -> void;
 
-	/// Writes an element that was written into the heap beforehand.
+	/// Writes a string value into the vector without UTF-8 validation.
 	/// @param index The element to write: any index within the size of a FLAT vector, only 0 for a CONSTANT one.
-	/// @param value A token from this vector's own heap. A non-inlined token from another vector dangles.
-	/// @throws InvalidInputException On malformed VARCHAR text, before changing the slot.
+	/// @param value A string value from this vector's own heap. A non-inlined value from another vector dangles.
+	/// VARCHAR values must contain valid UTF-8.
 	auto SetString(idx_t index, varchar_t value) -> void;
-
-	/// Like SetString, but the caller is responsible for valid UTF-8 in VARCHAR vectors.
-	auto SetStringUnsafe(idx_t index, varchar_t value) -> void;
 
 private:
 	explicit Vector(void *impl);
@@ -2306,8 +2296,6 @@ private:
 	/// @internal Throws `InvalidInputException` if [start, start + count) is not writable: a CONSTANT vector has a
 	/// single element, so only index 0 may be written.
 	auto CheckWriteRange(idx_t start, idx_t count) const -> void;
-	/// Validates UTF-8 for VARCHAR; binary types do not require valid UTF-8.
-	auto ValidateString(std::string_view data) const -> void;
 };
 
 //----------------------------------------------------------------------------------------------------------------------

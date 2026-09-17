@@ -2055,29 +2055,22 @@ auto Vector::CheckWriteRange(idx_t start, idx_t count) const -> void {
 	}
 }
 
-auto Vector::ValidateString(std::string_view data) const -> void {
+auto Vector::AssignString(idx_t index, std::string_view data) -> void {
 	duckdb_v2_logical_type_handle type = nullptr;
 	CheckedAPICall(duckdb_v2_vector_get_logical_type, handle(), &type);
 	auto logical_type = detail::Factory::Make<LogicalType>(type);
-	if (logical_type.GetTypeId() == LogicalTypeId::VARCHAR) {
-		ValidateUTF8(data);
+	if (logical_type.GetTypeId() != LogicalTypeId::VARCHAR) {
+		AssignStringUnsafe(index, data);
+		return;
 	}
-}
-
-auto Vector::AssignString(idx_t index, std::string_view data) -> void {
-	if (data.size() > std::numeric_limits<uint32_t>::max()) {
-		throw Exception(DUCKDB_V2_ERROR_INPUT_OUT_OF_RANGE, "Out of Range Error: string length " +
-		                                                        std::to_string(data.size()) +
-		                                                        " exceeds the maximum a duckdb_v2_bytes can hold");
-	}
-	ValidateString(data);
-	AssignStringUnsafe(index, data);
+	auto heap = GetHeap();
+	SetString(index, heap.AddString(data));
 }
 
 auto Vector::AssignStringUnsafe(idx_t index, std::string_view data) -> void {
-	CheckWriteRange(index, 1);
 	auto heap = GetHeap();
-	GetDataMutable<blob_t>()[index] = heap.AddStringUnsafe(data);
+	auto bytes = heap.AddBlob(data);
+	SetString(index, varchar_t(bytes.data(), bytes.size()));
 }
 
 auto Vector::GetHeap() -> Arena {
@@ -2087,11 +2080,6 @@ auto Vector::GetHeap() -> Arena {
 }
 
 auto Vector::SetString(idx_t index, varchar_t value) -> void {
-	ValidateString(value.view());
-	SetStringUnsafe(index, value);
-}
-
-auto Vector::SetStringUnsafe(idx_t index, varchar_t value) -> void {
 	CheckWriteRange(index, 1);
 	GetDataMutable<varchar_t>()[index] = value;
 }

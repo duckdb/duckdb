@@ -650,7 +650,7 @@ TEST_CASE("Stable C++API: checked and unsafe UTF-8 string construction", "[cpp_a
 	for (const auto &text : valid) {
 		REQUIRE_NOTHROW(ValidateUTF8(text));
 		vec.AssignString(0, text);
-		vec.SetStringUnsafe(1, heap.AddString(text));
+		vec.SetString(1, heap.AddString(text));
 		vec.SetString(2, heap.AddStringUnsafe(text));
 		for (idx_t i = 0; i < 3; i++) {
 			REQUIRE(slots[i].view() == text);
@@ -665,12 +665,8 @@ TEST_CASE("Stable C++API: checked and unsafe UTF-8 string construction", "[cpp_a
 		vec.AssignString(0, "🦆");
 		REQUIRE_THROWS_MATCHES(vec.AssignString(0, text), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 		REQUIRE(slots[0].view() == "🦆");
-		REQUIRE_THROWS_MATCHES(vec.SetString(0, heap.AddStringUnsafe(text)), Exception,
-		                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
-		REQUIRE(slots[0].view() == "🦆");
-
 		vec.AssignStringUnsafe(1, text);
-		vec.SetStringUnsafe(2, heap.AddStringUnsafe(text));
+		vec.SetString(2, heap.AddStringUnsafe(text));
 		REQUIRE(slots[1].view() == text);
 		REQUIRE(slots[2].view() == text);
 	}
