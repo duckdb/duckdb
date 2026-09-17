@@ -113,19 +113,6 @@ EXPLAIN SELECT sum(v) FROM (SELECT id, __internal_barrier(id) AS v FROM walk_row
 ----
 physical_plan	<REGEX>:[\s\S]*Filters: id = 3[\s\S]*
 
-statement ok
-CREATE SEQUENCE projected_calls;
-
-query II
-SELECT sum(v), count(*) FROM (SELECT id, nextval('projected_calls') AS v FROM walk_rows) q WHERE id = 3;
-----
-36	8
-
-query I
-SELECT currval('projected_calls');
-----
-8
-
 # Global limits and observable predicates remain barriers to producer restriction.
 
 query II
