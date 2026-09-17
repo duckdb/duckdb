@@ -10,9 +10,8 @@
 
 namespace duckdb {
 
-namespace {
-bool TryEvaluateAtConstants(ClientContext &context, const BoundFunctionExpression &func,
-                            const vector<Value> &arg_values, Value &result) {
+bool StatisticsPropagator::TryEvaluateAtConstants(ClientContext &context, const BoundFunctionExpression &func,
+                                                  const vector<Value> &arg_values, Value &result) {
 	vector<unique_ptr<Expression>> children;
 	children.reserve(arg_values.size());
 	for (auto &v : arg_values) {
@@ -23,6 +22,63 @@ bool TryEvaluateAtConstants(ClientContext &context, const BoundFunctionExpressio
 	clone->Cast<BoundFunctionExpression>().GetChildrenMutable() = std::move(children);
 	return ExpressionExecutor::TryEvaluateScalar(context, *clone, result);
 }
+
+namespace {
+
+//! NaN/NULL at a corner means the input was NaN/NULL (column contains NaN, or year(±infinity)).
+//! NaN is excluded even though DuckDB orders it above all other values: negate(NaN) = NaN, which
+//! would violate NON_INCREASING if NaN were treated as a valid corner.
+bool IsUnusableMonotoneResult(const Value &v) {
+	if (v.IsNull()) {
+		return true;
+	}
+	switch (v.type().id()) {
+	case LogicalTypeId::DOUBLE:
+		return Value::IsNan(v.GetValue<double>());
+	case LogicalTypeId::FLOAT:
+		return Value::IsNan(v.GetValue<float>());
+	default:
+		return false;
+	}
+}
+
+} // namespace
+
+bool StatisticsPropagator::TryEvaluateMonotoneCorners(ClientContext &context, const BoundFunctionExpression &func,
+                                                      const vector<Value> &lo_args, const vector<Value> &hi_args,
+                                                      Value &out_lo, Value &out_hi) {
+	if (!TryEvaluateAtConstants(context, func, lo_args, out_lo) ||
+	    !TryEvaluateAtConstants(context, func, hi_args, out_hi)) {
+		return false;
+	}
+	if (IsUnusableMonotoneResult(out_lo) || IsUnusableMonotoneResult(out_hi)) {
+		return false;
+	}
+	if (out_hi < out_lo) {
+		throw InternalException("Monotonic arg annotation violated for '%s': output min exceeds output max",
+		                        func.Function().GetName());
+	}
+	return true;
+}
+
+bool StatisticsPropagator::TryEvaluateMonotoneEndpoints(ClientContext &context, const BoundFunctionExpression &func,
+                                                        const vector<Value> &arg_values, idx_t column_arg,
+                                                        bool decreasing, const Value &col_min, const Value &col_max,
+                                                        Value &out_lo, Value &out_hi) {
+	vector<Value> lo_args = arg_values;
+	vector<Value> hi_args = arg_values;
+	// a decreasing function attains its output minimum at the column maximum and vice versa
+	if (decreasing) {
+		lo_args[column_arg] = col_max;
+		hi_args[column_arg] = col_min;
+	} else {
+		lo_args[column_arg] = col_min;
+		hi_args[column_arg] = col_max;
+	}
+	return TryEvaluateMonotoneCorners(context, func, lo_args, hi_args, out_lo, out_hi);
+}
+
+namespace {
 
 // Equal bounds need not imply identical inputs for certain types, so we skip this optimization for those values.
 // Floating-point bounds only lose information for the sign of zero.
@@ -161,32 +217,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateMonotoneBounds(ClientC
 	}
 
 	Value out_lo, out_hi;
-	if (!TryEvaluateAtConstants(context, func, lo_args, out_lo) ||
-	    !TryEvaluateAtConstants(context, func, hi_args, out_hi)) {
+	if (!TryEvaluateMonotoneCorners(context, func, lo_args, hi_args, out_lo, out_hi)) {
 		return nullptr;
-	}
-	// NaN/NULL at a corner means the input was NaN/NULL (column contains NaN, or year(±infinity)).
-	// NaN is excluded even though DuckDB orders it above all other values: negate(NaN) = NaN, which
-	// would violate NON_INCREASING if NaN were treated as a valid corner. Bail instead.
-	const auto is_unusable = [](const Value &v) {
-		if (v.IsNull()) {
-			return true;
-		}
-		switch (v.type().id()) {
-		case LogicalTypeId::DOUBLE:
-			return Value::IsNan(v.GetValue<double>());
-		case LogicalTypeId::FLOAT:
-			return Value::IsNan(v.GetValue<float>());
-		default:
-			return false;
-		}
-	};
-	if (is_unusable(out_lo) || is_unusable(out_hi)) {
-		return nullptr;
-	}
-	if (out_hi < out_lo) {
-		throw InternalException("Monotonic arg annotation violated for '%s': output min exceeds output max",
-		                        func.Function().GetName());
 	}
 
 	auto result = NumericStats::CreateEmpty(func.GetReturnType());

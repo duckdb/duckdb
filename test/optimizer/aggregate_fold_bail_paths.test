@@ -81,11 +81,28 @@ EXPLAIN SELECT sum(i) FROM t
 ----
 physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
 
-# the projection below the aggregate computes an expression: there is no column to chase
+# a projection computing a monotone function of the column folds through the mapped endpoints:
+# max(i + 1) = max(i) + 1
 query II
 EXPLAIN SELECT max(x) FROM (SELECT i+1 AS x FROM t)
 ----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(x) FROM (SELECT i+1 AS x FROM t)
+----
+8192
+
+# a projection computing an expression with no monotonicity annotation has no column to chase
+query II
+EXPLAIN SELECT max(x) FROM (SELECT i % 100 AS x FROM t)
+----
 physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(x) FROM (SELECT i % 100 AS x FROM t)
+----
+99
 
 # the projection casts to VARCHAR: the cast does not preserve the order of the statistics
 query II

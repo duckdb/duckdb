@@ -8,6 +8,8 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/arg_properties.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/partition_fold.hpp"
@@ -23,7 +25,9 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/storage_index.hpp"
 
@@ -147,6 +151,76 @@ bool TryGetByteLengthColumnRef(const Expression &expr, ColumnBinding &binding) {
 		return false;
 	}
 	binding = fun.GetChildren()[0]->Cast<BoundColumnRefExpression>().Binding();
+	return true;
+}
+
+//! A recognized MIN/MAX over a monotone function of a column: MIN/MAX(f(col))
+struct MonotoneColumnInfo {
+	ColumnBinding binding;
+	//! A copy of `f(...)`; evaluating it needs arg_values spliced in
+	unique_ptr<Expression> function;
+	//! The constant arguments, indexed like the function's children
+	vector<Value> arg_values;
+	//! The argument that holds the column
+	idx_t column_arg;
+	//! Whether f is non-increasing in that argument
+	bool decreasing;
+	bool is_min;
+	idx_t aggr_idx;
+};
+
+//! Resolve MIN/MAX(f(col)): one column arg with known monotonicity; other args constant.
+bool TryGetMonotoneColumnInfo(ClientContext &context, const Expression &expr, MonotoneColumnInfo &info) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	auto &func = expr.Cast<BoundFunctionExpression>();
+	if (!func.Function().HasArgProperties() || func.Function().GetStability() != FunctionStability::CONSISTENT) {
+		// without an annotation there is no reason to believe the endpoints map to the extremes
+		return false;
+	}
+	if (BaseStatistics::GetStatsType(func.GetReturnType()) != StatisticsType::NUMERIC_STATS ||
+	    func.GetReturnType().InternalType() == PhysicalType::BOOL) {
+		// the mapped value has to be orderable for MIN/MAX over it to be defined
+		return false;
+	}
+	optional_idx column_arg;
+	vector<Value> arg_values(func.GetChildren().size());
+	bool decreasing = false;
+	for (idx_t i = 0; i < func.GetChildren().size(); i++) {
+		auto &child = *func.GetChildren()[i];
+		if (child.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+			if (!child.IsFoldable()) {
+				return false;
+			}
+			if (!ExpressionExecutor::TryEvaluateScalar(context, child, arg_values[i]) || arg_values[i].IsNull()) {
+				return false;
+			}
+			continue;
+		}
+		if (column_arg.IsValid()) {
+			return false;
+		}
+		const auto monotonicity = func.Function().GetArgProperties(i).monotonicity;
+		if (!IsKnownMonotonic(monotonicity) || monotonicity == Monotonicity::CONSTANT) {
+			return false;
+		}
+		if (child.GetReturnType().id() == LogicalTypeId::INTERVAL) {
+			// intervals are not totally ordered, so an interval endpoint carries no extremum
+			return false;
+		}
+		column_arg = i;
+		decreasing = IsMonotonicDecreasing(monotonicity);
+		info.binding = child.Cast<BoundColumnRefExpression>().Binding();
+	}
+	if (!column_arg.IsValid()) {
+		// no column to read the endpoints from
+		return false;
+	}
+	info.function = expr.Copy();
+	info.arg_values = std::move(arg_values);
+	info.column_arg = column_arg.GetIndex();
+	info.decreasing = decreasing;
 	return true;
 }
 
@@ -371,6 +445,76 @@ private:
 	LogicalType result_type;
 };
 
+//! MIN/MAX(f(col)) from numeric min/max via ArgProperties. Exact partitions fold; inexact or
+//! filter-cut partitions only vote as BOUND. Both mapped endpoints must be usable.
+struct MonotoneFoldClient {
+	MonotoneFoldClient(ClientContext &context_p, MonotoneColumnInfo info_p, StorageIndex storage_index_p,
+	                   LogicalType result_type_p)
+	    : context(context_p), info(std::move(info_p)), storage_index(std::move(storage_index_p)),
+	      result_type(std::move(result_type_p)) {
+	}
+
+	FoldPartitionState ClassifyPartition(const FoldPartition &partition, Value &value) const {
+		auto &stats = partition.stats;
+		if (!stats.partition_row_group) {
+			return FoldPartitionState::NO_INFO;
+		}
+		auto column_stats = stats.partition_row_group->GetColumnStatistics(storage_index);
+		if (!column_stats) {
+			return FoldPartitionState::NO_INFO;
+		}
+		if (stats.partition_row_group->HasPendingWrites()) {
+			// rows appended to this partition locally are not covered by the statistics
+			return FoldPartitionState::NO_INFO;
+		}
+		if (column_stats->GetStatsType() != StatisticsType::NUMERIC_STATS) {
+			return FoldPartitionState::NO_INFO;
+		}
+		const bool min_max_exact = stats.partition_row_group->MinMaxIsExact(storage_index);
+		if (!NumericStats::HasMinMax(*column_stats)) {
+			if (!min_max_exact) {
+				return FoldPartitionState::NO_INFO;
+			}
+			// a partition without min/max holds no non-null values: MIN/MAX ignores them
+			return column_stats->CanHaveNoNull() ? FoldPartitionState::NO_INFO : FoldPartitionState::NEUTRAL;
+		}
+		auto &func = info.function->Cast<BoundFunctionExpression>();
+		Value out_lo, out_hi;
+		if (!StatisticsPropagator::TryEvaluateMonotoneEndpoints(context, func, info.arg_values, info.column_arg,
+		                                                        info.decreasing, NumericStats::Min(*column_stats),
+		                                                        NumericStats::Max(*column_stats), out_lo, out_hi)) {
+			return FoldPartitionState::NO_INFO;
+		}
+		value = info.is_min ? std::move(out_lo) : std::move(out_hi);
+		// inexact/filter-cut: mapped endpoint is a bound, not attained
+		if (!min_max_exact || partition.filter_result != FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+			return FoldPartitionState::BOUND;
+		}
+		return FoldPartitionState::EXACT_VALUE;
+	}
+
+	void CombineCandidate(Value &candidate, Value &value) const {
+		if (info.is_min ? value < candidate : value > candidate) {
+			candidate = std::move(value);
+		}
+	}
+
+	bool ExcludesCandidate(const Value &bound, const Value &candidate) const {
+		// the mapped bound is numeric, so it is safe to compare.
+		return info.is_min ? bound >= candidate : bound <= candidate;
+	}
+
+	Value FallbackValue() const {
+		// MIN/MAX over no non-null values is NULL
+		return Value(result_type);
+	}
+
+	ClientContext &context;
+	MonotoneColumnInfo info;
+	StorageIndex storage_index;
+	LogicalType result_type;
+};
+
 bool GroupingSetCanIntroduceNull(const LogicalAggregate &aggr, idx_t group_idx) {
 	if (aggr.grouping_sets.empty()) {
 		return false;
@@ -397,6 +541,8 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	vector<unique_ptr<ValueComparator>> comparators;
 	// MIN/MAX over a byte length, e.g. MAX(strlen(col))
 	vector<ByteLengthColumnInfo> byte_length_columns;
+	// MIN/MAX over a monotone function of a column, e.g. MAX(year(ts))
+	vector<MonotoneColumnInfo> monotone_columns;
 
 	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
 		auto &aggr_ref = aggr.expressions[i];
@@ -422,10 +568,17 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			MinMaxColumnInfo column_info;
 			if (!TryGetMinMaxColumnInfo(*aggr_expr.GetChildren()[0], column_info)) {
 				ColumnBinding length_binding;
-				if (!TryGetByteLengthColumnRef(*aggr_expr.GetChildren()[0], length_binding)) {
+				if (TryGetByteLengthColumnRef(*aggr_expr.GetChildren()[0], length_binding)) {
+					byte_length_columns.push_back({length_binding, is_min, i});
+					continue;
+				}
+				MonotoneColumnInfo monotone_info;
+				if (!TryGetMonotoneColumnInfo(context, *aggr_expr.GetChildren()[0], monotone_info)) {
 					return;
 				}
-				byte_length_columns.push_back({length_binding, is_min, i});
+				monotone_info.is_min = is_min;
+				monotone_info.aggr_idx = i;
+				monotone_columns.push_back(std::move(monotone_info));
 				continue;
 			}
 			column_info.is_min = is_min;
@@ -460,22 +613,40 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				return;
 			}
 		}
-		// reclassify projected strlen exprs out of plain min/max entries
+		// monotone entries only chase colrefs; bail if the projection computes the argument
+		for (auto &column_info : monotone_columns) {
+			auto &expr = proj.GetExpression(column_info.binding);
+			if (expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+				return;
+			}
+			column_info.binding = expr.Cast<BoundColumnRefExpression>().Binding();
+		}
+		// walk backwards: an entry whose projection computes a byte length moves into
+		// byte_length_columns, so it is only resolved against the next projection level
 		for (idx_t i = min_max_columns.size(); i > 0; i--) {
 			auto &column_info = min_max_columns[i - 1];
 			auto &expr = proj.GetExpression(column_info.binding);
 			MinMaxColumnInfo projection_info;
 			if (!TryGetMinMaxColumnInfo(expr, projection_info)) {
-				// projection computes the aggregated value (e.g. CSE-lifted strlen)
-				ColumnBinding length_binding;
-				if (!TryGetByteLengthColumnRef(expr, length_binding)) {
-					return;
-				}
+				// the projection computes the value the aggregate consumes, e.g. a strlen(col) shared
+				// with another aggregate and lifted out of the aggregates by CSE, or a monotone
+				// function of a column
 				if (column_info.result_type != expr.GetReturnType()) {
-					// the aggregate casts the projected value - not a plain byte-length aggregate
+					// the aggregate casts the projected value - not a plain mapped aggregate
 					return;
 				}
-				byte_length_columns.push_back({length_binding, column_info.is_min, column_info.aggr_idx});
+				ColumnBinding length_binding;
+				if (TryGetByteLengthColumnRef(expr, length_binding)) {
+					byte_length_columns.push_back({length_binding, column_info.is_min, column_info.aggr_idx});
+				} else {
+					MonotoneColumnInfo monotone_info;
+					if (!TryGetMonotoneColumnInfo(context, expr, monotone_info)) {
+						return;
+					}
+					monotone_info.is_min = column_info.is_min;
+					monotone_info.aggr_idx = column_info.aggr_idx;
+					monotone_columns.push_back(std::move(monotone_info));
+				}
 				min_max_columns.erase(min_max_columns.begin() + NumericCast<int64_t>(i - 1));
 				comparators.erase(comparators.begin() + NumericCast<int64_t>(i - 1));
 				continue;
@@ -527,6 +698,15 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		auto &binding = byte_length_columns[i].binding;
 		auto &column_index = get.GetColumnIndex(binding);
 		if (!get.TryGetStorageIndex(column_index, byte_length_storage_indexes[i])) {
+			return;
+		}
+	}
+
+	vector<StorageIndex> monotone_storage_indexes(monotone_columns.size());
+	for (idx_t i = 0; i < monotone_columns.size(); i++) {
+		auto &binding = monotone_columns[i].binding;
+		auto &column_index = get.GetColumnIndex(binding);
+		if (!get.TryGetStorageIndex(column_index, monotone_storage_indexes[i])) {
 			return;
 		}
 	}
@@ -617,6 +797,14 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		const auto aggr_idx = byte_length_columns[i].aggr_idx;
 		ByteLengthFoldClient client(byte_length_storage_indexes[i], byte_length_columns[i].is_min,
 		                            aggr.expressions[aggr_idx]->GetReturnType());
+		if (!PartitionFold(partitions, client, results[aggr_idx])) {
+			return;
+		}
+	}
+	for (idx_t i = 0; i < monotone_columns.size(); i++) {
+		const auto aggr_idx = monotone_columns[i].aggr_idx;
+		MonotoneFoldClient client(context, std::move(monotone_columns[i]), monotone_storage_indexes[i],
+		                          aggr.expressions[aggr_idx]->GetReturnType());
 		if (!PartitionFold(partitions, client, results[aggr_idx])) {
 			return;
 		}

@@ -35,6 +35,7 @@
         "test/optimizer/eager_aggregate_execution_all_null.test",
         "test/optimizer/aggregate_fold_bail_paths.test",
         "test/optimizer/byte_length_fold.test",
+        "test/optimizer/monotone_aggregate_fold.test",
         "test/optimizer/partial_aggregate_precomputation.test"
       ]
     },
