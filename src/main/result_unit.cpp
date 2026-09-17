@@ -8,13 +8,8 @@ ResultUnit::ResultUnit(idx_t row_count_p, idx_t byte_size_p) : row_count(row_cou
 ResultUnit::~ResultUnit() {
 }
 
-static DataChunk &RequireChunk(const unique_ptr<DataChunk> &chunk) {
-	D_ASSERT(chunk);
-	return *chunk;
-}
-
 ChunkUnit::ChunkUnit(unique_ptr<DataChunk> chunk_p)
-    : ResultUnit(RequireChunk(chunk_p).size(), chunk_p->GetDataSize()), chunk(std::move(chunk_p)) {
+    : ResultUnit(chunk_p->size(), chunk_p->GetDataSize()), chunk(std::move(chunk_p)) {
 }
 
 } // namespace duckdb
