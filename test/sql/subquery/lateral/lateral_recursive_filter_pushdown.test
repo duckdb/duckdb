@@ -115,7 +115,7 @@ statement ok
 CREATE SEQUENCE lateral_output_sequence;
 
 query I
-SELECT count(v) FROM (SELECT id, nextval('lateral_output_sequence') AS v FROM walk_rows) q WHERE id=3;
+SELECT count(nextval('lateral_output_sequence')) FROM walk_rows WHERE id = 3;
 ----
 8
 
