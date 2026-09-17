@@ -1150,17 +1150,24 @@ void LogQueryPathSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 //===----------------------------------------------------------------------===//
 void MaxMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	// a percentage is relative to the system memory, since resolving it against maximum_memory would be circular
-	config.options.maximum_memory =
+	auto maximum_memory =
 	    ParseMemoryLimitOrPercentage(input.ToString(), [&]() { return GetAvailableSystemMemory(config); });
 	if (db) {
-		BufferManager::GetBufferManager(*db).SetMemoryLimit(config.options.maximum_memory);
+		BufferManager::GetBufferManager(*db).SetMemoryLimit(maximum_memory);
 	}
+	config.options.maximum_memory = maximum_memory;
 }
 
 void MaxMemorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	auto old_memory = config.options.maximum_memory;
 	config.SetDefaultMaxMemory();
 	if (db) {
-		BufferManager::GetBufferManager(*db).SetMemoryLimit(config.options.maximum_memory);
+		try {
+			BufferManager::GetBufferManager(*db).SetMemoryLimit(config.options.maximum_memory);
+		} catch (...) {
+			config.options.maximum_memory = old_memory;
+			throw;
+		}
 	}
 }
 
