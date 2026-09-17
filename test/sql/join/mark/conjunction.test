@@ -2,6 +2,10 @@
 # description: Nested-loop MARK conditions form a conjunction for each pair
 # group: [mark]
 
+# Exercise nested-loop conjunctions even when both inputs exceed the range-join threshold.
+statement ok
+SET nested_loop_join_threshold=10000;
+
 foreach disable false true
 
 statement ok
@@ -30,6 +34,11 @@ SELECT a,__mark_join_marker FROM conjunction_probe JOIN BY (TYPE MARK) conjuncti
 NULL	NULL
 
 # Each term matches some build row, but never the same row.
+query II
+EXPLAIN SELECT a,__mark_join_marker FROM conjunction_probe JOIN BY (TYPE MARK) conjunction_build ON a>b AND a<c;
+----
+physical_plan	<REGEX>:.*Nested Loop Join.*Join Type: MARK.*
+
 query II rowsort
 SELECT a,__mark_join_marker FROM conjunction_probe JOIN BY (TYPE MARK) conjunction_build ON a>b AND a<c;
 ----
@@ -124,6 +133,11 @@ SELECT __mark_join_marker FROM (VALUES ((1,NULL),(1,1))) l(a,c) JOIN BY (TYPE MA
 false
 
 # Both inputs cross chunk boundaries; the only match is in the last build row.
+query II
+EXPLAIN SELECT count(*) FROM (SELECT __mark_join_marker m FROM range(2050) l(a) JOIN BY (TYPE MARK) range(2050) r(b) ON a>=b AND a<b+1 AND b>=2049) WHERE m;
+----
+physical_plan	<REGEX>:.*Nested Loop Join.*Join Type: MARK.*
+
 query I
 SELECT count(*) FROM (SELECT __mark_join_marker m FROM range(2050) l(a) JOIN BY (TYPE MARK) range(2050) r(b) ON a>=b AND a<b+1 AND b>=2049) WHERE m;
 ----
@@ -153,3 +167,6 @@ endloop
 
 statement ok
 SET debug_disable_optimizer=false;
+
+statement ok
+RESET nested_loop_join_threshold;

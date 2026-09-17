@@ -2,6 +2,10 @@
 # description: MARK comparisons retain residual predicate truth and evaluation
 # group: [mark]
 
+# Exercise the nested-loop residual evaluator across chunk boundaries.
+statement ok
+SET nested_loop_join_threshold=10000;
+
 foreach disable false true
 
 statement ok
@@ -83,6 +87,11 @@ SELECT a FROM residual_probe JOIN BY (TYPE ANTI) residual_build ON a<b AND a+b=2
 3
 NULL
 
+query II
+EXPLAIN SELECT count(*) FROM (SELECT __mark_join_marker m FROM range(2050) l(a) JOIN BY (TYPE MARK) range(2050) r(b) ON a>=2049 AND b>=2049 AND a+b=4098) WHERE m;
+----
+physical_plan	<REGEX>:.*Nested Loop Join.*Join Type: MARK.*
+
 query I
 SELECT count(*) FROM (SELECT __mark_join_marker m FROM range(2050) l(a) JOIN BY (TYPE MARK) range(2050) r(b) ON a>=2049 AND b>=2049 AND a+b=4098) WHERE m;
 ----
@@ -129,3 +138,6 @@ endloop
 
 statement ok
 SET debug_disable_optimizer=false;
+
+statement ok
+RESET nested_loop_join_threshold;
