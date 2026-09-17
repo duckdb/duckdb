@@ -1332,16 +1332,9 @@ private:
 				}
 			}
 		}
-		bool found_named_argument = false;
 		for (idx_t argument_index = 0; argument_index < argument_names.size(); argument_index++) {
 			auto &argument_name = argument_names[argument_index];
 			if (argument_name.empty()) {
-				if (found_named_argument) {
-					return Failure(InternalExpressionInvariant(ChildPath(path, argument_index),
-					                                           *expression.GetChildren()[argument_index],
-					                                           "The scalar SQL argument-name callback placed a "
-					                                           "positional argument after a named argument"));
-				}
 				continue;
 			}
 			if (!IsValidIdentifier(argument_name)) {
@@ -1349,7 +1342,6 @@ private:
 				    ChildPath(path, argument_index), *expression.GetChildren()[argument_index],
 				    "The scalar SQL argument-name callback returned an invalid identifier"));
 			}
-			found_named_argument = true;
 		}
 		vector<unique_ptr<ParsedExpression>> children;
 		auto sql_argument_count =

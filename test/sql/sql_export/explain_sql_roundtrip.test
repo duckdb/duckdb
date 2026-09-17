@@ -8,6 +8,9 @@ CREATE TABLE explain_data(i INTEGER, g VARCHAR);
 statement ok
 INSERT INTO explain_data VALUES (1,'a'), (1,'a'), (2,'b'), (NULL,'b');
 
+query T nosort explain_verification_mode
+SELECT current_setting('debug_verify_sql_export');
+
 explain_sql
 
 query II rowsort
@@ -186,3 +189,6 @@ query I
 SELECT 42;
 ----
 42
+
+query T nosort explain_verification_mode
+SELECT current_setting('debug_verify_sql_export');

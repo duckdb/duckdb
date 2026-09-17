@@ -326,7 +326,8 @@ def selftest(args):
         ),
         'explain_execution_error': (
             True,
-            "explain_sql\n\nstatement error\nSELECT error('execution reached');\n----\nexecution reached\n",
+            "explain_sql\n\nstatement error\nSELECT error('execution reached');\n----\nexecution reached\n"
+            "\nquery T\nSELECT current_setting('debug_verify_sql_export');\n----\nstrict\n",
         ),
         'explain_failure_is_not_expected_error': (
             False,
@@ -457,7 +458,8 @@ endloop
             assert len(explained) == expected_count, (name, explained)
             assert len({record_key(record) for record in explained}) == len(explained)
             if name == 'explain_execution_error':
-                assert explained[0]['execution'] == 'ERRORED' and not records
+                assert explained[0]['execution'] == 'ERRORED'
+                assert len(records) == 1 and records[0]['route'] == 'GENERATED'
             elif name == 'explain_named_loop':
                 assert all(record['connection'] == 'named' for record in explained)
             elif name == 'explain_setting_restore':

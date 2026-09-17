@@ -59,22 +59,7 @@ inline bool IsSQLValueType(const LogicalType &type) {
 }
 
 inline bool SQLTypesMatch(const LogicalType &left, const LogicalType &right) {
-	if (left != right) {
-		return false;
-	}
-	vector<string> collations;
-	TypeVisitor::Contains(left, [&](const LogicalType &child) {
-		if (child.id() == LogicalTypeId::VARCHAR) {
-			collations.push_back(StringType::GetCollation(child));
-		}
-		return false;
-	});
-	idx_t index = 0;
-	const auto mismatch = TypeVisitor::Contains(right, [&](const LogicalType &child) {
-		return child.id() == LogicalTypeId::VARCHAR &&
-		       (index >= collations.size() || collations[index++] != StringType::GetCollation(child));
-	});
-	return !mismatch && index == collations.size();
+	return left.EqualsWithCollation(right);
 }
 
 inline string TypeCollationSignature(const LogicalType &type) {

@@ -1,3 +1,4 @@
+#include "duckdb/common/enum_util.hpp"
 
 #include "sqllogic_test_runner.hpp"
 
@@ -1411,46 +1412,6 @@ static JSONMutableValue SQLExportPathJSON(JSONWriter &writer, const LogicalPlanV
 	return components;
 }
 
-static const char *SQLExportIssueCodeName(LogicalPlanVerificationIssueCode code) {
-	switch (code) {
-	case LogicalPlanVerificationIssueCode::INVALID_BINDING:
-		return "INVALID_BINDING";
-	case LogicalPlanVerificationIssueCode::TYPE_MISMATCH:
-		return "TYPE_MISMATCH";
-	case LogicalPlanVerificationIssueCode::UNSUPPORTED_OPERATOR:
-		return "UNSUPPORTED_OPERATOR";
-	case LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPRESSION:
-		return "UNSUPPORTED_EXPRESSION";
-	case LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION:
-		return "UNSUPPORTED_FUNCTION";
-	case LogicalPlanVerificationIssueCode::UNSUPPORTED_SOURCE:
-		return "UNSUPPORTED_SOURCE";
-	case LogicalPlanVerificationIssueCode::UNSUPPORTED_EXTENSION:
-		return "UNSUPPORTED_EXTENSION";
-	case LogicalPlanVerificationIssueCode::MALFORMED_EXTENSION_RESULT:
-		return "MALFORMED_EXTENSION_RESULT";
-	case LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE:
-		return "UNSUPPORTED_EXPORT_FEATURE";
-	case LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT:
-		return "INTERNAL_INVARIANT";
-	default:
-		throw InternalException("Unknown SQL export diagnostic code");
-	}
-}
-
-static const char *SQLExportIssuePhaseName(LogicalPlanVerificationPhase phase) {
-	switch (phase) {
-	case LogicalPlanVerificationPhase::VERIFY:
-		return "VERIFY";
-	case LogicalPlanVerificationPhase::EXPRESSION_EXPORT:
-		return "EXPRESSION_EXPORT";
-	case LogicalPlanVerificationPhase::PLAN_EXPORT:
-		return "PLAN_EXPORT";
-	default:
-		throw InternalException("Unknown SQL export diagnostic phase");
-	}
-}
-
 static JSONMutableValue SQLExportFunctionJSON(JSONWriter &writer,
                                               const LogicalPlanVerificationFunctionIdentity &function) {
 	auto result = writer.CreateObject();
@@ -1511,8 +1472,8 @@ static JSONMutableValue SQLExportConstructJSON(JSONWriter &writer,
 
 static JSONMutableValue SQLExportIssueJSON(JSONWriter &writer, const LogicalPlanVerificationIssue &issue) {
 	auto result = writer.CreateObject();
-	result.AddString("code", SQLExportIssueCodeName(issue.code));
-	result.AddString("phase", SQLExportIssuePhaseName(issue.phase));
+	result.AddString("code", EnumUtil::ToString(issue.code));
+	result.AddString("phase", EnumUtil::ToString(issue.phase));
 	if (issue.path) {
 		result.Add("path", SQLExportPathJSON(writer, *issue.path));
 	}

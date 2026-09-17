@@ -2,6 +2,7 @@
 #include "duckdb/main/sql_export_verification.hpp"
 #include "duckdb/planner/sql_export_helpers.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/common/json_document.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "sqllogic_test_runner.hpp"
@@ -239,9 +240,10 @@ class SQLExportCollectionScope {
 public:
 	explicit SQLExportCollectionScope(ClientContext &context_p)
 	    : context(context_p), already_attached(SQLExportVerificationState::Get(context) != nullptr),
-	      observer(SQLExportVerificationState::GetOrCreate(context)) {
+	      observer(SQLExportVerificationState::GetOrCreate(context)), retain_failure_sql(observer->retain_failure_sql) {
 	}
 	~SQLExportCollectionScope() {
+		observer->retain_failure_sql = retain_failure_sql;
 		if (!already_attached) {
 			SQLExportVerificationState::Remove(context);
 		}
@@ -253,36 +255,60 @@ private:
 
 public:
 	shared_ptr<SQLExportVerificationState> observer;
+	bool retain_failure_sql;
 };
 
-class ExplainSQLVerificationScope {
+static bool CollectSQLExport(ClientContext &context, const string &sql) {
+	if (Settings::Get<DebugVerifySqlExportSetting>(context) != DebugSQLExportVerification::OFF ||
+	    SQLExportVerificationState::Get(context) || TestConfiguration::Get().EmitSQLExportEvents() ||
+	    TestConfiguration::Get().RequireSQLExportRoundTrip()) {
+		return true;
+	}
+	// A later statement or parser expansion can enable verification during this command.
+	auto &callbacks = ExtensionCallbackManager::Get(context);
+	if (callbacks.HasParserExtensions() || !callbacks.GrammarExtensions().empty() ||
+	    StringUtil::Contains(StringUtil::Lower(sql), "pragma")) {
+		return true;
+	}
+	auto separator = sql.find(';');
+	return separator != string::npos && sql.find_first_not_of(" ;\t\r\n", separator + 1) != string::npos;
+}
+
+class ExplainSQLVerificationOverride {
 public:
-	explicit ExplainSQLVerificationScope(ClientContext &context_p)
-	    : settings(ClientConfig::GetConfig(context_p).user_settings),
+	explicit ExplainSQLVerificationOverride(ClientContext &context_p)
+	    : context(context_p), settings(ClientConfig::GetConfig(context).user_settings),
 	      was_set(settings.IsSet(DebugVerifySqlExportSetting::SettingIndex)) {
 		if (was_set) {
-			context_p.TryGetCurrentUserSetting(DebugVerifySqlExportSetting::SettingIndex, previous);
+			context.TryGetCurrentUserSetting(DebugVerifySqlExportSetting::SettingIndex, previous);
 		}
-		settings.SetUserSetting(DebugVerifySqlExportSetting::SettingIndex, Value("off"));
+		Set(Value("off"), false);
 	}
 
-	~ExplainSQLVerificationScope() {
-		if (was_set) {
-			settings.SetUserSetting(DebugVerifySqlExportSetting::SettingIndex, std::move(previous));
-		} else {
-			settings.ClearSetting(DebugVerifySqlExportSetting::SettingIndex);
-		}
+	void Restore() {
+		Set(was_set ? previous : Value(DebugVerifySqlExportSetting::DefaultValue), !was_set);
 	}
 
 private:
+	void Set(Value value, bool reset) {
+		SettingCallbackInfo info(context, SetScope::SESSION);
+		info.is_reset = reset;
+		DebugVerifySqlExportSetting::OnSet(info, value);
+		if (reset) {
+			settings.ClearSetting(DebugVerifySqlExportSetting::SettingIndex);
+		} else {
+			settings.SetUserSetting(DebugVerifySqlExportSetting::SettingIndex, std::move(value));
+		}
+	}
+
+	ClientContext &context;
 	LocalUserSettings &settings;
 	bool was_set;
 	Value previous;
 };
 
-static unique_ptr<QueryResult> ExecuteExplainedSQL(Connection &connection, const string &sql,
-                                                               const string &file, idx_t line) {
-	ExplainSQLVerificationScope verification_scope(*connection.context);
+static unique_ptr<QueryResult> ExecuteExplainedSQLInternal(Connection &connection, const string &sql,
+                                                                       const string &file, idx_t line) {
 	auto statements = connection.ExtractStatements(sql);
 	if (statements.size() != 1 || statements[0]->type != StatementType::SELECT_STATEMENT) {
 		TEST_FAIL_LINE(file, line, "explain_sql requires exactly one query");
@@ -319,6 +345,20 @@ static unique_ptr<QueryResult> ExecuteExplainedSQL(Connection &connection, const
 	}
 	vector<Value> parameters;
 	return prepared->Execute(parameters);
+}
+
+static unique_ptr<QueryResult> ExecuteExplainedSQL(Connection &connection, const string &sql,
+                                                               const string &file, idx_t line) {
+	ExplainSQLVerificationOverride verification(*connection.context);
+	unique_ptr<QueryResult> result;
+	try {
+		result = ExecuteExplainedSQLInternal(connection, sql, file, line);
+	} catch (...) {
+		verification.Restore();
+		throw;
+	}
+	verification.Restore();
+	return result;
 }
 
 unique_ptr<QueryResult> Command::ExecuteQuery(ExecuteContext &context, reference<Connection> connection,
@@ -358,10 +398,12 @@ unique_ptr<QueryResult> Command::ExecuteQuery(ExecuteContext &context, reference
 	QueryParameters parameters;
 	parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
 
-	SQLExportCollectionScope collection(*connection.get().context);
-	auto &observer = collection.observer;
-	observer->TakeRecords();
-	observer->retain_failure_sql = TestConfiguration::Get().RetainSQLExportFailureSQL();
+	unique_ptr<SQLExportCollectionScope> collection;
+	if (CollectSQLExport(*connection.get().context, context.sql_query)) {
+		collection = make_uniq<SQLExportCollectionScope>(*connection.get().context);
+		collection->observer->TakeRecords();
+		collection->observer->retain_failure_sql = TestConfiguration::Get().RetainSQLExportFailureSQL();
+	}
 	context.sql_export_strict_failure = false;
 	unique_ptr<QueryResult> materialized;
 	try {
@@ -398,6 +440,10 @@ unique_ptr<QueryResult> Command::ExecuteQuery(ExecuteContext &context, reference
 	} catch (std::exception &ex) {
 		materialized = make_uniq<QueryResult>(ErrorData(ex));
 	}
+	if (!collection) {
+		return materialized;
+	}
+	auto &observer = collection->observer;
 	auto statement_count = observer->StatementCount();
 	auto records = observer->TakeRecords();
 	auto mode = Settings::Get<DebugVerifySqlExportSetting>(*connection.get().context);
