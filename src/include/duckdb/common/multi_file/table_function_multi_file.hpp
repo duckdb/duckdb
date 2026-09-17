@@ -126,8 +126,13 @@ public:
 	vector<LogicalType> types;
 	//! The cardinality estimate of the wrapped function for this file (if it has one)
 	optional_idx cardinality;
+	//! The operator this file is scanned for, and the number of files that scan reads
+	optional_ptr<const PhysicalOperator> scan_op;
+	idx_t scan_file_count = 1;
 
 private:
+	//! Take the operator and file count of the scan this file is read for from its state
+	void SetScanState(GlobalTableFunctionState &gstate);
 	TableFunctionInitInput GetInitInput() const;
 	//! Initialize the global state of the wrapped function (if it has not been initialized yet)
 	void InitializeFunctionState(ClientContext &context);

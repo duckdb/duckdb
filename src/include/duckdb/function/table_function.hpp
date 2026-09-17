@@ -184,7 +184,9 @@ struct TableFunctionInitInput {
 	//! while reading, rather than having the conversion applied to its output
 	optional_ptr<const unordered_map<column_t, LogicalType>> cast_map;
 	//! (Optional) When the caller reads several files with this function, the index of the file this scan reads
+	//! and the number of files it reads in total. "op" is then the operator all those files are read for
 	optional_idx file_index;
+	idx_t file_count = 1;
 
 	bool CanRemoveFilterColumns() const {
 		if (projection_ids.empty()) {

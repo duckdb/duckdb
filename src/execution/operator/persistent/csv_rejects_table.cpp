@@ -57,6 +57,28 @@ shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context,
 	return cache.GetOrCreate<CSVRejectsTable>(key, rejects_scan, rejects_error);
 }
 
+idx_t CSVRejectsTable::GetFileIndexBase(idx_t query_id, const void *scan_key, idx_t file_count) {
+	const lock_guard<mutex> lock(file_index_lock);
+	if (file_index_query_id != query_id) {
+		// the file indexes are unique within a query
+		file_index_query_id = query_id;
+		next_file_index = 0;
+		scan_file_index_base.clear();
+	}
+	if (!scan_key) {
+		// we cannot tell which scan this file belongs to - give it an index of its own
+		return next_file_index++;
+	}
+	auto entry = scan_file_index_base.find(scan_key);
+	if (entry != scan_file_index_base.end()) {
+		return entry->second;
+	}
+	const idx_t base = next_file_index;
+	next_file_index += MaxValue<idx_t>(file_count, 1);
+	scan_file_index_base.emplace(scan_key, base);
+	return base;
+}
+
 void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData &data) {
 	// every file of a scan initializes the table it reports its rejects to, and files are opened in parallel
 	const lock_guard<mutex> lock(write_lock);

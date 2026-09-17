@@ -19,8 +19,9 @@ struct ReadSingleCSVFileData : public ReadCSVData {
 
 struct ReadSingleCSVFileGlobalState : public GlobalTableFunctionState {
 public:
-	ReadSingleCSVFileGlobalState(ClientContext &context, ReadSingleCSVFileData &csv_data)
-	    : state(context, csv_data, csv_data.csv_names, 1) {
+	ReadSingleCSVFileGlobalState(ClientContext &context, ReadSingleCSVFileData &csv_data,
+	                             const TableFunctionInitInput &input)
+	    : state(context, csv_data, csv_data.csv_names, input.file_count, input.op) {
 	}
 
 public:
@@ -46,25 +47,43 @@ struct ReadSingleCSVFileLocalState : public LocalTableFunctionState {
 	bool claimed_externally = false;
 };
 
-//! The equivalent of MultiFileReaderInterface::FinalizeBindData - resolve "force_not_null" against the columns
-static void ApplyForceNotNull(CSVReaderOptions &options, const vector<Identifier> &names) {
+//! The columns "force_not_null" was given, looked up the way column names are compared
+static identifier_set_t GetForceNotNullNames(const CSVReaderOptions &options) {
+	identifier_set_t result;
+	for (auto &force_name : options.force_not_null_names) {
+		result.insert(Identifier(force_name));
+	}
+	return result;
+}
+
+//! "force_not_null" names columns of the scan, so it is verified against the schema of the scan rather than
+//! against the columns of any single file of it
+static void VerifyForceNotNull(const CSVReaderOptions &options, const vector<Identifier> &schema) {
 	if (options.force_not_null_names.empty()) {
 		return;
 	}
 	identifier_set_t column_names;
-	for (auto &name : names) {
+	for (auto &name : schema) {
 		column_names.insert(name);
 	}
-	for (auto &force_name : options.force_not_null_names) {
-		if (column_names.find(Identifier(force_name)) == column_names.end()) {
+	for (auto &force_name : GetForceNotNullNames(options)) {
+		if (column_names.find(force_name) == column_names.end()) {
 			throw BinderException("\"force_not_null\" expected to find %s, but it was not found in the table",
-			                      force_name);
+			                      force_name.GetIdentifierName());
 		}
 	}
+}
+
+//! The equivalent of MultiFileReaderInterface::FinalizeBindData - mark the columns of this file that
+//! "force_not_null" names. A file of a multi-file scan only has some of the columns of the scan
+static void ApplyForceNotNull(CSVReaderOptions &options, const vector<Identifier> &names) {
+	if (options.force_not_null_names.empty()) {
+		return;
+	}
+	const auto force_not_null = GetForceNotNullNames(options);
 	options.force_not_null.clear();
 	for (auto &name : names) {
-		options.force_not_null.push_back(options.force_not_null_names.find(name.GetIdentifierName()) !=
-		                                 options.force_not_null_names.end());
+		options.force_not_null.push_back(force_not_null.find(name) != force_not_null.end());
 	}
 }
 
@@ -111,6 +130,9 @@ static unique_ptr<FunctionData> ReadSingleCSVFileBind(ClientContext &context, Ta
 	}
 	SimpleMultiFileList file_list(vector<OpenFileInfo> {result->file});
 
+	//! Whether the options that name columns are verified against the columns of this file, which is the schema of
+	//! the scan only when this file is the whole scan
+	bool verify_against_file = false;
 	optional_ptr<const ReadSingleCSVFileData> schema_source;
 	if (input.HasExpectedSchema()) {
 		if (input.expected_bind_data) {
@@ -141,11 +163,13 @@ static unique_ptr<FunctionData> ReadSingleCSVFileBind(ClientContext &context, Ta
 	options.multi_file_reader = input.multi_file_scan;
 	options.Verify(file_options);
 
-	// when the columns are known upfront the options are resolved against them before this file is sniffed, so
-	// that an option that does not match them is reported before any error in the file itself
-	const bool schema_known = input.HasExpectedSchema() && !schema_source;
-	if (schema_known) {
-		ApplyForceNotNull(options, names);
+	// when the schema of the scan is known upfront the options are verified against it before this file is
+	// sniffed, so that an option that does not match it is reported before any error in the file itself
+	if (input.HasExpectedSchema()) {
+		VerifyForceNotNull(options, *input.expected_names);
+	} else if (!input.multi_file_scan) {
+		// this file is the whole scan, so its own columns are the schema the options are verified against
+		verify_against_file = true;
 	}
 	if (schema_source) {
 		// the schema of this file must be reconcilable with the schema of the scan
@@ -158,9 +182,7 @@ static unique_ptr<FunctionData> ReadSingleCSVFileBind(ClientContext &context, Ta
 			SniffCSVFile(context, *result, CSVSchema(), file_options, return_types, names);
 		}
 	} else if (options.auto_detect || file_options.union_by_name) {
-		// the schema of this file may be combined with the schemas of other files, so columns without any value
-		// are kept as SQLNULL - the reported types below replace what is left with VARCHAR. When the files are
-		// unified by name this file is sniffed even if auto-detection is off, since only its own columns matter
+		// a column without any value is kept as SQLNULL here, so the other files can still determine its type
 		result->csv_schema = CSVSchemaDiscovery::SchemaDiscovery(context, result->buffer_manager, options, file_options,
 		                                                         return_types, names, file_list, false);
 	} else {
@@ -178,9 +200,10 @@ static unique_ptr<FunctionData> ReadSingleCSVFileBind(ClientContext &context, Ta
 	}
 	options.dialect_options.num_cols = names.size();
 
-	if (!schema_known) {
-		ApplyForceNotNull(options, names);
+	if (verify_against_file) {
+		VerifyForceNotNull(options, names);
 	}
+	ApplyForceNotNull(options, names);
 	if (!file_options.union_by_name) {
 		for (auto &type : return_types) {
 			if (type.id() == LogicalTypeId::SQLNULL) {
@@ -202,8 +225,9 @@ static unique_ptr<FunctionData> ReadSingleCSVFileCombineSchema(ClientContext &co
                                                                vector<LogicalType> &return_types,
                                                                vector<Identifier> &names) {
 	if (input.union_by_name) {
-		// the columns of the files were unified by name - the types the user gave apply to the result of that
+		// the columns of the files were unified by name - the options that name columns apply to the result of that
 		auto &options = input.bind_data[0].get().Cast<ReadSingleCSVFileData>().options;
+		VerifyForceNotNull(options, names);
 		if (!options.sql_types_per_column.empty()) {
 			const auto exception = CSVError::ColumnTypesError(options.sql_types_per_column, names);
 			if (!exception.error_message.empty()) {
@@ -258,6 +282,7 @@ static unique_ptr<FunctionData> ReadSingleCSVFileCombineSchema(ClientContext &co
 	best_schema.ReplaceNullWithVarchar();
 	names = StringsToIdentifiers(best_schema.GetNames());
 	return_types = best_schema.GetTypes();
+	VerifyForceNotNull(first_file->options, names);
 
 	auto result = make_uniq<ReadSingleCSVFileData>();
 	// the options that were sniffed on the first file are the starting point for every file of the scan. The
@@ -285,7 +310,7 @@ static unique_ptr<GlobalTableFunctionState> ReadSingleCSVFileInitGlobal(ClientCo
 		    ->InitializeTable(context, csv_data);
 	}
 
-	auto result = make_uniq<ReadSingleCSVFileGlobalState>(context, csv_data);
+	auto result = make_uniq<ReadSingleCSVFileGlobalState>(context, csv_data, input);
 
 	// this file was sniffed during binding, so its dialect and columns are known
 	auto options = csv_data.options;

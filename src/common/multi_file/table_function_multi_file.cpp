@@ -14,7 +14,12 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // States
 //===--------------------------------------------------------------------===//
-class TableFunctionMultiFileGlobalState : public GlobalTableFunctionState {};
+class TableFunctionMultiFileGlobalState : public GlobalTableFunctionState {
+public:
+	//! The operator the files are scanned for, and how many files that scan reads
+	optional_ptr<const PhysicalOperator> op;
+	idx_t file_count = 1;
+};
 
 class TableFunctionMultiFileLocalState : public LocalTableFunctionState {
 public:
@@ -123,6 +128,8 @@ TableFunctionInitInput TableFunctionFileReader::GetInitInput() const {
 	vector<idx_t> projection_ids;
 	TableFunctionInitInput input(bind_data.get(), column_indexes, projection_ids, filters.get());
 	input.file_index = file_list_idx;
+	input.file_count = scan_file_count;
+	input.op = scan_op;
 	if (!cast_map.empty()) {
 		input.cast_map = cast_map;
 	}
@@ -138,6 +145,12 @@ optional_idx TableFunctionFileReader::MaxThreads(ClientContext &context) {
 	return global_state->MaxThreads();
 }
 
+void TableFunctionFileReader::SetScanState(GlobalTableFunctionState &gstate) {
+	auto &scan_state = gstate.Cast<TableFunctionMultiFileGlobalState>();
+	scan_op = scan_state.op;
+	scan_file_count = scan_state.file_count;
+}
+
 void TableFunctionFileReader::InitializeFunctionState(ClientContext &context) {
 	lock_guard<mutex> guard(lock);
 	if (global_state || !function.init_global) {
@@ -147,16 +160,18 @@ void TableFunctionFileReader::InitializeFunctionState(ClientContext &context) {
 	global_state = function.init_global(context, init_input);
 }
 
-void TableFunctionFileReader::PrepareReader(ClientContext &context, GlobalTableFunctionState &) {
+void TableFunctionFileReader::PrepareReader(ClientContext &context, GlobalTableFunctionState &gstate) {
+	SetScanState(gstate);
 	InitializeFunctionState(context);
 }
 
-bool TableFunctionFileReader::TryInitializeScan(ClientContext &context, GlobalTableFunctionState &,
+bool TableFunctionFileReader::TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
                                                 LocalTableFunctionState &lstate_p) {
 	if (exhausted) {
 		return false;
 	}
 	// the initial reader obtained during binding is never prepared - initialize it here instead
+	SetScanState(gstate);
 	InitializeFunctionState(context);
 	auto &lstate = lstate_p.Cast<TableFunctionMultiFileLocalState>();
 	if (!function.init_local) {
@@ -421,8 +436,14 @@ void TableFunctionMultiFileWrapper::BindReader(ClientContext &context, vector<Lo
 }
 
 unique_ptr<GlobalTableFunctionState>
-TableFunctionMultiFileWrapper::InitializeGlobalState(ClientContext &, MultiFileBindData &, MultiFileGlobalState &) {
-	return make_uniq<TableFunctionMultiFileGlobalState>();
+TableFunctionMultiFileWrapper::InitializeGlobalState(ClientContext &, MultiFileBindData &bind_data,
+                                                     MultiFileGlobalState &global_state) {
+	auto result = make_uniq<TableFunctionMultiFileGlobalState>();
+	// the wrapped function is told which file of this scan it reads, so that a function that reports per-file
+	// information (like the CSV rejects tables) can tell the files of a scan apart from those of another scan
+	result->op = global_state.op;
+	result->file_count = bind_data.file_list->GetTotalFileCount();
+	return std::move(result);
 }
 
 unique_ptr<LocalTableFunctionState> TableFunctionMultiFileWrapper::InitializeLocalState(ClientContext &context,

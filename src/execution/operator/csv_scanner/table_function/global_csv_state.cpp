@@ -13,9 +13,10 @@
 namespace duckdb {
 
 CSVGlobalState::CSVGlobalState(ClientContext &context_p, ReadCSVData &csv_data_p,
-                               const vector<Identifier> &column_names_p, idx_t total_file_count)
-    : context(context_p), csv_data(csv_data_p), column_names(column_names_p),
-      sniffer_mismatch_error(csv_data_p.options.sniffer_user_mismatch_error) {
+                               const vector<Identifier> &column_names_p, idx_t total_file_count_p,
+                               optional_ptr<const PhysicalOperator> scan_op_p)
+    : context(context_p), csv_data(csv_data_p), scan_op(scan_op_p), total_file_count(total_file_count_p),
+      column_names(column_names_p), sniffer_mismatch_error(csv_data_p.options.sniffer_user_mismatch_error) {
 	auto &options = csv_data.options;
 	// There are situations where we only support single threaded scanning
 	auto system_threads = context.db->NumberOfThreads();
@@ -235,9 +236,11 @@ void CSVGlobalState::FillRejectsTable(CSVFileScan &scan) {
 	InternalAppender scans_appender(context, scans_table);
 	idx_t scan_idx = context.transaction.GetActiveQuery();
 
-	// the index of the file within the scan identifies it in the rejects tables - using it rather than the order in
-	// which the files finish keeps the indexes deterministic when the files are read in parallel
-	const idx_t rejects_file_idx = scan.GetFileIndex();
+	// the files of a scan report under a block of indexes, so that the index of a file within its scan identifies
+	// it - that keeps the indexes deterministic when files are read in parallel, and keeps the files of one scan
+	// apart from those of another scan in the same query
+	const idx_t rejects_file_idx =
+	    rejects->GetFileIndexBase(scan_idx, scan_op.get(), total_file_count) + scan.GetFileIndex();
 	scan.error_handler->FillRejectsTable(errors_appender, rejects_file_idx, scan_idx, scan, *rejects, column_names,
 	                                     limit);
 	if (rejects->count != 0) {

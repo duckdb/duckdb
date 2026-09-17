@@ -120,6 +120,35 @@ SELECT * FROM read_csv('data/csv/error/mismatch/*.csv', ignore_errors=true, file
 ----
 <REGEX>:.*schema mismatch in glob.*
 
+# "force_not_null" names the columns of the scan, so a column that only some of the files have is allowed - it is
+# forced in the files that have it, and NULL in the files that do not
+statement ok
+COPY (SELECT 1 AS a, '' AS b) TO '{TEST_DIR}/fnn_1.csv' (FORMAT csv, HEADER, QUOTE '')
+
+statement ok
+COPY (SELECT 2 AS a, '' AS c) TO '{TEST_DIR}/fnn_2.csv' (FORMAT csv, HEADER, QUOTE '')
+
+query III
+SELECT a, b IS NULL, c IS NULL FROM read_csv('{TEST_DIR}/fnn_*.csv', union_by_name=true, force_not_null=['c'])
+ORDER BY a
+----
+1	true	true
+2	true	false
+
+# a column that none of the files have is still reported
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/fnn_*.csv', union_by_name=true, force_not_null=['d'])
+----
+<REGEX>:.*force_not_null.*expected to find d.*
+
+# the columns are matched the way column names are matched elsewhere - case-insensitively
+query III
+SELECT a, b IS NULL, c IS NULL FROM read_csv('{TEST_DIR}/fnn_*.csv', union_by_name=true, force_not_null=['C'])
+ORDER BY a
+----
+1	true	true
+2	true	false
+
 # rows that cannot be read are stored in the rejects table rather than failing the scan
 query I
 SELECT count(*) FROM read_csv('data/csv/error/mismatch/small1.csv', store_rejects=true)
