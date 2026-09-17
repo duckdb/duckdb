@@ -679,15 +679,15 @@ shared-libs-release-artifact:
 
 # Writes a C source that links statically built extensions into a program: compile it next to your own sources and put
 # the extension archives before libduckdb_static.a. LINK_EXTENSIONS picks the extensions (space or semicolon
-# separated); without it, every extension archive in LINK_HELPER_BUILD_DIR is used.
-LINK_HELPER_BUILD_DIR ?= build/release
-LINK_HELPER_FILE ?= $(LINK_HELPER_BUILD_DIR)/link_helper.c
+# separated); without it, every extension archive in STATIC_EXTENSION_LOADER_BUILD_DIR is used.
+STATIC_EXTENSION_LOADER_BUILD_DIR ?= build/release
+STATIC_EXTENSION_LOADER_FILE ?= $(STATIC_EXTENSION_LOADER_BUILD_DIR)/static_extension_loader.c
 
-.PHONY: link_helper
-link_helper:
-	$(PYTHON) scripts/generate_extension_roots.py --output "$(LINK_HELPER_FILE)" \
-		$(if $(LINK_EXTENSIONS),"$(LINK_EXTENSIONS)",$(patsubst lib%_extension.a,%,$(notdir $(wildcard $(LINK_HELPER_BUILD_DIR)/extension/*/lib*_extension.a))))
-	@echo "Wrote $(LINK_HELPER_FILE)"
+.PHONY: static_extension_loader
+static_extension_loader:
+	$(PYTHON) scripts/generate_static_extension_loader.py --output "$(STATIC_EXTENSION_LOADER_FILE)" \
+		$(if $(LINK_EXTENSIONS),"$(LINK_EXTENSIONS)",$(patsubst lib%_extension.a,%,$(notdir $(wildcard $(STATIC_EXTENSION_LOADER_BUILD_DIR)/extension/*/lib*_extension.a))))
+	@echo "Wrote $(STATIC_EXTENSION_LOADER_FILE)"
 
 .PHONY: static-libs-release-artifact
 

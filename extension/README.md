@@ -216,13 +216,13 @@ and finally link both extensions into DuckDB.
 
 # Linking the static archives by hand
 Outside of CMake, a program links one archive per extension it wants, names each extension's root, and puts the engine
-archive last. The simplest way to name the roots is a generated C source compiled into the program:
+archive last. The simplest way to name the roots is a generated static extension loader compiled into the program:
 ```shell
-LINK_EXTENSIONS="parquet;json" make link_helper     # writes build/release/link_helper.c
-cc main.c build/release/link_helper.c libparquet_extension.a libjson_extension.a libduckdb_static.a
+LINK_EXTENSIONS="parquet;json" make static_extension_loader     # writes build/release/static_extension_loader.c
+cc main.c build/release/static_extension_loader.c libparquet_extension.a libjson_extension.a libduckdb_static.a
 ```
 Each extension archive carries a root member, `duckdb_extension_<name>_root`, that registers the extension with the
-engine. Nothing references it, so the link has to: `link_helper.c` does that for every compiler, and without
+engine. Nothing references it, so the link has to: `static_extension_loader.c` does that for every compiler, and without
 `LINK_EXTENSIONS` it names every extension archive in the build. The same can be done with linker flags, `-u <root>` with
 GCC or clang (`-u _<root>` on macOS) and `/INCLUDE:<root>` with MSVC (`/INCLUDE:_<root>` on 32-bit x86). An archive
 whose root is not named contributes nothing, and a named root whose archive is missing fails the link. CMake targets get
