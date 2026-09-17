@@ -6,38 +6,12 @@ statement ok
 SET debug_verify_sql_export='strict';
 
 query I
-SELECT * FROM range(4);
-----
-0
-1
-2
-3
-
-query I
 SELECT count(*) FROM range(4);
 ----
 4
 
 query I
-SELECT * FROM range(5,0,-2);
-----
-5
-3
-1
-
-query I
-SELECT * FROM generate_series(5,1,-2);
-----
-5
-3
-1
-
-query I
 SELECT * FROM range(NULL::BIGINT);
-----
-
-query I
-SELECT * FROM range(4,0);
 ----
 
 query II
@@ -47,66 +21,53 @@ SELECT x,x FROM range(5) t(x) WHERE x>=2 ORDER BY x DESC;
 3	3
 2	2
 
-query T
-SELECT * FROM range(TIMESTAMP '2020-01-01',TIMESTAMP '2020-01-03',INTERVAL '1 day');
-----
-2020-01-01 00:00:00
-2020-01-02 00:00:00
-
-query T
-SELECT * FROM generate_series(TIMESTAMP '2020-01-01',TIMESTAMP '2020-01-03',INTERVAL '1 day');
-----
-2020-01-01 00:00:00
-2020-01-02 00:00:00
-2020-01-03 00:00:00
+foreach mode off strict
 
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query TT nosort source_rows_0
 SELECT * FROM duckdb_keywords() ORDER BY ALL;
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query TT nosort source_rows_0
-SELECT * FROM duckdb_keywords() ORDER BY ALL;
+reset label source_rows_0
+
+foreach mode off strict
 
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query T nosort source_rows_1
 SELECT * FROM duckdb_optimizers() ORDER BY ALL;
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query T nosort source_rows_1
-SELECT * FROM duckdb_optimizers() ORDER BY ALL;
+reset label source_rows_1
+
+foreach mode off strict
 
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query TTT nosort source_rows_2
 SELECT database_name,schema_name,table_name FROM system.main.duckdb_tables() ORDER BY ALL;
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query TTT nosort source_rows_2
-SELECT database_name,schema_name,table_name FROM system.main.duckdb_tables() ORDER BY ALL;
+reset label source_rows_2
+
+foreach mode off strict
 
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_sql_export='{mode}';
 
 query T nosort source_rows_3
 SELECT * FROM pragma_user_agent();
 
-statement ok
-SET debug_verify_sql_export='strict';
+endloop
 
-query T nosort source_rows_3
-SELECT * FROM pragma_user_agent();
+reset label source_rows_3
 
 statement ok
 CREATE TABLE scan_rows(i INTEGER, j INTEGER, "text value" VARCHAR, n DECIMAL(12,3), xs INTEGER[]);

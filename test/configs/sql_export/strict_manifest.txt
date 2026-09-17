@@ -3,6 +3,8 @@ test/sql/alter/test_alter_database_rename.test
 test/sql/catalog/dependencies/drop_recreate_schema_dependency.test
 test/sql/catalog/dependency/drop_recreate_schema_dependency.test
 test/sql/catalog/table/test_create_table_parallelism.test
+test/sql/table_function/test_range_function.test
+test/sql/table_function/range_timestamp.test
 test/sql/sql_export/sql_export_quantiles.test
 test/sql/sql_export/alias.test
 test/sql/sql_export/nested_values.test
