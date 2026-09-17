@@ -31,6 +31,11 @@ CREATE TABLE placement_wide AS
 SELECT i::INTEGER AS i, lpad(i::VARCHAR, 2000, 'x') AS v
 FROM range(100) t(i);
 
+statement ok
+CREATE TABLE placement_entries AS
+SELECT (i % 100)::INTEGER AS i, (1000 - i)::INTEGER AS v
+FROM range(1000) t(i);
+
 # A bounded string projection is cheaper to evaluate on the dimension side of a fanout join
 query II
 EXPLAIN SELECT s
@@ -213,13 +218,53 @@ JOIN placement_selective USING (i);
 ----
 logical_opt	<REGEX>:.*JOIN.*PROJECTION.*Expressions:([^\n]*\n){0,8}[^\n]*[ ,]s[ ,│].*
 
-# Unknown variable-width results stay above the join
+# Unknown variable-width results use an average width estimate
 query II
 EXPLAIN SELECT s
 FROM (SELECT i, lower(v) AS s FROM placement_dimension) d
 JOIN placement_fact USING (i);
 ----
-logical_opt	<!REGEX>:.*JOIN.*PROJECTION.*Expressions:([^\n]*\n){0,8}[^\n]*[ ,]s[ ,│].*
+logical_opt	<REGEX>:.*JOIN.*PROJECTION.*Expressions:([^\n]*\n){0,8}[^\n]*[ ,]s[ ,│].*
+
+# Nested values without width statistics participate in placement, even when a later optimizer
+# speculatively inlines and then rejects the projection
+query II
+EXPLAIN WITH grouped AS (
+	SELECT i, list(v) AS values FROM placement_entries GROUP BY i
+), sorted AS (
+	SELECT i, list_sort(values) AS sorted_values FROM grouped
+)
+SELECT SUM(sorted_values[1])
+FROM sorted
+JOIN placement_fact USING (i);
+----
+logical_opt	<REGEX>:.*AGGREGATE.*JOIN.*PROJECTION.*Expressions:([^\n]*\n){0,8}[^\n]*sorted_values.*
+
+# Rejected projection fusion is rolled back for grouped aggregates as well
+query II
+EXPLAIN WITH grouped AS (
+	SELECT i, list(v) AS values FROM placement_entries GROUP BY i
+), sorted AS (
+	SELECT i, list_sort(values) AS sorted_values FROM grouped
+)
+SELECT f.i % 2 AS g, SUM(sorted_values[1])
+FROM sorted
+JOIN placement_fact f USING (i)
+GROUP BY g;
+----
+logical_opt	<REGEX>:.*AGGREGATE.*JOIN.*PROJECTION.*Expressions:([^\n]*\n){0,8}[^\n]*sorted_values.*
+
+query I
+WITH grouped AS (
+	SELECT i, list(v) AS values FROM placement_entries GROUP BY i
+), sorted AS (
+	SELECT i, list_sort(values) AS sorted_values FROM grouped
+)
+SELECT SUM(sorted_values[1])
+FROM sorted
+JOIN placement_fact USING (i);
+----
+5050000
 
 # The cost is evaluated across the complete single-child path through multiple joins
 query II

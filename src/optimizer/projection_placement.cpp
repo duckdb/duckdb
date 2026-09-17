@@ -20,6 +20,7 @@ namespace duckdb {
 namespace {
 
 constexpr double MINIMUM_COST_RATIO = 0.75;
+constexpr idx_t DEFAULT_VARIABLE_WIDTH = 32;
 
 struct PathStep {
 	reference<LogicalOperator> op;
@@ -108,18 +109,27 @@ static bool GetBindingWidth(const ColumnBinding &binding, const LogicalType &typ
 		width = GetTypeIdSize(physical_type);
 		return true;
 	}
-	if (physical_type != PhysicalType::VARCHAR) {
+	if (physical_type == PhysicalType::VARCHAR) {
+		auto entry = statistics_map.find(binding);
+		if (entry != statistics_map.end() && entry->second &&
+		    entry->second->GetStatsType() == StatisticsType::STRING_STATS &&
+		    StringStats::HasMaxStringLength(*entry->second)) {
+			width = GetTypeIdSize(physical_type) + StringStats::MaxStringLength(*entry->second);
+			return true;
+		}
+	}
+	// Use an average width for variable-size values without usable statistics.
+	switch (physical_type) {
+	case PhysicalType::VARCHAR:
+	case PhysicalType::LIST:
+	case PhysicalType::ARRAY:
+	case PhysicalType::STRUCT:
+	case PhysicalType::UNKNOWN:
+		width = DEFAULT_VARIABLE_WIDTH;
+		return true;
+	default:
 		return false;
 	}
-	// Variable-width values are only costed when statistics provide a safe upper bound.
-	auto entry = statistics_map.find(binding);
-	if (entry == statistics_map.end() || !entry->second ||
-	    entry->second->GetStatsType() != StatisticsType::STRING_STATS ||
-	    !StringStats::HasMaxStringLength(*entry->second)) {
-		return false;
-	}
-	width = GetTypeIdSize(physical_type) + StringStats::MaxStringLength(*entry->second);
-	return true;
 }
 
 static bool GetExpressionWidth(const Expression &expression,
