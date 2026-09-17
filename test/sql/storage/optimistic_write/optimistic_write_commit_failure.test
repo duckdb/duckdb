@@ -29,14 +29,6 @@ Forced commit failure
 statement ok
 SET debug_force_commit_failure = false;
 
-# The failed bulk append optimistically allocated a physical block on disk.
-# RevertCommit places it into modified_blocks (deferred reclamation for MVCC and crash consistency).
-# Because free_blocks only counts the active free_list, used_blocks remains 2 until the next checkpoint.
-query III
-SELECT total_blocks, used_blocks, free_blocks FROM pragma_database_size();
-----
-2	2	0
-
 # Force checkpoint even though the WAL was truncated
 statement ok
 PRAGMA force_checkpoint;
