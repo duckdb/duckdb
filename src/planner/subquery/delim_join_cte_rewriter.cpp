@@ -2537,7 +2537,7 @@ static bool SingleJoinRHSIsDeduplicated(LogicalComparisonJoin &join) {
 }
 
 // Decorrelation partitions the RHS by its domain. Only retain this fact for repeatable, locally owned inputs.
-static bool CanRestrictCorrelationInput(LogicalOperator &op, unordered_set<TableIndex> &local_ctes) {
+static bool CanRestrictCorrelationDomain(LogicalOperator &op, unordered_set<TableIndex> &local_ctes) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET:
 		if (!op.Cast<LogicalGet>().GetTable()) {
@@ -2546,7 +2546,7 @@ static bool CanRestrictCorrelationInput(LogicalOperator &op, unordered_set<Table
 		break;
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
 		auto &cte = op.Cast<LogicalRecursiveCTE>();
-		if (!cte.union_all || cte.ref_recurring || !cte.key_targets.empty()) {
+		if (cte.ref_recurring || !cte.key_targets.empty()) {
 			return false;
 		}
 		local_ctes.insert(cte.table_index);
@@ -2561,10 +2561,6 @@ static bool CanRestrictCorrelationInput(LogicalOperator &op, unordered_set<Table
 		}
 		break;
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-		if (op.Cast<LogicalComparisonJoin>().join_type != JoinType::INNER) {
-			return false;
-		}
-		break;
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
@@ -2591,7 +2587,7 @@ static bool CanRestrictCorrelationInput(LogicalOperator &op, unordered_set<Table
 		return false;
 	}
 	for (auto &child : op.children) {
-		if (!CanRestrictCorrelationInput(*child, local_ctes)) {
+		if (!CanRestrictCorrelationDomain(*child, local_ctes)) {
 			return false;
 		}
 	}
@@ -2640,7 +2636,11 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
 	}
 	generated_dedup_cte_indexes.push_back(dedup_cte_index);
 	unordered_set<TableIndex> local_ctes {dedup_cte_index};
-	const bool can_restrict_input = join.join_type == JoinType::INNER && CanRestrictCorrelationInput(*plan, local_ctes);
+	const bool requires_left_row = join.join_type == JoinType::INNER || join.join_type == JoinType::LEFT ||
+	                               join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI ||
+	                               join.join_type == JoinType::MARK;
+	// Only RHS partitions are removed; ordinary filter pushdown handles the producer.
+	const bool can_restrict_input = requires_left_row && CanRestrictCorrelationDomain(*plan->children[1], local_ctes);
 
 	plan->children[0]->ResolveOperatorTypes();
 	auto left_bindings = plan->children[0]->GetColumnBindings();

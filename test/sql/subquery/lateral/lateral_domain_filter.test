@@ -214,12 +214,13 @@ SELECT currval('producer_calls');
 ----
 5
 
-# Filters with observable evaluations cannot be copied into the producer.
+# Explicit barriers cannot be copied into the producer.
 query II
 EXPLAIN SELECT count(*) FROM owner_walk WHERE __internal_barrier(person = 1);
 ----
 physical_plan	<!REGEX>:[\s\S]*Filters: person = 1[\s\S]*
 
+# A throwing predicate still cannot cross the producer projection.
 query II
 EXPLAIN SELECT count(*) FROM owner_walk WHERE person::VARCHAR::INTEGER = 1;
 ----

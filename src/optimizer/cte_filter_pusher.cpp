@@ -67,6 +67,7 @@ bool CTEFilterPusher::CanPushFilter(const MaterializedCTEInfo &info) {
 		row_scans += ref.get().table_index == dependency.row_scan;
 		domain_scans += ref.get().table_index == dependency.domain_scan;
 	}
+	D_ASSERT(info.filters[0].get().children[0]->type == LogicalOperatorType::LOGICAL_CTE_REF);
 	auto &filtered_ref = info.filters[0].get().children[0]->Cast<LogicalCTERef>();
 	return row_scans == 1 && domain_scans == 1 && filtered_ref.table_index == dependency.row_scan;
 }
@@ -109,15 +110,6 @@ void CTEFilterPusher::PushFilterIntoCTE(MaterializedCTEInfo &info) {
 		return;
 	}
 
-	// Consumer predicates remain in place; copying observable expressions would evaluate them again.
-	for (auto &filter : info.filters) {
-		for (auto &expr : filter.get().expressions) {
-			if (ExpressionBarrier::Required(*expr) || ExpressionBarrier::Contains(*expr)) {
-				return;
-			}
-		}
-	}
-
 	// Create an OR expression with all the filters on all references of the CTE
 	unique_ptr<Expression> outer_expr;
 	for (auto &filter : info.filters) {
@@ -133,9 +125,19 @@ void CTEFilterPusher::PushFilterIntoCTE(MaterializedCTEInfo &info) {
 			replacer.replacement_bindings.emplace_back(old_bindings[i], new_bindings[i]);
 		}
 
+		bool all_conjuncts_repeatable = true;
+		for (auto &expr : filter.get().expressions) {
+			all_conjuncts_repeatable &= !expr->IsVolatile() && !ExpressionBarrier::Contains(*expr);
+		}
+
 		// We copy the filters and replace the CTE reference bindings with the bindings in the CTE definition
 		unique_ptr<Expression> inner_expr;
 		for (auto &filter_expr : filter.get().expressions) {
+			// Dropping a conjunct must not expose errors it previously short-circuited.
+			if (filter_expr->IsVolatile() || ExpressionBarrier::Contains(*filter_expr) ||
+			    (!all_conjuncts_repeatable && filter_expr->CanThrow())) {
+				continue;
+			}
 			auto filter_expr_copy = filter_expr->Copy();
 			replacer.VisitExpression(&filter_expr_copy);
 			if (inner_expr) {
@@ -144,6 +146,11 @@ void CTEFilterPusher::PushFilterIntoCTE(MaterializedCTEInfo &info) {
 			} else {
 				inner_expr = std::move(filter_expr_copy);
 			}
+		}
+
+		// An unrestricted consumer makes the disjunction true.
+		if (!inner_expr) {
+			return;
 		}
 
 		if (outer_expr) {
