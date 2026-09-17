@@ -9,8 +9,9 @@ namespace duckdb {
 //! State kept while a V2 C API extension initializes. This object IS the token handed to the extension as its
 //! duckdb_v2_extension_handle, and the one get_api takes back.
 struct DuckDBExtensionLoadStateV2 {
-	DuckDBExtensionLoadStateV2(DatabaseInstance &db, const ExtensionInitResult &init_result)
-	    : db(db), init_result(init_result) {
+	DuckDBExtensionLoadStateV2(DatabaseInstance &db, const ExtensionInitResult &init_result,
+	                           const string &extension_name)
+	    : db(db), init_result(init_result), loader(db, extension_name) {
 	}
 
 	static DuckDBExtensionLoadStateV2 &Get(duckdb_v2_extension_handle handle) {
@@ -30,8 +31,12 @@ struct DuckDBExtensionLoadStateV2 {
 	DatabaseInstance &db;
 	const ExtensionInitResult &init_result;
 
+	//! Registers catalog entries (functions, types) on the extension's behalf, resolved from the handle via
+	//! capiv2::GetExtensionLoader. Lives only as long as this state: the load.
+	ExtensionLoader loader;
+
 	//! The function pointer struct handed to the extension. The extension is expected to copy it during initialization
-	duckdb_ext_api_v2 api_struct;
+	duckdb_ext_api_v2 api_struct = {};
 	//! Whether the extension fetched the API struct. A loadable extension that did not has an all-null vtable
 	bool api_requested = false;
 
@@ -161,10 +166,18 @@ void CallEntrypoint(DuckDBExtensionLoadStateV2 &load_state, const string &extens
 
 } // namespace
 
+namespace capiv2 {
+
+auto GetExtensionLoader(duckdb_v2_extension_handle handle) -> ExtensionLoader & {
+	return DuckDBExtensionLoadStateV2::Get(handle).loader;
+}
+
+} // namespace capiv2
+
 void InvokeCAPIV2Entrypoint(DatabaseInstance &db, const ExtensionInitResult &init_result, const string &extension_name,
                             ext_init_c_api_v2_fun_t init_fun, optional_ptr<ClientContext> context,
                             bool statically_linked) {
-	DuckDBExtensionLoadStateV2 load_state(db, init_result);
+	DuckDBExtensionLoadStateV2 load_state(db, init_result, extension_name);
 
 	// A context is only usable here if a transaction is already running on it, which is the case when loading through
 	// LOAD. Otherwise open one of our own, matching what a V1 extension does when it connects in its glue code.

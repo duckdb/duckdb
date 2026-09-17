@@ -92,6 +92,14 @@ Matcher &MatcherFactory::CreateMatcher(const PEGExpression &expression, const st
 	}
 }
 
+optional_ptr<const CompiledGrammarRule> MatcherFactory::GetRule(const string &rule_name) const {
+	auto entry = rules.find(rule_name);
+	if (entry == rules.end()) {
+		return nullptr;
+	}
+	return *entry->second;
+}
+
 Matcher &MatcherFactory::CreateMatcher(string_t rule_name, vector<reference<Matcher>> &parameters) {
 	bool is_function_call = !parameters.empty();
 	auto matcher_entry = matchers.find(rule_name);
@@ -133,7 +141,7 @@ Matcher &MatcherFactory::CreateMatcher(string_t rule_name, vector<reference<Matc
 	}
 
 	auto rule_name_str = rule_name.GetString();
-	auto rule_p = compiled.GetRule(rule_name_str);
+	auto rule_p = GetRule(rule_name_str);
 	if (!rule_p) {
 		throw InvalidInputException("Failed to compile rule '%s', no registered data exists for it", rule_name_str);
 	}
@@ -153,12 +161,13 @@ void MatcherFactory::AddKeywordOverride(const char *name, KeywordInfo info) {
 	keyword_overrides.insert(make_pair(name, info));
 }
 
-void MatcherFactory::AddRuleOverride(const char *name, Matcher &matcher) {
+void MatcherFactory::AddRuleOverride(const char *name, unique_ptr<Matcher> &&matcher_p) {
+	auto &matcher = allocator.Allocate(std::move(matcher_p));
 	if (packrat_memoized_rules.count(name)) {
 		matcher.SetPackratMemoized();
 	}
 	if (grammar.GetRule(name)) {
-		auto rule_p = compiled.GetRule(name);
+		auto rule_p = GetRule(name);
 		if (!rule_p) {
 			throw InvalidInputException("No registered data exists for rule '%s', failed to set RuleOverride", name);
 		}
@@ -176,8 +185,10 @@ void MatcherFactory::SuppressSuggestions(const char *name) {
 	no_suggestion_rules.insert(name);
 }
 
-MatcherFactory::MatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar_p, CompiledGrammar &compiled_p)
-    : allocator(allocator), grammar(grammar_p), compiled(compiled_p) {
+MatcherFactory::MatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar_p,
+                               const compiled_rules_map_t &rules, terminal_rule_overrides_t terminal_rule_overrides_p)
+    : allocator(allocator), grammar(grammar_p), rules(rules),
+      terminal_rule_overrides(std::move(terminal_rule_overrides_p)) {
 }
 
 Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
@@ -215,63 +226,9 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 	// END GENERATED PACKRAT MEMOIZED RULES
 	//===--------------------------------------------------------------------===//
 
-	// rule overrides
-	//===--------------------------------------------------------------------===//
-	// START GENERATED RULE OVERRIDES
-	//===--------------------------------------------------------------------===//
-	AddRuleOverride("Identifier", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE,
-	                                                                              compiled.GetKeywordHelper())));
-	AddRuleOverride("ReservedIdentifier", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
-	                                          SuggestionState::SUGGEST_VARIABLE, compiled.GetKeywordHelper())));
-	AddRuleOverride("CatalogName", allocator.Allocate(make_uniq<IdentifierMatcher>(
-	                                   SuggestionState::SUGGEST_CATALOG_NAME, compiled.GetKeywordHelper())));
-	AddRuleOverride("SchemaName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME,
-	                                                                              compiled.GetKeywordHelper())));
-	AddRuleOverride("ReservedSchemaName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
-	                                          SuggestionState::SUGGEST_SCHEMA_NAME, compiled.GetKeywordHelper())));
-	AddRuleOverride("TableName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TABLE_NAME,
-	                                                                             compiled.GetKeywordHelper())));
-	AddRuleOverride("ReservedTableName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
-	                                         SuggestionState::SUGGEST_TABLE_NAME, compiled.GetKeywordHelper())));
-	AddRuleOverride("ColumnName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_COLUMN_NAME,
-	                                                                              compiled.GetKeywordHelper())));
-	AddRuleOverride("ReservedColumnName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
-	                                          SuggestionState::SUGGEST_COLUMN_NAME, compiled.GetKeywordHelper())));
-	AddRuleOverride("IndexName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE,
-	                                                                             compiled.GetKeywordHelper())));
-	AddRuleOverride("ReservedIndexName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
-	                                         SuggestionState::SUGGEST_VARIABLE, compiled.GetKeywordHelper())));
-	AddRuleOverride("SequenceName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE,
-	                                                                                compiled.GetKeywordHelper())));
-	AddRuleOverride("FunctionName", allocator.Allocate(make_uniq<IdentifierMatcher>(
-	                                    SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME, compiled.GetKeywordHelper())));
-	AddRuleOverride("ReservedFunctionName",
-	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
-	                    SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME, compiled.GetKeywordHelper())));
-	AddRuleOverride("ReservedKeyword", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
-	                                       SuggestionState::SUGGEST_VARIABLE, compiled.GetKeywordHelper())));
-	AddRuleOverride("TableFunctionName",
-	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TABLE_FUNCTION_NAME,
-	                                                                compiled.GetKeywordHelper())));
-	AddRuleOverride("TypeName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TYPE_NAME,
-	                                                                            compiled.GetKeywordHelper())));
-	AddRuleOverride("ReservedTypeName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
-	                                        SuggestionState::SUGGEST_TYPE_NAME, compiled.GetKeywordHelper())));
-	AddRuleOverride("PragmaName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_PRAGMA_NAME,
-	                                                                              compiled.GetKeywordHelper())));
-	AddRuleOverride("SettingName", allocator.Allocate(make_uniq<IdentifierMatcher>(
-	                                   SuggestionState::SUGGEST_SETTING_NAME, compiled.GetKeywordHelper())));
-	AddRuleOverride("CopyOptionName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
-	                                      SuggestionState::SUGGEST_VARIABLE, compiled.GetKeywordHelper())));
-	AddRuleOverride("NumberLiteral", allocator.Allocate(make_uniq<NumberLiteralMatcher>()));
-	AddRuleOverride("StringLiteral", allocator.Allocate(make_uniq<StringLiteralMatcher>()));
-	AddRuleOverride("OperatorLiteral", allocator.Allocate(make_uniq<OperatorMatcher>()));
-	//===--------------------------------------------------------------------===//
-	// END GENERATED RULE OVERRIDES
-	//===--------------------------------------------------------------------===//
-
-	// EndOfInput has no grammar body; satisfied here (outside the regenerated block).
-	AddRuleOverride("EndOfInput", allocator.Allocate(make_uniq<EndOfInputMatcher>()));
+	for (auto &entry : terminal_rule_overrides) {
+		AddRuleOverride(entry.first.c_str(), std::move(entry.second));
+	}
 
 	// suppress suggestions for catch-all rules that would pollute statement-level autocomplete
 	SuppressSuggestions("ExpressionStatement");

@@ -232,9 +232,19 @@ static bool ResolveUseTmpFile(ClientContext &context, const string &file_path, c
 	}
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	bool is_file_and_exists = fs.FileExists(file_path);
-	bool is_stdout = file_path == "/dev/stdout";
-	return is_file_and_exists && !options.PerThreadOutput() && !options.PartitionedOrOrdered() && !is_stdout;
+	const bool is_file_and_exists = fs.FileExists(file_path);
+	const bool is_stdout = file_path == "/dev/stdout";
+
+	// Disable temp file if multiple files could be involved.
+	if (options.Rotate() || options.PerThreadOutput() || options.PartitionedOrOrdered()) {
+		return false;
+	}
+	// Disable temp file if emit to stdout.
+	if (is_stdout) {
+		return false;
+	}
+
+	return is_file_and_exists;
 }
 
 static CopyToResolvedOptions ResolveCopyToOptions(ClientContext &context, const string &file_path,
@@ -815,7 +825,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 	}
 
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	if (stmt.info->is_from) {
 		return BindCopyFrom(stmt, function);

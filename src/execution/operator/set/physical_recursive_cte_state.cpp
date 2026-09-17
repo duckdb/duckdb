@@ -33,12 +33,13 @@ void RecursiveCTEPartialKeyIndex::Resize(idx_t capacity) {
 	}
 }
 
-void RecursiveCTEPartialKeyIndex::AddGroups(DataChunk &full_keys, const SelectionVector &new_groups,
-                                            Vector &new_group_addresses, idx_t new_group_count) {
-	if (new_group_count == 0) {
+void RecursiveCTEPartialKeyIndex::AddGroups(DataChunk &full_keys, const SelectionVector &key_selection,
+                                            Vector &group_addresses, const SelectionVector &address_selection,
+                                            idx_t group_count) {
+	if (group_count == 0) {
 		return;
 	}
-	while (entries.size() + new_group_count > heads.size()) {
+	while (entries.size() + group_count > heads.size()) {
 		Resize(heads.size() * 2);
 	}
 	partial_keys.Reset();
@@ -47,15 +48,15 @@ void RecursiveCTEPartialKeyIndex::AddGroups(DataChunk &full_keys, const Selectio
 	}
 	partial_keys.CheckCardinality(full_keys.size());
 	selected_keys.Reset();
-	selected_keys.Slice(partial_keys, new_groups, new_group_count);
+	selected_keys.Slice(partial_keys, key_selection, group_count);
 	selected_keys.Hash(hashes);
 
 	const auto hash_values = hashes.Values<hash_t>();
-	const auto addresses = FlatVector::GetData<data_ptr_t>(new_group_addresses);
-	for (idx_t new_group_idx = 0; new_group_idx < new_group_count; new_group_idx++) {
-		const auto hash = hash_values[new_group_idx].GetValue();
+	const auto addresses = FlatVector::GetData<data_ptr_t>(group_addresses);
+	for (idx_t group_idx = 0; group_idx < group_count; group_idx++) {
+		const auto hash = hash_values[group_idx].GetValue();
 		const auto bucket = hash & (heads.size() - 1);
-		entries.push_back({hash, addresses[new_group_idx], heads[bucket]});
+		entries.push_back({hash, addresses[address_selection.get_index(group_idx)], heads[bucket]});
 		heads[bucket] = entries.size() - 1;
 	}
 }
@@ -149,6 +150,22 @@ void RecursiveCTEEpochMetrics::RecordKeyPreaggregationCombine(idx_t elapsed_ns) 
 	key_preaggregation_combine_work_ns.fetch_add(elapsed_ns);
 }
 
+void RecursiveCTEEpochMetrics::RecordLocalKeyPreaggregationClassification(idx_t elapsed_ns) {
+	local_key_preaggregation_classification_work_ns.fetch_add(elapsed_ns);
+}
+
+void RecursiveCTEEpochMetrics::RecordLocalKeyPreaggregation(idx_t candidate_rows, idx_t groups, idx_t elapsed_ns) {
+	D_ASSERT(groups <= candidate_rows);
+	local_key_preaggregation_candidate_rows.fetch_add(candidate_rows);
+	local_key_preaggregation_groups.fetch_add(groups);
+	local_key_preaggregation_states.fetch_add(1);
+	local_key_preaggregation_work_ns.fetch_add(elapsed_ns);
+}
+
+void RecursiveCTEEpochMetrics::RecordLocalKeyPreaggregationResidual(idx_t candidate_rows) {
+	local_key_preaggregation_residual_rows.fetch_add(candidate_rows);
+}
+
 void RecursiveCTEEpochMetrics::RecordPartialIndexMaintenance(idx_t elapsed_ns) {
 	partial_index_maintenance_work_ns.fetch_add(elapsed_ns);
 }
@@ -177,6 +194,12 @@ void RecursiveCTEEpochMetrics::RecordDistinctGrouping(idx_t candidate_rows, idx_
 	distinct_candidate_rows.fetch_add(candidate_rows);
 	distinct_inserted_rows.fetch_add(inserted_rows);
 	distinct_grouping_work_ns.fetch_add(elapsed_ns);
+}
+
+void RecursiveCTEEpochMetrics::RecordPipelineWorkers(idx_t workers) {
+	auto current = max_pipeline_workers.load();
+	while (current < workers && !max_pipeline_workers.compare_exchange_weak(current, workers)) {
+	}
 }
 
 void RecursiveCTEEpochMetrics::RecordPipelineExecution(RecursiveCTEPipelineMetricType metric_type, idx_t elapsed_ns) {
@@ -338,6 +361,7 @@ void RecursiveCTEMetrics::LogEpochSummary(const RecursiveCTEEpochMetrics &epoch_
 	     {"frontier_rows_max", to_string(epoch_metrics.frontier_rows.maximum)},
 	     {"workers_p50_upper_bound", to_string(epoch_metrics.workers.MedianUpperBound())},
 	     {"workers_max", to_string(epoch_metrics.workers.maximum)},
+	     {"max_pipeline_workers", to_string(epoch_metrics.max_pipeline_workers.load())},
 	     {"tasks_p50_upper_bound", to_string(epoch_metrics.tasks.MedianUpperBound())},
 	     {"tasks_max", to_string(epoch_metrics.tasks.maximum)},
 	     {"elapsed_us_p50_upper_bound", to_string(epoch_metrics.elapsed_us.MedianUpperBound())},
@@ -357,6 +381,15 @@ void RecursiveCTEMetrics::LogEpochSummary(const RecursiveCTEEpochMetrics &epoch_
 	     {"key_preaggregation_combine_work_ns", to_string(epoch_metrics.key_preaggregation_combine_work_ns.load())},
 	     {"key_preaggregation_candidate_rows", to_string(epoch_metrics.key_preaggregation_candidate_rows.load())},
 	     {"key_preaggregation_groups", to_string(epoch_metrics.key_preaggregation_groups.load())},
+	     {"local_key_preaggregation_classification_work_ns",
+	      to_string(epoch_metrics.local_key_preaggregation_classification_work_ns.load())},
+	     {"local_key_preaggregation_work_ns", to_string(epoch_metrics.local_key_preaggregation_work_ns.load())},
+	     {"local_key_preaggregation_candidate_rows",
+	      to_string(epoch_metrics.local_key_preaggregation_candidate_rows.load())},
+	     {"local_key_preaggregation_groups", to_string(epoch_metrics.local_key_preaggregation_groups.load())},
+	     {"local_key_preaggregation_states", to_string(epoch_metrics.local_key_preaggregation_states.load())},
+	     {"local_key_preaggregation_residual_rows",
+	      to_string(epoch_metrics.local_key_preaggregation_residual_rows.load())},
 	     {"partial_index_maintenance_work_ns", to_string(epoch_metrics.partial_index_maintenance_work_ns.load())},
 	     {"key_delta_work_ns", to_string(epoch_metrics.key_delta_work_ns.load())},
 	     {"key_delta_candidate_rows", to_string(epoch_metrics.key_delta_candidate_rows.load())},

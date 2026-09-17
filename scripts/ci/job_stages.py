@@ -12,7 +12,8 @@ COMMON_JOBS = [
     "linux-relassert",
     "linux-relassert-tests",
     "tidy-check",
-    "extensions",
+    "extensions-build",
+    "extensions-deploy",
     "wasm-eh",
     "linux-release",
     "linux-release-tests",
@@ -48,7 +49,7 @@ MERGE_GROUP_JOBS = [
 
 RELEASE_JOBS = [
     "osx",
-    "staged-extension-install",
+    "extensions-install",
 ]
 
 SKIP_TESTS_JOBS = {
@@ -96,12 +97,7 @@ class JobSelectionInput:
 
 
 def should_save_cache(selection_input: JobSelectionInput) -> bool:
-    return (
-        selection_input.repository != "duckdb/duckdb"
-        or selection_input.ref_name == "main"
-        or selection_input.ref_name == "v1.5-variegata"
-        or selection_input.event_name == "merge_group"
-    )
+    return selection_input.repository != "duckdb/duckdb" or selection_input.event_name == "workflow_dispatch"
 
 
 def enabled_jobs(selection_input: JobSelectionInput) -> list[str]:

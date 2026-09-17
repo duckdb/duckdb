@@ -25,14 +25,10 @@ using namespace duckdb::capiv2;
 
 DUCKDB_V2_ERROR duckdb_v2_vector_get_arena(duckdb_v2_vector_handle vector, duckdb_v2_arena_handle *out_arena,
                                            duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(out_arena);
+	*out_arena = nullptr;
+	DUCKDB_CHECK_ARG(vector);
 	return WithErrorHandler(err, [&]() {
-		if (!out_arena) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_vector_get_arena");
-		}
-		*out_arena = nullptr;
-		if (!vector) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_vector_get_arena");
-		}
 		auto *vec = Convert(vector);
 
 		// Physical VARCHAR backs VARCHAR / BLOB / BIT / BIGNUM
@@ -46,14 +42,8 @@ DUCKDB_V2_ERROR duckdb_v2_vector_get_arena(duckdb_v2_vector_handle vector, duckd
 
 DUCKDB_V2_ERROR duckdb_v2_arena_allocate(duckdb_v2_arena_handle arena, idx_t byte_len, uint8_t **out_ptr,
                                          duckdb_v2_error_info_handle *err) {
-	return WithErrorHandler(err, [&]() {
-		if (!out_ptr) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_arena_allocate");
-		}
-		*out_ptr = nullptr;
-		if (!arena) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_arena_allocate");
-		}
-		*out_ptr = Convert(arena)->Allocate(byte_len);
-	});
+	DUCKDB_CHECK_ARG(out_ptr);
+	*out_ptr = nullptr;
+	DUCKDB_CHECK_ARG(arena);
+	return WithErrorHandler(err, [&]() { *out_ptr = Convert(arena)->Allocate(byte_len); });
 }

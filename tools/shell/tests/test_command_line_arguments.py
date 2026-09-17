@@ -52,6 +52,13 @@ def test_command(shell):
     result = test.run()
     result.check_stdout("42")
 
+def test_command_unterminated_block_comment(shell):
+    test = ShellTest(shell).add_argument("-c", "SELECT 1/*;")
+    result = test.run()
+    assert result.status_code == 1
+    assert result.stdout == ""
+    result.check_stderr('Parser Error: unterminated /* comment at or near "/*;"')
+
 def test_version(shell):
     test = (
         ShellTest(shell)

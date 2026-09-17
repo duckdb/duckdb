@@ -3,7 +3,6 @@
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
-#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/token_iterator.hpp"
@@ -37,9 +36,6 @@ bool ParseIterator::Peek() {
 	if (exhausted) {
 		return false;
 	}
-	// Charge the time spent tokenizing/parsing on this Peek to MetricParserTotalTime so callers
-	// get parse metrics without each having to remember to wrap us in a timer.
-	auto parser_timer = QueryProfiler::Get(client_context).StartTimer<MetricParserTotalTime>();
 	auto options = client_context.GetParserOptions();
 	// On the very first Peek, give `parser_override` extensions a chance to claim the whole
 	// query. If one does, we yield its statements one at a time and skip the PEG path entirely.

@@ -152,8 +152,7 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 		schema_col_names.push_back(Identifier(column.name));
 		schema_col_types.push_back(column.type);
 
-		auto res = MultiFileColumnDefinition(column.name, column.type);
-		res.identifier = column.identifier;
+		auto res = column.ToMultiFileColumnDefinition();
 #ifdef DEBUG
 		if (match_by_field_id) {
 			D_ASSERT(res.identifier.type().id() == LogicalTypeId::INTEGER);
@@ -162,7 +161,6 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 		}
 #endif
 
-		res.default_expression = make_uniq<ConstantExpression>(column.default_value);
 		reader_bind.schema.emplace_back(res);
 	}
 	ParseFileRowNumberOption(reader_bind, options, return_types, names);
@@ -229,52 +227,6 @@ static bool ParquetScanSupportPushdownExtract(const FunctionData &bind_data_p, c
 	auto &column = bind_data.columns[col_idx.index];
 	auto &column_type = column.type;
 	return column_type.id() == LogicalTypeId::STRUCT || column_type.id() == LogicalTypeId::VARIANT;
-}
-
-static void VerifyParquetSchemaParameter(const Value &schema) {
-	LogicalType::MAP(LogicalType::BLOB, LogicalType::STRUCT({{{"name", LogicalType::VARCHAR},
-	                                                          {"type", LogicalType::VARCHAR},
-	                                                          {"default_value", LogicalType::VARCHAR}}}));
-	auto &map_type = schema.type();
-	if (map_type.id() != LogicalTypeId::MAP) {
-		throw InvalidInputException("'schema' expects a value of type MAP, not %s",
-		                            LogicalTypeIdToString(map_type.id()));
-	}
-	auto &key_type = MapType::KeyType(map_type);
-	auto &value_type = MapType::ValueType(map_type);
-
-	if (value_type.id() != LogicalTypeId::STRUCT) {
-		throw InvalidInputException("'schema' expects a STRUCT as the value type of the map");
-	}
-	auto &children = StructType::GetChildTypes(value_type);
-	if (children.size() < 3) {
-		throw InvalidInputException(
-		    "'schema' expects the STRUCT to have 3 children, 'name', 'type' and 'default_value");
-	}
-	if (children[0].first != "name") {
-		throw InvalidInputException("'schema' expects the first field of the struct to be called 'name'");
-	}
-	if (children[0].second.id() != LogicalTypeId::VARCHAR) {
-		throw InvalidInputException("'schema' expects the 'name' field to be of type VARCHAR, not %s",
-		                            LogicalTypeIdToString(children[0].second.id()));
-	}
-	if (children[1].first != "type") {
-		throw InvalidInputException("'schema' expects the second field of the struct to be called 'type'");
-	}
-	if (children[1].second.id() != LogicalTypeId::VARCHAR) {
-		throw InvalidInputException("'schema' expects the 'type' field to be of type VARCHAR, not %s",
-		                            LogicalTypeIdToString(children[1].second.id()));
-	}
-	if (children[2].first != "default_value") {
-		throw InvalidInputException("'schema' expects the third field of the struct to be called 'default_value'");
-	}
-	//! NOTE: default_value can be any type
-
-	if (key_type.id() != LogicalTypeId::INTEGER && key_type.id() != LogicalTypeId::VARCHAR) {
-		throw InvalidInputException(
-		    "'schema' expects the value type of the map to be either INTEGER or VARCHAR, not %s",
-		    LogicalTypeIdToString(key_type.id()));
-	}
 }
 
 static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
@@ -498,17 +450,11 @@ const vector<ParquetMetadataCacheEntry> &ParquetReadBindData::TryLoadCaches(cons
 			return caches;
 		}
 		// check if the file has any deletes
+		// if it has, skip emitting partition stats
+		// FIXME: we could emit partition stats but set count to `COUNT_APPROXIMATE` instead of `COUNT_EXACT`
 		bool has_deletes = false;
 		if (file.extended_info) {
-			auto entry = file.extended_info->options.find("has_deletes");
-			if (entry != file.extended_info->options.end()) {
-				if (BooleanValue::Get(entry->second)) {
-					// the file has deletes - skip emitting partition stats
-					// FIXME: we could emit partition stats but set count to `COUNT_APPROXIMATE` instead of
-					// `COUNT_EXACT`
-					has_deletes = true;
-				}
-			}
+			file.extended_info->TryGetOption("has_deletes", has_deletes);
 		}
 
 		// check if the cache is valid based ONLY on the OpenFileInfo (do not do any file system requests here)
@@ -681,16 +627,11 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const Identifier 
 	}
 	if (key == "schema") {
 		// Argument is a map that defines the schema
-		const auto &schema_value = val;
-		VerifyParquetSchemaParameter(schema_value);
-		const auto column_values = ListValue::GetChildren(schema_value);
-		if (column_values.empty()) {
+		auto schema = ParquetColumnDefinition::FromSchemaMap(context, val);
+		if (schema.empty()) {
 			throw BinderException("Parquet schema cannot be empty");
 		}
-		options.schema.reserve(column_values.size());
-		for (idx_t i = 0; i < column_values.size(); i++) {
-			options.schema.emplace_back(ParquetColumnDefinition::FromSchemaValue(context, column_values[i]));
-		}
+		options.schema = std::move(schema);
 		file_options.auto_detect_hive_partitioning = false;
 		return true;
 	}
@@ -809,14 +750,13 @@ unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(ClientContext &c
 			estimated_file_row_count = 0;
 			break;
 		}
-		auto entry = file.extended_info->options.find("file_size");
-		if (entry == file.extended_info->options.end()) {
+		idx_t current_file_size;
+		if (!file.extended_info->TryGetOption("file_size", current_file_size)) {
 			// no file size available
 			estimated_file_row_count = 0;
 			break;
 		}
 		// we have the file size - estimate row count based on estimated bytes per row
-		auto current_file_size = entry->second.GetValue<uint64_t>();
 		files_with_sizes++;
 		idx_t rows_in_this_file = MaxValue<idx_t>(current_file_size / estimated_bytes_per_row, 1ULL);
 		estimated_file_row_count += rows_in_this_file;

@@ -1,4 +1,5 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/types/hash.hpp"
@@ -43,7 +44,19 @@ bool BoundFunctionExpression::RequiresOrderedExecution() const {
 }
 
 bool BoundFunctionExpression::IsVolatile() const {
-	return function.GetStability() == FunctionStability::VOLATILE ? true : Expression::IsVolatile();
+	if (function.GetStability() == FunctionStability::VOLATILE) {
+		return true;
+	}
+	// Lambda bodies live in bind data rather than the ordinary expression children.
+	if (function.HasBindLambdaCallback()) {
+		D_ASSERT(bind_info);
+		auto &lambda_bind_data = bind_info->Cast<LambdaFunctionData>();
+		auto lambda_expr = lambda_bind_data.GetLambdaExpression();
+		if (lambda_expr && lambda_expr->IsVolatile()) {
+			return true;
+		}
+	}
+	return Expression::IsVolatile();
 }
 
 bool BoundFunctionExpression::IsConsistent() const {

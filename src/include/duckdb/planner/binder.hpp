@@ -23,7 +23,6 @@
 #include "duckdb/parser/tableref/delimgetref.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/bind_context.hpp"
-#include "duckdb/planner/bound_expression_map.hpp"
 #include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -45,6 +44,7 @@ class BoundResultModifier;
 class BoundSelectNode;
 class ClientContext;
 class ExpressionBinder;
+struct ExternalResourceOptions;
 class LimitModifier;
 class OrderBinder;
 class TableCatalogEntry;
@@ -206,8 +206,6 @@ struct GlobalBinderState {
 	optional_ptr<TableCatalogEntry> trigger_creation_table;
 	//! Name of the trigger being created (for error messages)
 	Identifier trigger_creation_name;
-	//! Bound expressions of parsed nodes, used to prevent re-binding of already bound parts
-	BoundExpressionMap bound_expressions;
 };
 
 //! Bind the parsed query tree to the actual columns present in the catalog.
@@ -325,11 +323,21 @@ public:
 	void AddBoundView(ViewCatalogEntry &view);
 
 	void BeginSubqueryBind(Binder &parent, ExpressionBinder &binder);
-	ExpressionBinder &GetActiveBinder();
-	bool HasActiveBinder();
+	//! The innermost enclosing scope
+	ExpressionBinder &GetInnermostScope();
+	bool HasEnclosingScope();
 	void FinishSubqueryBind();
 
-	vector<reference<ExpressionBinder>> &GetActiveBinders();
+	//! The scopes enclosing this binder, stored outermost first
+	const vector<reference<ExpressionBinder>> &GetEnclosingScopes() const;
+	//! Add an enclosing scope that expressions bound by this binder can resolve against
+	void PushScope(ExpressionBinder &binder);
+	//! Remove the innermost enclosing scope
+	void PopScope();
+	//! Remove and return the scopes added since the chain had `count` entries
+	vector<reference<ExpressionBinder>> SaveScopesAfter(idx_t count);
+	//! Restore scopes previously removed by SaveScopesAfter
+	void RestoreScopes(const vector<reference<ExpressionBinder>> &scopes);
 
 	void MergeCorrelatedColumns(CorrelatedColumns &other);
 	//! Add a correlated column to this binder (if it does not exist)
@@ -353,6 +361,8 @@ public:
 	static void BindSchemaOrCatalog(ClientContext &context, QualifiedName &qualified_name);
 
 	void BindLogicalType(LogicalType &type);
+	//! Resolve a type expression into a concrete type
+	LogicalType BindLogicalType(const ParsedExpression &type_expr);
 
 	optional_ptr<Binding> GetMatchingBinding(const Identifier &table_name, const Identifier &column_name,
 	                                         ErrorData &error);
@@ -386,7 +396,6 @@ public:
 	bool IsInsideSubquery() const;
 
 	StatementProperties &GetStatementProperties();
-	BoundExpressionMap &GetBoundExpressions();
 	static void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
 	static string ReplaceColumnsAlias(const string &alias, const string &column_name,
 	                                  optional_ptr<duckdb_re2::RE2> regex);
@@ -475,6 +484,13 @@ private:
 	BoundStatement Bind(ConnectStatement &stmt);
 	BoundStatement Bind(DisconnectStatement &stmt);
 	BoundStatement Bind(ExternalResourceStatement &stmt);
+	//! Bind + constant-fold a single EXTERNAL RESOURCE expression (a create param, or the REGISTER handle).
+	Value BindExternalResourceValue(unique_ptr<ParsedExpression> &expr);
+	//! Bind + constant-fold the create params of an EXTERNAL RESOURCE statement or clause.
+	void BindExternalResourceParams(case_insensitive_map_t<unique_ptr<ParsedExpression>> &parsed_params,
+	                                unordered_map<string, Value> &params);
+	//! Bind the `ATTACH/CONNECT TO EXTERNAL RESOURCE ...` clause. Shared by ATTACH and CONNECT.
+	void BindExternalResource(ExternalResourceOptions &external_resource);
 
 	//! Resolves the base table for DROP TRIGGER, stamps catalog/schema onto stmt.info,
 	//! and registers the catalog modification. IF EXISTS only guards the trigger, not the table.
@@ -527,7 +543,7 @@ private:
 	                                 const vector<const_reference<TriggerCatalogEntry>> &triggers,
 	                                 TriggerEventType event_type);
 	//! Registers a row scope binding (named "new" for INSERT, "old" for DELETE) so child binders resolve
-	//! NEW.col / OLD.col at depth=1. The returned binder is pushed onto GetActiveBinders().
+	//! NEW.col / OLD.col at depth=1. The returned binder is pushed as an enclosing scope.
 	//! The caller must keep it alive until the matching pop_back().
 	unique_ptr<ExpressionBinder> SetupRowScope(TableIndex table_index, const vector<Identifier> &col_names,
 	                                           const vector<LogicalType> &col_types, const string &scope_name);
@@ -641,8 +657,6 @@ private:
 
 	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const Identifier &schema_name,
 	                                         bool default_schema_precedence = false);
-
-	LogicalType BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &type_expr);
 
 	BoundStatement BindSelectNode(SelectNode &statement, BoundStatement from_table);
 

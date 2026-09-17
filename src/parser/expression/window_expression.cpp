@@ -94,7 +94,7 @@ void WindowExpression::SetFunctionName(const string &function_name_p) {
 }
 
 string WindowExpression::ToString() const {
-	return ToString<WindowExpression, ParsedExpression, OrderByNode>(*this, qualified_name.Schema().GetIdentifierName(),
+	return ToString<WindowExpression, ParsedExpression, OrderByNode>(*this, qualified_name.QualificationToString(),
 	                                                                 qualified_name.Name().GetIdentifierName());
 }
 
@@ -137,6 +137,11 @@ void WindowExpression::Serialize(Serializer &serializer) const {
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<vector<FunctionArgument>>(218, "arguments", arguments);
 	}
+
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0) || qualified_name.Path().size() > 3) {
+		// the catalog/schema properties above cannot represent a nested schema path
+		serializer.WriteProperty<QualifiedName>(219, "qualified_name", qualified_name);
+	}
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(Deserializer &deserializer) {
@@ -178,6 +183,12 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(Deserializer &deseria
 	// New children deserialization
 	if (children.empty()) {
 		deserializer.ReadPropertyWithDefault<vector<FunctionArgument>>(218, "arguments", result->arguments);
+	}
+
+	auto qualified_name =
+	    deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(219, "qualified_name", QualifiedName());
+	if (!qualified_name.Path().empty()) {
+		result->SetQualifiedName(std::move(qualified_name));
 	}
 
 	return std::move(result);

@@ -245,7 +245,7 @@ size_t Path::ParseURIScheme(const string &input, Path &parsed) {
 	parsed.scheme = input.substr(0, auth_begin);
 
 	const size_t path_begin = input.find('/', auth_begin);
-	D_ASSERT(path_begin == string::npos || path_begin > auth_begin);
+	D_ASSERT(path_begin == string::npos || path_begin >= auth_begin);
 	parsed.authority = input.substr(auth_begin, path_begin == string::npos ? string::npos : path_begin - auth_begin);
 	parsed.anchor = '/';
 	return path_begin == string::npos ? input.size() : path_begin + 1;

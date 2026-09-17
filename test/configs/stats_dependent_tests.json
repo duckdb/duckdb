@@ -20,6 +20,8 @@
         "test/sql/function/timetz/test_date_part.test",
         "test/sql/storage/types/variant/variant_extract_stats.test",
         "test/sql/storage/types/variant/variant_comparator_stats.test",
+        "test/sql/storage/types/variant/variant_validity_stats.test",
+        "test/sql/storage/types/variant/variant_stats_case_sensitive_merge.test",
         "test/sql/types/variant/variant_cast_stats.test",
         "test/sql/alter/alter_type/test_alter_type.test",
         "test/sql/alter/alter_type/alter_type_distinct_stats.test",
@@ -56,7 +58,8 @@
         "test/sql/copy/parquet/read_ahead/readahead_depth_learning.test",
         "test/sql/copy/parquet/read_ahead/readahead_io_budget.test_slow",
         "test/sql/types/geo/geometry_vertex_extract.test",
-        "test/sql/optimizer/secure_view_statistics.test"
+        "test/sql/optimizer/secure_view_statistics.test",
+        "test/sql/window/test_window_agg_stats_propagation.test"
       ]
     }
   ]

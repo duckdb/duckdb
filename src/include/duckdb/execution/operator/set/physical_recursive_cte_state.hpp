@@ -43,8 +43,9 @@ public:
 	RecursiveCTEPartialKeyIndex(Allocator &allocator, const vector<LogicalType> &full_key_types,
 	                            vector<idx_t> key_indices);
 
-	void AddGroups(DataChunk &full_keys, const SelectionVector &new_groups, Vector &new_group_addresses,
-	               idx_t new_group_count);
+	//! Key and address selections can differ when addresses have already been compacted.
+	void AddGroups(DataChunk &full_keys, const SelectionVector &key_selection, Vector &group_addresses,
+	               const SelectionVector &address_selection, idx_t group_count);
 	idx_t GetHead(hash_t hash) const;
 	const Entry &GetEntry(idx_t entry_idx) const;
 	idx_t Count() const;
@@ -64,14 +65,15 @@ private:
 
 struct RecursiveCTEScheduleStage {
 	RecursiveCTEScheduleStage(PipelineScheduleStageType type_p, Pipeline &pipeline_p, bool has_source_tasks_p,
-	                          RecursiveCTEPipelineMetricType metric_type_p)
-	    : type(type_p), pipeline(pipeline_p), has_source_tasks(has_source_tasks_p), metric_type(metric_type_p),
-	      dependency_count(0) {
+	                          RecursiveCTEPipelineMetricType metric_type_p, bool is_invariant_build_p)
+	    : type(type_p), pipeline(pipeline_p), has_source_tasks(has_source_tasks_p),
+	      is_invariant_build(is_invariant_build_p), metric_type(metric_type_p), dependency_count(0) {
 	}
 
 	PipelineScheduleStageType type;
 	reference<Pipeline> pipeline;
 	bool has_source_tasks;
+	bool is_invariant_build;
 	RecursiveCTEPipelineMetricType metric_type;
 	vector<idx_t> dependents;
 	idx_t dependency_count;
@@ -99,6 +101,8 @@ struct RecursiveCTEMetricDistribution {
 };
 
 struct RecursiveCTEEpochMetrics {
+	void RecordPipelineWorkers(idx_t workers);
+
 	void Record(idx_t frontier_rows, idx_t workers, idx_t tasks, idx_t elapsed_us, idx_t frontier_storage_bytes,
 	            idx_t frontier_allocation_bytes);
 	void RecordDirectProbeLookup(idx_t elapsed_ns);
@@ -108,6 +112,9 @@ struct RecursiveCTEEpochMetrics {
 	void RecordKeyPreaggregationClassification(idx_t elapsed_ns);
 	void RecordKeyPreaggregation(idx_t candidate_rows, idx_t groups, idx_t elapsed_ns);
 	void RecordKeyPreaggregationCombine(idx_t elapsed_ns);
+	void RecordLocalKeyPreaggregationClassification(idx_t elapsed_ns);
+	void RecordLocalKeyPreaggregation(idx_t candidate_rows, idx_t groups, idx_t elapsed_ns);
+	void RecordLocalKeyPreaggregationResidual(idx_t candidate_rows);
 	void RecordPartialIndexMaintenance(idx_t elapsed_ns);
 	void RecordKeyDelta(idx_t candidate_rows, idx_t touched_keys, idx_t new_keys, idx_t changed_keys, idx_t elapsed_ns);
 	void RecordRecurringScan(idx_t elapsed_ns);
@@ -115,6 +122,8 @@ struct RecursiveCTEEpochMetrics {
 	void RecordDistinctGrouping(idx_t candidate_rows, idx_t inserted_rows, idx_t elapsed_ns);
 	void RecordPipelineExecution(RecursiveCTEPipelineMetricType metric_type, idx_t elapsed_ns);
 
+	//! Maximum scheduled worker count of one EXECUTE stage across this invocation.
+	atomic<idx_t> max_pipeline_workers {1};
 	RecursiveCTEMetricDistribution frontier_rows;
 	RecursiveCTEMetricDistribution workers;
 	RecursiveCTEMetricDistribution tasks;
@@ -132,6 +141,12 @@ struct RecursiveCTEEpochMetrics {
 	atomic<idx_t> key_preaggregation_combine_work_ns {0};
 	atomic<idx_t> key_preaggregation_candidate_rows {0};
 	atomic<idx_t> key_preaggregation_groups {0};
+	atomic<idx_t> local_key_preaggregation_classification_work_ns {0};
+	atomic<idx_t> local_key_preaggregation_work_ns {0};
+	atomic<idx_t> local_key_preaggregation_candidate_rows {0};
+	atomic<idx_t> local_key_preaggregation_groups {0};
+	atomic<idx_t> local_key_preaggregation_states {0};
+	atomic<idx_t> local_key_preaggregation_residual_rows {0};
 	atomic<idx_t> partial_index_maintenance_work_ns {0};
 	atomic<idx_t> key_delta_work_ns {0};
 	atomic<idx_t> key_delta_candidate_rows {0};
@@ -242,6 +257,9 @@ public:
 
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk);
 	const ColumnDataCollection &CurrentInputTable() const;
+	idx_t CurrentInputCount() const {
+		return CurrentInputTable().Count();
+	}
 	void InitializeSharedOutputAppend();
 	void CommitUsingKeyUpdates();
 	void PromoteDistinctState(ClientContext &context, idx_t partition_count);
@@ -249,6 +267,8 @@ public:
 	const RecursiveCTEPartialKeyIndex &GetPartialKeyIndex(const vector<idx_t> &key_indices) const;
 	void AppendOutput(DataChunk &chunk);
 	void CombineOutput(ColumnDataCollection &output);
+	void RegisterLocalPreaggregation(unique_ptr<GroupedAggregateHashTable> local_ht, idx_t candidate_rows,
+	                                 idx_t classification_work_ns, idx_t preaggregation_work_ns);
 	void SinkSerialDistinct(DataChunk &chunk, RecursiveCTELocalState &local_state);
 	void SinkDistinct(DataChunk &chunk, RecursiveCTELocalState &local_state, bool emit_rows = true,
 	                  bool record_sink_metrics = true);
@@ -299,6 +319,9 @@ public:
 	bool HasMaterializedInvariantPipelines() const {
 		return invariant_meta_pipelines_materialized;
 	}
+	bool CanPreaggregateUsingKey() const {
+		return can_preaggregate_using_key;
+	}
 	void MarkInvariantPipelinesMaterialized() {
 		invariant_meta_pipelines_materialized = true;
 	}
@@ -308,11 +331,18 @@ private:
 	void CommitUsingKeyUpdatesInternal();
 	template <bool COLLECT_METRICS>
 	void CommitPreaggregatedUsingKeyUpdatesInternal();
+	template <bool COLLECT_METRICS>
+	void CommitMixedUsingKeyUpdatesInternal(unique_ptr<GroupedAggregateHashTable> epoch_ht,
+	                                        idx_t preaggregated_candidate_count);
+	template <bool COLLECT_METRICS>
+	void ApplyPreaggregatedUsingKeyUpdates(GroupedAggregateHashTable &epoch_ht, idx_t &delta_work_ns);
+	template <bool COLLECT_METRICS>
+	idx_t PreaggregateUsingKeyUpdates(GroupedAggregateHashTable &epoch_ht);
 	unique_ptr<GroupedAggregateHashTable> CreateUsingKeyHashTable() const;
 	void ExtractUsingKeyKeys(DataChunk &input);
 	bool ShouldPreaggregateUsingKeyUpdates(idx_t candidate_count);
 	void SnapshotUsingKeyDelta(const Vector &group_addresses, const SelectionVector &new_groups, idx_t new_group_count,
-	                           idx_t row_count);
+	                           idx_t row_count, bool allow_candidate_reuse = true);
 	void SnapshotPreaggregatedUsingKeyDeltaGroups(DataChunk &keys);
 	void SnapshotExistingUsingKeyDeltaAddresses(Vector &addresses, idx_t count, bool defer_append = false);
 	void AppendPreviousUsingKeyDeltaRows(Vector &addresses, idx_t count);
@@ -338,6 +368,8 @@ private:
 	ColumnDataAppendState working_append_state;
 	ColumnDataAppendState recurring_append_state;
 	ColumnDataScanState scan_state;
+	vector<unique_ptr<GroupedAggregateHashTable>> local_preaggregates;
+	idx_t local_preaggregate_candidate_count = 0;
 	RecursiveCTESourcePhase source_phase = RecursiveCTESourcePhase::INITIAL;
 	bool output_is_working = false;
 	//! Cached chunk for distinct key extraction in the using_key Sink path

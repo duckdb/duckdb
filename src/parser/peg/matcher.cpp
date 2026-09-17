@@ -1,4 +1,5 @@
 #include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/matcher_stack.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/peg/matcher_factory.hpp"
 #include "duckdb/main/database.hpp"
@@ -18,19 +19,21 @@
 namespace duckdb {
 
 MatcherResult Matcher::MatchParseResult(MatchState &state) const {
-	state.rule = rule;
-	if (state.packrat_cache && IsPackratMemoized()) {
-		return state.packrat_cache->Match(*this, state);
-	}
-	return MatchParseResultInternal(state);
+	MatchInput input {*this, state};
+	MatchStack stack;
+	return stack.Execute(input);
 }
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
-	auto entry = state.added_suggestions.find(*this);
-	if (entry != state.added_suggestions.end()) {
+	if (!state.added_suggestions) {
+		state.added_suggestions = make_uniq<reference_set_t<const Matcher>>();
+	}
+	auto &added_suggestions = *state.added_suggestions;
+	auto entry = added_suggestions.find(*this);
+	if (entry != added_suggestions.end()) {
 		return SuggestionType::MANDATORY;
 	}
-	state.added_suggestions.insert(*this);
+	added_suggestions.insert(*this);
 	return AddSuggestionInternal(state);
 }
 
@@ -46,7 +49,7 @@ void Matcher::Print() const {
 }
 
 void MatchState::AddSuggestion(MatcherSuggestion suggestion) {
-	suggestions.push_back(std::move(suggestion));
+	context.suggestions.push_back(std::move(suggestion));
 }
 
 Matcher &MatcherAllocator::Allocate(unique_ptr<Matcher> matcher) {

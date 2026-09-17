@@ -103,9 +103,11 @@ public:
 	                              const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row);
 	static bool InitializeScanInRowGroup(ClientContext &context, CollectionScanState &state,
 	                                     RowGroupCollection &collection, SegmentNode<RowGroup> &row_group,
-	                                     idx_t vector_index, idx_t max_row);
+	                                     idx_t vector_index, idx_t max_row, bool initialize_columns = true);
 	void InitializeParallelScan(ParallelCollectionScanState &state);
-	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state);
+	//! Claims the next assignment and returns its rows, invalid once none is left, deferring column setup when asked
+	optional_idx NextParallelScan(ClientContext &context, ParallelCollectionScanState &state,
+	                              CollectionScanState &scan_state, bool initialize_columns = true);
 
 	RowGroupIterationHelper Chunks(DuckTransaction &transaction);
 	RowGroupIterationHelper Chunks(DuckTransaction &transaction, const vector<StorageIndex> &column_ids);
@@ -128,7 +130,7 @@ public:
 	void FinalizeAppend(TransactionData transaction, TableAppendState &state);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	void RevertAppendInternal(idx_t start_row);
-	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
+	void CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t start, idx_t count);
 
 	void MergeStorage(RowGroupCollection &data, optional_ptr<DataTable> table,
 	                  optional_ptr<StorageCommitState> commit_state);
@@ -184,7 +186,8 @@ public:
 	shared_ptr<RowGroupCollection> AlterType(ClientContext &context, idx_t changed_idx, const LogicalType &target_type,
 	                                         vector<StorageIndex> bound_columns, Expression &cast_expr,
 	                                         TransactionData transaction);
-	void VerifyNewConstraint(const QueryContext &context, DataTable &parent, const BoundConstraint &constraint);
+	void VerifyNewConstraint(const QueryContext &context, DuckTransaction &transaction, DataTable &parent,
+	                         const BoundConstraint &constraint);
 
 	void SetStats(TableStatistics &new_stats);
 	void CopyStats(TableStatistics &stats);

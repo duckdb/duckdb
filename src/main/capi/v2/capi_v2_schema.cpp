@@ -4,21 +4,18 @@ using namespace duckdb::capiv2;
 
 DUCKDB_V2_ERROR duckdb_v2_schema_get_count(duckdb_v2_schema_handle schema, idx_t *out_count,
                                            duckdb_v2_error_info_handle *err) {
-	return WithErrorHandler(err, [&]() {
-		if (!schema || !out_count) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_schema_get_count");
-		}
-		*out_count = Convert(schema)->fields.size();
-	});
+	DUCKDB_CHECK_ARG(schema);
+	DUCKDB_CHECK_ARG(out_count);
+	return WithErrorHandler(err, [&]() { *out_count = Convert(schema)->fields.size(); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_schema_get_field(duckdb_v2_schema_handle schema, idx_t index,
                                            duckdb_v2_identifier_t *out_name, duckdb_v2_logical_type_handle *out_type,
                                            duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(schema);
+	DUCKDB_CHECK_ARG(out_name);
+	DUCKDB_CHECK_ARG(out_type);
 	return WithErrorHandler(err, [&]() {
-		if (!schema || !out_name || !out_type) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_schema_get_field");
-		}
 		*out_name = duckdb_v2_identifier_t {nullptr, 0};
 		*out_type = nullptr;
 		auto &wrapper = *Convert(schema);

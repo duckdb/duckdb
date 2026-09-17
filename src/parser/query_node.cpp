@@ -92,7 +92,7 @@ string CommonTableExpressionMap::ToString() const {
 		result += ")";
 		first_cte = false;
 	}
-	return result;
+	return result + " ";
 }
 
 string QueryNode::ResultModifiersToString() const {
