@@ -215,18 +215,18 @@ which will use the merged manifest to install all required dependencies, build `
 and finally link both extensions into DuckDB.
 
 # Linking the static archives by hand
-Outside of CMake, a program links the engine archive plus one archive per extension it wants:
+Outside of CMake, a program links one archive per extension it wants, names each extension's root, and puts the engine
+archive last. The simplest way to name the roots is a generated C source compiled into the program:
 ```shell
-cc main.c libparquet_extension.a libjson_extension.a libduckdb_static.a
+LINK_EXTENSIONS="parquet;json" make link_helper     # writes build/release/link_helper.c
+cc main.c build/release/link_helper.c libparquet_extension.a libjson_extension.a libduckdb_static.a
 ```
-Each extension archive carries a root member that registers the extension with the engine, and the table in
-`duckdb_autolink.h` (included by `duckdb.hpp`; C programs include it next to `duckdb.h`) makes the program want that
-member for every extension DuckDB knows, so putting an archive on the line is enough to link the extension in. The
-engine archive must come last: it defines a no-op for every known name whose archive is absent, and the linker keeps the
-first definition it meets, so an engine listed before an extension silently wins. An extension that is not in
-`extension/known_extensions.txt` is linked with `-u duckdb_extension_<name>_root` (`/INCLUDE:duckdb_extension_<name>_root` on
-MSVC), and
-`DUCKDB_NO_AUTOLINK` turns the table off for programs that want to pick with `-u` only.
+Each extension archive carries a root member, `duckdb_extension_<name>_root`, that registers the extension with the
+engine. Nothing references it, so the link has to: `link_helper.c` does that for every compiler, and without
+`LINK_EXTENSIONS` it names every extension archive in the build. The same can be done with linker flags, `-u <root>` with
+GCC or clang (`-u _<root>` on macOS) and `/INCLUDE:<root>` with MSVC (`/INCLUDE:_<root>` on 32-bit x86). An archive
+whose root is not named contributes nothing, and a named root whose archive is missing fails the link. CMake targets get
+all of this from `link_extension_libraries`.
 
 A loadable extension is the same archive linked as a shared library with its entry point exported, next to the
 engine archive when it is built to carry its own copy of DuckDB:
