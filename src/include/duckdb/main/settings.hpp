@@ -1208,20 +1208,6 @@ struct EnableFSSTVectorsSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
-struct EnableFsyncSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "enable_fsync";
-	static constexpr const char *Description =
-	    "Whether to synchronize database file changes to stable storage. Disabling this setting may cause database "
-	    "corruption after an operating system or hardware crash.";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr bool IsDebug = false;
-	static constexpr bool IsDeprecated = false;
-	static constexpr const char *DefaultValue = "true";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-};
-
 struct EnableHTTPMetadataCacheSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_http_metadata_cache";
@@ -1546,6 +1532,21 @@ struct ForceCompressionSetting {
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
 	static constexpr const char *DefaultValue = "auto";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct FsyncModeSetting {
+	using RETURN_TYPE = FileSyncMode;
+	static constexpr const char *Name = "fsync_mode";
+	static constexpr const char *Description =
+	    "How to synchronize database file changes to stable storage (STANDARD, NONE or FULL). NONE may cause database "
+	    "corruption after an operating system or hardware crash. FULL uses fullfsync on macOS.";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "STANDARD";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);

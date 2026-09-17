@@ -700,13 +700,6 @@
         "struct": "EnableFSSTVectorsSetting"
     },
     {
-        "name": "enable_fsync",
-        "description": "Whether to synchronize database file changes to stable storage. Disabling this setting may cause database corruption after an operating system or hardware crash.",
-        "type": "BOOLEAN",
-        "scope": "global",
-        "default_value": "true"
-    },
-    {
         "name": "enable_http_metadata_cache",
         "description": "Whether or not the global http metadata is used to cache HTTP metadata",
         "type": "BOOLEAN",
@@ -924,6 +917,13 @@
         "custom_implementation": [
             "set"
         ]
+    },
+    {
+        "name": "fsync_mode",
+        "description": "How to synchronize database file changes to stable storage (STANDARD, NONE or FULL). NONE may cause database corruption after an operating system or hardware crash. FULL uses fullfsync on macOS.",
+        "type": "ENUM<FileSyncMode>",
+        "scope": "global",
+        "default_value": "STANDARD"
     },
     {
         "name": "geometry_minimum_shredding_size",

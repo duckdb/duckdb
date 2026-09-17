@@ -1,6 +1,7 @@
 #include "duckdb/common/local_file_system.hpp"
 
 #include "duckdb/common/checksum.hpp"
+#include "duckdb/common/enums/file_sync_mode.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/helper.hpp"
@@ -795,7 +796,8 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
 	auto &unix_handle = handle.Cast<UnixFileHandle>();
-	if (unix_handle.db && !Settings::Get<EnableFsyncSetting>(*unix_handle.db)) {
+	auto fsync_mode = unix_handle.db ? Settings::Get<FsyncModeSetting>(*unix_handle.db) : FileSyncMode::STANDARD;
+	if (fsync_mode == FileSyncMode::NONE) {
 		return;
 	}
 	int fd = unix_handle.fd;
@@ -803,7 +805,7 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 #ifdef F_FULLFSYNC
 	// On macOS and iOS, fsync() doesn't guarantee durability past power failures. fcntl(F_FULLFSYNC) is required for
 	// that purpose. Some filesystems don't support fcntl(F_FULLFSYNC), and require a fallback to fsync().
-	if (::fcntl(fd, F_FULLFSYNC) == 0) {
+	if (fsync_mode == FileSyncMode::FULL && ::fcntl(fd, F_FULLFSYNC) == 0) {
 		return;
 	}
 #endif // F_FULLFSYNC
@@ -1592,7 +1594,8 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
 	auto &windows_handle = handle.Cast<WindowsFileHandle>();
-	if (windows_handle.db && !Settings::Get<EnableFsyncSetting>(*windows_handle.db)) {
+	auto fsync_mode = windows_handle.db ? Settings::Get<FsyncModeSetting>(*windows_handle.db) : FileSyncMode::STANDARD;
+	if (fsync_mode == FileSyncMode::NONE) {
 		return;
 	}
 	HANDLE hFile = windows_handle.fd;
