@@ -24,7 +24,6 @@ struct PartitionCaseTestDirectory {
 		return fs.JoinPath(path, name);
 	}
 
-	//! Whether the real file system under this directory folds case (macOS/Windows, but not Linux)
 	bool FoldsCase() {
 		auto probe = fs.JoinPath(path, "case_probe_dir");
 		fs.CreateDirectory(probe);
@@ -37,8 +36,6 @@ struct PartitionCaseTestDirectory {
 	string path;
 };
 
-//! Resolves each path component to an existing entry that differs only in case, so that the guard is
-//! exercised on case-sensitive platforms as well
 class CaseFoldingFileSystem : public LocalFileSystem {
 public:
 	explicit CaseFoldingFileSystem(string root_p) : root(std::move(root_p)) {
@@ -97,7 +94,6 @@ private:
 	string root;
 };
 
-//! Makes the case probe throw, so the collision check has to fall back to its default
 class ProbeFailingFileSystem : public LocalFileSystem {
 public:
 	string GetName() const override {
@@ -141,19 +137,15 @@ TEST_CASE("Partitioned COPY rejects partition values that differ only in case", 
 	auto db = DatabaseOn<CaseFoldingFileSystem>(config, dir.path);
 	Connection con(*db);
 
-	// two values within one COPY that resolve to the same directory
 	RequireCaseCollision(con.Query(PartitionCopy(CASE_PAIR, dir.Child("out"), "k")));
 
-	// a directory left behind by an earlier COPY, at either partition level
 	auto nested = dir.Child("nested");
 	REQUIRE_NO_FAIL(con.Query(PartitionCopy("(SELECT 'p' AS g, 'a' AS k, 1 AS x)", nested, "g, k")));
 	RequireCaseCollision(con.Query(PartitionCopy("(SELECT 'P' AS g, 'a' AS k, 2 AS x)", nested, "g, k")));
 	RequireCaseCollision(con.Query(PartitionCopy("(SELECT 'p' AS g, 'A' AS k, 3 AS x)", nested, "g, k")));
 
-	// the rejected writes leave the partition they collided with intact
 	REQUIRE(CountRows(con, nested) == 1);
 
-	// a colliding pair created inside a run whose parent directory was already listed
 	auto listed = dir.Child("listed");
 	REQUIRE_NO_FAIL(con.Query(PartitionCopy("(SELECT 'z' AS k, 1 AS x)", listed, "k")));
 	RequireCaseCollision(
@@ -198,7 +190,6 @@ TEST_CASE("Partitioned COPY keeps the collision check when the case probe fails"
 		RequireCaseCollision(std::move(result));
 		return;
 	}
-	// case-sensitive host: both directories exist, so the still-enabled check must not fire on a re-run
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE_NO_FAIL(con.Query(sql));
 	REQUIRE(CountRows(con, out) == 2);
