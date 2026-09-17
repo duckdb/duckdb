@@ -46,36 +46,36 @@ void Leaf::MergeInlined(ArenaAllocator &arena, ART &art, NodePtr &left, NodePtr 
 	auto left_byte = left_key.data[pos];
 	auto right_byte = right_key.data[pos];
 
-	NodePtr replacement;
+	NodePtr merged_root_ptr;
 	if (pos == Prefix::ROW_ID_COUNT) {
 		// The row IDs differ on the last byte.
-		Node7Leaf::New(art, replacement);
-		Node7Leaf::InsertByte(art, replacement, left_byte);
-		Node7Leaf::InsertByte(art, replacement, right_byte);
+		Node7Leaf::New(art, merged_root_ptr);
+		Node7Leaf::InsertByte(art, merged_root_ptr, left_byte);
+		Node7Leaf::InsertByte(art, merged_root_ptr, right_byte);
 	} else {
 		// Create and insert the (compressed) children.
 		// We inline directly into the node, instead of creating prefixes
 		// with a single inlined leaf as their child.
-		Node4::New(art, replacement);
+		Node4::New(art, merged_root_ptr);
 
 		NodePtr left_child;
 		Leaf::New(left_child, left_row_id);
-		Node4::InsertChild(art, replacement, left_byte, left_child);
+		Node4::InsertChild(art, merged_root_ptr, left_byte, left_child);
 
 		NodePtr right_child;
 		Leaf::New(right_child, right_row_id);
-		Node4::InsertChild(art, replacement, right_byte, right_child);
+		Node4::InsertChild(art, merged_root_ptr, right_byte, right_child);
 	}
 
 	if (pos != depth) {
 		// The row IDs share a prefix.
 		auto chain = PrefixHandle::New(art, left_key, depth, pos - depth);
-		chain.tail.Child(art) = replacement;
-		replacement = chain.root;
+		chain.tail.Child(art) = merged_root_ptr;
+		merged_root_ptr = chain.root;
 	}
 
-	replacement.SetGateStatus(status);
-	left = replacement;
+	merged_root_ptr.SetGateStatus(status);
+	left = merged_root_ptr;
 }
 
 void Leaf::TransformToNested(ART &art, NodePtr &node) {
