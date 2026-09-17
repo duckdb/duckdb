@@ -210,18 +210,42 @@ EXPLAIN SELECT count(*) FROM ts WHERE julian(t) = 2458850.0;
 ----
 logical_opt	<!REGEX>:.*julian.*
 
+statement ok
+SET disabled_optimizers='expression_rewriter';
+
+query II
+EXPLAIN SELECT count(*) FROM ets WHERE julian(t) > 2451545;
+----
+logical_opt	<REGEX>:.*julian.*
+
+statement ok
+CREATE TABLE ets_ref AS SELECT t FROM ets WHERE julian(t) > 2451545;
+
+statement ok
+RESET disabled_optimizers;
+
+query I
+SELECT count(*) FROM ets_ref;
+----
+199999
+
+query I
+SELECT count(*) FROM ets WHERE julian(t) > 2451545;
+----
+199999
+
 query I
 SELECT count(*) FROM (
-  SELECT 1 FROM ets WHERE julian(t) > 2451545
-  EXCEPT ALL SELECT 1 FROM (SELECT t FROM ets OFFSET 0) WHERE julian(t) > 2451545
+  SELECT t FROM ets WHERE julian(t) > 2451545
+  EXCEPT ALL SELECT t FROM ets_ref
 );
 ----
 0
 
 query I
 SELECT count(*) FROM (
-  SELECT 1 FROM (SELECT t FROM ets OFFSET 0) WHERE julian(t) > 2451545
-  EXCEPT ALL SELECT 1 FROM ets WHERE julian(t) > 2451545
+  SELECT t FROM ets_ref
+  EXCEPT ALL SELECT t FROM ets WHERE julian(t) > 2451545
 );
 ----
 0
