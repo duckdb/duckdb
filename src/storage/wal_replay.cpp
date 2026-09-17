@@ -64,6 +64,10 @@ public:
 	optional_idx checkpoint_end_position;
 	optional_idx expected_checkpoint_id;
 	WALReplayState replay_state;
+	//! Blocks referenced by ROW_GROUP_DATA entries, collected during the deserialize-only scan.
+	//! They are marked as used only once we have decided to replay the WAL, so that early-return
+	//! paths (e.g. an already-completed checkpoint) do not leak the marks.
+	vector<block_id_t> row_group_blocks;
 
 	struct ReplayIndexInfo {
 		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, idx_t table_oid, optional_idx index_oid)
@@ -606,6 +610,14 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 		auto main_handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ);
 		truncated_wal_reader = make_uniq<BufferedFileReader>(fs, std::move(main_handle));
 	}
+	// we have decided to replay this WAL - now mark the blocks referenced by ROW_GROUP_DATA entries as used.
+	// this must happen before replay, because replaying earlier entries can allocate blocks -
+	// without the marks, those allocations could hand out blocks that later entries reference.
+	auto &block_manager = storage_manager.GetBlockManager();
+	for (auto &block_id : checkpoint_state.row_group_blocks) {
+		block_manager.MarkBlockAsUsed(block_id);
+	}
+
 	// we need to recover from the WAL: actually set up the replay state
 	ReplayState state(database, *con.context, replay_state);
 
@@ -1325,11 +1337,10 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 	deserializer.Unset<const CompressionInfo>();
 	deserializer.Unset<DatabaseInstance>();
 	if (DeserializeOnly()) {
-		// label blocks in data as used - they will be used after the WAL replay is finished
-		// we need to do this during the deserialization phase to ensure the blocks will not be overwritten
-		// by previous deserialization steps
+		// only record the blocks here - they are marked as used in ReplayLog once we have decided to
+		// actually replay this WAL, so that the marks cannot leak on early-return paths
 		for (auto &block_id : data.GetBlockIds()) {
-			block_manager.MarkBlockAsUsed(block_id);
+			state.row_group_blocks.push_back(block_id);
 		}
 		return;
 	}
