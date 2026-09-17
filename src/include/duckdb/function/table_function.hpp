@@ -446,6 +446,8 @@ struct TableFunctionToSQLInput {
 //! Return owned SQL for GetColumnIds, projected_input, then the requested extra ordinality column.
 //! The child has positional aliases. Apply file_filters before outer filters and projections.
 //! Honor the complete request or return a reason without a query; do not retain borrowed input.
+//! The exporter does not verify the returned query against this request; ignoring source_ordinality or file_filters
+//! can produce invalid or incorrect SQL.
 typedef TableFunctionToSQLResult (*table_function_to_sql_t)(ClientContext &context, const LogicalGet &get,
                                                             TableFunctionToSQLInput input);
 
