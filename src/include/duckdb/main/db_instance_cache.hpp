@@ -47,6 +47,11 @@ public:
 	                                       CacheBehavior cache_behavior = CacheBehavior::AUTOMATIC,
 	                                       const std::function<void(DuckDB &)> &on_create = nullptr);
 
+	//! Creates an uncached instance with no database attached (see DuckDB::CreateEmpty). Databases attached to it
+	//! later go through this cache's path manager, so opening one file twice is detected across every instance
+	//! created through the cache.
+	shared_ptr<DuckDB> CreateEmptyInstance(DBConfig &config);
+
 private:
 	shared_ptr<DatabaseFilePathManager> path_manager;
 	//! A map with the cached instances <absolute_path/instance>

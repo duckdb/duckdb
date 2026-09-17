@@ -35,6 +35,8 @@ public:
 	TableFunction function;
 	//! The bind data of the function
 	unique_ptr<FunctionData> bind_data;
+	//! Process-local input that cannot be reconstructed from SQL parameters
+	shared_ptr<TableFunctionInfo> bind_info;
 	//! The types of ALL columns that can be returned by the table function
 	vector<LogicalType> returned_types;
 	//! The names of ALL columns that can be returned by the table function

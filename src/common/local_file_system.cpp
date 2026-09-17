@@ -619,6 +619,26 @@ FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
 	return file_metadata;
 }
 
+optional<FileMetadata> LocalFileSystem::GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
+	const auto &path_p = file.path;
+	if (path_p.empty()) {
+		return nullopt;
+	}
+	auto path = ExpandPath(path_p, opener);
+	struct stat status;
+	if (stat(path.c_str(), &status) != 0) {
+		auto retained_errno = errno;
+		if (retained_errno == ENOENT || retained_errno == ENOTDIR) {
+			return nullopt;
+		}
+		throw IOException({{"errno", std::to_string(retained_errno)}}, "Failed to get stats for path \"%s\": %s",
+		                  path_p, strerror(retained_errno));
+	}
+	auto file_metadata = StatsFromStruct(status);
+	file_metadata.version_tag = VersionTagFromMetadata(file_metadata);
+	return file_metadata;
+}
+
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	if (ftruncate(fd, new_size) != 0) {
@@ -1649,6 +1669,29 @@ FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
 	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	auto file_metadata = StatsInternal(hFile, handle.GetPath());
+	file_metadata.version_tag = VersionTagFromMetadata(file_metadata);
+	return file_metadata;
+}
+
+optional<FileMetadata> LocalFileSystem::GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
+	const auto &path_p = file.path;
+	if (path_p.empty()) {
+		return nullopt;
+	}
+	auto unicode_path = NormalizePathAndConvertToUnicode(*this, path_p, opener);
+	auto raw_handle = CreateFileW(unicode_path.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+	                              OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+	if (raw_handle == INVALID_HANDLE_VALUE) {
+		auto error_code = GetLastError();
+		if (error_code == ERROR_FILE_NOT_FOUND || error_code == ERROR_PATH_NOT_FOUND) {
+			return nullopt;
+		}
+		SetLastError(error_code);
+		throw IOException("Failed to get stats for path \"%s\": %s", path_p, GetLastErrorAsString());
+	}
+	unique_ptr<void, decltype(&CloseHandle)> handle(raw_handle, CloseHandle);
+
+	auto file_metadata = StatsInternal(handle.get(), path_p);
 	file_metadata.version_tag = VersionTagFromMetadata(file_metadata);
 	return file_metadata;
 }
