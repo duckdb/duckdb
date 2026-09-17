@@ -17,8 +17,4 @@ ChunkUnit::ChunkUnit(unique_ptr<DataChunk> chunk_p)
     : ResultUnit(RequireChunk(chunk_p).size(), chunk_p->GetDataSize()), chunk(std::move(chunk_p)) {
 }
 
-const char *ChunkUnit::TypeTag() const {
-	return TAG;
-}
-
 } // namespace duckdb
