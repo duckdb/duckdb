@@ -364,7 +364,7 @@ bool CatalogSearchPath::SchemaInSearchPath(ClientContext &context, const Identif
 		if (path.GetCatalog() == catalog_name) {
 			return true;
 		}
-		if (IsInvalidCatalog(path.GetCatalog()) && catalog_name == DatabaseManager::GetDefaultDatabase(context)) {
+		if (IsInvalidCatalog(path.GetCatalog()) && catalog_name == DatabaseManager::TryGetDefaultDatabase(context)) {
 			return true;
 		}
 	}
