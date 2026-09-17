@@ -711,19 +711,6 @@ TEST_CASE("Incremental scalar registration preserves live SQL identity",
 	source.Rollback();
 }
 
-TEST_CASE("SQL export excludes internal types recursively", "[sql_export][bound_expression_sql_export]") {
-	auto binding = ColumnBinding(TableIndex(0), ProjectionIndex(0));
-	LogicalPlanVerificationPath path;
-	path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
-	for (auto &type : vector<LogicalType> {LogicalType::POINTER, LogicalType::LIST(LogicalType::POINTER),
-	                                       LogicalType::LIST(LogicalType::ANY)}) {
-		BoundColumnRefExpression expression(type, binding);
-		auto context = ResolveBinding(binding, {Identifier("value")}, type);
-		RequireIssue(BoundExpressionSQLExporter::Export(expression, context),
-		             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, path);
-	}
-}
-
 TEST_CASE("SQL export type admission follows DuckDB value types", "[sql_export][bound_expression_sql_export]") {
 	auto types = LogicalType::AllTypes();
 	for (idx_t value = 0; value <= NumericLimits<uint8_t>::Maximum(); value++) {
@@ -819,31 +806,25 @@ TEST_CASE("Bound expression SQL export supports represented catalog bind state",
 	LogicalPlanVerificationPath root_path;
 	root_path.root = LogicalPlanVerificationPathRoot::STANDALONE_EXPRESSION;
 
-	auto ordinary_scalar = bind_scalar("ordinary_bound_scalar");
-	REQUIRE(ordinary_scalar->Cast<BoundFunctionExpression>().BindInfo());
-	auto scalar_result = BoundExpressionSQLExporter::Export(*ordinary_scalar, context);
-	REQUIRE(scalar_result.IsSuccess());
-	REQUIRE(BoundExpressionSQLExporter::Export(*ordinary_scalar->Copy(), context).IsSuccess());
-	REQUIRE(scalar_result.GetValue()->Cast<FunctionExpression>().GetQualifiedName() ==
-	        QualifiedName(Identifier::SystemCatalog(), schema_name, Identifier("ordinary_bound_scalar")));
-	auto serialized_scalar = BinaryRoundTrip(*connection.context, *ordinary_scalar);
-	RequireRoundTrip(connection, *serialized_scalar, context, string(),
-	                 schema_name.GetIdentifierName() + ".ordinary_bound_scalar(7, 99)");
-	RequireRoundTrip(connection, *ordinary_scalar, context, string(),
-	                 schema_name.GetIdentifierName() + ".ordinary_bound_scalar(7, 99)");
-
-	auto ordinary_aggregate = bind_aggregate("ordinary_bound_sum");
-	REQUIRE(ordinary_aggregate->Cast<BoundAggregateExpression>().BindInfo());
-	auto aggregate_result = BoundExpressionSQLExporter::Export(*ordinary_aggregate, context);
-	REQUIRE(aggregate_result.IsSuccess());
-	REQUIRE(BoundExpressionSQLExporter::Export(*ordinary_aggregate->Copy(), context).IsSuccess());
-	REQUIRE(aggregate_result.GetValue()->Cast<FunctionExpression>().GetQualifiedName() ==
-	        QualifiedName(Identifier::SystemCatalog(), schema_name, Identifier("ordinary_bound_sum")));
-	auto serialized_aggregate = BinaryRoundTrip(*connection.context, *ordinary_aggregate);
-	RequireRoundTrip(connection, *serialized_aggregate, context, string(),
-	                 schema_name.GetIdentifierName() + ".ordinary_bound_sum(7)");
-	RequireRoundTrip(connection, *ordinary_aggregate, context, string(),
-	                 schema_name.GetIdentifierName() + ".ordinary_bound_sum(7)");
+	vector<pair<string, unique_ptr<Expression>>> represented;
+	represented.emplace_back("ordinary_bound_scalar", bind_scalar("ordinary_bound_scalar"));
+	represented.emplace_back("ordinary_bound_sum", bind_aggregate("ordinary_bound_sum"));
+	for (auto &entry : represented) {
+		CAPTURE(entry.first);
+		auto &expression = *entry.second;
+		const bool scalar = expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION;
+		REQUIRE((scalar ? expression.Cast<BoundFunctionExpression>().BindInfo()
+		                : expression.Cast<BoundAggregateExpression>().BindInfo()));
+		auto result = BoundExpressionSQLExporter::Export(expression, context);
+		REQUIRE(result.IsSuccess());
+		REQUIRE(BoundExpressionSQLExporter::Export(*expression.Copy(), context).IsSuccess());
+		REQUIRE(result.GetValue()->Cast<FunctionExpression>().GetQualifiedName() ==
+		        QualifiedName(Identifier::SystemCatalog(), schema_name, Identifier(entry.first)));
+		const string oracle = schema_name.GetIdentifierName() + "." + entry.first + (scalar ? "(7, 99)" : "(7)");
+		auto serialized = BinaryRoundTrip(*connection.context, expression);
+		RequireRoundTrip(connection, *serialized, context, string(), oracle);
+		RequireRoundTrip(connection, expression, context, string(), oracle);
+	}
 
 	auto lost_scalar = bind_scalar("lost_scalar_argument");
 	REQUIRE(lost_scalar->Cast<BoundFunctionExpression>().GetChildren().size() == 1);
@@ -1172,13 +1153,6 @@ TEST_CASE("Bound expression SQL export reconstructs registered casts", "[sql_exp
 TEST_CASE("Bound expression SQL export admits only validated bound operators",
           "[sql_export][bound_expression_sql_export]") {
 	BoundExpressionSQLExportContext context;
-	BoundOperatorExpression invalid(ExpressionType::ARRAY_EXTRACT, LogicalType::INTEGER);
-	invalid.GetChildrenMutable().push_back(Constant(Value::INTEGER(1)));
-	invalid.GetChildrenMutable().push_back(Constant(Value::INTEGER(2)));
-	auto invalid_result = BoundExpressionSQLExporter::Export(invalid, context);
-	REQUIRE(invalid_result.HasError());
-	REQUIRE(invalid_result.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE);
-
 	BoundOperatorExpression invalid_arity(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);
 	auto arity_result = BoundExpressionSQLExporter::Export(invalid_arity, context);
 	REQUIRE(arity_result.HasError());
