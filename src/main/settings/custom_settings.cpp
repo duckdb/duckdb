@@ -143,7 +143,8 @@ Value AllocatorBulkDeallocationFlushThresholdSetting::GetSetting(const ClientCon
 //===----------------------------------------------------------------------===//
 // Delta Only Variant Legacy Encoding
 //===----------------------------------------------------------------------===//
-void DebugDeltaOnlyVariantEncodingEnabledSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void DebugDeltaOnlyVariantEncodingEnabledSetting::SetGlobal(DatabaseInstance *db, DBConfig &config,
+                                                            const Value &input) {
 	throw InvalidInputException("This setting is not adjustable by a user");
 }
 
@@ -569,7 +570,7 @@ Value DisabledFilesystemsSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Disabled Optimizers
 //===----------------------------------------------------------------------===//
-void DebugDisabledOptimizersSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void DisabledOptimizersSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto list = StringUtil::Split(input.ToString(), ",");
 	set<OptimizerType> disabled_optimizers;
 	for (auto &entry : list) {
@@ -583,11 +584,11 @@ void DebugDisabledOptimizersSetting::SetGlobal(DatabaseInstance *db, DBConfig &c
 	config.options.disabled_optimizers = std::move(disabled_optimizers);
 }
 
-void DebugDisabledOptimizersSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void DisabledOptimizersSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.disabled_optimizers = DBConfigOptions().disabled_optimizers;
 }
 
-Value DebugDisabledOptimizersSetting::GetSetting(const ClientContext &context) {
+Value DisabledOptimizersSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	string result;
 	for (auto &optimizer : config.options.disabled_optimizers) {
@@ -1009,7 +1010,7 @@ void ExternalThreadsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 //===----------------------------------------------------------------------===//
 // Force Compression
 //===----------------------------------------------------------------------===//
-void DebugForceCompressionSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+void ForceCompressionSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	auto compression = StringUtil::Lower(input.ToString());
 	if (compression == "none" || compression == "auto") {
 		input = "auto";

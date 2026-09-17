@@ -340,17 +340,6 @@
         "is_debug": true
     },
     {
-        "name": "debug_disabled_optimizers",
-        "description": "Disable a specific, comma-separated set of optimizers.",
-        "type": "VARCHAR",
-        "scope": "global",
-        "custom_implementation": true,
-        "aliases": [
-            "disabled_optimizers"
-        ],
-        "is_debug": true
-    },
-    {
         "name": "debug_enable_caching_operators",
         "description": "Enables caching operators that cache intermediate results.",
         "type": "BOOLEAN",
@@ -397,20 +386,6 @@
         "default_scope": "global",
         "default_value": "false",
         "is_debug": true
-    },
-    {
-        "name": "debug_force_compression",
-        "description": "Forces the usage of a specific compression method.",
-        "type": "ENUM<CompressionType>",
-        "scope": "global",
-        "default_value": "auto",
-        "custom_implementation": [
-            "set"
-        ],
-        "is_debug": true,
-        "aliases": [
-            "force_compression"
-        ]
     },
     {
         "name": "debug_force_external",
@@ -697,6 +672,13 @@
         "custom_implementation": true
     },
     {
+        "name": "disabled_optimizers",
+        "description": "Disable a specific, comma-separated set of optimizers.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "duckdb_api",
         "description": "Specifies which client API/binding opened the database connection, e.g. cpp, capi, cli. The value gets folded into the HTTP User-Agent string DuckDB sends on any HTTP request.",
         "type": "VARCHAR",
@@ -785,11 +767,10 @@
     },
     {
         "name": "enable_optimizer",
-        "description": "Deprecated setting. Set debug_disable_optimizer to false instead.",
+        "description": "Whether the query optimizer is enabled.",
         "type": "BOOLEAN",
         "default_scope": "global",
-        "default_value": "true",
-        "is_deprecated": true
+        "default_value": "true"
     },
     {
         "name": "enable_profiling",
@@ -950,6 +931,16 @@
         "scope": "global",
         "default_value": "false",
         "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "force_compression",
+        "description": "Forces the usage of a specific compression method.",
+        "type": "ENUM<CompressionType>",
+        "scope": "global",
+        "default_value": "auto",
+        "custom_implementation": [
             "set"
         ]
     },

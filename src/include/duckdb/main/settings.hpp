@@ -642,18 +642,6 @@ struct DebugDisableOptimizerSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
-struct DebugDisabledOptimizersSetting {
-	using RETURN_TYPE = string;
-	static constexpr const char *Name = "debug_disabled_optimizers";
-	static constexpr const char *Description = "Disable a specific, comma-separated set of optimizers.";
-	static constexpr const char *InputType = "VARCHAR";
-	static constexpr bool IsDebug = true;
-	static constexpr bool IsDeprecated = false;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
 struct EnableCachingOperatorsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_enable_caching_operators";
@@ -715,19 +703,6 @@ struct DebugForceCommitRevertFailureSetting {
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-};
-
-struct DebugForceCompressionSetting {
-	using RETURN_TYPE = CompressionType;
-	static constexpr const char *Name = "debug_force_compression";
-	static constexpr const char *Description = "Forces the usage of a specific compression method.";
-	static constexpr const char *InputType = "VARCHAR";
-	static constexpr bool IsDebug = true;
-	static constexpr bool IsDeprecated = false;
-	static constexpr const char *DefaultValue = "auto";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct DebugForceExternalSetting {
@@ -1152,6 +1127,18 @@ struct DisabledLogTypes {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DisabledOptimizersSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "disabled_optimizers";
+	static constexpr const char *Description = "Disable a specific, comma-separated set of optimizers.";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct DuckDBAPISetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "duckdb_api";
@@ -1289,10 +1276,10 @@ struct EnableOptimisticWriteSetting {
 struct EnableOptimizerSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_optimizer";
-	static constexpr const char *Description = "Deprecated setting. Set debug_disable_optimizer to false instead.";
+	static constexpr const char *Description = "Whether the query optimizer is enabled.";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr bool IsDebug = false;
-	static constexpr bool IsDeprecated = true;
+	static constexpr bool IsDeprecated = false;
 	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
@@ -1534,6 +1521,19 @@ struct ForceColumnMetadataReuseSetting {
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
 	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct ForceCompressionSetting {
+	using RETURN_TYPE = CompressionType;
+	static constexpr const char *Name = "force_compression";
+	static constexpr const char *Description = "Forces the usage of a specific compression method.";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "auto";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
