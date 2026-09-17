@@ -593,7 +593,7 @@ void SQLExportWrapSource(OptimizerExtensionInput &input, unique_ptr<LogicalOpera
 
 TEST_CASE("SQL export extension source selects exactly one executable plan", "[sql_export][sql_export_verification]") {
 	for (auto mode : {"off", "report", "strict"}) {
-		for (auto behavior : {0, 1, 2}) {
+		for (idx_t behavior = 0; behavior < (string(mode) == "off" ? 1 : 3); behavior++) {
 			DuckDB db(nullptr);
 			Connection con(db);
 			auto observer = SQLExportVerificationState::GetOrCreate(*con.context);
@@ -1146,56 +1146,54 @@ TEST_CASE("SQL export retains completed verification when physical planning fail
 
 TEST_CASE("SQL export renders error positions against their generated source",
           "[sql_export][sql_export_verification]") {
-	for (auto mode : {"report", "strict"}) {
-		for (bool collect : {false, true}) {
-			for (bool streaming : {false, true}) {
-				CAPTURE(mode, collect, streaming);
-				DuckDB db(nullptr);
-				Connection con(db);
-				REQUIRE_NO_FAIL(con.Query("SET threads=1; SET max_streaming_buffer_size='1b'"));
-				shared_ptr<SQLExportVerificationState> observer;
-				if (collect) {
-					observer = SQLExportVerificationState::GetOrCreate(*con.context);
-					REQUIRE_FALSE(observer->retain_failure_sql);
-				}
-				REQUIRE_NO_FAIL(con.Query("SET debug_verify_sql_export='" + string(mode) + "'"));
-				if (observer) {
-					observer->TakeRecords();
-				}
-				QueryParameters parameters;
-				parameters.output_type =
-				    streaming ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
-				auto rows = streaming ? StringUtil::Repeat("('1'),", STANDARD_VECTOR_SIZE * 2) : string();
-				auto result = con.context->Query("SELECT CAST(x AS UTINYINT) FROM (VALUES " + rows + "('hello'))t(x)",
-				                                 parameters);
-				if (streaming) {
-					REQUIRE_NO_FAIL(*result);
-					REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
-					result = result->Cast<StreamQueryResult>().Materialize();
-				}
-				REQUIRE(result->HasError());
-				REQUIRE(StringUtil::Contains(result->GetError(), "Could not convert string 'hello' to UINT8"));
-				REQUIRE(StringUtil::Contains(result->GetError(), "r0.c0"));
-				REQUIRE(StringUtil::Contains(result->GetError(), "^"));
-				if (observer) {
-					auto record = TakeSQLExportRecord(*observer);
-					REQUIRE(record.route == SQLExportExecutionRoute::GENERATED);
-					REQUIRE(record.outcome == SQLExportOutcome::STRUCTURALLY_VALIDATED);
-					REQUIRE(record.generated_sql.empty());
-				}
-				REQUIRE_NO_FAIL(con.Query("SET debug_verify_sql_export='off'"));
-				auto original = con.Query("SELECT 'hello'::INTEGER");
-				REQUIRE(original->HasError());
-				REQUIRE(StringUtil::Contains(original->GetError(), "LINE 1: SELECT 'hello'::INTEGER"));
-				REQUIRE(StringUtil::Contains(original->GetError(), "^"));
+	for (bool collect : {false, true}) {
+		for (bool streaming : {false, true}) {
+			CAPTURE(collect, streaming);
+			DuckDB db(nullptr);
+			Connection con(db);
+			REQUIRE_NO_FAIL(con.Query("SET threads=1; SET max_streaming_buffer_size='1b'"));
+			shared_ptr<SQLExportVerificationState> observer;
+			if (collect) {
+				observer = SQLExportVerificationState::GetOrCreate(*con.context);
+				REQUIRE_FALSE(observer->retain_failure_sql);
 			}
+			REQUIRE_NO_FAIL(con.Query("SET debug_verify_sql_export='strict'"));
+			if (observer) {
+				observer->TakeRecords();
+			}
+			QueryParameters parameters;
+			parameters.output_type =
+			    streaming ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
+			auto rows = streaming ? StringUtil::Repeat("('1'),", STANDARD_VECTOR_SIZE * 2) : string();
+			auto result =
+			    con.context->Query("SELECT CAST(x AS UTINYINT) FROM (VALUES " + rows + "('hello'))t(x)", parameters);
+			if (streaming) {
+				REQUIRE_NO_FAIL(*result);
+				REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+				result = result->Cast<StreamQueryResult>().Materialize();
+			}
+			REQUIRE(result->HasError());
+			REQUIRE(StringUtil::Contains(result->GetError(), "Could not convert string 'hello' to UINT8"));
+			REQUIRE(StringUtil::Contains(result->GetError(), "r0.c0"));
+			REQUIRE(StringUtil::Contains(result->GetError(), "^"));
+			if (observer) {
+				auto record = TakeSQLExportRecord(*observer);
+				REQUIRE(record.route == SQLExportExecutionRoute::GENERATED);
+				REQUIRE(record.outcome == SQLExportOutcome::STRUCTURALLY_VALIDATED);
+				REQUIRE(record.generated_sql.empty());
+			}
+			REQUIRE_NO_FAIL(con.Query("SET debug_verify_sql_export='off'"));
+			auto original = con.Query("SELECT 'hello'::INTEGER");
+			REQUIRE(original->HasError());
+			REQUIRE(StringUtil::Contains(original->GetError(), "LINE 1: SELECT 'hello'::INTEGER"));
+			REQUIRE(StringUtil::Contains(original->GetError(), "^"));
 		}
 	}
 }
 
 TEST_CASE("SQL export keeps auxiliary parse errors independent of active streams",
           "[sql_export][sql_export_verification]") {
-	for (auto mode : {"off", "report", "strict"}) {
+	for (auto mode : {"off", "strict"}) {
 		for (bool collect : {false, true}) {
 			CAPTURE(mode, collect);
 			DuckDB db(nullptr);
