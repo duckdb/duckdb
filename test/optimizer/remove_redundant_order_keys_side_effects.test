@@ -51,4 +51,17 @@ SELECT count(*) FROM (SELECT id FROM t ORDER BY id, CAST(payload AS INTEGER)) q;
 Conversion Error
 
 statement ok
+CREATE SEQUENCE seq_evaluated START 1;
+
+query I
+SELECT count(*) FROM (SELECT id FROM t ORDER BY id, nextval('seq_evaluated')) q;
+----
+5
+
+query I
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name = 'seq_evaluated';
+----
+5
+
+statement ok
 RESET disabled_optimizers;

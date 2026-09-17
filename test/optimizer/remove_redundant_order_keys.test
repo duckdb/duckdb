@@ -14,6 +14,18 @@ EXPLAIN SELECT id FROM t WHERE id + grp > 0 ORDER BY id, payload LIMIT 2;
 ----
 physical_plan	<REGEX>:.*Order By: id ASC +│.*
 
+# the freed column is pruned by the later passes, so the pass has to run before them
+query II
+EXPLAIN SELECT id FROM t ORDER BY id, payload;
+----
+physical_plan	<!REGEX>:.*payload.*
+
+query I
+SELECT id FROM t ORDER BY id DESC, payload LIMIT 2 OFFSET 1;
+----
+4
+3
+
 query II
 SELECT id, payload FROM t ORDER BY id DESC NULLS FIRST, payload ASC NULLS LAST, grp DESC;
 ----
@@ -94,6 +106,12 @@ query II
 EXPLAIN SELECT grp FROM t GROUP BY grp ORDER BY grp, count(*);
 ----
 physical_plan	<REGEX>:.*Order By: grp ASC +│.*
+
+# and the freed aggregate is eliminated too
+query II
+EXPLAIN SELECT grp FROM t GROUP BY grp ORDER BY grp, count(*);
+----
+physical_plan	<!REGEX>:.*count_star.*
 
 # one grouping set is a GROUP BY, more than one is not
 statement ok
