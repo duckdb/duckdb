@@ -64,99 +64,75 @@ void FindUniqueColumnSets(LogicalGet &get, vector<column_binding_set_t> &result)
 	}
 }
 
-void FindUniqueColumnSets(LogicalOperator &op, vector<column_binding_set_t> &result) {
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_GET:
-		FindUniqueColumnSets(op.Cast<LogicalGet>(), result);
-		break;
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-		auto &aggr = op.Cast<LogicalAggregate>();
-		if (aggr.groups.empty() || aggr.grouping_sets.size() > 1 || !aggr.grouping_functions.empty()) {
-			break;
-		}
-		column_binding_set_t key;
-		if (aggr.grouping_sets.empty()) {
-			for (auto group_idx : ProjectionIndex::GetIndexes(aggr.groups.size())) {
-				key.insert(ColumnBinding(aggr.group_index, group_idx));
-			}
-		} else {
-			for (auto group_idx : aggr.grouping_sets[0]) {
-				if (group_idx.GetIndex() >= aggr.groups.size()) {
-					return;
-				}
-				key.insert(ColumnBinding(aggr.group_index, group_idx));
-			}
-		}
-		if (!key.empty()) {
-			result.push_back(std::move(key));
-		}
-		break;
+void FindUniqueColumnSets(LogicalAggregate &aggr, vector<column_binding_set_t> &result) {
+	if (aggr.groups.empty() || aggr.grouping_sets.size() > 1 || !aggr.grouping_functions.empty()) {
+		return;
 	}
-	case LogicalOperatorType::LOGICAL_DISTINCT: {
-		auto &distinct = op.Cast<LogicalDistinct>();
-		column_binding_set_t key;
-		bool all_columns = true;
-		for (auto &target : distinct.distinct_targets) {
-			if (target->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-				all_columns = false;
-				break;
+	column_binding_set_t key;
+	if (aggr.grouping_sets.empty()) {
+		for (auto group_idx : ProjectionIndex::GetIndexes(aggr.groups.size())) {
+			key.insert(ColumnBinding(aggr.group_index, group_idx));
+		}
+	} else {
+		for (auto group_idx : aggr.grouping_sets[0]) {
+			if (group_idx.GetIndex() >= aggr.groups.size()) {
+				return;
 			}
-			key.insert(target->Cast<BoundColumnRefExpression>().Binding());
+			key.insert(ColumnBinding(aggr.group_index, group_idx));
 		}
-		if (all_columns && !key.empty()) {
-			result.push_back(std::move(key));
-		}
-		break;
 	}
-	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		auto &projection = op.Cast<LogicalProjection>();
-		vector<column_binding_set_t> child_sets;
-		FindUniqueColumnSets(*projection.children[0], child_sets);
-		if (child_sets.empty()) {
-			break;
-		}
-		column_binding_map_t<ColumnBinding> forwarded;
-		for (auto expr_idx : ProjectionIndex::GetIndexes(projection.expressions.size())) {
-			auto &expr = *projection.expressions[expr_idx];
-			if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-				forwarded.emplace(expr.Cast<BoundColumnRefExpression>().Binding(),
-				                  ColumnBinding(projection.table_index, expr_idx));
-			}
-		}
-		for (auto &child_set : child_sets) {
-			column_binding_set_t key;
-			bool complete = true;
-			for (auto &binding : child_set) {
-				auto entry = forwarded.find(binding);
-				if (entry == forwarded.end()) {
-					complete = false;
-					break;
-				}
-				key.insert(entry->second);
-			}
-			if (complete) {
-				result.push_back(std::move(key));
-			}
-		}
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_FILTER:
-	case LogicalOperatorType::LOGICAL_LIMIT:
-	case LogicalOperatorType::LOGICAL_ORDER_BY:
-		FindUniqueColumnSets(*op.children[0], result);
-		break;
-	default:
-		break;
+	if (!key.empty()) {
+		result.push_back(std::move(key));
 	}
 }
 
-void RemoveRedundantKeys(LogicalOrder &order) {
-	if (order.orders.size() < 2) {
+void FindUniqueColumnSets(LogicalDistinct &distinct, vector<column_binding_set_t> &result) {
+	column_binding_set_t key;
+	bool all_columns = true;
+	for (auto &target : distinct.distinct_targets) {
+		if (target->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+			all_columns = false;
+			break;
+		}
+		key.insert(target->Cast<BoundColumnRefExpression>().Binding());
+	}
+	if (all_columns && !key.empty()) {
+		result.push_back(std::move(key));
+	}
+}
+
+void ForwardUniqueColumnSets(LogicalProjection &projection, const vector<column_binding_set_t> &child_sets,
+                             vector<column_binding_set_t> &result) {
+	if (child_sets.empty()) {
 		return;
 	}
-	vector<column_binding_set_t> unique_sets;
-	FindUniqueColumnSets(*order.children[0], unique_sets);
-	if (unique_sets.empty()) {
+	column_binding_map_t<ColumnBinding> forwarded;
+	for (auto expr_idx : ProjectionIndex::GetIndexes(projection.expressions.size())) {
+		auto &expr = *projection.expressions[expr_idx];
+		if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+			forwarded.emplace(expr.Cast<BoundColumnRefExpression>().Binding(),
+			                  ColumnBinding(projection.table_index, expr_idx));
+		}
+	}
+	for (auto &child_set : child_sets) {
+		column_binding_set_t key;
+		bool complete = true;
+		for (auto &binding : child_set) {
+			auto entry = forwarded.find(binding);
+			if (entry == forwarded.end()) {
+				complete = false;
+				break;
+			}
+			key.insert(entry->second);
+		}
+		if (complete) {
+			result.push_back(std::move(key));
+		}
+	}
+}
+
+void RemoveRedundantKeys(LogicalOrder &order, const vector<column_binding_set_t> &unique_sets) {
+	if (order.orders.size() < 2 || unique_sets.empty()) {
 		return;
 	}
 	column_binding_set_t prefix;
@@ -183,15 +159,69 @@ void RemoveRedundantKeys(LogicalOrder &order) {
 	}
 }
 
+void VisitOperator(LogicalOperator &op);
+
+void VisitChildren(LogicalOperator &op, idx_t start) {
+	for (idx_t child_idx = start; child_idx < op.children.size(); child_idx++) {
+		VisitOperator(*op.children[child_idx]);
+	}
+}
+
+vector<column_binding_set_t> CollectUniqueColumnSets(LogicalOperator &op) {
+	vector<column_binding_set_t> result;
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_ORDER_BY: {
+		auto &order = op.Cast<LogicalOrder>();
+		result = CollectUniqueColumnSets(*order.children[0]);
+		RemoveRedundantKeys(order, result);
+		VisitChildren(op, 1);
+		return result;
+	}
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_LIMIT:
+		result = CollectUniqueColumnSets(*op.children[0]);
+		VisitChildren(op, 1);
+		return result;
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		auto &projection = op.Cast<LogicalProjection>();
+		auto child_sets = CollectUniqueColumnSets(*projection.children[0]);
+		ForwardUniqueColumnSets(projection, child_sets, result);
+		VisitChildren(op, 1);
+		return result;
+	}
+	case LogicalOperatorType::LOGICAL_GET:
+		FindUniqueColumnSets(op.Cast<LogicalGet>(), result);
+		break;
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+		FindUniqueColumnSets(op.Cast<LogicalAggregate>(), result);
+		break;
+	case LogicalOperatorType::LOGICAL_DISTINCT:
+		FindUniqueColumnSets(op.Cast<LogicalDistinct>(), result);
+		break;
+	default:
+		break;
+	}
+	VisitChildren(op, 0);
+	return result;
+}
+
+void VisitOperator(LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_ORDER_BY) {
+		auto &order = op.Cast<LogicalOrder>();
+		if (order.orders.size() >= 2) {
+			auto unique_sets = CollectUniqueColumnSets(*order.children[0]);
+			RemoveRedundantKeys(order, unique_sets);
+			VisitChildren(op, 1);
+			return;
+		}
+	}
+	VisitChildren(op, 0);
+}
+
 } // namespace
 
 void RemoveRedundantOrderKeys::Optimize(LogicalOperator &op) {
-	if (op.type == LogicalOperatorType::LOGICAL_ORDER_BY) {
-		RemoveRedundantKeys(op.Cast<LogicalOrder>());
-	}
-	for (auto &child : op.children) {
-		Optimize(*child);
-	}
+	VisitOperator(op);
 }
 
 } // namespace duckdb
