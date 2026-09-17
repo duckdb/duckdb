@@ -6,6 +6,7 @@ Statement <-
 	ExternalResourceStatement /
 	ExtensionRepositoryStatement /
 	CreateStatement /
+	ExplainStatement /
 	SelectStatement /
 	SetStatement /
 	PragmaStatement /
@@ -13,7 +14,6 @@ Statement <-
 	InsertStatement /
 	DropStatement /
 	CopyStatement /
-	ExplainStatement /
 	UpdateStatement /
 	PrepareStatement /
 	ExecuteStatement /
@@ -1199,6 +1199,8 @@ ExplainOptionList <- Parens(List(ExplainOption))
 ExplainOption <- ExplainOptionName Expression?
 ExplainOptionName <- AnalyzeKeyword / ColId / FuncNameKeyword / TypeNameKeyword
 
+ExplainQueryStatement <- ExplainStatement
+
 ExplainSelectStatement <- SelectStatementInternal
 
 ExplainableStatements <-
@@ -1800,7 +1802,7 @@ SetopUnion <- 'UNION'
 SetopExcept <- 'EXCEPT'
 ByName <- 'BY' 'NAME'
 
-SelectStatementType <- OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement
+SelectStatementType <- ExplainQueryStatement / OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement
 ResultModifiers <- OrderByClause? LimitOffset?
 LimitOffset <- LimitOffsetClause / OffsetFetchClause / OffsetLimitClause / FetchOnlyClause
 LimitOffsetClause <- LimitClause OffsetClause?

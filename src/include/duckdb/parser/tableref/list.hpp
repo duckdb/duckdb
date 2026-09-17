@@ -7,5 +7,6 @@
 #include "duckdb/parser/tableref/match_recognize_ref.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/parser/tableref/showref.hpp"
+#include "duckdb/parser/tableref/explain_ref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"

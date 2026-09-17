@@ -8,6 +8,10 @@ LogicalExplain::LogicalExplain(unique_ptr<LogicalOperator> plan, ExplainType exp
 	children.push_back(std::move(plan));
 }
 
+vector<TableIndex> LogicalExplain::GetTableIndex() const {
+	return {table_index};
+}
+
 idx_t LogicalExplain::EstimateCardinality(ClientContext &context) {
 	return 3;
 }
@@ -22,9 +26,8 @@ void LogicalExplain::ResolveTypes() {
 }
 vector<ColumnBinding> LogicalExplain::GetColumnBindings() {
 	vector<ColumnBinding> result;
-	TableIndex explain_tbl_idx(0);
 	for (auto explain_col_idx : ProjectionIndex::GetIndexes(2)) {
-		result.emplace_back(explain_tbl_idx, explain_col_idx);
+		result.emplace_back(table_index, explain_col_idx);
 	}
 	return result;
 }

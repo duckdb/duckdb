@@ -172,6 +172,9 @@ BoundStatement Binder::Bind(TableRef &ref) {
 	case TableReferenceType::PIVOT:
 		result = Bind(ref.Cast<PivotRef>());
 		break;
+	case TableReferenceType::EXPLAIN:
+		result = Bind(ref.Cast<ExplainRef>());
+		break;
 	case TableReferenceType::SHOW_REF:
 		result = Bind(ref.Cast<ShowRef>());
 		break;

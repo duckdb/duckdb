@@ -334,6 +334,23 @@
     ]
   },
   {
+    "class": "ExplainRef",
+    "base": "TableRef",
+    "enum": "EXPLAIN",
+    "members": [
+      {
+        "id": 200,
+        "name": "query",
+        "type": "QueryNode*"
+      },
+      {
+        "id": 201,
+        "name": "format",
+        "type": "string"
+      }
+    ]
+  },
+  {
     "class": "ShowRef",
     "base": "TableRef",
     "enum": "SHOW_REF",

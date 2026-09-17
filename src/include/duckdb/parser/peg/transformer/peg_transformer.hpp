@@ -2093,6 +2093,10 @@ public:
 	static void InitializeExplainOptionNameTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeExplainOptionNameTrampoline(PEGTransformer &transformer,
 	                                                                            GeneratedTransformProcess &process);
+	static void InitializeExplainQueryStatementTrampoline(PEGTransformer &transformer,
+	                                                      GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeExplainQueryStatementTrampoline(PEGTransformer &transformer,
+	                                                                                GeneratedTransformProcess &process);
 	static void InitializeExplainSelectStatementTrampoline(PEGTransformer &transformer,
 	                                                       GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue>
@@ -5823,6 +5827,10 @@ public:
 	static unique_ptr<TransformResultValue> TransformExplainOptionNameInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
 	static Identifier TransformExplainOptionName(PEGTransformer &transformer, ParseResult &choice_result);
+	static unique_ptr<TransformResultValue> TransformExplainQueryStatementInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static unique_ptr<SelectStatement> TransformExplainQueryStatement(PEGTransformer &transformer,
+	                                                                  unique_ptr<SQLStatement> explain_statement);
 	static unique_ptr<TransformResultValue> TransformExplainSelectStatementInternal(PEGTransformer &transformer,
 	                                                                                ParseResult &parse_result);
 	static unique_ptr<SQLStatement>

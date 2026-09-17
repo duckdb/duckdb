@@ -6,6 +6,7 @@ Statement <-
 	ExternalResourceStatement /
 	ExtensionRepositoryStatement /
 	CreateStatement /
+	ExplainStatement /
 	SelectStatement /
 	SetStatement /
 	PragmaStatement /
@@ -13,7 +14,6 @@ Statement <-
 	InsertStatement /
 	DropStatement /
 	CopyStatement /
-	ExplainStatement /
 	UpdateStatement /
 	PrepareStatement /
 	ExecuteStatement /

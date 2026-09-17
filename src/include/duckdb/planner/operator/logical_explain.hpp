@@ -23,6 +23,7 @@ public:
 public:
 	LogicalExplain(unique_ptr<LogicalOperator> plan, ExplainType explain_type, const ProfilerPrintFormat &format);
 
+	TableIndex table_index;
 	ExplainType explain_type;
 	ProfilerPrintFormat format;
 	string physical_plan;
@@ -33,6 +34,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
+	vector<TableIndex> GetTableIndex() const override;
 	idx_t EstimateCardinality(ClientContext &context) override;
 	bool SupportSerialization() const override;
 

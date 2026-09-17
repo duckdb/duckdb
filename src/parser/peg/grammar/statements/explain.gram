@@ -3,6 +3,8 @@ ExplainOptionList <- Parens(List(ExplainOption))
 ExplainOption <- ExplainOptionName Expression?
 ExplainOptionName <- AnalyzeKeyword / ColId / FuncNameKeyword / TypeNameKeyword
 
+ExplainQueryStatement <- ExplainStatement
+
 ExplainSelectStatement <- SelectStatementInternal
 
 ExplainableStatements <-

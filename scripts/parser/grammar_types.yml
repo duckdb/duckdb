@@ -123,6 +123,7 @@ SelectStatement:
   by_value: true
   rules:
     - DescribeStatement
+    - ExplainQueryStatement
     - PivotStatement
     - UnpivotStatement
     - SelectStatementInternal

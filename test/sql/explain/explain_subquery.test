@@ -1,0 +1,158 @@
+# name: test/sql/explain/explain_subquery.test
+# description: Query EXPLAIN output through subqueries, CTEs, joins and views
+# group: [explain]
+
+load {TEST_DIR}/explain_subquery.db
+
+query T
+SELECT explain_key FROM (EXPLAIN SELECT 42)
+----
+physical_plan
+
+query I
+SELECT count(*) FROM (EXPLAIN SELECT 42) WHERE explain_key = 'missing'
+----
+0
+
+query TT
+SELECT a.explain_key, b.explain_key
+FROM (EXPLAIN SELECT 42) a JOIN (EXPLAIN SELECT 84) b USING (explain_key)
+----
+physical_plan	physical_plan
+
+query I
+SELECT count(*) FROM (EXPLAIN SELECT * FROM range(10)) e CROSS JOIN range(3)
+----
+3
+
+query T
+WITH plan AS (EXPLAIN SELECT 42) SELECT explain_key FROM plan
+----
+physical_plan
+
+query T
+SELECT (SELECT explain_key FROM (EXPLAIN SELECT 42))
+----
+physical_plan
+
+query T
+SELECT k FROM (EXPLAIN SELECT 42) AS plan(k, v)
+----
+physical_plan
+
+statement ok
+CREATE VIEW explain_view AS SELECT * FROM (EXPLAIN (FORMAT JSON) SELECT 42)
+
+restart
+
+query TT
+SELECT explain_key, contains(explain_value, '"name":') FROM explain_view
+----
+physical_plan	true
+
+statement ok
+CREATE TABLE explain_output AS SELECT * FROM (EXPLAIN SELECT 42)
+
+query I
+SELECT count(*) FROM explain_output
+----
+1
+
+statement ok
+PREPARE explain_param AS SELECT explain_key FROM (EXPLAIN SELECT $1::INTEGER)
+
+query T
+EXECUTE explain_param(42)
+----
+physical_plan
+
+statement ok
+CREATE MACRO explain_macro(x) AS TABLE SELECT * FROM (EXPLAIN SELECT x)
+
+query T
+SELECT explain_key FROM explain_macro(42)
+----
+physical_plan
+
+statement ok
+SET explain_output = 'all'
+
+query T rowsort
+SELECT explain_key FROM (EXPLAIN SELECT 42)
+----
+logical_opt
+logical_plan
+physical_plan
+
+query I
+SELECT count(*) FROM (EXPLAIN SELECT 42) a JOIN (EXPLAIN SELECT 84) b USING (explain_key)
+----
+3
+
+statement ok
+RESET explain_output
+
+statement error
+SELECT * FROM (EXPLAIN SELECT missing_column)
+----
+missing_column
+
+statement error
+SELECT * FROM (EXPLAIN ANALYZE SELECT 42)
+----
+EXPLAIN ANALYZE is not supported in subqueries
+
+statement error
+SELECT * FROM (EXPLAIN CREATE TABLE should_not_exist(i INTEGER))
+----
+EXPLAIN in a subquery requires a SELECT statement
+
+statement error
+SELECT * FROM range(3) t(i), LATERAL (EXPLAIN SELECT i) e
+----
+Correlated EXPLAIN subqueries are not supported
+
+query T
+WITH input AS (SELECT 42 AS i)
+SELECT explain_key FROM (EXPLAIN SELECT i FROM input)
+----
+physical_plan
+
+query T
+SELECT explain_key FROM (EXPLAIN WITH input AS (SELECT 42 AS i) SELECT * FROM input)
+----
+physical_plan
+
+query T
+SELECT explain_key FROM (EXPLAIN SELECT * FROM (EXPLAIN SELECT 42))
+----
+physical_plan
+
+# Explaining a query does not execute it.
+statement ok
+CREATE SEQUENCE explain_seq
+
+query I
+SELECT count(*) FROM (EXPLAIN SELECT nextval('explain_seq'))
+----
+1
+
+query I
+SELECT nextval('explain_seq')
+----
+1
+
+foreach mode COPY_STATEMENT REPARSE_STATEMENT
+
+statement ok
+SET debug_verify_statement = '{mode}'
+
+query T
+SELECT explain_key FROM (EXPLAIN (FORMAT JSON) SELECT 42 AS "quoted column")
+----
+physical_plan
+
+endloop
+
+statement ok
+RESET debug_verify_statement

@@ -104,6 +104,11 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		}
 		break;
 	}
+	case TableReferenceType::EXPLAIN: {
+		auto &explain = ref.Cast<ExplainRef>();
+		EnumerateQueryNodeChildren(*explain.query, expr_callback, ref_callback);
+		break;
+	}
 	case TableReferenceType::SUBQUERY: {
 		auto &sq_ref = ref.Cast<SubqueryRef>();
 		EnumerateQueryNodeChildren(*sq_ref.subquery->node, expr_callback, ref_callback);

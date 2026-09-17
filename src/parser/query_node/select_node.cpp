@@ -9,7 +9,8 @@ SelectNode::SelectNode()
 }
 
 string SelectNode::ToString() const {
-	if (from_table && from_table->type == TableReferenceType::SHOW_REF) {
+	if (from_table &&
+	    (from_table->type == TableReferenceType::SHOW_REF || from_table->type == TableReferenceType::EXPLAIN)) {
 		D_ASSERT(select_list.size() == 1);
 		return from_table->ToString();
 	}

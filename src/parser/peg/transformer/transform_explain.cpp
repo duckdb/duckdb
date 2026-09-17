@@ -2,6 +2,8 @@
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/tableref/explain_ref.hpp"
 
 namespace duckdb {
 
@@ -47,6 +49,27 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainStatement(
 	}
 	auto statement = std::move(explainable_statements);
 	return make_uniq<ExplainStatement>(std::move(statement), explain_type, format);
+}
+
+unique_ptr<SelectStatement>
+PEGTransformerFactory::TransformExplainQueryStatement(PEGTransformer &transformer,
+                                                      unique_ptr<SQLStatement> explain_statement) {
+	auto &explain = explain_statement->Cast<ExplainStatement>();
+	if (explain.explain_type == ExplainType::EXPLAIN_ANALYZE) {
+		throw ParserException("EXPLAIN ANALYZE is not supported in subqueries");
+	}
+	if (explain.stmt->type != StatementType::SELECT_STATEMENT) {
+		throw ParserException("EXPLAIN in a subquery requires a SELECT statement");
+	}
+	auto ref = make_uniq<ExplainRef>();
+	ref->query = std::move(explain.stmt->Cast<SelectStatement>().node);
+	ref->format = explain.format.ToString();
+	auto node = make_uniq<SelectNode>();
+	node->select_list.push_back(make_uniq<StarExpression>());
+	node->from_table = std::move(ref);
+	auto result = make_uniq<SelectStatement>();
+	result->node = std::move(node);
+	return result;
 }
 
 Identifier PEGTransformerFactory::TransformExplainOptionName(PEGTransformer &transformer, ParseResult &choice_result) {

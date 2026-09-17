@@ -1,0 +1,74 @@
+# name: test/sql/explain/explain_json_subquery.test
+# description: Inspect EXPLAIN output with JSON functions
+# group: [explain]
+
+require json
+
+query TTT
+SELECT json_type(explain_value::JSON),
+       json_extract_string(explain_value::JSON, '$[0].name'),
+       json_contains(explain_value::JSON, '{"name":"DUMMY_SCAN","children":[]}')
+FROM (EXPLAIN (FORMAT JSON) SELECT 42)
+----
+ARRAY	PROJECTION	true
+
+# Check the parent-child relationship and projection metadata without matching formatting.
+query T
+SELECT json_contains(explain_value::JSON,
+    '{"name":"PROJECTION","extra_info":{"Projections":"42"},"children":[{"name":"DUMMY_SCAN"}]}')
+FROM (EXPLAIN (FORMAT JSON) SELECT 42)
+----
+true
+
+statement ok
+CREATE TABLE renderer_t AS SELECT i, i % 7 AS g FROM range(200) t(i)
+
+# Inspect nodes at different depths of a join/aggregate/top-n plan.
+query TTTT
+SELECT json_contains(explain_value::JSON, '{"name":"TOP_N"}'),
+       json_contains(explain_value::JSON, '{"name":"HASH_JOIN"}'),
+       json_contains(explain_value::JSON, '{"Join Type":"INNER"}'),
+       json_contains(explain_value::JSON, '{"name":"WINDOW"}')
+FROM (EXPLAIN (FORMAT JSON)
+      SELECT a.g, count(*) AS c FROM renderer_t a JOIN renderer_t b ON a.i = b.i
+      WHERE a.i > 2 GROUP BY a.g ORDER BY a.g LIMIT 3)
+----
+true	true	true	false
+
+statement ok
+SET explain_output = 'all'
+
+query TTT rowsort
+SELECT explain_key, json_type(explain_value::JSON),
+       json_contains(explain_value::JSON, '{"name":"PROJECTION","extra_info":{"Expressions":"42"}}')
+FROM (EXPLAIN (FORMAT JSON) SELECT 42)
+WHERE explain_key <> 'physical_plan'
+----
+logical_opt	ARRAY	true
+logical_plan	ARRAY	true
+
+statement ok
+RESET explain_output
+
+# The surrounding query must not prune columns from the plan being explained.
+query T
+SELECT json_contains(explain_value::JSON, '{"Projections":["i","g"]}')
+FROM (EXPLAIN (FORMAT JSON) SELECT i, g FROM renderer_t)
+----
+true
+
+# Parameters in the explained query are rebound on execution.
+statement ok
+PREPARE json_explain_param AS
+SELECT json_contains(explain_value::JSON, '{"Projections":"42"}')
+FROM (EXPLAIN (FORMAT JSON) SELECT $1::INTEGER)
+
+query T
+EXECUTE json_explain_param(42)
+----
+true
+
+query T
+EXECUTE json_explain_param(84)
+----
+false
