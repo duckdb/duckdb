@@ -499,7 +499,9 @@ TEST_CASE("Bound expression SQL export composes deterministic expression paths",
 
 TEST_CASE("Bound expression SQL export handles default casts and exclusive BETWEEN",
           "[sql_export][bound_expression_sql_export]") {
-	DuckDB db;
+	DBConfig config;
+	config.options.load_extensions = false;
+	DuckDB db(nullptr, &config);
 	Connection connection(db);
 	connection.BeginTransaction();
 	BoundExpressionSQLExportContext context;
