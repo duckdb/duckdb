@@ -35,11 +35,11 @@ static unique_ptr<FunctionData> RepeatRowBind(ClientContext &context, TableFunct
 	if (entry->second.IsNull()) {
 		throw BinderException("num_rows should be an integer value >= 0");
 	}
-	auto repeat_rows = entry->second.GetValue<int64_t>();
-	if (repeat_rows < 0) {
+	auto num_rows = entry->second.GetValue<int64_t>();
+	if (num_rows < 0) {
 		throw BinderException("num_rows cannot be less than zero");
 	}
-	return make_uniq<RepeatRowFunctionData>(inputs, NumericCast<idx_t>(repeat_rows));
+	return make_uniq<RepeatRowFunctionData>(inputs, NumericCast<idx_t>(num_rows));
 }
 
 static unique_ptr<GlobalTableFunctionState> RepeatRowInit(ClientContext &context, TableFunctionInitInput &input) {
