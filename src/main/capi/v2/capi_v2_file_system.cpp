@@ -2,20 +2,11 @@
 
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/open_file_info.hpp"
 #include "duckdb/common/query_context.hpp"
 
 namespace duckdb::capiv2 {
-
-// The file system handle, borrowed. It carries the context it was taken from alongside the file system itself, so
-// that reads and writes can hand the engine a QueryContext and have their bytes attributed to the query. Kept on the
-// context's own state, so the handle stays borrowed -- one per context, alive exactly as long as the context is.
-class CV2FileSystem : public ClientContextState {
-public:
-	optional_ptr<FileSystem> fs;
-	//! The context the file system was taken from, so reads and writes can be attributed to the query.
-	QueryContext query;
-};
 
 inline auto GetFileSystemSlot(ClientContext &context) -> shared_ptr<CV2FileSystem> {
 	constexpr auto FILE_SYSTEM_SLOT_KEY = "c_api_v2_file_system";
@@ -23,56 +14,6 @@ inline auto GetFileSystemSlot(ClientContext &context) -> shared_ptr<CV2FileSyste
 	slot->fs = &FileSystem::GetFileSystem(context);
 	slot->query = context;
 	return slot;
-}
-
-// How a file is opened, owned. Holds the flag word as given rather than the engine's FileOpenFlags, so that
-// "no flags set yet" stays distinguishable and is reported when the options are actually used.
-class CV2FileOpenOptions {
-public:
-	FileOpenFlags flags;
-	//! Flags are applied one at a time, so this is what distinguishes "none applied yet" from any particular set.
-	bool has_flags = false;
-	//! Built on first use: an absent extended info is meaningfully different from an empty one.
-	shared_ptr<ExtendedOpenFileInfo> extended_info;
-
-	auto Options() -> unordered_map<string, Value> & {
-		if (!extended_info) {
-			extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
-		}
-		return extended_info->options;
-	}
-};
-
-// An open file, owned. Carries the context for the same reason the file system handle does.
-class CV2File {
-public:
-	unique_ptr<FileHandle> handle;
-	QueryContext query;
-
-	auto Handle() const -> FileHandle & {
-		return *handle;
-	}
-};
-
-static auto Convert(duckdb_v2_file_system_handle fs) -> CV2FileSystem * {
-	return reinterpret_cast<CV2FileSystem *>(fs);
-}
-static auto Convert(CV2FileSystem *fs) -> duckdb_v2_file_system_handle {
-	return reinterpret_cast<duckdb_v2_file_system_handle>(fs);
-}
-
-static auto Convert(duckdb_v2_file_open_options_handle options) -> CV2FileOpenOptions * {
-	return reinterpret_cast<CV2FileOpenOptions *>(options);
-}
-static auto Convert(CV2FileOpenOptions *options) -> duckdb_v2_file_open_options_handle {
-	return reinterpret_cast<duckdb_v2_file_open_options_handle>(options);
-}
-
-static auto Convert(duckdb_v2_file_handle handle) -> CV2File * {
-	return reinterpret_cast<CV2File *>(handle);
-}
-static auto Convert(CV2File *handle) -> duckdb_v2_file_handle {
-	return reinterpret_cast<duckdb_v2_file_handle>(handle);
 }
 
 // Applies one C flag to the engine's flag set. The C enum is a list of names rather than a bitmask, so each value
@@ -105,6 +46,27 @@ static void ApplyFileFlag(CV2FileOpenOptions &options, DUCKDB_V2_FILE_FLAG flag)
 		throw InvalidInputException("'%d' is not a file flag.", static_cast<int>(flag));
 	}
 	options.has_flags = true;
+}
+
+static bool IsFileType(DUCKDB_V2_FILE_TYPE type) {
+	switch (type) {
+	case DUCKDB_V2_FILE_TYPE_INVALID:
+	case DUCKDB_V2_FILE_TYPE_REGULAR:
+	case DUCKDB_V2_FILE_TYPE_DIRECTORY:
+	case DUCKDB_V2_FILE_TYPE_PIPE:
+	case DUCKDB_V2_FILE_TYPE_OTHER:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static const CV2FileListing::Entry &EntryAt(duckdb_v2_file_listing_handle listing, idx_t index, const char *function) {
+	auto &entries = Convert(listing)->entries;
+	if (index >= entries.size()) {
+		throw InvalidInputException("Index out of bounds in %s", function);
+	}
+	return entries[index];
 }
 
 } // namespace duckdb::capiv2
@@ -210,6 +172,90 @@ DUCKDB_V2_ERROR duckdb_v2_file_system_open(duckdb_v2_file_system_handle file_sys
 	});
 }
 
+//----------------------------------------------------------------------------------------------------------------------
+// Path operations
+//----------------------------------------------------------------------------------------------------------------------
+
+DUCKDB_V2_ERROR duckdb_v2_file_system_list(duckdb_v2_file_system_handle file_system, duckdb_v2_str path,
+                                           duckdb_v2_file_listing_handle *listing, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(file_system);
+	DUCKDB_CHECK_ARG(path);
+	DUCKDB_CHECK_ARG(listing);
+	*listing = nullptr;
+	return WithErrorHandler(err, [&]() {
+		auto &slot = *Convert(file_system);
+		auto p = duckdb::string(Convert(path));
+		auto result = duckdb::make_uniq<CV2FileListing>();
+		auto found = slot.fs->ListFiles(p, [&](duckdb::OpenFileInfo &info) { result->Add(info); });
+		if (!found) {
+			throw duckdb::IOException("Cannot list \"%s\": no such directory", p);
+		}
+		*listing = Convert(result.release());
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_system_glob(duckdb_v2_file_system_handle file_system, duckdb_v2_str pattern,
+                                           duckdb_v2_file_listing_handle *listing, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(file_system);
+	DUCKDB_CHECK_ARG(pattern);
+	DUCKDB_CHECK_ARG(listing);
+	*listing = nullptr;
+	return WithErrorHandler(err, [&]() {
+		auto &slot = *Convert(file_system);
+		auto result = duckdb::make_uniq<CV2FileListing>();
+		auto files = slot.fs->GlobFileList(duckdb::string(Convert(pattern)), duckdb::FileGlobOptions::ALLOW_EMPTY);
+		for (auto &info : files->GetAllFiles()) {
+			result->Add(info);
+		}
+		*listing = Convert(result.release());
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_system_remove_file(duckdb_v2_file_system_handle file_system, duckdb_v2_str path,
+                                                  duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(file_system);
+	DUCKDB_CHECK_ARG(path);
+	return WithErrorHandler(err, [&]() {
+		auto &slot = *Convert(file_system);
+		slot.fs->RemoveFile(duckdb::string(Convert(path)));
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_system_create_directory(duckdb_v2_file_system_handle file_system, duckdb_v2_str path,
+                                                       duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(file_system);
+	DUCKDB_CHECK_ARG(path);
+	return WithErrorHandler(err, [&]() {
+		auto &slot = *Convert(file_system);
+		slot.fs->CreateDirectoryExtended(duckdb::string(Convert(path)), {duckdb::CreateDirectoryMode::RECURSIVE});
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_system_remove_directory(duckdb_v2_file_system_handle file_system, duckdb_v2_str path,
+                                                       duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(file_system);
+	DUCKDB_CHECK_ARG(path);
+	return WithErrorHandler(err, [&]() {
+		auto &slot = *Convert(file_system);
+		slot.fs->RemoveDirectoryExtended(duckdb::string(Convert(path)), {duckdb::RemoveDirectoryMode::RECURSIVE});
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_system_move(duckdb_v2_file_system_handle file_system, duckdb_v2_str source,
+                                           duckdb_v2_str target, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(file_system);
+	DUCKDB_CHECK_ARG(source);
+	DUCKDB_CHECK_ARG(target);
+	return WithErrorHandler(err, [&]() {
+		auto &slot = *Convert(file_system);
+		slot.fs->MoveFile(duckdb::string(Convert(source)), duckdb::string(Convert(target)));
+	});
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// File
+//----------------------------------------------------------------------------------------------------------------------
+
 DUCKDB_V2_ERROR duckdb_v2_file_read(duckdb_v2_file_handle file, void *buffer, idx_t buffer_size, idx_t *bytes_read,
                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file);
@@ -268,6 +314,17 @@ DUCKDB_V2_ERROR duckdb_v2_file_size(duckdb_v2_file_handle file, idx_t *size, duc
 	return WithErrorHandler(err, [&]() { *size = Convert(file)->Handle().GetFileSize(); });
 }
 
+DUCKDB_V2_ERROR duckdb_v2_file_get_stat(duckdb_v2_file_handle file, duckdb_v2_file_stat_handle *stat,
+                                        duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(file);
+	DUCKDB_CHECK_ARG(stat);
+	*stat = nullptr;
+	return WithErrorHandler(err, [&]() {
+		auto result = duckdb::make_uniq<CV2FileStat>(CV2FileStat::FromMetadata(Convert(file)->Handle().Stats()));
+		*stat = Convert(result.release());
+	});
+}
+
 DUCKDB_V2_ERROR duckdb_v2_file_seek(duckdb_v2_file_handle file, idx_t position, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file);
 	return WithErrorHandler(err, [&]() { Convert(file)->Handle().Seek(position); });
@@ -283,14 +340,195 @@ DUCKDB_V2_ERROR duckdb_v2_file_close(duckdb_v2_file_handle file, duckdb_v2_error
 	return WithErrorHandler(err, [&]() { Convert(file)->Handle().Close(); });
 }
 
+//----------------------------------------------------------------------------------------------------------------------
+// File Stat
+//----------------------------------------------------------------------------------------------------------------------
+
+DUCKDB_V2_ERROR duckdb_v2_file_stat_get_type(duckdb_v2_file_stat_handle stat, DUCKDB_V2_FILE_TYPE *type,
+                                             duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(stat);
+	DUCKDB_CHECK_ARG(type);
+	return WithErrorHandler(err, [&]() { *type = Convert(stat)->type; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_stat_get_size(duckdb_v2_file_stat_handle stat, idx_t *size, bool *is_known,
+                                             duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(stat);
+	DUCKDB_CHECK_ARG(size);
+	DUCKDB_CHECK_ARG(is_known);
+	return WithErrorHandler(err, [&]() {
+		auto &info = *Convert(stat);
+		*is_known = info.size.has_value();
+		*size = info.size ? *info.size : 0;
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_stat_get_last_modified(duckdb_v2_file_stat_handle stat, int64_t *last_modified,
+                                                      bool *is_known, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(stat);
+	DUCKDB_CHECK_ARG(last_modified);
+	DUCKDB_CHECK_ARG(is_known);
+	return WithErrorHandler(err, [&]() {
+		auto &info = *Convert(stat);
+		*is_known = info.last_modified.has_value();
+		*last_modified = info.last_modified ? *info.last_modified : 0;
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_stat_get_version_tag(duckdb_v2_file_stat_handle stat, duckdb_v2_str *version_tag,
+                                                    bool *is_known, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(stat);
+	DUCKDB_CHECK_ARG(version_tag);
+	DUCKDB_CHECK_ARG(is_known);
+	return WithErrorHandler(err, [&]() {
+		auto &info = *Convert(stat);
+		*is_known = info.version_tag.has_value();
+		*version_tag = info.version_tag ? Convert(*info.version_tag) : duckdb_v2_str {nullptr, 0};
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_stat_set_type(duckdb_v2_file_stat_handle stat, DUCKDB_V2_FILE_TYPE type,
+                                             duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(stat);
+	return WithErrorHandler(err, [&]() {
+		if (!IsFileType(type)) {
+			throw duckdb::InvalidInputException("'%d' is not a file type.", static_cast<int>(type));
+		}
+		Convert(stat)->type = type;
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_stat_set_size(duckdb_v2_file_stat_handle stat, idx_t size,
+                                             duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(stat);
+	return WithErrorHandler(err, [&]() { Convert(stat)->size = size; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_stat_set_last_modified(duckdb_v2_file_stat_handle stat, int64_t last_modified,
+                                                      duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(stat);
+	return WithErrorHandler(err, [&]() { Convert(stat)->last_modified = last_modified; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_stat_set_version_tag(duckdb_v2_file_stat_handle stat, duckdb_v2_str version_tag,
+                                                    duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(stat);
+	DUCKDB_CHECK_ARG(version_tag);
+	return WithErrorHandler(err, [&]() { Convert(stat)->version_tag = duckdb::string(Convert(version_tag)); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_stat_destroy(duckdb_v2_file_stat_handle *stat) {
+	return WithErrorHandler(nullptr, [&]() {
+		if (!stat) {
+			return;
+		}
+		if (*stat) {
+			delete Convert(*stat);
+			*stat = nullptr;
+		}
+	});
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// File Listing
+//----------------------------------------------------------------------------------------------------------------------
+
+DUCKDB_V2_ERROR duckdb_v2_file_listing_add_entry(duckdb_v2_file_listing_handle listing, duckdb_v2_str path,
+                                                 DUCKDB_V2_FILE_TYPE type, duckdb_v2_file_stat_handle *stat,
+                                                 duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(listing);
+	DUCKDB_CHECK_ARG(path);
+	if (stat) {
+		*stat = nullptr;
+	}
+	return WithErrorHandler(err, [&]() {
+		if (!IsFileType(type)) {
+			throw duckdb::InvalidInputException("'%d' is not a file type.", static_cast<int>(type));
+		}
+		auto entry_path = duckdb::string(Convert(path));
+		if (entry_path.empty()) {
+			throw duckdb::InvalidInputException("A listing entry cannot have an empty path.");
+		}
+		auto &entries = Convert(listing)->entries;
+		entries.push_back({std::move(entry_path), type, {}});
+		entries.back().stat.type = type;
+		if (stat) {
+			*stat = Convert(&entries.back().stat);
+		}
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_listing_get_entry_count(duckdb_v2_file_listing_handle listing, idx_t *count,
+                                                       duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(listing);
+	DUCKDB_CHECK_ARG(count);
+	return WithErrorHandler(err, [&]() { *count = Convert(listing)->entries.size(); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_listing_get_entry_path(duckdb_v2_file_listing_handle listing, idx_t index,
+                                                      duckdb_v2_str *path, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(listing);
+	DUCKDB_CHECK_ARG(path);
+	return WithErrorHandler(err, [&]() { *path = Convert(EntryAt(listing, index, __func__).path); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_listing_get_entry_type(duckdb_v2_file_listing_handle listing, idx_t index,
+                                                      DUCKDB_V2_FILE_TYPE *type, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(listing);
+	DUCKDB_CHECK_ARG(type);
+	return WithErrorHandler(err, [&]() { *type = EntryAt(listing, index, __func__).type; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_listing_get_entry_stat(duckdb_v2_file_listing_handle listing, idx_t index,
+                                                      duckdb_v2_file_stat_handle *stat,
+                                                      duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(listing);
+	DUCKDB_CHECK_ARG(stat);
+	*stat = nullptr;
+	return WithErrorHandler(err, [&]() {
+		// The entries are only ever appended to, so handing out a pointer into them is safe.
+		auto &entry = const_cast<CV2FileListing::Entry &>(EntryAt(listing, index, __func__)); // NOLINT
+		*stat = Convert(&entry.stat);
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_listing_destroy(duckdb_v2_file_listing_handle *listing) {
+	return WithErrorHandler(nullptr, [&]() {
+		if (!listing) {
+			return;
+		}
+		if (*listing) {
+			delete Convert(*listing);
+			*listing = nullptr;
+		}
+	});
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Destroy
+//----------------------------------------------------------------------------------------------------------------------
+
 DUCKDB_V2_ERROR duckdb_v2_file_destroy(duckdb_v2_file_handle *file_handle) {
 	return WithErrorHandler(nullptr, [&]() {
 		if (!file_handle) {
 			return;
 		}
 		if (*file_handle) {
-			delete Convert(*file_handle);
+			auto file = Convert(*file_handle);
 			*file_handle = nullptr;
+			// Close explicitly: a file system may treat a handle destroyed unclosed as an abandoned write.
+			std::exception_ptr close_error;
+			try {
+				if (file->handle) {
+					file->handle->Close();
+				}
+			} catch (...) {
+				close_error = std::current_exception();
+			}
+			delete file;
+			if (close_error) {
+				std::rethrow_exception(close_error);
+			}
 		}
 	});
 }

@@ -47,6 +47,26 @@ enums:
           `[[file_read_at]]` or `[[file_write_at]]` are used concurrently -- a file system that would otherwise
           assume sequential access, by caching, buffering, or keeping a single cursor, needs to know not to.
 
+  FILE_TYPE:
+    description: |
+      What a path refers to, as reported by a stat or list callback.
+    values:
+      FILE_TYPE_INVALID:
+        value: 0
+        description: The path does not exist.
+      FILE_TYPE_REGULAR:
+        value: 1
+        description: A regular file, which can be opened.
+      FILE_TYPE_DIRECTORY:
+        value: 2
+        description: A directory, which can be listed.
+      FILE_TYPE_PIPE:
+        value: 3
+        description: A pipe or other forward-only stream, which exists and can be opened but neither seeked nor listed. The engine asks for this before it writes a file, since it will not truncate a pipe.
+      FILE_TYPE_OTHER:
+        value: 4
+        description: Something else that exists, such as a socket or a device. Neither a file nor a directory, so the engine treats the path as taken but unusable.
+
 #-----------------------------------------------------------------------------------------------------------------------
 # Handles
 #-----------------------------------------------------------------------------------------------------------------------
@@ -70,6 +90,21 @@ handles:
       An owned opaque handle to an open file, produced by `[[file_system_open]]` and destroyed with
       `[[file_destroy]]`. Read, write, seek and sync through the `file_*` functions. Only usable while the file
       system it was opened through is still valid.
+
+  file_stat:
+    description: |
+      An opaque handle to what is known about one file: its type, and when known its size, modification time
+      and version tag. Produced owned by `[[file_get_stat]]`, to be destroyed with `[[file_stat_destroy]]`; handed
+      out borrowed to a virtual file system's callbacks and by `[[file_listing_get_entry_stat]]`, where it must
+      not be destroyed. Read with the `file_stat_get_*` functions, filled in with the `file_stat_set_*`
+      functions.
+
+  file_listing:
+    description: |
+      An opaque handle to the entries of one directory listing or glob expansion. Produced owned by
+      `[[file_system_list]]` and `[[file_system_glob]]`, to be destroyed with `[[file_listing_destroy]]`; handed
+      out borrowed to a virtual file system's "list" and "glob" callbacks, which fill it with
+      `[[file_listing_add_entry]]`, where it must not be destroyed. Entries are read by index.
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Functions
@@ -492,6 +527,500 @@ functions:
         type: error_info
         indirection: 1
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # File System: paths
+  #---------------------------------------------------------------------------------------------------------------------
+  file_system_list:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Lists the entries of a directory.
+
+      Each entry is the name of a file or subdirectory relative to the directory, with whatever the file
+      system already knew about it. A directory that does not exist is an error.
+    parameters:
+      file_system:
+        type: file_system
+        description: The file system to act through.
+      path:
+        type: str
+        description: The directory to list. Borrowed for the call only.
+      listing:
+        type: file_listing
+        indirection: 1
+        kind: OUT
+        description: On success, receives the listing. Owned by the caller; destroy via `[[file_listing_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_system_glob:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Expands a glob pattern to the files matching it.
+
+      Each entry is the full path of a matching file. A pattern that matches nothing yields an empty listing,
+      which is a result rather than an error; a plain path yields itself when it exists.
+    parameters:
+      file_system:
+        type: file_system
+        description: The file system to act through.
+      pattern:
+        type: str
+        description: The pattern to expand. Borrowed for the call only.
+      listing:
+        type: file_listing
+        indirection: 1
+        kind: OUT
+        description: On success, receives the matching files. Owned by the caller; destroy via `[[file_listing_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_system_remove_file:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Removes a file. A missing file is an error.
+    parameters:
+      file_system:
+        type: file_system
+        description: The file system to act through.
+      path:
+        type: str
+        description: The path of the file to remove. Borrowed for the call only.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_system_create_directory:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Creates a directory, including any missing parents. An existing directory is not an error.
+    parameters:
+      file_system:
+        type: file_system
+        description: The file system to act through.
+      path:
+        type: str
+        description: The path of the directory to create. Borrowed for the call only.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_system_remove_directory:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Removes a directory and everything inside it.
+    parameters:
+      file_system:
+        type: file_system
+        description: The file system to act through.
+      path:
+        type: str
+        description: The path of the directory to remove. Borrowed for the call only.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_system_move:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Moves a file, replacing any existing target.
+
+      Routed by the source: the target has to be on the same file system as the source, and a move across
+      file systems is an error.
+    parameters:
+      file_system:
+        type: file_system
+        description: The file system to act through.
+      source:
+        type: str
+        description: The path of the file to move. Borrowed for the call only.
+      target:
+        type: str
+        description: The path to move it to. Borrowed for the call only.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # File Stat
+  #---------------------------------------------------------------------------------------------------------------------
+  file_get_stat:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Reports what is known about an open file: its size, and when the file system knows them, its
+      modification time and version tag.
+    parameters:
+      file:
+        type: file
+        description: The file to report on.
+      stat:
+        type: file_stat
+        indirection: 1
+        kind: OUT
+        description: On success, receives the stat. Owned by the caller; destroy via `[[file_stat_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_stat_get_type:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Reads what the file is, `FILE_TYPE_INVALID` when nothing was reported.
+    parameters:
+      stat:
+        type: file_stat
+        description: The stat to read.
+      type:
+        type: FILE_TYPE
+        indirection: 1
+        kind: OUT
+        description: Receives the type.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_stat_get_size:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Reads the size of the file in bytes, and whether one is known at all.
+    parameters:
+      stat:
+        type: file_stat
+        description: The stat to read.
+      size:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the size, or zero when none is known.
+      is_known:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives whether a size is known.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_stat_get_last_modified:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Reads when the file was last modified, and whether that is known at all.
+    parameters:
+      stat:
+        type: file_stat
+        description: The stat to read.
+      last_modified:
+        type: i64
+        indirection: 1
+        kind: OUT
+        description: Receives the modification time in microseconds since 1970-01-01 UTC, or zero when none is known.
+      is_known:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives whether a modification time is known.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_stat_get_version_tag:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Reads the tag that identifies this version of the file's contents, and whether one is known at all. Borrowed; valid as long as the stat is.
+    parameters:
+      stat:
+        type: file_stat
+        description: The stat to read.
+      version_tag:
+        type: str
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed tag, or the empty view when none is known.
+      is_known:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives whether a version tag is known.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_stat_set_type:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Sets what the file is.
+
+      From a virtual file system's "stat" callback, `FILE_TYPE_PIPE` makes the engine treat the open file as a
+      pipe and anything else as a regular file. On a listing entry it replaces the type the entry was added
+      with.
+    parameters:
+      stat:
+        type: file_stat
+        description: The stat to fill in.
+      type:
+        type: FILE_TYPE
+        description: The type to report.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_stat_set_size:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Sets the size of the file in bytes. Meaningful for regular files only.
+    parameters:
+      stat:
+        type: file_stat
+        description: The stat to fill in.
+      size:
+        type: idx
+        description: The size of the file in bytes.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_stat_set_last_modified:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Sets when the file was last modified.
+
+      Optional. Together with the version tag, this is what lets the engine cache a file's contents across
+      queries and tell when they went stale; a file that reports neither is never cached.
+    parameters:
+      stat:
+        type: file_stat
+        description: The stat to fill in.
+      last_modified:
+        type: i64
+        description: The modification time, in microseconds since 1970-01-01 UTC.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_stat_set_version_tag:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Sets the tag that identifies this version of the file's contents, such as an HTTP ETag.
+
+      Optional. A tag that changes whenever the contents do is the most reliable way for the engine to
+      validate what it cached from the file. The tag is borrowed and copied.
+    parameters:
+      stat:
+        type: file_stat
+        description: The stat to fill in.
+      version_tag:
+        type: str
+        description: The version tag. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_stat_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Destroys a stat the caller owns, releasing its resources.
+
+      Only for stats produced by `[[file_get_stat]]`; a borrowed one must not be passed here. Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on
+      return to prevent double-destruction.
+    parameters:
+      stat:
+        type: file_stat
+        description: The stat to destroy.
+        indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # File Listing
+  #---------------------------------------------------------------------------------------------------------------------
+  file_listing_add_entry:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Adds one entry to a listing being filled in by a virtual file system.
+
+      What the path means depends on which callback is filling the listing: from the "list" callback it is the
+      entry's name relative to the directory listed, from the "glob" callback the full path of a matching
+      file. The path is borrowed and copied. Entries are reported in the order they are added.
+
+      The returned stat is for filling in what the listing already knows about the entry, such as its size,
+      modification time and version tag; the engine hands those back when it opens the entry, so the file
+      system need not fetch them again. It is borrowed and valid until the callback returns. Pass null to skip
+      it.
+    parameters:
+      listing:
+        type: file_listing
+        description: The listing to add to.
+      path:
+        type: str
+        description: The name or path of the entry. Borrowed and copied.
+      type:
+        type: FILE_TYPE
+        description: What the entry is. Directories are descended into by globs and regular files matched by them; a pipe or anything else is listed but never matches a pattern.
+      stat:
+        type: file_stat
+        indirection: 1
+        kind: OUT
+        description: Optional. Receives the borrowed stat of the new entry, to fill in what is known about it. Valid until the callback returns.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_listing_get_entry_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Returns how many entries the listing has. Valid indices for the entry getters are [0, count).
+    parameters:
+      listing:
+        type: file_listing
+        description: The listing to read.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of entries.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_listing_get_entry_path:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Retrieves the path of an entry: a name relative to the listed directory for a listing, a full path for a
+      glob. Fails if the index is out of bounds. Borrowed; valid as long as the listing is.
+    parameters:
+      listing:
+        type: file_listing
+        description: The listing to read.
+      index:
+        type: idx
+        description: The index of the entry.
+      path:
+        type: str
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed path.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_listing_get_entry_type:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Retrieves what an entry is. Fails if the index is out of bounds.
+    parameters:
+      listing:
+        type: file_listing
+        description: The listing to read.
+      index:
+        type: idx
+        description: The index of the entry.
+      type:
+        type: FILE_TYPE
+        indirection: 1
+        kind: OUT
+        description: Receives the type.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_listing_get_entry_stat:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Retrieves what the listing knows about an entry. Fails if the index is out of bounds. Borrowed; valid as
+      long as the listing is, and must not be destroyed.
+    parameters:
+      listing:
+        type: file_listing
+        description: The listing to read.
+      index:
+        type: idx
+        description: The index of the entry.
+      stat:
+        type: file_stat
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed stat.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_listing_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Destroys a listing the caller owns, releasing its resources.
+
+      Only for listings produced by `[[file_system_list]]` and `[[file_system_glob]]`; a borrowed one must not
+      be passed here. Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on
+      return to prevent double-destruction.
+    parameters:
+      listing:
+        type: file_listing
+        description: The listing to destroy.
+        indirection: 1
     return_type: ERROR
 
   #---------------------------------------------------------------------------------------------------------------------

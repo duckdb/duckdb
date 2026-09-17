@@ -35,6 +35,7 @@ add_library_unity(
   capi_v2_statement.cpp
   capi_v2_tokenizer.cpp
   capi_v2_value.cpp
+  capi_v2_virtual_file_system.cpp
   capi_v2_vector.cpp)
 
 set(ALL_OBJECT_FILES

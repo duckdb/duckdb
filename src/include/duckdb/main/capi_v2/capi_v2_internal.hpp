@@ -27,6 +27,11 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/open_file_info.hpp"
+#include "duckdb/common/query_context.hpp"
+
+#include <deque>
 
 // DuckDB internals used by the option set/get bridge.
 #include "duckdb/main/setting_info.hpp"
@@ -348,6 +353,178 @@ inline auto Convert(duckdb_v2_schema_handle schema) -> CV2Schema * {
 }
 inline auto Convert(CV2Schema *schema) -> duckdb_v2_schema_handle {
 	return reinterpret_cast<duckdb_v2_schema_handle>(schema);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// File System Types (shared by the consumer side and the virtual file system bridge)
+//----------------------------------------------------------------------------------------------------------------------
+
+// The file system handle, borrowed. It carries the context it was taken from alongside the file system itself, so
+// that reads and writes can hand the engine a QueryContext and have their bytes attributed to the query. Kept on the
+// context's own state, so the handle stays borrowed -- one per context, alive exactly as long as the context is. A
+// virtual file system holds one without a context, for delegation from its callbacks; the engine's wrapper pushes
+// the database's opener for it.
+class CV2FileSystem : public ClientContextState {
+public:
+	optional_ptr<FileSystem> fs;
+	//! The context the file system was taken from, so reads and writes can be attributed to the query.
+	QueryContext query;
+};
+
+inline auto Convert(duckdb_v2_file_system_handle fs) -> CV2FileSystem * {
+	return reinterpret_cast<CV2FileSystem *>(fs);
+}
+inline auto Convert(CV2FileSystem *fs) -> duckdb_v2_file_system_handle {
+	return reinterpret_cast<duckdb_v2_file_system_handle>(fs);
+}
+
+// How a file is opened, owned. Holds the flag word as given rather than the engine's FileOpenFlags, so that
+// "no flags set yet" stays distinguishable and is reported when the options are actually used.
+class CV2FileOpenOptions {
+public:
+	FileOpenFlags flags;
+	//! Flags are applied one at a time, so this is what distinguishes "none applied yet" from any particular set.
+	bool has_flags = false;
+	//! Built on first use: an absent extended info is meaningfully different from an empty one.
+	shared_ptr<ExtendedOpenFileInfo> extended_info;
+
+	auto Options() -> unordered_map<string, Value> & {
+		if (!extended_info) {
+			extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+		}
+		return extended_info->options;
+	}
+};
+
+inline auto Convert(duckdb_v2_file_open_options_handle options) -> CV2FileOpenOptions * {
+	return reinterpret_cast<CV2FileOpenOptions *>(options);
+}
+inline auto Convert(CV2FileOpenOptions *options) -> duckdb_v2_file_open_options_handle {
+	return reinterpret_cast<duckdb_v2_file_open_options_handle>(options);
+}
+
+// An open file, owned. Carries the context for the same reason the file system handle does.
+class CV2File {
+public:
+	unique_ptr<FileHandle> handle;
+	QueryContext query;
+
+	auto Handle() const -> FileHandle & {
+		return *handle;
+	}
+};
+
+inline auto Convert(duckdb_v2_file_handle handle) -> CV2File * {
+	return reinterpret_cast<CV2File *>(handle);
+}
+inline auto Convert(CV2File *handle) -> duckdb_v2_file_handle {
+	return reinterpret_cast<duckdb_v2_file_handle>(handle);
+}
+
+// What is known about one file or directory. Filled in by a virtual file system's callbacks, read by consumers.
+class CV2FileStat {
+public:
+	DUCKDB_V2_FILE_TYPE type = DUCKDB_V2_FILE_TYPE_INVALID;
+	optional<idx_t> size;
+	optional<int64_t> last_modified;
+	optional<string> version_tag;
+
+	timestamp_t LastModified() const {
+		return last_modified ? timestamp_t(*last_modified) : timestamp_t::ninfinity();
+	}
+
+	//! The listing options the engine hands back at open, under the names the local file system uses.
+	void FillOptions(unordered_map<string, Value> &options) const {
+		if (size) {
+			options.emplace("file_size", Value::UBIGINT(*size));
+		}
+		if (last_modified) {
+			options.emplace("last_modified", Value::TIMESTAMP(timestamp_t(*last_modified)));
+		}
+		if (version_tag) {
+			options.emplace("etag", Value(*version_tag));
+		}
+	}
+
+	//! The reverse of FillOptions: what a listing put into the open options.
+	static CV2FileStat FromOptions(const OpenFileInfo &file) {
+		CV2FileStat info;
+		if (!file.extended_info) {
+			return info;
+		}
+		auto &options = file.extended_info->options;
+		auto type = options.find("type");
+		if (type != options.end() && !type->second.IsNull()) {
+			info.type =
+			    type->second.ToString() == "directory" ? DUCKDB_V2_FILE_TYPE_DIRECTORY : DUCKDB_V2_FILE_TYPE_REGULAR;
+		}
+		auto size = options.find("file_size");
+		if (size != options.end() && !size->second.IsNull()) {
+			info.size = size->second.DefaultCastAs(LogicalType::UBIGINT).GetValue<uint64_t>();
+			if (info.type == DUCKDB_V2_FILE_TYPE_INVALID) {
+				info.type = DUCKDB_V2_FILE_TYPE_REGULAR;
+			}
+		}
+		auto modified = options.find("last_modified");
+		if (modified != options.end() && !modified->second.IsNull()) {
+			info.last_modified = modified->second.DefaultCastAs(LogicalType::TIMESTAMP).GetValue<timestamp_t>().value;
+		}
+		auto etag = options.find("etag");
+		if (etag != options.end() && !etag->second.IsNull()) {
+			info.version_tag = etag->second.ToString();
+		}
+		return info;
+	}
+
+	//! What the engine reports about an open file.
+	static CV2FileStat FromMetadata(const FileMetadata &metadata) {
+		CV2FileStat info;
+		info.type = DUCKDB_V2_FILE_TYPE_REGULAR;
+		if (metadata.file_size >= 0) {
+			info.size = NumericCast<idx_t>(metadata.file_size);
+		}
+		if (metadata.last_modification_time != timestamp_t::ninfinity() &&
+		    metadata.last_modification_time != timestamp_t::infinity()) {
+			info.last_modified = metadata.last_modification_time.value;
+		}
+		if (!metadata.version_tag.empty()) {
+			info.version_tag = metadata.version_tag;
+		}
+		return info;
+	}
+};
+
+inline auto Convert(duckdb_v2_file_stat_handle stat) -> CV2FileStat * {
+	return reinterpret_cast<CV2FileStat *>(stat);
+}
+inline auto Convert(CV2FileStat *stat) -> duckdb_v2_file_stat_handle {
+	return reinterpret_cast<duckdb_v2_file_stat_handle>(stat);
+}
+
+// The entries of one listing or glob. Filled in by a virtual file system's callbacks, read by consumers.
+class CV2FileListing {
+public:
+	struct Entry {
+		string path;
+		DUCKDB_V2_FILE_TYPE type;
+		CV2FileStat stat;
+	};
+	//! A deque, so the stat handed out for an entry stays valid while more entries are added.
+	std::deque<Entry> entries;
+
+	//! Adds an entry the engine reported, decoding what its options carry.
+	void Add(const OpenFileInfo &info) {
+		auto stat = CV2FileStat::FromOptions(info);
+		auto type = stat.type == DUCKDB_V2_FILE_TYPE_INVALID ? DUCKDB_V2_FILE_TYPE_REGULAR : stat.type;
+		entries.push_back({info.path, type, std::move(stat)});
+	}
+};
+
+inline auto Convert(duckdb_v2_file_listing_handle listing) -> CV2FileListing * {
+	return reinterpret_cast<CV2FileListing *>(listing);
+}
+inline auto Convert(CV2FileListing *listing) -> duckdb_v2_file_listing_handle {
+	return reinterpret_cast<duckdb_v2_file_listing_handle>(listing);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
