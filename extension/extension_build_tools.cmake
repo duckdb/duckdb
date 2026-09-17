@@ -329,6 +329,14 @@ function(duckdb_extension_link_member NAME KIND OUT_FILE)
     endif()
     set(LINK_FILE "${DuckDB_BINARY_DIR}/codegen/link/${NAME}_link.cpp")
     configure_file(${DUCKDB_MODULE_BASE_DIR}/extension/loader/link_extension.cpp.in ${LINK_FILE} @ONLY)
+    # The root member includes <NAME>_extension.hpp, but it compiles in the directory that calls build_static_extension,
+    # where an extension that adds its include directory only for its sources' subdirectory does not reach. Give this
+    # one file the include path the extension was registered with.
+    string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
+    if(DEFINED DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH)
+        set_source_files_properties(${LINK_FILE} PROPERTIES INCLUDE_DIRECTORIES
+                "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH}")
+    endif()
     set(${OUT_FILE} ${LINK_FILE} PARENT_SCOPE)
 endfunction()
 
