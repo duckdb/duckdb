@@ -392,9 +392,9 @@ typedef void (*duckdb_v2_opaque_destroy_fn)(void *data);
  * dereferenced when `len` is 0. Not to be confused with `bytes`, the transparent 16-byte *storage* format for a
  * variable-size value in a vector.
  *
- * When used for text, callers must supply valid UTF-8 unless the function explicitly documents otherwise. The view does
- * not validate its contents, and callers must not assume that API calls validate UTF-8. Functions that use this view
- * for binary data, such as BLOB values, accept arbitrary bytes.
+ * Text inputs, such as VARCHAR values and names, must contain valid UTF-8 unless the function documents otherwise. The
+ * caller is responsible for ensuring this; API functions do not necessarily validate the input. Binary inputs, such as
+ * BLOB values, do not require valid UTF-8.
  */
 struct duckdb_v2_str {
 	const char *ptr;

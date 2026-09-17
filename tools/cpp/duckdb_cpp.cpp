@@ -2066,7 +2066,9 @@ auto Vector::ValidateString(std::string_view data) const -> void {
 
 auto Vector::AssignString(idx_t index, std::string_view data) -> void {
 	if (data.size() > std::numeric_limits<uint32_t>::max()) {
-		throw InvalidInputException("String exceeds the maximum size of 4 GiB");
+		throw Exception(DUCKDB_V2_ERROR_INPUT_OUT_OF_RANGE, "Out of Range Error: string length " +
+		                                                        std::to_string(data.size()) +
+		                                                        " exceeds the maximum a duckdb_v2_bytes can hold");
 	}
 	ValidateString(data);
 	AssignStringUnsafe(index, data);

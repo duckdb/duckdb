@@ -2306,7 +2306,7 @@ private:
 	/// @internal Throws `InvalidInputException` if [start, start + count) is not writable: a CONSTANT vector has a
 	/// single element, so only index 0 may be written.
 	auto CheckWriteRange(idx_t start, idx_t count) const -> void;
-	/// Validates VARCHAR text while leaving binary string-backed types unrestricted.
+	/// Validates UTF-8 for VARCHAR; binary types do not require valid UTF-8.
 	auto ValidateString(std::string_view data) const -> void;
 };
 
