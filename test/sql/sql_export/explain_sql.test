@@ -90,7 +90,7 @@ sql	<REGEX>:.*error.*execution only.*
 statement error
 EXPLAIN (SQL) PIVOT (SELECT nextval('explain_sequence') AS i) ON i;
 ----
-PIVOT statements with pivot elements extracted from the data cannot be used
+PIVOT statements with pivot elements extracted from the data cannot be used in EXPLAIN (SQL).
 
 query I
 SELECT last_value IS NULL FROM duckdb_sequences() WHERE sequence_name='explain_sequence';
@@ -111,4 +111,9 @@ statement error
 EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (1)) l(a)
 JOIN BY (TYPE MARK) (VALUES (1,NULL::INTEGER)) r(b,c) ON a=b AND a+c>0;
 ----
-<REGEX>:.*UNSUPPORTED_EXPORT_FEATURE during PLAN_EXPORT at logical_plan.*MARK condition.*
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query:.*MARK condition.*
+
+statement error
+EXPLAIN (SQL) SELECT * FROM duckdb_views();
+----
+EXPLAIN (SQL) cannot render table function "duckdb_views".

@@ -1,5 +1,4 @@
 #include "duckdb/common/tree_renderer.hpp"
-#include "duckdb/common/enum_util.hpp"
 #include "duckdb/planner/logical_plan_sql_exporter.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/helper/physical_explain_analyze.hpp"
@@ -20,14 +19,12 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 		auto exported = LogicalPlanSQLExporter::Export(context, *op.children[0], options);
 		if (exported.HasError()) {
 			auto &issue = exported.GetIssues()[0];
-			string path = "logical_plan";
-			if (issue.path) {
-				for (auto &component : issue.path->components) {
-					path += StringUtil::Format("/%s[%llu]", EnumUtil::ToString(component.type), component.ordinal);
-				}
+			auto message = "EXPLAIN (SQL) cannot render this query: " + issue.message;
+			if (issue.construct && issue.construct->type == LogicalPlanVerificationConstructType::SOURCE_FUNCTION &&
+			    issue.construct->function && issue.construct->function->name != "logical_source") {
+				message = StringUtil::Format("EXPLAIN (SQL) cannot render table function \"%s\".",
+				                             issue.construct->function->name);
 			}
-			auto message = StringUtil::Format("EXPLAIN (SQL): %s during %s at %s: %s", EnumUtil::ToString(issue.code),
-			                                  EnumUtil::ToString(issue.phase), path, issue.message);
 			switch (issue.code) {
 			case LogicalPlanVerificationIssueCode::UNSUPPORTED_OPERATOR:
 			case LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPRESSION:

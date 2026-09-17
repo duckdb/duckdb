@@ -34,7 +34,7 @@ CREATE SEQUENCE seq;
 statement error
 EXPLAIN (SQL) SELECT i,nextval('seq'),x=ANY(SELECT y FROM r WHERE r.g=l.g) m FROM l;
 ----
-<REGEX>:.*UNSUPPORTED_EXPORT_FEATURE.*The MARK condition requires conjunction execution semantics.*
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
 query I
 SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
@@ -57,7 +57,7 @@ CREATE SEQUENCE seq;
 statement error
 EXPLAIN (SQL) SELECT i,nextval('seq'),x=ANY(SELECT y FROM r WHERE r.g=l.g) m FROM l LIMIT 1;
 ----
-<REGEX>:.*UNSUPPORTED_EXPORT_FEATURE.*The MARK condition requires conjunction execution semantics.*
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
 query I
 SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
@@ -80,7 +80,7 @@ CREATE SEQUENCE seq;
 statement error
 EXPLAIN (SQL) SELECT i,CASE WHEN i>=4096 THEN CAST(error('grouped mark stream') AS BIGINT) ELSE nextval('seq') END,x=ANY(SELECT y FROM r WHERE r.g=l.g) m FROM l;
 ----
-<REGEX>:.*UNSUPPORTED_EXPORT_FEATURE.*The MARK condition requires conjunction execution semantics.*
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
 query I
 SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
@@ -103,7 +103,7 @@ CREATE SEQUENCE seq;
 statement error
 EXPLAIN (SQL) SELECT i,CASE WHEN i>=4096 THEN CAST(error('grouped mark stream') AS BIGINT) ELSE nextval('seq') END,x=ANY(SELECT y FROM r WHERE r.g=l.g) m FROM l LIMIT 1;
 ----
-<REGEX>:.*UNSUPPORTED_EXPORT_FEATURE.*The MARK condition requires conjunction execution semantics.*
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
 query I
 SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';

@@ -16,11 +16,11 @@ The generated query preserves SQL semantics when rebound under the same catalog,
 
 This is generated SQL, not recovery of the original query text. Optimizer rewrites can change expressions, join order, and query structure. Generated relation names and nested queries are expected. Formatting and SQL text are not stable across DuckDB versions. Rebinding may rediscover files, infer schemas, and observe current catalog or runtime state, as ordinary SQL does; the output is not a frozen execution snapshot or a portable catalog bundle.
 
-Optimization can also fold observations made while planning into the generated SQL. A join input known to be empty may become a typed empty relation with `WHERE false`; `current_setting('threads')` may become a literal such as `CAST(10 AS BIGINT)`; and `count(*)` on a small table may become a literal derived from its statistics. Rebinding these literals does not repeat the observations that produced them. Export a plan optimized against the data and settings on which the generated query will run, including when exporting fragments for execution elsewhere; changes to those inputs may require optimizing and exporting a new plan.
+Optimization can also fold observations made while planning into the generated SQL. A join input known to be empty may become a typed empty relation with `WHERE false`; `current_setting('threads')` may become a literal such as `CAST(10 AS BIGINT)`; `now()` may become a timestamp literal from the transaction in which the plan was optimized; and `count(*)` on a small table may become a literal derived from its statistics. Rebinding these literals does not repeat the observations that produced them. Export a plan optimized against the data and settings on which the generated query will run, including when exporting fragments for execution elsewhere; changes to those inputs may require optimizing and exporting a new plan.
 
 ## Supported statements and errors
 
-SQL mode accepts supported SELECT, VALUES, and WITH queries. It does not combine with ANALYZE or FORMAT, and it does not support DDL/DML, CALL, or EXPLAIN EXECUTE. Existing restrictions on SQL PREPARE also apply. Some logical operators and expressions cannot yet be exported; their errors identify the export issue, phase, location in the plan, and reason. Unsupported export never returns the original query as a fallback.
+SQL mode accepts supported SELECT, VALUES, and WITH queries. It does not combine with ANALYZE or FORMAT, and it does not support DDL/DML, CALL, or EXPLAIN EXECUTE. Existing restrictions on SQL PREPARE also apply. Some logical operators and expressions cannot yet be exported; their errors describe the unsupported query or source. The debug verifier retains structured issue codes, phases, and plan locations. Unsupported export never returns the original query as a fallback.
 
 PIVOT with values discovered from data is rejected because column discovery requires executing auxiliary statements. Specify the values with an explicit IN list to export supported PIVOT queries. Unresolved parameters and explicit optimizer opt-outs may also leave unsupported plan nodes.
 
@@ -36,3 +36,7 @@ EXPLAIN (SQL) SELECT nextval('example_sequence');
 Explanation does not advance the sequence. Executing the returned query advances it once. Queries that cannot preserve observable evaluation behavior are rejected explicitly. Source and extension export callbacks must return owned SQL representations without executing their source or performing effects.
 
 The debug SQL-export verifier is a separate testing facility. `EXPLAIN (SQL)` works without enabling it and does not run differential executions to establish correctness.
+
+## Fragment export
+
+The C++ exporter consumes an already planned logical tree. It does not choose an optimization stage or undo constant folding. Distributed fragment export is experimental: callers must preserve the catalog, data, settings, and transaction assumptions under which the input was planned. Exported field bindings belong to that plan; they are not stable identifiers shared between independent exports. Pre-folding export options, stable fragment identities, and aggregate rendering callbacks are not provided by this API.

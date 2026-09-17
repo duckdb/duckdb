@@ -241,7 +241,7 @@ SET debug_verify_sql_export='strict';
 statement error
 EXPLAIN (SQL) SELECT * FROM (VALUES (1,10),(2,20),(2,20),(NULL,30)) l(a,x) JOIN BY (TYPE mark) (VALUES (2,20),(3,30),(NULL,40)) r(b,y) ON a=b AND x<y;
 ----
-<REGEX>:.*UNSUPPORTED_EXPORT_FEATURE.*The MARK condition requires conjunction execution semantics.*
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
 statement error
 SELECT * FROM (VALUES (1),(2)) l(a) JOIN BY (TYPE single) (VALUES(2),(2)) r(b) ON a=b;

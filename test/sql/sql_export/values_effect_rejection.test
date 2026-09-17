@@ -20,7 +20,7 @@ SET disabled_optimizers='compressed_materialization';
 statement error
 EXPLAIN (SQL) SELECT count(*) FROM values_input a, values_input b JOIN LATERAL (VALUES (a.v+nextval('values_guard')),(-1)) ss(x) ON b.v=ss.x;
 ----
-<REGEX>:.*UNSUPPORTED_EXPORT_FEATURE.*VALUES with input requires nonvolatile, nonthrowing expressions.*
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: VALUES with input requires nonvolatile, nonthrowing expressions.*
 
 # Export rejection must not advance the sequence.
 
