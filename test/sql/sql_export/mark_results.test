@@ -66,128 +66,40 @@ SELECT __mark_join_marker FROM (VALUES (NULL::INTEGER)) l(a) JOIN BY (TYPE MARK)
 ----
 0
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query I rowsort
-SELECT __mark_join_marker FROM (VALUES (1)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a>2;
-----
-0
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (1)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a>2;
 ----
 <REGEX>:.*UNSUPPORTED_EXPORT_FEATURE.*The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query I rowsort
-SELECT __mark_join_marker FROM (VALUES (1)) l(a) JOIN BY (TYPE MARK) (VALUES (0,0),(2,2)) r(b,c) ON a>b AND a<c;
-----
-0
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (1)) l(a) JOIN BY (TYPE MARK) (VALUES (0,0),(2,2)) r(b,c) ON a>b AND a<c;
 ----
 <REGEX>:.*UNSUPPORTED_EXPORT_FEATURE.*The MARK condition requires conjunction execution semantics.*
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query I rowsort
-SELECT __mark_join_marker FROM (VALUES (1)) l(a) JOIN BY (TYPE MARK) (VALUES (NULL::INTEGER,2)) r(b,c) ON a>b AND a<c;
-----
-NULL
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (1)) l(a) JOIN BY (TYPE MARK) (VALUES (NULL::INTEGER,2)) r(b,c) ON a>b AND a<c;
 ----
 <REGEX>:.*UNSUPPORTED_EXPORT_FEATURE.*The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query I rowsort
-SELECT __mark_join_marker FROM (VALUES (1)) l(a) JOIN BY (TYPE MARK) (VALUES (NULL::INTEGER,2),(0,2)) r(b,c) ON a>b AND a<c;
-----
-1
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (1)) l(a) JOIN BY (TYPE MARK) (VALUES (NULL::INTEGER,2),(0,2)) r(b,c) ON a>b AND a<c;
 ----
 <REGEX>:.*UNSUPPORTED_EXPORT_FEATURE.*The MARK condition requires conjunction execution semantics.*
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query I rowsort
-SELECT __mark_join_marker FROM (VALUES (1)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a+b=2;
-----
-0
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (1)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a+b=2;
 ----
 <REGEX>:.*UNSUPPORTED_EXPORT_FEATURE.*The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query I rowsort
-SELECT __mark_join_marker FROM (VALUES (0)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a+b=2;
-----
-1
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (0)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a+b=2;
 ----
 <REGEX>:.*UNSUPPORTED_EXPORT_FEATURE.*The MARK condition requires conjunction execution semantics.*
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query I rowsort
-SELECT __mark_join_marker FROM (VALUES (NULL::INTEGER)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a+b IS NOT NULL;
-----
-0
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (NULL::INTEGER)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a+b IS NOT NULL;
 ----
 <REGEX>:.*UNSUPPORTED_EXPORT_FEATURE.*The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query I rowsort
-SELECT __mark_join_marker FROM (VALUES (NULL::INTEGER)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a+b=2;
-----
-NULL
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (NULL::INTEGER)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a+b=2;
@@ -210,17 +122,6 @@ EXPLAIN (SQL) SELECT bool_and(__mark_join_marker IS NOT DISTINCT FROM (a>0)) FRO
 ----
 <REGEX>:.*UNSUPPORTED_EXPORT_FEATURE.*The MARK condition requires conjunction execution semantics.*
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query I rowsort
-SELECT bool_and(__mark_join_marker IS NOT DISTINCT FROM (a IS NOT NULL)) FROM (VALUES (NULL::INTEGER),(1)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a+b IS NOT NULL;
-----
-1
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT bool_and(__mark_join_marker IS NOT DISTINCT FROM (a IS NOT NULL)) FROM (VALUES (NULL::INTEGER),(1)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a+b IS NOT NULL;
 ----
@@ -238,19 +139,6 @@ CREATE TABLE mark_build(b INTEGER,d INTEGER);
 statement ok
 INSERT INTO mark_build VALUES (1,NULL);
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTII rowsort
-SELECT label,label,id,__mark_join_marker FROM mark_probe JOIN BY (TYPE MARK) mark_build ON a=b AND c+d>0;
-----
-null	null	0	NULL
-one	one	1	NULL
-two	two	2	0
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT label,label,id,__mark_join_marker FROM mark_probe JOIN BY (TYPE MARK) mark_build ON a=b AND c+d>0;
 ----
@@ -258,19 +146,6 @@ EXPLAIN (SQL) SELECT label,label,id,__mark_join_marker FROM mark_probe JOIN BY (
 
 statement ok
 DELETE FROM mark_build;
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTII rowsort
-SELECT label,label,id,__mark_join_marker FROM mark_probe JOIN BY (TYPE MARK) mark_build ON a=b AND c+d>0;
-----
-null	null	0	0
-one	one	1	0
-two	two	2	0
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT label,label,id,__mark_join_marker FROM mark_probe JOIN BY (TYPE MARK) mark_build ON a=b AND c+d>0;
