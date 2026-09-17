@@ -146,7 +146,7 @@ struct KeyRowIdOutput {
 
 //! Scanning state. The scanning output policies allow us to pass in a capacity while scanning, so that when the
 //! scan fills up the capacity, we can pause the scan state at that location, and resume scanning later.
-enum class ARTScanResult : uint8_t { COMPLETED = 0, PAUSED = 1 };
+enum class ARTScanProgress : uint8_t { COMPLETED = 0, PAUSED = 1 };
 
 class Iterator {
 public:
@@ -161,7 +161,7 @@ public:
 	//! Templated scan implementation. Output policy defines how results are emitted.
 	//! Returns COMPLETED if scan finished, PAUSED if stopped due to output capacity.
 	template <typename Output>
-	ARTScanResult Scan(const ARTKey &upper_bound, Output &output, bool equal);
+	ARTScanProgress Scan(const ARTKey &upper_bound, Output &output, bool equal);
 
 	//! Finds the minimum (leaf) of the current subtree.
 	void FindMinimum(NodePtr current);
@@ -190,7 +190,7 @@ private:
 	//! True, if we entered a nested leaf to retrieve the next node.
 	bool entered_nested_leaf = false;
 
-	//! State for resuming a scan after early return due to the Output policy capacity (see note for the ARTScanResult
+	//! State for resuming a scan after early return due to the Output policy capacity (see note for the ARTScanProgress
 	//! enum).
 	struct ResumeScanState {
 		//! For LEAF: cached row IDs and current position.
