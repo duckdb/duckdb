@@ -1,9 +1,8 @@
-// Generated from extension/loader/link_helper.c.in. Do not edit.
+// Generated from extension/loader/static_extension_loader.c.in. Do not edit.
 // Links the extensions: @LINK_EXTENSION_LIST@
 //
-// Each extension archive carries a root member, duckdb_extension_<name>_root, that registers the extension with the
-// engine. Nothing references it, so this file does: compile it into the program and put the extension archives before
-// libduckdb_static.a. A listed extension whose archive is missing fails the link.
+// Static extension loader: references each extension's root member so the linker pulls it in.
+// Compile it into the program and put the extension archives before libduckdb_static.a.
 
 #if defined(_MSC_VER)
 // an /include directive is how the MSVC linker is told to want a symbol nothing references
@@ -13,7 +12,7 @@
 @MSVC_INCLUDES@
 #endif
 // keeps the translation unit from being empty
-typedef int duckdb_link_helper_unused;
+typedef int duckdb_static_extension_loader_unused;
 #else
 #ifdef __cplusplus
 extern "C" {

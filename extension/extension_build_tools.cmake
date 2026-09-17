@@ -48,10 +48,10 @@ function(duckdb_link_root TARGET SYMBOL)
     endif()
 endfunction()
 
-# Writes OUT_FILE from extension/loader/link_helper.c.in: a source referencing the root of each named extension, so a
-# link that compiles it takes those extensions' root members out of their archives. scripts/generate_extension_roots.py
+# Writes OUT_FILE from extension/loader/static_extension_loader.c.in: a source referencing the root of each named extension, so a
+# link that compiles it takes those extensions' root members out of their archives. scripts/generate_static_extension_loader.py
 # renders the same template for links outside CMake.
-function(duckdb_write_link_helper OUT_FILE)
+function(duckdb_write_static_extension_loader OUT_FILE)
     set(LINK_EXTENSION_LIST "")
     set(MSVC_X86_INCLUDES "")
     set(MSVC_INCLUDES "")
@@ -68,11 +68,11 @@ function(duckdb_write_link_helper OUT_FILE)
     foreach(PART MSVC_X86_INCLUDES MSVC_INCLUDES ROOT_DECLARATIONS ROOT_TABLE)
         string(REGEX REPLACE "\n$" "" ${PART} "${${PART}}")
     endforeach()
-    configure_file(${DUCKDB_MODULE_BASE_DIR}/extension/loader/link_helper.c.in ${OUT_FILE} @ONLY)
+    configure_file(${DUCKDB_MODULE_BASE_DIR}/extension/loader/static_extension_loader.c.in ${OUT_FILE} @ONLY)
 endfunction()
 
 # Links the named extensions into TARGET, in the given order, which is also their load order: their archives, plus a
-# generated <TARGET>_link_helper.c naming their roots. Extensions this build does not build are skipped and reported.
+# generated <TARGET>_static_extension_loader.c naming their roots. Extensions this build does not build are skipped and reported.
 # Each target picks its own set, so a shell and a test binary in the same build can link different extensions.
 function(duckdb_link_extensions TARGET)
     set(LINKAGE "")
@@ -99,8 +99,8 @@ function(duckdb_link_extensions TARGET)
     if("${LINKED}" STREQUAL "")
         return()
     endif()
-    set(HELPER "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}_link_helper.c")
-    duckdb_write_link_helper(${HELPER} ${LINKED})
+    set(HELPER "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}_static_extension_loader.c")
+    duckdb_write_static_extension_loader(${HELPER} ${LINKED})
     target_sources(${TARGET} PRIVATE ${HELPER})
 endfunction()
 

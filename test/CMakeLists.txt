@@ -10,7 +10,7 @@ add_definitions(-DDUCKDB_PATCH_VERSION=${DUCKDB_PATCH_VERSION})
 set(UNITTEST_OBJECT_FILES)
 
 if(TARGET parquet_extension)
-  # A static link of parquet through its generated link helper: the root member
+  # A static link of parquet through its generated static extension loader: the root member
   # it names has to register the extension.
   add_executable(static_link_smoke static_link/static_link_smoke.c)
   target_link_libraries(static_link_smoke duckdb_static)
