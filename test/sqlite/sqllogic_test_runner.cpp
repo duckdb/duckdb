@@ -1393,19 +1393,7 @@ static JSONMutableValue SQLExportPathJSON(JSONWriter &writer, const LogicalPlanV
 	auto components = writer.CreateArray();
 	for (auto &component : path.components) {
 		auto entry = writer.CreateObject();
-		const char *kind;
-		switch (component.type) {
-		case LogicalPlanVerificationPathComponentType::OPERATOR_CHILD:
-			kind = "operator_child";
-			break;
-		case LogicalPlanVerificationPathComponentType::OPERATOR_EXPRESSION:
-			kind = "operator_expression";
-			break;
-		default:
-			kind = "expression_child";
-			break;
-		}
-		entry.AddString("kind", kind);
+		entry.AddString("kind", StringUtil::Lower(EnumUtil::ToString(component.type)));
 		entry.Add("ordinal", writer.CreateUnsignedInteger(component.ordinal));
 		components.Append(entry);
 	}

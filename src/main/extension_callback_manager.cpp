@@ -5,6 +5,7 @@
 #include "duckdb/parser/peg/dialect_extension.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
+#include "duckdb/planner/logical_plan_sql_exporter.hpp"
 #include "duckdb/planner/planner_extension.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/planner/extension_callback.hpp"
@@ -254,6 +255,11 @@ void DialectExtension::Register(DBConfig &config, shared_ptr<DialectExtension> e
 
 void PlannerExtension::Register(DBConfig &config, PlannerExtension extension) {
 	config.GetCallbackManager().Register(std::move(extension));
+}
+
+LogicalPlanSQLExportExtensionResult
+OperatorExtension::ExportLogicalPlanSQL(const LogicalPlanSQLExportExtensionInput &) {
+	return LogicalPlanSQLExportExtensionResult::NotHandled();
 }
 
 void OperatorExtension::Register(DBConfig &config, shared_ptr<OperatorExtension> extension) {

@@ -11,12 +11,13 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/logical_plan_sql_exporter.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
 
 namespace duckdb {
 
 struct DBConfig;
+struct LogicalPlanSQLExportExtensionInput;
+struct LogicalPlanSQLExportExtensionResult;
 
 //! The OperatorExtensionInfo holds static information relevant to the operator extension
 struct OperatorExtensionInfo {
@@ -43,9 +44,8 @@ public:
 	virtual ~OperatorExtension() {
 	}
 
-	virtual LogicalPlanSQLExportExtensionResult ExportLogicalPlanSQL(const LogicalPlanSQLExportExtensionInput &) {
-		return LogicalPlanSQLExportExtensionResult::NotHandled();
-	}
+	DUCKDB_API virtual LogicalPlanSQLExportExtensionResult
+	ExportLogicalPlanSQL(const LogicalPlanSQLExportExtensionInput &input);
 
 	static void Register(DBConfig &config, shared_ptr<OperatorExtension> extension);
 	static ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> Iterate(ClientContext &context) {
