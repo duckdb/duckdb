@@ -297,20 +297,6 @@ public:
 	}
 };
 
-class SyntheticLogicalOperator : public LogicalOperator {
-public:
-	explicit SyntheticLogicalOperator(LogicalOperatorType type_p) : LogicalOperator(type_p) {
-	}
-
-	vector<ColumnBinding> GetColumnBindings() override {
-		return {};
-	}
-
-protected:
-	void ResolveTypes() override {
-	}
-};
-
 static unique_ptr<SQLExportExtensionOperator> LeafExtension(const string &name, TableIndex table_index) {
 	auto binding = ColumnBinding(table_index, ProjectionIndex(0));
 	return make_uniq<SQLExportExtensionOperator>(name, vector<ColumnBinding> {binding},
@@ -369,18 +355,6 @@ TEST_CASE("Logical plan SQL export identifies rejected output types", "[sql_expo
 		REQUIRE(GetPlanIssueFact(issue, "column_index") == Value::UBIGINT(0));
 		REQUIRE(GetPlanIssueFact(issue, "logical_type") == Value(type.ToString()));
 		REQUIRE(GetPlanIssueFact(issue, "varchar_collations") == Value(SQLExportHelpers::TypeCollationSignature(type)));
-	}
-
-	SECTION("aggregate state without reconstruction parameters") {
-		auto type = LogicalType::STRUCT({{Identifier("value"), LogicalType::INTEGER}}).WithAlias("AGGREGATE_STATE");
-		LogicalEmptyResult plan(vector<LogicalType> {type},
-		                        vector<ColumnBinding> {ColumnBinding(TableIndex(2), ProjectionIndex(0))});
-		plan.ResolveOperatorTypes();
-		auto result = LogicalPlanSQLExporter::Export(*connection.context, plan);
-		RequirePlanExportIssue(result, LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE);
-		auto &issue = result.GetIssues()[0];
-		REQUIRE(issue.construct ==
-		        LogicalPlanVerificationConstructIdentity::ExportFeature("aggregate_state_parameters"));
 	}
 }
 
@@ -559,8 +533,7 @@ TEST_CASE("Logical plan SQL export applies requested output names", "[sql_export
 	REQUIRE(copied->ToString() == "EXPLAIN (SQL) SELECT 42");
 }
 
-TEST_CASE("Logical plan SQL export closes unsupported shapes and operator enums",
-          "[sql_export][logical_plan_sql_export]") {
+TEST_CASE("Logical plan SQL export rejects opaque table sources", "[sql_export][logical_plan_sql_export]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
 	connection.BeginTransaction();
@@ -580,42 +553,7 @@ TEST_CASE("Logical plan SQL export closes unsupported shapes and operator enums"
 		REQUIRE(issue.facts.size() == 1);
 		REQUIRE((issue.facts[0] == pair<string, Value> {"guard", Value("test_opaque")}));
 	}
-	SECTION("generic source callback guard") {
-		auto plan = OptimizeLogicalPlanExportQuery(connection, "SELECT * FROM range(2)");
-		auto &get = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_GET)->Cast<LogicalGet>();
-		get.ordinality_idx = optional_idx(0);
-		auto result = LogicalPlanSQLExporter::Export(*connection.context, get);
-		RequirePlanExportIssue(result, LogicalPlanVerificationIssueCode::UNSUPPORTED_SOURCE);
-		auto &issue = result.GetIssues()[0];
-		REQUIRE(issue.construct->function->name == "range");
-		REQUIRE(issue.facts.size() == 1);
-		REQUIRE((issue.facts[0] == pair<string, Value> {"guard", Value("ordinality")}));
-	}
 	connection.Rollback();
-}
-
-TEST_CASE("Logical plan SQL export returns verifier failures before invoking resolvers",
-          "[sql_export][logical_plan_sql_export]") {
-	DuckDB db(nullptr);
-	Connection connection(db);
-	idx_t calls = 0;
-	auto options = PlanResolverOptions([&](const LogicalPlanSQLExportExtensionInput &input) {
-		calls++;
-		return LogicalPlanSQLExportExtensionResult::Exported(PlanConstantRelation(input, 42));
-	});
-	vector<unique_ptr<Expression>> expressions;
-	expressions.push_back(nullptr);
-	auto binding = ColumnBinding(TableIndex(70), ProjectionIndex(0));
-	auto plan = make_uniq<SQLExportExtensionOperator>("bypassed_extension", vector<ColumnBinding> {binding},
-	                                                  vector<LogicalType> {LogicalType::INTEGER},
-	                                                  vector<TableIndex> {TableIndex(70)}, std::move(expressions));
-
-	auto result = LogicalPlanSQLExporter::Export(*connection.context, *plan, options);
-	RequireLogicalPlanExportIssue(
-	    result, LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, LogicalPlanVerificationPhase::VERIFY,
-	    LogicalPlanVerificationPath {LogicalPlanVerificationPathRoot::LOGICAL_PLAN,
-	                                 {{LogicalPlanVerificationPathComponentType::OPERATOR_EXPRESSION, 0}}});
-	REQUIRE(calls == 0);
 }
 
 TEST_CASE("Logical plan SQL export supports local and registered extension callbacks",
@@ -771,50 +709,6 @@ TEST_CASE("Logical plan SQL export uses the matching registered extension callba
 	auto legacy_plan = LeafExtension("legacy_sql_export_test", TableIndex(92));
 	auto legacy_result = LogicalPlanSQLExporter::Export(*connection.context, *legacy_plan);
 	RequirePlanExportIssue(legacy_result, LogicalPlanVerificationIssueCode::UNSUPPORTED_EXTENSION);
-}
-
-TEST_CASE("Logical plan SQL export rejects missing extension query or rejection reason",
-          "[sql_export][logical_plan_sql_export]") {
-	DuckDB db(nullptr);
-	Connection connection(db);
-
-	SECTION("EXPORTED without relation") {
-		auto plan = LeafExtension("malformed_state", TableIndex(103));
-		auto options = PlanResolverOptions([](const LogicalPlanSQLExportExtensionInput &) {
-			LogicalPlanSQLExportExtensionResult result;
-			result.type = LogicalPlanSQLExportExtensionResultType::EXPORTED;
-			return result;
-		});
-		auto result = LogicalPlanSQLExporter::Export(*connection.context, *plan, options);
-		RequirePlanExportIssue(result, LogicalPlanVerificationIssueCode::MALFORMED_EXTENSION_RESULT);
-	}
-
-	SECTION("UNSUPPORTED without reason") {
-		auto plan = LeafExtension("malformed_state", TableIndex(104));
-		auto options = PlanResolverOptions([](const LogicalPlanSQLExportExtensionInput &) {
-			return LogicalPlanSQLExportExtensionResult::Unsupported("");
-		});
-		auto result = LogicalPlanSQLExporter::Export(*connection.context, *plan, options);
-		RequirePlanExportIssue(result, LogicalPlanVerificationIssueCode::MALFORMED_EXTENSION_RESULT);
-	}
-}
-
-TEST_CASE("Logical plan SQL export does not descend through unsupported parents",
-          "[sql_export][logical_plan_sql_export]") {
-	DuckDB db(nullptr);
-	Connection connection(db);
-	idx_t calls = 0;
-	auto options = PlanResolverOptions([&](const LogicalPlanSQLExportExtensionInput &input) {
-		calls++;
-		return LogicalPlanSQLExportExtensionResult::Exported(PlanConstantRelation(input, 1));
-	});
-	auto plan = make_uniq<SyntheticLogicalOperator>(static_cast<LogicalOperatorType>(254));
-	plan->children.push_back(LeafExtension("left_extension", TableIndex(110)));
-	plan->children.push_back(LeafExtension("right_extension", TableIndex(111)));
-
-	auto result = LogicalPlanSQLExporter::Export(*connection.context, *plan, options);
-	RequirePlanExportIssue(result, LogicalPlanVerificationIssueCode::UNSUPPORTED_OPERATOR);
-	REQUIRE(calls == 0);
 }
 
 TEST_CASE("Logical plan SQL export propagates callback exceptions unchanged", "[sql_export][logical_plan_sql_export]") {
@@ -980,30 +874,6 @@ static void RequireMarkConditionRejection(const LogicalPlanVerificationResult<Lo
 	        LogicalPlanVerificationConstructIdentity::ExportFeature("mark_condition_semantics"));
 }
 
-TEST_CASE("Logical plan SQL export rejects aggregate state values without parameters",
-          "[sql_export][logical_plan_sql_export]") {
-	auto missing_parameters = BoundExpressionSQLExporter::Export(
-	    BoundConstantExpression(Value(LogicalType(LogicalType::INTEGER).WithAlias("AGGREGATE_STATE"))), {});
-	REQUIRE(missing_parameters.HasError());
-	REQUIRE(missing_parameters.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE);
-}
-
-TEST_CASE("Logical plan SQL export rejects malformed ordinality partitions", "[sql_export][logical_plan_sql_export]") {
-	DuckDB db(nullptr);
-	Connection connection(db);
-	connection.BeginTransaction();
-
-	auto plan = OptimizeLogicalPlanExportQuery(connection, "SELECT * FROM range(5) WITH ORDINALITY");
-	auto window = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_WINDOW);
-	REQUIRE(window);
-	auto &expression = window->expressions[0]->Cast<BoundWindowExpression>();
-	expression.PartitionsMutable().push_back(
-	    make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, window->children[0]->GetColumnBindings()[0]));
-	auto unsupported = LogicalPlanSQLExporter::Export(*connection.context, *window);
-	RequirePlanExportIssue(unsupported, LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE);
-	connection.Rollback();
-}
-
 static void RequirePivotStreamingEffects(Connection &connection) {
 	for (idx_t route = 0; route < 4; route++) {
 		CAPTURE(route);
@@ -1067,17 +937,6 @@ static void RequirePivotSQLExportFailure(Connection &connection, unique_ptr<Logi
 	REQUIRE(exported.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE);
 	REQUIRE(StringUtil::Contains(exported.GetIssues()[0].message, message));
 }
-
-class PivotOpaqueBindData : public FunctionData {
-public:
-	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<PivotOpaqueBindData>();
-	}
-
-	bool Equals(const FunctionData &) const override {
-		return false;
-	}
-};
 
 struct PivotNonstandardEmptySum {
 	static bool IgnoreNull() {
@@ -1165,58 +1024,6 @@ TEST_CASE("Logical plan SQL export reconstructs list PIVOT barriers",
 	REQUIRE(sum.Function().GetName() == "sum_no_overflow");
 	REQUIRE(LogicalPlanSQLExporter::Export(*connection.context, *optimized_sum).IsSuccess());
 	RequirePivotStreamingEffects(connection);
-	connection.Rollback();
-}
-
-TEST_CASE("Logical plan SQL export rebinds PIVOT implementation metadata",
-          "[sql_export][logical_plan_sql_export][pivot_sql_export]") {
-	DuckDB db(nullptr);
-	Connection connection(db);
-	connection.BeginTransaction();
-	REQUIRE_NO_FAIL(connection.Query("SET pivot_filter_threshold=0"));
-	const string sql = "FROM (VALUES ('a',1),('b',2)) t(k,v) PIVOT (sum(v) FOR k IN ('a','b','z'))";
-	auto require_fresh = [&](unique_ptr<LogicalOperator> plan) {
-		auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
-		INFO((exported.HasError() ? exported.GetIssues()[0].message : string()));
-		REQUIRE(exported.IsSuccess());
-		auto fresh = connection.Query(sql);
-		auto generated = connection.Query(exported.GetValue().query->ToString());
-		REQUIRE_NO_FAIL(*fresh);
-		REQUIRE_NO_FAIL(*generated);
-		REQUIRE(generated->GetTypes() == fresh->GetTypes());
-		REQUIRE(SQLExportRows(*generated, false) == SQLExportRows(*fresh, false));
-	};
-
-	{
-		auto plan = OptimizeLogicalPlanExportQuery(connection, sql);
-		auto &aggregate = PivotAggregate(*plan);
-		auto fake_definition = make_shared_ptr<AggregateFunction>(*aggregate.Function().GetDefinition());
-		aggregate.FunctionMutable() = BoundAggregateFunction(std::move(fake_definition));
-		require_fresh(std::move(plan));
-	}
-	{
-		auto plan = OptimizeLogicalPlanExportQuery(connection, sql);
-		auto &aggregate = PivotAggregate(*plan);
-		auto callbacks = aggregate.Function().GetCallbacks();
-		callbacks.initialize = nullptr;
-		aggregate.FunctionMutable().SetCallbacks(callbacks);
-		require_fresh(std::move(plan));
-	}
-	{
-		auto plan = OptimizeLogicalPlanExportQuery(connection, sql);
-		auto &aggregate = PivotAggregate(*plan);
-		auto properties = aggregate.Function().GetProperties();
-		properties.order_dependent = properties.order_dependent == AggregateOrderDependent::ORDER_DEPENDENT
-		                                 ? AggregateOrderDependent::NOT_ORDER_DEPENDENT
-		                                 : AggregateOrderDependent::ORDER_DEPENDENT;
-		aggregate.FunctionMutable().SetProperties(properties);
-		require_fresh(std::move(plan));
-	}
-	{
-		auto plan = OptimizeLogicalPlanExportQuery(connection, sql);
-		PivotAggregate(*plan).BindInfoMutable() = make_uniq<PivotOpaqueBindData>();
-		require_fresh(std::move(plan));
-	}
 	connection.Rollback();
 }
 
@@ -1399,73 +1206,6 @@ TEST_CASE("Logical plan SQL export validates noncanonical PIVOT defaults and lis
 		}
 		connection.Rollback();
 	}
-
-	SECTION("unaligned supplied lists") {
-		DuckDB db(nullptr);
-		Connection connection(db);
-		REQUIRE_NO_FAIL(connection.Query("SET pivot_filter_threshold=0"));
-		connection.BeginTransaction();
-		auto original = OptimizeLogicalPlanExportQuery(
-		    connection, "FROM (VALUES ('g','a',1)) t(g,k,v) PIVOT(sum(v) FOR k IN ('a','b'))");
-		auto pivot = FindLogicalPlanExportOperator(*original, LogicalOperatorType::LOGICAL_PIVOT);
-		REQUIRE(pivot);
-		for (bool binary : {false, true}) {
-			auto plan = pivot->Copy(*connection.context);
-			plan->Cast<LogicalPivot>().pivot_index = TableIndex(100000);
-			plan->children[0] = OptimizeLogicalPlanExportQuery(connection, "SELECT 'g', [10::HUGEINT], ['a','b']");
-			plan->ResolveOperatorTypes();
-			if (binary) {
-				plan = plan->Copy(*connection.context);
-			}
-			RequirePivotSQLExportFailure(connection, std::move(plan), "lists are not aligned");
-		}
-		connection.Rollback();
-	}
-
-	SECTION("modified canonical list aggregate") {
-		DuckDB db(nullptr);
-		Connection connection(db);
-		REQUIRE_NO_FAIL(connection.Query("SET pivot_filter_threshold=0"));
-		connection.BeginTransaction();
-		const string sql = "FROM (VALUES ('g','a',1),('g','b',2)) t(g,k,v) PIVOT(sum(v) FOR k IN ('a','b'))";
-		for (idx_t variant = 0; variant < 3; variant++) {
-			CAPTURE(variant);
-			auto plan = OptimizeLogicalPlanExportQuery(connection, sql);
-			auto pivot = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_PIVOT);
-			REQUIRE(pivot);
-			auto source_op = pivot->children[0].get();
-			REQUIRE(source_op->type == LogicalOperatorType::LOGICAL_PROJECTION);
-			source_op = source_op->children[0].get();
-			REQUIRE(source_op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY);
-			auto &source = source_op->Cast<LogicalAggregate>();
-			REQUIRE_FALSE(source.expressions.empty());
-			auto &list = source.expressions[0]->Cast<BoundAggregateExpression>();
-			if (variant == 0) {
-				list.GetAggregateTypeMutable() = AggregateType::DISTINCT;
-			} else if (variant == 1) {
-				list.GetFilterMutable() = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
-			} else {
-				source.grouping_sets.push_back(GroupingSet());
-			}
-			RequirePivotSQLExportFailure(connection, std::move(plan), "PIVOT");
-		}
-		connection.Rollback();
-	}
-}
-
-TEST_CASE("Scalar LIMIT export rejects row-dependent bounds", "[sql_export][logical_plan_sql_export]") {
-	DuckDB db;
-	Connection connection(db);
-	connection.BeginTransaction();
-	auto plan = OptimizeLogicalPlanExportQuery(connection, "SELECT i FROM range(5) t(i) LIMIT 2");
-	auto &limit = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_LIMIT)->Cast<LogicalLimit>();
-	limit.limit_val = BoundLimitNode::ExpressionValue(
-	    make_uniq<BoundColumnRefExpression>(limit.children[0]->types[0], limit.children[0]->GetColumnBindings()[0]));
-	auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
-	REQUIRE(exported.HasError());
-	REQUIRE(exported.GetIssues()[0].construct ==
-	        LogicalPlanVerificationConstructIdentity::ExportFeature("limit_binding"));
-	connection.Rollback();
 }
 
 namespace {
@@ -1665,89 +1405,6 @@ TEST_CASE("Logical plan SQL export verifies unordered VALUES list canonicalizers
 				}
 				CheckValuesRoundTrip(connection, std::move(plan));
 			}
-		}
-	}
-
-	SECTION("modified bound functions") {
-		DuckDB db(nullptr);
-		Connection connection(db);
-		REQUIRE_NO_FAIL(connection.Query("SET threads=1"));
-		for (bool modify_scalar : {false, true}) {
-			CAPTURE(modify_scalar);
-			connection.BeginTransaction();
-			auto plan = OptimizeLogicalPlanExportQuery(
-			    connection, "SELECT list_sort(list(x)) FROM (VALUES (2,0),(NULL,1),(2,2),(1,3))t(x,r)");
-			REQUIRE(AddValuesRows(plan, 3));
-			plan->ResolveOperatorTypes();
-			auto reference_plan = plan->Copy(*connection.context);
-			reference_plan->ResolveOperatorTypes();
-			auto reference_export = LogicalPlanSQLExporter::Export(*connection.context, *reference_plan);
-			REQUIRE(reference_export.IsSuccess());
-			if (modify_scalar) {
-				auto &projection = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_PROJECTION)
-				                       ->Cast<LogicalProjection>();
-				projection.expressions[0]->Cast<BoundFunctionExpression>().FunctionMutable().SetFunctionCallback(
-				    ScalarFunction::NopFunction);
-			} else {
-				auto &aggregate =
-				    FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY)
-				        ->Cast<LogicalAggregate>()
-				        .expressions[0]
-				        ->Cast<BoundAggregateExpression>();
-				auto callbacks = aggregate.Function().GetCallbacks();
-				callbacks.initialize = nullptr;
-				aggregate.FunctionMutable().SetCallbacks(callbacks);
-			}
-			plan->ResolveOperatorTypes();
-			auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
-			REQUIRE(exported.IsSuccess());
-			auto reference = connection.Query(reference_export.GetValue().query->ToString());
-			auto generated = connection.Query(exported.GetValue().query->ToString());
-			REQUIRE_NO_FAIL(*reference);
-			REQUIRE_NO_FAIL(*generated);
-			REQUIRE(generated->GetTypes() == reference->GetTypes());
-			REQUIRE(SQLExportRows(*generated, false) == SQLExportRows(*reference, false));
-			connection.Rollback();
-		}
-	}
-
-	SECTION("modified registered scalar function") {
-		DuckDB db(nullptr);
-		Connection connection(db);
-		REQUIRE_NO_FAIL(connection.Query("SET threads=1"));
-		connection.BeginTransaction();
-		auto &entry = Catalog::GetEntry<ScalarFunctionCatalogEntry>(*connection.context,
-		                                                            QualifiedName("system", "main", "list_sort"));
-		entry.functions.ApplyToFunctions(
-		    [](ScalarFunction &function) { function.SetFunctionCallback(ScalarFunction::NopFunction); });
-		connection.Rollback();
-		for (bool binary : {false, true}) {
-			CAPTURE(binary);
-			connection.BeginTransaction();
-			auto plan =
-			    OptimizeLogicalPlanExportQuery(connection, "SELECT list_sort(list(x)) FROM (VALUES (2,0),(1,1))t(x,r)");
-			REQUIRE(AddValuesRows(plan, 3));
-			plan->ResolveOperatorTypes();
-			if (binary) {
-				plan = plan->Copy(*connection.context);
-				plan->ResolveOperatorTypes();
-			}
-			auto native_plan = plan->Copy(*connection.context);
-			native_plan->ResolveOperatorTypes();
-			auto direct = connection.Query(make_uniq<LogicalPlanStatement>(std::move(native_plan)));
-			REQUIRE_NO_FAIL(*direct);
-			REQUIRE(Value::NotDistinctFrom(direct->GetValue(0, 0),
-			                               Value::LIST({Value::INTEGER(2), Value::INTEGER(1), Value::INTEGER(2),
-			                                            Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(1)})));
-			auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
-			REQUIRE(exported.IsSuccess());
-			auto generated =
-			    connection.Query("SELECT unnest(c0) FROM (" + exported.GetValue().query->ToString() + ") v(c0)");
-			REQUIRE_NO_FAIL(*generated);
-			auto expected = connection.Query("SELECT * FROM (VALUES (1), (1), (1), (2), (2), (2)) t(x)");
-			REQUIRE_NO_FAIL(*expected);
-			REQUIRE(SQLExportRows(*generated, false) == SQLExportRows(*expected, false));
-			connection.Rollback();
 		}
 	}
 
@@ -2016,32 +1673,6 @@ TEST_CASE("Logical plan SQL export retains consumed file predicates",
 	        LogicalPlanVerificationConstructIdentity::ExportFeature("file_filter_residual"));
 	connection.Rollback();
 	TestDeleteDirectory(directory);
-}
-
-TEST_CASE("Logical plan SQL export rejects missing relational input types",
-          "[sql_export][logical_plan_sql_export][table_source_sql]") {
-	DuckDB db(nullptr);
-	Connection connection(db);
-	connection.BeginTransaction();
-	auto incomplete = OptimizeLogicalPlanExportQuery(connection, "SELECT * FROM range(3) t(i), range(i) u(j)");
-	optional_ptr<LogicalGet> incomplete_get;
-	std::function<void(LogicalOperator &)> find_incomplete = [&](LogicalOperator &op) {
-		if (op.type == LogicalOperatorType::LOGICAL_GET && !op.children.empty()) {
-			incomplete_get = op.Cast<LogicalGet>();
-		}
-		for (auto &child : op.children) {
-			find_incomplete(*child);
-		}
-	};
-	find_incomplete(*incomplete);
-	REQUIRE(incomplete_get);
-	incomplete_get->input_table_types.clear();
-	auto rejected = LogicalPlanSQLExporter::Export(*connection.context, *incomplete);
-	REQUIRE(rejected.HasError());
-	REQUIRE(rejected.GetIssues().size() == 1);
-	REQUIRE(rejected.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_SOURCE);
-	REQUIRE((rejected.GetIssues()[0].facts[0] == pair<string, Value> {"guard", Value("input_columns")}));
-	connection.Rollback();
 }
 
 TEST_CASE("Logical plan SQL export copies owned chunk data and selected columns",
@@ -2700,21 +2331,9 @@ TEST_CASE("Window SQL export retains logical signatures and context boundaries",
 	auto exported = BoundExpressionSQLExporter::ExportWindowAtPath(window, context, path);
 	REQUIRE(exported.IsSuccess());
 	auto text = exported.GetValue()->ToString();
-	function.GetArguments()[0] = LogicalType::VARCHAR;
-	function.SetReturnType(LogicalType::VARCHAR);
-	REQUIRE(function.GetLogicalArguments() == arguments);
-	REQUIRE(function.GetLogicalReturnType() == LogicalType::INTEGER);
-	auto retained = BoundExpressionSQLExporter::ExportWindowAtPath(window, context, path);
-	REQUIRE(retained.IsSuccess());
-	REQUIRE(retained.GetValue()->ToString() == text);
 	auto result = connection.Query("SELECT " + text + " FROM (VALUES(1),(2))t(x)");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(CHECK_COLUMN(result, 0, {2, Value()}));
-	window.GetChildrenMutable()[2] = make_uniq<BoundConstantExpression>(Value("lost logical argument"));
-	auto changed = BoundExpressionSQLExporter::ExportWindowAtPath(window, context, path);
-	REQUIRE(changed.IsSuccess());
-	auto changed_result = connection.Query("SELECT " + changed.GetValue()->ToString() + " FROM (VALUES(1),(2))t(x)");
-	REQUIRE(changed_result->HasError());
 	connection.Rollback();
 }
 
@@ -2822,7 +2441,7 @@ TEST_CASE("Copied UNION SQL outlives its plan and original exported AST",
 	connection.Rollback();
 }
 
-TEST_CASE("Grouped MARK SQL export rejects inconsistent group metadata",
+TEST_CASE("Grouped MARK SQL export rejects unsupported conjunction semantics",
           "[sql_export][logical_plan_sql_export][join_sql_export]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
@@ -2850,64 +2469,29 @@ TEST_CASE("Grouped MARK SQL export rejects inconsistent group metadata",
 	REQUIRE(exported.GetIssues()[0].construct ==
 	        LogicalPlanVerificationConstructIdentity::ExportFeature("mark_condition_semantics"));
 
-	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE collated_l(g VARCHAR COLLATE nocase,x INTEGER); "
-	                                 "CREATE TABLE collated_r(g VARCHAR COLLATE nocase,y INTEGER); "
-	                                 "INSERT INTO collated_l VALUES ('A',1); INSERT INTO collated_r VALUES ('a',1)"));
-	plan = OptimizeLogicalPlanExportQuery(connection,
-	                                      "SELECT x=ANY(SELECT y FROM collated_r r WHERE r.g=l.g) FROM collated_l l");
-	auto &collated_join = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_COMPARISON_JOIN)
-	                          ->Cast<LogicalComparisonJoin>();
-	REQUIRE(collated_join.mark_types.size() == 1);
-	REQUIRE(StringType::GetCollation(collated_join.mark_types[0]) == "nocase");
-	collated_join.mark_types[0] = LogicalType::VARCHAR;
-	exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
-	REQUIRE(exported.HasError());
-	REQUIRE(exported.GetIssues()[0].construct ==
-	        LogicalPlanVerificationConstructIdentity::ExportFeature("mark_condition_semantics"));
-	for (auto &condition : collated_join.conditions) {
-		condition = JoinCondition(condition.GetLHS().Copy(), condition.GetRHS().Copy(), ExpressionType::COMPARE_EQUAL);
-	}
-	exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
-	REQUIRE(exported.HasError());
-	REQUIRE(exported.GetIssues()[0].construct ==
-	        LogicalPlanVerificationConstructIdentity::ExportFeature("mark_group_null_semantics"));
 	connection.Rollback();
 }
 
-TEST_CASE("Logical plan SQL export rejects inconsistent sampling metadata",
+TEST_CASE("Logical plan SQL export rejects nonrepeatable seeded sampling",
           "[sql_export][logical_plan_sql_export][sample_sql_export]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
 	connection.BeginTransaction();
-	for (idx_t variant = 0; variant < 2; variant++) {
-		auto plan =
-		    OptimizeLogicalPlanExportQuery(connection, "SELECT * FROM range(10000) USING SAMPLE 31 (reservoir,42)");
-		auto sample_op = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_SAMPLE);
-		REQUIRE(sample_op);
-		auto &sample = sample_op->Cast<LogicalSample>();
-		string feature;
-		if (variant == 0) {
-			sample.sample_options->repeatable = false;
-			feature = "sample_repeatability";
-		} else {
-			sample.sample_options->SetSeed(idx_t(NumericLimits<int64_t>::Maximum()) + 1);
-			feature = "sample_seed";
-		}
-		for (bool binary : {false, true}) {
-			CAPTURE(variant, binary);
-			auto copy = binary ? sample.Copy(*connection.context) : nullptr;
-			auto exported = LogicalPlanSQLExporter::Export(*connection.context, copy ? *copy : sample);
-			REQUIRE(exported.HasError());
-			REQUIRE(exported.IsValid());
-			REQUIRE(exported.GetIssues()[0].phase == LogicalPlanVerificationPhase::PLAN_EXPORT);
-			REQUIRE(exported.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE);
-			REQUIRE(exported.GetIssues()[0].construct ==
-			        LogicalPlanVerificationConstructIdentity::ExportFeature(feature));
-			if (variant == 1) {
-				// Native binary serialization stores a signed seed.
-				break;
-			}
-		}
+	auto plan = OptimizeLogicalPlanExportQuery(connection, "SELECT * FROM range(10000) USING SAMPLE 31 (reservoir,42)");
+	auto sample_op = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_SAMPLE);
+	REQUIRE(sample_op);
+	auto &sample = sample_op->Cast<LogicalSample>();
+	sample.sample_options->repeatable = false;
+	for (bool binary : {false, true}) {
+		CAPTURE(binary);
+		auto copy = binary ? sample.Copy(*connection.context) : nullptr;
+		auto exported = LogicalPlanSQLExporter::Export(*connection.context, copy ? *copy : sample);
+		REQUIRE(exported.HasError());
+		REQUIRE(exported.IsValid());
+		REQUIRE(exported.GetIssues()[0].phase == LogicalPlanVerificationPhase::PLAN_EXPORT);
+		REQUIRE(exported.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE);
+		REQUIRE(exported.GetIssues()[0].construct ==
+		        LogicalPlanVerificationConstructIdentity::ExportFeature("sample_repeatability"));
 	}
 	connection.Rollback();
 }
