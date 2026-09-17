@@ -2536,6 +2536,68 @@ static bool SingleJoinRHSIsDeduplicated(LogicalComparisonJoin &join) {
 	return true;
 }
 
+// Decorrelation partitions the RHS by its domain. Only retain this fact for repeatable, locally owned inputs.
+static bool CanRestrictCorrelationInput(LogicalOperator &op, unordered_set<TableIndex> &local_ctes) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_GET:
+		if (!op.Cast<LogicalGet>().GetTable()) {
+			return false;
+		}
+		break;
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
+		auto &cte = op.Cast<LogicalRecursiveCTE>();
+		if (!cte.union_all || cte.ref_recurring || !cte.key_targets.empty()) {
+			return false;
+		}
+		local_ctes.insert(cte.table_index);
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+		local_ctes.insert(op.Cast<LogicalMaterializedCTE>().table_index);
+		break;
+	case LogicalOperatorType::LOGICAL_CTE_REF:
+		if (!local_ctes.count(op.Cast<LogicalCTERef>().cte_index)) {
+			return false;
+		}
+		break;
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+		if (op.Cast<LogicalComparisonJoin>().join_type != JoinType::INNER) {
+			return false;
+		}
+		break;
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+	case LogicalOperatorType::LOGICAL_DISTINCT:
+	case LogicalOperatorType::LOGICAL_WINDOW:
+	case LogicalOperatorType::LOGICAL_LIMIT:
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+	case LogicalOperatorType::LOGICAL_UNION:
+	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
+	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
+		break;
+	default:
+		return false;
+	}
+	bool repeatable = true;
+	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expr) {
+		repeatable &= !(*expr)->IsVolatile() && !ExpressionBarrier::Contains(**expr);
+		ExpressionIterator::VisitExpression<BoundFunctionExpression>(**expr, [&](const BoundFunctionExpression &func) {
+			repeatable &= !func.Function().RequiresOrderedExecution();
+		});
+	});
+	if (!repeatable) {
+		return false;
+	}
+	for (auto &child : op.children) {
+		if (!CanRestrictCorrelationInput(*child, local_ctes)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 DelimJoinCTERewriter::DelimJoinCTERewriter(Binder &binder) : binder(binder) {
 	auto &config = DBConfig::GetConfig(binder.context);
 	cte_deliminator_enabled =
@@ -2577,6 +2639,8 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
 		return {};
 	}
 	generated_dedup_cte_indexes.push_back(dedup_cte_index);
+	unordered_set<TableIndex> local_ctes {dedup_cte_index};
+	const bool can_restrict_input = join.join_type == JoinType::INNER && CanRestrictCorrelationInput(*plan, local_ctes);
 
 	plan->children[0]->ResolveOperatorTypes();
 	auto left_bindings = plan->children[0]->GetColumnBindings();
@@ -2699,6 +2763,9 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
 	output_replacements.Merge(cte_output_replacements);
 	auto cte = make_uniq<LogicalMaterializedCTE>(cte_name, cte_index, left_column_count, std::move(cte_source),
 	                                             std::move(cte_child), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	if (can_restrict_input) {
+		cte->filter_dependency = make_uniq<CTEFilterDependency>(left_cte_ref_index, dedup_child_index);
+	}
 	plan = std::move(cte);
 	return output_replacements;
 }
