@@ -22,7 +22,6 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 
-#include <chrono>
 #include <numeric>
 
 namespace duckdb {
@@ -394,16 +393,13 @@ public:
 				// release the reader so its file handle is closed; skipped files are
 				// never scanned, so nothing else needs the reader
 				current_reader_data.reader = nullptr;
-				global_state.file_opened_cv.notify_all();
 				return false;
 			}
 			current_reader_data.file_state = MultiFileFileState::OPEN;
-			global_state.file_opened_cv.notify_all();
 			return true;
 		} catch (...) {
 			parallel_lock.lock();
 			global_state.error_opening_file = true;
-			global_state.file_opened_cv.notify_all();
 			throw;
 		}
 	}
@@ -469,7 +465,6 @@ public:
 					    [&gstate]() {
 						    // the reader stays in OPENING, so tell every waiter to stop instead of polling forever
 						    gstate.error_opening_file = true;
-						    gstate.file_opened_cv.notify_all();
 					    });
 				}
 				progress_guaranteed = true;
@@ -548,23 +543,24 @@ public:
 		}
 	}
 
+	//! Returns true with the lock released when a later file supplies a job.
 	static bool WaitForAsyncOpen(ClientContext &context, MultiFileGlobalState &gstate,
 	                             ScanReadAheadJobWrapper<MultiFileScanJobState> &job,
 	                             unique_lock<mutex> &parallel_lock) {
 		D_ASSERT(parallel_lock.owns_lock());
+		auto &read_ahead = *gstate.read_ahead;
 		while (HasFilesToRead(gstate, parallel_lock) && !gstate.error_opening_file &&
 		       gstate.readers[gstate.file_index]->file_state == MultiFileFileState::OPENING) {
 			if (gstate.claim_ahead && TryClaimAhead(context, gstate, job, parallel_lock)) {
 				return true;
 			}
-			if (gstate.file_opened_cv.wait_for(parallel_lock, std::chrono::milliseconds(5)) ==
-			    std::cv_status::timeout) {
-				// Run queued tasks if the async pool stalls or shuts down
-				parallel_lock.unlock();
-				gstate.read_ahead->TryRunPendingTask();
-				parallel_lock.lock();
+			parallel_lock.unlock();
+			// the open may be queued behind other async work or the async pool may be gone, so run tasks inline
+			if (!read_ahead.TryRunPendingTask()) {
+				context.InterruptCheck();
+				TaskScheduler::YieldThread();
 			}
-			context.InterruptCheck();
+			parallel_lock.lock();
 		}
 		return false;
 	}

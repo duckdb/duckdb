@@ -10,9 +10,6 @@ SET threads=4
 statement ok
 SET async_threads=2
 
-statement ok
-SET read_ahead_depth=4
-
 loop i 0 16
 
 statement ok
@@ -20,10 +17,33 @@ COPY (SELECT range + {i} * 4096 AS i FROM range(4096)) TO '{TEST_DIR}/many_small
 
 endloop
 
+foreach preserve_order true false
+
 statement ok
-SET preserve_insertion_order=false
+SET preserve_insertion_order={preserve_order}
+
+foreach depth 0 1 4
+
+statement ok
+SET read_ahead_depth={depth}
+
+foreach union_by_name false true
+
+statement ok
+PREPARE scan_files AS SELECT count(*), count(DISTINCT i), sum(i) FROM read_parquet('{TEST_DIR}/many_small_f*.parquet', union_by_name={union_by_name})
+
+# Each execution must start with fresh row-group positions.
+loop execution 0 2
 
 query III
-SELECT count(*), count(DISTINCT i), sum(i) FROM read_parquet('{TEST_DIR}/many_small_f*.parquet')
+EXECUTE scan_files
 ----
 65536	65536	2147450880
+
+endloop
+
+endloop
+
+endloop
+
+endloop
