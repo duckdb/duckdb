@@ -25,7 +25,9 @@ def parse_names(values):
     return names
 
 
-TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'extension', 'loader', 'static_extension_loader.c.in')
+TEMPLATE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), '..', 'extension', 'loader', 'static_extension_loader.c.in'
+)
 
 
 def generate(names):
