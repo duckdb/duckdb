@@ -5334,8 +5334,6 @@ public:
 	static vector<LogicalType> TransformTypeList(PEGTransformer &transformer, const vector<LogicalType> &type);
 	static unique_ptr<SQLStatement> TransformSelectStatement(PEGTransformer &transformer,
 	                                                         unique_ptr<SelectStatement> select_statement_internal);
-	static unique_ptr<TransformResultValue> TransformSelectStatementInternal(PEGTransformer &transformer,
-	                                                                         ParseResult &parse_result);
 	static unique_ptr<SelectStatement> TransformSelectSetOpChain(
 	    PEGTransformer &transformer, unique_ptr<SelectStatement> intersect_chain,
 	    optional<vector<pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>>> select_set_op_chain_tail);
