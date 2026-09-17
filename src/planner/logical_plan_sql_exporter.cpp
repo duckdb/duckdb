@@ -639,7 +639,7 @@ static bool IsIdentityProjection(const LogicalProjection &projection, const vect
 		}
 		auto &column = expression.Cast<BoundColumnRefExpression>();
 		if (column.Depth() != 0 || column.Binding() != fields[i].source_binding ||
-		    !SQLExportHelpers::SQLTypesMatch(column.GetReturnType(), fields[i].type)) {
+		    !column.GetReturnType().EqualsWithCollation(fields[i].type)) {
 			return false;
 		}
 	}
@@ -763,7 +763,7 @@ private:
 					continue;
 				}
 				auto value = ConstantSQLInput(*arguments[i], *op.children[0]);
-				if (value && SQLExportHelpers::SQLTypesMatch(value->type(), arguments[i]->GetReturnType())) {
+				if (value && value->type().EqualsWithCollation(arguments[i]->GetReturnType())) {
 					if (!restored) {
 						restored = expression.Copy();
 					}
@@ -1712,8 +1712,7 @@ private:
 		select->from_table = std::move(table);
 		for (idx_t i = 0; i < fields.GetValue().size(); i++) {
 			if (view.output_bindings[i] != fields.GetValue()[i].source_binding ||
-			    !SQLExportHelpers::SQLTypesMatch(view.output_expressions[i]->GetReturnType(),
-			                                     fields.GetValue()[i].type)) {
+			    !view.output_expressions[i]->GetReturnType().EqualsWithCollation(fields.GetValue()[i].type)) {
 				return PlanFailure(PlanUnsupportedFeature(
 				    path, "secure_view_output", "The secure view output mapping does not match its current schema"));
 			}
@@ -1942,8 +1941,8 @@ private:
 				    PlanUnsupportedFeature(path, "pivot_layout", "The PIVOT aggregate metadata is incomplete"));
 			}
 			auto &aggregate = expression->Cast<BoundAggregateExpression>();
-			if (!SQLExportHelpers::SQLTypesMatch(aggregate.GetReturnType(),
-			                                     fields.GetValue()[info.group_count + aggregate_idx].type)) {
+			if (!aggregate.GetReturnType().EqualsWithCollation(
+			        fields.GetValue()[info.group_count + aggregate_idx].type)) {
 				return PlanFailure(PlanUnsupportedFeature(
 				    path, "pivot_layout", "The PIVOT aggregate metadata does not match its output types"));
 			}
@@ -1959,9 +1958,9 @@ private:
 				auto output_idx = info.group_count + target_idx * aggregate_count + aggregate_idx;
 				if (info.pivot_values[target_idx * aggregate_count + aggregate_idx] !=
 				        info.pivot_values[target_idx * aggregate_count] ||
-				    !SQLExportHelpers::SQLTypesMatch(info.aggregates[aggregate_idx]->GetReturnType(),
-				                                     fields.GetValue()[output_idx].type) ||
-				    !SQLExportHelpers::SQLTypesMatch(info.types[output_idx], fields.GetValue()[output_idx].type)) {
+				    !info.aggregates[aggregate_idx]->GetReturnType().EqualsWithCollation(
+				        fields.GetValue()[output_idx].type) ||
+				    !info.types[output_idx].EqualsWithCollation(fields.GetValue()[output_idx].type)) {
 					return PlanFailure(PlanUnsupportedFeature(
 					    path, "pivot_layout", "The PIVOT target blocks do not match the retained aggregate layout"));
 				}
@@ -1977,18 +1976,17 @@ private:
 			    PlanUnsupportedFeature(path, "pivot_layout", "The PIVOT child does not contain aligned lists"));
 		}
 		for (idx_t group_idx = 0; group_idx < info.group_count; group_idx++) {
-			if (!SQLExportHelpers::SQLTypesMatch(info.types[group_idx], fields.GetValue()[group_idx].type) ||
-			    !SQLExportHelpers::SQLTypesMatch(child.GetValue().relation.fields[group_idx].type,
-			                                     fields.GetValue()[group_idx].type)) {
+			if (!info.types[group_idx].EqualsWithCollation(fields.GetValue()[group_idx].type) ||
+			    !child.GetValue().relation.fields[group_idx].type.EqualsWithCollation(
+			        fields.GetValue()[group_idx].type)) {
 				return PlanFailure(
 				    PlanUnsupportedFeature(path, "pivot_layout", "The PIVOT group types do not match its child"));
 			}
 		}
 		for (idx_t aggregate_idx = 0; aggregate_idx < aggregate_count; aggregate_idx++) {
 			auto &list_type = child.GetValue().relation.fields[info.group_count + aggregate_idx].type;
-			if (list_type.id() != LogicalTypeId::LIST ||
-			    !SQLExportHelpers::SQLTypesMatch(ListType::GetChildType(list_type),
-			                                     info.aggregates[aggregate_idx]->GetReturnType())) {
+			if (list_type.id() != LogicalTypeId::LIST || !ListType::GetChildType(list_type).EqualsWithCollation(
+			                                                 info.aggregates[aggregate_idx]->GetReturnType())) {
 				return PlanFailure(PlanUnsupportedFeature(path, "pivot_layout",
 				                                          "The PIVOT aggregate list type does not match its output"));
 			}

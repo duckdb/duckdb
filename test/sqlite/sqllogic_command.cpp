@@ -1,8 +1,6 @@
 #include "sqllogic_command.hpp"
 #include "duckdb/main/sql_export_verification.hpp"
-#include "duckdb/planner/sql_export_helpers.hpp"
 #include "duckdb/main/settings.hpp"
-#include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/common/json_document.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "sqllogic_test_runner.hpp"
@@ -258,22 +256,6 @@ public:
 	bool retain_failure_sql;
 };
 
-static bool CollectSQLExport(ClientContext &context, const string &sql) {
-	if (Settings::Get<DebugVerifySqlExportSetting>(context) != DebugSQLExportVerification::OFF ||
-	    SQLExportVerificationState::Get(context) || TestConfiguration::Get().EmitSQLExportEvents() ||
-	    TestConfiguration::Get().RequireSQLExportRoundTrip()) {
-		return true;
-	}
-	// A later statement or parser expansion can enable verification during this command.
-	auto &callbacks = ExtensionCallbackManager::Get(context);
-	if (callbacks.HasParserExtensions() || !callbacks.GrammarExtensions().empty() ||
-	    StringUtil::Contains(StringUtil::Lower(sql), "pragma")) {
-		return true;
-	}
-	auto separator = sql.find(';');
-	return separator != string::npos && sql.find_first_not_of(" ;\t\r\n", separator + 1) != string::npos;
-}
-
 class ExplainSQLVerificationOverride {
 public:
 	explicit ExplainSQLVerificationOverride(ClientContext &context_p)
@@ -291,6 +273,7 @@ public:
 
 private:
 	void Set(Value value, bool reset) {
+		// Executing SET would perturb the observer's statement count.
 		SettingCallbackInfo info(context, SetScope::SESSION);
 		info.is_reset = reset;
 		DebugVerifySqlExportSetting::OnSet(info, value);
@@ -339,7 +322,7 @@ static unique_ptr<QueryResult> ExecuteExplainedSQLInternal(Connection &connectio
 		TEST_FAIL_LINE(file, line, "EXPLAIN (SQL) changed the output names or logical types");
 	}
 	for (idx_t i = 0; i < original->GetTypes().size(); i++) {
-		if (!SQLExportHelpers::SQLTypesMatch(prepared->GetTypes()[i], original->GetTypes()[i])) {
+		if (!prepared->GetTypes()[i].EqualsWithCollation(original->GetTypes()[i])) {
 			TEST_FAIL_LINE(file, line, "EXPLAIN (SQL) changed output collation annotations");
 		}
 	}
@@ -398,12 +381,10 @@ unique_ptr<QueryResult> Command::ExecuteQuery(ExecuteContext &context, reference
 	QueryParameters parameters;
 	parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
 
-	unique_ptr<SQLExportCollectionScope> collection;
-	if (CollectSQLExport(*connection.get().context, context.sql_query)) {
-		collection = make_uniq<SQLExportCollectionScope>(*connection.get().context);
-		collection->observer->TakeRecords();
-		collection->observer->retain_failure_sql = TestConfiguration::Get().RetainSQLExportFailureSQL();
-	}
+	SQLExportCollectionScope collection(*connection.get().context);
+	auto &observer = collection.observer;
+	observer->TakeRecords();
+	observer->retain_failure_sql = TestConfiguration::Get().RetainSQLExportFailureSQL();
 	context.sql_export_strict_failure = false;
 	unique_ptr<QueryResult> materialized;
 	try {
@@ -440,10 +421,6 @@ unique_ptr<QueryResult> Command::ExecuteQuery(ExecuteContext &context, reference
 	} catch (std::exception &ex) {
 		materialized = make_uniq<QueryResult>(ErrorData(ex));
 	}
-	if (!collection) {
-		return materialized;
-	}
-	auto &observer = collection->observer;
 	auto statement_count = observer->StatementCount();
 	auto records = observer->TakeRecords();
 	auto mode = Settings::Get<DebugVerifySqlExportSetting>(*connection.get().context);

@@ -390,9 +390,6 @@ TEST_CASE("SQL export streaming observations are published only on completion",
 TEST_CASE("SQL export propagates generated planning failures and recovers", "[sql_export][sql_export_verification]") {
 	for (auto source : {"parser", "binder", "rebind", "optimizer"}) {
 		for (auto mode : {"report", "strict"}) {
-			if (string(source) == "optimizer" && string(mode) == "strict") {
-				continue;
-			}
 			CAPTURE(source, mode);
 			DuckDB db(nullptr);
 			Connection con(db);

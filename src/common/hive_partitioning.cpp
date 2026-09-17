@@ -2,6 +2,7 @@
 
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/table_function.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -252,7 +253,8 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<Ope
 				    representable = false;
 				    return;
 			    }
-			    column.BindingMutable() = ColumnBinding(TableIndex(0), ProjectionIndex(index.GetPrimaryIndex()));
+			    column.BindingMutable() = ColumnBinding(TableIndex(TableFunctionToSQLInput::FILE_FILTER_TABLE_INDEX),
+			                                            ProjectionIndex(index.GetPrimaryIndex()));
 		    });
 		if (!representable) {
 			info.extra_info.file_filter_expressions.reset();

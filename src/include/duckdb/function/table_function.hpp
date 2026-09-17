@@ -433,11 +433,13 @@ struct TableFunctionToSQLResult {
 };
 
 struct TableFunctionToSQLInput {
+	static constexpr idx_t FILE_FILTER_TABLE_INDEX = 0;
+
 	unique_ptr<TableRef> child;
 	Identifier relation_alias;
 	//! Append one ordinality column to replace a surrounding row-number window.
 	bool source_ordinality = false;
-	//! Borrowed predicates bound to TableIndex(0) and unprojected returned_types positions.
+	//! Borrowed predicates bound to FILE_FILTER_TABLE_INDEX and unprojected returned_types positions.
 	optional_ptr<const vector<unique_ptr<Expression>>> file_filters;
 };
 

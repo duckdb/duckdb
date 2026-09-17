@@ -195,8 +195,7 @@ static unique_ptr<ParsedExpression> TableFunctionColumn(const LogicalGet &get, c
 	vector<Identifier> path {function_ref.alias, function_ref.column_name_alias[primary_index]};
 	if (!index.IsPushdownExtract()) {
 		auto column = make_uniq<ColumnRefExpression>(std::move(path));
-		if (index.HasType() &&
-		    !SQLExportHelpers::SQLTypesMatch(get.returned_types[primary_index], index.GetScanType())) {
+		if (index.HasType() && !get.returned_types[primary_index].EqualsWithCollation(index.GetScanType())) {
 			return make_uniq<CastExpression>(index.GetScanType(), std::move(column));
 		}
 		return std::move(column);
@@ -208,7 +207,7 @@ static unique_ptr<ParsedExpression> TableFunctionColumn(const LogicalGet &get, c
 		return nullptr;
 	}
 	auto column = make_uniq<ColumnRefExpression>(std::move(path));
-	if (!SQLExportHelpers::SQLTypesMatch(source_type, index.GetScanType())) {
+	if (!source_type.EqualsWithCollation(index.GetScanType())) {
 		return make_uniq<CastExpression>(index.GetScanType(), std::move(column));
 	}
 	return std::move(column);
@@ -313,7 +312,8 @@ TableFunctionToSQLResult TableFunction::ToSQLFunctionCall(ClientContext &context
 		export_context.client_context = &context;
 		export_context.resolve_binding = [&](const ColumnBinding &binding) -> optional<ResolvedSQLColumnReference> {
 			auto index = binding.column_index.GetIndex();
-			if (binding.table_index != TableIndex(0) || index >= get.returned_types.size()) {
+			if (binding.table_index != TableIndex(TableFunctionToSQLInput::FILE_FILTER_TABLE_INDEX) ||
+			    index >= get.returned_types.size()) {
 				return {};
 			}
 			return ResolvedSQLColumnReference {{function_ref.alias, function_ref.column_name_alias[index]},

@@ -428,13 +428,12 @@ private:
 		if (expression.OrderBy().size() == 1) {
 			sql_order = expression.OrderBy()[0].expression.get();
 			if (sql_order && expression.SQLRangeOrderType().IsComplete() &&
-			    !SQLExportHelpers::SQLTypesMatch(sql_order->GetReturnType(), expression.SQLRangeOrderType()) &&
+			    !sql_order->GetReturnType().EqualsWithCollation(expression.SQLRangeOrderType()) &&
 			    BoundCastExpression::IsCast(*sql_order)) {
 				auto &cast = sql_order->Cast<BoundFunctionExpression>();
 				if (BoundCastExpression::HasValidBindData(cast) && !BoundCastExpression::IsTryCast(cast) &&
 				    cast.GetChildren().size() == 1 && cast.GetChildren()[0] &&
-				    SQLExportHelpers::SQLTypesMatch(cast.GetChildren()[0]->GetReturnType(),
-				                                    expression.SQLRangeOrderType())) {
+				    cast.GetChildren()[0]->GetReturnType().EqualsWithCollation(expression.SQLRangeOrderType())) {
 					sql_order = cast.GetChildren()[0].get();
 				}
 			}
@@ -889,7 +888,7 @@ private:
 		if (optimizer_type_match) {
 			return result;
 		}
-		if (!SQLExportHelpers::SQLTypesMatch(expression.GetReturnType(), resolved->type)) {
+		if (!expression.GetReturnType().EqualsWithCollation(resolved->type)) {
 			if (expression.GetReturnType().id() != LogicalTypeId::VARCHAR) {
 				auto issue = UnsupportedFeature(path, "nested_result_collation",
 				                                "Changing nested input collations requires a typed SQL representation");
@@ -1501,8 +1500,7 @@ public:
 		if (call.HasError()) {
 			return call;
 		}
-		if (!SQLExportHelpers::SQLTypesMatch(expression.GetReturnType(),
-		                                     expression.Function().GetLogicalReturnType())) {
+		if (!expression.GetReturnType().EqualsWithCollation(expression.Function().GetLogicalReturnType())) {
 			return AggregateFailure(
 			    UnsupportedFeature(path, "aggregate_call_result_type",
 			                       "A bare aggregate call cannot preserve the bound expression's logical result type"));

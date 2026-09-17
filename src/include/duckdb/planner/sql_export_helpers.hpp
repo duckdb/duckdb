@@ -58,10 +58,6 @@ inline bool IsSQLValueType(const LogicalType &type) {
 	       !TypeVisitor::Contains(type, [](const LogicalType &child) { return !IsSQLExportType(child.id()); });
 }
 
-inline bool SQLTypesMatch(const LogicalType &left, const LogicalType &right) {
-	return left.EqualsWithCollation(right);
-}
-
 inline string TypeCollationSignature(const LogicalType &type) {
 	string result;
 	TypeVisitor::Contains(type, [&](const LogicalType &child) {
