@@ -1,0 +1,41 @@
+# name: test/sql/storage/external_file_cache/external_file_cache_stats.test
+# description: Test hit/miss statistics of the external file cache
+# group: [external_file_cache]
+
+require parquet
+
+statement ok
+set cache_local_files=true;
+
+statement ok
+set enable_external_file_cache=true;
+
+statement ok
+copy (select range i, range % 100 j from range(10000)) to '{TEST_DIR}/test_cache_stats.parquet';
+
+statement ok
+create temp table stats_cold as select * from duckdb_external_file_cache_stats();
+
+statement ok
+select * from '{TEST_DIR}/test_cache_stats.parquet';
+
+# the cold read requested bytes and fetched them from the file system
+query III
+select s.requested_bytes > b.requested_bytes, s.miss_count > b.miss_count, s.miss_bytes > b.miss_bytes
+from duckdb_external_file_cache_stats() s, stats_cold b;
+----
+true	true	true
+
+statement ok
+create temp table stats_warm as select * from duckdb_external_file_cache_stats();
+
+# warm read: served from the cache, no new fetches
+statement ok
+select * from '{TEST_DIR}/test_cache_stats.parquet';
+
+query IIII
+select s.requested_bytes > b.requested_bytes, s.hit_count > b.hit_count, s.hit_bytes > b.hit_bytes,
+       s.miss_bytes = b.miss_bytes
+from duckdb_external_file_cache_stats() s, stats_warm b;
+----
+true	true	true	true

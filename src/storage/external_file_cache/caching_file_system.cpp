@@ -53,14 +53,15 @@ void TightenCacheDeadline(optional<timestamp_t> &cached, const optional<timestam
 class FetchBlockTask : public BaseExecutorTask {
 public:
 	FetchBlockTask(CachingFileHandle &caching_file_handle_p, TaskExecutor &executor, QueryContext context_p,
-	               BufferManager &buffer_manager_p, shared_ptr<CacheBlock> block_p, idx_t block_idx_p,
-	               idx_t block_size_p, BufferHandle &result_pin_p)
+	               BufferManager &buffer_manager_p, ExternalFileCacheStats &stats_p, shared_ptr<CacheBlock> block_p,
+	               idx_t block_idx_p, idx_t block_size_p, BufferHandle &result_pin_p)
 	    : BaseExecutorTask(executor), caching_file_handle(caching_file_handle_p), context(context_p),
-	      buffer_manager(buffer_manager_p), block(std::move(block_p)), block_idx(block_idx_p), block_size(block_size_p),
-	      result_pin(result_pin_p) {
+	      buffer_manager(buffer_manager_p), stats(stats_p), block(std::move(block_p)), block_idx(block_idx_p),
+	      block_size(block_size_p), result_pin(result_pin_p) {
 	}
 
 	void ExecuteTask() override {
+		bool was_evicted = false;
 		annotated_unique_lock<annotated_mutex> lk(block->mtx);
 
 		while (true) {
@@ -71,10 +72,13 @@ public:
 #ifdef DEBUG
 					D_ASSERT(Checksum(pin.Ptr(), block->nr_bytes) == block->checksum);
 #endif
+					stats.hit_count++;
+					stats.hit_bytes += block->nr_bytes;
 					result_pin = std::move(pin);
 					return;
 				}
 				// Evicted by buffer manager, need to re-fetch
+				was_evicted = true;
 				block->state = CacheBlockState::EMPTY;
 				continue;
 			}
@@ -97,6 +101,11 @@ public:
 					auto buf =
 					    ExternalFileCache::AllocateCacheBuffer(buffer_manager, caching_file_handle.GetPath(), to_read);
 					caching_file_handle.ReadAndRecord(context, buf.GetDataMutable(), to_read, offset);
+					stats.miss_count++;
+					stats.miss_bytes += to_read;
+					if (was_evicted) {
+						stats.eviction_refetch_count++;
+					}
 					const bool share_block = !caching_file_handle.IsCacheReuseProhibited();
 
 					lk.lock();
@@ -141,6 +150,7 @@ private:
 	CachingFileHandle &caching_file_handle;
 	QueryContext context;
 	BufferManager &buffer_manager;
+	ExternalFileCacheStats &stats;
 	shared_ptr<CacheBlock> block;
 	idx_t block_idx;
 	idx_t block_size;
@@ -353,6 +363,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	}
 
 	auto current_cached_file = EnsureCachedFileCurrent();
+	external_file_cache.GetStats().requested_bytes += nr_bytes;
 	const idx_t block_size = external_file_cache.GetCacheBlockSize(current_cached_file->path);
 	const idx_t first_block = location / block_size;
 	const idx_t last_block = (location + nr_bytes - 1) / block_size;
@@ -369,8 +380,9 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 
 	for (idx_t idx = 0; idx < num_blocks; idx++) {
 		executor.ScheduleTask(make_uniq<FetchBlockTask>(*this, executor, context,
-		                                                external_file_cache.GetBufferManager(), blocks[idx],
-		                                                first_block + idx, block_size, pins[idx]));
+		                                                external_file_cache.GetBufferManager(),
+		                                                external_file_cache.GetStats(), blocks[idx], first_block + idx,
+		                                                block_size, pins[idx]));
 	}
 	executor.WorkOnTasks();
 

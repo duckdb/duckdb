@@ -363,6 +363,10 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 	return result;
 }
 
+ExternalFileCacheStats &ExternalFileCache::GetStats() {
+	return stats;
+}
+
 idx_t ExternalFileCache::GetCachedFileCount() const {
 	const annotated_lock_guard<annotated_mutex> files_guard(lock);
 	return cached_file_keys.size();
