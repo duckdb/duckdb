@@ -365,7 +365,7 @@ TEST_CASE("V2 tokenizer: the iterator outlives the connection and the database",
 
 	REQUIRE(duckdb_v2_disconnect(&fx.conn) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_close(&fx.db) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_destroy_environment(&fx.env) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_environment_destroy(&fx.env) == DUCKDB_V2_ERROR_NONE);
 
 	REQUIRE(TokDrain(it, 12) == Toks {{KEYWORD, 0, 6}, {NUMBER, 7, 1}, {TERMINATOR, 8, 1}, {STRING, 10, 2}});
 	REQUIRE(EndsUnterminated(it));

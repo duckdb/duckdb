@@ -132,14 +132,13 @@ typedef struct {
 	(duckdb_v2_database_handle db, idx_t *out_count, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_database_option_set)
 	(duckdb_v2_database_handle db, duckdb_v2_option_handle option, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR (*duckdb_v2_destroy_environment)(duckdb_v2_environment_handle *env);
 	DUCKDB_V2_ERROR (*duckdb_v2_disconnect)(duckdb_v2_connection_handle *conn);
 	DUCKDB_V2_ERROR(*duckdb_v2_environment_database_count)
 	(duckdb_v2_environment_handle env, idx_t *out_count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_environment_destroy)(duckdb_v2_environment_handle *env);
 	DUCKDB_V2_ERROR (*duckdb_v2_error_info_destroy)(duckdb_v2_error_info_handle *info);
 	DUCKDB_V2_ERROR (*duckdb_v2_error_info_get_code)(duckdb_v2_error_info_handle info, DUCKDB_V2_ERROR *out_code);
-	DUCKDB_V2_ERROR(*duckdb_v2_error_info_get_raw_message)
-	(duckdb_v2_error_info_handle info, duckdb_v2_str *out_raw_message);
+	DUCKDB_V2_ERROR (*duckdb_v2_error_info_get_raw_text)(duckdb_v2_error_info_handle info, duckdb_v2_str *out_raw_text);
 	DUCKDB_V2_ERROR (*duckdb_v2_error_info_get_text)(duckdb_v2_error_info_handle info, duckdb_v2_str *out_text);
 	DUCKDB_V2_ERROR (*duckdb_v2_error_info_set_code)(duckdb_v2_error_info_handle info, DUCKDB_V2_ERROR code);
 	DUCKDB_V2_ERROR (*duckdb_v2_error_info_set_text)(duckdb_v2_error_info_handle info, duckdb_v2_str text);
@@ -1322,12 +1321,12 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_database_option_get_by_index = duckdb_v2_database_option_get_by_index;
 	result.duckdb_v2_database_option_get_count = duckdb_v2_database_option_get_count;
 	result.duckdb_v2_database_option_set = duckdb_v2_database_option_set;
-	result.duckdb_v2_destroy_environment = duckdb_v2_destroy_environment;
 	result.duckdb_v2_disconnect = duckdb_v2_disconnect;
 	result.duckdb_v2_environment_database_count = duckdb_v2_environment_database_count;
+	result.duckdb_v2_environment_destroy = duckdb_v2_environment_destroy;
 	result.duckdb_v2_error_info_destroy = duckdb_v2_error_info_destroy;
 	result.duckdb_v2_error_info_get_code = duckdb_v2_error_info_get_code;
-	result.duckdb_v2_error_info_get_raw_message = duckdb_v2_error_info_get_raw_message;
+	result.duckdb_v2_error_info_get_raw_text = duckdb_v2_error_info_get_raw_text;
 	result.duckdb_v2_error_info_get_text = duckdb_v2_error_info_get_text;
 	result.duckdb_v2_error_info_set_code = duckdb_v2_error_info_set_code;
 	result.duckdb_v2_error_info_set_text = duckdb_v2_error_info_set_text;

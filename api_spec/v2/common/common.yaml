@@ -8,7 +8,7 @@ handles:
       are detected across them. Destroying the environment refuses with
       ERROR_RESOURCE_IN_USE while any database opened through it is still
       alive; close those first.
-    cleanup_with: destroy_environment
+    cleanup_with: environment_destroy
   database:
     description: An opaque, owned handle to a DuckDB database instance.
   connection:

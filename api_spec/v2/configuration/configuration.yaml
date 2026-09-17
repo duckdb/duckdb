@@ -213,8 +213,7 @@ functions:
       Returns the option's target scope.
 
       OPTION_TARGET_SCOPE_UNKNOWN for an option created via option_create until
-      it has been resolved through a database/connection get, and for one whose
-      declaration carries no explicit scope target.
+      it has been resolved through a database/connection get.
     role: getter
     belongs_to: option
     parameters:
