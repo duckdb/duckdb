@@ -25,7 +25,7 @@ static unique_ptr<ArrowTestFactory> MakeArrowFactory(Connection &con, const stri
 // Helper: get the EXPLAIN output for an arrow_scan with a filter
 static string GetExplainForFilter(Connection &con, ArrowTestFactory &factory, const string &filter_expr) {
 	const auto params = ArrowTestHelper::ConstructArrowScan(factory);
-	const auto rel = con.TableFunction("arrow_scan", params)->Filter(filter_expr);
+	const auto rel = con.TableFunction("arrow_scan", {}, {}, params)->Filter(filter_expr);
 	// render operator names raw/upper-case so the string checks below (ARROW_SCAN, FILTER) match
 	REQUIRE(!con.Query("SET profiling_renderer_settings = MAP {'operator_casing': 'upper'}")->HasError());
 	const auto explain_result = rel->Explain();
