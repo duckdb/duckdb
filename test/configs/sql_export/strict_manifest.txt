@@ -21,12 +21,16 @@ test/sql/sql_export/scalar_limit.test
 test/sql/sql_export/values_consumers.test
 test/sql/sql_export/pure_values_input.test
 test/sql/sql_export/cte_names.test
-test/sql/cte/recursive_cte_logging.test
+# Runtime logging uses duckdb_log_contexts, which has no SQL export callback.
+# Retain native and report coverage for this fixture.
+!test/sql/cte/recursive_cte_logging.test
 
 test/sql/sql_export/explain_sql.test
 
 test/sql/sql_export/explain_sql_roundtrip.test
-test/sql/parser/cte_printing.test
+# Stored SQL inspection uses duckdb_views, which has no SQL export callback.
+# Retain native and report coverage for this fixture.
+!test/sql/parser/cte_printing.test
 test/sql/sql_export/explain_sql_scopes.test
 test/sql/sql_export/pivot_sql_export.test
 test/sql/sql_export/secure_view_sql_export.test
