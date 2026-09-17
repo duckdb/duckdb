@@ -3,14 +3,20 @@ include_directories(../third_party/sqlite/include)
 include_directories(include)
 include_directories(extension/debug_fs/include)
 
-# Allows loading tests from registered extensions
-include_directories("${PROJECT_BINARY_DIR}/codegen/include/")
-add_definitions(-DGENERATED_EXTENSION_HEADERS=1)
 add_definitions(-DDUCKDB_MAJOR_VERSION=${DUCKDB_MAJOR_VERSION})
 add_definitions(-DDUCKDB_MINOR_VERSION=${DUCKDB_MINOR_VERSION})
 add_definitions(-DDUCKDB_PATCH_VERSION=${DUCKDB_PATCH_VERSION})
 
 set(UNITTEST_OBJECT_FILES)
+
+if(TARGET parquet_extension)
+  # A static link of parquet through its generated static extension loader: the
+  # root member it names has to register the extension.
+  add_executable(static_link_smoke static_link/static_link_smoke.c)
+  target_link_libraries(static_link_smoke duckdb_static)
+  duckdb_link_extensions(static_link_smoke parquet)
+  add_test(NAME static_link_smoke COMMAND static_link_smoke)
+endif()
 
 if(${ENABLE_UNITTEST_CPP_TESTS})
   add_subdirectory(api)

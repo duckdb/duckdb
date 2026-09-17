@@ -6,7 +6,7 @@ from python_helpers import open_utf8
 import re
 import tempfile
 
-excluded_objects = ['utf8proc_data.cpp', 'dummy_static_extension_loader.cpp']
+excluded_objects = ['utf8proc_data.cpp']
 
 
 def third_party_includes():
@@ -264,12 +264,14 @@ def build_package(
 
     # include the main extension helper
     include_files += [os.path.join('src', 'include', 'duckdb', 'main', 'extension_helper.hpp')]
-    # include the separate extensions
-    ext_register_body = ''
+    include_files += [os.path.join('src', 'include', 'duckdb_static_extension.h')]
+    # include the separate extensions, and generate their roots plus the object that registers the linked ones.
+    # Every source is compiled straight into the package, so the registration runs before main.
     ext_loader_defines = ''
-    ext_headers = ''
-    ext_name_vector_initializer = ''
-    ext_capi_declarations = ''
+    ext_roots = ''
+    ext_registrations = ''
+    with open(os.path.join(scripts_dir, '..', 'extension', 'loader', 'extension_root.c.in')) as root_template_file:
+        root_template = root_template_file.read()
     for ext in extensions:
         ext_path = os.path.join(scripts_dir, '..', 'extension', ext)
         ext_kind = include_package(ext, ext_path, include_files, include_list, source_list)
@@ -281,58 +283,58 @@ def build_package(
             f"#ifndef {ext_linked_define}\n" f"#define {ext_linked_define} {ext_linked_default}\n" "#endif\n\n"
         )
 
-        # handle generated_extension_loader
-        # this - beautifully - approximates code in extension/CMakeLists.txt
+        # the same root duckdb_add_extension_root generates in extension/extension_build_tools.cmake
         if ext_kind == 'CAPI':
-            ext_capi_declarations += (
-                f'#if {ext_linked_define}\n'
-                f'extern "C" bool {ext}_init_c_api(duckdb_extension_info, duckdb_extension_access *);\n'
-                "#endif\n"
-            )
-            ext_register_body += (
-                f"#if {ext_linked_define}\n"
-                f"    config.linked_extensions.push_back({{\"{ext}\", [](DuckDB &db) {{\n"
-                f"        db.LoadStaticCAPIExtension(\"{ext}\", {ext}_init_c_api);\n"
-                "    }});\n"
-                "#endif\n"
+            entry_name, entry_field = f'{ext}_init_c_api', 'entry_capi_v1'
+            entry_declaration = (
+                f'extern "C" bool {entry_name}(duckdb_extension_info info, struct duckdb_extension_access *access);'
             )
         elif ext_kind == 'CAPI_V2':
-            ext_capi_declarations += (
-                f'#if {ext_linked_define}\n'
-                f'extern "C" void {ext}_init_c_api_v2(struct duckdb_v2_extension_input *);\n'
-                "#endif\n"
-            )
-            ext_loader_body += (
-                f"#if {ext_linked_define}\n"
-                f"    if (extension==\"{ext}\") {{\n"
-                f"        db.LoadStaticCAPIExtensionV2(\"{ext}\", {ext}_init_c_api_v2);\n"
-                "        return ExtensionLoadResult::LOADED_EXTENSION;\n"
-                "    }\n"
-                "#endif\n"
-            )
+            entry_name, entry_field = f'{ext}_init_c_api_v2', 'entry_capi_v2'
+            entry_declaration = f'extern "C" void {entry_name}(struct duckdb_v2_extension_input *input);'
         else:
-            ext_headers += f'#if {ext_linked_define}\n#include "{ext}_extension.hpp"\n#endif\n'
-            ext_name_camelcase = ext.replace('_', ' ').title().replace(' ', '')
-            ext_register_body += (
-                f"#if {ext_linked_define}\n"
-                f"    config.linked_extensions.push_back({{\"{ext}\", [](DuckDB &db) {{\n"
-                f"        db.LoadStaticExtension<{ext_name_camelcase}Extension>();\n"
-                "    }});\n"
-                "#endif\n"
-            )
+            entry_name, entry_field = f'{ext}_duckdb_cpp_init', 'entry_cpp'
+            entry_declaration = f'extern "C" void {entry_name}(duckdb::ExtensionLoader &loader);'
+        version_define = f'EXT_VERSION_{ext.upper()}'
+        root = root_template
+        for key, value in {
+            'NAME': ext,
+            'ENTRY_DECLARATION': entry_declaration,
+            'ENTRY_NAME': entry_name,
+            'ENTRY_FIELD': entry_field,
+            'EXTENSION_VERSION': version_define,
+        }.items():
+            root = root.replace(f'@{key}@', value)
 
-        ext_name_vector_initializer += f"\n#if {ext_linked_define}\n" f"        \"{ext}\",\n" "#endif"
+        ext_roots += (
+            f"#if {ext_linked_define}\n"
+            f"#ifndef {version_define}\n"
+            f'#define {version_define} ""\n'
+            "#endif\n"
+            f"{root}"
+            "#endif\n\n"
+        )
+        ext_registrations += (
+            f"#if {ext_linked_define}\n"
+            f"\t\tduckdb_register_static_extension(duckdb_extension_{ext}_root);\n"
+            "#endif\n"
+        )
 
-    loader_code = open(os.path.join('extension', 'generated_extension_loader.cpp.in'), 'rb').read().decode('utf8')
     loader_code = (
-        loader_code.replace('${EXT_REGISTER_BODY}', ext_register_body)
-        .replace('${EXT_CAPI_DECLARATIONS}', ext_capi_declarations)
-        .replace('${EXT_NAME_VECTOR_INITIALIZER}', ext_name_vector_initializer)
-        .replace('${EXT_TEST_PATH_INITIALIZER}', '')
-        .replace('CMake', 'package_build.py')
+        "// Generated by package_build.py. Do not edit.\n"
+        + ext_loader_defines
+        + '#include "duckdb/main/extension/extension_loader.hpp"\n'
+        + '#include "duckdb_static_extension.h"\n\n'
+        + ext_roots
+        + "namespace {\n\n"
+        + "struct DuckDBStaticExtensionLoader {\n"
+        + "\tDuckDBStaticExtensionLoader() {\n"
+        + ext_registrations
+        + "\t}\n"
+        + "};\n\n"
+        + "const DuckDBStaticExtensionLoader duckdb_static_extension_loader;\n\n"
+        + "} // namespace\n"
     )
-
-    loader_code = ext_loader_defines + ext_headers + loader_code
 
     loader_name = 'generated_extension_loader_package_build.cpp'
     f = open(loader_name, 'wb')
