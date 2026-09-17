@@ -190,3 +190,31 @@ query I
 SELECT count(*) FROM ets WHERE julian(t) > 2451545;
 ----
 199999
+
+# TIME and TIME_NS are outside the rule's domain, so the function stays in the plan
+statement ok
+CREATE TABLE oob_time(t TIME);
+
+statement ok
+INSERT INTO oob_time VALUES ('12:00:00'), (make_time(23, 59, 60.4));
+
+query I
+SELECT count(*) FROM oob_time WHERE epoch_us(t) > 86400000000;
+----
+1
+
+query II
+EXPLAIN SELECT count(*) FROM oob_time WHERE epoch_us(t) > 86400000000;
+----
+logical_opt	<REGEX>:.*epoch_us.*
+
+statement ok
+CREATE TABLE oob_time_ns(t TIME_NS);
+
+statement ok
+INSERT INTO oob_time_ns VALUES ('24:00:00.000000999');
+
+query II
+EXPLAIN SELECT count(*) FROM oob_time_ns WHERE epoch_ns(t) > 86400000000000;
+----
+logical_opt	<REGEX>:.*epoch_ns.*

@@ -178,9 +178,14 @@ EXPLAIN ANALYZE SELECT sum(x) FROM t WHERE even(x::DOUBLE) > 495000;
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
 
+query I
+SELECT count(*) FROM t WHERE even(x::DOUBLE) > 495000;
+----
+4999
+
 # n = 0..19, 25000 rows each, so the five row groups span n of [0,4] [4,9] [9,14] [14,19] [19]
 statement ok
-CREATE TABLE small AS SELECT (range // 25000)::INTEGER AS n FROM range(500000);
+CREATE TABLE small AS SELECT (range // 25000)::INTEGER AS n, (range // 25000)::BIGINT AS nb FROM range(500000);
 
 # 10! is the first factorial above 1e6, so the first two row groups cannot match
 query II
@@ -188,8 +193,13 @@ EXPLAIN ANALYZE SELECT sum(n) FROM small WHERE factorial(n) > 1000000;
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 5.*
 
+query I
+SELECT count(*) FROM small WHERE factorial(n) > 1000000;
+----
+250000
+
 query II
-EXPLAIN ANALYZE SELECT sum(n) FROM small WHERE make_time(n, 0, 0) > TIME '12:00:00';
+EXPLAIN ANALYZE SELECT sum(n) FROM small WHERE make_time(nb, 0, 0) > TIME '12:00:00';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 5.*
 
@@ -200,6 +210,6 @@ analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
 
 # the derived range must not drop matching rows
 query I
-SELECT count(*) FROM small WHERE make_time(n, 0, 0) > TIME '12:00:00';
+SELECT count(*) FROM small WHERE make_time(nb, 0, 0) > TIME '12:00:00';
 ----
 175000
