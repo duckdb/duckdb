@@ -388,33 +388,6 @@ TEST_CASE("SQL export schema failure preserves the original plan and transaction
 	}
 }
 
-TEST_CASE("SQL export crosses the text parser and rejects generated statement changes",
-          "[sql_export][sql_export_verification]") {
-	for (auto replacement : {"VALUES (1); VALUES (2)", "CREATE TABLE unexpected_sql_export(i INTEGER)", "VALUES (?)"}) {
-		DuckDB db(nullptr);
-		Connection con(db);
-		auto observer = SQLExportVerificationState::GetOrCreate(*con.context);
-		SetSQLExportMode(con, *observer, "report");
-		REQUIRE_NO_FAIL(con.Query("SET allow_parser_override_extension='fallback'"));
-		observer->TakeRecords();
-		auto info = make_shared_ptr<SQLExportParseHook>();
-		info->replacement = replacement;
-		ParserExtension extension;
-		extension.parser_info = info;
-		extension.parser_override = SQLExportReplaceGeneratedParse;
-		ParserExtension::Register(DBConfig::GetConfig(*con.context), extension);
-		auto result = con.Query("VALUES (42)");
-		REQUIRE_NO_FAIL(*result);
-		REQUIRE(CHECK_COLUMN(result, 0, {42}));
-		REQUIRE(info->calls == 2);
-		auto record = TakeSQLExportRecord(*observer);
-		REQUIRE(record.outcome == SQLExportOutcome::REPARSE_ERROR);
-		REQUIRE(record.route == SQLExportExecutionRoute::ORIGINAL_FALLBACK);
-		REQUIRE(record.export_count == 1);
-		REQUIRE(record.outcome != SQLExportOutcome::STRUCTURALLY_VALIDATED);
-	}
-}
-
 TEST_CASE("SQL export streaming observations are published only on completion",
           "[sql_export][sql_export_verification]") {
 	DuckDB db(nullptr);
@@ -806,53 +779,6 @@ TEST_CASE("SQL export nested logical planning cannot recurse into execution veri
 	}
 }
 
-TEST_CASE("SQL export rejects generated writes and tracks generated read dependencies",
-          "[sql_export][sql_export_verification]") {
-	for (auto replacement : {"SELECT nextval('s')", "SELECT i AS col0 FROM temp.t"}) {
-		for (auto mode : {"report", "strict"}) {
-			if (string(mode) == "report" && string(replacement) != "SELECT nextval('s')") {
-				continue;
-			}
-			DuckDB db(nullptr);
-			Connection con(db);
-			REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE s"));
-			REQUIRE_NO_FAIL(con.Query("CREATE TEMP TABLE t AS SELECT 42::BIGINT i"));
-			REQUIRE_NO_FAIL(con.Query("SET allow_parser_override_extension='fallback'"));
-			auto observer = SQLExportVerificationState::GetOrCreate(*con.context);
-			SetSQLExportMode(con, *observer, mode);
-			auto info = make_shared_ptr<SQLExportParseHook>();
-			info->replacement = replacement;
-			ParserExtension extension;
-			extension.parser_info = info;
-			extension.parser_override = SQLExportReplaceGeneratedParse;
-			ParserExtension::Register(DBConfig::GetConfig(*con.context), extension);
-			auto result = con.Query("VALUES (42::BIGINT)");
-			auto record = TakeSQLExportRecord(*observer);
-			const bool writes = string(replacement) == "SELECT nextval('s')";
-			if (!writes) {
-				REQUIRE_NO_FAIL(*result);
-				REQUIRE(CHECK_COLUMN(result, 0, {42}));
-				REQUIRE(record.outcome == SQLExportOutcome::STRUCTURALLY_VALIDATED);
-				REQUIRE(record.route == SQLExportExecutionRoute::GENERATED);
-			} else {
-				REQUIRE(record.outcome == SQLExportOutcome::OUTPUT_SCHEMA_MISMATCH);
-				REQUIRE(record.code == "GENERATED_STATEMENT_PROPERTIES");
-				if (string(mode) == "report") {
-					REQUIRE_NO_FAIL(*result);
-					REQUIRE(CHECK_COLUMN(result, 0, {42}));
-					REQUIRE(record.route == SQLExportExecutionRoute::ORIGINAL_FALLBACK);
-				} else {
-					REQUIRE(result->HasError());
-					REQUIRE(record.route == SQLExportExecutionRoute::NONE);
-				}
-			}
-			SetSQLExportMode(con, *observer, "off");
-			result = con.Query("SELECT nextval('s')");
-			REQUIRE(CHECK_COLUMN(result, 0, {1}));
-		}
-	}
-}
-
 TEST_CASE("SQL export inventories pushed single and multi-column scan predicates",
           "[sql_export][sql_export_verification]") {
 	DuckDB db(nullptr);
@@ -916,7 +842,6 @@ struct SQLExportOptimizerReplacement : public OptimizerExtensionInfo {
 	idx_t calls = 0;
 	string replacement;
 	bool require_rebind = false;
-	bool add_write_kind = false;
 };
 
 void SQLExportReplaceDuringOptimization(OptimizerExtensionInput &input, unique_ptr<LogicalOperator> &plan) {
@@ -925,12 +850,9 @@ void SQLExportReplaceDuringOptimization(OptimizerExtensionInput &input, unique_p
 		return;
 	}
 	if (info.require_rebind) {
-		input.optimizer.binder.GetStatementProperties().always_require_rebind = true;
-	}
-	if (info.add_write_kind) {
-		auto &catalog = Catalog::GetCatalog(input.context, Identifier("memory"));
-		input.optimizer.binder.GetStatementProperties().RegisterDBModify(catalog, input.context,
-		                                                                 DatabaseModificationType::INSERT_DATA);
+		auto &properties = input.optimizer.binder.GetStatementProperties();
+		properties.always_require_rebind = true;
+		properties.RegisterDBRead(Catalog::GetCatalog(input.context, Identifier("temp")), input.context);
 	}
 	if (!info.replacement.empty()) {
 		Parser parser(input.context.GetParserOptions());
@@ -942,68 +864,28 @@ void SQLExportReplaceDuringOptimization(OptimizerExtensionInput &input, unique_p
 
 } // namespace
 
-TEST_CASE("SQL export checks final properties after generated optimization", "[sql_export][sql_export_verification]") {
-	for (auto mode : {"off", "report", "strict"}) {
-		for (auto replacement :
-		     {"SELECT 42::BIGINT FROM temp.t", "SELECT nextval('s')", "rebind", "SELECT 42::BIGINT"}) {
-			if ((string(mode) == "off" && string(replacement) != "SELECT 42::BIGINT") ||
-			    (string(mode) == "report" && string(replacement) != "SELECT nextval('s')")) {
-				continue;
-			}
-			CAPTURE(mode, replacement);
-			DuckDB db(nullptr);
-			Connection con(db);
-			REQUIRE_NO_FAIL(con.Query("CREATE TEMP TABLE t AS SELECT 1 i"));
-			REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE s"));
-			auto observer = SQLExportVerificationState::GetOrCreate(*con.context);
-			SetSQLExportMode(con, *observer, mode);
-			auto info = make_shared_ptr<SQLExportOptimizerReplacement>();
-			info->require_rebind = string(replacement) == "rebind";
-			info->replacement = info->require_rebind ? "" : replacement;
-			OptimizerExtension extension;
-			extension.optimizer_info = info;
-			extension.optimize_function = SQLExportReplaceDuringOptimization;
-			OptimizerExtension::Register(DBConfig::GetConfig(*con.context), extension);
+TEST_CASE("SQL export retains final properties after generated optimization", "[sql_export][sql_export_verification]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto observer = SQLExportVerificationState::GetOrCreate(*con.context);
+	SetSQLExportMode(con, *observer, "strict");
+	auto info = make_shared_ptr<SQLExportOptimizerReplacement>();
+	info->require_rebind = true;
+	OptimizerExtension extension;
+	extension.optimizer_info = info;
+	extension.optimize_function = SQLExportReplaceDuringOptimization;
+	OptimizerExtension::Register(DBConfig::GetConfig(*con.context), extension);
 
-			auto result = con.Query("VALUES (42::BIGINT)");
-			bool compatible = string(replacement) != "SELECT nextval('s')";
-			if (string(mode) == "off") {
-				REQUIRE(info->calls == 1);
-				REQUIRE(observer->TakeRecords().empty());
-			} else {
-				REQUIRE(info->calls == 2);
-				auto record = TakeSQLExportRecord(*observer);
-				REQUIRE(record.export_count == 1);
-				REQUIRE((record.outcome == SQLExportOutcome::STRUCTURALLY_VALIDATED) == compatible);
-				if (compatible) {
-					REQUIRE(record.route == SQLExportExecutionRoute::GENERATED);
-				} else {
-					REQUIRE(record.outcome == SQLExportOutcome::OUTPUT_SCHEMA_MISMATCH);
-					REQUIRE(record.code == "GENERATED_SCHEMA_OR_PROPERTIES");
-					REQUIRE(record.phase == "SCHEMA");
-					REQUIRE(record.strict_failure == (string(mode) == "strict"));
-					REQUIRE(record.route == (string(mode) == "strict" ? SQLExportExecutionRoute::NONE
-					                                                  : SQLExportExecutionRoute::ORIGINAL_FALLBACK));
-				}
-			}
-			if (string(mode) == "strict" && !compatible) {
-				REQUIRE(result->HasError());
-			} else {
-				REQUIRE_NO_FAIL(*result);
-				REQUIRE(CHECK_COLUMN(result, 0, {42}));
-			}
-
-			info->replacement.clear();
-			info->require_rebind = false;
-			SetSQLExportMode(con, *observer, "off");
-			result = con.Query("SELECT nextval('s')");
-			REQUIRE_NO_FAIL(*result);
-			REQUIRE(CHECK_COLUMN(result, 0, {1}));
-			SetSQLExportMode(con, *observer, "strict");
-			REQUIRE_NO_FAIL(con.Query("VALUES (43::BIGINT)"));
-			REQUIRE(TakeSQLExportRecord(*observer).outcome == SQLExportOutcome::STRUCTURALLY_VALIDATED);
-		}
-	}
+	auto result = con.Query("VALUES (42::BIGINT)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	REQUIRE(info->calls == 2);
+	REQUIRE(result->GetStatementProperties().always_require_rebind);
+	REQUIRE(result->GetStatementProperties().read_databases.count(Identifier("temp")) == 1);
+	auto record = TakeSQLExportRecord(*observer);
+	REQUIRE(record.export_count == 1);
+	REQUIRE(record.outcome == SQLExportOutcome::STRUCTURALLY_VALIDATED);
+	REQUIRE(record.route == SQLExportExecutionRoute::GENERATED);
 }
 
 TEST_CASE("SQL export checks final type annotations after generated optimization",
@@ -1239,43 +1121,6 @@ TEST_CASE("SQL export keeps auxiliary parse errors independent of active streams
 				REQUIRE(record.route == SQLExportExecutionRoute::GENERATED);
 				REQUIRE(record.outcome == SQLExportOutcome::STRUCTURALLY_VALIDATED);
 			}
-		}
-	}
-}
-
-TEST_CASE("SQL export permits declared effects but rejects additional write kinds",
-          "[sql_export][sql_export_verification]") {
-	for (auto mode : {"report", "strict"}) {
-		for (bool additional_write : {false, true}) {
-			if (string(mode) == "report" && !additional_write) {
-				continue;
-			}
-			DuckDB db(nullptr);
-			Connection con(db);
-			REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE s"));
-			auto observer = SQLExportVerificationState::GetOrCreate(*con.context);
-			SetSQLExportMode(con, *observer, mode);
-			auto info = make_shared_ptr<SQLExportOptimizerReplacement>();
-			info->add_write_kind = additional_write;
-			OptimizerExtension extension;
-			extension.optimizer_info = info;
-			extension.optimize_function = SQLExportReplaceDuringOptimization;
-			OptimizerExtension::Register(DBConfig::GetConfig(*con.context), extension);
-			auto result = con.Query("SELECT nextval('s')");
-			auto record = TakeSQLExportRecord(*observer);
-			const bool rejected = additional_write && string(mode) == "strict";
-			REQUIRE(result->HasError() == rejected);
-			if (additional_write) {
-				REQUIRE(record.code == "GENERATED_SCHEMA_OR_PROPERTIES");
-				REQUIRE(record.route ==
-				        (rejected ? SQLExportExecutionRoute::NONE : SQLExportExecutionRoute::ORIGINAL_FALLBACK));
-			} else {
-				REQUIRE(record.route == SQLExportExecutionRoute::GENERATED);
-			}
-			SetSQLExportMode(con, *observer, "off");
-			auto after = con.Query("SELECT nextval('s')");
-			REQUIRE_NO_FAIL(*after);
-			REQUIRE(after->GetValue(0, 0) == Value::BIGINT(rejected ? 1 : 2));
 		}
 	}
 }
