@@ -53,6 +53,12 @@ TEST_CASE("Current list serialization preserves bound ordering across repeated c
           "[serialization][function_invocation]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
+	bool optimize = false;
+	SECTION("Bound plan") {
+	}
+	SECTION("Optimized plan") {
+		optimize = true;
+	}
 	REQUIRE_NO_FAIL(connection.Query("SET threads=1; SET debug_disable_optimizer=true; "
 	                                 "CREATE TABLE ordering_input(l VARCHAR[]); "
 	                                 "INSERT INTO ordering_input VALUES (['a','B',NULL,'a']),([]),(NULL)"));
@@ -70,6 +76,11 @@ TEST_CASE("Current list serialization preserves bound ordering across repeated c
 		parser.ParseQuery(sql);
 		Planner planner(*connection.context);
 		planner.CreatePlan(std::move(parser.statements[0]));
+		if (optimize) {
+			planner.plan->ResolveOperatorTypes();
+			Optimizer optimizer(*planner.binder, *connection.context);
+			planner.plan = optimizer.Optimize(std::move(planner.plan));
+		}
 		REQUIRE_NO_FAIL(connection.Query("SET default_collation=''; SET default_order='DESC'; "
 		                                 "SET default_null_order='NULLS LAST'"));
 		auto plan = std::move(planner.plan);
@@ -131,23 +142,6 @@ TEST_CASE("Compressed materialization functions retain their identity across cop
 	for (auto found : seen) {
 		REQUIRE(found);
 	}
-	connection.Rollback();
-}
-
-TEST_CASE("List ordering retains its bound collation across plan serialization",
-          "[serialization][function_invocation]") {
-	DuckDB db(nullptr);
-	Connection connection(db);
-	REQUIRE_NO_FAIL(connection.Query("SET threads=1; SET default_collation='nocase'"));
-	connection.BeginTransaction();
-	auto plan = PlanAndOptimize(connection, "SELECT list_sort(x) FROM (VALUES (['b','B']::VARCHAR[]))t(x)");
-	REQUIRE_NO_FAIL(connection.Query("SET default_collation=''"));
-	plan = plan->Copy(*connection.context);
-	plan->ResolveOperatorTypes();
-	REQUIRE_NO_FAIL(connection.Query("SET debug_disable_optimizer=true"));
-	auto direct = connection.Query(make_uniq<LogicalPlanStatement>(std::move(plan)));
-	REQUIRE_NO_FAIL(*direct);
-	REQUIRE(Value::NotDistinctFrom(direct->GetValue(0, 0), Value::LIST({Value("b"), Value("B")})));
 	connection.Rollback();
 }
 
