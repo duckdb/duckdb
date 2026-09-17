@@ -21,8 +21,6 @@
 #include "duckdb/main/client_context_state.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/main/parse_iterator.hpp"
-#include "duckdb/main/pending_query_result.hpp"
-#include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/sql_statement.hpp"
@@ -364,7 +362,7 @@ auto NullArgumentError(duckdb_v2_error_info_handle *err, const char *function, c
 // Classify the exception currently being handled into a V2 error code and detail strings. Must be called from inside
 // a catch block. Never throws: if rendering the detail itself fails, it degrades to a bare code with empty detail
 // (RESOURCE_OUT_OF_MEMORY on allocation failure). Defined in capi_v2.cpp.
-auto RenderCaughtError(DUCKDB_V2_ERROR &code, string &text, string &raw_message) noexcept -> void;
+auto RenderCaughtError(DUCKDB_V2_ERROR &code, string &text, optional<string> &raw_message) noexcept -> void;
 
 // The null test behind DUCKDB_CHECK_ARG: a pointer/handle is invalid when null; a string/identifier view is invalid
 // when its pointer is null while it carries a non-zero length.
@@ -402,7 +400,7 @@ struct CV2ErrorInfo {
 	// rendered form (caret block, or JSON under errors_as_json); empty for a
 	// directly-set message. Both written on the error path (WithErrorHandler).
 	string message;
-	string raw_message;
+	optional<string> raw_message;
 
 	bool HasError() const {
 		return code != DUCKDB_V2_ERROR_NONE;
@@ -437,7 +435,7 @@ template <class T>
 DUCKDB_V2_ERROR WithErrorHandler(duckdb_v2_error_info_handle *err, T callback) noexcept {
 	auto code = static_cast<DUCKDB_V2_ERROR>(DUCKDB_V2_ERROR_NONE);
 	auto text = string();
-	auto raw_message = string();
+	optional<string> raw_message;
 
 	try {
 		// Invoke the callback

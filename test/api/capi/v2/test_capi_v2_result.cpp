@@ -789,7 +789,7 @@ TEST_CASE("V2: a fetched chunk outlives result, connection, and database", "[cap
 	duckdb_v2_result_destroy(&r);
 	duckdb_v2_disconnect(&conn);
 	duckdb_v2_close(&db);
-	duckdb_v2_destroy_environment(&env);
+	duckdb_v2_environment_destroy(&env);
 
 	// The chunk owns its data; producers are all gone.
 	idx_t size = 0;
@@ -1311,7 +1311,7 @@ TEST_CASE("V2: an undrained result survives disconnect and close", "[capi_v2][qu
 	(void)drained;
 	REQUIRE(duckdb_v2_result_destroy(&r) == DUCKDB_V2_ERROR_NONE);
 
-	duckdb_v2_destroy_environment(&env);
+	duckdb_v2_environment_destroy(&env);
 }
 #endif
 

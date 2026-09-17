@@ -125,7 +125,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"enable_progress_bar_print", {false}},
 	    {"scalar_subquery_error_on_multiple_rows", {false}},
 	    {"ieee_floating_point_ops", {false}},
-	    {"null_on_division_by_zero", {true}},
+	    {"error_on_division_by_zero", {false}},
 	    {"progress_bar_time", {0}},
 	    {"regex_match_operator_semantics", {"full"}},
 	    {"temp_directory", {"tmp"}},
@@ -228,8 +228,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "tracked_metrics",
 	    "debug_verification_mode",
 	    "standard_vector_size",
-	    "warnings_as_errors", // requires logging to be enabled
-	    "heap_based_parser",
+	    "warnings_as_errors",      // requires logging to be enabled
 	    "block_allocator_memory"}; // cant reduce
 	return excluded_options.count(name) == 1;
 }

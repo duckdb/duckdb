@@ -2672,7 +2672,7 @@ ProgressData PhysicalHashJoin::GetProgress(ClientContext &context, GlobalSourceS
 			res.total = static_cast<double>(gstate.full_outer_chunk_count);
 			return res;
 		}
-		res.done = 0.0;
+		res.done = gstate.global_stage == HashJoinSourceStage::DONE ? 1.0 : 0.0;
 		res.total = 1.0;
 		return res;
 	}

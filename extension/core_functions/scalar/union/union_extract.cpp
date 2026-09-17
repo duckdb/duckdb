@@ -10,8 +10,8 @@ namespace duckdb {
 namespace {
 
 struct UnionExtractBindData : public FunctionData {
-	UnionExtractBindData(Identifier key, idx_t index, LogicalType type)
-	    : key(std::move(key)), index(index), type(std::move(type)) {
+	UnionExtractBindData(const Identifier &key, idx_t index, LogicalType type)
+	    : key(key), index(index), type(std::move(type)) {
 	}
 
 	string key;
