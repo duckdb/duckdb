@@ -828,6 +828,16 @@
         ]
     },
     {
+        "name": "explain_format",
+        "description": "Default format of EXPLAIN and EXPLAIN ANALYZE statements (default preserves the standard rendering behavior)",
+        "type": "VARCHAR",
+        "default_scope": "local",
+        "default_value": "default",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "explain_output",
         "description": "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)",
         "type": "ENUM<ExplainOutputType>",
