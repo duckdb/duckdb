@@ -1,5 +1,4 @@
-# Kept so that extensions calling it still configure. It used to add compile definitions and include
-# directories derived from the extension list to everything built after it; nothing needs them any more.
+# Deprecated no-op, kept so extensions that still call it configure.
 function(add_extension_definitions)
     message(DEPRECATION "add_extension_definitions() no longer does anything and can be removed")
 endfunction()
@@ -373,9 +372,7 @@ function(duckdb_extension_link_member NAME KIND OUT_FILE)
     endif()
     set(LINK_FILE "${DuckDB_BINARY_DIR}/codegen/link/${NAME}_link.cpp")
     configure_file(${DUCKDB_MODULE_BASE_DIR}/extension/loader/link_extension.cpp.in ${LINK_FILE} @ONLY)
-    # The root member includes <NAME>_extension.hpp, but it compiles in the directory that calls build_static_extension,
-    # where an extension that adds its include directory only for its sources' subdirectory does not reach. Give this
-    # one file the include path the extension was registered with.
+    # The root member includes <NAME>_extension.hpp, so give it the extension's registered include path.
     string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
     if(DEFINED DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH)
         set_source_files_properties(${LINK_FILE} PROPERTIES INCLUDE_DIRECTORIES
@@ -394,8 +391,8 @@ function(build_static_extension NAME PARAMETERS)
     set_property(TARGET ${NAME}_extension PROPERTY DUCKDB_EXTENSION_KIND "CPP")
 endfunction()
 
-# Compiles a C++ extension once, into lib<NAME>_extension.a, and links its loadable binary from that archive instead of
-# compiling the same sources a second time. NO_LOADABLE builds the archive only; NO_WARNINGS silences compiler warnings.
+# Compiles a C++ extension once into lib<NAME>_extension.a and links its loadable from that archive.
+# NO_LOADABLE builds the archive only; NO_WARNINGS silences compiler warnings.
 function(build_extension_library NAME)
     cmake_parse_arguments(PARSE_ARGV 1 ARG "NO_LOADABLE;NO_WARNINGS" "" "")
     set(FILES ${ARG_UNPARSED_ARGUMENTS})

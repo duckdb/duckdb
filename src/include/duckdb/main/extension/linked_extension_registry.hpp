@@ -23,9 +23,7 @@ struct LinkedExtension {
 	std::function<void(DuckDB &)> load;
 };
 
-//! The extensions linked into this binary. Each of them carries a LinkedExtensionRegistrar that runs
-//! before main, so the registry is complete by the time the first database is created and the engine
-//! never has to know at build time what was linked next to it.
+//! The extensions linked into this binary, each registered before main by its LinkedExtensionRegistrar.
 class LinkedExtensionRegistry {
 public:
 	DUCKDB_API static void Register(const string &name, std::function<void(DuckDB &)> load);
