@@ -258,6 +258,10 @@ BoundCastInfo &BoundCastExpression::GetBoundCastMutable(BoundFunctionExpression 
 unique_ptr<BaseStatistics> BoundCastExpression::PropagateStatistics(BoundFunctionExpression &cast_expr,
                                                                     const BaseStatistics &child_stats,
                                                                     optional_ptr<ClientContext> context) {
+	if (!child_stats.CanHaveNoNull() &&
+	    cast_expr.Function().GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
+		return BaseStatistics::FromConstant(Value(cast_expr.GetReturnType())).ToUnique();
+	}
 	auto &cast_data = cast_expr.BindInfoMutable()->Cast<CastFunctionData>();
 	auto result =
 	    cast_data.bound_cast.PropagateStatistics(cast_data.source_type, cast_data.target_type, child_stats, context);
