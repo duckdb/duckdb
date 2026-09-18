@@ -1,0 +1,25 @@
+# name: test/sql/index/art/issues/test_art_issue_23929.test
+# description: Test issue 23929: DROP and CREATE INDEX with same name in a single transaction on reopened database
+# group: [issues]
+
+load {TEST_DIR}/test_art_issue_23929.db
+
+statement ok
+CREATE TABLE t(x INT);
+
+statement ok
+CREATE INDEX i1 ON t(x);
+
+restart
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+DROP INDEX i1;
+
+statement ok
+CREATE INDEX i1 ON t(x);
+
+statement ok
+COMMIT;
