@@ -1,5 +1,5 @@
 # name: test/sql/storage/wal/wal_replay_clean_checkpoint_block_marks.test_slow
-# description: WAL replay must not leak block usage marks when the WAL is discarded because its checkpoint completed cleanly
+# description: WAL replay must not double reference block usage marks when the WAL is discarded because its checkpoint completed cleanly
 # group: [wal]
 
 load {TEST_DIR}/wal_replay_clean_checkpoint_block_marks.db
@@ -30,6 +30,10 @@ CHECKPOINT;
 Checkpoint aborted
 
 restart
+
+# the crash simulation is done - the abort setting survives the restart, reset it
+statement ok
+PRAGMA debug_checkpoint_abort='none';
 
 # the checkpoint completed cleanly, so the WAL is discarded without being replayed -
 # the deserialize-only scan must not have leaked block usage marks for the ROW_GROUP_DATA blocks
