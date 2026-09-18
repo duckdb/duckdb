@@ -99,7 +99,8 @@ struct FirstStringStateBase {
 			if (alloc_size >= len) {
 				ptr = value.GetDataWriteable();
 			} else {
-				alloc_size = UnsafeNumericCast<uint32_t>(NextPowerOfTwo(len));
+				alloc_size =
+				    UnsafeNumericCast<uint32_t>(MinValue<idx_t>(NextPowerOfTwo(len), string_t::MAX_STRING_SIZE));
 				ptr = char_ptr_cast(input_data.allocator.Allocate(alloc_size));
 			}
 			memcpy(ptr, input.GetData(), len);

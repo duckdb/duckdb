@@ -175,7 +175,7 @@ struct ModeString {
 			ptr = mode->GetDataWriteable();
 		} else {
 			// round up so repeatedly growing keys don't churn through a new arena allocation every time
-			alloc_size = UnsafeNumericCast<uint32_t>(NextPowerOfTwo(len));
+			alloc_size = UnsafeNumericCast<uint32_t>(MinValue<idx_t>(NextPowerOfTwo(len), string_t::MAX_STRING_SIZE));
 			ptr = char_ptr_cast(aggr_input_data.allocator.Allocate(alloc_size));
 			if (!mode) {
 				mode = new string_t(nullptr, 0);

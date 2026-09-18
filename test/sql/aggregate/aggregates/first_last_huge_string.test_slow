@@ -1,0 +1,23 @@
+# name: test/sql/aggregate/aggregates/first_last_huge_string.test_slow
+# description: Issue 25269 - strings over 2^31 bytes truncated the arena allocation size to zero, so these queries crashed instead of returning a length
+# group: [aggregates]
+
+require ram 24gb
+
+statement ok
+SET threads=1;
+
+query I
+SELECT length(last(s)) FROM (SELECT repeat('A', 2147483649) AS s) t;
+----
+2147483649
+
+query I
+SELECT length(max(s)) FROM (SELECT repeat('A', 2147483649) AS s) t;
+----
+2147483649
+
+query I
+SELECT length(approx_top_k(s, 1)[1]) FROM (SELECT repeat('A', 2147483649) AS s) t;
+----
+2147483649

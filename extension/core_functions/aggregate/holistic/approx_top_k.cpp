@@ -94,7 +94,8 @@ struct InternalApproxTopKState {
 		value.size = UnsafeNumericCast<uint32_t>(input.str.GetSize());
 		if (value.size > value.capacity) {
 			// need to re-allocate for this value
-			value.capacity = UnsafeNumericCast<uint32_t>(NextPowerOfTwo(value.size));
+			value.capacity =
+			    UnsafeNumericCast<uint32_t>(MinValue<idx_t>(NextPowerOfTwo(value.size), string_t::MAX_STRING_SIZE));
 			value.dataptr = char_ptr_cast(allocator.Allocate(value.capacity));
 		}
 		// copy over the data

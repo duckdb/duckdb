@@ -1,0 +1,14 @@
+# name: test/sql/window/mode_window_huge_string.test_slow
+# description: Issue 25269 - strings over 2^31 bytes truncated the MODE key arena allocation size to zero, so this query crashed instead of returning a length
+# group: [window]
+
+require ram 24gb
+
+statement ok
+SET threads=1;
+
+query I
+SELECT length(mode(s) OVER (ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW))
+FROM (SELECT i, repeat('A', 2147483649) AS s FROM range(1) t(i)) t;
+----
+2147483649
