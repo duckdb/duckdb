@@ -101,28 +101,27 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 			}
 			if (length_idx >= byte_array_count) {
 				throw IOException(
-				    "DELTA_LENGTH_BYTE_ARRAY - length mismatch between values and byte array lengths (attempted "
-				    "read of %d from %d entries) - corrupt file?",
-				    length_idx, byte_array_count);
+					"DELTA_LENGTH_BYTE_ARRAY - length mismatch between values and byte array lengths (attempted "
+					"read of %d from %d entries) - corrupt file?",
+					length_idx, byte_array_count);
 			}
 		}
 		const auto &str_len = length_data[length_idx++];
+
 		if (needs_full_individual_validation) {
 			auto verified = string_column_reader.VerifyString(char_ptr_cast(block.ptr), str_len);
 			result_data.WriteValue(verified);
 		} else {
 			if (TouchesUtf8Boundary(char_ptr_cast(block.ptr), str_len)) {
-				boundary_strings.emplace_back(char_ptr_cast(block.ptr), str_len);
+				string_column_reader.VerifyString(char_ptr_cast(block.ptr), str_len);
 			}
 			result_data.WriteValue(string_t(char_ptr_cast(block.ptr), str_len));
 		}
 		block.unsafe_inc(str_len);
 	}
+
 	if (!needs_full_individual_validation) {
-		string_column_reader.VerifyString(char_ptr_cast(start_ptr), block.ptr - start_ptr);
-		for (auto &entry : boundary_strings) {
-			string_column_reader.VerifyString(entry.first, entry.second);
-		}
+		string_column_reader.VerifyString(char_ptr_cast(start_ptr), NumericCast<uint32_t>(block.ptr - start_ptr));
 	}
 	StringColumnReader::ReferenceBlock(result, block_ref);
 }
