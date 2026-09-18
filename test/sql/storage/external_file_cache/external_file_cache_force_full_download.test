@@ -1,0 +1,90 @@
+# name: test/sql/storage/external_file_cache/external_file_cache_force_full_download.test
+# description: Test that force_full_download eagerly caches the entire file under default VALIDATE_ALL and NO_VALIDATION
+# group: [external_file_cache]
+
+require parquet
+
+# the cache skips local files unless forced, these tests exercise it with local files
+statement ok
+set cache_local_files=true;
+
+statement ok
+set enable_external_file_cache=true;
+
+# Create a parquet file with multiple blocks
+statement ok
+copy (select range i, repeat('x', 50) s from range(20000)) to '{TEST_DIR}/test_ffd.parquet';
+
+# Scan the entire file to populate all blocks into the cache and record the total cached bytes
+statement ok
+select sum(i), sum(length(s)) from '{TEST_DIR}/test_ffd.parquet';
+
+statement ok
+create temp table full_cached_bytes as select sum(nr_bytes) as total from duckdb_external_file_cache();
+
+# Verify cache has data
+query I
+select total > 0 from full_cached_bytes;
+----
+true
+
+# Reset cache
+statement ok
+set enable_external_file_cache=false;
+
+statement ok
+set enable_external_file_cache=true;
+
+# Under default VALIDATE_ALL without force_full_download, count(*) only reads the footer/metadata
+query I
+select count(*) from read_parquet([{'filename': '{TEST_DIR}/test_ffd.parquet', 'force_full_download': false}]);
+----
+20000
+
+# Cache should have only footer blocks, strictly less than the full file
+query I
+select (select sum(nr_bytes) from duckdb_external_file_cache()) < (select total from full_cached_bytes);
+----
+true
+
+# Reset cache
+statement ok
+set enable_external_file_cache=false;
+
+statement ok
+set enable_external_file_cache=true;
+
+statement ok
+set validate_external_file_cache='VALIDATE_ALL';
+
+# With force_full_download=true under default VALIDATE_ALL, the entire file must be cached
+query I
+select count(*) from read_parquet([{'filename': '{TEST_DIR}/test_ffd.parquet', 'force_full_download': true}]);
+----
+20000
+
+query I
+select (select sum(nr_bytes) from duckdb_external_file_cache()) = (select total from full_cached_bytes);
+----
+true
+
+# Reset cache and test under NO_VALIDATION
+statement ok
+set enable_external_file_cache=false;
+
+statement ok
+set enable_external_file_cache=true;
+
+statement ok
+set validate_external_file_cache='NO_VALIDATION';
+
+# With force_full_download=true under NO_VALIDATION, the entire file must also be cached
+query I
+select count(*) from read_parquet([{'filename': '{TEST_DIR}/test_ffd.parquet', 'force_full_download': true}]);
+----
+20000
+
+query I
+select (select sum(nr_bytes) from duckdb_external_file_cache()) = (select total from full_cached_bytes);
+----
+true

@@ -271,19 +271,24 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
                                                                                caching_file_system_p.db)),
       cached_file(nullptr), position(0) {
 	cached_file = external_file_cache.GetOrCreateCachedFile(path_p.path);
-	if (!external_file_cache.IsEnabled() || Validate()) {
-		// If caching is disabled, or if we must validate cache entries, we always have to open the file
+	if (!external_file_cache.IsEnabled()) {
+		// If caching is disabled, we always have to open the file
 		GetFileHandle();
 		return;
 	}
-	// If we don't have any cached blocks, we must also open the file.
-	bool needs_open = false;
-	{
-		annotated_lock_guard<annotated_mutex> guard(cached_file->map_lock);
-		needs_open = cached_file->blocks.empty();
-	}
-	if (needs_open) {
+	if (Validate()) {
+		// If we must validate cache entries, we always have to open the file
 		GetFileHandle();
+	} else {
+		// If we don't have any cached blocks, we must also open the file.
+		bool needs_open = false;
+		{
+			annotated_lock_guard<annotated_mutex> guard(cached_file->map_lock);
+			needs_open = cached_file->blocks.empty();
+		}
+		if (needs_open) {
+			GetFileHandle();
+		}
 	}
 	auto needs_full_download = StripForceFullDownloadIfPresent();
 	if (needs_full_download) {
