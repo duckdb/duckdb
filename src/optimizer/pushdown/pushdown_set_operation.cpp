@@ -28,12 +28,24 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_UNION || op->type == LogicalOperatorType::LOGICAL_EXCEPT ||
 	         op->type == LogicalOperatorType::LOGICAL_INTERSECT);
 	auto &setop = op->Cast<LogicalSetOperation>();
+	vector<unique_ptr<Filter>> pushdown_filters;
+	vector<unique_ptr<Filter>> remaining_filters;
+	for (auto &filter : filters) {
+		// A predicate may distinguish values that the set operation considers equal. Pushing such a predicate into the
+		// inputs can remove a match from EXCEPT/INTERSECT. UNION ALL performs no equality comparison.
+		if ((setop.type == LogicalOperatorType::LOGICAL_UNION && setop.setop_all) || !FilterUsesCollation(*filter)) {
+			pushdown_filters.push_back(std::move(filter));
+		} else {
+			remaining_filters.push_back(std::move(filter));
+		}
+	}
+	filters = std::move(remaining_filters);
 
 	for (auto &child : op->children) {
 		auto child_bindings = child->GetColumnBindings();
 
 		FilterPushdown child_pushdown(optimizer, convert_mark_joins, projection_mode);
-		for (auto &original_filter : filters) {
+		for (auto &original_filter : pushdown_filters) {
 			// first create a copy of the filter
 			auto filter = make_uniq<Filter>();
 			filter->filter = original_filter->filter->Copy();
@@ -69,7 +81,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 				i--;
 			}
 		}
-		return op;
+		return PushFinalFilters(std::move(op));
 	}
 	bool left_empty = op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
 	bool right_empty = op->children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
@@ -92,7 +104,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 				// union or except with empty right child: return left child
 				auto &projection = op->children[0]->Cast<LogicalProjection>();
 				projection.table_index = setop.table_index;
-				return std::move(op->children[0]);
+				return PushFinalFilters(std::move(op->children[0]));
 			}
 			break;
 		case LogicalOperatorType::LOGICAL_INTERSECT:
@@ -102,7 +114,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 			throw InternalException("Unsupported set operation");
 		}
 	}
-	return op;
+	return PushFinalFilters(std::move(op));
 }
 
 } // namespace duckdb
