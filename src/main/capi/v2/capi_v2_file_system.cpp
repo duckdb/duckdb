@@ -16,6 +16,16 @@ inline auto GetFileSystemSlot(ClientContext &context) -> shared_ptr<CV2FileSyste
 	return slot;
 }
 
+// A lock request rides alongside the bit flags; exclusive wins over shared whichever order they are applied in.
+static void SetLock(FileOpenFlags &flags, FileLockType lock) {
+	if (flags.Lock() == FileLockType::WRITE_LOCK) {
+		return;
+	}
+	auto caching = flags.GetCachingMode();
+	flags = FileOpenFlags(flags.GetFlagsInternal(), lock, flags.Compression());
+	flags.SetCachingMode(caching);
+}
+
 // Applies one C flag to the engine's flag set. The C enum is a list of names rather than a bitmask, so each value
 // maps to exactly one engine flag and anything else is a caller error.
 static void ApplyFileFlag(CV2FileOpenOptions &options, DUCKDB_V2_FILE_FLAG flag) {
@@ -40,6 +50,12 @@ static void ApplyFileFlag(CV2FileOpenOptions &options, DUCKDB_V2_FILE_FLAG flag)
 		break;
 	case DUCKDB_V2_FILE_FLAG_PARALLEL_ACCESS:
 		options.flags |= FileOpenFlags::FILE_FLAGS_PARALLEL_ACCESS;
+		break;
+	case DUCKDB_V2_FILE_FLAG_SHARED_LOCK:
+		SetLock(options.flags, FileLockType::READ_LOCK);
+		break;
+	case DUCKDB_V2_FILE_FLAG_EXCLUSIVE_LOCK:
+		SetLock(options.flags, FileLockType::WRITE_LOCK);
 		break;
 	default:
 		// Includes FILE_FLAG_INVALID, which names no behaviour.

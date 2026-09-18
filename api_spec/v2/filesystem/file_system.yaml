@@ -46,6 +46,19 @@ enums:
           The file will be read and written at explicit offsets from several threads at once. Pass it whenever
           `[[file_read_at]]` or `[[file_write_at]]` are used concurrently -- a file system that would otherwise
           assume sequential access, by caching, buffering, or keeping a single cursor, needs to know not to.
+      FILE_FLAG_SHARED_LOCK:
+        value: 8
+        description: |
+          Hold a shared lock on the file for as long as it is open: other shared holders may open it too, an
+          exclusive holder may not. This is how the engine opens a database read-only. Advisory: a file system
+          that can lock does so for the life of the file and releases it on close; one that cannot may still
+          open the file. `FILE_FLAG_EXCLUSIVE_LOCK` wins when both are applied.
+      FILE_FLAG_EXCLUSIVE_LOCK:
+        value: 9
+        description: |
+          Hold an exclusive lock on the file for as long as it is open: no other holder, shared or exclusive,
+          may open it. This is how the engine opens a database for writing, and every file it writes. Advisory,
+          like `FILE_FLAG_SHARED_LOCK`; a file system that cannot lock is trusted to be the only writer.
 
   FILE_TYPE:
     description: |
