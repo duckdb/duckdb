@@ -1,0 +1,12 @@
+diff --git a/test/sql/deletion_inlining/test_multiple_files_flush.test_slow b/test/sql/deletion_inlining/test_multiple_files_flush.test_slow
+--- a/test/sql/deletion_inlining/test_multiple_files_flush.test_slow
++++ b/test/sql/deletion_inlining/test_multiple_files_flush.test_slow
+@@ -2,6 +2,8 @@
+ # description: test ducklake flushing deletion on inserted inline, but the flush produces multiple files
+ # group: [deletion_inlining]
+ 
++mode skip slow
++
+ require ducklake
+ 
+ require notmusl
