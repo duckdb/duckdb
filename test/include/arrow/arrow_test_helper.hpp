@@ -23,7 +23,7 @@
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/main/extension_helper.hpp"
-#include "duckdb/common/arrow/arrow_query_result.hpp"
+#include "duckdb/common/arrow/arrow_format.hpp"
 
 class ArrowStreamTestFactory : public duckdb::ArrowScanFactory {
 public:
@@ -41,22 +41,19 @@ namespace duckdb {
 class ArrowTestFactory : public ArrowScanFactory {
 public:
 	ArrowTestFactory(vector<LogicalType> types_p, vector<string> names_p, duckdb::unique_ptr<QueryResult> result_p,
-	                 bool big_result, ClientProperties options, ClientContext &context)
-	    : types(std::move(types_p)), names(std::move(names_p)), result(std::move(result_p)), big_result(big_result),
+	                 ClientProperties options, ClientContext &context)
+	    : types(std::move(types_p)), names(std::move(names_p)), result(std::move(result_p)),
 	      options(std::move(options)), context(context) {
-		if (result->GetResultType() == QueryResultType::ARROW_RESULT) {
-			auto &arrow_result = result->Cast<ArrowQueryResult>();
-			prefetched_chunks = arrow_result.ConsumeArrays();
-			chunk_iterator = prefetched_chunks.begin();
+		if (!result->Format().IsChunk()) {
+			prefetched_arrays = result->TakeCollection<ArrowFormat>();
 		}
 	}
 
 	vector<LogicalType> types;
 	vector<string> names;
 	duckdb::unique_ptr<QueryResult> result;
-	vector<unique_ptr<ArrowArrayWrapper>> prefetched_chunks;
-	vector<unique_ptr<ArrowArrayWrapper>>::iterator chunk_iterator;
-	bool big_result;
+	//! Set when the query ran in the Arrow format: the record batches the engine produced
+	duckdb::unique_ptr<ResultUnitCollection> prefetched_arrays;
 	ClientProperties options;
 	ClientContext &context;
 

@@ -967,26 +967,68 @@ TEST_CASE("V2 arrow: a stream gathers chunks up to batch_size", "[capi_v2][arrow
 	REQUIRE(coalesced_stats.arrays == 1);
 	REQUIRE(coalesced_stats.first_array_rows == 100);
 	coalesced.release(&coalesced);
+
+	// A batch smaller than an engine chunk cuts each one into several arrays, and the sink hands
+	// over every one of them before it takes the next chunk.
+	ArrowArrayStream split {};
+	REQUIRE(ArrowStreamFor(fx.conn, "SELECT i FROM range(20000) t(i)", 500, &split) == DUCKDB_V2_ERROR_NONE);
+	auto split_stats = DrainArrowStream(split);
+	REQUIRE(split_stats.rows == 20000);
+	REQUIRE(split_stats.arrays == 40);
+	REQUIRE(split_stats.first_array_rows == 500);
+	split.release(&split);
 }
 
-TEST_CASE("V2 arrow: a stream over a partially consumed result covers the remainder", "[capi_v2][arrow]") {
+TEST_CASE("V2 arrow: a partially consumed result is rejected", "[capi_v2][arrow]") {
 	EnvFixture fx;
 
+	// The rows of a stepped result are already committed to chunks, so the format comes too late.
 	duckdb_v2_result_handle result = nullptr;
 	REQUIRE(Query(fx.conn, "SELECT i FROM range(1000) t(i)", &result) == DUCKDB_V2_ERROR_NONE);
 	auto chunk = StepChunk(result);
 	REQUIRE(chunk != nullptr);
-	idx_t consumed = 0;
-	REQUIRE(duckdb_v2_data_chunk_get_size(chunk, &consumed, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(consumed > 0);
 	duckdb_v2_data_chunk_destroy(&chunk);
 
 	ArrowArrayStream stream {};
-	REQUIRE(duckdb_v2_result_to_arrow_stream(&result, 0, &stream, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_error_info_handle err = nullptr;
+	REQUIRE(duckdb_v2_result_to_arrow_stream(&result, 0, &stream, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	// Consumed even so, and the stream is untouched.
 	REQUIRE(result == nullptr);
+	REQUIRE(stream.release == nullptr);
+	REQUIRE(err != nullptr);
+	duckdb_v2_str message = {nullptr, 0};
+	REQUIRE(duckdb_v2_error_info_get_text(err, &message) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(Convert(message).find("before the result yields anything") != std::string::npos);
+	duckdb_v2_error_info_destroy(&err);
+
+	// The connection is free again.
+	duckdb_v2_result_handle after = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT 1", &after) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(DrainRowCount(after) == 1);
+	duckdb_v2_result_destroy(&after);
+}
+
+TEST_CASE("V2 arrow: a result that completes at submission streams its rows as Arrow", "[capi_v2][arrow]") {
+	EnvFixture fx;
+	ExecSQL(fx.conn, "CREATE TABLE t(i BIGINT)");
+
+	// INSERT ... RETURNING is born materialized, so the format cannot ride on the sink: the bridge
+	// converts the retained rows on this thread instead.
+	ArrowArrayStream stream {};
+	REQUIRE(ArrowStreamFor(fx.conn, "INSERT INTO t SELECT i FROM range(5000) t(i) RETURNING i", 1024, &stream) ==
+	        DUCKDB_V2_ERROR_NONE);
+	ArrowSchema schema {};
+	REQUIRE(stream.get_schema(&stream, &schema) == 0);
+	REQUIRE(schema.n_children == 1);
+	schema.release(&schema);
 	auto stats = DrainArrowStream(stream);
-	REQUIRE(stats.rows == static_cast<int64_t>(1000 - consumed));
+	REQUIRE(stats.rows == 5000);
+	REQUIRE(stats.arrays == 5);
+	REQUIRE(stats.first_array_rows == 1024);
 	stream.release(&stream);
+
+	// The insert really happened.
+	REQUIRE(ArrowQueryBool(fx.conn, "SELECT count(*) = 5000 FROM t"));
 }
 
 TEST_CASE("V2 arrow: an empty result gives a schema and no rows", "[capi_v2][arrow]") {

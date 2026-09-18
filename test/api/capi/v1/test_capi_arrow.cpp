@@ -24,6 +24,30 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		REQUIRE_NO_FAIL(tester.Query("DROP TABLE test;"));
 	}
 
+	SECTION("test rows changed after the arrays are drained") {
+		REQUIRE_NO_FAIL(tester.Query("CREATE TABLE test(a INTEGER);"));
+		REQUIRE_NO_FAIL(tester.Query("INSERT INTO test VALUES (1), (2), (3);"));
+		auto state = duckdb_query_arrow(tester.connection, "UPDATE test SET a = a + 1;", &arrow_result);
+		REQUIRE(state == DuckDBSuccess);
+
+		// Draining first is what a client does, and it empties the result's record batches
+		while (true) {
+			ArrowArray arrow_array;
+			arrow_array.Init();
+			auto arrow_array_ptr = &arrow_array;
+			state = duckdb_query_arrow_array(arrow_result, reinterpret_cast<duckdb_arrow_array *>(&arrow_array_ptr));
+			REQUIRE(state == DuckDBSuccess);
+			if (arrow_array.length == 0) {
+				break;
+			}
+			arrow_array.release(arrow_array_ptr);
+		}
+		REQUIRE(duckdb_arrow_rows_changed(arrow_result) == 3);
+
+		duckdb_destroy_arrow(&arrow_result);
+		REQUIRE_NO_FAIL(tester.Query("DROP TABLE test;"));
+	}
+
 	SECTION("test query arrow") {
 		auto state = duckdb_query_arrow(tester.connection, "SELECT 42 AS VALUE, [1,2,3,4,5] AS LST;", &arrow_result);
 		REQUIRE(state == DuckDBSuccess);

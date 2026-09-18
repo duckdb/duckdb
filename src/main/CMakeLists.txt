@@ -8,7 +8,6 @@ add_subdirectory(relation)
 add_subdirectory(secret)
 add_subdirectory(settings)
 add_subdirectory(buffered_data)
-add_subdirectory(chunk_scan_state)
 
 if(FORCE_QUERY_LOG)
   add_definitions(-DDUCKDB_FORCE_QUERY_LOG="\""${FORCE_QUERY_LOG}"\"")
@@ -26,7 +25,6 @@ add_library_unity(
   client_data.cpp
   client_verify.cpp
   connection_manager.cpp
-  chunk_scan_state.cpp
   config.cpp
   connection.cpp
   database.cpp
@@ -49,6 +47,7 @@ add_library_unity(
   query_profiler.cpp
   query_result.cpp
   query_result_stream.cpp
+  result_format.cpp
   result_set_manager.cpp
   result_unit.cpp
   user_settings.cpp

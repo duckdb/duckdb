@@ -70,6 +70,7 @@
 #include "duckdb/common/enums/relation_type.hpp"
 #include "duckdb/common/enums/result_eagerness.hpp"
 #include "duckdb/common/enums/result_lifetime.hpp"
+#include "duckdb/common/enums/result_ordering.hpp"
 #include "duckdb/common/enums/row_group_append_mode.hpp"
 #include "duckdb/common/enums/row_id_handling.hpp"
 #include "duckdb/common/enums/set_operation_type.hpp"
@@ -129,7 +130,6 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
-#include "duckdb/execution/operator/helper/physical_result_sink.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte_state.hpp"
@@ -165,7 +165,6 @@
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/http/http_util.hpp"
 #include "duckdb/main/profiler/gathered_metrics.hpp"
-#include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/optimizer/aggregate_rewrite.hpp"
@@ -4982,24 +4981,6 @@ const char* EnumUtil::ToChars<QueryResultState>(QueryResultState value) {
 template<>
 QueryResultState EnumUtil::FromString<QueryResultState>(const char *value) {
 	return static_cast<QueryResultState>(StringUtil::StringToEnum(GetQueryResultStateValues(), 6, "QueryResultState", value));
-}
-
-const StringUtil::EnumStringLiteral *GetQueryResultTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(QueryResultType::MATERIALIZED_RESULT), "MATERIALIZED_RESULT" },
-		{ static_cast<uint32_t>(QueryResultType::ARROW_RESULT), "ARROW_RESULT" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value) {
-	return StringUtil::EnumToString(GetQueryResultTypeValues(), 2, "QueryResultType", static_cast<uint32_t>(value));
-}
-
-template<>
-QueryResultType EnumUtil::FromString<QueryResultType>(const char *value) {
-	return static_cast<QueryResultType>(StringUtil::StringToEnum(GetQueryResultTypeValues(), 2, "QueryResultType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetRecoveryModeValues() {

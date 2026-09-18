@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/helper/physical_result_sink.hpp"
 
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/thread_annotation.hpp"
@@ -9,6 +10,7 @@
 #include "duckdb/main/buffered_data/simple_buffered_data.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/main/result_format.hpp"
 #include "duckdb/main/result_unit.hpp"
 
 namespace duckdb {
@@ -21,18 +23,26 @@ PhysicalResultSink::PhysicalResultSink(PhysicalPlan &physical_plan, PreparedStat
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
+//! A unit does not know the batch it came from, so a retained result keeps it alongside
+struct RetainedUnit {
+	idx_t batch;
+	unique_ptr<ResultUnit> unit;
+};
+
 class ResultSinkGlobalState : public GlobalSinkState {
 public:
 	//! This is weak to avoid creating a cyclical reference
 	weak_ptr<ClientContext> context;
-	//! The buffer behind a stream result. It also holds the retention decision, so it exists
-	//! whenever the plan left retention open. Null for a sink retained by the plan
+	//! The buffer behind a stream result. It also holds the retention decision and the settled format,
+	//! so it exists whenever the plan left retention open. Null for a sink retained by the plan
 	shared_ptr<BufferedData> buffered_data;
 	annotated_mutex glock;
 	//! CDC to materialize a result in arrival order
 	unique_ptr<ColumnDataCollection> collection DUCKDB_GUARDED_BY(glock);
 	//! CDC to materialize a result in batch order
 	unique_ptr<BatchedDataCollection> batch_data DUCKDB_GUARDED_BY(glock);
+	//! The finished units of a retained result in any other format, merged from the producers
+	vector<RetainedUnit> units DUCKDB_GUARDED_BY(glock);
 };
 
 class ResultSinkLocalState : public LocalSinkState {
@@ -47,6 +57,11 @@ public:
 	ColumnDataAppendState append_state;
 	//! Local CDC (batch order) that will be merged later, in Combine
 	unique_ptr<BatchedDataCollection> batch_data;
+	//! The format's per-producer state. Created at the first Append, because the retention (and with
+	//! it the format) is not settled when the local sink state is
+	unique_ptr<ResultFormatLocalState> format_state;
+	//! Finished units of a retained result in a non-chunk format, merged into the global state in Combine
+	vector<RetainedUnit> units;
 };
 
 void PhysicalResultSink::SetResultBuffer(shared_ptr<BufferedData> buffer) {
@@ -79,6 +94,29 @@ bool PhysicalResultSink::DrainsByBatchIndex(ResultSinkGlobalState &gstate) const
 	return BatchOrdered() && CurrentLifetime(gstate) != ResultLifetime::RETAINED;
 }
 
+bool PhysicalResultSink::UsesChunkFormat(ResultSinkGlobalState &gstate) const {
+	if (!gstate.buffered_data) {
+		return true;
+	}
+	return gstate.buffered_data->Format().IsChunk();
+}
+
+const ChunkFormat &PhysicalResultSink::ChunkFormatOf(ResultSinkGlobalState &gstate) const {
+	if (!gstate.buffered_data) {
+		return ResultFormat::Chunk()->Cast<ChunkFormat>();
+	}
+	return gstate.buffered_data->Format().Cast<ChunkFormat>();
+}
+
+ResultFormatLocalState &PhysicalResultSink::LocalFormatState(ResultSinkGlobalState &gstate,
+                                                             ResultSinkLocalState &lstate) const {
+	if (!lstate.format_state) {
+		auto &format = gstate.buffered_data->Format();
+		lstate.format_state = format.InitLocal(gstate.buffered_data->FormatState());
+	}
+	return *lstate.format_state;
+}
+
 SinkResultType PhysicalResultSink::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<ResultSinkGlobalState>();
 	auto &lstate = input.local_state.Cast<ResultSinkLocalState>();
@@ -91,21 +129,24 @@ SinkResultType PhysicalResultSink::Sink(ExecutionContext &context, DataChunk &ch
 		current = gstate.buffered_data->Lifetime();
 	}
 	if (current == ResultLifetime::RETAINED) {
-		return SinkRetained(context, lstate, chunk);
+		if (UsesChunkFormat(gstate)) {
+			return SinkRetained(context, gstate, lstate, chunk);
+		}
+		return SinkRetainedFormatted(gstate, lstate, chunk, input.interrupt_state);
 	}
 	return SinkDraining(gstate, lstate, chunk, input);
 }
 
-SinkResultType PhysicalResultSink::SinkRetained(ExecutionContext &context, ResultSinkLocalState &lstate,
-                                                DataChunk &chunk) const {
+SinkResultType PhysicalResultSink::SinkRetained(ExecutionContext &context, ResultSinkGlobalState &gstate,
+                                                ResultSinkLocalState &lstate, DataChunk &chunk) const {
 	if (BatchOrdered()) {
 		if (!lstate.batch_data) {
-			lstate.batch_data = make_uniq<BatchedDataCollection>(context.client, types, memory_type);
+			lstate.batch_data = ChunkFormatOf(gstate).CreateBatchedCollection(context.client, types);
 		}
 		lstate.batch_data->Append(chunk, lstate.partition_info.batch_index.GetIndex());
 	} else {
 		if (!lstate.collection) {
-			lstate.collection = CreateCollection(context.client);
+			lstate.collection = ChunkFormatOf(gstate).CreateCollection(context.client, types);
 			lstate.collection->InitializeAppend(lstate.append_state);
 		}
 		lstate.collection->Append(lstate.append_state, chunk);
@@ -113,31 +154,74 @@ SinkResultType PhysicalResultSink::SinkRetained(ExecutionContext &context, Resul
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-static unique_ptr<ResultUnit> FinishChunkUnit(DataChunk &chunk) {
-	// Built outside the buffer's lock, so parallel producers copy concurrently
-	return make_uniq<ChunkUnit>(BufferedData::CopyForBuffering(chunk));
+void PhysicalResultSink::AppendChunk(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
+                                     DataChunk &chunk) const {
+	auto &format = gstate.buffered_data->Format();
+	format.Append(gstate.buffered_data->FormatState(), LocalFormatState(gstate, lstate), chunk);
+}
+
+unique_ptr<ResultUnit> PhysicalResultSink::FinishUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
+                                                      bool flush_partial) const {
+	if (!lstate.format_state) {
+		return nullptr;
+	}
+	auto &format = gstate.buffered_data->Format();
+	return format.Finish(gstate.buffered_data->FormatState(), *lstate.format_state, flush_partial);
+}
+
+SinkResultType PhysicalResultSink::SinkRetainedFormatted(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
+                                                         DataChunk &chunk, const InterruptState &interrupt) const {
+	if (BatchOrdered()) {
+		lstate.current_batch = lstate.partition_info.batch_index.GetIndex();
+	}
+	AppendChunk(gstate, lstate, chunk);
+	// A retained producer lists its units locally, so the drain never parks it
+	DrainFinishedUnits(gstate, lstate, interrupt);
+	return SinkResultType::NEED_MORE_INPUT;
+}
+
+bool PhysicalResultSink::HandOver(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
+                                  unique_ptr<ResultUnit> unit, const InterruptState &interrupt) const {
+	if (BatchOrdered()) {
+		return gstate.buffered_data->Cast<BatchedBufferedData>().AppendOrBlock(std::move(unit), lstate.current_batch,
+		                                                                       interrupt);
+	}
+	return gstate.buffered_data->Cast<SimpleBufferedData>().AppendOrBlock(std::move(unit), interrupt);
+}
+
+bool PhysicalResultSink::DeliverUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
+                                     unique_ptr<ResultUnit> unit, const InterruptState &interrupt) const {
+	if (CurrentLifetime(gstate) == ResultLifetime::RETAINED) {
+		lstate.units.push_back({lstate.current_batch, std::move(unit)});
+		return false;
+	}
+	return HandOver(gstate, lstate, std::move(unit), interrupt);
+}
+
+bool PhysicalResultSink::DrainUnits(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
+                                    const InterruptState &interrupt, bool flush_partial) const {
+	while (auto unit = FinishUnit(gstate, lstate, flush_partial)) {
+		if (DeliverUnit(gstate, lstate, std::move(unit), interrupt)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 SinkResultType PhysicalResultSink::SinkDraining(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
                                                 DataChunk &chunk, OperatorSinkInput &input) const {
 	if (lstate.chunk_deposited) {
+		// The chunk was consumed before the park; the units it still owes come out of the drain below
 		lstate.chunk_deposited = false;
-		return SinkResultType::NEED_MORE_INPUT;
-	}
-	if (BatchOrdered()) {
-		auto batch = lstate.partition_info.batch_index.GetIndex();
-		auto min_batch_index = lstate.partition_info.min_batch_index.GetIndex();
-		lstate.current_batch = batch;
-		auto &buffered_data = gstate.buffered_data->Cast<BatchedBufferedData>();
-		buffered_data.UpdateMinBatchIndex(min_batch_index);
-		if (buffered_data.AppendOrBlock(FinishChunkUnit(chunk), batch, input.interrupt_state)) {
-			lstate.chunk_deposited = true;
-			return SinkResultType::BLOCKED;
+	} else {
+		if (BatchOrdered()) {
+			lstate.current_batch = lstate.partition_info.batch_index.GetIndex();
+			gstate.buffered_data->Cast<BatchedBufferedData>().UpdateMinBatchIndex(
+			    lstate.partition_info.min_batch_index.GetIndex());
 		}
-		return SinkResultType::NEED_MORE_INPUT;
+		AppendChunk(gstate, lstate, chunk);
 	}
-	auto &buffered_data = gstate.buffered_data->Cast<SimpleBufferedData>();
-	if (buffered_data.AppendOrBlock(FinishChunkUnit(chunk), input.interrupt_state)) {
+	if (DrainFinishedUnits(gstate, lstate, input.interrupt_state)) {
 		lstate.chunk_deposited = true;
 		return SinkResultType::BLOCKED;
 	}
@@ -147,6 +231,10 @@ SinkResultType PhysicalResultSink::SinkDraining(ResultSinkGlobalState &gstate, R
 SinkCombineResultType PhysicalResultSink::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<ResultSinkGlobalState>();
 	auto &lstate = input.local_state.Cast<ResultSinkLocalState>();
+	// A re-invocation continues the drain: the first call moved out what it managed to deliver
+	if (FlushUnits(gstate, lstate, input.interrupt_state)) {
+		return SinkCombineResultType::BLOCKED;
+	}
 	if (CurrentLifetime(gstate) == ResultLifetime::RETAINED) {
 		return CombineRetained(gstate, lstate);
 	}
@@ -165,6 +253,16 @@ SinkCombineResultType PhysicalResultSink::CombineDraining(ResultSinkGlobalState 
 SinkCombineResultType PhysicalResultSink::CombineRetained(ResultSinkGlobalState &gstate,
                                                           ResultSinkLocalState &lstate) const {
 	// A producer whose partition held no rows never created its local collection
+	if (!UsesChunkFormat(gstate)) {
+		if (lstate.units.empty()) {
+			return SinkCombineResultType::FINISHED;
+		}
+		annotated_lock_guard<annotated_mutex> l(gstate.glock);
+		gstate.units.insert(gstate.units.end(), std::make_move_iterator(lstate.units.begin()),
+		                    std::make_move_iterator(lstate.units.end()));
+		lstate.units.clear();
+		return SinkCombineResultType::FINISHED;
+	}
 	if (BatchOrdered()) {
 		if (!lstate.batch_data) {
 			return SinkCombineResultType::FINISHED;
@@ -191,10 +289,15 @@ SinkCombineResultType PhysicalResultSink::CombineRetained(ResultSinkGlobalState 
 
 SinkNextBatchType PhysicalResultSink::NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const {
 	auto &gstate = input.global_state.Cast<ResultSinkGlobalState>();
+	auto &lstate = input.local_state.Cast<ResultSinkLocalState>();
+	// Finished before the producer moves on, so a unit never spans two batch indexes. A re-invocation
+	// continues the drain: the first call moved out what it managed to deliver
+	if (FlushUnits(gstate, lstate, input.interrupt_state)) {
+		return SinkNextBatchType::BLOCKED;
+	}
 	if (!DrainsByBatchIndex(gstate)) {
 		return SinkNextBatchType::READY;
 	}
-	auto &lstate = input.local_state.Cast<ResultSinkLocalState>();
 
 	auto batch = lstate.current_batch;
 	auto min_batch_index = lstate.partition_info.min_batch_index.GetIndex();
@@ -220,7 +323,7 @@ SinkNextBatchType PhysicalResultSink::UpdateMinBatchIndex(ExecutionContext &cont
 
 unique_ptr<QueryResult> PhysicalResultSink::GetResult(GlobalSinkState &state) const {
 	auto &gstate = state.Cast<ResultSinkGlobalState>();
-	// A draining sink hands its chunks to the consumer through the buffer, never through a result
+	// A draining sink hands its units to the consumer through the buffer, never through a result
 	D_ASSERT(CurrentLifetime(gstate) == ResultLifetime::RETAINED);
 	return GetMaterializedResult(gstate);
 }
@@ -229,6 +332,9 @@ unique_ptr<QueryResult> PhysicalResultSink::GetMaterializedResult(ResultSinkGlob
 	auto cc = gstate.context.lock();
 	if (!cc) {
 		throw ConnectionException("Connection has already been closed");
+	}
+	if (!UsesChunkFormat(gstate)) {
+		return GetFormattedResult(gstate, *cc);
 	}
 	unique_ptr<ColumnDataCollection> collection;
 	{
@@ -242,9 +348,32 @@ unique_ptr<QueryResult> PhysicalResultSink::GetMaterializedResult(ResultSinkGlob
 		}
 	}
 	if (!collection) {
-		collection = CreateCollection(*cc);
+		collection = ChunkFormatOf(gstate).CreateCollection(*cc, types);
 	}
 	return make_uniq<QueryResult>(statement_type, properties, names, std::move(collection), cc->GetClientProperties());
+}
+
+unique_ptr<QueryResult> PhysicalResultSink::GetFormattedResult(ResultSinkGlobalState &gstate,
+                                                               ClientContext &context) const {
+	vector<RetainedUnit> retained;
+	{
+		annotated_lock_guard<annotated_mutex> l(gstate.glock);
+		retained = std::move(gstate.units);
+	}
+	if (BatchOrdered()) {
+		// Stable, so the units a producer contributed to one batch keep their production order
+		std::stable_sort(retained.begin(), retained.end(),
+		                 [](const RetainedUnit &lhs, const RetainedUnit &rhs) { return lhs.batch < rhs.batch; });
+	}
+	vector<unique_ptr<ResultUnit>> units;
+	units.reserve(retained.size());
+	for (auto &entry : retained) {
+		units.push_back(std::move(entry.unit));
+	}
+	auto collection = make_uniq<ResultUnitCollection>(std::move(units));
+	return make_uniq<QueryResult>(statement_type, properties, types, names, std::move(collection),
+	                              gstate.buffered_data->SharedFormat(), gstate.buffered_data->SharedFormatState(),
+	                              context.GetClientProperties());
 }
 
 OperatorPartitionInfo PhysicalResultSink::RequiredPartitionInfo() const {

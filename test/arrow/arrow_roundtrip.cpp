@@ -22,7 +22,7 @@ public:
 		REQUIRE_NO_FAIL(*result);
 		auto factory =
 		    make_uniq<ArrowTestFactory>(result->GetTypes(), IdentifiersToStrings(result->GetNames()), std::move(result),
-		                                false, source.context->GetClientProperties(), *source.context);
+		                                source.context->GetClientProperties(), *source.context);
 		auto stream = factory->ProduceStream(parameters);
 		factories.push_back(std::move(factory));
 		return stream;
@@ -45,8 +45,9 @@ TEST_CASE("Arrow scan view supports repeated CTE references", "[arrow]") {
 	auto result = con.Query("WITH t AS (SELECT * FROM v) SELECT i FROM t UNION ALL SELECT i FROM t LIMIT 3");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->RowCount() == 3);
-	for (idx_t row = 0; row < result->RowCount(); row++) {
-		REQUIRE(result->GetValue(0, row) == Value::INTEGER(42));
+	auto rows = result->Collection().GetRows();
+	for (idx_t row = 0; row < rows.size(); row++) {
+		REQUIRE(rows.GetValue(0, row) == Value::INTEGER(42));
 	}
 }
 
@@ -71,8 +72,9 @@ TEST_CASE("Arrow scan view supports serializer verification", "[arrow]") {
 	auto result = con.Query(query);
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->RowCount() == expected_count);
-	for (idx_t row = 0; row < result->RowCount(); row++) {
-		REQUIRE(result->GetValue(0, row) == Value::INTEGER(42));
+	auto rows = result->Collection().GetRows();
+	for (idx_t row = 0; row < rows.size(); row++) {
+		REQUIRE(rows.GetValue(0, row) == Value::INTEGER(42));
 	}
 }
 
