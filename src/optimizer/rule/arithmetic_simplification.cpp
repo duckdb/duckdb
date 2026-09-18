@@ -40,18 +40,21 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 		if (constant.GetValue() == 0) {
 			// addition with 0
 			// we can remove the entire operator and replace it with the non-constant child
-			return std::move(root.GetChildrenMutable()[1 - constant_child]);
+			return Expression::PreserveReturnType(root.GetReturnType(),
+			                                      std::move(root.GetChildrenMutable()[1 - constant_child]));
 		}
 	} else if (func_name == "-") {
 		if (constant_child == 1 && constant.GetValue() == 0) {
 			// subtraction by 0
 			// we can remove the entire operator and replace it with the non-constant child
-			return std::move(root.GetChildrenMutable()[1 - constant_child]);
+			return Expression::PreserveReturnType(root.GetReturnType(),
+			                                      std::move(root.GetChildrenMutable()[1 - constant_child]));
 		}
 	} else if (func_name == "*") {
 		if (constant.GetValue() == 1) {
 			// multiply with 1, replace with non-constant child
-			return std::move(root.GetChildrenMutable()[1 - constant_child]);
+			return Expression::PreserveReturnType(root.GetReturnType(),
+			                                      std::move(root.GetChildrenMutable()[1 - constant_child]));
 		} else if (constant.GetValue() == 0) {
 			// multiply by zero: replace with constant or null
 			return ExpressionRewriter::ConstantOrNull(GetContext(),
@@ -62,8 +65,9 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 		if (constant_child == 1) {
 			if (constant.GetValue() == 1) {
 				// divide by 1, replace with non-constant child
-				return std::move(root.GetChildrenMutable()[1 - constant_child]);
-			} else if (constant.GetValue() == 0 && Settings::Get<NullOnDivisionByZeroSetting>(rewriter.context)) {
+				return Expression::PreserveReturnType(root.GetReturnType(),
+				                                      std::move(root.GetChildrenMutable()[1 - constant_child]));
+			} else if (constant.GetValue() == 0 && !Settings::Get<ErrorOnDivisionByZeroSetting>(rewriter.context)) {
 				// divide by 0, replace with NULL
 				return make_uniq<BoundConstantExpression>(Value(root.GetReturnType()));
 			}

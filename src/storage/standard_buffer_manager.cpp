@@ -126,7 +126,7 @@ idx_t StandardBufferManager::GetOperatorMemoryLimit() const {
 template <typename... ARGS>
 TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(QueryContext context, MemoryTag tag,
                                                                     idx_t memory_delta, unique_ptr<FileBuffer> *buffer,
-                                                                    ARGS... args) {
+                                                                    const ARGS &...args) {
 	auto r = buffer_pool.EvictBlocks(context, tag, memory_delta, buffer_pool.maximum_memory, buffer);
 	if (!r.success) {
 		string extra_text = StringUtil::Format(" (%s/%s used)", StringUtil::BytesToHumanReadableString(GetUsedMemory()),
@@ -547,29 +547,40 @@ void StandardBufferManager::WriteTemporaryBuffer(QueryContext context, MemoryTag
 		header_size += DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
 	}
 
-	evicted_data_per_tag[uint8_t(tag)] += buffer.AllocSize();
-
 	// Create the file and write the size followed by the buffer contents.
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
-	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + header_size);
-	//! for very large buffers, we store the size of the buffer in plaintext.
-	idx_t block_header_size = buffer.GetHeaderSize();
-	auto user_size = buffer.Size();
-	handle->Write(context, &user_size, sizeof(idx_t), 0);
-	handle->Write(context, &block_header_size, sizeof(idx_t), sizeof(idx_t));
+	bool size_on_disk_increased = false;
+	try {
+		temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + header_size);
+		size_on_disk_increased = true;
+		//! for very large buffers, we store the size of the buffer in plaintext.
+		idx_t block_header_size = buffer.GetHeaderSize();
+		auto user_size = buffer.Size();
+		handle->Write(context, &user_size, sizeof(idx_t), 0);
+		handle->Write(context, &block_header_size, sizeof(idx_t), sizeof(idx_t));
 
-	idx_t offset = sizeof(idx_t) * 2;
+		idx_t offset = sizeof(idx_t) * 2;
 
-	if (EncryptTemporaryFiles()) {
-		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
-		EncryptionEngine::EncryptTemporaryBuffer(db, buffer.InternalBuffer(), buffer.AllocSize(), encryption_metadata);
-		//! Write the nonce (and tag for GCM).
-		handle->Write(context, encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, offset);
-		offset += DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
+		if (EncryptTemporaryFiles()) {
+			uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
+			EncryptionEngine::EncryptTemporaryBuffer(db, buffer.InternalBuffer(), buffer.AllocSize(),
+			                                         encryption_metadata);
+			handle->Write(context, encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, offset);
+			offset += DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
+		}
+
+		buffer.Write(context, *handle, offset);
+	} catch (...) {
+		// roll back the accounting and remove the partially written file
+		if (size_on_disk_increased) {
+			temporary_directory.handle->GetTempFile().DecreaseSizeOnDisk(buffer.AllocSize() + header_size);
+		}
+		handle.reset();
+		fs.RemoveFile(path);
+		throw;
 	}
-
-	buffer.Write(context, *handle, offset);
+	evicted_data_per_tag[uint8_t(tag)] += buffer.AllocSize();
 }
 
 unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext context, MemoryTag tag,
@@ -677,13 +688,11 @@ void StandardBufferManager::DeleteTemporaryFile(BlockMemory &memory) {
 	// The file is not in the shared pool of files.
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto path = GetTemporaryPath(id);
-	if (fs.FileExists(path)) {
+	auto metadata = fs.GetStatsIfExists(path);
+	if (metadata) {
 		evicted_data_per_tag[uint8_t(memory.GetMemoryTag())] -= memory.GetMemoryUsage();
-		auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
-		auto content_size = handle->GetFileSize();
-		handle.reset();
 		fs.RemoveFile(path);
-		temporary_directory.handle->GetTempFile().DecreaseSizeOnDisk(content_size);
+		temporary_directory.handle->GetTempFile().DecreaseSizeOnDisk(NumericCast<idx_t>(metadata->file_size));
 	}
 }
 
@@ -734,15 +743,15 @@ vector<TemporaryFileInformation> StandardBufferManager::GetTemporaryFiles() {
 		}
 
 		// Another process or thread can delete the file before we can get its file size.
-		auto handle = fs.OpenFile(name, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
-		if (!handle) {
+		auto path = fs.JoinPath(temporary_directory.path, name);
+		auto metadata = fs.GetStatsIfExists(path);
+		if (!metadata) {
 			return;
 		}
 
 		TemporaryFileInformation info;
-		info.path = name;
-		info.size = NumericCast<idx_t>(fs.GetFileSize(*handle));
-		handle.reset();
+		info.path = std::move(path);
+		info.size = NumericCast<idx_t>(metadata->file_size);
 		result.push_back(info);
 	});
 	return result;

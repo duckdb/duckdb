@@ -46,7 +46,7 @@ struct MultiFileReaderInterface {
 	//! Combine the schemas of a set of files that were bound individually into a single schema
 	//! The default implementation combines the return types of the files by name
 	virtual void CombineSchemas(ClientContext &context, const vector<shared_ptr<BaseUnionData>> &union_data,
-	                            vector<LogicalType> &return_types, vector<Identifier> &names);
+	                            bool union_by_name, vector<LogicalType> &return_types, vector<Identifier> &names);
 	virtual void FinalizeBindData(MultiFileBindData &multi_file_data);
 	virtual void GetBindInfo(const TableFunctionData &bind_data, BindInfo &info);
 	virtual optional_idx MaxThreads(const MultiFileBindData &bind_data_p, const MultiFileGlobalState &global_state,
@@ -408,6 +408,15 @@ public:
 		return OpenMarkedFile(context, bind_data, global_state, current_reader_data, current_file_index, parallel_lock);
 	}
 
+	//! Record an error of an async file open. Read-ahead is optional, and a scan drains the opens it scheduled
+	//! before it goes away - without a read-ahead to report to, the error only marks the scan as failed
+	static void PushAsyncOpenError(MultiFileGlobalState &gstate, ErrorData error) {
+		if (gstate.read_ahead) {
+			gstate.read_ahead->PushError(std::move(error));
+		}
+		gstate.error_opening_file = true;
+	}
+
 	//! Open a file on the read-ahead async pool. Runs off the operator thread; records errors instead of throwing.
 	static void OpenMarkedFileAsync(ClientContext &context, const MultiFileBindData &bind_data,
 	                                MultiFileGlobalState &gstate, MultiFileReaderData &reader_data, idx_t file_index) {
@@ -419,14 +428,12 @@ public:
 			if (!parallel_lock.owns_lock()) {
 				parallel_lock.lock();
 			}
-			gstate.read_ahead->PushError(ErrorData(ex));
-			gstate.error_opening_file = true;
+			PushAsyncOpenError(gstate, ErrorData(ex));
 		} catch (...) { // LCOV_EXCL_START
 			if (!parallel_lock.owns_lock()) {
 				parallel_lock.lock();
 			}
-			gstate.read_ahead->PushError(ErrorData("Unknown exception while opening a file"));
-			gstate.error_opening_file = true;
+			PushAsyncOpenError(gstate, ErrorData("Unknown exception while opening a file"));
 		} // LCOV_EXCL_STOP
 	}
 
@@ -452,9 +459,14 @@ public:
 				reader_data.file_state = MultiFileFileState::OPENING;
 				{
 					MultiFileReaderData *reader_ptr = &reader_data;
-					read_ahead.ScheduleFileOpen([&context, &bind_data, &gstate, reader_ptr, current_file_index]() {
-						OpenMarkedFileAsync(context, bind_data, gstate, *reader_ptr, current_file_index);
-					});
+					read_ahead.ScheduleFileOpen(
+					    [&context, &bind_data, &gstate, reader_ptr, current_file_index]() {
+						    OpenMarkedFileAsync(context, bind_data, gstate, *reader_ptr, current_file_index);
+					    },
+					    [&gstate]() {
+						    // the reader stays in OPENING, so tell every waiter to stop instead of polling forever
+						    gstate.error_opening_file = true;
+					    });
 				}
 				progress_guaranteed = true;
 				break;
@@ -641,6 +653,10 @@ public:
 
 		while (true) {
 			if (gstate.error_opening_file) {
+				// the flag only says a file failed, the error itself lives on the read-ahead - report before ending
+				if (gstate.read_ahead) {
+					gstate.read_ahead->ThrowIfError();
+				}
 				return MultiFileClaimResult::EXHAUSTED;
 			}
 

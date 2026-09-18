@@ -706,6 +706,12 @@
         "name": "maximum_sample_files",
         "type": "idx_t",
         "default": "1"
+      },
+      {
+        "id": 109,
+        "name": "sampled_schema_is_union",
+        "type": "bool",
+        "default": "true"
       }
     ],
     "pointer_type": "none"

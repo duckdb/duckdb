@@ -149,7 +149,7 @@ QualifiedName PEGTransformerFactory::TransformQualifiedSequenceName(PEGTransform
 unique_ptr<AlterInfo>
 PEGTransformerFactory::TransformRenameAlterSequenceOptions(PEGTransformer &transformer,
                                                            unique_ptr<AlterTableInfo> rename_alter) {
-	return std::move(rename_alter);
+	throw NotImplementedException("Renaming sequences is not yet supported");
 }
 
 unique_ptr<AlterInfo>
@@ -244,6 +244,7 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransfor
 	if (add_column_entry.default_value) {
 		column_definition.SetDefaultValue(std::move(add_column_entry.default_value));
 	}
+	column_definition.SetCompressionType(add_column_entry.compression_type);
 
 	unique_ptr<AlterTableInfo> result;
 	auto if_not_exists_value = if_not_exists.has_value();
@@ -254,6 +255,9 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransfor
 	} else {
 		if (add_column_entry.is_not_null) {
 			throw NotImplementedException("Adding NOT NULL constraints to nested fields is not supported");
+		}
+		if (add_column_entry.compression_type != CompressionType::COMPRESSION_AUTO) {
+			throw NotImplementedException("Adding compression to nested fields is not supported");
 		}
 		const auto parent_path =
 		    vector<Identifier>(add_column_entry.column_path.begin(), add_column_entry.column_path.end() - 1);
@@ -290,6 +294,11 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(
 			} else if (constraint.constraint_name == "NotNullConstraint" &&
 			           constraint.constraint_type_info.second == ConstraintType::NOT_NULL) {
 				new_column.is_not_null = true;
+			} else if (constraint.constraint_name == "ColumnCompression") {
+				new_column.compression_type = constraint.compression_type;
+				if (new_column.compression_type == CompressionType::COMPRESSION_AUTO) {
+					throw ParserException("Unrecognized option for column compression");
+				}
 			}
 		}
 	}

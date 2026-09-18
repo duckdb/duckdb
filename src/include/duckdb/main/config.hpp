@@ -224,7 +224,8 @@ public:
 
 	DUCKDB_API void AddExtensionOption(const Identifier &name, string description, LogicalType parameter,
 	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr,
-	                                   SetScope default_scope = SetScope::SESSION);
+	                                   SetScope default_scope = SetScope::SESSION, bool is_debug = false,
+	                                   bool is_deprecated = false);
 	DUCKDB_API bool HasExtensionOption(const Identifier &name) const;
 	DUCKDB_API identifier_map_t<ExtensionOption> GetExtensionSettings() const;
 	DUCKDB_API bool TryGetExtensionOption(const Identifier &name, ExtensionOption &result) const;
@@ -314,6 +315,10 @@ public:
 	void AddAllowedConfig(const Identifier &config_name);
 	void AddAllowedDirectory(const string &path);
 	void AddAllowedPath(const string &path);
+	//! Allows a database file and its WAL files, so a database can be opened while external access is disabled
+	void AddAllowedDatabasePath(const string &database_path);
+	vector<string> GetAllowedDirectories() const;
+	vector<string> GetAllowedPaths() const;
 	string SanitizeAllowedPath(const string &path) const;
 	ExtensionCallbackManager &GetCallbackManager();
 	const ExtensionCallbackManager &GetCallbackManager() const;
@@ -324,6 +329,8 @@ public:
 
 private:
 	mutable mutex config_lock;
+	//! Guards allowed_paths and allowed_directories, which a running instance can extend while files are being opened
+	mutable mutex allowed_paths_lock;
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<EncodingFunctionSet> encoding_functions;
 	unique_ptr<ArrowTypeExtensionSet> arrow_extensions;

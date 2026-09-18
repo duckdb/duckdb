@@ -447,11 +447,20 @@ unique_ptr<BaseStatistics> SubstringGraphemePropagateStats(ClientContext &contex
 
 ScalarFunctionSet SubstringFun::GetFunctions() {
 	ScalarFunctionSet substr("substring");
-	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT},
-	                                  LogicalType::VARCHAR, SubstringFunction<SubstringUnicodeOp>, SubstringBind,
-	                                  SubstringPropagateStats));
-	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
-	                                  SubstringFunction<SubstringUnicodeOp>, SubstringBind, SubstringPropagateStats));
+
+	ScalarFunction three_arg({}, LogicalType::VARCHAR, SubstringFunction<SubstringUnicodeOp>, SubstringBind,
+	                         SubstringPropagateStats);
+	three_arg.GetSignature()
+	    .AddParameter("string", LogicalType::VARCHAR)
+	    .AddParameter("start", LogicalType::BIGINT)
+	    .AddParameter("length", LogicalType::BIGINT);
+	substr.AddFunction(three_arg);
+
+	ScalarFunction two_arg({}, LogicalType::VARCHAR, SubstringFunction<SubstringUnicodeOp>, SubstringBind,
+	                       SubstringPropagateStats);
+	two_arg.GetSignature().AddParameter("string", LogicalType::VARCHAR).AddParameter("start", LogicalType::BIGINT);
+	substr.AddFunction(two_arg);
+
 	// throws if the offset or length are out of the supported range
 	substr.SetFallible();
 	return (substr);
@@ -459,12 +468,20 @@ ScalarFunctionSet SubstringFun::GetFunctions() {
 
 ScalarFunctionSet SubstringGraphemeFun::GetFunctions() {
 	ScalarFunctionSet substr_grapheme("substring_grapheme");
-	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT},
-	                                           LogicalType::VARCHAR, SubstringFunction<SubstringGraphemeOp>,
-	                                           SubstringBind, SubstringGraphemePropagateStats));
-	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
-	                                           SubstringFunction<SubstringGraphemeOp>, SubstringBind,
-	                                           SubstringGraphemePropagateStats));
+
+	ScalarFunction three_arg({}, LogicalType::VARCHAR, SubstringFunction<SubstringGraphemeOp>, SubstringBind,
+	                         SubstringGraphemePropagateStats);
+	three_arg.GetSignature()
+	    .AddParameter("string", LogicalType::VARCHAR)
+	    .AddParameter("start", LogicalType::BIGINT)
+	    .AddParameter("length", LogicalType::BIGINT);
+	substr_grapheme.AddFunction(three_arg);
+
+	ScalarFunction two_arg({}, LogicalType::VARCHAR, SubstringFunction<SubstringGraphemeOp>, SubstringBind,
+	                       SubstringGraphemePropagateStats);
+	two_arg.GetSignature().AddParameter("string", LogicalType::VARCHAR).AddParameter("start", LogicalType::BIGINT);
+	substr_grapheme.AddFunction(two_arg);
+
 	// throws if the offset or length are out of the supported range
 	substr_grapheme.SetFallible();
 	return (substr_grapheme);

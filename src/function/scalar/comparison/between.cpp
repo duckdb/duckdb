@@ -213,8 +213,11 @@ unique_ptr<FunctionData> BetweenFunctionDeserialize(Deserializer &deserializer, 
 }
 
 ScalarFunction BetweenFun::GetFunction() {
-	ScalarFunction between_fun("__between", {LogicalType::ANY, LogicalType::ANY, LogicalType::ANY},
-	                           LogicalType::BOOLEAN, BetweenFunction, BindBetweenFun);
+	ScalarFunction between_fun("__between", {}, LogicalType::BOOLEAN, BetweenFunction, BindBetweenFun);
+	between_fun.GetSignature()
+	    .AddParameter("input", LogicalType::ANY)
+	    .AddParameter("lower", LogicalType::ANY)
+	    .AddParameter("upper", LogicalType::ANY);
 	between_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	between_fun.SetToStringCallback(BetweenToString);
 	between_fun.SetGetExpressionTypeCallback(BetweenGetExpressionType);

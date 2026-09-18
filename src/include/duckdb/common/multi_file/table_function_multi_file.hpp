@@ -23,6 +23,8 @@ public:
 	vector<LogicalType> expected_types;
 	//! The bind data that determined the schema above, if it came from binding a file of this same scan
 	shared_ptr<FunctionData> schema_bind_data;
+	//! Whether the scan reads several files
+	bool multi_file_scan = false;
 };
 
 //! Bind data of a multi-file function that wraps a single-file table function
@@ -46,6 +48,11 @@ struct TableFunctionMultiFileSettings {
 	string reader_type;
 	//! How many files are sampled by default to determine the schema
 	idx_t maximum_sample_files = 1;
+	//! The named parameter of the wrapped function that sets how many files are sampled (if it has one)
+	Identifier sample_files_parameter;
+	//! Whether the schemas of the sampled files are combined into a union of their columns - files are then allowed
+	//! to be missing columns of the combined schema
+	bool sampled_schema_is_union = true;
 };
 
 //! The function info of a multi-file wrapper - holds the single-file function that is wrapped
@@ -82,11 +89,14 @@ public:
 
 public:
 	string GetReaderType() const override;
+	bool UseCastMap() const override;
 	shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx) override;
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name) override;
 	void AddVirtualColumn(column_t virtual_column_id) override;
 	void PrepareReader(ClientContext &context, GlobalTableFunctionState &gstate) override;
 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
+	                       LocalTableFunctionState &lstate) override;
+	AsyncResult ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;
 	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate,
 	                 DataChunk &chunk) override;
@@ -97,7 +107,8 @@ public:
 	void FinishBatch(ClientContext &context, LocalTableFunctionState &local_state);
 	//! Bind the wrapped table function over this file - this sets up the columns of the reader.
 	//! When the schema of the scan is known upfront, the file is bound against that schema
-	void BindFunction(ClientContext &context, const TableFunctionFileReaderOptions &options);
+	void BindFunction(ClientContext &context, const TableFunctionFileReaderOptions &options,
+	                  const MultiFileOptions &file_options);
 	//! The cardinality of this file (if the wrapped function can provide one)
 	optional_idx GetCardinality() const {
 		return cardinality;
@@ -115,8 +126,13 @@ public:
 	vector<LogicalType> types;
 	//! The cardinality estimate of the wrapped function for this file (if it has one)
 	optional_idx cardinality;
+	//! The operator this file is scanned for, and the number of files that scan reads
+	optional_ptr<const PhysicalOperator> scan_op;
+	idx_t scan_file_count = 1;
 
 private:
+	//! Take the operator and file count of the scan this file is read for from its state
+	void SetScanState(GlobalTableFunctionState &gstate);
 	TableFunctionInitInput GetInitInput() const;
 	//! Initialize the global state of the wrapped function (if it has not been initialized yet)
 	void InitializeFunctionState(ClientContext &context);
@@ -179,7 +195,7 @@ public:
 	                        const MultiFileGlobalState &global_state, FileExpandResult expand_result) override;
 	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
 	                MultiFileBindData &bind_data) override;
-	void CombineSchemas(ClientContext &context, const vector<shared_ptr<BaseUnionData>> &union_data,
+	void CombineSchemas(ClientContext &context, const vector<shared_ptr<BaseUnionData>> &union_data, bool union_by_name,
 	                    vector<LogicalType> &return_types, vector<Identifier> &names) override;
 	void FinalizeBindData(MultiFileBindData &multi_file_data) override;
 	unique_ptr<GlobalTableFunctionState> InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data,
@@ -188,6 +204,7 @@ public:
 	                                                         GlobalTableFunctionState &global_state) override;
 	void FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
 	                   LocalTableFunctionState &local_state) override;
+	bool SupportsReadAhead(const MultiFileBindData &bind_data) const override;
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                        BaseUnionData &union_data, const MultiFileBindData &bind_data) override;
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,

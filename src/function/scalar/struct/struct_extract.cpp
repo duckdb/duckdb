@@ -133,18 +133,24 @@ unique_ptr<FunctionData> StructExtractAtFun::GetBindData(idx_t index) {
 }
 
 ScalarFunction GetKeyExtractFunction() {
-	return ScalarFunction("struct_extract", {{"struct", LogicalTypeId::STRUCT}, {"key", LogicalType::VARCHAR}},
-	                      LogicalType::ANY, StructExtractFunction, StructExtractBind, PropagateStructExtractStats);
+	ScalarFunction fun("struct_extract", {}, LogicalType::ANY, StructExtractFunction, StructExtractBind,
+	                   PropagateStructExtractStats);
+	fun.GetSignature().AddParameter("struct", LogicalTypeId::STRUCT).AddParameter("entry", LogicalType::VARCHAR);
+	return fun;
 }
 
 ScalarFunction GetIndexExtractFunction() {
-	return ScalarFunction("struct_extract", {{"tuple", LogicalTypeId::TUPLE}, {"index", LogicalType::BIGINT}},
-	                      LogicalType::ANY, StructExtractFunction, StructExtractBindIndex, PropagateStructExtractStats);
+	ScalarFunction fun("struct_extract", {}, LogicalType::ANY, StructExtractFunction, StructExtractBindIndex,
+	                   PropagateStructExtractStats);
+	fun.GetSignature().AddParameter("tuple", LogicalTypeId::TUPLE).AddParameter("index", LogicalType::BIGINT);
+	return fun;
 }
 
 ScalarFunction GetExtractAtFunction() {
-	return ScalarFunction("struct_extract_at", {{"struct", LogicalTypeId::STRUCT}, {"index", LogicalType::BIGINT}},
-	                      LogicalType::ANY, StructExtractFunction, StructExtractAtBind, PropagateStructExtractStats);
+	ScalarFunction fun("struct_extract_at", {}, LogicalType::ANY, StructExtractFunction, StructExtractAtBind,
+	                   PropagateStructExtractStats);
+	fun.GetSignature().AddParameter("struct", LogicalTypeId::STRUCT).AddParameter("index", LogicalType::BIGINT);
+	return fun;
 }
 
 ScalarFunctionSet StructExtractFun::GetFunctions() {

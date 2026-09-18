@@ -24,8 +24,8 @@ TEST_CASE("Read-ahead progress only counts the assignments a thread is decoding"
 	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='64KB'"));
 
 	// after one chunk read-ahead has claimed four row groups, only the first of them is being decoded
-	auto stream = con.SendQuery("SELECT i FROM integers");
-	REQUIRE_NO_FAIL(*stream);
+	auto stream = OpenStream(con, "SELECT i FROM integers");
+	REQUIRE_FALSE(stream->HasError());
 	auto chunk = stream->Fetch();
 	REQUIRE(chunk);
 	auto percentage = con.context->GetQueryProgress().GetPercentage();
@@ -36,8 +36,8 @@ TEST_CASE("Read-ahead progress only counts the assignments a thread is decoding"
 	// with single vector assignments the claimed rows are single vectors as well, buffer only a chunk or two
 	REQUIRE_NO_FAIL(con.Query("PRAGMA verify_parallelism"));
 	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='16KB'"));
-	stream = con.SendQuery("SELECT i FROM integers");
-	REQUIRE_NO_FAIL(*stream);
+	stream = OpenStream(con, "SELECT i FROM integers");
+	REQUIRE_FALSE(stream->HasError());
 	chunk = stream->Fetch();
 	REQUIRE(chunk);
 	percentage = con.context->GetQueryProgress().GetPercentage();
@@ -46,11 +46,18 @@ TEST_CASE("Read-ahead progress only counts the assignments a thread is decoding"
 	stream.reset();
 }
 
-TEST_CASE("Read-ahead inline task draining surfaces async errors", "[api]") {
+TEST_CASE("Read-ahead settles a file open that never runs", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	ScanReadAhead read_ahead(*con.context, 1, nullptr);
-	read_ahead.PushError(ErrorData("injected read-ahead error"));
-	REQUIRE_THROWS(read_ahead.TryRunPendingTask());
+	std::atomic<bool> opened {false};
+	std::atomic<bool> settled {false};
+	{
+		ScanReadAhead read_ahead(*con.context, 1, nullptr);
+		read_ahead.PushError(ErrorData("injected read-ahead error"));
+		read_ahead.ScheduleFileOpen([&]() { opened = true; }, [&]() { settled = true; });
+		// leaving the scope cancels and drains, retiring the open without running it
+	}
+	REQUIRE(settled);
+	REQUIRE(!opened);
 }

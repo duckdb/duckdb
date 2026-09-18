@@ -209,7 +209,9 @@ DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create_with_database(duckdb_v2_databa
 	DUCKDB_CHECK_ARG(out_scan);
 	*out_scan = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto &db = *Convert(database)->database->instance;
+		auto &db_wrapper = *Convert(database);
+		duckdb::lock_guard<duckdb::mutex> guard(db_wrapper.lock);
+		auto &db = *db_wrapper.GetDatabase().instance;
 		auto scan = duckdb::make_uniq<CV2DatabaseReplacementScan>(db);
 		*out_scan = Convert(scan.release());
 	});
