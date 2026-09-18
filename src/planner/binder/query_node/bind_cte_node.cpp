@@ -3,6 +3,7 @@
 #include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/query_node/merge_query_node.hpp"
+#include "duckdb/parser/query_node/copy_query_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/parser/query_node/list.hpp"
@@ -27,15 +28,25 @@ static bool IsDMLQueryNode(QueryNodeType t) {
 	       t == QueryNodeType::DELETE_QUERY_NODE || t == QueryNodeType::MERGE_QUERY_NODE;
 }
 
+static bool IsSideEffectingQueryNode(QueryNodeType type) {
+	return IsDMLQueryNode(type) || type == QueryNodeType::COPY_QUERY_NODE;
+}
+
 BoundStatement Binder::BindNode(QueryNode &node) {
 	reference<Binder> current_binder(*this);
 	vector<BoundCTEData> bound_ctes;
 	idx_t dml_cte_count = 0;
 	for (auto &cte : node.cte_map.map) {
-		if (IsDMLQueryNode(cte.second->query_node->type)) {
+		auto cte_type = cte.second->query_node->type;
+		if (IsSideEffectingQueryNode(cte_type)) {
 			if (parent && !cte.second->is_trigger_generated) {
+				if (cte_type == QueryNodeType::COPY_QUERY_NODE) {
+					throw BinderException("WITH clause containing a COPY statement must be at the top level");
+				}
 				throw BinderException("WITH clause containing a data-modifying statement must be at the top level");
 			}
+		}
+		if (IsDMLQueryNode(cte_type)) {
 			++dml_cte_count;
 		}
 		bound_ctes.push_back(current_binder.get().PrepareCTE(cte.first, *cte.second));
@@ -68,6 +79,9 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 	case QueryNodeType::MERGE_QUERY_NODE:
 		result = current_binder.get().BindNode(node.Cast<MergeQueryNode>());
 		break;
+	case QueryNodeType::COPY_QUERY_NODE:
+		result = current_binder.get().BindNode(node.Cast<CopyQueryNode>());
+		break;
 	default:
 		throw InternalException("Unsupported query node type");
 	}
@@ -92,7 +106,7 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 
 CTEBindState::CTEBindState(Binder &parent_binder_p, QueryNode &cte_def_p, const vector<Identifier> &aliases_p)
     : parent_binder(parent_binder_p), cte_def(cte_def_p), aliases(aliases_p),
-      active_binder_count(parent_binder.GetActiveBinders().size()) {
+      active_binder_count(parent_binder.GetEnclosingScopes().size()) {
 }
 
 CTEBindState::~CTEBindState() {
@@ -110,13 +124,7 @@ void CTEBindState::Bind(CTEBinding &binding) {
 
 	// we clear any expression binders that were added in the mean-time, to ensure we are not binding to any newly added
 	// correlated columns
-	auto &active_binders = parent_binder.GetActiveBinders();
-	vector<reference<ExpressionBinder>> stored_binders;
-	for (idx_t i = active_binder_count; i < active_binders.size(); i++) {
-		stored_binders.push_back(active_binders[i]);
-	}
-	active_binders.erase(active_binders.begin() + UnsafeNumericCast<int64_t>(active_binder_count),
-	                     active_binders.end());
+	auto stored_binders = parent_binder.SaveScopesAfter(active_binder_count);
 
 	// add this CTE to the query binder on the RHS with "CANNOT_BE_REFERENCED" to detect recursive references to
 	// ourselves
@@ -127,9 +135,7 @@ void CTEBindState::Bind(CTEBinding &binding) {
 	query = query_binder->Bind(cte_def);
 
 	// after binding - we add the active binders we removed back so we can leave the binder in its original state
-	for (auto &stored_binder : stored_binders) {
-		active_binders.push_back(stored_binder);
-	}
+	parent_binder.RestoreScopes(stored_binders);
 
 	// the result types of the CTE are the types of the LHS
 	types = query.types;
@@ -171,14 +177,14 @@ BoundCTEData Binder::PrepareCTE(const Identifier &ctename, CommonTableExpression
 BoundStatement Binder::FinishCTE(BoundCTEData &bound_cte, BoundStatement child) {
 	if (!bound_cte.cte_bind_state->IsBound()) {
 		auto node_type = bound_cte.cte_bind_state->cte_def.type;
-		bool is_dml = IsDMLQueryNode(node_type);
-		if (is_dml) {
-			// DML CTEs always execute even if not referenced - force bind now
+		bool has_side_effects = IsSideEffectingQueryNode(node_type);
+		if (has_side_effects) {
+			// Side-effecting CTEs always execute even if not referenced - force bind now
 			auto dummy_binding =
 			    make_uniq<CTEBinding>(BindingAlias(bound_cte.ctename), bound_cte.cte_bind_state, bound_cte.setop_index);
 			bound_cte.cte_bind_state->Bind(*dummy_binding);
 		} else {
-			// Non-DML CTE was not referenced - just ignore it
+			// CTE without side effects was not referenced - just ignore it
 			MoveCorrelatedExpressions(*bound_cte.child_binder);
 			return child;
 		}
@@ -202,10 +208,6 @@ BoundStatement Binder::FinishCTE(BoundCTEData &bound_cte, BoundStatement child) 
 	auto root = make_uniq<LogicalMaterializedCTE>(bound_cte.ctename, bound_cte.setop_index, result.types.size(),
 	                                              std::move(cte_query), std::move(cte_child), bound_cte.materialized);
 
-	// check if there are any unplanned subqueries left in either child
-	has_unplanned_dependent_joins = has_unplanned_dependent_joins ||
-	                                bound_cte.child_binder->has_unplanned_dependent_joins ||
-	                                bind_state.query_binder->has_unplanned_dependent_joins;
 	result.plan = std::move(root);
 	return result;
 }

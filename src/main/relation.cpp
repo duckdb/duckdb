@@ -54,7 +54,7 @@ shared_ptr<Relation> Relation::Project(vector<unique_ptr<ParsedExpression>> expr
 	                                           StringsToIdentifiers(aliases));
 }
 
-static vector<unique_ptr<ParsedExpression>> StringListToExpressionList(const ClientContext &context,
+static vector<unique_ptr<ParsedExpression>> StringListToExpressionList(ClientContext &context,
                                                                        const vector<string> &expressions) {
 	if (expressions.empty()) {
 		throw ParserException("Zero expressions provided");
@@ -311,11 +311,11 @@ void Relation::Create(const Identifier &catalog_name, const Identifier &schema_n
 	}
 }
 
-shared_ptr<Relation> Relation::WriteCSVRel(const string &csv_file, case_insensitive_map_t<vector<Value>> options) {
+shared_ptr<Relation> Relation::WriteCSVRel(const string &csv_file, identifier_map_t<vector<Value>> options) {
 	return make_shared_ptr<duckdb::WriteCSVRelation>(shared_from_this(), csv_file, std::move(options));
 }
 
-void Relation::WriteCSV(const string &csv_file, case_insensitive_map_t<vector<Value>> options) {
+void Relation::WriteCSV(const string &csv_file, identifier_map_t<vector<Value>> options) {
 	auto write_csv = WriteCSVRel(csv_file, std::move(options));
 	auto res = write_csv->Execute();
 	if (res->HasError()) {
@@ -324,14 +324,13 @@ void Relation::WriteCSV(const string &csv_file, case_insensitive_map_t<vector<Va
 	}
 }
 
-shared_ptr<Relation> Relation::WriteParquetRel(const string &parquet_file,
-                                               case_insensitive_map_t<vector<Value>> options) {
+shared_ptr<Relation> Relation::WriteParquetRel(const string &parquet_file, identifier_map_t<vector<Value>> options) {
 	auto write_parquet =
 	    make_shared_ptr<duckdb::WriteParquetRelation>(shared_from_this(), parquet_file, std::move(options));
 	return std::move(write_parquet);
 }
 
-void Relation::WriteParquet(const string &parquet_file, case_insensitive_map_t<vector<Value>> options) {
+void Relation::WriteParquet(const string &parquet_file, identifier_map_t<vector<Value>> options) {
 	auto write_parquet = WriteParquetRel(parquet_file, std::move(options));
 	auto res = write_parquet->Execute();
 	if (res->HasError()) {
@@ -356,7 +355,7 @@ shared_ptr<Relation> Relation::CreateView(const Identifier &schema_name, const I
 }
 
 unique_ptr<QueryResult> Relation::Query(const string &sql) const {
-	return context->GetContext()->Query(sql, false);
+	return context->GetContext()->Query(sql, QueryParameters());
 }
 
 unique_ptr<QueryResult> Relation::Query(const Identifier &name, const string &sql) {

@@ -5,6 +5,7 @@
 #include "parquet_reader.hpp"
 #include "column_reader.hpp"
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
@@ -33,6 +34,32 @@ const ParquetColumnSchema &ParquetColumnSchema::GetChildByIndex(idx_t index) con
 void ParquetColumnSchema::SetSchemaIndex(idx_t schema_idx) {
 	D_ASSERT(!schema_index.IsValid());
 	schema_index = schema_idx;
+}
+
+void ParquetColumnSchema::ValidateColumnMetadata(const ColumnChunk &column, int64_t row_group_num_rows,
+                                                 bool validate_row_count, const char *file_name) const {
+	if (!column.__isset.meta_data) {
+		return;
+	}
+	auto &metadata = column.meta_data;
+	if (metadata.num_values < 0) {
+		if (file_name) {
+			throw InvalidInputException("Failed to read file \"%s\": metadata is corrupt. Column has invalid "
+			                            "number of values (%lld)",
+			                            file_name, metadata.num_values);
+		}
+		throw InvalidInputException("Parquet metadata is corrupt. Column has invalid number of values (%lld)",
+		                            metadata.num_values);
+	}
+	if (validate_row_count && !type.IsNested() && max_repeat == 0 && metadata.num_values != row_group_num_rows) {
+		if (file_name) {
+			throw InvalidInputException(
+			    "Failed to read file \"%s\": metadata is corrupt. Column has %lld values but row group has %lld rows",
+			    file_name, metadata.num_values, row_group_num_rows);
+		}
+		throw InvalidInputException("Parquet metadata is corrupt. Column has %lld values but row group has %lld rows",
+		                            metadata.num_values, row_group_num_rows);
+	}
 }
 
 //! Writer constructors
@@ -132,6 +159,15 @@ unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(const FileMetaData &file_m
 	if (schema_type == ParquetColumnSchemaType::EXPRESSION) {
 		return nullptr;
 	}
+	D_ASSERT(row_group_idx_p < file_meta_data.row_groups.size());
+	auto &row_group = file_meta_data.row_groups[row_group_idx_p];
+	if (row_group.num_rows < 0) {
+		throw InvalidInputException("Parquet metadata is corrupt. Row group has invalid number of rows (%lld)",
+		                            row_group.num_rows);
+	}
+	if (schema_type == ParquetColumnSchemaType::COLUMN && column_index < columns.size()) {
+		ValidateColumnMetadata(columns[column_index], row_group.num_rows, true);
+	}
 	if (schema_type == ParquetColumnSchemaType::FILE_ROW_GROUP_NUMBER) {
 		// the row group number is constant within a row group - set min and max to the row group index
 		auto stats = NumericStats::CreateUnknown(type);
@@ -142,7 +178,6 @@ unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(const FileMetaData &file_m
 	}
 	if (schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
 		auto &row_groups = file_meta_data.row_groups;
-		D_ASSERT(row_group_idx_p < row_groups.size());
 		if (row_groups[row_group_idx_p].num_rows == 0) {
 			return NumericStats::CreateEmpty(type).ToUnique();
 		}

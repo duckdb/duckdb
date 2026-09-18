@@ -1398,12 +1398,17 @@ void ColumnDataCollection::ResetForReuse() {
 		return;
 	}
 
+	// Combined segments can retain an allocator distinct from the collection allocator.
+	auto segment_allocator = segments.front()->allocator;
 	for (auto &segment : segments) {
 		segment->Reset();
 	}
 
 	if (segments.size() > 1) {
 		segments.resize(1);
+	}
+	if (segment_allocator.get() != allocator.get()) {
+		segment_allocator->ResetPreserveLastBlock();
 	}
 	allocator->ResetPreserveLastBlock();
 }

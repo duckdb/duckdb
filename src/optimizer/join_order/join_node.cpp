@@ -7,12 +7,15 @@
 namespace duckdb {
 
 DPJoinNode::DPJoinNode(JoinRelationSet &set)
-    : set(set), info(nullptr), is_leaf(true), left_set(set), right_set(set), cost(0) {
+    : set(set), join_operator(nullptr), generated_cross_product(false), is_leaf(true), left_set(set), right_set(set),
+      cost(0) {
 }
 
-DPJoinNode::DPJoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinRelationSet &left,
+DPJoinNode::DPJoinNode(JoinRelationSet &set, optional_ptr<JoinOrderOperator> join_operator,
+                       vector<reference<JoinPredicate>> predicates, bool generated_cross_product, JoinRelationSet &left,
                        JoinRelationSet &right, double cost)
-    : set(set), info(info), is_leaf(false), left_set(left), right_set(right), cost(cost) {
+    : set(set), join_operator(join_operator), predicates(std::move(predicates)),
+      generated_cross_product(generated_cross_product), is_leaf(false), left_set(left), right_set(right), cost(cost) {
 }
 
 } // namespace duckdb

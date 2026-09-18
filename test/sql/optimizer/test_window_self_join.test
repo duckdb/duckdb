@@ -240,6 +240,18 @@ ORDER BY grp, seq;
 ----
 physical_plan	<REGEX>:.*WINDOW.*
 
+query II
+SELECT grp, sum(seq) OVER (PARTITION BY grp ORDER BY seq
+  ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+FROM (VALUES (1,1),(1,2),(1,3),(2,1),(2,2)) t(grp,seq)
+ORDER BY 1,2;
+----
+1	1
+1	3
+1	6
+2	1
+2	3
+
 foreach framing RANGE GROUPS
 
 query II
@@ -319,3 +331,24 @@ FROM (
 ) AS b;
 ----
 1	10.0
+
+statement ok 
+CREATE OR REPLACE SEQUENCE seq;
+
+statement ok 
+CREATE OR REPLACE TABLE t AS SELECT * FROM range(6) tt(i);
+
+query III
+SELECT g, n, sum(n) OVER (PARTITION BY g) s 
+FROM (
+	SELECT nextval('seq') g, i n 
+	FROM t
+) 
+ORDER BY n;
+----
+1	0	0
+2	1	1
+3	2	2
+4	3	3
+5	4	4
+6	5	5

@@ -17,12 +17,11 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/table_column.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/parallel/scan_read_ahead.hpp"
 
 namespace duckdb {
 struct MultiFileReader;
 struct MultiFileReaderInterface;
-class MultiFileReadAhead;
-class ReadAheadJobCompletion;
 
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
 struct MultiFileReaderBindData {
@@ -41,18 +40,22 @@ struct MultiFileReaderBindData {
 
 //! Global state for MultiFileReads
 struct MultiFileReaderGlobalState {
-	MultiFileReaderGlobalState(vector<LogicalType> extra_columns_p, optional_ptr<const MultiFileList> file_list_p)
-	    : extra_columns(std::move(extra_columns_p)), file_list(file_list_p) {};
+	MultiFileReaderGlobalState(vector<LogicalType> extra_columns_p, optional_ptr<const MultiFileList> file_list_p,
+	                           bool supports_local_extra_columns_p = false)
+	    : extra_columns(std::move(extra_columns_p)), file_list(file_list_p),
+	      supports_local_extra_columns(supports_local_extra_columns_p) {};
 	virtual ~MultiFileReaderGlobalState();
 
 	//! extra columns that will be produced during scanning
 	const vector<LogicalType> extra_columns;
 	// the file list driving the current scan
 	const optional_ptr<const MultiFileList> file_list;
+	//! Whether individual readers can add extra columns during InitializeReader
+	const bool supports_local_extra_columns;
 
 	//! Indicates that the MultiFileReader has added columns to be scanned that are not in the projection
-	bool RequiresExtraColumns() {
-		return !extra_columns.empty();
+	bool RequiresExtraColumns() const {
+		return !extra_columns.empty() || supports_local_extra_columns;
 	}
 
 	template <class TARGET>
@@ -135,6 +138,15 @@ struct MultiFileReaderData {
 	MultiFileConstantMap constant_map;
 	//! The set of expressions that should be evaluated to obtain the final result
 	vector<unique_ptr<Expression>> expressions;
+	//! Extra columns required by FinalizeChunk for this file, appended after any global extra columns
+	//! Is only allowed to be populated when MultiFileReaderGlobalState::supports_local_extra_columns is set
+	vector<LogicalType> extra_columns;
+
+	vector<LogicalType> GetExtraColumns(const MultiFileReaderGlobalState &global_state) const {
+		auto result = global_state.extra_columns;
+		result.insert(result.end(), extra_columns.begin(), extra_columns.end());
+		return result;
+	}
 
 	//! (only set when file_state is UNOPENED) the file to be opened
 	OpenFileInfo file_to_be_opened;
@@ -156,7 +168,8 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	//! Lock
 	mutable mutex lock;
 	//! Signal to other threads that a file failed to open, letting every thread abort.
-	bool error_opening_file = false;
+	//! Atomic because a cancelled file open settles it while the scheduling thread may hold the lock.
+	atomic<bool> error_opening_file {false};
 
 	//! Index of file currently up for scanning
 	atomic<idx_t> file_index;
@@ -177,7 +190,8 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 
 	unique_ptr<GlobalTableFunctionState> global_state;
 
-	unique_ptr<MultiFileReadAhead> read_ahead;
+	unique_ptr<ScanReadAhead> read_ahead;
+	ScanStatePool<LocalTableFunctionState> state_pool;
 
 	optional_ptr<const PhysicalOperator> op;
 
@@ -205,40 +219,33 @@ enum class MultiFileDecodeResult : uint8_t {
 	JOB_FINISHED      //! job is done
 };
 
-//! Outcome of acquiring the next scan job
-enum class MultiFileAcquireResult : uint8_t {
-	ACQUIRED,  //! a ready-to-decode job is now current
-	EXHAUSTED, //! the scan is exhausted, we have no more jobs
-	PARKED     //! the operator parked on schedule-time async I/O,  return from the scan
+//! Outcome of claiming the next scan job from the current file
+enum class MultiFileClaimResult : uint8_t {
+	CLAIMED,   //! the current file's next unit of work (e.g. a parquet row group)
+	EXHAUSTED, //! the scan is exhausted
+	WAIT_OPEN  //! the current file is still being opened
 };
 
 //! A single, independently schedulable unit of scan work (e.g. one Parquet row group of one file)
-struct MultiFileScanJob {
+struct MultiFileScanJobState {
 	//! The reader producing this job
 	shared_ptr<BaseFileReader> reader;
 	//! Per-file data for the reader
 	optional_ptr<MultiFileReaderData> reader_data;
-	//! The reader-specific scan state that ScheduleIO/Scan operate on
-	unique_ptr<LocalTableFunctionState> reader_scan_state;
-	//! Batch index of this job
-	idx_t batch_index = 0;
 	//! Index of the file this job belongs to
 	idx_t file_index = DConstants::INVALID_INDEX;
-	//! Completion state of the read-ahead I/O tasks for this job.
-	shared_ptr<ReadAheadJobCompletion> io_completion;
-	//! Total bytes of scheduled read-ahead I/O for this job
-	idx_t io_bytes = 0;
+	//! The scan state the job's I/O and decoding operate on, declared last so it is destroyed before the reader
+	unique_ptr<LocalTableFunctionState> scan_state;
 };
 
 struct MultiFileLocalState : public LocalTableFunctionState {
 public:
 	explicit MultiFileLocalState(ClientContext &context) : executor(context) {
 	}
-	~MultiFileLocalState() override;
 
 public:
 	//! The job currently being scanned by this thread
-	MultiFileScanJob job;
+	unique_ptr<ScanReadAheadJobWrapper<MultiFileScanJobState>> job;
 	//! Job's state
 	MultiFileJobState job_state = MultiFileJobState::NONE;
 	//! The chunk written to by the reader, handed to FinalizeChunk to transform to the global schema

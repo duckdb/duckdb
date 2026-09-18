@@ -162,8 +162,8 @@ TEST_CASE("ParseIterator: statement query text is populated and normalized", "[a
 	REQUIRE(s0);
 	REQUIRE(StringUtil::Contains(s0->query, "SELECT 1"));
 	REQUIRE_FALSE(StringUtil::Contains(s0->query, "SELECT 2"));
-	REQUIRE(s0->stmt_location == 0);
-	REQUIRE(s0->stmt_length == s0->query.size());
+	REQUIRE(s0->stmt_location.offset == 0);
+	REQUIRE(s0->stmt_location.length == s0->query.size());
 
 	Parser reparser(ctx.GetParserOptions());
 	reparser.ParseQuery(s0->query);

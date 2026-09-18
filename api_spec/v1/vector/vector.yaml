@@ -1,8 +1,10 @@
 module: vector
 functions:
   create_vector:
+    offset: 536
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
     role: constructor
     belongs_to: vector
     parameters:
@@ -17,8 +19,10 @@ functions:
       Creates a flat vector. Must be destroyed with `duckdb_destroy_vector`.
     return_description: The vector.
   destroy_vector:
+    offset: 537
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
     role: destructor
     belongs_to: vector
     parameters:
@@ -30,8 +34,9 @@ functions:
     description: |
       Destroys the vector and de-allocates its memory.
   vector_get_column_type:
+    offset: 193
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       vector:
         type: vector
@@ -43,8 +48,9 @@ functions:
       The result must be destroyed with `duckdb_destroy_logical_type`.
     return_description: The type of the vector
   vector_get_data:
+    offset: 194
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       vector:
         type: vector
@@ -58,8 +64,9 @@ functions:
       How to read or write values depends on the type of the vector.
     return_description: The data pointer
   vector_get_validity:
+    offset: 195
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       vector:
         type: vector
@@ -84,8 +91,9 @@ functions:
       Alternatively, the (slower) duckdb_validity_row_is_valid function can be used.
     return_description: The pointer to the validity mask, or NULL if no validity mask is present
   vector_ensure_validity_writable:
+    offset: 196
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       vector:
         type: vector
@@ -97,8 +105,9 @@ functions:
       After this function is called, `duckdb_vector_get_validity` will ALWAYS return non-NULL.
       This allows NULL values to be written to the vector, regardless of whether a validity mask was present before.
   vector_assign_string_element:
+    offset: 197
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       vector:
         type: vector
@@ -117,8 +126,9 @@ functions:
 
       Superseded by `duckdb_unsafe_vector_assign_string_element_len`, optionally combined with `duckdb_valid_utf8_check`.
   vector_assign_string_element_len:
+    offset: 198
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       vector:
         type: vector
@@ -140,8 +150,10 @@ functions:
 
       Superseded by `duckdb_unsafe_vector_assign_string_element_len`, optionally combined with `duckdb_valid_utf8_check`.
   unsafe_vector_assign_string_element_len:
+    offset: 545
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       vector:
         type: vector
@@ -161,8 +173,9 @@ functions:
     description: |
       Assigns a string element in the vector at the specified location without UTF-8 validation. The caller is responsible for ensuring the input is valid UTF-8. Use `duckdb_valid_utf8_check` to validate strings before calling this function if needed. If the input is known to be valid UTF-8, this function can be called directly for better performance, avoiding the overhead of redundant validation.
   list_vector_get_child:
+    offset: 199
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       vector:
         type: vector
@@ -174,8 +187,9 @@ functions:
       The resulting vector is valid as long as the parent vector is valid.
     return_description: The child vector
   list_vector_get_size:
+    offset: 200
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       vector:
         type: vector
@@ -185,8 +199,9 @@ functions:
       Returns the size of the child vector of the list.
     return_description: The size of the child list
   list_vector_set_size:
+    offset: 201
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.7.0", "2023-02-13"]
     parameters:
       vector:
         type: vector
@@ -202,8 +217,9 @@ functions:
       To set the capacity, use `duckdb_list_vector_reserve`.
     return_description: The duckdb state. Returns DuckDBError, if the vector is nullptr.
   list_vector_reserve:
+    offset: 202
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.7.0", "2023-02-13"]
     parameters:
       vector:
         type: vector
@@ -219,8 +235,9 @@ functions:
       which is set via `duckdb_list_vector_set_size`.
     return_description: The duckdb state. Returns DuckDBError, if the vector is nullptr.
   struct_vector_get_child:
+    offset: 203
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       vector:
         type: vector
@@ -234,8 +251,9 @@ functions:
       The resulting vector is valid as long as the parent vector is valid.
     return_description: The child vector
   array_vector_get_child:
+    offset: 204
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.1", "2024-03-18"]
     parameters:
       vector:
         type: vector
@@ -247,8 +265,10 @@ functions:
       The resulting vector has the size of the parent vector multiplied by the array size.
     return_description: The child vector
   slice_vector:
+    offset: 538
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
     parameters:
       vector:
         type: vector
@@ -265,8 +285,10 @@ functions:
       The length of the selection vector must be less than or equal to the length of the vector.
       Turns the vector into a dictionary vector.
   vector_copy_sel:
+    offset: 544
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     parameters:
       src:
         type: vector
@@ -290,8 +312,10 @@ functions:
     description: |
       Copy the src vector to the dst with a selection vector that identifies which indices to copy.
   vector_reference_value:
+    offset: 539
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
     parameters:
       vector:
         type: vector
@@ -303,8 +327,10 @@ functions:
     description: |
       Copies the value from `value` to `vector`.
   vector_reference_vector:
+    offset: 540
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
     parameters:
       to_vector:
         type: vector
@@ -316,8 +342,9 @@ functions:
     description: |
       Changes `to_vector` to reference `from_vector. After, the vectors share ownership of the data.
   validity_row_is_valid:
+    offset: 205
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       validity:
         type: u64
@@ -331,8 +358,9 @@ functions:
       Returns whether or not a row is valid (i.e. not NULL) in the given validity mask.
     return_description: true if the row is valid, false otherwise
   validity_set_row_validity:
+    offset: 206
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       validity:
         type: u64
@@ -351,8 +379,9 @@ functions:
       Note that `duckdb_vector_ensure_validity_writable` should be called before calling `duckdb_vector_get_validity`,
       to ensure that there is a validity mask to write to.
   validity_set_row_invalid:
+    offset: 207
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       validity:
         type: u64
@@ -367,8 +396,9 @@ functions:
 
       Equivalent to `duckdb_validity_set_row_validity` with valid set to false.
   validity_set_row_valid:
+    offset: 208
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       validity:
         type: u64
@@ -383,8 +413,10 @@ functions:
 
       Equivalent to `duckdb_validity_set_row_validity` with valid set to true.
   create_selection_vector:
+    offset: 541
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
     role: constructor
     belongs_to: selection_vector
     parameters:
@@ -397,8 +429,10 @@ functions:
       Must be destroyed with `duckdb_destroy_selection_vector`.
     return_description: The selection vector.
   destroy_selection_vector:
+    offset: 542
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
     role: destructor
     belongs_to: selection_vector
     parameters:
@@ -409,8 +443,10 @@ functions:
     description: |
       Destroys the selection vector and de-allocates its memory.
   selection_vector_get_data_ptr:
+    offset: 543
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
     parameters:
       sel:
         type: selection_vector

@@ -19,3 +19,14 @@ CALL check_peg_parser($TEST_PEG_PARSER$COPY t TO 'x.parquet' (FORMAT parquet, OR
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$COPY t TO 'x.parquet' (FORMAT parquet, ORDER_BY (a, b))$TEST_PEG_PARSER$);
+
+# spaced copy options
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$COPY t TO 'x.parquet' (FORMAT parquet, PARTITIONED BY (p1, p2), ORDER BY (a DESC, b ASC))$TEST_PEG_PARSER$);
+
+# unparenthesized PARTITION BY only consumes one column
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$COPY (SELECT 1 a) TO 'file.csv' PARTITION BY a, HEADER$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$COPY (SELECT 1 a, 2 b, 3 c) TO 'file.csv' PARTITION BY (a, b), HEADER$TEST_PEG_PARSER$);

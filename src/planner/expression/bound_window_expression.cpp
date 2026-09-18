@@ -18,6 +18,11 @@ BoundWindowExpression::BoundWindowExpression(LogicalType return_type, unique_ptr
       distinct(false) {
 }
 
+bool BoundWindowExpression::IsVolatile() const {
+	auto stability = aggregate ? aggregate->GetStability() : window->GetStability();
+	return stability == FunctionStability::VOLATILE || Expression::IsVolatile();
+}
+
 string BoundWindowExpression::ToString() const {
 	string function_name =
 	    aggregate.get() ? aggregate->GetName().GetIdentifierName() : window->GetName().GetIdentifierName();
@@ -93,17 +98,20 @@ bool BoundWindowExpression::Equals(const BaseExpression &other_p) const {
 }
 
 bool BoundWindowExpression::PartitionsAreEquivalent(const BoundWindowExpression &other) const {
-	// Partitions are not order sensitive.
-	if (partitions.size() != other.partitions.size()) {
+	// Partitions are neither order nor duplicate sensitive, so compare them as sets.
+	expression_set_t lhs;
+	for (const auto &partition : partitions) {
+		lhs.insert(*partition);
+	}
+	expression_set_t rhs;
+	for (const auto &partition : other.partitions) {
+		rhs.insert(*partition);
+	}
+	if (lhs.size() != rhs.size()) {
 		return false;
 	}
-	// TODO: Should partitions be an expression_set_t?
-	expression_set_t others;
-	for (const auto &partition : other.partitions) {
-		others.insert(*partition);
-	}
-	for (const auto &partition : partitions) {
-		if (!others.count(*partition)) {
+	for (const auto &partition : lhs) {
+		if (!rhs.count(partition)) {
 			return false;
 		}
 	}

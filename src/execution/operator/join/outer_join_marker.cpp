@@ -4,6 +4,11 @@
 
 namespace duckdb {
 
+void OuterJoinLocalScanState::Reset() {
+	scan_chunk.Reset();
+	local_scan = ColumnDataLocalScanState();
+}
+
 OuterJoinMarker::OuterJoinMarker(bool enabled_p) : enabled(enabled_p), count(0) {
 }
 

@@ -1078,6 +1078,19 @@ def test_mode_trash(shell):
     result = test.run()
     result.check_stdout(None)
 
+def test_mode_trash_runs_to_completion(shell):
+    # the rows are discarded, but the query must still run to completion
+    test = (
+        ShellTest(shell)
+        .statement("CREATE SEQUENCE seq")
+        .statement(".mode trash")
+        .statement("SELECT nextval('seq') FROM range(1000000)")
+        .statement(".mode csv")
+        .statement("SELECT currval('seq')")
+    )
+    result = test.run()
+    result.check_stdout("1000000")
+
 def test_sqlite_comments(shell):
     # Using /* <comment> */
     test = (
@@ -1126,6 +1139,35 @@ def test_duckbox(shell):
     )
     result = test.run()
     result.check_stdout('0 rows')
+
+def test_duckbox_enum_type_rendering(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode duckbox")
+        .statement("SELECT 'A'::ENUM('A','a') AS upper_a, 'A'::ENUM('a','A') AS lower_a LIMIT 0")
+    )
+    result = test.run()
+    result.check_stdout("enum('A', 'a')")
+    result.check_stdout("enum('a', 'A')")
+    result.check_not_exist("enum('a', 'a')")
+
+def test_duckbox_malformed_json(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode duckbox")
+        .statement("select union_value(\"c1\" := '}');")
+    )
+    result = test.run()
+    result.check_stdout('}')
+
+    # nested object
+    test = (
+        ShellTest(shell)
+        .statement(".mode duckbox")
+        .statement("select union_value(\"c1\" := '[\"a\", {]');")
+    )
+    result = test.run()
+    result.check_stdout('[\"a\", {]')
 
 # Original comment: #5411 - with maxrows=2, we still display all 4 rows (hiding them would take up more space)
 def test_maxrows(shell):

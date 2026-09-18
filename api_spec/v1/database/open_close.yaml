@@ -1,8 +1,10 @@
 module: database
 functions:
   create_instance_cache:
+    offset: 404
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.2.0", "2025-02-05"]
     description: |
       Creates a new database instance cache.
       The instance cache is necessary if a client/program (re)opens multiple databases to the same file within the same process.
@@ -14,8 +16,10 @@ functions:
     return_pointer: 0
     return_description: The database instance cache.
   get_or_create_from_cache:
+    offset: 405
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.2.0", "2025-02-05"]
     role: constructor
     belongs_to: database
     parameters:
@@ -48,8 +52,10 @@ functions:
       Must be closed with 'duckdb_close'.
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   destroy_instance_cache:
+    offset: 406
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.2.0", "2025-02-05"]
     role: destructor
     belongs_to: instance_cache
     parameters:
@@ -61,8 +67,9 @@ functions:
     description: |
       Destroys an existing database instance cache and de-allocates its memory.
   open:
+    offset: 0
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.1.0", "2019-06-27"]
     role: constructor
     belongs_to: database
     parameters:
@@ -83,8 +90,9 @@ functions:
       The database must be closed with 'duckdb_close'.
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   open_ext:
+    offset: 1
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.8", "2021-07-30"]
     role: constructor
     belongs_to: database
     parameters:
@@ -114,8 +122,9 @@ functions:
       The database must be closed with 'duckdb_close'.
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   close:
+    offset: 2
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.1.0", "2019-06-27"]
     role: destructor
     belongs_to: database
     parameters:
@@ -130,8 +139,9 @@ functions:
       Note that failing to call `duckdb_close` (in case of e.g. a program crash) will not cause data corruption.
       Still, it is recommended to always correctly close a database object after you are done with it.
   library_version:
+    offset: 7
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.6.0", "2022-11-14"]
     parameters: {}
     return_type: char
     return_pointer: 1
@@ -141,8 +151,9 @@ functions:
 
       Usually used for developing C extensions that must return this for a compatibility check.
   create_config:
+    offset: 8
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.8", "2021-07-30"]
     role: constructor
     belongs_to: config
     parameters:
@@ -163,8 +174,9 @@ functions:
       `DuckDBError`.
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   config_count:
+    offset: 9
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.8", "2021-07-30"]
     parameters: {}
     return_type: size
     description: |
@@ -173,8 +185,9 @@ functions:
       This should not be called in a loop as it internally loops over all the options.
     return_description: The amount of config options available.
   get_config_flag:
+    offset: 10
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.8", "2021-07-30"]
     parameters:
       index:
         type: size
@@ -199,8 +212,9 @@ functions:
       The result name or description MUST NOT be freed.
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   set_config:
+    offset: 11
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.8", "2021-07-30"]
     parameters:
       config:
         type: config
@@ -225,8 +239,9 @@ functions:
       This can fail if either the name is invalid, or if the value provided for the option is invalid.
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   destroy_config:
+    offset: 12
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.8", "2021-07-30"]
     role: destructor
     belongs_to: config
     parameters:

@@ -6,18 +6,17 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "include/icu-datefunc.hpp"
-#include "unicode/calendar.h"
 #include "tz_calendar.hpp"
 
 namespace duckdb {
 
 struct ICUTableRange {
-	using CalendarPtr = unique_ptr<icu::Calendar>;
+	using CalendarPtr = unique_ptr<Calendar>;
 
 	struct ICURangeBindData : public TableFunctionData {
 		ICURangeBindData(const ICURangeBindData &other)
 		    : TableFunctionData(other), tz_setting(other.tz_setting), cal_setting(other.cal_setting),
-		      calendar(other.calendar->clone()), cardinality(other.cardinality) {
+		      calendar(other.calendar->Copy()), cardinality(other.cardinality) {
 		}
 
 		explicit ICURangeBindData(ClientContext &context, const vector<Value> &inputs) {
@@ -25,23 +24,18 @@ struct ICUTableRange {
 			if (context.TryGetCurrentSetting("TimeZone", tz_value)) {
 				tz_setting = tz_value.ToString();
 			}
-			auto tz = icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_setting)));
+			auto tz = TimeZone::TryCreate(tz_setting);
 
-			string cal_id("@calendar=");
 			Value cal_value;
 			if (context.TryGetCurrentSetting("Calendar", cal_value)) {
 				cal_setting = cal_value.ToString();
-				cal_id += cal_setting;
 			} else {
-				cal_id += "gregorian";
+				cal_setting = "gregorian";
 			}
 
-			icu::Locale locale(cal_id.c_str());
-
-			UErrorCode success = U_ZERO_ERROR;
-			calendar.reset(icu::Calendar::createInstance(tz, locale, success));
-			if (U_FAILURE(success)) {
-				throw InternalException("Unable to create ICU calendar.");
+			calendar = Calendar::TryCreate(cal_setting, tz ? std::move(tz) : TimeZone::TryCreate("UTC"));
+			if (!calendar) {
+				throw InternalException("Unable to create calendar.");
 			}
 
 			timestamp_tz_t bounds[2];
@@ -154,7 +148,7 @@ struct ICUTableRange {
 
 	template <bool GENERATE_SERIES>
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
-	                                     vector<LogicalType> &return_types, vector<string> &names) {
+	                                     vector<LogicalType> &return_types, vector<Identifier> &names) {
 		auto result = make_uniq<ICURangeBindData>(context, input.inputs);
 
 		return_types.push_back(LogicalType::TIMESTAMP_TZ);
@@ -235,6 +229,7 @@ struct ICUTableRange {
 		                             nullptr, Bind<false>, nullptr, RangeDateTimeLocalInit);
 		range_function.in_out_function = ICUTableRangeFunction<false>;
 		range_function.cardinality = Cardinality;
+		range_function.return_type = TableFunctionReturnType::SET_RETURNING_FUNCTION;
 		range.AddFunction(range_function);
 
 		loader.RegisterFunction(range);

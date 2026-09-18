@@ -161,7 +161,7 @@ struct tpch_append_information {
 			return;
 		}
 		FlushChunk();
-		TransactionData transaction_data(0, 0);
+		auto transaction_data = TransactionData::Unversioned();
 		auto &row_collection = *optimistic_collection->collection;
 		row_collection.FinalizeAppend(transaction_data, append_state);
 		finalized = true;
@@ -778,10 +778,40 @@ const LogicalType LineitemInfo::Types[] = {
     LogicalType(LogicalTypeId::VARCHAR)};
 
 template <class T>
+static void ValidateTPCHTableSchema(const TableCatalogEntry &table, const string &table_name) {
+	const auto &columns = table.GetColumns();
+
+	if (columns.LogicalColumnCount() != T::ColumnCount) {
+		throw InvalidInputException(
+		    "TPC-H table \"%s\" has an incompatible schema: expected %llu columns but found %llu", table_name,
+		    (unsigned long long)T::ColumnCount, (unsigned long long)columns.LogicalColumnCount());
+	}
+
+	for (idx_t i = 0; i < T::ColumnCount; i++) {
+		const auto &column = columns.GetColumn(LogicalIndex(i));
+
+		if (column.Name() != Identifier(T::Columns[i])) {
+			throw InvalidInputException(
+			    "TPC-H table \"%s\" has an incompatible schema: expected column \"%s\" at position %llu but found %s",
+			    table_name, T::Columns[i], (unsigned long long)i, column.Name());
+		}
+
+		if (column.Type() != T::Types[i]) {
+			throw InvalidInputException(
+			    "TPC-H table \"%s\" has an incompatible schema: column \"%s\" has type %s but expected %s",
+			    table_name, T::Columns[i], column.Type().ToString(), T::Types[i].ToString());
+		}
+	}
+}
+
+template <class T>
 static void CreateTPCHTable(ClientContext &context, const Identifier &catalog_name, const Identifier &schema,
                             string suffix) {
+	auto table_name = string(T::Name) + suffix;
+	auto qualified_name = QualifiedName(catalog_name, schema, Identifier(table_name));
+
 	auto info = make_uniq<CreateTableInfo>();
-	info->SetQualifiedName(QualifiedName(catalog_name, schema, Identifier(T::Name + suffix)));
+	info->SetQualifiedName(qualified_name);
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	info->temporary = false;
 	for (idx_t i = 0; i < T::ColumnCount; i++) {
@@ -790,6 +820,10 @@ static void CreateTPCHTable(ClientContext &context, const Identifier &catalog_na
 	}
 	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 	catalog.CreateTable(context, std::move(info));
+
+	// Validate both newly created and pre-existing TPC-H tables before appending.
+	auto &table = catalog.GetEntry<TableCatalogEntry>(context, qualified_name);
+	ValidateTPCHTableSchema<T>(table, table_name);
 }
 
 void DBGenWrapper::CreateTPCHSchema(ClientContext &context, const Identifier &catalog, const Identifier &schema,
@@ -1083,9 +1117,24 @@ public:
 	TPCHDBGenGenerator(ClientContext &context, double flt_scale, const Identifier &catalog_name,
 	                   const Identifier &schema, string suffix, int children, int current_step)
 	    : context(context), flt_scale(flt_scale), children(children), current_step(current_step) {
+		// NaN compares false against every scale factor check, and reaches an out-of-range cast below
+		if (Value::IsNan(flt_scale)) {
+			throw InvalidInputException("DBGen requires a valid scale factor.");
+		}
+
+		if (flt_scale <= 0) {
+			Finish();
+			return;
+		}
+
+		if (flt_scale > MAX_SCALE) {
+			throw InvalidInputException("DBGen does not support a scale factor exceeding %d.",
+			                            static_cast<int>(MAX_SCALE));
+		}
+
 		InitializeBaseContext();
 
-		if (flt_scale == 0 || current_step >= children) {
+		if (current_step >= children) {
 			Finish();
 			return;
 		}
@@ -1316,9 +1365,6 @@ private:
 				parallel_work_offset++;
 			}
 			executor.WorkOnTasks();
-			if (executor.HasError()) {
-				executor.ThrowError();
-			}
 			for (idx_t appender_idx = 0; appender_idx < new_appenders.size(); appender_idx++) {
 				auto work_item_idx = parallel_work_offset - new_appenders.size() + appender_idx;
 				finished_appenders.push_back(make_uniq<FinishedDBGenAppender>(

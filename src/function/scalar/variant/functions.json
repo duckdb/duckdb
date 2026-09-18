@@ -53,6 +53,29 @@
 		"type": "scalar_function_set"
 	},
 	{
+		"name": "variant_contains",
+		"variants": [
+			{
+				"parameters": [
+					{
+						"name": "variant_haystack",
+						"type": "VARIANT"
+					},
+					{
+						"name": "variant_needle",
+						"type": "VARIANT"
+					}
+				],
+				"description": "Returns whether the needle is contained in the haystack, recursively checking nested arrays and objects.",
+				"example": "variant_contains({'a': {'b': 42}}::VARIANT, {'b': 42}::VARIANT)",
+				"categories": [
+					"variant"
+				]
+			}
+		],
+		"type": "scalar_function_set"
+	},
+	{
 		"name": "variant_exists",
 		"variants": [
 			{
@@ -132,6 +155,46 @@
 		],
 		"type": "scalar_function_set"
 	},
+	{
+		"name": "variant_extract_string",
+		"variants": [
+          {
+            "parameters": [
+              {
+                "name": "input_variant",
+                "type": "VARIANT"
+              },
+              {
+                "name": "path",
+                "type": "VARCHAR"
+              }
+            ],
+            "categories": [
+              "variant"
+            ],
+            "description": "Returns the stringified representation at `path` from the `input_variant`.",
+            "example": "variant_extract_string({'a': 42, 'b': [1,2,3])::VARIANT, 'b')"
+          },
+          {
+            "parameters": [
+              {
+                "name": "input_variant",
+                "type": "VARIANT"
+              },
+              {
+                "name": "path",
+                "type": "VARCHAR[]"
+              }
+            ],
+            "categories": [
+              "variant"
+            ],
+            "description": "Returns the stringified representation for each `path` from the `input_variant`.",
+            "example": "variant_extract_string({'a': 42, 'b': [1,2,3])::VARIANT, ['a', 'b'])"
+          }
+        ],
+      "type": "scalar_function_set"
+    },
 	{
 		"name": "variant_normalize",
 		"parameters": "input_variant",

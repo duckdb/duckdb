@@ -205,6 +205,10 @@ ListColumnReader::ListColumnReader(const ParquetReader &reader, const ParquetCol
 	}
 }
 
+ColumnReader &ListColumnReader::GetChildReader() {
+	return *child_column_reader;
+}
+
 void ListColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out) {
 	ColumnReaderInput empty_input(pending_skips, nullptr, nullptr);
 	ReadInternal<TemplatedListSkipper>(empty_input, nullptr);

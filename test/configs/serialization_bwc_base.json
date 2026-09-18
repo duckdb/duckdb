@@ -317,14 +317,6 @@
       "paths": [
         "test/sql/upsert/upsert_basic.test"
       ]
-    },
-    {
-      "reason": "Unknown failure (empty reason)",
-      "paths": [
-        "test/sql/catalog/function/test_recursive_macro.test",
-        "test/sql/storage/compression/dict_fsst/dictionary_covers_validity.test",
-        "test/sql/storage/compression/zstd/test_skipping.test"
-      ]
     }
   ]
 }

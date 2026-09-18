@@ -506,42 +506,13 @@ void PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &
 	const auto sort_key_type = table.GetSortKeyType();
 
 	switch (sort_key_type) {
-	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		TemplatedSliceSortedPayload<SortKeyType::NO_PAYLOAD_FIXED_8>(chunk, sorted, state, sort_keys, scan_state,
-		                                                             chunk_idx, result);
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		TemplatedSliceSortedPayload<SortKeyType::SORT_KEY_TYPE>(chunk, sorted, state, sort_keys, scan_state,           \
+		                                                        chunk_idx, result);                                    \
 		break;
-	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		TemplatedSliceSortedPayload<SortKeyType::NO_PAYLOAD_FIXED_16>(chunk, sorted, state, sort_keys, scan_state,
-		                                                              chunk_idx, result);
-		break;
-	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		TemplatedSliceSortedPayload<SortKeyType::NO_PAYLOAD_FIXED_24>(chunk, sorted, state, sort_keys, scan_state,
-		                                                              chunk_idx, result);
-		break;
-	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		TemplatedSliceSortedPayload<SortKeyType::NO_PAYLOAD_FIXED_32>(chunk, sorted, state, sort_keys, scan_state,
-		                                                              chunk_idx, result);
-		break;
-	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		TemplatedSliceSortedPayload<SortKeyType::NO_PAYLOAD_VARIABLE_32>(chunk, sorted, state, sort_keys, scan_state,
-		                                                                 chunk_idx, result);
-		break;
-	case SortKeyType::PAYLOAD_FIXED_16:
-		TemplatedSliceSortedPayload<SortKeyType::PAYLOAD_FIXED_16>(chunk, sorted, state, sort_keys, scan_state,
-		                                                           chunk_idx, result);
-		break;
-	case SortKeyType::PAYLOAD_FIXED_24:
-		TemplatedSliceSortedPayload<SortKeyType::PAYLOAD_FIXED_24>(chunk, sorted, state, sort_keys, scan_state,
-		                                                           chunk_idx, result);
-		break;
-	case SortKeyType::PAYLOAD_FIXED_32:
-		TemplatedSliceSortedPayload<SortKeyType::PAYLOAD_FIXED_32>(chunk, sorted, state, sort_keys, scan_state,
-		                                                           chunk_idx, result);
-		break;
-	case SortKeyType::PAYLOAD_VARIABLE_32:
-		TemplatedSliceSortedPayload<SortKeyType::PAYLOAD_VARIABLE_32>(chunk, sorted, state, sort_keys, scan_state,
-		                                                              chunk_idx, result);
-		break;
+		DUCKDB_FOR_EACH_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
 	default:
 		throw NotImplementedException("MergeJoinSimpleBlocks for %s", EnumUtil::ToString(sort_key_type));
 	}

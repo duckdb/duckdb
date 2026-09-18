@@ -1,0 +1,58 @@
+# name: test/sql/function/variant/variant_contains_shredded.test
+# description: Test variant_contains with shredded VARIANT values
+# group: [variant]
+
+load {TEST_DIR}/variant_contains_shredded.db readwrite v1.5.0
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+SET force_variant_shredding = 'STRUCT(b INTEGER, a INTEGER)';
+
+statement ok
+CREATE TABLE variants(id INTEGER, v VARIANT);
+
+statement ok
+INSERT INTO variants VALUES
+	(1, {'z': 9, 'a': 1, 'b': 2}::VARIANT),
+	(2, {'a': 10, 'b': NULL}::VARIANT),
+	(3, {'a': 20}::VARIANT),
+	(4, {'z': 40}::VARIANT),
+	(5, 42::VARIANT),
+	(6, NULL::VARIANT);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query T
+SELECT DISTINCT vector_type(v) FROM variants;
+----
+SHREDDED_VECTOR
+
+query III
+SELECT variant_contains(v, {'a': 1}::VARIANT), variant_contains(v, {'b': 2}::VARIANT),
+       variant_contains(v, 42::VARIANT)
+FROM variants
+ORDER BY id;
+----
+true	true	false
+false	false	false
+false	false	false
+false	false	false
+false	false	true
+NULL	NULL	NULL
+
+query I
+SELECT variant_contains(v, {'b': NULL}::VARIANT)
+FROM variants
+ORDER BY id;
+----
+false
+true
+false
+false
+false
+NULL

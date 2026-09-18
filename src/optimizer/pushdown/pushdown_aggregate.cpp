@@ -9,6 +9,17 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
+static bool IsVolatile(LogicalAggregate &aggr, const Expression &expr) {
+	bool is_volatile = false;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
+		D_ASSERT(colref.Depth() == 0);
+		if (aggr.GetExpression(colref.Binding()).IsVolatile()) {
+			is_volatile = true;
+		}
+	});
+	return is_volatile;
+}
+
 static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &aggr, unique_ptr<Expression> root_expr) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &expr) {
@@ -30,7 +41,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 
 	// pushdown into AGGREGATE and GROUP BY
 	// we cannot push expressions that refer to the aggregate
-	FilterPushdown child_pushdown(optimizer, convert_mark_joins);
+	FilterPushdown child_pushdown(optimizer, convert_mark_joins, projection_mode);
 	for (idx_t i = 0; i < filters.size(); i++) {
 		auto &f = *filters[i];
 		if (f.bindings.find(aggr.aggregate_index) != f.bindings.end()) {
@@ -71,6 +82,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 		if (!can_pushdown_filter) {
 			continue;
 		}
+		if (IsVolatile(aggr, *f.filter)) {
+			continue;
+		}
 		// no aggregate! we can push this down
 		// rewrite any group bindings within the filter
 		f.filter = ReplaceGroupBindings(aggr, std::move(f.filter));
@@ -86,7 +100,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 	child_pushdown.GenerateFilters();
 
 	op->children[0] = child_pushdown.Rewrite(std::move(op->children[0]));
-	return FinishPushdown(std::move(op));
+	return PushFinalFilters(std::move(op));
 }
 
 } // namespace duckdb

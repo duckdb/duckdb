@@ -23,11 +23,18 @@ unique_ptr<AlterInfo> CreateInfo::GetAlterInfo() const {
 	throw NotImplementedException("GetAlterInfo not implemented for this type");
 }
 
+void CreateInfo::StripCatalogQualification() {
+	qualified_name.StripCatalog();
+}
+
 string CreateInfo::QualifiedNameToString() const {
+	if (!temporary) {
+		return qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	}
 	// for temporary entries the catalog is implied, so it is omitted from the rendered name
-	auto catalog = temporary ? Identifier() : qualified_name.Catalog();
-	return QualifiedName(std::move(catalog), qualified_name.Schema(), qualified_name.Name())
-	    .ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	auto name = qualified_name;
+	name.StripCatalog();
+	return name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 }
 
 string CreateInfo::GetCreatePrefix(const string &entry) const {

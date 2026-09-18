@@ -13,7 +13,7 @@ struct DuckDBMetricsData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBMetricsBind(ClientContext &context, TableFunctionBindInput &input,
-                                                  vector<LogicalType> &return_types, vector<string> &names) {
+                                                  vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("metric_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 

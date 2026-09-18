@@ -30,6 +30,19 @@ class DataChunk;
 
 enum class ReaderInitializeType { INITIALIZED, SKIP_READING_FILE };
 
+struct MultiFileDynamicPushdownInfo {
+	MultiFileDynamicPushdownInfo(ClientContext &context, const MultiFileOptions &options,
+	                             const vector<Identifier> &column_names, const vector<LogicalType> &column_types,
+	                             const vector<ColumnIndex> &column_indexes, TableFilterSet &filters);
+	ClientContext &context;
+	const MultiFileOptions &options;
+	const vector<Identifier> &column_names;
+	const vector<LogicalType> &column_types;
+	const vector<ColumnIndex> &column_indexes;
+	vector<column_t> column_ids;
+	TableFilterSet &filters;
+};
+
 struct MultiFileReaderVirtualColumnBinding {
 public:
 	enum class VirtualColumnBindingType : uint8_t { COLUMN_REFERENCE, EXPRESSION, CONSTANT };
@@ -87,6 +100,8 @@ public:
 	static constexpr int32_t ROW_ID_FIELD_ID = 2147483540;
 	// Reserved field id used for the "_last_updated_sequence_number" field according to the iceberg spec
 	static constexpr int32_t LAST_UPDATED_SEQUENCE_NUMBER_ID = 2147483539;
+	//! The field of a file STRUCT that holds the path of the file - all other fields are open options
+	static constexpr const char *FILE_PATH_FIELD = "filename";
 
 public:
 	virtual ~MultiFileReader();
@@ -104,29 +119,35 @@ public:
 	//! Creates a table function set from a single reader function (including e.g. list parameters, etc)
 	DUCKDB_API static TableFunctionSet CreateFunctionSet(TableFunction table_function);
 
-	//! Parse a Value containing 1 or more paths into a vector of paths. Note: no expansion is performed here
-	DUCKDB_API virtual vector<string> ParsePaths(const Value &input);
+	//! Parse a Value containing 1 or more files into a vector of files. A file is specified either as a path
+	//! (VARCHAR) or as a STRUCT/VARIANT holding the path together with the options to open the file with
+	DUCKDB_API virtual vector<OpenFileInfo> ParseFileList(const Value &input);
+	//! Parse a single entry of a file list - see ParseFileList
+	DUCKDB_API OpenFileInfo ParseFileEntry(const Value &input);
 	//! Create a MultiFileList from a vector of paths. Any globs will be expanded using the default filesystem
 	DUCKDB_API virtual shared_ptr<MultiFileList>
 	CreateFileList(ClientContext &context, const vector<string> &paths,
 	               const FileGlobInput &glob_input = FileGlobOptions::DISALLOW_EMPTY);
-	//! Shorthand for ParsePaths + CreateFileList
+	//! Create a MultiFileList from a vector of files. Files that carry explicit open options are used as-is,
+	//! any other paths are expanded using the default filesystem
+	DUCKDB_API virtual shared_ptr<MultiFileList>
+	CreateFileList(ClientContext &context, vector<OpenFileInfo> files,
+	               const FileGlobInput &glob_input = FileGlobOptions::DISALLOW_EMPTY);
+	//! Shorthand for ParseFileList + CreateFileList
 	DUCKDB_API shared_ptr<MultiFileList>
 	CreateFileList(ClientContext &context, const Value &input,
 	               const FileGlobInput &glob_input = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! Parse the named parameters of a multi-file reader
-	DUCKDB_API virtual bool ParseOption(const string &key, const Value &val, MultiFileOptions &options,
+	DUCKDB_API virtual bool ParseOption(const Identifier &key, const Value &val, MultiFileOptions &options,
 	                                    ClientContext &context);
 	//! Perform filter pushdown into the MultiFileList. Returns a new MultiFileList if filters were pushed down
 	DUCKDB_API virtual unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
 	                                                                   const MultiFileOptions &options,
 	                                                                   MultiFilePushdownInfo &info,
 	                                                                   vector<unique_ptr<Expression>> &filters);
-	DUCKDB_API virtual unique_ptr<MultiFileList>
-	DynamicFilterPushdown(ClientContext &context, const MultiFileList &files, const MultiFileOptions &options,
-	                      const vector<Identifier> &names, const vector<LogicalType> &types,
-	                      const vector<column_t> &column_ids, TableFilterSet &filters);
+	DUCKDB_API virtual unique_ptr<MultiFileList> DynamicFilterPushdown(const MultiFileList &files,
+	                                                                   MultiFileDynamicPushdownInfo &pushdown_info);
 	//! Try to use the MultiFileReader for binding. Returns true if a bind could be made, returns false if the
 	//! MultiFileReader can not perform the bind and binding should be performed on 1 or more files in the MultiFileList
 	//! directly.
@@ -185,6 +206,16 @@ public:
 	MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
 	                                        vector<Identifier> &names, MultiFileList &files, MultiFileBindData &result,
 	                                        BaseFileReaderOptions &options, MultiFileOptions &file_options);
+
+	//! Bind the schema on the first file only
+	MultiFileReaderBindData BindFirstReader(ClientContext &context, vector<LogicalType> &return_types,
+	                                        vector<Identifier> &names, MultiFileList &files, MultiFileBindData &result,
+	                                        BaseFileReaderOptions &options, MultiFileOptions &file_options);
+	//! Bind the schema on the first "maximum_sample_files" files, combining the schemas of the sampled files
+	MultiFileReaderBindData BindSampledReader(ClientContext &context, vector<LogicalType> &return_types,
+	                                          vector<Identifier> &names, MultiFileList &files,
+	                                          MultiFileBindData &result, BaseFileReaderOptions &options,
+	                                          MultiFileOptions &file_options);
 
 	MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types,
 	                                   vector<Identifier> &names, MultiFileList &files, MultiFileBindData &result,

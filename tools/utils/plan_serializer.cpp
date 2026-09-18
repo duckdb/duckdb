@@ -106,8 +106,8 @@ int main(int argc, char **argv) {
 
 		deserialized_plan->ResolveOperatorTypes();
 
-		auto deserialized_results =
-		    con.context->Query(duckdb::make_uniq<duckdb::LogicalPlanStatement>(std::move(deserialized_plan)), false);
+		auto deserialized_results = con.context->Query(
+		    duckdb::make_uniq<duckdb::LogicalPlanStatement>(std::move(deserialized_plan)), duckdb::QueryParameters());
 		if (deserialized_results->HasError()) {
 			fprintf(stderr, "Error executing deserialized plan: %s\n", deserialized_results->GetError().c_str());
 			return 1;
@@ -129,12 +129,8 @@ int main(int argc, char **argv) {
 			return 1;
 		}
 
-		if (deserialized_results->names.size() == expected_results->names.size()) {
-			// ignore names
-			deserialized_results->names = expected_results->names;
-		}
-
-		if (!deserialized_results->Equals(*expected_results)) {
+		// ignore names
+		if (!deserialized_results->Equals(*expected_results, false)) {
 			fprintf(stderr, "-----------------------------------\n");
 			fprintf(stderr, "Deserialized result does not match!\n");
 			fprintf(stderr, "-----------------------------------\n");

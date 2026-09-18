@@ -52,6 +52,9 @@ public:
 	//! Rollback
 	void Rollback();
 
+	//! Whether this writer can write to disk at all (not temporary / in-memory / read-only)
+	bool CanWriteToDisk() const;
+
 	//! Return the client context.
 	ClientContext &GetClientContext() {
 		return context;

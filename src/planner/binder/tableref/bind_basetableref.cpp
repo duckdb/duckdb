@@ -18,6 +18,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/query_node/cte_node.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
+#include "duckdb/planner/operator/logical_secure_view.hpp"
 
 namespace duckdb {
 
@@ -45,49 +46,66 @@ static bool TryLoadExtensionForReplacementScan(ClientContext &context, const str
 }
 
 BoundStatement Binder::BindWithReplacementScan(ClientContext &context, BaseTableRef &ref) {
-	auto &config = DBConfig::GetConfig(context);
 	if (!context.config.use_replacement_scans) {
 		return BoundStatement();
 	}
-	for (auto &scan : config.replacement_scans) {
-		ReplacementScanInput input(ref.GetQualifiedName());
-		auto replacement_function = scan.function(context, input, scan.data.get());
-		if (!replacement_function) {
-			continue;
+	ReplacementScanInput input(ref.GetQualifiedName());
+	unique_ptr<TableRef> replacement_function;
+
+	// Connection-scoped replacement scans are consulted first
+	for (const auto &scan : context.config.replacement_scans) {
+		if (auto result = scan->function(context, input, scan->data.get())) {
+			replacement_function = std::move(result);
+			break;
 		}
-		if (!ref.alias.empty()) {
-			// user-provided alias overrides the default alias
-			replacement_function->alias = ref.alias;
-		} else if (replacement_function->alias.empty()) {
-			// if the replacement scan itself did not provide an alias we use the table name
-			replacement_function->alias = ref.Table();
-		}
-		if (replacement_function->type == TableReferenceType::TABLE_FUNCTION) {
-			auto &table_function = replacement_function->Cast<TableFunctionRef>();
-			table_function.column_name_alias = ref.column_name_alias;
-		} else if (replacement_function->type == TableReferenceType::SUBQUERY) {
-			auto &subquery = replacement_function->Cast<SubqueryRef>();
-			subquery.column_name_alias = ref.column_name_alias;
-		} else {
-			// carry the alias to the wrapping SubqueryRef so qualified references
-			// like `SELECT d.x FROM _ AS d` can resolve against the outer ref
-			auto inner_alias = replacement_function->alias;
-			auto select_node = make_uniq<SelectNode>();
-			select_node->select_list.push_back(make_uniq<StarExpression>());
-			select_node->from_table = std::move(replacement_function);
-			auto select_stmt = make_uniq<SelectStatement>();
-			select_stmt->node = std::move(select_node);
-			auto subquery = make_uniq<SubqueryRef>(std::move(select_stmt));
-			subquery->alias = std::move(inner_alias);
-			subquery->column_name_alias = ref.column_name_alias;
-			replacement_function = std::move(subquery);
-		}
-		if (GetBindingMode() == BindingMode::EXTRACT_REPLACEMENT_SCANS) {
-			AddReplacementScan(ref.Table(), replacement_function->Copy());
-		}
-		return Bind(*replacement_function);
 	}
-	return BoundStatement();
+
+	// Then the database-wide ones, including the built-in file scans
+	if (!replacement_function) {
+		for (const auto &scan : DBConfig::GetConfig(context).replacement_scans) {
+			if (auto result = scan.function(context, input, scan.data.get())) {
+				replacement_function = std::move(result);
+				break;
+			}
+		}
+	}
+
+	if (!replacement_function) {
+		return BoundStatement();
+	}
+
+	if (!ref.alias.empty()) {
+		// user-provided alias overrides the default alias
+		replacement_function->alias = ref.alias;
+	} else if (replacement_function->alias.empty()) {
+		// if the replacement scan itself did not provide an alias we use the table name
+		replacement_function->alias = ref.Table();
+	}
+	if (replacement_function->type == TableReferenceType::TABLE_FUNCTION) {
+		auto &table_function = replacement_function->Cast<TableFunctionRef>();
+		table_function.column_name_alias = ref.column_name_alias;
+	} else if (replacement_function->type == TableReferenceType::SUBQUERY) {
+		auto &subquery = replacement_function->Cast<SubqueryRef>();
+		subquery.column_name_alias = ref.column_name_alias;
+	} else {
+		// carry the alias to the wrapping SubqueryRef so qualified references
+		// like `SELECT d.x FROM _ AS d` can resolve against the outer ref
+		auto inner_alias = replacement_function->alias;
+		auto select_node = make_uniq<SelectNode>();
+		select_node->select_list.push_back(make_uniq<StarExpression>());
+		select_node->from_table = std::move(replacement_function);
+		auto select_stmt = make_uniq<SelectStatement>();
+		select_stmt->node = std::move(select_node);
+		auto subquery = make_uniq<SubqueryRef>(std::move(select_stmt));
+		subquery->alias = std::move(inner_alias);
+		subquery->column_name_alias = ref.column_name_alias;
+		replacement_function = std::move(subquery);
+	}
+	if (GetBindingMode() == BindingMode::EXTRACT_REPLACEMENT_SCANS) {
+		AddReplacementScan(ref.Table(), replacement_function->Copy());
+	}
+
+	return Bind(*replacement_function);
 }
 
 unique_ptr<BoundAtClause> Binder::BindAtClause(optional_ptr<AtClause> at_clause) {
@@ -100,18 +118,19 @@ unique_ptr<BoundAtClause> Binder::BindAtClause(optional_ptr<AtClause> at_clause)
 	return make_uniq<BoundAtClause>(at_clause->Unit(), std::move(val));
 }
 
-vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const Identifier &schema_name) {
+vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const Identifier &schema_name,
+                                                 bool default_schema_precedence) {
 	vector<CatalogSearchEntry> view_search_path;
 	auto &catalog_name = catalog.GetName();
 	if (!schema_name.empty()) {
 		view_search_path.emplace_back(catalog_name, schema_name);
 	}
 	auto default_schema = catalog.GetDefaultSchema();
-	if (schema_name.empty() && schema_name != default_schema) {
-		view_search_path.emplace_back(catalog_name, Identifier(default_schema));
+	if (default_schema && schema_name.empty() && schema_name != *default_schema) {
+		view_search_path.emplace_back(catalog_name, *default_schema);
 	}
 	//! Signal that this catalog should be checked, regardless of the schema in the reference
-	view_search_path.emplace_back(catalog_name, INVALID_SCHEMA);
+	view_search_path.emplace_back(catalog_name, INVALID_SCHEMA, default_schema_precedence);
 	return view_search_path;
 }
 
@@ -220,9 +239,9 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		if (ctebinding) {
 			D_ASSERT(!ctebinding->CanBeReferenced());
 			throw BinderException(error_context,
-			                      "Circular reference to CTE \"%s\", use WITH RECURSIVE to "
+			                      "Circular reference to CTE %s, use WITH RECURSIVE to "
 			                      "use recursive CTEs.",
-			                      ref.Table().GetIdentifierName());
+			                      ref.Table());
 		}
 		// could not find an alternative: bind again to get the error
 		// note: this will always throw when using DuckDB as a catalog, but a second look-up might succeed
@@ -309,7 +328,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 
 		// when binding a view, we always look into the catalog/schema where the view is stored first
 		auto view_search_path =
-		    GetSearchPath(view_catalog_entry.ParentCatalog(), view_catalog_entry.ParentSchema().name);
+		    GetSearchPath(view_catalog_entry.ParentCatalog(), view_catalog_entry.ParentSchema().name, true);
 		view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
 		// propagate the AT clause through the view
 		view_binder->entry_retriever.SetAtClause(entry_at_clause);
@@ -322,8 +341,13 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		}
 		// update the view binding with the bound view information
 		view_catalog_entry.UpdateBinding(bound_child.types, bound_child.names);
-		bind_context.AddView(bound_child.plan->GetRootIndex(), subquery.alias, subquery, bound_child,
-		                     view_catalog_entry);
+		auto root_index = bound_child.plan->GetRootIndex();
+		if (view_catalog_entry.security_type == ViewSecurityType::SECURE_VIEW) {
+			// wrap the plan of a secure view - this prevents the optimizer from pushing into the view
+			bound_child.plan =
+			    make_uniq<LogicalSecureView>(view_catalog_entry.name.GetIdentifierName(), std::move(bound_child.plan));
+		}
+		bind_context.AddView(root_index, subquery.alias, subquery, bound_child, view_catalog_entry);
 		return bound_child;
 	}
 	default:

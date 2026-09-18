@@ -86,6 +86,7 @@ unique_ptr<CreateInfo> SchemaCatalogEntry::GetInfo() const {
 
 string SchemaCatalogEntry::ToSQL() const {
 	auto create_schema_info = GetInfo();
+	create_schema_info->StripCatalogQualification();
 	return create_schema_info->ToString();
 }
 

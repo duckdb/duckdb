@@ -12,8 +12,8 @@ CreateTableInfo::CreateTableInfo(QualifiedName qualified_name_p) : CreateInfo(Ca
 	SetQualifiedName(std::move(qualified_name_p));
 }
 
-CreateTableInfo::CreateTableInfo(SchemaCatalogEntry &schema, Identifier name_p)
-    : CreateTableInfo(QualifiedName(schema.catalog.GetName(), schema.name, std::move(name_p))) {
+CreateTableInfo::CreateTableInfo(SchemaCatalogEntry &schema, const Identifier &name_p)
+    : CreateTableInfo(schema.GetQualifiedName(name_p)) {
 }
 
 unique_ptr<CreateInfo> CreateTableInfo::Copy() const {

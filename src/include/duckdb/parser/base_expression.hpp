@@ -12,6 +12,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/query_location.hpp"
 
 namespace duckdb {
 
@@ -42,13 +43,18 @@ public:
 		type = new_type;
 	}
 
-	//! Returns the location in the query (if any)
-	optional_idx GetQueryLocation() const {
+	//! Returns the source location in the query (if any). Implicitly converts to optional_idx (start offset).
+	QueryLocation GetQueryLocation() const {
 		return query_location;
 	}
 
 	//! Sets the location in the query
 	void SetQueryLocation(optional_idx location) {
+		query_location = location;
+	}
+
+	//! Sets the source location in the query
+	void SetQueryLocation(QueryLocation location) {
 		query_location = location;
 	}
 
@@ -87,8 +93,8 @@ protected:
 	//! The alias of the expression,
 	Identifier alias;
 
-	//! The location in the query (if any)
-	optional_idx query_location;
+	//! The source location in the query (if any)
+	QueryLocation query_location;
 
 protected:
 	//! Sets the class of the expression unsafely. In general expressions are immutable and should not be changed after

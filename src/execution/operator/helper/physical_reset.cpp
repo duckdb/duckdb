@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/helper/physical_reset.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 
 #include "duckdb/common/string_util.hpp"
@@ -30,14 +31,15 @@ SourceResultType PhysicalReset::GetDataInternal(ExecutionContext &context, DataC
 		return SourceResultType::FINISHED;
 	}
 	auto &config = DBConfig::GetConfig(context.client);
-	config.CheckLock(name);
-	auto option = DBConfig::GetOptionByName(name);
+	Identifier option_name(name.ToStdString());
+	config.CheckLock(option_name);
+	auto option = DBConfig::GetOptionByName(option_name);
 	if (!option) {
 		// check if this is an extra extension variable
 		ExtensionOption extension_option;
-		if (!config.TryGetExtensionOption(name, extension_option)) {
-			auto extension_name = Catalog::AutoloadExtensionByConfigName(context.client, name);
-			if (!config.TryGetExtensionOption(name, extension_option)) {
+		if (!config.TryGetExtensionOption(option_name, extension_option)) {
+			auto extension_name = Catalog::AutoloadExtensionByConfigName(context.client, option_name);
+			if (!config.TryGetExtensionOption(option_name, extension_option)) {
 				throw InvalidInputException("Extension parameter %s was not found after autoloading", name);
 			}
 		}
@@ -51,6 +53,7 @@ SourceResultType PhysicalReset::GetDataInternal(ExecutionContext &context, DataC
 	if (option->default_value) {
 		if (option->set_callback) {
 			SettingCallbackInfo info(context.client, variable_scope);
+			info.is_reset = true;
 			auto parameter_type = DBConfig::ParseLogicalType(option->parameter_type);
 			Value reset_val = Value(option->default_value).CastAs(context.client, parameter_type);
 			option->set_callback(info, reset_val);

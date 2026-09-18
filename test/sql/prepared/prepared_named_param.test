@@ -31,3 +31,12 @@ statement error
 execute q01(a, 2, 0)
 ----
 Invalid Input Error: Only scalar parameters, named parameters or NULL supported for EXECUTE
+
+# missing named parameters must be reported in declaration order, not hash order
+statement ok
+prepare q03 as select $aa, $bb, $cc, $dd, $ee;
+
+statement error
+execute q03(aa := 1, bb := 2);
+----
+Invalid Input Error: Values were not provided for the following parameters: cc, dd, ee

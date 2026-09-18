@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -39,29 +40,34 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 		if (constant.GetValue() == 0) {
 			// addition with 0
 			// we can remove the entire operator and replace it with the non-constant child
-			return std::move(root.GetChildrenMutable()[1 - constant_child]);
+			return Expression::PreserveReturnType(root.GetReturnType(),
+			                                      std::move(root.GetChildrenMutable()[1 - constant_child]));
 		}
 	} else if (func_name == "-") {
 		if (constant_child == 1 && constant.GetValue() == 0) {
 			// subtraction by 0
 			// we can remove the entire operator and replace it with the non-constant child
-			return std::move(root.GetChildrenMutable()[1 - constant_child]);
+			return Expression::PreserveReturnType(root.GetReturnType(),
+			                                      std::move(root.GetChildrenMutable()[1 - constant_child]));
 		}
 	} else if (func_name == "*") {
 		if (constant.GetValue() == 1) {
 			// multiply with 1, replace with non-constant child
-			return std::move(root.GetChildrenMutable()[1 - constant_child]);
+			return Expression::PreserveReturnType(root.GetReturnType(),
+			                                      std::move(root.GetChildrenMutable()[1 - constant_child]));
 		} else if (constant.GetValue() == 0) {
 			// multiply by zero: replace with constant or null
-			return ExpressionRewriter::ConstantOrNull(std::move(root.GetChildrenMutable()[1 - constant_child]),
+			return ExpressionRewriter::ConstantOrNull(GetContext(),
+			                                          std::move(root.GetChildrenMutable()[1 - constant_child]),
 			                                          Value::Numeric(root.GetReturnType(), 0));
 		}
 	} else if (func_name == "//") {
 		if (constant_child == 1) {
 			if (constant.GetValue() == 1) {
 				// divide by 1, replace with non-constant child
-				return std::move(root.GetChildrenMutable()[1 - constant_child]);
-			} else if (constant.GetValue() == 0) {
+				return Expression::PreserveReturnType(root.GetReturnType(),
+				                                      std::move(root.GetChildrenMutable()[1 - constant_child]));
+			} else if (constant.GetValue() == 0 && !Settings::Get<ErrorOnDivisionByZeroSetting>(rewriter.context)) {
 				// divide by 0, replace with NULL
 				return make_uniq<BoundConstantExpression>(Value(root.GetReturnType()));
 			}

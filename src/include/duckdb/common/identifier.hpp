@@ -35,6 +35,9 @@ public:
 	}
 	explicit Identifier(string &&str) : value(std::move(str)) {
 	}
+	//! Construction from a string view is also explicit to be safe
+	explicit Identifier(const std::string_view str) : value(str) {
+	}
 
 	//! Named constructors for well-known identifiers
 	static Identifier DefaultSchema() {
@@ -76,6 +79,12 @@ public:
 	const char *c_str() const { // NOLINT: match std::string interface
 		return value.c_str();
 	}
+
+	//! Whether the identifier starts with the given prefix (case-insensitive)
+	DUCKDB_API bool StartsWith(const string &prefix) const;
+
+	//! Whether the identifier ends with the given suffix (case-insensitive)
+	DUCKDB_API bool EndsWith(const string &suffix) const;
 
 	//! Case-insensitive hash of the identifier
 	DUCKDB_API hash_t Hash() const;

@@ -84,7 +84,19 @@ struct DuckDBDependenciesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBDialectsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBGrammarExtensionsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBExtensionsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBExtensionRepositoriesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -115,6 +127,11 @@ struct DuckDBExternalResourceTypesFun {
 struct DuckDBExternalResourcesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
+
+//! An external resource callback's handle/result column is part of the contract: it must be a MAP. Validate
+//! and normalize to MAP(VARCHAR, VARCHAR), so a callback that returns something else gets a clear error
+//! instead of crashing when the value is later read or emitted. NULL passes through unchanged.
+Value RequireResourceMap(const Value &value, const string &function_name, const string &column);
 
 struct DuckDBPreparedStatementsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
@@ -157,6 +174,10 @@ struct DuckDBMetricsFun {
 };
 
 struct DuckDBOptimizersFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBSecretTypeParametersFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

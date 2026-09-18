@@ -5,7 +5,7 @@
 #include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
-#include "yyjson_utils.hpp"
+#include "yyjson_memory.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
@@ -23,12 +23,23 @@ namespace {
 
 struct FromVariantConversionData {
 public:
-	explicit FromVariantConversionData(RecursiveUnifiedVectorFormat &variant_format) : variant(variant_format) {
+	FromVariantConversionData(RecursiveUnifiedVectorFormat &variant_format, optional_ptr<ClientContext> client)
+	    : variant(variant_format), client(client) {
+	}
+
+	optional<Value> TryCastAs(const Value &value, const LogicalType &target_type, string *error_message = nullptr,
+	                          bool strict = false) {
+		if (client) {
+			return value.TryCastAs(*client, target_type, error_message, strict);
+		}
+		return value.DefaultTryCastAs(target_type, error_message, strict);
 	}
 
 public:
 	//! The input Variant column
 	UnifiedVariantVectorData variant;
+	//! The optional client to use for casting
+	optional_ptr<ClientContext> client;
 	//! If unsuccessful - the error of the conversion
 	string error;
 };
@@ -55,6 +66,19 @@ public:
 public:
 	idx_t width;
 	idx_t scale;
+};
+
+struct ToVariantCastData : public BoundCastData {
+public:
+	explicit ToVariantCastData(optional_ptr<ClientContext> client) : client(client) {
+	}
+
+	unique_ptr<BoundCastData> Copy() const override {
+		return make_uniq<ToVariantCastData>(client);
+	}
+
+public:
+	optional_ptr<ClientContext> client;
 };
 
 } // namespace
@@ -182,13 +206,14 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 		}
 		if (!converted) {
 			auto value = VariantUtils::ConvertVariantToValue(conversion_data.variant, row_index, sel[i]);
-			if (!value.DefaultTryCastAs(target_type, true)) {
+			auto cast_value = conversion_data.TryCastAs(value, target_type, nullptr, true);
+			if (!cast_value) {
 				conversion_data.error = StringUtil::Format("Can't convert VARIANT(%s) value '%s'",
 				                                           EnumUtil::ToString(type_id), value.ToString());
-				value = Value(target_type);
+				cast_value = Value(target_type);
 				all_valid = false;
 			}
-			result.SetValue(i + offset, value);
+			result.SetValue(i + offset, *cast_value);
 		}
 	}
 	return all_valid;
@@ -269,6 +294,9 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 
 		FindValues(conversion_data.variant, row_index, new_sel, child_data_entry);
 		if (!CastVariant(conversion_data, child, new_sel, entry.offset, child_data_entry.child_count, row_index)) {
+			// a TRY_CAST reports the failure by returning false rather than throwing, so the writer has to be
+			// told it is deliberately short of count before it goes out of scope
+			result_data.Truncate();
 			return false;
 		}
 	}
@@ -487,30 +515,29 @@ static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector
                               idx_t offset, idx_t count, optional_idx row) {
 	auto &error = conversion_data.error;
 
-	ConvertedJSONHolder json_holder;
+	ConvertedJSONHolder holder(Allocator::DefaultAllocator());
 
 	auto result_data = FlatVector::Writer<string_t>(result, count, offset);
-	json_holder.doc = yyjson_mut_doc_new(nullptr);
 	for (idx_t i = 0; i < count; i++) {
-		auto row_index = row.IsValid() ? row.GetIndex() : i;
-
-		auto json_val = VariantCasts::ConvertVariantToJSON(json_holder.doc, conversion_data.variant, row_index, sel[i]);
+		const auto row_index = row.IsValid() ? row.GetIndex() : i;
+		const auto json_val =
+		    VariantCasts::ConvertVariantToJSON(holder.GetDocument(), conversion_data.variant, row_index, sel[i]);
 		if (!json_val) {
 			error = StringUtil::Format("Failed to convert to JSON object");
+			// same as the list path: a TRY_CAST returns false instead of throwing, so the writer must be
+			// told it is deliberately short of count
+			result_data.Truncate();
 			return false;
 		}
 
-		size_t len;
-		json_holder.stringified_json =
-		    yyjson_mut_val_write_opts(json_val, YYJSON_WRITE_ALLOW_INF_AND_NAN, nullptr, &len, nullptr);
-		if (!json_holder.stringified_json) {
-			error = "Could not serialize the JSON to string, yyjson failed";
+		const auto serialized = holder.Serialize(json_val, error);
+		if (!serialized) {
+			result_data.Truncate();
 			return false;
 		}
-		string_t res(json_holder.stringified_json, NumericCast<uint32_t>(len));
-		result_data.WriteValue(res);
-		free(json_holder.stringified_json);
-		json_holder.stringified_json = nullptr;
+
+		result_data.WriteValue(*serialized);
+		holder.Reset();
 	}
 
 	return true;
@@ -580,11 +607,12 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			uint32_t value_index = sel[i];
 			auto value = VariantUtils::ConvertVariantToValue(conversion_data.variant, row_index, value_index);
 			try {
-				if (!value.DefaultTryCastAs(target_type, true)) {
-					value = Value(target_type);
+				auto cast_value = conversion_data.TryCastAs(value, target_type, nullptr, true);
+				if (!cast_value) {
+					cast_value = Value(target_type);
 					all_valid = false;
 				}
-				result.SetValue(i + offset, value);
+				result.SetValue(i + offset, *cast_value);
 			} catch (const BinderException &) {
 				// Bind-time exceptions (e.g., incompatible struct layouts) should be treated as conversion failures
 				// Set the value to NULL and mark as failed
@@ -756,9 +784,10 @@ static bool TryFromShreddedCast(Vector &variant_vec, Vector &result) {
 	if (ShreddedVector::IsFullyShredded(variant_vec) && shredded_vec.GetType().id() == LogicalTypeId::STRUCT) {
 		// it is! check if the type of the typed_value entry matches
 		auto &shredded_entries = StructVector::GetEntries(shredded_vec);
-		if (shredded_entries[1].GetType() == result.GetType()) {
+		auto &typed_value = shredded_entries[VariantStats::TYPED_VALUE_INDEX];
+		if (typed_value.GetType() == result.GetType()) {
 			// the typed_value matches - directly reference it
-			result.Reference(shredded_entries[1]);
+			result.Reference(typed_value);
 			return true;
 		}
 	}
@@ -773,7 +802,11 @@ static bool CastFromVARIANT(Vector &variant_vec, Vector &result, idx_t count, Ca
 	D_ASSERT(variant_vec.GetType().id() == LogicalTypeId::VARIANT);
 	RecursiveUnifiedVectorFormat variant_format;
 	Vector::RecursiveToUnifiedFormat(variant_vec, variant_format);
-	FromVariantConversionData conversion_data(variant_format);
+	optional_ptr<ClientContext> client;
+	if (parameters.cast_data) {
+		client = parameters.cast_data->Cast<ToVariantCastData>().client;
+	}
+	FromVariantConversionData conversion_data(variant_format, client);
 
 	reference<const SelectionVector> sel(*ConstantVector::ZeroSelectionVector());
 	SelectionVector zero_sel;
@@ -797,6 +830,7 @@ static bool CastFromVARIANT(Vector &variant_vec, Vector &result, idx_t count, Ca
 
 BoundCastInfo DefaultCasts::VariantCastSwitch(BindCastInput &input, const LogicalType &source,
                                               const LogicalType &target) {
+	auto cast_data = make_uniq<ToVariantCastData>(input.context);
 	D_ASSERT(source.id() == LogicalTypeId::VARIANT);
 	switch (target.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -834,11 +868,11 @@ BoundCastInfo DefaultCasts::VariantCastSwitch(BindCastInput &input, const Logica
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::ARRAY:
-		return BoundCastInfo(CastFromVARIANT);
+		return BoundCastInfo(CastFromVARIANT, std::move(cast_data));
 	case LogicalTypeId::GEOMETRY:
-		return BoundCastInfo(CastFromVARIANT);
+		return BoundCastInfo(CastFromVARIANT, std::move(cast_data));
 	case LogicalTypeId::VARCHAR: {
-		return BoundCastInfo(CastFromVARIANT);
+		return BoundCastInfo(CastFromVARIANT, std::move(cast_data));
 	}
 	default:
 		return TryVectorNullCast;

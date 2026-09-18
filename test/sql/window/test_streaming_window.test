@@ -285,6 +285,13 @@ explain select i, j, first_value(i) over (), first_value(j) over () from integer
 ----
 physical_plan	<REGEX>:.*STREAMING_WINDOW.*
 
+query TT
+EXPLAIN
+SELECT first_value(i) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+FROM integers;
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
 query TTTT
 select i, j, first_value(i) over (), first_value(j) over () from integers
 ----
@@ -300,6 +307,112 @@ select row_number() over (), first_value(i) over (), first_value(j) over () from
 2	2	2
 3	2	2
 4	2	2
+
+# FIRST_VALUE can only stream when the first row of the frame does not move
+query TT
+EXPLAIN
+SELECT first_value(i) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW)
+FROM range(4) t(i);
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+query IIIII
+SELECT i,
+	first_value(i) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW),
+	first_value(i) OVER (ROWS BETWEEN 1 PRECEDING AND CURRENT ROW),
+	first_value(i) OVER (ROWS BETWEEN 1 FOLLOWING AND 1 FOLLOWING),
+	first_value(i) OVER (ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+FROM range(4) t(i);
+----
+0	0	0	1	0
+1	1	0	2	1
+2	2	1	3	2
+3	3	2	NULL	3
+
+# FIRST_VALUE can stream GROUPS and UNBOUNDED FOLLOWING frames fixed at the partition start
+query TT
+EXPLAIN
+SELECT first_value(i) OVER (GROUPS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+FROM integers;
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+EXPLAIN
+SELECT first_value(i) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+FROM integers;
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query IIII
+SELECT i, j,
+	first_value(i) OVER (GROUPS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW),
+	first_value(j) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+FROM integers;
+----
+2	2	2	2
+2	1	2	2
+1	2	2	2
+1	NULL	2	2
+
+# RANGE frames fixed at the partition start can also stream
+query TT
+EXPLAIN
+SELECT first_value(i) OVER (RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+FROM integers;
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+EXPLAIN
+SELECT first_value(i) OVER (RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+FROM integers;
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query III
+SELECT i,
+	first_value(i) OVER (RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW),
+	first_value(i) OVER (RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+FROM integers;
+----
+2	2	2
+2	2	2
+1	2	2
+1	2	2
+
+# RANGE frames with a moving frame start or an ORDER BY cannot stream
+query TT
+EXPLAIN
+SELECT first_value(i) OVER (RANGE BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+FROM integers;
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+EXPLAIN
+SELECT first_value(i) OVER (ORDER BY i RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+FROM integers;
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+query II
+SELECT i, first_value(i) OVER (RANGE BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+FROM integers;
+----
+2	2
+2	2
+1	2
+1	2
+
+query II
+SELECT i, first_value(i) OVER (ORDER BY i RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+FROM integers;
+----
+1	1
+1	1
+2	1
+2	1
 
 query TT
 select row_number() over (), row_number() over () from integers

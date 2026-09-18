@@ -1,19 +1,42 @@
-schema_version: "0.5"
+schema_version: "0.7"
 versions:
+  - "v0.1.0"
+  - "v0.1.1"
+  - "v0.1.2"
+  - "v0.2.1"
+  - "v0.2.5"
+  - "v0.2.7"
+  - "v0.2.8"
+  - "v0.2.9"
+  - "v0.3.3"
+  - "v0.4.0"
+  - "v0.5.0"
+  - "v0.6.0"
+  - "v0.7.0"
+  - "v0.8.0"
+  - "v0.9.0"
+  - "v0.10.0"
+  - "v0.10.1"
+  - "v1.0.0"
+  - "v1.1.0"
   - "v1.2.0"
   - "v1.3.0"
   - "v1.4.0"
   - "v1.5.0"
+  - "v1.5.2"
   - "v1.5.4"
+  - "v1.5.6"
 prefix: "duckdb_"
 lifecycle_states:
-  frozen:
+  stable:
     visibility: always
   deprecated:
     visibility: opt_out
     guard: DUCKDB_API_NO_DEPRECATED
-  # Required by the extension_header adapter for gating appended members.
-  # No v1 construct is currently unstable.
+  # Nothing is currently unstable: everything previously opt-in behind
+  # DUCKDB_EXTENSION_API_VERSION_UNSTABLE was stabilized into v1.5.6. The state is
+  # still needed for the 174 histories that pass through it, which is what lets a
+  # consumer targeting a pre-v1.5.6 version opt back into those symbols.
   unstable:
     visibility: opt_in
     guard: DUCKDB_EXTENSION_API_VERSION_UNSTABLE

@@ -385,7 +385,7 @@ struct TestAllTypesBindData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFunctionBindInput &input,
-                                                 vector<LogicalType> &return_types, vector<string> &names) {
+                                                 vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto result = make_uniq<TestAllTypesBindData>();
 	bool use_large_enum = false;
 	bool use_large_bignum = false;
@@ -406,7 +406,7 @@ static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFu
 	result->test_types = TestAllTypesFun::GetTestTypes(use_large_enum, use_large_bignum);
 	for (auto &test_type : result->test_types) {
 		return_types.push_back(test_type.type);
-		names.push_back(test_type.name);
+		names.emplace_back(test_type.name);
 	}
 	return std::move(result);
 }

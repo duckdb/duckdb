@@ -14,13 +14,15 @@
 
 namespace duckdb {
 
-template <uint8_t CAPACITY, NType TYPE>
+template <uint8_t CAPACITY, NType NODE_TYPE>
 class BaseLeaf {
 	friend class Node7Leaf;
 	friend class Node15Leaf;
 	friend class Node256Leaf;
 
 public:
+	static constexpr NType TYPE = NODE_TYPE;
+
 	BaseLeaf() = delete;
 	BaseLeaf(const BaseLeaf &) = delete;
 	BaseLeaf &operator=(const BaseLeaf &) = delete;
@@ -31,12 +33,12 @@ private:
 
 public:
 	//! Get a new BaseLeaf and initialize it.
-	static NodeHandle<BaseLeaf> New(ART &art, Node &node) {
-		node = Node::GetAllocator(art, TYPE).New();
+	static NodeHandle New(ART &art, NodePtr &node) {
+		node = NodePtr::GetAllocator(art, TYPE).New();
 		node.SetMetadata(static_cast<uint8_t>(TYPE));
 
-		NodeHandle<BaseLeaf> handle(art, node);
-		auto &n = handle.Get();
+		NodeHandle handle(art, node);
+		auto &n = handle.Get<BaseLeaf>();
 
 		n.count = 0;
 		return handle;
@@ -72,7 +74,7 @@ public:
 
 private:
 	static void InsertByteInternal(BaseLeaf &n, const uint8_t byte);
-	static NodeHandle<BaseLeaf> DeleteByteInternal(ART &art, Node &node, const uint8_t byte);
+	static NodeHandle DeleteByteInternal(ART &art, NodePtr &node, const uint8_t byte);
 };
 
 //! Node7Leaf holds up to seven sorted bytes.
@@ -86,12 +88,12 @@ public:
 
 public:
 	//! Insert a byte.
-	static void InsertByte(ART &art, Node &node, const uint8_t byte);
+	static void InsertByte(ART &art, NodePtr &node, const uint8_t byte);
 	//! Delete a byte.
-	static void DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byte, const ARTKey &row_id);
+	static void DeleteByte(ART &art, NodePtr &node, NodePtr &prefix, const uint8_t byte, const ARTKey &row_id);
 
 private:
-	static void ShrinkNode15Leaf(ART &art, Node &node7_leaf, Node &node15_leaf);
+	static void ShrinkNode15Leaf(ART &art, NodePtr &node7_leaf, NodePtr &node15_leaf);
 };
 
 //! Node15Leaf holds up to 15 sorted bytes.
@@ -105,14 +107,14 @@ public:
 
 public:
 	//! Insert a byte.
-	static void InsertByte(ART &art, Node &node, const uint8_t byte);
+	static void InsertByte(ART &art, NodePtr &node, const uint8_t byte);
 	//! Delete a byte.
-	static void DeleteByte(ART &art, Node &node, const uint8_t byte);
+	static void DeleteByte(ART &art, NodePtr &node, const uint8_t byte);
 
 private:
-	static void GrowNode7Leaf(ART &art, Node &node15_leaf, Node &node7_leaf);
+	static void GrowNode7Leaf(ART &art, NodePtr &node15_leaf, NodePtr &node7_leaf);
 	//! We shrink at <= Node48::SHRINK_THRESHOLD.
-	static void ShrinkNode256Leaf(ART &art, Node &node15_leaf, Node &node256_leaf);
+	static void ShrinkNode256Leaf(ART &art, NodePtr &node15_leaf, NodePtr &node256_leaf);
 };
 
 } // namespace duckdb

@@ -1,8 +1,10 @@
 module: config_option
 functions:
   create_config_option:
+    offset: 423
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     role: constructor
     belongs_to: config_option
     parameters: {}
@@ -11,8 +13,10 @@ functions:
       Creates a configuration option instance.
     return_description: The resulting configuration option instance. Must be destroyed with `duckdb_destroy_config_option`.
   destroy_config_option:
+    offset: 424
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     role: destructor
     belongs_to: config_option
     parameters:
@@ -24,8 +28,10 @@ functions:
     description: |
       Destroys the given configuration option instance.
   config_option_set_name:
+    offset: 425
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       option:
         type: config_option
@@ -39,8 +45,10 @@ functions:
     description: |
       Sets the name of the configuration option.
   config_option_set_type:
+    offset: 426
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       option:
         type: config_option
@@ -52,8 +60,10 @@ functions:
     description: |
       Sets the type of the configuration option.
   config_option_set_default_value:
+    offset: 427
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       option:
         type: config_option
@@ -67,8 +77,10 @@ functions:
       If the type of this option has already been set with `duckdb_config_option_set_type`, the value is cast to the type.
       Otherwise, the type is inferred from the value.
   config_option_set_default_scope:
+    offset: 428
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       option:
         type: config_option
@@ -81,8 +93,10 @@ functions:
       Sets the default scope of the configuration option.
       If not set, this defaults to `DUCKDB_CONFIG_OPTION_SCOPE_SESSION`.
   config_option_set_description:
+    offset: 429
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       option:
         type: config_option
@@ -96,8 +110,10 @@ functions:
     description: |
       Sets the description of the configuration option.
   register_config_option:
+    offset: 430
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       connection:
         type: connection
@@ -110,8 +126,10 @@ functions:
       Registers the given configuration option on the specified connection.
     return_description: A duckdb_state indicating success or failure.
   client_context_get_config_option:
+    offset: 431
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       context:
         type: client_context
@@ -134,8 +152,9 @@ functions:
       Retrieves the value of a configuration option by name from the given client context.
     return_description: The value of the configuration option. Returns `nullptr` if the option does not exist.
   get_profiling_info:
+    offset: 331
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       connection:
         type: connection
@@ -145,8 +164,9 @@ functions:
       Returns the root node of the profiling information. Returns nullptr, if profiling is not enabled.
     return_description: A profiling information object.
   profiling_info_get_value:
+    offset: 332
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       info:
         type: profiling_info
@@ -163,8 +183,9 @@ functions:
        by calling the corresponding function: char *duckdb_get_varchar(duckdb_value value).
     return_description: The value of the metric. Must be freed with `duckdb_destroy_value`
   profiling_info_get_metrics:
+    offset: 278
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       info:
         type: profiling_info
@@ -175,8 +196,9 @@ functions:
       The individual elements are accessible via the duckdb_value MAP functions.
     return_description: The key-value metric map as a MAP duckdb_value.
   profiling_info_get_child_count:
+    offset: 279
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       info:
         type: profiling_info
@@ -186,8 +208,9 @@ functions:
       Returns the number of children in the current profiling info node.
     return_description: The number of children in the current node.
   profiling_info_get_child:
+    offset: 280
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       info:
         type: profiling_info

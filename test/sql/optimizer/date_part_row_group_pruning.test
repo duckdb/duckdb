@@ -1,0 +1,374 @@
+# name: test/sql/optimizer/date_part_row_group_pruning.test
+# description: Row-group pruning through date/time parts when a row group spans a single parent period
+# group: [optimizer]
+
+statement ok
+ATTACH '{TEST_DIR}/date_part_prune.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+#################### date parts ####################
+
+# 3 row groups covering months [1, 2], [5, 6] and [9, 10] of 2024:
+# each row group spans two part values so the filters below cannot be folded away entirely
+statement ok
+CREATE TABLE months AS
+    SELECT make_date(2024,
+                     1 + (range // 2048)::INT * 4 + ((range % 2048) // 1024)::INT,
+                     1 + ((range % 1024) * 27 // 1024)::INT) AS d
+    FROM range(6144);
+
+query I
+SELECT count(*) FROM months WHERE month(d) = 5;
+----
+1024
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM months WHERE month(d) = 5;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+# range predicates on a date part also prune
+query I
+SELECT count(*) FROM months WHERE month(d) BETWEEN 6 AND 9;
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM months WHERE month(d) BETWEEN 6 AND 9;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 3.*
+
+query I
+SELECT count(*) FROM months WHERE month(d) >= 10;
+----
+1024
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM months WHERE month(d) >= 10;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+# quarters per row group: [1, 1], [2, 2] and [3, 4]
+query I
+SELECT count(*) FROM months WHERE quarter(d) = 4;
+----
+1024
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM months WHERE quarter(d) = 4;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+# dayofyear 130 is May 9: only the second row group ([122, 179]) can contain it
+query I
+SELECT count(*) FROM months WHERE dayofyear(d) = 130;
+----
+38
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM months WHERE dayofyear(d) = 130;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+# ISO week 20 is May 13-19: only the second row group ([18, 26]) can contain it
+query I
+SELECT count(*) FROM months WHERE week(d) = 20;
+----
+265
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM months WHERE week(d) = 20;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+# also works through a TIMESTAMP column
+statement ok
+CREATE TABLE month_ts AS SELECT d::TIMESTAMP AS ts FROM months;
+
+query I
+SELECT count(*) FROM month_ts WHERE month(ts) = 5;
+----
+1024
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM month_ts WHERE month(ts) = 5;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+# 3 row groups within June 2024 covering days [1, 9], [11, 19] and [21, 29]
+statement ok
+CREATE TABLE days AS
+    SELECT make_date(2024, 6, 1 + (range // 2048)::INT * 10 + ((range % 2048) * 9 // 2048)::INT) AS d
+    FROM range(6144);
+
+query I
+SELECT count(*) FROM days WHERE day(d) = 15;
+----
+227
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM days WHERE day(d) = 15;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+# a row group spanning multiple years must keep the full [1, 12] month range:
+# every row group here contains dates from both December 2023 and January 2024
+statement ok
+CREATE TABLE cross_year AS
+    SELECT make_date(2023 + (range % 2)::INT, 12 - (range % 2)::INT * 11, 1 + (range // 236)::INT) AS d
+    FROM range(6144);
+
+query I
+SELECT count(*) FROM cross_year WHERE month(d) = 12;
+----
+3072
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM cross_year WHERE month(d) = 12;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+# quarter/dayofyear/week fall back to their fixed ranges on the same cross-year data
+query I
+SELECT count(*) FROM cross_year WHERE quarter(d) = 4;
+----
+3072
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM cross_year WHERE quarter(d) = 4;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+# dayofyear 339 is Dec 5 in the non-leap year 2023
+query I
+SELECT count(*) FROM cross_year WHERE dayofyear(d) = 339;
+----
+118
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM cross_year WHERE dayofyear(d) = 339;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+# ISO week 52 of 2023 is Dec 25-31
+query I
+SELECT count(*) FROM cross_year WHERE week(d) = 52;
+----
+240
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM cross_year WHERE week(d) = 52;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+# cross-year also cannot prune through a TIMESTAMP column
+statement ok
+CREATE TABLE cross_year_ts AS SELECT d::TIMESTAMP AS ts FROM cross_year;
+
+query I
+SELECT count(*) FROM cross_year_ts WHERE month(ts) = 12;
+----
+3072
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM cross_year_ts WHERE month(ts) = 12;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+# a row group spanning a month boundary must keep the full [1, 31] day range
+statement ok
+CREATE TABLE cross_month AS
+    SELECT (DATE '2024-06-30' + (range % 2)::INT) AS d FROM range(6144);
+
+query I
+SELECT count(*) FROM cross_month WHERE day(d) = 30;
+----
+3072
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM cross_month WHERE day(d) = 30;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+#################### time parts ####################
+
+# 3 row groups within 2024-06-01 covering hours [9, 10], [12, 13] and [15, 16]
+statement ok
+CREATE TABLE hours_ts AS
+    SELECT TIMESTAMP '2024-06-01 09:00:00'
+           + INTERVAL ((range // 2048) * 3 + (range % 2048) // 1024) HOUR
+           + INTERVAL ((range % 1024) * 59 // 1024) MINUTE AS ts
+    FROM range(6144);
+
+query I
+SELECT count(*) FROM hours_ts WHERE hour(ts) = 12;
+----
+1024
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM hours_ts WHERE hour(ts) = 12;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+# hour of a TIME column is monotone over the whole domain
+statement ok
+CREATE TABLE times AS SELECT ts::TIME AS t FROM hours_ts;
+
+query I
+SELECT count(*) FROM times WHERE hour(t) = 12;
+----
+1024
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM times WHERE hour(t) = 12;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+# 3 row groups within hour 12 covering minutes [0, 8], [20, 28] and [40, 48]
+statement ok
+CREATE TABLE minutes_ts AS
+    SELECT TIMESTAMP '2024-06-01 12:00:00'
+           + INTERVAL ((range // 2048) * 20) MINUTE
+           + INTERVAL ((range % 2048) * 9 // 2048) MINUTE AS ts
+    FROM range(6144);
+
+query I
+SELECT count(*) FROM minutes_ts WHERE minute(ts) = 25;
+----
+228
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM minutes_ts WHERE minute(ts) = 25;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+# 3 row groups within one minute covering seconds [0, 8], [20, 28] and [40, 48]
+statement ok
+CREATE TABLE seconds_ts AS
+    SELECT TIMESTAMP '2024-06-01 12:30:00'
+           + INTERVAL ((range // 2048) * 20) SECOND
+           + INTERVAL ((range % 2048) * 9 // 2048) SECOND AS ts
+    FROM range(6144);
+
+query I
+SELECT count(*) FROM seconds_ts WHERE second(ts) = 25;
+----
+228
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM seconds_ts WHERE second(ts) = 25;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+# sub-second parts are also monotone within a single minute
+query I
+SELECT count(*) FROM seconds_ts WHERE millisecond(ts) = 25000;
+----
+228
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM seconds_ts WHERE millisecond(ts) = 25000;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM seconds_ts WHERE microsecond(ts) = 25000000;
+----
+228
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM seconds_ts WHERE microsecond(ts) = 25000000;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM seconds_ts WHERE nanosecond(ts) = 25000000000;
+----
+228
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM seconds_ts WHERE nanosecond(ts) = 25000000000;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+# a row group spanning midnight must keep the full [0, 24] hour range:
+# every row group here contains timestamps from both 23:30 and 00:30 the next day
+statement ok
+CREATE TABLE cross_midnight AS
+    SELECT TIMESTAMP '2024-06-01 23:30:00'
+           + INTERVAL ((range % 2) * 60) MINUTE
+           + INTERVAL (range // 236) SECOND AS ts
+    FROM range(6144);
+
+query I
+SELECT count(*) FROM cross_midnight WHERE hour(ts) = 23;
+----
+3072
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM cross_midnight WHERE hour(ts) = 23;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+# a row group spanning an hour boundary must keep the full [0, 59] minute range
+statement ok
+CREATE TABLE cross_hour AS
+    SELECT TIMESTAMP '2024-06-01 12:59:30' + INTERVAL ((range % 2) * 60) SECOND AS ts
+    FROM range(6144);
+
+query I
+SELECT count(*) FROM cross_hour WHERE minute(ts) = 59;
+----
+3072
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM cross_hour WHERE minute(ts) = 59;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+# a row group spanning a minute boundary must keep the full [0, 59] second range
+statement ok
+CREATE TABLE cross_minute AS
+    SELECT TIMESTAMP '2024-06-01 12:30:59' + INTERVAL (range % 2) SECOND AS ts
+    FROM range(6144);
+
+query I
+SELECT count(*) FROM cross_minute WHERE second(ts) = 59;
+----
+3072
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM cross_minute WHERE second(ts) = 59;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+# sub-second parts must also fall back across a minute boundary
+query I
+SELECT count(*) FROM cross_minute WHERE millisecond(ts) = 59000;
+----
+3072
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM cross_minute WHERE millisecond(ts) = 59000;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+# pre-epoch timestamps (negative microseconds) must resolve parent periods correctly
+statement ok
+CREATE TABLE pre_epoch AS
+    SELECT TIMESTAMP '1965-06-01 09:00:00'
+           + INTERVAL ((range // 2048) * 3 + (range % 2048) // 1024) HOUR
+           + INTERVAL ((range % 1024) * 59 // 1024) MINUTE AS ts
+    FROM range(6144);
+
+query I
+SELECT count(*) FROM pre_epoch WHERE hour(ts) = 12;
+----
+1024
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM pre_epoch WHERE hour(ts) = 12;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*

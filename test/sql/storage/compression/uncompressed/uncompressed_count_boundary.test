@@ -1,0 +1,29 @@
+# name: test/sql/storage/compression/uncompressed/uncompressed_count_boundary.test
+# description: A segment count one past true block capacity must error, not read past the block
+# group: [uncompressed]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/uncompressed_count_boundary.db.gz {TEST_DIR}/uncompressed_count_boundary.db
+
+load {TEST_DIR}/uncompressed_count_boundary.db readonly
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE column_name='a' AND compression='Uncompressed';
+----
+Uncompressed
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted fixed-size segment: array count extends past the end of the segment
+
+restart
+
+statement ok
+SET debug_force_fetch_row=true;
+
+statement error
+SELECT sum(a) FROM t;
+----
+Data Corruption Error: Corrupted fixed-size segment: array count extends past the end of the segment

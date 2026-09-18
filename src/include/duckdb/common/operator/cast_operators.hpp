@@ -11,6 +11,7 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/query_location.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/typedefs.hpp"
@@ -22,6 +23,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 struct CastParameters;
@@ -68,6 +70,23 @@ static string CastExceptionText(SRC input) {
 	       " can't be cast to the destination type " + TypeIdToString(GetTypeId<DST>());
 }
 
+template <class SRC>
+static string CastExceptionText(SRC input, const LogicalType &target_type) {
+	if constexpr (std::is_same<SRC, string_t>::value) {
+		return StringUtil::Format("Could not convert string '%s' to %s", ConvertToString::Operation<SRC>(input),
+		                          target_type.ToString());
+	}
+	return StringUtil::Format("Type %s with value %s can't be cast to the destination type %s",
+	                          TypeIdToString(GetTypeId<SRC>()), ConvertToString::Operation<SRC>(input),
+	                          target_type.ToString());
+}
+
+template <class SRC>
+static string CastExceptionText(SRC input, const LogicalType &source_type, const LogicalType &target_type) {
+	return StringUtil::Format("Type %s with value %s can't be cast to the destination type %s", source_type.ToString(),
+	                          ConvertToString::Operation<SRC>(input), target_type.ToString());
+}
+
 struct Cast {
 	template <class SRC, class DST>
 	static inline DST Operation(SRC input) {
@@ -83,7 +102,7 @@ struct HandleCastError {
 	static void AssignError(const string &error_message, CastParameters &parameters);
 	static void AssignError(const string &error_message, string *error_message_ptr,
 	                        optional_ptr<const Expression> cast_source = nullptr,
-	                        optional_idx error_location = optional_idx());
+	                        QueryLocation error_location = QueryLocation());
 };
 
 //===--------------------------------------------------------------------===//
@@ -1050,6 +1069,16 @@ struct CastFromPointer {
 };
 template <>
 duckdb::string_t CastFromPointer::Operation(uintptr_t input, StringHeap &heap);
+
+//! Parses the text produced by CastFromPointer; not registered as a SQL cast
+struct CastToPointer {
+	template <class SRC, class DST>
+	static inline DST Operation(SRC input) {
+		throw duckdb::NotImplementedException("Cast to pointer could not be performed!");
+	}
+};
+template <>
+uintptr_t CastToPointer::Operation(string_t input);
 
 //===--------------------------------------------------------------------===//
 // Types

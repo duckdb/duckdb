@@ -53,3 +53,43 @@ query I
 select t::DATE from tstzs;
 ----
 2026-04-09
+
+# Issue #24617: TRY_CAST through the ICU casts must return NULL on overflow instead of raising
+
+statement ok
+SET TimeZone = 'UTC';
+
+query I
+SELECT TRY_CAST(TIMESTAMPTZ '2262-04-11 23:47:16.854776+00' AS TIMESTAMP_NS);
+----
+NULL
+
+statement error
+SELECT CAST(TIMESTAMPTZ '2262-04-11 23:47:16.854776+00' AS TIMESTAMP_NS);
+----
+Conversion Error: Could not convert Timestamp to higher precision.
+
+# The overflow check applies to the local time, so use values that overflow in any time zone
+statement ok
+SET TimeZone = 'America/Los_Angeles';
+
+query I
+SELECT TRY_CAST(TIMESTAMPTZ '9999-01-01 00:00:00+00' AS TIMESTAMP_NS);
+----
+NULL
+
+query I
+SELECT TRY_CAST(TIMESTAMPTZ '2026-04-09 11:48:07.123456-07' AS TIMESTAMP_NS);
+----
+2026-04-09 11:48:07.123456
+
+# Widening the naive source before attaching the time zone can also overflow
+query I
+SELECT TRY_CAST(DATE '5877642-06-25' AS TIMESTAMPTZ);
+----
+NULL
+
+statement error
+SELECT CAST(DATE '5877642-06-25' AS TIMESTAMPTZ);
+----
+Conversion Error

@@ -42,6 +42,11 @@ public:
 	bool TryGetBindingIndex(const Identifier &column_name, column_t &column_index);
 	column_t GetBindingIndex(const Identifier &column_name);
 	bool HasMatchingBinding(const Identifier &column_name);
+	//! Register an alternative name for an existing column - the alias can be bound, but is hidden from *
+	void AddColumnAlias(const Identifier &column_alias, column_t column_index);
+	//! Returns the name under which a column is registered in this binding (this can differ from the provided name
+	//! because of case insensitivity, or because the column is referenced through a column alias)
+	const Identifier &GetRegisteredColumnName(const Identifier &column_name);
 	virtual ErrorData ColumnNotFoundError(const Identifier &column_name) const;
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
 	virtual optional_ptr<StandardEntry> GetStandardEntry();
@@ -77,6 +82,8 @@ public:
 
 protected:
 	void Initialize();
+	//! Set the alias of the column reference to the name under which the column is registered in this binding
+	void SetBoundColumnAlias(ColumnRefExpression &colref);
 
 protected:
 	//! The type of Binding

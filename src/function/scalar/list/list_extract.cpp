@@ -1,3 +1,4 @@
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -6,7 +7,6 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/list_functions.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
@@ -124,10 +124,31 @@ static void ListExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 
 static unique_ptr<FunctionData> ListExtractBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
-	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	D_ASSERT(bound_function.GetArguments().size() == 2);
+	D_ASSERT(input.GetBoundFunction().GetArguments().size() == 2);
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
+	return nullptr;
+}
+
+//! Extracting from a string throws if the index is outside of the range supported by substring - if the index is a
+//! constant within that range the extract cannot throw
+//! Extracting from a list returns NULL for indexes that are out of range instead
+static unique_ptr<FunctionData> StringExtractBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto index = input.TryGetConstant(1);
+	if (!index) {
+		bound_function.SetFallible();
+		return nullptr;
+	}
+	string error;
+	auto index_value = index->DefaultTryCastAs(LogicalType::BIGINT, &error);
+	if (!index_value) {
+		// the index is a constant that cannot be converted to an integer at all - report that directly
+		throw ConversionException(error);
+	}
+	if (index_value->IsNull() || !SubstringInSupportedRange(BigIntValue::Get(*index_value), 1)) {
+		bound_function.SetFallible();
+	}
 	return nullptr;
 }
 
@@ -137,6 +158,9 @@ static unique_ptr<BaseStatistics> ListExtractStats(ClientContext &context, Funct
 	auto child_copy = list_child_stats.Copy();
 	// list_extract always pushes a NULL, since if the offset is out of range for a list it inserts a null
 	child_copy.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	if (!child_stats[0].CanHaveNoNull() || !child_stats[1].CanHaveNoNull()) {
+		child_copy.Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
+	}
 	return child_copy.ToUnique();
 }
 
@@ -150,9 +174,12 @@ ScalarFunctionSet ListExtractFun::GetFunctions() {
 	lfun.GetSignature().GetParameter(0).SetName("list");
 	lfun.GetSignature().GetParameter(1).SetName("index");
 
-	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
+	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction,
+	                    StringExtractBind);
+	sfun.GetSignature().GetParameter(0).SetName("string");
+	sfun.GetSignature().GetParameter(1).SetName("index");
+
 	lfun.SetFallible();
-	sfun.SetFallible();
 	list_extract_set.AddFunction(lfun);
 	list_extract_set.AddFunction(sfun);
 	return list_extract_set;
@@ -165,10 +192,11 @@ ScalarFunctionSet ArrayExtractFun::GetFunctions() {
 	ScalarFunction lfun({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::BIGINT},
 	                    LogicalType::TEMPLATE("T"), ListExtractFunction, ListExtractBind, ListExtractStats);
 
-	lfun.GetSignature().GetParameter(0).SetName("array");
+	lfun.GetSignature().GetParameter(0).SetName("list");
 	lfun.GetSignature().GetParameter(1).SetName("index");
 
-	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
+	ScalarFunction sfun({}, LogicalType::VARCHAR, ListExtractFunction, StringExtractBind);
+	sfun.GetSignature().AddParameter("string", LogicalType::VARCHAR).AddParameter("index", LogicalType::BIGINT);
 
 	array_extract_set.AddFunction(lfun);
 	array_extract_set.AddFunction(sfun);

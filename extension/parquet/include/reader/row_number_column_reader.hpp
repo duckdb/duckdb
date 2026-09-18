@@ -50,7 +50,8 @@ public:
 	void Filter(ColumnReaderInput &input, Vector &result, const TableFilter &filter, TableFilterState &filter_state,
 	            SelectionVector &sel, idx_t &approved_tuple_count, bool is_first_filter) override;
 
-	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override;
+	void InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows, const vector<ColumnChunk> &columns,
+	                    TProtocol &protocol_p) override;
 
 	void Skip(idx_t num_values) override {
 		row_group_offset += num_values;
@@ -82,7 +83,8 @@ public:
 public:
 	idx_t Read(ColumnReaderInput &input, Vector &result) override;
 
-	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override;
+	void InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows, const vector<ColumnChunk> &columns,
+	                    TProtocol &protocol_p) override;
 
 	void Skip(idx_t num_values) override {
 	}

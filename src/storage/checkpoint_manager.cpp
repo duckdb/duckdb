@@ -13,10 +13,12 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/thread.hpp"
+#include "duckdb/common/vector_size.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -36,6 +38,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
 
 namespace duckdb {
 
@@ -66,8 +69,9 @@ void ActiveCheckpointWrapper::GetCheckpointTransaction(CheckpointOptions &option
 	auto &transaction = DuckTransaction::Get(*checkpoint_context, db);
 	transaction.SetIsCheckpointTransaction();
 	checkpoint_transaction = &transaction;
-	options.transaction_id = transaction.start_time;
-	transaction_manager.SetActiveCheckpoint(transaction.start_time);
+	options.checkpoint_id = transaction_manager.NextCheckpointId();
+	options.visibility_bound = transaction.view.visibility_bound;
+	transaction_manager.SetActiveCheckpoint(options.checkpoint_id.GetIndex());
 }
 
 void ActiveCheckpointWrapper::Commit() {
@@ -80,6 +84,10 @@ void ActiveCheckpointWrapper::Commit() {
 }
 
 bool ActiveCheckpointWrapper::HasCheckpointContext() const {
+	return checkpoint_context;
+}
+
+optional_ptr<ClientContext> ActiveCheckpointWrapper::GetCheckpointContext() const {
 	return checkpoint_context;
 }
 
@@ -227,6 +235,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// WALStartCheckpoint we will create a transaction for the checkpoint.
 	ActiveCheckpointWrapper active_checkpoint(context, db, transaction_manager);
 	auto has_wal = storage_manager.WALStartCheckpoint(meta_block, options, active_checkpoint);
+	checkpoint_context = active_checkpoint.GetCheckpointContext();
 
 	catalog_entry_vector_t catalog_entries;
 
@@ -364,8 +373,9 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		auto &storage = table.GetStorage();
 		auto &table_info = storage.GetDataTableInfo();
 		auto &index_list = table_info->GetIndexes();
-		index_list.MergeCheckpointDeltas(options.transaction_id);
+		index_list.MergeCheckpointDeltas(options.checkpoint_id);
 	}
+	checkpoint_context = nullptr;
 	active_checkpoint.Commit();
 }
 
@@ -560,7 +570,7 @@ void CheckpointReader::ReadTrigger(CatalogTransaction transaction, Deserializer 
 	auto info = ReadCreateInfo(deserializer, CatalogType::TRIGGER_ENTRY, "trigger");
 	auto &trigger_info = info->Cast<CreateTriggerInfo>();
 	trigger_info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-	auto &schema = catalog.GetSchema(transaction, trigger_info.GetQualifiedName().Schema());
+	auto &schema = catalog.GetEntrySchema(transaction, trigger_info.GetQualifiedName());
 	auto table_entry = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, trigger_info.base_table->Table());
 	if (!table_entry) {
 		throw DataCorruptionException("corrupt database file - trigger entry without table entry");
@@ -607,7 +617,7 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 	// create the index in the catalog
 
 	// look for the table in the catalog
-	auto &schema = catalog.GetSchema(transaction, create_info->GetQualifiedName().Schema());
+	auto &schema = catalog.GetEntrySchema(transaction, create_info->GetQualifiedName());
 	auto catalog_table = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, info.table);
 	if (!catalog_table) {
 		// See internal issue 3663.
@@ -689,12 +699,15 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 	// Write the table metadata
 	serializer.WriteProperty(100, "table", &table);
 
-	// If there is a context available, bind indexes before serialization.
-	// This is necessary so that buffered index operations are replayed before we checkpoint, otherwise
-	// we would lose them if there was a restart after this.
-	if (context && context->transaction.HasActiveTransaction()) {
+	// Explicit checkpoints bind indexes before serialization, so that buffered index operations are replayed
+	// and not lost on a restart. During a commit-time checkpoint the caller has no active transaction.
+	if (context && context->transaction.HasActiveTransaction() && checkpoint_context) {
+		D_ASSERT(checkpoint_context->transaction.HasActiveTransaction());
+		// Bind indexes with checkpoint transaction, which is already running and read-only, so any transaction the
+		// binder still starts skips start_transaction_lock.
+		D_ASSERT(MetaTransaction::Get(*checkpoint_context).IsReadOnly());
 		auto &info = table.GetStorage().GetDataTableInfo();
-		info->BindIndexes(*context);
+		info->BindIndexes(*checkpoint_context);
 	}
 	// FIXME: If we do not have a context, however, the unbound indexes have to be serialized to disk.
 
@@ -714,10 +727,6 @@ void CheckpointReader::ReadTable(CatalogTransaction transaction, Deserializer &d
 	vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
 	auto &schema = *catalog.GetSchema(transaction, schema_path, OnEntryNotFound::THROW_EXCEPTION);
 	auto bound_info = Binder::BindCreateTableCheckpoint(std::move(info), schema);
-
-	for (auto &dep : bound_info->Base().dependencies.Set()) {
-		bound_info->dependencies.AddDependency(dep);
-	}
 
 	// now read the actual table data and place it into the CreateTableInfo
 	ReadTableData(transaction, deserializer, *bound_info);
@@ -756,8 +765,10 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 	}
 
 	// FIXME: icky downcast to get the underlying MetadataReader
-	auto &binary_deserializer = dynamic_cast<BinaryDeserializer &>(deserializer);
-	auto &reader = dynamic_cast<MetadataReader &>(binary_deserializer.GetStream());
+	DynamicCastCheck<BinaryDeserializer>(&deserializer);
+	auto &binary_deserializer = static_cast<BinaryDeserializer &>(deserializer);
+	DynamicCastCheck<MetadataReader>(&binary_deserializer.GetStream());
+	auto &reader = static_cast<MetadataReader &>(binary_deserializer.GetStream());
 
 	vector<MetaBlockPointer> read_pointers;
 	MetadataReader table_data_reader(reader.GetMetadataManager(), table_pointer, read_pointers);

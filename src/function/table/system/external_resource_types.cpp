@@ -22,7 +22,7 @@ struct RegisterExternalResourceTypeState : public GlobalTableFunctionState {
 
 static unique_ptr<FunctionData> RegisterExternalResourceTypeBind(ClientContext &context, TableFunctionBindInput &input,
                                                                  vector<LogicalType> &return_types,
-                                                                 vector<string> &names) {
+                                                                 vector<Identifier> &names) {
 	auto result = make_uniq<RegisterExternalResourceTypeBindData>();
 	auto &type = result->type;
 
@@ -49,6 +49,8 @@ static unique_ptr<FunctionData> RegisterExternalResourceTypeBind(ClientContext &
 			type.destroy_function = value;
 		} else if (key == "resolve_function") {
 			type.resolve_function = value;
+		} else if (key == "list_function") {
+			type.list_function = value;
 		}
 	}
 	// The entry itself (required fields, well-formed callback names) is validated by the registry, which
@@ -89,7 +91,8 @@ struct ExternalResourceTypesData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> ExternalResourceTypesBind(ClientContext &context, TableFunctionBindInput &input,
-                                                          vector<LogicalType> &return_types, vector<string> &names) {
+                                                          vector<LogicalType> &return_types,
+                                                          vector<Identifier> &names) {
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("kind");
@@ -101,6 +104,8 @@ static unique_ptr<FunctionData> ExternalResourceTypesBind(ClientContext &context
 	names.emplace_back("destroy_function");
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("resolve_function");
+	return_types.emplace_back(LogicalType::VARCHAR);
+	names.emplace_back("list_function");
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("origin");
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -126,7 +131,8 @@ static void ExternalResourceTypesFunction(ClientContext &context, TableFunctionI
 	auto &status = output.data[3];
 	auto &destroy = output.data[4];
 	auto &resolve = output.data[5];
-	auto &origin = output.data[6];
+	auto &list = output.data[6];
+	auto &origin = output.data[7];
 	idx_t count = 0;
 	while (data.offset < data.types.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &t = data.types[data.offset++];
@@ -136,6 +142,7 @@ static void ExternalResourceTypesFunction(ClientContext &context, TableFunctionI
 		status.Append(OptionalString(t.status_function));
 		destroy.Append(OptionalString(t.destroy_function));
 		resolve.Append(OptionalString(t.resolve_function));
+		list.Append(OptionalString(t.list_function));
 		origin.Append(Value(t.origin));
 		count++;
 	}
@@ -153,6 +160,7 @@ void RegisterExternalResourceTypeFun::RegisterFunction(BuiltinFunctions &set) {
 	fn.named_parameters["status_function"] = LogicalType::VARCHAR;
 	fn.named_parameters["destroy_function"] = LogicalType::VARCHAR;
 	fn.named_parameters["resolve_function"] = LogicalType::VARCHAR;
+	fn.named_parameters["list_function"] = LogicalType::VARCHAR;
 	set.AddFunction(fn);
 }
 

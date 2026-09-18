@@ -135,6 +135,7 @@ template <bool HAS_RSEL, bool FIRST_HASH>
 void ListLoopHash(const Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
 	// FIXME: if we want to be more efficient we shouldn't flatten, but the logic here currently requires it
 	hashes.Flatten();
+	FlatVector::SetSize(hashes, count_t(count));
 	auto hdata = FlatVector::GetDataMutable<hash_t>(hashes);
 
 	UnifiedVectorFormat idata;
@@ -225,6 +226,7 @@ void ListLoopHash(const Vector &input, Vector &hashes, const SelectionVector *rs
 template <bool HAS_RSEL, bool FIRST_HASH>
 void ArrayLoopHash(const Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
 	hashes.Flatten();
+	FlatVector::SetSize(hashes, count_t(count));
 	auto hdata = FlatVector::GetDataMutable<hash_t>(hashes);
 
 	UnifiedVectorFormat idata;

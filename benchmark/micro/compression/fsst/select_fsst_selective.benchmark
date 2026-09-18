@@ -7,7 +7,7 @@ group fsst
 storage persistent
 
 load
-CREATE TABLE string_values(filter_val INTEGER USING COMPRESSION UNCOMPRESSED, str_val VARCHAR USING COMPRESSION FSST, str_val_nulls VARCHAR USING COMPRESSION FSST);
+CREATE TABLE string_values(filter_val INTEGER USING COMPRESSION UNCOMPRESSED, str_val VARCHAR USING COMPRESSION DICT_FSST, str_val_nulls VARCHAR USING COMPRESSION DICT_FSST);
 INSERT INTO string_values SELECT i % 1000, case when i%7=0 then concat('thisisalongstring', i) else concat('shortstr', i // 10) end str_val, case when i%3=0 then null else str_val end str_val_nulls FROM range(100_000_000) t(i);
 
 run

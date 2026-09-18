@@ -1,0 +1,8 @@
+# name: benchmark/recursive_cte/asql_fluid.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/asql_ws2526/recursive_cte_asql.benchmark.in
+LOAD=fluid
+QUERY=asql_fluid
+BENCHMARK_NAME=Advanced SQL one-dimensional diffusion
+DESCRIPTION=Simulate diffusion with multiple recursive references and per-iteration aggregation

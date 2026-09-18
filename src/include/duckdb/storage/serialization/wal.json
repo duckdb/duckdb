@@ -112,18 +112,34 @@
   {
     "class": "WALDropView",
     "pointer_type": "none",
+    "finalize_deserialization": [
+      "if (result.qualified_name.Path().empty()) {",
+      "\tresult.qualified_name = QualifiedName(vector<Identifier> {std::move(schema)}, std::move(name));",
+      "}"
+    ],
     "members": [
       {
         "id": 101,
         "name": "schema",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_property": "LegacySchema()",
+        "serialize_until": "v2.0.0",
+        "deserialize_skip_assign": true
       },
       {
         "id": 102,
         "name": "name",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_property": "LegacyName()",
+        "serialize_until": "v2.0.0",
+        "deserialize_skip_assign": true
+      },
+      {
+        "id": 103,
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "default": "QualifiedName()"
       }
     ]
   },
@@ -142,36 +158,61 @@
   {
     "class": "WALDropSequence",
     "pointer_type": "none",
+    "finalize_deserialization": [
+      "if (result.qualified_name.Path().empty()) {",
+      "\tresult.qualified_name = QualifiedName(vector<Identifier> {std::move(schema)}, std::move(name));",
+      "}"
+    ],
     "members": [
       {
         "id": 101,
         "name": "schema",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_property": "LegacySchema()",
+        "serialize_until": "v2.0.0",
+        "deserialize_skip_assign": true
       },
       {
         "id": 102,
         "name": "name",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_property": "LegacyName()",
+        "serialize_until": "v2.0.0",
+        "deserialize_skip_assign": true
+      },
+      {
+        "id": 103,
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "default": "QualifiedName()"
       }
     ]
   },
   {
     "class": "WALSequenceValue",
     "pointer_type": "none",
+    "finalize_deserialization": [
+      "if (result.qualified_name.Path().empty()) {",
+      "\tresult.qualified_name = QualifiedName(vector<Identifier> {std::move(schema)}, std::move(name));",
+      "}"
+    ],
     "members": [
       {
         "id": 101,
         "name": "schema",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_property": "LegacySchema()",
+        "serialize_until": "v2.0.0",
+        "deserialize_skip_assign": true
       },
       {
         "id": 102,
         "name": "name",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_property": "LegacyName()",
+        "serialize_until": "v2.0.0",
+        "deserialize_skip_assign": true
       },
       {
         "id": 103,
@@ -190,6 +231,13 @@
         "name": "last_value",
         "type": "optional<int64_t>",
         "version": "v2.0.0"
+      },
+      {
+        "id": 106,
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "default": "QualifiedName()"
       }
     ]
   },
@@ -208,18 +256,34 @@
   {
     "class": "WALDropMacro",
     "pointer_type": "none",
+    "finalize_deserialization": [
+      "if (result.qualified_name.Path().empty()) {",
+      "\tresult.qualified_name = QualifiedName(vector<Identifier> {std::move(schema)}, std::move(name));",
+      "}"
+    ],
     "members": [
       {
         "id": 101,
         "name": "schema",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_property": "LegacySchema()",
+        "serialize_until": "v2.0.0",
+        "deserialize_skip_assign": true
       },
       {
         "id": 102,
         "name": "name",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_property": "LegacyName()",
+        "serialize_until": "v2.0.0",
+        "deserialize_skip_assign": true
+      },
+      {
+        "id": 103,
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "default": "QualifiedName()"
       }
     ]
   },
@@ -238,18 +302,34 @@
   {
     "class": "WALDropTableMacro",
     "pointer_type": "none",
+    "finalize_deserialization": [
+      "if (result.qualified_name.Path().empty()) {",
+      "\tresult.qualified_name = QualifiedName(vector<Identifier> {std::move(schema)}, std::move(name));",
+      "}"
+    ],
     "members": [
       {
         "id": 101,
         "name": "schema",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_property": "LegacySchema()",
+        "serialize_until": "v2.0.0",
+        "deserialize_skip_assign": true
       },
       {
         "id": 102,
         "name": "name",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_property": "LegacyName()",
+        "serialize_until": "v2.0.0",
+        "deserialize_skip_assign": true
+      },
+      {
+        "id": 103,
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "default": "QualifiedName()"
       }
     ]
   },
@@ -268,18 +348,34 @@
   {
     "class": "WALDropType",
     "pointer_type": "none",
+    "finalize_deserialization": [
+      "if (result.qualified_name.Path().empty()) {",
+      "\tresult.qualified_name = QualifiedName(vector<Identifier> {std::move(schema)}, std::move(name));",
+      "}"
+    ],
     "members": [
       {
         "id": 101,
         "name": "schema",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_property": "LegacySchema()",
+        "serialize_until": "v2.0.0",
+        "deserialize_skip_assign": true
       },
       {
         "id": 102,
         "name": "name",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_property": "LegacyName()",
+        "serialize_until": "v2.0.0",
+        "deserialize_skip_assign": true
+      },
+      {
+        "id": 103,
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "default": "QualifiedName()"
       }
     ]
   },
@@ -298,42 +394,73 @@
   {
     "class": "WALDropTrigger",
     "pointer_type": "none",
+    "finalize_deserialization": [
+      "if (result.qualified_name.Path().empty()) {",
+      "\tresult.qualified_name = QualifiedName(vector<Identifier> {std::move(schema)}, std::move(name));",
+      "}"
+    ],
     "members": [
       {
         "id": 101,
         "name": "schema",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_property": "LegacySchema()",
+        "serialize_until": "v2.0.0",
+        "deserialize_skip_assign": true
       },
       {
         "id": 102,
         "name": "name",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_property": "LegacyName()",
+        "serialize_until": "v2.0.0",
+        "deserialize_skip_assign": true
       },
       {
         "id": 103,
         "name": "table",
-        "type": "Identifier",
-        "required_until": "v2.0.0"
+        "type": "Identifier"
+      },
+      {
+        "id": 104,
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "default": "QualifiedName()"
       }
     ]
   },
   {
     "class": "WALDropIndex",
     "pointer_type": "none",
+    "finalize_deserialization": [
+      "if (result.qualified_name.Path().empty()) {",
+      "\tresult.qualified_name = QualifiedName(vector<Identifier> {std::move(schema)}, std::move(name));",
+      "}"
+    ],
     "members": [
       {
         "id": 101,
         "name": "schema",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_property": "LegacySchema()",
+        "serialize_until": "v2.0.0",
+        "deserialize_skip_assign": true
       },
       {
         "id": 102,
         "name": "name",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_property": "LegacyName()",
+        "serialize_until": "v2.0.0",
+        "deserialize_skip_assign": true
+      },
+      {
+        "id": 103,
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "default": "QualifiedName()"
       }
     ]
   },

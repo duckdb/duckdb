@@ -80,26 +80,6 @@ static vector<unordered_set<RelationIndex>> GetAllNeighborSets(vector<RelationIn
 	return ret;
 }
 
-void PlanEnumerator::GenerateCrossProducts() {
-	// generate a set of cross products to combine the currently available plans into a full join plan
-	// we create edges between every relation with a high cost
-	connection_cache.clear();
-	for (idx_t i = 0; i < query_graph_manager.relation_manager.NumRelations(); i++) {
-		auto &left = query_graph_manager.set_manager.GetJoinRelation(RelationIndex(i));
-		for (idx_t j = 0; j < query_graph_manager.relation_manager.NumRelations(); j++) {
-			auto cross_product_allowed = query_graph_manager.relation_manager.CrossProductWithRelationAllowed(i) &&
-			                             query_graph_manager.relation_manager.CrossProductWithRelationAllowed(j);
-			if (i != j && cross_product_allowed) {
-				auto &right = query_graph_manager.set_manager.GetJoinRelation(RelationIndex(j));
-				query_graph_manager.CreateQueryGraphCrossProduct(left, right);
-			}
-		}
-	}
-	// Now that the query graph has new edges, we need to re-initialize our query graph.
-	// TODO: do we need to initialize our qyery graph again?
-	// query_graph = query_graph_manager.GetQueryGraph();
-}
-
 const reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>> &PlanEnumerator::GetPlans() const {
 	return plans;
 }
@@ -146,44 +126,71 @@ unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
                                                       const vector<reference<NeighborInfo>> &possible_connections,
                                                       DPJoinNode &left, DPJoinNode &right) {
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
-	optional_ptr<NeighborInfo> best_connection = possible_connections.back().get();
-	// cross products are technically still connections, but they have no predicates
-	bool found_non_cross_product_connection = false;
-	for (auto &connection : possible_connections) {
-		for (auto predicate_ref : connection.get().predicates) {
-			if (predicate_ref.get().GetJoinType() != JoinType::INVALID) {
-				best_connection = connection.get();
-				found_non_cross_product_connection = true;
+	vector<reference<NeighborInfo>> applicable_connections;
+	struct JoinCandidate {
+		optional_ptr<JoinOrderOperator> join_operator;
+		vector<reference<JoinPredicate>> predicates;
+		bool generated_cross_product = false;
+		idx_t priority = 0;
+	};
+	vector<JoinCandidate> candidates;
+	for (auto &connection_ref : possible_connections) {
+		auto &connection = connection_ref.get();
+		if (!query_graph_manager.IsConnectionApplicable(connection, left.set, right.set)) {
+			continue;
+		}
+		applicable_connections.push_back(connection);
+		optional_ptr<JoinCandidate> candidate;
+		for (auto &entry : candidates) {
+			if (entry.join_operator == connection.join_operator &&
+			    entry.generated_cross_product == connection.generated_cross_product) {
+				candidate = entry;
 				break;
 			}
 		}
-		if (found_non_cross_product_connection) {
-			break;
+		if (!candidate) {
+			candidates.emplace_back();
+			candidate = candidates.back();
+			candidate->join_operator = connection.join_operator;
+			candidate->generated_cross_product = connection.generated_cross_product;
 		}
+		candidate->predicates.insert(candidate->predicates.end(), connection.predicates.begin(),
+		                             connection.predicates.end());
+		idx_t priority = 0;
+		if (!connection.predicates.empty()) {
+			priority = 3;
+		} else if (connection.join_operator) {
+			priority = 2;
+		} else if (connection.generated_cross_product) {
+			priority = 1;
+		}
+		candidate->priority = MaxValue(candidate->priority, priority);
 	}
-	auto join_type = JoinType::INVALID;
-	for (auto predicate_ref : best_connection->predicates) {
-		auto &predicate = predicate_ref.get();
-		if (!predicate.GetLeftSetOptional() || !predicate.GetRightSetOptional()) {
+	if (applicable_connections.empty()) {
+		return nullptr;
+	}
+	optional_ptr<JoinCandidate> best_candidate;
+	for (auto &candidate : candidates) {
+		if (!query_graph_manager.IsJoinOrderCandidate(candidate.join_operator, candidate.generated_cross_product,
+		                                              left.set, right.set)) {
 			continue;
 		}
-
-		join_type = predicate.GetJoinType();
-		// prefer joining on semi and anti joins as they have a higher chance of being more
-		// selective
-		if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
-			break;
+		if (!best_candidate || candidate.priority > best_candidate->priority) {
+			best_candidate = candidate;
 		}
 	}
-	// need the filter info from the Neighborhood info.
-	auto cost = cost_model.ComputeCost(left, right, set, possible_connections);
-	auto result = make_uniq<DPJoinNode>(set, best_connection, left.set, right.set, cost);
+	if (!best_candidate) {
+		return nullptr;
+	}
+	auto cost = cost_model.ComputeCost(left, right, set, applicable_connections);
+	auto result = make_uniq<DPJoinNode>(set, best_candidate->join_operator, std::move(best_candidate->predicates),
+	                                    best_candidate->generated_cross_product, left.set, right.set, cost);
 	result->cardinality = cost_model.GetCardinalityEstimator().EstimateCardinalityWithSet<idx_t>(set);
 	return result;
 }
 
-DPJoinNode &PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &right,
-                                     const vector<reference<NeighborInfo>> &info) {
+optional_ptr<DPJoinNode> PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &right,
+                                                  const vector<reference<NeighborInfo>> &info) {
 	// get the left and right join plans
 	auto left_plan = plans.find(left);
 	auto right_plan = plans.find(right);
@@ -193,6 +200,9 @@ DPJoinNode &PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &rig
 	auto &new_set = query_graph_manager.set_manager.Union(left, right);
 	// create the join tree based on combining the two plans
 	auto new_plan = CreateJoinTree(new_set, info, *left_plan->second, *right_plan->second);
+	if (!new_plan) {
+		return nullptr;
+	}
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
 	auto new_cost = new_plan->cost;
@@ -203,7 +213,7 @@ DPJoinNode &PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &rig
 	if (entry == plans.end() || new_cost < old_cost) {
 		// the new plan costs less than the old plan. Update our DP table.
 		plans[new_set] = std::move(new_plan);
-		return *plans[new_set];
+		return plans[new_set].get();
 	}
 	// Tiebreaker for equal-cost plans: needed for LEFT JOINs,
 	// because all orderings preserve the LHS cardinality and always tie.
@@ -216,12 +226,12 @@ DPJoinNode &PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &rig
 			auto old_right_cardinality = existing_right->second->cardinality;
 			if (new_right_cardinality > old_right_cardinality) {
 				plans[new_set] = std::move(new_plan);
-				return *plans[new_set];
+				return plans[new_set].get();
 			}
 		}
 	}
 	// Create join node from the plan currently in the DP table.
-	return *entry->second;
+	return entry->second.get();
 }
 
 bool PlanEnumerator::TryEmitPair(JoinRelationSet &left, JoinRelationSet &right,
@@ -395,7 +405,7 @@ bool PlanEnumerator::SolveJoinOrderExactly() {
 	return true;
 }
 
-void PlanEnumerator::SolveJoinOrderApproximately() {
+bool PlanEnumerator::SolveJoinOrderApproximately() {
 	// at this point, we exited the dynamic programming but did not compute the final join order because it took too
 	// long instead, we use a greedy heuristic to obtain a join ordering now we use Greedy Operator Ordering to
 	// construct the result tree first we start out with all the base relations (the to-be-joined relations)
@@ -420,17 +430,20 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 				auto &connection = GetConnections(left, right);
 				if (!connection.empty()) {
 					// we can check the cost of this connection
-					auto &node = EmitPair(left, right, connection);
+					auto node = EmitPair(left, right, connection);
+					if (!node) {
+						continue;
+					}
 
 					// update the DP tree in case a plan created by the DP algorithm uses the node
 					// that was potentially just updated by EmitPair. You will get a use-after-free
 					// error if future plans rely on the old node that was just replaced.
 					// if node in FullPath, then updateDP tree.
 
-					if (!found_connection || node.cost < best_cost) {
+					if (!found_connection || node->cost < best_cost) {
 						// best pair found so far
 						found_connection = true;
-						best_cost = node.cost;
+						best_cost = node->cost;
 						best_left = i;
 						best_right = j;
 					}
@@ -438,41 +451,34 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 			}
 		}
 		if (!found_connection) {
-			// could not find a connection, but we were not done with finding a completed plan
-			// we have to add a cross product; we add it between the two smallest relations
-			optional_ptr<DPJoinNode> smallest_plans[2];
-			size_t smallest_index[2];
-			D_ASSERT(join_relations.size() >= 2);
-
-			// first just add the first two join relations. It doesn't matter the cost as the JOO
-			// will swap them on estimated cardinality anyway.
-			for (idx_t i = 0; i < 2; i++) {
-				optional_ptr<DPJoinNode> current_plan = plans[join_relations[i]];
-				smallest_plans[i] = current_plan;
-				smallest_index[i] = i;
+			if (ActivateRequiredCrossProducts()) {
+				continue;
 			}
-
-			// if there are any other join relations that don't have connections
-			// add them if they have lower estimated cardinality.
-			for (idx_t i = 2; i < join_relations.size(); i++) {
-				// get the plan for this relation
-				optional_ptr<DPJoinNode> current_plan = plans[join_relations[i]];
-				// check if the cardinality is smaller than the smallest two found so far
-				for (idx_t j = 0; j < 2; j++) {
-					if (!smallest_plans[j] || smallest_plans[j]->cost > current_plan->cost) {
-						smallest_plans[j] = current_plan;
-						smallest_index[j] = i;
-						break;
+			// Optimizer-introduced cross products are valid only inside an inner-join companion set (Section 6.2).
+			for (idx_t i = 0; i < join_relations.size(); i++) {
+				auto &left = join_relations[i].get();
+				for (idx_t j = i + 1; j < join_relations.size(); j++) {
+					auto &right = join_relations[j].get();
+					if (!query_graph_manager.CanCreateCrossProduct(left, right)) {
+						continue;
+					}
+					auto left_plan = plans.find(left);
+					auto right_plan = plans.find(right);
+					D_ASSERT(left_plan != plans.end() && right_plan != plans.end());
+					auto cost = left_plan->second->cost + right_plan->second->cost;
+					if (!found_connection || cost < best_cost) {
+						found_connection = true;
+						best_cost = cost;
+						best_left = i;
+						best_right = j;
 					}
 				}
 			}
-			if (!smallest_plans[0] || !smallest_plans[1]) {
-				throw InternalException("Internal error in join order optimizer");
+			if (!found_connection) {
+				return false;
 			}
-			D_ASSERT(smallest_plans[0] && smallest_plans[1]);
-			D_ASSERT(smallest_index[0] != smallest_index[1]);
-			auto &left = smallest_plans[0]->set;
-			auto &right = smallest_plans[1]->set;
+			auto &left = join_relations[best_left].get();
+			auto &right = join_relations[best_right].get();
 			// create a cross product edge (i.e. edge with empty filter) between these two sets in the query graph
 			query_graph_manager.CreateQueryGraphCrossProduct(left, right);
 			connection_cache.clear();
@@ -480,13 +486,9 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 			auto &connections = GetConnections(left, right);
 			D_ASSERT(!connections.empty());
 
-			EmitPair(left, right, connections);
-			best_left = smallest_index[0];
-			best_right = smallest_index[1];
-
-			// the code below assumes best_right > best_left
-			if (best_left > best_right) {
-				std::swap(best_left, best_right);
+			auto cross_product = EmitPair(left, right, connections);
+			if (!cross_product) {
+				return false;
 			}
 		}
 		// now update the to-be-checked pairs
@@ -501,6 +503,40 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 		join_relations.erase(join_relations.begin() + (int64_t)best_left);
 		join_relations.push_back(new_set);
 	}
+	return true;
+}
+
+bool PlanEnumerator::HasCompletePlan() const {
+	unordered_set<RelationIndex> bindings;
+	for (idx_t relation_idx = 0; relation_idx < query_graph_manager.relation_manager.NumRelations(); relation_idx++) {
+		bindings.emplace(relation_idx);
+	}
+	auto &total_relation = query_graph_manager.set_manager.GetJoinRelation(bindings);
+	return plans.find(total_relation) != plans.end();
+}
+
+bool PlanEnumerator::ActivateRequiredCrossProducts() {
+	if (!query_graph_manager.ActivateRequiredCrossProducts()) {
+		return false;
+	}
+	pairs = 0;
+	connection_cache.clear();
+	neighbor_set_cache.clear();
+	return true;
+}
+
+bool PlanEnumerator::PlanUsesCrossProduct(const DPJoinNode &node) const {
+	if (node.is_leaf) {
+		return false;
+	}
+	if (node.generated_cross_product ||
+	    (node.join_operator && node.join_operator->type == JoinOrderOperatorType::CROSS_PRODUCT)) {
+		return true;
+	}
+	auto left = plans.find(node.left_set);
+	auto right = plans.find(node.right_set);
+	D_ASSERT(left != plans.end() && right != plans.end());
+	return PlanUsesCrossProduct(*left->second) || PlanUsesCrossProduct(*right->second);
 }
 
 void PlanEnumerator::InitLeafPlans() {
@@ -529,17 +565,26 @@ void PlanEnumerator::InitLeafPlans() {
 // the plan enumeration is a straight implementation of the paper "Dynamic Programming Strikes Back" by Guido
 // Moerkotte and Thomas Neumannn, see that paper for additional info/documentation bonus slides:
 // https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
-void PlanEnumerator::SolveJoinOrder() {
+bool PlanEnumerator::SolveJoinOrder() {
 	bool force_no_cross_product = Settings::Get<DebugForceNoCrossProductSetting>(query_graph_manager.context);
 	auto swap_to_approximate_threshold =
 	    Settings::Get<ApproximateJoinOrderThresholdSetting>(query_graph_manager.context);
 
 	// first try to solve the join order exactly
+	bool solved;
 	if (query_graph_manager.relation_manager.NumRelations() >= swap_to_approximate_threshold) {
-		SolveJoinOrderApproximately();
-	} else if (!SolveJoinOrderExactly()) {
-		// otherwise, if that times out we resort to a greedy algorithm
-		SolveJoinOrderApproximately();
+		solved = SolveJoinOrderApproximately();
+	} else {
+		auto completed_exactly = SolveJoinOrderExactly();
+		if (completed_exactly && !HasCompletePlan() && ActivateRequiredCrossProducts()) {
+			completed_exactly = SolveJoinOrderExactly();
+		}
+		if (!completed_exactly || !HasCompletePlan()) {
+			// Exact enumeration either reached its pair budget or could not connect the graph.
+			solved = SolveJoinOrderApproximately();
+		} else {
+			solved = true;
+		}
 	}
 
 	// now the optimal join path should have been found
@@ -550,18 +595,24 @@ void PlanEnumerator::SolveJoinOrder() {
 	}
 	auto &total_relation = query_graph_manager.set_manager.GetJoinRelation(bindings);
 	auto final_plan = plans.find(total_relation);
+	if (!solved) {
+		if (force_no_cross_product && query_graph_manager.RequiresCrossProduct()) {
+			throw InvalidInputException(
+			    "Query requires a cross-product, but 'force_no_cross_product' PRAGMA is enabled");
+		}
+		return false;
+	}
 	if (final_plan == plans.end()) {
-		// could not find the final plan
-		// this should only happen in case the sets are actually disjoint
-		// in this case we need to generate cross product to connect the disjoint sets
 		if (force_no_cross_product) {
 			throw InvalidInputException(
 			    "Query requires a cross-product, but 'force_no_cross_product' PRAGMA is enabled");
 		}
-		GenerateCrossProducts();
-		//! solve the join order again, returning the final plan
-		SolveJoinOrder();
+		return false;
 	}
+	if (force_no_cross_product && PlanUsesCrossProduct(*final_plan->second)) {
+		throw InvalidInputException("Query requires a cross-product, but 'force_no_cross_product' PRAGMA is enabled");
+	}
+	return true;
 }
 
 } // namespace duckdb

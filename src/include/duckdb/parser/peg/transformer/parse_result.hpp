@@ -61,6 +61,7 @@ inline string TokenTypeToString(TokenType type) {
 }
 
 class PEGTransformer; // Forward declaration
+struct CompiledGrammarRule;
 
 enum class ParseResultType : uint8_t {
 	LIST,
@@ -115,7 +116,8 @@ inline const char *ParseResultToString(ParseResultType type) {
 
 class ParseResult {
 public:
-	explicit ParseResult(ParseResultType type, optional_idx offset) : type(type), offset(offset) {
+	explicit ParseResult(ParseResultType type, optional_idx offset, optional_idx length = optional_idx())
+	    : type(type), offset(offset), length(length) {
 	}
 	virtual ~ParseResult() = default;
 
@@ -133,7 +135,36 @@ public:
 
 	ParseResultType type;
 	string name;
+	optional_ptr<const CompiledGrammarRule> rule;
 	optional_idx offset;
+	//! Source length: for leaf tokens the token length; for composite results the enclosing extent of children
+	optional_idx length;
+
+	void SetRule(const CompiledGrammarRule &rule_p) {
+		rule = rule_p;
+	}
+	optional_ptr<const CompiledGrammarRule> GetRule() const {
+		return rule;
+	}
+
+	//! Returns the source location [offset, offset+length) of this parse result (length 0 when unknown)
+	QueryLocation GetLocation() const {
+		if (!offset.IsValid()) {
+			return QueryLocation();
+		}
+		return QueryLocation(offset.GetIndex(), length.IsValid() ? length.GetIndex() : 0);
+	}
+
+	//! Grow this result's location so it encloses the given child's location (used to build composite
+	//! locations bottom-up)
+	void EncloseChild(const ParseResult &child) {
+		auto child_location = child.GetLocation();
+		if (!offset.IsValid() || !child_location.IsValid()) {
+			return;
+		}
+		auto enclosing = GetLocation().Merge(child_location);
+		length = enclosing.length;
+	}
 
 	virtual void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
 	                              const std::string &indent, bool is_last) const {
@@ -157,8 +188,8 @@ struct IdentifierParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::IDENTIFIER;
 	Identifier identifier;
 
-	explicit IdentifierParseResult(string identifier_p, optional_idx offset)
-	    : ParseResult(TYPE, offset), identifier(std::move(identifier_p)) {
+	explicit IdentifierParseResult(string identifier_p, optional_idx offset, optional_idx length = optional_idx())
+	    : ParseResult(TYPE, offset, length), identifier(std::move(identifier_p)) {
 	}
 
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
@@ -185,8 +216,8 @@ struct KeywordParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::KEYWORD;
 	string keyword;
 
-	explicit KeywordParseResult(string keyword_p, optional_idx offset)
-	    : ParseResult(TYPE, offset), keyword(std::move(keyword_p)) {
+	explicit KeywordParseResult(string keyword_p, optional_idx offset, optional_idx length = optional_idx())
+	    : ParseResult(TYPE, offset, length), keyword(std::move(keyword_p)) {
 	}
 
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
@@ -203,6 +234,9 @@ public:
 	explicit ListParseResult(vector<reference<ParseResult>> results_p, string name_p, optional_idx offset)
 	    : ParseResult(TYPE, offset), children(std::move(results_p)) {
 		name = std::move(name_p);
+		for (auto &child : children) {
+			EncloseChild(child.get());
+		}
 	}
 
 	vector<reference<ParseResult>> GetChildren() const {
@@ -252,6 +286,9 @@ struct RepeatParseResult : ParseResult {
 
 	explicit RepeatParseResult(vector<reference<ParseResult>> results_p, optional_idx offset)
 	    : ParseResult(TYPE, offset), children(std::move(results_p)) {
+		for (auto &child : children) {
+			EncloseChild(child.get());
+		}
 	}
 
 	vector<reference<ParseResult>> GetChildren() const {
@@ -300,6 +337,7 @@ struct OptionalParseResult : ParseResult {
 	explicit OptionalParseResult(optional_ptr<ParseResult> result_p, optional_idx offset)
 	    : ParseResult(TYPE, offset), optional_result(result_p) {
 		name = result_p->name;
+		EncloseChild(*result_p);
 	}
 
 	bool HasResult() const {
@@ -341,6 +379,7 @@ public:
 	explicit ChoiceParseResult(ParseResult &parse_result_p, idx_t selected_idx_p, optional_idx offset)
 	    : ParseResult(TYPE, offset), result(parse_result_p), selected_idx(selected_idx_p) {
 		name = parse_result_p.name;
+		EncloseChild(parse_result_p);
 	}
 
 	ParseResult &GetResult() {
@@ -367,8 +406,8 @@ class NumberParseResult : public ParseResult {
 public:
 	static constexpr ParseResultType TYPE = ParseResultType::NUMBER;
 
-	explicit NumberParseResult(string number_p, optional_idx offset)
-	    : ParseResult(TYPE, offset), number(std::move(number_p)) {
+	explicit NumberParseResult(string number_p, optional_idx offset, optional_idx length = optional_idx())
+	    : ParseResult(TYPE, offset, length), number(std::move(number_p)) {
 	}
 	string number;
 
@@ -383,40 +422,26 @@ class StringLiteralParseResult : public ParseResult {
 public:
 	static constexpr ParseResultType TYPE = ParseResultType::STRING;
 
-	explicit StringLiteralParseResult(string string_p, SpecialStringCharacter string_type_p, optional_idx offset)
-	    : ParseResult(TYPE, offset), result(std::move(string_p)), string_type(string_type_p) {
+	explicit StringLiteralParseResult(string string_p, SpecialStringCharacter string_type_p, optional_idx offset,
+	                                  optional_idx length = optional_idx())
+	    : ParseResult(TYPE, offset, length), result(std::move(string_p)), string_type(string_type_p) {
 	}
 
 	string GetRawString() const {
 		return result;
 	}
 
-	unique_ptr<ParsedExpression> ToExpression() {
+	virtual unique_ptr<ParsedExpression> ToExpression() {
 		switch (string_type) {
 		case SpecialStringCharacter::STANDARD:
-			return make_uniq<ConstantExpression>(Value(result));
+			return ConstantExpression::String(result);
 		case SpecialStringCharacter::NATIONAL_STRING:
-			return make_uniq<CastExpression>(LogicalType::VARCHAR, make_uniq<ConstantExpression>(Value(result)));
-		case SpecialStringCharacter::HEXADECIMAL_STRING: {
+			return make_uniq<CastExpression>(LogicalType::VARCHAR, ConstantExpression::String(result));
+		case SpecialStringCharacter::HEXADECIMAL_STRING:
 			// result contains raw hex digits (e.g. "FF" for X'FF')
-			if (result.size() % 2 != 0) {
-				throw ParserException("Hex string literal must have an even number of hex digits");
-			}
-			// Build \xHH-escaped string that Blob::ToBlob (via Value::BLOB) expects
-			idx_t blob_len = result.size() / 2;
-			string escaped;
-			escaped.reserve(blob_len * 4);
-			for (idx_t i = 0; i < result.size(); i += 2) {
-				escaped += "\\x";
-				escaped += result[i];
-				escaped += result[i + 1];
-			}
-			return make_uniq<ConstantExpression>(Value::BLOB(escaped));
-		}
-		case SpecialStringCharacter::BIT_STRING: {
-			string bit_string = "b" + result;
-			return make_uniq<ConstantExpression>(Value(bit_string));
-		}
+			return ConstantExpression::Hex(result);
+		case SpecialStringCharacter::BIT_STRING:
+			return ConstantExpression::Bit(result);
 		case SpecialStringCharacter::ESCAPE_STRING:
 			string escaped_result;
 			escaped_result.reserve(result.size());
@@ -500,9 +525,9 @@ public:
 				    reason == UnicodeInvalidReason::BYTE_MISMATCH ? "byte mismatch" : "invalid unicode codepoint";
 				throw ParserException("Invalid UTF-8 in escape string literal at byte offset %d: %s", pos, reason_str);
 			}
-			return make_uniq<ConstantExpression>(Value(escaped_result));
+			return ConstantExpression::String(escaped_result);
 		}
-		return make_uniq<ConstantExpression>(Value(result));
+		return ConstantExpression::String(result);
 	}
 
 	string result;
@@ -528,8 +553,8 @@ class OperatorParseResult : public ParseResult {
 public:
 	static constexpr ParseResultType TYPE = ParseResultType::OPERATOR;
 
-	explicit OperatorParseResult(string operator_p, optional_idx offset)
-	    : ParseResult(TYPE, offset), operator_token(std::move(operator_p)) {
+	explicit OperatorParseResult(string operator_p, optional_idx offset, optional_idx length = optional_idx())
+	    : ParseResult(TYPE, offset, length), operator_token(std::move(operator_p)) {
 	}
 	string operator_token;
 

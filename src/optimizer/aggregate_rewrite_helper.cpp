@@ -5,12 +5,31 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
+
+optional_idx AggregateRewriteHelper::GetDirectReferenceIndex(const Expression &expression, LogicalOperator &input) {
+	auto bindings = input.GetColumnBindings();
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+		auto index = expression.Cast<BoundReferenceExpression>().Index();
+		return index < bindings.size() ? optional_idx(index) : optional_idx();
+	}
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+		return optional_idx();
+	}
+	auto binding = expression.Cast<BoundColumnRefExpression>().Binding();
+	for (idx_t index = 0; index < bindings.size(); index++) {
+		if (bindings[index] == binding) {
+			return optional_idx(index);
+		}
+	}
+	return optional_idx();
+}
 
 vector<Identifier> AggregateRewriteHelper::GenerateColumnNames(const string &prefix, idx_t column_count) {
 	vector<Identifier> result;
@@ -119,6 +138,20 @@ unique_ptr<LogicalOperator> AggregateRewriteHelper::CreateCTERef(Optimizer &opti
 		replacement_map[input_bindings[col_idx]] = ColumnBinding(cte_ref_index, ProjectionIndex(col_idx));
 	}
 	return make_uniq<LogicalCTERef>(cte_ref_index, cte_index, input_types, input_names);
+}
+
+unique_ptr<LogicalOperator> AggregateRewriteHelper::PinColumnOrder(Optimizer &optimizer,
+                                                                   unique_ptr<LogicalOperator> definition,
+                                                                   const vector<LogicalType> &types,
+                                                                   const vector<ColumnBinding> &bindings) {
+	vector<unique_ptr<Expression>> expressions;
+	expressions.reserve(bindings.size());
+	for (idx_t col_idx = 0; col_idx < bindings.size(); col_idx++) {
+		expressions.push_back(make_uniq<BoundColumnRefExpression>(types[col_idx], bindings[col_idx]));
+	}
+	auto projection = make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(), std::move(expressions));
+	projection->children.push_back(std::move(definition));
+	return std::move(projection);
 }
 
 } // namespace duckdb

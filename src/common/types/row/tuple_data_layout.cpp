@@ -1,5 +1,6 @@
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 
 namespace duckdb {
@@ -199,6 +200,18 @@ void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, const L
 	if (sort_width != DConstants::INVALID_INDEX && has_payload) {
 		temp_row_width += 8;
 	}
+#if DUCKDB_SMALLER_BINARY(sort_key_layouts)
+	// Round the key up to the nearest layout that DUCKDB_FOR_EACH_SORT_KEY_TYPE still keeps. A key
+	// without payload widens to the 32-byte one rather than falling back to the variable-size key,
+	// which would cost far more than the wider row: a variable-size key compares through the heap.
+	if (has_payload) {
+		if (temp_row_width > 24) {
+			temp_row_width = DConstants::INVALID_INDEX;
+		}
+	} else if (temp_row_width > 8 && temp_row_width <= 32) {
+		temp_row_width = 32;
+	}
+#endif
 	if (temp_row_width <= 8) {
 		D_ASSERT(!has_payload);
 		row_width = 8;

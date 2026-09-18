@@ -1,10 +1,12 @@
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/arrow/arrow_type_extension.hpp"
 #include "duckdb/main/profiler/metrics_manager.hpp"
-#include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/http_util.hpp"
+#include "duckdb/main/http/http_util.hpp"
+#include "duckdb/main/http/http_transport_manager.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
@@ -60,7 +62,7 @@ DBConfig::DBConfig() {
 	index_types = make_uniq<IndexTypeSet>();
 	error_manager = make_uniq<ErrorManager>();
 	secret_manager = make_uniq<SecretManager>();
-	http_util = make_shared_ptr<HTTPUtil>();
+	http_transport_manager = HTTPTransportManager::Create(make_shared_ptr<HTTPUtil>());
 	callback_manager = make_uniq<ExtensionCallbackManager>();
 }
 
@@ -70,7 +72,7 @@ DBConfig::DBConfig(bool read_only) : DBConfig::DBConfig() {
 	}
 }
 
-DBConfig::DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_only) : DBConfig::DBConfig(read_only) {
+DBConfig::DBConfig(const identifier_map_t<Value> &config_dict, bool read_only) : DBConfig::DBConfig(read_only) {
 	SetOptionsByName(config_dict);
 }
 
@@ -80,6 +82,7 @@ DBConfig::~DBConfig() {
 DatabaseInstance::DatabaseInstance() : db_validity(*this) {
 	config.is_user_config = false;
 	create_api_v1 = nullptr;
+	invoke_capi_v2 = nullptr;
 	parser_cache = make_uniq<ParserCache>();
 }
 
@@ -92,6 +95,7 @@ DatabaseInstance::~DatabaseInstance() {
 	if (db_manager) {
 		db_manager->ResetDatabases();
 	}
+	config.http_transport_manager->Close();
 	// destroy child elements
 	connection_manager.reset();
 	object_cache.reset();
@@ -231,15 +235,16 @@ void DatabaseInstance::CreateMainDatabase() {
 	Connection con(*this);
 	con.BeginTransaction();
 	AttachOptions options(config.options);
+	options.options = config.options.main_database_options;
 	options.is_main_database = true;
 	db_manager->AttachDatabase(*con.context, info, options);
 	con.Commit();
 }
 
-static void ThrowExtensionSetUnrecognizedOptions(const case_insensitive_map_t<Value> &unrecognized_options) {
+static void ThrowExtensionSetUnrecognizedOptions(const identifier_map_t<Value> &unrecognized_options) {
 	D_ASSERT(!unrecognized_options.empty());
 
-	vector<string> options;
+	vector<duckdb::Identifier> options;
 	for (auto &kv : unrecognized_options) {
 		options.push_back(kv.first);
 	}
@@ -260,7 +265,6 @@ void DatabaseInstance::LoadExtensionSettings() {
 		Connection con(*this);
 		con.BeginTransaction();
 
-		vector<string> extension_options;
 		for (auto &option : unrecognized_options_copy) {
 			auto &name = option.first;
 			auto &value = option.second;
@@ -281,8 +285,7 @@ void DatabaseInstance::LoadExtensionSettings() {
 			// if the extension provided the option, it should no longer be unrecognized.
 			D_ASSERT(config.options.unrecognized_options.find(name) == config.options.unrecognized_options.end());
 			auto &context = *con.context;
-			PhysicalSet::SetExtensionVariable(context, extension_option, name, SetScope::GLOBAL, value);
-			extension_options.push_back(name);
+			PhysicalSet::SetExtensionVariable(context, extension_option, SetScope::GLOBAL, value);
 		}
 
 		con.Commit();
@@ -297,6 +300,36 @@ static duckdb_ext_api_v1 CreateAPIv1Wrapper() {
 }
 
 void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_config) {
+	InitializeInstance(database_path, user_config);
+	if (!db_manager->HasAttachedDatabase()) {
+		CreateMainDatabase();
+	}
+	// The main database is the default; a storage extension may have attached it during startup instead.
+	optional_ptr<AttachedDatabase> main_database;
+	for (auto &attached : db_manager->GetDatabases()) {
+		if (attached->IsSystem()) {
+			continue;
+		}
+		if (!main_database || attached->oid < main_database->oid) {
+			main_database = attached.get();
+		}
+	}
+	db_manager->SetDefaultDatabase(main_database->GetName());
+	StartScheduler();
+}
+
+void DatabaseInstance::InitializeEmpty(DBConfig *user_config) {
+	InitializeInstance(nullptr, user_config);
+	StartScheduler();
+}
+
+void DatabaseInstance::StartScheduler() {
+	scheduler->SetThreads(config.options.maximum_threads, Settings::Get<ExternalThreadsSetting>(config));
+	scheduler->SetAsyncThreads(config.options.async_threads);
+	scheduler->RelaunchThreads();
+}
+
+void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *user_config) {
 	DBConfig default_config;
 	DBConfig *config_ptr = &default_config;
 	if (user_config) {
@@ -304,8 +337,11 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	Configure(*config_ptr, database_path);
+	// publish what this binary links, unless the config already carries a set handed to us
+	ExtensionHelper::RegisterLinkedExtensions(config);
 
 	create_api_v1 = CreateAPIv1Wrapper;
+	invoke_capi_v2 = InvokeCAPIV2Entrypoint;
 
 	db_file_system = make_uniq<DatabaseFileSystem>(*this);
 	local_db_file_system = make_uniq<LocalDatabaseFileSystem>(*this);
@@ -355,15 +391,6 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	LoadExtensionSettings();
-
-	if (!db_manager->HasDefaultDatabase()) {
-		CreateMainDatabase();
-	}
-
-	// only increase thread count after storage init because we get races on catalog otherwise
-	scheduler->SetThreads(config.options.maximum_threads, Settings::Get<ExternalThreadsSetting>(config));
-	scheduler->SetAsyncThreads(config.options.async_threads);
-	scheduler->RelaunchThreads();
 }
 
 DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared_ptr<DatabaseInstance>()) {
@@ -375,6 +402,16 @@ DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared_pt
 }
 
 DuckDB::DuckDB(const string &path, DBConfig *config) : DuckDB(path.c_str(), config) {
+}
+
+shared_ptr<DuckDB> DuckDB::CreateEmpty(DBConfig *config) {
+	auto instance = make_shared_ptr<DatabaseInstance>();
+	instance->InitializeEmpty(config);
+	auto db = make_shared_ptr<DuckDB>(*instance);
+	if (instance->config.options.load_extensions) {
+		ExtensionHelper::LoadAllExtensions(*db);
+	}
+	return db;
 }
 
 DuckDB::DuckDB(DatabaseInstance &instance_p) : instance(instance_p.shared_from_this()) {
@@ -479,6 +516,9 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
 	config.options = new_config.options;
 	config.user_settings = new_config.user_settings;
+	// carry over a capability set handed to us, so a database created by code with its own copy of
+	// DuckDB can be given the extensions the binary that created it links
+	config.linked_extensions = new_config.linked_extensions;
 
 	if (Settings::Get<DuckDBAPISetting>(*this).empty()) {
 		config.SetOptionByName("duckdb_api", "cpp");
@@ -506,11 +546,9 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	} else {
 		config.file_system = make_uniq<VirtualFileSystem>(FileSystem::CreateLocal());
 	}
+	config.http_transport_manager->Initialize(DBConfig::GetSystemMaxThreads(*config.file_system));
 	if (database_path && !Settings::Get<EnableExternalAccessSetting>(*this)) {
-		config.AddAllowedPath(database_path);
-		config.AddAllowedPath(database_path + string(".wal"));
-		config.AddAllowedPath(database_path + string(".wal.checkpoint"));
-		config.AddAllowedPath(database_path + string(".wal.recovery"));
+		config.AddAllowedDatabasePath(database_path);
 		if (!config.options.temporary_directory.empty()) {
 			config.AddAllowedDirectory(config.options.temporary_directory);
 		}
@@ -588,7 +626,7 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 	return instance->ExtensionIsLoaded(name);
 }
 
-SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const string &key, Value &result) const {
+SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const Identifier &key, Value &result) const {
 	// check the session values
 	auto &db_config = DBConfig::GetConfig(*this);
 	return db_config.TryGetCurrentSetting(key, result);
@@ -649,6 +687,13 @@ ValidChecker &DatabaseInstance::GetValidChecker() {
 const duckdb_ext_api_v1 DatabaseInstance::GetExtensionAPIV1() {
 	D_ASSERT(create_api_v1);
 	return create_api_v1();
+}
+
+void DatabaseInstance::InvokeExtensionEntrypointV2(const ExtensionInitResult &init_result, const string &extension_name,
+                                                   ext_init_c_api_v2_fun_t init_fun,
+                                                   optional_ptr<ClientContext> context, bool statically_linked) {
+	D_ASSERT(invoke_capi_v2);
+	invoke_capi_v2(*this, init_result, extension_name, init_fun, context, statically_linked);
 }
 
 LogManager &DatabaseInstance::GetLogManager() const {

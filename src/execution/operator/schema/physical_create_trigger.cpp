@@ -11,8 +11,7 @@ SourceResultType PhysicalCreateTrigger::GetDataInternal(ExecutionContext &contex
 	// reference preserves the name exactly as written, which may be a two-part `catalog.table` reference that would
 	// otherwise be misread as `schema.table` here.
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(
-	    context.client, QualifiedName(info->GetQualifiedName().Catalog(), info->GetQualifiedName().Schema(),
-	                                  info->base_table->GetQualifiedName().Name()));
+	    context.client, info->GetQualifiedName().WithName(info->base_table->GetQualifiedName().Name()));
 	auto transaction = catalog.GetCatalogTransaction(context.client);
 	table.CreateTrigger(transaction, *info);
 

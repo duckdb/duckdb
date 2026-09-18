@@ -1,5 +1,7 @@
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+
 namespace duckdb {
 
 IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info)
@@ -9,6 +11,7 @@ IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
 	this->temporary = info.temporary;
 	this->dependencies = info.dependencies;
 	this->comment = info.comment;
+	this->tags = info.tags;
 	for (auto &expr : expressions) {
 		D_ASSERT(expr);
 		expressions.push_back(expr->Copy());
@@ -21,7 +24,7 @@ IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
 
 unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateIndexInfo>();
-	result->SetQualifiedName(QualifiedName({GetSchemaName()}, name));
+	result->SetQualifiedName(schema.GetQualifiedName(name));
 	result->table = GetTableName();
 
 	result->temporary = temporary;
@@ -47,6 +50,7 @@ unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
 
 string IndexCatalogEntry::ToSQL() const {
 	auto info = GetInfo();
+	info->StripCatalogQualification();
 	return info->ToString();
 }
 

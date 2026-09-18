@@ -51,6 +51,8 @@
 #include <stdio.h>
 #include <assert.h>
 
+#include "duckdb/common/time_point.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -175,12 +177,6 @@ static void setTextMode(FILE *file, int isOutput) {
 /* True if the timer is enabled */
 static bool enableTimer = false;
 
-/* Return the current wall-clock time */
-static int64_t timeOfDay(void) {
-	auto current_time = std::chrono::system_clock::now().time_since_epoch();
-	return (int64_t)std::chrono::duration_cast<std::chrono::milliseconds>(current_time).count();
-}
-
 #if !defined(_WIN32) && !defined(WIN32) && !defined(__minux)
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -196,7 +192,7 @@ struct rusage {
 
 /* Saved resource information for the beginning of an operation */
 static struct rusage sBegin; /* CPU time at start */
-static int64_t iBegin;       /* Wall-clock time at start */
+static int64_t iBegin;       /* Monotonic time at start */
 
 /*
 ** Begin timing an operation
@@ -204,7 +200,7 @@ static int64_t iBegin;       /* Wall-clock time at start */
 static void beginTimer(void) {
 	if (enableTimer) {
 		getrusage(RUSAGE_SELF, &sBegin);
-		iBegin = timeOfDay();
+		iBegin = duckdb::TimePoint::GetTickMs();
 	}
 }
 
@@ -218,7 +214,7 @@ static double timeDiff(struct timeval *pStart, struct timeval *pEnd) {
 */
 static void endTimer(void) {
 	if (enableTimer) {
-		int64_t iEnd = timeOfDay();
+		int64_t iEnd = duckdb::TimePoint::GetTickMs();
 		struct rusage sEnd;
 		getrusage(RUSAGE_SELF, &sEnd);
 		printf("Run Time (s): real %.3f user %f sys %f\n", (iEnd - iBegin) * 0.001,
@@ -236,7 +232,7 @@ static void endTimer(void) {
 static HANDLE hProcess;
 static FILETIME ftKernelBegin;
 static FILETIME ftUserBegin;
-static int64_t ftWallBegin;
+static int64_t ftMonotonicBegin;
 typedef BOOL(WINAPI *GETPROCTIMES)(HANDLE, LPFILETIME, LPFILETIME, LPFILETIME, LPFILETIME);
 static GETPROCTIMES getProcessTimesAddr = NULL;
 
@@ -276,7 +272,7 @@ static void beginTimer(void) {
 	if (enableTimer && getProcessTimesAddr) {
 		FILETIME ftCreation, ftExit;
 		getProcessTimesAddr(hProcess, &ftCreation, &ftExit, &ftKernelBegin, &ftUserBegin);
-		ftWallBegin = timeOfDay();
+		ftMonotonicBegin = duckdb::TimePoint::GetTickMs();
 	}
 }
 
@@ -293,9 +289,9 @@ static double timeDiff(FILETIME *pStart, FILETIME *pEnd) {
 static void endTimer(void) {
 	if (enableTimer && getProcessTimesAddr) {
 		FILETIME ftCreation, ftExit, ftKernelEnd, ftUserEnd;
-		int64_t ftWallEnd = timeOfDay();
+		int64_t ftMonotonicEnd = duckdb::TimePoint::GetTickMs();
 		getProcessTimesAddr(hProcess, &ftCreation, &ftExit, &ftKernelEnd, &ftUserEnd);
-		printf("Run Time (s): real %.3f user %f sys %f\n", (ftWallEnd - ftWallBegin) * 0.001,
+		printf("Run Time (s): real %.3f user %f sys %f\n", (ftMonotonicEnd - ftMonotonicBegin) * 0.001,
 		       timeDiff(&ftUserBegin, &ftUserEnd), timeDiff(&ftKernelBegin, &ftKernelEnd));
 	}
 }
@@ -848,7 +844,7 @@ void ShellState::SetTextMode() {
 
 SuccessState ShellState::RenderQuery(ShellRenderer &renderer, const string &query, PagerMode pager_overwrite) {
 	auto &con = *conn;
-	auto result = con.SendQuery(query);
+	auto result = con.Query(query);
 	if (result->HasError()) {
 		PrintDatabaseError(result->GetError());
 		return SuccessState::FAILURE;
@@ -941,6 +937,14 @@ ShellState &ShellState::Get() {
 	return *GetReference();
 }
 
+static bool ResultIsDescribeShaped(const duckdb::QueryResult &result) {
+	// The describe renderer reads the fixed column layout produced by DESCRIBE / a table describe (column_name,
+	// column_type, null, key, default, extra). Anything else - e.g. a setting value from a bareword "SHOW name" - is a
+	// regular result that must not be rendered in describe mode.
+	auto &names = result.GetNames();
+	return names.size() == 6 && names[0] == "column_name" && names[1] == "column_type";
+}
+
 SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement) {
 	if (statement->has_anonymous_parameters) {
 		PrintDatabaseError("Prepared statement parameters cannot be used directly\nTo use prepared "
@@ -950,30 +954,43 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	auto &con = *conn;
 	auto renderer = GetRenderer();
 	unique_ptr<duckdb::QueryResult> result;
-	if (renderer->RequireMaterializedResult()) {
+	unique_ptr<duckdb::QueryResultStream> stream;
+	const bool render_materialized = renderer->RequireMaterializedResult();
+	if (render_materialized) {
 		// we need to materialize the result prior to rendering
-		duckdb::QueryParameters parameters;
-		parameters.output_type = duckdb::QueryResultOutputType::FORCE_MATERIALIZED;
-		parameters.memory_type = duckdb::QueryResultMemoryType::BUFFER_MANAGED;
-		result = con.SendQuery(std::move(statement), parameters);
+		result = con.Query(std::move(statement), duckdb::QueryResultMemoryType::BUFFER_MANAGED);
 	} else {
-		// for row-wise rendering we can use streaming results
-		result = con.SendQuery(std::move(statement));
+		result = con.Submit(std::move(statement));
 	}
 	auto &res = *result;
 	if (res.HasError()) {
 		PrintDatabaseError(res.GetError());
 		return SuccessState::FAILURE;
 	}
-	auto &properties = res.properties;
+	auto &properties = res.GetStatementProperties();
+	// Row-wise rendering drains the result as it is produced; everything else is retained
+	const bool render_streaming = !render_materialized &&
+	                              properties.return_type == duckdb::StatementReturnType::QUERY_RESULT &&
+	                              properties.result_eagerness != duckdb::ResultEagerness::FORCED;
+	if (!render_materialized && !render_streaming) {
+		// the statement is not rendered row by row, but its side effects must still happen
+		res.Complete();
+		if (res.HasError()) {
+			PrintDatabaseError(res.GetError());
+			return SuccessState::FAILURE;
+		}
+	}
 	if (properties.return_type == duckdb::StatementReturnType::CHANGED_ROWS) {
 		auto result_chunk = res.Fetch();
 		if (result_chunk && result_chunk->size() == 1) {
 			// update total changes
 			auto row_changes = result_chunk->GetValue(0, 0);
-			if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(duckdb::LogicalType::BIGINT)) {
-				last_changes = row_changes.GetValue<int64_t>();
-				total_changes += last_changes;
+			if (!row_changes.IsNull()) {
+				auto cast_row_changes = row_changes.DefaultTryCastAs(duckdb::LogicalType::BIGINT);
+				if (cast_row_changes) {
+					last_changes = cast_row_changes->GetValue<int64_t>();
+					total_changes += last_changes;
+				}
 			}
 		}
 	}
@@ -981,11 +998,20 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		// only SELECT statements return results that need to be rendered
 		return SuccessState::SUCCESS;
 	}
-	if (res.type == duckdb::QueryResultType::MATERIALIZED_RESULT) {
-		last_result = duckdb::unique_ptr_cast<duckdb::QueryResult, MaterializedQueryResult>(std::move(result));
+	if (render_streaming) {
+		stream = duckdb::make_uniq<duckdb::QueryResultStream>(std::move(result));
+	} else {
+		last_result = std::move(result);
+	}
+	// A bareword "SHOW name" is optimistically routed to the describe renderer, but it may have resolved to a setting
+	// value rather than a table describe. Only a describe-shaped result can be rendered in describe mode - fall back to
+	// the default rendering otherwise.
+	if (cMode == RenderMode::DESCRIBE && !ResultIsDescribeShaped(res)) {
+		cMode = mode;
+		renderer = GetRenderer();
 	}
 	// analyze the query result so we know how long/wide the result will be
-	auto render_state = RenderQueryResult(*renderer, res);
+	auto render_state = stream ? RenderQueryResult(*renderer, *stream) : RenderQueryResult(*renderer, res);
 	return render_state;
 }
 
@@ -1026,12 +1052,12 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 	try {
 		auto iterator = con.context->IterateStatements(zSql);
 		while (iterator.Peek()) {
-			auto statement = iterator.GetStatement();
+			auto statement = iterator.GetStatementForExecution();
 			if (!statement) {
 				continue; // a peel that preprocessing swallowed
 			}
-			idx_t start_pos = statement->stmt_location;
-			idx_t len = statement->stmt_length;
+			idx_t start_pos = statement->stmt_location.offset;
+			idx_t len = statement->stmt_location.length;
 			while (len > 0 && IsSpace(zSql[start_pos])) {
 				start_pos++;
 				len--;
@@ -1858,7 +1884,7 @@ ExecuteSQLSingleValueResult ShellState::ExecuteSQLSingleValue(duckdb::Connection
 		result_value = result->GetError();
 		return ExecuteSQLSingleValueResult::EXECUTION_ERROR;
 	}
-	auto is_query = result->properties.return_type == duckdb::StatementReturnType::QUERY_RESULT;
+	auto is_query = result->GetStatementProperties().return_type == duckdb::StatementReturnType::QUERY_RESULT;
 	if (!is_query) {
 		return ExecuteSQLSingleValueResult::EMPTY_RESULT;
 	}
@@ -2322,6 +2348,12 @@ MetadataResult ShellState::DisplayManual(const vector<string> &args) {
 		       ErrorData(ex).RawMessage().c_str());
 		return MetadataResult::FAIL;
 	}
+	if (qname.Path().size() > 3) {
+		// duckdb_functions() only reports the innermost schema, so a nested schema path cannot be matched here
+		PrintF(PrintOutput::STDERR,
+		       "'%s' is not a valid function name - expected NAME, SCHEMA.NAME or DATABASE.SCHEMA.NAME\n", args[1]);
+		return MetadataResult::FAIL;
+	}
 	// missing qualifiers match everything
 	string name_pattern = qname.Name().GetIdentifierName();
 	string schema_pattern = qname.Schema().empty() ? "%" : qname.Schema().GetIdentifierName();
@@ -2410,13 +2442,19 @@ LIMIT 5)");
 		if (!style.layout_on.empty()) {
 			style.layout_off = ShellHighlight::ResetTerminalCode();
 		}
-		style.heading_on = ShellHighlight::TerminalCode(PrintColor::WHITE, PrintIntensity::BOLD);
-		style.heading_off = ShellHighlight::ResetTerminalCode();
-		style.path_on = ShellHighlight::TerminalCode(PrintColor::WHITE, PrintIntensity::STANDARD);
-		style.path_off = ShellHighlight::ResetTerminalCode();
+		if (linenoiseGetTerminalColorMode() == LINENOISE_LIGHT_MODE) {
+			style.heading_on = ShellHighlight::TerminalCode(PrintColor::BLACK, PrintIntensity::BOLD);
+			style.path_on = ShellHighlight::TerminalCode(PrintColor::BLACK, PrintIntensity::STANDARD);
+		} else {
+			style.heading_on = ShellHighlight::TerminalCode(PrintColor::WHITE, PrintIntensity::BOLD);
+			style.path_on = ShellHighlight::TerminalCode(PrintColor::WHITE, PrintIntensity::STANDARD);
+		}
 		style.param_on = ShellHighlight::TerminalCode(PrintColor::GRAY, PrintIntensity::ITALIC);
-		style.param_off = ShellHighlight::ResetTerminalCode();
 		style.type_on = ShellHighlight::TerminalCode(PrintColor::STANDARD, PrintIntensity::BOLD);
+
+		style.heading_off = ShellHighlight::ResetTerminalCode();
+		style.path_off = ShellHighlight::ResetTerminalCode();
+		style.param_off = ShellHighlight::ResetTerminalCode();
 		style.type_off = ShellHighlight::ResetTerminalCode();
 	}
 
@@ -3001,9 +3039,11 @@ int ShellState::ProcessInput(InputMode mode) {
 		zLine = OneInputLine(in, zLine, nSql > 0);
 		if (!zLine) {
 			/* End of input */
-			if (!in && stdin_is_interactive && conn && conn->context && conn->context->IsConnected()) {
+			if (!in && stdin_is_interactive && !started_as_client && conn && conn->context &&
+			    conn->context->IsConnected()) {
 				// First Ctrl-D while CONNECT-ed: implicit DISCONNECT instead of exiting. A second
-				// Ctrl-D (now unbound) will exit normally.
+				// Ctrl-D (now unbound) will exit normally. Shells launched with `-connect` skip this
+				// and exit right away - disconnecting would leave a local shell that was never asked for.
 				printf("\n");
 				conn->Query("DISCONNECT");
 				nSql = 0;
@@ -3249,7 +3289,7 @@ static char *linenoise_format(const char *zLine) {
 			return nullptr;
 		}
 		vector<duckdb::Value> params = {duckdb::Value(string(zLine))};
-		auto result = prepared->Execute(params, /*allow_stream_result=*/false);
+		auto result = prepared->Execute(params);
 		if (result->HasError()) {
 			return nullptr;
 		}
@@ -3471,6 +3511,10 @@ int RunShell(int argc, const char **argv) {
 			}
 			arguments.emplace_back(argv[++i]);
 		}
+		if (option.optional_argument && i + 1 < argc && argv[i + 1][0] != '-') {
+			// an optional argument is only consumed when it is not an option itself
+			arguments.emplace_back(argv[++i]);
+		}
 		if (option.pre_init_callback) {
 			// invoke the pre-init callback (if any)
 			auto result = option.pre_init_callback(data, arguments);
@@ -3482,6 +3526,14 @@ int RunShell(int argc, const char **argv) {
 		command_line_calls.emplace_back(option, std::move(arguments));
 	}
 
+	if (data.started_as_client && !data.zDbFilename.empty()) {
+		// checked before OpenDB, so that a database that does not exist yet is not created either
+		data.PrintDatabaseError(
+		    StringUtil::Format("Invalid Input Error: cannot open a database (%s) together with -connect\n"
+		                       "-connect uses the database of the server it connects to",
+		                       data.zDbFilename));
+		return 1;
+	}
 	if (data.zDbFilename.empty()) {
 		data.zDbFilename = ":memory:";
 	}

@@ -14,10 +14,10 @@ static unique_ptr<ArrowTestFactory> MakeArrowFactory(Connection &con, const stri
 		REQUIRE(!con.Query("SET arrow_output_version = '1.0'")->HasError());
 	}
 	auto client_properties = con.context->GetClientProperties();
-	auto result = con.context->Query(query, false);
+	auto result = con.context->Query(query, QueryParameters());
 	REQUIRE(!result->HasError());
-	auto types = result->types;
-	auto names = result->names;
+	auto types = result->GetTypes();
+	auto names = IdentifiersToStrings(result->GetNames());
 	return make_uniq<ArrowTestFactory>(std::move(types), std::move(names), std::move(result), false, client_properties,
 	                                   *con.context);
 }
@@ -25,12 +25,12 @@ static unique_ptr<ArrowTestFactory> MakeArrowFactory(Connection &con, const stri
 // Helper: get the EXPLAIN output for an arrow_scan with a filter
 static string GetExplainForFilter(Connection &con, ArrowTestFactory &factory, const string &filter_expr) {
 	const auto params = ArrowTestHelper::ConstructArrowScan(factory);
-	const auto rel = con.TableFunction("arrow_scan", params)->Filter(filter_expr);
+	const auto rel = con.TableFunction("arrow_scan", {}, {}, params)->Filter(filter_expr);
 	// render operator names raw/upper-case so the string checks below (ARROW_SCAN, FILTER) match
 	REQUIRE(!con.Query("SET profiling_renderer_settings = MAP {'operator_casing': 'upper'}")->HasError());
 	const auto explain_result = rel->Explain();
 	REQUIRE(!explain_result->HasError());
-	auto &mat = explain_result->Cast<MaterializedQueryResult>();
+	auto &mat = *explain_result;
 	return mat.GetValue(1, 0).ToString();
 }
 

@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/external_resources_manager.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/database.hpp"
@@ -192,8 +193,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 		options.stored_database_path.reset();
 	}
 	if (AttachedDatabase::NameIsReserved(info.name)) {
-		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name",
-		                      info.name.GetIdentifierName());
+		throw BinderException("Attached database name %s cannot be used because it is a reserved name", info.name);
 	}
 	if (!extension.empty()) {
 		if (!ExtensionHelper::TryAutoLoadExtension(context, extension)) {
@@ -205,10 +205,6 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	// now create the attached database
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto attached_db = db.CreateAttachedDatabase(context, info, options);
-
-	if (default_database.empty()) {
-		default_database = attached_db->GetName();
-	}
 
 	//! Initialize the database.
 	if (options.is_main_database) {
@@ -249,9 +245,15 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 		if (detached_db->GetCatalog().Supports(RemoteCapability::IS_REMOTE)) {
 			--remote_catalog_count;
 		}
+		auto deleter = detached_db->ExtractDeleter();
 		meta_transaction.DetachDatabase(*detached_db);
 		detached_db->OnDetach(context);
 		detached_db.reset();
+		// Best-effort teardown: the replacement is already in effect, so a deleter failure must not
+		// abort the statement mid-swap; TryDelete logs it as a warning instead.
+		if (deleter) {
+			deleter->TryDelete();
+		}
 	}
 	if (attached_db->GetCatalog().Supports(RemoteCapability::IS_REMOTE)) {
 		++remote_catalog_count;
@@ -263,26 +265,75 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 	return db_ref;
 }
 
-void DatabaseManager::DetachDatabase(ClientContext &context, const Identifier &name, OnEntryNotFound if_not_found) {
-	if (GetDefaultDatabase(context) == name) {
-		throw BinderException("Cannot detach database \"%s\" because it is the default database. Select a different "
+void DatabaseManager::DetachDatabase(ClientContext &context, const Identifier &name, OnEntryNotFound if_not_found,
+                                     bool allow_default_database) {
+	if (!allow_default_database && TryGetDefaultDatabase(context) == name) {
+		throw BinderException("Cannot detach database %s because it is the default database. Select a different "
 		                      "database using `USE` to allow detaching this database",
-		                      name.GetIdentifierName());
+		                      name);
 	}
 
 	auto attached_db = DetachInternal(name);
 	if (!attached_db) {
 		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw BinderException("Failed to detach database with name \"%s\": database not found",
-			                      name.GetIdentifierName());
+			throw BinderException("Failed to detach database with name %s: database not found", name);
 		}
 		return;
 	}
 
+	auto deleter = attached_db->ExtractDeleter();
 	attached_db->OnDetach(context);
 
 	// DetachInternal removes the AttachedDatabase from the list of databases that can be referenced.
 	AttachedDatabase::InvokeCloseIfLastReference(attached_db, context);
+
+	// Tear down the owned external resource last (runs SQL): the detach itself is complete either way,
+	// and a teardown failure surfaces with instructions to retry it manually.
+	if (deleter) {
+		deleter->Delete();
+	}
+}
+
+void DatabaseManager::AddPendingTeardown(unique_ptr<ResourceDeleter> deleter) {
+	lock_guard<mutex> guard(pending_teardowns_lock);
+	pending_teardowns.push_back(std::move(deleter));
+}
+
+void DatabaseManager::DrainPendingTeardowns() {
+	vector<unique_ptr<ResourceDeleter>> to_run;
+	{
+		lock_guard<mutex> guard(pending_teardowns_lock);
+		to_run = std::move(pending_teardowns);
+		pending_teardowns.clear();
+	}
+	// Best-effort: the statement that owned these resources is gone, so a failure can only be logged.
+	for (auto &deleter : to_run) {
+		deleter->TryDelete();
+	}
+}
+
+void DatabaseManager::DetachResourceBorrowers(ClientContext &context, const string &resource_name) {
+	vector<Identifier> to_detach;
+	{
+		lock_guard<mutex> guard(databases_lock);
+		for (auto &entry : databases) {
+			// Both sides come from ColId -> Identifier::GetIdentifierName(), matching how the manager keys names.
+			if (entry.second->GetBorrowedResourceName() == resource_name) {
+				to_detach.push_back(entry.second->GetName());
+			}
+		}
+	}
+	// Detach outside the lock: DetachDatabase takes databases_lock itself. A borrowed attachment binds no
+	// deleter, so this runs no teardown -- the resource is already gone.
+	for (auto &name : to_detach) {
+		try {
+			DetachDatabase(context, name, OnEntryNotFound::RETURN_NULL);
+		} catch (std::exception &) {
+			// Best-effort: DETACH refuses a connection's default database, and DESTROY goes through anyway.
+			// Deliberately not marked invalid -- ValidChecker would then throw for every statement
+			// resolving through it, including the USE and DETACH needed to recover.
+		}
+	}
 }
 
 void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {
@@ -302,8 +353,7 @@ void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {
 void DatabaseManager::RenameDatabase(ClientContext &context, const Identifier &old_name, const Identifier &new_name,
                                      OnEntryNotFound if_not_found) {
 	if (AttachedDatabase::NameIsReserved(new_name)) {
-		throw BinderException("Database name \"%s\" cannot be used because it is a reserved name",
-		                      new_name.GetIdentifierName());
+		throw BinderException("Database name %s cannot be used because it is a reserved name", new_name);
 	}
 
 	shared_ptr<AttachedDatabase> attached_db;
@@ -312,26 +362,24 @@ void DatabaseManager::RenameDatabase(ClientContext &context, const Identifier &o
 		auto old_entry = databases.find(old_name);
 		if (old_entry == databases.end()) {
 			if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-				throw BinderException("Failed to rename database \"%s\": database not found",
-				                      old_name.GetIdentifierName());
+				throw BinderException("Failed to rename database %s: database not found", old_name);
 			}
 			return;
 		}
 
 		auto new_entry = databases.find(new_name);
 		if (new_entry != databases.end()) {
-			throw BinderException("Failed to rename database \"%s\" to \"%s\": database with new name already exists",
-			                      old_name.GetIdentifierName(), new_name.GetIdentifierName());
+			throw BinderException("Failed to rename database %s to %s: database with new name already exists", old_name,
+			                      new_name);
 		}
 
 		attached_db = old_entry->second;
 		databases.erase(old_entry);
 		attached_db->SetName(new_name);
 		databases[new_name] = attached_db;
-	}
-
-	if (old_name == default_database) {
-		default_database = new_name;
+		if (default_database == old_name) {
+			default_database = new_name;
+		}
 	}
 }
 
@@ -345,6 +393,21 @@ shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const Identifier &n
 		}
 		attached_db = std::move(entry->second);
 		databases.erase(entry);
+		if (default_database == name) {
+			// Fall back to the oldest remaining database (OIDs are assigned in attach order)
+			// Arguably, this should not be required - we should just leave the default database unset.
+			// The default used to be defined as the oldest attached database, so detaching the current default changed
+			// the new default to "unset". Keep the previous observable behavior rather than leave new connections
+			// without a default db, since SQL has no way to set the default database at the instance level.
+			default_database = Identifier();
+			idx_t oldest_oid = DConstants::INVALID_INDEX;
+			for (auto &other : databases) {
+				if (other.second->oid < oldest_oid) {
+					oldest_oid = other.second->oid;
+					default_database = other.first;
+				}
+			}
+		}
 	}
 	if (attached_db && attached_db->GetCatalog().Supports(RemoteCapability::IS_REMOTE)) {
 		--remote_catalog_count;
@@ -397,49 +460,81 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 		return;
 	}
 
-	auto extension_name = ExtensionHelper::ApplyExtensionAlias(options.db_type);
-	if (StorageExtension::Find(config, extension_name)) {
+	auto storage_extension_name = ExtensionHelper::ApplyExtensionAlias(options.db_type);
+	if (StorageExtension::Find(config, storage_extension_name)) {
 		// If the database type is already registered, we don't need to load it again.
 		return;
 	}
+	auto extension_name =
+	    ExtensionHelper::FindExtensionInEntries(Identifier(storage_extension_name), EXTENSION_STORAGE_EXTENSIONS);
+	if (extension_name.empty()) {
+		//! Couldn't find a mapping, assume that the storage extension name is also the extension name
+		extension_name = storage_extension_name;
+	}
 
 	// If we are loading a database type from an extension, then we need to check if that extension is loaded.
-	if (!Catalog::TryAutoLoad(context, options.db_type)) {
+	if (!Catalog::TryAutoLoad(context, extension_name)) {
 		// FIXME: Here it might be preferable to use an AutoLoadOrThrow kind of function
 		// so that either there will be success or a message to throw, and load will be
 		// attempted only once respecting the auto-loading options
-		ExtensionHelper::LoadExternalExtension(context, {options.db_type});
+		ExtensionHelper::LoadExternalExtension(context, {extension_name});
 	}
 }
 
 Identifier DatabaseManager::GetDefaultDatabase(ClientContext &context) {
-	auto &config = ClientData::Get(context);
-	auto &default_entry = config.catalog_search_path->GetDefault();
-	if (IsInvalidCatalog(default_entry.GetCatalog())) {
-		auto &result = DatabaseManager::Get(context).default_database;
-		if (result.empty()) {
-			throw InternalException("Calling DatabaseManager::GetDefaultDatabase with no default database set");
-		}
+	auto result = TryGetDefaultDatabase(context);
+	if (!IsInvalidCatalog(result)) {
 		return result;
 	}
-	return default_entry.GetCatalog();
-}
-
-// LCOV_EXCL_START
-void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &new_value) {
-	auto db_entry = GetDatabase(context, Identifier(new_value));
-
-	if (!db_entry) {
-		throw InternalException("Database \"%s\" not found", new_value);
-	} else if (db_entry->IsTemporary()) {
-		throw InternalException("Cannot set the default database to a temporary database");
-	} else if (db_entry->IsSystem()) {
-		throw InternalException("Cannot set the default database to a system database");
+	auto &connected_with = ClientData::Get(context).default_database;
+	if (!IsInvalidCatalog(connected_with)) {
+		throw CatalogException("The default database %s has been detached: select another database using `USE`",
+		                       connected_with);
 	}
-
-	default_database = Identifier(new_value);
+	// Reachable on an instance created without a database (DuckDB::CreateEmpty).
+	throw CatalogException("No database is attached: attach one with ATTACH before referring to a database");
 }
-// LCOV_EXCL_STOP
+
+Identifier DatabaseManager::TryGetDefaultDatabase(ClientContext &context) {
+	auto &client_data = ClientData::Get(context);
+	auto &default_entry = client_data.catalog_search_path->GetDefault();
+	if (!IsInvalidCatalog(default_entry.GetCatalog())) {
+		return default_entry.GetCatalog();
+	}
+	auto &manager = DatabaseManager::Get(context);
+	// Callable outside a transaction: only consult the transaction's references when one is active.
+	const bool in_transaction = context.transaction.HasActiveTransaction();
+	if (!IsInvalidCatalog(client_data.default_database)) {
+		// still the default while attached, or while this transaction still references it
+		if (manager.GetDatabase(client_data.default_database)) {
+			return client_data.default_database;
+		}
+		if (in_transaction && MetaTransaction::Get(context).GetReferencedDatabase(client_data.default_database)) {
+			return client_data.default_database;
+		}
+		return Identifier();
+	}
+	if (in_transaction && !manager.HasAttachedDatabase()) {
+		auto modified_database = MetaTransaction::Get(context).ModifiedDatabase();
+		if (modified_database) {
+			return modified_database->GetName();
+		}
+	}
+	return Identifier();
+}
+
+Identifier DatabaseManager::GetDefaultDatabase() {
+	lock_guard<mutex> guard(databases_lock);
+	return default_database;
+}
+
+void DatabaseManager::SetDefaultDatabase(const Identifier &name) {
+	lock_guard<mutex> guard(databases_lock);
+	if (!IsInvalidCatalog(name) && databases.find(name) == databases.end()) {
+		throw BinderException("Cannot make database %s the default database: it is not attached", name);
+	}
+	default_database = name;
+}
 
 vector<shared_ptr<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext &context,
                                                                    const optional_idx max_db_count) {

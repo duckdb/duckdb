@@ -50,22 +50,24 @@ string CreateSchemaInfo::ToString() const {
 		qualified += SQLIdentifier(path[i]);
 	}
 
+	string temp = temporary ? "TEMPORARY " : "";
+
 	string ret = "";
 	switch (on_conflict) {
 	case OnCreateConflict::ALTER_ON_CONFLICT: {
-		ret += "CREATE SCHEMA " + qualified + " ON CONFLICT INSERT OR REPLACE;";
+		ret += "CREATE " + temp + "SCHEMA " + qualified + " ON CONFLICT INSERT OR REPLACE;";
 		break;
 	}
 	case OnCreateConflict::IGNORE_ON_CONFLICT: {
-		ret += "CREATE SCHEMA IF NOT EXISTS " + qualified + ";";
+		ret += "CREATE " + temp + "SCHEMA IF NOT EXISTS " + qualified + ";";
 		break;
 	}
 	case OnCreateConflict::REPLACE_ON_CONFLICT: {
-		ret += "CREATE OR REPLACE SCHEMA " + qualified + ";";
+		ret += "CREATE OR REPLACE " + temp + "SCHEMA " + qualified + ";";
 		break;
 	}
 	case OnCreateConflict::ERROR_ON_CONFLICT: {
-		ret += "CREATE SCHEMA " + qualified + ";";
+		ret += "CREATE " + temp + "SCHEMA " + qualified + ";";
 		break;
 	}
 	}

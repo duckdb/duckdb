@@ -17,6 +17,7 @@ struct FileHandle;
 struct BaseRequest;
 struct HTTPResponse;
 class PhysicalOperator;
+enum class PhysicalOperatorType : uint8_t;
 class AttachedDatabase;
 class RowGroup;
 struct DataTableInfo;
@@ -106,6 +107,9 @@ public:
 
 	static string ConstructLogMessage(const PhysicalOperator &op, const string &class_p, const string &event,
 	                                  const vector<pair<string, string>> &info);
+	static string ConstructLogMessage(PhysicalOperatorType operator_type,
+	                                  const vector<pair<string, string>> &parameters, const string &class_p,
+	                                  const string &event, const vector<pair<string, string>> &info);
 };
 
 class MetricsLogType : public LogType {

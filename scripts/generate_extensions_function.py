@@ -800,6 +800,7 @@ struct ExtensionFunctionOverloadEntry {
 static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
     {"parquet", "parquet"},
     {"json", "json"},
+    {"geojson", "json"},
     {"avro", "avro"},
     {"iceberg", "iceberg"}
 }; // END_OF_EXTENSION_COPY_FUNCTIONS
@@ -810,6 +811,12 @@ static constexpr ExtensionEntry EXTENSION_TYPES[] = {
     {"json", "json"},
     {"inet", "inet"},
 }; // END_OF_EXTENSION_TYPES
+
+// Note: these are currently hardcoded in scripts/generate_extensions_function.py
+// TODO: automate by passing though to script via duckdb
+static constexpr ExtensionEntry EXTENSION_STORAGE_EXTENSIONS[] = {
+    {"arn", "aws"},
+}; // END_OF_EXTENSION_STORAGE_EXTENSIONS
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
@@ -852,6 +859,8 @@ static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {
     {".json", "json"},
     {".jsonl", "json"},
     {".ndjson", "json"},
+    {".geojson", "json"},
+    {".geojsonl", "json"},
     {".shp", "spatial"},
     {".gpkg", "spatial"},
     {".fgb", "spatial"},
@@ -888,6 +897,13 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {{"s3/config", "h
                                                                 {"mysql/config", "mysql_scanner"},
                                                                 {"postgres/config", "postgres_scanner"}
 }; // EXTENSION_SECRET_PROVIDERS
+
+// Note: these are currently hardcoded in scripts/generate_extensions_function.py
+// TODO: automate by passing though to script via duckdb
+static constexpr ExtensionEntry EXTENSION_LOG_TYPES[] = {
+    {"DuckLakeMetadata", "ducklake"},
+    {"Iceberg", "iceberg"},
+}; // END_OF_EXTENSION_LOG_TYPES
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "autocomplete",

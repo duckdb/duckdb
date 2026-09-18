@@ -1,0 +1,167 @@
+# name: test/sql/json/scalar/test_st_geomfromgeojson.test
+# description: Test ST_GeomFromGeoJSON
+# group: [scalar]
+
+require json
+
+statement ok
+CREATE TABLE types (geom GEOMETRY);
+
+statement ok
+INSERT INTO types VALUES
+    ('POINT EMPTY'),
+    ('POINT(0 0)'),
+    ('LINESTRING EMPTY'),
+    ('LINESTRING(0 0, 1 1)'),
+    ('POLYGON EMPTY'),
+    ('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'),
+    ('MULTIPOINT EMPTY'),
+    ('MULTIPOINT(0 0, 1 1)'),
+    ('MULTILINESTRING EMPTY'),
+    ('MULTILINESTRING((0 0, 1 1), (2 2, 3 3))'),
+    ('MULTIPOLYGON EMPTY'),
+    ('MULTIPOLYGON(((0 0, 1 0, 1 1, 0 1, 0 0)), ((2 2, 3 2, 3 3, 2 3, 2 2)))'),
+    ('GEOMETRYCOLLECTION EMPTY'),
+    ('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(0 0, 1 1))');
+
+# Round-trip every geometry type through GeoJSON
+query I
+SELECT ST_AsText(ST_GeomFromGeoJSON(ST_AsGeoJSON(geom))) FROM types;
+----
+POINT EMPTY
+POINT (0 0)
+LINESTRING EMPTY
+LINESTRING (0 0, 1 1)
+POLYGON EMPTY
+POLYGON ((0 0, 1 0, 1 1, 0 1, 0 0))
+MULTIPOINT EMPTY
+MULTIPOINT (0 0, 1 1)
+MULTILINESTRING EMPTY
+MULTILINESTRING ((0 0, 1 1), (2 2, 3 3))
+MULTIPOLYGON EMPTY
+MULTIPOLYGON (((0 0, 1 0, 1 1, 0 1, 0 0)), ((2 2, 3 2, 3 3, 2 3, 2 2)))
+GEOMETRYCOLLECTION EMPTY
+GEOMETRYCOLLECTION (POINT (0 0), LINESTRING (0 0, 1 1))
+
+query I
+SELECT typeof(ST_GeomFromGeoJSON('{"type":"Point","coordinates":[1,2]}'));
+----
+GEOMETRY
+
+# Both the VARCHAR and the JSON overload are available
+query I
+SELECT ST_AsText(ST_GeomFromGeoJSON('{"type":"Point","coordinates":[1,2]}'::JSON));
+----
+POINT (1 2)
+
+query I
+SELECT ST_AsText(ST_GeomFromGeoJSON('{"type":"Point","coordinates":[1,2]}'::VARCHAR));
+----
+POINT (1 2)
+
+# Three-dimensional positions
+query I
+SELECT ST_AsText(ST_GeomFromGeoJSON('{"type":"Point","coordinates":[1.0,2.0,3.0]}'));
+----
+POINT Z (1 2 3)
+
+query I
+SELECT ST_AsText(ST_GeomFromGeoJSON('{"type":"LineString","coordinates":[[1.0,2.0,3.0],[4.0,5.0,6.0]]}'));
+----
+LINESTRING Z (1 2 3, 4 5 6)
+
+query I
+SELECT ST_AsText(ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[1.0,2.0,3.0],[4.0,5.0,6.0],[7.0,8.0,9.0],[1.0,2.0,3.0]]]}'));
+----
+POLYGON Z ((1 2 3, 4 5 6, 7 8 9, 1 2 3))
+
+# A geometry must have uniform dimensions, so a single 3D position promotes the whole geometry
+query I
+SELECT ST_AsText(ST_GeomFromGeoJSON('{"type":"LineString","coordinates":[[1,2],[3,4,5]]}'));
+----
+LINESTRING Z (1 2 0, 3 4 5)
+
+# A fourth ordinate is unspecified in GeoJSON, and ignored
+query I
+SELECT ST_AsText(ST_GeomFromGeoJSON('{"type":"Point","coordinates":[1,2,3,4]}'));
+----
+POINT Z (1 2 3)
+
+# "crs" and "bbox" members are ignored
+query I
+SELECT ST_AsText(ST_GeomFromGeoJSON('{"type":"Point","coordinates":[1,2],"crs":{"type":"name"},"bbox":[0,0,1,1]}'));
+----
+POINT (1 2)
+
+query I
+SELECT ST_GeomFromGeoJSON(NULL);
+----
+NULL
+
+# Integer and float coordinates both work
+query I
+SELECT ST_AsText(ST_GeomFromGeoJSON('{"type":"Point","coordinates":[-122.4194,37.7749]}'));
+----
+POINT (-122.4194 37.7749)
+
+statement error
+SELECT ST_GeomFromGeoJSON('{"type":"Nope","coordinates":[1,2]}');
+----
+<REGEX>:.*unknown geometry type "Nope".*
+
+statement error
+SELECT ST_GeomFromGeoJSON('{"coordinates":[1,2]}');
+----
+<REGEX>:.*missing a "type" string.*
+
+statement error
+SELECT ST_GeomFromGeoJSON('{"type":"Point"}');
+----
+<REGEX>:.*Point requires a "coordinates" array.*
+
+statement error
+SELECT ST_GeomFromGeoJSON('{"type":"Point","coordinates":["a","b"]}');
+----
+<REGEX>:.*must contain only numbers.*
+
+statement error
+SELECT ST_GeomFromGeoJSON('{"type":"Point","coordinates":[1]}');
+----
+<REGEX>:.*at least 2 numbers.*
+
+# Polygon coordinates need one more level of nesting than this
+statement error
+SELECT ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[1,2]}');
+----
+<REGEX>:.*nested too shallowly.*
+
+statement error
+SELECT ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[1,2],[3,4]]}');
+----
+<REGEX>:.*Polygon position must be an array of at least 2 numbers.*
+
+statement error
+SELECT ST_GeomFromGeoJSON('{"type":"GeometryCollection"}');
+----
+<REGEX>:.*GeometryCollection requires a "geometries" array.*
+
+statement error
+SELECT ST_GeomFromGeoJSON('[1,2]');
+----
+<REGEX>:.*geometry must be an object.*
+
+# Deeply nested coordinates must error rather than exhaust the stack
+statement error
+SELECT ST_GeomFromGeoJSON('{"type":"Point","coordinates":' || repeat('[', 100000) || repeat(']', 100000) || '}');
+----
+<REGEX>:.*at least 2 numbers.*
+
+statement error
+SELECT ST_GeomFromGeoJSON('{"type":"GeometryCollection","geometries":[' || repeat('{"type":"GeometryCollection","geometries":[', 100000) || '{"type":"Point","coordinates":[1,2]}' || repeat(']}', 100000) || ']}');
+----
+<REGEX>:.*maximum recursion depth.*
+
+statement error
+SELECT ST_GeomFromGeoJSON('not json at all');
+----
+<REGEX>:.*Malformed JSON.*

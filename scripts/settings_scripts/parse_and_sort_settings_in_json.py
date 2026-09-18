@@ -27,6 +27,8 @@ def add_all_settings_to_global_list():
         'default_scope',
         'default_value',
         'conditional_defaults',
+        'is_debug',
+        'is_deprecated',
     ]
 
     print(f"Parsing and sorting the settings data in {JSON_PATH}")
@@ -52,6 +54,8 @@ def add_all_settings_to_global_list():
             default_scope=entry.get('default_scope', None),
             default_value=entry.get('default_value', None),
             conditional_defaults=entry.get('conditional_defaults', None),
+            is_debug=entry.get('is_debug', False),
+            is_deprecated=entry.get('is_deprecated', False),
         )
         SettingsList.append(setting)
 

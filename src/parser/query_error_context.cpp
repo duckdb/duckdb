@@ -10,7 +10,7 @@ QueryErrorContext::QueryErrorContext(const ParsedExpression &expr) : query_locat
 }
 
 string QueryErrorContext::Format(const string &query, const string &error_message, optional_idx error_loc,
-                                 bool add_line_indicator) {
+                                 idx_t error_length, bool add_line_indicator) {
 	static constexpr idx_t MAX_LINE_RENDER_WIDTH = 120;
 	if (!error_loc.IsValid()) {
 		// no location in query provided
@@ -154,11 +154,26 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 	}
 	error_render_width += line_indicator.size() + begin_trunc.size();
 
+	// get the render width of the caret indicator, covering the full location length (clamped to the visible line)
+	idx_t caret_width = 0;
+	idx_t error_end_in_line = (error_location - error_line_start) + error_length;
+	idx_t display_end_in_line = end_pos - error_line_start;
+	for (idx_t i = epos; i < positions.size(); i++) {
+		if (positions[i] >= error_end_in_line || positions[i] >= display_end_in_line) {
+			break;
+		}
+		caret_width += render_widths[i];
+	}
+	if (caret_width == 0) {
+		// always render at least one caret
+		caret_width = 1;
+	}
+
 	// now first print the error message plus the current line (or a subset of the line)
 	string result = error_message;
 	result += "\n\n" + line_indicator + begin_trunc + query.substr(start_pos, end_pos - start_pos) + end_trunc;
-	// print an arrow pointing at the error location
-	result += "\n" + string(error_render_width, ' ') + "^";
+	// print arrows pointing at the error location
+	result += "\n" + string(error_render_width, ' ') + string(caret_width, '^');
 	return result;
 }
 

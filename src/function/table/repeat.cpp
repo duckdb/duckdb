@@ -18,11 +18,11 @@ struct RepeatOperatorData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> RepeatBind(ClientContext &context, TableFunctionBindInput &input,
-                                           vector<LogicalType> &return_types, vector<string> &names) {
+                                           vector<LogicalType> &return_types, vector<Identifier> &names) {
 	// the repeat function returns the type of the first argument
 	auto &inputs = input.inputs;
 	return_types.push_back(inputs[0].type());
-	names.push_back(inputs[0].ToString());
+	names.emplace_back(inputs[0].ToString());
 	if (inputs[1].IsNull()) {
 		throw BinderException("Repeat second parameter cannot be NULL");
 	}

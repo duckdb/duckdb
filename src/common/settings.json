@@ -16,6 +16,17 @@
         ]
     },
     {
+        "name": "active_grammar_extensions",
+        "description": "The grammar extensions used by the parser",
+        "type": "VARCHAR[]",
+        "scope": "local",
+        "on_callbacks": [
+            "set",
+            "reset"
+        ],
+        "custom_implementation": true
+    },
+    {
         "name": "allocator_background_threads",
         "description": "Whether to enable the allocator background thread.",
         "type": "BOOLEAN",
@@ -48,6 +59,16 @@
         "type": "BOOLEAN",
         "scope": "global",
         "default_value": "true",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "allow_extension_repositories",
+        "description": "Whether custom trusted extension repositories are 'allowed', 'forbidden' (which also distrusts existing repositories) or 'undecided' (the default: blocks adding new repositories, but keeps trusting existing ones). While the database is running the setting can only move from 'undecided' to 'allowed' or 'forbidden', or from 'allowed' to 'forbidden'",
+        "type": "VARCHAR",
+        "scope": "global",
+        "default_value": "undecided",
         "on_callbacks": [
             "set"
         ]
@@ -219,14 +240,14 @@
     },
     {
         "name": "catalog_error_max_schemas",
-        "description": "The maximum number of schemas the system will scan for \\\"did you mean...\\\" style errors in the catalog",
+        "description": "The maximum number of schemas the system will scan for \"did you mean...\" style errors in the catalog",
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": "100"
     },
     {
         "name": "checkpoint_on_detach",
-        "description": "Override checkpoint behavior when detaching a database. ENABLED always checkpoints, DISABLED never checkpoints, DEFAULT defers to the global checkpoint_on_shutdown setting.",
+        "description": "Override checkpoint behavior when detaching a database. ENABLED requests a checkpoint, but the checkpoint does not occur if another connection still references the database. DISABLED never checkpoints, DEFAULT defers to the global checkpoint_on_shutdown setting.",
         "type": "ENUM<CheckpointOnDetach>",
         "default_scope": "local",
         "default_value": "DEFAULT"
@@ -246,15 +267,15 @@
         ]
     },
     {
-        "name": "configure_profiling",
-        "description": "Accepts a JSON enabling custom metrics",
+        "name": "current_dialect",
+        "description": "The SQL dialect used by the parser",
         "type": "VARCHAR",
         "scope": "local",
-        "custom_implementation": true,
-        "aliases": [
-            "custom_profiling_settings",
-            "configure_metrics"
-        ]
+        "on_callbacks": [
+            "set",
+            "reset"
+        ],
+        "custom_implementation": true
     },
     {
         "name": "current_transaction_invalidation_policy",
@@ -314,11 +335,35 @@
         "default_value": "false"
     },
     {
+        "name": "debug_enable_caching_operators",
+        "description": "Enables caching operators that cache intermediate results",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "true",
+        "is_debug": true,
+        "aliases": [
+            "enable_caching_operators"
+        ],
+        "struct": "EnableCachingOperatorsSetting"
+    },
+    {
         "name": "debug_eviction_queue_sleep_micro_seconds",
         "description": "DEBUG SETTING: time for the eviction queue to sleep before acquiring shared ownership of block memory",
         "type": "UBIGINT",
         "scope": "global",
         "default_value": "0"
+    },
+    {
+        "name": "debug_force_bitpacking_mode",
+        "description": "DEBUG SETTING: forces a specific bitpacking mode",
+        "type": "ENUM<BitpackingMode>",
+        "scope": "global",
+        "default_value": "AUTO",
+        "is_debug": true,
+        "aliases": [
+            "force_bitpacking_mode"
+        ],
+        "struct": "ForceBitpackingModeSetting"
     },
     {
         "name": "debug_force_commit_failure",
@@ -349,11 +394,54 @@
         "default_value": "false"
     },
     {
+        "name": "debug_force_mbedtls_unsafe",
+        "description": "Enable mbedtls for encryption (WARNING: unsafe to use)",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true,
+        "is_debug": true,
+        "aliases": [
+            "force_mbedtls_unsafe"
+        ],
+        "struct": "ForceMbedtlsUnsafeSetting"
+    },
+    {
         "name": "debug_force_no_cross_product",
         "description": "DEBUG SETTING: Force disable cross product generation when hyper graph isn't connected, used for testing",
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "false"
+    },
+    {
+        "name": "debug_force_update_to_del_and_insert",
+        "description": "DEBUG SETTING: forces all updates to use the delete + insert code path instead of in-place updates",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false",
+        "is_debug": true,
+        "aliases": [
+            "force_update_to_del_and_insert"
+        ],
+        "struct": "ForceUpdateToDelAndInsertSetting"
+    },
+    {
+        "name": "debug_force_variant_shredding",
+        "description": "Forces the VARIANT shredding that happens at checkpoint to use the provided schema for the shredding.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true,
+        "is_debug": true,
+        "aliases": [
+            "force_variant_shredding"
+        ],
+        "struct": "ForceVariantShredding"
+    },
+    {
+        "name": "debug_local_file_system_delay_ms",
+        "description": "DEBUG SETTING: time to sleep before local file system open/read/write operations",
+        "type": "UBIGINT",
+        "scope": "global",
+        "default_value": "0"
     },
     {
         "name": "debug_order_verification",
@@ -373,13 +461,6 @@
         "description": "DEBUG SETTING: skip checkpointing on commit",
         "type": "BOOLEAN",
         "default_scope": "global",
-        "default_value": "false"
-    },
-    {
-        "name": "debug_transformer_trampoline_style",
-        "description": "Use the experimental trampoline-style parser transformer",
-        "type": "BOOLEAN",
-        "default_scope": "local",
         "default_value": "false"
     },
     {
@@ -473,13 +554,6 @@
         ]
     },
     {
-        "name": "default_io_mode",
-        "description": "The default IO_MODE for newly attached database files when no explicit IO_MODE is given (BUFFERED_IO or MMAP)",
-        "type": "ENUM<FileIOMode>",
-        "default_value": "BUFFERED_IO",
-        "default_scope": "global"
-    },
-    {
         "name": "default_null_order",
         "description": "NULL ordering used when none is specified (NULLS_FIRST or NULLS_LAST)",
         "type": "ENUM<DefaultOrderByNullType>",
@@ -521,14 +595,10 @@
         "description": "Rewrite delim joins to materialized CTEs during dependent join flattening",
         "type": "BOOLEAN",
         "default_scope": "local",
-        "default_value": "true"
-    },
-    {
-        "name": "deprecated_using_key_syntax",
-        "description": "Configures the use of the deprecated union syntax for USING KEY CTEs.",
-        "type": "ENUM<DeprecatedUsingKeySyntax>",
-        "default_scope": "local",
-        "default_value": "DEFAULT"
+        "default_value": "true",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "dialect_compatibility_mode",
@@ -602,15 +672,8 @@
         "default_value": "50"
     },
     {
-        "name": "enable_caching_operators",
-        "description": "Enables caching operators that cache intermediate results",
-        "type": "BOOLEAN",
-        "default_scope": "local",
-        "default_value": "true"
-    },
-    {
         "name": "enable_external_access",
-        "description": "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV \"\n\t    \"readers, pandas replacement scans, etc)",
+        "description": "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV readers, pandas replacement scans, etc)",
         "type": "BOOLEAN",
         "scope": "global",
         "default_value": "true",
@@ -664,7 +727,17 @@
         "description": "[PLACEHOLDER] Legacy setting - does nothing",
         "type": "BOOLEAN",
         "default_scope": "global",
-        "default_value": "false"
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "enable_optimistic_write",
+        "description": "Whether or not to optimistically write large appends to disk before committing. Disable this to keep bulk appends in memory (e.g. for in-memory benchmarks).",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "true"
     },
     {
         "name": "enable_optimizer",
@@ -713,6 +786,16 @@
         "custom_implementation": true
     },
     {
+        "name": "error_on_division_by_zero",
+        "description": "Throw an error instead of returning NULL when dividing by zero.",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "true",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "errors_as_json",
         "description": "Output error messages as structured JSON instead of as a raw string",
         "type": "BOOLEAN",
@@ -725,7 +808,10 @@
         "description": "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.",
         "type": "BOOLEAN",
         "scope": "global",
-        "default_value": "true"
+        "default_value": "true",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "explain_output",
@@ -743,10 +829,24 @@
     },
     {
         "name": "extension_directory",
-        "description": "Set the directory to store extensions in",
+        "description": "DEPRECATED: Use extension_directories instead",
         "type": "VARCHAR",
         "scope": "global",
-        "default_value": ""
+        "default_value": "",
+        "is_deprecated": true,
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "extension_repository_directory",
+        "description": "Set the directory in which trusted extension repositories are stored. This is the trust anchor for user-provided repositories, so while signature checking is enabled (allow_unsigned_extensions=false) it can only be set at startup, not while the database is running",
+        "type": "VARCHAR",
+        "scope": "global",
+        "default_value": "",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "external_file_cache_local_block_size",
@@ -775,6 +875,13 @@
         ]
     },
     {
+        "name": "external_file_cache_spill",
+        "description": "Whether evicted external file cache blocks of remote files spill to the temporary directory instead of being dropped, so that they are re-read from there rather than re-fetched from the source",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "external_threads",
         "description": "The number of external threads that work on DuckDB tasks.",
         "type": "UBIGINT",
@@ -792,18 +899,14 @@
         "default_value": ""
     },
     {
-        "name": "force_bitpacking_mode",
-        "description": "DEBUG SETTING: forces a specific bitpacking mode",
-        "type": "ENUM<BitpackingMode>",
-        "scope": "global",
-        "default_value": "AUTO"
-    },
-    {
         "name": "force_column_metadata_reuse",
         "description": "Force re-use of row group metadata on a column-level when checkpointing on older storage versions 6 and 7. This breaks storage backward-compatibility with older DuckDB versions.",
         "type": "BOOLEAN",
         "scope": "global",
-        "default_value": "false"
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "force_compression",
@@ -816,26 +919,11 @@
         ]
     },
     {
-        "name": "force_mbedtls_unsafe",
-        "description": "Enable mbedtls for encryption (WARNING: unsafe to use)",
-        "type": "BOOLEAN",
+        "name": "fsync_mode",
+        "description": "How to synchronize database file changes to stable storage (STANDARD, NONE or FULL). NONE may cause database corruption after an operating system or hardware crash. FULL uses fullfsync on macOS.",
+        "type": "ENUM<FileSyncMode>",
         "scope": "global",
-        "custom_implementation": true
-    },
-    {
-        "name": "force_update_to_del_and_insert",
-        "description": "DEBUG SETTING: forces all updates to use the delete + insert code path instead of in-place updates",
-        "type": "BOOLEAN",
-        "default_scope": "local",
-        "default_value": "false"
-    },
-    {
-        "name": "force_variant_shredding",
-        "description": "Forces the VARIANT shredding that happens at checkpoint to use the provided schema for the shredding.",
-        "type": "VARCHAR",
-        "scope": "global",
-        "struct": "ForceVariantShredding",
-        "custom_implementation": true
+        "default_value": "STANDARD"
     },
     {
         "name": "geometry_minimum_shredding_size",
@@ -905,14 +993,14 @@
     },
     {
         "name": "index_scan_max_count",
-        "description": "The maximum index scan count sets a threshold for index scans. If fewer than MAX(index_scan_max_count, \"\n\t    \"index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
+        "description": "The maximum index scan count sets a threshold for index scans. If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": 2048
     },
     {
         "name": "index_scan_percentage",
-        "description": "The index scan percentage sets a threshold for index scans. If fewer than MAX(index_scan_max_count, \"\n\t    \"index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
+        "description": "The index scan percentage sets a threshold for index scans. If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
         "type": "DOUBLE",
         "default_scope": "global",
         "default_value": "0.001",
@@ -956,14 +1044,20 @@
         "description": "When enabled, prevent the NULL type from leaving the binder (< v2.0 default behavior)",
         "type": "BOOLEAN",
         "default_scope": "local",
-        "default_value": "false"
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "legacy_metrics_format",
         "description": "When enabled, profiling output uses the legacy flat format instead of the current grouped format",
         "type": "BOOLEAN",
         "default_scope": "local",
-        "default_value": "false"
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "lock_configuration",
@@ -1015,7 +1109,7 @@
     },
     {
         "name": "max_expression_depth",
-        "description": "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep \"\n\t    \"expressions might lead to stack overflow errors.",
+        "description": "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep expressions might lead to stack overflow errors.",
         "type": "UBIGINT",
         "default_scope": "local",
         "default_value": "1000"
@@ -1028,6 +1122,16 @@
         "custom_implementation": true,
         "aliases": [
             "memory_limit"
+        ]
+    },
+    {
+        "name": "max_streaming_buffer_size",
+        "description": "The maximum number of bytes a streaming query result buffers (e.g. 1GB). Buffered bytes stay under this cap plus at most one chunk: an oversized chunk is only admitted into an empty queue",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true,
+        "aliases": [
+            "streaming_buffer_size"
         ]
     },
     {
@@ -1060,10 +1164,14 @@
     },
     {
         "name": "old_implicit_casting",
-        "description": "Allow implicit casting to/from VARCHAR",
+        "description": "DEPRECATED: Compatibility setting for the pre-0.10 implicit VARCHAR casting behavior; will be removed",
         "type": "BOOLEAN",
         "default_scope": "global",
-        "default_value": "false"
+        "default_value": "false",
+        "is_deprecated": true,
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "operator_memory_limit",
@@ -1088,13 +1196,6 @@
         "on_callbacks": [
             "set"
         ]
-    },
-    {
-        "name": "parallelize_sequential_sources",
-        "description": "Whether to automatically parallelize sequential sources",
-        "type": "BOOLEAN",
-        "default_scope": "local",
-        "default_value": "true"
     },
     {
         "name": "partitioned_write_flush_threshold",
@@ -1157,24 +1258,31 @@
     },
     {
         "name": "preserve_identifier_case",
-        "description": "Whether or not to preserve the identifier case, instead of always lowercasing all non-quoted identifiers",
-        "type": "BOOLEAN",
+        "description": "How to fold non-quoted identifiers: 'preserve_case' keeps the case as written, 'lowercase' lowercases them, 'uppercase' uppercases them",
+        "type": "ENUM<IdentifierCaseMode>",
         "default_scope": "local",
-        "default_value": "true"
+        "default_value": "preserve_case",
+        "custom_implementation": [
+            "set"
+        ]
     },
     {
         "name": "preserve_insertion_order",
-        "description": "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results \"\n\t    \"that do not contain ORDER BY clauses.",
+        "description": "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results that do not contain ORDER BY clauses.",
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "true"
     },
     {
         "name": "produce_arrow_string_view",
-        "description": "Whether Arrow strings should be produced by DuckDB in Utf8View format instead of Utf8",
+        "description": "DEPRECATED: Already controlled by enable_arrow_string_view",
         "type": "BOOLEAN",
         "default_scope": "global",
-        "default_value": "false"
+        "default_value": "false",
+        "is_deprecated": true,
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "profiling_coverage",
@@ -1185,10 +1293,11 @@
     },
     {
         "name": "profiling_mode",
-        "description": "DEPRECATED: Sets the profiling mode",
+        "description": "DEPRECATED: Use enable_profiling and profiling_coverage instead",
         "type": "VARCHAR",
         "scope": "local",
-        "custom_implementation": true
+        "custom_implementation": true,
+        "is_deprecated": true
     },
     {
         "name": "profiling_output",
@@ -1216,7 +1325,7 @@
     },
     {
         "name": "read_ahead_depth",
-        "description": "Number of scan jobs the multi-file reader prefetches ahead of decoding. -1 = automatic (based on thread count), 0 = disabled.",
+        "description": "Number of scan jobs prefetched ahead of decoding. -1 = automatic (backlog bounded by a memory budget), 0 = disabled.",
         "type": "BIGINT",
         "default_scope": "global",
         "default_value": "-1",
@@ -1229,11 +1338,14 @@
         "description": "Configures whether regex match operators use partial or full string matching",
         "type": "ENUM<RegexMatchOperatorSemantics>",
         "default_scope": "local",
-        "default_value": "partial"
+        "default_value": "partial",
+        "custom_implementation": [
+            "set"
+        ]
     },
     {
         "name": "scalar_subquery_error_on_multiple_rows",
-        "description": "When a scalar subquery returns multiple rows - return a random row instead of returning an error.",
+        "description": "Throw an error when a scalar subquery returns more than one row. When disabled, an arbitrary row is returned instead.",
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "true"
@@ -1270,6 +1382,13 @@
         "custom_implementation": true
     },
     {
+        "name": "show_behavior",
+        "description": "How SHOW resolves a bare identifier: 'auto' (describe a table if one exists, else a setting; deprecated), 'table' (always a table), or 'setting' (always a setting)",
+        "type": "ENUM<ShowBehaviorType>",
+        "default_scope": "global",
+        "default_value": "AUTO"
+    },
+    {
         "name": "standard_vector_size",
         "description": "The compiled-in STANDARD_VECTOR_SIZE (read-only)",
         "type": "UBIGINT",
@@ -1295,18 +1414,14 @@
         "custom_implementation": true
     },
     {
-        "name": "streaming_buffer_size",
-        "description": "The maximum memory to buffer between fetching from a streaming result (e.g. 1GB)",
-        "type": "VARCHAR",
-        "scope": "local",
-        "custom_implementation": true
-    },
-    {
         "name": "table_function_identifier_conversion",
         "description": "Configures the use of deprecated implicit conversion of unbound identifiers to strings in table function arguments.",
         "type": "ENUM<TableFunctionIdentifierConversion>",
         "default_scope": "local",
-        "default_value": "DEFAULT"
+        "default_value": "DEFAULT",
+        "custom_implementation": [
+            "set"
+        ]
     },
     {
         "name": "temp_directory",

@@ -35,16 +35,15 @@ struct SetValValueOperator {
 	}
 };
 
-SequenceCatalogEntry &BindSequence(Binder &binder, QualifiedName name) {
-	// resolve the (optional) catalog/schema qualification and fetch the sequence from the catalog
-	Binder::BindSchemaOrCatalog(binder.context, name);
-	EntryLookupInfo sequence_lookup(CatalogType::SEQUENCE_ENTRY, name);
+SequenceCatalogEntry &BindSequence(Binder &binder, const QualifiedName &name) {
+	// resolve the (possibly nested) catalog/schema qualification and fetch the sequence from the catalog
+	EntryLookupInfo sequence_lookup(CatalogType::SEQUENCE_ENTRY, Binder::BindTableName(binder.EntryRetriever(), name));
 	return binder.EntryRetriever().GetEntry(sequence_lookup)->Cast<SequenceCatalogEntry>();
 }
 
-SequenceCatalogEntry &BindSequenceFromContext(ClientContext &context, QualifiedName name) {
-	Binder::BindSchemaOrCatalog(context, name);
-	return Catalog::GetEntry<SequenceCatalogEntry>(context, name);
+SequenceCatalogEntry &BindSequenceFromContext(ClientContext &context, const QualifiedName &name) {
+	CatalogEntryRetriever retriever(context);
+	return Catalog::GetEntry<SequenceCatalogEntry>(context, Binder::BindTableName(retriever, name));
 }
 
 SequenceCatalogEntry &BindSequence(Binder &binder, const Identifier &name) {
@@ -156,8 +155,9 @@ void NextValModifiedDatabases(ClientContext &context, FunctionModifiedDatabasesI
 } // namespace
 
 ScalarFunction NextvalFun::GetFunction() {
-	ScalarFunction next_val("nextval", {{"sequence_name", LogicalType::VARCHAR}}, LogicalType::BIGINT,
-	                        NextValFunction<NextSequenceValueOperator>, nullptr, nullptr);
+	ScalarFunction next_val("nextval", {}, LogicalType::BIGINT, NextValFunction<NextSequenceValueOperator>, nullptr,
+	                        nullptr);
+	next_val.GetSignature().AddParameter("sequence_name", LogicalType::VARCHAR);
 	next_val.SetBindCallback(NextValBind);
 	next_val.SetSerializeCallback(Serialize);
 	next_val.SetDeserializeCallback(Deserialize);
@@ -165,12 +165,14 @@ ScalarFunction NextvalFun::GetFunction() {
 	next_val.SetInitStateCallback(NextValLocalFunction);
 	next_val.SetVolatile();
 	next_val.SetFallible();
+	next_val.SetRequiresOrderedExecution(true);
 	return next_val;
 }
 
 ScalarFunction CurrvalFun::GetFunction() {
-	ScalarFunction curr_val("currval", {{"sequence_name", LogicalType::VARCHAR}}, LogicalType::BIGINT,
-	                        NextValFunction<CurrentSequenceValueOperator>, nullptr, nullptr);
+	ScalarFunction curr_val("currval", {}, LogicalType::BIGINT, NextValFunction<CurrentSequenceValueOperator>, nullptr,
+	                        nullptr);
+	curr_val.GetSignature().AddParameter("sequence_name", LogicalType::VARCHAR);
 	curr_val.SetBindCallback(NextValBind);
 	curr_val.SetSerializeCallback(Serialize);
 	curr_val.SetDeserializeCallback(Deserialize);
@@ -181,8 +183,10 @@ ScalarFunction CurrvalFun::GetFunction() {
 }
 
 ScalarFunctionSet SetvalFun::GetFunctions() {
-	ScalarFunction set_val("setval", {LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::BIGINT,
-	                       NextValFunction<SetValValueOperator>, nullptr, nullptr);
+	ScalarFunction set_val("setval", {}, LogicalType::BIGINT, NextValFunction<SetValValueOperator>, nullptr, nullptr);
+	set_val.GetSignature()
+	    .AddParameter("sequence_name", LogicalType::VARCHAR)
+	    .AddParameter("value", LogicalType::BIGINT);
 	set_val.SetBindCallback(NextValBind);
 	set_val.SetSerializeCallback(Serialize);
 	set_val.SetDeserializeCallback(Deserialize);
@@ -190,12 +194,13 @@ ScalarFunctionSet SetvalFun::GetFunctions() {
 	set_val.SetInitStateCallback(NextValLocalFunction);
 	set_val.SetVolatile();
 	set_val.SetFallible();
+	set_val.SetRequiresOrderedExecution(true);
 
 	ScalarFunctionSet set_val_set;
 	set_val_set.AddFunction(set_val);
 
 	// Add an overload that takes an additional boolean parameter
-	set_val.GetSignature().AddParameter(LogicalType::BOOLEAN);
+	set_val.GetSignature().AddParameter("is_called", LogicalType::BOOLEAN);
 	set_val_set.AddFunction(set_val);
 
 	return set_val_set;

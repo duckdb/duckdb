@@ -1,4 +1,6 @@
 #include "duckdb/parser/expression/star_expression.hpp"
+
+#include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
@@ -21,7 +23,7 @@ string StarExpression::ToString() const {
 	if (columns) {
 		result += "COLUMNS(";
 	}
-	result += relation_name.empty() ? "*" : relation_name + ".*";
+	result += relation_name.empty() ? "*" : SQLIdentifier(relation_name) + ".*";
 	if (!exclude_list.empty()) {
 		result += " EXCLUDE (";
 		bool first_entry = true;

@@ -32,6 +32,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/common/types/string.hpp"
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
@@ -176,6 +177,13 @@ Value::Value(String val) : type_(LogicalType::VARCHAR), is_null(false) {
 		throw ErrorManager::InvalidUnicodeError(val, "value construction");
 	}
 	value_info_ = make_shared_ptr<StringValueInfo>(val.ToStdString());
+}
+
+Value::Value(std::string_view val) : type_(LogicalType::VARCHAR), is_null(false) {
+	if (!Value::StringIsValid(val.data(), val.size())) {
+		throw ErrorManager::InvalidUnicodeError(string(val), "value construction");
+	}
+	value_info_ = make_shared_ptr<StringValueInfo>(string(val));
 }
 
 Value::~Value() {
@@ -1423,6 +1431,11 @@ DUCKDB_API Value Value::GetValue() const {
 	return Value(*this);
 }
 
+template <>
+DUCKDB_API Identifier Value::GetValue() const {
+	return Identifier(GetValue<string>());
+}
+
 uintptr_t Value::GetPointer() const {
 	D_ASSERT(type() == LogicalType::POINTER);
 	return value_.pointer;
@@ -1687,6 +1700,14 @@ interval_t Value::GetValueUnsafe() const {
 }
 
 //===--------------------------------------------------------------------===//
+// GetPointerToData
+//===--------------------------------------------------------------------===//
+const_data_ptr_t Value::GetPointerToData() const {
+	D_ASSERT(TypeIsConstantSize(type_.InternalType()));
+	return const_data_ptr_cast(&value_);
+}
+
+//===--------------------------------------------------------------------===//
 // Hash
 //===--------------------------------------------------------------------===//
 hash_t Value::Hash() const {
@@ -1712,7 +1733,11 @@ string Value::ToString() const {
 
 string Value::ToSQLString() const {
 	if (IsNull()) {
-		return ToString();
+		auto res = ToString();
+		if (type_.id() != LogicalTypeId::SQLNULL) {
+			res += "::" + type_.ToString();
+		}
+		return res;
 	}
 	switch (type_.id()) {
 	case LogicalTypeId::UUID:
@@ -1728,6 +1753,8 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIT:
+	case LogicalTypeId::GEOMETRY:
 		return "'" + ToString() + "'::" + type_.ToString();
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::ENUM: {
@@ -1738,15 +1765,27 @@ string Value::ToSQLString() const {
 		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
 	}
 	case LogicalTypeId::VARIANT: {
-		string ret = "VARIANT(";
 		Vector tmp(*this, count_t(1));
 		RecursiveUnifiedVectorFormat format;
 		Vector::RecursiveToUnifiedFormat(tmp, format);
 		UnifiedVariantVectorData vector_data(format);
 		auto val = VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
-		ret += val.ToString();
-		ret += ")";
-		return ret;
+		if (val.type().id() == LogicalTypeId::STRUCT) {
+			child_list_t<Value> children;
+			auto &values = StructValue::GetChildren(val);
+			for (idx_t i = 0; i < values.size(); i++) {
+				children.emplace_back(StructType::GetChildName(val.type(), i),
+				                      values[i].DefaultCastAs(LogicalType::VARIANT()));
+			}
+			val = Value::STRUCT(std::move(children));
+			return "CAST(" + val.ToSQLString() + " AS VARIANT)";
+		}
+		if (val.type().id() == LogicalTypeId::LIST) {
+			val = Value::LIST(LogicalType::VARIANT(), ListValue::GetChildren(val));
+			return "CAST(" + val.ToSQLString() + " AS VARIANT)";
+		}
+		// Preserve the payload's type as well as its value (e.g. SMALLINT versus INTEGER).
+		return "CAST(CAST(" + val.ToSQLString() + " AS " + val.type().ToString() + ") AS VARIANT)";
 	}
 	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::STRUCT: {
@@ -1761,7 +1800,7 @@ string Value::ToSQLString() const {
 			if (is_unnamed) {
 				ret += child.ToSQLString();
 			} else {
-				ret += "'" + name + "': " + child.ToSQLString();
+				ret += "'" + StringUtil::Replace(name.GetIdentifierName(), "'", "''") + "': " + child.ToSQLString();
 			}
 			if (i < struct_values.size() - 1) {
 				ret += ", ";
@@ -1775,12 +1814,17 @@ string Value::ToSQLString() const {
 		return ret;
 	}
 	case LogicalTypeId::FLOAT:
-		if (!FloatIsFinite(FloatValue::Get(*this))) {
+		if (!FloatIsFinite(FloatValue::Get(*this)) ||
+		    (FloatValue::Get(*this) == 0 && std::signbit(FloatValue::Get(*this)))) {
 			return "'" + ToString() + "'::" + type_.ToString();
 		}
 		return ToString();
 	case LogicalTypeId::DOUBLE: {
 		double val = DoubleValue::Get(*this);
+		// A numeric -0.0 literal is parsed as DECIMAL, losing the floating-point sign.
+		if (val == 0 && std::signbit(val)) {
+			return "'" + ToString() + "'::" + type_.ToString();
+		}
 		if (!DoubleIsFinite(val)) {
 			if (!Value::IsNan(val)) {
 				// to infinity and beyond
@@ -1838,9 +1882,9 @@ string Value::ToSQLString() const {
 		string ret = "union_value(";
 		auto union_tag = UnionValue::GetTag(*this);
 		auto &tag_name = UnionType::GetMemberName(type(), union_tag);
-		ret += tag_name + " := ";
+		ret += SQLIdentifier(tag_name) + " := ";
 		ret += UnionValue::GetValue(*this).ToSQLString();
-		ret += ")";
+		ret += ")::" + type_.ToString();
 		return ret;
 	}
 	default:
@@ -2105,32 +2149,32 @@ bool Value::operator>=(const int64_t &rhs) const {
 	return *this >= Value::Numeric(type_, rhs);
 }
 
-bool Value::TryCastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
-                      Value &new_value, string *error_message, bool strict) const {
+optional<Value> Value::TryCastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
+                                 string *error_message, bool strict) const {
 	if (type_ == target_type) {
-		new_value = Copy();
-		return true;
+		return Copy();
 	}
 	Vector input(*this, count_t(1));
 	Vector result(target_type);
-	if (!VectorOperations::TryCast(set, get_input, input, result, 1, error_message, strict)) {
-		return false;
+	// always pass an error string - VectorOperations::TryCast throws instead of returning false without one
+	string local_error;
+	if (!VectorOperations::TryCast(set, get_input, input, result, 1, error_message ? error_message : &local_error,
+	                               strict)) {
+		return nullopt;
 	}
-	new_value = result.GetValue(0);
-	return true;
+	return result.GetValue(0);
 }
 
-bool Value::TryCastAs(ClientContext &context, const LogicalType &target_type, Value &new_value, string *error_message,
-                      bool strict) const {
+optional<Value> Value::TryCastAs(ClientContext &context, const LogicalType &target_type, string *error_message,
+                                 bool strict) const {
 	GetCastFunctionInput get_input(context);
-	return TryCastAs(CastFunctionSet::Get(context), get_input, target_type, new_value, error_message, strict);
+	return TryCastAs(CastFunctionSet::Get(context), get_input, target_type, error_message, strict);
 }
 
-bool Value::DefaultTryCastAs(const LogicalType &target_type, Value &new_value, string *error_message,
-                             bool strict) const {
+optional<Value> Value::DefaultTryCastAs(const LogicalType &target_type, string *error_message, bool strict) const {
 	CastFunctionSet set;
 	GetCastFunctionInput get_input;
-	return TryCastAs(set, get_input, target_type, new_value, error_message, strict);
+	return TryCastAs(set, get_input, target_type, error_message, strict);
 }
 
 Value Value::CastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
@@ -2138,12 +2182,12 @@ Value Value::CastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const
 	if (target_type.id() == LogicalTypeId::ANY) {
 		return *this;
 	}
-	Value new_value;
 	string error_message;
-	if (!TryCastAs(set, get_input, target_type, new_value, &error_message, strict)) {
+	auto new_value = TryCastAs(set, get_input, target_type, &error_message, strict);
+	if (!new_value) {
 		throw InvalidInputException("Failed to cast value: %s", error_message);
 	}
-	return new_value;
+	return std::move(*new_value);
 }
 
 Value Value::CastAs(ClientContext &context, const LogicalType &target_type, bool strict) const {
@@ -2157,33 +2201,10 @@ Value Value::DefaultCastAs(const LogicalType &target_type, bool strict) const {
 	return CastAs(set, get_input, target_type, strict);
 }
 
-bool Value::TryCastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
-                      bool strict) {
-	Value new_value;
-	string error_message;
-	if (!TryCastAs(set, get_input, target_type, new_value, &error_message, strict)) {
-		return false;
-	}
-	type_ = target_type;
-	is_null = new_value.is_null;
-	value_ = new_value.value_;
-	value_info_ = std::move(new_value.value_info_);
-	return true;
-}
-
-bool Value::TryCastAs(ClientContext &context, const LogicalType &target_type, bool strict) {
-	GetCastFunctionInput get_input(context);
-	return TryCastAs(CastFunctionSet::Get(context), get_input, target_type, strict);
-}
-
-bool Value::DefaultTryCastAs(const LogicalType &target_type, bool strict) {
-	CastFunctionSet set;
-	GetCastFunctionInput get_input;
-	return TryCastAs(set, get_input, target_type, strict);
-}
-
-void Value::Reinterpret(LogicalType new_type) {
-	this->type_ = std::move(new_type);
+Value Value::WithType(LogicalType new_type) const {
+	Value result = *this;
+	result.type_ = std::move(new_type);
+	return result;
 }
 
 static const LogicalType &GetChildType(const LogicalType &parent_type, idx_t i) {

@@ -17,12 +17,10 @@ if(NOT MSVC)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wimplicit-fallthrough")
   endif()
 endif()
-set(EXIT_TIME_DESTRUCTORS_WARNING FALSE)
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}"
                                                   STREQUAL "AppleClang")
-  set(EXIT_TIME_DESTRUCTORS_WARNING TRUE)
   set(CMAKE_CXX_FLAGS_DEBUG
-      "${CMAKE_CXX_FLAGS_DEBUG} -Wexit-time-destructors -Wimplicit-int-conversion -Wshorten-64-to-32 -Wnarrowing -Wsign-conversion -Wsign-compare -Wconversion -Wtype-limits"
+      "${CMAKE_CXX_FLAGS_DEBUG} -Wimplicit-int-conversion -Wshorten-64-to-32 -Wnarrowing -Wsign-conversion -Wsign-compare -Wconversion -Wtype-limits"
   )
 endif()
 
@@ -141,9 +139,11 @@ install(
   FILES_MATCHING
   PATTERN "*.hpp"
   PATTERN "*.ipp")
-install(FILES "${PROJECT_SOURCE_DIR}/src/include/duckdb.hpp"
-              "${PROJECT_SOURCE_DIR}/src/include/duckdb.h"
-        DESTINATION "${INSTALL_INCLUDE_DIR}")
+install(
+  FILES "${PROJECT_SOURCE_DIR}/src/include/duckdb.hpp"
+        "${PROJECT_SOURCE_DIR}/src/include/duckdb.h"
+        "${PROJECT_SOURCE_DIR}/src/include/duckdb_extension.h"
+  DESTINATION "${INSTALL_INCLUDE_DIR}")
 
 install(
   TARGETS duckdb duckdb_static

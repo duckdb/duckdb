@@ -19,11 +19,11 @@ struct RepeatRowOperatorData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> RepeatRowBind(ClientContext &context, TableFunctionBindInput &input,
-                                              vector<LogicalType> &return_types, vector<string> &names) {
+                                              vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto &inputs = input.inputs;
 	for (idx_t input_idx = 0; input_idx < inputs.size(); input_idx++) {
 		return_types.push_back(inputs[input_idx].type());
-		names.push_back("column" + std::to_string(input_idx));
+		names.emplace_back("column" + std::to_string(input_idx));
 	}
 	auto entry = input.named_parameters.find("num_rows");
 	if (entry == input.named_parameters.end()) {
@@ -32,7 +32,14 @@ static unique_ptr<FunctionData> RepeatRowBind(ClientContext &context, TableFunct
 	if (inputs.empty()) {
 		throw BinderException("repeat_rows requires at least one column to be specified");
 	}
-	return make_uniq<RepeatRowFunctionData>(inputs, NumericCast<idx_t>(entry->second.GetValue<int64_t>()));
+	if (entry->second.IsNull()) {
+		throw BinderException("num_rows should be an integer value >= 0");
+	}
+	auto repeat_rows = entry->second.GetValue<int64_t>();
+	if (repeat_rows < 0) {
+		throw BinderException("num_rows cannot be less than zero");
+	}
+	return make_uniq<RepeatRowFunctionData>(inputs, NumericCast<idx_t>(repeat_rows));
 }
 
 static unique_ptr<GlobalTableFunctionState> RepeatRowInit(ClientContext &context, TableFunctionInitInput &input) {

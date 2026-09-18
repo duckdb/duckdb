@@ -21,7 +21,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 
 	auto entry = client_data.prepared_statements.find(stmt.name);
 	if (entry == client_data.prepared_statements.end()) {
-		throw BinderException("Prepared statement \"%s\" does not exist", stmt.name);
+		throw BinderException("Prepared statement %s does not exist", stmt.name);
 	}
 
 	// check if we need to rebind the prepared statement
@@ -29,11 +29,16 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	auto prepared = entry->second;
 	auto &named_param_map = prepared->unbound_statement->named_param_map;
 
-	PreparedStatement::VerifyParameters(stmt.named_values, named_param_map, &context);
+	// values that were supplied pre-typed do not go through the literal binding below
+	identifier_map_t<BoundParameterData> bind_values = stmt.bound_values;
+	if (stmt.bound_values.empty()) {
+		PreparedStatement::VerifyParameters(stmt.named_values, named_param_map, &context);
+	} else {
+		PreparedStatement::VerifyParameters(stmt.bound_values, named_param_map, &context);
+	}
 
 	auto &mapped_named_values = stmt.named_values;
 	// bind any supplied parameters
-	identifier_map_t<BoundParameterData> bind_values;
 	auto constant_binder = Binder::CreateBinder(context);
 	constant_binder->SetCanContainNulls(true);
 	for (auto &pair : mapped_named_values) {
@@ -49,11 +54,11 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 			    StringType::GetCollation(constant.GetReturnType()).empty()) {
 				return_type = LogicalTypeId::STRING_LITERAL;
 			} else if (constant.GetReturnType().IsIntegral()) {
-				return_type = LogicalType::INTEGER_LITERAL(constant.GetValueMutable());
+				return_type = LogicalType::INTEGER_LITERAL(constant.GetValue());
 			} else {
-				return_type = constant.GetValueMutable().type();
+				return_type = constant.GetValue().type();
 			}
-			parameter_data = BoundParameterData(std::move(constant.GetValueMutable()), std::move(return_type));
+			parameter_data = BoundParameterData(constant.TakeValue(), std::move(return_type));
 		} else {
 			auto value = ExpressionExecutor::EvaluateScalar(context, *bound_expr, true);
 			auto value_type = value.type();

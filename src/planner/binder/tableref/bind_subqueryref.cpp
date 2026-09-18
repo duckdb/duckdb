@@ -21,9 +21,6 @@ BoundStatement Binder::Bind(SubqueryRef &ref) {
 		subquery_alias = ref.alias;
 	}
 	binder->is_outside_flattened = is_outside_flattened;
-	if (binder->has_unplanned_dependent_joins) {
-		has_unplanned_dependent_joins = true;
-	}
 	bind_context.AddSubquery(bind_index, subquery_alias, ref, subquery);
 	MoveCorrelatedExpressions(*binder);
 

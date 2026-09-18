@@ -1,0 +1,210 @@
+# name: test/sql/catalog/nested_schema/nested_entries_persist.test
+# description: Persisting views/sequences/types/macros/indexes in nested schemas (WAL replay + checkpoint)
+# group: [nested_schema]
+
+load {TEST_DIR}/nested_entries_persist.db readwrite v2.0.0
+
+statement ok
+CREATE SCHEMA parent;
+
+statement ok
+CREATE SCHEMA parent.child;
+
+statement ok
+CREATE TABLE parent.child.t(i INTEGER);
+
+statement ok
+INSERT INTO parent.child.t VALUES (1), (2);
+
+statement ok
+CREATE VIEW parent.child.v AS SELECT i * 10 AS x FROM parent.child.t;
+
+statement ok
+CREATE SEQUENCE parent.child.seq START 5;
+
+statement ok
+CREATE MACRO parent.child.double(a) AS a * 2;
+
+statement ok
+CREATE TYPE parent.child.mood AS ENUM ('happy', 'sad');
+
+statement ok
+CREATE INDEX idx ON parent.child.t(i);
+
+# replay the entries from the WAL
+restart
+
+query I
+SELECT * FROM parent.child.v ORDER BY x;
+----
+10
+20
+
+query I
+SELECT nextval('parent.child.seq');
+----
+5
+
+query I
+SELECT parent.child.double(21);
+----
+42
+
+query I
+SELECT 'sad'::parent.child.mood;
+----
+sad
+
+query IIII
+SELECT database_name, schema_name, index_name, table_name FROM duckdb_indexes() WHERE index_name = 'idx';
+----
+nested_entries_persist	child	idx	t
+
+# checkpoint the entries, so they go through storage serialization instead of the WAL
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT * FROM parent.child.v ORDER BY x;
+----
+10
+20
+
+query I
+SELECT nextval('parent.child.seq');
+----
+6
+
+query I
+SELECT parent.child.double(21);
+----
+42
+
+query I
+SELECT 'happy'::parent.child.mood;
+----
+happy
+
+query IIII
+SELECT database_name, schema_name, index_name, table_name FROM duckdb_indexes() WHERE index_name = 'idx';
+----
+nested_entries_persist	child	idx	t
+
+# the index in the nested schema is still enforced after a restart
+statement ok
+CREATE TABLE parent.child.pk(i INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO parent.child.pk VALUES (1);
+
+restart
+
+statement error
+INSERT INTO parent.child.pk VALUES (1);
+----
+<REGEX>:.*violates primary key constraint.*
+
+# foreign keys between tables in the same nested schema survive a restart
+statement ok
+CREATE TABLE parent.child.fk(j INTEGER REFERENCES pk(i));
+
+statement ok
+INSERT INTO parent.child.fk VALUES (1);
+
+restart
+
+statement error
+INSERT INTO parent.child.fk VALUES (2);
+----
+<REGEX>:.*foreign key constraint.*
+
+statement ok
+CHECKPOINT;
+
+restart
+
+statement error
+INSERT INTO parent.child.fk VALUES (2);
+----
+<REGEX>:.*foreign key constraint.*
+
+# a trigger on a nested-schema table survives a restart
+
+statement ok
+CREATE TABLE parent.child.log(i INTEGER);
+
+statement ok
+CREATE TRIGGER trg AFTER INSERT ON parent.child.t FOR EACH STATEMENT INSERT INTO parent.child.log SELECT 1;
+
+restart
+
+statement ok
+INSERT INTO parent.child.t VALUES (3);
+
+query I
+SELECT count(*) FROM parent.child.log;
+----
+1
+
+statement ok
+CHECKPOINT;
+
+restart
+
+statement ok
+INSERT INTO parent.child.t VALUES (4);
+
+query I
+SELECT count(*) FROM parent.child.log;
+----
+2
+
+statement ok
+DROP TRIGGER trg ON parent.child.t;
+
+restart
+
+query I
+SELECT count(*) FROM duckdb_triggers() WHERE trigger_name = 'trg';
+----
+0
+
+# dropping the entries is replayed as well
+statement ok
+DROP VIEW parent.child.v;
+
+statement ok
+DROP SEQUENCE parent.child.seq;
+
+restart
+
+statement error
+SELECT * FROM parent.child.v;
+----
+<REGEX>:.*does not exist.*
+
+query I
+SELECT count(*) FROM duckdb_sequences() WHERE sequence_name = 'seq';
+----
+0
+
+# dropping the whole nested schema removes everything
+statement ok
+DROP SCHEMA parent CASCADE;
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT count(*) FROM duckdb_schemas() WHERE schema_name IN ('parent', 'child');
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_indexes();
+----
+0

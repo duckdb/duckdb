@@ -3,6 +3,10 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/execution/operator/helper/physical_result_sink.hpp"
+#include "duckdb/execution/operator/scan/physical_dummy_scan.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/main/prepared_statement_data.hpp"
 
 using namespace duckdb;
 
@@ -20,9 +24,9 @@ TEST_CASE("Test results API", "[api]") {
 	result2 = con.Query("SELECT 43");
 	REQUIRE(!result->Equals(*result2));
 
-	// stream query to string
-	auto stream_result = con.SendQuery("SELECT 42");
-	auto str = stream_result->ToString();
+	// submitted query to string
+	auto submitted = con.Submit("SELECT 42");
+	auto str = submitted->ToString();
 	REQUIRE(!str.empty());
 
 	// materialized query to string
@@ -155,9 +159,45 @@ TEST_CASE("Error in streaming result after initial query", "[api][.]") {
 	// now insert one non-numeric value
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('hello')"));
 
-	// now create a streaming result
-	auto result = con.SendQuery("SELECT CAST(v AS INTEGER) FROM strings");
-	REQUIRE_FAIL(result);
+	// now create a streaming result: the bad row sits in a later chunk, so the error surfaces on the drain
+	auto stream = OpenStream(con, "SELECT CAST(v AS INTEGER) FROM strings");
+	while (stream->Fetch()) {
+	}
+	REQUIRE(stream->HasError());
+}
+
+TEST_CASE("A retained result sink rejects results after the connection closes", "[api]") {
+	DuckDB db(nullptr);
+
+	auto test_collector = [&](ResultOrdering ordering) {
+		auto connection = make_uniq<Connection>(db);
+		weak_ptr<ClientContext> weak_context = connection->context;
+
+		PreparedStatementData data(StatementType::SELECT_STATEMENT);
+		data.names.emplace_back("value");
+		data.types.emplace_back(LogicalType::INTEGER);
+		data.memory_type = QueryResultMemoryType::IN_MEMORY;
+		data.physical_plan = make_uniq<PhysicalPlan>(Allocator::Get(*connection->context));
+		auto &root = data.physical_plan->Make<PhysicalDummyScan>(data.types, 0);
+		data.physical_plan->SetRoot(root);
+
+		// A sink whose retention is still open takes its store from the submission; a hand-built one
+		// is retained
+		unique_ptr<PhysicalResultCollector> collector =
+		    make_uniq<PhysicalResultSink>(*data.physical_plan, data, ResultLifetime::RETAINED, ordering);
+		auto sink_state = collector->GetGlobalSinkState(*connection->context);
+
+		connection.reset();
+		REQUIRE(weak_context.expired());
+		REQUIRE_THROWS_AS(collector->GetResult(*sink_state), ConnectionException);
+	};
+
+	SECTION("source ordered") {
+		test_collector(ResultOrdering::SOURCE_ORDERED);
+	}
+	SECTION("batch index ordered") {
+		test_collector(ResultOrdering::BATCH_INDEX_ORDERED);
+	}
 }
 
 TEST_CASE("Test UUID", "[api][uuid]") {
@@ -190,7 +230,7 @@ TEST_CASE("Test ARRAY_AGG with ORDER BY", "[api][array_agg]") {
 
 	auto result = con.Query("select a, array_agg(c ORDER BY b) from t2 GROUP BY a");
 	REQUIRE(!result->HasError());
-	REQUIRE(result->names[1] == "array_agg(c ORDER BY b)");
+	REQUIRE(result->ColumnName(1) == "array_agg(c ORDER BY b)");
 }
 
 TEST_CASE("Issue #9417", "[api][.]") {
@@ -199,16 +239,16 @@ TEST_CASE("Issue #9417", "[api][.]") {
 
 	DuckDB db(TestCreatePath("issue_replication.db"), &config);
 	Connection con(db);
-	auto result = con.SendQuery("with max_period as ("
-	                            "            select max(reporting_date) as max_record\n"
-	                            "            from \"data/parquet-testing/issue9417.parquet\"\n"
-	                            "        )\n"
-	                            "        select\n"
-	                            "            *\n"
-	                            "        from \"data/parquet-testing/issue9417.parquet\" e\n"
-	                            "            inner join max_period\n"
-	                            "            on e.reporting_date = max_period.max_record\n"
-	                            "         where e.record_date between '2012-01-31' and '2023-06-30'");
+	auto result = con.Query("with max_period as ("
+	                        "            select max(reporting_date) as max_record\n"
+	                        "            from \"data/parquet-testing/issue9417.parquet\"\n"
+	                        "        )\n"
+	                        "        select\n"
+	                        "            *\n"
+	                        "        from \"data/parquet-testing/issue9417.parquet\" e\n"
+	                        "            inner join max_period\n"
+	                        "            on e.reporting_date = max_period.max_record\n"
+	                        "         where e.record_date between '2012-01-31' and '2023-06-30'");
 	idx_t count = 0;
 	while (true) {
 		auto chunk = result->Fetch();

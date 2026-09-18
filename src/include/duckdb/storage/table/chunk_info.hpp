@@ -10,6 +10,8 @@
 
 #include "duckdb/execution/index/index_pointer.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
 
 namespace duckdb {
 class RowGroup;
@@ -42,6 +44,13 @@ enum class VersionCompressionResult : uint8_t {
 	SETTLED
 };
 
+//! The storage state of the delete side of a ChunkVectorInfo. Exhaustive and mutually exclusive:
+//! CONSTANT - all rows share constant_delete_id (NOT_DELETED_ID for none-deleted, or a single delete id)
+//! MASKED   - partially deleted, all deleted rows share one committed id (mask_delete_id): which rows are
+//!            deleted is stored in deleted_mask, deleted_data freed
+//! ARRAY    - per-row delete ids materialized in deleted_data
+enum class DeleteIdState : uint8_t { CONSTANT, MASKED, ARRAY };
+
 class ChunkVectorInfo {
 public:
 	explicit ChunkVectorInfo(FixedSizeAllocator &allocator, idx_t start, transaction_t insert_id = 0);
@@ -59,7 +68,7 @@ public:
 	//! Returns whether or not a single row in the ChunkVectorInfo should be used or not for the given transaction
 	bool Fetch(TransactionData transaction, row_t row);
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end);
-	bool Cleanup(transaction_t lowest_transaction) const;
+	bool Cleanup(VisibilityBound lowest_visibility_bound) const;
 	string ToString(idx_t max_count) const;
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
@@ -72,10 +81,9 @@ public:
 	idx_t Delete(transaction_t transaction_id, row_t rows[], idx_t count);
 	void CommitDelete(transaction_t commit_id, const DeleteInfo &info);
 
-	//! Attempts to compress the per-row insert/delete ids into constants
-	//! This is possible when the ids behave identically for all transactions with a start time of at least
-	//! lowest_active_start (i.e. all active and future transactions)
-	VersionCompressionResult CompressVersionIds(transaction_t lowest_active_start);
+	//! Attempts to compress the per-row insert/delete ids into constants. Ids that precede
+	//! lowest_visibility_bound look the same to every active and future transaction, so they can collapse
+	VersionCompressionResult CompressVersionIds(VisibilityBound lowest_visibility_bound);
 	//! Whether a compression pass could achieve anything for this vector (see recheck_compression)
 	bool RecheckCompression() const {
 		return recheck_compression;
@@ -84,7 +92,7 @@ public:
 	//! compressible now or in the future without a modification that re-arms the check
 	void VerifyCachedCompressionState() const;
 
-	bool HasDeletes(transaction_t transaction_id = MAX_TRANSACTION_ID) const;
+	bool HasDeletes(VisibilityBound visibility_bound = VisibilityBound::IncludingUncommitted()) const;
 	bool HasUncommittedChanges() const;
 	bool AnyDeleted() const;
 	bool HasConstantInsertionId() const;
@@ -92,13 +100,13 @@ public:
 	bool HasConstantDeleteId() const;
 	transaction_t ConstantDeleteId() const;
 
-	void Write(WriteStream &writer, transaction_t transaction_id) const;
+	void Write(WriteStream &writer, VisibilityBound visibility_bound) const;
 	static unique_ptr<ChunkVectorInfo> Read(FixedSizeAllocator &allocator, ReadStream &reader);
 
 private:
 	template <class INSERT_OP, class DELETE_OP>
-	idx_t TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id,
-	                            optional_ptr<SelectionVector> sel_vector, idx_t max_count) const;
+	idx_t TemplatedGetSelVector(const SnapshotView &view, optional_ptr<SelectionVector> sel_vector,
+	                            idx_t max_count) const;
 
 	IndexPointer GetInsertedPointer() const;
 	IndexPointer GetDeletedPointer() const;
@@ -106,6 +114,11 @@ private:
 	IndexPointer GetInitializedDeletedPointer();
 	//! Frees the per-row delete ids (if any)
 	void FreeDeleteData();
+	//! ARRAY -> MASKED: record alive rows as invalid bits, free the per-row delete array. mask_id is the
+	//! shared committed id of the deleted rows (0 when they are already visible to all transactions)
+	void CompressDeleteToMask(transaction_t mask_id);
+	//! MASKED -> ARRAY: re-materialize the per-row delete array from the bitmask
+	void DecompressDeleteMask();
 
 private:
 	FixedSizeAllocator &allocator;
@@ -118,6 +131,16 @@ private:
 	IndexPointer deleted_data;
 	//! The constant delete id (if there is only one, e.g. because the entire vector was deleted in one transaction)
 	transaction_t constant_delete_id;
+	//! Bitmask used in the MASKED state: valid bit == the row is deleted, invalid bit == the row is alive.
+	//! Matches the on-disk VECTOR_INFO orientation. Only meaningful when delete_state == DeleteIdState::MASKED.
+	ValidityMask deleted_mask;
+	//! The single committed id shared by every deleted row in the MASKED state. 0 means the deletes are
+	//! visible to all transactions (the value used when read from disk); a non-zero committed id means the
+	//! mask was folded from one committed transaction whose delete is not yet visible to every snapshot.
+	//! Only meaningful when delete_state == DeleteIdState::MASKED.
+	transaction_t mask_delete_id = 0;
+	//! The current delete-side storage state - the single source of truth for the delete side
+	DeleteIdState delete_state = DeleteIdState::CONSTANT;
 	//! Whether a compression pass could achieve anything for this vector: armed by any id modification,
 	//! disarmed when a pass compresses the vector fully or finds it settled (live rows block the collapse
 	//! until a further delete re-arms it). CompressVersionIds returns the cached SETTLED without

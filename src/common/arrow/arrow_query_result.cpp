@@ -6,8 +6,9 @@
 
 namespace duckdb {
 
-ArrowQueryResult::ArrowQueryResult(StatementType statement_type, StatementProperties properties, vector<string> names_p,
-                                   vector<LogicalType> types_p, ClientProperties client_properties, idx_t batch_size)
+ArrowQueryResult::ArrowQueryResult(StatementType statement_type, StatementProperties properties,
+                                   vector<Identifier> names_p, vector<LogicalType> types_p,
+                                   ClientProperties client_properties, idx_t batch_size)
     : QueryResult(QueryResultType::ARROW_RESULT, statement_type, std::move(properties), std::move(types_p),
                   std::move(names_p), std::move(client_properties)),
       batch_size(batch_size) {
@@ -24,6 +25,10 @@ unique_ptr<DataChunk> ArrowQueryResult::FetchInternal() {
 string ArrowQueryResult::ToString() {
 	// FIXME: can't throw an exception here as it's used for verification
 	return "";
+}
+
+string ArrowQueryResult::ToBox(BoxRendererContext &context, const BoxRendererConfig &config) {
+	return ToString();
 }
 
 vector<unique_ptr<ArrowArrayWrapper>> ArrowQueryResult::ConsumeArrays() {

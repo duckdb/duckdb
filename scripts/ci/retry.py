@@ -1,11 +1,14 @@
 import argparse
-import re
 import os
+import re
+import signal
 import subprocess
 import sys
 import time
 
 RETRY_DELAY_SECONDS = 15.0
+TERMINATE_GRACE_SECONDS = 10.0
+PROCESS_GROUP_POLL_SECONDS = 0.1
 
 
 def parse_timeout(timeout: str) -> float:
@@ -65,10 +68,86 @@ def format_command(command):
     return subprocess.list2cmdline(command) if os.name == "nt" else " ".join(command)
 
 
-def run_command(command, command_text, timeout):
+def process_group_exists(process_group_id):
+    try:
+        os.killpg(process_group_id, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def wait_for_process_group_exit(process, process_group_id):
+    deadline = time.monotonic() + TERMINATE_GRACE_SECONDS
+    while process_group_exists(process_group_id):
+        process.poll()
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        time.sleep(min(PROCESS_GROUP_POLL_SECONDS, remaining))
+    return True
+
+
+def terminate_posix_process_group(process):
+    process_group_id = process.pid
+    try:
+        os.killpg(process_group_id, signal.SIGTERM)
+    except ProcessLookupError:
+        process.wait()
+        return
+
+    if not wait_for_process_group_exit(process, process_group_id):
+        try:
+            os.killpg(process_group_id, signal.SIGKILL)
+        except (PermissionError, ProcessLookupError):
+            pass
+        wait_for_process_group_exit(process, process_group_id)
+    process.wait()
+
+
+def terminate_windows_process_tree(process):
+    try:
+        completed = subprocess.run(
+            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        completed = None
+    if completed is None or (completed.returncode != 0 and process.poll() is None):
+        process.kill()
+    process.wait()
+
+
+def terminate_process_tree(process):
     if os.name == "nt":
-        return subprocess.run(command_text, timeout=timeout, shell=True)
-    return subprocess.run(command, timeout=timeout)
+        terminate_windows_process_tree(process)
+    else:
+        terminate_posix_process_group(process)
+
+
+def run_command(command, command_text, timeout):
+    if timeout is None:
+        if os.name == "nt":
+            return subprocess.run(command_text, shell=True)
+        return subprocess.run(command)
+
+    if os.name == "nt":
+        process = subprocess.Popen(
+            command_text,
+            shell=True,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+        )
+    else:
+        process = subprocess.Popen(command, start_new_session=True)
+
+    try:
+        return_code = process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        terminate_process_tree(process)
+        raise
+    return subprocess.CompletedProcess(command, return_code)
 
 
 def main() -> int:

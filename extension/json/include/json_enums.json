@@ -28,6 +28,10 @@
       {
         "name": "VALUES",
         "comment": "Any other JSON type, e.g., ARRAY"
+      },
+      {
+        "name": "FEATURES",
+        "comment": "GeoJSON Features, unnested into a geometry column plus one column per property"
       }
     ]
   },

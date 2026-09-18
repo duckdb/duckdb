@@ -62,7 +62,7 @@ static void EnableProfiling(ClientContext &context, TableFunctionInput &data, Da
 }
 
 static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, TableFunctionBindInput &input,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
+                                                    vector<LogicalType> &return_types, vector<Identifier> &names) {
 	if (input.inputs.size() > 1) {
 		throw InvalidInputException("EnableProfiling: expected 0 or 1 parameter");
 	}
@@ -123,7 +123,7 @@ static void DisableProfiling(ClientContext &context, TableFunctionInput &data, D
 }
 
 static unique_ptr<FunctionData> BindDisableProfiling(ClientContext &context, TableFunctionBindInput &input,
-                                                     vector<LogicalType> &return_types, vector<string> &names) {
+                                                     vector<LogicalType> &return_types, vector<Identifier> &names) {
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
 

@@ -13,9 +13,14 @@ RowVersionManager::RowVersionManager(BufferManager &buffer_manager_p) noexcept
 }
 
 idx_t RowVersionManager::GetRowCount(ScanOptions options, idx_t count) {
+	return GetRowCount(options, 0, count);
+}
+
+idx_t RowVersionManager::GetRowCount(ScanOptions options, idx_t start_vector, idx_t count) {
 	lock_guard<mutex> l(version_lock);
 	idx_t total_count = 0;
-	for (idx_t r = 0, i = 0; r < count; r += STANDARD_VECTOR_SIZE, i++) {
+	// Only visit version vectors belonging to this scan assignment.
+	for (idx_t r = 0, i = start_vector; r < count; r += STANDARD_VECTOR_SIZE, i++) {
 		idx_t segment_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - r);
 		if (segment_count == 0) {
 			break;
@@ -112,15 +117,15 @@ void RowVersionManager::AppendVersionInfo(TransactionData transaction, idx_t cou
 		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
 		if (vector_start == 0 && vector_end == STANDARD_VECTOR_SIZE) {
 			// entire vector is encapsulated by append: store a single constant insert id
-			vector_info[vector_idx] =
-			    make_uniq<ChunkVectorInfo>(allocator, vector_idx * STANDARD_VECTOR_SIZE, transaction.transaction_id);
+			vector_info[vector_idx] = make_uniq<ChunkVectorInfo>(allocator, vector_idx * STANDARD_VECTOR_SIZE,
+			                                                     transaction.GetTransactionId());
 		} else {
 			// part of a vector is encapsulated: append to that part
 			if (!vector_info[vector_idx]) {
 				// first time appending to this vector: create new info
 				vector_info[vector_idx] = make_uniq<ChunkVectorInfo>(allocator, vector_idx * STANDARD_VECTOR_SIZE);
 			}
-			vector_info[vector_idx]->Append(vector_start, vector_end, transaction.transaction_id);
+			vector_info[vector_idx]->Append(vector_start, vector_end, transaction.GetTransactionId());
 		}
 	}
 }
@@ -143,7 +148,7 @@ void RowVersionManager::CommitAppend(transaction_t commit_id, idx_t row_group_st
 	}
 }
 
-void RowVersionManager::CleanupAppend(transaction_t lowest_active_transaction, idx_t row_group_start, idx_t count) {
+void RowVersionManager::CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t row_group_start, idx_t count) {
 	if (count == 0) {
 		return;
 	}
@@ -165,7 +170,7 @@ void RowVersionManager::CleanupAppend(transaction_t lowest_active_transaction, i
 		}
 		auto &info = *vector_info[vector_idx];
 		// if we wrote the entire chunk info try to compress it
-		auto cleanup = info.Cleanup(lowest_active_transaction);
+		auto cleanup = info.Cleanup(lowest_visibility_bound);
 		if (cleanup) {
 			vector_info[vector_idx].reset();
 		}
@@ -205,7 +210,7 @@ void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, 
 	GetVectorInfo(vector_idx).CommitDelete(commit_id, info);
 }
 
-void RowVersionManager::CompressVersionIds(transaction_t lowest_active_start) {
+void RowVersionManager::CompressVersionIds(VisibilityBound lowest_visibility_bound) {
 	lock_guard<mutex> lock(version_lock);
 	if (!needs_compression_check) {
 		// no version ids were modified since the last pass, and the last pass left nothing
@@ -224,7 +229,7 @@ void RowVersionManager::CompressVersionIds(transaction_t lowest_active_start) {
 	}
 	bool pending = false;
 	for (auto &info : vector_info) {
-		if (info && info->CompressVersionIds(lowest_active_start) == VersionCompressionResult::PENDING) {
+		if (info && info->CompressVersionIds(lowest_visibility_bound) == VersionCompressionResult::PENDING) {
 			// some ids can still compress once the lowest active start advances - check again next pass
 			pending = true;
 		}
@@ -253,7 +258,7 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(RowGroupWriter &writer) {
 		if (!chunk_info) {
 			continue;
 		}
-		if (!chunk_info->HasDeletes(options.transaction_id)) {
+		if (!chunk_info->HasDeletes(options.visibility_bound)) {
 			continue;
 		}
 		to_serialize.emplace_back(vector_idx, *chunk_info);
@@ -269,12 +274,12 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(RowGroupWriter &writer) {
 			auto &vector_idx = entry.first;
 			auto &chunk_info = entry.second.get();
 			metadata_writer.Write<idx_t>(vector_idx);
-			chunk_info.Write(metadata_writer, options.transaction_id);
+			chunk_info.Write(metadata_writer, options.visibility_bound);
 		}
 		metadata_writer.Flush();
 	}
 
-	if (uncheckpointed_delete_commit.IsValid() && uncheckpointed_delete_commit.GetIndex() <= options.transaction_id) {
+	if (uncheckpointed_delete_commit.IsValid() && uncheckpointed_delete_commit.GetIndex() < options.visibility_bound) {
 		// the last checkpointed id was either before or on the transaction we are checkpointing
 		// nothing to checkpoint in future commits until more deletes appear
 		uncheckpointed_delete_commit = optional_idx();

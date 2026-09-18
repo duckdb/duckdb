@@ -45,9 +45,8 @@ unique_ptr<SelectStatement> CommonTableExpressionInfo::GetQueryForSerialization(
 	if (!query_node ||
 	    (query_node->type != QueryNodeType::SELECT_NODE && query_node->type != QueryNodeType::SET_OPERATION_NODE &&
 	     query_node->type != QueryNodeType::RECURSIVE_CTE_NODE)) {
-		throw SerializationException(
-		    "DML CTEs (INSERT/UPDATE/DELETE) require storage version v2.0.0 or higher and cannot be "
-		    "serialized to older storage formats");
+		throw SerializationException("Side-effecting CTEs require storage version v2.0.0 or higher and cannot be "
+		                             "serialized to older storage formats");
 	}
 	auto select = make_uniq<SelectStatement>();
 	select->node = query_node->Copy();

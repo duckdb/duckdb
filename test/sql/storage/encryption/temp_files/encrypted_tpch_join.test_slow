@@ -10,10 +10,8 @@ require httpfs
 statement ok
 SET threads = 8;
 
-# FIXME: This is a significant regression because we no longer evict "tiny buffers", of which we're
-# FIXME: allocating plenty here.
 statement ok
-SET memory_limit = '2GB';
+SET memory_limit = '1GB';
 
 statement ok
 ATTACH '{TEST_DIR}/tpch_enc_{cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '{cipher}');

@@ -155,3 +155,111 @@ WorldHello
 (empty)
 RÄcksMotörHead
 
+# list 
+
+query T
+select CONCAT_WS(',', ['a', 'b', 'c'])
+----
+a,b,c
+
+# list argument with scalar
+
+query T
+select CONCAT_WS(',', ['a', 'b'], 'c')
+----
+a,b,c
+
+# scalar with list argument
+
+query T
+select CONCAT_WS(',', 'a', ['b', 'c'])
+----
+a,b,c
+
+# multiple list arguments
+
+query T
+select CONCAT_WS(',', ['a', 'b'], ['c', 'd'])
+----
+a,b,c,d
+
+# NULL list elements
+
+query T
+select CONCAT_WS(',', ['a', NULL, 'b'])
+----
+a,b
+
+# empty list
+
+query T
+select CONCAT_WS(',', [])
+----
+(empty)
+
+# empty string in list
+
+query T
+select CONCAT_WS(',', ['a', ''])
+----
+a,
+
+# non-VARCHAR list
+
+query T
+select CONCAT_WS(',', [1, 2, 3])
+----
+1,2,3
+
+# mixed list and scalar types
+
+query T
+select CONCAT_WS(',', ['a', 'b'], 5)
+----
+a,b,5
+
+# nested lists are not supported
+
+statement error
+select CONCAT_WS(',', [['a', 'b'], ['c']])
+----
+
+query T
+select CONCAT_WS(',', NULL::VARCHAR[], 'a')
+----
+a
+
+query T
+select CONCAT_WS(NULL, ['a', 'b'])
+----
+NULL
+
+query T
+select CONCAT_WS(',', [NULL, NULL])
+----
+(empty)
+
+query T
+select CONCAT_WS(',', [], 'a', ['b','c'])
+----
+a,b,c
+
+statement ok
+CREATE TABLE lists(sep VARCHAR, l VARCHAR[]);
+
+statement ok
+INSERT INTO lists VALUES (',', ['a','b']), (';', ['x']), ('-', []), (',', NULL), (',', ['p','q','r']);
+
+query T
+SELECT CONCAT_WS(sep, l) FROM lists ORDER BY rowid
+----
+a,b
+x
+(empty)
+(empty)
+p,q,r
+
+query T
+select CONCAT_WS(',', NULL::VARCHAR[], ['c', 'd'])
+----
+c,d

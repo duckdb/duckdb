@@ -9,6 +9,15 @@ namespace duckdb {
 
 namespace {
 
+static void PropagateLambdaProperties(BoundScalarFunction &function, const Expression &lambda_expr) {
+	if (lambda_expr.IsVolatile()) {
+		function.SetVolatile();
+	}
+	if (lambda_expr.CanThrow()) {
+		function.SetFallible();
+	}
+}
+
 struct LambdaInvokeData final : public LambdaFunctionData {
 	unique_ptr<Expression> lambda_expr;
 
@@ -33,10 +42,18 @@ struct LambdaInvokeData final : public LambdaFunctionData {
 	}
 
 	//! Deserializes a lambda function's bind data
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunction &) {
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunction &function) {
 		auto lambda_expr = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<Expression>>(
 		    101, "lambda_expr", unique_ptr<Expression>());
+		if (lambda_expr) {
+			auto &bound_lambda_expr = lambda_expr->Cast<BoundLambdaExpression>();
+			PropagateLambdaProperties(function, *bound_lambda_expr.LambdaExpr());
+		}
 		return make_uniq<LambdaInvokeData>(std::move(lambda_expr));
+	}
+
+	unique_ptr<Expression> RecoverLambdaChild() const override {
+		return lambda_expr ? lambda_expr->Copy() : nullptr;
 	}
 
 	optional_ptr<const Expression> GetLambdaExpression() const override {
@@ -67,14 +84,16 @@ struct LambdaInvokeState final : public FunctionLocalState {
 		}
 		auto &bound_lambda_expr = bdata.lambda_expr->Cast<BoundLambdaExpression>();
 		const auto parameter_count = bound_lambda_expr.ParameterCount();
-		D_ASSERT(parameter_count <= expr.GetChildren().size());
+		D_ASSERT(parameter_count < expr.GetChildren().size());
 
+		// children[0] is the lambda placeholder itself, the parameters follow it. The lambda body refers
+		// to its parameters in reverse order, so the input chunk lists them reversed
 		vector<LogicalType> input_types;
-		input_types.reserve(expr.GetChildren().size());
+		input_types.reserve(expr.GetChildren().size() - 1);
 		for (idx_t i = 0; i < parameter_count; i++) {
-			input_types.push_back(expr.GetChildren()[parameter_count - i - 1]->GetReturnType());
+			input_types.push_back(expr.GetChildren()[parameter_count - i]->GetReturnType());
 		}
-		for (idx_t i = parameter_count; i < expr.GetChildren().size(); i++) {
+		for (idx_t i = parameter_count + 1; i < expr.GetChildren().size(); i++) {
 			input_types.push_back(expr.GetChildren()[i]->GetReturnType());
 		}
 
@@ -86,10 +105,10 @@ struct LambdaInvokeState final : public FunctionLocalState {
 void LambdaInvokeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<LambdaInvokeState>();
 	for (idx_t i = 0; i < lstate.parameter_count; i++) {
-		lstate.input_chunk.data[i].Reference(args.data[lstate.parameter_count - i - 1]);
+		lstate.input_chunk.data[i].Reference(args.data[lstate.parameter_count - i]);
 	}
-	for (idx_t i = lstate.parameter_count; i < args.ColumnCount(); i++) {
-		lstate.input_chunk.data[i].Reference(args.data[i]);
+	for (idx_t i = lstate.parameter_count + 1; i < args.ColumnCount(); i++) {
+		lstate.input_chunk.data[i - 1].Reference(args.data[i]);
 	}
 	lstate.input_chunk.SetChildCardinality(args.size());
 	lstate.executor->ExecuteExpression(lstate.input_chunk, result);
@@ -111,6 +130,7 @@ unique_ptr<FunctionData> LambdaInvokeBind(BindScalarFunctionInput &input) {
 	}
 
 	bound_function.SetReturnType(bound_lambda_expr.LambdaExpr()->GetReturnType());
+	PropagateLambdaProperties(bound_function, *bound_lambda_expr.LambdaExpr());
 
 	return make_uniq<LambdaInvokeData>(bound_lambda_expr.Copy());
 }
@@ -130,7 +150,8 @@ LogicalType LambdaInvokeBindParameters(ClientContext &context, const vector<Logi
 } // namespace
 
 ScalarFunction InvokeFun::GetFunction() {
-	ScalarFunction fun("invoke", {LogicalType::LAMBDA, LogicalType::ANY}, LogicalType::ANY, LambdaInvokeFunction);
+	ScalarFunction fun("invoke", {}, LogicalType::ANY, LambdaInvokeFunction);
+	fun.GetSignature().AddParameter("lambda", LogicalType::LAMBDA).AddParameter("arg1", LogicalType::ANY);
 	fun.SetBindCallback(LambdaInvokeBind);
 	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
@@ -138,6 +159,8 @@ ScalarFunction InvokeFun::GetFunction() {
 	fun.SetInitStateCallback(LambdaInvokeState::Init);
 	fun.SetSerializeCallback(LambdaInvokeData::Serialize);
 	fun.SetDeserializeCallback(LambdaInvokeData::Deserialize);
+	// the lambda expression that is executed for every row can throw
+	fun.SetFallible();
 	return fun;
 }
 

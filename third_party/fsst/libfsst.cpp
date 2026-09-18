@@ -247,14 +247,15 @@ SymbolTable *buildSymbolTable(Counters& counters, std::vector<const u8*> line, c
 
 // optimized adaptive *scalar* compression method
 static inline size_t compressBulk(SymbolTable &symbolTable, size_t nlines, size_t lenIn[], u8* strIn[], size_t size, u8* out, size_t lenOut[], u8* strOut[], bool noSuffixOpt, bool avoidBranch) {
-	const u8 *cur = NULL, *end =  NULL, *lim = out + size;
+	const u8 *lim = out + size;
 	size_t curLine, suffixLim = symbolTable.suffixLim;
 	u8 byteLim = symbolTable.nSymbols + symbolTable.zeroTerminated - symbolTable.lenHisto[0];
 
-	u8 buf[512+8] = {}; /* +8 sentinel is to avoid 8-byte unaligned-loads going beyond 511 out-of-bounds */
+	u8 buf[8+1+8] = {}; /* stages the unconsumed tail (at most 8 bytes) of each string: terminator + sentinel keep the 8-byte unaligned-loads in bounds */
 
+	// compresses [cur,end) and returns where it stopped (at most 7 bytes past end).
 	// three variants are possible. dead code falls away since the bool arguments are constants
-	auto compressVariant = [&](bool noSuffixOpt, bool avoidBranch) {
+	auto compressVariant = [&](const u8 *cur, const u8 *end, bool noSuffixOpt, bool avoidBranch) {
 		while (cur < end) {
 			u64 word = fsst_unaligned_load(cur);
 			size_t code = symbolTable.shortCodes[word & 0xFFFF];
@@ -286,35 +287,46 @@ static inline size_t compressBulk(SymbolTable &symbolTable, size_t nlines, size_
 				}
 			}
 		}
+		return cur;
+	};
+
+	// based on symboltable stats, choose a variant that is nice to the branch predictor
+	auto compress = [&](const u8 *cur, const u8 *end) {
+		if (noSuffixOpt) {
+			return compressVariant(cur, end, true, false);
+		} else if (avoidBranch) {
+			return compressVariant(cur, end, false, true);
+		} else {
+			return compressVariant(cur, end, false, false);
+		}
 	};
 
 	for(curLine=0; curLine<nlines; curLine++) {
-		size_t chunk, curOff = 0;
-		strOut[curLine] = out;
-		do {
-			cur = strIn[curLine] + curOff;
-			chunk = lenIn[curLine] - curOff;
-			if (chunk > 511) {
-				chunk = 511; // we need to compress in chunks of 511 in order to be byte-compatible with simd-compressed FSST
-			}
-			if ((2*chunk+7) > (size_t) (lim-out)) {
-				return curLine; // out of memory
-			}
-			// copy the string to the 511-byte buffer
-			memcpy(buf, cur, chunk);
-			buf[chunk] = (u8) symbolTable.terminator;
-			cur = buf;
-			end = cur + chunk;
 
-			// based on symboltable stats, choose a variant that is nice to the branch predictor
-			if (noSuffixOpt) {
-				compressVariant(true,false);
-			} else if (avoidBranch) {
-				compressVariant(false,true);
-			} else {
-				compressVariant(false, false);
-			}
-		} while((curOff += chunk) < lenIn[curLine]);
+		// write start pointer for the line we want to decompress now
+		strOut[curLine] = out;
+
+		// check for out of memory
+		const size_t curLength = lenIn[curLine];
+		if ((2 * curLength + 7) > (size_t) (lim - out)) {
+			return curLine; // out of memory
+		}
+
+		// compress always reads the next 8 bytes per position and may consume all 8, so it can run up to
+		// 7 bytes past the end it is given. Clamping that end to curLength - 8 therefore keeps
+		// every read inside the string and leaves curCompressPtr (where compression stopped)
+		// in [curLength-8, curLength-1]
+		const u8 *curStartPtr = strIn[curLine];
+		const u8 *curCompressPtr = compress(curStartPtr, curStartPtr + (curLength > 8 ? curLength - 8 : 0));
+
+		// stage the bytes the main pass did not consume (at most 8), followed by the terminator:
+		// multibyte symbols never contain the terminator byte, so no match can cross the string
+		// end into the sentinel bytes
+		const size_t tailSize = (size_t) (curStartPtr + curLength - curCompressPtr);
+		memcpy(buf, curCompressPtr, tailSize);
+		buf[tailSize] = (u8) symbolTable.terminator;
+
+		compress(buf, buf + tailSize);
 		lenOut[curLine] = (size_t) (out - strOut[curLine]);
 	}
 	return curLine;
@@ -426,16 +438,20 @@ extern "C" u32 duckdb_fsst_export(duckdb_fsst_encoder_t *encoder, u8 *buf) {
 
 #define FSST_CORRUPT 32774747032022883 /* 7-byte number in little endian containing "corrupt" */
 
-extern "C" u32 duckdb_fsst_import(duckdb_fsst_decoder_t *decoder, u8 *buf) {
+extern "C" u32 duckdb_fsst_import(duckdb_fsst_decoder_t *decoder, u8 *buf, size_t buf_size) {
 	u64 version = 0;
 	u32 code, pos = 17;
 	u8 lenHisto[8];
+
+	// the fixed header (version + zeroTerminated + lenHisto) needs 17 bytes; less than that cannot hold a table
+	if (buf_size < pos) return DUCKDB_FSST_IMPORT_OUT_OF_BOUNDS;
 
 	// version field (first 8 bytes) is now there just for future-proofness, unused still (skipped)
 	memcpy(&version, buf, 8);
 	version = swap64_if_be(version); // version is always little-endian encoded
 
-	if ((version>>32) != FSST_VERSION) return 0;
+	// version mismatch is not corruption: it is how an absent symbol table (all empty/null strings) is encoded
+	if ((version>>32) != FSST_VERSION) return DUCKDB_FSST_IMPORT_VERSION_MISMATCH;
 	decoder->zeroTerminated = buf[8]&1;
 	memcpy(lenHisto, buf+9, 8);
 
@@ -450,10 +466,15 @@ extern "C" u32 duckdb_fsst_import(duckdb_fsst_decoder_t *decoder, u8 *buf) {
 	// now get all symbols from the buffer
 	for(u32 l=1; l<=8; l++) { /* l = 1,2,3,4,5,6,7,8 */
 		for(u32 i=0; i < lenHisto[(l&7) /* 1,2,3,4,5,6,7,0 */]; i++, code++)  {
+			// a corrupt histogram (buf[9..16]) could describe more than 255 symbols (writing past the decoder
+			// arrays) or more bytes than buf_size (reading past the buffer); reject both as out-of-bounds
+			if (code >= 255) return DUCKDB_FSST_IMPORT_OUT_OF_BOUNDS;
 			decoder->len[code] = (l&7)+1; /* len = 2,3,4,5,6,7,8,1  */
 			decoder->symbol[code] = 0;
-			for(u32 j=0; j<decoder->len[code]; j++)
+			for(u32 j=0; j<decoder->len[code]; j++) {
+				if (pos >= buf_size) return DUCKDB_FSST_IMPORT_OUT_OF_BOUNDS;
 				((u8*) &decoder->symbol[code])[j] = buf[pos++]; // note this enforces 'little endian' symbols
+			}
 		}
 	}
 	if (decoder->zeroTerminated) lenHisto[0]++;
@@ -511,7 +532,7 @@ extern "C" duckdb_fsst_decoder_t duckdb_fsst_decoder(duckdb_fsst_encoder_t *enco
 	u8 buf[sizeof(duckdb_fsst_decoder_t)];
 	u32 cnt1 = duckdb_fsst_export(encoder, buf);
 	duckdb_fsst_decoder_t decoder;
-	u32 cnt2 = duckdb_fsst_import(&decoder, buf);
+	u32 cnt2 = duckdb_fsst_import(&decoder, buf, sizeof(buf));
 	assert(cnt1 == cnt2); (void) cnt1; (void) cnt2;
 	return decoder;
 }

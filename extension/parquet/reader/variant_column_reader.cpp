@@ -98,13 +98,13 @@ ColumnReader &VariantColumnReader::GetChildReader(idx_t child_idx) {
 	return *child_readers[child_idx].get();
 }
 
-void VariantColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns,
-                                         TProtocol &protocol_p) {
+void VariantColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows,
+                                         const vector<ColumnChunk> &columns, TProtocol &protocol_p) {
 	for (auto &child : child_readers) {
 		if (!child) {
 			continue;
 		}
-		child->InitializeRead(row_group_idx_p, columns, protocol_p);
+		child->InitializeRead(row_group_idx_p, row_group_num_rows, columns, protocol_p);
 	}
 }
 

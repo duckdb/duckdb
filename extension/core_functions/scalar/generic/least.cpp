@@ -1,5 +1,6 @@
-#include "duckdb/common/operator/comparison_operators.hpp"
 #include "core_functions/scalar/generic_functions.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -222,8 +223,13 @@ unique_ptr<BaseStatistics> PropagateLeastGreatestStats(ClientContext &context, F
 	}
 
 	auto result = NumericStats::CreateEmpty(return_type);
-	NumericStats::SetMin(result, IS_LEAST ? std::move(loose) : std::move(anchored));
-	NumericStats::SetMax(result, IS_LEAST ? std::move(anchored) : std::move(loose));
+	if constexpr (IS_LEAST) {
+		NumericStats::SetMin(result, std::move(loose));
+		NumericStats::SetMax(result, std::move(anchored));
+	} else {
+		NumericStats::SetMin(result, std::move(anchored));
+		NumericStats::SetMax(result, std::move(loose));
+	}
 	result.Set(StatsInfo::CAN_HAVE_VALID_VALUES);
 	if (!has_nonnull_input) {
 		// the result is NULL only if all inputs are NULL
@@ -260,7 +266,7 @@ unique_ptr<FunctionData> BindLeastGreatest(BindScalarFunctionInput &input) {
 	}
 	using OP = typename LEAST_GREATER_OP::OP;
 	switch (child_type.InternalType()) {
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(least_greatest_types)
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		bound_function.SetFunctionCallback(LeastGreatestFunction<int8_t, OP>);
@@ -299,9 +305,10 @@ unique_ptr<FunctionData> BindLeastGreatest(BindScalarFunctionInput &input) {
 
 template <class OP>
 ScalarFunction GetLeastGreatestFunction() {
-	return ScalarFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, BindLeastGreatest<OP>,
-	                      PropagateLeastGreatestStats<OP>, nullptr, LogicalType::ANY, FunctionStability::CONSISTENT,
-	                      FunctionNullHandling::SPECIAL_HANDLING);
+	ScalarFunction fun({}, LogicalType::ANY, nullptr, BindLeastGreatest<OP>, PropagateLeastGreatestStats<OP>, nullptr,
+	                   LogicalType::ANY, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
+	fun.GetSignature().AddParameter("arg1", LogicalType::ANY);
+	return fun;
 }
 
 template <class OP>

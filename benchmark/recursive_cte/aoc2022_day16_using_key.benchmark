@@ -1,0 +1,11 @@
+# name: benchmark/recursive_cte/aoc2022_day16_using_key.benchmark
+# group: [recursive_cte]
+
+name AoC 2022 day16 valve search USING KEY
+group Recursive CTE
+
+load benchmark/recursive_cte/aoc2022/load/day16.sql
+
+run benchmark/recursive_cte/queries/performance/aoc2022_day16_using_key.sql
+
+result benchmark/recursive_cte/answers/performance/aoc2022_day16.csv

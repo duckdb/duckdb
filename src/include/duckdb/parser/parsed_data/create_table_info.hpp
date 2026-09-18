@@ -20,7 +20,7 @@ class SchemaCatalogEntry;
 struct CreateTableInfo : public CreateInfo {
 	DUCKDB_API CreateTableInfo();
 	DUCKDB_API explicit CreateTableInfo(QualifiedName qualified_name);
-	DUCKDB_API CreateTableInfo(SchemaCatalogEntry &schema, Identifier name);
+	DUCKDB_API CreateTableInfo(SchemaCatalogEntry &schema, const Identifier &name);
 
 	//! Table name to insert to
 	const Identifier &GetTableName() const {

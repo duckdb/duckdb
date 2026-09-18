@@ -19,7 +19,7 @@ class TestReport:
         self.comparison_results = None
         self.start_time = time.time()
         self.exit_on_failure = exit_on_failure
-        self.last_timestamp = self.start_time
+        self.last_timestamp = time.monotonic()
         self.durations = []
         self.outputs = []
         self.duckdb_old_version = old_version
@@ -37,9 +37,10 @@ class TestReport:
         if step_name not in TestReport.step_names:
             raise ValueError(f"Unknown step name: {step_name}")
 
-        self.durations.append(time.time() - self.last_timestamp)
+        current_timestamp = time.monotonic()
+        self.durations.append(current_timestamp - self.last_timestamp)
         self.outputs.append(step_output)
-        self.last_timestamp = time.time()
+        self.last_timestamp = current_timestamp
         success = step_output["success"]
 
         if self.exit_on_failure and not success:

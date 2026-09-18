@@ -34,6 +34,8 @@ TEST_CASE("Issue #6931 - test windows unicode path", "[windows]") {
 	string dirname = "Moseguí_i_González";
 	auto test_directory = TestDirectoryPath() + "/" + dirname;
 	auto current_directory = TestGetCurrentDirectory();
+	// TestDirectoryPath() is absolute whenever the temp-dir-root is, so anchor rather than concatenate.
+	auto absolute_directory = TestMakeAbsolute(test_directory, current_directory);
 	TestCreateDirectory(test_directory);
 	TestChangeDirectory(test_directory);
 
@@ -44,9 +46,10 @@ TEST_CASE("Issue #6931 - test windows unicode path", "[windows]") {
 	// relative path TOWARDS folder with accents
 	TestConnectToDatabase(dirname + "/" + "test.db");
 
-	// absolute path with folder with accents
-	TestConnectToDatabase(current_directory + "/" + test_directory + "/" + "test.db");
-
-	// revert current working directory
+	// Restore before the last leg, which does not need the chdir: a throw while still inside the temp
+	// dir leaves every later test resolving relative paths from there.
 	TestChangeDirectory(current_directory);
+
+	// absolute path with folder with accents
+	TestConnectToDatabase(absolute_directory + "/" + "test.db");
 }

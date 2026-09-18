@@ -21,19 +21,9 @@ class ErrorData;
 class MetaTransaction;
 class PreparedStatementData;
 class SQLStatement;
-struct PendingQueryParameters;
 class RegisteredStateManager;
 
 enum class RebindQueryInfo { DO_NOT_REBIND, ATTEMPT_TO_REBIND };
-
-struct PreparedStatementCallbackInfo {
-	PreparedStatementCallbackInfo(PreparedStatementData &prepared_statement, const PendingQueryParameters &parameters)
-	    : prepared_statement(prepared_statement), parameters(parameters) {
-	}
-
-	PreparedStatementData &prepared_statement;
-	const PendingQueryParameters &parameters;
-};
 
 struct BindPreparedStatementCallbackInfo {
 	PreparedStatementData &prepared_statement;
@@ -73,10 +63,6 @@ public:
 	}
 	virtual RebindQueryInfo OnFinalizePrepare(ClientContext &context, PreparedStatementData &prepared_statement,
 	                                          PreparedStatementMode mode) {
-		return RebindQueryInfo::DO_NOT_REBIND;
-	}
-	virtual RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementCallbackInfo &info,
-	                                          RebindQueryInfo current_rebind) {
 		return RebindQueryInfo::DO_NOT_REBIND;
 	}
 	virtual RebindQueryInfo OnRebindPreparedStatement(ClientContext &context, BindPreparedStatementCallbackInfo &info,

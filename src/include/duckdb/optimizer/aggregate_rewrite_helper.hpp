@@ -9,12 +9,14 @@
 
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 class LogicalAggregate;
 class Optimizer;
 
 struct AggregateRewriteHelper {
+	static optional_idx GetDirectReferenceIndex(const Expression &expression, LogicalOperator &input);
 	static vector<Identifier> GenerateColumnNames(const string &prefix, idx_t column_count);
 	static unique_ptr<Expression> CopyAndRebind(const Expression &expr,
 	                                            const column_binding_map_t<ColumnBinding> &replacement_map);
@@ -25,6 +27,10 @@ struct AggregateRewriteHelper {
 	                                                const vector<Identifier> &input_names,
 	                                                const vector<ColumnBinding> &input_bindings,
 	                                                column_binding_map_t<ColumnBinding> &replacement_map);
+	//! Projects the definition onto the given bindings so CTE references can rely on a stable column layout
+	static unique_ptr<LogicalOperator> PinColumnOrder(Optimizer &optimizer, unique_ptr<LogicalOperator> definition,
+	                                                  const vector<LogicalType> &types,
+	                                                  const vector<ColumnBinding> &bindings);
 };
 
 } // namespace duckdb

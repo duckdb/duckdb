@@ -181,6 +181,31 @@ void BaseStatistics::Merge(const BaseStatistics &other, StatsMergeType merge_typ
 	}
 }
 
+void BaseStatistics::ResetAdditiveStatistics() {
+	switch (GetStatsType()) {
+	case StatisticsType::STRING_STATS:
+		stats_union.string_data.has_total_string_length = false;
+		break;
+	case StatisticsType::LIST_STATS:
+	case StatisticsType::ARRAY_STATS:
+		child_stats[0].ResetAdditiveStatistics();
+		break;
+	case StatisticsType::STRUCT_STATS:
+		for (idx_t child_idx = 0; child_idx < StructType::GetChildCount(type); child_idx++) {
+			child_stats[child_idx].ResetAdditiveStatistics();
+		}
+		break;
+	case StatisticsType::VARIANT_STATS:
+		child_stats[0].ResetAdditiveStatistics();
+		if (child_stats[1].GetType().id() != LogicalTypeId::INVALID) {
+			child_stats[1].ResetAdditiveStatistics();
+		}
+		break;
+	default:
+		break;
+	}
+}
+
 idx_t BaseStatistics::GetDistinctCount() {
 	return distinct_count;
 }

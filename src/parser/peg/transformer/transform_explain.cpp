@@ -26,7 +26,17 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainStatement(
 				if (format_is_set) {
 					throw InvalidInputException("FORMAT can not be provided more than once");
 				}
-				format = ParseProfilerPrintFormat(option.children[0]);
+				if (option.children.empty()) {
+					// no constant/identifier argument: either FORMAT was given nothing at all, or its argument is an
+					// expression the parser kept whole. A bare DEFAULT keyword parses as a DefaultExpression.
+					if (option.expression && option.expression->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
+						format = ProfilerPrintFormat::Default();
+					} else {
+						throw InvalidInputException("FORMAT requires a single format name, e.g. FORMAT json");
+					}
+				} else {
+					format = ParseProfilerPrintFormat(option.children[0]);
+				}
 				format_is_set = true;
 			} else if (option_name == "analyze") {
 				explain_type = ExplainType::EXPLAIN_ANALYZE;
@@ -65,7 +75,7 @@ GenericCopyOption PEGTransformerFactory::TransformExplainOption(PEGTransformer &
 	}
 	auto &expr = *expression;
 	if (expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		copy_option.children.push_back(Value(expr->Cast<ConstantExpression>().GetValue()));
+		copy_option.children.push_back(expr->Cast<ConstantExpression>().GetLiteral().ToValue());
 	} else if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		copy_option.children.push_back(Value(expr->Cast<ColumnRefExpression>().GetColumnName()));
 	} else {

@@ -1,12 +1,12 @@
 #include "duckdb/parser/keyword_helper.hpp"
-#include "duckdb/parser/peg/keyword_helper.hpp"
+#include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/identifier.hpp"
 
 namespace duckdb {
 
 static KeywordCategory GetPEGKeywordCategory(const string &text) {
-	auto &helper = PEGKeywordHelper::Instance();
+	auto &helper = DuckDBKeywordHelper::Instance();
 	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_RESERVED)) {
 		return KeywordCategory::KEYWORD_RESERVED;
 	}
@@ -76,8 +76,14 @@ string KeywordHelper::WriteQuoted(const string &text, char quote) {
 	return WriteQuotedAndEscaped(text, quote);
 }
 
+static bool RequiresQuotesForPrinting(const string &text, bool allow_caps) {
+	// After a qualification dot, an underscore followed by a digit can begin a decimal literal.
+	const bool ambiguous_after_dot = text.size() > 1 && text[0] == '_' && StringUtil::CharacterIsDigit(text[1]);
+	return ambiguous_after_dot || KeywordHelper::RequiresQuotes(text, allow_caps);
+}
+
 string KeywordHelper::WriteOptionallyQuoted(const string &text, char quote, bool allow_caps) {
-	if (!RequiresQuotes(text, allow_caps)) {
+	if (!RequiresQuotesForPrinting(text, allow_caps)) {
 		return text;
 	}
 	return WriteQuotedAndEscaped(text, quote);
@@ -87,14 +93,33 @@ SQLIdentifier::SQLIdentifier(const Identifier &id) : raw_string(id.GetIdentifier
 }
 
 string SQLIdentifier::ToString(const string &identifier) {
-	if (!KeywordHelper::RequiresQuotes(identifier)) {
+	if (!RequiresQuotesForPrinting(identifier, true)) {
 		return identifier;
 	}
 	return SQLQuotedIdentifier::ToString(identifier);
 }
 
+string SQLIdentifier::ToString(const Identifier &identifier) {
+	return ToString(identifier.GetIdentifierName());
+}
+
+string SQLIdentifier::ToString(const char *identifier) {
+	return ToString(string(identifier));
+}
+
+SQLQuotedIdentifier::SQLQuotedIdentifier(const Identifier &id) : raw_string(id.GetIdentifierName()) {
+}
+
 string SQLQuotedIdentifier::ToString(const string &identifier) {
 	return KeywordHelper::WriteQuotedAndEscaped(identifier, '"');
+}
+
+string SQLQuotedIdentifier::ToString(const Identifier &identifier) {
+	return ToString(identifier.GetIdentifierName());
+}
+
+string SQLQuotedIdentifier::ToString(const char *identifier) {
+	return ToString(string(identifier));
 }
 
 string SQLString::ToString(const string &literal) {

@@ -35,8 +35,8 @@ struct QualifiedName {
 		path.push_back(std::move(name_p));
 	}
 	QualifiedName(Identifier catalog_p, Identifier schema_p, Identifier name_p) {
-		// store the catalog/schema/name as a single path - in preparation for multi-level schema support
-		// for now we only support a single schema level, so the path is at most [catalog, schema, name]
+		// store the catalog/schema/name as a single path - deeper (nested schema) paths are built with the
+		// vector<Identifier> constructor below
 		if (!catalog_p.empty()) {
 			path.push_back(std::move(catalog_p));
 			path.push_back(std::move(schema_p));
@@ -51,10 +51,10 @@ struct QualifiedName {
 		path.push_back(std::move(name_p));
 	}
 
-	//! The catalog is the first element of the path, but only when the path is fully qualified ([catalog, schema,
-	//! name])
+	//! The catalog is the first element of the path, but only when the path is fully qualified ([catalog,
+	//! schema..., name])
 	const Identifier &Catalog() const {
-		return path.size() == 3 ? path[0] : empty;
+		return path.size() >= 3 ? path[0] : empty;
 	}
 	//! The schema is the element directly before the name (or empty if there is no schema)
 	const Identifier &Schema() const {
@@ -70,13 +70,47 @@ struct QualifiedName {
 		return path;
 	}
 
-	//! Return a copy of this name with the name replaced, keeping the catalog/schema qualification
+	//! Return a copy of this name with the name replaced, keeping the (possibly nested) catalog/schema qualification
 	QualifiedName WithName(Identifier name) const {
-		return QualifiedName(Catalog(), Schema(), std::move(name));
+		vector<Identifier> qualification;
+		if (!path.empty()) {
+			qualification.insert(qualification.end(), path.begin(), path.end() - 1);
+		}
+		return QualifiedName(std::move(qualification), std::move(name));
 	}
 	//! Return a copy of this name with the catalog/schema qualification replaced by the given path, keeping the name
 	QualifiedName WithQualification(vector<Identifier> schema_path) const {
 		return QualifiedName(std::move(schema_path), Name());
+	}
+	//! Drop the catalog component (if any), keeping the (possibly nested) schema path and the name
+	void StripCatalog() {
+		if (path.size() < 3) {
+			return;
+		}
+		path.erase(path.begin());
+		if (path.size() >= 2 && path[0].empty()) {
+			// the name was catalog-qualified without a schema - drop the empty schema placeholder as well
+			path.erase(path.begin());
+		}
+	}
+	//! Return a copy of this name qualified with the given catalog, replacing the catalog component it already has.
+	//! An empty catalog strips the catalog qualification.
+	QualifiedName WithCatalog(Identifier catalog) const {
+		if (catalog.empty()) {
+			auto result = *this;
+			result.StripCatalog();
+			return result;
+		}
+		if (path.size() < 2) {
+			return QualifiedName(std::move(catalog), Identifier(), Name());
+		}
+		vector<Identifier> qualification;
+		qualification.push_back(std::move(catalog));
+		// keep the (possibly nested) schema path, skipping the catalog component when the name is fully qualified
+		for (idx_t i = path.size() >= 3 ? 1 : 0; i + 1 < path.size(); i++) {
+			qualification.push_back(path[i]);
+		}
+		return QualifiedName(std::move(qualification), Name());
 	}
 
 	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
@@ -84,6 +118,8 @@ struct QualifiedName {
 	static QualifiedName Parse(const string &input);
 	static vector<Identifier> ParseComponents(const string &input);
 	string ToString(QualifiedNameToStringMode mode = QualifiedNameToStringMode::DEFAULT) const;
+	//! Render only the qualification (every component before the name), with a trailing "." after each component
+	string QualificationToString(QualifiedNameToStringMode mode = QualifiedNameToStringMode::DEFAULT) const;
 
 	hash_t Hash() const;
 	bool operator==(const QualifiedName &rhs) const;
@@ -94,7 +130,7 @@ struct QualifiedName {
 
 private:
 	//! The full path (catalog/schema/name). The name is always the last element; the catalog/schema components that
-	//! are actually present precede it. For now at most [catalog, schema, name] (single schema level).
+	//! are actually present precede it, and the schema part can be a nested chain ([catalog, s1, s2, ..., name]).
 	vector<Identifier> path;
 	//! Always-empty identifier, returned by the accessors when a catalog/schema/name component is absent
 	Identifier empty;
@@ -114,6 +150,7 @@ struct QualifiedColumnName {
 	static QualifiedColumnName Parse(string &input);
 
 	string ToString() const;
+	string ToDisplayString() const;
 
 	void Serialize(Serializer &serializer) const;
 	static QualifiedColumnName Deserialize(Deserializer &deserializer);

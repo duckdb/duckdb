@@ -1,8 +1,9 @@
 module: aggregate_function
 functions:
   create_aggregate_function:
+    offset: 226
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     role: constructor
     belongs_to: aggregate_function
     parameters: {}
@@ -13,8 +14,9 @@ functions:
       The return value should be destroyed with `duckdb_destroy_aggregate_function`.
     return_description: The aggregate function object.
   destroy_aggregate_function:
+    offset: 227
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     role: destructor
     belongs_to: aggregate_function
     parameters:
@@ -25,8 +27,9 @@ functions:
     description: |
       Destroys the given aggregate function object.
   aggregate_function_set_name:
+    offset: 228
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       aggregate_function:
         type: aggregate_function
@@ -40,8 +43,9 @@ functions:
     description: |
       Sets the name of the given aggregate function.
   aggregate_function_add_parameter:
+    offset: 229
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       aggregate_function:
         type: aggregate_function
@@ -53,8 +57,9 @@ functions:
     description: |
       Adds a parameter to the aggregate function.
   aggregate_function_set_return_type:
+    offset: 230
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       aggregate_function:
         type: aggregate_function
@@ -66,8 +71,9 @@ functions:
     description: |
       Sets the return type of the aggregate function.
   aggregate_function_set_functions:
+    offset: 231
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       aggregate_function:
         type: aggregate_function
@@ -91,8 +97,9 @@ functions:
     description: |
       Sets the main functions of the aggregate function.
   aggregate_function_set_destructor:
+    offset: 232
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       aggregate_function:
         type: aggregate_function
@@ -104,8 +111,9 @@ functions:
     description: |
       Sets the state destructor callback of the aggregate function (optional)
   register_aggregate_function:
+    offset: 233
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       con:
         type: connection
@@ -121,8 +129,9 @@ functions:
       If the function is incomplete or a function with this name already exists DuckDBError is returned.
     return_description: Whether or not the registration was successful.
   aggregate_function_set_special_handling:
+    offset: 234
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       aggregate_function:
         type: aggregate_function
@@ -131,8 +140,9 @@ functions:
     description: |
       Sets the NULL handling of the aggregate function to SPECIAL_HANDLING.
   aggregate_function_set_extra_info:
+    offset: 235
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       aggregate_function:
         type: aggregate_function
@@ -148,8 +158,9 @@ functions:
     description: |
       Assigns extra information to the scalar function that can be fetched during binding, etc.
   aggregate_function_get_extra_info:
+    offset: 236
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       info:
         type: function_info
@@ -160,8 +171,9 @@ functions:
       Retrieves the extra info of the function as set in `duckdb_aggregate_function_set_extra_info`.
     return_description: The extra info
   aggregate_function_set_error:
+    offset: 237
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       info:
         type: function_info
@@ -175,8 +187,9 @@ functions:
     description: |
       Report that an error has occurred while executing the aggregate function.
   create_aggregate_function_set:
+    offset: 238
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     role: constructor
     belongs_to: aggregate_function_set
     parameters:
@@ -191,8 +204,9 @@ functions:
       The return value should be destroyed with `duckdb_destroy_aggregate_function_set`.
     return_description: The aggregate function set object.
   destroy_aggregate_function_set:
+    offset: 239
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     role: destructor
     belongs_to: aggregate_function_set
     parameters:
@@ -203,8 +217,9 @@ functions:
     description: |
       Destroys the given aggregate function set object.
   add_aggregate_function_to_set:
+    offset: 240
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       set:
         type: aggregate_function_set
@@ -218,8 +233,9 @@ functions:
 
       Returns DuckDBError if the function could not be added, for example if the overload already exists.
   register_aggregate_function_set:
+    offset: 241
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       con:
         type: connection

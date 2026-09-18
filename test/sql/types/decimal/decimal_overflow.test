@@ -2,31 +2,31 @@
 # description: Test overflow in various decimal computations
 # group: [decimal]
 
-# decimals can also overflow at the bigint boundary, because we don't perform automatic upcasting to hugeint
-statement error
+# decimals are automatically promoted past the bigint boundary
+query I
 select (99000000000000000.0::DECIMAL(18,1)+99000000000000000.0::DECIMAL(18,1));
 ----
-<REGEX>:Out of Range Error.*Overflow in addition of DECIMAL.*
+198000000000000000.0
 
 statement error
 select (99000000000000000.0::DECIMAL(18,1)+99000000000000000.0::DECIMAL(18,1))::VARCHAR::DECIMAL(18,1);
 ----
-<REGEX>:Out of Range Error.*Overflow in addition of DECIMAL.*
+<REGEX>:Conversion Error.*Could not convert string.*
 
-statement error
+query I
 select (50000000000000000.0::DECIMAL(18,1)+50000000000000000.0::DECIMAL(18,1));
 ----
-<REGEX>:Out of Range Error.*Overflow in addition of DECIMAL.*
+100000000000000000.0
 
-statement error
+query I
 select (-99000000000000000.0::DECIMAL(18,1)-99000000000000000.0::DECIMAL(18,1));
 ----
-<REGEX>:Out of Range Error.*Overflow in subtract of DECIMAL.*
+-198000000000000000.0
 
-statement error
+query I
 select (-50000000000000000.0::DECIMAL(18,1)-50000000000000000.0::DECIMAL(18,1));
 ----
-<REGEX>:Out of Range Error.*Overflow in subtract of DECIMAL.*
+-100000000000000000.0
 
 # decimals can overflow at the hugeint boundary, because we run out of bits
 statement error

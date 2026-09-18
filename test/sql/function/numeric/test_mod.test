@@ -13,11 +13,23 @@ select mod(a, 40) from modme
 ----
 2.123456
 
-# mod 0 results in NULL: SQLite behavior
+# mod 0 is an error
+statement error
+select mod(42, 0)
+----
+<REGEX>:.*Division by zero.*
+
+# unless error_on_division_by_zero is disabled
+statement ok
+SET error_on_division_by_zero=false;
+
 query I
 select mod(42, 0)
 ----
 NULL
+
+statement ok
+SET error_on_division_by_zero=true;
 
 query R
 select mod(a, 2) from modme

@@ -1,0 +1,94 @@
+# name: test/issues/general/test_21492.test
+# description: Issue 21492 - table subscripts should fold to a column reference so columns can be pruned
+# group: [general]
+
+statement ok
+CREATE TABLE t (grd_quart INTEGER, typl INTEGER, ipondl INTEGER, catl VARCHAR);
+
+statement ok
+INSERT INTO t VALUES (1, 2, 100, '1'), (1, 2, 200, '1');
+
+# a bracket subscript returns the same result as a direct column reference
+query III
+FROM t AS s
+SELECT grd_quart, s['typl'], sum(ipondl) AS eft
+WHERE catl = '1'
+GROUP BY ALL
+ORDER BY ALL
+----
+1	2	300
+
+query III
+FROM t AS s
+SELECT grd_quart, typl, sum(ipondl) AS eft
+WHERE catl = '1'
+GROUP BY ALL
+ORDER BY ALL
+----
+1	2	300
+
+statement ok
+SET VARIABLE col = 'typl'
+
+query III
+FROM t AS s
+SELECT grd_quart, s[getvariable('col')], sum(ipondl) AS eft
+WHERE catl = '1'
+GROUP BY ALL
+ORDER BY ALL
+----
+1	2	300
+
+# the fold must not leave a struct_pack in the plan - that would force reading every column
+query II
+EXPLAIN SELECT grd_quart, s['typl'], sum(ipondl) FROM t AS s WHERE catl = '1' GROUP BY ALL
+----
+physical_plan	<!REGEX>:(?s).*struct_pack.*
+
+query II
+EXPLAIN SELECT grd_quart, s[getvariable('col')], sum(ipondl) FROM t AS s WHERE catl = '1' GROUP BY ALL
+----
+physical_plan	<!REGEX>:(?s).*struct_pack.*
+
+statement ok
+RESET VARIABLE col
+
+# folding is semantics-preserving for struct_pack that is not a table subscript
+query I
+SELECT struct_extract(struct_pack(a := 40, b := 2), 'a')
+----
+40
+
+query I
+SELECT struct_pack(a := 40, b := 2)['b']
+----
+2
+
+query I
+SELECT struct_extract(struct_pack(a := i + 1, b := i * 2), 'b') FROM range(3) tbl(i) ORDER BY ALL
+----
+0
+2
+4
+
+# unnamed structs are extracted by index
+query I
+SELECT struct_extract(row(40, 2), 2)
+----
+2
+
+query I
+SELECT struct_extract_at(struct_pack(a := 40, b := 2), 1)
+----
+40
+
+# NULL keys and out-of-range keys keep erroring at bind time
+statement error
+SELECT struct_extract(struct_pack(a := 40), 'c')
+----
+<REGEX>:.*Could not find key.*
+
+statement error
+SELECT struct_extract(row(40, 2), 3)
+----
+<REGEX>:.*out of range.*

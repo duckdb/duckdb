@@ -15,7 +15,8 @@ ForeignKeyConstraint::ForeignKeyConstraint(vector<Identifier> pk_columns, vector
 }
 
 string ForeignKeyConstraint::ToString() const {
-	if (info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+	if (info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
+	    info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
 		string base = "FOREIGN KEY (";
 
 		for (idx_t i = 0; i < fk_columns.size(); i++) {
@@ -26,10 +27,10 @@ string ForeignKeyConstraint::ToString() const {
 		}
 		base += ") REFERENCES ";
 		if (!info.schema.empty() && info.schema != DEFAULT_SCHEMA) {
-			base += info.schema.GetIdentifierName();
+			base += SQLIdentifier(info.schema);
 			base += ".";
 		}
-		base += info.table.GetIdentifierName();
+		base += SQLIdentifier(info.table);
 		if (!pk_columns.empty()) {
 			base += "(";
 

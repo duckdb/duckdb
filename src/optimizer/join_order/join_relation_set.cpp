@@ -28,7 +28,7 @@ bool JoinRelationSet::Empty() const {
 }
 
 //! Returns true if sub is a subset of super
-bool JoinRelationSet::IsSubset(JoinRelationSet &super, JoinRelationSet &sub) {
+bool JoinRelationSet::IsSubset(const JoinRelationSet &super, const JoinRelationSet &sub) {
 	D_ASSERT(sub.count > 0);
 	if (sub.count > super.count) {
 		return false;
@@ -40,6 +40,22 @@ bool JoinRelationSet::IsSubset(JoinRelationSet &super, JoinRelationSet &sub) {
 			if (j == sub.count) {
 				return true;
 			}
+		}
+	}
+	return false;
+}
+
+bool JoinRelationSet::Intersects(const JoinRelationSet &left, const JoinRelationSet &right) {
+	idx_t left_idx = 0;
+	idx_t right_idx = 0;
+	while (left_idx < left.count && right_idx < right.count) {
+		if (left.relations[left_idx] == right.relations[right_idx]) {
+			return true;
+		}
+		if (left.relations[left_idx] < right.relations[right_idx]) {
+			left_idx++;
+		} else {
+			right_idx++;
 		}
 	}
 	return false;

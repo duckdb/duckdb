@@ -12,6 +12,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -55,10 +56,24 @@ void FindGetsAndProjections(LogicalOperator &op, Analyses &analyses, Projections
 		LogicalProjection &projection = op.Cast<LogicalProjection>();
 		D_ASSERT(projection.children.size() == 1);
 		auto &child = *projection.children[0];
-		if (!IsPassthrough(projection) || child.type != LogicalOperatorType::LOGICAL_GET) {
+		if (!IsPassthrough(projection)) {
 			break;
 		}
-		if (auto &get = child.Cast<LogicalGet>(); get.function.projection_expression_pushdown != nullptr) {
+
+		LogicalGet *get = nullptr;
+
+		// queries with LIMIT may include a STREAMING_LIMIT between PROJECTION and GET.
+		// See test/optimizer/pushdown/scalar_function_pushdown_limit.test
+		if (child.type == LogicalOperatorType::LOGICAL_LIMIT) {
+			if (auto &limit = child.Cast<LogicalLimit>();
+			    limit.children.size() == 1 && limit.children[0]->type == LogicalOperatorType::LOGICAL_GET) {
+				get = &limit.children[0]->Cast<LogicalGet>();
+			}
+		} else if (child.type == LogicalOperatorType::LOGICAL_GET) {
+			get = &child.Cast<LogicalGet>();
+		}
+
+		if (get != nullptr && get->function.projection_expression_pushdown != nullptr) {
 			projections.emplace(projection.table_index, projection);
 		}
 		break;

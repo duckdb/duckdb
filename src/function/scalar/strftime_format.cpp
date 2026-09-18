@@ -838,7 +838,7 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 	result_data[6] = 0;
 	result_data[7] = 0;
 	// skip leading spaces
-	while (StringUtil::CharacterIsSpace(*data)) {
+	while (size > 0 && StringUtil::CharacterIsSpace(*data)) {
 		data++;
 		size--;
 	}

@@ -150,14 +150,14 @@ SELECT CASE WHEN NOT col1 NOT IN (SELECT (SELECT MAX(col7)) UNION (SELECT MIN(Co
 2
 2
 
-# correlated columns in window functions not supported yet
-statement error
+# the aggregate belongs to the outer query, and the window partitions by its result
+query I
 SELECT EXISTS (SELECT RANK() OVER (PARTITION BY SUM(DISTINCT col5))) FROM another_T t1;
 ----
-<REGEX>:.*Binder Error.*not supported.*
+true
 
-# REQUIRE(CHECK_COLUMN(result, 0, {true}));
+# col2 is neither grouped by nor aggregated in the outer query
 statement error
 SELECT (SELECT SUM(col2) OVER (PARTITION BY SUM(col2) ORDER BY MAX(col1 + ColID) ROWS UNBOUNDED PRECEDING) FROM tbl_ProductSales) FROM another_T t1 GROUP BY col1
 ----
-<REGEX>:.*Binder Error.*not supported.*
+<REGEX>:.*must appear in the GROUP BY clause.*

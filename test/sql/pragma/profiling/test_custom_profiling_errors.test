@@ -1,5 +1,5 @@
 # name: test/sql/pragma/profiling/test_custom_profiling_errors.test
-# description: Test that custom_profiling_settings is deprecated and errors on use.
+# description: Test that custom_profiling_settings and its aliases have been removed in favor of tracked_metrics.
 # group: [profiling]
 
 require json
@@ -7,24 +7,19 @@ require json
 statement error
 PRAGMA custom_profiling_settings='}}}}}}';
 ----
-<REGEX>:Invalid Input Error.*deprecated.*tracked_metrics.*
-
-statement error
-PRAGMA custom_profiling_settings=BONJOUR;
-----
-<REGEX>:Invalid Input Error.*deprecated.*tracked_metrics.*
+<REGEX>:Catalog Error:.*custom_profiling_settings.*
 
 statement error
 PRAGMA configure_profiling='{"INVALID_SETTING": "true"}';
 ----
-<REGEX>:Invalid Input Error.*deprecated.*tracked_metrics.*
+<REGEX>:Catalog Error:.*configure_profiling.*
 
 statement error
 SET configure_metrics = 'hello';
 ----
-<REGEX>:Invalid Input Error.*deprecated.*tracked_metrics.*
+<REGEX>:Catalog Error:.*configure_metrics.*
 
-# Verify tracked_metrics is the new way
+# tracked_metrics is the replacement
 statement ok
 SET tracked_metrics = ['*'];
 

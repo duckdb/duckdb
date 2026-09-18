@@ -32,6 +32,7 @@ public:
 	void Write(CompressedFile &file, StreamData &stream_data, data_ptr_t buffer, int64_t nr_bytes) override;
 
 	void Close() override;
+	void AbortWrite() override;
 
 	void FlushStream();
 };
@@ -170,6 +171,10 @@ void ZstdStreamWrapper::Close() {
 	if (writing) {
 		FlushStream();
 	}
+	AbortWrite();
+}
+
+void ZstdStreamWrapper::AbortWrite() {
 	if (zstd_stream_ptr) {
 		duckdb_zstd::ZSTD_freeDStream(zstd_stream_ptr);
 	}
@@ -200,8 +205,19 @@ public:
 
 unique_ptr<FileHandle> ZStdFileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
                                                           bool write) {
-	auto path = handle->path;
-	return make_uniq<ZStdFile>(context, std::move(handle), path, write);
+	try {
+		auto path = handle->path;
+		return make_uniq<ZStdFile>(context, std::move(handle), path, write);
+	} catch (...) {
+		auto error = std::current_exception();
+		if (handle) {
+			try {
+				handle->AbortWrite();
+			} catch (...) { // NOLINT
+			}
+		}
+		std::rethrow_exception(error);
+	}
 }
 
 unique_ptr<StreamWrapper> ZStdFileSystem::CreateStream() {

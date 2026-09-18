@@ -16,8 +16,6 @@
 #include "duckdb/storage/compression/patas/patas.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 
-#include <cmath>
-
 namespace duckdb {
 
 template <class T>
@@ -66,8 +64,19 @@ public:
 
 template <class T>
 unique_ptr<AnalyzeState> AlpInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	auto state = make_uniq<AlpAnalyzeState<T>>(col_data.GetBlockManager());
-	state->storage_version = col_data.GetStorageManager().GetStorageVersion();
+	auto &storage_manager = col_data.GetStorageManager();
+	auto &block_manager = col_data.GetBlockManager();
+	const auto storage_version = storage_manager.GetStorageVersion();
+
+	if (block_manager.GetBlockSize() + block_manager.GetBlockHeaderSize() < DEFAULT_BLOCK_ALLOC_SIZE) {
+		if (StorageManager::IsPriorToVersion(StorageVersion::V1_5_0, storage_version)) {
+			// Before v1.5.0, blocks cannot use uncompressed-vector fallback
+			return nullptr;
+		}
+	}
+
+	auto state = make_uniq<AlpAnalyzeState<T>>(block_manager);
+	state->storage_version = storage_version;
 	return unique_ptr<AnalyzeState>(std::move(state));
 }
 
@@ -76,10 +85,6 @@ unique_ptr<AnalyzeState> AlpInitAnalyze(ColumnData &col_data, PhysicalType type)
  */
 template <class T>
 bool AlpAnalyze(AnalyzeState &state, const Vector &input) {
-	if (state.info.GetBlockSize() + state.info.GetBlockHeaderSize() < DEFAULT_BLOCK_ALLOC_SIZE) {
-		return false;
-	}
-
 	auto &analyze_state = state.Cast<AlpAnalyzeState<T>>();
 
 	const auto count = input.size();
@@ -146,7 +151,7 @@ bool AlpAnalyze(AnalyzeState &state, const Vector &input) {
  */
 template <class T>
 idx_t AlpFinalAnalyze(AnalyzeState &state) {
-	auto &analyze_state = (AlpAnalyzeState<T> &)state;
+	auto &analyze_state = state.Cast<AlpAnalyzeState<T>>();
 
 	// Finding the Top K combinations of Exponent and Factor
 	alp::AlpCompression<T, true>::FindTopKCombinations(analyze_state.rowgroup_sample, analyze_state.compression_data);

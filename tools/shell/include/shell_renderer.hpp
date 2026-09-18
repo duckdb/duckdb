@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/time_point.hpp"
 #include "duckdb/logging/log_storage.hpp"
 #include "shell_state.hpp"
 #include "shell_highlight.hpp"
@@ -18,6 +19,8 @@ struct RenderingResultIterator;
 
 struct ResultMetadata {
 	explicit ResultMetadata(duckdb::QueryResult &result);
+	explicit ResultMetadata(duckdb::QueryResultStream &stream);
+	ResultMetadata(const vector<duckdb::Identifier> &names, const vector<duckdb::LogicalType> &result_types);
 
 	vector<string> column_names;
 	vector<duckdb::LogicalType> types;
@@ -36,8 +39,12 @@ struct RowData {
 
 struct RenderingQueryResult {
 	RenderingQueryResult(duckdb::QueryResult &result, ShellRenderer &renderer);
+	RenderingQueryResult(duckdb::QueryResultStream &stream, ShellRenderer &renderer);
 
-	duckdb::QueryResult &result;
+	//! The retained result, or null when the rows come from a stream
+	duckdb::optional_ptr<duckdb::QueryResult> result;
+	//! The stream the rows come from, or null when they come from a retained result
+	duckdb::optional_ptr<duckdb::QueryResultStream> stream;
 	ShellRenderer &renderer;
 	ResultMetadata metadata;
 	vector<unique_ptr<duckdb::DataChunk>> chunks;
@@ -48,6 +55,8 @@ struct RenderingQueryResult {
 		return metadata.ColumnCount();
 	}
 	bool TryConvertChunk();
+	//! Runs the result to completion without rendering it. Stops early on an interrupt
+	void Drain(ShellState &state);
 
 public:
 	RenderingResultIterator begin(); // NOLINT: match stl API
@@ -186,8 +195,8 @@ private:
 	// Warnings/errors that have already been printed, to avoid spamming the shell (loud logs only)
 	duckdb::unordered_set<uint64_t> printed_logs;
 
-	// Timestamp (micros) at storage construction (CLI launch), the zero point for elapsed time
-	int64_t start_micros = 0;
+	// Monotonic zero point for elapsed time in compact log lines.
+	duckdb::TimePoint start_time;
 
 	// lock to ensure thread safety of the printed_logs set and the elapsed-time state
 	mutable duckdb::mutex lock;

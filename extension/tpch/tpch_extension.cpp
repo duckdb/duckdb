@@ -47,7 +47,7 @@ static AsyncResult DBGenYield() {
 }
 
 static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionBindInput &input,
-                                          vector<LogicalType> &return_types, vector<string> &names) {
+                                          vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto result = make_uniq<DBGenFunctionData>();
 
 	// Set the current catalog and schema.
@@ -159,7 +159,7 @@ unique_ptr<GlobalTableFunctionState> TPCHInit(ClientContext &context, TableFunct
 }
 
 static duckdb::unique_ptr<FunctionData> TPCHQueryBind(ClientContext &context, TableFunctionBindInput &input,
-                                                      vector<LogicalType> &return_types, vector<string> &names) {
+                                                      vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("query_nr");
 	return_types.emplace_back(LogicalType::INTEGER);
 
@@ -193,7 +193,8 @@ static void TPCHQueryFunction(ClientContext &context, TableFunctionInput &data_p
 }
 
 static duckdb::unique_ptr<FunctionData> TPCHQueryAnswerBind(ClientContext &context, TableFunctionBindInput &input,
-                                                            vector<LogicalType> &return_types, vector<string> &names) {
+                                                            vector<LogicalType> &return_types,
+                                                            vector<Identifier> &names) {
 	names.emplace_back("query_nr");
 	return_types.emplace_back(LogicalType::INTEGER);
 
@@ -237,6 +238,9 @@ static void TPCHQueryAnswerFunction(ClientContext &context, TableFunctionInput &
 }
 
 static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &parameters) {
+	if (parameters.values[0].IsNull()) {
+		throw InvalidInputException("Cannot use NULL as argument for the TPC-H query number");
+	}
 	auto index = parameters.values[0].GetValue<int32_t>();
 	return tpch::DBGenWrapper::GetQuery(index);
 }

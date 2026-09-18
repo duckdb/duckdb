@@ -1,0 +1,29 @@
+# name: test/sql/storage/types/variant/variant_duplicate_keys_shredding.test
+# description: Test shredding VARIANT values converted from JSON objects with duplicate keys
+# group: [variant]
+
+require json
+
+load {TEST_DIR}/variant_duplicate_keys_shredding.db readwrite v1.5.0
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+CREATE TABLE variants AS
+SELECT '{"a":1,"a":2}'::JSON::VARIANT AS v;
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT DISTINCT vector_type(v) FROM variants;
+----
+SHREDDED_VECTOR
+
+query III
+SELECT (v).a, variant_keys(v), v::JSON FROM variants;
+----
+2	[a]	{"a":2}

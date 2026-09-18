@@ -5,8 +5,6 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
 
-#include "duckdb/main/stream_query_result.hpp"
-
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/main/query_result.hpp"
@@ -86,16 +84,9 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 		my_stream->last_error = result.GetErrorObject();
 		return -1;
 	}
-	if (result.type == QueryResultType::STREAM_RESULT) {
-		auto &stream_result = result.Cast<StreamQueryResult>();
-		if (!stream_result.IsOpen()) {
-			my_stream->last_error = ErrorData("Query Stream is closed");
-			return -1;
-		}
-	}
 	if (my_stream->column_types.empty()) {
-		my_stream->column_types = result.types;
-		my_stream->column_names = result.names;
+		my_stream->column_types = result.GetTypes();
+		my_stream->column_names = IdentifiersToStrings(result.GetNames());
 	}
 	try {
 		ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
@@ -118,17 +109,9 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 		my_stream->last_error = result.GetErrorObject();
 		return -1;
 	}
-	if (result.type == QueryResultType::STREAM_RESULT) {
-		auto &stream_result = result.Cast<StreamQueryResult>();
-		if (!stream_result.IsOpen()) {
-			// Nothing to output
-			out->release = nullptr;
-			return 0;
-		}
-	}
 	if (my_stream->column_types.empty()) {
-		my_stream->column_types = result.types;
-		my_stream->column_names = result.names;
+		my_stream->column_types = result.GetTypes();
+		my_stream->column_names = IdentifiersToStrings(result.GetNames());
 	}
 
 	try {
@@ -185,7 +168,7 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 	stream.get_last_error = ResultArrowArrayStreamWrapper::MyStreamGetLastError;
 
 	extension_types =
-	    ArrowTypeExtensionData::GetExtensionTypes(*result->client_properties.client_context, result->types);
+	    ArrowTypeExtensionData::GetExtensionTypes(*result->client_properties.client_context, result->GetTypes());
 }
 
 } // namespace duckdb

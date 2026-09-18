@@ -2,13 +2,13 @@
 # description: Fuzzer #61: statistics assert
 # group: [sqlsmith]
 
-# FIXME
-mode skip flaky
-
+# The reported statistics assertion is fixed. The query still fails, but now for a legitimate
+# data-dependent reason: it uses a VARCHAR column as a join condition, and test_all_types()'s
+# varchar value does not convert to BOOL. Kept as the regression test for fuzzer #61.
 statement ok
 create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();
 
-statement ok
+statement error
 SELECT NULL AS c3
 FROM
   (SELECT NULL AS c0,
@@ -50,3 +50,5 @@ WHERE EXISTS
                                                      (SELECT 'duck')
                                           END
                                  END))
+----
+<REGEX>:.*Could not convert string.*to BOOL.*

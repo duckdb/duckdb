@@ -5,6 +5,16 @@
 
 namespace duckdb {
 
+void ThrowNonFallibleFunctionError(const Identifier &name, std::exception &ex) {
+	ErrorData error(ex);
+	if (!Exception::IsExecutionError(error.Type())) {
+		throw;
+	}
+	throw InternalException("Scalar function \"%s\" threw an execution error, but the function is not marked as "
+	                        "fallible - the function must call SetFallible(). Error: %s",
+	                        name, error.RawMessage());
+}
+
 bool ScalarFunctionCallbacks::operator==(const ScalarFunctionCallbacks &rhs) const {
 	return bind == rhs.bind && init_local_state == rhs.init_local_state && statistics == rhs.statistics &&
 	       bind_lambda == rhs.bind_lambda && bind_expression == rhs.bind_expression &&
@@ -107,7 +117,14 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::Bind(ClientContext &context,
 	return unique_ptr_cast<Expression, BoundFunctionExpression>(std::move(expr));
 }
 
-BoundScalarFunction::BoundScalarFunction(const ScalarFunction &function) {
+BoundScalarFunction::BoundScalarFunction(const ScalarFunction &function)
+    // the function does not come from a function set - copy it into a definition of its own
+    : BoundScalarFunction(make_shared_ptr<ScalarFunction>(function)) {
+}
+
+BoundScalarFunction::BoundScalarFunction(shared_ptr<const ScalarFunction> function_p)
+    : definition(std::move(function_p)) {
+	auto &function = *definition;
 	name = function.name;
 	schema_name = function.GetSchemaName();
 	catalog_name = function.GetCatalogName();
@@ -123,6 +140,8 @@ BoundScalarFunction::BoundScalarFunction(const ScalarFunction &function) {
 	for (auto &param : function.GetSignature().GetParameters()) {
 		arguments.push_back(param.GetType());
 	}
+	logical_arguments = arguments;
+	logical_return_type = return_type;
 }
 
 bool BoundScalarFunction::operator==(const BoundScalarFunction &rhs) const {

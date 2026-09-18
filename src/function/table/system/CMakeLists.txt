@@ -8,7 +8,10 @@ add_library_unity(
   duckdb_coordinate_systems.cpp
   duckdb_databases.cpp
   duckdb_dependencies.cpp
+  duckdb_dialects.cpp
+  duckdb_grammar_extensions.cpp
   create_external_resource.cpp
+  duckdb_extension_repositories.cpp
   duckdb_extensions.cpp
   duckdb_external_file_cache.cpp
   external_resource_types.cpp
@@ -26,6 +29,7 @@ add_library_unity(
   duckdb_secrets.cpp
   duckdb_prepared_statements.cpp
   duckdb_which_secret.cpp
+  duckdb_secret_type_parameters.cpp
   duckdb_secret_types.cpp
   duckdb_sequences.cpp
   duckdb_triggers.cpp

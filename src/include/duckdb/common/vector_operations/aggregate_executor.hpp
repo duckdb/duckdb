@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
@@ -37,7 +38,7 @@ using SubFrames = vector<FrameBounds>;
 
 class AggregateExecutor {
 private:
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(aggregate_executor_flat)
 	template <class STATE_TYPE, class OP>
 	static inline void NullaryFlatLoop(STATE_TYPE **__restrict states, AggregateInputData &aggr_input_data,
 	                                   idx_t count) {
@@ -63,7 +64,7 @@ private:
 		}
 	}
 
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(aggregate_executor_flat)
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static inline void UnaryFlatLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                 STATE_TYPE **__restrict states, const ValidityMask &mask, idx_t count) {
@@ -105,7 +106,7 @@ private:
 	}
 #endif
 
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(aggregate_executor_sel_flags)
 	template <class STATE_TYPE, class INPUT_TYPE, class OP, bool HAS_ISEL, bool HAS_SSEL>
 #else
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
@@ -113,7 +114,7 @@ private:
 	static inline void UnaryScatterLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                    STATE_TYPE **__restrict states, const SelectionVector &isel,
 	                                    const SelectionVector &ssel, const ValidityMask &mask, idx_t count) {
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(aggregate_executor_sel_flags)
 		const auto HAS_ISEL = isel.IsSet();
 		const auto HAS_SSEL = ssel.IsSet();
 #endif
@@ -138,7 +139,7 @@ private:
 		}
 	}
 
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(aggregate_executor_flat)
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static inline void UnaryFlatUpdateLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                       STATE_TYPE *__restrict state, idx_t count, const ValidityMask &mask) {
@@ -311,16 +312,16 @@ public:
 		// COUNT(*) can add run lengths directly.
 		if (aggr_input_data.clustered) {
 			auto &cs = *aggr_input_data.clustered;
-			for (idx_t r = 0; r < cs.n_group_runs; r++) {
-				OP::template ConstantOperation<STATE_TYPE, OP>(*reinterpret_cast<STATE_TYPE *>(cs.group_runs[r].state),
-				                                               aggr_input_data, cs.group_runs[r].count);
+			for (auto &run : cs.runs()) {
+				OP::template ConstantOperation<STATE_TYPE, OP>(*reinterpret_cast<STATE_TYPE *>(run.state),
+				                                               aggr_input_data, run.count);
 			}
 			return;
 		}
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			OP::template ConstantOperation<STATE_TYPE, OP>(**sdata, aggr_input_data, count);
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(aggregate_executor_flat)
 		} else if (states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto sdata = FlatVector::GetDataMutable<STATE_TYPE *>(states);
 			NullaryFlatLoop<STATE_TYPE, OP>(sdata, aggr_input_data, count);
@@ -334,10 +335,9 @@ public:
 
 	template <class STATE_TYPE, class OP>
 	static void NullaryClustUpdate(AggregateInputData &aggr_input_data, const ClusteredAggr &clustered, idx_t count) {
-		for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-			OP::template ConstantOperation<STATE_TYPE, OP>(
-			    *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state), aggr_input_data,
-			    clustered.group_runs[r].count);
+		for (auto &run : clustered.runs()) {
+			OP::template ConstantOperation<STATE_TYPE, OP>(*reinterpret_cast<STATE_TYPE *>(run.state), aggr_input_data,
+			                                               run.count);
 		}
 	}
 
@@ -450,34 +450,34 @@ public:
 		idx_t pos = 0;
 		using local_type = clustered_local_state_t<OP, STATE_TYPE>;
 		if (cluster_iter) {
-			for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-				auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state);
+			for (auto &run : clustered.runs()) {
+				auto &state = *reinterpret_cast<STATE_TYPE *>(run.state);
 				local_type local;
 				OP::template InitializeClusteredLocal<STATE_TYPE>(local, state);
-				auto run_count = clustered.group_runs[r].count;
+				auto run_count = run.count;
 				auto saw_value = UpdateUnaryClusteredOpt<CHECK_VALIDITY, local_type, INPUT_TYPE, OP>(
 				    vals, local, run_count, validity, cluster_iter + pos);
 				OP::template FlushClusteredLocal<STATE_TYPE>(state, local, saw_value);
 				pos += run_count;
 			}
 		} else if (isel) {
-			for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-				auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state);
+			for (auto &run : clustered.runs()) {
+				auto &state = *reinterpret_cast<STATE_TYPE *>(run.state);
 				local_type local;
 				OP::template InitializeClusteredLocal<STATE_TYPE>(local, state);
-				auto run_count = clustered.group_runs[r].count;
+				auto run_count = run.count;
 				auto saw_value = UpdateUnaryClusteredOpt<CHECK_VALIDITY, local_type, INPUT_TYPE, OP>(
-				    vals, local, run_count, validity, clustered.group_runs[r].sel, isel);
+				    vals, local, run_count, validity, run.sel, isel);
 				OP::template FlushClusteredLocal<STATE_TYPE>(state, local, saw_value);
 			}
 		} else {
-			for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-				auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state);
+			for (auto &run : clustered.runs()) {
+				auto &state = *reinterpret_cast<STATE_TYPE *>(run.state);
 				local_type local;
 				OP::template InitializeClusteredLocal<STATE_TYPE>(local, state);
-				auto run_count = clustered.group_runs[r].count;
+				auto run_count = run.count;
 				auto saw_value = UpdateUnaryClusteredOpt<CHECK_VALIDITY, local_type, INPUT_TYPE, OP>(
-				    vals, local, run_count, validity, clustered.group_runs[r].sel);
+				    vals, local, run_count, validity, run.sel);
 				OP::template FlushClusteredLocal<STATE_TYPE>(state, local, saw_value);
 			}
 		}
@@ -501,8 +501,8 @@ public:
 	}
 
 	static inline bool IsDenseSingleRun(const ClusteredAggr &clustered, idx_t count) {
-		return clustered.n_group_runs == 1 && clustered.group_runs[0].count == count &&
-		       clustered.group_runs[0].sel == nullptr;
+		auto runs = clustered.runs();
+		return runs.size() == 1 && runs[0].count == count && runs[0].sel == nullptr;
 	}
 
 	template <bool SIMPLE_DICT, class STATE_TYPE, class INPUT_TYPE, class OP>
@@ -524,7 +524,8 @@ public:
 		auto vals = FlatVector::GetData<INPUT_TYPE>(input);
 		auto &validity = FlatVector::Validity(input);
 		if (IsDenseSingleRun(clustered, count)) {
-			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[0].state);
+			auto runs = clustered.runs();
+			auto &state = *reinterpret_cast<STATE_TYPE *>(runs[0].state);
 			using local_type = clustered_local_state_t<OP, STATE_TYPE>;
 			local_type local;
 			OP::template InitializeClusteredLocal<STATE_TYPE>(local, state);
@@ -543,11 +544,11 @@ public:
 		}
 		const auto &constant_input = *ConstantVector::GetData<INPUT_TYPE>(input);
 		using has_repeat_count = HasClusteredLocalRepeatCount<OP, INPUT_TYPE, local_type>;
-		for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state);
+		for (auto &run : clustered.runs()) {
+			auto &state = *reinterpret_cast<STATE_TYPE *>(run.state);
 			local_type local;
 			OP::template InitializeClusteredLocal<STATE_TYPE>(local, state);
-			auto run_count = clustered.group_runs[r].count;
+			auto run_count = run.count;
 			if (run_count != 0) {
 				UpdateUnaryClusteredLocalRepeat<local_type, INPUT_TYPE, OP>(local, constant_input, run_count,
 				                                                            has_repeat_count {});
@@ -588,10 +589,9 @@ public:
 		}
 		auto idata = ConstantVector::GetData<INPUT_TYPE>(input);
 		AggregateUnaryInput unary_input(aggr_input_data, ConstantVector::Validity(input));
-		for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state);
-			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(state, *idata, unary_input,
-			                                                           clustered.group_runs[r].count);
+		for (auto &run : clustered.runs()) {
+			auto &state = *reinterpret_cast<STATE_TYPE *>(run.state);
+			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(state, *idata, unary_input, run.count);
 		}
 	}
 
@@ -607,11 +607,10 @@ public:
 		input.ToUnifiedFormat(idata);
 		auto vals = UnifiedVectorFormat::GetData<INPUT_TYPE>(idata);
 		AggregateUnaryInput unary_input(aggr_input_data, idata.validity);
-		for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state);
-			OP::template ClusteredOp<INPUT_TYPE, STATE_TYPE, OP>(state, vals, unary_input, clustered.group_runs[r].sel,
-			                                                     *idata.sel, idata.validity, 0,
-			                                                     clustered.group_runs[r].count);
+		for (auto &run : clustered.runs()) {
+			auto &state = *reinterpret_cast<STATE_TYPE *>(run.state);
+			OP::template ClusteredOp<INPUT_TYPE, STATE_TYPE, OP>(state, vals, unary_input, run.sel, *idata.sel,
+			                                                     idata.validity, 0, run.count);
 		}
 	}
 
@@ -636,7 +635,7 @@ public:
 						}
 					}
 				}
-				auto *cluster_iter = clustered.ClusterIter(input, count);
+				auto *cluster_iter = clustered.ClusterIter(input);
 				if (cluster_iter) {
 					ExecuteUnaryClusteredDictOpt<true, STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count,
 					                                                               cluster_iter);
@@ -675,7 +674,7 @@ public:
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			AggregateUnaryInput input_data(aggr_input_data, ConstantVector::Validity(input));
 			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(**sdata, *idata, input_data, count);
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(aggregate_executor_flat)
 		} else if (input.GetVectorType() == VectorType::FLAT_VECTOR &&
 		           states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
@@ -687,7 +686,7 @@ public:
 			UnifiedVectorFormat idata, sdata;
 			input.ToUnifiedFormat(idata);
 			states.ToUnifiedFormat(sdata);
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(aggregate_executor_sel_flags)
 			UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP>(UnifiedVectorFormat::GetData<INPUT_TYPE>(idata),
 			                                             aggr_input_data, (STATE_TYPE **)sdata.data, *idata.sel,
 			                                             *sdata.sel, idata.validity, count);
@@ -731,7 +730,7 @@ public:
 			                                                           input_data, count);
 			break;
 		}
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(aggregate_executor_flat)
 		case VectorType::FLAT_VECTOR: {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
 			UnaryFlatUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, aggr_input_data, (STATE_TYPE *)state, count,
@@ -826,7 +825,7 @@ public:
 		}
 
 		STATE_TYPE &Get() {
-			return *reinterpret_cast<STATE_TYPE *>(&storage);
+			return *reinterpret_cast<STATE_TYPE *>(storage);
 		}
 
 		void Initialize() {
@@ -844,7 +843,7 @@ public:
 		}
 
 	private:
-		typename std::aligned_storage<sizeof(STATE_TYPE), alignof(STATE_TYPE)>::type storage;
+		alignas(STATE_TYPE) data_t storage[sizeof(STATE_TYPE)];
 		AggregateInputData &aggr_input_data;
 		bool initialized = false;
 	};

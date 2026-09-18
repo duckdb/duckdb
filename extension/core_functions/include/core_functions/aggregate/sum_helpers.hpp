@@ -73,6 +73,15 @@ static inline void KahanAddInternal(double input, double &summed, double &err) {
 }
 
 template <class T>
+static inline void CombineSumStateValue(T &target, const T &source) {
+	if constexpr (std::is_same<T, hugeint_t>::value) {
+		target = Hugeint::Add(target, source);
+	} else {
+		target += source;
+	}
+}
+
+template <class T>
 struct SumState {
 	using value_type = T;
 	using STATE_TYPE = OptionalStateType<T>;

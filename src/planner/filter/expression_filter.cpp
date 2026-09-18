@@ -1,17 +1,22 @@
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/function/arg_properties.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/function/cast/cast_statistics.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
+#include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/expression_barrier.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/filter/dynamic_filter.hpp"
@@ -30,8 +35,12 @@
 
 namespace duckdb {
 
-ExpressionFilter::ExpressionFilter(unique_ptr<Expression> expr_p)
-    : TableFilter(TableFilterType::EXPRESSION_FILTER), expr(std::move(expr_p)) {
+ExpressionFilter::ExpressionFilter(unique_ptr<Expression> expr_p) : ExpressionFilter(std::move(expr_p), {}) {
+}
+
+ExpressionFilter::ExpressionFilter(unique_ptr<Expression> expr_p, vector<ProjectionIndex> column_indexes_p)
+    : TableFilter(TableFilterType::EXPRESSION_FILTER), expr(std::move(expr_p)),
+      column_indexes(std::move(column_indexes_p)) {
 }
 
 const ExpressionFilter &ExpressionFilter::GetExpressionFilter(const TableFilter &filter, const char *context) {
@@ -201,12 +210,18 @@ static FilterPropagateResult CheckZonemapAgainstConstants(const BaseStatistics &
 	}
 }
 
-static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientContext> context_p,
-                                                            const Expression &expr, const BaseStatistics &stats,
-                                                            vector<unique_ptr<BaseStatistics>> &owned_stats) {
+static optional_ptr<const BaseStatistics> TryGetExpressionStats(optional_ptr<ClientContext> context_p,
+                                                                const Expression &expr,
+                                                                array_ptr<const BaseStatistics> input_stats,
+                                                                vector<unique_ptr<BaseStatistics>> &owned_stats) {
 	switch (expr.GetExpressionClass()) {
-	case ExpressionClass::BOUND_REF:
-		return &stats;
+	case ExpressionClass::BOUND_REF: {
+		auto index = expr.Cast<BoundReferenceExpression>().Index();
+		if (index >= input_stats.size()) {
+			return nullptr;
+		}
+		return &input_stats[index];
+	}
 	case ExpressionClass::BOUND_CONSTANT: {
 		auto &constant = expr.Cast<BoundConstantExpression>().GetValue();
 		owned_stats.push_back(BaseStatistics::FromConstant(constant).ToUnique());
@@ -215,19 +230,21 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientC
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &func = expr.Cast<BoundFunctionExpression>();
 
+		if (ExpressionBarrier::IsBarrier(func)) {
+			// the barrier returns its argument unchanged
+			return TryGetExpressionStats(context_p, *func.GetChildren()[0], input_stats, owned_stats);
+		}
 		if (BoundCastExpression::IsCast(func)) {
 			auto &cast_child = BoundCastExpression::Child(func);
-			auto child_stats = TryGetFilterStats(context_p, cast_child, stats, owned_stats);
+			auto child_stats = TryGetExpressionStats(context_p, cast_child, input_stats, owned_stats);
 			if (!child_stats) {
 				return nullptr;
 			}
-			auto cast_stats =
-			    StatisticsPropagator::TryPropagateCast(*child_stats, cast_child.GetReturnType(), func.GetReturnType());
+			auto expr_copy = func.Copy();
+			auto &func_copy = expr_copy->Cast<BoundFunctionExpression>();
+			auto cast_stats = BoundCastExpression::PropagateStatistics(func_copy, *child_stats, context_p);
 			if (!cast_stats) {
 				return nullptr;
-			}
-			if (BoundCastExpression::IsTryCast(func)) {
-				cast_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 			}
 			owned_stats.push_back(std::move(cast_stats));
 			return owned_stats.back().get();
@@ -237,7 +254,7 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientC
 			// Since statistics callback need context, so this path is the fallback
 			idx_t child_idx;
 			if (TryGetStructExtractChildIndex(func, child_idx) && !func.GetChildren().empty()) {
-				auto child_stats = TryGetFilterStats(context_p, *func.GetChildren()[0], stats, owned_stats);
+				auto child_stats = TryGetExpressionStats(context_p, *func.GetChildren()[0], input_stats, owned_stats);
 				if (!child_stats || child_stats->GetType().id() != LogicalTypeId::STRUCT) {
 					return nullptr;
 				}
@@ -251,13 +268,18 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientC
 			vector<BaseStatistics> child_stats;
 			child_stats.reserve(func.GetChildren().size());
 			for (auto &child_expr : func.GetChildren()) {
-				auto child_stat = TryGetFilterStats(context_p, *child_expr, stats, owned_stats);
+				auto child_stat = TryGetExpressionStats(context_p, *child_expr, input_stats, owned_stats);
 				if (!child_stat) {
 					return nullptr;
 				}
 				child_stats.push_back(child_stat->Copy());
 			}
 
+			auto constant_stats = StatisticsPropagator::PropagateConstantInputs(*context_p, func, child_stats);
+			if (constant_stats) {
+				owned_stats.push_back(std::move(constant_stats));
+				return owned_stats.back().get();
+			}
 			// Use copy to avoid expression rewritten
 			auto expr_copy = func.Copy();
 			auto &func_copy = expr_copy->Cast<BoundFunctionExpression>();
@@ -269,15 +291,18 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientC
 		// No custom callback: fall back to the declared monotonicity (ArgProperties) and derive output
 		// bounds by evaluating the function at the corners of each argument's range. This lets a
 		// f(col) OP const filter prune row groups via the zonemap of the base column.
-		if (func.Function().HasArgProperties()) {
+		if (func.Function().GetStability() == FunctionStability::CONSISTENT) {
 			vector<BaseStatistics> child_stats;
 			child_stats.reserve(func.GetChildren().size());
 			for (auto &child_expr : func.GetChildren()) {
-				auto child_stat = TryGetFilterStats(context_p, *child_expr, stats, owned_stats);
+				auto child_stat = TryGetExpressionStats(context_p, *child_expr, input_stats, owned_stats);
 				child_stats.push_back(child_stat ? child_stat->Copy()
 				                                 : BaseStatistics::CreateUnknown(child_expr->GetReturnType()));
 			}
-			auto derived = StatisticsPropagator::PropagateMonotoneBounds(*context_p, func, child_stats);
+			auto derived = StatisticsPropagator::PropagateConstantInputs(*context_p, func, child_stats);
+			if (!derived) {
+				derived = StatisticsPropagator::PropagateMonotoneBounds(*context_p, func, child_stats);
+			}
 			if (derived) {
 				owned_stats.push_back(std::move(derived));
 				return owned_stats.back().get();
@@ -286,9 +311,153 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientC
 
 		return nullptr;
 	}
+	case ExpressionClass::BOUND_CASE: {
+		// Output range is the union of the ELSE and every THEN branch.
+		auto &case_expr = expr.Cast<BoundCaseExpression>();
+		auto else_stats = TryGetExpressionStats(context_p, case_expr.Else(), input_stats, owned_stats);
+		if (!else_stats) {
+			return nullptr;
+		}
+		auto merged = else_stats->ToUnique();
+		for (auto &check : case_expr.CaseChecks()) {
+			auto then_stats = TryGetExpressionStats(context_p, *check.then_expr, input_stats, owned_stats);
+			if (!then_stats) {
+				return nullptr;
+			}
+			merged->Merge(*then_stats);
+		}
+		owned_stats.push_back(std::move(merged));
+		return owned_stats.back().get();
+	}
+	case ExpressionClass::BOUND_OPERATOR: {
+		auto &op = expr.Cast<BoundOperatorExpression>();
+		if (op.GetExpressionType() != ExpressionType::OPERATOR_COALESCE || op.GetChildren().empty()) {
+			return nullptr;
+		}
+		// COALESCE returns the first non-NULL child: merge the stats of every reachable child,
+		// stopping at the first child that can never be NULL since later children are unreachable
+		unique_ptr<BaseStatistics> merged;
+		bool last_child_can_be_null = true;
+		for (auto &child : op.GetChildren()) {
+			auto child_stats = TryGetExpressionStats(context_p, *child, input_stats, owned_stats);
+			if (!child_stats) {
+				return nullptr;
+			}
+			if (!merged) {
+				merged = child_stats->ToUnique();
+			} else {
+				merged->Merge(*child_stats);
+			}
+			last_child_can_be_null = child_stats->CanHaveNull();
+			if (!last_child_can_be_null) {
+				break;
+			}
+		}
+		if (!last_child_can_be_null) {
+			// the result is NULL only if every considered child is NULL
+			merged->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+		}
+		owned_stats.push_back(std::move(merged));
+		return owned_stats.back().get();
+	}
 	default:
 		return nullptr;
 	}
+}
+
+static bool CanDeriveExpressionStatistics(const Expression &expr) {
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::BOUND_COLUMN_REF:
+	case ExpressionClass::BOUND_REF:
+		return true;
+	case ExpressionClass::BOUND_CONSTANT:
+		return !expr.Cast<BoundConstantExpression>().GetValue().IsNull();
+	case ExpressionClass::BOUND_FUNCTION: {
+		const auto &func = expr.Cast<BoundFunctionExpression>();
+		if (BoundCastExpression::IsCast(func)) {
+			return BoundCastExpression::GetBoundCast(func).HasStatisticsCallback() &&
+			       CanDeriveExpressionStatistics(BoundCastExpression::Child(func));
+		}
+		if (func.Function().HasStatisticsCallback()) {
+			for (const auto &child : func.GetChildren()) {
+				if (!CanDeriveExpressionStatistics(*child)) {
+					return false;
+				}
+			}
+			return true;
+		}
+		if (!func.Function().HasArgProperties() || func.GetChildren().empty() ||
+		    BaseStatistics::GetStatsType(func.GetReturnType()) != StatisticsType::NUMERIC_STATS ||
+		    func.GetReturnType().InternalType() == PhysicalType::BOOL) {
+			return false;
+		}
+		for (idx_t child_idx = 0; child_idx < func.GetChildren().size(); ++child_idx) {
+			const auto &child = *func.GetChildren()[child_idx];
+			if (child.IsFoldable()) {
+				continue;
+			}
+			if (!IsKnownMonotonic(func.Function().GetArgProperties(child_idx).monotonicity) ||
+			    !CanDeriveExpressionStatistics(child)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	default:
+		return false;
+	}
+}
+
+static bool CanPropagateExpressionStatisticsInternal(const Expression &expr) {
+	if (BoundComparisonExpression::IsComparison(expr)) {
+		switch (expr.GetExpressionType()) {
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOTEQUAL:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+			break;
+		default:
+			return false;
+		}
+		const auto &comparison = expr.Cast<BoundFunctionExpression>();
+		return CanDeriveExpressionStatistics(BoundComparisonExpression::Left(comparison)) &&
+		       CanDeriveExpressionStatistics(BoundComparisonExpression::Right(comparison));
+	}
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
+		return false;
+	}
+	const auto &conjunction = expr.Cast<BoundConjunctionExpression>();
+	if ((conjunction.GetExpressionType() != ExpressionType::CONJUNCTION_AND &&
+	     conjunction.GetExpressionType() != ExpressionType::CONJUNCTION_OR) ||
+	    conjunction.GetChildren().empty()) {
+		return false;
+	}
+	for (const auto &child : conjunction.GetChildren()) {
+		if (!CanPropagateExpressionStatisticsInternal(*child)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool ExpressionFilter::CanPropagateExpressionStatistics(const Expression &expr) {
+	return expr.IsConsistent() && !expr.CanThrow() && CanPropagateExpressionStatisticsInternal(expr);
+}
+
+static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientContext> context_p,
+                                                            const Expression &expr,
+                                                            array_ptr<const BaseStatistics> input_stats,
+                                                            vector<unique_ptr<BaseStatistics>> &owned_stats) {
+	return TryGetExpressionStats(context_p, expr, input_stats, owned_stats);
+}
+
+unique_ptr<BaseStatistics> ExpressionFilter::TryGetExpressionStatistics(ClientContext &context, const Expression &expr,
+                                                                        array_ptr<const BaseStatistics> input_stats) {
+	vector<unique_ptr<BaseStatistics>> owned_stats;
+	auto result = TryGetExpressionStats(&context, expr, input_stats, owned_stats);
+	return result ? result->ToUnique() : nullptr;
 }
 
 static bool TryGetVariantComparisonStatsType(const LogicalType &typed_type, const LogicalType &constant_type,
@@ -336,14 +505,16 @@ TryPrepareVariantComparisonStats(const BaseStatistics &stats, Value &constant,
 	if (!TryGetVariantComparisonStatsType(typed_type, constant.type(), comparison_type)) {
 		return nullptr;
 	}
-	if (!constant.DefaultTryCastAs(comparison_type)) {
+	auto cast_constant = constant.DefaultTryCastAs(comparison_type);
+	if (!cast_constant) {
 		return nullptr;
 	}
+	constant = std::move(*cast_constant);
 	if (typed_type == comparison_type) {
 		return &typed_stats;
 	}
 
-	auto cast_stats = StatisticsPropagator::TryPropagateCast(typed_stats, typed_type, comparison_type);
+	auto cast_stats = CastStatistics::TryPropagate(typed_stats, typed_type, comparison_type);
 	if (!cast_stats) {
 		return nullptr;
 	}
@@ -353,7 +524,7 @@ TryPrepareVariantComparisonStats(const BaseStatistics &stats, Value &constant,
 
 static FilterPropagateResult CheckComparisonStatistics(optional_ptr<ClientContext> context_p,
                                                        const BoundFunctionExpression &comp_expr,
-                                                       const BaseStatistics &stats) {
+                                                       array_ptr<const BaseStatistics> input_stats) {
 	vector<unique_ptr<BaseStatistics>> owned_stats;
 	optional_ptr<const BaseStatistics> filter_stats;
 	optional_ptr<const BoundConstantExpression> constant_expr;
@@ -361,14 +532,19 @@ static FilterPropagateResult CheckComparisonStatistics(optional_ptr<ClientContex
 	auto &left = BoundComparisonExpression::Left(comp_expr);
 	auto &right = BoundComparisonExpression::Right(comp_expr);
 	if (right.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		filter_stats = TryGetFilterStats(context_p, left, stats, owned_stats);
+		filter_stats = TryGetFilterStats(context_p, left, input_stats, owned_stats);
 		constant_expr = &right.Cast<BoundConstantExpression>();
 	} else if (left.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		filter_stats = TryGetFilterStats(context_p, right, stats, owned_stats);
+		filter_stats = TryGetFilterStats(context_p, right, input_stats, owned_stats);
 		constant_expr = &left.Cast<BoundConstantExpression>();
 		comparison_type = FlipComparisonExpression(comparison_type);
 	} else {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		auto left_stats = TryGetFilterStats(context_p, left, input_stats, owned_stats);
+		auto right_stats = TryGetFilterStats(context_p, right, input_stats, owned_stats);
+		if (!left_stats || !right_stats) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return StatisticsPropagator::PropagateComparison(*left_stats, *right_stats, comparison_type);
 	}
 	if (!filter_stats || !constant_expr) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
@@ -410,7 +586,7 @@ static FilterPropagateResult CheckComparisonStatistics(optional_ptr<ClientContex
 //! CheckComparisonStatistics. `input` may itself be a monotone function whose stats are derived.
 static FilterPropagateResult CheckBetweenStatistics(optional_ptr<ClientContext> context_p,
                                                     const BoundFunctionExpression &between,
-                                                    const BaseStatistics &stats) {
+                                                    array_ptr<const BaseStatistics> input_stats) {
 	auto &lower = BoundBetweenExpression::LowerBound(between);
 	auto &upper = BoundBetweenExpression::UpperBound(between);
 	if (lower.GetExpressionType() != ExpressionType::VALUE_CONSTANT ||
@@ -423,18 +599,18 @@ static FilterPropagateResult CheckBetweenStatistics(optional_ptr<ClientContext> 
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	vector<unique_ptr<BaseStatistics>> owned_stats;
-	auto input_stats = TryGetFilterStats(context_p, BoundBetweenExpression::Input(between), stats, owned_stats);
-	if (!input_stats || input_stats->GetType().id() == LogicalTypeId::VARIANT) {
+	auto between_stats = TryGetFilterStats(context_p, BoundBetweenExpression::Input(between), input_stats, owned_stats);
+	if (!between_stats || between_stats->GetType().id() == LogicalTypeId::VARIANT) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	if (!input_stats->CanHaveNoNull()) {
+	if (!between_stats->CanHaveNoNull()) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
-	auto lower_res = CheckZonemapAgainstConstants(*input_stats, BoundBetweenExpression::LowerComparisonType(between),
+	auto lower_res = CheckZonemapAgainstConstants(*between_stats, BoundBetweenExpression::LowerComparisonType(between),
 	                                              array_ptr<const Value>(&lower_val, 1));
-	auto upper_res = CheckZonemapAgainstConstants(*input_stats, BoundBetweenExpression::UpperComparisonType(between),
+	auto upper_res = CheckZonemapAgainstConstants(*between_stats, BoundBetweenExpression::UpperComparisonType(between),
 	                                              array_ptr<const Value>(&upper_val, 1));
-	if (input_stats->CanHaveNull()) {
+	if (between_stats->CanHaveNull()) {
 		if (lower_res == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
 		    upper_res == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
@@ -452,17 +628,52 @@ static FilterPropagateResult CheckBetweenStatistics(optional_ptr<ClientContext> 
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
+static FilterPropagateResult CheckBoolStatistics(const BaseStatistics &stats, bool negated) {
+	if (stats.GetType().id() != LogicalTypeId::BOOLEAN) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	if (!stats.CanHaveNoNull()) {
+		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
+	}
+	if (!NumericStats::HasMinMax(stats)) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	const auto min_v = NumericStats::Min(stats).GetValue<bool>();
+	const auto max_v = NumericStats::Max(stats).GetValue<bool>();
+	if (min_v != max_v) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	const bool value = negated ? !min_v : min_v;
+	if (!value) {
+		return stats.CanHaveNull() ? FilterPropagateResult::FILTER_FALSE_OR_NULL
+		                           : FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	return stats.CanHaveNull() ? FilterPropagateResult::FILTER_TRUE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_TRUE;
+}
+
 static FilterPropagateResult CheckFunctionStatistics(optional_ptr<ClientContext> context_p,
                                                      const BoundFunctionExpression &func_expr,
-                                                     const BaseStatistics &stats) {
+                                                     array_ptr<const BaseStatistics> input_stats) {
+	if (ExpressionBarrier::IsBarrier(func_expr)) {
+		// pruning never evaluates the expression, and only ever removes rows - the barrier can be seen through
+		return ExpressionFilter::CheckExpressionStatistics(context_p, *func_expr.GetChildren()[0], input_stats);
+	}
 	if (func_expr.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
-		return CheckBetweenStatistics(context_p, func_expr, stats);
+		return CheckBetweenStatistics(context_p, func_expr, input_stats);
 	}
 	if (BoundComparisonExpression::IsComparison(func_expr.GetExpressionType())) {
-		return CheckComparisonStatistics(context_p, func_expr, stats);
+		return CheckComparisonStatistics(context_p, func_expr, input_stats);
 	}
 	if (!func_expr.Function().HasFilterPruneCallback()) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		if (func_expr.GetReturnType().id() != LogicalTypeId::BOOLEAN) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		vector<unique_ptr<BaseStatistics>> owned_stats;
+		const auto function_stats = TryGetFilterStats(context_p, func_expr, input_stats, owned_stats);
+		if (!function_stats) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return CheckBoolStatistics(*function_stats, /*negated=*/false);
 	}
 	// Derive the statistics of each argument. This lets a callback prune regardless of which argument is the column and
 	// which is the constant (e.g. `foo(col, const)` vs `foo(const, col`).
@@ -471,7 +682,7 @@ static FilterPropagateResult CheckFunctionStatistics(optional_ptr<ClientContext>
 	vector<optional_ptr<const BaseStatistics>> child_stats;
 	child_stats.reserve(func_expr.GetChildren().size());
 	for (auto &child : func_expr.GetChildren()) {
-		child_stats.push_back(TryGetFilterStats(context_p, *child, stats, owned_stats));
+		child_stats.push_back(TryGetFilterStats(context_p, *child, input_stats, owned_stats));
 	}
 	FunctionStatisticsPruneInput input(func_expr, func_expr.BindInfo().get(), child_stats);
 	return func_expr.Function().GetFilterPruneCallback()(input);
@@ -479,12 +690,13 @@ static FilterPropagateResult CheckFunctionStatistics(optional_ptr<ClientContext>
 
 static FilterPropagateResult CheckNullOperatorStatistics(optional_ptr<ClientContext> context_p,
                                                          const BoundOperatorExpression &op_expr,
-                                                         const BaseStatistics &stats, ExpressionType operator_type) {
+                                                         array_ptr<const BaseStatistics> input_stats,
+                                                         ExpressionType operator_type) {
 	if (op_expr.GetChildren().empty()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	vector<unique_ptr<BaseStatistics>> owned_stats;
-	auto filter_stats = TryGetFilterStats(context_p, *op_expr.GetChildren()[0], stats, owned_stats);
+	auto filter_stats = TryGetFilterStats(context_p, *op_expr.GetChildren()[0], input_stats, owned_stats);
 	if (!filter_stats) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
@@ -508,12 +720,12 @@ static FilterPropagateResult CheckNullOperatorStatistics(optional_ptr<ClientCont
 
 static FilterPropagateResult CheckInOperatorStatistics(optional_ptr<ClientContext> context_p,
                                                        const BoundOperatorExpression &op_expr,
-                                                       const BaseStatistics &stats) {
+                                                       array_ptr<const BaseStatistics> input_stats) {
 	if (op_expr.GetChildren().size() <= 1) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	vector<unique_ptr<BaseStatistics>> owned_stats;
-	auto filter_stats = TryGetFilterStats(context_p, *op_expr.GetChildren()[0], stats, owned_stats);
+	auto filter_stats = TryGetFilterStats(context_p, *op_expr.GetChildren()[0], input_stats, owned_stats);
 	if (!filter_stats) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
@@ -534,22 +746,57 @@ static FilterPropagateResult CheckInOperatorStatistics(optional_ptr<ClientContex
 	if (!filter_stats->CanHaveNoNull()) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
-	auto result = CheckZonemapAgainstConstants(*filter_stats, ExpressionType::COMPARE_EQUAL,
-	                                           array_ptr<const Value>(values.data(), values.size()));
+	array_ptr<const Value> constants(values.data(), values.size());
+	auto result = CheckZonemapAgainstConstants(*filter_stats, ExpressionType::COMPARE_EQUAL, constants);
+	if (result == FilterPropagateResult::NO_PRUNING_POSSIBLE &&
+	    NumericStats::ConstantsCoverRange(*filter_stats, constants)) {
+		// an integral column whose whole [min, max] range is listed always matches
+		result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
+	}
 	if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && filter_stats->CanHaveNull()) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		return FilterPropagateResult::FILTER_TRUE_OR_NULL;
 	}
 	return result;
 }
 
-static FilterPropagateResult CheckNotOperatorStatistics(const BoundOperatorExpression &op_expr) {
-	if (op_expr.GetChildren().size() != 1 ||
-	    op_expr.GetChildren()[0]->GetExpressionType() != ExpressionType::COMPARE_IN) {
+static FilterPropagateResult CheckBoolRefStatistics(const Expression &expr, array_ptr<const BaseStatistics> input_stats,
+                                                    bool negated) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_REF ||
+	    expr.GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	auto &children = op_expr.GetChildren()[0]->Cast<BoundOperatorExpression>().GetChildren();
-	if (children.size() == 2 && children[1]->GetExpressionType() == ExpressionType::VALUE_CONSTANT &&
-	    children[1]->Cast<BoundConstantExpression>().GetValue().IsNull()) {
+	auto index = expr.Cast<BoundReferenceExpression>().Index();
+	if (index >= input_stats.size()) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	return CheckBoolStatistics(input_stats[index], negated);
+}
+
+static FilterPropagateResult CheckNotOperatorStatistics(optional_ptr<ClientContext> context_p,
+                                                        const BoundOperatorExpression &op_expr,
+                                                        array_ptr<const BaseStatistics> input_stats) {
+	if (op_expr.GetChildren().size() != 1) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	auto &child = *op_expr.GetChildren()[0];
+	if (child.GetExpressionType() == ExpressionType::COMPARE_IN) {
+		auto &children = child.Cast<BoundOperatorExpression>().GetChildren();
+		if (children.size() == 2 && children[1]->GetExpressionType() == ExpressionType::VALUE_CONSTANT &&
+		    children[1]->Cast<BoundConstantExpression>().GetValue().IsNull()) {
+			return FilterPropagateResult::FILTER_FALSE_OR_NULL;
+		}
+	}
+	auto bool_ref = CheckBoolRefStatistics(child, input_stats, true);
+	if (bool_ref != FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+		return bool_ref;
+	}
+	// a child matching every row makes NOT match no row - the converse does not hold, since a child
+	// that matches no row may be NULL rather than false, and NOT NULL does not match either
+	auto child_result = ExpressionFilter::CheckExpressionStatistics(context_p, child, input_stats);
+	if (child_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	if (child_result == FilterPropagateResult::FILTER_TRUE_OR_NULL) {
 		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
 	}
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
@@ -557,15 +804,15 @@ static FilterPropagateResult CheckNotOperatorStatistics(const BoundOperatorExpre
 
 static FilterPropagateResult CheckOperatorStatistics(optional_ptr<ClientContext> context_p,
                                                      const BoundOperatorExpression &op_expr,
-                                                     const BaseStatistics &stats) {
+                                                     array_ptr<const BaseStatistics> input_stats) {
 	switch (op_expr.GetExpressionType()) {
 	case ExpressionType::OPERATOR_IS_NULL:
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
-		return CheckNullOperatorStatistics(context_p, op_expr, stats, op_expr.GetExpressionType());
+		return CheckNullOperatorStatistics(context_p, op_expr, input_stats, op_expr.GetExpressionType());
 	case ExpressionType::COMPARE_IN:
-		return CheckInOperatorStatistics(context_p, op_expr, stats);
+		return CheckInOperatorStatistics(context_p, op_expr, input_stats);
 	case ExpressionType::OPERATOR_NOT:
-		return CheckNotOperatorStatistics(op_expr);
+		return CheckNotOperatorStatistics(context_p, op_expr, input_stats);
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
@@ -573,12 +820,12 @@ static FilterPropagateResult CheckOperatorStatistics(optional_ptr<ClientContext>
 
 static FilterPropagateResult CheckConjunctionStatistics(optional_ptr<ClientContext> context_p,
                                                         const BoundConjunctionExpression &conj,
-                                                        const BaseStatistics &stats) {
+                                                        array_ptr<const BaseStatistics> input_stats) {
 	switch (conj.GetExpressionType()) {
 	case ExpressionType::CONJUNCTION_AND: {
 		auto result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		for (auto &child : conj.GetChildren()) {
-			auto prune_result = ExpressionFilter::CheckExpressionStatistics(context_p, *child, stats);
+			auto prune_result = ExpressionFilter::CheckExpressionStatistics(context_p, *child, input_stats);
 			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 				return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 			}
@@ -591,36 +838,57 @@ static FilterPropagateResult CheckConjunctionStatistics(optional_ptr<ClientConte
 		}
 		return result;
 	}
-	case ExpressionType::CONJUNCTION_OR:
+	case ExpressionType::CONJUNCTION_OR: {
 		D_ASSERT(!conj.GetChildren().empty());
+		auto result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		for (auto &child : conj.GetChildren()) {
-			auto prune_result = ExpressionFilter::CheckExpressionStatistics(context_p, *child, stats);
+			auto prune_result = ExpressionFilter::CheckExpressionStatistics(context_p, *child, input_stats);
 			if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 				return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 			}
 			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 				return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 			}
+			if (prune_result == FilterPropagateResult::FILTER_TRUE_OR_NULL) {
+				result = FilterPropagateResult::FILTER_TRUE_OR_NULL;
+			} else if (prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL &&
+			           result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+				result = FilterPropagateResult::FILTER_FALSE_OR_NULL;
+			}
 		}
-		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		return result;
+	}
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 }
 
 FilterPropagateResult ExpressionFilter::CheckExpressionStatistics(const Expression &expr, const BaseStatistics &stats) {
-	return CheckExpressionStatistics(nullptr, expr, stats);
+	return CheckExpressionStatistics(nullptr, expr, array_ptr<const BaseStatistics>(stats));
 }
 
 FilterPropagateResult ExpressionFilter::CheckExpressionStatistics(optional_ptr<ClientContext> context_p,
                                                                   const Expression &expr, const BaseStatistics &stats) {
+	return CheckExpressionStatistics(context_p, expr, array_ptr<const BaseStatistics>(stats));
+}
+
+FilterPropagateResult ExpressionFilter::CheckExpressionStatistics(const Expression &expr,
+                                                                  array_ptr<const BaseStatistics> input_stats) {
+	return CheckExpressionStatistics(nullptr, expr, input_stats);
+}
+
+FilterPropagateResult ExpressionFilter::CheckExpressionStatistics(optional_ptr<ClientContext> context_p,
+                                                                  const Expression &expr,
+                                                                  array_ptr<const BaseStatistics> input_stats) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION:
-		return CheckFunctionStatistics(context_p, expr.Cast<BoundFunctionExpression>(), stats);
+		return CheckFunctionStatistics(context_p, expr.Cast<BoundFunctionExpression>(), input_stats);
 	case ExpressionClass::BOUND_OPERATOR:
-		return CheckOperatorStatistics(context_p, expr.Cast<BoundOperatorExpression>(), stats);
+		return CheckOperatorStatistics(context_p, expr.Cast<BoundOperatorExpression>(), input_stats);
 	case ExpressionClass::BOUND_CONJUNCTION:
-		return CheckConjunctionStatistics(context_p, expr.Cast<BoundConjunctionExpression>(), stats);
+		return CheckConjunctionStatistics(context_p, expr.Cast<BoundConjunctionExpression>(), input_stats);
+	case ExpressionClass::BOUND_REF:
+		return CheckBoolRefStatistics(expr, input_stats, false);
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
@@ -708,7 +976,7 @@ shared_ptr<DynamicFilterData> ExpressionFilter::GetRootOptionalDynamicFilterData
 unique_ptr<ExpressionFilter> ExpressionFilter::FromTableFilter(const TableFilter &filter, const LogicalType &col_type) {
 	if (filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
-		return make_uniq<ExpressionFilter>(expr_filter.expr->Copy());
+		return expr_filter.Copy();
 	}
 	if (col_type == LogicalType::ANY) {
 		throw InternalException("ExpressionFilter::FromTableFilter requires the actual column type");
@@ -801,6 +1069,7 @@ void ExpressionFilter::ReplaceExpressionRecursive(unique_ptr<Expression> &expr, 
 }
 
 unique_ptr<Expression> ExpressionFilter::ToExpression(const Expression &column) const {
+	D_ASSERT(column_indexes.empty());
 	auto expr_copy = expr->Copy();
 	ReplaceExpressionRecursive(expr_copy, column);
 	return expr_copy;
@@ -808,11 +1077,11 @@ unique_ptr<Expression> ExpressionFilter::ToExpression(const Expression &column) 
 
 bool ExpressionFilter::Equals(const ExpressionFilter &other_p) const {
 	auto &other = other_p.Cast<ExpressionFilter>();
-	return other.expr->Equals(*expr);
+	return column_indexes == other.column_indexes && other.expr->Equals(*expr);
 }
 
 unique_ptr<ExpressionFilter> ExpressionFilter::Copy() const {
-	return make_uniq<ExpressionFilter>(expr->Copy());
+	return make_uniq<ExpressionFilter>(expr->Copy(), column_indexes);
 }
 
 } // namespace duckdb

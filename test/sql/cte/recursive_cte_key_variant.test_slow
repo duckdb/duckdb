@@ -297,7 +297,7 @@ SELECT * FROM tbl
 query II
 WITH RECURSIVE tbl(a, b) USING KEY (b) AS (
 	SELECT 1, 1
-		UNION
+		UNION ALL
 	(WITH RECURSIVE tbl2(a, b) AS (
 		SELECT a, b+1 FROM tbl WHERE b < 5
 			UNION ALL

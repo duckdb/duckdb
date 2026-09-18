@@ -6,12 +6,11 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "icu-helpers.hpp"
-#include "unicode/ucal.h"
 
 namespace duckdb {
 
 ICUDateFunc::BindData::BindData(const BindData &other)
-    : tz_setting(other.tz_setting), cal_setting(other.cal_setting), calendar(other.calendar->clone()) {
+    : tz_setting(other.tz_setting), cal_setting(other.cal_setting), calendar(other.calendar->Copy()) {
 }
 
 ICUDateFunc::BindData::BindData(const string &tz_setting_p, const string &cal_setting_p)
@@ -36,30 +35,18 @@ ICUDateFunc::BindData::BindData(ClientContext &context) {
 }
 
 void ICUDateFunc::BindData::InitCalendar() {
-	auto tz = icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_setting)));
-
-	string cal_id("@calendar=");
-	cal_id += cal_setting;
-
-	icu::Locale locale(cal_id.c_str());
-
-	UErrorCode success = U_ZERO_ERROR;
-	calendar.reset(icu::Calendar::createInstance(tz, locale, success));
-	if (U_FAILURE(success)) {
-		throw InternalException("Unable to create ICU calendar.");
+	//	Postgres always assumes times are given in the proleptic Gregorian calendar,
+	//	which is what our Gregorian calendar implements.
+	auto tz = TimeZone::TryCreate(tz_setting);
+	calendar = Calendar::TryCreate(cal_setting, tz ? std::move(tz) : TimeZone::TryCreate("UTC"));
+	if (!calendar) {
+		throw InternalException("Unable to create calendar.");
 	}
-
-	//	Postgres always assumes times are given in the proleptic Gregorian calendar.
-	//	ICU defaults to the Gregorian change in 1582, so we reset the change to the minimum date
-	//	so that all dates are proleptic Gregorian.
-	//	The only error here is if we have a non-Gregorian calendar,
-	//	and we just ignore that and hope for the best...
-	ucal_setGregorianChange((UCalendar *)calendar.get(), U_DATE_MIN, &success); // NOLINT
 }
 
 bool ICUDateFunc::BindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<const BindData>();
-	return calendar->isEquivalentTo(*other.calendar);
+	return calendar->Equals(*other.calendar);
 }
 
 unique_ptr<FunctionData> ICUDateFunc::BindData::Copy() const {
@@ -70,43 +57,86 @@ unique_ptr<FunctionData> ICUDateFunc::Bind(BindScalarFunctionInput &input) {
 	return make_uniq<BindData>(input.GetClientContext());
 }
 
-bool ICUDateFunc::TrySetTimeZone(icu::Calendar *calendar, const string_t &tz_id) {
-	string tz_str = tz_id.GetString();
-	auto tz = ICUHelpers::TryGetTimeZone(tz_str);
-	if (!tz) {
+const ICUDateFunc::CalendarCacheState::CacheEntry &ICUDateFunc::CalendarCacheState::GetEntry(const string_t &tz_id) {
+	if (last && last->first.size() == tz_id.GetSize() &&
+	    memcmp(last->first.data(), tz_id.GetData(), tz_id.GetSize()) == 0) {
+		return last->second;
+	}
+	auto tz_str = tz_id.GetString();
+	auto entry = cache.find(tz_str);
+	if (entry == cache.end()) {
+		CacheEntry new_entry;
+		//	GetTimeZone may normalize the name - keep the original as the cache key
+		auto resolved = tz_str;
+		new_entry.tz = ICUHelpers::GetTimeZone(resolved, &new_entry.error);
+		if (new_entry.tz) {
+			new_entry.calendar = base_calendar->Copy();
+			new_entry.calendar->SetTimeZone(new_entry.tz->Copy());
+		}
+		entry = cache.emplace(std::move(tz_str), std::move(new_entry)).first;
+	}
+	last = &*entry;
+	return entry->second;
+}
+
+Calendar *ICUDateFunc::CalendarCacheState::GetCalendar(const string_t &tz_id) {
+	auto &entry = GetEntry(tz_id);
+	if (!entry.calendar) {
+		throw NotImplementedException(entry.error);
+	}
+	return entry.calendar.get();
+}
+
+void ICUDateFunc::CalendarCacheState::SetTimeZone(Calendar *calendar, const string_t &tz_id, string *error_message) {
+	auto &entry = GetEntry(tz_id);
+	if (!entry.tz) {
+		if (error_message) {
+			*error_message = entry.error;
+			return;
+		}
+		throw NotImplementedException(entry.error);
+	}
+	calendar->SetTimeZone(entry.tz->Copy());
+}
+
+bool ICUDateFunc::CalendarCacheState::TrySetTimeZone(Calendar *calendar, const string_t &tz_id) {
+	auto &entry = GetEntry(tz_id);
+	if (!entry.tz) {
 		return false;
 	}
-	calendar->adoptTimeZone(tz.release());
+	calendar->SetTimeZone(entry.tz->Copy());
 	return true;
 }
 
-void ICUDateFunc::SetTimeZone(icu::Calendar *calendar, const string_t &tz_id, string *error_message) {
-	string tz_str = tz_id.GetString();
-	auto tz = ICUHelpers::GetTimeZone(tz_str, error_message);
-	if (tz) {
-		calendar->adoptTimeZone(tz.release());
-	}
+unique_ptr<FunctionLocalState>
+ICUDateFunc::InitCalendarCache(ExpressionState &state, const BoundFunctionExpression &expr, FunctionData *bind_data) {
+	auto &info = bind_data->Cast<BindData>();
+	return make_uniq<CalendarCacheState>(*info.calendar);
 }
 
-timestamp_tz_t ICUDateFunc::GetTimeUnsafe(icu::Calendar *calendar, uint64_t micros) {
+unique_ptr<FunctionLocalState> ICUDateFunc::InitCastCalendarCache(CastLocalStateParameters &parameters) {
+	auto &cast_data = parameters.cast_data->Cast<CastData>();
+	auto &info = cast_data.info->Cast<BindData>();
+	return make_uniq<CalendarCacheState>(*info.calendar);
+}
+
+timestamp_tz_t ICUDateFunc::GetTimeUnsafe(Calendar *calendar, uint64_t micros) {
 	// Extract the new time
-	UErrorCode status = U_ZERO_ERROR;
-	const auto millis = int64_t(calendar->getTime(status));
-	if (U_FAILURE(status)) {
-		throw InternalException("Unable to get ICU calendar time.");
+	const auto millis = calendar->GetTime();
+	if (calendar->HasFailed()) {
+		throw InternalException("Unable to get calendar time.");
 	}
 	return timestamp_tz_t(millis * Interval::MICROS_PER_MSEC + int64_t(micros));
 }
 
-bool ICUDateFunc::TryGetTime(icu::Calendar *calendar, uint64_t micros, timestamp_tz_t &result) {
+bool ICUDateFunc::TryGetTime(Calendar *calendar, uint64_t micros, timestamp_tz_t &result) {
 	// Extract the new time
-	UErrorCode status = U_ZERO_ERROR;
-	auto millis = int64_t(calendar->getTime(status));
-	if (U_FAILURE(status)) {
+	auto millis = calendar->GetTime();
+	if (calendar->HasFailed()) {
 		return false;
 	}
 
-	// UDate is a double, so it can't overflow (it just loses accuracy), but converting back to µs can.
+	// The time is a whole number of milliseconds, so converting it back to microseconds can overflow.
 	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(millis, Interval::MICROS_PER_MSEC, millis)) {
 		return false;
 	}
@@ -122,7 +152,7 @@ bool ICUDateFunc::TryGetTime(icu::Calendar *calendar, uint64_t micros, timestamp
 	                                                                 days_micros);
 }
 
-timestamp_tz_t ICUDateFunc::GetTime(icu::Calendar *calendar, uint64_t micros) {
+timestamp_tz_t ICUDateFunc::GetTime(Calendar *calendar, uint64_t micros) {
 	timestamp_tz_t result;
 	if (!TryGetTime(calendar, micros, result)) {
 		throw ConversionException("ICU date overflows timestamp range");
@@ -130,7 +160,7 @@ timestamp_tz_t ICUDateFunc::GetTime(icu::Calendar *calendar, uint64_t micros) {
 	return result;
 }
 
-bool ICUDateFunc::TryGetTimeNS(icu::Calendar *calendar, uint64_t nanos, timestamp_tz_ns_t &result) {
+bool ICUDateFunc::TryGetTimeNS(Calendar *calendar, uint64_t nanos, timestamp_tz_ns_t &result) {
 	timestamp_tz_t tstz_micros;
 	if (!TryGetTime(calendar, nanos / Interval::NANOS_PER_MICRO, tstz_micros)) {
 		return false;
@@ -146,7 +176,7 @@ bool ICUDateFunc::TryGetTimeNS(icu::Calendar *calendar, uint64_t nanos, timestam
 	return true;
 }
 
-timestamp_tz_ns_t ICUDateFunc::GetTimeNS(icu::Calendar *calendar, uint64_t nanos) {
+timestamp_tz_ns_t ICUDateFunc::GetTimeNS(Calendar *calendar, uint64_t nanos) {
 	timestamp_tz_ns_t result;
 	if (!TryGetTimeNS(calendar, nanos, result)) {
 		throw ConversionException("ICU date overflows timestamp_ns range");
@@ -154,7 +184,7 @@ timestamp_tz_ns_t ICUDateFunc::GetTimeNS(icu::Calendar *calendar, uint64_t nanos
 	return result;
 }
 
-uint64_t ICUDateFunc::SetTime(icu::Calendar *calendar, timestamp_tz_t date) {
+uint64_t ICUDateFunc::SetTime(Calendar *calendar, timestamp_tz_t date) {
 	int64_t millis = date.value / Interval::MICROS_PER_MSEC;
 	int64_t micros = date.value % Interval::MICROS_PER_MSEC;
 	if (micros < 0) {
@@ -162,16 +192,11 @@ uint64_t ICUDateFunc::SetTime(icu::Calendar *calendar, timestamp_tz_t date) {
 		micros += Interval::MICROS_PER_MSEC;
 	}
 
-	const auto udate = UDate(millis);
-	UErrorCode status = U_ZERO_ERROR;
-	calendar->setTime(udate, status);
-	if (U_FAILURE(status)) {
-		throw InternalException("Unable to set ICU calendar time.");
-	}
+	calendar->SetTime(millis);
 	return uint64_t(micros);
 }
 
-uint64_t ICUDateFunc::SetTimeNS(icu::Calendar *calendar, timestamp_tz_ns_t date) {
+uint64_t ICUDateFunc::SetTimeNS(Calendar *calendar, timestamp_tz_ns_t date) {
 	int64_t millis = date.value / Interval::NANOS_PER_MSEC;
 	int64_t nanos = date.value % Interval::NANOS_PER_MSEC;
 	if (nanos < 0) {
@@ -179,31 +204,24 @@ uint64_t ICUDateFunc::SetTimeNS(icu::Calendar *calendar, timestamp_tz_ns_t date)
 		nanos += Interval::NANOS_PER_MSEC;
 	}
 
-	const auto udate = UDate(millis);
-	UErrorCode status = U_ZERO_ERROR;
-	calendar->setTime(udate, status);
-	if (U_FAILURE(status)) {
-		throw InternalException("Unable to set ICU calendar time.");
-	}
+	calendar->SetTime(millis);
 	return uint64_t(nanos);
 }
 
-int32_t ICUDateFunc::ExtractField(icu::Calendar *calendar, UCalendarDateFields field) {
-	UErrorCode status = U_ZERO_ERROR;
-	const auto result = calendar->get(field, status);
-	if (U_FAILURE(status)) {
-		throw InternalException("Unable to extract ICU calendar part.");
+int32_t ICUDateFunc::ExtractField(Calendar *calendar, CalendarField field) {
+	const auto result = calendar->Get(field);
+	// a date the calendar cannot represent is something the query asked for, not a defect
+	if (calendar->HasFailed()) {
+		throw ConversionException("Unable to extract calendar part");
 	}
 	return result;
 }
 
-int32_t ICUDateFunc::SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_tz_t end_date) {
+int32_t ICUDateFunc::SubtractField(Calendar *calendar, CalendarField field, timestamp_tz_t end_date) {
 	const int64_t millis = end_date.value / Interval::MICROS_PER_MSEC;
-	const auto when = UDate(millis);
-	UErrorCode status = U_ZERO_ERROR;
-	auto sub = calendar->fieldDifference(when, field, status);
-	if (U_FAILURE(status)) {
-		throw InternalException("Unable to subtract ICU calendar part.");
+	const auto sub = calendar->FieldDifference(millis, field);
+	if (calendar->HasFailed()) {
+		throw ConversionException("Unable to subtract calendar part");
 	}
 	return sub;
 }

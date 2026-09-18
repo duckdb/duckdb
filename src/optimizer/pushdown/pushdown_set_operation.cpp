@@ -32,7 +32,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	for (auto &child : op->children) {
 		auto child_bindings = child->GetColumnBindings();
 
-		FilterPushdown child_pushdown(optimizer, convert_mark_joins);
+		FilterPushdown child_pushdown(optimizer, convert_mark_joins, projection_mode);
 		for (auto &original_filter : filters) {
 			// first create a copy of the filter
 			auto filter = make_uniq<Filter>();
