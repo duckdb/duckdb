@@ -205,6 +205,7 @@
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/matcher/operator_matcher.hpp"
 #include "duckdb/parser/peg/sql_formatter.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
@@ -4086,6 +4087,24 @@ const char* EnumUtil::ToChars<OperatorFinalizeResultType>(OperatorFinalizeResult
 template<>
 OperatorFinalizeResultType EnumUtil::FromString<OperatorFinalizeResultType>(const char *value) {
 	return static_cast<OperatorFinalizeResultType>(StringUtil::StringToEnum(GetOperatorFinalizeResultTypeValues(), 2, "OperatorFinalizeResultType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetOperatorMatcherModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(OperatorMatcherMode::GENERIC_PRECEDENCE), "GENERIC_PRECEDENCE" },
+		{ static_cast<uint32_t>(OperatorMatcherMode::ALL_OPERATORS), "ALL_OPERATORS" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<OperatorMatcherMode>(OperatorMatcherMode value) {
+	return StringUtil::EnumToString(GetOperatorMatcherModeValues(), 2, "OperatorMatcherMode", static_cast<uint32_t>(value));
+}
+
+template<>
+OperatorMatcherMode EnumUtil::FromString<OperatorMatcherMode>(const char *value) {
+	return static_cast<OperatorMatcherMode>(StringUtil::StringToEnum(GetOperatorMatcherModeValues(), 2, "OperatorMatcherMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOperatorResultTypeValues() {
