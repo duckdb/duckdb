@@ -36,9 +36,6 @@ static unique_ptr<FunctionData> RepeatRowBind(ClientContext &context, TableFunct
 		throw BinderException("num_rows should be an integer value >= 0");
 	}
 	auto num_rows = entry->second.GetValue<int64_t>();
-	if (num_rows < 0) {
-		throw BinderException("num_rows cannot be less than zero");
-	}
 	return make_uniq<RepeatRowFunctionData>(inputs, NumericCast<idx_t>(num_rows));
 }
 
@@ -66,7 +63,7 @@ static unique_ptr<NodeStatistics> RepeatRowCardinality(ClientContext &context, c
 void RepeatRowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction repeat_row("repeat_row", {}, RepeatRowFunction, RepeatRowBind, RepeatRowInit);
 	repeat_row.SetVarArgs(LogicalType::ANY);
-	repeat_row.named_parameters["num_rows"] = LogicalType::BIGINT;
+	repeat_row.named_parameters["num_rows"] = LogicalType::UBIGINT;
 	repeat_row.cardinality = RepeatRowCardinality;
 	set.AddFunction(repeat_row);
 }
