@@ -4,6 +4,66 @@
 
 load {TEST_DIR}/variant_shredded_extract_wrong_type.db readwrite v1.5.0
 
+# A key lookup on a shredded primitive used to treat the physical STRUCT wrapper as an OBJECT.
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+CREATE TABLE shredded_booleans AS
+SELECT i AS id, (i % 2 = 0)::VARIANT AS v FROM range(5) t(i);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT DISTINCT vector_type(v) FROM shredded_booleans;
+----
+SHREDDED_VECTOR
+
+query I
+SELECT variant_extract(v, 'a') FROM shredded_booleans WHERE id = 1;
+----
+NULL
+
+# Extraction must not invalidate the database.
+query I
+SELECT 42;
+----
+42
+
+# Array element statistics describe the elements, but an out-of-bounds lookup is still NULL.
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+CREATE TABLE one_element_arrays AS
+SELECT i AS id, [i]::VARIANT AS v FROM range(5) t(i);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query IIII
+SELECT count(v[2]), count(v[2]::VARCHAR), count(v[2]::BIGINT),
+       count(*) FILTER (WHERE v[2] IS NULL) FROM one_element_arrays;
+----
+0	0	0	5
+
+query I
+SELECT variant_typeof(v[2].x) FROM one_element_arrays limit 1;
+----
+VARIANT_NULL
+
+# Chaining a key lookup onto the missing element produces an empty shredded STRUCT internally.
+query I
+SELECT count(v[2].x::BIGINT) FROM one_element_arrays;
+----
+0
+
+# Keep a wider differential matrix for wrapper types, nested paths, casts, and optimizer settings.
 foreach threshold -1 0
 
 statement ok

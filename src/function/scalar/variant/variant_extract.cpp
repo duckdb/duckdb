@@ -118,6 +118,10 @@ static bool TryShreddedExtractRecursive(const Vector &input, const vector<Varian
 	}
 	// first entry is "typed_value"
 	auto &typed_entries = StructVector::GetEntries(input);
+	if (typed_entries.empty()) {
+		// An empty shredded STRUCT has no typed_value child.
+		return false;
+	}
 	auto &typed_value = typed_entries[0];
 	if (typed_value.GetType().id() != LogicalTypeId::STRUCT) {
 		// A shredded wrapper can also contain a primitive or an array.
