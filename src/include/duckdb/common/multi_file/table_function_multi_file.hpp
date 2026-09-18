@@ -85,7 +85,8 @@ public:
 	}
 
 	optional_idx cardinality;
-	//! The bind data of the wrapped function for this file - used to combine the schemas of several files
+	//! The bind data of the wrapped function for this file. It is used to combine the schemas of several files, and
+	//! kept afterwards so that the bind that reads the file can reuse what this one read from it
 	shared_ptr<FunctionData> bind_data;
 
 	optional_idx TryGetCardinalityEstimate() const override {
@@ -107,6 +108,7 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name) override;
 	void AddVirtualColumn(column_t virtual_column_id) override;
 	void PrepareReader(ClientContext &context, GlobalTableFunctionState &gstate) override;
+	void PrepareReadAhead(ClientContext &context, GlobalTableFunctionState &gstate) override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) override;
 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;
@@ -121,8 +123,11 @@ public:
 	void FinishBatch(ClientContext &context, LocalTableFunctionState &local_state);
 	//! Bind the wrapped table function over this file - this sets up the columns of the reader.
 	//! When the schema of the scan is known upfront, the file is bound against that schema
+	//! When schema_only is set the file is bound only to determine the schema of the scan and is not read with the
+	//! resulting bind data. file_bind_data is what an earlier bind of this same file produced, if there was one
 	void BindFunction(ClientContext &context, const TableFunctionFileReaderOptions &options,
-	                  const MultiFileOptions &file_options);
+	                  const MultiFileOptions &file_options, bool schema_only = false,
+	                  optional_ptr<const FunctionData> file_bind_data = nullptr);
 	//! The cardinality of this file (if the wrapped function can provide one)
 	optional_idx GetCardinality() const {
 		return cardinality;
@@ -232,8 +237,7 @@ public:
 	void CombineSchemas(ClientContext &context, const vector<shared_ptr<BaseUnionData>> &union_data, bool union_by_name,
 	                    vector<LogicalType> &return_types, vector<Identifier> &names) override;
 	void FinalizeBindData(MultiFileBindData &multi_file_data) override;
-	void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data,
-	                       virtual_column_map_t &result) override;
+	void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result) override;
 	unique_ptr<GlobalTableFunctionState> InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data,
 	                                                           MultiFileGlobalState &global_state) override;
 	unique_ptr<LocalTableFunctionState> InitializeLocalState(ClientContext &context,

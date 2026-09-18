@@ -70,7 +70,8 @@ bool TableFunctionFileReader::UseCastMap() const {
 }
 
 void TableFunctionFileReader::BindFunction(ClientContext &context, const TableFunctionFileReaderOptions &options,
-                                           const MultiFileOptions &file_options) {
+                                           const MultiFileOptions &file_options, bool schema_only,
+                                           optional_ptr<const FunctionData> file_bind_data) {
 	if (!function.bind) {
 		throw InternalException("Table function %s cannot be wrapped in a multi file function - it has no bind",
 		                        function.name);
@@ -85,6 +86,8 @@ void TableFunctionFileReader::BindFunction(ClientContext &context, const TableFu
 	                                  function.function_info.get(), nullptr, function, empty_ref);
 	bind_input.multi_file_options = file_options;
 	bind_input.multi_file_scan = options.multi_file_scan;
+	bind_input.schema_only = schema_only;
+	bind_input.file_bind_data = file_bind_data;
 	if (!options.expected_names.empty()) {
 		// the schema of the scan is known upfront - bind this file against that schema
 		bind_input.expected_names = options.expected_names;
@@ -213,6 +216,18 @@ void TableFunctionFileReader::InitializeFunctionState(ClientContext &context) {
 void TableFunctionFileReader::PrepareReader(ClientContext &context, GlobalTableFunctionState &gstate) {
 	SetScanState(gstate);
 	InitializeFunctionState(context);
+}
+
+void TableFunctionFileReader::PrepareReadAhead(ClientContext &context, GlobalTableFunctionState &gstate) {
+	if (!function.prepare_read_ahead) {
+		return;
+	}
+	// the file has been opened on the read-ahead pool - let the function pre-open what its scan needs, so that
+	// claiming a batch does no I/O while the global lock of the scan is held
+	SetScanState(gstate);
+	InitializeFunctionState(context);
+	TableFunctionInput input(bind_data.get(), nullptr, global_state.get());
+	function.prepare_read_ahead(context, input);
 }
 
 bool TableFunctionFileReader::TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
@@ -436,7 +451,10 @@ void TableFunctionMultiFileWrapper::CombineSchemas(ClientContext &context,
 	}
 	combined_names = names;
 	combined_types = return_types;
-	ReleaseBindData(union_data);
+	if (combined_bind_data) {
+		// every file is re-bound against the schema the function combined - what they bound to on their own is stale
+		ReleaseBindData(union_data);
+	}
 }
 
 void TableFunctionMultiFileWrapper::GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data,
@@ -471,8 +489,8 @@ void TableFunctionMultiFileWrapper::FinalizeBindData(MultiFileBindData &multi_fi
 	}
 }
 
-//! The per-file bind data is only kept around to combine the schemas - release it afterwards so we don't hold on to
-//! the bind data of every file for the duration of the query
+//! Drop the per-file bind data of a scan whose schema the function combined itself - every file is re-bound against
+//! that combined schema, so what the files bound to on their own is of no use anymore
 void TableFunctionMultiFileWrapper::ReleaseBindData(const vector<shared_ptr<BaseUnionData>> &union_data) {
 	for (auto &data : union_data) {
 		data->Cast<TableFunctionUnionData>().bind_data.reset();
@@ -485,8 +503,8 @@ void TableFunctionMultiFileWrapper::BindReader(ClientContext &context, vector<Lo
 	// whether the scan reads several files. The file list is only asked here, where it has been created and is
 	// about to be read anyway - a list that is built lazily is not ready to be expanded any earlier
 	data.options.multi_file_scan = bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES;
-	if (settings.bind_scan_schema && settings.bind_scan_schema(context, bind_data, data.options.named_parameters,
-	                                                           return_types, names)) {
+	if (settings.bind_scan_schema &&
+	    settings.bind_scan_schema(context, bind_data, data.options.named_parameters, return_types, names)) {
 		// the options describe the schema of the scan - every file is mapped onto it, so no file determines it
 		return;
 	}
@@ -548,7 +566,8 @@ shared_ptr<BaseFileReader> TableFunctionMultiFileWrapper::CreateReader(ClientCon
 	auto &options = options_p.Cast<TableFunctionFileReaderOptions>();
 	auto result =
 	    make_shared_ptr<TableFunctionFileReader>(function, file, options.named_parameters, settings.reader_type);
-	result->BindFunction(context, options, file_options);
+	// this overload binds a file only to determine the schema of the scan - the file is read by a reader of its own
+	result->BindFunction(context, options, file_options, true);
 	return std::move(result);
 }
 
@@ -564,10 +583,16 @@ shared_ptr<BaseFileReader> TableFunctionMultiFileWrapper::CreateReader(ClientCon
 }
 
 shared_ptr<BaseFileReader> TableFunctionMultiFileWrapper::CreateReader(ClientContext &context,
-                                                                       GlobalTableFunctionState &gstate,
+                                                                       GlobalTableFunctionState &,
                                                                        BaseUnionData &union_data,
                                                                        const MultiFileBindData &bind_data) {
-	return CreateReader(context, gstate, union_data.file, 0, bind_data);
+	auto &data = bind_data.bind_data->Cast<TableFunctionMultiFileData>();
+	auto &union_entry = union_data.Cast<TableFunctionUnionData>();
+	auto result = make_shared_ptr<TableFunctionFileReader>(function, union_data.file, data.options.named_parameters,
+	                                                       settings.reader_type);
+	// this file was already bound to combine the schemas - the bind can reuse what that read from the file
+	result->BindFunction(context, data.options, bind_data.file_options, false, union_entry.bind_data.get());
+	return std::move(result);
 }
 
 unique_ptr<NodeStatistics> TableFunctionMultiFileWrapper::GetCardinality(ClientContext &context,
@@ -589,12 +614,9 @@ unique_ptr<NodeStatistics> TableFunctionMultiFileWrapper::GetCardinality(ClientC
 //===--------------------------------------------------------------------===//
 using TableFunctionMultiFileFunction = MultiFileFunction<TableFunctionMultiFileWrapper>;
 
-unique_ptr<FunctionData> TableFunctionMultiFileWrapper::MultiFileBindWith(ClientContext &context,
-                                                                         TableFunctionBindInput &input,
-                                                                         vector<LogicalType> &return_types,
-                                                                         vector<Identifier> &names,
-                                                                         TableFunction single_file_function,
-                                                                         TableFunctionMultiFileSettings settings) {
+unique_ptr<FunctionData> TableFunctionMultiFileWrapper::MultiFileBindWith(
+    ClientContext &context, TableFunctionBindInput &input, vector<LogicalType> &return_types, vector<Identifier> &names,
+    TableFunction single_file_function, TableFunctionMultiFileSettings settings) {
 	return TableFunctionMultiFileFunction::MultiFileBindInterface(
 	    context, input, return_types, names,
 	    make_uniq<TableFunctionMultiFileWrapper>(std::move(single_file_function), std::move(settings)));
@@ -663,7 +685,7 @@ static void TableFunctionMultiFileGetMetrics(TableFunctionGetMetricsInput &input
 //! The row groups of the scan, as the wrapped function describes those of its files. Only reported when the whole
 //! scan is one file - the files after it have not been opened at this point, so their row groups are unknown
 static vector<PartitionStatistics> TableFunctionMultiFileGetPartitionStats(ClientContext &context,
-                                                                          GetPartitionStatsInput &input) {
+                                                                           GetPartitionStatsInput &input) {
 	vector<PartitionStatistics> result;
 	auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
 	if (bind_data.file_list->GetExpandResult() != FileExpandResult::SINGLE_FILE || !bind_data.initial_reader) {

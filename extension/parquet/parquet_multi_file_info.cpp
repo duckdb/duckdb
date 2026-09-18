@@ -89,7 +89,6 @@ private:
 	bool attempted_to_load_caches = false;
 };
 
-
 static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, ParquetOptions &options,
                                      vector<LogicalType> &return_types, vector<Identifier> &names) {
 	if (options.file_row_number) {
@@ -538,16 +537,14 @@ static TableFunctionMultiFileSettings ParquetMultiFileSettings() {
 //! they construct, which carries none of our info
 static unique_ptr<FunctionData> ParquetMultiFileBind(ClientContext &context, TableFunctionBindInput &input,
                                                      vector<LogicalType> &return_types, vector<Identifier> &names) {
-	return TableFunctionMultiFileWrapper::MultiFileBindWith(context, input, return_types, names,
-	                                                        ParquetScanFunction::GetSingleFileFunction(),
-	                                                        ParquetMultiFileSettings());
+	return TableFunctionMultiFileWrapper::MultiFileBindWith(
+	    context, input, return_types, names, ParquetScanFunction::GetSingleFileFunction(), ParquetMultiFileSettings());
 }
 
 TableFunction ParquetScanFunction::GetMultiFileFunction(Identifier name) {
 	// the multi-file parquet reader is the single-file parquet reader wrapped into a multi-file function
-	auto result =
-	    TableFunctionMultiFileWrapper::CreateFunction(GetSingleFileFunction(), std::move(name),
-	                                                  ParquetMultiFileSettings());
+	auto result = TableFunctionMultiFileWrapper::CreateFunction(GetSingleFileFunction(), std::move(name),
+	                                                            ParquetMultiFileSettings());
 	result.bind = ParquetMultiFileBind;
 	// the callbacks below describe the scan rather than one of its files, so they are set on the wrapper
 	result.get_row_id_columns = ParquetGetRowIdColumns;

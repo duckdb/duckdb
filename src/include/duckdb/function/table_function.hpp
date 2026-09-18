@@ -147,6 +147,12 @@ struct TableFunctionBindInput {
 	//! Whether the caller reads several files with this function. Options that describe the schema then describe the
 	//! scan rather than this one file, so the bind should not hold this file to them exactly
 	bool multi_file_scan = false;
+	//! Whether the caller only binds this file to determine the schema of its scan - the file is not read with the
+	//! resulting bind data, so the bind should not keep resources around for scanning it
+	bool schema_only = false;
+	//! (Optional) The bind data an earlier bind of this same file produced, when the caller bound it before to
+	//! determine the schema of the scan. The bind can take whatever it read from the file from there again
+	optional_ptr<const FunctionData> file_bind_data;
 
 	bool HasExpectedSchema() const {
 		return expected_names && expected_types;
@@ -433,6 +439,9 @@ typedef void (*table_function_finish_batch_t)(ClientContext &context, TableFunct
 typedef bool (*table_function_supports_read_ahead_t)(const FunctionData &bind_data);
 //! Schedules the I/O needed by the batch a local state has claimed, so it can be loaded before it is scanned
 typedef AsyncResult (*table_function_schedule_io_t)(ClientContext &context, TableFunctionInput &input);
+//! Called on the read-ahead pool once the scan of this function has been initialized, before any batch is claimed.
+//! Lets the function pre-open the resources its scan needs, so that claiming a batch does no I/O
+typedef void (*table_function_prepare_read_ahead_t)(ClientContext &context, TableFunctionInput &input);
 //! Combines the schemas of several individually bound files into one. The names and types are pre-filled with the
 //! schemas of the files combined by name - the function can replace or adjust them. Returns the bind data describing
 //! the combined schema, which is then handed to the bind of every file that is read - or nullptr when the files must
@@ -586,6 +595,8 @@ public:
 	table_function_supports_read_ahead_t supports_read_ahead;
 	//! (Optional) schedules the I/O of a claimed batch - see table_function_schedule_io_t
 	table_function_schedule_io_t schedule_io;
+	//! (Optional) pre-opens the resources the scan needs - see table_function_prepare_read_ahead_t
+	table_function_prepare_read_ahead_t prepare_read_ahead;
 	//! (Optional) function for rendering the operator to a string in explain/profiling output (invoked pre-execution)
 	table_function_to_string_t to_string;
 	//! (Optional) return how much of the table we have scanned up to this point (% of the data)

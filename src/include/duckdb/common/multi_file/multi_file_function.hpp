@@ -1083,7 +1083,7 @@ public:
 	}
 
 	static unique_ptr<BaseStatistics> MultiFileScanStatsInternal(ClientContext &context,
-	                                                            TableFunctionGetStatisticsInput &input) {
+	                                                             TableFunctionGetStatisticsInput &input) {
 		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
 		auto &column_index = input.column_index;
 
