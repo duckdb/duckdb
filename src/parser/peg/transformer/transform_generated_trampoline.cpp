@@ -2654,6 +2654,9 @@ static const TransformFrameOps ON_CLAUSE_OPS = {"OnClause", &PEGTransformerFacto
 static const TransformFrameOps USING_CLAUSE_OPS = {"UsingClause",
                                                    &PEGTransformerFactory::InitializeUsingClauseTrampoline,
                                                    &PEGTransformerFactory::FinalizeUsingClauseTrampoline};
+static const TransformFrameOps USING_COLUMN_NAME_OPS = {"UsingColumnName",
+                                                        &PEGTransformerFactory::InitializeUsingColumnNameTrampoline,
+                                                        &PEGTransformerFactory::FinalizeUsingColumnNameTrampoline};
 static const TransformFrameOps JOIN_TYPE_OPS = {"JoinType", &PEGTransformerFactory::InitializeJoinTypeTrampoline,
                                                 &PEGTransformerFactory::FinalizeJoinTypeTrampoline};
 static const TransformFrameOps JOIN_PREFIX_OPS = {"JoinPrefix", &PEGTransformerFactory::InitializeJoinPrefixTrampoline,
@@ -3928,6 +3931,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"JoinQualifier", &JOIN_QUALIFIER_OPS},
 	    {"OnClause", &ON_CLAUSE_OPS},
 	    {"UsingClause", &USING_CLAUSE_OPS},
+	    {"UsingColumnName", &USING_COLUMN_NAME_OPS},
 	    {"JoinType", &JOIN_TYPE_OPS},
 	    {"JoinPrefix", &JOIN_PREFIX_OPS},
 	    {"CrossJoinPrefix", &CROSS_JOIN_PREFIX_OPS},
@@ -22555,7 +22559,7 @@ void PEGTransformerFactory::InitializeUsingClauseTrampoline(PEGTransformer &tran
 	process.ReserveChildSlots(1 + dynamic_child_count - 1);
 	for (idx_t i = list_items.size(); i > 0; i--) {
 		auto child_idx = i - 1;
-		process.PushChild({transformer.GetRule("ColIdOrString"), list_items[child_idx].get()}, 0 + child_idx);
+		process.PushChild({transformer.GetRule("UsingColumnName"), list_items[child_idx].get()}, 0 + child_idx);
 	}
 }
 
@@ -22564,12 +22568,52 @@ PEGTransformerFactory::FinalizeUsingClauseTrampoline(PEGTransformer &transformer
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(1)));
 	auto dynamic_child_count = dynamic_list_items.size();
-	vector<Identifier> col_id_or_string;
+	vector<Identifier> using_column_name;
 	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
-		col_id_or_string.push_back(process.TakeResult<Identifier>(i));
+		using_column_name.push_back(process.TakeResult<Identifier>(i));
 	}
-	auto result = TransformUsingClause(transformer, col_id_or_string);
+	auto result = TransformUsingClause(transformer, using_column_name);
 	return make_uniq<TypedTransformResult<JoinQualifier>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeUsingColumnNameTrampoline(PEGTransformer &transformer,
+                                                                GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (choice_result.name.empty() || choice_result.type == ParseResultType::IDENTIFIER ||
+	    choice_result.type == ParseResultType::KEYWORD || choice_result.type == ParseResultType::STRING) {
+		return;
+	}
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.name);
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeUsingColumnNameTrampoline(PEGTransformer &transformer,
+                                                         GeneratedTransformProcess &process) {
+	Identifier result;
+	if (process.child_results[0]) {
+		result = process.TakeResult<Identifier>(0);
+	} else {
+		auto &list_pr = process.parse_result.Cast<ListParseResult>();
+		auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
+		if (choice_result.type == ParseResultType::IDENTIFIER) {
+			result = choice_result.Cast<IdentifierParseResult>().identifier;
+		} else if (choice_result.type == ParseResultType::KEYWORD) {
+			result = Identifier(choice_result.Cast<KeywordParseResult>().keyword);
+		} else if (choice_result.type == ParseResultType::STRING) {
+			result = Identifier(choice_result.Cast<StringLiteralParseResult>().result);
+		} else {
+			result = Identifier(TransformIdentifierOrKeyword(transformer, choice_result));
+		}
+	}
+	return make_uniq<TypedTransformResult<Identifier>>(result);
 }
 
 void PEGTransformerFactory::InitializeJoinTypeTrampoline(PEGTransformer &transformer,
