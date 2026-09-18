@@ -144,6 +144,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 
 	auto &schema = table.schema;
 	info->column_ids = storage_ids;
+	optional_idx index_oid;
 
 	if (!alter_table_info) {
 		// Ensure that the index does not yet exist in the catalog.
@@ -161,6 +162,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		D_ASSERT(index_entry);
 		auto &index = index_entry->Cast<DuckIndexEntry>();
 		index.initial_index_size = bound_index->GetInMemorySize();
+		index_oid = index.oid;
 
 	} else {
 		// Ensure that there are no other indexes with that name on this table.
@@ -184,7 +186,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	}
 
 	// Add the index to the storage.
-	storage.AddIndex(std::move(bound_index));
+	storage.AddIndex(std::move(bound_index), index_oid);
 
 	return SinkFinalizeType::READY;
 }
