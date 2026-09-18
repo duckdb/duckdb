@@ -90,7 +90,6 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 
 	const auto start_ptr = block.ptr;
 	auto result_data = FlatVector::Writer<string_t>(result, read_count, result_offset);
-	vector<std::pair<const char *, uint32_t>> boundary_strings;
 
 	for (idx_t row_idx = 0; row_idx < read_count; row_idx++) {
 		const auto result_idx = result_offset + row_idx;
