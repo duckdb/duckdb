@@ -1578,6 +1578,19 @@ struct HomeDirectorySetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct HTTPClientPoolCapacitySetting {
+	using RETURN_TYPE = int64_t;
+	static constexpr const char *Name = "http_client_pool_capacity";
+	static constexpr const char *Description =
+	    "HTTP client pool capacity derived from CPU and async thread counts unless explicitly set";
+	static constexpr const char *InputType = "BIGINT";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct HTTPProxySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "http_proxy";

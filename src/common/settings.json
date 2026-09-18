@@ -944,6 +944,14 @@
         ]
     },
     {
+        "name": "http_client_pool_capacity",
+        "description": "HTTP client pool capacity derived from CPU and async thread counts unless explicitly set",
+        "type": "BIGINT",
+        "scope": "global",
+        "custom_implementation": true,
+        "struct": "HTTPClientPoolCapacitySetting"
+    },
+    {
         "name": "http_proxy",
         "description": "HTTP proxy host (defaults to the HTTP_PROXY environment variable when unset)",
         "type": "VARCHAR",

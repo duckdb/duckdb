@@ -182,6 +182,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(FsyncModeSetting),
     DUCKDB_SETTING(GeometryMinimumShreddingSize),
     DUCKDB_SETTING_CALLBACK(HomeDirectorySetting),
+    DUCKDB_GLOBAL(HTTPClientPoolCapacitySetting),
     DUCKDB_GLOBAL(HTTPProxySetting),
     DUCKDB_SETTING(HTTPProxyPasswordSetting),
     DUCKDB_SETTING(HTTPProxyUsernameSetting),
@@ -1009,6 +1010,10 @@ HTTPUtil &DBConfig::GetHTTPUtil() const {
 }
 
 HTTPTransportManager &DBConfig::GetHTTPTransportManager() {
+	return *http_transport_manager;
+}
+
+const HTTPTransportManager &DBConfig::GetHTTPTransportManager() const {
 	return *http_transport_manager;
 }
 
