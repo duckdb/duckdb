@@ -30,6 +30,7 @@
 #include <utility>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <type_traits>
 #include <functional>
 #include <memory>
@@ -324,15 +325,14 @@ public:
 //----------------------------------------------------------------------------------------------------------------------
 // Database Option
 //----------------------------------------------------------------------------------------------------------------------
-// Configuration settings, as name/value pairs.
-// Construct a `DatabaseOption` to write a setting, or read one back from an existing `Database` or `Connection` to
-// inspect its current value, default value, description or aliases.
-// Settings that can only be chosen up front must be passed to `Environment::Open`.
+// Configuration settings. Write one with `Database::SetOption` or `Connection::SetOption`, which take the name and
+// value directly; read one back as a `DatabaseOption` to inspect its current value, default value, description,
+// target scope or aliases. Settings that can only be chosen at startup are written on a `Database` before its first
+// `Attach` or `Connect`.
 
 /// At which scope a setting may be written.
 enum class OptionTargetScope : uint8_t {
-	/// Unknown: the setting declares no target scope, or the option was constructed here and has not been resolved
-	/// against a database yet.
+	/// Unknown: the setting declares no target scope, which includes every extension setting.
 	UNKNOWN = 0,
 	/// Writable only at GLOBAL (database) scope.
 	GLOBAL_ONLY = 1,
@@ -354,42 +354,32 @@ enum class SettingScope : uint8_t {
 	LOCAL = 2,
 };
 
-/// A single configuration setting
-/// This holds the value of the setting plus the metadata DuckDB declares for it.
+/// A single configuration setting as read from a database or connection: its current value there, plus the
+/// metadata DuckDB declares for it. Read-only.
 /// The string accessors return views borrowed from this option, valid until it is destroyed.
 class DatabaseOption final : public detail::Handle<DatabaseOption> {
 	friend detail::Factory;
 
 public:
-	/// An option setting `name` to `value`, to hand to `Environment::Open` or to a `SetOption`. The value is parsed
-	/// when the option is applied, so an unknown name or an ill-typed value throws there rather than here.
-	/// @param name The setting to write, either its canonical name or one of its aliases.
-	/// @param value The new value, in the same textual form SQL's `SET` accepts.
-	DatabaseOption(const std::string &name, const std::string &value);
-
 	DatabaseOption(DatabaseOption &&) noexcept = default;
 	DatabaseOption &operator=(DatabaseOption &&) noexcept = default;
 
 	/// The setting's name.
 	auto GetName() const -> std::string_view;
 
-	/// The value this option carries, as text.
+	/// The setting's current value where it was read from, as text.
 	auto GetValue() const -> std::string_view;
 
-	/// The value the setting falls back to when it is not set. Empty until the option has been read back from a
-	/// database or connection.
+	/// The value the setting falls back to when it is not set. Empty when the setting declares no default.
 	auto GetDefaultValue() const -> std::string_view;
 
-	/// A human-readable description of the setting. Empty until the option has been read back from a database or
-	/// connection.
+	/// A human-readable description of the setting.
 	auto GetDescription() const -> std::string_view;
 
-	/// At which scope this setting may be written. UNKNOWN until the option has been read back from a database or
-	/// connection.
+	/// At which scope this setting may be written.
 	auto GetTargetScope() const -> OptionTargetScope;
 
-	/// How many alternative names resolve to this setting. 0 until the option has been read back from a database or
-	/// connection.
+	/// How many alternative names resolve to this setting. 0 for an extension setting.
 	auto GetAliasCount() const -> size_t;
 
 	/// One of the setting's aliases.
@@ -708,14 +698,17 @@ public:
 	auto GetOption(std::string_view name) const -> DatabaseOption;
 
 	/// Writes a setting at the scope it declares for itself, like SQL `SET name = value`.
-	/// @param option The name/value pair to apply.
-	auto SetOption(const DatabaseOption &option) -> void;
+	/// @param name The setting to write, either its canonical name or one of its aliases.
+	/// @param value The new value, in the same textual form SQL's `SET` accepts.
+	/// @throws InvalidInputException When no setting goes by that name or the value does not parse.
+	auto SetOption(std::string_view name, std::string_view value) -> void;
 
 	/// Writes a setting at an explicit scope.
-	/// @param option The name/value pair to apply.
+	/// @param name The setting to write, either its canonical name or one of its aliases.
+	/// @param value The new value, in the same textual form SQL's `SET` accepts.
 	/// @param scope GLOBAL to write it database-wide, LOCAL for this session only.
 	/// @throws Exception When the setting does not allow the requested scope.
-	auto SetOption(const DatabaseOption &option, SettingScope scope) -> void;
+	auto SetOption(std::string_view name, std::string_view value, SettingScope scope) -> void;
 
 	/// Parses a SQL string into an iterator over its statements, without binding or executing any of them.
 	/// Parsing happens statement by statement as the iterator advances, so a syntax error surfaces from
@@ -845,7 +838,6 @@ private:
 // An open database: the catalog, the storage behind it, and the settings shared by every session on it. Databases are
 // opened through an `Environment` and worked with through the `Connection`s they hand out.
 
-/// An open database. It must outlive every `Connection` opened on it.
 class Database final : public detail::Handle<Database> {
 	friend detail::Factory;
 
@@ -853,6 +845,38 @@ public:
 	~Database() override;
 	Database(Database &&) noexcept = default;
 	Database &operator=(Database &&) noexcept = default;
+
+	/// Attaches a database to this instance, like SQL `ATTACH 'path'`, starting the instance if this is its first
+	/// use.
+	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
+	/// @param make_default Whether to make it the default database for sessions opened afterwards, as `SetDefault`
+	/// would; false leaves the default alone.
+	/// @throws Exception When the path is already attached in this environment, or a database of that name exists.
+	auto Attach(const std::string &path, bool make_default = false) -> void;
+
+	/// Attaches a database under a name and with the per-database options SQL `ATTACH` takes, like
+	/// `ATTACH 'path' AS name (KEY value, ...)`.
+	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
+	/// @param name The name to attach under; empty for the name derived from the path.
+	/// @param options The `(KEY value)` options, e.g. `{{"READ_ONLY", "true"}, {"BLOCK_SIZE", "16384"}}`. Keys match
+	/// case-insensitively and values are passed on as the text a quoted SQL literal carries; the engine casts the
+	/// ones it knows and hands the rest to the storage extension owning the database.
+	/// @param make_default Whether to make it the default database for sessions opened afterwards.
+	auto Attach(const std::string &path, const std::string &name,
+	            const std::unordered_map<std::string, std::string> &options, bool make_default = false) -> void;
+
+	/// Detaches the database attached from `path`, like SQL `DETACH`. Connections still using it keep it alive until
+	/// they let go; if it was the default database, new sessions have no default until `SetDefault` names another.
+	/// @param path The path that was passed to `Attach`, or the name the database is attached under.
+	/// @throws InvalidInputException When neither matches an attached database.
+	auto Detach(const std::string &path) -> void;
+
+	/// Makes the database attached from `path` the default database for sessions opened from now on: where their
+	/// unqualified DDL and unqualified table lookups that miss the temporary catalog go, unless they `USE` another.
+	/// Sessions already open keep the default they connected with.
+	/// @param path The path that was passed to `Attach`, or the name the database is attached under.
+	/// @throws InvalidInputException When neither matches an attached database.
+	auto SetDefault(const std::string &path) -> void;
 
 	/// How many settings this database exposes.
 	auto GetOptionCount() const -> size_t;
@@ -867,11 +891,15 @@ public:
 	/// @throws InvalidInputException When no setting goes by that name.
 	auto GetOption(std::string_view name) const -> DatabaseOption;
 
-	/// Writes a setting globally, for this database and every session on it.
-	/// @param option The name/value pair to apply.
-	auto SetOption(const DatabaseOption &option) -> void;
+	/// Writes a setting globally, for this database and every session on it. Before the first `Attach` or `Connect`
+	/// the setting goes into the startup configuration, which is how settings that can only be chosen at startup,
+	/// such as access_mode, are written; afterwards this is SQL `SET GLOBAL`.
+	/// @param name The setting to write, either its canonical name or one of its aliases.
+	/// @param value The new value, in the same textual form SQL's `SET` accepts.
+	/// @throws InvalidInputException When no setting goes by that name or the value does not parse.
+	auto SetOption(std::string_view name, std::string_view value) -> void;
 
-	/// Opens a new session on this database.
+	/// Opens a new session on this database, starting the instance if this is its first use.
 	/// @return An owning `Connection`, which disconnects when destroyed. Open one per thread.
 	auto Connect() -> Connection;
 
@@ -910,11 +938,11 @@ auto RunExtensionEntry(void (*body)(Extension &, Context &), void *extension, vo
 //----------------------------------------------------------------------------------------------------------------------
 // Environment
 //----------------------------------------------------------------------------------------------------------------------
-// The entry point to the API: an `Environment` opens databases and tracks the ones it has opened. Create one, keep it
-// for as long as any database is open, and open databases through it.
+// The entry point to the API: an `Environment` creates databases and tracks the ones it has created. Create one,
+// keep it for as long as any database is alive, and create databases through it.
 
-/// The environment databases are opened in. It must outlive every `Database` opened through it; destroying it while
-/// databases are still open leaks them.
+/// The environment databases are created in. It must outlive every `Database` created through it; destroying it
+/// while databases are still alive leaks them.
 class Environment final : public detail::Handle<Environment> {
 	friend detail::Factory;
 
@@ -924,18 +952,16 @@ public:
 	Environment(Environment &&) noexcept = default;
 	Environment &operator=(Environment &&) noexcept = default;
 
-	/// How many databases are currently open in this environment.
-	auto GetOpenDatabaseCount() const -> size_t;
+	/// How many databases are currently alive in this environment.
+	auto GetDatabaseCount() const -> size_t;
 
-	/// Opens a database with default settings.
+	/// Creates a database instance with nothing attached. Write startup settings with `Database::SetOption`, then
+	/// attach a database with `Database::Attach` and make it the default with `Database::SetDefault`.
+	auto CreateDatabase() -> Database;
+
+	/// Creates a database instance with default settings, attaches `path`, and makes it the default database.
 	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
 	auto Open(const std::string &path) -> Database;
-
-	/// Opens a database, configuring it up front. Settings such as access_mode and the storage options can only be
-	/// chosen here, before the database exists.
-	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
-	/// @param options The settings to open with. Borrowed for the call only; the caller keeps them.
-	auto Open(const std::string &path, const std::vector<DatabaseOption> &options) -> Database;
 };
 
 /// The version of the DuckDB library this program is linked against, e.g. "v1.5.0", with a suffix such as
@@ -1317,7 +1343,7 @@ struct decimal_t {
 /// itself; longer ones live elsewhere and the element only points at them.
 ///
 /// A blob never owns its bytes. Constructing one from a `std::string_view` borrows that memory rather than copying it,
-/// so a long blob is only valid while whatever holds the bytes is: use `Arena::AddString` / `Vector::AssignString` to
+/// so a long blob is only valid while whatever holds the bytes is: use `Arena::AddBlob` / `Vector::AssignString` to
 /// put bytes somewhere that lives as long as the vector.
 struct blob_t {
 	/// The longest byte string that fits in a vector element without being stored elsewhere.
@@ -1401,7 +1427,12 @@ struct blob_t {
 	}
 };
 
+/// Validates a byte string, throwing InvalidInputException for malformed UTF-8.
+void ValidateUTF8(std::string_view text);
+
 /// VARCHAR: like `blob_t`, but naming a string of UTF-8 text rather than of arbitrary bytes.
+/// Constructing a `varchar_t` does not validate UTF-8; use `Arena::AddString` or `Vector::AssignString` for checked
+/// construction.
 struct varchar_t : blob_t {
 	using blob_t::blob_t;
 };
@@ -1999,22 +2030,22 @@ public:
 	auto Allocate(idx_t byte_len) -> uint8_t *;
 
 	/// Copies a string into the heap.
-	/// @param data The bytes to copy. Anything up to `varchar_t::INLINE_LENGTH` is kept in the token itself and never
-	/// reaches the heap.
-	/// @return A token to place with `Vector::SetString`, valid as long as the heap is.
-	/// @throws Exception When the data exceeds the 4 GiB an element can describe.
+	/// @param data The bytes to copy. Up to `varchar_t::INLINE_LENGTH` bytes are stored directly in the returned value.
+	/// @return The string as a `varchar_t`, with validated UTF-8, valid as long as the heap is.
+	/// Place it in the vector owning this heap with `Vector::SetString`.
+	/// @throws Exception On malformed UTF-8 or when the data exceeds the 4 GiB an element can describe.
 	auto AddString(std::string_view data) -> varchar_t {
-		// TODO: UTF8-validate
 		if (data.size() > std::numeric_limits<uint32_t>::max()) {
 			ThrowStringTooLong(data.size());
 		}
-		const auto size = static_cast<uint32_t>(data.size());
-		if (size <= varchar_t::INLINE_LENGTH) {
-			return varchar_t(data.data(), size);
-		}
-		auto *bytes = Allocate(size);
-		std::memcpy(bytes, data.data(), size);
-		return varchar_t(reinterpret_cast<char *>(bytes), size);
+		ValidateUTF8(data);
+		return AddStringUnsafe(data);
+	}
+
+	/// Copies text without UTF-8 validation. The caller must ensure that the text is valid.
+	auto AddStringUnsafe(std::string_view data) -> varchar_t {
+		auto bytes = AddBlob(data);
+		return varchar_t(bytes.data(), bytes.size());
 	}
 
 	/// `AddString` for arbitrary bytes rather than text.
@@ -2189,6 +2220,7 @@ public:
 	~Vector() override;
 
 	/// The buffer for writing, typed. The vector must be FLAT or CONSTANT, and `T` must match its type.
+	/// Raw writes to VARCHAR storage must preserve valid UTF-8.
 	template <class T>
 	auto GetDataMutable() -> T * {
 		return static_cast<T *>(GetDataMutable());
@@ -2211,6 +2243,14 @@ public:
 	/// Rewrites the vector as a FLAT one, materializing one element per row. Pointers and views taken from it
 	/// beforehand do not survive this.
 	auto Flatten() const -> void;
+
+	/// Repoints the vector at another vector's data, without copying: the two then alias the same buffers, in the
+	/// source's layout, until one of them is reset or re-referenced. Works for any type, including nested ones, and
+	/// is the way to hand an already-materialized vector to an output vector without a per-row copy. Pointers and
+	/// views taken from this vector beforehand do not survive this.
+	/// @param source The vector to reference. Its data must outlive every read of this vector.
+	/// @throws InvalidInputException When the source's type does not match the vector's.
+	auto Reference(const Vector &source) -> void;
 
 	/// How many rows the vector holds.
 	auto GetSize() const -> idx_t;
@@ -2277,15 +2317,21 @@ public:
 	/// @return The heap. The vector must be of a string-backed type such as VARCHAR, BLOB, BIT or BIGNUM.
 	auto GetHeap() -> Arena;
 
-	/// Copies a string into the vector's heap and writes the resulting element in one step. Looks the heap up per call,
-	/// so flattening in between is safe.
+	/// Copies bytes into the vector's heap and places the string value with `SetString`.
+	/// VARCHAR values are constructed with `Arena::AddString`; binary values are copied without UTF-8 validation.
+	/// Looks the heap up per call, so flattening in between is safe.
 	/// @param index The element to write: any index within the size of a FLAT vector, only 0 for a CONSTANT one.
 	/// @param data The bytes to copy. The vector must be of a string-backed type such as VARCHAR, BLOB, BIT or BIGNUM.
+	/// @throws InvalidInputException On malformed VARCHAR text, before changing the slot.
 	auto AssignString(idx_t index, std::string_view data) -> void;
 
-	/// Writes an element that was written into the heap beforehand.
+	/// Like `AssignString`, but skips UTF-8 validation. The caller must ensure VARCHAR values contain valid UTF-8.
+	auto AssignStringUnsafe(idx_t index, std::string_view data) -> void;
+
+	/// Writes a string value into the vector without UTF-8 validation.
 	/// @param index The element to write: any index within the size of a FLAT vector, only 0 for a CONSTANT one.
-	/// @param value A token from this vector's own heap. A non-inlined token from another vector dangles.
+	/// @param value A string value from this vector's own heap. A non-inlined value from another vector dangles.
+	/// VARCHAR values must contain valid UTF-8.
 	auto SetString(idx_t index, varchar_t value) -> void;
 
 private:
@@ -2459,6 +2505,7 @@ public:
 	/// @param state The append state to append through.
 	/// @param chunk The rows to append. The chunk's column types must equal the collection's exactly, and the chunk is
 	/// only borrowed: it can be reused, refilled and appended again.
+	/// VARCHAR values must already be valid UTF-8; append does not validate text.
 	/// @throws InvalidInputException When the chunk's columns do not match the collection's.
 	auto Append(AppendState &state, const DataChunk &chunk) -> void;
 
@@ -2549,7 +2596,7 @@ public:
 	}
 
 	/// Buffers a whole chunk. Its column types must equal `ColumnTypes()` exactly; a mismatch is refused before
-	/// anything is copied.
+	/// anything is copied. VARCHAR values must already be valid UTF-8; append does not validate text.
 	/// @throws InvalidInputException When the chunk's columns do not match, or a previous buffer operation failed.
 	void AppendChunk(DataChunk &chunk);
 

@@ -94,6 +94,10 @@ bool ColumnWriterStatistics::HasNaN() {
 	return false;
 }
 
+idx_t ColumnWriterStatistics::GetNaNCount() {
+	return 0;
+}
+
 bool ColumnWriterStatistics::MinIsExact() {
 	return true;
 }

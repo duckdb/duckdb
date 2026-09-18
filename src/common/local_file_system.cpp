@@ -1,6 +1,7 @@
 #include "duckdb/common/local_file_system.hpp"
 
 #include "duckdb/common/checksum.hpp"
+#include "duckdb/common/enums/file_sync_mode.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/helper.hpp"
@@ -814,21 +815,26 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 }
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
-	int fd = handle.Cast<UnixFileHandle>().fd;
-
-#if HAVE_FULLFSYNC
-	// On macOS and iOS, fsync() doesn't guarantee durability past power failures. fcntl(F_FULLFSYNC) is required for
-	// that purpose. Some filesystems don't support fcntl(F_FULLFSYNC), and require a fallback to fsync().
-	if (::fcntl(fd, F_FULLFSYNC) == 0) {
+	auto &unix_handle = handle.Cast<UnixFileHandle>();
+	auto fsync_mode = unix_handle.db ? Settings::Get<FsyncModeSetting>(*unix_handle.db) : FileSyncMode::STANDARD;
+	if (fsync_mode == FileSyncMode::NONE) {
 		return;
 	}
-#endif // HAVE_FULLFSYNC
+	int fd = unix_handle.fd;
 
-#if HAVE_FDATASYNC
+#ifdef F_FULLFSYNC
+	// On macOS and iOS, fsync() doesn't guarantee durability past power failures. fcntl(F_FULLFSYNC) is required for
+	// that purpose. Some filesystems don't support fcntl(F_FULLFSYNC), and require a fallback to fsync().
+	if (fsync_mode == FileSyncMode::FULL && ::fcntl(fd, F_FULLFSYNC) == 0) {
+		return;
+	}
+#endif // F_FULLFSYNC
+
+#ifdef DUCKDB_HAVE_FDATASYNC
 	bool sync_success = ::fdatasync(fd) == 0;
 #else
 	bool sync_success = ::fsync(fd) == 0;
-#endif // HAVE_FDATASYNC
+#endif // DUCKDB_HAVE_FDATASYNC
 
 	if (sync_success) {
 		return;
@@ -1130,8 +1136,9 @@ static FileMetadata StatsFromDirInfo(const FILE_ID_BOTH_DIR_INFO &entry) {
 
 struct WindowsFileHandle : public FileHandle {
 public:
-	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd, FileOpenFlags flags)
-	    : FileHandle(file_system, path, flags), position(0), fd(fd) {
+	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd, FileOpenFlags flags,
+	                  optional_ptr<DatabaseInstance> db)
+	    : FileHandle(file_system, path, flags), position(0), fd(fd), db(db) {
 	}
 	~WindowsFileHandle() override {
 		Close();
@@ -1139,6 +1146,7 @@ public:
 
 	idx_t position;
 	HANDLE fd;
+	optional_ptr<DatabaseInstance> db;
 
 public:
 	void Close() override {
@@ -1289,7 +1297,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
 		throw IOException("Cannot open file \"%s\": %s%s", abs_path, error, extended_error);
 	}
-	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile, flags);
+	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile, flags, FileOpener::TryGetDatabase(opener));
 	if (flags.OpenForAppending()) {
 		auto file_size = GetFileSize(*handle);
 		SetFilePointer(*handle, file_size);
@@ -1605,7 +1613,12 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 }
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
-	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
+	auto &windows_handle = handle.Cast<WindowsFileHandle>();
+	auto fsync_mode = windows_handle.db ? Settings::Get<FsyncModeSetting>(*windows_handle.db) : FileSyncMode::STANDARD;
+	if (fsync_mode == FileSyncMode::NONE) {
+		return;
+	}
+	HANDLE hFile = windows_handle.fd;
 	if (FlushFileBuffers(hFile) == 0) {
 		throw IOException("Could not flush file handle to disk!");
 	}

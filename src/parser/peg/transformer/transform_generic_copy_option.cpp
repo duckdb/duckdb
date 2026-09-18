@@ -87,7 +87,27 @@ static GenericCopyOption BuildGenericCopyOption(const Identifier &generic_copy_o
                                                 optional<GenericCopyOptionValue> generic_copy_option_value) {
 	GenericCopyOption copy_option;
 	copy_option.name = Identifier(StringUtil::Lower(generic_copy_option_name.GetIdentifierName()));
-	if (!generic_copy_option_value || !generic_copy_option_value->has_value) {
+	const bool has_value = generic_copy_option_value && generic_copy_option_value->has_value;
+	if (!has_value && copy_option.name == "PARTITION_PATH") {
+		throw ParserException("PARTITION_PATH expects an expression");
+	}
+	if (!has_value) {
+		return copy_option;
+	}
+
+	if (copy_option.name == "PARTITION_PATH") {
+		// kept as-is, as it is bound against the partition columns
+		if (!generic_copy_option_value->is_order_list) {
+			copy_option.expression = std::move(generic_copy_option_value->expression);
+			return copy_option;
+		}
+		// an expression wrapped in () will trigger this case
+		auto &orders = generic_copy_option_value->order_list;
+		if (orders.size() != 1 || orders[0].type != OrderType::ORDER_DEFAULT ||
+		    orders[0].null_order != OrderByNullType::ORDER_DEFAULT) {
+			throw ParserException("PARTITION_PATH expects a single expression");
+		}
+		copy_option.expression = std::move(orders[0].expression);
 		return copy_option;
 	}
 

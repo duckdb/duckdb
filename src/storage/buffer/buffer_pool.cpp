@@ -357,7 +357,10 @@ BufferPool::EvictionResult BufferPool::EvictObjectCacheEntries(MemoryTag tag, id
 
 	bool success = false;
 	while (!object_cache->IsEmpty()) {
-		const idx_t freed_mem = object_cache->EvictToReduceMemory(extra_memory);
+		const idx_t used = memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH);
+		const idx_t overshoot = used > memory_limit ? (used - memory_limit) : 0;
+		const idx_t target = MaxValue(extra_memory, overshoot);
+		const idx_t freed_mem = object_cache->EvictToReduceMemory(target);
 		// Break if all entries cannot be evicted.
 		if (freed_mem == 0) {
 			break;

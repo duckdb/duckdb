@@ -88,7 +88,11 @@ void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, Identifier &c
 	auto &search_path = retriever.GetSearchPath();
 	auto catalog_names = search_path.GetCatalogsForSchema(schema);
 	if (catalog_names.empty()) {
-		catalog_names.emplace_back(DatabaseManager::GetDefaultDatabase(context));
+		// with no default database there is no schema for the name to be ambiguous with
+		auto default_database = DatabaseManager::TryGetDefaultDatabase(context);
+		if (!IsInvalidCatalog(default_database)) {
+			catalog_names.emplace_back(std::move(default_database));
+		}
 	}
 	for (auto &catalog_name : catalog_names) {
 		auto catalog_ptr = Catalog::GetCatalogEntry(retriever, catalog_name);

@@ -188,6 +188,9 @@ RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, con
 			    order_by, column_type, order_type, null_order, storage_index, row_offset.GetIndex(), partition_stats);
 			if (offset_puning_result.pruned_row_group_count > 0 || offset_puning_result.leading_null_group_offset > 0) {
 				// We can prune row groups and/or reduce the offset by consuming definite NULL-only groups
+				if (!logical_limit.unpruned_offset.IsValid()) {
+					logical_limit.unpruned_offset = row_offset;
+				}
 				logical_limit.offset_val =
 				    BoundLimitNode::ConstantValue(NumericCast<int64_t>(offset_puning_result.offset_remainder));
 
