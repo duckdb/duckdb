@@ -38,6 +38,7 @@
 #include "duckdb/common/enums/dialect_compatibility_mode.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
+#include "duckdb/common/enums/file_sync_mode.hpp"
 #include "duckdb/common/enums/file_write_mode.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/enums/function_errors.hpp"
@@ -2582,6 +2583,25 @@ const char* EnumUtil::ToChars<FileNameSegmentType>(FileNameSegmentType value) {
 template<>
 FileNameSegmentType EnumUtil::FromString<FileNameSegmentType>(const char *value) {
 	return static_cast<FileNameSegmentType>(StringUtil::StringToEnum(GetFileNameSegmentTypeValues(), 4, "FileNameSegmentType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetFileSyncModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(FileSyncMode::STANDARD), "STANDARD" },
+		{ static_cast<uint32_t>(FileSyncMode::NONE), "NONE" },
+		{ static_cast<uint32_t>(FileSyncMode::FULL), "FULL" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<FileSyncMode>(FileSyncMode value) {
+	return StringUtil::EnumToString(GetFileSyncModeValues(), 3, "FileSyncMode", static_cast<uint32_t>(value));
+}
+
+template<>
+FileSyncMode EnumUtil::FromString<FileSyncMode>(const char *value) {
+	return static_cast<FileSyncMode>(StringUtil::StringToEnum(GetFileSyncModeValues(), 3, "FileSyncMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetFileWriteModeValues() {

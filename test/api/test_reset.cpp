@@ -90,6 +90,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"explain_output", {{"all", "optimized_only", "physical_only"}}},
 	    {"file_search_path", {"test"}},
 	    {"force_compression", {"uncompressed", "uncompressed"}},
+	    {"fsync_mode", {"NONE"}},
 	    {"home_directory", {"test"}},
 	    {"allow_extensions_metadata_mismatch", {"true"}},
 	    {"extension_directory", {"test"}},

@@ -1537,6 +1537,21 @@ struct ForceCompressionSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct FsyncModeSetting {
+	using RETURN_TYPE = FileSyncMode;
+	static constexpr const char *Name = "fsync_mode";
+	static constexpr const char *Description =
+	    "How to synchronize database file changes to stable storage (STANDARD, NONE or FULL). NONE may cause database "
+	    "corruption after an operating system or hardware crash. FULL uses fullfsync on macOS.";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "STANDARD";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct GeometryMinimumShreddingSize {
 	using RETURN_TYPE = int64_t;
 	static constexpr const char *Name = "geometry_minimum_shredding_size";
