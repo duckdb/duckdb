@@ -31,7 +31,7 @@ CompiledGrammar &Parser::GetGrammar() {
 		if (options.compiled_grammar) {
 			compiled_grammar = options.compiled_grammar;
 		} else {
-			compiled_grammar = CompiledGrammar::Create();
+			compiled_grammar = CompiledGrammar::GetDefault();
 		}
 	}
 	return *compiled_grammar;
