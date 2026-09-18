@@ -75,7 +75,7 @@ std::vector<int64_t> CollectBigints(QueryResult result) {
 }
 
 [[noreturn]] void NotFound(const std::string &path) {
-	throw Exception(DUCKDB_V2_ERROR_IO_FILE_NOT_FOUND, "IO Error: mem: no such file: " + path);
+	throw FileNotFoundException("IO Error: mem: no such file: " + path);
 }
 
 // `*` and `?` match within one path component, `**` across components.
@@ -384,8 +384,8 @@ TEST_CASE("Stable C++ API: a virtual file system takes COPY TO and the consumer 
 	fs.CreateDirectory("mem://out/sub");
 	REQUIRE(fs.Stat("mem://out/sub").GetType() == FileType::DIRECTORY);
 	fs.RemoveFile("mem://out/y.csv");
-	// The callback's "not found" reaches the consumer as an IO error carrying its text.
-	REQUIRE_THROWS_MATCHES(fs.RemoveFile("mem://out/y.csv"), Exception, HasErrorCode(DUCKDB_V2_ERROR_IO_GENERAL));
+	// The callback's "not found" reaches the consumer as the typed exception, carrying its text.
+	REQUIRE_THROWS_AS(fs.RemoveFile("mem://out/y.csv"), FileNotFoundException);
 	REQUIRE_THROWS_WITH(fs.RemoveFile("mem://out/y.csv"), Catch::Contains("mem: no such file"));
 	fs.RemoveDirectory("mem://out");
 	REQUIRE(store.files.empty());
@@ -400,10 +400,11 @@ TEST_CASE("Stable C++ API: virtual file system callback errors and open values",
 	store.files["mem://v.txt"] = "x";
 	RegisterMem(conn, store);
 
-	// A missing file surfaces the open callback's error, as an IO error carrying its text.
+	// A missing file surfaces the open callback's error as the typed exception, carrying its text.
 	auto fs = conn.GetFileSystem();
+	REQUIRE_THROWS_AS(fs.OpenFile("mem://missing.csv", {FileFlags::READ}), FileNotFoundException);
 	REQUIRE_THROWS_MATCHES(fs.OpenFile("mem://missing.csv", {FileFlags::READ}), Exception,
-	                       HasErrorCode(DUCKDB_V2_ERROR_IO_GENERAL));
+	                       HasErrorCode(DUCKDB_V2_ERROR_IO_FILE_NOT_FOUND));
 	REQUIRE_THROWS_WITH(fs.OpenFile("mem://missing.csv", {FileFlags::READ}), Catch::Contains("mem: no such file"));
 
 	// Values attached to an open reach the callback; without one the lookup comes back empty.

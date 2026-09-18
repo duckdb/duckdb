@@ -210,6 +210,10 @@ InterruptException::InterruptException(const std::string &message, std::string r
     : Exception(DUCKDB_V2_ERROR_RUNTIME_INTERRUPT, message, std::move(raw_message)) {
 }
 
+FileNotFoundException::FileNotFoundException(const std::string &message, std::string raw_message)
+    : Exception(DUCKDB_V2_ERROR_IO_FILE_NOT_FOUND, message, std::move(raw_message)) {
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // Error Handling Helpers
 //----------------------------------------------------------------------------------------------------------------------
@@ -237,6 +241,8 @@ auto CheckedAPICall(F &&func, ARGS &&...args) -> void {
 			throw InvalidInputException(message, std::move(raw));
 		case DUCKDB_V2_ERROR_RUNTIME_INTERRUPT:
 			throw InterruptException(message, std::move(raw));
+		case DUCKDB_V2_ERROR_IO_FILE_NOT_FOUND:
+			throw FileNotFoundException(message, std::move(raw));
 		default:
 			throw Exception(code, std::move(message), std::move(raw));
 		}

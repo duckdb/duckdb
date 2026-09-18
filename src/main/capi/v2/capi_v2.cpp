@@ -18,6 +18,8 @@ auto GetErrorCodeFromExceptionType(ExceptionType type) -> DUCKDB_V2_ERROR {
 	// IO
 	case ExceptionType::IO:
 		return DUCKDB_V2_ERROR_IO_GENERAL;
+	case ExceptionType::FILE_NOT_FOUND:
+		return DUCKDB_V2_ERROR_IO_FILE_NOT_FOUND;
 	case ExceptionType::NETWORK:
 		return DUCKDB_V2_ERROR_IO_NETWORK;
 	case ExceptionType::HTTP:
@@ -121,10 +123,9 @@ auto TryGetExceptionTypeFromErrorCode(DUCKDB_V2_ERROR code) -> optional<Exceptio
 		return ExceptionType::OBJECT_SIZE;
 	// IO
 	case DUCKDB_V2_ERROR_IO_GENERAL:
-	case DUCKDB_V2_ERROR_IO_FILE_NOT_FOUND:
-		// A missing file is an IO error to the engine; the specific code is what a virtual file system's callbacks
-		// report it with.
 		return ExceptionType::IO;
+	case DUCKDB_V2_ERROR_IO_FILE_NOT_FOUND:
+		return ExceptionType::FILE_NOT_FOUND;
 
 	case DUCKDB_V2_ERROR_IO_NETWORK:
 		return ExceptionType::NETWORK;

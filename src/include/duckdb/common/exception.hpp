@@ -92,7 +92,8 @@ enum class ExceptionType : uint8_t {
 	INVALID_CONFIGURATION =
 	    42, // An invalid configuration was detected (e.g. a Secret param was missing, or a required setting not found)
 	DATA_CORRUPTION = 43, // Data corruption was detected in persistent storage
-	RESOURCE_IN_USE = 44  // A resource is already in use
+	RESOURCE_IN_USE = 44, // A resource is already in use
+	FILE_NOT_FOUND = 45   // A file that does not exist
 };
 
 class Exception : public std::runtime_error {
@@ -249,6 +250,18 @@ public:
 	template <typename... ARGS>
 	explicit IOException(const unordered_map<string, string> &extra_info, const string &msg, ARGS &&...params)
 	    : IOException(extra_info, ConstructMessage(msg, std::forward<ARGS>(params)...)) {
+	}
+};
+
+//! A file that does not exist. An IOException, so handlers of those see it too.
+//! Only used by the C-API for now.
+class FileNotFoundException : public IOException {
+public:
+	DUCKDB_API explicit FileNotFoundException(const string &msg);
+
+	template <typename... ARGS>
+	explicit FileNotFoundException(const string &msg, ARGS &&...params)
+	    : FileNotFoundException(ConstructMessage(msg, std::forward<ARGS>(params)...)) {
 	}
 };
 

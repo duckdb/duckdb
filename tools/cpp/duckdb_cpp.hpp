@@ -315,6 +315,13 @@ public:
 	explicit InterruptException(const std::string &message, std::string raw_message = {});
 };
 
+/// A file that does not exist: thrown by file operations on a missing path, and what a virtual file system callback
+/// throws to report one, which lets callers that asked for it receive no file instead of an error.
+class FileNotFoundException : public Exception {
+public:
+	explicit FileNotFoundException(const std::string &message, std::string raw_message = {});
+};
+
 //----------------------------------------------------------------------------------------------------------------------
 // Database Option
 //----------------------------------------------------------------------------------------------------------------------
