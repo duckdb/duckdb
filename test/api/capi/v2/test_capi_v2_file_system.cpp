@@ -19,24 +19,11 @@ duckdb_v2_file_system_handle FsOf(duckdb_v2_connection_handle conn) {
 	return fs;
 }
 
-// Builds a set of options with the given flags applied one at a time.
-duckdb_v2_file_open_options_handle FsOptions(duckdb_v2_file_system_handle fs,
-                                             const std::vector<DUCKDB_V2_FILE_FLAG> &flags) {
-	duckdb_v2_file_open_options_handle options = nullptr;
-	REQUIRE(duckdb_v2_file_open_options_create(fs, &options, nullptr) == DUCKDB_V2_ERROR_NONE);
-	for (auto flag : flags) {
-		REQUIRE(duckdb_v2_file_open_options_set_flag(options, flag, nullptr) == DUCKDB_V2_ERROR_NONE);
-	}
-	return options;
-}
-
 // Opens with nothing but flags, which is what most of these cases need.
 duckdb_v2_file_handle FsOpen(duckdb_v2_file_system_handle fs, const std::string &path,
                              const std::vector<DUCKDB_V2_FILE_FLAG> &flags) {
-	auto options = FsOptions(fs, flags);
 	duckdb_v2_file_handle handle = nullptr;
-	auto rc = duckdb_v2_file_system_open(fs, Convert(path), options, &handle, nullptr);
-	duckdb_v2_file_open_options_destroy(&options);
+	auto rc = duckdb_v2_file_system_open(fs, Convert(path), flags.data(), flags.size(), nullptr, &handle, nullptr);
 	REQUIRE(rc == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(handle != nullptr);
 	return handle;
@@ -45,10 +32,7 @@ duckdb_v2_file_handle FsOpen(duckdb_v2_file_system_handle fs, const std::string 
 // The same, reporting the code rather than asserting success.
 DUCKDB_V2_ERROR FsTryOpen(duckdb_v2_file_system_handle fs, const std::string &path,
                           const std::vector<DUCKDB_V2_FILE_FLAG> &flags, duckdb_v2_file_handle *out) {
-	auto options = FsOptions(fs, flags);
-	auto rc = duckdb_v2_file_system_open(fs, Convert(path), options, out, nullptr);
-	duckdb_v2_file_open_options_destroy(&options);
-	return rc;
+	return duckdb_v2_file_system_open(fs, Convert(path), flags.data(), flags.size(), nullptr, out, nullptr);
 }
 
 void FsWrite(duckdb_v2_file_handle handle, const std::string &data) {
@@ -222,13 +206,14 @@ TEST_CASE("V2 file system: open refusals", "[capi_v2][file_system]") {
 	REQUIRE(FsTryOpen(fs, missing, {DUCKDB_V2_FILE_FLAG_READ}, &handle) != DUCKDB_V2_ERROR_NONE);
 	REQUIRE(handle == nullptr);
 
-	// Options that were never given flags cannot say whether the file is being read or written.
+	// An open without flags cannot say whether the file is being read or written.
 	auto path = duckdb::TestCreatePath("v2_fs_flags.bin");
-	duckdb_v2_file_open_options_handle empty = nullptr;
-	REQUIRE(duckdb_v2_file_open_options_create(fs, &empty, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_file_system_open(fs, Convert(path), empty, &handle, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(FsTryOpen(fs, path, {}, &handle) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(handle == nullptr);
-	duckdb_v2_file_open_options_destroy(&empty);
+	// INVALID names no behaviour, and neither does a value outside the enum.
+	REQUIRE(FsTryOpen(fs, path, {DUCKDB_V2_FILE_FLAG_INVALID}, &handle) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(FsTryOpen(fs, path, {static_cast<DUCKDB_V2_FILE_FLAG>(99)}, &handle) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(handle == nullptr);
 }
 
 TEST_CASE("V2 file system: close leaves the handle destroyable", "[capi_v2][file_system]") {
@@ -258,15 +243,13 @@ TEST_CASE("V2 file system: null arguments and destroy null-safety", "[capi_v2][f
 	REQUIRE(duckdb_v2_file_system_get_from_connection(nullptr, &out_fs, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_file_system_get_from_connection(fx.conn, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_file_system_get_from_context(nullptr, &out_fs, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	duckdb_v2_file_open_options_handle options = nullptr;
-	REQUIRE(duckdb_v2_file_open_options_create(fs, &options, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_file_open_options_set_flag(options, DUCKDB_V2_FILE_FLAG_READ, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_file_system_open(nullptr, Convert(path), options, &out_handle, nullptr) ==
+	const DUCKDB_V2_FILE_FLAG read_flag = DUCKDB_V2_FILE_FLAG_READ;
+	REQUIRE(duckdb_v2_file_system_open(nullptr, Convert(path), &read_flag, 1, nullptr, &out_handle, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_file_system_open(fs, Convert(path), nullptr, &out_handle, nullptr) ==
+	REQUIRE(duckdb_v2_file_system_open(fs, Convert(path), nullptr, 1, nullptr, &out_handle, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_file_system_open(fs, Convert(path), options, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	duckdb_v2_file_open_options_destroy(&options);
+	REQUIRE(duckdb_v2_file_system_open(fs, Convert(path), &read_flag, 1, nullptr, nullptr, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	REQUIRE(duckdb_v2_file_read(nullptr, buffer, 4, &count, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_file_read(handle, nullptr, 4, &count, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
@@ -380,82 +363,106 @@ TEST_CASE("V2 file system: positional read and write null arguments", "[capi_v2]
 	duckdb_v2_file_destroy(&handle);
 }
 
-TEST_CASE("V2 file system: open options carry flags and values", "[capi_v2][file_system]") {
+TEST_CASE("V2 file system: metadata accompanies an open", "[capi_v2][file_system]") {
 	EnvFixture fx;
 	auto fs = FsOf(fx.conn);
 	auto path = duckdb::TestCreatePath("v2_fs_options.bin");
 
-	duckdb_v2_file_open_options_handle options = nullptr;
-	REQUIRE(duckdb_v2_file_open_options_create(fs, &options, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(options != nullptr);
-	REQUIRE(duckdb_v2_file_open_options_set_flag(options, DUCKDB_V2_FILE_FLAG_WRITE, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_file_open_options_set_flag(options, DUCKDB_V2_FILE_FLAG_CREATE_NEW, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
-	// Applying the same flag twice is harmless.
-	REQUIRE(duckdb_v2_file_open_options_set_flag(options, DUCKDB_V2_FILE_FLAG_WRITE, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_file_metadata_handle metadata = nullptr;
+	REQUIRE(duckdb_v2_file_metadata_create(&metadata, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(metadata != nullptr);
+	REQUIRE(duckdb_v2_file_metadata_set_size(metadata, 4, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	// Values a file system does not recognise are carried and ignored rather than rejected.
-	auto size = MakeInt64Value(fx.conn, 4);
-	REQUIRE(duckdb_v2_file_open_options_set_value(options, Convert("file_size"), size, nullptr) ==
+	auto unknown = MakeVarcharValue(fx.conn, "nobody-reads-this");
+	REQUIRE(duckdb_v2_file_metadata_set_value(metadata, Convert("made_up_option"), unknown, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 	// Copied at the call, so the value can go immediately.
-	duckdb_v2_value_destroy(&size);
-	auto unknown = MakeVarcharValue(fx.conn, "nobody-reads-this");
-	REQUIRE(duckdb_v2_file_open_options_set_value(options, Convert("made_up_option"), unknown, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_value_destroy(&unknown);
+	duckdb_v2_value_handle read_back = nullptr;
+	REQUIRE(duckdb_v2_file_metadata_get_value(metadata, Convert("made_up_option"), &read_back, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(read_back != nullptr);
+	duckdb_v2_value_destroy(&read_back);
+	REQUIRE(duckdb_v2_file_metadata_get_value(metadata, Convert("another_option"), &read_back, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(read_back == nullptr);
 
+	// Passing the same flag twice is harmless.
+	const std::vector<DUCKDB_V2_FILE_FLAG> flags {DUCKDB_V2_FILE_FLAG_WRITE, DUCKDB_V2_FILE_FLAG_CREATE_NEW,
+	                                              DUCKDB_V2_FILE_FLAG_WRITE};
 	duckdb_v2_file_handle handle = nullptr;
-	REQUIRE(duckdb_v2_file_system_open(fs, Convert(path), options, &handle, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_file_system_open(fs, Convert(path), flags.data(), flags.size(), metadata, &handle, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	FsWrite(handle, "data");
 	duckdb_v2_file_destroy(&handle);
 
-	// One options object opens as many files as you like, and setting a name again replaces it.
-	auto again = MakeInt64Value(fx.conn, 8);
-	REQUIRE(duckdb_v2_file_open_options_set_value(options, Convert("file_size"), again, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_value_destroy(&again);
+	// The same metadata accompanies as many opens as you like, and is copied by another.
 	auto second = duckdb::TestCreatePath("v2_fs_options_second.bin");
-	REQUIRE(duckdb_v2_file_system_open(fs, Convert(second), options, &handle, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_file_system_open(fs, Convert(second), flags.data(), flags.size(), metadata, &handle, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_file_destroy(&handle);
+	duckdb_v2_file_metadata_handle copy = nullptr;
+	REQUIRE(duckdb_v2_file_metadata_create(&copy, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_file_metadata_copy(copy, metadata, nullptr) == DUCKDB_V2_ERROR_NONE);
+	idx_t size = 0;
+	bool known = false;
+	REQUIRE(duckdb_v2_file_metadata_get_size(copy, &size, &known, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(known);
+	REQUIRE(size == 4);
+	REQUIRE(duckdb_v2_file_metadata_get_value(copy, Convert("made_up_option"), &read_back, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(read_back != nullptr);
+	duckdb_v2_value_destroy(&read_back);
+	duckdb_v2_file_metadata_destroy(&copy);
 
-	// Destroying the options does not affect files already opened with them.
-	REQUIRE(duckdb_v2_file_open_options_destroy(&options) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(options == nullptr);
-	REQUIRE(duckdb_v2_file_open_options_destroy(&options) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_file_open_options_destroy(nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_file_metadata_destroy(&metadata) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(metadata == nullptr);
 
 	auto reader = FsOpen(fs, path, {DUCKDB_V2_FILE_FLAG_READ});
 	REQUIRE(FsReadAll(reader, 32) == "data");
 	duckdb_v2_file_destroy(&reader);
 }
 
-TEST_CASE("V2 file system: open options null arguments", "[capi_v2][file_system]") {
+TEST_CASE("V2 file system: metadata value null arguments and reserved names", "[capi_v2][file_system]") {
 	EnvFixture fx;
-	auto fs = FsOf(fx.conn);
-	duckdb_v2_file_open_options_handle options = nullptr;
-	REQUIRE(duckdb_v2_file_open_options_create(fs, &options, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_file_metadata_handle metadata = nullptr;
+	REQUIRE(duckdb_v2_file_metadata_create(&metadata, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto value = MakeInt64Value(fx.conn, 1);
+	duckdb_v2_value_handle out = nullptr;
 
-	REQUIRE(duckdb_v2_file_open_options_create(nullptr, &options, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_file_open_options_create(fs, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_file_open_options_set_flag(nullptr, DUCKDB_V2_FILE_FLAG_READ, nullptr) ==
+	REQUIRE(duckdb_v2_file_metadata_create(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_file_metadata_set_value(nullptr, Convert("k"), value, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_file_metadata_set_value(metadata, Convert("k"), nullptr, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	// INVALID names no behaviour, and neither does a value outside the enum.
-	REQUIRE(duckdb_v2_file_open_options_set_flag(options, DUCKDB_V2_FILE_FLAG_INVALID, nullptr) ==
+	REQUIRE(duckdb_v2_file_metadata_get_value(nullptr, Convert("k"), &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_file_metadata_get_value(metadata, Convert("k"), nullptr, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_file_open_options_set_flag(options, static_cast<DUCKDB_V2_FILE_FLAG>(99), nullptr) ==
+	REQUIRE(duckdb_v2_file_metadata_copy(nullptr, metadata, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_file_metadata_copy(metadata, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	// An empty name is not a usable key, and the typed fields have setters of their own.
+	REQUIRE(duckdb_v2_file_metadata_set_value(metadata, Convert(""), value, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_file_metadata_set_value(metadata, Convert("file_size"), value, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_file_open_options_set_value(nullptr, Convert("k"), value, nullptr) ==
+	REQUIRE(duckdb_v2_file_metadata_set_value(metadata, Convert("FILE_SIZE"), value, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_file_open_options_set_value(options, Convert("k"), nullptr, nullptr) ==
+
+	// An option the engine knows is matched without regard to case and cast to the type it is read back as.
+	auto flag = MakeVarcharValue(fx.conn, "true");
+	REQUIRE(duckdb_v2_file_metadata_set_value(metadata, Convert("FORCE_FULL_DOWNLOAD"), flag, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_value_destroy(&flag);
+	REQUIRE(duckdb_v2_file_metadata_get_value(metadata, Convert("force_full_download"), &out, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(out != nullptr);
+	duckdb_v2_value_destroy(&out);
+	auto not_a_flag = MakeVarcharValue(fx.conn, "sometimes");
+	REQUIRE(duckdb_v2_file_metadata_set_value(metadata, Convert("force_full_download"), not_a_flag, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	// An empty name is not a usable key.
-	REQUIRE(duckdb_v2_file_open_options_set_value(options, Convert(""), value, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	duckdb_v2_value_destroy(&not_a_flag);
 
 	duckdb_v2_value_destroy(&value);
-	duckdb_v2_file_open_options_destroy(&options);
+	duckdb_v2_file_metadata_destroy(&metadata);
 }
 
 } // namespace test_capi_v2

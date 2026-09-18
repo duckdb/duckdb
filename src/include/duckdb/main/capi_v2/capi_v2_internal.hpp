@@ -378,31 +378,6 @@ inline auto Convert(CV2FileSystem *fs) -> duckdb_v2_file_system_handle {
 	return reinterpret_cast<duckdb_v2_file_system_handle>(fs);
 }
 
-// How a file is opened, owned. Holds the flag word as given rather than the engine's FileOpenFlags, so that
-// "no flags set yet" stays distinguishable and is reported when the options are actually used.
-class CV2FileOpenOptions {
-public:
-	FileOpenFlags flags;
-	//! Flags are applied one at a time, so this is what distinguishes "none applied yet" from any particular set.
-	bool has_flags = false;
-	//! Built on first use: an absent extended info is meaningfully different from an empty one.
-	shared_ptr<ExtendedOpenFileInfo> extended_info;
-
-	auto Options() -> unordered_map<string, Value> & {
-		if (!extended_info) {
-			extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
-		}
-		return extended_info->options;
-	}
-};
-
-inline auto Convert(duckdb_v2_file_open_options_handle options) -> CV2FileOpenOptions * {
-	return reinterpret_cast<CV2FileOpenOptions *>(options);
-}
-inline auto Convert(CV2FileOpenOptions *options) -> duckdb_v2_file_open_options_handle {
-	return reinterpret_cast<duckdb_v2_file_open_options_handle>(options);
-}
-
 // An open file, owned. Carries the context for the same reason the file system handle does.
 class CV2File {
 public:
@@ -423,79 +398,60 @@ inline auto Convert(CV2File *handle) -> duckdb_v2_file_handle {
 	return reinterpret_cast<duckdb_v2_file_handle>(handle);
 }
 
-// What is known about one file or directory. Filled in by a virtual file system's callbacks, read by consumers.
+// What is known about one file or directory: the engine's own metadata, whose extended info holds the named values.
+// Filled in by a virtual file system's callbacks, read by consumers.
 class CV2FileMetadata {
 public:
-	DUCKDB_V2_FILE_TYPE type = DUCKDB_V2_FILE_TYPE_INVALID;
-	optional<idx_t> size;
-	optional<int64_t> last_modified;
-	optional<string> version_tag;
+	FileMetadata data;
 
-	timestamp_t LastModified() const {
-		return last_modified ? timestamp_t(*last_modified) : timestamp_t::ninfinity();
+	CV2FileMetadata() = default;
+	explicit CV2FileMetadata(FileMetadata data_p) : data(std::move(data_p)) {
 	}
 
-	//! The listing options the engine hands back at open, under the names the local file system uses.
-	void FillOptions(unordered_map<string, Value> &options) const {
-		if (size) {
-			options.emplace("file_size", Value::UBIGINT(*size));
-		}
-		if (last_modified) {
-			options.emplace("last_modified", Value::TIMESTAMP(timestamp_t(*last_modified)));
-		}
-		if (version_tag) {
-			options.emplace("etag", Value(*version_tag));
-		}
-	}
-
-	//! The reverse of FillOptions: what a listing put into the open options.
-	static CV2FileMetadata FromOptions(const OpenFileInfo &file) {
-		CV2FileMetadata info;
-		if (!file.extended_info) {
-			return info;
-		}
-		auto &options = file.extended_info->options;
-		auto type = options.find("type");
-		if (type != options.end() && !type->second.IsNull()) {
-			info.type =
-			    type->second.ToString() == "directory" ? DUCKDB_V2_FILE_TYPE_DIRECTORY : DUCKDB_V2_FILE_TYPE_REGULAR;
-		}
-		auto size = options.find("file_size");
-		if (size != options.end() && !size->second.IsNull()) {
-			info.size = size->second.DefaultCastAs(LogicalType::UBIGINT).GetValue<uint64_t>();
-			if (info.type == DUCKDB_V2_FILE_TYPE_INVALID) {
-				info.type = DUCKDB_V2_FILE_TYPE_REGULAR;
+	//! Whether a name belongs to one of the typed fields, which have setters of their own. The engine matches the
+	//! names of the options it knows without regard to case.
+	static bool IsReservedName(const string &name) {
+		for (auto reserved : {"type", "file_size", "last_modified", "etag"}) {
+			if (StringUtil::CIEquals(name, reserved)) {
+				return true;
 			}
 		}
-		auto modified = options.find("last_modified");
-		if (modified != options.end() && !modified->second.IsNull()) {
-			info.last_modified = modified->second.DefaultCastAs(LogicalType::TIMESTAMP).GetValue<timestamp_t>().value;
-		}
-		auto etag = options.find("etag");
-		if (etag != options.end() && !etag->second.IsNull()) {
-			info.version_tag = etag->second.ToString();
-		}
-		return info;
+		return false;
 	}
 
-	//! The C type for the engine's, which distinguishes more kinds than the C API cares about.
-	static DUCKDB_V2_FILE_TYPE ToType(FileType type, bool open_file) {
-		switch (type) {
+	bool HasType() const {
+		return data.file_type != FileType::FILE_TYPE_INVALID;
+	}
+	bool HasSize() const {
+		return data.file_size >= 0;
+	}
+	bool HasLastModified() const {
+		return data.last_modification_time != timestamp_t::ninfinity() &&
+		       data.last_modification_time != timestamp_t::infinity();
+	}
+	bool HasVersionTag() const {
+		return !data.version_tag.empty();
+	}
+	bool IsEmpty() const {
+		return !HasType() && !HasSize() && !HasLastModified() && !HasVersionTag() && data.extended_file_info.empty();
+	}
+
+	//! The C type, where a type that was never set reads as a regular file.
+	DUCKDB_V2_FILE_TYPE Type() const {
+		switch (data.file_type) {
+		case FileType::FILE_TYPE_INVALID:
 		case FileType::FILE_TYPE_REGULAR:
 			return DUCKDB_V2_FILE_TYPE_REGULAR;
 		case FileType::FILE_TYPE_DIR:
 			return DUCKDB_V2_FILE_TYPE_DIRECTORY;
 		case FileType::FILE_TYPE_FIFO:
 			return DUCKDB_V2_FILE_TYPE_PIPE;
-		case FileType::FILE_TYPE_INVALID:
-			// The engine's default for a handle it cannot classify; an open file is a file.
-			return open_file ? DUCKDB_V2_FILE_TYPE_REGULAR : DUCKDB_V2_FILE_TYPE_OTHER;
 		default:
 			return DUCKDB_V2_FILE_TYPE_OTHER;
 		}
 	}
 
-	//! The engine's type for the C one.
+	//! The engine distinguishes more kinds than the C API cares about; a socket stands in for all the others.
 	static FileType ToEngineType(DUCKDB_V2_FILE_TYPE type) {
 		switch (type) {
 		case DUCKDB_V2_FILE_TYPE_REGULAR:
@@ -504,26 +460,68 @@ public:
 			return FileType::FILE_TYPE_DIR;
 		case DUCKDB_V2_FILE_TYPE_PIPE:
 			return FileType::FILE_TYPE_FIFO;
+		case DUCKDB_V2_FILE_TYPE_OTHER:
+			return FileType::FILE_TYPE_SOCKET;
 		default:
 			return FileType::FILE_TYPE_INVALID;
 		}
 	}
 
-	//! What the engine reports about a file: an open one, or one found by path.
-	static CV2FileMetadata FromMetadata(const FileMetadata &metadata, bool open_file) {
-		CV2FileMetadata info;
-		info.type = ToType(metadata.file_type, open_file);
-		if (metadata.file_size >= 0) {
-			info.size = NumericCast<idx_t>(metadata.file_size);
+	//! The options the engine carries from a listing to the open of a listed file. The engine stores each under the
+	//! name and type it reads it back as.
+	void FillOptions(ExtendedOpenFileInfo &info) const {
+		if (HasType()) {
+			info.SetUserOption("type", Value(data.file_type == FileType::FILE_TYPE_DIR ? "directory" : "file"));
 		}
-		if (metadata.last_modification_time != timestamp_t::ninfinity() &&
-		    metadata.last_modification_time != timestamp_t::infinity()) {
-			info.last_modified = metadata.last_modification_time.value;
+		if (HasSize()) {
+			info.SetUserOption("file_size", Value::UBIGINT(NumericCast<uint64_t>(data.file_size)));
 		}
-		if (!metadata.version_tag.empty()) {
-			info.version_tag = metadata.version_tag;
+		if (HasLastModified()) {
+			info.SetUserOption("last_modified", Value::TIMESTAMP(data.last_modification_time));
 		}
-		return info;
+		if (HasVersionTag()) {
+			info.SetUserOption("etag", Value(data.version_tag));
+		}
+		for (auto &entry : data.extended_file_info) {
+			info.SetUserOption(entry.first, entry.second);
+		}
+	}
+
+	//! The reverse of FillOptions: what an open request or a listing entry of the engine carries.
+	static CV2FileMetadata FromOptions(const OpenFileInfo &file) {
+		CV2FileMetadata result;
+		if (!file.extended_info) {
+			return result;
+		}
+		auto &info = *file.extended_info;
+		// The typed reads of the engine reject a NULL, which here only means that the field is not known.
+		auto is_known = [&](const char *name) {
+			auto entry = info.options.find(name);
+			return entry != info.options.end() && !entry->second.IsNull();
+		};
+		string type;
+		if (is_known("type") && info.TryGetOption("type", type)) {
+			result.data.file_type = type == "directory" ? FileType::FILE_TYPE_DIR : FileType::FILE_TYPE_REGULAR;
+		}
+		idx_t size;
+		if (is_known("file_size") && info.TryGetOption("file_size", size)) {
+			result.data.file_size = NumericCast<int64_t>(size);
+		}
+		// The engine has no typed read for a timestamp option.
+		if (is_known("last_modified")) {
+			result.data.last_modification_time =
+			    info.options.at("last_modified").DefaultCastAs(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
+		}
+		string version_tag;
+		if (is_known("etag") && info.TryGetOption("etag", version_tag)) {
+			result.data.version_tag = std::move(version_tag);
+		}
+		for (auto &entry : info.options) {
+			if (!IsReservedName(entry.first)) {
+				result.data.extended_file_info.emplace(entry.first, entry.second);
+			}
+		}
+		return result;
 	}
 };
 
@@ -539,7 +537,6 @@ class CV2FileListing {
 public:
 	struct Entry {
 		string path;
-		DUCKDB_V2_FILE_TYPE type;
 		CV2FileMetadata metadata;
 	};
 	//! A deque, so the metadata handed out for an entry stays valid while more entries are added.
@@ -547,9 +544,7 @@ public:
 
 	//! Adds an entry the engine reported, decoding what its options carry.
 	void Add(const OpenFileInfo &info) {
-		auto metadata = CV2FileMetadata::FromOptions(info);
-		auto type = metadata.type == DUCKDB_V2_FILE_TYPE_INVALID ? DUCKDB_V2_FILE_TYPE_REGULAR : metadata.type;
-		entries.push_back({info.path, type, std::move(metadata)});
+		entries.push_back({info.path, CV2FileMetadata::FromOptions(info)});
 	}
 };
 

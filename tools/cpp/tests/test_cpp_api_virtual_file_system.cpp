@@ -124,7 +124,7 @@ auto MemOpen(VirtualFileSystem::OpenInput &input) -> std::unique_ptr<VirtualFile
 	if (input.TryGetContext()) {
 		store.open_had_context++;
 	}
-	if (auto hint = input.GetValue("mem_hint")) {
+	if (auto hint = input.GetMetadata().GetValue("mem_hint")) {
 		store.last_open_value = std::to_string(hint->Get<int32_t>());
 	} else {
 		store.last_open_value.clear();
@@ -201,18 +201,20 @@ bool IsDirectory(MemStore &store, const std::string &path) {
 	return false;
 }
 
-void MemStatPath(Info &info, std::string_view path_view, FileMetadata &metadata) {
+auto MemStatPath(Info &info, std::string_view path_view, FileMetadata &metadata) -> bool {
 	auto &store = StoreOf(info);
 	auto path = std::string(path_view);
 	std::lock_guard<std::mutex> guard(store.lock);
 	auto file = store.files.find(path);
 	if (file != store.files.end()) {
 		metadata.SetType(FileType::REGULAR).SetSize(file->second.size());
-		return;
+		return true;
 	}
 	if (IsDirectory(store, path)) {
 		metadata.SetType(FileType::DIRECTORY);
+		return true;
 	}
+	return false;
 }
 
 void MemList(Info &info, std::string_view path_view, FileListing &listing) {
@@ -357,24 +359,25 @@ TEST_CASE("Stable C++ API: a virtual file system takes COPY TO and the consumer 
 
 	auto fs = conn.GetFileSystem();
 	auto metadata = fs.Stat("mem://out/x.csv");
-	REQUIRE(metadata.GetType() == FileType::REGULAR);
-	REQUIRE(metadata.GetSize().has_value());
-	REQUIRE(*metadata.GetSize() == store.files["mem://out/x.csv"].size());
-	REQUIRE(!metadata.GetLastModified().has_value());
-	REQUIRE(fs.Stat("mem://out").GetType() == FileType::DIRECTORY);
-	REQUIRE(fs.Stat("mem://out/missing.csv").GetType() == FileType::INVALID);
+	REQUIRE(metadata.has_value());
+	REQUIRE(metadata->GetType() == FileType::REGULAR);
+	REQUIRE(metadata->GetSize().has_value());
+	REQUIRE(*metadata->GetSize() == store.files["mem://out/x.csv"].size());
+	REQUIRE(!metadata->GetLastModified().has_value());
+	REQUIRE(fs.Stat("mem://out")->GetType() == FileType::DIRECTORY);
+	REQUIRE(!fs.Stat("mem://out/missing.csv").has_value());
 
 	auto listing = fs.List("mem://out");
 	REQUIRE(listing.GetEntryCount() == 1);
 	REQUIRE(listing.GetEntryPath(0) == "x.csv");
 	REQUIRE(listing.GetEntryType(0) == FileType::REGULAR);
-	REQUIRE(listing.GetEntryMetadata(0).GetSize() == metadata.GetSize());
+	REQUIRE(listing.GetEntryMetadata(0).GetSize() == metadata->GetSize());
 	REQUIRE_THROWS_MATCHES(listing.GetEntryPath(1), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 
 	// The open file reports the same size, and reads back at offsets.
 	{
 		auto file = fs.OpenFile("mem://out/x.csv", {FileFlags::READ});
-		REQUIRE(file.Stat().GetSize() == metadata.GetSize());
+		REQUIRE(file.Stat().GetSize() == metadata->GetSize());
 		char head[2] = {0, 0};
 		file.ReadAt(head, 1, 0);
 		REQUIRE(head[0] == 'i');
@@ -383,7 +386,7 @@ TEST_CASE("Stable C++ API: a virtual file system takes COPY TO and the consumer 
 	fs.Move("mem://out/x.csv", "mem://out/y.csv");
 	REQUIRE(fs.Glob("mem://out/*.csv").GetEntryPath(0) == "mem://out/y.csv");
 	fs.CreateDirectory("mem://out/sub");
-	REQUIRE(fs.Stat("mem://out/sub").GetType() == FileType::DIRECTORY);
+	REQUIRE(fs.Stat("mem://out/sub")->GetType() == FileType::DIRECTORY);
 	fs.RemoveFile("mem://out/y.csv");
 	// The callback's "not found" reaches the consumer as the typed exception, carrying its text.
 	REQUIRE_THROWS_AS(fs.RemoveFile("mem://out/y.csv"), FileNotFoundException);
@@ -409,10 +412,10 @@ TEST_CASE("Stable C++ API: virtual file system callback errors and open values",
 	REQUIRE_THROWS_WITH(fs.OpenFile("mem://missing.csv", {FileFlags::READ}), Catch::Contains("mem: no such file"));
 
 	// Values attached to an open reach the callback; without one the lookup comes back empty.
-	auto options = fs.CreateOpenOptions();
-	options.SetFlag(FileFlags::READ).SetValue("mem_hint", Value::Create(conn, static_cast<int32_t>(42)));
+	auto metadata = FileMetadata::Create();
+	metadata.SetValue("mem_hint", Value::Create(conn, static_cast<int32_t>(42)));
 	{
-		auto file = fs.OpenFile("mem://v.txt", options);
+		auto file = fs.OpenFile("mem://v.txt", {FileFlags::READ}, metadata);
 		REQUIRE(store.last_open_value == "42");
 	}
 	{

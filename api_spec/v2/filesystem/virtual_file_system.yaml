@@ -79,16 +79,17 @@ handles:
       `read_at`, `write_at`, `read`, `write`, `seek`, `tell`, `stat`, `sync`, `truncate`) operate on one file: "open"
       produces it from a path, the others act on what it produced. Every callback receives the shared info handle as its
       first argument and the handle of its own operation as its second. `claim`, `open` and the path callbacks receive
-      the path as a plain argument next to it, `open` its flags after that, and the other file callbacks
+      the path as a plain argument next to it, `open` its flags and metadata after that, and the other file callbacks
       the per-file state. The file system's user data is reachable from the shared info; a file callback finds what
       it needs in the per-file state the "open" callback attached.
 
       A callback reports a missing path the way the `file_system` function of the same name reports it to its
-      caller, so that an overlay can pass the answer on as it received it. The file system `stat` leaves the metadata
-      untouched and `glob` adds no entries, since a path that is not there is an ordinary answer to both. `open`,
-      `list`, `remove_file` and `move` report it as `ERROR_IO_FILE_NOT_FOUND`. `remove_directory` has nothing to
-      do for a directory that is not there and succeeds, and `create_directory` creates the parents that are
-      missing. Each callback repeats its own rule.
+      caller, so that an overlay can pass the answer on as it received it. The file system `stat` leaves its `exists`
+      output `false` and `glob` adds no entries, since a path that is not there is an ordinary answer to both. `open`,
+      `list`, `remove_file`, `remove_directory` and `move` report it as `ERROR_IO_FILE_NOT_FOUND`, and
+      `create_directory` creates the parents that are missing. A backend without directories, such as an object
+      store, cannot tell a missing directory from an empty one, and treats it as empty in `list` and
+      `remove_directory`. Each callback repeats its own rule.
 
       Open-file attempts, and other file-system level operations may run concurrently, and `claim` can be called from
       any thread as soon as `register` returns.
@@ -99,9 +100,9 @@ handles:
       
       A file system can delegate to other file systems. The shared info handle has a
       `get_file_system` function that returns the engine's file system, which is also reachable through a
-      context, and `[[vfs_file_open_get_options]]` turns an open request into options for 
-      `[[file_system_open]]`. This is how an overlay (caching, encryption, logging, ...) file system can open the 
-      underlying file with exactly the flags and values it was given. An overlay should claim paths of its own, 
+      context, and the "open" callback receives the same flags and metadata that `[[file_system_open]]` takes.
+      This is how an overlay (caching, encryption, logging, ...) file system can open the underlying file with
+      exactly the flags and values it was given, by passing them on. An overlay should claim paths of its own, 
       typically its own URI scheme, and map them onto the paths of the file system it wraps, since a path the overlay 
       itself claims would be routed back into itself recursively.
 
@@ -150,9 +151,9 @@ handles:
 
   vfs_file_open_info:
     description: |
-      A borrowed opaque handle to one file open operation. It carries the open request: the values the caller
-      attached, what a listing knew about the file, and the options to forward the request with, and it is where
-      the callback attaches the per-file state and reports the file's properties.
+      A borrowed opaque handle to one file open operation. It is where the callback attaches the per-file state
+      and reports the file's properties. The request itself, the path, the flags and the metadata, comes as plain
+      arguments.
 
   vfs_file_close_info:
     description: |
@@ -239,8 +240,8 @@ callbacks:
     description: |
       Opens a file.
 
-      The flags come as a complete list; the values the caller attached to the open and what a listing knew
-      about the file are read from `op_info`, and the context of the query opening it from `info`. On success
+      It receives what `[[file_system_open]]` takes: the path, the flags as a complete list, and the metadata
+      accompanying the open. The context of the query opening the file is read from `info`. On success
       the callback attaches per-file state via
       `[[vfs_file_open_set_data]]`, which every other file callback then receives, and reports any property of
       the file via `[[vfs_file_open_set_property]]`. A file opened with `FILE_FLAG_APPEND` starts with its cursor
@@ -275,6 +276,16 @@ callbacks:
       flag_count:
         type: idx
         description: The number of flags.
+      metadata:
+        type: file_metadata
+        description: |
+          What accompanies the open, to read and to fill in. Never null. It starts out holding what is already known
+          about the file: when the file was found through the "glob" callback, whatever that callback filled in about
+          the entry (size, modification time, version tag, named values of its own), so the backend does not need to
+          fetch it again, along with the hints the caller set as named values. Complete or correct it with the
+          `file_metadata_set_*` functions. What it holds when the callback returns is what the engine reports about
+          the open file if the file system has no file "stat" callback. Borrowed and valid only for the duration of
+          the callback, so a file callback that needs one of its values later keeps it in the per-file state.
       err:
         type: error_info
         indirection: 1
@@ -287,7 +298,8 @@ callbacks:
 
       The engine calls it once when it closes a file, before the file data's destructor. This is the place to
       release operating-system resources and, for a written file, to publish it. An object store would complete its
-      upload here, for example. A file opened for writing is always synced before it is closed. A file system whose
+      upload here, for example. Closing means publishing and nothing more: the engine calls "sync" itself where
+      it needs the data to be durable, and a close is not preceded by one. A file system whose
       per-file state needs no such step can leave this unset and rely on the destructor alone.
 
       If a file is destroyed without having been closed, which happens when an error unwinds past a writer, it is
@@ -556,8 +568,8 @@ callbacks:
       read the file as a pipe, and any other type means a regular file. The engine calls this whenever it needs the
       size, so it should be cheap.
 
-      This callback is optional. Without it the engine reports what the "open" callback left in
-      `[[vfs_file_open_get_metadata]]`, which for a file that a listing described takes no code at all. Once such a
+      This callback is optional. Without it the engine reports what the "open" callback left in the metadata it
+      was given, which for a file that a listing described takes no code at all. Once such a
       file is written or truncated, its size, modification time and version tag are no longer known. Set this
       callback for a file system that writes files whose size the engine asks for, or whose files change while
       they are open.
@@ -585,7 +597,8 @@ callbacks:
     description: |
       Flushes buffered writes to persistent storage.
 
-      The engine calls it when it needs written data to be durable, and before it closes a written file. A file
+      The engine calls it when it needs written data to be durable, as it does for database and write-ahead-log
+      files. Data files written by `COPY` are not synced, and a close is not preceded by a sync. A file
       system that leaves it unset is assumed to make every write durable immediately.
     parameters:
       info:
@@ -634,13 +647,15 @@ callbacks:
     description: |
       Reports what is known about a path, without opening it.
 
-      Fills in `metadata` with the type of the path and, for a regular file, whatever else is known. Size,
-      modification time and version tag are all optional, and what is filled in is what `[[file_system_stat]]`
-      reports for the path. Leaving `metadata` untouched means the path does not exist, which is not an error. The
-      type is what reports existence, so filling in anything else without it is an error. The engine uses this to
+      Sets `exists` when the path is there, and fills in `metadata` with its type and, for a regular file, whatever
+      else is known. Type, size, modification time and version tag are all optional, a path without a type is a
+      regular file, and what is filled in is what `[[file_system_stat]]` reports for the path. Leaving `exists` as
+      `false` means the path does not exist, which is not an error. Filling in `metadata` for a path reported as
+      absent is an error, since it means `exists` was forgotten. The engine uses this to
       check whether a file or directory exists before creating or overwriting it, whether it is about to write to a
       pipe, and to learn a file's size without opening it. If this callback is unset, the engine opens the file for
-      reading to find out instead, and lists a directory to learn whether it exists.
+      reading to find out instead, and lists a directory to learn whether it exists. Only a listing with entries
+      proves that, so an empty directory then counts as absent.
     parameters:
       info:
         type: vfs_info
@@ -654,6 +669,11 @@ callbacks:
       metadata:
         type: file_metadata
         description: Borrowed opaque handle to fill in. Valid only for the duration of the callback.
+      exists:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives whether the path exists. Starts out `false`.
       err:
         type: error_info
         indirection: 1
@@ -767,8 +787,9 @@ callbacks:
     description: |
       Removes a directory and everything inside it. The engine calls it when it overwrites partitioned output.
 
-      A directory that does not exist is not an error, since there is nothing left to remove.
-      `ERROR_IO_FILE_NOT_FOUND` is accepted and means the same.
+      Report a directory that does not exist as `ERROR_IO_FILE_NOT_FOUND`, like a missing file in
+      `[[vfs_remove_file_callback]]`. A backend without directories, such as an object store, cannot tell a missing
+      directory from an empty one and succeeds instead.
     parameters:
       info:
         type: vfs_info
@@ -1244,9 +1265,9 @@ functions:
       Sets the optional file system "stat" callback of the virtual file system.
 
       The callback reports what is known about a path. See `[[vfs_stat_callback]]`. Without it, every check for
-      a file costs an open for reading and every check for a directory a "list". A file system that cannot read,
-      or cannot list, then reports every such path as absent, so nothing protects an existing file from being
-      overwritten.
+      a file costs an open for reading and every check for a directory a "list", which only proves a directory
+      that has entries. A file system that cannot read, or cannot list, then reports every such path as absent, so
+      nothing protects an existing file from being overwritten.
     parameters:
       file_system:
         type: vfs
@@ -1388,87 +1409,6 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # Callback Functions: file system
   #---------------------------------------------------------------------------------------------------------------------
-  vfs_file_open_get_value:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
-    description: |
-      Retrieves a named value attached to the open request.
-
-      These are the values the caller attached with `[[file_open_options_set_value]]`, and their meaning is up to
-      this file system. Metadata that a listing of this file system reported about the file is read through
-      `[[vfs_file_open_get_metadata]]` instead. Names are case-sensitive. A name with no value is not an
-      error, and null is returned. The returned value is owned by the caller and must be destroyed via
-      `[[value_destroy]]`.
-    parameters:
-      info:
-        type: vfs_file_open_info
-        description: The file open info handle.
-      name:
-        type: str
-        description: The name of the value. Borrowed for the call only.
-      value:
-        type: value
-        indirection: 1
-        kind: OUT
-        description: Receives the value, or null if none was attached under that name. Owned by the caller; destroy via `[[value_destroy]]`.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  vfs_file_open_get_metadata:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
-    description: |
-      Retrieves what is known about the file being opened, for the "open" callback to read and to fill in.
-
-      When the file was found through the "glob" callback, whatever that callback filled in about the entry (size,
-      modification time, version tag) is already here, so the backend does not need to fetch it again. Read it with
-      `[[file_metadata_get_size]]` and its siblings, each of which reports whether its field is known, and complete
-      or correct it with `[[file_metadata_set_size]]` and its siblings. What it holds when the callback returns is
-      what the engine reports about the open file if the file system has no file "stat" callback. Borrowed and valid
-      only for the duration of the callback, and must not be destroyed.
-    parameters:
-      info:
-        type: vfs_file_open_info
-        description: The file open info handle.
-      metadata:
-        type: file_metadata
-        indirection: 1
-        kind: OUT
-        description: Receives the borrowed metadata, empty when no listing reported anything.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  vfs_file_open_get_options:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-16" ]
-    description: |
-      Copies the open request into options for `[[file_system_open]]`.
-
-      The flags and every attached value of the request are copied into a fresh set of open options, so an overlay
-      can open the underlying file, typically under a rewritten path, exactly as it was asked to open this one. The
-      options can be adjusted with the usual setters first. They are owned by the caller and must be destroyed with
-      `[[file_open_options_destroy]]`.
-    parameters:
-      info:
-        type: vfs_file_open_info
-        description: The file open info handle.
-      options:
-        type: file_open_options
-        indirection: 1
-        kind: OUT
-        description: Receives the new options. Owned by the caller; destroy via `[[file_open_options_destroy]]`.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
   vfs_file_open_set_data:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]

@@ -2362,13 +2362,11 @@ struct duckdb_v2_extension_input {
 /* --- Enums for file system --- */
 
 /*!
- * How `duckdb_v2_file_system_open()` opens a file. These are not a bitmask -- apply them one at a time with
- * `duckdb_v2_file_open_options_set_flag()`, calling it once per behaviour you want, e.g. `FILE_FLAG_WRITE` then
- * `FILE_FLAG_CREATE` to write to a file and create it when it does not exist.
+ * How `duckdb_v2_file_system_open()` opens a file. These are not a bitmask -- pass one array element per behaviour you
+ * want, e.g. `FILE_FLAG_WRITE` and `FILE_FLAG_CREATE` to write to a file and create it when it does not exist.
  */
 typedef enum DUCKDB_V2_FILE_FLAG {
-	//! Not a flag. The zero value, so that an uninitialized variable does not name a behaviour; applying it is an
-	//! error.
+	//! Not a flag. The zero value, so that an uninitialized variable does not name a behaviour; passing it is an error.
 	DUCKDB_V2_FILE_FLAG_INVALID = 0,
 
 	//! Open the file with "read" capabilities.
@@ -2418,7 +2416,7 @@ typedef enum DUCKDB_V2_FILE_FLAG {
 
 //! What a path refers to, as reported by a stat or list callback.
 typedef enum DUCKDB_V2_FILE_TYPE {
-	//! The path does not exist.
+	//! Not a type. The zero value, so that an uninitialized variable does not name one; setting it is an error.
 	DUCKDB_V2_FILE_TYPE_INVALID = 0,
 
 	//! A regular file, which can be opened.
@@ -2456,16 +2454,6 @@ typedef struct _duckdb_v2_file_system {
 } * duckdb_v2_file_system_handle;
 
 /*!
- * An owned opaque handle to the options a file is opened with. Created with `duckdb_v2_file_open_options_create()`,
- * configured with `duckdb_v2_file_open_options_set_flag()` and `duckdb_v2_file_open_options_set_value()`, passed to
- * `duckdb_v2_file_system_open()`, and destroyed with `duckdb_v2_file_open_options_destroy()`. One options object can
- * open any number of files, and destroying it does not affect files already opened with it.
- */
-typedef struct _duckdb_v2_file_open_options {
-	void *internal_ptr;
-} * duckdb_v2_file_open_options_handle;
-
-/*!
  * An owned opaque handle to an open file, produced by `duckdb_v2_file_system_open()` and destroyed with
  * `duckdb_v2_file_destroy()`. Read, write, seek and sync through the `file_*` functions. Only usable while the file
  * system it was opened through is still valid.
@@ -2475,11 +2463,14 @@ typedef struct _duckdb_v2_file {
 } * duckdb_v2_file_handle;
 
 /*!
- * An opaque handle to what is known about one file or directory: its type, and when known its size, modification time
- * and version tag. Produced owned by `duckdb_v2_file_system_stat()` and `duckdb_v2_file_stat()`, to be destroyed with
- * `duckdb_v2_file_metadata_destroy()`; handed out borrowed to a virtual file system's callbacks and by
- * `duckdb_v2_file_listing_get_entry_metadata()`, where it must not be destroyed. Read with the `file_metadata_get_*`
- * functions, filled in with the `file_metadata_set_*` functions.
+ * An opaque handle to everything that travels with one file or directory: its type, and when known its size,
+ * modification time and version tag, plus any number of named values. It is the one such handle of the file system API,
+ * used wherever something is said about a file: the result of a stat, an entry of a listing, and what accompanies an
+ * open, in both directions. Produced owned by `duckdb_v2_file_metadata_create()`, `duckdb_v2_file_system_stat()` and
+ * `duckdb_v2_file_stat()`, to be destroyed with `duckdb_v2_file_metadata_destroy()`; handed out borrowed to a virtual
+ * file system's callbacks and by `duckdb_v2_file_listing_get_entry_metadata()`, where it must not be destroyed. Read
+ * with the `file_metadata_get_*` functions, filled in with the `file_metadata_set_*` functions. Whether a named value
+ * is a fact about the file or a hint for opening it is up to the file system that handles the path.
  */
 typedef struct _duckdb_v2_file_metadata {
 	void *internal_ptr;
@@ -2540,100 +2531,22 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_system_get_from_connection(duckdb_v2
                                                                        duckdb_v2_error_info_handle *err);
 
 /*!
- * Creates a set of open options for a file system.
- *
- * The options start out empty: give them flags with `duckdb_v2_file_open_options_set_flag()`, which is required, and
- * optionally attach values with `duckdb_v2_file_open_options_set_value()`. They are then passed to
- * `duckdb_v2_file_system_open()`, and can be reused for as many opens as you like. The caller owns the returned handle
- * and must destroy it with `duckdb_v2_file_open_options_destroy()`.
- *
- * The options belong to the file system they were created from, since which values mean anything depends on which file
- * system ends up handling the path.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param file_system The file system the options are for.
- * @param options On success, receives the new options. Owned by the caller; destroy via
- * `duckdb_v2_file_open_options_destroy()`.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_open_options_create(duckdb_v2_file_system_handle file_system,
-                                                                duckdb_v2_file_open_options_handle *options,
-                                                                duckdb_v2_error_info_handle *err);
-
-/*!
- * Applies one flag to the options.
- *
- * Additive: call it once per behaviour you want, and applying the same flag twice is harmless. At least one flag must
- * be applied before the options can open anything, since the flags are what say whether the file is being read or
- * written. There is no way to take a flag back -- build a fresh set of options instead.
- *
- * `FILE_FLAG_INVALID` names no behaviour and is rejected, as is any value that is not a `DUCKDB_V2_FILE_FLAG`.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param options The options to apply the flag to.
- * @param flag The flag to apply.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_open_options_set_flag(duckdb_v2_file_open_options_handle options,
-                                                                  DUCKDB_V2_FILE_FLAG flag,
-                                                                  duckdb_v2_error_info_handle *err);
-
-/*!
- * Attaches a named value to the options.
- *
- * These are hints for whichever file system ends up handling the path, and what they mean is that file system's
- * business: a value it does not recognise is ignored rather than rejected, and the same name can mean different things
- * to different file systems. They are the same values a file system reports when listing files, so a known file size or
- * modification time learned from a listing can be handed straight back to avoid re-reading it.
- *
- * The name and the value are borrowed and copied, so the caller may destroy the value immediately after. Setting the
- * same name again replaces the previous value. Names are case-sensitive.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param options The options to set the value on.
- * @param name The name of the value. Borrowed and copied.
- * @param value The value. Borrowed and copied.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_open_options_set_value(duckdb_v2_file_open_options_handle options,
-                                                                   duckdb_v2_str name, duckdb_v2_value_handle value,
-                                                                   duckdb_v2_error_info_handle *err);
-
-/*!
- * Destroys the options, releasing their resources.
- *
- * Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
- * double-destruction. Files already opened with these options are unaffected.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param options The options to destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_open_options_destroy(duckdb_v2_file_open_options_handle *options);
-
-/*!
  * Opens a file.
  *
  * Opens the file at the given path through the file system, which routes it the way the engine would -- a path handled
  * by a registered virtual or remote file system goes there rather than to local disk. The returned handle is owned by
  * the caller and must be destroyed with `duckdb_v2_file_destroy()`.
  *
- * The options carry the flags and any file-system-specific values; see `duckdb_v2_file_open_options_create()`. Opening
- * without having set flags fails, since the flags are what say whether the file is being read or written.
+ * The flags say how the file is opened, one array element per behaviour; see `DUCKDB_V2_FILE_FLAG`. At least one is
+ * required, since the flags are what say whether the file is being read or written, and passing the same flag twice is
+ * harmless. `FILE_FLAG_INVALID` names no behaviour and is rejected, as is any value that is not a
+ * `DUCKDB_V2_FILE_FLAG`.
+ *
+ * The optional metadata accompanies the open. It carries what is already known about the file, such as the metadata of
+ * the listing entry the path came from, so that the file system need not fetch it again, and any named values set with
+ * `duckdb_v2_file_metadata_set_value()` as hints for whichever file system ends up handling the path. What a hint means
+ * is that file system's business: one it does not recognise is ignored rather than rejected. The metadata is borrowed
+ * for the call only, and can be reused or destroyed right after.
  *
  * Failure to open -- a missing file without `FILE_FLAG_CREATE`, insufficient permissions, an existing file under
  * `FILE_FLAG_EXCLUSIVE_CREATE` -- is reported as an error. A missing file is reported as `ERROR_IO_FILE_NOT_FOUND`.
@@ -2647,15 +2560,17 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_open_options_destroy(duckdb_v2_file_
  *
  * @param file_system The file system to open the file through.
  * @param file_path The path of the file to open. Borrowed for the call only.
- * @param options How to open the file. Borrowed for the call only, and reusable across opens.
+ * @param flags The flags to open the file with, `flag_count` of them. Borrowed for the call only.
+ * @param flag_count The number of flags. At least one.
+ * @param metadata Optional. What is known about the file, and any hints for opening it. Borrowed for the call only.
  * @param file On success, receives the open file. Owned by the caller; destroy via `duckdb_v2_file_destroy()`.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_system_open(duckdb_v2_file_system_handle file_system,
-                                                        duckdb_v2_str file_path,
-                                                        duckdb_v2_file_open_options_handle options,
+                                                        duckdb_v2_str file_path, const DUCKDB_V2_FILE_FLAG *flags,
+                                                        idx_t flag_count, duckdb_v2_file_metadata_handle metadata,
                                                         duckdb_v2_file_handle *file, duckdb_v2_error_info_handle *err);
 
 /*!
@@ -2813,7 +2728,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_seek(duckdb_v2_file_handle file, idx
  * Flushes buffered writes to persistent storage.
  *
  * Forces anything still buffered out to storage, which is what makes writes durable across a crash or a process exit.
- * Closing or destroying the handle flushes as well.
+ * Closing or destroying the handle hands buffered writes to the file system but does not make them durable.
  *
  * history:
  * - stable: v2.0.0
@@ -2883,25 +2798,26 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_close(duckdb_v2_file_handle file, du
 /*!
  * Reports what is known about a path, without opening it.
  *
- * Routed to whichever file system handles the path. The type is always answered: a regular file, a directory, a pipe,
- * something else, or `FILE_TYPE_INVALID` when nothing is there, which is a result rather than an error. Size,
- * modification time and version tag are filled in as far as the file system knows them by path; each getter reports
- * whether its field is known. The local file system answers all of them from one system call, and a virtual file system
- * answers whatever its path-level "stat" callback reports.
+ * Routed to whichever file system handles the path. A path with nothing there is a result rather than an error:
+ * `exists` is `false` and no metadata is produced. Otherwise the type is always answered: a regular file, a directory,
+ * a pipe or something else. Size, modification time and version tag are filled in as far as the file system knows them
+ * by path; each getter reports whether its field is known. The local file system answers all of them from one system
+ * call, and a virtual file system answers whatever its path-level "stat" callback reports.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param file_system The file system to ask.
  * @param path The path to report on. Borrowed for the call only.
- * @param metadata On success, receives the metadata. Owned by the caller; destroy via
- * `duckdb_v2_file_metadata_destroy()`.
+ * @param metadata On success, receives the metadata, or null when the path does not exist. Owned by the caller; destroy
+ * via `duckdb_v2_file_metadata_destroy()`.
+ * @param exists Receives whether the path exists.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_system_stat(duckdb_v2_file_system_handle file_system, duckdb_v2_str path,
-                                                        duckdb_v2_file_metadata_handle *metadata,
+                                                        duckdb_v2_file_metadata_handle *metadata, bool *exists,
                                                         duckdb_v2_error_info_handle *err);
 
 /*!
@@ -2979,8 +2895,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_system_create_directory(duckdb_v2_fi
                                                                     duckdb_v2_error_info_handle *err);
 
 /*!
- * Removes a directory and everything inside it. A directory that does not exist is not an error, since there is nothing
- * left to remove.
+ * Removes a directory and everything inside it. A directory the file system knows does not exist is reported as
+ * `ERROR_IO_FILE_NOT_FOUND`. A file system without directories, such as an object store, cannot tell a missing
+ * directory from an empty one and succeeds.
  *
  * history:
  * - stable: v2.0.0
@@ -3015,6 +2932,25 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_system_move(duckdb_v2_file_system_ha
                                                         duckdb_v2_str target, duckdb_v2_error_info_handle *err);
 
 /*!
+ * Creates empty metadata, to accompany an open.
+ *
+ * Nothing is known yet: fill in hints with `duckdb_v2_file_metadata_set_value()`, or what is already known about the
+ * file with the other setters, and pass it to `duckdb_v2_file_system_open()`. The caller owns the returned handle and
+ * must destroy it with `duckdb_v2_file_metadata_destroy()`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param metadata On success, receives the new metadata. Owned by the caller; destroy via
+ * `duckdb_v2_file_metadata_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_metadata_create(duckdb_v2_file_metadata_handle *metadata,
+                                                            duckdb_v2_error_info_handle *err);
+
+/*!
  * Reports what is known about an open file: its size, and when the file system knows them, its modification time and
  * version tag.
  *
@@ -3032,7 +2968,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_stat(duckdb_v2_file_handle file, duc
                                                  duckdb_v2_error_info_handle *err);
 
 /*!
- * Reads what the path refers to, `FILE_TYPE_INVALID` when nothing is there.
+ * Reads what the path refers to. A type that was never set reads as a regular file.
  *
  * history:
  * - stable: v2.0.0
@@ -3099,13 +3035,83 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_metadata_get_version_tag(duckdb_v2_f
                                                                      duckdb_v2_error_info_handle *err);
 
 /*!
+ * Retrieves a named value of the metadata.
+ *
+ * Named values are whatever travels with a file besides its typed fields: what a file system reported about it, what a
+ * virtual file system attached to a listing entry, and in an "open" callback also the hints the caller of
+ * `duckdb_v2_file_system_open()` set. Their meaning is up to the file system that handles the file. Names are
+ * case-sensitive, except those of the options the engine itself knows, such as `force_full_download`. A name with no
+ * value is not an error, and null is returned. The typed fields are not reachable by name. The returned value is owned
+ * by the caller and must be destroyed via `duckdb_v2_value_destroy()`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param metadata The metadata to read.
+ * @param name The name of the value. Borrowed for the call only.
+ * @param value Receives the value, or null if there is none under that name. Owned by the caller; destroy via
+ * `duckdb_v2_value_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_metadata_get_value(duckdb_v2_file_metadata_handle metadata,
+                                                               duckdb_v2_str name, duckdb_v2_value_handle *value,
+                                                               duckdb_v2_error_info_handle *err);
+
+/*!
+ * Attaches a named value to the metadata.
+ *
+ * This is how a caller hands a hint to the file system that opens a file, and how a virtual file system carries
+ * something of its own from a listing to the open of a listed file, such as an object's generation: set on the entry's
+ * metadata in the "glob" callback, it is there again in the metadata of the "open" callback when the engine opens that
+ * entry. The name and the value are borrowed and copied. Setting the same name again replaces the previous value. Names
+ * are case-sensitive and values are kept as given, except for the options the engine itself knows, such as
+ * `force_full_download`: those are matched without regard to case, and their value is cast to the type the engine reads
+ * it as, which fails for a value that cannot be. The names `type`, `file_size`, `last_modified` and `etag` belong to
+ * the typed fields and are rejected.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param metadata The metadata to set the value on.
+ * @param name The name of the value. Borrowed and copied.
+ * @param value The value. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_metadata_set_value(duckdb_v2_file_metadata_handle metadata,
+                                                               duckdb_v2_str name, duckdb_v2_value_handle value,
+                                                               duckdb_v2_error_info_handle *err);
+
+/*!
+ * Replaces everything the target holds with a copy of what the source holds.
+ *
+ * The type, size, modification time, version tag and every named value are copied, including values the caller knows
+ * nothing about. This is how a virtual file system that wraps another passes on what that one reported, from its
+ * "stat", "list" and "glob" callbacks alike.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param target The metadata to fill in.
+ * @param source The metadata to copy. Borrowed.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_metadata_copy(duckdb_v2_file_metadata_handle target,
+                                                          duckdb_v2_file_metadata_handle source,
+                                                          duckdb_v2_error_info_handle *err);
+
+/*!
  * Sets what the path refers to.
  *
- * From a virtual file system's path-level "stat" callback this is what reports existence: until it is called the path
- * is reported as not existing, and `FILE_TYPE_INVALID` says the same explicitly. Filling in a size, modification time
- * or version tag there without a type is an error. From the file-level "stat" callback the file is open and so exists:
- * `FILE_TYPE_PIPE` makes the engine treat it as a pipe, and anything else, including no type at all, as a regular file.
- * On a listing entry it replaces the type the entry was added with.
+ * From either "stat" callback of a virtual file system, a path or file whose type is never set is a regular file. From
+ * the file-level "stat" callback, `FILE_TYPE_PIPE` makes the engine treat the open file as a pipe, and anything else as
+ * a regular file. On a listing entry it replaces the type the entry was added with. `FILE_TYPE_INVALID` is rejected, as
+ * is any value that is not a `DUCKDB_V2_FILE_TYPE`.
  *
  * history:
  * - stable: v2.0.0
@@ -3176,9 +3182,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_metadata_set_version_tag(duckdb_v2_f
 /*!
  * Destroys metadata the caller owns, releasing its resources.
  *
- * Only for metadata produced by `duckdb_v2_file_system_stat()` and `duckdb_v2_file_stat()`; a borrowed one must not be
- * passed here. Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to
- * prevent double-destruction.
+ * Only for metadata produced by `duckdb_v2_file_metadata_create()`, `duckdb_v2_file_system_stat()` and
+ * `duckdb_v2_file_stat()`; a borrowed one must not be passed here. Null-safe: passing a null pointer or null handle is
+ * a no-op. The handle is set to null on return to prevent double-destruction.
  *
  * history:
  * - stable: v2.0.0
@@ -3271,7 +3277,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_listing_get_entry_type(duckdb_v2_fil
 
 /*!
  * Retrieves what the listing knows about an entry. Fails if the index is out of bounds. Borrowed; valid as long as the
- * listing is, and must not be destroyed.
+ * listing is, and must not be destroyed. It can be passed to `duckdb_v2_file_system_open()` as it is to open the entry,
+ * and the owner of the listing may first set hints of its own on it with `duckdb_v2_file_metadata_set_value()`.
  *
  * history:
  * - stable: v2.0.0
@@ -12067,15 +12074,16 @@ typedef enum DUCKDB_V2_FILE_PROPERTY {
  * `read_at`, `write_at`, `read`, `write`, `seek`, `tell`, `stat`, `sync`, `truncate`) operate on one file: "open"
  * produces it from a path, the others act on what it produced. Every callback receives the shared info handle as its
  * first argument and the handle of its own operation as its second. `claim`, `open` and the path callbacks receive the
- * path as a plain argument next to it, `open` its flags after that, and the other file callbacks the per-file state.
- * The file system's user data is reachable from the shared info; a file callback finds what it needs in the per-file
- * state the "open" callback attached.
+ * path as a plain argument next to it, `open` its flags and metadata after that, and the other file callbacks the
+ * per-file state. The file system's user data is reachable from the shared info; a file callback finds what it needs in
+ * the per-file state the "open" callback attached.
  *
  * A callback reports a missing path the way the `file_system` function of the same name reports it to its caller, so
- * that an overlay can pass the answer on as it received it. The file system `stat` leaves the metadata untouched and
- * `glob` adds no entries, since a path that is not there is an ordinary answer to both. `open`, `list`, `remove_file`
- * and `move` report it as `ERROR_IO_FILE_NOT_FOUND`. `remove_directory` has nothing to do for a directory that is not
- * there and succeeds, and `create_directory` creates the parents that are missing. Each callback repeats its own rule.
+ * that an overlay can pass the answer on as it received it. The file system `stat` leaves its `exists` output `false`
+ * and `glob` adds no entries, since a path that is not there is an ordinary answer to both. `open`, `list`,
+ * `remove_file`, `remove_directory` and `move` report it as `ERROR_IO_FILE_NOT_FOUND`, and `create_directory` creates
+ * the parents that are missing. A backend without directories, such as an object store, cannot tell a missing directory
+ * from an empty one, and treats it as empty in `list` and `remove_directory`. Each callback repeats its own rule.
  *
  * Open-file attempts, and other file-system level operations may run concurrently, and `claim` can be called from any
  * thread as soon as `register` returns.
@@ -12085,12 +12093,11 @@ typedef enum DUCKDB_V2_FILE_PROPERTY {
  * been called.
  *
  * A file system can delegate to other file systems. The shared info handle has a `get_file_system` function that
- * returns the engine's file system, which is also reachable through a context, and
- * `duckdb_v2_vfs_file_open_get_options()` turns an open request into options for `duckdb_v2_file_system_open()`. This
- * is how an overlay (caching, encryption, logging, ...) file system can open the underlying file with exactly the flags
- * and values it was given. An overlay should claim paths of its own, typically its own URI scheme, and map them onto
- * the paths of the file system it wraps, since a path the overlay itself claims would be routed back into itself
- * recursively.
+ * returns the engine's file system, which is also reachable through a context, and the "open" callback receives the
+ * same flags and metadata that `duckdb_v2_file_system_open()` takes. This is how an overlay (caching, encryption,
+ * logging, ...) file system can open the underlying file with exactly the flags and values it was given, by passing
+ * them on. An overlay should claim paths of its own, typically its own URI scheme, and map them onto the paths of the
+ * file system it wraps, since a path the overlay itself claims would be routed back into itself recursively.
  *
  * A virtual file system registration lasts for the life of the database instance, like an extension load, and its name
  * stays taken.
@@ -12150,9 +12157,8 @@ typedef struct _duckdb_v2_vfs_move_info {
 } * duckdb_v2_vfs_move_info_handle;
 
 /*!
- * A borrowed opaque handle to one file open operation. It carries the open request: the values the caller attached,
- * what a listing knew about the file, and the options to forward the request with, and it is where the callback
- * attaches the per-file state and reports the file's properties.
+ * A borrowed opaque handle to one file open operation. It is where the callback attaches the per-file state and reports
+ * the file's properties. The request itself, the path, the flags and the metadata, comes as plain arguments.
  */
 typedef struct _duckdb_v2_vfs_file_open_info {
 	void *internal_ptr;
@@ -12234,11 +12240,11 @@ typedef void (*duckdb_v2_vfs_claim_callback_fn)(duckdb_v2_vfs_info_handle info, 
 /*!
  * Opens a file.
  *
- * The flags come as a complete list; the values the caller attached to the open and what a listing knew about the file
- * are read from `op_info`, and the context of the query opening it from `info`. On success the callback attaches
- * per-file state via `duckdb_v2_vfs_file_open_set_data()`, which every other file callback then receives, and reports
- * any property of the file via `duckdb_v2_vfs_file_open_set_property()`. A file opened with `FILE_FLAG_APPEND` starts
- * with its cursor at the end.
+ * It receives what `duckdb_v2_file_system_open()` takes: the path, the flags as a complete list, and the metadata
+ * accompanying the open. The context of the query opening the file is read from `info`. On success the callback
+ * attaches per-file state via `duckdb_v2_vfs_file_open_set_data()`, which every other file callback then receives, and
+ * reports any property of the file via `duckdb_v2_vfs_file_open_set_property()`. A file opened with `FILE_FLAG_APPEND`
+ * starts with its cursor at the end.
  *
  * A failed open reports the reason through `err`. State attached before the failure is destroyed. Report a missing file
  * as `ERROR_IO_FILE_NOT_FOUND`, which lets the engine give a precise error message, and lets callers that asked for it
@@ -12247,6 +12253,7 @@ typedef void (*duckdb_v2_vfs_claim_callback_fn)(duckdb_v2_vfs_info_handle info, 
 typedef void (*duckdb_v2_vfs_file_open_callback_fn)(duckdb_v2_vfs_info_handle info,
                                                     duckdb_v2_vfs_file_open_info_handle op_info, duckdb_v2_str path,
                                                     const DUCKDB_V2_FILE_FLAG *flags, idx_t flag_count,
+                                                    duckdb_v2_file_metadata_handle metadata,
                                                     duckdb_v2_error_info_handle *err);
 
 /*!
@@ -12254,8 +12261,9 @@ typedef void (*duckdb_v2_vfs_file_open_callback_fn)(duckdb_v2_vfs_info_handle in
  *
  * The engine calls it once when it closes a file, before the file data's destructor. This is the place to release
  * operating-system resources and, for a written file, to publish it. An object store would complete its upload here,
- * for example. A file opened for writing is always synced before it is closed. A file system whose per-file state needs
- * no such step can leave this unset and rely on the destructor alone.
+ * for example. Closing means publishing and nothing more: the engine calls "sync" itself where it needs the data to be
+ * durable, and a close is not preceded by one. A file system whose per-file state needs no such step can leave this
+ * unset and rely on the destructor alone.
  *
  * If a file is destroyed without having been closed, which happens when an error unwinds past a writer, it is aborted
  * instead if it was opened for writing and an "abort" callback is set. Otherwise it is closed here, and any error
@@ -12355,10 +12363,10 @@ typedef void (*duckdb_v2_vfs_file_tell_callback_fn)(duckdb_v2_vfs_info_handle in
  * size up front reject the file. Setting the type to `FILE_TYPE_PIPE` tells the engine to read the file as a pipe, and
  * any other type means a regular file. The engine calls this whenever it needs the size, so it should be cheap.
  *
- * This callback is optional. Without it the engine reports what the "open" callback left in
- * `duckdb_v2_vfs_file_open_get_metadata()`, which for a file that a listing described takes no code at all. Once such a
- * file is written or truncated, its size, modification time and version tag are no longer known. Set this callback for
- * a file system that writes files whose size the engine asks for, or whose files change while they are open.
+ * This callback is optional. Without it the engine reports what the "open" callback left in the metadata it was given,
+ * which for a file that a listing described takes no code at all. Once such a file is written or truncated, its size,
+ * modification time and version tag are no longer known. Set this callback for a file system that writes files whose
+ * size the engine asks for, or whose files change while they are open.
  */
 typedef void (*duckdb_v2_vfs_file_stat_callback_fn)(duckdb_v2_vfs_info_handle info,
                                                     duckdb_v2_vfs_file_stat_info_handle op_info, void *file,
@@ -12368,8 +12376,9 @@ typedef void (*duckdb_v2_vfs_file_stat_callback_fn)(duckdb_v2_vfs_info_handle in
 /*!
  * Flushes buffered writes to persistent storage.
  *
- * The engine calls it when it needs written data to be durable, and before it closes a written file. A file system that
- * leaves it unset is assumed to make every write durable immediately.
+ * The engine calls it when it needs written data to be durable, as it does for database and write-ahead-log files. Data
+ * files written by `COPY` are not synced, and a close is not preceded by a sync. A file system that leaves it unset is
+ * assumed to make every write durable immediately.
  */
 typedef void (*duckdb_v2_vfs_file_sync_callback_fn)(duckdb_v2_vfs_info_handle info,
                                                     duckdb_v2_vfs_file_sync_info_handle op_info, void *file,
@@ -12388,17 +12397,18 @@ typedef void (*duckdb_v2_vfs_file_truncate_callback_fn)(duckdb_v2_vfs_info_handl
 /*!
  * Reports what is known about a path, without opening it.
  *
- * Fills in `metadata` with the type of the path and, for a regular file, whatever else is known. Size, modification
- * time and version tag are all optional, and what is filled in is what `duckdb_v2_file_system_stat()` reports for the
- * path. Leaving `metadata` untouched means the path does not exist, which is not an error. The type is what reports
- * existence, so filling in anything else without it is an error. The engine uses this to check whether a file or
- * directory exists before creating or overwriting it, whether it is about to write to a pipe, and to learn a file's
- * size without opening it. If this callback is unset, the engine opens the file for reading to find out instead, and
- * lists a directory to learn whether it exists.
+ * Sets `exists` when the path is there, and fills in `metadata` with its type and, for a regular file, whatever else is
+ * known. Type, size, modification time and version tag are all optional, a path without a type is a regular file, and
+ * what is filled in is what `duckdb_v2_file_system_stat()` reports for the path. Leaving `exists` as `false` means the
+ * path does not exist, which is not an error. Filling in `metadata` for a path reported as absent is an error, since it
+ * means `exists` was forgotten. The engine uses this to check whether a file or directory exists before creating or
+ * overwriting it, whether it is about to write to a pipe, and to learn a file's size without opening it. If this
+ * callback is unset, the engine opens the file for reading to find out instead, and lists a directory to learn whether
+ * it exists. Only a listing with entries proves that, so an empty directory then counts as absent.
  */
 typedef void (*duckdb_v2_vfs_stat_callback_fn)(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_stat_info_handle op_info,
                                                duckdb_v2_str path, duckdb_v2_file_metadata_handle metadata,
-                                               duckdb_v2_error_info_handle *err);
+                                               bool *exists, duckdb_v2_error_info_handle *err);
 
 /*!
  * Lists the entries of a directory.
@@ -12453,8 +12463,9 @@ typedef void (*duckdb_v2_vfs_create_directory_callback_fn)(duckdb_v2_vfs_info_ha
 /*!
  * Removes a directory and everything inside it. The engine calls it when it overwrites partitioned output.
  *
- * A directory that does not exist is not an error, since there is nothing left to remove. `ERROR_IO_FILE_NOT_FOUND` is
- * accepted and means the same.
+ * Report a directory that does not exist as `ERROR_IO_FILE_NOT_FOUND`, like a missing file in
+ * `duckdb_v2_vfs_remove_file_callback_fn`. A backend without directories, such as an object store, cannot tell a
+ * missing directory from an empty one and succeeds instead.
  */
 typedef void (*duckdb_v2_vfs_remove_directory_callback_fn)(duckdb_v2_vfs_info_handle info,
                                                            duckdb_v2_vfs_remove_directory_info_handle op_info,
@@ -12837,8 +12848,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_set_file_truncate_callback(duckdb_v2_
  * Sets the optional file system "stat" callback of the virtual file system.
  *
  * The callback reports what is known about a path. See `duckdb_v2_vfs_stat_callback_fn`. Without it, every check for a
- * file costs an open for reading and every check for a directory a "list". A file system that cannot read, or cannot
- * list, then reports every such path as absent, so nothing protects an existing file from being overwritten.
+ * file costs an open for reading and every check for a directory a "list", which only proves a directory that has
+ * entries. A file system that cannot read, or cannot list, then reports every such path as absent, so nothing protects
+ * an existing file from being overwritten.
  *
  * history:
  * - stable: v2.0.0
@@ -12964,73 +12976,6 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_set_remove_directory_callback(
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_set_move_callback(duckdb_v2_vfs_handle file_system,
                                                              duckdb_v2_vfs_move_callback_fn callback,
                                                              duckdb_v2_error_info_handle *err);
-
-/*!
- * Retrieves a named value attached to the open request.
- *
- * These are the values the caller attached with `duckdb_v2_file_open_options_set_value()`, and their meaning is up to
- * this file system. Metadata that a listing of this file system reported about the file is read through
- * `duckdb_v2_vfs_file_open_get_metadata()` instead. Names are case-sensitive. A name with no value is not an error, and
- * null is returned. The returned value is owned by the caller and must be destroyed via `duckdb_v2_value_destroy()`.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param info The file open info handle.
- * @param name The name of the value. Borrowed for the call only.
- * @param value Receives the value, or null if none was attached under that name. Owned by the caller; destroy via
- * `duckdb_v2_value_destroy()`.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_get_value(duckdb_v2_vfs_file_open_info_handle info,
-                                                               duckdb_v2_str name, duckdb_v2_value_handle *value,
-                                                               duckdb_v2_error_info_handle *err);
-
-/*!
- * Retrieves what is known about the file being opened, for the "open" callback to read and to fill in.
- *
- * When the file was found through the "glob" callback, whatever that callback filled in about the entry (size,
- * modification time, version tag) is already here, so the backend does not need to fetch it again. Read it with
- * `duckdb_v2_file_metadata_get_size()` and its siblings, each of which reports whether its field is known, and complete
- * or correct it with `duckdb_v2_file_metadata_set_size()` and its siblings. What it holds when the callback returns is
- * what the engine reports about the open file if the file system has no file "stat" callback. Borrowed and valid only
- * for the duration of the callback, and must not be destroyed.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param info The file open info handle.
- * @param metadata Receives the borrowed metadata, empty when no listing reported anything.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_get_metadata(duckdb_v2_vfs_file_open_info_handle info,
-                                                                  duckdb_v2_file_metadata_handle *metadata,
-                                                                  duckdb_v2_error_info_handle *err);
-
-/*!
- * Copies the open request into options for `duckdb_v2_file_system_open()`.
- *
- * The flags and every attached value of the request are copied into a fresh set of open options, so an overlay can open
- * the underlying file, typically under a rewritten path, exactly as it was asked to open this one. The options can be
- * adjusted with the usual setters first. They are owned by the caller and must be destroyed with
- * `duckdb_v2_file_open_options_destroy()`.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param info The file open info handle.
- * @param options Receives the new options. Owned by the caller; destroy via `duckdb_v2_file_open_options_destroy()`.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_get_options(duckdb_v2_vfs_file_open_info_handle info,
-                                                                 duckdb_v2_file_open_options_handle *options,
-                                                                 duckdb_v2_error_info_handle *err);
 
 /*!
  * Attaches the per-file state of the file being opened.

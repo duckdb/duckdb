@@ -98,8 +98,9 @@ public:
 	//! Reported by the open callback; see FILE_PROPERTY.
 	bool is_seekable = true;
 	bool is_on_disk = false;
-	//! What was known about the file when it was opened, which answers for a file system without a stat callback.
-	CV2FileMetadata metadata;
+	//! What was known about the file when it was opened. Kept only for a file system without a stat callback, which
+	//! it answers for.
+	FileMetadata metadata;
 	//! Whether the file was written or truncated since, which makes that metadata stale.
 	std::atomic<bool> written {false};
 	//! What the file callbacks receive. Without a per-call context from the engine it is fixed for the file's life.
@@ -109,22 +110,10 @@ public:
 // The open callback's own handle: the open request it answers.
 class CV2VirtualFileOpenInfo {
 public:
-	const OpenFileInfo *file = nullptr;
-	FileOpenFlags flags;
 	//! Owned as soon as it is attached, so it is destroyed on every path out of the open.
 	CV2UserData data;
 	bool is_seekable = true;
 	bool is_on_disk = false;
-	//! What a listing reported about the file, decoded from the open options on first request, and whatever the
-	//! open callback filled in on top of it.
-	unique_ptr<CV2FileMetadata> metadata;
-
-	CV2FileMetadata &Metadata() {
-		if (!metadata) {
-			metadata = make_uniq<CV2FileMetadata>(CV2FileMetadata::FromOptions(*file));
-		}
-		return *metadata;
-	}
 };
 
 static auto Convert(duckdb_v2_vfs_info_handle info) -> CV2VirtualFileSystemInfo * {
@@ -246,14 +235,14 @@ protected:
 		}
 
 		CV2VirtualFileOpenInfo info;
-		info.file = &file;
-		info.flags = flags;
 		auto system_info = SystemInfo(opener);
 		auto flag_list = FlagList(flags);
+		// What a listing knew about the file and the caller's hints, for the callback to read and fill in.
+		auto metadata = CV2FileMetadata::FromOptions(file);
 
 		auto err = TryInvokeCallback([&](duckdb_v2_error_info_handle err) {
 			cb.open(Convert(&system_info), Convert(&info), Convert(file.path), flag_list.data(), flag_list.size(),
-			        &err);
+			        Convert(&metadata), &err);
 		});
 		if (err.HasError()) {
 			// Whatever the callback attached is destroyed with `info`.
@@ -279,7 +268,9 @@ protected:
 		handle->op_info = SystemInfo(nullptr);
 		handle->is_seekable = info.is_seekable;
 		handle->is_on_disk = info.is_on_disk;
-		handle->metadata = info.Metadata();
+		if (!cb.stat) {
+			handle->metadata = std::move(metadata.data);
+		}
 		if (flags.OpenForAppending() && !config.OwnsCursor()) {
 			// The engine's cursor starts at the end; the file system's own cursor is its business.
 			handle->position = NumericCast<idx_t>(GetFileSize(*handle));
@@ -293,10 +284,6 @@ public:
 	}
 
 	void CloseFile(CV2VirtualFile &handle) {
-		// A written file is always synced before it is closed; the engine's writers do not promise to.
-		if (OpenedForWriting(handle)) {
-			FileSync(handle);
-		}
 		if (!config.callbacks.close) {
 			return;
 		}
@@ -443,41 +430,27 @@ public:
 
 	int64_t GetFileSize(FileHandle &handle) override {
 		auto metadata = Stat(handle.Cast<CV2VirtualFile>());
-		if (!metadata.size) {
+		if (metadata.file_size < 0) {
 			throw IOException("The size of \"%s\" is not known to file system \"%s\", and this operation needs it",
 			                  handle.path, config.name);
 		}
-		return NumericCast<int64_t>(*metadata.size);
+		return metadata.file_size;
 	}
 
 	timestamp_t GetLastModifiedTime(FileHandle &handle) override {
-		return Stat(handle.Cast<CV2VirtualFile>()).LastModified();
+		return Stat(handle.Cast<CV2VirtualFile>()).last_modification_time;
 	}
 
 	string GetVersionTag(FileHandle &handle) override {
-		auto metadata = Stat(handle.Cast<CV2VirtualFile>());
-		return metadata.version_tag ? *metadata.version_tag : string();
-	}
-
-	static FileType ToFileType(DUCKDB_V2_FILE_TYPE type) {
-		// An open file is a regular file unless the stat callback says it is a pipe.
-		return type == DUCKDB_V2_FILE_TYPE_PIPE ? FileType::FILE_TYPE_FIFO : FileType::FILE_TYPE_REGULAR;
+		return Stat(handle.Cast<CV2VirtualFile>()).version_tag;
 	}
 
 	FileType GetFileType(FileHandle &handle) override {
-		return ToFileType(Stat(handle.Cast<CV2VirtualFile>()).type);
+		return Stat(handle.Cast<CV2VirtualFile>()).file_type;
 	}
 
 	FileMetadata Stats(FileHandle &handle) override {
-		auto metadata = Stat(handle.Cast<CV2VirtualFile>());
-		FileMetadata result;
-		result.file_size = metadata.size ? NumericCast<int64_t>(*metadata.size) : -1;
-		result.last_modification_time = metadata.LastModified();
-		result.file_type = ToFileType(metadata.type);
-		if (metadata.version_tag) {
-			result.version_tag = *metadata.version_tag;
-		}
-		return result;
+		return Stat(handle.Cast<CV2VirtualFile>());
 	}
 
 	void FileSync(FileHandle &handle_p) override {
@@ -519,18 +492,7 @@ public:
 			// The engine's own way: open the file and ask it.
 			return FileSystem::GetStatsIfExists(file, opener);
 		}
-		auto metadata = StatPath(file.path, opener);
-		if (metadata.type == DUCKDB_V2_FILE_TYPE_INVALID) {
-			return nullopt;
-		}
-		FileMetadata result;
-		result.file_size = metadata.size ? NumericCast<int64_t>(*metadata.size) : -1;
-		result.last_modification_time = metadata.LastModified();
-		result.file_type = CV2FileMetadata::ToEngineType(metadata.type);
-		if (metadata.version_tag) {
-			result.version_tag = *metadata.version_tag;
-		}
-		return result;
+		return StatPath(file.path, opener);
 	}
 
 	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override {
@@ -542,16 +504,17 @@ public:
 			auto stats = FileSystem::GetStatsIfExists(OpenFileInfo(filename), opener);
 			return stats && stats->file_type == FileType::FILE_TYPE_REGULAR;
 		}
-		return StatPath(filename, opener).type == DUCKDB_V2_FILE_TYPE_REGULAR;
+		return HasType(StatPath(filename, opener), FileType::FILE_TYPE_REGULAR);
 	}
 
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override {
 		if (!config.callbacks.stat_path) {
-			// A directory that can be listed exists.
+			// A directory with something in it exists. An empty listing proves nothing, since a backend without
+			// directories lists a missing one as empty.
 			CV2FileListing listing;
-			return config.callbacks.list && TryList(directory, opener, listing);
+			return config.callbacks.list && TryList(directory, opener, listing) && !listing.entries.empty();
 		}
-		return StatPath(directory, opener).type == DUCKDB_V2_FILE_TYPE_DIRECTORY;
+		return HasType(StatPath(directory, opener), FileType::FILE_TYPE_DIR);
 	}
 
 	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override {
@@ -559,7 +522,7 @@ public:
 		if (!config.callbacks.stat_path) {
 			return false;
 		}
-		return StatPath(filename, opener).type == DUCKDB_V2_FILE_TYPE_PIPE;
+		return HasType(StatPath(filename, opener), FileType::FILE_TYPE_FIFO);
 	}
 
 	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override {
@@ -619,7 +582,7 @@ public:
 			                    Convert(directory), &err);
 		});
 		if (err.HasError()) {
-			// A directory that is not there leaves nothing to remove.
+			// The engine's way of saying that the directory was not there.
 			if (err.code == DUCKDB_V2_ERROR_IO_FILE_NOT_FOUND) {
 				return false;
 			}
@@ -713,9 +676,7 @@ private:
 	static OpenFileInfo ToOpenFileInfo(const CV2FileListing::Entry &entry) {
 		OpenFileInfo info(entry.path);
 		info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
-		auto &options = info.extended_info->options;
-		options.emplace("type", Value(entry.type == DUCKDB_V2_FILE_TYPE_DIRECTORY ? "directory" : "file"));
-		entry.metadata.FillOptions(options);
+		entry.metadata.FillOptions(*info.extended_info);
 		return info;
 	}
 
@@ -749,42 +710,57 @@ private:
 		return bytes_read;
 	}
 
-	CV2FileMetadata Stat(CV2VirtualFile &handle) {
+	//! What is known about an open file, which is a regular file unless it was said to be a pipe.
+	FileMetadata Stat(CV2VirtualFile &handle) {
 		auto &cb = config.callbacks;
-		if (!cb.stat) {
-			auto info = handle.metadata;
+		CV2FileMetadata info;
+		if (cb.stat) {
+			InvokeCallback([&](duckdb_v2_error_info_handle err) {
+				cb.stat(Convert(&handle.op_info), EmptyOperationInfo<duckdb_v2_vfs_file_stat_info_handle>(),
+				        handle.Data(), Convert(&info), &err);
+			});
+		} else {
+			info.data = handle.metadata;
 			if (handle.written) {
 				// Writes have moved the file on from what the open knew.
-				info.size.reset();
-				info.last_modified.reset();
-				info.version_tag.reset();
+				info.data.file_size = -1;
+				info.data.last_modification_time = timestamp_t::ninfinity();
+				info.data.version_tag.clear();
 			}
-			return info;
 		}
-		CV2FileMetadata info;
-		InvokeCallback([&](duckdb_v2_error_info_handle err) {
-			cb.stat(Convert(&handle.op_info), EmptyOperationInfo<duckdb_v2_vfs_file_stat_info_handle>(), handle.Data(),
-			        Convert(&info), &err);
-		});
-		return info;
+		if (info.data.file_type != FileType::FILE_TYPE_FIFO) {
+			info.data.file_type = FileType::FILE_TYPE_REGULAR;
+		}
+		return std::move(info.data);
 	}
 
-	CV2FileMetadata StatPath(const string &path_p, optional_ptr<FileOpener> opener) {
+	static bool HasType(const optional<FileMetadata> &metadata, FileType type) {
+		return metadata && metadata->file_type == type;
+	}
+
+	//! What the stat callback reports about a path, or nothing for a path that does not exist.
+	optional<FileMetadata> StatPath(const string &path_p, optional_ptr<FileOpener> opener) {
 		auto &cb = config.callbacks;
 		RequireCallback(cb.stat_path, "stat");
 		auto path = SystemInfo(opener);
 		CV2FileMetadata info;
+		bool exists = false;
 		InvokeCallback([&](duckdb_v2_error_info_handle err) {
 			cb.stat_path(Convert(&path), EmptyOperationInfo<duckdb_v2_vfs_stat_info_handle>(), Convert(path_p),
-			             Convert(&info), &err);
+			             Convert(&info), &exists, &err);
 		});
-		if (info.type == DUCKDB_V2_FILE_TYPE_INVALID && (info.size || info.last_modified || info.version_tag)) {
-			// The type is what reports existence, so this would otherwise read as a missing path.
-			throw InvalidInputException("The stat callback of file system \"%s\" described \"%s\" without setting "
-			                            "its type",
-			                            config.name, path_p);
+		if (!exists) {
+			if (!info.IsEmpty()) {
+				throw InvalidInputException("The stat callback of file system \"%s\" described \"%s\" without "
+				                            "reporting that it exists",
+				                            config.name, path_p);
+			}
+			return nullopt;
 		}
-		return info;
+		if (!info.HasType()) {
+			info.data.file_type = FileType::FILE_TYPE_REGULAR;
+		}
+		return std::move(info.data);
 	}
 
 	//! Fills the listing, or reports false for a directory the file system says does not exist.
@@ -1140,57 +1116,6 @@ DUCKDB_V2_ERROR duckdb_v2_vfs_set_move_callback(duckdb_v2_vfs_handle file_system
                                                 duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.move = callback; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_get_value(duckdb_v2_vfs_file_open_info_handle info, duckdb_v2_str name,
-                                                  duckdb_v2_value_handle *value, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(name);
-	DUCKDB_CHECK_ARG(value);
-	*value = nullptr;
-	return WithErrorHandler(err, [&]() {
-		auto &open_info = *Convert(info);
-		auto &extended_info = open_info.file->extended_info;
-		if (!extended_info) {
-			return;
-		}
-		auto entry = extended_info->options.find(duckdb::string(Convert(name)));
-		if (entry == extended_info->options.end()) {
-			return;
-		}
-		*value = Convert(new duckdb::Value(entry->second));
-	});
-}
-
-DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_get_metadata(duckdb_v2_vfs_file_open_info_handle info,
-                                                     duckdb_v2_file_metadata_handle *metadata,
-                                                     duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(metadata);
-	*metadata = nullptr;
-	return WithErrorHandler(err, [&]() {
-		auto &open_info = *Convert(info);
-		*metadata = Convert(&open_info.Metadata());
-	});
-}
-
-DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_get_options(duckdb_v2_vfs_file_open_info_handle info,
-                                                    duckdb_v2_file_open_options_handle *options,
-                                                    duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(options);
-	*options = nullptr;
-	return WithErrorHandler(err, [&]() {
-		auto &open_info = *Convert(info);
-		auto copy = duckdb::make_uniq<CV2FileOpenOptions>();
-		copy->flags = open_info.flags;
-		copy->has_flags = true;
-		if (open_info.file->extended_info) {
-			// A copy of the values, so adjusting them afterwards does not touch the request.
-			copy->extended_info = duckdb::make_shared_ptr<duckdb::ExtendedOpenFileInfo>(*open_info.file->extended_info);
-		}
-		*options = Convert(copy.release());
-	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_set_data(duckdb_v2_vfs_file_open_info_handle info, duckdb_v2_opaque *data,

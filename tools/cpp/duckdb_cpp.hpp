@@ -94,7 +94,6 @@ class TableDescription;
 class ColumnDescription;
 class FileSystem;
 class FileHandle;
-class FileOpenOptions;
 class FileMetadata;
 class FileListing;
 class VirtualFile;
@@ -168,7 +167,7 @@ private:
 /// ownership release from inside a member of the consuming wrapper.
 struct Factory {
 	template <class T, class... ARGS>
-	static auto Make(ARGS &&...args) -> T {
+	static auto Make(ARGS &&... args) -> T {
 		return T(std::forward<ARGS>(args)...);
 	}
 };
@@ -2997,7 +2996,7 @@ public:
 	/// Constructs user data of type `T`, carried by the registered function and freed at engine teardown; read it from
 	/// any callback via the inputs' `GetUserData<T>`. Consumed by `Register`: set it again before re-registering.
 	template <class T, class... ARGS>
-	auto SetUserData(ARGS &&...args) & -> ScalarFunction & {
+	auto SetUserData(ARGS &&... args) & -> ScalarFunction & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
 		SetUserDataInternal(ptr, detail::TypedDelete<T>);
 		return *this;
@@ -3042,7 +3041,7 @@ public:
 		/// callbacks via `GetBindData<T>`. The engine compares bind data when it compares expressions: by
 		/// `operator==` when `T` has one, by identity otherwise.
 		template <class T, class... ARGS>
-		void SetBindData(ARGS &&...args) {
+		void SetBindData(ARGS &&... args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
 		}
@@ -3104,7 +3103,7 @@ public:
 		/// Constructs init data of type `T`, owned by this execution thread's function state and readable from the
 		/// exec callback via `GetInitData<T>`.
 		template <class T, class... ARGS>
-		void SetInitData(ARGS &&...args) {
+		void SetInitData(ARGS &&... args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetInitDataInternal(ptr, detail::TypedDelete<T>);
 		}
@@ -3286,7 +3285,7 @@ public:
 	/// Constructs user data of type `T`, carried by the registered function and freed at engine teardown; read it from
 	/// any callback via the inputs' `GetUserData<T>`. Consumed by `Register`: set it again before re-registering.
 	template <class T, class... ARGS>
-	auto SetUserData(ARGS &&...args) & -> AggregateFunction & {
+	auto SetUserData(ARGS &&... args) & -> AggregateFunction & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
 		SetUserDataInternal(ptr, detail::TypedDelete<T>);
 		return *this;
@@ -3343,7 +3342,7 @@ public:
 		/// via `GetBindData<T>`. The engine compares bind data when it compares expressions: by `operator==` when `T`
 		/// has one, by identity otherwise.
 		template <class T, class... ARGS>
-		void SetBindData(ARGS &&...args) {
+		void SetBindData(ARGS &&... args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
 		}
@@ -3829,7 +3828,7 @@ public:
 	/// Constructs user data of type `T`, carried by the registered function and freed at engine teardown; read it from
 	/// any callback via the inputs' `GetUserData<T>`. Consumed by `Register`: set it again before re-registering.
 	template <class T, class... ARGS>
-	auto SetUserData(ARGS &&...args) & -> TableFunction & {
+	auto SetUserData(ARGS &&... args) & -> TableFunction & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
 		SetUserDataInternal(ptr, detail::TypedDelete<T>);
 		return *this;
@@ -3887,7 +3886,7 @@ public:
 		/// via `GetBindData<T>`. The engine compares bind data when it compares expressions: by `operator==` when `T`
 		/// has one, by identity otherwise.
 		template <class T, class... ARGS>
-		void SetBindData(ARGS &&...args) {
+		void SetBindData(ARGS &&... args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
 		}
@@ -3943,7 +3942,7 @@ public:
 		/// local init, exec and progress callbacks. Since every thread sees the same object, the function must
 		/// synchronize its own access to it.
 		template <class T, class... ARGS>
-		void SetGlobalState(ARGS &&...args) {
+		void SetGlobalState(ARGS &&... args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetGlobalStateInternal(ptr, detail::TypedDelete<T>);
 		}
@@ -3998,7 +3997,7 @@ public:
 		/// Constructs local state of type `T`, owned by this scanning thread and readable from the exec callback via
 		/// `ExecInput::GetLocalState<T>`. No other thread observes it, so it needs no synchronization.
 		template <class T, class... ARGS>
-		void SetLocalState(ARGS &&...args) {
+		void SetLocalState(ARGS &&... args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetLocalStateInternal(ptr, detail::TypedDelete<T>);
 		}
@@ -4459,7 +4458,7 @@ public:
 	/// Constructs user data of type `T`, carried by the registered function and freed at engine teardown; read it from
 	/// any callback via the inputs' `GetUserData<T>`. Consumed by `Register`: set it again before re-registering.
 	template <class T, class... ARGS>
-	auto SetUserData(ARGS &&...args) & -> CopyFunction & {
+	auto SetUserData(ARGS &&... args) & -> CopyFunction & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
 		SetUserDataInternal(ptr, detail::TypedDelete<T>);
 		return *this;
@@ -4513,7 +4512,7 @@ public:
 		/// callback via `GetBindData<T>`. The engine compares bind data when it compares statements: by `operator==`
 		/// when `T` has one, by identity otherwise.
 		template <class T, class... ARGS>
-		void SetBindData(ARGS &&...args) {
+		void SetBindData(ARGS &&... args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
 		}
@@ -4619,7 +4618,7 @@ public:
 		/// finalize callbacks of that file via `GetInitData<T>`. Batches may be prepared on several threads at once, so
 		/// the batch callback must synchronize its own access to it.
 		template <class T, class... ARGS>
-		void SetInitData(ARGS &&...args) {
+		void SetInitData(ARGS &&... args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetInitDataInternal(ptr, detail::TypedDelete<T>);
 		}
@@ -4665,7 +4664,7 @@ public:
 		/// Constructs batch data of type `T`: the prepared form of the batch, handed to the flush callback via
 		/// `CopyToFlushInput::GetBatchData<T>` and freed once the batch has been flushed.
 		template <class T, class... ARGS>
-		void SetBatchData(ARGS &&...args) {
+		void SetBatchData(ARGS &&... args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetBatchDataInternal(ptr, detail::TypedDelete<T>);
 		}
@@ -4813,7 +4812,7 @@ public:
 		/// `COPY ... FROM` callback via `GetBindData<T>`. The engine compares bind data when it compares statements:
 		/// by `operator==` when `T` has one, by identity otherwise.
 		template <class T, class... ARGS>
-		void SetBindData(ARGS &&...args) {
+		void SetBindData(ARGS &&... args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
 		}
@@ -4887,7 +4886,7 @@ public:
 		/// init, exec and progress callbacks. Since every thread sees the same object, the function must synchronize
 		/// its own access to it.
 		template <class T, class... ARGS>
-		void SetGlobalState(ARGS &&...args) {
+		void SetGlobalState(ARGS &&... args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetGlobalStateInternal(ptr, detail::TypedDelete<T>);
 		}
@@ -4934,7 +4933,7 @@ public:
 		/// Constructs local state of type `T`, owned by this reading thread and readable from the exec callback via
 		/// `CopyFromExecInput::GetLocalState<T>`. No other thread observes it, so it needs no synchronization.
 		template <class T, class... ARGS>
-		void SetLocalState(ARGS &&...args) {
+		void SetLocalState(ARGS &&... args) {
 			auto ptr = new T(std::forward<ARGS>(args)...);
 			SetLocalStateInternal(ptr, detail::TypedDelete<T>);
 		}
@@ -5139,7 +5138,7 @@ public:
 	/// Constructs user data of type `T`, carried by the registered cast and freed at engine teardown; read it from the
 	/// exec callback via `ExecInput::GetUserData<T>`. Consumed by `Register`: set it again before re-registering.
 	template <class T, class... ARGS>
-	auto SetUserData(ARGS &&...args) & -> CastFunction & {
+	auto SetUserData(ARGS &&... args) & -> CastFunction & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
 		SetUserDataInternal(ptr, detail::TypedDelete<T>);
 		return *this;
@@ -5242,7 +5241,7 @@ enum class FileFlags : uint8_t {
 
 /// What a path refers to, as a stat or a listing reports it.
 enum class FileType : uint8_t {
-	/// The path does not exist.
+	/// Not a type. The zero value, so that an uninitialized variable does not name one.
 	INVALID = 0,
 	/// A regular file, which can be opened.
 	REGULAR = 1,
@@ -5266,7 +5265,7 @@ public:
 
 	~FileMetadata() override;
 
-	/// What the path refers to; `FileType::INVALID` when nothing is there.
+	/// What the path refers to. A type that was never set reads as a regular file.
 	auto GetType() const -> FileType;
 	/// The size in bytes, when known.
 	auto GetSize() const -> std::optional<idx_t>;
@@ -5284,6 +5283,18 @@ public:
 	auto SetLastModified(timestamp_t time) -> FileMetadata &;
 	/// Reports the tag identifying this version of the file's contents.
 	auto SetVersionTag(std::string_view tag) -> FileMetadata &;
+
+	/// Creates empty metadata, to fill in and pass to `FileSystem::OpenFile`. Owned.
+	static auto Create() -> FileMetadata;
+	/// A named value: what a file system reported or attached to a listing entry, or a hint set for an open.
+	auto GetValue(std::string_view name) const -> std::optional<Value>;
+	/// Attaches a named value, replacing any under the same name. What a name means is up to the file system that
+	/// handles the file.
+	/// @throws InvalidInputException When the name is one of the typed fields' (`type`, `file_size`,
+	/// `last_modified`, `etag`).
+	auto SetValue(std::string_view name, const Value &value) -> FileMetadata &;
+	/// Replaces everything this holds with a copy of what `source` holds, named values included.
+	auto CopyFrom(const FileMetadata &source) -> FileMetadata &;
 
 private:
 	FileMetadata(void *impl, bool owned);
@@ -5340,7 +5351,7 @@ public:
 	~FileHandle() override;
 
 	/// Flushes buffered writes to persistent storage, which is what makes them durable across a crash. Closing or
-	/// destroying the handle flushes as well.
+	/// destroying the handle hands buffered writes to the file system but does not make them durable.
 	void Sync();
 
 	/// Closes the file, releasing its operating-system resources. The handle stays valid but can no longer be used
@@ -5395,33 +5406,6 @@ private:
 	explicit FileHandle(void *impl);
 };
 
-/// How a file is opened: the flags, plus any values the file system handling the path cares about.
-/// Created from the `FileSystem` it will be used with, and reusable across any number of opens.
-class FileOpenOptions final : public detail::Handle<FileOpenOptions> {
-	friend detail::Factory;
-
-public:
-	FileOpenOptions(FileOpenOptions &&) noexcept = default;
-	FileOpenOptions &operator=(FileOpenOptions &&) noexcept = default;
-
-	~FileOpenOptions() override;
-
-	/// Creates an empty set of options for `fs`. Flags must be set before they can open anything.
-	static auto Create(const FileSystem &fs) -> FileOpenOptions;
-
-	/// Applies one flag. Additive, and applying the same flag twice is harmless; at least one flag is required
-	/// before the options can open anything. There is no way to take a flag back -- build a fresh set instead.
-	/// @throws InvalidInputException When the value is `FileFlags::INVALID` or not a flag at all.
-	auto SetFlag(FileFlags flag) & -> FileOpenOptions &;
-
-	/// Attaches a named value, a hint for whichever file system ends up handling the path. What a name means is that
-	/// file system's business, and one it does not recognize is ignored. Setting the same name again replaces it.
-	auto SetValue(std::string_view name, const Value &value) & -> FileOpenOptions &;
-
-private:
-	explicit FileOpenOptions(void *impl);
-};
-
 /// The file system DuckDB itself reads and writes through, so files open the way the engine would open them --
 /// including through virtual and remote file systems registered by other extensions.
 /// Borrowed from a `Context` or `Connection`, and valid only for as long as that is.
@@ -5437,18 +5421,20 @@ public:
 	/// Opens a file with nothing but flags, which is what most opens need.
 	/// @param path The path to open, routed the way the engine would route it.
 	/// @param flags How to open it, e.g. `{FileFlags::WRITE, FileFlags::FILE_CREATE}`; at least one is required.
+	/// @throws FileNotFoundException When the file does not exist.
 	/// @throws Exception When the file cannot be opened.
-	auto OpenFile(const std::string &path, std::initializer_list<FileFlags> flags) const -> FileHandle;
+	auto OpenFile(const std::string &path, const std::vector<FileFlags> &flags) const -> FileHandle;
 
-	/// Opens a file with a prepared set of options, for when the file system needs values as well as flags.
-	/// @throws Exception When the file cannot be opened, or the options carry no flags.
-	auto OpenFile(const std::string &path, const FileOpenOptions &options) const -> FileHandle;
+	/// Opens a file along with what is already known about it, such as the metadata of the listing entry the path
+	/// came from, and any hints set on it as named values for the file system that handles the path.
+	/// @throws FileNotFoundException When the file does not exist.
+	/// @throws Exception When the file cannot be opened.
+	auto OpenFile(const std::string &path, const std::vector<FileFlags> &flags, const FileMetadata &metadata) const
+	    -> FileHandle;
 
-	/// Creates an empty set of options for this file system, the same as `FileOpenOptions::Create(*this)`.
-	auto CreateOpenOptions() const -> FileOpenOptions;
-
-	/// What a path refers to, without opening it. A path that does not exist reports `FileType::INVALID`.
-	auto Stat(const std::string &path) const -> FileMetadata;
+	/// What a path refers to, without opening it.
+	/// @return The metadata, or nothing when the path does not exist.
+	auto Stat(const std::string &path) const -> std::optional<FileMetadata>;
 	/// Lists the entries directly inside a directory, by name relative to it.
 	/// @throws Exception When the path is not a directory that can be listed.
 	auto List(const std::string &path) const -> FileListing;
@@ -5526,10 +5512,10 @@ public:
 	/// Opens a file, returning its per-file state. Required. Report a missing file by throwing an `Exception` with
 	/// the `IO_FILE_NOT_FOUND` code, which lets callers that asked for it receive no file instead of an error.
 	using OpenCallback = std::unique_ptr<VirtualFile> (*)(OpenInput &input);
-	/// Reports what a path refers to by filling `metadata` in. Leaving it untouched reports that the path does not
-	/// exist, which is not an error. The type is what reports existence, so filling in anything else without it is
-	/// an error.
-	using StatCallback = void (*)(Info &info, std::string_view path, FileMetadata &metadata);
+	/// Reports whether a path exists, and what it refers to by filling `metadata` in. A path without a type is a
+	/// regular file. A path that does not exist is not an error, and filling `metadata` in for one is.
+	/// @return Whether the path exists.
+	using StatCallback = bool (*)(Info &info, std::string_view path, FileMetadata &metadata);
 	/// Lists a directory: one entry per file and subdirectory directly inside it, by name relative to it. Report a
 	/// directory that does not exist by throwing an `Exception` with the `IO_FILE_NOT_FOUND` code; a backend
 	/// without directories cannot tell it from an empty one and adds no entries instead.
@@ -5539,9 +5525,10 @@ public:
 	/// pattern syntax is the file system's own. A path naming one existing file is added as its own single match,
 	/// and a pattern or path matching nothing adds nothing.
 	using GlobCallback = void (*)(Info &info, std::string_view pattern, FileListing &listing);
-	/// Removes a file, or creates or removes a directory. Removing a file that does not exist throws an `Exception`
-	/// with the `IO_FILE_NOT_FOUND` code. Removing a directory that does not exist, and creating one that does or
-	/// whose parents are missing, are not errors.
+	/// Removes a file, or creates or removes a directory. Removing a file or directory that does not exist throws
+	/// an `Exception` with the `IO_FILE_NOT_FOUND` code; a backend without directories cannot tell a missing
+	/// directory from an empty one and succeeds instead. Creating a directory that exists, or whose parents are
+	/// missing, is not an error.
 	using PathCallback = void (*)(Info &info, std::string_view path);
 	/// Moves or renames a file, replacing the target if it exists. Report a missing source by throwing an
 	/// `Exception` with the `IO_FILE_NOT_FOUND` code.
@@ -5573,7 +5560,8 @@ public:
 	/// engine reports what the open callback left in `OpenInput::GetMetadata`, and no longer knows the size of a
 	/// file once it is written.
 	using FileStatCallback = void (*)(Info &info, VirtualFile &file, FileMetadata &metadata);
-	/// Flushes buffered writes to durable storage. A written file is always synced before it is closed.
+	/// Flushes buffered writes to durable storage. The engine calls it where it needs durability, and not before
+	/// a close, which means publishing and nothing more.
 	using FileSyncCallback = void (*)(Info &info, VirtualFile &file);
 	/// Cuts the file down to `size` bytes, or extends it with zeros. Needed to attach a database on the file system.
 	using FileTruncateCallback = void (*)(Info &info, VirtualFile &file, idx_t size);
@@ -5595,7 +5583,7 @@ public:
 	/// Constructs user data of type `T`, carried by the registered file system and freed when the database closes;
 	/// read it from a callback via `Info::GetUserData<T>`. Consumed by `Register`.
 	template <class T, class... ARGS>
-	auto SetUserData(ARGS &&...args) & -> VirtualFileSystem & {
+	auto SetUserData(ARGS &&... args) & -> VirtualFileSystem & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
 		user_data = detail::UserData(ptr, detail::TypedDelete<T>);
 		return *this;
@@ -5705,16 +5693,11 @@ public:
 		auto GetFlags() const -> const std::vector<FileFlags> &;
 		/// Whether the file is being opened with the given flag.
 		auto HasFlag(FileFlags flag) const -> bool;
-		/// A named value the caller attached to the open via `FileOpenOptions::SetValue`, if any.
-		auto GetValue(std::string_view name) const -> std::optional<Value>;
-		/// What is known about the file being opened, to read and to fill in. It starts out holding what a listing of
-		/// this file system reported, so the backend need not fetch it again, and is empty when the file was not
-		/// found through a listing. What it holds when the open callback returns is what the engine reports about the
-		/// file when there is no file stat callback. Borrowed.
+		/// What accompanies the open, to read and to fill in. It starts out holding what a listing of this file
+		/// system reported, so the backend need not fetch it again, and the hints the caller set as named values.
+		/// What it holds when the open callback returns is what the engine reports about the file when there is no
+		/// file stat callback. An overlay passes it on to `FileSystem::OpenFile` with the flags. Borrowed.
 		auto GetMetadata() const -> FileMetadata;
-		/// The open request as options for `FileSystem::OpenFile`: the same flags and values, for an overlay that
-		/// opens the file underneath as it was asked to. Owned.
-		auto GetOptions() const -> FileOpenOptions;
 		/// Reports whether the file's cursor can be moved to an arbitrary position; true unless reported otherwise.
 		/// A file that cannot seek, such as a stream, can only be served by a file system that owns the cursor.
 		auto SetSeekable(bool seekable) -> void;
@@ -5722,11 +5705,12 @@ public:
 		auto SetOnDisk(bool on_disk) -> void;
 
 	private:
-		OpenInput(void *info, void *open_info, std::string_view path, std::vector<FileFlags> flags)
-		    : Info(info), open_info(open_info), path(path), flags(std::move(flags)) {
+		OpenInput(void *info, void *open_info, std::string_view path, std::vector<FileFlags> flags, void *metadata)
+		    : Info(info), open_info(open_info), path(path), flags(std::move(flags)), metadata(metadata) {
 		}
 
 		void *open_info;
+		void *metadata;
 		std::string_view path;
 		std::vector<FileFlags> flags;
 	};
@@ -5902,7 +5886,7 @@ public:
 	/// Constructs user data of type `T`, carried by the registered scan and freed when its scope ends; read it from
 	/// the callback via `Input::GetUserData<T>`. Consumed by `Register`.
 	template <class T, class... ARGS>
-	auto SetUserData(ARGS &&...args) & -> ReplacementScan & {
+	auto SetUserData(ARGS &&... args) & -> ReplacementScan & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
 		SetUserDataInternal(ptr, detail::TypedDelete<T>);
 		return *this;

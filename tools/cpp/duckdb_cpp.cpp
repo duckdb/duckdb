@@ -180,10 +180,6 @@ struct HandleTraits<FileHandle> {
 	using handle = duckdb_v2_file_handle;
 };
 template <>
-struct HandleTraits<FileOpenOptions> {
-	using handle = duckdb_v2_file_open_options_handle;
-};
-template <>
 struct HandleTraits<FileMetadata> {
 	using handle = duckdb_v2_file_metadata_handle;
 };
@@ -218,7 +214,7 @@ namespace {
 // Perform a DuckDB C-API call, setup an error info object, and throw an exception if it fails.
 // This is used to simplify error handling in the C++ wrapper.
 template <class F, class... ARGS>
-auto CheckedAPICall(F &&func, ARGS &&...args) -> void {
+auto CheckedAPICall(F &&func, ARGS &&... args) -> void {
 	duckdb_v2_error_info_handle err = nullptr;
 	const auto code = func(std::forward<ARGS>(args)..., &err);
 	if (code != DUCKDB_V2_ERROR_NONE) {
@@ -307,7 +303,7 @@ private:
 // then a buffer with room for the terminator receives the text. The library
 // never allocates, so there is nothing to free.
 template <class F, class... ARGS>
-auto RenderText(F &&func, ARGS &&...args) -> std::string {
+auto RenderText(F &&func, ARGS &&... args) -> std::string {
 	idx_t length = 0;
 	CheckedAPICall(func, args..., static_cast<char *>(nullptr), static_cast<idx_t>(0), &length);
 	std::string out;
@@ -5429,46 +5425,25 @@ FileSystem::~FileSystem() {
 	// Borrowed: the context or connection owns the file system, so there is nothing to release here.
 }
 
-auto FileSystem::CreateOpenOptions() const -> FileOpenOptions {
-	return FileOpenOptions::Create(*this);
-}
-
-auto FileSystem::OpenFile(const std::string &path, std::initializer_list<FileFlags> flags) const -> FileHandle {
-	auto options = CreateOpenOptions();
+static auto OpenWith(duckdb_v2_file_system_handle fs, const std::string &path, const std::vector<FileFlags> &flags,
+                     duckdb_v2_file_metadata_handle metadata) -> duckdb_v2_file_handle {
+	std::vector<DUCKDB_V2_FILE_FLAG> c_flags;
+	c_flags.reserve(flags.size());
 	for (auto flag : flags) {
-		options.SetFlag(flag);
+		c_flags.push_back(static_cast<DUCKDB_V2_FILE_FLAG>(flag));
 	}
-	return OpenFile(path, options);
-}
-
-auto FileSystem::OpenFile(const std::string &path, const FileOpenOptions &options) const -> FileHandle {
 	duckdb_v2_file_handle result = nullptr;
-	CheckedAPICall(duckdb_v2_file_system_open, handle(), ToStr(path), options.handle(), &result);
-	return detail::Factory::Make<FileHandle>(result);
+	CheckedAPICall(duckdb_v2_file_system_open, fs, ToStr(path), c_flags.data(), c_flags.size(), metadata, &result);
+	return result;
 }
 
-FileOpenOptions::FileOpenOptions(void *impl) : detail::Handle<FileOpenOptions>(impl) {
+auto FileSystem::OpenFile(const std::string &path, const std::vector<FileFlags> &flags) const -> FileHandle {
+	return detail::Factory::Make<FileHandle>(OpenWith(handle(), path, flags, nullptr));
 }
 
-FileOpenOptions::~FileOpenOptions() {
-	auto _h = handle();
-	duckdb_v2_file_open_options_destroy(&_h);
-}
-
-auto FileOpenOptions::Create(const FileSystem &fs) -> FileOpenOptions {
-	duckdb_v2_file_open_options_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_file_open_options_create, fs.handle(), &_h);
-	return detail::Factory::Make<FileOpenOptions>(_h);
-}
-
-auto FileOpenOptions::SetFlag(FileFlags flag) & -> FileOpenOptions & {
-	CheckedAPICall(duckdb_v2_file_open_options_set_flag, handle(), static_cast<DUCKDB_V2_FILE_FLAG>(flag));
-	return *this;
-}
-
-auto FileOpenOptions::SetValue(std::string_view name, const Value &value) & -> FileOpenOptions & {
-	CheckedAPICall(duckdb_v2_file_open_options_set_value, handle(), ToStr(name), value.handle());
-	return *this;
+auto FileSystem::OpenFile(const std::string &path, const std::vector<FileFlags> &flags,
+                          const FileMetadata &metadata) const -> FileHandle {
+	return detail::Factory::Make<FileHandle>(OpenWith(handle(), path, flags, metadata.handle()));
 }
 
 FileHandle::FileHandle(void *impl) : detail::Handle<FileHandle>(impl) {
@@ -5541,9 +5516,13 @@ auto FileHandle::Stat() const -> FileMetadata {
 	return detail::Factory::Make<FileMetadata>(metadata, true);
 }
 
-auto FileSystem::Stat(const std::string &path) const -> FileMetadata {
+auto FileSystem::Stat(const std::string &path) const -> std::optional<FileMetadata> {
 	duckdb_v2_file_metadata_handle metadata = nullptr;
-	CheckedAPICall(duckdb_v2_file_system_stat, handle(), ToStr(path), &metadata);
+	bool exists = false;
+	CheckedAPICall(duckdb_v2_file_system_stat, handle(), ToStr(path), &metadata, &exists);
+	if (!exists) {
+		return std::nullopt;
+	}
 	return detail::Factory::Make<FileMetadata>(metadata, true);
 }
 
@@ -5587,6 +5566,31 @@ FileMetadata::~FileMetadata() {
 		auto _h = handle();
 		duckdb_v2_file_metadata_destroy(&_h);
 	}
+}
+
+auto FileMetadata::Create() -> FileMetadata {
+	duckdb_v2_file_metadata_handle metadata = nullptr;
+	CheckedAPICall(duckdb_v2_file_metadata_create, &metadata);
+	return detail::Factory::Make<FileMetadata>(metadata, true);
+}
+
+auto FileMetadata::GetValue(std::string_view name) const -> std::optional<Value> {
+	duckdb_v2_value_handle value = nullptr;
+	CheckedAPICall(duckdb_v2_file_metadata_get_value, handle(), ToStr(name), &value);
+	if (!value) {
+		return std::nullopt;
+	}
+	return detail::Factory::Make<Value>(value);
+}
+
+auto FileMetadata::SetValue(std::string_view name, const Value &value) -> FileMetadata & {
+	CheckedAPICall(duckdb_v2_file_metadata_set_value, handle(), ToStr(name), value.handle());
+	return *this;
+}
+
+auto FileMetadata::CopyFrom(const FileMetadata &source) -> FileMetadata & {
+	CheckedAPICall(duckdb_v2_file_metadata_copy, handle(), source.handle());
+	return *this;
 }
 
 auto FileMetadata::GetType() const -> FileType {
@@ -5763,11 +5767,11 @@ void ClaimTrampoline(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_claim_info_ha
 }
 
 void StatTrampoline(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_stat_info_handle, duckdb_v2_str path,
-                    duckdb_v2_file_metadata_handle metadata, duckdb_v2_error_info_handle *err) {
+                    duckdb_v2_file_metadata_handle metadata, bool *exists, duckdb_v2_error_info_handle *err) {
 	WithExceptionGuard(err, [&]() {
 		auto wrapped = InfoOf(info);
 		auto wrapped_metadata = BorrowedMetadata(metadata);
-		TableOf(info).stat(wrapped, FromStr(path), wrapped_metadata);
+		*exists = TableOf(info).stat(wrapped, FromStr(path), wrapped_metadata);
 	});
 }
 
@@ -5822,7 +5826,8 @@ void MoveTrampoline(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_move_info_hand
 }
 
 void OpenTrampoline(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_open_info_handle open_info, duckdb_v2_str path,
-                    const DUCKDB_V2_FILE_FLAG *flags, idx_t flag_count, duckdb_v2_error_info_handle *err) {
+                    const DUCKDB_V2_FILE_FLAG *flags, idx_t flag_count, duckdb_v2_file_metadata_handle metadata,
+                    duckdb_v2_error_info_handle *err) {
 	WithExceptionGuard(err, [&]() {
 		std::vector<FileFlags> flag_list;
 		flag_list.reserve(flag_count);
@@ -5830,7 +5835,8 @@ void OpenTrampoline(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_open_info
 			flag_list.push_back(static_cast<FileFlags>(flags[i]));
 		}
 		auto input = detail::Factory::Make<VirtualFileSystem::OpenInput>(
-		    static_cast<void *>(info), static_cast<void *>(open_info), FromStr(path), std::move(flag_list));
+		    static_cast<void *>(info), static_cast<void *>(open_info), FromStr(path), std::move(flag_list),
+		    static_cast<void *>(metadata));
 		auto file = TableOf(info).open(input);
 		if (!file) {
 			throw InvalidInputException("the open callback returned no file");
@@ -6177,28 +6183,8 @@ auto VirtualFileSystem::OpenInput::HasFlag(FileFlags flag) const -> bool {
 	return false;
 }
 
-auto VirtualFileSystem::OpenInput::GetValue(std::string_view name) const -> std::optional<Value> {
-	duckdb_v2_value_handle value = nullptr;
-	CheckedAPICall(duckdb_v2_vfs_file_open_get_value, static_cast<duckdb_v2_vfs_file_open_info_handle>(open_info),
-	               ToStr(name), &value);
-	if (!value) {
-		return std::nullopt;
-	}
-	return detail::Factory::Make<Value>(value);
-}
-
 auto VirtualFileSystem::OpenInput::GetMetadata() const -> FileMetadata {
-	duckdb_v2_file_metadata_handle metadata = nullptr;
-	CheckedAPICall(duckdb_v2_vfs_file_open_get_metadata, static_cast<duckdb_v2_vfs_file_open_info_handle>(open_info),
-	               &metadata);
-	return BorrowedMetadata(metadata);
-}
-
-auto VirtualFileSystem::OpenInput::GetOptions() const -> FileOpenOptions {
-	duckdb_v2_file_open_options_handle options = nullptr;
-	CheckedAPICall(duckdb_v2_vfs_file_open_get_options, static_cast<duckdb_v2_vfs_file_open_info_handle>(open_info),
-	               &options);
-	return detail::Factory::Make<FileOpenOptions>(options);
+	return BorrowedMetadata(static_cast<duckdb_v2_file_metadata_handle>(metadata));
 }
 
 auto VirtualFileSystem::OpenInput::SetSeekable(bool seekable) -> void {

@@ -14,14 +14,13 @@ module: file system
 enums:
   FILE_FLAG:
     description: |
-      How `[[file_system_open]]` opens a file. These are not a bitmask -- apply
-      them one at a time with `[[file_open_options_set_flag]]`, calling it once
-      per behaviour you want, e.g. `FILE_FLAG_WRITE` then `FILE_FLAG_CREATE` to
-      write to a file and create it when it does not exist.
+      How `[[file_system_open]]` opens a file. These are not a bitmask -- pass
+      one array element per behaviour you want, e.g. `FILE_FLAG_WRITE` and
+      `FILE_FLAG_CREATE` to write to a file and create it when it does not exist.
     values:
       FILE_FLAG_INVALID:
         value: 0
-        description: Not a flag. The zero value, so that an uninitialized variable does not name a behaviour; applying it is an error.
+        description: Not a flag. The zero value, so that an uninitialized variable does not name a behaviour; passing it is an error.
       FILE_FLAG_READ:
         value: 1
         description: Open the file with "read" capabilities.
@@ -66,7 +65,7 @@ enums:
     values:
       FILE_TYPE_INVALID:
         value: 0
-        description: The path does not exist.
+        description: Not a type. The zero value, so that an uninitialized variable does not name one; setting it is an error.
       FILE_TYPE_REGULAR:
         value: 1
         description: A regular file, which can be opened.
@@ -91,13 +90,6 @@ handles:
       `[[file_system_open]]`. Borrowed: the handle belongs to the context or connection it came from, is valid only
       for as long as that is, and must not be destroyed.
 
-  file_open_options:
-    description: |
-      An owned opaque handle to the options a file is opened with. Created with `[[file_open_options_create]]`,
-      configured with `[[file_open_options_set_flag]]` and `[[file_open_options_set_value]]`, passed to
-      `[[file_system_open]]`, and destroyed with `[[file_open_options_destroy]]`. One options object can open any number
-      of files, and destroying it does not affect files already opened with it.
-
   file:
     description: |
       An owned opaque handle to an open file, produced by `[[file_system_open]]` and destroyed with
@@ -106,11 +98,15 @@ handles:
 
   file_metadata:
     description: |
-      An opaque handle to what is known about one file or directory: its type, and when known its size,
-      modification time and version tag. Produced owned by `[[file_system_stat]]` and `[[file_stat]]`, to be
-      destroyed with `[[file_metadata_destroy]]`; handed out borrowed to a virtual file system's callbacks and by
-      `[[file_listing_get_entry_metadata]]`, where it must not be destroyed. Read with the `file_metadata_get_*`
-      functions, filled in with the `file_metadata_set_*` functions.
+      An opaque handle to everything that travels with one file or directory: its type, and when known its size,
+      modification time and version tag, plus any number of named values. It is the one such handle of the file
+      system API, used wherever something is said about a file: the result of a stat, an entry of a listing, and
+      what accompanies an open, in both directions. Produced owned by `[[file_metadata_create]]`,
+      `[[file_system_stat]]` and `[[file_stat]]`, to be destroyed with `[[file_metadata_destroy]]`; handed out
+      borrowed to a virtual file system's callbacks and by `[[file_listing_get_entry_metadata]]`, where it must
+      not be destroyed. Read with the `file_metadata_get_*` functions, filled in with the `file_metadata_set_*`
+      functions. Whether a named value is a fact about the file or a hint for opening it is up to the file system
+      that handles the path.
 
   file_listing:
     description: |
@@ -172,103 +168,6 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  file_open_options_create:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-02" ]
-    description: |
-      Creates a set of open options for a file system.
-
-      The options start out empty: give them flags with `[[file_open_options_set_flag]]`, which is required, and
-      optionally attach values with `[[file_open_options_set_value]]`. They are then passed to `[[file_system_open]]`,
-      and can be reused for as many opens as you like. The caller owns the returned handle and must destroy it with
-      `[[file_open_options_destroy]]`.
-
-      The options belong to the file system they were created from, since which values mean anything depends on
-      which file system ends up handling the path.
-    parameters:
-      file_system:
-        type: file_system
-        description: The file system the options are for.
-      options:
-        type: file_open_options
-        indirection: 1
-        kind: OUT
-        description: On success, receives the new options. Owned by the caller; destroy via `[[file_open_options_destroy]]`.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  file_open_options_set_flag:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-02" ]
-    description: |
-      Applies one flag to the options.
-
-      Additive: call it once per behaviour you want, and applying the same flag twice is harmless. At least one
-      flag must be applied before the options can open anything, since the flags are what say whether the file is
-      being read or written. There is no way to take a flag back -- build a fresh set of options instead.
-
-      `FILE_FLAG_INVALID` names no behaviour and is rejected, as is any value that is not a `[[FILE_FLAG]]`.
-    parameters:
-      options:
-        type: file_open_options
-        description: The options to apply the flag to.
-      flag:
-        type: FILE_FLAG
-        description: The flag to apply.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  file_open_options_set_value:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-02" ]
-    description: |
-      Attaches a named value to the options.
-
-      These are hints for whichever file system ends up handling the path, and what they mean is that file system's
-      business: a value it does not recognise is ignored rather than rejected, and the same name can mean different
-      things to different file systems. They are the same values a file system reports when listing files, so a
-      known file size or modification time learned from a listing can be handed straight back to avoid re-reading
-      it.
-
-      The name and the value are borrowed and copied, so the caller may destroy the value immediately after.
-      Setting the same name again replaces the previous value. Names are case-sensitive.
-    parameters:
-      options:
-        type: file_open_options
-        description: The options to set the value on.
-      name:
-        type: str
-        description: The name of the value. Borrowed and copied.
-      value:
-        type: value
-        description: The value. Borrowed and copied.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  file_open_options_destroy:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-02" ]
-    description: |
-      Destroys the options, releasing their resources.
-
-      Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
-      double-destruction. Files already opened with these options are unaffected.
-    parameters:
-      options:
-        type: file_open_options
-        description: The options to destroy.
-        indirection: 1
-    return_type: ERROR
-
   file_system_open:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-02" ]
@@ -279,8 +178,16 @@ functions:
       handled by a registered virtual or remote file system goes there rather than to local disk. The returned
       handle is owned by the caller and must be destroyed with `[[file_destroy]]`.
 
-      The options carry the flags and any file-system-specific values; see `[[file_open_options_create]]`. Opening
-      without having set flags fails, since the flags are what say whether the file is being read or written.
+      The flags say how the file is opened, one array element per behaviour; see `[[FILE_FLAG]]`. At least one is
+      required, since the flags are what say whether the file is being read or written, and passing the same flag
+      twice is harmless. `FILE_FLAG_INVALID` names no behaviour and is rejected, as is any value that is not a
+      `[[FILE_FLAG]]`.
+
+      The optional metadata accompanies the open. It carries what is already known about the file, such as the
+      metadata of the listing entry the path came from, so that the file system need not fetch it again, and any
+      named values set with `[[file_metadata_set_value]]` as hints for whichever file system ends up handling the
+      path. What a hint means is that file system's business: one it does not recognise is ignored rather than
+      rejected. The metadata is borrowed for the call only, and can be reused or destroyed right after.
 
       Failure to open -- a missing file without `FILE_FLAG_CREATE`, insufficient permissions, an existing file
       under `FILE_FLAG_EXCLUSIVE_CREATE` -- is reported as an error. A missing file is reported as
@@ -296,9 +203,17 @@ functions:
       file_path:
         type: str
         description: The path of the file to open. Borrowed for the call only.
-      options:
-        type: file_open_options
-        description: How to open the file. Borrowed for the call only, and reusable across opens.
+      flags:
+        type: FILE_FLAG
+        const: true
+        indirection: 1
+        description: The flags to open the file with, `flag_count` of them. Borrowed for the call only.
+      flag_count:
+        type: idx
+        description: The number of flags. At least one.
+      metadata:
+        type: file_metadata
+        description: Optional. What is known about the file, and any hints for opening it. Borrowed for the call only.
       file:
         type: file
         indirection: 1
@@ -524,7 +439,8 @@ functions:
       Flushes buffered writes to persistent storage.
 
       Forces anything still buffered out to storage, which is what makes writes durable across a crash or a
-      process exit. Closing or destroying the handle flushes as well.
+      process exit. Closing or destroying the handle hands buffered writes to the file system but does not make
+      them durable.
     parameters:
       file:
         type: file
@@ -606,11 +522,12 @@ functions:
     description: |
       Reports what is known about a path, without opening it.
 
-      Routed to whichever file system handles the path. The type is always answered: a regular file, a
-      directory, a pipe, something else, or `FILE_TYPE_INVALID` when nothing is there, which is a result rather
-      than an error. Size, modification time and version tag are filled in as far as the file system knows
-      them by path; each getter reports whether its field is known. The local file system answers all of them
-      from one system call, and a virtual file system answers whatever its path-level "stat" callback reports.
+      Routed to whichever file system handles the path. A path with nothing there is a result rather than an
+      error: `exists` is `false` and no metadata is produced. Otherwise the type is always answered: a regular
+      file, a directory, a pipe or something else. Size, modification time and version tag are filled in as far as
+      the file system knows them by path; each getter reports whether its field is known. The local file system
+      answers all of them from one system call, and a virtual file system answers whatever its path-level "stat"
+      callback reports.
     parameters:
       file_system:
         type: file_system
@@ -622,7 +539,12 @@ functions:
         type: file_metadata
         indirection: 1
         kind: OUT
-        description: On success, receives the metadata. Owned by the caller; destroy via `[[file_metadata_destroy]]`.
+        description: On success, receives the metadata, or null when the path does not exist. Owned by the caller; destroy via `[[file_metadata_destroy]]`.
+      exists:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives whether the path exists.
       err:
         type: error_info
         indirection: 1
@@ -724,8 +646,9 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
-      Removes a directory and everything inside it. A directory that does not exist is not an error, since there
-      is nothing left to remove.
+      Removes a directory and everything inside it. A directory the file system knows does not exist is reported
+      as `ERROR_IO_FILE_NOT_FOUND`. A file system without directories, such as an object store, cannot tell a
+      missing directory from an empty one and succeeds.
     parameters:
       file_system:
         type: file_system
@@ -767,6 +690,27 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # File Metadata
   #---------------------------------------------------------------------------------------------------------------------
+  file_metadata_create:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Creates empty metadata, to accompany an open.
+
+      Nothing is known yet: fill in hints with `[[file_metadata_set_value]]`, or what is already known about the
+      file with the other setters, and pass it to `[[file_system_open]]`. The caller owns the returned handle and
+      must destroy it with `[[file_metadata_destroy]]`.
+    parameters:
+      metadata:
+        type: file_metadata
+        indirection: 1
+        kind: OUT
+        description: On success, receives the new metadata. Owned by the caller; destroy via `[[file_metadata_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   file_stat:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
@@ -792,7 +736,7 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
-      Reads what the path refers to, `FILE_TYPE_INVALID` when nothing is there.
+      Reads what the path refers to. A type that was never set reads as a regular file.
     parameters:
       metadata:
         type: file_metadata
@@ -883,17 +827,99 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
+  file_metadata_get_value:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Retrieves a named value of the metadata.
+
+      Named values are whatever travels with a file besides its typed fields: what a file system reported about
+      it, what a virtual file system attached to a listing entry, and in an "open" callback also the hints the
+      caller of `[[file_system_open]]` set. Their meaning is up to the file system that handles the file. Names
+      are case-sensitive, except those of the options the engine itself knows, such as `force_full_download`. A
+      name with no value is not an error, and null is returned. The typed fields are not
+      reachable by name. The returned value is owned by the caller and must be destroyed via `[[value_destroy]]`.
+    parameters:
+      metadata:
+        type: file_metadata
+        description: The metadata to read.
+      name:
+        type: str
+        description: The name of the value. Borrowed for the call only.
+      value:
+        type: value
+        indirection: 1
+        kind: OUT
+        description: Receives the value, or null if there is none under that name. Owned by the caller; destroy via `[[value_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_metadata_set_value:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Attaches a named value to the metadata.
+
+      This is how a caller hands a hint to the file system that opens a file, and how a virtual file system carries
+      something of its own from a listing to the open of a listed file, such as an object's generation: set on the
+      entry's metadata in the "glob" callback, it is there again in the metadata of the "open" callback when the
+      engine opens that entry. The name and the value are borrowed and
+      copied. Setting the same name again replaces the previous value. Names are case-sensitive and values are kept
+      as given, except for the options the engine itself knows, such as `force_full_download`: those are matched
+      without regard to case, and their value is cast to the type the engine reads it as, which fails for a value
+      that cannot be. The names `type`, `file_size`, `last_modified` and `etag` belong to the typed fields and are
+      rejected.
+    parameters:
+      metadata:
+        type: file_metadata
+        description: The metadata to set the value on.
+      name:
+        type: str
+        description: The name of the value. Borrowed and copied.
+      value:
+        type: value
+        description: The value. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_metadata_copy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Replaces everything the target holds with a copy of what the source holds.
+
+      The type, size, modification time, version tag and every named value are copied, including values the caller
+      knows nothing about. This is how a virtual file system that wraps another passes on what that one reported,
+      from its "stat", "list" and "glob" callbacks alike.
+    parameters:
+      target:
+        type: file_metadata
+        description: The metadata to fill in.
+      source:
+        type: file_metadata
+        description: The metadata to copy. Borrowed.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   file_metadata_set_type:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
       Sets what the path refers to.
 
-      From a virtual file system's path-level "stat" callback this is what reports existence: until it is called the
-      path is reported as not existing, and `FILE_TYPE_INVALID` says the same explicitly. Filling in a size,
-      modification time or version tag there without a type is an error. From the file-level "stat" callback the
-      file is open and so exists: `FILE_TYPE_PIPE` makes the engine treat it as a pipe, and anything else,
-      including no type at all, as a regular file. On a listing entry it replaces the type the entry was added with.
+      From either "stat" callback of a virtual file system, a path or file whose type is never set is a regular
+      file. From the file-level "stat" callback, `FILE_TYPE_PIPE` makes the engine treat the open file as a pipe,
+      and anything else as a regular file. On a listing entry it replaces the type the entry was added with.
+      `FILE_TYPE_INVALID` is rejected, as is any value that is not a `[[FILE_TYPE]]`.
     parameters:
       metadata:
         type: file_metadata
@@ -973,7 +999,7 @@ functions:
     description: |
       Destroys metadata the caller owns, releasing its resources.
 
-      Only for metadata produced by `[[file_system_stat]]` and `[[file_stat]]`; a borrowed one must not be
+      Only for metadata produced by `[[file_metadata_create]]`, `[[file_system_stat]]` and `[[file_stat]]`; a borrowed one must not be
       passed here. Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on
       return to prevent double-destruction.
     parameters:
@@ -1096,7 +1122,9 @@ functions:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
       Retrieves what the listing knows about an entry. Fails if the index is out of bounds. Borrowed; valid as
-      long as the listing is, and must not be destroyed.
+      long as the listing is, and must not be destroyed. It can be passed to `[[file_system_open]]` as it is to open
+      the entry, and the owner of the listing may first set hints of its own on it with
+      `[[file_metadata_set_value]]`.
     parameters:
       listing:
         type: file_listing

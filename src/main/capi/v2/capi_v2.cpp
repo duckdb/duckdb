@@ -1,5 +1,7 @@
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
 
+#include <cerrno>
+
 using namespace duckdb::capiv2;
 
 namespace duckdb {
@@ -262,6 +264,14 @@ auto RenderCaughtError(DUCKDB_V2_ERROR &code, string &text, optional<string> &ra
 		} catch (const duckdb::Exception &ex) {
 			ErrorData error_data(ex);
 			code = GetErrorCodeFromExceptionType(error_data.Type());
+			if (code == DUCKDB_V2_ERROR_IO_GENERAL) {
+				// The local file system reports a missing path as a general IO error carrying the errno.
+				auto &extra_info = error_data.ExtraInfo();
+				auto entry = extra_info.find("errno");
+				if (entry != extra_info.end() && entry->second == std::to_string(ENOENT)) {
+					code = DUCKDB_V2_ERROR_IO_FILE_NOT_FOUND;
+				}
+			}
 			text = error_data.Message();
 			raw_message = error_data.RawMessage();
 		} catch (const std::bad_alloc &) {
