@@ -207,6 +207,99 @@ SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A) PATTERN (A) DEFINE A
 ----
 <REGEX>:Parser Error.*more than one PATTERN clause.*
 
+# every clause kind names itself in that message
+
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(PARTITION BY i PARTITION BY j MEASURES i AS x PATTERN (A) DEFINE A as true)
+----
+<REGEX>:Parser Error.*more than one PARTITION BY clause.*
+
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(ORDER BY i ORDER BY j MEASURES i AS x PATTERN (A) DEFINE A as true)
+----
+<REGEX>:Parser Error.*more than one ORDER BY clause.*
+
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(ONE ROW PER MATCH ALL ROWS PER MATCH PATTERN (A) DEFINE A as true)
+----
+<REGEX>:Parser Error.*more than one ROWS PER MATCH clause.*
+
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(
+    AFTER MATCH SKIP TO NEXT ROW AFTER MATCH SKIP PAST LAST ROW
+    MEASURES i AS x PATTERN (A) DEFINE A as true
+)
+----
+<REGEX>:Parser Error.*more than one AFTER MATCH SKIP clause.*
+
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(
+    MEASURES i AS x PATTERN (A B) SUBSET U = (A) SUBSET V = (B) DEFINE A as true, B as true
+)
+----
+<REGEX>:Parser Error.*more than one SUBSET clause.*
+
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A B) DEFINE A as true DEFINE B as true)
+----
+<REGEX>:Parser Error.*more than one DEFINE clause.*
+
+# a repetition count has to fit in the counter the matcher repeats with
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A{99999999999999999999999}) DEFINE A as true)
+----
+<REGEX>:Parser Error.*Pattern quantifier bounds must be non-negative integers.*
+
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A{1,99999999999999999999999}) DEFINE A as true)
+----
+<REGEX>:Parser Error.*Pattern quantifier bounds must be non-negative integers.*
+
+# PREV()/NEXT() read a neighbour and FIRST()/LAST() read a row of the match; both take the
+# expression to read and at most an offset, wherever they are written
+
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES PREV() AS x PATTERN (A) DEFINE A as true)
+----
+<REGEX>:Binder Error.*PREV\(\) takes an expression and an optional offset.*
+
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES NEXT(i, 1, 2) AS x PATTERN (A) DEFINE A as true)
+----
+<REGEX>:Binder Error.*NEXT\(\) takes an expression and an optional offset.*
+
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A) DEFINE A as PREV() > 0)
+----
+<REGEX>:Binder Error.*PREV\(\) takes an expression and an optional offset.*
+
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A) DEFINE A as NEXT(i, 1, 2) > 0)
+----
+<REGEX>:Binder Error.*NEXT\(\) takes an expression and an optional offset.*
+
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A) DEFINE A as FIRST() > 0)
+----
+<REGEX>:Binder Error.*FIRST\(\) takes an expression and an optional offset.*
+
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A) DEFINE A as LAST(i, 1, 2) > 0)
+----
+<REGEX>:Binder Error.*LAST\(\) takes an expression and an optional offset.*
+
+# and what a navigation reads still has to resolve, which it reports rather than navigating nothing
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A) DEFINE A as FIRST(nosuchcol) > 0)
+----
+<REGEX>:Binder Error.*nosuchcol.*
+
+# a navigation over something a condition may not contain reports that, not the navigation
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A) DEFINE A as FIRST(sum(i)) > 0)
+----
+<REGEX>:Binder Error.*cannot be an aggregate.*
+
 # ONE ROW PER MATCH reports the match rather than its rows, so its columns are what the match was
 # partitioned by and what was measured. With neither there is nothing to return, which is worth
 # saying rather than letting an empty projection report itself.

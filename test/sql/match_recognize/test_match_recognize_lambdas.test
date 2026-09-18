@@ -178,6 +178,24 @@ FROM (VALUES (10)) t(x) MATCH_RECOGNIZE (
 ----
 3
 
+# an aggregate over the rows of the match reads its arguments for a pattern variable to scope to, so
+# a lambda parameter inside one must not be mistaken for a variable the match could be scoped to
+query I
+SELECT s FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES sum(list_transform([{'A': x}], lambda A: A.A)[1]) AS s PATTERN (A+)
+)
+----
+3
+
+# naming the variable outside the lambda still scopes the aggregate to the rows it matched
+query I
+SELECT s FROM (VALUES (1), (2), (3)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES sum(list_transform([B.x], lambda v: v)[1]) AS s
+    PATTERN (A B+) DEFINE A AS x < 2, B AS x >= 2
+)
+----
+5
+
 # a pattern variable in front of a column still means the column, where no lambda binds the name
 query II
 SELECT * FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
