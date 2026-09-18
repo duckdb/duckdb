@@ -8,8 +8,12 @@ statement ok
 CREATE TYPE null_target_struct AS STRUCT(n INTEGER, s VARCHAR);
 
 statement ok
+CREATE TYPE null_target_nested_struct AS STRUCT(v null_target_struct);
+
+statement ok
 CREATE TABLE null_nested_values AS SELECT
     {'n': 42, 's': 'hello'} AS null_target_struct,
+    {'v': {'n': 42, 's': 'hello'}} AS null_target_nested_struct,
     [42, NULL, 7] AS "INTEGER[]",
     MAP {1: 'hello', 2: NULL} AS "MAP(INTEGER,VARCHAR)";
 
@@ -20,7 +24,7 @@ COPY (SELECT 1 AS id, NULL::"NULL" AS r,
              [NULL::"NULL", NULL::"NULL"] AS l)
 TO '{TEST_DIR}/null_nested_old.parquet' (FORMAT PARQUET);
 
-foreach type null_target_struct INTEGER[] MAP(INTEGER,VARCHAR)
+foreach type null_target_struct null_target_nested_struct INTEGER[] MAP(INTEGER,VARCHAR)
 
 statement ok
 COPY (SELECT 2 AS id, v AS r, {'v': v} AS s, MAP {'key': v} AS m, [v, NULL] AS l
