@@ -670,6 +670,7 @@ TEST_CASE("V2: result_stream_create refuses a result whose rows are already kept
 
 TEST_CASE("V2: result_stream_create refuses an eager statement", "[capi_v2][query_result]") {
 	EnvFixture fx;
+	ExecSQL(fx.conn, "SET threads=1");
 	ExecSQL(fx.conn, "CREATE TABLE t (i INTEGER)");
 
 	duckdb_v2_result_handle r = nullptr;
