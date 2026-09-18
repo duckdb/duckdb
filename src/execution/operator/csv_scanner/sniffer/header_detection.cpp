@@ -5,6 +5,7 @@
 #include "duckdb/parser/simplified_token.hpp"
 
 #include "utf8proc.hpp"
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 // Helper function to generate column names
@@ -18,26 +19,24 @@ static string GenerateColumnName(const idx_t total_cols, const idx_t col_number,
 
 // Helper function for UTF-8 aware space trimming
 static string TrimWhitespace(const string &col_name) {
-	utf8proc_int32_t codepoint;
-	const auto str = reinterpret_cast<const utf8proc_uint8_t *>(col_name.c_str());
+	int32_t codepoint;
+	const auto str = col_name.c_str();
 	const idx_t size = col_name.size();
 	// Find the first character that is not left trimmed
 	idx_t begin = 0;
 	while (begin < size) {
-		auto bytes = utf8proc_iterate(str + begin, NumericCast<utf8proc_ssize_t>(size - begin), &codepoint);
-		D_ASSERT(bytes > 0);
+		auto bytes = Utf8Proc::DecodeCharacter(str + begin, size - begin, codepoint);
 		if (utf8proc_category(codepoint) != UTF8PROC_CATEGORY_ZS) {
 			break;
 		}
-		begin += NumericCast<idx_t>(bytes);
+		begin += bytes;
 	}
 
 	// Find the last character that is not right trimmed
 	idx_t end = begin;
-	for (auto next = begin; next < col_name.size();) {
-		auto bytes = utf8proc_iterate(str + next, NumericCast<utf8proc_ssize_t>(size - next), &codepoint);
-		D_ASSERT(bytes > 0);
-		next += NumericCast<idx_t>(bytes);
+	for (auto next = begin; next < size;) {
+		auto bytes = Utf8Proc::DecodeCharacter(str + next, size - next, codepoint);
+		next += bytes;
 		if (utf8proc_category(codepoint) != UTF8PROC_CATEGORY_ZS) {
 			end = next;
 		}
