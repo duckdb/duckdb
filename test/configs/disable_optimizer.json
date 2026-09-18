@@ -130,6 +130,12 @@
       ]
     },
     {
+      "reason": "Collated DISTINCT aggregates require the multi-stage aggregate optimizer rewrite.",
+      "paths": [
+        "test/sql/aggregate/distinct/collated.test"
+      ]
+    },
+    {
       "reason": "FIXME: binding bug.",
       "paths": [
         "test/sql/join/natural/natural_join.test"
