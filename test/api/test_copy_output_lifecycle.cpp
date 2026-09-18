@@ -43,6 +43,49 @@ struct LifecycleCopyLocalData : LocalFunctionData {};
 
 struct LifecycleCopyPreparedData : PreparedBatchData {};
 
+// A remote output sink for the lifecycle COPY function, which does not write payloads.
+// No network service or local backing files are needed to exercise partition path construction.
+class PartitionCopyFileSystem : public FileSystem {
+public:
+	struct Handle : FileHandle {
+		Handle(FileSystem &fs, const string &path, FileOpenFlags flags) : FileHandle(fs, path, flags) {
+		}
+		void Close() override {
+		}
+	};
+
+	string GetName() const override {
+		return "PartitionCopyFileSystem";
+	}
+	bool CanHandleFile(const string &path) override {
+		return StringUtil::StartsWith(path, "s3://partition-copy-test/");
+	}
+	bool IsManuallySet() override {
+		return true;
+	}
+	string PathSeparator(const string &) override {
+		return "/";
+	}
+	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags, optional_ptr<FileOpener>) override {
+		return make_uniq<Handle>(*this, path, flags);
+	}
+	bool FileExists(const string &, optional_ptr<FileOpener>) override {
+		return false;
+	}
+	bool IsPipe(const string &, optional_ptr<FileOpener>) override {
+		return false;
+	}
+	bool DirectoryExists(const string &, optional_ptr<FileOpener>) override {
+		return false;
+	}
+	bool CreateDirectoryExtended(const string &, const CreateDirectoryOptions &, optional_ptr<FileOpener>) override {
+		return false;
+	}
+	bool ListFiles(const string &, const std::function<void(const string &, bool)> &, FileOpener *) override {
+		return true;
+	}
+};
+
 struct LifecycleCopyGlobalData : GlobalFunctionData {
 	LifecycleCopyGlobalData(ClientContext &context, string path_p)
 	    : path(std::move(path_p)),
@@ -159,6 +202,37 @@ void RemoveDirectoryIfPresent(FileSystem &fs, const string &path) {
 }
 
 } // namespace
+
+TEST_CASE("Partitioned COPY to remote storage does not require the local filesystem", "[api][copy]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	auto &fs = FileSystem::GetFileSystem(*connection.context);
+	fs.RegisterSubSystem(make_uniq<PartitionCopyFileSystem>());
+	auto info = make_shared_ptr<LifecycleCopyInfo>();
+	RegisterLifecycleCopyFunction(db, "copy_remote_partitions", info);
+	REQUIRE_NO_FAIL(connection.Query("SET disabled_filesystems='LocalFileSystem'"));
+
+	string path_option;
+	string directory;
+	SECTION("Default Hive partition path") {
+		directory = "p=1";
+	}
+	SECTION("Explicit partition path") {
+		path_option = ", PARTITION_PATH 'custom/part_' || p::VARCHAR";
+		directory = "custom/part_1";
+	}
+	REQUIRE_NO_FAIL(connection.Query("COPY (SELECT 1 AS p, 42 AS v) TO 's3://partition-copy-test/output' "
+	                                 "(FORMAT copy_remote_partitions, PARTITION_BY (p), FILENAME_PATTERN 'part_{i}'" +
+	                                 path_option + ")"));
+	REQUIRE(info->finalized_paths.size() == 1);
+	REQUIRE(info->finalized_paths[0] == "s3://partition-copy-test/output/" + directory + "/part_0.test");
+
+	// A genuinely local target must still enforce the disabled filesystem setting.
+	auto local_result = connection.Query("COPY (SELECT 1 AS p, 42 AS v) TO 'partition_copy_local' "
+	                                     "(FORMAT copy_remote_partitions, PARTITION_BY (p))");
+	REQUIRE_FAIL(local_result);
+	REQUIRE(local_result->GetError().find("LocalFileSystem has been disabled") != string::npos);
+}
 
 TEST_CASE("COPY output lifecycle removes only finalized owned files", "[api][copy]") {
 	DuckDB db(nullptr);
