@@ -87,6 +87,10 @@ bool ActiveCheckpointWrapper::HasCheckpointContext() const {
 	return checkpoint_context;
 }
 
+optional_ptr<ClientContext> ActiveCheckpointWrapper::GetCheckpointContext() const {
+	return checkpoint_context;
+}
+
 void ReorderTableEntries(catalog_entry_vector_t &tables);
 
 SingleFileCheckpointWriter::SingleFileCheckpointWriter(QueryContext context, AttachedDatabase &db,
@@ -231,6 +235,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// WALStartCheckpoint we will create a transaction for the checkpoint.
 	ActiveCheckpointWrapper active_checkpoint(context, db, transaction_manager);
 	auto has_wal = storage_manager.WALStartCheckpoint(meta_block, options, active_checkpoint);
+	checkpoint_context = active_checkpoint.GetCheckpointContext();
 
 	catalog_entry_vector_t catalog_entries;
 
@@ -370,6 +375,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		auto &index_list = table_info->GetIndexes();
 		index_list.MergeCheckpointDeltas(options.checkpoint_id);
 	}
+	checkpoint_context = nullptr;
 	active_checkpoint.Commit();
 }
 
@@ -693,12 +699,15 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 	// Write the table metadata
 	serializer.WriteProperty(100, "table", &table);
 
-	// If there is a context available, bind indexes before serialization.
-	// This is necessary so that buffered index operations are replayed before we checkpoint, otherwise
-	// we would lose them if there was a restart after this.
-	if (context && context->transaction.HasActiveTransaction()) {
+	// Explicit checkpoints bind indexes before serialization, so that buffered index operations are replayed
+	// and not lost on a restart. During a commit-time checkpoint the caller has no active transaction.
+	if (context && context->transaction.HasActiveTransaction() && checkpoint_context) {
+		D_ASSERT(checkpoint_context->transaction.HasActiveTransaction());
+		// Bind indexes with checkpoint transaction, which is already running and read-only, so any transaction the
+		// binder still starts skips start_transaction_lock.
+		D_ASSERT(MetaTransaction::Get(*checkpoint_context).IsReadOnly());
 		auto &info = table.GetStorage().GetDataTableInfo();
-		info->BindIndexes(*context);
+		info->BindIndexes(*checkpoint_context);
 	}
 	// FIXME: If we do not have a context, however, the unbound indexes have to be serialized to disk.
 

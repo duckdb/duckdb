@@ -13,9 +13,11 @@ using namespace std;
 TEST_CASE("Value expression conversion preserves VARIANT payloads and floating zero", "[literal][value_sql]") {
 	DuckDB db;
 	Connection con(db);
-	for (auto sql : {"'hello'::VARIANT", "7::SMALLINT::VARIANT", "{'x': 7::SMALLINT::VARIANT}::VARIANT",
-	                 "[7::SMALLINT::VARIANT, 'x'::VARIANT]::VARIANT", "'-0.0'::FLOAT", "'-0.0'::DOUBLE",
-	                 "'-0.0'::FLOAT::VARIANT", "'-0.0'::DOUBLE::VARIANT"}) {
+	for (auto sql :
+	     {"'hello'::VARIANT", "7::SMALLINT::VARIANT", "{'x': 7::SMALLINT::VARIANT}::VARIANT",
+	      "[7::SMALLINT::VARIANT, 'x'::VARIANT]::VARIANT", "'-0.0'::FLOAT", "'-0.0'::DOUBLE", "'-0.0'::FLOAT::VARIANT",
+	      "'-0.0'::DOUBLE::VARIANT", "{'a': [{'b': 1::SMALLINT, 'c': 2::TINYINT, 'a': 3}], 'b': 4, 'c': 5}::VARIANT",
+	      "{'a': [7::SMALLINT::VARIANT, {'b': 2::TINYINT, 'a': 3}::VARIANT]}::VARIANT"}) {
 		INFO(sql);
 		auto original = con.Query("SELECT " + string(sql));
 		REQUIRE_NO_FAIL(*original);
@@ -31,6 +33,10 @@ TEST_CASE("Value expression conversion preserves VARIANT payloads and floating z
 			auto types = con.Query("SELECT variant_typeof(" + string(sql) + ") = variant_typeof(" + rendered + ")");
 			REQUIRE_NO_FAIL(*types);
 			REQUIRE(types->GetValue(0, 0) == Value::BOOLEAN(true));
+			auto strings = con.Query("SELECT variant_extract_string(" + string(sql) +
+			                         ", '') = variant_extract_string(" + rendered + ", '')");
+			REQUIRE_NO_FAIL(*strings);
+			REQUIRE(strings->GetValue(0, 0) == Value::BOOLEAN(true));
 		}
 		if (string(sql).find("-0.0") != string::npos) {
 			auto signs = con.Query("SELECT 1.0 / (" + string(sql) + ")::DOUBLE = 1.0 / (" + rendered + ")::DOUBLE");

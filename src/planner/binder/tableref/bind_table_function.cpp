@@ -1,6 +1,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -313,6 +314,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 
 	auto get = make_uniq<LogicalGet>(bind_index, table_function, std::move(bind_data), return_types, return_names,
 	                                 virtual_columns);
+	get->bind_info = ref.bind_info;
 	get->parameters = parameters;
 	get->named_parameters = named_parameters;
 	get->input_table_types = input_table_types;
@@ -333,7 +335,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 
 		auto window_index = GenerateTableIndex();
 		auto window = make_uniq<duckdb::LogicalWindow>(window_index);
-		auto row_number = RowNumberFun::GetFunction().Bind(context);
+		auto row_number = GetBuiltinWindowFunction(context, RowNumberFun::Name, {})->Bind(context);
 		row_number->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
 		row_number->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
 		Identifier ordinality_alias(ordinality_column_name);

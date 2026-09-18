@@ -623,10 +623,10 @@ bool VariantStats::MergeShredding(const BaseStatistics &stats, const BaseStatist
 		auto &other_object_children = StructType::GetChildTypes(other_typed_value_type);
 
 		//! Map field name to index, for 'other'
-		case_insensitive_map_t<idx_t> key_to_index;
+		unordered_map<string, idx_t> key_to_index;
 		for (idx_t i = 0; i < other_object_children.size(); i++) {
 			auto &other_object_child = other_object_children[i];
-			key_to_index.emplace(other_object_child.first, i);
+			key_to_index.emplace(other_object_child.first.GetIdentifierName(), i);
 		}
 
 		//! Attempt to merge all overlapping fields, only keep the fields that were able to be merged

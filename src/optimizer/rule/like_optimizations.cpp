@@ -1,7 +1,7 @@
 #include "duckdb/optimizer/rule/like_optimizations.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/optimizer/builtin_function_lookup.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"

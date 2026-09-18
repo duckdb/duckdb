@@ -19,6 +19,7 @@ namespace duckdb {
 class ParseResult;
 class PEGTransformer;
 class PEGKeywordHelper;
+class DialectExtension;
 class Matcher;
 class TransformProcess;
 class GrammarChange;
@@ -68,7 +69,9 @@ public:
 	DUCKDB_API void AddTerminalRuleOverride(const string &rule_name, terminal_rule_matcher_factory_t matcher_factory);
 
 private:
+	friend class DialectExtension;
 	friend class MatcherFactory;
+	friend class GrammarLiteralTable;
 	friend struct CompiledGrammar;
 	friend class PEGTransformerFactory;
 	friend class GrammarChange;

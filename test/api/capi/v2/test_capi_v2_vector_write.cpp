@@ -21,6 +21,18 @@
 
 namespace test_capi_v2 {
 
+TEST_CASE("V2: UTF-8 validation reports input errors", "[capi_v2][vector_write]") {
+	duckdb_v2_error_info_handle error = nullptr;
+	REQUIRE(duckdb_v2_validate_utf8({nullptr, 0}, &error) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(error == nullptr);
+	REQUIRE(duckdb_v2_validate_utf8(Convert("🦆"), &error) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_validate_utf8(Convert(std::string("a\0b", 3)), &error) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_validate_utf8(Convert("\xFF"), &error) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(error != nullptr);
+	duckdb_v2_error_info_destroy(&error);
+	REQUIRE(duckdb_v2_validate_utf8({nullptr, 1}, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+}
+
 // These tests almost always assume a vector is 2048 rows to write into, so only run them if that is the case
 #if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 

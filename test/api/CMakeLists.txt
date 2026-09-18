@@ -34,6 +34,8 @@ set(TEST_API_OBJECTS
     test_lifecycle_hooks.cpp
     test_extension_schema_api.cpp
     test_pending_query.cpp
+    test_query_result.cpp
+    test_query_result_stream.cpp
     test_plan_serialization.cpp
     test_relation_api.cpp
     test_stream_result_buffer.cpp
@@ -41,10 +43,12 @@ set(TEST_API_OBJECTS
     test_query_profiler.cpp
     test_read_ahead_abandon.cpp
     test_read_ahead_progress.cpp
+    test_read_ahead_failure.cpp
     test_row_id_deduplicator.cpp
     test_dbdir.cpp
     test_pending_with_parameters.cpp
     test_parse_statement_iterator.cpp
+    test_dialect_extension.cpp
     test_grammar_extension.cpp
     test_progress_bar.cpp
     test_uuid.cpp

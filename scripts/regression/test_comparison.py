@@ -251,7 +251,7 @@ with open(os.environ["BENCHMARK_ORDER_LOG"], "a", encoding="utf-8") as order_log
 values = {
     "q26.benchmark": {
         "old": [0.0805, 0.084, 0.0882, 0.095, 0.103],
-        "new": [0.0757, 0.082, 0.0859, 0.095, 0.104],
+        "new": [0.0757, 0.082, 0.085, 0.095, 0.104],
     },
     "q28.benchmark": {
         "old": [0.397, 0.420, 0.436, 0.460, 0.499],
@@ -283,7 +283,7 @@ with open(os.environ["BENCHMARK_ORDER_LOG"], "a", encoding="utf-8") as order_log
 counter_path = Path(os.environ["BENCHMARK_COUNTER_DIR"]) / f"{label}.count"
 invocation = int(counter_path.read_text(encoding="utf-8")) if counter_path.exists() else 0
 counter_path.write_text(str(invocation + 1), encoding="utf-8")
-timing = 1.03 if label == "new" and invocation < 2 else 1.0
+timing = 1.04 if label == "new" and invocation < 2 else 1.0
 print("name\\trun\\ttiming", file=sys.stderr)
 for run in range(1, runs + 1):
     print(f"{sys.argv[1]}\\t{run}\\t{timing}", file=sys.stderr)
@@ -306,7 +306,7 @@ for run in range(1, runs + 1):
     if label == "old":
         timing = 1.0
     elif invocation < 2:
-        timing = 1.03
+        timing = 1.04
     elif invocation < 4 and run <= 3:
         timing = 1.1
     else:
@@ -385,6 +385,33 @@ if label == "old" and previous_owner == "new":
 else:
     for run in range(1, runs + 1):
         print(f"{sys.argv[1]}\\t{run}\\t1.0", file=sys.stderr)
+"""
+
+    missing_base_runner_source = """#!/usr/bin/env python3
+import os
+import sys
+
+label = os.path.basename(sys.argv[0])
+benchmark = sys.argv[1]
+runs = int(sys.argv[sys.argv.index("--timed-runs") + 1])
+with open(os.environ["BENCHMARK_ORDER_LOG"], "a", encoding="utf-8") as order_log:
+    order_log.write(f"{label}:{runs}\\n")
+base_missing = benchmark in ("new_query.benchmark", "broken_query.benchmark", "missing_everywhere.benchmark")
+if label == "old" and base_missing:
+    print("Benchmark to run could not be found.", file=sys.stderr)
+    raise SystemExit(1)
+if label == "old" and benchmark == "base_error.benchmark":
+    print("Base benchmark setup failed.", file=sys.stderr)
+    raise SystemExit(1)
+if label == "new" and benchmark == "broken_query.benchmark":
+    print("PR benchmark setup failed.", file=sys.stderr)
+    raise SystemExit(1)
+if label == "new" and benchmark == "missing_everywhere.benchmark":
+    print("Benchmark to run could not be found.", file=sys.stderr)
+    raise SystemExit(1)
+print("name\\trun\\ttiming", file=sys.stderr)
+for run in range(1, runs + 1):
+    print(f"{benchmark}\\t{run}\\t1.0", file=sys.stderr)
 """
 
     def run_regression_test(
@@ -477,22 +504,22 @@ else:
         self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
         self.assertEqual(order, self.expected_order(10))
         plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
-        self.assertIn("sampling: adaptive; 10 initial pairs, then 30–100 confirmation pairs outside ±2%", plain_output)
+        self.assertIn("sampling: adaptive; 10 initial pairs, then 30–100 confirmation pairs outside ±3%", plain_output)
         self.assertIn("query regression: median change ≥ +10.0% (warning)", plain_output)
         self.assertIn("CI failure: geomean change ≥ +10.0% or ≥ +50.0 ms", plain_output)
         self.assertNotIn("confidence", plain_output.lower())
         self.assertNotIn("UNCERTAIN", plain_output)
-        self.assertIn("UNCHANGED (±2%)\n1 benchmarks", plain_output)
+        self.assertIn("UNCHANGED (±3%)\n1 benchmarks", plain_output)
         self.assertTrue(plain_output.rstrip().endswith("result: passed; no query regressions"))
 
     def test_noise_boundaries_are_inclusive(self):
-        for new_timing in ("0.98", "1.02"):
+        for new_timing in ("0.97", "1.03"):
             with self.subTest(new_timing=new_timing):
                 process, order, _ = self.run_regression_test(self.stable_runner_source, new_timing=new_timing)
                 self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
                 self.assertEqual(order, self.expected_order(10))
                 plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
-                self.assertIn("UNCHANGED (±2%)", plain_output)
+                self.assertIn("UNCHANGED (±3%)", plain_output)
 
     def test_adaptive_batches_alternate_and_full_budget_is_default(self):
         process, order, _ = self.run_regression_test(self.stable_runner_source, new_timing="1.08")
@@ -511,7 +538,7 @@ else:
         self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
         self.assertEqual(order, self.expected_order(20))
         self.assertIn(
-            "confirm: fake.benchmark: 10 pairs | median change +0.0% | within ±2% (stopped early)",
+            "confirm: fake.benchmark: 10 pairs | median change +0.0% | within ±3% (stopped early)",
             process.stdout,
         )
 
@@ -522,7 +549,7 @@ else:
         self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
         self.assertEqual(order, self.expected_order(30))
         self.assertIn(
-            "confirm: fake.benchmark: 20 pairs | median change +0.0% | within ±2% (stopped early)",
+            "confirm: fake.benchmark: 20 pairs | median change +0.0% | within ±3% (stopped early)",
             process.stdout,
         )
 
@@ -629,6 +656,57 @@ else:
         self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
         self.assertIn("::error title=Geomean benchmark regression::", process.stdout)
         self.assertIn("+50.0 ms (+5.0%)", process.stdout)
+
+    def test_missing_base_benchmark_warns_and_smoke_tests_pr_once(self):
+        process, order, summary = self.run_regression_test(
+            self.missing_base_runner_source,
+            ci=True,
+            benchmarks=["new_query.benchmark"],
+            step_summary=True,
+        )
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertEqual(order, ["old:5", "new:1"])
+        self.assertIn("::warning title=Benchmark missing from Linux Base::", process.stdout)
+        self.assertIn("SKIPPED (missing from Base)", process.stdout)
+        self.assertIn("new_query: PR smoke test passed", process.stdout)
+        self.assertIn("geomean: unavailable", process.stdout)
+        self.assertIn("1 benchmark skipped (missing from Base)", process.stdout)
+        self.assertIn("## Benchmarks Missing From Base: `benchmarks`", summary)
+        self.assertIn("| `new_query.benchmark` | passed |", summary)
+
+    def test_missing_base_query_does_not_exclude_supported_queries(self):
+        process, order, _ = self.run_regression_test(
+            self.missing_base_runner_source,
+            benchmarks=["stable.benchmark", "new_query.benchmark"],
+        )
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertEqual(order, ["old:5", "new:5", "new:5", "old:5", "old:5", "new:1"])
+        self.assertIn("UNCHANGED (±3%)", process.stdout)
+        self.assertIn("geomean: 1.0 s -> 1.0 s", process.stdout)
+        self.assertIn("new_query: PR smoke test passed", process.stdout)
+
+    def test_missing_base_benchmark_does_not_hide_pr_failure(self):
+        for benchmark in ("broken_query.benchmark", "missing_everywhere.benchmark"):
+            with self.subTest(benchmark=benchmark):
+                process, order, _ = self.run_regression_test(
+                    self.missing_base_runner_source,
+                    ci=True,
+                    benchmarks=[benchmark],
+                )
+                self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+                self.assertEqual(order, ["old:5", "new:1"])
+                self.assertIn("::error title=Regression benchmark failure::", process.stdout)
+                self.assertNotIn("::warning title=Benchmark missing from Linux Base::", process.stdout)
+
+    def test_other_base_errors_still_fail(self):
+        process, order, _ = self.run_regression_test(
+            self.missing_base_runner_source,
+            benchmarks=["base_error.benchmark"],
+        )
+        self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+        self.assertEqual(order, ["old:5", "new:5"])
+        self.assertIn("Base benchmark setup failed.", process.stdout)
+        self.assertIn("benchmark failure", process.stdout)
 
     def test_nofail_suppresses_only_geomean_gate(self):
         process, _, _ = self.run_regression_test(
