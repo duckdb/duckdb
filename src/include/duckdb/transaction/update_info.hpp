@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/transaction/undo_buffer_allocator.hpp"
@@ -17,7 +18,7 @@
 namespace duckdb {
 class UpdateSegment;
 struct DataTableInfo;
-class DataTable;
+class DuckTableEntry;
 
 //! UpdateInfo is a class that represents a set of updates applied to a single vector.
 //! The UpdateInfo struct contains metadata associated with the update.
@@ -28,7 +29,7 @@ struct UpdateInfo {
 	//! The update segment that this update info affects
 	UpdateSegment *segment;
 	//! The table this was update was made on
-	DataTable *table;
+	DuckTableEntry *table;
 	//! The column index of which column we are updating
 	idx_t column_index;
 	//! The start index of the row group
@@ -57,29 +58,28 @@ struct UpdateInfo {
 		return reinterpret_cast<T *>(GetValues());
 	}
 
-	bool AppliesToTransaction(transaction_t start_time, transaction_t transaction_id) {
-		// these tuples were either committed AFTER this transaction started or are not committed yet, use
+	bool AppliesToTransaction(const SnapshotView &view) {
+		// these tuples are either committed outside this transaction's snapshot or not committed yet, use
 		// tuples stored in this version
-		if (version_number == TRANSACTION_ID_START - 1) {
+		if (version_number == MAX_COMMIT_ID) {
 			// dummy transaction number for the root element - should always match
 			return true;
 		}
-		return version_number > start_time && version_number != transaction_id;
+		return !view.Sees(version_number.load());
 	}
 
 	//! Loop over the update chain and execute the specified callback on all UpdateInfo's that are relevant for that
 	//! transaction in-order of newest to oldest
 	template <class T>
-	static void UpdatesForTransaction(UpdateInfo &current, transaction_t start_time, transaction_t transaction_id,
-	                                  T &&callback) {
-		if (current.AppliesToTransaction(start_time, transaction_id)) {
+	static void UpdatesForTransaction(UpdateInfo &current, const SnapshotView &view, T &&callback) {
+		if (current.AppliesToTransaction(view)) {
 			callback(current);
 		}
 		auto update_ptr = current.next;
 		while (update_ptr.IsSet()) {
 			auto pin = update_ptr.Pin();
 			auto &info = Get(pin);
-			if (info.AppliesToTransaction(start_time, transaction_id)) {
+			if (info.AppliesToTransaction(view)) {
 				callback(info);
 			}
 			update_ptr = info.next;
@@ -93,11 +93,18 @@ struct UpdateInfo {
 	bool HasPrev() const;
 	bool HasNext() const;
 	static UpdateInfo &Get(UndoBufferReference &entry);
-	//! Returns the total allocation size for an UpdateInfo entry, together with space for the tuple data
+	//! Returns the total allocation size for an UpdateInfo entry with max capacity (STANDARD_VECTOR_SIZE)
 	static idx_t GetAllocSize(idx_t type_size);
+	//! Returns the total allocation size for an UpdateInfo entry with a specific capacity
+	static idx_t GetAllocSize(idx_t type_size, idx_t capacity);
+	//! Computes a compact capacity for a given count (rounds up with growth headroom)
+	static idx_t GetCompactCapacity(idx_t count);
 	//! Initialize an UpdateInfo struct that has been allocated using GetAllocSize (i.e. has extra space after it)
-	static void Initialize(UpdateInfo &info, DataTable &data_table, transaction_t transaction_id,
+	static void Initialize(UpdateInfo &info, DuckTableEntry &table_entry, transaction_t transaction_id,
 	                       idx_t row_group_start);
+	//! Initialize with a specific capacity (for compact allocations)
+	static void Initialize(UpdateInfo &info, DuckTableEntry &table_entry, transaction_t transaction_id,
+	                       idx_t row_group_start, idx_t capacity);
 };
 
 } // namespace duckdb

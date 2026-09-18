@@ -4,9 +4,6 @@
 
 require no_extension_autoloading "FIXME: Unimplemented type for cast (TIMESTAMP WITH TIME ZONE -> DATE)"
 
-statement ok
-PRAGMA enable_verification
-
 # by default these columns can be used as per usual
 query I
 SELECT user FROM (VALUES ('hello world')) t(user)
@@ -40,7 +37,7 @@ require icu
 foreach value_function current_catalog current_date current_schema current_role current_time current_timestamp current_user localtime localtimestamp session_user user
 
 statement ok
-SELECT ${value_function}
+SELECT {value_function}
 
 endloop
 

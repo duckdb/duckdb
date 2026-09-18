@@ -1,0 +1,86 @@
+# name: test/sql/window/test_streaming_nthvalue.test
+# description: Streaming Nth_Value
+# group: [window]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+# Nth_Value requires running totals
+query TT
+explain select nth_value(i, 1) over () 
+from range(10) tbl(i)
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+explain select nth_value(i, 2) over (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) 
+from range(5) tbl(i)
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query I
+select nth_value(i, 2) over (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) 
+from range(5) tbl(i)
+----
+NULL
+1
+1
+1
+1
+
+# Nth_Value maps negative indices to NULL
+query TT
+explain select nth_value(i, -1) over (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) 
+from range(5) tbl(i)
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query I
+select nth_value(i, -1) over (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) 
+from range(5) tbl(i)
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query II
+SELECT s,
+	nth_value(s, 2 IGNORE NULLS) over(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+FROM (VALUES 
+	(NULL), 
+	('A'), 
+	(NULL), 
+	('B')
+	) t(s)
+----
+NULL	NULL
+A	NULL
+NULL	NULL
+B	B
+
+# Regression: later NULL rows should not overwrite the found value
+query II
+WITH src(id, x) AS (VALUES (1, 10), (2, 20), (3, NULL), (4, 30))
+SELECT id, NTH_VALUE(x, 2 IGNORE NULLS) OVER (
+	ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+) AS actual
+FROM src ORDER BY id
+----
+1	NULL
+2	20
+3	20
+4	20
+
+# Test short circuit
+query II
+select i, nth_value(i, 2049) over(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) n
+from range(2049) tbl(i)
+QUALIFY n IS NOT NULL;
+----
+2048	2048
+

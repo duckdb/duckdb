@@ -57,18 +57,18 @@ ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const String &value
 	return ExceptionFormatValue(value);
 }
 template <>
-ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const SQLString &value) {
-	return KeywordHelper::WriteQuoted(value.raw_string, '\'');
-}
-
-template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const Identifier &value) {
 	return SQLQuotedIdentifier::ToString(value);
 }
 
 template <>
+ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const SQLString &value) {
+	return SQLString::ToString(value.raw_string);
+}
+
+template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const SQLIdentifier &value) {
-	return KeywordHelper::WriteOptionallyQuoted(value.raw_string, '"');
+	return SQLIdentifier::ToString(value.raw_string);
 }
 
 template <>

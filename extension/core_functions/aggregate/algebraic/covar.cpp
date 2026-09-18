@@ -1,17 +1,22 @@
 #include "core_functions/aggregate/algebraic_functions.hpp"
-#include "duckdb/common/types/null_value.hpp"
 #include "core_functions/aggregate/algebraic/covar.hpp"
 
 namespace duckdb {
 
 AggregateFunction CovarPopFun::GetFunction() {
-	return AggregateFunction::BinaryAggregate<CovarState, double, double, double, CovarPopOperation>(
+	auto fun = AggregateFunction::BinaryAggregate<CovarState, double, double, double, CovarPopOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
+	fun.GetSignature().GetParameter(0).SetName("y");
+	fun.GetSignature().GetParameter(1).SetName("x");
+	return fun;
 }
 
 AggregateFunction CovarSampFun::GetFunction() {
-	return AggregateFunction::BinaryAggregate<CovarState, double, double, double, CovarSampOperation>(
+	auto fun = AggregateFunction::BinaryAggregate<CovarState, double, double, double, CovarSampOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
+	fun.GetSignature().GetParameter(0).SetName("y");
+	fun.GetSignature().GetParameter(1).SetName("x");
+	return fun;
 }
 
 } // namespace duckdb

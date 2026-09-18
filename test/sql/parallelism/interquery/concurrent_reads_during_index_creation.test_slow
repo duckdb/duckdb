@@ -15,7 +15,7 @@ loop x 0 100
 
 onlyif threadid<>0
 query I
-SELECT COUNT(*) FROM integers WHERE i = (${threadid} * 10000 + ${x})
+SELECT COUNT(*) FROM integers WHERE i = ({threadid} * 10000 + {x})
 ----
 1
 

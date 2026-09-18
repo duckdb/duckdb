@@ -5,9 +5,6 @@
 require parquet
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t1 (s1 STRUCT(a INT, b INT));
 
 statement ok
@@ -20,13 +17,13 @@ statement ok
 INSERT INTO t2 VALUES ({a: 100, c: 101});
 
 statement ok
-COPY t1 TO '__TEST_DIR__/struct_cast_t1.parquet' (FORMAT 'parquet');
+COPY t1 TO '{TEST_DIR}/struct_cast_t1.parquet' (FORMAT 'parquet');
 
 statement ok
-COPY t2 TO '__TEST_DIR__/struct_cast_t2.parquet' (FORMAT 'parquet');
+COPY t2 TO '{TEST_DIR}/struct_cast_t2.parquet' (FORMAT 'parquet');
 
 query I
-SELECT * FROM read_parquet('__TEST_DIR__/struct_cast_*.parquet', union_by_name = TRUE);
+SELECT * FROM read_parquet('{TEST_DIR}/struct_cast_*.parquet', union_by_name = TRUE);
 ----
 {'a': 42, 'b': 43, 'c': NULL}
 {'a': 100, 'b': NULL, 'c': 101}

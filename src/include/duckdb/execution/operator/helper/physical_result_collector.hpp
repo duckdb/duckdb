@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/common/enums/query_result_memory_type.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 
 namespace duckdb {
@@ -29,7 +30,7 @@ public:
 	StatementProperties properties;
 	QueryResultMemoryType memory_type;
 	PhysicalOperator &plan;
-	vector<string> names;
+	vector<Identifier> names;
 
 public:
 	static unique_ptr<PhysicalOperator> GetResultCollector(ClientContext &context, PreparedStatementData &data);
@@ -51,7 +52,8 @@ public:
 	}
 
 public:
-	//! Whether this is a streaming result collector
+	//! Whether this collector produces a result that must stay open after the fetch.
+	//! Custom collectors override this to keep the query alive for their stream
 	virtual bool IsStreaming() const {
 		return false;
 	}

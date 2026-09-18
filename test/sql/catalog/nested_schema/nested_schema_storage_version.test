@@ -1,0 +1,27 @@
+# name: test/sql/catalog/nested_schema/nested_schema_storage_version.test
+# description: Nested schemas require storage version v2.0.0 when persisted
+# group: [nested_schema]
+
+# an old-storage-version database rejects nested schemas
+load {TEST_DIR}/nested_old_storage.db readwrite v1.4.0
+
+# top-level schemas are still fine
+statement ok
+CREATE SCHEMA parent;
+
+statement error
+CREATE SCHEMA parent.child;
+----
+<REGEX>:.*Nested schemas are only supported for storage versions v2.0.0.*
+
+restart
+
+# nested schema in an in-memory (temporary) attached catalog is allowed regardless of the main db version
+statement ok
+ATTACH ':memory:' AS mem;
+
+statement ok
+CREATE SCHEMA mem.p;
+
+statement ok
+CREATE SCHEMA mem.p.c;

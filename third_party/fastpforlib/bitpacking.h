@@ -8,6 +8,17 @@
 #include <cinttypes>
 #include <string>
 
+// On macOS, sys/cdefs.h doesn't contain c++:
+// #if __STDC_VERSION__ < 199901
+// #define __restrict
+// #else
+// #define __restrict      restrict
+// #endif
+#ifdef __APPLE__
+#undef __restrict
+#define __restrict __restrict__
+#endif
+
 namespace duckdb_fastpforlib {
 namespace internal {
 

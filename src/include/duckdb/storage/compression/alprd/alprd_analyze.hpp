@@ -27,7 +27,7 @@ struct AlpRDAnalyzeState : public AnalyzeState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	explicit AlpRDAnalyzeState(const CompressionInfo &info) : AnalyzeState(info), compression_data() {
+	explicit AlpRDAnalyzeState(BlockManager &block_manager) : AnalyzeState(block_manager), compression_data() {
 	}
 
 	idx_t vectors_count = 0;
@@ -40,27 +40,27 @@ public:
 template <class T>
 unique_ptr<AnalyzeState> AlpRDInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	auto &storage_manager = col_data.GetStorageManager();
-	auto &block_manager = storage_manager.GetBlockManager();
+	auto &block_manager = col_data.GetBlockManager();
 
 	if (block_manager.GetBlockSize() + block_manager.GetBlockHeaderSize() < DEFAULT_BLOCK_ALLOC_SIZE) {
-		if (storage_manager.GetStorageVersion() < 7) {
+		if (StorageManager::IsPriorToVersion(StorageVersion::V1_5_0, storage_manager.GetStorageVersion())) {
 			// Before v1.5.0, blocks cannot use uncompressed-vector fallback
 			return nullptr;
 		}
 	}
 
-	CompressionInfo info(block_manager);
-	return make_uniq<AlpRDAnalyzeState<T>>(info);
+	return make_uniq<AlpRDAnalyzeState<T>>(block_manager);
 }
 
 /*
  * ALPRD Analyze step only pushes the needed samples to estimate the compression size in the finalize step
  */
 template <class T>
-bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
+bool AlpRDAnalyze(AnalyzeState &state, const Vector &input) {
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 	auto &analyze_state = state.Cast<AlpRDAnalyzeState<T>>();
 
+	const auto count = input.size();
 	bool must_skip_current_vector = alp::AlpUtils::MustSkipSamplingFromCurrentVector(
 	    analyze_state.vectors_count, analyze_state.vectors_sampled_count, count);
 	analyze_state.vectors_count += 1;
@@ -70,7 +70,7 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	}
 
 	UnifiedVectorFormat vdata;
-	input.ToUnifiedFormat(count, vdata);
+	input.ToUnifiedFormat(vdata);
 	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 
 	alp::AlpSamplingParameters sampling_params = alp::AlpUtils::GetSamplingParameters(count);
@@ -82,7 +82,7 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	idx_t sample_idx = 0;
 	idx_t nulls_idx = 0;
 	// We optimize by doing a different loop when there are no nulls
-	if (vdata.validity.AllValid()) {
+	if (vdata.validity.CannotHaveNull()) {
 		for (idx_t i = 0; i < sampling_params.n_lookup_values; i += sampling_params.n_sampled_increments) {
 			auto idx = vdata.sel->get_index(i);
 			EXACT_TYPE value = Load<EXACT_TYPE>(const_data_ptr_cast(&data[idx]));

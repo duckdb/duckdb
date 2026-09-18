@@ -3,9 +3,6 @@
 # group: [arrow]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 SET lambda_syntax='ENABLE_SINGLE_ARROW'
 
 # issue #5795

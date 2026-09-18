@@ -35,7 +35,7 @@
  */
 #ifndef W_TDEFS_H
 #define W_TDEFS_H
-tdef w_tdefs[] = {
+thread_local tdef w_tdefs[] = {
     {"call_center", "cc", FL_TYPE_2 | FL_SMALL, CALL_CENTER_START, CALL_CENTER_END, CALL_CENTER, -1, NULL, 0, 0, 100, 0,
      0x0B, NULL},
     {"catalog_page", "cp", 0, CATALOG_PAGE_START, CATALOG_PAGE_END, CATALOG_PAGE, -1, NULL, 0, 0, 200, 0, 0x03, NULL},

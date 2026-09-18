@@ -15,12 +15,12 @@ static void ReplaceSetOpBindings(vector<ColumnBinding> &bindings, Filter &filter
                                  LogicalSetOperation &setop) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &expr) {
-		    D_ASSERT(colref.binding.table_index == setop.table_index);
-		    D_ASSERT(colref.depth == 0);
+		    D_ASSERT(colref.Binding().table_index == setop.table_index);
+		    D_ASSERT(colref.Depth() == 0);
 
 		    // rewrite the binding by looking into the bound_tables list of the subquery
-		    colref.binding = bindings[colref.binding.column_index];
-		    filter.bindings.insert(colref.binding.table_index);
+		    colref.BindingMutable() = bindings[colref.Binding().column_index];
+		    filter.bindings.insert(colref.Binding().table_index);
 	    });
 }
 
@@ -32,7 +32,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	for (auto &child : op->children) {
 		auto child_bindings = child->GetColumnBindings();
 
-		FilterPushdown child_pushdown(optimizer, convert_mark_joins);
+		FilterPushdown child_pushdown(optimizer, convert_mark_joins, projection_mode);
 		for (auto &original_filter : filters) {
 			// first create a copy of the filter
 			auto filter = make_uniq<Filter>();

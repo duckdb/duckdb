@@ -633,6 +633,8 @@ typedef struct {
 	                               idx_t src_offset, idx_t dst_offset);
 	void (*duckdb_unsafe_vector_assign_string_element_len)(duckdb_vector vector, idx_t index, const char *str,
 	                                                       idx_t str_len);
+	duckdb_value (*duckdb_create_timestamp_tz_ns)(duckdb_timestamp_ns input);
+	duckdb_timestamp_ns (*duckdb_get_timestamp_tz_ns)(duckdb_value val);
 } duckdb_ext_api_v1;
 
 //===--------------------------------------------------------------------===//
@@ -1186,6 +1188,8 @@ inline duckdb_ext_api_v1 CreateAPIv1(void) {
 	result.duckdb_selection_vector_get_data_ptr = duckdb_selection_vector_get_data_ptr;
 	result.duckdb_vector_copy_sel = duckdb_vector_copy_sel;
 	result.duckdb_unsafe_vector_assign_string_element_len = duckdb_unsafe_vector_assign_string_element_len;
+	result.duckdb_create_timestamp_tz_ns = duckdb_create_timestamp_tz_ns;
+	result.duckdb_get_timestamp_tz_ns = duckdb_get_timestamp_tz_ns;
 	return result;
 }
 

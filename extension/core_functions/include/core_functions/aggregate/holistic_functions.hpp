@@ -57,7 +57,7 @@ struct ModeFun {
 
 struct QuantileDiscFun {
 	static constexpr const char *Name = "quantile_disc";
-	static constexpr const char *Parameters = "x,pos";
+	static constexpr const char *Parameters = "x,quantile";
 	static constexpr const char *Description = "Returns the exact quantile number between 0 and 1 . If pos is a LIST of FLOATs, then the result is a LIST of the corresponding exact quantiles.";
 	static constexpr const char *Example = "quantile_disc(x, 0.5)";
 	static constexpr const char *Categories = "";
@@ -73,7 +73,7 @@ struct QuantileFun {
 
 struct QuantileContFun {
 	static constexpr const char *Name = "quantile_cont";
-	static constexpr const char *Parameters = "x,pos";
+	static constexpr const char *Parameters = "x,quantile";
 	static constexpr const char *Description = "Returns the interpolated quantile number between 0 and 1 . If pos is a LIST of FLOATs, then the result is a LIST of the corresponding interpolated quantiles.	";
 	static constexpr const char *Example = "quantile_cont(x, 0.5)";
 	static constexpr const char *Categories = "";
@@ -99,6 +99,16 @@ struct ApproxTopKFun {
 	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
+};
+
+struct LttbFun {
+	static constexpr const char *Name = "lttb";
+	static constexpr const char *Parameters = "x,y,n";
+	static constexpr const char *Description = "Downsamples the (x, y) points to (at most) n representative points using the Largest Triangle Three Buckets algorithm. Returns a LIST of STRUCT(x, y); the points must be ordered by x (use lttb(x, y, n ORDER BY x)).";
+	static constexpr const char *Example = "lttb(x, y, 500 ORDER BY x)";
+	static constexpr const char *Categories = "";
+
+	static AggregateFunctionSet GetFunctions();
 };
 
 } // namespace duckdb

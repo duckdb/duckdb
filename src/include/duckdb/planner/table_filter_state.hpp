@@ -9,10 +9,19 @@
 #pragma once
 
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
+
+struct SelectionVector;
+class Vector;
+
+struct ExpressionFilterExecutor {
+	virtual ~ExpressionFilterExecutor() = default;
+
+	virtual idx_t FilterSelection(SelectionVector &sel, Vector &vector, idx_t scan_count,
+	                              idx_t &approved_tuple_count) = 0;
+};
 
 //! Thread-local state for executing a table filter
 struct TableFilterState {
@@ -21,6 +30,11 @@ public:
 
 public:
 	static unique_ptr<TableFilterState> Initialize(ClientContext &context, const TableFilter &filter);
+
+	//! Whether evaluating the filter can throw. Such a filter must only ever be evaluated on the rows that are still
+	//! selected - evaluating it on the distinct values of a segment (a dictionary, the RLE runs) would raise errors
+	//! for rows that another filter already removed
+	bool can_throw = false;
 
 public:
 	template <class TARGET>
@@ -35,34 +49,18 @@ public:
 	}
 };
 
-struct ConjunctionAndFilterState : public TableFilterState {
-public:
-	vector<unique_ptr<TableFilterState>> child_states;
-};
-
-struct ConjunctionOrFilterState : public TableFilterState {
-public:
-	vector<unique_ptr<TableFilterState>> child_states;
-};
-
 struct ExpressionFilterState : public TableFilterState {
 public:
 	ExpressionFilterState(ClientContext &context, const Expression &expression);
+	~ExpressionFilterState() override;
 
-	ExpressionExecutor executor;
-};
-
-struct BFTableFilterState final : public TableFilterState {
-	idx_t current_capacity;
-	Vector hashes_v;
-	Vector found_v;
-	Vector keys_sliced_v;
-	SelectionVector bf_sel;
-
-	explicit BFTableFilterState(const LogicalType &key_logical_type)
-	    : current_capacity(STANDARD_VECTOR_SIZE), hashes_v(LogicalType::HASH), found_v(LogicalType::UBIGINT),
-	      keys_sliced_v(key_logical_type), bf_sel(STANDARD_VECTOR_SIZE) {
+	ClientContext &GetContext() {
+		D_ASSERT(executor);
+		return executor->GetContext();
 	}
+
+	unique_ptr<ExpressionExecutor> executor;
+	unique_ptr<ExpressionFilterExecutor> fast_executor;
 };
 
 } // namespace duckdb

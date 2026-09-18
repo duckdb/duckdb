@@ -4,9 +4,6 @@
 
 require skip_reload
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT current_setting('disabled_filesystems')
 ----
@@ -53,7 +50,7 @@ has been disabled previously
 statement error
 SELECT * FROM abc.main.t1;
 ----
-Catalog "abc" does not exist
+schema "abc.main" does not exist
 
 statement error
 SELECT * FROM abc.t1;

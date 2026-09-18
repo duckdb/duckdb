@@ -17,6 +17,8 @@
 
 namespace duckdb {
 class Binder;
+class FilterStatisticsOptimizer;
+class SQLStatement;
 
 class Optimizer {
 public:
@@ -24,11 +26,16 @@ public:
 
 	//! Optimize a plan by running specialized optimizers
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
+	//! Lower aggregates whose ordinary grouped execution requires an explicit relational plan.
+	unique_ptr<LogicalOperator> LowerMandatoryAggregateRewrites(unique_ptr<LogicalOperator> plan);
 	//! Return a reference to the client context of this optimizer
 	ClientContext &GetContext();
 	//! Whether the specific optimizer is disabled
 	bool OptimizerDisabled(OptimizerType type);
 	static bool OptimizerDisabled(ClientContext &context, OptimizerType type);
+
+	//! Pre-binder statement-level optimization pass
+	void OptimizeStatement(unique_ptr<SQLStatement> &statement);
 
 public:
 	ClientContext &context;
@@ -36,20 +43,25 @@ public:
 	ExpressionRewriter rewriter;
 
 private:
+	friend class FilterStatisticsOptimizer;
+
 	void RunBuiltInOptimizers();
 	void RunOptimizer(OptimizerType type, const std::function<void()> &callback);
 	void Verify(LogicalOperator &op);
 
 public:
 	// helper functions
-	unique_ptr<Expression> BindScalarFunction(const string &name, unique_ptr<Expression> c1);
-	unique_ptr<Expression> BindScalarFunction(const string &name, unique_ptr<Expression> c1, unique_ptr<Expression> c2);
+	unique_ptr<Expression> BindScalarFunction(const Identifier &name, unique_ptr<Expression> c1);
+	unique_ptr<Expression> BindScalarFunction(const Identifier &name, unique_ptr<Expression> c1,
+	                                          unique_ptr<Expression> c2);
+	unique_ptr<Expression> BindScalarFunction(const Identifier &name, unique_ptr<Expression> c1,
+	                                          unique_ptr<Expression> c2, unique_ptr<Expression> c3);
 
 private:
 	unique_ptr<LogicalOperator> plan;
 
 private:
-	unique_ptr<Expression> BindScalarFunction(const string &name, vector<unique_ptr<Expression>> children);
+	unique_ptr<Expression> BindScalarFunction(const Identifier &name, vector<unique_ptr<Expression>> children);
 };
 
 } // namespace duckdb

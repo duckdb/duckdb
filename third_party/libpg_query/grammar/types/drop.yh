@@ -1,6 +1,0 @@
-%type <objtype> drop_type_any_name
-%type <objtype> drop_type_name
-%type <list> any_name_list
-%type <dbehavior> opt_drop_behavior
-%type <objtype> drop_type_name_on_any_name
-%type <list> type_name_list

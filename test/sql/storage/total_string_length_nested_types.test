@@ -1,0 +1,74 @@
+# name: test/sql/storage/total_string_length_nested_types.test
+# description: Test that total_string_length is correctly tracked (or invalidated) for strings inside nested types
+# group: [storage]
+
+# Use COALESCE so the query passes in both normal mode (exact value) and force_storage_restart mode
+# (NULL due to EXPAND_BOUNDS on unloaded columns). It fails only if the value is an incorrect non-NULL
+# result — which would indicate that EXPAND_BOUNDS was not propagated to the nested type's string child.
+
+load {TEST_DIR}/total_string_length_nested_types.db readwrite v2.0.0
+
+statement ok
+CREATE TABLE test(a VARCHAR[], b STRUCT(s VARCHAR), c VARCHAR[3]);
+
+statement ok
+SET checkpoint_threshold='1TB';
+
+statement ok
+INSERT INTO test SELECT ['abc'], {'s': 'de'}, ['fg', 'hi', 'jk'] FROM range(10_000);
+
+# a: list of varchar — child total = 10000 * len('abc') = 30000
+query I
+SELECT COALESCE(s.child_stats.total_string_length, 30000) FROM (SELECT stats(a) s FROM test LIMIT 1)
+----
+30000
+
+# b: struct with a varchar field — child field total = 10000 * len('de') = 20000
+query I
+SELECT COALESCE(s.child_stats.s.total_string_length, 20000) FROM (SELECT stats(b) s FROM test LIMIT 1)
+----
+20000
+
+# c: fixed-size array of varchar — child total = 10000 * (len('fg') + len('hi') + len('jk')) = 60000
+query I
+SELECT COALESCE(s.child_stats.total_string_length, 60000) FROM (SELECT stats(c) s FROM test LIMIT 1)
+----
+60000
+
+statement ok
+INSERT INTO test SELECT ['abc'], {'s': 'de'}, ['fg', 'hi', 'jk'] FROM range(10_000);
+
+# After second insert: doubled
+query I
+SELECT COALESCE(s.child_stats.total_string_length, 60000) FROM (SELECT stats(a) s FROM test LIMIT 1)
+----
+60000
+
+query I
+SELECT COALESCE(s.child_stats.s.total_string_length, 40000) FROM (SELECT stats(b) s FROM test LIMIT 1)
+----
+40000
+
+query I
+SELECT COALESCE(s.child_stats.total_string_length, 120000) FROM (SELECT stats(c) s FROM test LIMIT 1)
+----
+120000
+
+statement ok
+INSERT INTO test SELECT ['abc'], {'s': 'de'}, ['fg', 'hi', 'jk'] FROM range(10_000);
+
+# After third insert: tripled
+query I
+SELECT COALESCE(s.child_stats.total_string_length, 90000) FROM (SELECT stats(a) s FROM test LIMIT 1)
+----
+90000
+
+query I
+SELECT COALESCE(s.child_stats.s.total_string_length, 60000) FROM (SELECT stats(b) s FROM test LIMIT 1)
+----
+60000
+
+query I
+SELECT COALESCE(s.child_stats.total_string_length, 180000) FROM (SELECT stats(c) s FROM test LIMIT 1)
+----
+180000

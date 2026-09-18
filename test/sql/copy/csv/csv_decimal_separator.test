@@ -2,9 +2,6 @@
 # description: Support decimal separators
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 # period-separated decimal doesn't parse
 statement error
 CREATE TABLE decimal_separators AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/decimal_separators/decimal_separators.csv', column_types={'commas': 'double', 'periods': 'double'}, delim=';', decimal_separator=',')

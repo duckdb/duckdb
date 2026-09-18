@@ -3,9 +3,6 @@
 # group: [binder]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create table customers (name varchar, age integer, something_easy_to_type_wrong integer, city varchar);
 
 statement ok

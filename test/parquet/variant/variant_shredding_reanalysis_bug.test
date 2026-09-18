@@ -21,20 +21,20 @@ SELECT
 FROM generate_series(1, 10000) t(i);
 
 statement ok
-COPY repro TO '__TEST_DIR__/variant_reanalysis.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048);
+COPY repro TO '{TEST_DIR}/variant_reanalysis.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048);
 
 # Verify data round-trips correctly
 query I
-SELECT count(*) FROM '__TEST_DIR__/variant_reanalysis.parquet';
+SELECT count(*) FROM '{TEST_DIR}/variant_reanalysis.parquet';
 ----
 10000
 
 query II
-SELECT v1, some_int FROM '__TEST_DIR__/variant_reanalysis.parquet' WHERE some_int = 1;
+SELECT v1, some_int FROM '{TEST_DIR}/variant_reanalysis.parquet' WHERE some_int = 1;
 ----
 1	1
 
 query II
-SELECT v1, some_int FROM '__TEST_DIR__/variant_reanalysis.parquet' WHERE some_int = 6000;
+SELECT v1, some_int FROM '{TEST_DIR}/variant_reanalysis.parquet' WHERE some_int = 6000;
 ----
 0	6000

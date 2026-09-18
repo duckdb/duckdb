@@ -254,6 +254,6 @@ SELECT $$[","]$$::VARCHAR[]; -- List with only a comma
 [',']
 
 query III
-select $$[NULL, 'null', 'nUlL', NuLl, "NULLz", "NULL"]$$::VARCHAR[] a, a::VARCHAR::VARCHAR[] b, a == b
+select $$[NULL, 'null', 'nUlL', NuLl, "NULLz", "NULL"]$$::VARCHAR[] a, a::VARCHAR::VARCHAR[] b, a IS NOT DISTINCT FROM b
 ----
 [NULL, 'null', 'nUlL', NULL, NULLz, 'NULL']	[NULL, 'null', 'nUlL', NULL, NULLz, 'NULL']	true

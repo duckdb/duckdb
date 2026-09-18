@@ -1,0 +1,18 @@
+# name: test/sql/alter/struct/rename_col_struct_case_insensitive.test
+# description: Ensure nested field rename works when top-level column uses mixed case
+# group: [struct]
+
+statement ok
+CREATE TABLE test(S STRUCT(i INTEGER, j INTEGER))
+
+statement ok
+INSERT INTO test VALUES (ROW(1, 1)), (ROW(2, 2))
+
+statement ok
+ALTER TABLE test RENAME s.i TO v1
+
+query I
+SELECT * FROM test
+----
+{'v1': 1, 'j': 1}
+{'v1': 2, 'j': 2}

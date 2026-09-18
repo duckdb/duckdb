@@ -1,0 +1,61 @@
+# name: test/parquet/variant/pushdown/variant_extract_partial_shredding.test
+# group: [pushdown]
+
+require parquet
+
+foreach disabled true false
+
+onlyif disabled=true
+statement ok
+COPY (
+	FROM (VALUES
+		({'field1': 'hello0', 'field2': 0::INTEGER}::VARIANT),
+		({'field1': 1::INTEGER, 'field2': 10::INTEGER}::VARIANT),
+		({'field1': NULL, 'field2': 20::INTEGER}::VARIANT),
+		({'field2': 30::INTEGER}::VARIANT),
+		({'field1': 4::INTEGER, 'field2': 40::INTEGER}::VARIANT),
+		({'field1': 'hello5', 'field2': 50::INTEGER}::VARIANT)
+	) t(v)
+) TO '{TEST_DIR}/variant_pushdown_partial.parquet' (SHREDDING {'v': 'NULL'});
+
+onlyif disabled=false
+statement ok
+COPY (
+	FROM (VALUES
+		({'field1': 'hello0', 'field2': 0::INTEGER}::VARIANT),
+		({'field1': 1::INTEGER, 'field2': 10::INTEGER}::VARIANT),
+		({'field1': NULL, 'field2': 20::INTEGER}::VARIANT),
+		({'field2': 30::INTEGER}::VARIANT),
+		({'field1': 4::INTEGER, 'field2': 40::INTEGER}::VARIANT),
+		({'field1': 'hello5', 'field2': 50::INTEGER}::VARIANT)
+	) t(v)
+) TO '{TEST_DIR}/variant_pushdown_partial.parquet' (
+	SHREDDING {'v': 'STRUCT(field1 INTEGER, field2 INTEGER)'}
+);
+
+query III
+SELECT
+	count(*) FILTER (WHERE v.field1 = 4),
+	count(*) FILTER (WHERE v.field1 IS NULL),
+	count(*) FILTER (WHERE v.field2::INTEGER = 40)
+FROM '{TEST_DIR}/variant_pushdown_partial.parquet'
+----
+1	2	1
+
+query II
+SELECT v.field1::INTEGER, v.field2::INTEGER
+FROM '{TEST_DIR}/variant_pushdown_partial.parquet'
+WHERE v.field1 = 4
+----
+4	40
+
+query IT nosort
+SELECT v.field2::INTEGER, v.field1::VARCHAR
+FROM '{TEST_DIR}/variant_pushdown_partial.parquet'
+WHERE v.field2::INTEGER IN (10, 40)
+ORDER BY ALL
+----
+10	1
+40	4
+
+endloop

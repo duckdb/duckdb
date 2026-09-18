@@ -1,0 +1,14 @@
+# name: test/sql/storage/corrupt/row_group_count_mismatch.test
+# description: A persisted column count that differs from its row group must report data corruption
+# group: [corrupt]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/row_group_count_mismatch.db.gz {TEST_DIR}/row_group_count_mismatch.db
+
+load {TEST_DIR}/row_group_count_mismatch.db readonly
+
+statement error
+SELECT * FROM t;
+----
+Data Corruption Error: Corrupted database - loaded column with index 0, count 200 did not match count of row group 201

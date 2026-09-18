@@ -37,6 +37,7 @@ from __future__ import print_function
 
 import argparse
 import glob
+import hashlib
 import json
 import multiprocessing
 import os
@@ -76,6 +77,33 @@ def make_absolute(f, directory):
     if os.path.isabs(f):
         return f
     return os.path.normpath(os.path.join(directory, f))
+
+
+def is_ignored_file(path, third_party_path):
+    normalized = os.path.normpath(path)
+    return normalized == third_party_path or normalized.startswith(third_party_path + os.sep)
+
+
+def validate_shard(shard_index, shard_count):
+    if shard_count < 1:
+        raise ValueError('shard count must be at least 1')
+    if shard_index < 0 or shard_index >= shard_count:
+        raise ValueError('shard index must be between 0 and shard count - 1')
+
+
+def shard_for_file(path, source_root, shard_count):
+    relative_path = os.path.relpath(os.path.realpath(path), os.path.realpath(source_root))
+    normalized_path = relative_path.replace(os.sep, '/')
+    digest = hashlib.sha256(normalized_path.encode('utf-8')).digest()
+    return int.from_bytes(digest[:8], byteorder='big') % shard_count
+
+
+def select_files_for_shard(files, source_root, third_party_path, file_name_re, shard_index, shard_count):
+    eligible_files = [
+        name for name in files if not is_ignored_file(name, third_party_path) and file_name_re.search(name)
+    ]
+    selected_files = [name for name in eligible_files if shard_for_file(name, source_root, shard_count) == shard_index]
+    return selected_files, len(eligible_files)
 
 
 def get_tidy_invocation(
@@ -248,7 +276,14 @@ def main():
         help='Additional argument to prepend to the compiler ' 'command line.',
     )
     parser.add_argument('-quiet', action='store_true', help='Run clang-tidy in quiet mode')
+    parser.add_argument('--shard-count', type=int, default=1, help='number of shards used to partition the input files')
+    parser.add_argument('--shard-index', type=int, default=0, help='zero-based shard to run')
     args = parser.parse_args()
+
+    try:
+        validate_shard(args.shard_index, args.shard_count)
+    except ValueError as error:
+        parser.error(str(error))
 
     db_path = 'compile_commands.json'
 
@@ -277,6 +312,8 @@ def main():
     # Load the database and extract all files.
     database = json.load(open(os.path.join(build_path, db_path)))
     files = [make_absolute(entry['file'], entry['directory']) for entry in database]
+    source_root = os.path.commonpath(files)
+    third_party_path = os.path.join(source_root, 'third_party')
 
     max_task = args.j
     if max_task == 0:
@@ -289,6 +326,14 @@ def main():
 
     # Build up a big regexy filter from all command line arguments.
     file_name_re = re.compile('|'.join(args.files))
+    selected_files, eligible_file_count = select_files_for_shard(
+        files, source_root, third_party_path, file_name_re, args.shard_index, args.shard_count
+    )
+    print(
+        'Running clang-tidy shard {}/{} on {} of {} files'.format(
+            args.shard_index + 1, args.shard_count, len(selected_files), eligible_file_count
+        )
+    )
 
     return_code = 0
     try:
@@ -303,9 +348,8 @@ def main():
             t.start()
 
         # Fill the queue with files.
-        for name in files:
-            if file_name_re.search(name):
-                task_queue.put(name)
+        for name in selected_files:
+            task_queue.put(name)
 
         # Wait for all threads to be done.
         task_queue.join()

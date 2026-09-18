@@ -1,0 +1,14 @@
+diff --git a/src/inet_escape_functions.cpp b/src/inet_escape_functions.cpp
+index 1503440..dd16694 100644
+--- a/src/inet_escape_functions.cpp
++++ b/src/inet_escape_functions.cpp
+@@ -38,8 +38,7 @@ struct UnescapeBindData : public FunctionData {
+ };
+ 
+ unique_ptr<FunctionData>
+-UnescapeBind(ClientContext &context, ScalarFunction &bound_function,
+-             vector<unique_ptr<Expression>> &arguments) {
++UnescapeBind(BindScalarFunctionInput &) {
+   return make_uniq<UnescapeBindData>();
+ }
+ 

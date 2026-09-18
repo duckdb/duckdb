@@ -16,10 +16,10 @@ FROM
 	generate_series(0, 4) t(i);
 
 statement ok
-COPY json_data TO '__TEST_DIR__/json_variant.parquet' (FORMAT PARQUET);
+COPY json_data TO '{TEST_DIR}/json_variant.parquet' (FORMAT PARQUET);
 
 query II
-FROM '__TEST_DIR__/json_variant.parquet'
+FROM '{TEST_DIR}/json_variant.parquet'
 ----
 0	{'a': 0, 'b': hello}
 1	{'a': 1, 'b': hello}
@@ -40,10 +40,10 @@ FROM
 	generate_series(0, 4) t(i);
 
 statement ok
-COPY json_data TO '__TEST_DIR__/json_variant.parquet' (FORMAT PARQUET);
+COPY json_data TO '{TEST_DIR}/json_variant.parquet' (FORMAT PARQUET);
 
 query II
-select * from '__TEST_DIR__/json_variant.parquet';
+select * from '{TEST_DIR}/json_variant.parquet';
 ----
 -5	{'a': -5, 'b': hello}
 -4	{'a': -4, 'b': hello}

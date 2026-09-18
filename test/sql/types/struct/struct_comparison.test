@@ -2,9 +2,6 @@
 # description: Test STRUCT comparisons
 # group: [struct]
 
-statement ok
-PRAGMA enable_verification
-
 # Constant single integer column comparisons
 query T
 SELECT {'x': 1} < {'x': 2}

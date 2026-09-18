@@ -8,18 +8,23 @@
 
 #pragma once
 
+#include "duckdb/common/enums/compression_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
+#include "duckdb/storage/block.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/storage_info.hpp"
-#include "duckdb/storage/block.hpp"
 #include "duckdb/storage/table/per_column_metadata_blocks.hpp"
-#include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/common/enums/compression_type.hpp"
+#include "duckdb/storage/table/per_column_metadata_blocks.hpp"
 
 namespace duckdb {
 
 class Serializer;
 class Deserializer;
-class QueryContext;
 
 struct ColumnSegmentState {
 	virtual ~ColumnSegmentState() {
@@ -56,6 +61,8 @@ struct DataPointer {
 	uint64_t tuple_count;
 	BlockPointer block_pointer;
 	CompressionType compression_type;
+	//! Number of bytes occupied by this segment within its block
+	optional<uint32_t> byte_size;
 	//! Type-specific statistics of the segment
 	BaseStatistics statistics;
 	//! Serialized segment state

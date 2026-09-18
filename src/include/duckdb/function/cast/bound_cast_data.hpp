@@ -73,6 +73,8 @@ struct StructBoundCastData : public BoundCastData {
 	static unique_ptr<BoundCastData> BindStructToStructCast(BindCastInput &input, const LogicalType &source,
 	                                                        const LogicalType &target);
 	static unique_ptr<FunctionLocalState> InitStructCastLocalState(CastLocalStateParameters &parameters);
+	//! The shared (positional/by-name) value cast - used by both the STRUCT and TUPLE cast switches
+	static bool StructToStructCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
 
 public:
 	unique_ptr<BoundCastData> Copy() const override {
@@ -139,29 +141,6 @@ struct StructToMapCastLocalState : public FunctionLocalState {
 public:
 	unique_ptr<FunctionLocalState> key_state;
 	vector<unique_ptr<FunctionLocalState>> value_states;
-};
-
-struct UnionBoundCastData : public BoundCastData {
-	UnionBoundCastData(union_tag_t member_idx, string name, LogicalType type, int64_t cost,
-	                   BoundCastInfo member_cast_info)
-	    : tag(member_idx), name(std::move(name)), type(std::move(type)), cost(cost),
-	      member_cast_info(std::move(member_cast_info)) {
-	}
-
-	union_tag_t tag;
-	string name;
-	LogicalType type;
-	int64_t cost;
-	BoundCastInfo member_cast_info;
-
-public:
-	unique_ptr<BoundCastData> Copy() const override {
-		return make_uniq<UnionBoundCastData>(tag, name, type, cost, member_cast_info.Copy());
-	}
-
-	static bool SortByCostAscending(const UnionBoundCastData &left, const UnionBoundCastData &right) {
-		return left.cost < right.cost;
-	}
 };
 
 struct StructToUnionCast {

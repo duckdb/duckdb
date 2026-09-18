@@ -8,7 +8,7 @@ statement ok
 PRAGMA disable_checkpoint_on_shutdown
 
 statement ok
-ATTACH '__TEST_DIR__/geometry_wal.db' AS geo_wal (STORAGE_VERSION 'v1.5.0')
+ATTACH '{TEST_DIR}/geometry_wal.db' AS geo_wal (STORAGE_VERSION 'v1.5.0')
 
 statement ok
 create table geo_wal.t1(g GEOMETRY);
@@ -29,7 +29,7 @@ statement ok
 DETACH geo_wal
 
 statement ok
-ATTACH '__TEST_DIR__/geometry_wal.db' AS geo_wal
+ATTACH '{TEST_DIR}/geometry_wal.db' AS geo_wal
 
 query I
 select * from geo_wal.t1;

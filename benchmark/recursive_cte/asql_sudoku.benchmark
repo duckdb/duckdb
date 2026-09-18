@@ -1,0 +1,8 @@
+# name: benchmark/recursive_cte/asql_sudoku.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/asql_ws2526/recursive_cte_asql.benchmark.in
+LOAD=sudoku
+QUERY=asql_sudoku
+BENCHMARK_NAME=Advanced SQL Sudoku
+DESCRIPTION=Solve deterministic Sudoku boards with branching list-valued recursive state

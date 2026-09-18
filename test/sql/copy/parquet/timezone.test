@@ -6,9 +6,6 @@ require parquet
 
 require icu
 
-statement ok
-PRAGMA enable_verification
-
 query I
 select typeof(TimeRecStart) from '{DATA_DIR}/parquet-testing/tz.parquet' limit 1;
 ----

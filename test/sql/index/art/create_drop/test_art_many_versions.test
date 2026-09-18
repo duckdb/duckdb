@@ -5,9 +5,6 @@
 statement ok
 SET immediate_transaction_mode=true
 
-statement ok
-PRAGMA enable_verification
-
 # insert the values [1...20001]
 statement ok con1
 CREATE TABLE integers(i INTEGER)

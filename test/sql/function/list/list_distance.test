@@ -4,12 +4,12 @@
 foreach type FLOAT DOUBLE
 
 query I
-SELECT list_distance([1, 2, 3]::${type}[], [1, 2, 3]::${type}[]);
+SELECT list_distance([1, 2, 3]::{type}[], [1, 2, 3]::{type}[]);
 ----
 0.0
 
 statement ok
-CREATE OR REPLACE TABLE lists (l ${type}[]);
+CREATE OR REPLACE TABLE lists (l {type}[]);
 
 statement ok
 INSERT INTO lists VALUES ([1, 2, 3]), ([1, 2, 4]), ([7, 8, 9]), ([-1, -2, -3]), (NULL);
@@ -25,17 +25,17 @@ NULL
 
 
 statement error
-SELECT list_distance([1, NULL, 3]::${type}[], [1, 2, 3]::${type}[]);
+SELECT list_distance([1, NULL, 3]::{type}[], [1, 2, 3]::{type}[]);
 ----
 left argument can not contain NULL values
 
 statement error
-SELECT list_distance([1, 2, 3]::${type}[], [1, NULL, 3]::${type}[]);
+SELECT list_distance([1, 2, 3]::{type}[], [1, NULL, 3]::{type}[]);
 ----
 right argument can not contain NULL values
 
 statement error
-SELECT list_distance([1, 2, 3]::${type}[], [1, 2, 3, 4]::${type}[]);
+SELECT list_distance([1, 2, 3]::{type}[], [1, 2, 3, 4]::{type}[]);
 ----
 Invalid Input Error: list_distance: list dimensions must be equal, got left length '3' and right length '4'
 
@@ -45,3 +45,41 @@ SELECT list_distance([], []);
 0.0
 
 endloop
+
+# list distance operator
+query R
+SELECT [1.0, 2.0] <-> [2.0, 4.0];
+----
+2.23606797749979
+
+# no whitespace around the operator
+query R
+SELECT [1.0, 2.0]<->[2.0, 4.0];
+----
+2.23606797749979
+
+# parenthesized expression
+query R
+SELECT ([0.0, 0.0] <-> [3.0, 4.0]) + 1;
+----
+6.0
+
+# comparison has lower precedence than the list distance operator
+query I
+SELECT [0.0, 0.0] <-> [3.0, 4.0] = 5.0;
+----
+true
+
+# cosine distance remains a distinct operator
+query R
+SELECT [1.0, 2.0] <=> [2.0, 4.0];
+----
+0.0
+
+statement ok
+PREPARE list_distance_operator AS SELECT $1::DOUBLE[] <-> $2::DOUBLE[];
+
+query R
+EXECUTE list_distance_operator([1.0, 2.0], [2.0, 4.0]);
+----
+2.23606797749979

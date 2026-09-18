@@ -3,16 +3,13 @@
 # group: [csv]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
-COPY (SELECT NULL) TO '__TEST_DIR__/single_null.csv' (HEADER 0)
+COPY (SELECT NULL) TO '{TEST_DIR}/single_null.csv' (HEADER 0)
 
 statement ok
 CREATE TABLE integers(i INTEGER);
 
 statement ok
-COPY integers FROM '__TEST_DIR__/single_null.csv' (HEADER 0)
+COPY integers FROM '{TEST_DIR}/single_null.csv' (HEADER 0)
 
 query I
 FROM integers

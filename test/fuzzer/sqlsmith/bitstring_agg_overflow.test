@@ -5,7 +5,7 @@
 foreach type utinyint usmallint uinteger ubigint smallint integer bigint hugeint
 
 statement ok
-CREATE OR REPLACE TABLE integers(i ${type});
+CREATE OR REPLACE TABLE integers(i {type});
 
 statement ok
 INSERT INTO integers VALUES (0), (255);
@@ -21,14 +21,14 @@ CREATE TABLE all_types AS FROM test_all_types();
 foreach small_type utinyint usmallint
 
 statement ok
-SELECT bitstring_agg("${small_type}") FROM all_types;
+SELECT bitstring_agg("{small_type}") FROM all_types;
 
 endloop
 
 foreach type tinyint smallint int uint ubigint bigint hugeint
 
 statement error
-SELECT bitstring_agg("${type}") FROM all_types;
+SELECT bitstring_agg("{type}") FROM all_types;
 ----
 too large for bitstring aggregation
 

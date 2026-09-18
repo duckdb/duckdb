@@ -2,9 +2,6 @@
 # description: Test the DATESUB function
 # group: [timestamp]
 
-statement ok
-PRAGMA enable_verification
-
 #
 # DATE
 #
@@ -58,7 +55,7 @@ select DATESUB('millennium', '1004-02-29'::DATE, '2004-02-29'::DATE);
 foreach datepart day doy dow isodow julian
 
 query I
-select DATESUB('${datepart}', '2004-01-31'::DATE, '2004-02-29'::DATE);
+select DATESUB('{datepart}', '2004-01-31'::DATE, '2004-02-29'::DATE);
 ----
 29
 
@@ -67,7 +64,7 @@ endloop
 foreach datepart week yearweek
 
 query I
-select DATESUB('${datepart}', '2004-01-31'::DATE, '2004-02-29'::DATE);
+select DATESUB('{datepart}', '2004-01-31'::DATE, '2004-02-29'::DATE);
 ----
 4
 
@@ -102,7 +99,7 @@ select DATESUB('microsecond', '2004-02-29'::DATE, '2004-03-01'::DATE);
 foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear
 
 query I
-SELECT DATESUB('${datepart}', startdate, enddate) + DATESUB('${datepart}', enddate, startdate) FROM date1
+SELECT DATESUB('{datepart}', startdate, enddate) + DATESUB('{datepart}', enddate, startdate) FROM date1
 ----
 0
 
@@ -112,7 +109,7 @@ endloop
 foreach datepart year month day hour minute second millisecond microsecond
 
 query I
-SELECT DATESUB('${datepart}', startdate, startdate + INTERVAL 1 ${datepart})
+SELECT DATESUB('{datepart}', startdate, startdate + INTERVAL 1 {datepart})
 FROM (SELECT '2021-07-30'::DATE + INTERVAL (d) DAY AS startdate FROM range(0, 5) tbl(d)) days
 ----
 1
@@ -224,12 +221,12 @@ select DATESUB('millennium', '1004-02-29 12:00:00'::TIMESTAMP, '2004-02-28 13:00
 foreach datepart day doy dow isodow julian
 
 query I
-select DATESUB('${datepart}', '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-29 13:00:00'::TIMESTAMP);
+select DATESUB('{datepart}', '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-29 13:00:00'::TIMESTAMP);
 ----
 29
 
 query I
-select DATESUB('${datepart}', '2004-01-31 13:00:00'::TIMESTAMP, '2004-02-29 12:00:00'::TIMESTAMP);
+select DATESUB('{datepart}', '2004-01-31 13:00:00'::TIMESTAMP, '2004-02-29 12:00:00'::TIMESTAMP);
 ----
 28
 
@@ -238,12 +235,12 @@ endloop
 foreach datepart week yearweek
 
 query I
-select DATESUB('${datepart}', '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-28 13:00:00'::TIMESTAMP);
+select DATESUB('{datepart}', '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-28 13:00:00'::TIMESTAMP);
 ----
 4
 
 query I
-select DATESUB('${datepart}', '2004-01-31 13:00:00'::TIMESTAMP, '2004-02-28 12:00:00'::TIMESTAMP);
+select DATESUB('{datepart}', '2004-01-31 13:00:00'::TIMESTAMP, '2004-02-28 12:00:00'::TIMESTAMP);
 ----
 3
 
@@ -330,7 +327,7 @@ select DATESUB('microsecond', '2004-01-31 12:00:00.000050'::TIMESTAMP, '2004-02-
 foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear
 
 query I
-SELECT DATESUB('${datepart}', startdate, enddate) + DATESUB('${datepart}', enddate, startdate) FROM datetime1
+SELECT DATESUB('{datepart}', startdate, enddate) + DATESUB('{datepart}', enddate, startdate) FROM datetime1
 ----
 0
 
@@ -340,7 +337,7 @@ endloop
 foreach datepart year month day hour minute second millisecond microsecond
 
 query I
-SELECT DATESUB('${datepart}', startdate, startdate + INTERVAL 1 ${datepart})
+SELECT DATESUB('{datepart}', startdate, startdate + INTERVAL 1 {datepart})
 FROM (SELECT '2021-07-30'::TIMESTAMP + INTERVAL (d) DAY AS startdate FROM range(0, 5) tbl(d)) days
 ----
 1
@@ -450,7 +447,7 @@ select DATESUB('microsecond', '12:00:00.000050'::TIME, '12:00:00'::TIME);
 foreach datepart year month day decade century millennium quarter week
 
 statement error
-select DATESUB('${datepart}', '12:00:00.000050'::TIME, '12:00:00'::TIME)
+select DATESUB('{datepart}', '12:00:00.000050'::TIME, '12:00:00'::TIME)
 ----
 
 endloop
@@ -459,7 +456,7 @@ endloop
 foreach datepart 'hour' 'minute' 'second' 'millisecond' 'microsecond'
 
 query I
-SELECT DATESUB(${datepart}, startdate, enddate) + DATESUB(${datepart}, enddate, startdate) FROM time1
+SELECT DATESUB({datepart}, startdate, enddate) + DATESUB({datepart}, enddate, startdate) FROM time1
 ----
 0
 
@@ -469,7 +466,7 @@ endloop
 foreach datepart hour minute second millisecond microsecond
 
 query I
-SELECT DATESUB('${datepart}', startdate, startdate + INTERVAL 1 ${datepart})
+SELECT DATESUB('{datepart}', startdate, startdate + INTERVAL 1 {datepart})
 FROM (SELECT '12:52:07.123456'::TIME + INTERVAL (d) HOUR AS startdate FROM range(0, 5) tbl(d)) times
 ----
 1
@@ -490,17 +487,17 @@ foreach datepart year quarter month day dayofyear hour minute second millisecond
 foreach tbl date1 datetime1 time1
 
 query I
-SELECT DATESUB('${datepart}', NULL::TIMESTAMP, NULL::TIMESTAMP) FROM ${tbl}
+SELECT DATESUB('{datepart}', NULL::TIMESTAMP, NULL::TIMESTAMP) FROM {tbl}
 ----
 NULL
 
 query I
-SELECT DATESUB('${datepart}', NULL, enddate) FROM ${tbl}
+SELECT DATESUB('{datepart}', NULL, enddate) FROM {tbl}
 ----
 NULL
 
 query I
-SELECT DATESUB('${datepart}', startdate, NULL) FROM ${tbl}
+SELECT DATESUB('{datepart}', startdate, NULL) FROM {tbl}
 ----
 NULL
 
@@ -511,7 +508,7 @@ endloop
 foreach tbl date1 datetime1 time1
 
 query I
-SELECT DATESUB(NULL, startdate, enddate) FROM ${tbl}
+SELECT DATESUB(NULL, startdate, enddate) FROM {tbl}
 ----
 NULL
 
@@ -531,7 +528,7 @@ foreach lspecial infinity -infinity
 foreach rspecial infinity -infinity
 
 query I
-SELECT DATE_SUB('${specifier}', '${lspecial}'::${ltype}, '${rspecial}'::${rtype});
+SELECT DATE_SUB('{specifier}', '{lspecial}'::{ltype}, '{rspecial}'::{rtype});
 ----
 NULL
 
@@ -557,7 +554,7 @@ INSERT into parts VALUES(NULL);
 foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear
 
 statement ok
-INSERT into parts VALUES('${datepart}');
+INSERT into parts VALUES('{datepart}');
 
 endloop
 
@@ -592,7 +589,7 @@ foreach lspecial infinity -infinity
 foreach rspecial infinity -infinity
 
 query I
-SELECT DATE_SUB(datepart, '${lspecial}'::${ltype}, '${rspecial}'::${rtype}) AS sub
+SELECT DATE_SUB(datepart, '{lspecial}'::{ltype}, '{rspecial}'::{rtype}) AS sub
 FROM parts
 WHERE sub IS NOT NULL
 ----

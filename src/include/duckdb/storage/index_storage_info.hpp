@@ -9,9 +9,12 @@
 #pragma once
 
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/identifier.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
 
@@ -23,6 +26,9 @@ struct FixedSizeAllocatorInfo {
 	vector<idx_t> segment_counts;
 	vector<idx_t> allocation_sizes;
 	vector<idx_t> buffers_with_free_space;
+	//! Transient block handles used to initialize read-only entities (i.e., index entries during WAL replay)
+	//! These are transient runtime state and are never serialized.
+	shared_ptr<vector<shared_ptr<BlockHandle>>> transient_block_handles;
 
 	void Serialize(Serializer &serializer) const;
 	static FixedSizeAllocatorInfo Deserialize(Deserializer &deserializer);
@@ -41,7 +47,7 @@ struct IndexBufferInfo {
 //! Index (de)serialization information.
 struct IndexStorageInfo {
 	IndexStorageInfo() {};
-	explicit IndexStorageInfo(const string &name) : name(name) {};
+	explicit IndexStorageInfo(const Identifier &name) : name(name) {};
 
 	//! Disable copy constructor and copy assignment, this type's lifetime is explicitly managed.
 	IndexStorageInfo(const IndexStorageInfo &) = delete;
@@ -51,7 +57,7 @@ struct IndexStorageInfo {
 	IndexStorageInfo &operator=(IndexStorageInfo &&) = default;
 
 	//! The name.
-	string name;
+	Identifier name;
 	//! The storage root.
 	idx_t root;
 	//! Any index specialization can provide additional key-Value settings via this map.

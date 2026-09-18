@@ -19,7 +19,7 @@ vector<ColumnBinding> LogicalJoin::GetColumnBindings() {
 
 	if (join_type == JoinType::MARK) {
 		// for MARK join we project the left hand side plus the MARK column
-		left_bindings.emplace_back(mark_index, 0);
+		left_bindings.emplace_back(mark_index, ProjectionIndex(0));
 		return left_bindings;
 	}
 	// for other join types we project both the LHS and the RHS
@@ -31,8 +31,8 @@ vector<ColumnBinding> LogicalJoin::GetColumnBindings() {
 	return left_bindings;
 }
 
-vector<idx_t> LogicalJoin::GetTableIndex() const {
-	vector<idx_t> result;
+vector<TableIndex> LogicalJoin::GetTableIndex() const {
+	vector<TableIndex> result;
 	if (join_type == JoinType::MARK) {
 		result.emplace_back(mark_index);
 	}
@@ -42,7 +42,7 @@ vector<idx_t> LogicalJoin::GetTableIndex() const {
 string LogicalJoin::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings && join_type == JoinType::MARK) {
-		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", mark_index);
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", mark_index.index);
 	}
 #endif
 	return LogicalOperator::GetName();
@@ -68,19 +68,29 @@ void LogicalJoin::ResolveTypes() {
 	types.insert(types.end(), right_types.begin(), right_types.end());
 }
 
-void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<idx_t> &bindings) {
+void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<TableIndex> &bindings) {
 	auto column_bindings = op.GetColumnBindings();
 	for (auto binding : column_bindings) {
 		bindings.insert(binding.table_index);
 	}
 }
 
-void LogicalJoin::GetExpressionBindings(const Expression &root_expr, unordered_set<idx_t> &bindings) {
+void LogicalJoin::GetExpressionBindings(const Expression &root_expr, unordered_set<TableIndex> &bindings) {
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(root_expr,
 	                                                              [&](const BoundColumnRefExpression &colref) {
-		                                                              D_ASSERT(colref.depth == 0);
-		                                                              bindings.insert(colref.binding.table_index);
+		                                                              D_ASSERT(colref.Depth() == 0);
+		                                                              bindings.insert(colref.Binding().table_index);
 	                                                              });
+}
+
+void LogicalJoin::MoveJoinState(LogicalJoin &source, LogicalJoin &target) {
+	D_ASSERT(source.join_type == target.join_type);
+	target.mark_index = source.mark_index;
+	target.left_projection_map = std::move(source.left_projection_map);
+	target.right_projection_map = std::move(source.right_projection_map);
+	if (source.has_estimated_cardinality) {
+		target.SetEstimatedCardinality(source.estimated_cardinality);
+	}
 }
 
 } // namespace duckdb

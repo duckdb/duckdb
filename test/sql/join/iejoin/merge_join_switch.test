@@ -3,6 +3,9 @@
 # group: [iejoin]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 CREATE TABLE bigtbl AS FROM range(1000) t(i);
 
 statement ok

@@ -2,9 +2,6 @@
 # description: cast strings into (nested) list structures
 # group: [cast]
 
-statement ok
-PRAGMA enable_verification
-
 #               Basic tests:
 # ---------------------------------------------------
 
@@ -469,10 +466,10 @@ statement ok
 CREATE TABLE int_list(col INT[]);
 
 statement ok
-COPY (SELECT [1,2,3]) TO '__TEST_DIR__/int_list.csv';
+COPY (SELECT [1,2,3]) TO '{TEST_DIR}/int_list.csv';
 
 statement ok
-COPY int_list FROM '__TEST_DIR__/int_list.csv';
+COPY int_list FROM '{TEST_DIR}/int_list.csv';
 
 query I
 SELECT col FROM int_list;
@@ -483,10 +480,10 @@ statement ok
 CREATE TABLE assorted_lists(col1 INT[], col2 VARCHAR[], col3 DATE[]);
 
 statement ok
-COPY (SELECT [8,7,6], $$[hello, Duck\\'DB]$$, '[2022-12-2, 1929-01-25]') TO '__TEST_DIR__/assorted_lists.csv' (Header 0);
+COPY (SELECT [8,7,6], $$[hello, Duck\\'DB]$$, '[2022-12-2, 1929-01-25]') TO '{TEST_DIR}/assorted_lists.csv' (Header 0);
 
 statement ok
-COPY assorted_lists FROM '__TEST_DIR__/assorted_lists.csv' (ESCAPE '\');
+COPY assorted_lists FROM '{TEST_DIR}/assorted_lists.csv' (ESCAPE '\');
 
 query III
 SELECT * FROM assorted_lists;
@@ -501,10 +498,10 @@ COPY (
 		(1, '[["a0974028-d682-4796-b142-b96580b1c103","2afb4b62-0eeb-4f1a-b351-1464a79d6db2"],["205ffd21-db5c-463d-9575-f7cbf6d73746","2b6705fd-2154-4815-a418-d86cb381efa9"]]'),
 		(2, NULL)
 	) tbl(id, v)
-) TO '__TEST_DIR__/issue_23373_uuid_list.csv' (HEADER true, NULLSTR '\N');
+) TO '{TEST_DIR}/issue_23373_uuid_list.csv' (HEADER true, NULLSTR '\N');
 
 statement error
-SELECT id, v FROM read_csv('__TEST_DIR__/issue_23373_uuid_list.csv', columns={'id':'BIGINT','v':'UUID[]'}, header=true, delim=',', quote='"', escape='"', nullstr='\N');
+SELECT id, v FROM read_csv('{TEST_DIR}/issue_23373_uuid_list.csv', columns={'id':'BIGINT','v':'UUID[]'}, header=true, delim=',', quote='"', escape='"', nullstr='\N');
 ----
 Could not convert string
 

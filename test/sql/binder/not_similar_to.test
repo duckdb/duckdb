@@ -3,9 +3,6 @@
 # group: [binder]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create or replace table foo as select 'd' as a, 'e' as b, 'f' as c;
 
 # should select the column a and c

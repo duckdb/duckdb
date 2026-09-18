@@ -12,12 +12,13 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/multi_file/base_file_reader.hpp"
-#include "duckdb/common/multi_file/multi_file_reader.hpp"
+#include "duckdb/common/open_file_info.hpp"
 #include "json_reader_options.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/query_context.hpp"
 #include "json_common.hpp"
 #include "json_enums.hpp"
+#include "yyjson_memory.hpp"
 
 namespace duckdb {
 struct JSONScanGlobalState;
@@ -156,6 +157,9 @@ struct JSONReaderScanState {
 	bool is_first_scan = false;
 	//! Whether this is the last batch of the file
 	bool is_last = false;
+	//! Whether the remainder of the file is deliberately not read (everything after a FeatureCollection's
+	//! "features" array), i.e. no further buffers should be read even if the file has more data
+	bool skip_remainder_of_file = false;
 	//! Buffer to reconstruct split values
 	optional_idx batch_index;
 
@@ -177,7 +181,8 @@ struct JSONError {
 	string error_msg;
 };
 
-class JSONReader : public BaseFileReader {
+//! Reads a single JSON file
+class JSONReader {
 public:
 	JSONReader(ClientContext &context, JSONReaderOptions options, OpenFileInfo file);
 
@@ -201,19 +206,6 @@ public:
 
 	const string &GetFileName() const;
 	JSONFileHandle &GetFileHandle() const;
-
-public:
-	string GetReaderType() const override {
-		return "JSON";
-	}
-
-	void PrepareReader(ClientContext &context, GlobalTableFunctionState &) override;
-	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
-	                       LocalTableFunctionState &lstate) override;
-	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
-	                 LocalTableFunctionState &local_state, DataChunk &chunk) override;
-	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
-	double GetProgressInFile(ClientContext &context) override;
 
 public:
 	//! Get a new buffer index (must hold the lock)
@@ -270,6 +262,8 @@ private:
 	optional_idx TryGetLineNumber(idx_t buf_index, idx_t line_or_object_in_buf);
 
 private:
+	//! The file that is read
+	OpenFileInfo file;
 	ClientContext &context;
 	JSONReaderOptions options;
 
@@ -291,6 +285,10 @@ private:
 	//! If we have auto-detected, this is the buffer read by the auto-detection
 	AllocatedData auto_detect_data;
 	idx_t auto_detect_data_size = 0;
+
+	//! Whether this file is a GeoJSON FeatureCollection, i.e. the rows live in its "features" array rather than at
+	//! the top level. The array itself is then read using the regular JSONFormat::ARRAY handling
+	bool skip_feature_collection_prefix = false;
 
 	//! The first error we found in the file (if any)
 	unique_ptr<JSONError> error;

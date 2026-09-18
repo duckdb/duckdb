@@ -2,10 +2,6 @@
 # description: Read a CSV with enum types
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
-
 # load the DB from disk
 load {TEMP_DIR}/test_csv_enum.db
 

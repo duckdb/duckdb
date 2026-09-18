@@ -282,6 +282,9 @@ typedef enum DUCKDB_TYPE {
 
 	//! VARIANT type
 	DUCKDB_TYPE_VARIANT = 41,
+
+	//! duckdb_timestamp (nanoseconds)
+	DUCKDB_TYPE_TIMESTAMP_TZ_NS = 42,
 } DUCKDB_TYPE;
 
 /*!
@@ -399,6 +402,7 @@ typedef enum duckdb_error_type {
 	DUCKDB_ERROR_MISSING_EXTENSION = 39,
 	DUCKDB_ERROR_AUTOLOAD = 40,
 	DUCKDB_ERROR_SEQUENCE = 41,
+	DUCKDB_ERROR_DATA_CORRUPTION = 43,
 	DUCKDB_INVALID_CONFIGURATION = 42,
 } duckdb_error_type;
 
@@ -8762,6 +8766,20 @@ DUCKDB_C_API duckdb_value duckdb_create_timestamp(duckdb_timestamp input);
 DUCKDB_C_API duckdb_value duckdb_create_timestamp_tz(duckdb_timestamp input);
 #endif
 
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
+/*!
+ * Creates a TIMESTAMP_TZ_NS value from a duckdb_timestamp_ns
+ *
+ * history:
+ * - unstable: v1.5.4
+ * - stable: v1.5.6
+ *
+ * @param input The duckdb_timestamp_ns value
+ * @return duckdb_value
+ */
+DUCKDB_C_API duckdb_value duckdb_create_timestamp_tz_ns(duckdb_timestamp_ns input);
+#endif
+
 #if DUCKDB_API_VERSION_AT_LEAST(1, 2, 0)
 /*!
  * Creates a TIMESTAMP_S value from a duckdb_timestamp_s
@@ -9126,6 +9144,20 @@ DUCKDB_C_API duckdb_timestamp duckdb_get_timestamp(duckdb_value val);
  * @return duckdb_timestamp
  */
 DUCKDB_C_API duckdb_timestamp duckdb_get_timestamp_tz(duckdb_value val);
+#endif
+
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
+/*!
+ * Returns the TIMESTAMP_TZ_NS value of the given value.
+ *
+ * history:
+ * - unstable: v1.5.4
+ * - stable: v1.5.6
+ *
+ * @param val A duckdb_value containing a TIMESTAMP_TZ_NS
+ * @return duckdb_timestamp_ns
+ */
+DUCKDB_C_API duckdb_timestamp_ns duckdb_get_timestamp_tz_ns(duckdb_value val);
 #endif
 
 #if DUCKDB_API_VERSION_AT_LEAST(1, 2, 0)

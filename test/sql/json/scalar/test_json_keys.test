@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma enable_verification
-
 query T
 select json_keys('{"duck": 42}');
 ----

@@ -1,9 +1,6 @@
 # name: test/sql/attach/attach_show_all_tables.test
-# description: Test various DDL statements on an attached database
+# description: Test SHOW ALL TABLES aliases on an attached database
 # group: [attach]
-
-statement ok
-PRAGMA enable_verification
 
 statement ok
 ATTACH DATABASE ':memory:' AS new_database;
@@ -22,6 +19,35 @@ CREATE TABLE new_database.s1.tbl(c INTEGER);
 
 query IIIIII
 SHOW ALL TABLES
+----
+memory	main	tbl	[a]	[INTEGER]	false
+new_database	main	tbl	[b]	[INTEGER]	false
+new_database	s1	tbl	[c]	[INTEGER]	false
+
+# The bare shorthands (TABLES omitted) alias SHOW ALL TABLES.
+query IIIIII
+SHOW ALL
+----
+memory	main	tbl	[a]	[INTEGER]	false
+new_database	main	tbl	[b]	[INTEGER]	false
+new_database	s1	tbl	[c]	[INTEGER]	false
+
+query IIIIII
+DESCRIBE ALL
+----
+memory	main	tbl	[a]	[INTEGER]	false
+new_database	main	tbl	[b]	[INTEGER]	false
+new_database	s1	tbl	[c]	[INTEGER]	false
+
+query IIIIII
+DESC ALL
+----
+memory	main	tbl	[a]	[INTEGER]	false
+new_database	main	tbl	[b]	[INTEGER]	false
+new_database	s1	tbl	[c]	[INTEGER]	false
+
+query IIIIII
+DESCRIBE ALL TABLES
 ----
 memory	main	tbl	[a]	[INTEGER]	false
 new_database	main	tbl	[b]	[INTEGER]	false

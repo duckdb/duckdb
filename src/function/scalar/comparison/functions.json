@@ -1,0 +1,73 @@
+[
+    {
+        "name": "__between",
+        "parameters": "input,lower,upper",
+        "description": "Returns whether or not input is between lower and upper.",
+        "example": "__between(3, 0, 10)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "=",
+        "parameters": "left,right",
+        "description": "Returns whether left is equal to right.",
+        "example": "1 = 1",
+        "type": "scalar_function",
+        "struct": "OperatorEqualFun"
+    },
+    {
+        "name": "!=",
+        "parameters": "left,right",
+        "description": "Returns whether left is not equal to right.",
+        "example": "1 != 2",
+        "type": "scalar_function",
+        "struct": "OperatorNotEqualFun"
+    },
+    {
+        "name": "<",
+        "parameters": "left,right",
+        "description": "Returns whether left is less than right.",
+        "example": "1 < 2",
+        "type": "scalar_function",
+        "struct": "OperatorLessThanFun"
+    },
+    {
+        "name": "<=",
+        "parameters": "left,right",
+        "description": "Returns whether left is less than or equal to right.",
+        "example": "1 <= 2",
+        "type": "scalar_function",
+        "struct": "OperatorLessThanEqualsFun"
+    },
+    {
+        "name": ">",
+        "parameters": "left,right",
+        "description": "Returns whether left is greater than right.",
+        "example": "2 > 1",
+        "type": "scalar_function",
+        "struct": "OperatorGreaterThanFun"
+    },
+    {
+        "name": ">=",
+        "parameters": "left,right",
+        "description": "Returns whether left is greater than or equal to right.",
+        "example": "2 >= 1",
+        "type": "scalar_function",
+        "struct": "OperatorGreaterThanEqualsFun"
+    },
+    {
+        "name": "IS DISTINCT FROM",
+        "parameters": "left,right",
+        "description": "Returns whether left is distinct from right, treating null as a comparable value.",
+        "example": "1 IS DISTINCT FROM NULL",
+        "type": "scalar_function",
+        "struct": "IsDistinctFromFun"
+    },
+    {
+        "name": "IS NOT DISTINCT FROM",
+        "parameters": "left,right",
+        "description": "Returns whether left is not distinct from right, treating null as a comparable value.",
+        "example": "NULL IS NOT DISTINCT FROM NULL",
+        "type": "scalar_function",
+        "struct": "IsNotDistinctFromFun"
+    }
+]

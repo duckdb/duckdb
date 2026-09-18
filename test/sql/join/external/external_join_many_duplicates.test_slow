@@ -6,7 +6,7 @@
 require 64bit
 
 statement ok
-pragma verify_external
+SET debug_force_external=true;
 
 statement ok
 pragma verify_parallelism
@@ -26,6 +26,7 @@ select count(*) from test1 join test2 using (i)
 32
 
 # 10M build side with many useless duplicates (stress tests the compare-and-swap pointer table construction)
+# Also covers runtime filters reconstructing compressed casts with out-of-domain raw probe values.
 statement ok
 create sequence seq1 start 1000;
 

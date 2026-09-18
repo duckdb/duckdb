@@ -2,17 +2,17 @@ name: Android
 on:
   workflow_call:
     inputs:
-      override_git_describe:
+      duckdb_version:
         type: string
-      git_ref:
+      duckdb_commit:
         type: string
       skip_tests:
         type: string
   workflow_dispatch:
     inputs:
-      override_git_describe:
+      duckdb_version:
         type: string
-      git_ref:
+      duckdb_commit:
         type: string
       skip_tests:
         type: string
@@ -22,24 +22,24 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
-    paths-ignore:
-      - '**'
-      - '!.github/workflows/Android.yml'
+      - 'gh-readonly-queue/**'
+    paths:
+      - '.github/workflows/Android.yml'
   pull_request:
     types: [opened, reopened, ready_for_review]
-    paths-ignore:
-      - '**'
-      - '!.github/workflows/Android.yml'
-      - '!.github/patches/duckdb-wasm/**'
+    paths:
+      - '.github/workflows/Android.yml'
+      - '.github/patches/duckdb-wasm/**'
 
 
 concurrency:
-  group: android-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
+  group: android-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.duckdb_version }}
   cancel-in-progress: true
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
+  DUCKDB_VERSION: ${{ inputs.duckdb_version }}
+  DUCKDB_COMMIT: ${{ inputs.duckdb_commit }}
 
 jobs:
   android:
@@ -62,29 +62,29 @@ jobs:
       CMAKE_VARS_BUILD: -DBUILD_UNITTESTS=0 -DBUILD_SHELL=0 -DANDROID_ABI=${{ matrix.arch}} -DCMAKE_TOOLCHAIN_FILE=./android-ndk/build/cmake/android.toolchain.cmake -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
+        ref: ${{ inputs.duckdb_commit }}
 
     - name: Install Ninja
       shell: bash
-      run: sudo apt-get -y update && sudo apt-get -y install ninja-build
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Checkout (again)
       shell: bash
-      run: git checkout ${{ inputs.git_ref }}
+      run: git checkout "${DUCKDB_COMMIT:-${GITHUB_SHA}}"
 
     - name: Install Android NDK
       shell: bash
       run: |
-        wget https://dl.google.com/android/repository/android-ndk-r27-linux.zip
+        python3 scripts/ci/retry.py -- wget https://dl.google.com/android/repository/android-ndk-r27-linux.zip
         unzip android-ndk-r27-linux.zip
         mv android-ndk-r27 android-ndk
 
     - name:  Build
       shell: bash
-      run: make
+      run: python3 scripts/ci/retry.py -- make
 
     - name: Deploy
       shell: bash
@@ -93,10 +93,15 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        zip -j libduckdb-android_${{matrix.arch}}.zip build/release/src/libduckdb*.* src/include/duckdb.h src/include/duckdb_extension.h
+        zip -j libduckdb-android_${{matrix.arch}}.zip \
+          build/release/src/libduckdb*.* \
+          src/include/duckdb.h \
+          src/include/duckdb_v2.h \
+          src/include/duckdb_extension.h \
+          src/include/duckdb_extension_v2.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-android_${{matrix.arch}}.zip
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: duckdb-binaries-android-${{matrix.arch}}
         path: |

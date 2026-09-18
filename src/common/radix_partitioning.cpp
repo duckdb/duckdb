@@ -10,17 +10,8 @@ namespace duckdb {
 //! Templated radix partitioning constants, can be templated to the number of radix bits
 template <idx_t radix_bits>
 struct RadixPartitioningConstants {
-public:
-	//! Bitmask of the upper bits starting at the 5th byte
-	static constexpr idx_t NUM_PARTITIONS = RadixPartitioning::NumberOfPartitions(radix_bits);
-	static constexpr idx_t SHIFT = RadixPartitioning::Shift(radix_bits);
-	static constexpr hash_t MASK = RadixPartitioning::Mask(radix_bits);
-
-public:
-	//! Apply bitmask and right shift to get a number between 0 and NUM_PARTITIONS
 	static hash_t ApplyMask(const hash_t hash) {
-		D_ASSERT((hash & MASK) >> SHIFT < NUM_PARTITIONS);
-		return (hash & MASK) >> SHIFT;
+		return RadixPartitioning::ApplyMask(hash, radix_bits);
 	}
 };
 
@@ -62,7 +53,7 @@ RETURN_TYPE RadixBitsSwitch(const idx_t radix_bits, ARGS &&... args) {
 
 struct SelectFunctor {
 	template <idx_t radix_bits>
-	static idx_t Operation(Vector &hashes, const SelectionVector *sel, const idx_t count,
+	static idx_t Operation(const Vector &hashes, const SelectionVector *sel, const idx_t count,
 	                       const ValidityMask &partition_mask, SelectionVector *true_sel, SelectionVector *false_sel) {
 		using CONSTANTS = RadixPartitioningConstants<radix_bits>;
 		return UnaryExecutor::Select<hash_t>(
@@ -75,15 +66,15 @@ struct SelectFunctor {
 	}
 };
 
-idx_t RadixPartitioning::Select(Vector &hashes, const SelectionVector *sel, const idx_t count, const idx_t radix_bits,
-                                const ValidityMask &partition_mask, SelectionVector *true_sel,
+idx_t RadixPartitioning::Select(const Vector &hashes, const SelectionVector *sel, const idx_t count,
+                                const idx_t radix_bits, const ValidityMask &partition_mask, SelectionVector *true_sel,
                                 SelectionVector *false_sel) {
 	return RadixBitsSwitch<SelectFunctor, idx_t>(radix_bits, hashes, sel, count, partition_mask, true_sel, false_sel);
 }
 
 struct ComputePartitionIndicesFunctor {
 	template <idx_t radix_bits>
-	static void Operation(Vector &hashes, Vector &partition_indices, const idx_t original_count,
+	static void Operation(const Vector &hashes, Vector &partition_indices, const idx_t original_count,
 	                      const SelectionVector &append_sel, const idx_t append_count) {
 		using CONSTANTS = RadixPartitioningConstants<radix_bits>;
 		if (!append_sel.IsSet() || hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -94,24 +85,12 @@ struct ComputePartitionIndicesFunctor {
 			// We could just slice the "hashes" vector and use the UnaryExecutor
 			// But slicing a dictionary vector causes SelectionData to be allocated
 			// Instead, we just directly compute the partition indices using the selection vectors
-			UnifiedVectorFormat format;
-			hashes.ToUnifiedFormat(original_count, format);
-			const auto source_data = UnifiedVectorFormat::GetData<hash_t>(format);
-			const auto &source_sel = *format.sel;
-
+			const auto source_data = hashes.Values<hash_t>();
 			partition_indices.SetVectorType(VectorType::FLAT_VECTOR);
-			const auto target = FlatVector::GetData<hash_t>(partition_indices);
-
-			if (source_sel.IsSet()) {
-				for (idx_t i = 0; i < append_count; i++) {
-					const auto source_idx = source_sel.get_index(append_sel[i]);
-					target[i] = CONSTANTS::ApplyMask(source_data[source_idx]);
-				}
-			} else {
-				for (idx_t i = 0; i < append_count; i++) {
-					const auto source_idx = append_sel[i];
-					target[i] = CONSTANTS::ApplyMask(source_data[source_idx]);
-				}
+			auto target = FlatVector::Writer<hash_t>(partition_indices, append_count);
+			for (idx_t i = 0; i < append_count; i++) {
+				const auto source_idx = append_sel[i];
+				target.WriteValue(CONSTANTS::ApplyMask(source_data[source_idx].GetValue()));
 			}
 		}
 	}
@@ -172,9 +151,10 @@ void RadixPartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataAp
 //===--------------------------------------------------------------------===//
 RadixPartitionedTupleData::RadixPartitionedTupleData(BufferManager &buffer_manager,
                                                      shared_ptr<TupleDataLayout> layout_ptr, const MemoryTag tag,
-                                                     const idx_t radix_bits_p, const idx_t hash_col_idx_p)
-    : PartitionedTupleData(PartitionedTupleDataType::RADIX, buffer_manager, layout_ptr, tag), radix_bits(radix_bits_p),
-      hash_col_idx(hash_col_idx_p) {
+                                                     const idx_t radix_bits_p, const idx_t hash_col_idx_p,
+                                                     QueryContext context)
+    : PartitionedTupleData(PartitionedTupleDataType::RADIX, buffer_manager, layout_ptr, tag, context),
+      radix_bits(radix_bits_p), hash_col_idx(hash_col_idx_p) {
 	D_ASSERT(radix_bits <= RadixPartitioning::MAX_RADIX_BITS);
 	D_ASSERT(hash_col_idx < layout.GetTypes().size());
 	Initialize();
@@ -193,6 +173,48 @@ void RadixPartitionedTupleData::Initialize() {
 	for (idx_t i = 0; i < num_partitions; i++) {
 		partitions.emplace_back(CreatePartitionCollection());
 		partitions.back()->SetPartitionIndex(i);
+	}
+}
+
+void RadixPartitionedTupleData::ResetAppendState(PartitionedTupleDataAppendState &state,
+                                                 const TupleDataPinProperties properties) const {
+	if (!state.partition_sel.data()) {
+		state.partition_sel.Initialize();
+	}
+	if (!state.reverse_partition_sel.data()) {
+		state.reverse_partition_sel.Initialize();
+	}
+
+	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
+	if (state.partition_pin_states.size() != num_partitions) {
+		state.partition_pin_states.clear();
+		state.partition_pin_states.reserve(num_partitions);
+		for (idx_t i = 0; i < num_partitions; i++) {
+			state.partition_pin_states.emplace_back();
+		}
+	}
+	for (idx_t i = 0; i < num_partitions; i++) {
+		auto &pin_state = state.partition_pin_states[i];
+		pin_state.row_handles.clear();
+		pin_state.heap_handles.clear();
+		partitions[i]->InitializeAppend(pin_state, properties);
+	}
+
+	if (state.chunk_state.column_ids.empty()) {
+		auto column_count = layout.ColumnCount();
+		vector<column_t> column_ids;
+		column_ids.reserve(column_count);
+		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+			column_ids.emplace_back(col_idx);
+		}
+		partitions[0]->InitializeChunkState(state.chunk_state, std::move(column_ids));
+	}
+	state.chunk_state.chunk_lock = nullptr;
+	state.chunk_state.chunk_parts.clear();
+	state.chunk_state.chunk_part_indices.clear();
+
+	if (state.fixed_partition_entries.size() != num_partitions) {
+		state.fixed_partition_entries.resize(num_partitions);
 	}
 }
 

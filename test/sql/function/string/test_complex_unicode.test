@@ -2,9 +2,6 @@
 # description: Test correct behavior of various string functions under complex unicode characters
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # length_grapheme returns the number of grapheme clusters
 query I
 SELECT length_grapheme('S̈a')

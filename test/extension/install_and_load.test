@@ -1,0 +1,45 @@
+# name: test/extension/install_and_load.test
+# description: Test INSTALL AND LOAD, which installs and loads an extension in a single statement
+# group: [extension]
+
+# icu and json must be available in the LOCAL_EXTENSION_REPO and not statically linked
+# -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
+require-env LOCAL_EXTENSION_REPO
+
+require json
+
+require icu
+
+# start from a clean extension directory without any preinstalled extensions
+statement ok
+set extension_directory='{TEST_DIR}/install_and_load'
+
+statement ok
+set custom_extension_repository='{LOCAL_EXTENSION_REPO}'
+
+# a plain INSTALL leaves the extension installed but not loaded
+statement ok
+INSTALL icu
+
+query II
+SELECT installed, loaded FROM duckdb_extensions() WHERE extension_name='icu'
+----
+true	false
+
+# INSTALL AND LOAD installs and loads in a single statement
+statement ok
+INSTALL AND LOAD json
+
+query II
+SELECT installed, loaded FROM duckdb_extensions() WHERE extension_name='json'
+----
+true	true
+
+# it also composes with the FORCE prefix and an explicit FROM
+statement ok
+FORCE INSTALL AND LOAD icu FROM '{LOCAL_EXTENSION_REPO}'
+
+query II
+SELECT installed, loaded FROM duckdb_extensions() WHERE extension_name='icu'
+----
+true	true

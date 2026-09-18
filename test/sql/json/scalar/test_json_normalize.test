@@ -1,0 +1,256 @@
+# name: test/sql/json/scalar/test_json_normalize.test
+# description: Test JSON normalize
+# group: [scalar]
+
+require json
+
+# Simple object key sorting
+query T
+SELECT json_normalize('{"z":1,"a":2,"m":3}')
+----
+{"a":2,"m":3,"z":1}
+
+# Already sorted (idempotent)
+query T
+SELECT json_normalize('{"a":1,"b":2,"c":3}')
+----
+{"a":1,"b":2,"c":3}
+
+# Two keys
+query T
+SELECT json_normalize('{"b":1,"a":2}')
+----
+{"a":2,"b":1}
+
+# Nested object sorting (recursive)
+query T
+SELECT json_normalize('{"b":{"z":1,"a":2},"a":3}')
+----
+{"a":3,"b":{"a":2,"z":1}}
+
+# Deeply nested objects (3 levels)
+query T
+SELECT json_normalize('{"c":{"b":{"z":1,"a":2},"a":3},"a":4}')
+----
+{"a":4,"c":{"a":3,"b":{"a":2,"z":1}}}
+
+# Arrays are NOT sorted
+query T
+SELECT json_normalize('{"b":[3,1,2],"a":1}')
+----
+{"a":1,"b":[3,1,2]}
+
+# Objects inside arrays ARE sorted
+query T
+SELECT json_normalize('[{"z":1,"a":2},{"y":3,"b":4}]')
+----
+[{"a":2,"z":1},{"b":4,"y":3}]
+
+# Mixed types in object values
+query T
+SELECT json_normalize('{"z":"hello","m":true,"a":null,"f":42,"c":[1,2]}')
+----
+{"a":null,"c":[1,2],"f":42,"m":true,"z":"hello"}
+
+# Empty object
+query T
+SELECT json_normalize('{}')
+----
+{}
+
+# Empty array
+query T
+SELECT json_normalize('[]')
+----
+[]
+
+# Scalar string passthrough
+query T
+SELECT json_normalize('"hello"')
+----
+"hello"
+
+# Scalar number passthrough
+query T
+SELECT json_normalize('42')
+----
+42
+
+# Scalar boolean passthrough
+query T
+SELECT json_normalize('true')
+----
+true
+
+# Scalar null passthrough
+query T
+SELECT json_normalize('null')
+----
+null
+
+# NULL input → NULL output
+query T
+SELECT json_normalize(NULL)
+----
+NULL
+
+# Deeply nested (5+ levels)
+query T
+SELECT json_normalize('{"z":{"y":{"x":{"w":{"v":{"b":2,"a":1}}}}}}')
+----
+{"z":{"y":{"x":{"w":{"v":{"a":1,"b":2}}}}}}
+
+# Array of mixed types with nested objects
+query T
+SELECT json_normalize('[1,"two",{"c":3,"a":1},null,[5,6]]')
+----
+[1,"two",{"a":1,"c":3},null,[5,6]]
+
+# Large object (many keys)
+query T
+SELECT json_normalize('{"t":20,"s":19,"r":18,"q":17,"p":16,"o":15,"n":14,"m":13,"l":12,"k":11,"j":10,"i":9,"h":8,"g":7,"f":6,"e":5,"d":4,"c":3,"b":2,"a":1}')
+----
+{"a":1,"b":2,"c":3,"d":4,"e":5,"f":6,"g":7,"h":8,"i":9,"j":10,"k":11,"l":12,"m":13,"n":14,"o":15,"p":16,"q":17,"r":18,"s":19,"t":20}
+
+# Unicode keys (byte-order sorting: "abc" < "zzz" < "äbc" since ä is 0xC3A4)
+query T
+SELECT json_normalize('{"zzz":3,"äbc":1,"abc":2}')
+----
+{"abc":2,"zzz":3,"äbc":1}
+
+# Deterministic hashing: same content, different key order → same hash
+query T
+SELECT md5(json_normalize('{"z":1,"a":2}')) = md5(json_normalize('{"a":2,"z":1}'))
+----
+true
+
+# More complex deterministic hashing
+query T
+SELECT md5(json_normalize('{"b":{"z":1,"a":2},"a":3}')) = md5(json_normalize('{"a":3,"b":{"a":2,"z":1}}'))
+----
+true
+
+# Single key object
+query T
+SELECT json_normalize('{"a":1}')
+----
+{"a":1}
+
+# Nested empty objects and arrays
+query T
+SELECT json_normalize('{"b":{},"a":[]}')
+----
+{"a":[],"b":{}}
+
+# Object with numeric string keys
+query T
+SELECT json_normalize('{"2":2,"10":10,"1":1}')
+----
+{"1":1,"10":10,"2":2}
+
+# Array at top level with no objects
+query T
+SELECT json_normalize('[3,2,1]')
+----
+[3,2,1]
+
+# Nested arrays with objects
+query T
+SELECT json_normalize('[[{"b":2,"a":1}],[{"d":4,"c":3}]]')
+----
+[[{"a":1,"b":2}],[{"c":3,"d":4}]]
+
+# Test with JSON type input
+query T
+SELECT json_normalize('{"z":1,"a":2}'::JSON)
+----
+{"a":2,"z":1}
+
+# Table-based test
+statement ok
+CREATE TABLE json_data (id INTEGER, data JSON);
+
+statement ok
+INSERT INTO json_data VALUES (1, '{"z":1,"a":2}'), (2, '{"b":3,"a":4}'), (3, NULL);
+
+query IT
+SELECT id, json_normalize(data) FROM json_data ORDER BY id
+----
+1	{"a":2,"z":1}
+2	{"a":4,"b":3}
+3	NULL
+
+# Deterministic hashing on table data
+statement ok
+CREATE TABLE json_pairs (id INTEGER, v1 JSON, v2 JSON);
+
+statement ok
+INSERT INTO json_pairs VALUES (1, '{"z":1,"a":2}', '{"a":2,"z":1}'), (2, '{"b":{"z":1,"a":2},"a":3}', '{"a":3,"b":{"a":2,"z":1}}');
+
+query IT
+SELECT id, md5(json_normalize(v1)) = md5(json_normalize(v2)) FROM json_pairs ORDER BY id
+----
+1	true
+2	true
+
+# Whitespace in input is normalized away
+query T
+SELECT json_normalize('{ "z" : 1 , "a" : 2 }')
+----
+{"a":2,"z":1}
+
+# String values with special characters
+query T
+SELECT json_normalize('{"b":"hello world","a":"foo\"bar"}')
+----
+{"a":"foo\"bar","b":"hello world"}
+
+# Floating point values
+query T
+SELECT json_normalize('{"b":3.14,"a":2.72}')
+----
+{"a":2.72,"b":3.14}
+
+# Negative numbers
+query T
+SELECT json_normalize('{"b":-1,"a":-2}')
+----
+{"a":-2,"b":-1}
+
+# Constant vector test (verifies AllConstant path)
+query T
+SELECT json_normalize('{"z":1,"a":2}') FROM range(3)
+----
+{"a":2,"z":1}
+{"a":2,"z":1}
+{"a":2,"z":1}
+
+# JSON null value inside object (not SQL NULL)
+query T
+SELECT json_normalize('{"b":null,"a":1}')
+----
+{"a":1,"b":null}
+
+# Nested JSON null values
+query T
+SELECT json_normalize('{"b":{"z":null,"a":1},"a":null}')
+----
+{"a":null,"b":{"a":1,"z":null}}
+
+# Empty string key sorts first
+query T
+SELECT json_normalize('{"a":2,"":1}')
+----
+{"":1,"a":2}
+
+# Same-prefix keys: sorted by length tiebreaker (a < ab < abc)
+query T
+SELECT json_normalize('{"abc":3,"ab":2,"a":1}')
+----
+{"a":1,"ab":2,"abc":3}
+
+# Object nested inside array inside object (triple nesting)
+query T
+SELECT json_normalize('{"b":{"c":[{"z":1,"a":2}]},"a":1}')
+----
+{"a":1,"b":{"c":[{"a":2,"z":1}]}}

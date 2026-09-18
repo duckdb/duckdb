@@ -87,13 +87,13 @@ public:
 	SnifferResult SniffCSV(bool force_match = false);
 
 	//! I call it adaptive, since that's a sexier term.
-	//! In practice this Function that only sniffs the first two rows, to verify if a header exists and what are the
-	//! data types It does this considering a priorly set CSV schema. If there is a mismatch of the schema it runs the
+	//! In practice this function sniffs up to STANDARD_VECTOR_SIZE rows to verify if a header exists and determine the
+	//! data types. It does this considering a priorly set CSV schema. If there is a mismatch of the schema it runs the
 	//! full on blazing all guns sniffer, if that still fails it tells the user to union_by_name.
 	//! It returns the projection order.
 	SnifferResult AdaptiveSniff(const CSVSchema &file_schema);
 
-	//! Function that only sniffs the first two rows, to verify if a header exists and what are the data types
+	//! Function that sniffs up to STANDARD_VECTOR_SIZE rows to detect a header and data types
 	AdaptiveSnifferResult MinimalSniff();
 
 	static NewLineIdentifier DetectNewLineDelimiter(CSVBufferManager &buffer_manager);
@@ -102,6 +102,7 @@ public:
 	static bool CanYouCastIt(ClientContext &context, const string_t value, const LogicalType &type,
 	                         const DialectOptions &dialect_options, const bool is_null, const char decimal_separator,
 	                         const char thousands_separator);
+	static bool CanYouCastBignum(const char *value_ptr, idx_t value_size);
 
 	idx_t LinesSniffed() const;
 
@@ -206,13 +207,13 @@ private:
 	void DetectHeader();
 	static bool DetectHeaderWithSetColumn(ClientContext &context, vector<HeaderValue> &best_header_row,
 	                                      const SetColumns &set_columns, CSVReaderOptions &options);
-	static vector<string>
+	static vector<Identifier>
 	DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &best_header_row, CSVStateMachine &state_machine,
 	                     const SetColumns &set_columns,
 	                     unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
 	                     CSVReaderOptions &options, const MultiFileOptions &file_options,
 	                     CSVErrorHandler &error_handler);
-	vector<string> names;
+	vector<Identifier> names;
 	//! If the file only has a header
 	bool single_row_file = false;
 

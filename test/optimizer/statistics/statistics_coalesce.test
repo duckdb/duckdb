@@ -3,6 +3,9 @@
 # group: [statistics]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
 statement ok
@@ -98,9 +101,6 @@ SELECT * FROM integers WHERE (COALESCE(i, 4, 17)=3);
 
 statement ok
 PRAGMA disable_verification
-
-statement ok
-PRAGMA disable_verify_fetch_row;
 
 # COALESCE without statistics.
 

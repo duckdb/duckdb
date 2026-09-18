@@ -8,16 +8,21 @@ namespace duckdb {
 // WindowCustomAggregator
 //===--------------------------------------------------------------------===//
 bool WindowCustomAggregator::CanAggregate(const BoundWindowExpression &wexpr, WindowAggregationMode mode) {
-	if (!wexpr.aggregate) {
+	if (!wexpr.AggregateFunction()) {
 		return false;
 	}
 
-	if (!wexpr.aggregate->CanWindow()) {
+	if (!wexpr.AggregateFunction()->CanWindow()) {
 		return false;
 	}
 
 	//	ORDER BY arguments are not currently supported
-	if (!wexpr.arg_orders.empty()) {
+	if (!wexpr.ArgOrders().empty()) {
+		return false;
+	}
+
+	//	DISTINCT is not currently supported
+	if (wexpr.Distinct()) {
 		return false;
 	}
 
@@ -72,17 +77,19 @@ public:
 WindowCustomAggregatorLocalState::WindowCustomAggregatorLocalState(ExecutionContext &context,
                                                                    const AggregateObject &aggr,
                                                                    const WindowExcludeMode exclude_mode)
-    : WindowAggregatorLocalState(context), aggr(aggr), state(aggr.function.GetStateSizeCallback()(aggr.function)),
-      statef(Value::POINTER(CastPointerToValue(state.data()))), frames(3, {0, 0}) {
+    : WindowAggregatorLocalState(context), aggr(aggr), state(aggr.function.GetStateSize(aggr.GetFunctionData())),
+      statef(Value::POINTER(CastPointerToValue(state.data())), count_t(1)), frames(3, {0, 0}) {
 	// if we have a frame-by-frame method, share the single state
-	aggr.function.GetStateInitCallback()(aggr.function, state.data());
+	AggregateStateInput state_input(aggr.function, aggr.GetFunctionData());
+	data_ptr_t state_ptr = state.data();
+	aggr.function.GetStateInitCallback()(state_input, &state_ptr, 1);
 
 	InitSubFrames(frames, exclude_mode);
 }
 
 WindowCustomAggregatorLocalState::~WindowCustomAggregatorLocalState() {
 	if (aggr.function.HasStateDestructorCallback()) {
-		AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+		AggregateInputData aggr_input_data(aggr, allocator);
 		aggr.function.GetStateDestructorCallback()(statef, aggr_input_data, 1);
 	}
 }
@@ -120,7 +127,7 @@ void WindowCustomAggregator::Finalize(ExecutionContext &context, CollectionPtr c
 		WindowPartitionInput partition(context, inputs, count, child_idx, all_valids, filter_packed, stats,
 		                               sink.interrupt_state);
 
-		AggregateInputData aggr_input_data(aggr.GetFunctionData(), gcstate.allocator);
+		AggregateInputData aggr_input_data(aggr, gcstate.allocator);
 		aggr.function.GetWindowInitCallback()(aggr_input_data, partition, gcstate.state.data());
 	}
 
@@ -150,9 +157,25 @@ void WindowCustomAggregator::Evaluate(ExecutionContext &context, const DataChunk
 	auto &stats = gcsink.stats;
 	WindowPartitionInput partition(context, inputs, collection->size(), child_idx, all_valids, filter_packed, stats,
 	                               sink.interrupt_state);
+
+	// Batched window callback path: if the aggregate installs a batch callback,
+	// collect all `count` rows' subframes into a contiguous array and hand them
+	// off in a single call. This lets implementations amortise per-call
+	// overhead (e.g., RPC extensions that would otherwise fire one call per
+	// output row).
+	if (aggr.function.HasWindowBatchCallback()) {
+		vector<SubFrames> all_frames;
+		all_frames.reserve(count);
+		EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) { all_frames.push_back(frames); });
+		AggregateInputData aggr_input_data(aggr, lcstate.allocator);
+		aggr.function.GetWindowBatchCallback()(aggr_input_data, partition, gstate_p, lcstate.state.data(),
+		                                       all_frames.data(), count, result, row_idx);
+		return;
+	}
+
 	EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		// Extract the range
-		AggregateInputData aggr_input_data(aggr.GetFunctionData(), lcstate.allocator);
+		AggregateInputData aggr_input_data(aggr, lcstate.allocator);
 		aggr.function.GetWindowCallback()(aggr_input_data, partition, gstate_p, lcstate.state.data(), frames, result,
 		                                  i);
 	});

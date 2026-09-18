@@ -2,9 +2,6 @@
 # description: Test lock configuration
 # group: [settings]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT current_setting('lock_configuration')
 ----

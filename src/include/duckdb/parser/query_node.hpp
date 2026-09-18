@@ -25,7 +25,12 @@ enum class QueryNodeType : uint8_t {
 	BOUND_SUBQUERY_NODE = 3,
 	RECURSIVE_CTE_NODE = 4,
 	CTE_NODE = 5,
-	STATEMENT_NODE = 6
+	STATEMENT_NODE = 6,
+	UPDATE_QUERY_NODE = 7,
+	DELETE_QUERY_NODE = 8,
+	INSERT_QUERY_NODE = 9,
+	MERGE_QUERY_NODE = 10,
+	COPY_QUERY_NODE = 11
 };
 
 struct CommonTableExpressionInfo;
@@ -34,7 +39,7 @@ class CommonTableExpressionMap {
 public:
 	CommonTableExpressionMap();
 
-	InsertionOrderPreservingMap<unique_ptr<CommonTableExpressionInfo>> map;
+	InsertionOrderPreservingMap<unique_ptr<CommonTableExpressionInfo>, Identifier, identifier_map_t<idx_t>> map;
 
 public:
 	string ToString() const;

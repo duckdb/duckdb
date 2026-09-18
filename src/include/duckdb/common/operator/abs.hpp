@@ -8,7 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include <cmath>
@@ -87,7 +88,7 @@ inline hugeint_t TryAbsOperator::Operation(hugeint_t input) {
 
 template <>
 inline dtime_t TryAbsOperator::Operation(dtime_t input) {
-	return dtime_t(TryAbsOperator::Operation<int64_t, int64_t>(input.micros));
+	return dtime_t(TryAbsOperator::Operation<int64_t, int64_t>(input.value));
 }
 
 template <>

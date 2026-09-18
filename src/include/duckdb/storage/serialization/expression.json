@@ -22,20 +22,33 @@
       {
         "id": 102,
         "name": "alias",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 103,
         "name": "query_location",
         "type": "optional_idx",
         "default": "optional_idx()"
+      },
+      {
+        "id": 104,
+        "name": "query_location_length",
+        "type": "uint32_t",
+        "property": "query_location.length",
+        "default": "0",
+        "version": "v2.0.0",
+        "equals_skip": true,
+        "hash_skip": true
       }
     ]
   },
   {
-    "class": "BoundBetweenExpression",
+    "class": "LegacyBoundBetweenExpression",
     "base": "Expression",
-    "enum": "BOUND_BETWEEN",
+    "enum": "LEGACY_BOUND_BETWEEN",
+    "includes": [
+      "duckdb/planner/expression/legacy_bound_between_expression.hpp"
+    ],
     "members": [
       {
         "id": 200,
@@ -62,7 +75,8 @@
         "name": "upper_inclusive",
         "type": "bool"
       }
-    ]
+    ],
+    "constructor_method": "LegacyBoundBetweenExpression::DeserializeLegacyExpression"
   },
   {
     "class": "BoundCaseExpression",
@@ -88,9 +102,12 @@
     "constructor": ["return_type"]
   },
   {
-    "class": "BoundCastExpression",
+    "class": "LegacyBoundCastExpression",
     "base": "Expression",
-    "enum": "BOUND_CAST",
+    "enum": "LEGACY_BOUND_CAST",
+    "includes": [
+      "duckdb/planner/expression/legacy_bound_cast_expression.hpp"
+    ],
     "members": [
       {
         "id": 200,
@@ -108,7 +125,8 @@
         "type": "bool"
       }
     ],
-    "constructor": ["$ClientContext", "child", "return_type"]
+    "constructor": ["$ClientContext", "child", "return_type&", "try_cast"],
+    "constructor_method": "LegacyBoundCastExpression::DeserializeLegacyExpression"
   },
   {
     "class": "BoundColumnRefExpression",
@@ -134,9 +152,12 @@
     "constructor": ["return_type", "binding", "depth"]
   },
   {
-    "class": "BoundComparisonExpression",
+    "class": "LegacyBoundComparisonExpression",
     "base": "Expression",
-    "enum": "BOUND_COMPARISON",
+    "enum": "LEGACY_BOUND_COMPARISON",
+    "includes": [
+      "duckdb/planner/expression/legacy_bound_comparison_expression.hpp"
+     ],
     "members": [
       {
         "id": 200,
@@ -149,7 +170,8 @@
         "type": "Expression*"
       }
     ],
-    "constructor": ["type", "left", "right"]
+    "constructor": ["type", "left", "right"],
+    "constructor_method": "LegacyBoundComparisonExpression::DeserializeLegacyExpression"
   },
   {
     "class": "BoundConjunctionExpression",
@@ -214,6 +236,11 @@
         "id": 203,
         "name": "parameter_count",
         "type": "idx_t"
+      },
+      {
+        "id": 204,
+        "name": "parameter_names",
+        "type": "vector<Identifier>"
       }
     ],
     "constructor": ["type", "return_type", "lambda_expr", "parameter_count"]
@@ -273,7 +300,7 @@
       {
         "id": 200,
         "name": "identifier",
-        "type": "string"
+        "type": "duckdb::Identifier"
       },
       {
         "id": 201,

@@ -1,7 +1,12 @@
-if (NOT WIN32 AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
+# FIXME: disabled for now while CopyFunction undergoes heavy changes
+if (NOT DEFINED VORTEX_ENABLED)
+    set(VORTEX_ENABLED OFF)
+endif()
+if (VORTEX_ENABLED AND NOT WIN32 AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
     duckdb_extension_load(vortex
             GIT_URL https://github.com/vortex-data/duckdb-vortex
-            GIT_TAG 9a8eb67805271e15deadcd5682a0a285d48e0578
+            GIT_TAG 2aaba5f07f489f6fa73e74d457faf324cb84dcf5
+            SUBMODULES vortex
             APPLY_PATCHES
             LOAD_TESTS
             DONT_LINK

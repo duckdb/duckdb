@@ -73,7 +73,7 @@ struct AnyValueFun {
 
 struct MinFun {
 	static constexpr const char *Name = "min";
-	static constexpr const char *Parameters = "arg";
+	static constexpr const char *Parameters = "arg,n";
 	static constexpr const char *Description = "Returns the minimum value present in arg.";
 	static constexpr const char *Example = "min(A)";
 	static constexpr const char *Categories = "";
@@ -83,12 +83,33 @@ struct MinFun {
 
 struct MaxFun {
 	static constexpr const char *Name = "max";
-	static constexpr const char *Parameters = "arg";
+	static constexpr const char *Parameters = "arg,n";
 	static constexpr const char *Description = "Returns the maximum value present in arg.";
 	static constexpr const char *Example = "max(A)";
 	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();
+};
+
+struct DecimalAverageFun {
+	static constexpr const char *Name = "decimal_average";
+	static constexpr const char *Parameters = "arg";
+	static constexpr const char *Description = "Computes the average of a DECIMAL column using exact integer arithmetic with banker's rounding. Returns a DECIMAL with the same width and scale as the input.";
+	static constexpr const char *Example = "decimal_average(col::DECIMAL(18,2))";
+	static constexpr const char *Categories = "";
+
+	static AggregateFunctionSet GetFunctions();
+};
+
+struct CombineAggrFun {
+	static constexpr const char *Name = "combine_aggr";
+	static constexpr const char *Parameters = "arg,multiplicities";
+	static constexpr const char *Description = "Combines exported aggregate states";
+	static constexpr const char *Example = "combine_aggr(state_column)";
+	static constexpr const char *Categories = "";
+
+	static AggregateFunctionSet GetFunctions();
+	static AggregateFunction GetFunction();
 };
 
 } // namespace duckdb

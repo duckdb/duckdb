@@ -38,8 +38,8 @@
 #include <stdio.h>
 #include "error_msg.h"
 #include "grammar_support.h"
-static int *LN;
-static char *FN;
+static thread_local int *LN;
+static thread_local char *FN;
 
 err_msg_t Errors[MAX_ERROR + 2] = {{
                                        EFLG_NO_ARG,

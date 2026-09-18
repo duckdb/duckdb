@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/table_index.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
@@ -26,8 +27,8 @@ public:
 	bool IsNotNull(LogicalOperator &op, const Expression &expr);
 
 private:
-	bool IsNotNull(LogicalOperator &op, const Expression &expr, vector<idx_t> &seen_ctes);
-	optional_ptr<LogicalCTE> FindCTE(idx_t cte_index);
+	bool IsNotNull(LogicalOperator &op, const Expression &expr, vector<TableIndex> &seen_ctes);
+	optional_ptr<LogicalCTE> FindCTE(TableIndex cte_index);
 
 private:
 	ClientContext &context;

@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -14,7 +15,7 @@ namespace {
 
 //! Scan a table through the internal DataTable API, the way extensions (e.g. DuckLake's server-side commit)
 //! read their staged tables: DataTable::InitializeScan followed by a DataTable::Scan loop.
-idx_t ScanTableThroughStorage(Connection &con, const string &table_name) {
+idx_t ScanTableThroughStorage(Connection &con, const Identifier &table_name) {
 	auto &context = *con.context;
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, table_name);
 	auto &storage = table.GetStorage();

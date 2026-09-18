@@ -4,9 +4,6 @@
 
 require httpfs
 
-statement ok
-PRAGMA enable_verification
-
 # This may or may not work, depending if we encounter a value that breaks the quote on the thread set
 # But this will finish
 statement maybe

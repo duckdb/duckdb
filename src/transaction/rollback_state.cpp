@@ -6,11 +6,14 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 
 #include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table/row_version_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/external_resources_manager.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
@@ -29,7 +32,7 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::INSERT_TUPLE: {
 		auto info = reinterpret_cast<AppendInfo *>(data);
 		// revert the append in the base table
-		info->table->RevertAppend(transaction, info->start_row, info->count);
+		info->table->GetStorage().RevertAppend(transaction, info->start_row, info->count);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {
@@ -46,7 +49,16 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::ATTACHED_DATABASE: {
 		auto db = Load<AttachedDatabase *>(data);
 		auto &db_manager = DatabaseManager::Get(db->GetDatabase());
-		db_manager.DetachInternal(db->name);
+		auto attached_db = db_manager.DetachInternal(db->name);
+		if (attached_db) {
+			// Teardown runs SQL, which cannot happen under the transaction lock: it would need a
+			// transaction on the same manager, and rollback may not fail. Extracting the deleter is a
+			// field move, safe here; the DatabaseManager drains the queue once rollback completes.
+			auto deleter = attached_db->ExtractDeleter();
+			if (deleter) {
+				db_manager.AddPendingTeardown(std::move(deleter));
+			}
+		}
 		break;
 	}
 	case UndoFlags::SEQUENCE_VALUE:

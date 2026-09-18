@@ -161,19 +161,19 @@ foreach lspecial infinity -infinity
 
 # Unary
 query I
-SELECT AGE('${lspecial}'::TIMESTAMP);
+SELECT AGE('{lspecial}'::TIMESTAMP);
 ----
 NULL
 
 foreach rspecial infinity -infinity 2004-01-31T12:00:00.000050-08
 
 query I
-SELECT AGE('${lspecial}'::TIMESTAMP, '${rspecial}'::TIMESTAMP);
+SELECT AGE('{lspecial}'::TIMESTAMP, '{rspecial}'::TIMESTAMP);
 ----
 NULL
 
 query I
-SELECT AGE('${rspecial}'::TIMESTAMP, '${lspecial}'::TIMESTAMP);
+SELECT AGE('{rspecial}'::TIMESTAMP, '{lspecial}'::TIMESTAMP);
 ----
 NULL
 

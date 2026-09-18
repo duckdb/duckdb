@@ -55,4 +55,14 @@ struct BitStringFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct BitStringSortKeyFun {
+	static constexpr const char *Name = "bitstring_byte_comparable";
+	static constexpr const char *Parameters = "bitstring";
+	static constexpr const char *Description = "Converts a BIT to a binary comparable sort key";
+	static constexpr const char *Example = "bitstring_byte_comparable('1010'::BIT)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

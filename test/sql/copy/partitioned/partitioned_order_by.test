@@ -1,0 +1,167 @@
+# name: test/sql/copy/partitioned/partitioned_order_by.test
+# description: Test sortedness within each file for COPY with PARTITION_BY and ORDER_BY
+# group: [partitioned]
+
+require parquet
+
+statement ok
+PRAGMA threads=1;
+
+statement ok
+SET partitioned_write_flush_threshold=2048;
+
+statement ok
+CREATE TABLE ordered_source AS
+SELECT 0 AS p, i::INTEGER AS v
+FROM range(16384) tbl(i);
+
+statement ok
+COPY (SELECT p, v FROM ordered_source ORDER BY v DESC)
+TO '{TEST_DIR}/ordered_partitioned_default_asc'
+(FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (v));
+
+query I
+WITH per_file AS (
+	SELECT
+		filename,
+		v,
+		lag(v) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_v
+	FROM read_parquet(
+		'{TEST_DIR}/ordered_partitioned_default_asc/**/*.parquet',
+		filename = true,
+		file_row_number = true,
+		hive_partitioning = true
+	)
+)
+SELECT count(*) FROM per_file WHERE prev_v IS NOT NULL AND prev_v > v;
+----
+0
+
+statement ok
+COPY (SELECT p, v FROM ordered_source ORDER BY v)
+TO '{TEST_DIR}/ordered_partitioned'
+(FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (v DESC));
+
+query I
+SELECT count(*) > 1 FROM glob('{TEST_DIR}/ordered_partitioned/p=0/*.parquet');
+----
+true
+
+query I
+SELECT count(*) FROM glob('{TEST_DIR}/ordered_partitioned/p=0/data_1.parquet');
+----
+1
+
+query I
+WITH per_file AS (
+	SELECT
+		filename,
+		v,
+		lag(v) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_v
+	FROM read_parquet(
+		'{TEST_DIR}/ordered_partitioned/**/*.parquet',
+		filename = true,
+		file_row_number = true,
+		hive_partitioning = true
+	)
+)
+SELECT count(*) FROM per_file WHERE prev_v IS NOT NULL AND prev_v < v;
+----
+0
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/ordered_partitioned/**/*.parquet', hive_partitioning = true);
+----
+16384
+
+statement ok
+COPY (SELECT p, v FROM ordered_source ORDER BY v)
+TO '{TEST_DIR}/unordered_partitioned'
+(FORMAT PARQUET, PARTITION_BY (p));
+
+query I
+SELECT count(*) FROM glob('{TEST_DIR}/unordered_partitioned/p=0/*.parquet');
+----
+1
+
+statement ok
+COPY (SELECT p, v FROM ordered_source ORDER BY v)
+TO '{TEST_DIR}/ordered_partitioned_non_hive'
+(FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (v DESC), HIVE_FILE_PATTERN false);
+
+query I
+SELECT count(*) > 1 FROM glob('{TEST_DIR}/ordered_partitioned_non_hive/*.parquet');
+----
+true
+
+query I
+WITH per_file AS (
+	SELECT
+		filename,
+		v,
+		lag(v) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_v
+	FROM read_parquet(
+		'{TEST_DIR}/ordered_partitioned_non_hive/*.parquet',
+		filename = true,
+		file_row_number = true
+	)
+)
+SELECT count(*) FROM per_file WHERE prev_v IS NOT NULL AND prev_v < v;
+----
+0
+
+query II
+COPY (SELECT p, v FROM ordered_source ORDER BY v)
+TO '{TEST_DIR}/ordered_partitioned_return_files'
+(FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (v DESC), RETURN_FILES);
+----
+16384	<REGEX>:.*ordered_partitioned_return_files.*p=0.*data_0[.]parquet.*ordered_partitioned_return_files.*p=0.*data_1[.]parquet.*
+
+statement ok
+set threads=4
+
+# larger test to check order within a file is proper
+statement ok
+CREATE TABLE large_ordered_source AS
+SELECT
+	(i % 16)::INTEGER AS p,
+	((i * 17) % 65536)::INTEGER AS v
+FROM range(524288) tbl(i);
+
+statement ok
+COPY (SELECT p, v FROM large_ordered_source ORDER BY v DESC, p DESC)
+TO '{TEST_DIR}/large_ordered_partitioned'
+(FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (p, v), ROW_GROUP_SIZE 2048);
+
+query I
+SELECT count(*) > 16 FROM glob('{TEST_DIR}/large_ordered_partitioned/p=*/*.parquet');
+----
+true
+
+query I
+WITH per_file AS (
+	SELECT
+		filename,
+		p,
+		v,
+		lag(p) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_p,
+		lag(v) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_v
+	FROM read_parquet(
+		'{TEST_DIR}/large_ordered_partitioned/**/*.parquet',
+		filename = true,
+		file_row_number = true,
+		hive_partitioning = true
+	)
+)
+SELECT count(*)
+FROM per_file
+WHERE prev_p > p OR (prev_p = p AND prev_v > v);
+----
+0
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/large_ordered_partitioned/**/*.parquet', hive_partitioning = true);
+----
+524288

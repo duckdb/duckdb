@@ -1,0 +1,28 @@
+# name: test/sql/peg_parser/unterminated_literals.test
+# description: Test that unterminated string literals, quoted identifiers, and block comments are rejected
+# group: [peg_parser]
+
+statement error
+SELECT 'hello
+----
+Parser Error: unterminated string literal
+
+statement error
+SELECT 'CONCAT_WS(',', ''''
+----
+Parser Error: unterminated string literal
+
+statement error
+SELECT 'abc
+----
+Parser Error: unterminated string literal
+
+statement error
+SELECT "my_col
+----
+Parser Error: unterminated quoted identifier
+
+statement error
+SELECT 1 /*;
+----
+Parser Error: unterminated /* comment at or near "/*;"

@@ -1,0 +1,24 @@
+# name: test/sql/types/bignum/test_bignum_varchar_invalid.test
+# description: Test VARCHAR -> BIGNUM cast of strings with non-ascii bytes
+# group: [bignum]
+
+# high-bit bytes (signed char < 0) must be rejected as non-numeric, not fed to a ctype function
+statement error
+SELECT 'ä'::BIGNUM
+----
+<REGEX>:.*Conversion Error.*
+
+statement error
+SELECT '12ä34'::BIGNUM
+----
+<REGEX>:.*Conversion Error.*
+
+statement error
+SELECT '€'::BIGNUM
+----
+<REGEX>:.*Conversion Error.*
+
+query I
+SELECT '12345'::BIGNUM
+----
+12345

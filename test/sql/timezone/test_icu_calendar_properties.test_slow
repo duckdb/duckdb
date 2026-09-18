@@ -1,0 +1,383 @@
+# name: test/sql/timezone/test_icu_calendar_properties.test_slow
+# description: Properties that must hold for every calendar system, checked day by day over more than a century
+# group: [timezone]
+
+require icu
+
+statement ok
+SET TimeZone='UTC';
+
+statement ok
+CREATE TEMP TABLE days AS
+SELECT '1900-01-01 12:00:00+00'::TIMESTAMPTZ + (i * INTERVAL 1 DAY) AS ts FROM range(40000) t(i);
+
+# For every calendar system, walking forward one day at a time:
+#  * the day, the month and the day of the year are all counted from one;
+#  * truncating to a day never moves a time forward and never changes the day it falls on;
+#  * the last day of the month is the same for every day of that month;
+#  * the day of the month goes up by one every day, unless a new month starts;
+#  * the day of the year goes up by one every day, unless a new year starts.
+#
+# The last day of the month is not checked for the Chinese and Korean calendars, whose months
+# are identified by a number together with a leap month flag rather than by a number alone, and
+# the flag is not one of the parts that can be asked for from SQL.
+
+statement ok
+SET Calendar='gregorian';
+
+query IIIIIII
+SELECT 'gregorian' AS calendar,
+       count(*) FILTER (WHERE day < 1 OR month < 1 OR doy < 1) AS parts_below_one,
+       count(*) FILTER (WHERE trunc > ts OR day(trunc) <> day) AS truncation_wrong,
+       count(*) FILTER (WHERE last <> month_last) AS last_day_not_constant,
+       count(*) FILTER (WHERE day <> 1 AND day <> prev_day + 1) AS day_did_not_advance,
+       count(*) FILTER (WHERE doy <> 1 AND doy <> prev_doy + 1) AS doy_did_not_advance,
+       count(DISTINCT era || '/' || year || '/' || month) AS months
+FROM (SELECT ts, day, month, doy, trunc, last, era, year,
+             max(last) OVER (PARTITION BY era, year, month) AS month_last,
+             lag(day) OVER (ORDER BY ts) AS prev_day,
+             lag(doy) OVER (ORDER BY ts) AS prev_doy
+      FROM (SELECT ts, era(ts) era, year(ts) year, month(ts) month, day(ts) day, dayofyear(ts) doy,
+                   date_trunc('day', ts) trunc, last_day(ts) last FROM days));
+----
+gregorian	0	0	0	0	0	1315
+
+statement ok
+SET Calendar='buddhist';
+
+query IIIIIII
+SELECT 'buddhist' AS calendar,
+       count(*) FILTER (WHERE day < 1 OR month < 1 OR doy < 1) AS parts_below_one,
+       count(*) FILTER (WHERE trunc > ts OR day(trunc) <> day) AS truncation_wrong,
+       count(*) FILTER (WHERE last <> month_last) AS last_day_not_constant,
+       count(*) FILTER (WHERE day <> 1 AND day <> prev_day + 1) AS day_did_not_advance,
+       count(*) FILTER (WHERE doy <> 1 AND doy <> prev_doy + 1) AS doy_did_not_advance,
+       count(DISTINCT era || '/' || year || '/' || month) AS months
+FROM (SELECT ts, day, month, doy, trunc, last, era, year,
+             max(last) OVER (PARTITION BY era, year, month) AS month_last,
+             lag(day) OVER (ORDER BY ts) AS prev_day,
+             lag(doy) OVER (ORDER BY ts) AS prev_doy
+      FROM (SELECT ts, era(ts) era, year(ts) year, month(ts) month, day(ts) day, dayofyear(ts) doy,
+                   date_trunc('day', ts) trunc, last_day(ts) last FROM days));
+----
+buddhist	0	0	0	0	0	1315
+
+statement ok
+SET Calendar='roc';
+
+query IIIIIII
+SELECT 'roc' AS calendar,
+       count(*) FILTER (WHERE day < 1 OR month < 1 OR doy < 1) AS parts_below_one,
+       count(*) FILTER (WHERE trunc > ts OR day(trunc) <> day) AS truncation_wrong,
+       count(*) FILTER (WHERE last <> month_last) AS last_day_not_constant,
+       count(*) FILTER (WHERE day <> 1 AND day <> prev_day + 1) AS day_did_not_advance,
+       count(*) FILTER (WHERE doy <> 1 AND doy <> prev_doy + 1) AS doy_did_not_advance,
+       count(DISTINCT era || '/' || year || '/' || month) AS months
+FROM (SELECT ts, day, month, doy, trunc, last, era, year,
+             max(last) OVER (PARTITION BY era, year, month) AS month_last,
+             lag(day) OVER (ORDER BY ts) AS prev_day,
+             lag(doy) OVER (ORDER BY ts) AS prev_doy
+      FROM (SELECT ts, era(ts) era, year(ts) year, month(ts) month, day(ts) day, dayofyear(ts) doy,
+                   date_trunc('day', ts) trunc, last_day(ts) last FROM days));
+----
+roc	0	0	0	0	0	1315
+
+statement ok
+SET Calendar='iso8601';
+
+query IIIIIII
+SELECT 'iso8601' AS calendar,
+       count(*) FILTER (WHERE day < 1 OR month < 1 OR doy < 1) AS parts_below_one,
+       count(*) FILTER (WHERE trunc > ts OR day(trunc) <> day) AS truncation_wrong,
+       count(*) FILTER (WHERE last <> month_last) AS last_day_not_constant,
+       count(*) FILTER (WHERE day <> 1 AND day <> prev_day + 1) AS day_did_not_advance,
+       count(*) FILTER (WHERE doy <> 1 AND doy <> prev_doy + 1) AS doy_did_not_advance,
+       count(DISTINCT era || '/' || year || '/' || month) AS months
+FROM (SELECT ts, day, month, doy, trunc, last, era, year,
+             max(last) OVER (PARTITION BY era, year, month) AS month_last,
+             lag(day) OVER (ORDER BY ts) AS prev_day,
+             lag(doy) OVER (ORDER BY ts) AS prev_doy
+      FROM (SELECT ts, era(ts) era, year(ts) year, month(ts) month, day(ts) day, dayofyear(ts) doy,
+                   date_trunc('day', ts) trunc, last_day(ts) last FROM days));
+----
+iso8601	0	0	0	0	0	1315
+
+statement ok
+SET Calendar='coptic';
+
+query IIIIIII
+SELECT 'coptic' AS calendar,
+       count(*) FILTER (WHERE day < 1 OR month < 1 OR doy < 1) AS parts_below_one,
+       count(*) FILTER (WHERE trunc > ts OR day(trunc) <> day) AS truncation_wrong,
+       count(*) FILTER (WHERE last <> month_last) AS last_day_not_constant,
+       count(*) FILTER (WHERE day <> 1 AND day <> prev_day + 1) AS day_did_not_advance,
+       count(*) FILTER (WHERE doy <> 1 AND doy <> prev_doy + 1) AS doy_did_not_advance,
+       count(DISTINCT era || '/' || year || '/' || month) AS months
+FROM (SELECT ts, day, month, doy, trunc, last, era, year,
+             max(last) OVER (PARTITION BY era, year, month) AS month_last,
+             lag(day) OVER (ORDER BY ts) AS prev_day,
+             lag(doy) OVER (ORDER BY ts) AS prev_doy
+      FROM (SELECT ts, era(ts) era, year(ts) year, month(ts) month, day(ts) day, dayofyear(ts) doy,
+                   date_trunc('day', ts) trunc, last_day(ts) last FROM days));
+----
+coptic	0	0	0	0	0	1424
+
+statement ok
+SET Calendar='ethiopic';
+
+query IIIIIII
+SELECT 'ethiopic' AS calendar,
+       count(*) FILTER (WHERE day < 1 OR month < 1 OR doy < 1) AS parts_below_one,
+       count(*) FILTER (WHERE trunc > ts OR day(trunc) <> day) AS truncation_wrong,
+       count(*) FILTER (WHERE last <> month_last) AS last_day_not_constant,
+       count(*) FILTER (WHERE day <> 1 AND day <> prev_day + 1) AS day_did_not_advance,
+       count(*) FILTER (WHERE doy <> 1 AND doy <> prev_doy + 1) AS doy_did_not_advance,
+       count(DISTINCT era || '/' || year || '/' || month) AS months
+FROM (SELECT ts, day, month, doy, trunc, last, era, year,
+             max(last) OVER (PARTITION BY era, year, month) AS month_last,
+             lag(day) OVER (ORDER BY ts) AS prev_day,
+             lag(doy) OVER (ORDER BY ts) AS prev_doy
+      FROM (SELECT ts, era(ts) era, year(ts) year, month(ts) month, day(ts) day, dayofyear(ts) doy,
+                   date_trunc('day', ts) trunc, last_day(ts) last FROM days));
+----
+ethiopic	0	0	0	0	0	1424
+
+statement ok
+SET Calendar='ethiopic-amete-alem';
+
+query IIIIIII
+SELECT 'ethiopic-amete-alem' AS calendar,
+       count(*) FILTER (WHERE day < 1 OR month < 1 OR doy < 1) AS parts_below_one,
+       count(*) FILTER (WHERE trunc > ts OR day(trunc) <> day) AS truncation_wrong,
+       count(*) FILTER (WHERE last <> month_last) AS last_day_not_constant,
+       count(*) FILTER (WHERE day <> 1 AND day <> prev_day + 1) AS day_did_not_advance,
+       count(*) FILTER (WHERE doy <> 1 AND doy <> prev_doy + 1) AS doy_did_not_advance,
+       count(DISTINCT era || '/' || year || '/' || month) AS months
+FROM (SELECT ts, day, month, doy, trunc, last, era, year,
+             max(last) OVER (PARTITION BY era, year, month) AS month_last,
+             lag(day) OVER (ORDER BY ts) AS prev_day,
+             lag(doy) OVER (ORDER BY ts) AS prev_doy
+      FROM (SELECT ts, era(ts) era, year(ts) year, month(ts) month, day(ts) day, dayofyear(ts) doy,
+                   date_trunc('day', ts) trunc, last_day(ts) last FROM days));
+----
+ethiopic-amete-alem	0	0	0	0	0	1424
+
+statement ok
+SET Calendar='persian';
+
+query IIIIIII
+SELECT 'persian' AS calendar,
+       count(*) FILTER (WHERE day < 1 OR month < 1 OR doy < 1) AS parts_below_one,
+       count(*) FILTER (WHERE trunc > ts OR day(trunc) <> day) AS truncation_wrong,
+       count(*) FILTER (WHERE last <> month_last) AS last_day_not_constant,
+       count(*) FILTER (WHERE day <> 1 AND day <> prev_day + 1) AS day_did_not_advance,
+       count(*) FILTER (WHERE doy <> 1 AND doy <> prev_doy + 1) AS doy_did_not_advance,
+       count(DISTINCT era || '/' || year || '/' || month) AS months
+FROM (SELECT ts, day, month, doy, trunc, last, era, year,
+             max(last) OVER (PARTITION BY era, year, month) AS month_last,
+             lag(day) OVER (ORDER BY ts) AS prev_day,
+             lag(doy) OVER (ORDER BY ts) AS prev_doy
+      FROM (SELECT ts, era(ts) era, year(ts) year, month(ts) month, day(ts) day, dayofyear(ts) doy,
+                   date_trunc('day', ts) trunc, last_day(ts) last FROM days));
+----
+persian	0	0	0	0	0	1315
+
+statement ok
+SET Calendar='indian';
+
+query IIIIIII
+SELECT 'indian' AS calendar,
+       count(*) FILTER (WHERE day < 1 OR month < 1 OR doy < 1) AS parts_below_one,
+       count(*) FILTER (WHERE trunc > ts OR day(trunc) <> day) AS truncation_wrong,
+       count(*) FILTER (WHERE last <> month_last) AS last_day_not_constant,
+       count(*) FILTER (WHERE day <> 1 AND day <> prev_day + 1) AS day_did_not_advance,
+       count(*) FILTER (WHERE doy <> 1 AND doy <> prev_doy + 1) AS doy_did_not_advance,
+       count(DISTINCT era || '/' || year || '/' || month) AS months
+FROM (SELECT ts, day, month, doy, trunc, last, era, year,
+             max(last) OVER (PARTITION BY era, year, month) AS month_last,
+             lag(day) OVER (ORDER BY ts) AS prev_day,
+             lag(doy) OVER (ORDER BY ts) AS prev_doy
+      FROM (SELECT ts, era(ts) era, year(ts) year, month(ts) month, day(ts) day, dayofyear(ts) doy,
+                   date_trunc('day', ts) trunc, last_day(ts) last FROM days));
+----
+indian	0	0	0	0	0	1315
+
+statement ok
+SET Calendar='islamic';
+
+query IIIIIII
+SELECT 'islamic' AS calendar,
+       count(*) FILTER (WHERE day < 1 OR month < 1 OR doy < 1) AS parts_below_one,
+       count(*) FILTER (WHERE trunc > ts OR day(trunc) <> day) AS truncation_wrong,
+       count(*) FILTER (WHERE last <> month_last) AS last_day_not_constant,
+       count(*) FILTER (WHERE day <> 1 AND day <> prev_day + 1) AS day_did_not_advance,
+       count(*) FILTER (WHERE doy <> 1 AND doy <> prev_doy + 1) AS doy_did_not_advance,
+       count(DISTINCT era || '/' || year || '/' || month) AS months
+FROM (SELECT ts, day, month, doy, trunc, last, era, year,
+             max(last) OVER (PARTITION BY era, year, month) AS month_last,
+             lag(day) OVER (ORDER BY ts) AS prev_day,
+             lag(doy) OVER (ORDER BY ts) AS prev_doy
+      FROM (SELECT ts, era(ts) era, year(ts) year, month(ts) month, day(ts) day, dayofyear(ts) doy,
+                   date_trunc('day', ts) trunc, last_day(ts) last FROM days));
+----
+islamic	0	0	0	0	0	1356
+
+statement ok
+SET Calendar='islamic-civil';
+
+query IIIIIII
+SELECT 'islamic-civil' AS calendar,
+       count(*) FILTER (WHERE day < 1 OR month < 1 OR doy < 1) AS parts_below_one,
+       count(*) FILTER (WHERE trunc > ts OR day(trunc) <> day) AS truncation_wrong,
+       count(*) FILTER (WHERE last <> month_last) AS last_day_not_constant,
+       count(*) FILTER (WHERE day <> 1 AND day <> prev_day + 1) AS day_did_not_advance,
+       count(*) FILTER (WHERE doy <> 1 AND doy <> prev_doy + 1) AS doy_did_not_advance,
+       count(DISTINCT era || '/' || year || '/' || month) AS months
+FROM (SELECT ts, day, month, doy, trunc, last, era, year,
+             max(last) OVER (PARTITION BY era, year, month) AS month_last,
+             lag(day) OVER (ORDER BY ts) AS prev_day,
+             lag(doy) OVER (ORDER BY ts) AS prev_doy
+      FROM (SELECT ts, era(ts) era, year(ts) year, month(ts) month, day(ts) day, dayofyear(ts) doy,
+                   date_trunc('day', ts) trunc, last_day(ts) last FROM days));
+----
+islamic-civil	0	0	0	0	0	1356
+
+statement ok
+SET Calendar='islamic-rgsa';
+
+query IIIIIII
+SELECT 'islamic-rgsa' AS calendar,
+       count(*) FILTER (WHERE day < 1 OR month < 1 OR doy < 1) AS parts_below_one,
+       count(*) FILTER (WHERE trunc > ts OR day(trunc) <> day) AS truncation_wrong,
+       count(*) FILTER (WHERE last <> month_last) AS last_day_not_constant,
+       count(*) FILTER (WHERE day <> 1 AND day <> prev_day + 1) AS day_did_not_advance,
+       count(*) FILTER (WHERE doy <> 1 AND doy <> prev_doy + 1) AS doy_did_not_advance,
+       count(DISTINCT era || '/' || year || '/' || month) AS months
+FROM (SELECT ts, day, month, doy, trunc, last, era, year,
+             max(last) OVER (PARTITION BY era, year, month) AS month_last,
+             lag(day) OVER (ORDER BY ts) AS prev_day,
+             lag(doy) OVER (ORDER BY ts) AS prev_doy
+      FROM (SELECT ts, era(ts) era, year(ts) year, month(ts) month, day(ts) day, dayofyear(ts) doy,
+                   date_trunc('day', ts) trunc, last_day(ts) last FROM days));
+----
+islamic-rgsa	0	0	0	0	0	1356
+
+statement ok
+SET Calendar='islamic-tbla';
+
+query IIIIIII
+SELECT 'islamic-tbla' AS calendar,
+       count(*) FILTER (WHERE day < 1 OR month < 1 OR doy < 1) AS parts_below_one,
+       count(*) FILTER (WHERE trunc > ts OR day(trunc) <> day) AS truncation_wrong,
+       count(*) FILTER (WHERE last <> month_last) AS last_day_not_constant,
+       count(*) FILTER (WHERE day <> 1 AND day <> prev_day + 1) AS day_did_not_advance,
+       count(*) FILTER (WHERE doy <> 1 AND doy <> prev_doy + 1) AS doy_did_not_advance,
+       count(DISTINCT era || '/' || year || '/' || month) AS months
+FROM (SELECT ts, day, month, doy, trunc, last, era, year,
+             max(last) OVER (PARTITION BY era, year, month) AS month_last,
+             lag(day) OVER (ORDER BY ts) AS prev_day,
+             lag(doy) OVER (ORDER BY ts) AS prev_doy
+      FROM (SELECT ts, era(ts) era, year(ts) year, month(ts) month, day(ts) day, dayofyear(ts) doy,
+                   date_trunc('day', ts) trunc, last_day(ts) last FROM days));
+----
+islamic-tbla	0	0	0	0	0	1356
+
+statement ok
+SET Calendar='islamic-umalqura';
+
+query IIIIIII
+SELECT 'islamic-umalqura' AS calendar,
+       count(*) FILTER (WHERE day < 1 OR month < 1 OR doy < 1) AS parts_below_one,
+       count(*) FILTER (WHERE trunc > ts OR day(trunc) <> day) AS truncation_wrong,
+       count(*) FILTER (WHERE last <> month_last) AS last_day_not_constant,
+       count(*) FILTER (WHERE day <> 1 AND day <> prev_day + 1) AS day_did_not_advance,
+       count(*) FILTER (WHERE doy <> 1 AND doy <> prev_doy + 1) AS doy_did_not_advance,
+       count(DISTINCT era || '/' || year || '/' || month) AS months
+FROM (SELECT ts, day, month, doy, trunc, last, era, year,
+             max(last) OVER (PARTITION BY era, year, month) AS month_last,
+             lag(day) OVER (ORDER BY ts) AS prev_day,
+             lag(doy) OVER (ORDER BY ts) AS prev_doy
+      FROM (SELECT ts, era(ts) era, year(ts) year, month(ts) month, day(ts) day, dayofyear(ts) doy,
+                   date_trunc('day', ts) trunc, last_day(ts) last FROM days));
+----
+islamic-umalqura	0	0	0	0	0	1356
+
+statement ok
+SET Calendar='hebrew';
+
+query IIIIIII
+SELECT 'hebrew' AS calendar,
+       count(*) FILTER (WHERE day < 1 OR month < 1 OR doy < 1) AS parts_below_one,
+       count(*) FILTER (WHERE trunc > ts OR day(trunc) <> day) AS truncation_wrong,
+       count(*) FILTER (WHERE last <> month_last) AS last_day_not_constant,
+       count(*) FILTER (WHERE day <> 1 AND day <> prev_day + 1) AS day_did_not_advance,
+       count(*) FILTER (WHERE doy <> 1 AND doy <> prev_doy + 1) AS doy_did_not_advance,
+       count(DISTINCT era || '/' || year || '/' || month) AS months
+FROM (SELECT ts, day, month, doy, trunc, last, era, year,
+             max(last) OVER (PARTITION BY era, year, month) AS month_last,
+             lag(day) OVER (ORDER BY ts) AS prev_day,
+             lag(doy) OVER (ORDER BY ts) AS prev_doy
+      FROM (SELECT ts, era(ts) era, year(ts) year, month(ts) month, day(ts) day, dayofyear(ts) doy,
+                   date_trunc('day', ts) trunc, last_day(ts) last FROM days));
+----
+hebrew	0	0	0	0	0	1355
+
+statement ok
+SET Calendar='japanese';
+
+query IIIIIII
+SELECT 'japanese' AS calendar,
+       count(*) FILTER (WHERE day < 1 OR month < 1 OR doy < 1) AS parts_below_one,
+       count(*) FILTER (WHERE trunc > ts OR day(trunc) <> day) AS truncation_wrong,
+       count(*) FILTER (WHERE last <> month_last) AS last_day_not_constant,
+       count(*) FILTER (WHERE day <> 1 AND day <> prev_day + 1) AS day_did_not_advance,
+       count(*) FILTER (WHERE doy <> 1 AND doy <> prev_doy + 1) AS doy_did_not_advance,
+       count(DISTINCT era || '/' || year || '/' || month) AS months
+FROM (SELECT ts, day, month, doy, trunc, last, era, year,
+             max(last) OVER (PARTITION BY era, year, month) AS month_last,
+             lag(day) OVER (ORDER BY ts) AS prev_day,
+             lag(doy) OVER (ORDER BY ts) AS prev_doy
+      FROM (SELECT ts, era(ts) era, year(ts) year, month(ts) month, day(ts) day, dayofyear(ts) doy,
+                   date_trunc('day', ts) trunc, last_day(ts) last FROM days));
+----
+japanese	0	0	0	0	0	1318
+
+statement ok
+SET Calendar='chinese';
+
+query IIIIIII
+SELECT 'chinese' AS calendar,
+       count(*) FILTER (WHERE day < 1 OR month < 1 OR doy < 1) AS parts_below_one,
+       count(*) FILTER (WHERE trunc > ts OR day(trunc) <> day) AS truncation_wrong,
+       0 AS last_day_not_checked,
+       count(*) FILTER (WHERE day <> 1 AND day <> prev_day + 1) AS day_did_not_advance,
+       count(*) FILTER (WHERE doy <> 1 AND doy <> prev_doy + 1) AS doy_did_not_advance,
+       count(DISTINCT era || '/' || year || '/' || month) AS months
+FROM (SELECT ts, day, month, doy, trunc, last, era, year,
+             max(last) OVER (PARTITION BY era, year, month) AS month_last,
+             lag(day) OVER (ORDER BY ts) AS prev_day,
+             lag(doy) OVER (ORDER BY ts) AS prev_doy
+      FROM (SELECT ts, era(ts) era, year(ts) year, month(ts) month, day(ts) day, dayofyear(ts) doy,
+                   date_trunc('day', ts) trunc, last_day(ts) last FROM days));
+----
+chinese	0	0	0	0	0	1314
+
+statement ok
+SET Calendar='dangi';
+
+query IIIIIII
+SELECT 'dangi' AS calendar,
+       count(*) FILTER (WHERE day < 1 OR month < 1 OR doy < 1) AS parts_below_one,
+       count(*) FILTER (WHERE trunc > ts OR day(trunc) <> day) AS truncation_wrong,
+       0 AS last_day_not_checked,
+       count(*) FILTER (WHERE day <> 1 AND day <> prev_day + 1) AS day_did_not_advance,
+       count(*) FILTER (WHERE doy <> 1 AND doy <> prev_doy + 1) AS doy_did_not_advance,
+       count(DISTINCT era || '/' || year || '/' || month) AS months
+FROM (SELECT ts, day, month, doy, trunc, last, era, year,
+             max(last) OVER (PARTITION BY era, year, month) AS month_last,
+             lag(day) OVER (ORDER BY ts) AS prev_day,
+             lag(doy) OVER (ORDER BY ts) AS prev_doy
+      FROM (SELECT ts, era(ts) era, year(ts) year, month(ts) month, day(ts) day, dayofyear(ts) doy,
+                   date_trunc('day', ts) trunc, last_day(ts) last FROM days));
+----
+dangi	0	0	0	0	0	1314

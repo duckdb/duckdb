@@ -1,19 +1,27 @@
 #!/bin/bash
 
-rm -f hash_concats
-touch hash_concats
+set -euo pipefail
 
-split -b 1M $1
+input_file="$1"
+work_dir=$(mktemp -d "${TMPDIR:-/tmp}/duckdb-extension-hash.XXXXXX")
 
-FILES="x*"
-for f in $FILES
-do
-	# sha256 a segment
-	openssl dgst -binary -sha256 $f >> hash_concats
-	rm $f
+cleanup() {
+	rm -rf "$work_dir"
+}
+
+trap cleanup EXIT
+
+hash_concats="$work_dir/hash_concats"
+hash_composite="$work_dir/hash_composite"
+split_prefix="$work_dir/chunk_"
+
+touch "$hash_concats"
+split -b 1M "$input_file" "$split_prefix"
+
+for f in "${split_prefix}"*; do
+	# SHA256 each segment independently, then hash the concatenation of those digests.
+	openssl dgst -binary -sha256 "$f" >> "$hash_concats"
 done
 
-# sha256 the concatenation
-openssl dgst -binary -sha256 hash_concats > hash_composite
-
-cat hash_composite
+openssl dgst -binary -sha256 "$hash_concats" > "$hash_composite"
+cat "$hash_composite"

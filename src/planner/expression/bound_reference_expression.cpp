@@ -6,12 +6,12 @@
 
 namespace duckdb {
 
-BoundReferenceExpression::BoundReferenceExpression(string alias, LogicalType type, idx_t index)
+BoundReferenceExpression::BoundReferenceExpression(Identifier alias, LogicalType type, idx_t index)
     : Expression(ExpressionType::BOUND_REF, ExpressionClass::BOUND_REF, std::move(type)), index(index) {
 	this->alias = std::move(alias);
 }
 BoundReferenceExpression::BoundReferenceExpression(LogicalType type, storage_t index)
-    : BoundReferenceExpression(string(), std::move(type), index) {
+    : BoundReferenceExpression(Identifier(), std::move(type), index) {
 }
 
 string BoundReferenceExpression::ToString() const {
@@ -21,7 +21,7 @@ string BoundReferenceExpression::ToString() const {
 	}
 #endif
 	if (!alias.empty()) {
-		return alias;
+		return alias.GetIdentifierName();
 	}
 	return "#" + to_string(index);
 }

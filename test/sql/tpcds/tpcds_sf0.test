@@ -10,7 +10,7 @@ CALL dsdgen(sf=0)
 loop i 1 100
 
 statement ok
-PRAGMA tpcds(${i})
+PRAGMA tpcds({i})
 
 endloop
 
@@ -30,6 +30,11 @@ PRAGMA tpcds(32908301298)
 statement error
 PRAGMA tpcds(1.1)
 ----
+
+statement error
+PRAGMA tpcds(NULL)
+----
+<REGEX>:.*Cannot use NULL as argument for the TPC-DS query number.*
 
 # queries
 statement ok

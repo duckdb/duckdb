@@ -3,10 +3,10 @@
 # group: [left_outer]
 
 statement ok
-set explain_output='optimized_only';
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
 statement ok
-PRAGMA enable_verification
+set explain_output='optimized_only';
 
 statement ok
 CREATE OR REPLACE TABLE big_table AS

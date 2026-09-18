@@ -1,0 +1,4 @@
+require tpch
+
+statement ok
+CALL dbgen(sf={sf});

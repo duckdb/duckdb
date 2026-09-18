@@ -3,9 +3,6 @@
 # group: [csv]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TYPE mood AS ENUM ('happy', 'sad', 'angry')
 
 query I

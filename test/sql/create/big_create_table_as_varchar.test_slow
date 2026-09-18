@@ -2,9 +2,6 @@
 # description: Test large CREATE TABLE AS with varchar columns
 # group: [create]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 CREATE TABLE varchars AS SELECT i, concat('thisisalongstring', i) AS v FROM range(1000000) tbl(i);
 ----

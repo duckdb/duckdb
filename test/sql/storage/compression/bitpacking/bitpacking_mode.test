@@ -18,10 +18,10 @@ unrecognized value
 foreach mode auto constant constant_delta delta_for for
 
 statement ok
-SET force_bitpacking_mode='${mode}'
+SET force_bitpacking_mode='{mode}'
 
 query I
-SELECT current_setting('force_bitpacking_mode')='${mode}'
+SELECT current_setting('force_bitpacking_mode')='{mode}'
 ----
 true
 

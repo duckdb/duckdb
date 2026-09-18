@@ -1,5 +1,5 @@
 # name: test/sql/storage/metadata/full_table_metadata_reuse_v7.test
-# description: Test that column metadata is not loaded when making no changes to a table (with force_column_metadata_reuse on v1.5.0)
+# description: Test that column metadata is not loaded when making no changes to a table (v1.5.0 / serialization version 7)
 # group: [metadata]
 
 require no_alternative_verify
@@ -18,6 +18,21 @@ FROM range(200000) t(i);
 # first checkpoint
 restart
 
+# verify no columns are loaded after restart (all lazy)
+query I
+SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('tbl', include_segment_info=true, loaded_segments_only=true)
+----
+0
+
+# checkpoint again without any changes
+restart
+
+# verify still no columns are loaded after a second restart
+query I
+SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('tbl', include_segment_info=true, loaded_segments_only=true)
+----
+0
+
 # verify data is correct
 query II
 SELECT COUNT(*), SUM(c0) FROM tbl
@@ -34,12 +49,23 @@ CREATE TABLE other_tbl AS SELECT i AS x FROM range(1000) t(i);
 statement ok
 CHECKPOINT
 
+# verify tbl still has no columns loaded
+query I
+SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('tbl', include_segment_info=true, loaded_segments_only=true)
+----
+0
+
 # modify the other table and checkpoint again
 statement ok
 INSERT INTO other_tbl SELECT i FROM range(1000, 2000) t(i);
 
 statement ok
 CHECKPOINT
+
+query I
+SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('tbl', include_segment_info=true, loaded_segments_only=true)
+----
+0
 
 # verify data on both tables is correct
 query II

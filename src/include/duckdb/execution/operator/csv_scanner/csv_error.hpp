@@ -55,7 +55,7 @@ public:
 	         const string &fixes, const String &current_path);
 	CSVError(string error_message, CSVErrorType type, LinesPerBoundary error_info);
 	//! Produces error messages for column name -> type mismatch.
-	static CSVError ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
+	static CSVError ColumnTypesError(identifier_map_t<idx_t> sql_types_per_column, const vector<Identifier> &names);
 	//! Produces error messages for casting errors
 	static CSVError CastError(const CSVReaderOptions &options, const string &column_name, string &cast_error,
 	                          idx_t column_idx, string &csv_row, LinesPerBoundary error_info, idx_t row_byte_position,
@@ -143,7 +143,7 @@ public:
 	idx_t GetSize();
 
 	void FillRejectsTable(InternalAppender &errors_appender, idx_t file_idx, idx_t scan_idx, const CSVFileScan &file,
-	                      CSVRejectsTable &rejects, const MultiFileBindData &bind_data, idx_t limit);
+	                      CSVRejectsTable &rejects, const vector<Identifier> &column_names, idx_t limit);
 
 private:
 	//! Private methods should always be locked by parent method.

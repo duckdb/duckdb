@@ -1,0 +1,34 @@
+# name: test/sql/copy/csv/read_ahead/csv_readahead_gzip.test
+# description: Compressed CSV scans fall back to the per-thread path regardless of the read-ahead depth
+# group: [read_ahead]
+
+statement ok
+SET threads=8
+
+statement ok
+COPY (SELECT range AS i FROM range(0, 100000)) TO '{TEST_DIR}/csv_ra_0.csv.gz' (FORMAT csv, COMPRESSION gzip)
+
+statement ok
+COPY (SELECT range AS i FROM range(100000, 200000)) TO '{TEST_DIR}/csv_ra_1.csv.gz' (FORMAT csv, COMPRESSION gzip)
+
+statement ok
+COPY (SELECT range AS i FROM range(200000, 300000)) TO '{TEST_DIR}/csv_ra_2.csv.gz' (FORMAT csv, COMPRESSION gzip)
+
+foreach depth -1 1
+
+statement ok
+SET read_ahead_depth={depth}
+
+loop x 0 3
+
+query I
+SELECT count(*) FROM (
+    SELECT i, row_number() OVER () AS rn
+    FROM read_csv(['{TEST_DIR}/csv_ra_0.csv.gz', '{TEST_DIR}/csv_ra_1.csv.gz', '{TEST_DIR}/csv_ra_2.csv.gz'])
+) WHERE i + 1 <> rn
+----
+0
+
+endloop
+
+endloop

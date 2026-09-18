@@ -2,9 +2,6 @@
 # description: Test ASOF join with empty right table
 # group: [asof]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 select lefttable.x, righttable.y
 from (select 1 as x) lefttable

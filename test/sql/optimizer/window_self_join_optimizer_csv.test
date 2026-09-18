@@ -8,12 +8,12 @@ COPY (
     SELECT 'b' AS x, 11 AS a, 21 AS b, 31 AS c
     UNION ALL BY NAME
     SELECT 'c' AS x, 12 AS a, 22 AS b, 32 AS c
-) TO '__TEST_DIR__/window_self_join_src.csv'
+) TO '{TEST_DIR}/window_self_join_src.csv'
 
 query II rowsort
 SELECT
     x, MAX(a) OVER (PARTITION BY x)
-FROM '__TEST_DIR__/window_self_join_src.csv'
+FROM '{TEST_DIR}/window_self_join_src.csv'
 ----
 a	10
 b	11

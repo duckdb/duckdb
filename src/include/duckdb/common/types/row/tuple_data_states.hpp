@@ -89,6 +89,12 @@ struct TupleDataPinState {
 	buffer_handle_map_t row_handles;
 	buffer_handle_map_t heap_handles;
 	TupleDataPinProperties properties = TupleDataPinProperties::INVALID;
+
+	void Reset() {
+		row_handles.clear();
+		heap_handles.clear();
+		properties = TupleDataPinProperties::INVALID;
+	}
 };
 
 struct CombinedListData {
@@ -130,6 +136,15 @@ struct TupleDataChunkState {
 	//! Re-usable arrays used while building buffer space
 	unsafe_vector<reference<TupleDataChunkPart>> chunk_parts;
 	unsafe_vector<pair<idx_t, idx_t>> chunk_part_indices;
+
+	void ResetForScan() {
+		column_ids.clear();
+		chunk_lock = nullptr;
+		cached_cast_vectors.clear();
+		cached_cast_vector_cache.clear();
+		chunk_parts.clear();
+		chunk_part_indices.clear();
+	}
 };
 
 struct SortKeyPayloadState {
@@ -147,6 +162,13 @@ struct TupleDataScanState {
 	TupleDataChunkState chunk_state;
 	idx_t segment_index = DConstants::INVALID_INDEX;
 	idx_t chunk_index = DConstants::INVALID_INDEX;
+
+	void Reset() {
+		pin_state.Reset();
+		chunk_state.ResetForScan();
+		segment_index = DConstants::INVALID_INDEX;
+		chunk_index = DConstants::INVALID_INDEX;
+	}
 };
 
 struct TupleDataParallelScanState {

@@ -18,20 +18,4 @@ string PositionalReferenceExpression::ToString() const {
 	return "#" + to_string(index);
 }
 
-bool PositionalReferenceExpression::Equal(const PositionalReferenceExpression &a,
-                                          const PositionalReferenceExpression &b) {
-	return a.index == b.index;
-}
-
-unique_ptr<ParsedExpression> PositionalReferenceExpression::Copy() const {
-	auto copy = make_uniq<PositionalReferenceExpression>(index);
-	copy->CopyProperties(*this);
-	return std::move(copy);
-}
-
-hash_t PositionalReferenceExpression::Hash() const {
-	hash_t result = ParsedExpression::Hash();
-	return CombineHash(duckdb::Hash(index), result);
-}
-
 } // namespace duckdb

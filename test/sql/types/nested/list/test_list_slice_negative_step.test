@@ -2,9 +2,6 @@
 # description: List slicing with negatices steps test (ie. reverse)
 # group: [list]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT list_slice([1,2,3,4,5], 1, 3, -1);
 ----

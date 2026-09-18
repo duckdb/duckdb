@@ -123,20 +123,20 @@ select list_aggr([0, 0], 'stddev')
 ----
 0
 
-statement error
+query R
 select list_aggr([1e301, -1e301], 'stddev')
 ----
-<REGEX>:.*Out of Range Error.*out of range.*
+inf
 
-statement error
+query R
 select list_var_samp([1e301, -1e301])
 ----
-<REGEX>:.*Out of Range Error.*out of range.*
+inf
 
-statement error
+query R
 select list_var_pop([1e301, -1e301])
 ----
-<REGEX>:.*Out of Range Error.*out of range.*
+inf
 
 # incorrect usage
 statement error
@@ -151,7 +151,7 @@ CREATE TABLE t0 (c0 DOUBLE[]);
 statement ok
 INSERT INTO t0 VALUES([1E200, 0]);
 
-statement error
+query R
 SELECT list_stddev_pop(c0) FROM t0;
 ----
-<REGEX>:.*Out of Range Error.*out of range.*
+inf

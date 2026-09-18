@@ -1,0 +1,131 @@
+# name: test/sql/table_function/external_resource_logging.test
+# description: ExternalResource log entries record the outcome of the operation, not of the callback query
+# group: [table_function]
+
+# Mock recipe callbacks (non-TEMP macros, visible instance-wide to the internal connection).
+statement ok
+CREATE MACRO mock_create(p) AS TABLE SELECT MAP {'id': 'r1'} AS handle;
+
+statement ok
+CREATE MACRO mock_status(h) AS TABLE
+  SELECT 'ready' AS state, MAP {'uri': 'quack:localhost:9494', 'attached_db_type': 'quack'} AS result;
+
+statement ok
+CREATE MACRO mock_destroy(h) AS TABLE SELECT 'ok' AS status;
+
+statement ok
+CALL register_external_resource_type('mock@local', kind := 'catalog', create_function := 'mock_create',
+    status_function := 'mock_status', destroy_function := 'mock_destroy');
+
+statement ok
+CALL enable_logging('ExternalResource');
+
+# A successful create logs its two callback invocations, both without an error.
+statement ok
+SELECT * FROM create_external_resource('mock@local');
+
+query TTT
+SELECT operation, outcome, error IS NULL
+FROM duckdb_logs_parsed('ExternalResource') WHERE resource_type = 'mock@local' ORDER BY operation;
+----
+create	ok	true
+status	ok	true
+
+# The status poll records the observed state.
+query T
+SELECT extra_info['state']
+FROM duckdb_logs_parsed('ExternalResource') WHERE resource_type = 'mock@local' AND operation = 'status';
+----
+ready
+
+# A create whose callback query succeeds but whose result violates the contract is an operation failure:
+# it must not be recorded as 'ok' just because the query itself returned.
+statement ok
+CREATE MACRO scalar_create(p) AS TABLE SELECT 42 AS handle;
+
+statement ok
+CALL register_external_resource_type('scalarcreate@local', kind := 'catalog', create_function := 'scalar_create',
+    status_function := 'mock_status', destroy_function := 'mock_destroy');
+
+statement error
+SELECT * FROM create_external_resource('scalarcreate@local');
+----
+<REGEX>:.*must return a MAP.*
+
+query TT
+SELECT operation, outcome
+FROM duckdb_logs_parsed('ExternalResource') WHERE resource_type = 'scalarcreate@local';
+----
+create	error
+
+# Same for a create callback that returns no rows at all.
+statement ok
+CREATE MACRO empty_create(p) AS TABLE SELECT MAP {'id': 'x'} AS handle WHERE false;
+
+statement ok
+CALL register_external_resource_type('emptycreate@local', kind := 'catalog', create_function := 'empty_create',
+    status_function := 'mock_status', destroy_function := 'mock_destroy');
+
+statement error
+SELECT * FROM create_external_resource('emptycreate@local');
+----
+<REGEX>:.*returned no rows.*
+
+query TT
+SELECT operation, outcome
+FROM duckdb_logs_parsed('ExternalResource') WHERE resource_type = 'emptycreate@local';
+----
+create	error
+
+# A resource reporting 'failed' fails the operation, and the poll that observed it is logged as an error
+# rather than as a successful poll that happened to see a bad state.
+statement ok
+CREATE MACRO failed_status(h) AS TABLE SELECT 'failed' AS state, MAP {'id': 'r1'} AS result;
+
+statement ok
+CALL register_external_resource_type('failed@local', kind := 'catalog', create_function := 'mock_create',
+    status_function := 'failed_status', destroy_function := 'mock_destroy');
+
+statement error
+SELECT * FROM create_external_resource('failed@local');
+----
+<REGEX>:.*'failed'.*
+
+# The log is also the only evidence that the failed create tore its resource back down: create and status
+# are followed by the teardown guard's destroy.
+query TT
+SELECT operation, outcome
+FROM duckdb_logs_parsed('ExternalResource') WHERE resource_type = 'failed@local' ORDER BY operation;
+----
+create	ok
+destroy	ok
+status	error
+
+# With teardown_on_failure disabled, the resource is left behind: no destroy is logged.
+statement error
+SELECT * FROM create_external_resource('failed@local', teardown_on_failure := false);
+----
+<REGEX>:.*'failed'.*
+
+query I
+SELECT count(*)
+FROM duckdb_logs_parsed('ExternalResource') WHERE resource_type = 'failed@local' AND operation = 'destroy';
+----
+1
+
+# The log envelope: the type is registered under its own name and logs at INFO.
+query TTT
+SELECT DISTINCT type, log_level, scope FROM duckdb_logs_parsed('ExternalResource');
+----
+ExternalResource	INFO	CONNECTION
+
+# destroy_external_resource invokes a deleter binding directly, with no resource it can attribute the call
+# to: both identifying fields render as NULL rather than as empty strings.
+statement ok
+CALL destroy_external_resource('mock_destroy', MAP {'id': 'r1'});
+
+query TTT
+SELECT operation, outcome, resource_name IS NULL
+FROM duckdb_logs_parsed('ExternalResource') WHERE resource_type IS NULL;
+----
+destroy	ok	true

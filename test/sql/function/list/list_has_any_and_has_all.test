@@ -185,7 +185,7 @@ statement ok
 insert into tbl values ([1,2,3], [2,3,4]);
 
 query I
-select ${f}(list_intersect(l1, l2), list_intersect(l2, l1)) from tbl;
+select {f}(list_intersect(l1, l2), list_intersect(l2, l1)) from tbl;
 ----
 1
 

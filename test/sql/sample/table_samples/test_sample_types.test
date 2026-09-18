@@ -2,12 +2,9 @@
 # description: Test sampling of larger relations
 # group: [table_samples]
 
-mode skip
+mode skip flaky
 
 # test valid sampling types (for now only integral types)
-
-statement ok
-pragma enable_verification;
 
 statement ok
 create table string_samples as select range::Varchar a from range(204800);

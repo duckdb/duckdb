@@ -2,9 +2,6 @@
 # description: Issue 508
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # LEFT JOIN on column with NULL value results in a segmentation fault
 statement ok
 CREATE TABLE t0(c0 INT);

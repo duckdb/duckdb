@@ -1,0 +1,14 @@
+{
+  "description": "Run with SET debug_verify_serializer=true to test logical plan serialization",
+  "on_init": "SET debug_verify_serializer=true",
+  "skip_compiled": "true",
+  "inherit_skip_tests": "test/configs/stats_dependent_tests.json",
+  "skip_tests": [
+    {
+      "reason": "Extension optimizer pass breaks logical plan serialization",
+      "paths": [
+        "test/extension/test_extensible_filter.test"
+      ]
+    }
+  ]
+}

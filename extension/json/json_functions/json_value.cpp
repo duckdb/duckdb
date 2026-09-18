@@ -11,13 +11,20 @@ static void ValueManyFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 static void GetValueFunctionsInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({input_type, LogicalType::BIGINT}, LogicalType::VARCHAR, ValueFunction,
-	                               JSONReadFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
-	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::VARCHAR, ValueFunction,
-	                               JSONReadFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
-	set.AddFunction(ScalarFunction({input_type, LogicalType::LIST(LogicalType::VARCHAR)},
-	                               LogicalType::LIST(LogicalType::VARCHAR), ValueManyFunction,
-	                               JSONReadManyFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
+	ScalarFunction index_fun({}, LogicalType::VARCHAR, ValueFunction, JSONReadFunctionData::Bind, nullptr,
+	                         JSONFunctionLocalState::Init);
+	index_fun.GetSignature().AddParameter("json", input_type).AddParameter("index", LogicalType::BIGINT);
+	set.AddFunction(index_fun);
+	ScalarFunction path_fun({}, LogicalType::VARCHAR, ValueFunction, JSONReadFunctionData::Bind, nullptr,
+	                        JSONFunctionLocalState::Init);
+	path_fun.GetSignature().AddParameter("json", input_type).AddParameter("path", LogicalType::VARCHAR);
+	set.AddFunction(path_fun);
+	ScalarFunction many_fun({}, LogicalType::LIST(LogicalType::VARCHAR), ValueManyFunction,
+	                        JSONReadManyFunctionData::Bind, nullptr, JSONFunctionLocalState::Init);
+	many_fun.GetSignature()
+	    .AddParameter("json", input_type)
+	    .AddParameter("path", LogicalType::LIST(LogicalType::VARCHAR));
+	set.AddFunction(many_fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetValueFunction() {
@@ -25,12 +32,13 @@ ScalarFunctionSet JSONFunctions::GetValueFunction() {
 	ScalarFunctionSet set("json_value");
 	GetValueFunctionsInternal(set, LogicalType::VARCHAR);
 	GetValueFunctionsInternal(set, LogicalType::JSON());
-	for (auto &func : set.functions) {
-		if (func.arguments[0].IsJSONType() && func.arguments[1].IsNumeric()) {
-			continue;
+	set.ApplyToFunctions([](ScalarFunction &func) {
+		const auto &sig = func.GetSignature();
+		if (sig.GetParameter(0).GetType().IsJSONType() && sig.GetParameter(1).GetType().IsNumeric()) {
+			return;
 		}
-		func.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
-	}
+		func.SetFallible();
+	});
 	return set;
 }
 

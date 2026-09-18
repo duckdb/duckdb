@@ -1,0 +1,59 @@
+# name: test/sql/optimizer/interval_row_group_pruning.test
+# description: Row-group pruning using interval min/max statistics
+# group: [optimizer]
+
+statement ok
+ATTACH ':memory:' AS memory_db;
+
+statement ok
+ATTACH '{TEST_DIR}/interval_prune.duckdb' AS db (ROW_GROUP_SIZE 2048, STORAGE_VERSION 'v2.0.0');
+
+statement ok
+USE db;
+
+statement ok
+CREATE TABLE intervals AS
+    SELECT range * INTERVAL '1 day' AS iv, range::BIGINT AS i
+    FROM range(6144);
+
+statement ok
+USE memory_db;
+
+statement ok
+DETACH db;
+
+statement ok
+ATTACH '{TEST_DIR}/interval_prune.duckdb' AS db;
+
+statement ok
+USE db;
+
+query I
+SELECT count(*) FROM intervals WHERE iv > INTERVAL '5000 days';
+----
+1143
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM intervals WHERE iv > INTERVAL '5000 days';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+# Older storage versions omit interval min/max so old DuckDB versions can still read the file.
+statement ok
+ATTACH '{TEST_DIR}/interval_prune_v1_5.duckdb' AS compat (ROW_GROUP_SIZE 2048, STORAGE_VERSION 'v1.5.3');
+
+statement ok
+CREATE TABLE compat.intervals AS
+    SELECT range * INTERVAL '1 day' AS iv, range::BIGINT AS i
+    FROM range(6144);
+
+statement ok
+DETACH compat;
+
+statement ok
+ATTACH '{TEST_DIR}/interval_prune_v1_5.duckdb' AS compat;
+
+query I
+SELECT count(*) FROM compat.intervals WHERE iv > INTERVAL '5000 days';
+----
+1143

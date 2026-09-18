@@ -5,13 +5,13 @@
 require parquet
 
 statement ok
-COPY (SELECT {'a': 1, 'b': 2}::STRUCT(a INT, b INT) AS s, 1 AS id) TO '__TEST_DIR__/f1.parquet'
+COPY (SELECT {'a': 1, 'b': 2}::STRUCT(a INT, b INT) AS s, 1 AS id) TO '{TEST_DIR}/f1.parquet'
 
 statement ok
-COPY (SELECT 2 AS id) TO '__TEST_DIR__/f2.parquet'
+COPY (SELECT 2 AS id) TO '{TEST_DIR}/f2.parquet'
 
 query II
-SELECT * FROM read_parquet(['__TEST_DIR__/f1.parquet', '__TEST_DIR__/f2.parquet'], union_by_name=true) WHERE s.a = 1
+SELECT * FROM read_parquet(['{TEST_DIR}/f1.parquet', '{TEST_DIR}/f2.parquet'], union_by_name=true) WHERE s.a = 1
 ----
 {'a': 1, 'b': 2}	1
 

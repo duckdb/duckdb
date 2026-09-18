@@ -1,0 +1,79 @@
+# name: test/sql/function/string/test_ilike_embedded_null.test
+# description: ILIKE / NOT ILIKE must match embedded NUL bytes literally (not treat them as escape chars)
+# group: [string]
+
+# A pattern containing an embedded NUL byte must be matched literally. Previously the unicode ILIKE path
+# routed plain ILIKE through the escape-aware matcher with escape='\0', so an embedded NUL was treated as
+# a LIKE escape character and identical strings failed to match.
+
+# original repro: embedded NUL next to a non-ASCII value forces the unicode ILIKE path
+statement ok
+CREATE TABLE t(a VARCHAR, b VARCHAR);
+
+statement ok
+INSERT INTO t VALUES ('goo'||chr(0)||'se', 'goo'||chr(0)||'se'), ('🦆','🦆');
+
+query I
+SELECT a ILIKE b FROM t
+----
+true
+true
+
+# constant-folded scalar
+query I
+SELECT ('goo' || chr(0) || 'se') ILIKE ('goo' || chr(0) || 'se')
+----
+true
+
+# column vs column, ASCII-only column -> ASCII ILIKE operator
+statement ok
+CREATE TABLE ascii_only(a VARCHAR, b VARCHAR);
+
+statement ok
+INSERT INTO ascii_only VALUES ('goo' || chr(0) || 'se', 'goo' || chr(0) || 'se');
+
+query I
+SELECT a ILIKE b FROM ascii_only
+----
+true
+
+# column vs column, unicode-possible column -> unicode ILIKE operator (the previously buggy path)
+statement ok
+CREATE TABLE unicode_possible(a VARCHAR, b VARCHAR);
+
+statement ok
+INSERT INTO unicode_possible VALUES ('goo' || chr(0) || 'se', 'goo' || chr(0) || 'se'), ('🦆', '🦆');
+
+query II
+SELECT a ILIKE b, a !~~* b FROM unicode_possible ORDER BY a
+----
+true	false
+true	false
+
+# constant pattern fast path (column value vs constant pattern) on a unicode-possible column
+query II
+SELECT a ILIKE ('goo' || chr(0) || 'se'), a NOT ILIKE ('goo' || chr(0) || 'se') FROM unicode_possible ORDER BY a
+----
+true	false
+false	true
+
+# case-insensitivity is preserved around the embedded NUL
+query I
+SELECT a ILIKE ('GOO' || chr(0) || 'SE') FROM unicode_possible ORDER BY a
+----
+true
+false
+
+# wildcards still work with an embedded NUL in the pattern (unicode-possible column)
+query I
+SELECT a ILIKE ('goo' || chr(0) || '%') FROM unicode_possible ORDER BY a
+----
+true
+false
+
+# ILIKE ... ESCAPE with empty escape ('' => no escape) must also match the NUL literally
+query I
+SELECT a ILIKE ('goo' || chr(0) || 'se') ESCAPE '' FROM unicode_possible ORDER BY a
+----
+true
+false

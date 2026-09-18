@@ -1,0 +1,115 @@
+# name: test/sql/storage/rowid_gaps/leading_gap_lookup.test
+# description: rowid lookups into row-group gaps
+# group: [rowid_gaps]
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_lookup.db' AS rowid_gap_lookup_db (STORAGE_VERSION 'latest');
+
+statement ok
+CREATE TABLE rowid_gap_lookup_db.leading AS SELECT i FROM range(245760) tbl(i);
+
+statement ok
+DELETE FROM rowid_gap_lookup_db.leading WHERE rowid < 122880;
+
+statement ok
+CHECKPOINT rowid_gap_lookup_db;
+
+query II
+SELECT min(rowid), count(*) FROM rowid_gap_lookup_db.leading;
+----
+122880	122880
+
+query I
+SELECT count(*) FROM rowid_gap_lookup_db.leading WHERE rowid = 0;
+----
+0
+
+query I
+SELECT count(*) FROM rowid_gap_lookup_db.leading WHERE rowid BETWEEN 0 AND 10;
+----
+0
+
+query I
+SELECT count(*) FROM rowid_gap_lookup_db.leading WHERE rowid = 122879;
+----
+0
+
+query II
+SELECT rowid, i FROM rowid_gap_lookup_db.leading WHERE rowid IN (122879, 122880) ORDER BY rowid;
+----
+122880	122880
+
+query I
+SELECT i FROM rowid_gap_lookup_db.leading WHERE rowid IN (0, 122880) ORDER BY rowid;
+----
+122880
+
+statement ok
+UPDATE rowid_gap_lookup_db.leading SET i = i WHERE rowid = 0;
+
+# there is no rowid 0.
+statement ok
+DELETE FROM rowid_gap_lookup_db.leading WHERE rowid = 0;
+
+query I
+SELECT count(*) FROM rowid_gap_lookup_db.leading;
+----
+122880
+
+statement ok
+CREATE TABLE rowid_gap_lookup_db.middle AS SELECT i FROM range(368640) tbl(i);
+
+statement ok
+DELETE FROM rowid_gap_lookup_db.middle WHERE rowid >= 122880 AND rowid < 245760;
+
+statement ok
+CHECKPOINT rowid_gap_lookup_db;
+
+query III
+SELECT min(rowid), max(rowid), count(*) FROM rowid_gap_lookup_db.middle;
+----
+0	368639	245760
+
+# There is no rowid inside the dropped middle row group.
+query I
+SELECT count(*) FROM rowid_gap_lookup_db.middle WHERE rowid = 122880;
+----
+0
+
+query I
+SELECT count(*) FROM rowid_gap_lookup_db.middle WHERE rowid BETWEEN 122880 AND 122890;
+----
+0
+
+query I
+SELECT count(*) FROM rowid_gap_lookup_db.middle WHERE rowid = 245759;
+----
+0
+
+# Rowid lookup still finds rows that exist after the gap.
+query II
+SELECT rowid, i FROM rowid_gap_lookup_db.middle WHERE rowid = 245760;
+----
+245760	245760
+
+query II
+SELECT rowid, i FROM rowid_gap_lookup_db.middle WHERE rowid IN (245759, 245760) ORDER BY rowid;
+----
+245760	245760
+
+query II
+SELECT rowid, i FROM rowid_gap_lookup_db.middle WHERE rowid IN (42, 122880, 245760, 368640) ORDER BY rowid;
+----
+42	42
+245760	245760
+
+query II
+SELECT rowid, i FROM rowid_gap_lookup_db.middle WHERE rowid IN (368639, 368640) ORDER BY rowid;
+----
+368639	368639
+
+# There are no rows at or past next_row_id.
+query I
+SELECT count(*) FROM rowid_gap_lookup_db.middle WHERE rowid >= 368640;
+----
+0

@@ -3,9 +3,6 @@
 # group: [sqlsmith]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t(ps_supplycost INT, n_name INT);
 
 statement ok

@@ -17,14 +17,15 @@ namespace duckdb {
 class FunctionEntry : public StandardEntry {
 public:
 	FunctionEntry(CatalogType type, Catalog &catalog, SchemaCatalogEntry &schema, CreateFunctionInfo &info)
-	    : StandardEntry(type, schema, catalog, info.name) {
+	    : StandardEntry(type, schema, catalog, info.GetFunctionName()) {
 		descriptions = std::move(info.descriptions);
 		alias_of = std::move(info.alias_of);
 		this->dependencies = info.dependencies;
 		this->internal = info.internal;
+		this->extension_name = info.extension_name;
 	}
 
-	string alias_of;
+	Identifier alias_of;
 	vector<FunctionDescription> descriptions;
 };
 } // namespace duckdb

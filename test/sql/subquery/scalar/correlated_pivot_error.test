@@ -1,0 +1,31 @@
+# name: test/sql/subquery/scalar/correlated_pivot_error.test
+# description: Regression test for correlated bound PIVOT crash
+# group: [scalar]
+
+statement ok
+CREATE TABLE Product(DaysToManufacture int, StandardCost int);
+
+statement ok
+INSERT INTO Product VALUES (0, 5.0885), (1, 223.88), (2, 359.1082), (4, 949.4105);
+
+statement ok
+SET pivot_filter_threshold=0
+
+statement error
+SELECT DaysToManufacture, StandardCost, (SELECT ["0", "1", "2", "3", "4"] FROM
+	(SELECT DaysToManufacture < StandardCost) AS SourceTable
+	PIVOT
+	(
+	  AVG(StandardCost)
+	  FOR DaysToManufacture IN (0, 1, 2, 3, 4)
+	) AS PivotTable
+)
+FROM Product
+----
+PIVOT is not supported in correlated subqueries yet
+
+statement ok
+SET pivot_filter_threshold TO DEFAULT
+
+statement ok
+RESET SESSION pivot_filter_threshold

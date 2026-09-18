@@ -3,9 +3,6 @@
 # group: [join]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE structs AS SELECT i id, {'i': i} s, i%3 j FROM generate_series(0,99,1) tbl(i), generate_series(0,1,1);
 
 statement ok

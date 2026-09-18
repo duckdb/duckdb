@@ -4,9 +4,6 @@
 
 require icu
 
-statement ok
-PRAGMA enable_verification
-
 # extension settings are accepted in allowed_configs when the extension is loaded
 statement ok
 SET allowed_configs=['TimeZone']

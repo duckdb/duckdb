@@ -1,0 +1,14 @@
+# name: test/sql/peg_parser/fuzzer/fuzzer_4434.test
+# description: Fix empty subscript expression leading to internal error
+# group: [fuzzer]
+
+statement error
+n''''+ST�&6>ttacrotablesampimportleT�&6>tta�rordeT�Niqeger[], e�tfilter%
+                  t_not_currorderent;
+----
+Parser Error: Empty subscript '[]' is not allowed
+
+statement error
+[1,2,3][];
+----
+Parser Error: Empty subscript '[]' is not allowed

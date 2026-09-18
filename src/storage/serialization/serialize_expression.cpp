@@ -6,41 +6,39 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/expression/legacy_bound_between_expression.hpp"
+#include "duckdb/planner/expression/legacy_bound_cast_expression.hpp"
+#include "duckdb/planner/expression/legacy_bound_comparison_expression.hpp"
 
 namespace duckdb {
 
 void Expression::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<ExpressionClass>(100, "expression_class", expression_class);
 	serializer.WriteProperty<ExpressionType>(101, "type", type);
-	serializer.WritePropertyWithDefault<string>(102, "alias", alias);
+	serializer.WritePropertyWithDefault<Identifier>(102, "alias", alias);
 	serializer.WritePropertyWithDefault<optional_idx>(103, "query_location", query_location, optional_idx());
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<uint32_t>(104, "query_location_length", query_location.length, 0);
+	}
 }
 
 unique_ptr<Expression> Expression::Deserialize(Deserializer &deserializer) {
 	auto expression_class = deserializer.ReadProperty<ExpressionClass>(100, "expression_class");
 	auto type = deserializer.ReadProperty<ExpressionType>(101, "type");
-	auto alias = deserializer.ReadPropertyWithDefault<string>(102, "alias");
+	auto alias = deserializer.ReadPropertyWithDefault<Identifier>(102, "alias");
 	auto query_location = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(103, "query_location", optional_idx());
+	auto query_location_length = deserializer.ReadPropertyWithExplicitDefault<uint32_t>(104, "query_location_length", 0);
 	deserializer.Set<ExpressionType>(type);
 	unique_ptr<Expression> result;
 	switch (expression_class) {
 	case ExpressionClass::BOUND_AGGREGATE:
 		result = BoundAggregateExpression::Deserialize(deserializer);
 		break;
-	case ExpressionClass::BOUND_BETWEEN:
-		result = BoundBetweenExpression::Deserialize(deserializer);
-		break;
 	case ExpressionClass::BOUND_CASE:
 		result = BoundCaseExpression::Deserialize(deserializer);
 		break;
-	case ExpressionClass::BOUND_CAST:
-		result = BoundCastExpression::Deserialize(deserializer);
-		break;
 	case ExpressionClass::BOUND_COLUMN_REF:
 		result = BoundColumnRefExpression::Deserialize(deserializer);
-		break;
-	case ExpressionClass::BOUND_COMPARISON:
-		result = BoundComparisonExpression::Deserialize(deserializer);
 		break;
 	case ExpressionClass::BOUND_CONJUNCTION:
 		result = BoundConjunctionExpression::Deserialize(deserializer);
@@ -75,32 +73,23 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &deserializer) {
 	case ExpressionClass::BOUND_WINDOW:
 		result = BoundWindowExpression::Deserialize(deserializer);
 		break;
+	case ExpressionClass::LEGACY_BOUND_BETWEEN:
+		result = LegacyBoundBetweenExpression::Deserialize(deserializer);
+		break;
+	case ExpressionClass::LEGACY_BOUND_CAST:
+		result = LegacyBoundCastExpression::Deserialize(deserializer);
+		break;
+	case ExpressionClass::LEGACY_BOUND_COMPARISON:
+		result = LegacyBoundComparisonExpression::Deserialize(deserializer);
+		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of Expression!");
 	}
 	deserializer.Unset<ExpressionType>();
 	result->alias = std::move(alias);
 	result->query_location = query_location;
+	result->query_location.length = query_location_length;
 	return result;
-}
-
-void BoundBetweenExpression::Serialize(Serializer &serializer) const {
-	Expression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "input", input);
-	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(201, "lower", lower);
-	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(202, "upper", upper);
-	serializer.WritePropertyWithDefault<bool>(203, "lower_inclusive", lower_inclusive);
-	serializer.WritePropertyWithDefault<bool>(204, "upper_inclusive", upper_inclusive);
-}
-
-unique_ptr<Expression> BoundBetweenExpression::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<BoundBetweenExpression>(new BoundBetweenExpression());
-	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(200, "input", result->input);
-	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(201, "lower", result->lower);
-	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(202, "upper", result->upper);
-	deserializer.ReadPropertyWithDefault<bool>(203, "lower_inclusive", result->lower_inclusive);
-	deserializer.ReadPropertyWithDefault<bool>(204, "upper_inclusive", result->upper_inclusive);
-	return std::move(result);
 }
 
 void BoundCaseExpression::Serialize(Serializer &serializer) const {
@@ -118,21 +107,6 @@ unique_ptr<Expression> BoundCaseExpression::Deserialize(Deserializer &deserializ
 	return std::move(result);
 }
 
-void BoundCastExpression::Serialize(Serializer &serializer) const {
-	Expression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "child", child);
-	serializer.WriteProperty<LogicalType>(201, "return_type", return_type);
-	serializer.WritePropertyWithDefault<bool>(202, "try_cast", try_cast);
-}
-
-unique_ptr<Expression> BoundCastExpression::Deserialize(Deserializer &deserializer) {
-	auto child = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(200, "child");
-	auto return_type = deserializer.ReadProperty<LogicalType>(201, "return_type");
-	auto result = duckdb::unique_ptr<BoundCastExpression>(new BoundCastExpression(deserializer.Get<ClientContext &>(), std::move(child), std::move(return_type)));
-	deserializer.ReadPropertyWithDefault<bool>(202, "try_cast", result->try_cast);
-	return std::move(result);
-}
-
 void BoundColumnRefExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
 	serializer.WriteProperty<LogicalType>(200, "return_type", return_type);
@@ -145,19 +119,6 @@ unique_ptr<Expression> BoundColumnRefExpression::Deserialize(Deserializer &deser
 	auto binding = deserializer.ReadProperty<ColumnBinding>(201, "binding");
 	auto depth = deserializer.ReadPropertyWithDefault<idx_t>(202, "depth");
 	auto result = duckdb::unique_ptr<BoundColumnRefExpression>(new BoundColumnRefExpression(std::move(return_type), binding, depth));
-	return std::move(result);
-}
-
-void BoundComparisonExpression::Serialize(Serializer &serializer) const {
-	Expression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "left", left);
-	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(201, "right", right);
-}
-
-unique_ptr<Expression> BoundComparisonExpression::Deserialize(Deserializer &deserializer) {
-	auto left = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(200, "left");
-	auto right = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(201, "right");
-	auto result = duckdb::unique_ptr<BoundComparisonExpression>(new BoundComparisonExpression(deserializer.Get<ExpressionType>(), std::move(left), std::move(right)));
 	return std::move(result);
 }
 
@@ -200,6 +161,7 @@ void BoundLambdaExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(201, "lambda_expr", lambda_expr);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(202, "captures", captures);
 	serializer.WritePropertyWithDefault<idx_t>(203, "parameter_count", parameter_count);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(204, "parameter_names", parameter_names);
 }
 
 unique_ptr<Expression> BoundLambdaExpression::Deserialize(Deserializer &deserializer) {
@@ -209,6 +171,7 @@ unique_ptr<Expression> BoundLambdaExpression::Deserialize(Deserializer &deserial
 	auto parameter_count = deserializer.ReadPropertyWithDefault<idx_t>(203, "parameter_count");
 	auto result = duckdb::unique_ptr<BoundLambdaExpression>(new BoundLambdaExpression(deserializer.Get<ExpressionType>(), std::move(return_type), std::move(lambda_expr), parameter_count));
 	result->captures = std::move(captures);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(204, "parameter_names", result->parameter_names);
 	return std::move(result);
 }
 
@@ -244,16 +207,16 @@ unique_ptr<Expression> BoundOperatorExpression::Deserialize(Deserializer &deseri
 
 void BoundParameterExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "identifier", identifier);
+	serializer.WritePropertyWithDefault<duckdb::Identifier>(200, "identifier", identifier);
 	serializer.WriteProperty<LogicalType>(201, "return_type", return_type);
 	serializer.WritePropertyWithDefault<shared_ptr<BoundParameterData>>(202, "parameter_data", parameter_data);
 }
 
 unique_ptr<Expression> BoundParameterExpression::Deserialize(Deserializer &deserializer) {
-	auto identifier = deserializer.ReadPropertyWithDefault<string>(200, "identifier");
+	auto identifier = deserializer.ReadPropertyWithDefault<duckdb::Identifier>(200, "identifier");
 	auto return_type = deserializer.ReadProperty<LogicalType>(201, "return_type");
 	auto parameter_data = deserializer.ReadPropertyWithDefault<shared_ptr<BoundParameterData>>(202, "parameter_data");
-	auto result = duckdb::unique_ptr<BoundParameterExpression>(new BoundParameterExpression(deserializer.Get<bound_parameter_map_t &>(), std::move(identifier), std::move(return_type), std::move(parameter_data)));
+	auto result = duckdb::unique_ptr<BoundParameterExpression>(new BoundParameterExpression(deserializer.Get<bound_parameter_map_t &>(), identifier, std::move(return_type), std::move(parameter_data)));
 	return std::move(result);
 }
 
@@ -281,6 +244,53 @@ unique_ptr<Expression> BoundUnnestExpression::Deserialize(Deserializer &deserial
 	auto result = duckdb::unique_ptr<BoundUnnestExpression>(new BoundUnnestExpression(std::move(return_type)));
 	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(201, "child", result->child);
 	return std::move(result);
+}
+
+void LegacyBoundBetweenExpression::Serialize(Serializer &serializer) const {
+	Expression::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "input", input);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(201, "lower", lower);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(202, "upper", upper);
+	serializer.WritePropertyWithDefault<bool>(203, "lower_inclusive", lower_inclusive);
+	serializer.WritePropertyWithDefault<bool>(204, "upper_inclusive", upper_inclusive);
+}
+
+unique_ptr<Expression> LegacyBoundBetweenExpression::Deserialize(Deserializer &deserializer) {
+	auto input = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(200, "input");
+	auto lower = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(201, "lower");
+	auto upper = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(202, "upper");
+	auto lower_inclusive = deserializer.ReadPropertyWithDefault<bool>(203, "lower_inclusive");
+	auto upper_inclusive = deserializer.ReadPropertyWithDefault<bool>(204, "upper_inclusive");
+	auto result = LegacyBoundBetweenExpression::DeserializeLegacyExpression(std::move(input), std::move(lower), std::move(upper), lower_inclusive, upper_inclusive);
+	return result;
+}
+
+void LegacyBoundCastExpression::Serialize(Serializer &serializer) const {
+	Expression::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "child", child);
+	serializer.WriteProperty<LogicalType>(201, "return_type", return_type);
+	serializer.WritePropertyWithDefault<bool>(202, "try_cast", try_cast);
+}
+
+unique_ptr<Expression> LegacyBoundCastExpression::Deserialize(Deserializer &deserializer) {
+	auto child = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(200, "child");
+	auto return_type = deserializer.ReadProperty<LogicalType>(201, "return_type");
+	auto try_cast = deserializer.ReadPropertyWithDefault<bool>(202, "try_cast");
+	auto result = LegacyBoundCastExpression::DeserializeLegacyExpression(deserializer.Get<ClientContext &>(), std::move(child), return_type, try_cast);
+	return result;
+}
+
+void LegacyBoundComparisonExpression::Serialize(Serializer &serializer) const {
+	Expression::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "left", left);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(201, "right", right);
+}
+
+unique_ptr<Expression> LegacyBoundComparisonExpression::Deserialize(Deserializer &deserializer) {
+	auto left = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(200, "left");
+	auto right = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(201, "right");
+	auto result = LegacyBoundComparisonExpression::DeserializeLegacyExpression(deserializer.Get<ExpressionType>(), std::move(left), std::move(right));
+	return result;
 }
 
 } // namespace duckdb

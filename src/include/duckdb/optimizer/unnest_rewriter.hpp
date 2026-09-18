@@ -30,7 +30,7 @@ struct LHSBinding {
 	}
 	ColumnBinding binding;
 	LogicalType type;
-	string alias;
+	Identifier alias;
 };
 
 //! The UnnestRewriterPlanUpdater updates column bindings after changing the operator plan
@@ -46,7 +46,7 @@ public:
 	//! Contains all bindings that need to be updated
 	vector<ReplaceBinding> replace_bindings;
 	//! Stores the table index of the former child of the LOGICAL_UNNEST
-	idx_t overwritten_tbl_idx;
+	TableIndex overwritten_tbl_idx;
 };
 
 //! The UnnestRewriter optimizer traverses the logical operator tree and rewrites duplicate
@@ -63,6 +63,15 @@ private:
 	//! Find delim joins that contain an UNNEST
 	void FindCandidates(unique_ptr<LogicalOperator> &root, unique_ptr<LogicalOperator> &op,
 	                    vector<reference<unique_ptr<LogicalOperator>>> &candidates);
+	//! Rewrite materialized CTEs that encode duplicate eliminated UNNEST joins
+	bool RewriteCTECandidates(unique_ptr<LogicalOperator> &root, unique_ptr<LogicalOperator> &op,
+	                          UnnestRewriterPlanUpdater &updater);
+	//! Rewrite a materialized CTE that encodes one duplicate eliminated UNNEST join
+	bool RewriteCTECandidate(unique_ptr<LogicalOperator> &root, unique_ptr<LogicalOperator> &candidate,
+	                         UnnestRewriterPlanUpdater &updater);
+	//! Rewrite a materialized CTE where the deduplicated input has already been inlined
+	bool RewriteInlineCTEDedupCandidate(unique_ptr<LogicalOperator> &root, unique_ptr<LogicalOperator> &candidate,
+	                                    UnnestRewriterPlanUpdater &updater);
 	//! Rewrite a delim join that contains an UNNEST
 	bool RewriteCandidate(unique_ptr<LogicalOperator> &candidate);
 	//! Update the bindings of the RHS sequence of LOGICAL_PROJECTION(s)
@@ -81,7 +90,7 @@ private:
 	//! Store the column bindings of the LHS child of the LOGICAL_DELIM_JOIN
 	vector<LHSBinding> lhs_bindings;
 	//! Stores the table index of the former child of the LOGICAL_UNNEST
-	idx_t overwritten_tbl_idx;
+	TableIndex overwritten_tbl_idx;
 	//! The number of distinct columns to unnest
 	idx_t distinct_unnest_count;
 };

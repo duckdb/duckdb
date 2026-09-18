@@ -6,7 +6,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/function/table/range.hpp"
 #include "utf8proc_wrapper.hpp"
-#include "duckdb/storage/caching_file_system.hpp"
+#include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 
 namespace duckdb {
 
@@ -21,20 +21,20 @@ struct DirectMultiFileInfo : MultiFileReaderInterface {
 	static unique_ptr<MultiFileReaderInterface> CreateInterface(ClientContext &context);
 	unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                    optional_ptr<TableFunctionInfo> info) override;
-	bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
-	                     BaseFileReaderOptions &options, vector<string> &expected_names,
+	bool ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
+	                     BaseFileReaderOptions &options, vector<Identifier> &expected_names,
 	                     vector<LogicalType> &expected_types) override;
-	bool ParseOption(ClientContext &context, const string &key, const Value &val, MultiFileOptions &file_options,
+	bool ParseOption(ClientContext &context, const Identifier &key, const Value &val, MultiFileOptions &file_options,
 	                 BaseFileReaderOptions &options) override;
 	unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
 	                                                 unique_ptr<BaseFileReaderOptions> options) override;
-	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
+	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
 	                MultiFileBindData &bind_data) override;
 	optional_idx MaxThreads(const MultiFileBindData &bind_data_p, const MultiFileGlobalState &global_state,
 	                        FileExpandResult expand_result) override;
 	unique_ptr<GlobalTableFunctionState> InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data,
 	                                                           MultiFileGlobalState &global_state) override;
-	unique_ptr<LocalTableFunctionState> InitializeLocalState(ExecutionContext &, GlobalTableFunctionState &) override;
+	unique_ptr<LocalTableFunctionState> InitializeLocalState(ClientContext &, GlobalTableFunctionState &) override;
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                        BaseUnionData &union_data, const MultiFileBindData &bind_data_p) override;
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
@@ -59,14 +59,14 @@ unique_ptr<BaseFileReaderOptions> DirectMultiFileInfo<OP>::InitializeOptions(Cli
 }
 
 template <class OP>
-bool DirectMultiFileInfo<OP>::ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
-                                              BaseFileReaderOptions &options, vector<string> &expected_names,
-                                              vector<LogicalType> &expected_types) {
+bool DirectMultiFileInfo<OP>::ParseCopyOption(ClientContext &context, const Identifier &key,
+                                              const vector<Value> &values, BaseFileReaderOptions &options,
+                                              vector<Identifier> &expected_names, vector<LogicalType> &expected_types) {
 	return true;
 }
 
 template <class OP>
-bool DirectMultiFileInfo<OP>::ParseOption(ClientContext &context, const string &key, const Value &val,
+bool DirectMultiFileInfo<OP>::ParseOption(ClientContext &context, const Identifier &key, const Value &val,
                                           MultiFileOptions &file_options, BaseFileReaderOptions &options) {
 	return true;
 }
@@ -81,7 +81,7 @@ unique_ptr<TableFunctionData> DirectMultiFileInfo<OP>::InitializeBindData(MultiF
 
 template <class OP>
 void DirectMultiFileInfo<OP>::BindReader(ClientContext &context, vector<LogicalType> &return_types,
-                                         vector<string> &names, MultiFileBindData &bind_data) {
+                                         vector<Identifier> &names, MultiFileBindData &bind_data) {
 	auto &read_bind = bind_data.bind_data->Cast<ReadFileBindData>();
 	bind_data.reader_bind = bind_data.multi_file_reader->BindReader(
 	    context, return_types, names, *bind_data.file_list, bind_data, *read_bind.options, bind_data.file_options);
@@ -110,10 +110,11 @@ DirectMultiFileInfo<OP>::InitializeGlobalState(ClientContext &context, MultiFile
 	}
 
 	for (const auto &column_id : column_ids) {
-		// For everything except the 'file' name column, we need to open the file
-		if (column_id != ReadFileBindData::FILE_NAME_COLUMN && column_id != COLUMN_IDENTIFIER_ROW_ID) {
+		if (column_id == ReadFileBindData::FILE_CONTENT_COLUMN) {
 			result->requires_file_open = true;
-			break;
+		} else if (column_id == ReadFileBindData::FILE_SIZE_COLUMN ||
+		           column_id == ReadFileBindData::FILE_LAST_MODIFIED_COLUMN) {
+			result->requires_file_metadata = true;
 		}
 	}
 
@@ -122,7 +123,7 @@ DirectMultiFileInfo<OP>::InitializeGlobalState(ClientContext &context, MultiFile
 }
 
 template <class OP>
-unique_ptr<LocalTableFunctionState> DirectMultiFileInfo<OP>::InitializeLocalState(ExecutionContext &,
+unique_ptr<LocalTableFunctionState> DirectMultiFileInfo<OP>::InitializeLocalState(ClientContext &,
                                                                                   GlobalTableFunctionState &) {
 	return make_uniq<LocalTableFunctionState>();
 }

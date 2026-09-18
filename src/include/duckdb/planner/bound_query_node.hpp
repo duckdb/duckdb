@@ -23,12 +23,12 @@ public:
 	vector<unique_ptr<BoundResultModifier>> modifiers;
 
 	//! The names returned by this QueryNode.
-	vector<string> names;
+	vector<Identifier> names;
 	//! The types returned by this QueryNode.
 	vector<LogicalType> types;
 
 public:
-	virtual idx_t GetRootIndex() = 0;
+	virtual TableIndex GetRootIndex() = 0;
 };
 
 } // namespace duckdb

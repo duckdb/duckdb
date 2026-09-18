@@ -2,7 +2,7 @@
 # description: A DML transaction must fail to commit if another connection drops a column concurrently
 # group: [drop_col]
 
-load __TEST_DIR__/reproduce_alter_dupkey.db
+load {TEST_DIR}/reproduce_alter_dupkey.db
 
 statement ok
 SET immediate_transaction_mode=true

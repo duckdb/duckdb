@@ -1,6 +1,6 @@
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 
 namespace duckdb {
@@ -47,7 +47,7 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 
 	// Null mask at the front - 1 bit per value.
 	validity_type = validity_type_p;
-	flag_width = ValidityBytes::ValidityMaskSize(AllValid() ? 0 : types.size());
+	flag_width = ValidityBytes::ValidityMaskSize(CannotHaveNull() ? 0 : types.size());
 	row_width = flag_width;
 
 	// Whether all columns are constant size.
@@ -167,18 +167,18 @@ void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, const L
 
 	// Compute row width
 	sort_width = 0;
-	bool all_valid_and_truely_constant = true;
+	bool all_valid_and_truly_constant = true;
 	for (idx_t order_idx = 0; order_idx < orders.size(); order_idx++) {
 		const auto &order = orders[order_idx];
-		const auto &logical_type = order.expression->return_type;
+		const auto &logical_type = order.expression->GetReturnType();
 		const auto physical_type = logical_type.InternalType();
 
-		if (all_valid_and_truely_constant && order.stats && !order.stats->CanHaveNull() &&
+		if (all_valid_and_truly_constant && order.stats && !order.stats->CanHaveNull() &&
 		    TypeIsConstantSize(physical_type) && sort_width < 7) {
 			// We don't have to sort by this byte, all values are valid
 			sort_skippable_bytes.emplace_back(sort_width);
 		} else {
-			all_valid_and_truely_constant = false;
+			all_valid_and_truly_constant = false;
 		}
 
 		if (TypeIsConstantSize(physical_type)) {
@@ -200,6 +200,18 @@ void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, const L
 	if (sort_width != DConstants::INVALID_INDEX && has_payload) {
 		temp_row_width += 8;
 	}
+#if DUCKDB_SMALLER_BINARY(sort_key_layouts)
+	// Round the key up to the nearest layout that DUCKDB_FOR_EACH_SORT_KEY_TYPE still keeps. A key
+	// without payload widens to the 32-byte one rather than falling back to the variable-size key,
+	// which would cost far more than the wider row: a variable-size key compares through the heap.
+	if (has_payload) {
+		if (temp_row_width > 24) {
+			temp_row_width = DConstants::INVALID_INDEX;
+		}
+	} else if (temp_row_width > 8 && temp_row_width <= 32) {
+		temp_row_width = 32;
+	}
+#endif
 	if (temp_row_width <= 8) {
 		D_ASSERT(!has_payload);
 		row_width = 8;
@@ -226,6 +238,15 @@ void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, const L
 
 bool TupleDataLayout::IsSortKeyLayout() const {
 	return sort_key_type != SortKeyType::INVALID;
+}
+
+bool TupleDataLayout::HasNestedTypes() const {
+	for (const auto &type : types) {
+		if (type.IsNested()) {
+			return true;
+		}
+	}
+	return false;
 }
 
 } // namespace duckdb

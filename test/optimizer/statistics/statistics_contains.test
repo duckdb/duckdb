@@ -1,0 +1,20 @@
+# name: test/optimizer/statistics/statistics_contains.test
+# description: Row-group pruning for contains using string length statistics
+# group: [statistics]
+
+statement ok
+CREATE TABLE contains_pruning AS
+SELECT CASE WHEN i < 122880 THEN 'short' ELSE repeat('x', 50) END AS s
+FROM range(245760) tbl(i);
+
+# The first row group's maximum string length is shorter than the constant needle
+query II
+EXPLAIN ANALYZE
+SELECT count(*) FROM contains_pruning WHERE contains(s, 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx');
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT count(*) FROM contains_pruning WHERE contains(s, 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx');
+----
+122880

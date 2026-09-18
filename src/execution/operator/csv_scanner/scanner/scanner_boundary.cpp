@@ -1,5 +1,5 @@
 #include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
-
+#include "duckdb/common/printer.hpp"
 namespace duckdb {
 
 CSVPosition::CSVPosition(idx_t buffer_idx_p, idx_t buffer_pos_p) : buffer_idx(buffer_idx_p), buffer_pos(buffer_pos_p) {
@@ -18,18 +18,18 @@ CSVIterator::CSVIterator() : buffer_size(0), is_set(false) {
 
 void CSVBoundary::Print() const {
 #ifndef DUCKDB_DISABLE_PRINT
-	std::cout << "---Boundary: " << boundary_idx << " ---" << '\n';
-	std::cout << "Buffer Index: " << buffer_idx << '\n';
-	std::cout << "Buffer Pos: " << buffer_pos << '\n';
-	std::cout << "End Pos: " << end_pos << '\n';
-	std::cout << "------------" << end_pos << '\n';
+	Printer::PrintF("---Boundary: %d\n", boundary_idx);
+	Printer::PrintF("Buffer Index: %d\n", buffer_idx);
+	Printer::PrintF("Buffer Pos: %d\n", buffer_pos);
+	Printer::PrintF("End Pos: %d\n", end_pos);
+	Printer::PrintF("------------\n", end_pos);
 #endif
 }
 
 void CSVIterator::Print() const {
 #ifndef DUCKDB_DISABLE_PRINT
 	boundary.Print();
-	std::cout << "Is set: " << is_set << '\n';
+	Printer::PrintF("Is set: %s\n", is_set ? "true" : "false");
 #endif
 }
 
@@ -58,22 +58,38 @@ bool CSVIterator::Next(CSVBufferManager &buffer_manager, const CSVReaderOptions 
 	// If we are calling next this is not the first one anymore
 	first_one = false;
 	boundary.boundary_idx++;
-	// This is our start buffer
-	auto buffer = buffer_manager.GetBuffer(boundary.buffer_idx);
-	if (buffer->is_last_buffer && boundary.buffer_pos + bytes_per_thread > buffer->actual_size) {
+	// Figure out the shape of our start buffer
+	idx_t buffer_actual_size;
+	bool is_last_buffer;
+	const bool known_ranges = buffer_manager.HasKnownBufferRanges();
+	if (known_ranges) {
+		// We know exactly the layout of the buffers, can do the whole shebang without IO
+		buffer_actual_size = buffer_manager.KnownBufferSize(boundary.buffer_idx);
+		is_last_buffer = boundary.buffer_idx + 1 == buffer_manager.KnownBufferCount();
+	} else {
+		auto buffer = buffer_manager.GetBuffer(boundary.buffer_idx);
+		buffer_actual_size = buffer->actual_size;
+		is_last_buffer = buffer->is_last_buffer;
+	}
+	if (is_last_buffer && boundary.buffer_pos + bytes_per_thread > buffer_actual_size) {
 		// 1) We are done with the current file
 		return false;
-	} else if (boundary.buffer_pos + bytes_per_thread >= buffer->actual_size) {
+	} else if (boundary.buffer_pos + bytes_per_thread >= buffer_actual_size) {
 		// 2) We still have data to scan in this file, we set the iterator accordingly.
 		// We must move the buffer
 		boundary.buffer_idx++;
 		boundary.buffer_pos = 0;
 		// Verify this buffer really exists
-		auto next_buffer = buffer_manager.GetBuffer(boundary.buffer_idx);
-		if (!next_buffer) {
-			return false;
+		if (known_ranges) {
+			if (boundary.buffer_idx >= buffer_manager.KnownBufferCount()) {
+				return false;
+			}
+		} else {
+			auto next_buffer = buffer_manager.GetBuffer(boundary.buffer_idx);
+			if (!next_buffer) {
+				return false;
+			}
 		}
-
 	} else {
 		// 3) We are not done with the current buffer, hence we just move where we start within the buffer
 		boundary.buffer_pos += bytes_per_thread;

@@ -1,6 +1,5 @@
 #include "catch.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/types.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
@@ -29,35 +28,32 @@ TEST_CASE("Filter pushdown rewrites BoundColumnRef alias to the scan column name
 	Connection con(db);
 
 	TableFunction tf(
-	    "alias_inspect", {}, [](ClientContext &, TableFunctionInput &, DataChunk &out) { out.SetCardinality(0); },
-	    [](ClientContext &, TableFunctionBindInput &, vector<LogicalType> &types,
-	       vector<string> &names) -> unique_ptr<FunctionData> {
+	    "alias_inspect", {}, [](auto &, auto &, auto &out) { out.SetChildCardinality(0); },
+	    [](auto &, auto &, auto &types, auto &names) -> unique_ptr<FunctionData> {
 		    types.emplace_back(LogicalType::INTEGER);
 		    names.emplace_back("col");
 		    return make_uniq<BindData>();
 	    },
-	    [](ClientContext &, TableFunctionInitInput &) -> unique_ptr<GlobalTableFunctionState> { return {}; });
+	    [](auto &, auto &) -> unique_ptr<GlobalTableFunctionState> { return {}; });
 
-	tf.pushdown_complex_filter = [](ClientContext &, LogicalGet &get, FunctionData *bind_data_p,
-	                                vector<unique_ptr<Expression>> &filters) {
-		auto &data = bind_data_p->Cast<BindData>();
+	tf.pushdown_complex_filter = [](auto &, auto &get, auto *bind_data_p, auto &filters) {
+		auto &data = bind_data_p->template Cast<BindData>();
 		for (auto &expr : filters) {
-			ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
-			    expr, [&](BoundColumnRefExpression &ref, unique_ptr<Expression> &) {
-				    if (ref.binding.table_index == get.table_index && data.alias.empty()) {
-					    data.alias = ref.GetAlias();
-				    }
-			    });
+			ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(expr, [&](auto &ref, auto &) {
+				if (ref.Binding().table_index == get.table_index && data.alias.empty()) {
+					data.alias = ref.GetAlias().GetIdentifierName();
+				}
+			});
 		}
 	};
-	tf.to_string = [](TableFunctionToStringInput &input) {
+	tf.to_string = [](auto &input) {
 		InsertionOrderPreservingMap<string> result;
-		result["FilterAlias"] = input.bind_data->Cast<BindData>().alias;
+		result["FilterAlias"] = input.bind_data->template Cast<BindData>().alias;
 		return result;
 	};
 
 	ExtensionInfo ext_info {};
-	ExtensionActiveLoad load_info {*db.instance, ext_info, "test_extension"};
+	ExtensionActiveLoad load_info {*db.instance, ext_info, "test_extension", ""};
 	ExtensionLoader loader {load_info};
 	loader.RegisterFunction(tf);
 

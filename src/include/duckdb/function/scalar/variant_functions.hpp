@@ -15,11 +15,51 @@
 
 namespace duckdb {
 
+struct VariantArrayLengthFun {
+	static constexpr const char *Name = "variant_array_length";
+	static constexpr const char *Parameters = "input_variant::VARIANT\001input_variant::VARIANT,path::VARCHAR\001input_variant::VARIANT,path::VARCHAR[]";
+	static constexpr const char *Description = "Returns the number of elements in the variant, or `0` if not an array.\001Returns the number of elements in the array at the specified path in the variant, or `0` if not an array.\001Returns the number of elements in the array for each specified path in the variant, or `0` if not an array.";
+	static constexpr const char *Example = "variant_array_length(['duck', 'goose']::VARIANT)\001variant_array_length({'a': ['duck', 'goose']}::VARIANT, 'a')\001variant_array_length({'a': 1, 'b': ['duck', 'goose']}::VARIANT, ['a', 'b'])";
+	static constexpr const char *Categories = "variant\001variant\001variant";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct VariantContainsFun {
+	static constexpr const char *Name = "variant_contains";
+	static constexpr const char *Parameters = "variant_haystack::VARIANT,variant_needle::VARIANT";
+	static constexpr const char *Description = "Returns whether the needle is contained in the haystack, recursively checking nested arrays and objects.";
+	static constexpr const char *Example = "variant_contains({'a': {'b': 42}}::VARIANT, {'b': 42}::VARIANT)";
+	static constexpr const char *Categories = "variant";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct VariantExistsFun {
+	static constexpr const char *Name = "variant_exists";
+	static constexpr const char *Parameters = "input_variant::VARIANT,path::VARCHAR\001input_variant::VARIANT,path::VARCHAR[]";
+	static constexpr const char *Description = "Returns whether the specified path exists in the variant.\001Returns a boolean for each specified path, indicating whether that path exists in the variant.";
+	static constexpr const char *Example = "variant_exists({'a': { 'a': 1, 'b': 2}}::VARIANT, 'a')\001variant_exists({'a': 1, 'b': 2}::VARIANT, ['a', 'c'])";
+	static constexpr const char *Categories = "variant\001variant";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct VariantExtractFun {
 	static constexpr const char *Name = "variant_extract";
 	static constexpr const char *Parameters = "input_variant::VARIANT,field::VARCHAR\001input_variant::VARIANT,index::UINTEGER";
 	static constexpr const char *Description = "Returns the `field` from the `input_variant` if it's an OBJECT.\001Returns the entry at `index` from the `input_variant` if it's an ARRAY.";
 	static constexpr const char *Example = "variant_extract({'a': 42, 'b': [1,2,3])::VARIANT, 'b')\001variant_extract([1,2,3])::VARIANT, 0)";
+	static constexpr const char *Categories = "variant\001variant";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct VariantExtractStringFun {
+	static constexpr const char *Name = "variant_extract_string";
+	static constexpr const char *Parameters = "input_variant::VARIANT,path::VARCHAR\001input_variant::VARIANT,path::VARCHAR[]";
+	static constexpr const char *Description = "Returns the stringified representation at `path` from the `input_variant`.\001Returns the stringified representation for each `path` from the `input_variant`.";
+	static constexpr const char *Example = "variant_extract_string({'a': 42, 'b': [1,2,3])::VARIANT, 'b')\001variant_extract_string({'a': 42, 'b': [1,2,3])::VARIANT, ['a', 'b'])";
 	static constexpr const char *Categories = "variant\001variant";
 
 	static ScalarFunctionSet GetFunctions();
@@ -35,6 +75,26 @@ struct VariantNormalizeFun {
 	static ScalarFunction GetFunction();
 };
 
+struct VariantComparatorFun {
+	static constexpr const char *Name = "variant_comparator";
+	static constexpr const char *Parameters = "input_variant";
+	static constexpr const char *Description = "Returns a binary sort key that orders `input_variant` according to the logical ordering of VARIANT values (used internally for comparison and ordering).";
+	static constexpr const char *Example = "variant_comparator({'a': 1, 'b': 2}::VARIANT)";
+	static constexpr const char *Categories = "variant";
+
+	static ScalarFunction GetFunction();
+};
+
+struct VariantTypeFun {
+	static constexpr const char *Name = "variant_type";
+	static constexpr const char *Parameters = "input_variant::VARIANT\001input_variant::VARIANT,path::VARCHAR\001input_variant::VARIANT,path::VARCHAR[]";
+	static constexpr const char *Description = "Returns the type of the root `input_variant`.\001Returns the type of the value at the specified path.\001Returns a list of types for the values at each specified path.";
+	static constexpr const char *Example = "variant_type({'a': { 'a': 1, 'b': 2}}::VARIANT)\001variant_type({'a': { 'a': 1, 'b': 2}}::VARIANT, 'a')\001variant_type({'a': { 'a': 1, 'b': 2}, 'b': {'c': 3}}::VARIANT, ['a', 'b'])";
+	static constexpr const char *Categories = "variant\001variant\001variant";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct VariantTypeofFun {
 	static constexpr const char *Name = "variant_typeof";
 	static constexpr const char *Parameters = "input_variant";
@@ -43,6 +103,16 @@ struct VariantTypeofFun {
 	static constexpr const char *Categories = "variant";
 
 	static ScalarFunction GetFunction();
+};
+
+struct VariantKeysFun {
+	static constexpr const char *Name = "variant_keys";
+	static constexpr const char *Parameters = "input_variant::VARIANT\001input_variant::VARIANT,path::VARCHAR\001input_variant::VARIANT,path::VARCHAR[]";
+	static constexpr const char *Description = "Returns the keys present at the root level of the object.\001Returns the keys present at the level of the specified path.\001Returns a list of keys present at the level of each specified path.";
+	static constexpr const char *Example = "variant_keys({'a': { 'a': 1, 'b': 2}}::VARIANT)\001variant_keys({'a': { 'a': 1, 'b': 2}}::VARIANT, 'a')\001variant_keys({'a': { 'a': 1, 'b': 2}, 'b': {'c': 3}}::VARIANT, ['a', 'b'])";
+	static constexpr const char *Categories = "variant\001variant\001variant";
+
+	static ScalarFunctionSet GetFunctions();
 };
 
 } // namespace duckdb

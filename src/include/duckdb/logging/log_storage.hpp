@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/logging/logging.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types.hpp"
@@ -20,6 +21,7 @@
 #include "duckdb/parallel/thread_context.hpp"
 
 namespace duckdb {
+struct TableFunctionBindInput;
 struct RegisteredLoggingContext;
 class ColumnDataCollection;
 struct ColumnDataScanState;
@@ -69,7 +71,7 @@ public:
 	virtual const string GetStorageName() = 0;
 
 	static vector<LogicalType> GetSchema(LoggingTargetTable table);
-	static vector<string> GetColumnNames(LoggingTargetTable table);
+	static vector<Identifier> GetColumnNames(LoggingTargetTable table);
 
 	//! WRITING
 	DUCKDB_API virtual void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
@@ -148,7 +150,7 @@ protected:
 	//! lock to be used by this class and child classes to ensure thread safety TODO: maybe remove and delegate
 	//! thread-safety to LogManager?
 	mutable mutex lock;
-	//! Switches between using false = use LoggingTargetTable::ALL_LOGS, true = use LoggingTargetTable::LOG_ENTIRES +
+	//! Switches between using false = use LoggingTargetTable::ALL_LOGS, true = use LoggingTargetTable::LOG_ENTRIES +
 	//! LoggingTargetTable::CONTEXTS
 	bool normalize_contexts = true;
 
@@ -203,7 +205,7 @@ protected:
 	//! Returns the writer for a table
 	CSVWriter &GetWriter(LoggingTargetTable table);
 	//! Configure a CSV writer by initializing its settings with the `writer_options` and `reader_options` settings
-	void SetWriterConfigs(CSVWriter &Writer, vector<string> column_names);
+	void SetWriterConfigs(CSVWriter &Writer, vector<Identifier> column_names);
 	//! Allows child classes to manipulate options
 	CSVWriterOptions &GetCSVWriterOptions();
 	//! Allows child classes to manipulate options
@@ -278,7 +280,7 @@ protected:
 	void AfterFlush(LoggingTargetTable table, DataChunk &chunk) override;
 
 private:
-	//! Intialize the csv file for `table`
+	//! Initialize the csv file for `table`
 	void InitializeFile(DatabaseInstance &db, LoggingTargetTable table);
 	//! Initialize the filewriter to be passed to the CSVWriter
 	static unique_ptr<BufferedFileWriter> InitializeFileWriter(DatabaseInstance &db, const string &path);

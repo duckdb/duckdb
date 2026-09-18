@@ -2,7 +2,7 @@
 # description: Issue 21100 - duckdb 1.5: Issue with struct and write ahead log
 # group: [general]
 
-load __TEST_DIR__/test_struct_null.db
+load {TEST_DIR}/test_struct_null.db
 
 statement ok
 set threads=1;

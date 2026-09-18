@@ -9,13 +9,10 @@ require tpch
 require httpfs
 
 statement ok
-PRAGMA enable_verification
+ATTACH '{TEST_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
-
-statement ok
-ATTACH '__TEST_DIR__/unencrypted.duckdb' as unencrypted;
+ATTACH '{TEST_DIR}/unencrypted.duckdb' as unencrypted;
 
 statement ok
 USE unencrypted;

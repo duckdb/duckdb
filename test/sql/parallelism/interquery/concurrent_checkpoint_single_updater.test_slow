@@ -2,7 +2,7 @@
 # description: Concurrent checkpoint with single updater
 # group: [interquery]
 
-load __TEST_DIR__/concurrent_checkpoint.db
+load {TEST_DIR}/concurrent_checkpoint.db
 
 statement ok
 CREATE TABLE accounts(id INTEGER, money INTEGER)

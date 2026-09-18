@@ -2,9 +2,6 @@
 # description: Issue 571
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # Incorrect result for BETWEEN query that casts column to boolean #571
 statement ok
 CREATE TABLE t0(c0 INT);

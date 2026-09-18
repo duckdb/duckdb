@@ -24,7 +24,13 @@ public:
 		return !correlated_columns.empty();
 	}
 
+	bool IsLateralBinder() const override {
+		return true;
+	}
+
 	static void ReduceExpressionDepth(LogicalOperator &op, const CorrelatedColumns &info);
+	//! Insert a lateral scope around an already-bound subtree and return all correlations crossing the new scope.
+	static CorrelatedColumns InsertLateralScope(LogicalOperator &op, const unordered_set<TableIndex> &lateral_bindings);
 
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,

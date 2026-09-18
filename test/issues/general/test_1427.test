@@ -3,9 +3,6 @@
 # group: [general]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create table t as select 123 as a
 
 statement ok

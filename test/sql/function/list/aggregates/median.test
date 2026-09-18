@@ -7,7 +7,7 @@
 foreach type integer float double smallint bigint hugeint decimal(10,2)
 
 statement ok
-CREATE TABLE quantile AS SELECT LIST(r::${type}) AS r FROM range(10000) t1(r);
+CREATE TABLE quantile AS SELECT LIST(r::{type}) AS r FROM range(10000) t1(r);
 
 query I
 SELECT list_median(r) FROM quantile

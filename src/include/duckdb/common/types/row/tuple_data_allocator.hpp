@@ -22,6 +22,7 @@ class ContinuousIdSet;
 struct TupleDataBlock {
 public:
 	TupleDataBlock(BufferManager &buffer_manager, MemoryTag tag, idx_t capacity_p);
+	TupleDataBlock(shared_ptr<BlockHandle> handle, idx_t capacity_p);
 
 	//! Disable copy constructors
 	TupleDataBlock(const TupleDataBlock &other) = delete;
@@ -55,13 +56,17 @@ public:
 class TupleDataAllocator {
 public:
 	TupleDataAllocator(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr, MemoryTag tag,
-	                   shared_ptr<ArenaAllocator> stl_allocator);
+	                   shared_ptr<ArenaAllocator> stl_allocator, QueryContext context = QueryContext());
 	TupleDataAllocator(TupleDataAllocator &allocator);
 
 	~TupleDataAllocator();
 
 	//! Get the buffer manager
 	BufferManager &GetBufferManager();
+	//! Get the query context used to attribute eviction/spill I/O
+	QueryContext GetContext() const {
+		return context;
+	}
 	//! Get the buffer allocator
 	Allocator &GetAllocator();
 	//! Get the STL allocator
@@ -75,6 +80,8 @@ public:
 	idx_t HeapBlockCount() const;
 	//! Sets the partition index of this tuple data allocator
 	void SetPartitionIndex(idx_t index);
+	//! Gets the partition index of this tuple data allocator
+	idx_t GetPartitionIndex() const;
 
 public:
 	//! Builds out the chunks for next append, given the metadata in the append state
@@ -98,6 +105,8 @@ public:
 	void ReleaseOrStoreHandles(TupleDataPinState &state, TupleDataSegment &segment);
 	//! Sets 'can_destroy' to true for all blocks so they aren't added to the eviction queue
 	void SetDestroyBufferUponUnpin();
+	//! Release all row/heap blocks and reset the allocator for reuse without a heap allocation
+	void Reset();
 	//! Destroy the blocks between the given indices
 	void DestroyRowBlocks(idx_t row_block_begin, idx_t row_block_end);
 	void DestroyHeapBlocks(idx_t heap_block_begin, idx_t heap_block_end);
@@ -118,9 +127,9 @@ private:
 	                                          buffer_handle_map_t &handles, const ContinuousIdSet &block_ids,
 	                                          unsafe_arena_vector<TupleDataBlock> &blocks,
 	                                          TupleDataPinProperties properties);
-	//! Create a row/heap block, extend the pinned handles in the segment accordingly
-	void CreateRowBlock(TupleDataSegment &segment);
-	void CreateHeapBlock(TupleDataSegment &segment, idx_t size);
+	//! Create a row/heap block, store the handle in pin_state so the block stays pinned
+	void CreateRowBlock(TupleDataSegment &segment, TupleDataPinState &pin_state);
+	void CreateHeapBlock(TupleDataSegment &segment, TupleDataPinState &pin_state, idx_t size);
 	//! Pins the given row block
 	BufferHandle &PinRowBlock(TupleDataPinState &state, const TupleDataChunkPart &part);
 	//! Pins the given heap block
@@ -135,6 +144,8 @@ private:
 	shared_ptr<ArenaAllocator> stl_allocator;
 	//! The buffer manager
 	BufferManager &buffer_manager;
+	//! The query context, used to attribute eviction/spill I/O to the query
+	QueryContext context;
 	//! The layout of the data
 	shared_ptr<TupleDataLayout> layout_ptr;
 	const TupleDataLayout &layout;

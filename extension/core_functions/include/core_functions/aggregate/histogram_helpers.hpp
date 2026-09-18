@@ -16,15 +16,15 @@ namespace duckdb {
 struct HistogramFunctor {
 	template <class T>
 	static void HistogramFinalize(T value, Vector &result, idx_t offset) {
-		FlatVector::GetData<T>(result)[offset] = value;
+		FlatVector::GetDataMutable<T>(result)[offset] = value;
 	}
 
-	static bool CreateExtraState(idx_t count) {
+	static bool CreateExtraState() {
 		return false;
 	}
 
-	static void PrepareData(Vector &input, idx_t count, bool &, UnifiedVectorFormat &result) {
-		input.ToUnifiedFormat(count, result);
+	static void PrepareData(const Vector &input, bool &, UnifiedVectorFormat &result) {
+		input.ToUnifiedFormat(result);
 	}
 
 	template <class T>
@@ -63,15 +63,15 @@ struct HistogramStringFunctorBase {
 struct HistogramStringFunctor : HistogramStringFunctorBase {
 	template <class T>
 	static void HistogramFinalize(T value, Vector &result, idx_t offset) {
-		FlatVector::GetData<string_t>(result)[offset] = StringVector::AddStringOrBlob(result, value);
+		FlatVector::GetDataMutable<string_t>(result)[offset] = StringVector::AddStringOrBlob(result, value);
 	}
 
-	static bool CreateExtraState(idx_t count) {
+	static bool CreateExtraState() {
 		return false;
 	}
 
-	static void PrepareData(Vector &input, idx_t count, bool &, UnifiedVectorFormat &result) {
-		input.ToUnifiedFormat(count, result);
+	static void PrepareData(const Vector &input, bool &, UnifiedVectorFormat &result) {
+		input.ToUnifiedFormat(result);
 	}
 };
 
@@ -82,17 +82,18 @@ struct HistogramGenericFunctor : HistogramStringFunctorBase {
 		                                    OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST));
 	}
 
-	static Vector CreateExtraState(idx_t count) {
-		return Vector(LogicalType::BLOB, count);
+	static Vector CreateExtraState() {
+		return Vector(LogicalType::BLOB);
 	}
 
-	static void PrepareData(Vector &input, idx_t count, Vector &extra_state, UnifiedVectorFormat &result) {
+	static void PrepareData(const Vector &input, Vector &extra_state, UnifiedVectorFormat &result) {
 		OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
-		CreateSortKeyHelpers::CreateSortKey(input, count, modifiers, extra_state);
-		input.Flatten(count);
-		extra_state.Flatten(count);
-		FlatVector::Validity(extra_state).Initialize(FlatVector::Validity(input));
-		extra_state.ToUnifiedFormat(count, result);
+		extra_state.Reserve(input.size());
+		CreateSortKeyHelpers::CreateSortKey(input, modifiers, extra_state);
+		input.Flatten();
+		extra_state.Flatten();
+		FlatVector::ValidityMutable(extra_state).Initialize(FlatVector::Validity(input));
+		extra_state.ToUnifiedFormat(result);
 	}
 };
 

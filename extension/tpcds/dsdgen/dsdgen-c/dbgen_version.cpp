@@ -45,7 +45,7 @@
 #include "misc.h"
 #include "release.h"
 
-struct DBGEN_VERSION_TBL g_dbgen_version;
+thread_local struct DBGEN_VERSION_TBL g_dbgen_version;
 
 /*
  * Routine:

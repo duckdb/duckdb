@@ -3,9 +3,6 @@
 # group: [update]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t1 AS SELECT * FROM generate_series(0, 1999, 1) tbl(i)
 
 statement ok

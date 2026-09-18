@@ -15,7 +15,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalProj
 	for (idx_t i = 0; i < proj.expressions.size(); i++) {
 		auto stats = PropagateExpression(proj.expressions[i]);
 		if (stats) {
-			ColumnBinding binding(proj.table_index, i);
+			ColumnBinding binding(proj.table_index, ProjectionIndex(i));
 			statistics_map.insert(make_pair(binding, std::move(stats)));
 		}
 	}

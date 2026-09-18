@@ -1,4 +1,4 @@
-#include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
@@ -9,17 +9,26 @@ namespace duckdb {
 
 using JoinRelationTreeNode = JoinRelationSetManager::JoinRelationTreeNode;
 
+JoinRelationSet::JoinRelationSet(unsafe_unique_array<RelationIndex> relations, idx_t count)
+    : relations(std::move(relations)), count(count) {
+}
+
 // LCOV_EXCL_START
 string JoinRelationSet::ToString() const {
 	string result = "[";
-	result += StringUtil::Join(relations, count, ", ", [](const idx_t &relation) { return to_string(relation); });
+	result += StringUtil::Join(relations, count, ", ",
+	                           [](const RelationIndex &relation) { return to_string(relation.index); });
 	result += "]";
 	return result;
 }
 // LCOV_EXCL_STOP
 
+bool JoinRelationSet::Empty() const {
+	return count == 0;
+}
+
 //! Returns true if sub is a subset of super
-bool JoinRelationSet::IsSubset(JoinRelationSet &super, JoinRelationSet &sub) {
+bool JoinRelationSet::IsSubset(const JoinRelationSet &super, const JoinRelationSet &sub) {
 	D_ASSERT(sub.count > 0);
 	if (sub.count > super.count) {
 		return false;
@@ -36,7 +45,23 @@ bool JoinRelationSet::IsSubset(JoinRelationSet &super, JoinRelationSet &sub) {
 	return false;
 }
 
-JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unsafe_unique_array<idx_t> relations, idx_t count) {
+bool JoinRelationSet::Intersects(const JoinRelationSet &left, const JoinRelationSet &right) {
+	idx_t left_idx = 0;
+	idx_t right_idx = 0;
+	while (left_idx < left.count && right_idx < right.count) {
+		if (left.relations[left_idx] == right.relations[right_idx]) {
+			return true;
+		}
+		if (left.relations[left_idx] < right.relations[right_idx]) {
+			left_idx++;
+		} else {
+			right_idx++;
+		}
+	}
+	return false;
+}
+
+JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unsafe_unique_array<RelationIndex> relations, idx_t count) {
 	// now look it up in the tree
 	reference<JoinRelationTreeNode> info(root);
 	for (idx_t i = 0; i < count; i++) {
@@ -58,17 +83,26 @@ JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unsafe_unique_array<idx
 }
 
 //! Create or get a JoinRelationSet from a single node with the given index
-JoinRelationSet &JoinRelationSetManager::GetJoinRelation(idx_t index) {
+JoinRelationSet &JoinRelationSetManager::GetJoinRelation(RelationIndex index) {
 	// create a sorted vector of the relations
-	auto relations = make_unsafe_uniq_array<idx_t>(1);
+	auto relations = make_unsafe_uniq_array<RelationIndex>(1);
 	relations[0] = index;
 	idx_t count = 1;
 	return GetJoinRelation(std::move(relations), count);
 }
 
-JoinRelationSet &JoinRelationSetManager::GetJoinRelation(const unordered_set<idx_t> &bindings) {
+JoinRelationSet &JoinRelationSetManager::GetEmptyJoinRelationSet() {
+	if (!empty_relation_set) {
+		const unordered_set<RelationIndex> empty_bindings = {};
+		empty_relation_set = GetJoinRelation(empty_bindings);
+	}
+	return *empty_relation_set.get();
+}
+
+JoinRelationSet &JoinRelationSetManager::GetJoinRelation(const unordered_set<RelationIndex> &bindings) {
 	// create a sorted vector of the relations
-	unsafe_unique_array<idx_t> relations = bindings.empty() ? nullptr : make_unsafe_uniq_array<idx_t>(bindings.size());
+	unsafe_unique_array<RelationIndex> relations =
+	    bindings.empty() ? nullptr : make_unsafe_uniq_array<RelationIndex>(bindings.size());
 	idx_t count = 0;
 	for (auto &entry : bindings) {
 		relations[count++] = entry;
@@ -78,7 +112,7 @@ JoinRelationSet &JoinRelationSetManager::GetJoinRelation(const unordered_set<idx
 }
 
 JoinRelationSet &JoinRelationSetManager::Union(JoinRelationSet &left, JoinRelationSet &right) {
-	auto relations = make_unsafe_uniq_array<idx_t>(left.count + right.count);
+	auto relations = make_unsafe_uniq_array<RelationIndex>(left.count + right.count);
 	idx_t count = 0;
 	// move through the left and right relations, eliminating duplicates
 	idx_t i = 0, j = 0;

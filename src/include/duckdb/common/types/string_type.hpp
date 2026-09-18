@@ -95,6 +95,14 @@ public:
 		return value.inlined.inlined;
 	}
 
+	uint32_t GetPrefixIntegerComparable() const {
+#ifdef DUCKDB_DEBUG_NO_INLINE
+		return 0;
+#else
+		return BSwapIfLE(Load<uint32_t>(const_data_ptr_cast(GetPrefix())));
+#endif
+	}
+
 	idx_t GetSize() const {
 		return value.inlined.length;
 	}
@@ -108,7 +116,6 @@ public:
 			memcpy(GetDataWriteable(), ptr, size);
 		}
 		Finalize();
-		VerifyCharacters();
 	}
 
 	bool Empty() const {
@@ -150,9 +157,10 @@ public:
 	}
 
 	void Verify() const;
+	//! Verify also in release mode
+	void ForceVerify() const;
 	void VerifyUTF8() const;
 	void VerifyCharacters() const;
-	void VerifyNull() const;
 
 	struct StringComparisonOperators {
 		static inline bool Equals(const string_t &a, const string_t &b) {
@@ -224,6 +232,12 @@ public:
 	}
 	bool operator<(const string_t &r) const {
 		return r > *this;
+	}
+	bool operator<=(const string_t &r) const {
+		return !(r < *this);
+	}
+	bool operator>=(const string_t &r) const {
+		return !(*this < r);
 	}
 
 private:

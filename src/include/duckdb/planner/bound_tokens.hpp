@@ -23,15 +23,13 @@ class BoundSetOperationNode;
 class Expression;
 
 class BoundAggregateExpression;
-class BoundBetweenExpression;
 class BoundCaseExpression;
-class BoundCastExpression;
 class BoundColumnRefExpression;
-class BoundComparisonExpression;
 class BoundConjunctionExpression;
 class BoundConstantExpression;
 class BoundDefaultExpression;
 class BoundFunctionExpression;
+class BoundLambdaExpression;
 class BoundLambdaRefExpression;
 class BoundOperatorExpression;
 class BoundParameterExpression;

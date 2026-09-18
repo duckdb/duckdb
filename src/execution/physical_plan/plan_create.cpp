@@ -1,9 +1,11 @@
 #include "duckdb/execution/operator/schema/physical_create_function.hpp"
 #include "duckdb/execution/operator/schema/physical_create_schema.hpp"
 #include "duckdb/execution/operator/schema/physical_create_sequence.hpp"
+#include "duckdb/execution/operator/schema/physical_create_trigger.hpp"
 #include "duckdb/execution/operator/schema/physical_create_type.hpp"
 #include "duckdb/execution/operator/schema/physical_create_view.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_create.hpp"
@@ -15,6 +17,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreate &op) {
 	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
 		return Make<PhysicalCreateSequence>(unique_ptr_cast<CreateInfo, CreateSequenceInfo>(std::move(op.info)),
 		                                    op.estimated_cardinality);
+	case LogicalOperatorType::LOGICAL_CREATE_TRIGGER:
+		return Make<PhysicalCreateTrigger>(unique_ptr_cast<CreateInfo, CreateTriggerInfo>(std::move(op.info)),
+		                                   op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
 		return Make<PhysicalCreateView>(unique_ptr_cast<CreateInfo, CreateViewInfo>(std::move(op.info)),
 		                                op.estimated_cardinality);

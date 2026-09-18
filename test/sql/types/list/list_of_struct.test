@@ -3,9 +3,6 @@
 # group: [list]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE a AS SELECT [{'a': 3, 'b': 'hello'}, NULL, {'a': NULL, 'b': 'thisisalongstring'}] l;
 
 query I

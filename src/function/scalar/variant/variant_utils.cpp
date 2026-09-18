@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/enum_util.hpp"
@@ -6,6 +9,9 @@
 #include "duckdb/common/serializer/varint.hpp"
 #include "duckdb/common/types/variant_visitor.hpp"
 #include "duckdb/function/variant/variant_value_convert.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/common/types/variant/variant_builder.hpp"
 
 namespace duckdb {
 
@@ -77,7 +83,7 @@ vector<string> VariantUtils::GetObjectKeys(const UnifiedVariantVectorData &varia
 
 void VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant, const VariantPathComponent &component,
                                    optional_ptr<const SelectionVector> sel, SelectionVector &res,
-                                   ValidityMask &res_validity, const VariantNestedData *nested_data,
+                                   ValidityMask &res_validity, const array_ptr<VariantNestedData> &nested_data,
                                    const ValidityMask &validity, idx_t count) {
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = sel ? sel->get_index(i) : i;
@@ -140,7 +146,7 @@ vector<uint32_t> VariantUtils::ValueIsNull(const UnifiedVariantVectorData &varia
 VariantNestedDataCollectionResult
 VariantUtils::CollectNestedData(const UnifiedVariantVectorData &variant, VariantLogicalType expected_type,
                                 const SelectionVector &value_index_sel, idx_t count, optional_idx row, idx_t offset,
-                                VariantNestedData *child_data, ValidityMask &validity) {
+                                array_ptr<VariantNestedData> child_data, ValidityMask &validity) {
 	VariantLogicalType wrong_type = VariantLogicalType::VARIANT_NULL;
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
@@ -178,6 +184,36 @@ VariantUtils::CollectNestedData(const UnifiedVariantVectorData &variant, Variant
 	return VariantNestedDataCollectionResult();
 }
 
+void VariantUtils::TraversePath(const UnifiedVariantVectorData &variant, const vector<VariantPathComponent> &components,
+                                const idx_t count, array_ptr<VariantNestedData> nested_data, ValidityMask &validity,
+                                VariantPathSelection &path_selection) {
+	for (idx_t i = 0; i < components.size(); i++) {
+		auto &component = components[i];
+		auto &input_indices = path_selection.Input(i);
+		auto &output_indices = path_selection.Output(i);
+
+		if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
+			throw InternalException("Path indexes are not supported for this function");
+		}
+
+		(void)VariantUtils::CollectNestedData(variant, VariantLogicalType::OBJECT, input_indices, count, optional_idx(),
+		                                      0, nested_data, validity);
+
+		ValidityMask lookup_validity(count);
+		VariantUtils::FindChildValues(variant, component, nullptr, output_indices, lookup_validity, nested_data,
+		                              validity, count);
+
+		for (idx_t j = 0; j < count; j++) {
+			if (!validity.RowIsValid(j)) {
+				continue;
+			}
+			if (lookup_validity.CanHaveNull() && !lookup_validity.RowIsValid(j)) {
+				validity.SetInvalid(j);
+			}
+		}
+	}
+}
+
 Value VariantUtils::ConvertVariantToValue(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_idx) {
 	return VariantVisitor<ValueConverter>::Visit(variant, row, values_idx);
 }
@@ -185,8 +221,8 @@ Value VariantUtils::ConvertVariantToValue(const UnifiedVariantVectorData &varian
 void VariantUtils::FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<uint32_t> &dictionary,
                                        SelectionVector &sel, idx_t sel_size) {
 	auto &keys = VariantVector::GetKeys(variant);
-	auto &keys_entry = ListVector::GetEntry(keys);
-	auto keys_entry_data = FlatVector::GetData<string_t>(keys_entry);
+	auto &keys_entry = ListVector::GetChildMutable(keys);
+	auto keys_entry_data = FlatVector::GetDataMutable<string_t>(keys_entry);
 
 	bool already_sorted = true;
 
@@ -205,6 +241,13 @@ void VariantUtils::FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<u
 		it++;
 	}
 
+	//! The caller slices this vector into a dictionary that still spans every key slot, but only the distinct keys are
+	//! written above - zero the remaining slots so they hold empty strings instead of uninitialized memory
+	auto keys_entry_size = ListVector::GetListSize(keys);
+	if (dictionary.size() < keys_entry_size) {
+		memset(keys_entry_data + dictionary.size(), 0, sizeof(string_t) * (keys_entry_size - dictionary.size()));
+	}
+
 	if (!already_sorted) {
 		//! Adjust the selection vector to point to the right dictionary index
 		for (idx_t i = 0; i < sel_size; i++) {
@@ -215,9 +258,9 @@ void VariantUtils::FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<u
 	}
 }
 
-bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t count) {
+bool VariantUtils::Verify(const Vector &variant, const SelectionVector &sel_p, idx_t count) {
 	RecursiveUnifiedVectorFormat format;
-	Vector::RecursiveToUnifiedFormat(variant, count, format);
+	Vector::RecursiveToUnifiedFormat(variant, format);
 
 	//! keys
 	auto &keys = UnifiedVariantVector::GetKeys(format);
@@ -226,7 +269,7 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 	//! keys_entry
 	auto &keys_entry = UnifiedVariantVector::GetKeysEntry(format);
 	auto keys_entry_data = keys_entry.GetData<string_t>(keys_entry);
-	D_ASSERT(keys_entry.validity.AllValid());
+	D_ASSERT(keys_entry.validity.CannotHaveNull());
 
 	//! children
 	auto &children = UnifiedVariantVector::GetChildren(format);
@@ -349,6 +392,88 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 	}
 
 	return true;
+}
+
+LogicalType VariantUtils::ShreddedType(const LogicalType &logical_type) {
+	auto shredding_type = TypeVisitor::VisitReplace(logical_type, [](const LogicalType &type) {
+		if (type.id() == LogicalTypeId::STRUCT) {
+			return LogicalType::STRUCT({{"typed_value", type}});
+		}
+		return type;
+	});
+	return LogicalType::STRUCT({{"unshredded", VariantShredding::GetUnshreddedType()}, {"shredded", shredding_type}});
+}
+
+bool VariantUtils::VariantSupportsType(const LogicalType &type) {
+	if (type.IsJSONType()) {
+		return false;
+	}
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::UUID:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+	case LogicalTypeId::INTERVAL:
+	case LogicalTypeId::BIT:
+	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::DECIMAL:
+		return true;
+	default:
+		return false;
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// ToVariant sources
+//===--------------------------------------------------------------------===//
+// The single-pass build machinery (VariantBuilder / EmitIterator / BuildVariant) lives in
+// variant_builder.hpp so it can be shared with the parquet reader. A "source" just implements
+// 'bool Emit(idx_t row, VariantBuilder &builder)' (returning whether the row is a SQL NULL).
+namespace {
+
+struct VariantIteratorSource {
+	explicit VariantIteratorSource(const VariantIterator &state) : state(state) {
+	}
+	bool Emit(idx_t row, VariantBuilder &builder) const {
+		auto root = state.Root(row);
+		//! Root() resolves a missing/absent root to a SQL NULL
+		if (root.IsNull()) {
+			return true;
+		}
+		EmitIterator(root, builder);
+		return false;
+	}
+
+	const VariantIterator &state;
+};
+
+} // namespace
+
+void VariantUtils::ToVariant(const VariantIterator &state, idx_t count, Vector &result) {
+	VariantIteratorSource source(state);
+	BuildVariant(source, count, result);
 }
 
 } // namespace duckdb

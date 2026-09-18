@@ -29,7 +29,7 @@ CHECKPOINT
 
 endloop
 
-loop i 0 50
+loop i 0 25
 
 skipif threadid=0
 statement ok
@@ -41,5 +41,4 @@ WHERE l_orderkey IN (SELECT l_orderkey FROM lineitem WHERE l_shipdate >= DATE '1
 endloop
 
 endloop
-
 

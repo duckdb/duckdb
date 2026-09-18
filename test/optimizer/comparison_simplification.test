@@ -3,6 +3,9 @@
 # group: [optimizer]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 CREATE TABLE test(X INTEGER);
 
 statement ok
@@ -10,7 +13,7 @@ PRAGMA explain_output = OPTIMIZED_ONLY;
 
 # comparisons with NULL result in NULL
 query I nosort compnorm1
-EXPLAIN SELECT NULL FROM test
+EXPLAIN SELECT NULL::BOOLEAN FROM test
 ----
 
 query I nosort compnorm1
@@ -65,57 +68,57 @@ PRAGMA explain_output = PHYSICAL_ONLY;
 query II
 EXPLAIN SELECT * FROM date_test WHERE d < timestamp '2024-06-15 00:00:00';
 ----
-physical_plan	<REGEX>:.*d<'2024-06-15'::DATE.*
+physical_plan	<REGEX>:.*d < '2024-06-15'::DATE.*
 
 query II
 EXPLAIN SELECT * FROM date_test WHERE d <= timestamp '2024-06-15 00:00:00';
 ----
-physical_plan	<REGEX>:.*d<='2024-06-15'::DATE.*
+physical_plan	<REGEX>:.*d <= '2024-06-15'::DATE.*
 
 query II
 EXPLAIN SELECT * FROM date_test WHERE d > timestamp '2024-06-15 00:00:00';
 ----
-physical_plan	<REGEX>:.*d>'2024-06-15'::DATE.*
+physical_plan	<REGEX>:.*d > '2024-06-15'::DATE.*
 
 query II
 EXPLAIN SELECT * FROM date_test WHERE d >= timestamp '2024-06-15 00:00:00';
 ----
-physical_plan	<REGEX>:.*d>='2024-06-15'::DATE.*
+physical_plan	<REGEX>:.*d >= '2024-06-15'::DATE.*
 
 query II
 EXPLAIN SELECT * FROM date_test WHERE d = timestamp '2024-06-15 00:00:00';
 ----
-physical_plan	<REGEX>:.*d='2024-06-15'::DATE.*
+physical_plan	<REGEX>:.*d = '2024-06-15'::DATE.*
 
 query II
 EXPLAIN SELECT * FROM date_test WHERE d != timestamp '2024-06-15 00:00:00';
 ----
-physical_plan	<REGEX>:.*d!='2024-06-15'::DATE.*
+physical_plan	<REGEX>:.*d != '2024-06-15'::DATE.*
 
 # --- non-midnight, column LEFT ---
 # non-midnight, < : floor + 1 day
 query II
 EXPLAIN SELECT * FROM date_test WHERE d < timestamp '2024-06-15 12:00:00';
 ----
-physical_plan	<REGEX>:.*d<'2024-06-16'::DATE.*
+physical_plan	<REGEX>:.*d < '2024-06-16'::DATE.*
 
 # non-midnight, <= : floor
 query II
 EXPLAIN SELECT * FROM date_test WHERE d <= timestamp '2024-06-15 12:00:00';
 ----
-physical_plan	<REGEX>:.*d<='2024-06-15'::DATE.*
+physical_plan	<REGEX>:.*d <= '2024-06-15'::DATE.*
 
 # non-midnight, > : floor
 query II
 EXPLAIN SELECT * FROM date_test WHERE d > timestamp '2024-06-15 12:00:00';
 ----
-physical_plan	<REGEX>:.*d>'2024-06-15'::DATE.*
+physical_plan	<REGEX>:.*d > '2024-06-15'::DATE.*
 
 # non-midnight, >= : floor + 1 day
 query II
 EXPLAIN SELECT * FROM date_test WHERE d >= timestamp '2024-06-15 12:00:00';
 ----
-physical_plan	<REGEX>:.*d>='2024-06-16'::DATE.*
+physical_plan	<REGEX>:.*d >= '2024-06-16'::DATE.*
 
 # non-midnight, = : never matches — rewritten to constant_or_null(d, false)
 query II
@@ -205,31 +208,31 @@ SELECT d FROM date_test WHERE d >= timestamp '2024-06-15 12:00:00' ORDER BY d;
 query II
 EXPLAIN SELECT * FROM date_test WHERE timestamp '2024-06-15 00:00:00' < d;
 ----
-physical_plan	<REGEX>:.*d>'2024-06-15'::DATE.*
+physical_plan	<REGEX>:.*d > '2024-06-15'::DATE.*
 
 # non-midnight, T < col  ↔  col > floor (no adjust)
 query II
 EXPLAIN SELECT * FROM date_test WHERE timestamp '2024-06-15 12:00:00' < d;
 ----
-physical_plan	<REGEX>:.*d>'2024-06-15'::DATE.*
+physical_plan	<REGEX>:.*d > '2024-06-15'::DATE.*
 
 # non-midnight, T <= col  ↔  col >= floor+1
 query II
 EXPLAIN SELECT * FROM date_test WHERE timestamp '2024-06-15 12:00:00' <= d;
 ----
-physical_plan	<REGEX>:.*d>='2024-06-16'::DATE.*
+physical_plan	<REGEX>:.*d >= '2024-06-16'::DATE.*
 
 # non-midnight, T > col  ↔  col < floor+1
 query II
 EXPLAIN SELECT * FROM date_test WHERE timestamp '2024-06-15 12:00:00' > d;
 ----
-physical_plan	<REGEX>:.*d<'2024-06-16'::DATE.*
+physical_plan	<REGEX>:.*d < '2024-06-16'::DATE.*
 
 # non-midnight, T >= col  ↔  col <= floor (no adjust)
 query II
 EXPLAIN SELECT * FROM date_test WHERE timestamp '2024-06-15 12:00:00' >= d;
 ----
-physical_plan	<REGEX>:.*d<='2024-06-15'::DATE.*
+physical_plan	<REGEX>:.*d <= '2024-06-15'::DATE.*
 
 # non-midnight, T = col → constant_or_null
 query II

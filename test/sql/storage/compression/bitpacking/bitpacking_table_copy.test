@@ -5,12 +5,12 @@
 require tpch
 
 # load the DB from disk
-load __TEST_DIR__/test_bitpacking_struct_bug.db
+load {TEST_DIR}/test_bitpacking_struct_bug.db
 
 foreach bitpacking_mode delta_for for constant_delta
 
 statement ok
-PRAGMA force_bitpacking_mode='${bitpacking_mode}'
+PRAGMA force_bitpacking_mode='{bitpacking_mode}'
 
 statement ok
 PRAGMA force_compression = 'bitpacking'

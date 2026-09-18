@@ -1,0 +1,17 @@
+# name: benchmark/micro/join/hashjoin_dictionary_probe.benchmark
+# description: Hash join probe over a dictionary-encoded VARCHAR key (small build, 1M-row probe)
+# group: [join]
+
+name Hash Join Dictionary Probe
+group join
+storage persistent
+
+load
+CREATE TABLE dim AS SELECT format('key_{:03d}', i) AS k FROM range(10) t(i);
+CREATE TABLE fact AS SELECT format('key_{:03d}', i % 10) AS k FROM range(1000000) t(i);
+
+run
+SELECT COUNT(*) FROM fact f JOIN dim d ON f.k = d.k
+
+result I
+1000000

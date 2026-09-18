@@ -9,9 +9,10 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/result_eagerness.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/main/query_parameters.hpp"
 #include "duckdb/common/enums/database_modification_type.hpp"
 
 namespace duckdb {
@@ -50,7 +51,10 @@ enum class StatementType : uint8_t {
 	MULTI_STATEMENT,
 	COPY_DATABASE_STATEMENT,
 	UPDATE_EXTENSIONS_STATEMENT,
-	MERGE_INTO_STATEMENT
+	MERGE_INTO_STATEMENT,
+	CONNECT_STATEMENT,
+	DISCONNECT_STATEMENT,
+	EXTERNAL_RESOURCE_STATEMENT
 };
 
 DUCKDB_API string StatementTypeToString(StatementType type);
@@ -69,9 +73,8 @@ class ClientContext;
 //! A struct containing various properties of a SQL statement
 struct StatementProperties {
 	StatementProperties()
-	    : requires_valid_transaction(true), output_type(QueryResultOutputType::FORCE_MATERIALIZED),
-	      bound_all_parameters(true), return_type(StatementReturnType::QUERY_RESULT), parameter_count(0),
-	      always_require_rebind(false) {
+	    : requires_valid_transaction(true), result_eagerness(ResultEagerness::FORCED), bound_all_parameters(true),
+	      return_type(StatementReturnType::QUERY_RESULT), parameter_count(0), always_require_rebind(false) {
 	}
 
 	struct CatalogIdentity {
@@ -93,14 +96,15 @@ struct StatementProperties {
 	};
 
 	//! The set of databases this statement will read from
-	unordered_map<string, CatalogIdentity> read_databases;
+	identifier_map_t<CatalogIdentity> read_databases;
 	//! The set of databases this statement will modify
-	unordered_map<string, ModificationInfo> modified_databases;
+	identifier_map_t<ModificationInfo> modified_databases;
 	//! Whether or not the statement requires a valid transaction. Almost all statements require this, with the
 	//! exception of ROLLBACK
 	bool requires_valid_transaction;
-	//! Whether or not the result can be streamed to the client
-	QueryResultOutputType output_type;
+	//! FORCED for a statement whose side effects cannot wait for a consumer: it runs to completion
+	//! before the call that returns its result does, and its result is never streamed
+	ResultEagerness result_eagerness;
 	//! Whether or not all parameters have successfully had their types determined
 	bool bound_all_parameters;
 	//! What type of data the statement returns

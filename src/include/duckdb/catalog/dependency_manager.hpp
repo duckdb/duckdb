@@ -59,11 +59,11 @@ public:
 
 public:
 	//! Format: Type\0Schema\0Name
-	string name;
+	Identifier name;
 
 public:
 	bool operator==(const MangledEntryName &other) const {
-		return StringUtil::CIEquals(other.name, name);
+		return other.name == name;
 	}
 	bool operator!=(const MangledEntryName &other) const {
 		return !(*this == other);
@@ -77,7 +77,7 @@ public:
 
 public:
 	//! Format: MangledEntryName\0MangledEntryName
-	string name;
+	Identifier name;
 };
 
 //! The DependencyManager is in charge of managing dependencies between catalog entries
@@ -107,22 +107,30 @@ private:
 	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, const LogicalDependency &dependency);
 	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency);
 	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, const CatalogEntryInfo &info);
+	//! Look up a trigger dependency through the table it is defined on
+	optional_ptr<CatalogEntry> LookupTrigger(CatalogTransaction transaction, SchemaCatalogEntry &schema_entry,
+	                                         const CatalogEntryInfo &info);
 	string CollectDependents(CatalogTransaction transaction, catalog_entry_set_t &entries, CatalogEntryInfo &info);
 	void CleanupDependencies(CatalogTransaction transaction, CatalogEntry &entry);
 
 public:
-	static string GetSchema(const CatalogEntry &entry);
+	//! The path of (nested) schemas that contain this entry, outermost first (empty for a top-level schema)
+	static vector<Identifier> GetSchemaPath(const CatalogEntry &entry);
 	static MangledEntryName MangleName(const CatalogEntryInfo &info);
 	static MangledEntryName MangleName(const CatalogEntry &entry);
 	static CatalogEntryInfo GetLookupProperties(const CatalogEntry &entry);
+	//! Navigate the given schema path (outermost first) and return the deepest schema in it. Returns nullptr for an
+	//! empty path (the entry lives in the catalog root) or if a schema along the path does not exist.
+	optional_ptr<SchemaCatalogEntry> NavigateSchemaPath(CatalogTransaction transaction,
+	                                                    const vector<Identifier> &schema_path);
 
 private:
 	void ReorderEntry(CatalogTransaction transaction, CatalogEntry &entry, catalog_entry_set_t &visited,
-	                  catalog_entry_vector_t &order);
-	void ReorderEntries(catalog_entry_vector_t &entries, CatalogTransaction transaction);
+	                  catalog_entry_vector_t &order, bool allow_internal);
+	void ReorderEntries(catalog_entry_vector_t &entries, CatalogTransaction transaction, bool allow_internal);
 	void AddObject(CatalogTransaction transaction, CatalogEntry &object, const LogicalDependencyList &dependencies);
 	void VerifyExistence(CatalogTransaction transaction, DependencyEntry &object);
-	void VerifyCommitDrop(CatalogTransaction transaction, transaction_t start_time, CatalogEntry &object);
+	void VerifyCommitDrop(CatalogTransaction transaction, VisibilityBound visibility_bound, CatalogEntry &object);
 	//! Returns the objects that should be dropped alongside the object
 	catalog_entry_set_t CheckDropDependencies(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
 	void DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade);

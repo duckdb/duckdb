@@ -31,6 +31,12 @@ SELECT decode('\xA0\x50\x51\xA0\xA0'::BLOB, 'ignore')::VARCHAR;
 ----
 PQ
 
+# ignore mode where exactly 12 bytes remain (string_t inline boundary)
+query I
+SELECT decode('\xA0ABCDEFGHIJKL'::BLOB, 'ignore')::VARCHAR;
+----
+ABCDEFGHIJKL
+
 
 query I
 SELECT upper(decode('\xF0\x9F\x98\x84'::BLOB)::VARCHAR);

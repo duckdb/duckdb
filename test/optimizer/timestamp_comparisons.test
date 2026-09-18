@@ -83,11 +83,11 @@ select * from t1;
 ----
 2028-02-28 01:00:00	2028-02-28 01:00:00.123	2028-02-28 01:00:00.123456789	2028-02-28 01:00:00.123456
 
-# ts is more precise than timestamp_s and timestamp_ms, so casting ts_s, ts_ms to ts is not valid.
+# Casting NS => US now uses rounding (like the othe downcasts)
 query III
 select ts = ts_s::TIMESTAMP, ts = ts_ms::TIMESTAMP, ts = ts_ns::TIMESTAMP from t1;
 ----
-false	false	true
+false	false	false
 
 # ts is more precise than timestamp_s and timestamp_ms, so conversions can happen
 query III
@@ -99,7 +99,7 @@ true	true	false
 query III
 select ts_s::timestamp = timestamp '2028-02-28 01:00:00.123456789', ts_ms::timestamp = timestamp '2028-02-28 01:00:00.123456789', ts_ns::timestamp = timestamp '2028-02-28 01:00:00.123456789'  from t1;
 ----
-false	false	true
+false	false	false
 
 # ts_ms only has micro second precision, so the value of ts_ms is 2028-02-28 01:00:00.123 and not equal to 2028-02-28 01:00:00.123456789
 query II
@@ -107,7 +107,7 @@ select ts_s::timestamp_ms = timestamp_ms '2028-02-28 01:00:00.123456789', ts_ms 
 ----
 false	true
 
-statement error
+query I
 select ts_ns::timestamp_ms = timestamp_ms '2028-02-28 01:00:00.123456789' from t1;
 ----
-<REGEX>:.*Conversion Error.*
+true

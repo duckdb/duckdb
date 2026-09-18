@@ -20,10 +20,10 @@ SET index_scan_percentage=1
 foreach sleep_time 0 25 50 75 100
 
 statement ok
-SET debug_checkpoint_sleep_ms=${sleep_time}
+SET debug_checkpoint_sleep_ms={sleep_time}
 
 statement ok
-ATTACH '__TEST_DIR__/concurrent_checkpoint_deletes_fk${sleep_time}.db' AS concurrent_checkpoint_wal
+ATTACH '{TEST_DIR}/concurrent_checkpoint_deletes_fk{sleep_time}.db' AS concurrent_checkpoint_wal
 
 # work-around for not being able to create fk tables in other databases
 statement ok
@@ -44,7 +44,7 @@ loop threadid 0 11
 loop x 0 10
 
 statement ok
-INSERT INTO concurrent_checkpoint_wal.pk_tbl SELECT * FROM range((${x} * 2000) + ${threadid} * 100, (${x} * 2000) + (${threadid} + 1) * 100);
+INSERT INTO concurrent_checkpoint_wal.pk_tbl SELECT * FROM range(({x} * 2000) + {threadid} * 100, ({x} * 2000) + ({threadid} + 1) * 100);
 
 endloop
 
@@ -57,34 +57,34 @@ loop x 0 10
 # for the last 10 threads - insert the data during the loop
 onlyif threadid>10
 statement ok
-INSERT INTO concurrent_checkpoint_wal.pk_tbl SELECT * FROM range((${x} * 2000) + ${threadid} * 100, (${x} * 2000) + (${threadid} + 1) * 100);
+INSERT INTO concurrent_checkpoint_wal.pk_tbl SELECT * FROM range(({x} * 2000) + {threadid} * 100, ({x} * 2000) + ({threadid} + 1) * 100);
 
 # delete the data
 onlyif threadid<>10
 statement ok
-DELETE FROM concurrent_checkpoint_wal.pk_tbl WHERE i >= (${x} * 2000) + ${threadid} * 100 AND i < (${x} * 2000) + (${threadid} + 1) * 100 AND i%2=0
+DELETE FROM concurrent_checkpoint_wal.pk_tbl WHERE i >= ({x} * 2000) + {threadid} * 100 AND i < ({x} * 2000) + ({threadid} + 1) * 100 AND i%2=0
 
 # inserting in the FK table now fails
 onlyif threadid<>10
 statement error
-INSERT INTO concurrent_checkpoint_wal.fk_tbl SELECT * FROM range((${x} * 2000) + ${threadid} * 100, (${x} * 2000) + (${threadid} + 1) * 100) t(i) WHERE i%2=0;
+INSERT INTO concurrent_checkpoint_wal.fk_tbl SELECT * FROM range(({x} * 2000) + {threadid} * 100, ({x} * 2000) + ({threadid} + 1) * 100) t(i) WHERE i%2=0;
 ----
 constraint
 
 # we can re-insert the rows
 onlyif threadid<>10
 statement ok
-INSERT INTO concurrent_checkpoint_wal.pk_tbl SELECT * FROM range((${x} * 2000) + ${threadid} * 100, (${x} * 2000) + (${threadid} + 1) * 100) t(i) WHERE i%2=0;
+INSERT INTO concurrent_checkpoint_wal.pk_tbl SELECT * FROM range(({x} * 2000) + {threadid} * 100, ({x} * 2000) + ({threadid} + 1) * 100) t(i) WHERE i%2=0;
 
 # inserting in the fk table now succeeds
 onlyif threadid<>10
 statement ok
-INSERT INTO concurrent_checkpoint_wal.fk_tbl SELECT * FROM range((${x} * 2000) + ${threadid} * 100, (${x} * 2000) + (${threadid} + 1) * 100) t(i) WHERE i%2=0;
+INSERT INTO concurrent_checkpoint_wal.fk_tbl SELECT * FROM range(({x} * 2000) + {threadid} * 100, ({x} * 2000) + ({threadid} + 1) * 100) t(i) WHERE i%2=0;
 
 # deleting the rows now fails
 onlyif threadid<>10
 statement error
-DELETE FROM concurrent_checkpoint_wal.pk_tbl WHERE i >= (${x} * 2000) + ${threadid} * 100 AND i < (${x} * 2000) + (${threadid} + 1) * 100 AND i%2=0
+DELETE FROM concurrent_checkpoint_wal.pk_tbl WHERE i >= ({x} * 2000) + {threadid} * 100 AND i < ({x} * 2000) + ({threadid} + 1) * 100 AND i%2=0
 ----
 constraint
 
@@ -119,15 +119,15 @@ statement ok
 DETACH concurrent_checkpoint_wal
 
 statement ok
-ATTACH '__TEST_DIR__/concurrent_checkpoint_deletes_fk${sleep_time}.db' AS concurrent_checkpoint_wal
+ATTACH '{TEST_DIR}/concurrent_checkpoint_deletes_fk{sleep_time}.db' AS concurrent_checkpoint_wal
 
 foreach tbl_name pk_tbl fk_tbl
 
 query I
 SELECT CASE WHEN regular_count = index_count THEN NULL ELSE {'regular': regular_count, 'index_count': index_count} END
 FROM (
-	SELECT (SELECT COUNT(*) FROM concurrent_checkpoint_wal.${tbl_name}) regular_count,
-	       (SELECT COUNT(*) FROM concurrent_checkpoint_wal.${tbl_name} WHERE i < 19_999) + (SELECT COUNT(*) FROM concurrent_checkpoint_wal.${tbl_name} WHERE i = 19_999) AS index_count
+	SELECT (SELECT COUNT(*) FROM concurrent_checkpoint_wal.{tbl_name}) regular_count,
+	       (SELECT COUNT(*) FROM concurrent_checkpoint_wal.{tbl_name} WHERE i < 19_999) + (SELECT COUNT(*) FROM concurrent_checkpoint_wal.{tbl_name} WHERE i = 19_999) AS index_count
 )
 ----
 NULL

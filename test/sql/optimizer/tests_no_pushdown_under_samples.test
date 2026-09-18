@@ -2,6 +2,9 @@
 # group: [optimizer]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 CREATE OR REPLACE TABLE df AS (SELECT * AS i FROM range(10));
 
 statement ok

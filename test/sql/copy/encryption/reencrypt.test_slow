@@ -9,13 +9,10 @@ require tpch
 require httpfs
 
 statement ok
-PRAGMA enable_verification
+ATTACH '{TEST_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
-
-statement ok
-ATTACH '__TEST_DIR__/reencrypted.duckdb' as reencrypted (ENCRYPTION_KEY 'xxxx');
+ATTACH '{TEST_DIR}/reencrypted.duckdb' as reencrypted (ENCRYPTION_KEY 'xxxx');
 
 statement ok
 USE encrypted;
@@ -36,22 +33,22 @@ statement ok
 DETACH encrypted
 
 statement error
-ATTACH '__TEST_DIR__/reencrypted.duckdb' AS reencrypted;
+ATTACH '{TEST_DIR}/reencrypted.duckdb' AS reencrypted;
 ----
 
 statement ok
-ATTACH '__TEST_DIR__/reencrypted.duckdb' AS reencrypted (ENCRYPTION_KEY 'xxxx');
+ATTACH '{TEST_DIR}/reencrypted.duckdb' AS reencrypted (ENCRYPTION_KEY 'xxxx');
 
 statement ok
 DETACH reencrypted
 
 statement error
-ATTACH '__TEST_DIR__/reencrypted.duckdb' AS reencrypted (ENCRYPTION_KEY 'asdf');
+ATTACH '{TEST_DIR}/reencrypted.duckdb' AS reencrypted (ENCRYPTION_KEY 'asdf');
 ----
 Invalid Input Error: Wrong encryption key used to open the database file
 
 statement ok
-ATTACH '__TEST_DIR__/reencrypted.duckdb' AS reencrypted (ENCRYPTION_KEY 'xxxx');
+ATTACH '{TEST_DIR}/reencrypted.duckdb' AS reencrypted (ENCRYPTION_KEY 'xxxx');
 
 query I
 SELECT l_suppkey FROM reencrypted.lineitem limit 10;

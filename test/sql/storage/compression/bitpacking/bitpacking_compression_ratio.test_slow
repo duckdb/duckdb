@@ -6,7 +6,7 @@
 # because the bitpacking groups no longer fit the blocks.
 require block_size 262144
 
-load __TEST_DIR__/test_bitpacking.db
+load {TEST_DIR}/test_bitpacking.db
 
 #### CONSTANT MODE Compression ratio calculation:
 # For single row group (note we choose values such that we don't create the constant segments):
@@ -220,7 +220,7 @@ statement ok
 PRAGMA force_compression='uncompressed';
 
 statement ok
-CREATE TABLE test_uncompressed AS SELECT (i%2)::${type} FROM range(0, 2500000) tbl(i);
+CREATE TABLE test_uncompressed AS SELECT (i%2)::{type} FROM range(0, 2500000) tbl(i);
 
 statement ok
 checkpoint
@@ -229,14 +229,14 @@ statement ok
 PRAGMA force_compression='bitpacking'
 
 statement ok
-CREATE TABLE test_bitpacked AS SELECT (i%2)::${type} FROM range(0, 2500000) tbl(i);
+CREATE TABLE test_bitpacked AS SELECT (i%2)::{type} FROM range(0, 2500000) tbl(i);
 
 statement ok
 checkpoint
 
 # assert compression ratio >2 wich should be achieved for even the smallest types for this data
 query II
-select (uncompressed::FLOAT / bitpacked::FLOAT) > 2, CAST(1 as ${type}) FROM (
+select (uncompressed::FLOAT / bitpacked::FLOAT) > 2, CAST(1 as {type}) FROM (
     select
         (select count(distinct block_id) from pragma_storage_info('test_bitpacked') where segment_type not in('VARCHAR', 'VALIDITY')) as bitpacked,
         (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type not in('VARCHAR', 'VALIDITY')) as uncompressed

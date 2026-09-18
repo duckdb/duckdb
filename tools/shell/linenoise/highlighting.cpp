@@ -1,9 +1,13 @@
 #include "linenoise.hpp"
 #include "linenoise.h"
 #include "highlighting.hpp"
+
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/common/string.hpp"
 #include "shell_highlight.hpp"
+#include "duckdb/parser/peg/tokenizer/highlight_tokenizer.hpp"
 
 namespace duckdb {
 
@@ -11,20 +15,26 @@ bool Highlighting::IsEnabled() {
 	return duckdb_shell::ShellHighlight::IsEnabled();
 }
 
-static tokenType convertToken(duckdb::SimplifiedTokenType token_type) {
+static tokenType convertToken(TokenType token_type) {
 	switch (token_type) {
-	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
+	case TokenType::IDENTIFIER:
 		return tokenType::TOKEN_IDENTIFIER;
-	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
+	case TokenType::NUMBER_LITERAL:
 		return tokenType::TOKEN_NUMERIC_CONSTANT;
-	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
+	case TokenType::STRING_LITERAL:
 		return tokenType::TOKEN_STRING_CONSTANT;
-	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR:
+	case TokenType::OPERATOR:
+	case TokenType::TERMINATOR: // FIXME(Dtenwolde): Should become a special token for highlighting
 		return tokenType::TOKEN_OPERATOR;
-	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
+	case TokenType::KEYWORD:
 		return tokenType::TOKEN_KEYWORD;
-	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT:
+	case TokenType::COMMENT:
 		return tokenType::TOKEN_COMMENT;
+	case TokenType::TOKEN_ERROR:
+		return tokenType::TOKEN_ERROR;
+	case TokenType::END_OF_INPUT:
+	case TokenType::END_OF_INPUT_AUTOCOMPLETE:
+		return tokenType::TOKEN_OPERATOR;
 	default:
 		throw duckdb::InternalException("Unrecognized token type");
 	}
@@ -32,13 +42,22 @@ static tokenType convertToken(duckdb::SimplifiedTokenType token_type) {
 
 static vector<highlightToken> GetParseTokens(char *buf, size_t len) {
 	string sql(buf, len);
-	auto parseTokens = duckdb::Parser::Tokenize(sql);
-
 	vector<highlightToken> tokens;
-	for (auto &token : parseTokens) {
+	vector<MatcherToken> matcher_tokens;
+	HighlightTokenizerBehavior behavior(sql, matcher_tokens);
+	auto &keyword_helper = DuckDBKeywordHelper::Instance();
+	Tokenizer tokenizer(keyword_helper);
+	tokenizer.TokenizeInput(behavior);
+	vector<SimplifiedToken> result;
+	result.reserve(matcher_tokens.size());
+	for (auto &token : matcher_tokens) {
 		highlightToken new_token;
-		new_token.type = convertToken(token.type);
-		new_token.start = token.start;
+		if (token.unterminated) {
+			new_token.type = tokenType::TOKEN_ERROR;
+		} else {
+			new_token.type = convertToken(token.type);
+		}
+		new_token.start = token.offset;
 		tokens.push_back(new_token);
 	}
 

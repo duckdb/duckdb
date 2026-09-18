@@ -30,7 +30,9 @@ public:
 	                                            TableCatalogEntry &table_entry, unique_ptr<LogicalOperator> plan,
 	                                            unique_ptr<AlterTableInfo> alter_table_info);
 
-	static void InitCreateIndexInfo(LogicalGet &get, CreateIndexInfo &info, const string &schema);
+	static void InitCreateIndexInfo(LogicalGet &get, CreateIndexInfo &info);
+	//! Deprecated: the schema is derived from the table the index is created on
+	static void InitCreateIndexInfo(LogicalGet &get, CreateIndexInfo &info, const Identifier &schema);
 
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,

@@ -13,11 +13,11 @@ COPY (
 		END AS g,
 		i AS id
 	FROM range(1000) tbl(i)
-) TO '__TEST_DIR__/duckdb_geo_nullable.parquet' (FORMAT PARQUET, GEOPARQUET_VERSION 'V2', ROW_GROUP_SIZE 1000);
+) TO '{TEST_DIR}/duckdb_geo_nullable.parquet' (FORMAT PARQUET, GEOPARQUET_VERSION 'V2', ROW_GROUP_SIZE 1000);
 
 # The predicate covers the full extent of the column, but the NULL values still do not match it
 query I
-SELECT count(*) FROM '__TEST_DIR__/duckdb_geo_nullable.parquet' WHERE g && 'POLYGON((-1 -1, 200 -1, 200 200, -1 200, -1 -1))'::GEOMETRY;
+SELECT count(*) FROM '{TEST_DIR}/duckdb_geo_nullable.parquet' WHERE g && 'POLYGON((-1 -1, 200 -1, 200 200, -1 200, -1 -1))'::GEOMETRY;
 ----
 900
 
@@ -25,7 +25,7 @@ statement ok
 SET disabled_optimizers='filter_pushdown';
 
 query I
-SELECT count(*) FROM '__TEST_DIR__/duckdb_geo_nullable.parquet' WHERE g && 'POLYGON((-1 -1, 200 -1, 200 200, -1 200, -1 -1))'::GEOMETRY;
+SELECT count(*) FROM '{TEST_DIR}/duckdb_geo_nullable.parquet' WHERE g && 'POLYGON((-1 -1, 200 -1, 200 200, -1 200, -1 -1))'::GEOMETRY;
 ----
 900
 
@@ -81,7 +81,7 @@ SELECT count(*) FROM geo_nullable WHERE g && 'POLYGON((500 500, 600 500, 600 600
 ----
 0
 
-# Empty geometries contribute nothing to the extent, but never intersect anything either,
+# Empty geometries contribute nothing to the zonemap, but never intersect anything either,
 # so a covering predicate cannot prune the filter away when the column contains one
 statement ok
 CREATE TABLE geo_empty AS SELECT printf('POINT(%d %d)', i % 100, i % 100)::GEOMETRY AS g FROM range(999) tbl(i);
@@ -107,9 +107,9 @@ RESET disabled_optimizers;
 
 # Same, for a parquet file - there the empty geometry is not even visible in the statistics
 statement ok
-COPY (SELECT * FROM geo_empty) TO '__TEST_DIR__/duckdb_geo_empty.parquet' (FORMAT PARQUET, GEOPARQUET_VERSION 'V2', ROW_GROUP_SIZE 2000);
+COPY (SELECT * FROM geo_empty) TO '{TEST_DIR}/duckdb_geo_empty.parquet' (FORMAT PARQUET, GEOPARQUET_VERSION 'V2', ROW_GROUP_SIZE 2000);
 
 query I
-SELECT count(*) FROM '__TEST_DIR__/duckdb_geo_empty.parquet' WHERE g && 'POLYGON((-1 -1, 200 -1, 200 200, -1 200, -1 -1))'::GEOMETRY;
+SELECT count(*) FROM '{TEST_DIR}/duckdb_geo_empty.parquet' WHERE g && 'POLYGON((-1 -1, 200 -1, 200 200, -1 200, -1 -1))'::GEOMETRY;
 ----
 999

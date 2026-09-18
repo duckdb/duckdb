@@ -305,6 +305,18 @@ functions:
     description: |
       Creates a TIMESTAMP_TZ value from a duckdb_timestamp
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_timestamp_tz_ns:
+    lifecycle:
+      - [ "stable", "v1.5.6", "2026-07-30" ]
+      - [ "unstable", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: timestamp_ns
+        description: The duckdb_timestamp_ns value
+    return_type: value
+    description: |
+      Creates a TIMESTAMP_TZ_NS value from a duckdb_timestamp_ns
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_timestamp_s:
     offset: 323
     lifecycle:
@@ -649,6 +661,18 @@ functions:
     description: |
       Returns the TIMESTAMP_TZ value of the given value.
     return_description: A duckdb_timestamp, or MinValue<timestamp_tz> if the value cannot be converted
+  get_timestamp_tz_ns:
+    lifecycle:
+      - [ "stable", "v1.5.6", "2026-07-30" ]
+      - [ "unstable", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a TIMESTAMP_TZ_NS
+    return_type: timestamp_ns
+    description: |
+      Returns the TIMESTAMP_TZ_NS value of the given value.
+    return_description: A duckdb_timestamp_ns, or MinValue<timestamp_tz_ns> if the value cannot be converted
   get_timestamp_s:
     offset: 327
     lifecycle:

@@ -1,4 +1,6 @@
+#include "duckdb/common/multi_file/table_function_multi_file.hpp"
 #include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/function/table/read_duckdb.hpp"
 
 #include "duckdb/common/enum_util.hpp"
@@ -20,6 +22,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/base_scanner.hpp"
@@ -29,7 +32,7 @@
 #include <limits>
 #include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_schema_discovery.hpp"
 
 namespace duckdb {
 
@@ -57,6 +60,12 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["sep"] = LogicalType::VARCHAR;
 	table_function.named_parameters["delim"] = LogicalType::VARCHAR;
+	// aliases that the CSV options accept - COPY has always taken these, so the table function takes them too
+	table_function.named_parameters["separator"] = LogicalType::VARCHAR;
+	table_function.named_parameters["delimiter"] = LogicalType::VARCHAR;
+	table_function.named_parameters["null"] = LogicalType::ANY;
+	table_function.named_parameters["date_format"] = LogicalType::VARCHAR;
+	table_function.named_parameters["timestamp_format"] = LogicalType::VARCHAR;
 	table_function.named_parameters["quote"] = LogicalType::VARCHAR;
 	table_function.named_parameters["new_line"] = LogicalType::VARCHAR;
 	table_function.named_parameters["escape"] = LogicalType::VARCHAR;
@@ -79,6 +88,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["rejects_table"] = LogicalType::VARCHAR;
 	table_function.named_parameters["rejects_scan"] = LogicalType::VARCHAR;
 	table_function.named_parameters["rejects_limit"] = LogicalType::BIGINT;
+	table_function.named_parameters["rejects_line_size_limit"] = LogicalType::BIGINT;
 	table_function.named_parameters["force_not_null"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["buffer_size"] = LogicalType::UBIGINT;
 	table_function.named_parameters["decimal_separator"] = LogicalType::VARCHAR;
@@ -140,24 +150,70 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(Deserializer &deserializer,
 	// return bind_data;
 }
 
+static bool PushdownProjectionExpression(ClientContext &context, const TableFunctionProjectionExpressionInput &input) {
+	if (!BoundCastExpression::IsCast(input.expr)) {
+		return false;
+	}
+	const auto &cast = input.expr.Cast<BoundFunctionExpression>();
+	const auto &target_type = cast.GetReturnType();
+	auto &bind_data = input.get.bind_data->Cast<MultiFileBindData>();
+	const idx_t idx = input.get.GetColumnIds()[input.column_index].GetPrimaryIndex();
+	// Hive-partition and filename columns are produced from the file path by
+	// separate finalize expressions, not parsed from the file. Retyping them
+	// here would desync those expressions, so leave the cast in place.
+	// See test/sql/copy/csv/csv_hive.test
+	for (const auto &partition : bind_data.reader_bind.hive_partitioning_indexes) {
+		if (partition.index == idx) {
+			return false;
+		}
+	}
+	if (bind_data.reader_bind.filename_idx.IsValid() && bind_data.reader_bind.filename_idx.GetIndex() == idx) {
+		return false;
+	}
+	bind_data.types[idx] = target_type;
+	bind_data.columns[idx].type = target_type;
+	return true;
+}
+
+//! The same, for the multi-file wrapper around read_single_csv_file - every file is bound against the schema of the
+//! scan, so the pushed-down type has to be applied there too. That way the CSV reader converts to it itself, and
+//! "ignore_errors" applies to the conversions that fail
+static bool PushdownProjectionExpressionMultiFile(ClientContext &context,
+                                                  const TableFunctionProjectionExpressionInput &input) {
+	if (!PushdownProjectionExpression(context, input)) {
+		return false;
+	}
+	auto &bind_data = input.get.bind_data->Cast<MultiFileBindData>();
+	auto &data = bind_data.bind_data->Cast<TableFunctionMultiFileData>();
+	const idx_t idx = input.get.GetColumnIds()[input.column_index].GetPrimaryIndex();
+	if (idx < data.options.expected_types.size()) {
+		data.options.expected_types[idx] = input.expr.Cast<BoundFunctionExpression>().GetReturnType();
+	}
+	return true;
+}
+
 TableFunction ReadCSVTableFunction::GetFunction() {
-	MultiFileFunction<CSVMultiFileInfo> read_csv("read_csv");
+	// the multi-file CSV reader is the single-file CSV reader wrapped into a multi-file function
+	auto read_csv = ReadCSVTableFunction::GetMultiFileFunction("read_csv");
 	read_csv.serialize = CSVReaderSerialize;
 	read_csv.deserialize = CSVReaderDeserialize;
-	read_csv.type_pushdown = MultiFileFunction<CSVMultiFileInfo>::PushdownType;
-	ReadCSVAddNamedParameters(read_csv);
-	return static_cast<TableFunction>(read_csv);
+	read_csv.projection_expression_pushdown = PushdownProjectionExpressionMultiFile;
+	return read_csv;
 }
 
 TableFunction ReadCSVTableFunction::GetAutoFunction() {
 	auto read_csv_auto = ReadCSVTableFunction::GetFunction();
-	read_csv_auto.name = "read_csv_auto";
+	read_csv_auto.SetName("read_csv_auto");
 	return read_csv_auto;
 }
 
 void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(MultiFileReader::CreateFunctionSet(ReadCSVTableFunction::GetFunction()));
 	set.AddFunction(MultiFileReader::CreateFunctionSet(ReadCSVTableFunction::GetAutoFunction()));
+	// the single-file CSV reader that read_csv is built on
+	TableFunctionSet single_file_set("read_single_csv_file");
+	single_file_set.AddFunction(ReadCSVTableFunction::GetSingleFileFunction());
+	set.AddFunction(std::move(single_file_set));
 }
 
 unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, ReplacementScanInput &input,
@@ -179,12 +235,12 @@ unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, ReplacementScanI
 	}
 	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
+	children.push_back(ConstantExpression::String(table_name));
 	table_function->function = make_uniq<FunctionExpression>("read_csv_auto", std::move(children));
 
 	if (!FileSystem::HasGlob(table_name)) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		table_function->alias = fs.ExtractBaseName(table_name);
+		table_function->alias = Identifier(fs.ExtractBaseName(table_name));
 	}
 
 	return std::move(table_function);

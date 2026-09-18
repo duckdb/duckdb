@@ -2,9 +2,6 @@
 # description: Usage of valid generated columns that do not reference any columns
 # group: [virtual]
 
-statement ok
-PRAGMA enable_verification
-
 # Aggregate functions are not supported here
 statement error
 CREATE TABLE tbl (

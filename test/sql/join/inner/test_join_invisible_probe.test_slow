@@ -2,9 +2,6 @@
 # description: Test joins that would generate a perfect hashtable
 # group: [inner]
 
-statement ok
-PRAGMA enable_verification
-
 # create the table integers with the values 0..1000
 statement ok
 CREATE TABLE test3 AS SELECT range r FROM range(0, 1024, 1);

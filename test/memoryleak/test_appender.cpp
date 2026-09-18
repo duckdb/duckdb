@@ -4,7 +4,6 @@
 #include "test_config.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 void rand_str(char *dest, idx_t length) {
 	char charset[] = "0123456789"

@@ -4,7 +4,7 @@
 
 # TODO: re-enable these tests once we encrypt the full Parquet Encryption spec
 # for now, parquet crypto tests are in test/sql/copy/parquet/parquet_encryption.test_slow
-mode skip
+mode skip instable
 
 require parquet
 

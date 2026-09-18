@@ -1,9 +1,6 @@
 # name: test/sql/types/test_user_type_errors_18452.test
 # group: [types]
 
-statement ok
-PRAGMA enable_verification
-
 # We used to have issues parsing lots of type arguments, but thats no longer the case,
 # so these should all error out because type X/XX does not exist.
 

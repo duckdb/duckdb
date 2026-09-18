@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb.h"
 #include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
 #ifdef DEBUG
 #include "duckdb/common/vector.hpp"

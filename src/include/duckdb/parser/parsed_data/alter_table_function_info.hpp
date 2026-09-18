@@ -19,7 +19,7 @@ namespace duckdb {
 enum class AlterTableFunctionType : uint8_t { INVALID = 0, ADD_FUNCTION_OVERLOADS = 1 };
 
 struct AlterTableFunctionInfo : public AlterInfo {
-	AlterTableFunctionInfo(AlterTableFunctionType type, AlterEntryData data);
+	AlterTableFunctionInfo(AlterTableFunctionType type, const AlterEntryData &data);
 	~AlterTableFunctionInfo() override;
 
 	AlterTableFunctionType alter_table_function_type;
@@ -32,7 +32,7 @@ public:
 // AddTableFunctionOverloadInfo
 //===--------------------------------------------------------------------===//
 struct AddTableFunctionOverloadInfo : public AlterTableFunctionInfo {
-	AddTableFunctionOverloadInfo(AlterEntryData data, TableFunctionSet new_overloads);
+	AddTableFunctionOverloadInfo(const AlterEntryData &data, TableFunctionSet new_overloads);
 	~AddTableFunctionOverloadInfo() override;
 
 	TableFunctionSet new_overloads;

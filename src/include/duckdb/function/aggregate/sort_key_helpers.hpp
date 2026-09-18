@@ -22,26 +22,25 @@ struct AggregateSortKeyHelpers {
 
 		Vector sort_key(LogicalType::BLOB);
 		auto modifiers = OrderModifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST);
-		CreateSortKeyHelpers::CreateSortKey(input, count, modifiers, sort_key);
+		CreateSortKeyHelpers::CreateSortKey(input, modifiers, sort_key);
 
-		UnifiedVectorFormat idata;
+		optional<VectorValidityIterator> input_validity;
 		if (IGNORE_NULLS) {
-			input.ToUnifiedFormat(count, idata);
+			input_validity = input.Validity();
 		}
 
 		UnifiedVectorFormat kdata;
-		sort_key.ToUnifiedFormat(count, kdata);
+		sort_key.ToUnifiedFormat(kdata);
 
 		UnifiedVectorFormat sdata;
-		state_vector.ToUnifiedFormat(count, sdata);
+		state_vector.ToUnifiedFormat(sdata);
 
 		auto key_data = UnifiedVectorFormat::GetData<string_t>(kdata);
 		auto states = UnifiedVectorFormat::GetData<STATE *>(sdata);
 		for (idx_t i = 0; i < count; i++) {
 			const auto sidx = sdata.sel->get_index(i);
 			if (IGNORE_NULLS) {
-				auto idx = idata.sel->get_index(i);
-				if (!idata.validity.RowIsValid(idx)) {
+				if (!input_validity.value().IsValid(i)) {
 					continue;
 				}
 			}

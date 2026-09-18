@@ -2,11 +2,6 @@
 # description: Test allocating enough dummy list_entry_t's during tuple format serialization.
 # group: [duckfuzz]
 
-require notmusl
-
-statement ok
-PRAGMA enable_verification
-
 statement ok
 CREATE TABLE array_tbl(c50 INTEGER[2][]);
 

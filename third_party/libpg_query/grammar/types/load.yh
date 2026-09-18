@@ -1,3 +1,0 @@
-%type <str> file_name
-%type <str> opt_ext_version
-%type <loadinstalltype> opt_force

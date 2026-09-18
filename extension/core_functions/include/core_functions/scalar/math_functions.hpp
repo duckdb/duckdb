@@ -115,6 +115,16 @@ struct Atan2Fun {
 	static ScalarFunction GetFunction();
 };
 
+struct BinomFun {
+	static constexpr const char *Name = "binom";
+	static constexpr const char *Parameters = "n,k";
+	static constexpr const char *Description = "Returns binom(n,k)";
+	static constexpr const char *Example = "binom(5,2)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 struct BitCountFun {
 	static constexpr const char *Name = "bit_count";
 	static constexpr const char *Parameters = "x";
@@ -373,6 +383,22 @@ struct RoundFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct RoundEvenFun {
+	static constexpr const char *Name = "round_even";
+	static constexpr const char *Parameters = "x,precision";
+	static constexpr const char *Description = "Rounds x to s decimal places, rounding halfway cases to the nearest even digit";
+	static constexpr const char *Example = "round_even(24.5, 0)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct RoundbankersFun {
+	using ALIAS = RoundEvenFun;
+
+	static constexpr const char *Name = "roundbankers";
+};
+
 struct SignFun {
 	static constexpr const char *Name = "sign";
 	static constexpr const char *Parameters = "x";
@@ -425,7 +451,7 @@ struct TanFun {
 
 struct TruncFun {
 	static constexpr const char *Name = "trunc";
-	static constexpr const char *Parameters = "x";
+	static constexpr const char *Parameters = "x,precision";
 	static constexpr const char *Description = "Truncates the number";
 	static constexpr const char *Example = "trunc(17.4)";
 	static constexpr const char *Categories = "";

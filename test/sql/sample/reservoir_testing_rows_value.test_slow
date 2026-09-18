@@ -5,7 +5,7 @@
 loop i 1 8
 
 statement ok
-pragma threads=${i};
+pragma threads={i};
 
 statement ok
 CREATE or replace TABLE t1 as select range a from range(1000);

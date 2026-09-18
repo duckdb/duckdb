@@ -12,6 +12,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/projection_index.hpp"
 
 namespace duckdb {
 
@@ -36,6 +37,14 @@ public:
 
 	bool empty() const { // NOLINT: match stl API
 		return internal_vector.empty();
+	}
+
+	bool operator==(const IndexVector<T, INDEX_TYPE> &other) const {
+		return internal_vector == other.internal_vector;
+	}
+
+	bool operator!=(const IndexVector<T, INDEX_TYPE> &other) const {
+		return !(*this == other);
 	}
 
 	void reserve(idx_t size) { // NOLINT: match stl API

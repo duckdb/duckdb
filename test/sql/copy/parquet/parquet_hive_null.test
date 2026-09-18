@@ -8,11 +8,11 @@ statement ok
 create table test as select i%5 as a, i%2 as b from range(0,10) tbl(i);
 
 statement ok
-copy (FROM test UNION ALL select 'NULL' as a, 'NULL' as b) to '__TEST_DIR__/null-parquet' (PARTITION_BY (a,b), FORMAT 'parquet', WRITE_PARTITION_COLUMNS);
+copy (FROM test UNION ALL select 'NULL' as a, 'NULL' as b) to '{TEST_DIR}/null-parquet' (PARTITION_BY (a,b), FORMAT 'parquet', WRITE_PARTITION_COLUMNS);
 
 query II
 select * 
-from parquet_scan('__TEST_DIR__/null-parquet/**/*.parquet', hive_partitioning=1, hive_types={'a': INT})
+from parquet_scan('{TEST_DIR}/null-parquet/**/*.parquet', hive_partitioning=1, hive_types={'a': INT})
 ORDER BY ALL
 ----
 0	0
@@ -31,11 +31,11 @@ statement ok
 create table test2 as select i%5 as a, i%2 as b, i as c from range(0,10) tbl(i);
 
 statement ok
-copy (FROM test2 UNION ALL select 'NULL' as a, 'NULL' as b, 'NULL' as c) to '__TEST_DIR__/null-parquet' (PARTITION_BY (a,b), FORMAT 'parquet', OVERWRITE);
+copy (FROM test2 UNION ALL select 'NULL' as a, 'NULL' as b, 'NULL' as c) to '{TEST_DIR}/null-parquet' (PARTITION_BY (a,b), FORMAT 'parquet', OVERWRITE);
 
 query III
 select * 
-from parquet_scan('__TEST_DIR__/null-parquet/**/*.parquet', hive_partitioning=1, hive_types={'a': INT})
+from parquet_scan('{TEST_DIR}/null-parquet/**/*.parquet', hive_partitioning=1, hive_types={'a': INT})
 ORDER BY ALL
 ----
 0	0	0
@@ -53,36 +53,130 @@ NULL	NULL	NULL
 # Test __HIVE_DEFAULT_PARTITION__ is treated as NULL when reading
 # First create the nested directory structure using a dummy partitioned write
 statement ok
-copy (select 0 as c, NULL::INT as a, NULL::INT as b) to '__TEST_DIR__/hive-default-partition-test' (PARTITION_BY (a, b), FORMAT 'parquet', OVERWRITE);
+copy (select 0 as c, NULL::INT as a, NULL::INT as b) to '{TEST_DIR}/hive-default-partition-test' (PARTITION_BY (a, b), FORMAT 'parquet', OVERWRITE);
 
 # Now overwrite the file in that directory to test reading __HIVE_DEFAULT_PARTITION__
 statement ok
-copy (select 1 as c) to '__TEST_DIR__/hive-default-partition-test/a=__HIVE_DEFAULT_PARTITION__/b=__HIVE_DEFAULT_PARTITION__/data.parquet' (FORMAT 'parquet');
+copy (select 1 as c) to '{TEST_DIR}/hive-default-partition-test/a=__HIVE_DEFAULT_PARTITION__/b=__HIVE_DEFAULT_PARTITION__/data.parquet' (FORMAT 'parquet');
 
 query III
 select *
-from parquet_scan('__TEST_DIR__/hive-default-partition-test/a=__HIVE_DEFAULT_PARTITION__/b=__HIVE_DEFAULT_PARTITION__/data.parquet', hive_partitioning=1, hive_types={'a': INT, 'b': INT})
+from parquet_scan('{TEST_DIR}/hive-default-partition-test/a=__HIVE_DEFAULT_PARTITION__/b=__HIVE_DEFAULT_PARTITION__/data.parquet', hive_partitioning=1, hive_types={'a': INT, 'b': INT})
 ORDER BY ALL
 ----
 1	NULL	NULL
+
+# Test that literal VARCHAR partition value 'NULL' is not read as SQL NULL
+statement ok
+CREATE TABLE test_literal_null_partition AS
+SELECT *
+FROM (VALUES ('NULL', 1), ('ok', 2)) v(p, id);
+
+statement ok
+COPY test_literal_null_partition TO '{TEST_DIR}/hive-literal-null-partition'
+(FORMAT PARQUET, PARTITION_BY (p), OVERWRITE);
+
+query III
+SELECT (p IS NULL)::INTEGER AS is_null, COALESCE((p='NULL')::INTEGER, -1) AS equals_literal, id
+FROM parquet_scan('{TEST_DIR}/hive-literal-null-partition/**/*.parquet', hive_partitioning=1)
+ORDER BY id
+----
+0	1	1
+0	0	2
 
 # Test that NULL values are written as __HIVE_DEFAULT_PARTITION__
 statement ok
 create table test_null_write as select 1 as c, NULL::INT as a, NULL::INT as b;
 
 statement ok
-copy test_null_write to '__TEST_DIR__/hive-null-write-test' (PARTITION_BY (a,b), FORMAT 'parquet');
+copy test_null_write to '{TEST_DIR}/hive-null-write-test' (PARTITION_BY (a,b), FORMAT 'parquet');
 
 # Verify we can read the data back (proves __HIVE_DEFAULT_PARTITION__ is used and read correctly)
 query III
 select *
-from parquet_scan('__TEST_DIR__/hive-null-write-test/**/*.parquet', hive_partitioning=1, hive_types={'a': INT, 'b': INT})
+from parquet_scan('{TEST_DIR}/hive-null-write-test/**/*.parquet', hive_partitioning=1, hive_types={'a': INT, 'b': INT})
 ORDER BY ALL
 ----
 1	NULL	NULL
 
 # Verify the directory structure uses __HIVE_DEFAULT_PARTITION__
 query I
-select count(*) from glob('__TEST_DIR__/hive-null-write-test/a=__HIVE_DEFAULT_PARTITION__/b=__HIVE_DEFAULT_PARTITION__/*.parquet');
+select count(*) from glob('{TEST_DIR}/hive-null-write-test/a=__HIVE_DEFAULT_PARTITION__/b=__HIVE_DEFAULT_PARTITION__/*.parquet');
+----
+1
+
+# Test that a literal '__HIVE_DEFAULT_PARTITION__' value does not collide with the NULL partition directory
+statement ok
+CREATE TABLE test_hive_default_collision AS
+SELECT *
+FROM (VALUES ('__HIVE_DEFAULT_PARTITION__', 1), (NULL, 2), ('ok', 3)) v(p, id);
+
+statement ok
+COPY test_hive_default_collision TO '{TEST_DIR}/hive-default-collision'
+(FORMAT PARQUET, PARTITION_BY (p), OVERWRITE);
+
+query III
+SELECT (p IS NULL)::INTEGER AS is_null, p, id
+FROM parquet_scan('{TEST_DIR}/hive-default-collision/**/*.parquet', hive_partitioning=1)
+ORDER BY id
+----
+0	__HIVE_DEFAULT_PARTITION__	1
+1	NULL	2
+0	ok	3
+
+# the literal value is escaped so that it gets a directory of its own
+query I
+select count(*) from glob('{TEST_DIR}/hive-default-collision/p=%5F_HIVE_DEFAULT_PARTITION__/*.parquet');
+----
+1
+
+query I
+select count(*) from glob('{TEST_DIR}/hive-default-collision/p=__HIVE_DEFAULT_PARTITION__/*.parquet');
+----
+1
+
+# the same collision on a multi-column partition
+statement ok
+CREATE TABLE test_hive_default_collision_multi AS
+SELECT *
+FROM (VALUES ('__HIVE_DEFAULT_PARTITION__', 'x', 1), (NULL, 'x', 2), (NULL, NULL, 3)) v(a, b, id);
+
+statement ok
+COPY test_hive_default_collision_multi TO '{TEST_DIR}/hive-default-collision-multi'
+(FORMAT PARQUET, PARTITION_BY (a, b), OVERWRITE);
+
+query IIII
+SELECT (a IS NULL)::INTEGER AS a_is_null, a, b, id
+FROM parquet_scan('{TEST_DIR}/hive-default-collision-multi/**/*.parquet', hive_partitioning=1)
+ORDER BY id
+----
+0	__HIVE_DEFAULT_PARTITION__	x	1
+1	NULL	x	2
+1	NULL	NULL	3
+
+# a value that only differs in case still collides on a case-insensitive file system
+statement ok
+COPY (
+    SELECT * FROM (
+        VALUES ('__hive_default_partition__', 1), (NULL, 2)
+    ) v(p, id)
+) TO '{TEST_DIR}/hive-default-collision-case'
+(FORMAT PARQUET, PARTITION_BY (p), OVERWRITE);
+
+query III
+SELECT (p IS NULL)::INTEGER AS is_null, p, id
+FROM read_parquet('{TEST_DIR}/hive-default-collision-case/**/*.parquet', hive_partitioning=true)
+ORDER BY id
+----
+0	__hive_default_partition__	1
+1	NULL	2
+
+query I
+select count(*) from glob('{TEST_DIR}/hive-default-collision-case/p=%5F_hive_default_partition__/*.parquet');
+----
+1
+
+query I
+select count(*) from glob('{TEST_DIR}/hive-default-collision-case/p=__HIVE_DEFAULT_PARTITION__/*.parquet');
 ----
 1

@@ -2,9 +2,6 @@
 # description: Hugeint try cast
 # group: [numeric]
 
-statement ok
-PRAGMA enable_verification
-
 # integer casts
 statement ok
 CREATE TABLE hugeints AS SELECT i::HUGEINT i FROM (VALUES (-170141183460469231731687303715884105728), (0), (170141183460469231731687303715884105727)) tbl(i)

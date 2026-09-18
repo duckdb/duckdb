@@ -2,9 +2,6 @@
 # description: Tests with ordinality across chunk borders
 # group: [ordinality]
 
-statement ok
-PRAGMA enable_verification;
-
 query I
 SELECT bool_and(ordinality - r == 1)
 FROM  (SELECT a, ro.r, ro.ordinality

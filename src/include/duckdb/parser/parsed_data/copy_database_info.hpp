@@ -13,6 +13,7 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 struct CopyDatabaseInfo : public ParseInfo {
@@ -20,14 +21,14 @@ public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::COPY_DATABASE_INFO;
 
 public:
-	explicit CopyDatabaseInfo() : ParseInfo(TYPE), target_database(INVALID_CATALOG) {
+	explicit CopyDatabaseInfo() : ParseInfo(TYPE) {
 	}
 
-	explicit CopyDatabaseInfo(const string &target_database) : ParseInfo(TYPE), target_database(target_database) {
+	explicit CopyDatabaseInfo(const Identifier &target_database) : ParseInfo(TYPE), target_database(target_database) {
 	}
 
 	// The destination database to which catalog entries are being copied
-	string target_database;
+	Identifier target_database;
 
 	// The catalog entries that are going to be created in the destination DB
 	vector<unique_ptr<CreateInfo>> entries;

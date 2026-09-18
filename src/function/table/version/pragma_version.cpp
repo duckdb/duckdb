@@ -15,7 +15,7 @@ struct PragmaVersionData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> PragmaVersionBind(ClientContext &context, TableFunctionBindInput &input,
-                                                  vector<LogicalType> &return_types, vector<string> &names) {
+                                                  vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("library_version");
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("source_id");
@@ -35,10 +35,9 @@ static void PragmaVersionFunction(ClientContext &context, TableFunctionInput &da
 		// finished returning values
 		return;
 	}
-	output.SetCardinality(1);
-	output.SetValue(0, 0, DuckDB::LibraryVersion());
-	output.SetValue(1, 0, DuckDB::SourceID());
-	output.SetValue(2, 0, DuckDB::ReleaseCodename());
+	output.data[0].Append(Value(DuckDB::LibraryVersion()));
+	output.data[1].Append(Value(DuckDB::SourceID()));
+	output.data[2].Append(Value(DuckDB::ReleaseCodename()));
 
 	data.finished = true;
 }
@@ -64,7 +63,7 @@ const char *DuckDB::LibraryVersion() {
 
 const char *DuckDB::ReleaseCodename() {
 	// dev releases have no name
-	if (StringUtil::Contains(DUCKDB_VERSION, "-dev")) {
+	if (!VersioningUtils::IsReleaseVersion(DUCKDB_VERSION)) {
 		return "Development Version";
 	}
 	if (StringUtil::StartsWith(DUCKDB_VERSION, "v1.2.")) {
@@ -78,6 +77,9 @@ const char *DuckDB::ReleaseCodename() {
 	}
 	if (StringUtil::StartsWith(DUCKDB_VERSION, "v1.5.")) {
 		return "Variegata";
+	}
+	if (StringUtil::StartsWith(DUCKDB_VERSION, "v2.0.")) {
+		return "Cyanoptera";
 	}
 	// add new version names here
 
@@ -97,7 +99,7 @@ struct PragmaPlatformData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> PragmaPlatformBind(ClientContext &context, TableFunctionBindInput &input,
-                                                   vector<LogicalType> &return_types, vector<string> &names) {
+                                                   vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("platform");
 	return_types.emplace_back(LogicalType::VARCHAR);
 	return nullptr;
@@ -113,8 +115,7 @@ static void PragmaPlatformFunction(ClientContext &context, TableFunctionInput &d
 		// finished returning values
 		return;
 	}
-	output.SetCardinality(1);
-	output.SetValue(0, 0, DuckDB::Platform());
+	output.data[0].Append(Value(DuckDB::Platform()));
 	data.finished = true;
 }
 

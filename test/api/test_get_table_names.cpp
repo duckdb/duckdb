@@ -7,7 +7,6 @@
 #include <thread>
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test GetTableNames", "[api]") {
 	DuckDB db(nullptr);
@@ -118,6 +117,31 @@ TEST_CASE("Test GetTableNames", "[api]") {
 	table_names = con.GetTableNames("with series_generator as (select * from generate_series(TIMESTAMP '2001-04-10', "
 	                                "TIMESTAMP '2001-04-11', INTERVAL 1 HOUR)) select * from series_generator");
 	REQUIRE(table_names.empty());
+
+	// table CTA
+	table_names = con.GetTableNames("CREATE TABLE some_cataloag.some_schema.some_table (a INT)");
+	REQUIRE(table_names.size() == 1);
+	REQUIRE(table_names.count("some_table"));
+
+	table_names = con.GetTableNames("CREATE TABLE some_cataloag.some_schema.some_table (a INT)", true);
+	REQUIRE(table_names.size() == 1);
+	REQUIRE(table_names.count("some_cataloag.some_schema.some_table"));
+
+	table_names = con.GetTableNames("CREATE TABLE some_cataloag.some_schema.some_table AS SELECT * FROM my_table");
+	REQUIRE(table_names.size() == 2);
+	REQUIRE(table_names.count("some_table"));
+	REQUIRE(table_names.count("my_table"));
+
+	table_names = con.GetTableNames("CREATE TEMP TABLE new_temp_table AS SELECT * FROM my_table");
+	REQUIRE(table_names.size() == 2);
+	REQUIRE(table_names.count("new_temp_table"));
+	REQUIRE(table_names.count("my_table"));
+
+	// CREATE TABLE IF NOT EXISTS
+	table_names = con.GetTableNames("CREATE TABLE IF NOT EXISTS my_schema.new_table4 AS SELECT * FROM my_table");
+	REQUIRE(table_names.size() == 2);
+	REQUIRE(table_names.count("new_table4"));
+	REQUIRE(table_names.count("my_table"));
 
 	if (!db.ExtensionIsLoaded("tpch")) {
 		return;

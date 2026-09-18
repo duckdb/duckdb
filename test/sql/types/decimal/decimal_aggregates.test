@@ -2,9 +2,6 @@
 # description: Test decimal aggregates
 # group: [decimal]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT typeof(FIRST('0.1'::DECIMAL(4,1)))
 ----

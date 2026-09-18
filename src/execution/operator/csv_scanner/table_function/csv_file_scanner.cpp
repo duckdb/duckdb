@@ -7,15 +7,15 @@
 namespace duckdb {
 
 CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, CSVReaderOptions options_p,
-                         const MultiFileOptions &file_options, const vector<string> &names,
+                         const MultiFileOptions &file_options, const vector<Identifier> &names,
                          const vector<LogicalType> &types, CSVSchema &file_schema, bool per_file_single_threaded,
                          shared_ptr<CSVBufferManager> buffer_manager_p, bool fixed_schema)
-    : BaseFileReader(file_p), buffer_manager(std::move(buffer_manager_p)),
+    : file(file_p), buffer_manager(std::move(buffer_manager_p)),
       error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
       options(std::move(options_p)) {
 	// Initialize Buffer Manager
 	if (!buffer_manager) {
-		buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file, per_file_single_threaded);
+		buffer_manager = CSVBufferManager::Open(context, options, file, per_file_single_threaded);
 	}
 	// Initialize On Disk and Size of file
 	on_disk_file = buffer_manager->file_handle->OnDiskFile();
@@ -51,9 +51,9 @@ CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, CSV
 
 CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, const CSVReaderOptions &options_p,
                          const MultiFileOptions &file_options)
-    : BaseFileReader(file_p), error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
+    : file(file_p), error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
       options(options_p) {
-	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file);
+	buffer_manager = CSVBufferManager::Open(context, options, file);
 	// Initialize On Disk and Size of file
 	on_disk_file = buffer_manager->file_handle->OnDiskFile();
 	file_size = buffer_manager->file_handle->FileSize();
@@ -78,9 +78,6 @@ CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, con
 	SetStart();
 }
 
-CSVUnionData::~CSVUnionData() {
-}
-
 void CSVFileScan::SetStart() {
 	idx_t rows_to_skip = options.GetSkipRows() + state_machine->dialect_options.header.GetValue();
 
@@ -94,10 +91,10 @@ void CSVFileScan::SetStart() {
 	start_iterator = skip_scanner.GetIterator();
 }
 
-void CSVFileScan::SetNamesAndTypes(const vector<string> &names_p, const vector<LogicalType> &types_p) {
-	names = names_p;
+void CSVFileScan::SetNamesAndTypes(const vector<Identifier> &names_p, const vector<LogicalType> &types_p) {
+	names = IdentifiersToStrings(names_p);
 	types = types_p;
-	columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(names, types);
+	columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(names_p, types);
 }
 
 void CSVFileScan::InitializeFileNamesTypes() {
@@ -157,6 +154,25 @@ void CSVFileScan::InitializeProjection() {
 
 void CSVFileScan::Finish() {
 	buffer_manager.reset();
+}
+
+double CSVFileScan::GetProgressInFile(ClientContext &context) {
+	auto manager = buffer_manager;
+	if (!manager) {
+		// We are done with this file, so it's 100%
+		return 100.0;
+	}
+	double total_bytes_read;
+	if (manager->file_handle->compression_type == FileCompressionType::GZIP ||
+	    manager->file_handle->compression_type == FileCompressionType::ZSTD) {
+		// compressed file: we care about the progress made in the *underlying* file handle
+		// the bytes read from the uncompressed file are skewed
+		total_bytes_read = manager->file_handle->GetProgress();
+	} else {
+		total_bytes_read = static_cast<double>(bytes_read);
+	}
+	double file_progress = total_bytes_read / static_cast<double>(file_size);
+	return file_progress * 100.0;
 }
 
 } // namespace duckdb

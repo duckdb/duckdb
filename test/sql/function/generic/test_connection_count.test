@@ -2,9 +2,6 @@
 # description: Test the connection_count table function.
 # group: [generic]
 
-statement ok
-PRAGMA enable_verification
-
 statement ok con1
 BEGIN
 

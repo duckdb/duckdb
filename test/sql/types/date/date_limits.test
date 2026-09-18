@@ -2,9 +2,6 @@
 # description: Test date limits
 # group: [date]
 
-statement ok
-PRAGMA enable_verification
-
 # min date: 5877642-06-23 (BC)
 query I
 select '1969-01-01'::date

@@ -2,9 +2,6 @@
 # description: BAR test
 # group: [string]
 
-statement ok
-pragma enable_verification
-
 query I
 select bar(x * x, 0, 100) from range(0, 11) t(x)
 ----

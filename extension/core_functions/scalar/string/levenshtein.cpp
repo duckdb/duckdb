@@ -69,16 +69,18 @@ static int64_t LevenshteinScalarFunction(Vector &result, const string_t str, str
 }
 
 static void LevenshteinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &str_vec = args.data[0];
-	auto &tgt_vec = args.data[1];
+	const auto &str_vec = args.data[0];
+	const auto &tgt_vec = args.data[1];
 
-	BinaryExecutor::Execute<string_t, string_t, int64_t>(
-	    str_vec, tgt_vec, result, args.size(),
-	    [&](string_t str, string_t tgt) { return LevenshteinScalarFunction(result, str, tgt); });
+	BinaryExecutor::Execute<string_t, string_t, int64_t>(str_vec, tgt_vec, result, [&](string_t str, string_t tgt) {
+		return LevenshteinScalarFunction(result, str, tgt);
+	});
 }
 
 ScalarFunction LevenshteinFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BIGINT, LevenshteinFunction);
+	ScalarFunction fun({}, LogicalType::BIGINT, LevenshteinFunction);
+	fun.GetSignature().AddParameter("s1", LogicalType::VARCHAR).AddParameter("s2", LogicalType::VARCHAR);
+	return fun;
 }
 
 } // namespace duckdb

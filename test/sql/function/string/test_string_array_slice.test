@@ -2,9 +2,6 @@
 # description: String slicing test
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT 'hello'[0:2]
 ----

@@ -8,8 +8,14 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+
 #include "duckdb.hpp"
 #include "duckdb/common/compressed_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 
@@ -19,6 +25,14 @@ public:
 
 	std::string GetName() const override {
 		return "ZStdFileSystem";
+	}
+
+	FileCompressionType GetCompressionType() override {
+		return FileCompressionType::ZSTD;
+	}
+
+	bool CanHandleFile(const string &fpath) override {
+		return IsFileCompressed(fpath, FileCompressionType::ZSTD);
 	}
 
 	unique_ptr<StreamWrapper> CreateStream() override;

@@ -3,9 +3,6 @@
 # group: [timestamp]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE timestamps(w INTERVAL, t TIMESTAMP, shift INTERVAL, origin TIMESTAMP);
 
 statement ok
@@ -863,3 +860,8 @@ query I
 select time_bucket('-1 month'::interval, '2022-12-22'::timestamp, null::timestamp);
 ----
 NULL
+
+statement error
+SELECT time_bucket(INTERVAL '106751991' DAY, TIMESTAMP '1800-01-01 00:00:00', TIMESTAMP '1900-01-01 00:00:00');
+----
+Out of Range Error: Overflow in addition

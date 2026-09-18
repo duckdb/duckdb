@@ -4,6 +4,7 @@
 #include "core_functions/aggregate/holistic_functions.hpp"
 #include "core_functions/aggregate/nested_functions.hpp"
 #include "core_functions/aggregate/regression_functions.hpp"
+#include "core_functions/aggregate/variant_functions.hpp"
 #include "core_functions/scalar/bit_functions.hpp"
 #include "core_functions/scalar/blob_functions.hpp"
 #include "core_functions/scalar/date_functions.hpp"
@@ -113,6 +114,7 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(BarFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(Base64Fun),
 	DUCKDB_SCALAR_FUNCTION_SET(BinFun),
+	DUCKDB_SCALAR_FUNCTION(BinomFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(BitAndFun),
 	DUCKDB_SCALAR_FUNCTION_SET(BitCountFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(BitOrFun),
@@ -120,6 +122,7 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_AGGREGATE_FUNCTION_SET(BitXorFun),
 	DUCKDB_SCALAR_FUNCTION_SET(BitStringFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(BitstringAggFun),
+	DUCKDB_SCALAR_FUNCTION(BitStringSortKeyFun),
 	DUCKDB_AGGREGATE_FUNCTION(BoolAndFun),
 	DUCKDB_AGGREGATE_FUNCTION(BoolOrFun),
 	DUCKDB_SCALAR_FUNCTION(CanCastImplicitlyFun),
@@ -208,6 +211,7 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_AGGREGATE_FUNCTION(HistogramExactFun),
 	DUCKDB_SCALAR_FUNCTION_SET(HoursFun),
 	DUCKDB_SCALAR_FUNCTION(InSearchPathFun),
+	DUCKDB_SCALAR_FUNCTION(IndexKeyFun),
 	DUCKDB_SCALAR_FUNCTION(InstrFun),
 	DUCKDB_SCALAR_FUNCTION(IsHistogramOtherBinFun),
 	DUCKDB_SCALAR_FUNCTION_SET(IsFiniteFun),
@@ -261,6 +265,7 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(Log2Fun),
 	DUCKDB_SCALAR_FUNCTION(LpadFun),
 	DUCKDB_SCALAR_FUNCTION_SET(LtrimFun),
+	DUCKDB_AGGREGATE_FUNCTION_SET(LttbFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(MadFun),
 	DUCKDB_SCALAR_FUNCTION_SET(MakeDateFun),
 	DUCKDB_SCALAR_FUNCTION(MakeTimeFun),
@@ -329,6 +334,8 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(RightFun),
 	DUCKDB_SCALAR_FUNCTION(RightGraphemeFun),
 	DUCKDB_SCALAR_FUNCTION_SET(RoundFun),
+	DUCKDB_SCALAR_FUNCTION_SET(RoundEvenFun),
+	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(RoundbankersFun),
 	DUCKDB_SCALAR_FUNCTION(RpadFun),
 	DUCKDB_SCALAR_FUNCTION_SET(RtrimFun),
 	DUCKDB_SCALAR_FUNCTION_SET(SecondsFun),
@@ -405,6 +412,7 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_AGGREGATE_FUNCTION(VarPopFun),
 	DUCKDB_AGGREGATE_FUNCTION(VarSampFun),
 	DUCKDB_AGGREGATE_FUNCTION_ALIAS(VarianceFun),
+	DUCKDB_AGGREGATE_FUNCTION(VariantGroupObjectFun),
 	DUCKDB_SCALAR_FUNCTION(VectorTypeFun),
 	DUCKDB_SCALAR_FUNCTION(VersionFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WeekFun),

@@ -50,6 +50,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "COPY_TO_FILE";
 	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
 		return "COPY_DATABASE";
+	case LogicalOperatorType::LOGICAL_SECURE_VIEW:
+		return "SECURE_VIEW";
 	case LogicalOperatorType::LOGICAL_JOIN:
 		return "JOIN";
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
@@ -72,6 +74,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "UPDATE";
 	case LogicalOperatorType::LOGICAL_MERGE_INTO:
 		return "MERGE_INTO";
+	case LogicalOperatorType::LOGICAL_TRIGGER:
+		return "TRIGGER";
 	case LogicalOperatorType::LOGICAL_PREPARE:
 		return "PREPARE";
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
@@ -110,6 +114,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "ATTACH";
 	case LogicalOperatorType::LOGICAL_DETACH:
 		return "DETACH";
+	case LogicalOperatorType::LOGICAL_CREATE_TRIGGER:
+		return "CREATE_TRIGGER";
 	case LogicalOperatorType::LOGICAL_DROP:
 		return "DROP";
 	case LogicalOperatorType::LOGICAL_PRAGMA:
@@ -132,6 +138,12 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "PIVOT";
 	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
 		return "UPDATE_EXTENSIONS";
+	case LogicalOperatorType::LOGICAL_CONNECT:
+		return "CONNECT";
+	case LogicalOperatorType::LOGICAL_DISCONNECT:
+		return "DISCONNECT";
+	case LogicalOperatorType::LOGICAL_EXTERNAL_RESOURCE:
+		return "EXTERNAL_RESOURCE";
 	}
 	return "INVALID";
 }

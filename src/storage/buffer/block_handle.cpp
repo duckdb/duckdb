@@ -124,7 +124,7 @@ bool BlockMemory::CanUnload() const {
 	return true;
 }
 
-unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l) {
+unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l, QueryContext context) {
 	VerifyMutex(l);
 
 	if (GetState() == BlockState::BLOCK_UNLOADED) {
@@ -137,15 +137,15 @@ unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l) {
 	if (BlockId() >= MAXIMUM_BLOCK && MustWriteToTemporaryFile()) {
 		// This is a temporary block that cannot be destroyed upon evict/unpin.
 		// Thus, we write to it to a temporary file.
-		buffer_manager.WriteTemporaryBuffer(GetMemoryTag(), BlockId(), *GetBuffer());
+		buffer_manager.WriteTemporaryBuffer(context, GetMemoryTag(), BlockId(), *GetBuffer());
 	}
 	memory_charge.Resize(0);
 	SetState(BlockState::BLOCK_UNLOADED);
 	return std::move(GetBuffer());
 }
 
-void BlockMemory::Unload(BlockLock &l) {
-	auto block = UnloadAndTakeBlock(l);
+void BlockMemory::Unload(BlockLock &l, QueryContext context) {
+	auto block = UnloadAndTakeBlock(l, context);
 	block.reset();
 }
 
@@ -180,7 +180,11 @@ BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 
 unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuffer> reusable_buffer,
                                 block_id_t block_id) {
-	if (reusable_buffer && reusable_buffer->GetHeaderSize() == block_manager.GetBlockHeaderSize()) {
+	// A buffer that doesn't own its memory (e.g. it adopted a pointer into a memory-mapped
+	// region) cannot be reused for a different block: rewriting its bytes would clobber the
+	// original block on disk through the mapping.
+	if (reusable_buffer && reusable_buffer->OwnsInternalBuffer() &&
+	    reusable_buffer->GetHeaderSize() == block_manager.GetBlockHeaderSize()) {
 		// Reusable buffer: reuse it.
 		if (reusable_buffer->GetBufferType() == FileBufferType::BLOCK) {
 			// Reuse the entire buffer.
@@ -231,8 +235,7 @@ BufferHandle BlockHandle::Load(QueryContext context, unique_ptr<FileBuffer> reus
 		}
 		auto &buffer_manager = memory.GetBufferManager();
 		auto &buffer = memory.GetBuffer();
-		buffer = buffer_manager.ReadTemporaryBuffer(QueryContext(), memory.GetMemoryTag(), *this,
-		                                            std::move(reusable_buffer));
+		buffer = buffer_manager.ReadTemporaryBuffer(context, memory.GetMemoryTag(), *this, std::move(reusable_buffer));
 	}
 	memory.SetState(BlockState::BLOCK_LOADED);
 	memory.SetReaders(1);

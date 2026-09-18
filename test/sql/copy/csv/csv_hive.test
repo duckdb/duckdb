@@ -3,9 +3,6 @@
 # group: [csv]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE test AS SELECT 1 as id, 'value1' as value;
 CREATE TABLE test2 AS SELECT 2 as id, 'value2' as value;
 

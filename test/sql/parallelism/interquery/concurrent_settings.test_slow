@@ -16,7 +16,7 @@ foreach order_type asc desc
 
 onlyif threadid=0
 statement ok
-SET GLOBAL default_order='${order_type}'
+SET GLOBAL default_order='{order_type}'
 
 endloop
 
@@ -24,7 +24,7 @@ foreach null_order_type asc desc
 
 onlyif threadid=1
 statement ok
-SET GLOBAL default_order='${null_order_type}'
+SET GLOBAL default_order='{null_order_type}'
 
 endloop
 

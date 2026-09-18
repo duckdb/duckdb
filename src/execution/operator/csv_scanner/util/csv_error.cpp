@@ -1,4 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
+
+#include "utf8proc_wrapper.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table/read_csv.hpp"
@@ -184,7 +186,7 @@ string CSVErrorTypeToEnum(CSVErrorType type) {
 
 void CSVErrorHandler::FillRejectsTable(InternalAppender &errors_appender, const idx_t file_idx, const idx_t scan_idx,
                                        const CSVFileScan &file, CSVRejectsTable &rejects,
-                                       const MultiFileBindData &bind_data, const idx_t limit) {
+                                       const vector<Identifier> &column_names, const idx_t limit) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	// We first insert the file into the file scans table
 	for (auto &error : file.error_handler->errors) {
@@ -230,15 +232,15 @@ void CSVErrorHandler::FillRejectsTable(InternalAppender &errors_appender, const 
 				errors_appender.Append(Value());
 				break;
 			case CSVErrorType::TOO_FEW_COLUMNS:
-				if (col_idx + 1 < bind_data.names.size()) {
-					errors_appender.Append(string_t(bind_data.names[col_idx + 1]));
+				if (col_idx + 1 < column_names.size()) {
+					errors_appender.Append(string_t(column_names[col_idx + 1].GetIdentifierName()));
 				} else {
 					errors_appender.Append(Value());
 				}
 				break;
 			default:
-				if (col_idx < bind_data.names.size()) {
-					errors_appender.Append(string_t(bind_data.names[col_idx]));
+				if (col_idx < column_names.size()) {
+					errors_appender.Append(string_t(column_names[col_idx].GetIdentifierName()));
 				} else {
 					errors_appender.Append(Value());
 				}
@@ -283,9 +285,11 @@ CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx
 	if (reader_options.ignore_errors.GetValue()) {
 		RemoveNewLine(error_message);
 	}
-	// Let's cap the csv row to 10k bytes. For performance reasons.
-	if (csv_row.size() > 10000) {
-		csv_row.erase(csv_row.begin() + 10000, csv_row.end());
+	// Cap the csv row for performance reasons.
+	if (reader_options.rejects_line_size_limit > 0 && csv_row.size() > reader_options.rejects_line_size_limit) {
+		csv_row.erase(csv_row.begin() + NumericCast<int64_t>(reader_options.rejects_line_size_limit), csv_row.end());
+		// truncating might add invalid UTF8 at the tail end - make it valid again
+		Utf8Proc::MakeValid(csv_row.data(), csv_row.size(), '.');
 	}
 	error << error_message << '\n';
 	error << fixes << '\n';
@@ -294,7 +298,7 @@ CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx
 	full_error_message = error.str();
 }
 
-CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names) {
+CSVError CSVError::ColumnTypesError(identifier_map_t<idx_t> sql_types_per_column, const vector<Identifier> &names) {
 	for (idx_t i = 0; i < names.size(); i++) {
 		auto it = sql_types_per_column.find(names[i]);
 		if (it != sql_types_per_column.end()) {

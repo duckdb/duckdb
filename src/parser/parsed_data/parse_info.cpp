@@ -1,4 +1,7 @@
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/sql_identifier.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
@@ -27,24 +30,28 @@ string ParseInfo::TypeToString(CatalogType type) {
 		return "MACRO TABLE";
 	case CatalogType::SECRET_ENTRY:
 		return "SECRET";
+	case CatalogType::TRIGGER_ENTRY:
+		return "TRIGGER";
 	default:
 		throw InternalException("ParseInfo::TypeToString for CatalogType with type: %s not implemented",
 		                        EnumUtil::ToString(type));
 	}
 }
 
-string ParseInfo::QualifierToString(const string &catalog, const string &schema, const string &name) {
-	string result;
-	if (!catalog.empty()) {
-		result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
-		if (!schema.empty()) {
-			result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
-		}
-	} else if (!schema.empty() && schema != DEFAULT_SCHEMA) {
-		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
+string RenderOptionList(const case_insensitive_map_t<unique_ptr<ParsedExpression>> &parsed_options,
+                        const unordered_map<string, Value> &options) {
+	if (parsed_options.empty() && options.empty()) {
+		return string();
 	}
-	result += KeywordHelper::WriteOptionallyQuoted(name);
-	return result;
+	vector<string> stringified;
+	for (auto &opt : parsed_options) {
+		stringified.push_back(StringUtil::Format("%s %s", SQLIdentifier::ToString(opt.first), opt.second->ToString()));
+	}
+	for (auto &opt : options) {
+		stringified.push_back(
+		    StringUtil::Format("%s %s", SQLIdentifier::ToString(opt.first), opt.second.ToSQLString()));
+	}
+	return " (" + StringUtil::Join(stringified, ", ") + ")";
 }
 
 } // namespace duckdb

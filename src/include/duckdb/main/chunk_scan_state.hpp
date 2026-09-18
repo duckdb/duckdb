@@ -25,7 +25,7 @@ public:
 	virtual bool HasError() const = 0;
 	virtual ErrorData &GetError() = 0;
 	virtual const vector<LogicalType> &Types() const = 0;
-	virtual const vector<string> &Names() const = 0;
+	virtual const vector<Identifier> &Names() const = 0;
 	idx_t CurrentOffset() const;
 	idx_t RemainingInChunk() const;
 	DataChunk &CurrentChunk();

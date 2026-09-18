@@ -70,7 +70,7 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(QueryContext context, 
 		// continue
 		auto old_block_copy = buffer_manager.AllocateMemory(old_block->GetMemory().GetMemoryTag(), this, false);
 		auto copy_pin = buffer_manager.Pin(old_block_copy);
-		memcpy(copy_pin.Ptr(), old_handle.Ptr(), GetBlockSize());
+		memcpy(copy_pin.GetDataMutable(), old_handle.Ptr(), GetBlockSize());
 		old_block = std::move(old_block_copy);
 		old_handle = std::move(copy_pin);
 	}

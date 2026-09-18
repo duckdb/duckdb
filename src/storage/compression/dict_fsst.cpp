@@ -48,12 +48,12 @@ namespace dict_fsst {
 
 struct DictFSSTCompressionStorage {
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
-	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
+	static bool StringAnalyze(AnalyzeState &state_p, const Vector &input);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
 
 	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
 	                                                    unique_ptr<AnalyzeState> state);
-	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
+	static void Compress(CompressionState &state_p, const Vector &scan_vector);
 	static void FinalizeCompress(CompressionState &state_p);
 
 	static unique_ptr<SegmentScanState> StringInitScan(const QueryContext &context, ColumnSegment &segment);
@@ -70,18 +70,17 @@ struct DictFSSTCompressionStorage {
 //===--------------------------------------------------------------------===//
 unique_ptr<AnalyzeState> DictFSSTCompressionStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	auto &storage_manager = col_data.GetStorageManager();
-	if (storage_manager.GetStorageVersion() < 5) {
+	if (StorageManager::IsPriorToVersion(StorageVersion::V1_3_0, storage_manager.GetStorageVersion())) {
 		// dict_fsst not introduced yet, disable it
 		return nullptr;
 	}
 
-	CompressionInfo info(col_data.GetBlockManager());
-	return make_uniq<DictFSSTAnalyzeState>(info);
+	return make_uniq<DictFSSTAnalyzeState>(col_data.GetBlockManager());
 }
 
-bool DictFSSTCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
+bool DictFSSTCompressionStorage::StringAnalyze(AnalyzeState &state_p, const Vector &input) {
 	auto &analyze_state = state_p.Cast<DictFSSTAnalyzeState>();
-	return analyze_state.Analyze(input, count);
+	return analyze_state.Analyze(input);
 }
 
 idx_t DictFSSTCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
@@ -98,9 +97,9 @@ unique_ptr<CompressionState> DictFSSTCompressionStorage::InitCompression(ColumnD
 	                                           unique_ptr_cast<AnalyzeState, DictFSSTAnalyzeState>(std::move(state)));
 }
 
-void DictFSSTCompressionStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+void DictFSSTCompressionStorage::Compress(CompressionState &state_p, const Vector &scan_vector) {
 	auto &state = state_p.Cast<DictFSSTCompressionState>();
-	state.Compress(scan_vector, count);
+	state.Compress(scan_vector);
 }
 
 void DictFSSTCompressionStorage::FinalizeCompress(CompressionState &state_p) {
@@ -113,11 +112,11 @@ void DictFSSTCompressionStorage::FinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 unique_ptr<SegmentScanState> DictFSSTCompressionStorage::StringInitScan(const QueryContext &context,
                                                                         ColumnSegment &segment) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto state = make_uniq<CompressedStringScanState>(segment, buffer_manager.Pin(segment.block));
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto state = make_uniq<CompressedStringScanState>(segment, buffer_manager.Pin(segment.GetBlockHandle()));
 	state->Initialize(true);
 
-	const auto &stats = segment.stats.statistics;
+	const auto &stats = segment.GetStats();
 	if (stats.GetStatsType() == StatisticsType::STRING_STATS && StringStats::HasMaxStringLength(stats)) {
 		state->all_values_inlined = StringStats::MaxStringLength(stats) <= string_t::INLINE_LENGTH;
 	}
@@ -192,12 +191,9 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 			// Slot zero represents NULL and is not necessarily referenced by any row.
 			idx_t non_null_count = scan_state.dict_count - 1;
 			Vector dict_data(scan_state.dictionary->data, /*offset=*/1, scan_state.dict_count);
-			UnifiedVectorFormat vdata;
-			dict_data.ToUnifiedFormat(non_null_count, vdata);
 			SelectionVector dict_sel;
 			idx_t filter_count = non_null_count;
-			ColumnSegment::FilterSelection(dict_sel, dict_data, vdata, filter, filter_state, non_null_count,
-			                               filter_count);
+			ColumnSegment::FilterSelection(dict_sel, dict_data, filter_state, non_null_count, filter_count);
 
 			// now set all matching tuples to true
 			for (idx_t i = 0; i < filter_count; i++) {
@@ -215,12 +211,9 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 			// Evaluate NULL only when slot zero is referenced by an actual row.
 			if (dict_offset == 0 && !scan_state.null_filter_result_initialized) {
 				Vector null_data(scan_state.dictionary->data, /*offset=*/0, /*end=*/1);
-				UnifiedVectorFormat null_vdata;
-				null_data.ToUnifiedFormat(1, null_vdata);
 				SelectionVector null_sel;
 				idx_t null_filter_count = 1;
-				ColumnSegment::FilterSelection(null_sel, null_data, null_vdata, filter, filter_state, 1,
-				                               null_filter_count);
+				ColumnSegment::FilterSelection(null_sel, null_data, filter_state, 1, null_filter_count);
 				scan_state.filter_result[0] = null_filter_count == 1;
 				scan_state.null_filter_result_initialized = true;
 			}
@@ -236,15 +229,12 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 		}
 		sel_count = approved_tuple_count;
 
-		result.Dictionary(scan_state.dictionary, dict_sel);
+		result.Dictionary(scan_state.dictionary, dict_sel, vector_count);
 		return;
 	}
 	// fallback: scan + filter
 	DictFSSTCompressionStorage::StringScan(segment, state, vector_count, result);
-
-	UnifiedVectorFormat vdata;
-	result.ToUnifiedFormat(vector_count, vdata);
-	ColumnSegment::FilterSelection(sel, result, vdata, filter, filter_state, vector_count, sel_count);
+	ColumnSegment::FilterSelection(sel, result, filter_state, vector_count, sel_count);
 }
 
 static string DictFSSTModeToString(const DictFSSTMode mode) {
@@ -264,8 +254,8 @@ static string DictFSSTModeToString(const DictFSSTMode mode) {
 // GetSegmentInfo
 //===--------------------------------------------------------------------===//
 static InsertionOrderPreservingMap<string> DictFSSTGetSegmentInfo(QueryContext, ColumnSegment &segment) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto state = make_uniq<CompressedStringScanState>(segment, buffer_manager.Pin(segment.block));
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto state = make_uniq<CompressedStringScanState>(segment, buffer_manager.Pin(segment.GetBlockHandle()));
 	state->Initialize(false);
 
 	const auto tuple_count = segment.count.load();
@@ -294,7 +284,6 @@ CompressionFunction DictFSSTCompressionFun::GetFunction(PhysicalType data_type) 
 	res.select = dict_fsst::DictFSSTSelect;
 	res.filter = dict_fsst::DictFSSTFilter;
 	res.get_segment_info = dict_fsst::DictFSSTGetSegmentInfo;
-
 	return res;
 }
 

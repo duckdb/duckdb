@@ -5,9 +5,6 @@
 require icu
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 set Calendar='gregorian';
 
 statement ok

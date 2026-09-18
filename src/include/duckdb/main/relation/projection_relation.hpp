@@ -16,7 +16,7 @@ namespace duckdb {
 class ProjectionRelation : public Relation {
 public:
 	DUCKDB_API ProjectionRelation(shared_ptr<Relation> child, vector<unique_ptr<ParsedExpression>> expressions,
-	                              vector<string> aliases);
+	                              vector<Identifier> aliases);
 
 	vector<unique_ptr<ParsedExpression>> expressions;
 	vector<ColumnDefinition> columns;
@@ -27,7 +27,7 @@ public:
 
 	const vector<ColumnDefinition> &Columns() override;
 	string ToString(idx_t depth) override;
-	string GetAlias() override;
+	Identifier GetAlias() override;
 };
 
 } // namespace duckdb

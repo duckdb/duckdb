@@ -29,7 +29,7 @@ public:
 
 	const vector<ColumnDefinition> &Columns() override;
 	string ToString(idx_t depth) override;
-	string GetAlias() override;
+	Identifier GetAlias() override;
 };
 
 } // namespace duckdb

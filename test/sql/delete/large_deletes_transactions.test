@@ -2,9 +2,6 @@
 # description: Test large deletions with transactions
 # group: [delete]
 
-statement ok
-PRAGMA enable_verification
-
 statement ok con1
 CREATE TABLE a AS SELECT * FROM range(1000000) t1(i);
 

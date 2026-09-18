@@ -8,3 +8,4 @@ CREATE TABLE t0(c0 DOUBLE UNIQUE);
 query I
 SELECT c0 FROM t0 WHERE (c0 - 0 BETWEEN 0 AND 0) AND (c0 - 0 = c0);
 ----
+

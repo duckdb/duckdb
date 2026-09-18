@@ -52,6 +52,9 @@ enum class WALType : uint8_t {
 	DELETE_TUPLE = 27,
 	UPDATE_TUPLE = 28,
 	ROW_GROUP_DATA = 29,
+
+	CREATE_TRIGGER = 30,
+	DROP_TRIGGER = 31,
 	// -----------------------------
 	// Flush
 	// -----------------------------

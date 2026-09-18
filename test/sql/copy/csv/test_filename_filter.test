@@ -2,9 +2,6 @@
 # description: Test filter with filename option
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query IIII
 SELECT column1, column2, column3, parse_filename(filename) FROM read_csv('{DATA_DIR}/csv/filename_filter/*.csv', filename=true);
 ----

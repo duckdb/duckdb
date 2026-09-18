@@ -2,9 +2,6 @@
 # description: Test SAMPLE keyword
 # group: [sample]
 
-statement ok
-PRAGMA enable_verification;
-
 set seed 0.42
 
 query I

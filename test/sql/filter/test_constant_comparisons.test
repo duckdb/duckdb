@@ -2,9 +2,6 @@
 # description: Test expressions with constant comparisons
 # group: [filter]
 
-statement ok
-PRAGMA enable_verification
-
 # Test various simple constant comparisons
 # The main point here is to check that the optimizer handles all these cases correctly
 

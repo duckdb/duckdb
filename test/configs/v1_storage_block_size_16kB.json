@@ -1,0 +1,39 @@
+{
+  "description": "Run with the latest v1.x storage format on persistent databases with a default block size of 16kB.",
+  "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}__test__config__latest_storage_block_size_16kb.db",
+  "on_load": "skip",
+  "settings": [
+    {
+      "name": "storage_compatibility_version",
+      "value": "v1.5.2"
+    }
+  ],
+  "skip_compiled": "true",
+  "block_size": "16384",
+  "inherit_skip_tests": "test/configs/force_storage.json",
+  "skip_tests": [
+    {
+      "reason": "TODO",
+      "paths": [
+        "test/sql/json/test_json_serialize_sql.test",
+        "test/sql/storage/buffer_manager_temp_dir.test",
+        "test/sql/table_function/duckdb_databases.test"
+      ]
+    },
+    {
+      "reason": "ALP is disabled for non-default block sizes.",
+      "paths": [
+        "test/sql/storage/compression/alp/alp_min_max.test"
+      ]
+    },
+    {
+      "reason": "CREATE SECURE VIEW requires v2.0.0 storage.",
+      "paths": [
+        "test/sql/catalog/view/secure_view.test",
+        "test/sql/optimizer/secure_view_explain.test",
+        "test/sql/optimizer/secure_view_pushdown.test",
+        "test/sql/optimizer/secure_view_statistics.test"
+      ]
+    }
+  ]
+}

@@ -5,6 +5,7 @@ from utils.duckdb_installer import install_assets, install_extensions, make_cli_
 from utils.test_files_parser import load_test_files
 from utils.test_report import TestReport
 from utils.logger import make_logger
+from utils.version_list import list_supported_duckdb_versions
 import time
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock, Event
@@ -317,25 +318,7 @@ def cleanup_runtime_dir(bwc_tests_base_dir, dry_run=True):
 
 if __name__ == "__main__":
     supported_duckdb_versions = (
-        [args.old_duckdb_version]
-        if args.old_duckdb_version
-        else [
-            "v1.1.0",
-            "v1.1.2",
-            "v1.1.1",
-            "v1.2.0",
-            "v1.1.3",
-            "v1.2.2",
-            "v1.2.1",
-            "v1.3.0",
-            "v1.3.1",
-            "v1.3.2",
-            "v1.4.0",
-            "v1.4.1",
-            "v1.4.2",
-            "v1.4.3",
-            "v1.4.4",
-        ]
+        [args.old_duckdb_version] if args.old_duckdb_version else list_supported_duckdb_versions()
     )
 
     duckdb_root_dir = dirname(dirname(dirname(abspath(__file__))))
@@ -390,7 +373,7 @@ if __name__ == "__main__":
 
             run_sequentially = args.run_sequentially or test_pattern is not None
             stop_on_failure = args.stop_on_failure
-            start_time = time.time()
+            start_time = time.monotonic()
             nb_tests_run = 0
             if run_sequentially:
                 for test in tests:
@@ -417,7 +400,7 @@ if __name__ == "__main__":
                     if not r.is_successful():
                         failed_tests.append((old_duckdb_version, r.test_relative_path))
 
-            elapsed = time.time() - start_time
+            elapsed = time.monotonic() - start_time
             tps = nb_tests_run / elapsed if elapsed > 0 else 0
             nb_failed = nb_tests_run - nb_success
             logger.info(

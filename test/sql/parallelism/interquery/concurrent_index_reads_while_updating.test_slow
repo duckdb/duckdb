@@ -15,7 +15,7 @@ loop i 0 500
 
 skipif threadid<=10
 statement ok
-SELECT * FROM integers WHERE i=(hash(${threadid} + ${i})%100)
+SELECT * FROM integers WHERE i=(hash({threadid} + {i})%100)
 
 endloop
 
@@ -23,11 +23,11 @@ loop i 0 100
 
 skipif threadid>10
 statement ok
-UPDATE integers SET value = value + 1 WHERE i=${threadid}
+UPDATE integers SET value = value + 1 WHERE i={threadid}
 
 skipif threadid>10
 statement ok
-UPDATE integers SET value = value - 1 WHERE i=${threadid}
+UPDATE integers SET value = value - 1 WHERE i={threadid}
 
 
 endloop

@@ -3,7 +3,7 @@
 # group: [interquery]
 
 statement ok
-ATTACH '__TEST_DIR__/concurrent_checkpoint_long_reads.db' AS db
+ATTACH '{TEST_DIR}/concurrent_checkpoint_long_reads.db' AS db
 
 statement ok
 CREATE TABLE db.integers(i INTEGER);
@@ -21,7 +21,7 @@ SELECT sleep_ms(10)
 
 onlyif threadid=0
 statement ok
-UPDATE db.integers SET i=i+1 WHERE i%${k}=0
+UPDATE db.integers SET i=i+1 WHERE i%{k}=0
 
 onlyif threadid=0
 statement maybe
@@ -33,6 +33,6 @@ endloop
 
 onlyif threadid>0
 statement ok
-SELECT COUNT(*), SUM(i), SUM(sleep_ms(case when i%2=0 then 1 else 1 end)) FROM db.integers WHERE i%(973+${threadid})=0
+SELECT COUNT(*), SUM(i), SUM(sleep_ms(case when i%2=0 then 1 else 1 end)) FROM db.integers WHERE i%(973+{threadid})=0
 
 endloop

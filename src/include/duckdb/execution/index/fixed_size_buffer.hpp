@@ -44,6 +44,8 @@ public:
 public:
 	//! Constructor for a new in-memory buffer
 	explicit FixedSizeBuffer(BlockManager &block_manager, MemoryTag memory_tag);
+	FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const idx_t allocation_size,
+	                shared_ptr<BlockHandle> block_handle);
 	//! Constructor for deserializing buffer metadata from disk
 	FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const idx_t allocation_size,
 	                const BlockPointer &block_pointer);
@@ -61,7 +63,7 @@ private:
 		if (dirty_p) {
 			dirty = dirty_p;
 		}
-		return buffer_handle.Ptr();
+		return buffer_handle.GetDataMutable();
 	}
 
 	//! Returns true, if the buffer is in-memory
@@ -117,19 +119,7 @@ private:
 class SegmentHandle {
 public:
 	SegmentHandle() = delete;
-	SegmentHandle(FixedSizeBuffer &buffer_p, const idx_t offset) : buffer_ptr(buffer_p) {
-		lock_guard<mutex> l(buffer_ptr->lock);
-
-		if (!buffer_ptr->InMemory() && !buffer_ptr->loaded) {
-			buffer_ptr->LoadFromDisk();
-		}
-		if (!buffer_ptr->InMemory() && buffer_ptr->loaded) {
-			buffer_ptr->block_manager.buffer_manager.Pin(buffer_ptr->block_handle);
-		}
-
-		ptr = buffer_ptr->buffer_handle.Ptr() + offset;
-		buffer_ptr->readers++;
-	}
+	SegmentHandle(FixedSizeBuffer &buffer_p, const idx_t offset);
 
 	~SegmentHandle() {
 		if (!buffer_ptr) {
@@ -182,7 +172,7 @@ public:
 
 	template <class T = data_t>
 	const T *GetPtr() const {
-		return reinterpret_cast<T *>(ptr);
+		return reinterpret_cast<const T *>(ptr);
 	}
 
 	void MarkModified() {

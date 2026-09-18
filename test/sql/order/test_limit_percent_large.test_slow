@@ -2,9 +2,6 @@
 # description: Test LIMIT keyword {% | PERCENT}
 # group: [order]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT COUNT(*) FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM range(1000000) LIMIT 10%) LIMIT 10%) LIMIT 10%)
 ----

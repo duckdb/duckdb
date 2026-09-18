@@ -12,6 +12,7 @@
 #include "duckdb/planner/bound_constraint.hpp"
 
 namespace duckdb {
+struct CreateInfo;
 class TableCatalogEntry;
 
 class LogicalDelete : public LogicalOperator {
@@ -19,11 +20,12 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_DELETE;
 
 public:
-	explicit LogicalDelete(TableCatalogEntry &table, idx_t table_index);
+	explicit LogicalDelete(TableCatalogEntry &table, TableIndex table_index);
 
 	TableCatalogEntry &table;
-	idx_t table_index;
+	TableIndex table_index;
 	bool return_chunk;
+	vector<idx_t> return_columns;
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 
 public:
@@ -31,7 +33,7 @@ public:
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
 	idx_t EstimateCardinality(ClientContext &context) override;
-	vector<idx_t> GetTableIndex() const override;
+	vector<TableIndex> GetTableIndex() const override;
 	string GetName() const override;
 
 protected:

@@ -2,10 +2,9 @@
 # description: Constant window aggregation functionality.
 # group: [window]
 
-require tpch
+set variable sf 0.01
 
-statement ok
-call dbgen(sf=0.01);
+include test/sql/tpch/tpch_setup.test_template
 
 query IIII
 SELECT 

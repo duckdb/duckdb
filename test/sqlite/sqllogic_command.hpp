@@ -19,9 +19,9 @@ enum class ExpectedResult : uint8_t { RESULT_SUCCESS, RESULT_ERROR, RESULT_UNKNO
 
 struct LoopDefinition {
 	string loop_iterator_name;
-	int loop_idx;
-	int loop_start;
-	int loop_end;
+	idx_t loop_idx;
+	idx_t loop_start;
+	idx_t loop_end;
 	bool is_parallel;
 	vector<string> tokens;
 	bool is_skipped = false;
@@ -64,13 +64,19 @@ public:
 public:
 	Connection &CommandConnection(ExecuteContext &context) const;
 
-	duckdb::unique_ptr<MaterializedQueryResult> ExecuteQuery(ExecuteContext &context, reference<Connection> connection,
-	                                                         string file_name, idx_t query_line) const;
+	duckdb::unique_ptr<QueryResult> ExecuteQuery(ExecuteContext &context, reference<Connection> connection,
+	                                             string file_name, idx_t query_line) const;
 
 	virtual void ExecuteInternal(ExecuteContext &context) const = 0;
 	void Execute(ExecuteContext &context) const;
 
 	virtual bool SupportsConcurrent() const {
+		return false;
+	}
+
+	//! Whether this command is a countable test assertion (statement/query) for per-test outcome
+	//! stats (--emit-test-events). Infrastructure commands (mode/loop/load/...) return false.
+	virtual bool IsCountableStatement() const {
 		return false;
 	}
 
@@ -89,6 +95,9 @@ public:
 	void ExecuteInternal(ExecuteContext &context) const override;
 
 	bool SupportsConcurrent() const override {
+		return true;
+	}
+	bool IsCountableStatement() const override {
 		return true;
 	}
 };
@@ -124,6 +133,9 @@ public:
 	bool SupportsConcurrent() const override {
 		return true;
 	}
+	bool IsCountableStatement() const override {
+		return true;
+	}
 };
 
 class RestartCommand : public Command {
@@ -154,6 +166,9 @@ public:
 	void ExecuteInternal(ExecuteContext &context) const override;
 
 	bool SupportsConcurrent() const override;
+
+private:
+	bool ForEachTokenReplace(const string &parameter, vector<string> &result) const;
 };
 
 class ContinueCommand : public Command {

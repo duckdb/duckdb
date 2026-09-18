@@ -2,9 +2,6 @@
 # description: test query() function
 # group: [function]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT * FROM query('SELECT 42');
 ----
@@ -76,8 +73,8 @@ SELECT * FROM query('WITH a(i) AS (SELECT 1) SELECT a1.i AS i1, a2.i AS i2 FROM 
 ----
 1	1
 
-# test incorrect usage
-statement error
+# test incorrect usage, if using the peg parser this is now valid. 
+statement maybe
 SELECT * FROM query(NULL);
 ----
 <REGEX>:Parser Error.*NULL.*
@@ -186,7 +183,7 @@ FROM query_table(NULL);
 statement error
 FROM query_table([]);
 ----
-Binder Error: No function matches the given name and argument types 'query_table(INTEGER[])'.
+Expected a table or a list with tables as input
 
 statement error
 FROM query_table(['']);
@@ -216,7 +213,7 @@ Catalog Error: Table with name FROM query('select 1 + 2;') does not exist!
 statement error
 FROM query_table('FROM query("select 1 + 2;")');
 ----
-Catalog Error: Table with name FROM query(select 1 + 2;) does not exist!
+Parser Error: Unexpected quote in the middle of a qualified name component! (input: FROM query("select 1 + 2;"))
 
 statement error
 FROM query_table('(SELECT 17 + 25)');

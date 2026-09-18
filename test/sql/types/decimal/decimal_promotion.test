@@ -1,0 +1,63 @@
+# name: test/sql/types/decimal/decimal_promotion.test
+# description: Test automatic promotion of decimal arithmetic
+# group: [decimal]
+
+# addition promotes across each physical storage boundary
+query III
+SELECT typeof(1::DECIMAL(4,0) + 1::DECIMAL(4,0)),
+       typeof(1::DECIMAL(9,0) + 1::DECIMAL(9,0)),
+       typeof(1::DECIMAL(18,0) + 1::DECIMAL(18,0))
+----
+DECIMAL(5,0)	DECIMAL(10,0)	DECIMAL(19,0)
+
+# reported case
+query II
+SELECT typeof(99999999999999.9999::DECIMAL(18,4) + 0.0001::DECIMAL(5,4)),
+       99999999999999.9999::DECIMAL(18,4) + 0.0001::DECIMAL(5,4)
+----
+DECIMAL(19,4)	100000000000000.0000
+
+# aligning different scales can require significantly more width
+query IIII
+SELECT typeof(1::DECIMAL(18,0) + 0.1::DECIMAL(18,18)),
+       1::DECIMAL(18,0) + 0.1::DECIMAL(18,18),
+       typeof(0.1::DECIMAL(18,18) - 1::DECIMAL(18,0)),
+       0.1::DECIMAL(18,18) - 1::DECIMAL(18,0)
+----
+DECIMAL(37,18)	1.100000000000000000	DECIMAL(37,18)	-0.900000000000000000
+
+# potentially overflowing statistics keep the checked operator
+statement ok
+CREATE TABLE decimal_stats_overflow(
+	add_left DECIMAL(38,0),
+	add_right DECIMAL(38,0),
+	subtract_left DECIMAL(38,0),
+	subtract_right DECIMAL(38,0),
+	multiply_left DECIMAL(38,0),
+	multiply_right DECIMAL(38,0)
+);
+
+statement ok
+INSERT INTO decimal_stats_overflow VALUES (
+	99999999999999999999999999999999999999,
+	1,
+	-99999999999999999999999999999999999999,
+	1,
+	99999999999999999999999999999999999999,
+	2
+);
+
+statement error
+SELECT add_left + add_right FROM decimal_stats_overflow
+----
+<REGEX>:Out of Range Error.*Overflow in addition of DECIMAL.*
+
+statement error
+SELECT subtract_left - subtract_right FROM decimal_stats_overflow
+----
+<REGEX>:Out of Range Error.*Overflow in subtract of DECIMAL.*
+
+statement error
+SELECT multiply_left * multiply_right FROM decimal_stats_overflow
+----
+<REGEX>:Out of Range Error.*Overflow in multiplication of DECIMAL.*

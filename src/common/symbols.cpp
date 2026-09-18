@@ -12,11 +12,9 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/execution/join_hashtable.hpp"
 #include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/relation.hpp"
-#include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/rule.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
@@ -27,6 +25,10 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 #include "duckdb/planner/expression/list.hpp"
@@ -60,6 +62,10 @@ template class unique_ptr<VacuumStatement>;
 template class unique_ptr<QueryNode>;
 template class unique_ptr<SelectNode>;
 template class unique_ptr<SetOperationNode>;
+template class unique_ptr<UpdateQueryNode>;
+template class unique_ptr<DeleteQueryNode>;
+template class unique_ptr<InsertQueryNode>;
+template class unique_ptr<MergeQueryNode>;
 template class unique_ptr<ParsedExpression>;
 template class unique_ptr<CaseExpression>;
 template class unique_ptr<CastExpression>;
@@ -96,9 +102,7 @@ template class unique_ptr<BoundSelectNode>;
 template class unique_ptr<BoundSetOperationNode>;
 template class unique_ptr<BoundAggregateExpression>;
 template class unique_ptr<BoundCaseExpression>;
-template class unique_ptr<BoundCastExpression>;
 template class unique_ptr<BoundColumnRefExpression>;
-template class unique_ptr<BoundComparisonExpression>;
 template class unique_ptr<BoundConjunctionExpression>;
 template class unique_ptr<BoundConstantExpression>;
 template class unique_ptr<BoundDefaultExpression>;
@@ -113,8 +117,6 @@ template class unique_ptr<CatalogEntry>;
 template class unique_ptr<BindContext>;
 template class unique_ptr<char[]>;
 template class unique_ptr<QueryResult>;
-template class unique_ptr<MaterializedQueryResult>;
-template class unique_ptr<StreamQueryResult>;
 template class unique_ptr<LogicalOperator>;
 template class unique_ptr<PhysicalOperator>;
 template class unique_ptr<OperatorState>;

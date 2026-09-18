@@ -1,9 +1,6 @@
 # name: test/fuzzer/pedro/floating_point_inequality.test
 # group: [pedro]
 
-statement ok
-pragma enable_verification
-
 query II
 SELECT -0::DOUBLE, 0::DOUBLE;
 ----

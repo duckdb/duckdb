@@ -2,9 +2,6 @@
 # description: Test transaction ops with hugeints
 # group: [types]
 
-statement ok
-PRAGMA enable_verification
-
 # create table
 statement ok con1
 CREATE TABLE hugeints (h HUGEINT);

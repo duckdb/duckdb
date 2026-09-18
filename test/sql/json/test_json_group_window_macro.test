@@ -1,0 +1,23 @@
+# name: test/sql/json/test_json_group_window_macro.test
+# description: Windowed usage of json_group_object / json_group_array macros
+# group: [json]
+
+require json
+
+statement ok
+CREATE TABLE t(g INT, k VARCHAR, v INT);
+
+statement ok
+INSERT INTO t VALUES (1, 'a', 10), (1, 'b', 20), (2, 'c', 30);
+
+query T
+SELECT DISTINCT json_group_object(k, v) OVER (PARTITION BY g) FROM t ORDER BY 1;
+----
+{"a":10,"b":20}
+{"c":30}
+
+query T
+SELECT DISTINCT json_group_array(v) OVER (PARTITION BY g) FROM t ORDER BY 1;
+----
+[10,20]
+[30]

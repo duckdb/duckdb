@@ -1,0 +1,27 @@
+# name: test/sql/extensions/load_use_extension_one_query.test
+# description: LOAD a parser-extension and use its grammar in the SAME query string (PR 23291 repro).
+# group: [extensions]
+
+# The statement iterator must not parse a following statement before the preceding one has executed:
+# here "quack quack quack" is only parseable after the LOAD in the same query has registered the
+# extension grammar. A look-ahead that parsed the next statement early would fail with a syntax
+# error at "quack".
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+require notmingw
+
+# LOAD and the extension-grammar statement in one multi-statement query. Because this is the first
+# use of the extension, it also proves the LOAD executes before "quack quack quack" is parsed.
+query I
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension'; quack quack quack;
+----
+QUACK
+QUACK
+QUACK
+
+# Same shape as the original repro (no result checked), extension already loaded now.
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension'; QUACK quack quack;

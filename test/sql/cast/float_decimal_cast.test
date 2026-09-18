@@ -2,15 +2,12 @@
 # description: Rounding half up in float => decimal casts
 # group: [cast]
 
-statement ok
-PRAGMA enable_verification
-
 # PG does NOT use statistical ("Banker's") rounding for floating point => decimal
 
 foreach src FLOAT DOUBLE
 
 query II
-select 1.35::${src}::decimal(3, 1), 1.45::${src}::decimal(3, 1)
+select 1.35::{src}::decimal(3, 1), 1.45::{src}::decimal(3, 1)
 ----
 1.4	1.5
 

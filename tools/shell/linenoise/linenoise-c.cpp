@@ -100,6 +100,11 @@ void linenoiseSetCompletionCallback(linenoiseCompletionCallback *fn) {
 	Linenoise::SetCompletionCallback(fn);
 }
 
+/* Register a callback function to be called to format the input before returning it to the shell. */
+void linenoiseSetFormatCallback(linenoiseFormatCallback *fn) {
+	Linenoise::SetFormatCallback(fn);
+}
+
 void linenoiseSetMultiLine(int ml) {
 	Terminal::SetMultiLine(ml);
 }

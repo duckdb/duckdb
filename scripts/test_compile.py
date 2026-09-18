@@ -55,7 +55,7 @@ def try_compilation(fpath, cache):
     print(fpath)
 
     cmd = (
-        'clang++ -std=c++11 -Wno-deprecated -Wno-writable-strings -S -MMD -MF dependencies.d -o deps.s '
+        'clang++ -std=c++17 -Wno-deprecated -Wno-writable-strings -S -MMD -MF dependencies.d -o deps.s '
         + fpath
         + ' '
         + ' '.join(["-I" + x for x in amalgamation.include_paths])

@@ -6,7 +6,8 @@ namespace duckdb {
 
 template <int64_t MULTIPLIER>
 static void FormatBytesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::Execute<int64_t, string_t>(args.data[0], result, args.size(), [&](int64_t bytes) {
+	auto &heap = StringVector::GetStringHeap(result);
+	UnaryExecutor::Execute<int64_t, string_t>(args.data[0], result, [&](int64_t bytes) {
 		bool is_negative = bytes < 0;
 		idx_t unsigned_bytes;
 		if (bytes < 0) {
@@ -18,17 +19,21 @@ static void FormatBytesFunction(DataChunk &args, ExpressionState &state, Vector 
 		} else {
 			unsigned_bytes = idx_t(bytes);
 		}
-		return StringVector::AddString(result, (is_negative ? "-" : "") +
-		                                           StringUtil::BytesToHumanReadableString(unsigned_bytes, MULTIPLIER));
+		return heap.AddString((is_negative ? "-" : "") +
+		                      StringUtil::BytesToHumanReadableString(unsigned_bytes, MULTIPLIER));
 	});
 }
 
 ScalarFunction FormatBytesFun::GetFunction() {
-	return ScalarFunction({LogicalType::BIGINT}, LogicalType::VARCHAR, FormatBytesFunction<1024>);
+	ScalarFunction fun({}, LogicalType::VARCHAR, FormatBytesFunction<1024>);
+	fun.GetSignature().AddParameter("integer", LogicalType::BIGINT);
+	return fun;
 }
 
 ScalarFunction FormatreadabledecimalsizeFun::GetFunction() {
-	return ScalarFunction({LogicalType::BIGINT}, LogicalType::VARCHAR, FormatBytesFunction<1000>);
+	ScalarFunction fun({}, LogicalType::VARCHAR, FormatBytesFunction<1000>);
+	fun.GetSignature().AddParameter("integer", LogicalType::BIGINT);
+	return fun;
 }
 
 } // namespace duckdb

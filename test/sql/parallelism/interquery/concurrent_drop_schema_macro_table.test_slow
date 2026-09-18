@@ -2,7 +2,7 @@
 # description: Concurrent DROP SCHEMA CASCADE while recreating a dependent macro and table
 # group: [interquery]
 
-load __TEST_DIR__/concurrent_drop_schema_macro_table.db
+load {TEST_DIR}/concurrent_drop_schema_macro_table.db
 
 concurrentloop threadid 0 12
 

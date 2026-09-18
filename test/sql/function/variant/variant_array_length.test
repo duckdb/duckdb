@@ -1,0 +1,204 @@
+# name: test/sql/function/variant/variant_array_length.test
+# group: [variant]
+
+require json
+
+load {TEST_DIR}/variant_array_length.db readwrite v1.5.0
+
+statement ok
+CREATE MACRO struct_cast_data() AS TABLE (
+	SELECT {'a': [
+		{
+			'b': 'hello',
+			'c': NULL,
+			'a': '1970/03/15'::DATE
+		},
+		{
+			'b': NULL,
+			'c': True,
+			'a': '2020/11/03'::DATE
+		}
+	]}::VARIANT AS a
+	UNION ALL
+	SELECT {'a': [
+		{
+			'b': 'this is a long string',
+			'c': False,
+			'a': '1953/9/16'::DATE
+		}
+	],
+	'b': 42,
+	'c': {
+	    'd': 'world'
+	}}::VARIANT
+);
+
+# FIXME: Can have VARCHAR as input for variant parameter (should produce `2`).
+
+query I
+select variant_array_length('{"a": [1, 2], "b": {"c": 12, "d": 10}}', 'a');
+----
+NULL
+
+# Empty path supplied
+
+query I
+select variant_array_length(a, '') from struct_cast_data();
+----
+0
+0
+
+query I
+select variant_array_length([1, 2]::VARIANT, '');
+----
+2
+
+query I
+select variant_array_length(a, []) from struct_cast_data();
+----
+[]
+[]
+
+query I
+select variant_array_length(a, ['']) from struct_cast_data();
+----
+[0]
+[0]
+
+query I
+select variant_array_length([1, 2]::VARIANT, ['']);
+----
+[2]
+
+# Single path supplied
+
+query I
+select variant_array_length(a, 'a') from struct_cast_data();
+----
+2
+1
+
+query I
+select variant_array_length(a, ['a']) from struct_cast_data();
+----
+[2]
+[1]
+
+# Multiple paths supplied
+
+query I
+select variant_array_length(a, ['a', 'c']) from struct_cast_data();
+----
+[2, NULL]
+[1, 0]
+
+# FIXME: map type is currently casted into a shape inconsistent with respect to JSON (should produce `0`)
+
+query I
+select variant_array_length(MAP {'a': 1, 'b': 2}::VARIANT, 'a');
+----
+NULL
+
+# NULL returns NULL
+
+query I
+select variant_array_length(NULL::VARIANT, NULL);
+----
+NULL
+
+query I
+select variant_array_length(NULL, NULL);
+----
+NULL
+
+query I
+select variant_array_length(NULL::VARIANT, 'a');
+----
+NULL
+
+query I
+select variant_array_length(j, 'a') from (values ({'a': [1, 2]}::VARIANT), (NULL::VARIANT)) t(j);
+----
+2
+NULL
+
+query I
+select variant_array_length(j, ['a', 'b']) from (values ({'a': [1, 2]}::VARIANT), (NULL::VARIANT)) t(j);
+----
+[2, NULL]
+NULL
+
+# NULL path returns NULL
+
+query I
+select variant_array_length({'a': 1}::VARIANT, NULL);
+----
+NULL
+
+# FIXME: Support for JSONPath and JSONPointer
+
+query I
+select variant_array_length({'a': 1, 'b': {'c': [1, 2, 3]}}::VARIANT, '$.b.c');
+----
+NULL
+
+# Incorrect parameters
+
+statement error
+select variant_array_length({'a': 1}::VARIANT, [1]);
+----
+<REGEX>:.*No function matches the given name and argument types 'variant_array_length\(VARIANT, INTEGER\[\]\)'.*
+
+statement error
+select variant_array_length({'a': []}::VARIANT, [NULL]);
+----
+Binder Error: 'variant_array_length' does not accept NULL paths
+
+statement error
+select variant_array_length({'a': []}::VARIANT, [NULL::VARCHAR]);
+----
+Binder Error: 'variant_array_length' does not accept NULL paths
+
+statement error
+select variant_array_length({'c': []}::VARIANT, ['c', NULL]::VARCHAR[]);
+----
+Binder Error: 'variant_array_length' does not accept NULL paths
+
+query I
+select variant_array_length({'c': []}::VARIANT, []::VARCHAR[]);
+----
+[]
+
+# FIXME: malformed JSON object should result in an error
+
+statement ok
+select variant_array_length('{"a"\: 1}'::VARIANT, 'a');
+
+# Table of varying objects
+
+statement ok
+create table t1 as
+select range, case when range % 2 = 0 then {"duck": [42]}::VARIANT else {"duck": [42, 42]}::VARIANT end j
+from range(4096)
+
+query II
+select range % 2 g, sum(variant_array_length(j, 'duck')) c
+from t1
+group by g
+order by all
+----
+0	2048
+1	4096
+
+# Table whilst applying list of paths
+
+statement ok
+create table t2 as
+select range, {'duck': [42], 'goose': [42, 43]}::VARIANT j
+from range(4096)
+
+query T
+select sum(list_sum([l for l in variant_array_length(j, ['duck', 'goose'])])) s
+from t2
+----
+12288

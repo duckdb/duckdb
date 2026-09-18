@@ -53,9 +53,9 @@ struct QuantileBindData : public FunctionData {
 	bool Equals(const FunctionData &other_p) const override;
 
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                      const AggregateFunction &function);
+	                      const BoundAggregateFunction &function);
 
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, AggregateFunction &function);
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundAggregateFunction &function);
 
 	vector<QuantileValue> quantiles;
 	vector<idx_t> order;

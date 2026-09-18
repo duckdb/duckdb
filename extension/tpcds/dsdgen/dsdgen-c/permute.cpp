@@ -39,7 +39,22 @@
 #include <malloc.h>
 #endif
 #include <stdio.h>
+#include <vector>
 #include "genrand.h"
+
+struct PermutationCache {
+	~PermutationCache() {
+		for (auto permutation : int_permutations) {
+			free(permutation);
+		}
+		for (auto permutation : key_permutations) {
+			free(permutation);
+		}
+	}
+
+	std::vector<int *> int_permutations;
+	std::vector<ds_key_t *> key_permutations;
+};
 
 /*
  * Routine: MakePermutation(int nSize)
@@ -56,6 +71,7 @@
  * TODO: None
  */
 int *makePermutation(int *nNumberSet, int nSize, int nStream) {
+	static thread_local PermutationCache permutation_cache;
 	int i, nTemp, nIndex, *pInt;
 
 	if (nSize <= 0)
@@ -64,10 +80,11 @@ int *makePermutation(int *nNumberSet, int nSize, int nStream) {
 	if (!nNumberSet) {
 		nNumberSet = (int *)malloc(nSize * sizeof(int));
 		MALLOC_CHECK(nNumberSet);
-		pInt = nNumberSet;
-		for (i = 0; i < nSize; i++)
-			*pInt++ = i;
+		permutation_cache.int_permutations.push_back(nNumberSet);
 	}
+	pInt = nNumberSet;
+	for (i = 0; i < nSize; i++)
+		*pInt++ = i;
 
 	for (i = 0; i < nSize; i++) {
 		nIndex = genrand_integer(NULL, DIST_UNIFORM, 0, nSize - 1, 0, nStream);
@@ -94,6 +111,7 @@ int *makePermutation(int *nNumberSet, int nSize, int nStream) {
  * TODO: None
  */
 ds_key_t *makeKeyPermutation(ds_key_t *nNumberSet, ds_key_t nSize, int nStream) {
+	static thread_local PermutationCache permutation_cache;
 	ds_key_t i, nTemp, nIndex, *pInt;
 	if (nSize <= 0)
 		return (NULL);
@@ -101,10 +119,11 @@ ds_key_t *makeKeyPermutation(ds_key_t *nNumberSet, ds_key_t nSize, int nStream) 
 	if (!nNumberSet) {
 		nNumberSet = (ds_key_t *)malloc(nSize * sizeof(ds_key_t));
 		MALLOC_CHECK(nNumberSet);
-		pInt = nNumberSet;
-		for (i = 0; i < nSize; i++)
-			*pInt++ = i;
+		permutation_cache.key_permutations.push_back(nNumberSet);
 	}
+	pInt = nNumberSet;
+	for (i = 0; i < nSize; i++)
+		*pInt++ = i;
 
 	for (i = 0; i < nSize; i++) {
 		nIndex = genrand_key(NULL, DIST_UNIFORM, 0, nSize - 1, 0, nStream);

@@ -3,22 +3,35 @@
 # group: [export]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 BEGIN TRANSACTION
 
 statement ok
 CREATE TYPE "group" AS ENUM ( 'one', 'two');
 
 statement ok
+CREATE TYPE quoted_enum AS ENUM ('a''b', 'x,y', 'semi;');
+
+statement ok
 CREATE TABLE table1(col1 "group");
 
 statement ok
-EXPORT DATABASE '__TEST_DIR__/export_enum' (FORMAT CSV);
+CREATE TABLE table2(col1 quoted_enum);
+
+statement ok
+INSERT INTO table2 VALUES ('a''b'), ('x,y'), ('semi;');
+
+statement ok
+EXPORT DATABASE '{TEST_DIR}/export_enum' (FORMAT CSV);
 
 statement ok
 ROLLBACK
 
 statement ok
-IMPORT DATABASE '__TEST_DIR__/export_enum'
+IMPORT DATABASE '{TEST_DIR}/export_enum'
+
+query I
+SELECT col1::VARCHAR FROM table2 ORDER BY col1::VARCHAR
+----
+a'b
+semi;
+x,y

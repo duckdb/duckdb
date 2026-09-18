@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-ColumnDataRef::ColumnDataRef(optionally_owned_ptr<ColumnDataCollection> collection_p, vector<string> expected_names)
+ColumnDataRef::ColumnDataRef(optionally_owned_ptr<ColumnDataCollection> collection_p, vector<Identifier> expected_names)
     : TableRef(TableReferenceType::COLUMN_DATA), expected_names(std::move(expected_names)),
       collection(std::move(collection_p)) {
 }
@@ -37,7 +37,7 @@ bool ColumnDataRef::Equals(const TableRef &other_p) const {
 		if (this_type != other_type) {
 			return false;
 		}
-		if (!StringUtil::CIEquals(this_name, other_name)) {
+		if (this_name != other_name) {
 			return false;
 		}
 	}

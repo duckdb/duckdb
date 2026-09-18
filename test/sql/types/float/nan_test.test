@@ -2,22 +2,19 @@
 # description: Test usage of the NAN value
 # group: [float]
 
-statement ok
-PRAGMA enable_verification
-
 foreach type FLOAT DOUBLE
 
 foreach key UNIQUE CHECK(1)
 
 # nan as a constant
 query I
-SELECT 'NAN'::${type}
+SELECT 'NAN'::{type}
 ----
 nan
 
 # storing nan in a table
 statement ok
-CREATE TABLE floats(f ${type} ${key});
+CREATE TABLE floats(f {type} {key});
 
 statement ok
 INSERT INTO floats VALUES ('NAN'), (1)
@@ -30,17 +27,17 @@ nan
 
 # nan comparison
 query I
-select 'nan'::${type} == 'nan'::${type}
+select 'nan'::{type} == 'nan'::{type}
 ----
 true
 
 query I
-select 'nan'::${type} <> 'nan'::${type}
+select 'nan'::{type} <> 'nan'::{type}
 ----
 false
 
 query I
-select 'nan'::${type} <> 3.0::${type}
+select 'nan'::{type} <> 3.0::{type}
 ----
 true
 
@@ -53,7 +50,7 @@ SELECT f FROM floats WHERE f=1
 1
 
 query I
-SELECT f FROM floats WHERE f='nan'::${type}
+SELECT f FROM floats WHERE f='nan'::{type}
 ----
 nan
 
@@ -64,7 +61,7 @@ SELECT f FROM floats WHERE f<>1
 nan
 
 query I
-SELECT f FROM floats WHERE f<>'nan'::${type}
+SELECT f FROM floats WHERE f<>'nan'::{type}
 ----
 1
 
@@ -77,7 +74,7 @@ SELECT f FROM floats WHERE f > 0 ORDER BY ALL;
 nan
 
 query I
-SELECT f FROM floats WHERE f>'nan'::${type}
+SELECT f FROM floats WHERE f>'nan'::{type}
 ----
 
 # >=
@@ -88,7 +85,7 @@ SELECT f FROM floats WHERE f >= 1 ORDER BY ALL;
 nan
 
 query I
-SELECT f FROM floats WHERE f>='nan'::${type}
+SELECT f FROM floats WHERE f>='nan'::{type}
 ----
 nan
 
@@ -98,7 +95,7 @@ SELECT f FROM floats WHERE f<1
 ----
 
 query I
-SELECT f FROM floats WHERE f<'nan'::${type}
+SELECT f FROM floats WHERE f<'nan'::{type}
 ----
 1
 
@@ -109,7 +106,7 @@ SELECT f FROM floats WHERE f<=1
 1
 
 query I
-SELECT f FROM floats WHERE f <= 'nan'::${type} ORDER BY ALL;
+SELECT f FROM floats WHERE f <= 'nan'::{type} ORDER BY ALL;
 ----
 1
 nan

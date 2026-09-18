@@ -7,9 +7,6 @@ require parquet
 # requires notwindows for embedded spaces in the path
 require notwindows
 
-statement ok
-PRAGMA enable_verification
-
 set seed 0.8675309
 
 statement ok
@@ -45,13 +42,13 @@ LIMIT 5
 statement ok
 COPY (
   SELECT * FROM timeseries
-) TO '__TEST_DIR__/hive' (
+) TO '{TEST_DIR}/hive' (
   FORMAT 'PARQUET', COMPRESSION 'SNAPPY', PARTITION_BY (bucket), OVERWRITE_OR_IGNORE
 );
 
 query II
 SELECT bucket, total 
-FROM read_parquet('__TEST_DIR__/hive/*/*.parquet') 
+FROM read_parquet('{TEST_DIR}/hive/*/*.parquet')
 ORDER BY ALL
 LIMIT 5
 ----

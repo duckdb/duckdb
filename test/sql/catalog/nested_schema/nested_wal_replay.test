@@ -1,0 +1,291 @@
+# name: test/sql/catalog/nested_schema/nested_wal_replay.test
+# description: Replaying nested-schema DDL from the WAL (no checkpoint in between)
+# group: [nested_schema]
+
+# the restart in the other nested-schema tests checkpoints on shutdown, which exercises storage serialization rather
+# than WAL replay - disabling that checkpoint leaves the entries in the WAL so the replay path is covered
+
+load {TEST_DIR}/nested_wal_replay.db readwrite v2.0.0
+
+statement ok
+SET wal_autocheckpoint='1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+CREATE SCHEMA parent;
+
+statement ok
+CREATE SCHEMA parent.child;
+
+statement ok
+CREATE SCHEMA parent.child.grandchild;
+
+statement ok
+CREATE TABLE parent.child.t(i INTEGER);
+
+statement ok
+INSERT INTO parent.child.t VALUES (1), (2);
+
+statement ok
+CREATE VIEW parent.child.v AS SELECT i * 10 AS x FROM parent.child.t;
+
+statement ok
+CREATE SEQUENCE parent.child.seq START 5;
+
+statement ok
+CREATE MACRO parent.child.double(a) AS a * 2;
+
+statement ok
+CREATE MACRO parent.child.tm() AS TABLE SELECT 42 AS x;
+
+statement ok
+CREATE TYPE parent.child.mood AS ENUM ('happy', 'sad');
+
+statement ok
+CREATE INDEX idx ON parent.child.t(i);
+
+statement ok
+CREATE TABLE parent.child.log(i INTEGER);
+
+statement ok
+CREATE TRIGGER trg AFTER INSERT ON parent.child.t FOR EACH STATEMENT INSERT INTO parent.child.log SELECT 1;
+
+restart
+
+statement ok
+SET wal_autocheckpoint='1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+query II
+SELECT count(*), sum(i) FROM parent.child.t;
+----
+2	3
+
+query I
+SELECT * FROM parent.child.v ORDER BY x;
+----
+10
+20
+
+query I
+SELECT nextval('parent.child.seq');
+----
+5
+
+query I
+SELECT parent.child.double(21);
+----
+42
+
+query I
+SELECT * FROM parent.child.tm();
+----
+42
+
+query I
+SELECT 'sad'::parent.child.mood;
+----
+sad
+
+query II
+SELECT schema_name, index_name FROM duckdb_indexes() WHERE index_name = 'idx';
+----
+child	idx
+
+query I
+SELECT count(*) FROM duckdb_schemas() WHERE schema_name IN ('parent', 'child', 'grandchild');
+----
+3
+
+# the replayed trigger still fires
+statement ok
+INSERT INTO parent.child.t VALUES (3);
+
+query I
+SELECT count(*) FROM parent.child.log;
+----
+1
+
+# ALTER on nested entries is replayed (on a table without dependents)
+
+statement ok
+CREATE TABLE parent.child.alt(i INTEGER);
+
+statement ok
+INSERT INTO parent.child.alt VALUES (1), (2), (3);
+
+statement ok
+ALTER TABLE parent.child.alt RENAME TO t2;
+
+statement ok
+ALTER TABLE parent.child.t2 ADD COLUMN j INTEGER;
+
+statement ok
+ALTER VIEW parent.child.v RENAME TO v2;
+
+statement ok
+COMMENT ON TABLE parent.child.t2 IS 'nested table';
+
+statement ok
+COMMENT ON COLUMN parent.child.t2.i IS 'nested column';
+
+restart
+
+statement ok
+SET wal_autocheckpoint='1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+query I
+SELECT count(*) FROM parent.child.t2;
+----
+3
+
+query I
+SELECT j FROM parent.child.t2 LIMIT 1;
+----
+NULL
+
+query I
+SELECT * FROM parent.child.v2 ORDER BY x LIMIT 1;
+----
+10
+
+query I
+SELECT comment FROM duckdb_tables() WHERE table_name = 't2';
+----
+nested table
+
+query I
+SELECT comment FROM duckdb_columns() WHERE table_name = 't2' AND column_name = 'i';
+----
+nested column
+
+# ADD PRIMARY KEY on a nested table is replayed together with its index
+
+statement ok
+CREATE TABLE parent.child.pk(i INTEGER);
+
+statement ok
+INSERT INTO parent.child.pk VALUES (1);
+
+statement ok
+ALTER TABLE parent.child.pk ADD PRIMARY KEY (i);
+
+restart
+
+statement ok
+SET wal_autocheckpoint='1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement error
+INSERT INTO parent.child.pk VALUES (1);
+----
+<REGEX>:.*primary key.*
+
+# DROP of nested entries is replayed
+
+statement ok
+DROP TRIGGER trg ON parent.child.t;
+
+statement ok
+DROP VIEW parent.child.v2;
+
+statement ok
+DROP SEQUENCE parent.child.seq;
+
+statement ok
+DROP MACRO parent.child.double;
+
+statement ok
+DROP MACRO parent.child.tm;
+
+statement ok
+DROP TYPE parent.child.mood;
+
+statement ok
+DROP INDEX parent.child.idx;
+
+statement ok
+DROP TABLE parent.child.pk;
+
+statement ok
+DROP SCHEMA parent.child.grandchild;
+
+restart
+
+statement ok
+SET wal_autocheckpoint='1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+query I
+SELECT count(*) FROM duckdb_triggers();
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_views() WHERE NOT internal;
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_sequences();
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_functions() WHERE function_name IN ('double', 'tm');
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_types() WHERE type_name = 'mood';
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_indexes();
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_tables() WHERE table_name = 'pk';
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_schemas() WHERE schema_name = 'grandchild';
+----
+0
+
+# the remaining entries are untouched
+query I
+SELECT count(*) FROM parent.child.t2;
+----
+3
+
+# dropping the whole nested subtree is replayed
+
+statement ok
+DROP SCHEMA parent CASCADE;
+
+restart
+
+query I
+SELECT count(*) FROM duckdb_schemas() WHERE schema_name IN ('parent', 'child');
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_tables();
+----
+0

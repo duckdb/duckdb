@@ -2,7 +2,7 @@
 # description: Test that query results can be spilled
 # group: [outofcore]
 
-load __TEST_DIR__/buffer_managed_query_result.db
+load {TEST_DIR}/buffer_managed_query_result.db
 
 statement ok
 set memory_limit='100mb';
@@ -29,7 +29,7 @@ from range;
 Out of Memory Error
 
 statement ok
-set temp_directory='__TEST_DIR__/buffer_managed_query_result.db.tmp'
+set temp_directory='{TEST_DIR}/buffer_managed_query_result.db.tmp'
 
 # test non-batched
 statement ok

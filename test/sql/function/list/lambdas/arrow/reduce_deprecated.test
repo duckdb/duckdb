@@ -3,9 +3,6 @@
 # group: [arrow]
 
 statement ok
-pragma enable_verification
-
-statement ok
 SET lambda_syntax='ENABLE_SINGLE_ARROW'
 
 query I
@@ -68,7 +65,7 @@ Cannot perform list_reduce on an empty input list
 statement error
 SELECT list_reduce([1, 2, 3], (x, y) -> (x * y)::VARCHAR || 'please work');
 ----
-Could not convert
+Binder Error: No common super type between list element type INTEGER and lambda return type VARCHAR
 
 statement error
 SELECT list_reduce([1, 2], (x) -> x);

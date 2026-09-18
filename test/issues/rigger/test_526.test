@@ -2,9 +2,6 @@
 # description: Issue 526
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # Query that uses the CONCAT() function and OR expression crashes
 # FIXME: #398
 statement ok

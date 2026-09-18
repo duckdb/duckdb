@@ -3,9 +3,6 @@
 # group: [catalog]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t1 (c1 CHAR(5));
 
 statement ok

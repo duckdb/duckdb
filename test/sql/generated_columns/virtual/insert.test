@@ -3,9 +3,6 @@
 # group: [virtual]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE test (
     foo INTEGER,
     bar INTEGER GENERATED ALWAYS AS (foo+1) VIRTUAL,
@@ -36,7 +33,7 @@ SELECT * FROM test
 statement error
 INSERT INTO test VALUES (22)
 ----
-<REGEX>:.*Binder Error.*table test has 2 columns.*
+<REGEX>:.*Binder Error.*table "test" has 2 columns.*
 
 #Using VALUES correctly
 statement ok
@@ -46,7 +43,7 @@ INSERT INTO test VALUES (22, 10);
 statement error
 INSERT INTO test VALUES (22, 10, 10)
 ----
-<REGEX>:.*Binder Error.*table test has 2 columns.*
+<REGEX>:.*Binder Error.*table "test" has 2 columns.*
 
 statement ok
 CREATE TABLE tbl (

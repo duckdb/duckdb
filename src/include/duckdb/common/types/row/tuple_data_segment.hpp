@@ -13,7 +13,7 @@
 #include "duckdb/common/perfect_map_set.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/common/arena_containers/arena_vector.hpp"
 
 namespace duckdb {
@@ -161,6 +161,8 @@ public:
 	idx_t SizeInBytes() const;
 	//! Unpins all held pins
 	void Unpin();
+	//! Reset this segment for reuse, clearing chunk metadata while keeping the segment object alive
+	void Reset();
 
 	//! Verify counts of the chunks in this segment
 	void Verify() const;

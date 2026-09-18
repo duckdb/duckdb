@@ -2,7 +2,6 @@
 #include "test_helpers.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 // This test triggers an edge case where data that is flushed from a caching operator in pulled into an operator
 // that needs to see this chunk more that once. handling this case requires temporarily caching the flushed result.
@@ -13,8 +12,8 @@ TEST_CASE("Streaming result with a filter and a cross product", "[filter][.]") {
 	REQUIRE_NO_FAIL(con.Query("PRAGMA disable_optimizer"));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test as SELECT * FROM RANGE(0, 2000000) tbl(i)"));
-	auto result = con.SendQuery(
-	    "SELECT * FROM (SELECT * FROM test where i%1000=0) t1(i), (SELECT * FROM test where i%1000=0) t2(j)");
+	auto result =
+	    con.Query("SELECT * FROM (SELECT * FROM test where i%1000=0) t1(i), (SELECT * FROM test where i%1000=0) t2(j)");
 	REQUIRE_NO_FAIL(*result);
 
 	idx_t expected_count = 4000000;

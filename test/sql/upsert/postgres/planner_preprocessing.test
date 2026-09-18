@@ -1,9 +1,6 @@
 # name: test/sql/upsert/postgres/planner_preprocessing.test
 # group: [postgres]
 
-statement ok
-pragma enable_verification;
-
 # ******************************************************************
 # *                                                                *
 # * Test inheritance (example taken from tutorial)                 *

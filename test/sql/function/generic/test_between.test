@@ -249,6 +249,12 @@ SELECT *
 FROM issue3588
 WHERE (SELECT 0) BETWEEN 0 AND issue3588.c0;
 
+# internal between function cannot be called by the user
+statement error
+SELECT "__between"(2,0,10)
+----
+cannot be called directly
+
 statement ok
 CREATE TABLE between_pushdown_t2(a INT, b INT, c INT);
 

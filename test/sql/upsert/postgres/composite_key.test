@@ -1,9 +1,6 @@
 # name: test/sql/upsert/postgres/composite_key.test
 # group: [postgres]
 
-statement ok
-pragma enable_verification;
-
 # insert...on conflict do unique index inference
 
 statement ok

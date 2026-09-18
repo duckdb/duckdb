@@ -1,0 +1,19 @@
+# name: benchmark/micro/json/json_extract_wildcard.benchmark
+# description: Extract a wildcard path from small JSON documents
+# group: [json]
+
+name JSON extract wildcard
+group json
+
+require json
+
+load
+CREATE TABLE docs AS
+SELECT json_object('id', i, 'user', json_object('name', 'user_' || i, 'tags', json_array(i % 10, i % 7)), 'ts', i * 1000) AS j
+FROM range(0, 5000000) t(i);
+
+run
+SELECT count(json_extract(j, '$.user.tags[*]')) FROM docs
+
+result I
+5000000

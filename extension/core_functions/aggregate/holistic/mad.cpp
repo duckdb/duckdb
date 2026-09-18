@@ -1,95 +1,16 @@
 #include "core_functions/aggregate/holistic_functions.hpp"
-#include "duckdb/planner/expression.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/operator/abs.hpp"
 #include "core_functions/aggregate/quantile_state.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/operator/abs.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/smaller_binary.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
 namespace {
-
-struct FrameSet {
-	inline explicit FrameSet(const SubFrames &frames_p) : frames(frames_p) {
-	}
-
-	inline idx_t Size() const {
-		idx_t result = 0;
-		for (const auto &frame : frames) {
-			result += frame.end - frame.start;
-		}
-
-		return result;
-	}
-
-	inline bool Contains(idx_t i) const {
-		for (idx_t f = 0; f < frames.size(); ++f) {
-			const auto &frame = frames[f];
-			if (frame.start <= i && i < frame.end) {
-				return true;
-			}
-		}
-		return false;
-	}
-	const SubFrames &frames;
-};
-
-struct QuantileReuseUpdater {
-	idx_t *index;
-	idx_t j;
-
-	inline QuantileReuseUpdater(idx_t *index, idx_t j) : index(index), j(j) {
-	}
-
-	inline void Neither(idx_t begin, idx_t end) {
-	}
-
-	inline void Left(idx_t begin, idx_t end) {
-	}
-
-	inline void Right(idx_t begin, idx_t end) {
-		for (; begin < end; ++begin) {
-			index[j++] = begin;
-		}
-	}
-
-	inline void Both(idx_t begin, idx_t end) {
-	}
-};
-
-void ReuseIndexes(idx_t *index, const SubFrames &currs, const SubFrames &prevs) {
-	//  Copy overlapping indices by scanning the previous set and copying down into holes.
-	//	We copy instead of leaving gaps in case there are fewer values in the current frame.
-	FrameSet prev_set(prevs);
-	FrameSet curr_set(currs);
-	const auto prev_count = prev_set.Size();
-	idx_t j = 0;
-	for (idx_t p = 0; p < prev_count; ++p) {
-		auto idx = index[p];
-
-		//  Shift down into any hole
-		if (j != p) {
-			index[j] = idx;
-		}
-
-		//  Skip overlapping values
-		if (curr_set.Contains(idx)) {
-			++j;
-		}
-	}
-
-	//  Insert new indices
-	if (j > 0) {
-		QuantileReuseUpdater updater(index, j);
-		AggregateExecutor::IntersectFrames(prevs, currs, updater);
-	} else {
-		//  No overlap: overwrite with new values
-		for (const auto &curr : currs) {
-			for (auto idx = curr.start; idx < curr.end; ++idx) {
-				index[j++] = idx;
-			}
-		}
-	}
-}
 
 //===--------------------------------------------------------------------===//
 // Median Absolute Deviation
@@ -134,7 +55,7 @@ struct MadAccessor<date_t, interval_t, timestamp_t> {
 	}
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
 		const auto dt = Cast::Operation<date_t, timestamp_t>(input);
-		const auto delta = dt - median;
+		const auto delta = SubtractOperator::Operation<timestamp_t, MEDIAN_TYPE, int64_t>(dt, median);
 		return Interval::FromMicro(TryAbsOperator::Operation<int64_t, int64_t>(delta));
 	}
 };
@@ -149,7 +70,7 @@ struct MadAccessor<timestamp_t, interval_t, timestamp_t> {
 	explicit MadAccessor(const MEDIAN_TYPE &median_p) : median(median_p) {
 	}
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
-		const auto delta = input - median;
+		const auto delta = SubtractOperator::Operation<timestamp_t, MEDIAN_TYPE, int64_t>(input, median);
 		return Interval::FromMicro(TryAbsOperator::Operation<int64_t, int64_t>(delta));
 	}
 };
@@ -169,11 +90,57 @@ struct MadAccessor<dtime_t, interval_t, dtime_t> {
 	}
 };
 
+// Find the element at zero-based rank k in the union of two sorted ranges.
+// Instead of combining and sorting the ranges, partition each range so that their two lower partitions together
+// contain the first k + 1 elements of the union. The largest element in that combined partition is the element at
+// rank k.
+template <typename RESULT_TYPE, typename LEFT_OP, typename RIGHT_OP>
+static RESULT_TYPE SelectUnionNth(idx_t left_count, idx_t right_count, idx_t k, LEFT_OP &&left, RIGHT_OP &&right) {
+	D_ASSERT(k < left_count + right_count);
+
+	// Lower bound: assume the right range contributes as many elements as it can, leftovers are supplied by the left
+	// range.
+	idx_t lo = k + 1 > right_count ? k + 1 - right_count : 0;
+	// Upper bound: the left range cannot contribute more elements than it contains.
+	idx_t hi = MinValue(k + 1, left_count);
+
+	// Binary-search the number of elements contributed by the left range.
+	while (lo < hi) {
+		const idx_t i = lo + (hi - lo) / 2;
+		const idx_t j = k + 1 - i;
+
+		D_ASSERT(i < left_count);
+		D_ASSERT(j > 0);
+
+		if (LessThan::Operation(left(i), right(j - 1))) {
+			// The chosen partition size for the left range is too small. The next unselected value from the left range
+			// precedes the last selected value from the right range, so that left value belongs in the combined lower
+			// partition.
+			lo = i + 1;
+		} else {
+			hi = i;
+		}
+	}
+
+	const idx_t i = lo;
+	const idx_t j = k + 1 - i;
+	if (i == 0) {
+		return right(j - 1);
+	}
+	if (j == 0) {
+		return left(i - 1);
+	}
+
+	const auto l = left(i - 1);
+	const auto r = right(j - 1);
+	return LessThan::Operation(r, l) ? l : r;
+}
+
 template <typename MEDIAN_TYPE>
 struct MedianAbsoluteDeviationOperation : QuantileOperation {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (state.v.empty()) {
+		if (state.linked_list.total_capacity == 0) {
 			finalize_data.ReturnNull();
 			return;
 		}
@@ -182,95 +149,127 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
 		const auto &q = bind_data.quantiles[0];
-		QuantileInterpolator<false> interp(q, state.v.size(), false);
-		const auto med = interp.template Operation<INPUT_TYPE, MEDIAN_TYPE>(state.v.data(), finalize_data.result);
+		auto &flattened = FlattenedQuantileValues<INPUT_TYPE>::Flatten(finalize_data, state.linked_list);
+		QuantileInterpolator<false> interp(q, state.linked_list.total_capacity, false);
+		const auto med = interp.template Operation<INPUT_TYPE, MEDIAN_TYPE>(flattened.Data(), finalize_data.result);
 
 		MadAccessor<INPUT_TYPE, T, MEDIAN_TYPE> accessor(med);
-		target = interp.template Operation<INPUT_TYPE, T>(state.v.data(), finalize_data.result, accessor);
+		target = interp.template Operation<INPUT_TYPE, T>(flattened.Data(), finalize_data.result, accessor);
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
-	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &frames, Vector &result,
-	                   idx_t ridx) {
+	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames *subframes_per_row, idx_t count,
+	                   Vector &result, idx_t row_idx) {
+		using MAD = MadAccessor<INPUT_TYPE, RESULT_TYPE, MEDIAN_TYPE>;
+
 		auto &state = *reinterpret_cast<STATE *>(l_state);
 		auto gstate = reinterpret_cast<const STATE *>(g_state);
 
 		auto &data = state.GetOrCreateWindowCursor(partition);
 		const auto &fmask = partition.filter_mask;
 
-		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
+		auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
+		auto &rmask = FlatVector::ValidityMutable(result);
 
 		QuantileIncluded<INPUT_TYPE> included(fmask, data);
-		const auto n = FrameSize(included, frames);
 
-		if (!n) {
-			auto &rmask = FlatVector::Validity(result);
-			rmask.Set(ridx, false);
-			return;
-		}
-
-		//	Compute the median
 		D_ASSERT(aggr_input_data.bind_data);
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
 		D_ASSERT(bind_data.quantiles.size() == 1);
 		const auto &quantile = bind_data.quantiles[0];
+
 		auto &window_state = state.GetOrCreateWindowState();
-		MEDIAN_TYPE med;
-		if (gstate && gstate->HasTree()) {
-			med = gstate->GetWindowState().template WindowScalar<MEDIAN_TYPE, false>(data, frames, n, result, quantile);
-		} else {
-			window_state.UpdateSkip(data, frames, included);
-			med = window_state.template WindowScalar<MEDIAN_TYPE, false>(data, frames, n, result, quantile);
-		}
-
-		//  Lazily initialise frame state
-		window_state.SetCount(frames.back().end - frames.front().start);
-		auto index2 = window_state.m.data();
-		D_ASSERT(index2);
-
-		// The replacement trick does not work on the second index because if
-		// the median has changed, the previous order is not correct.
-		// It is probably close, however, and so reuse is helpful.
 		auto &prevs = window_state.prevs;
-		ReuseIndexes(index2, frames, prevs);
-		std::partition(index2, index2 + window_state.count, included);
+		vector<RESULT_TYPE> deviations;
+		MEDIAN_TYPE med;
 
-		QuantileInterpolator<false> interp(quantile, n, false);
+		for (idx_t ridx = 0; ridx < count; ++ridx) {
+			const auto &frames = subframes_per_row[ridx];
+			const auto n = FrameSize(included, frames);
+			if (!n) {
+				rmask.Set(ridx, false);
+				continue;
+			}
 
-		// Compute mad from the second index
-		using ID = QuantileIndirect<INPUT_TYPE>;
-		ID indirect(data);
+			if (gstate && gstate->HasTree()) {
+				med = gstate->GetWindowState().template WindowScalar<MEDIAN_TYPE, false>(data, frames, n, result,
+				                                                                         quantile);
+			} else {
+				window_state.UpdateSkip(data, frames, included);
+				med = window_state.template WindowScalar<MEDIAN_TYPE, false>(data, frames, n, result, quantile);
+			}
 
-		using MAD = MadAccessor<INPUT_TYPE, RESULT_TYPE, MEDIAN_TYPE>;
-		MAD mad(med);
+			QuantileInterpolator<false> interp(quantile, n, false);
+			MAD mad(med);
 
-		using MadIndirect = QuantileComposed<MAD, ID>;
-		MadIndirect mad_indirect(mad, indirect);
-		rdata[ridx] = interp.template Operation<idx_t, RESULT_TYPE, MadIndirect>(index2, result, mad_indirect);
+			if (gstate && gstate->HasTree()) {
+				deviations.clear();
+				deviations.reserve(n);
 
-		//	Prev is used by both skip lists and increments
-		prevs = frames;
+				if (included.AllValid()) {
+					for (const auto &frame : frames) {
+						for (auto i = frame.start; i < frame.end; ++i) {
+							deviations.push_back(mad(data[i]));
+						}
+					}
+				} else {
+					for (const auto &frame : frames) {
+						for (auto i = frame.start; i < frame.end; ++i) {
+							if (included(i)) {
+								deviations.push_back(mad(data[i]));
+							}
+						}
+					}
+				}
+
+				D_ASSERT(deviations.size() == n);
+				rdata[ridx] = interp.template Operation<RESULT_TYPE, RESULT_TYPE>(deviations.data(), result);
+			} else {
+				// The median lies between the two halves of the values stored in the sorted skip list. Absolute
+				// deviations decrease as values in the lower half approach the median and increase as values in the
+				// upper half move away from the median. Reading the lower half in reverse therefore produces two
+				// non-decreasing deviation ranges without materializing or sorting those ranges.
+				const auto left_count = (n + 1) / 2;
+				const auto right_count = n - left_count;
+				auto left = [&](idx_t i) {
+					return mad(window_state.SkipNth(left_count - i - 1));
+				};
+				auto right = [&](idx_t i) {
+					return mad(window_state.SkipNth(left_count + i));
+				};
+
+				array<RESULT_TYPE, 2> dest;
+				dest[0] = SelectUnionNth<RESULT_TYPE>(left_count, right_count, interp.FRN, left, right);
+				if (interp.CRN != interp.FRN) {
+					dest[1] = SelectUnionNth<RESULT_TYPE>(left_count, right_count, interp.CRN, left, right);
+				}
+
+				rdata[ridx] = interp.template Extract<RESULT_TYPE, RESULT_TYPE>(dest.data(), result);
+			}
+
+			//	Prev is used by both skip lists and increments
+			prevs = frames;
+		}
 	}
 };
 
-unique_ptr<FunctionData> BindMAD(ClientContext &context, AggregateFunction &function,
-                                 vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindMAD(BindAggregateFunctionInput &input) {
 	return make_uniq<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
 }
 
 template <typename INPUT_TYPE, typename MEDIAN_TYPE, typename TARGET_TYPE>
 AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const LogicalType &input_type,
                                                                    const LogicalType &target_type) {
-	using STATE = QuantileState<INPUT_TYPE, QuantileStandardType>;
+	using STATE = QuantileState<INPUT_TYPE>;
 	using OP = MedianAbsoluteDeviationOperation<MEDIAN_TYPE>;
-	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP,
-	                                                       AggregateDestructorType::LEGACY>(input_type, target_type);
+	auto fun = QuantileBufferingAggregate<STATE, TARGET_TYPE, OP>(input_type, target_type);
 	fun.SetBindCallback(BindMAD);
+	fun.SetStructStateExport(QuantileStateLayout<STATE>);
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-#ifndef DUCKDB_SMALLER_BINARY
-	fun.SetWindowCallback(OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>);
+#if !DUCKDB_SMALLER_BINARY(mad_window)
+	fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>);
 	fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
 #endif
 	return fun;
@@ -320,20 +319,25 @@ AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType 
 	return result;
 }
 
-unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(ClientContext &context, AggregateFunction &function,
-                                                            vector<unique_ptr<Expression>> &arguments) {
-	function = GetMedianAbsoluteDeviationAggregateFunction(arguments[0]->return_type);
-	function.name = "mad";
+unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	auto impl = GetMedianAbsoluteDeviationAggregateFunction(arguments[0]->GetReturnType());
+	function.ReplaceImplementation(impl);
+	function.SetName("mad");
 	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-	return BindMAD(context, function, arguments);
+	return BindMAD(input);
 }
 
 } // namespace
 
 AggregateFunctionSet MadFun::GetFunctions() {
 	AggregateFunctionSet mad("mad");
-	mad.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, nullptr, BindMedianAbsoluteDeviationDecimal));
+	AggregateFunction decimal_mad({}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                              FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(),
+	                              BindMedianAbsoluteDeviationDecimal);
+	decimal_mad.GetSignature().AddParameter("x", LogicalTypeId::DECIMAL);
+	mad.AddFunction(decimal_mad);
 
 	const vector<LogicalType> MAD_TYPES = {LogicalType::FLOAT,     LogicalType::DOUBLE, LogicalType::DATE,
 	                                       LogicalType::TIMESTAMP, LogicalType::TIME,   LogicalType::TIMESTAMP_TZ,

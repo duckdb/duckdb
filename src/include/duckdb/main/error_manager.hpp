@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/types/string.hpp"
 
 namespace duckdb {
 class String;
@@ -42,7 +43,7 @@ public:
 	DUCKDB_API string FormatExceptionRecursive(ErrorType error_type, vector<ExceptionFormatValue> &values);
 
 	template <class T, typename... ARGS>
-	string FormatExceptionRecursive(ErrorType error_type, vector<ExceptionFormatValue> &values, T param,
+	string FormatExceptionRecursive(ErrorType error_type, vector<ExceptionFormatValue> &values, const T &param,
 	                                ARGS &&...params) {
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		return FormatExceptionRecursive(error_type, values, std::forward<ARGS>(params)...);

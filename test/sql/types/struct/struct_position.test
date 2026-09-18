@@ -2,9 +2,6 @@
 # description: Test struct_position function
 # group: [struct]
 
-statement ok
-PRAGMA enable_verification
-
 # ==========================================================
 # Basic functionality tests
 # ==========================================================
@@ -262,5 +259,5 @@ NULL
 statement error
 SELECT struct_position({'a': 1, 'b': 2}, 2);
 ----
-<REGEX>:Binder Error.*struct_position can only be used on unnamed structs.*
+<REGEX>:Binder Error.*"struct_position" can only be used on unnamed structs.*
 

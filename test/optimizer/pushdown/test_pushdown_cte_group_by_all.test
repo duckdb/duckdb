@@ -3,6 +3,9 @@
 # group: [pushdown]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 create or replace table my_temp as
 from generate_series(99) t(i)
 select i, i % 10 as group_1;

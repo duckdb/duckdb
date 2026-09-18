@@ -29,16 +29,14 @@ public:
 	//! Construction from a string literal is implicit: literals in the source are identifiers by intent.
 	Identifier(const char *str) : value(str) { // NOLINT: implicit conversion from literals is intentional
 	}
-	//! NOTE(backport): DuckDB 2.0 makes these two constructors explicit, and the conversion back to a
-	//! string below as well. Every API on this branch still takes and returns `std::string`, so explicitness in
-	//! either direction would force a cast at every single call site into DuckDB - text that does not exist on the
-	//! 2.0 branch and would therefore *add* diff to carry and rebase. The rule for call sites is to write exactly
-	//! the casts the 2.0 branch writes and never any others: where 2.0 writes `Identifier(x)` or
-	//! `GetIdentifierName()`, write it here too (it compiles to the same thing); where 2.0 writes neither, write
-	//! neither and let the implicit conversion absorb the difference.
-	Identifier(const string &str) : value(str) { // NOLINT: implicit on purpose, see above
+	//! Construction from a runtime string is explicit: an Identifier carries case-insensitive semantics, so
+	//! promoting a runtime string must be a deliberate choice at the call site.
+	explicit Identifier(const string &str) : value(str) {
 	}
-	Identifier(string &&str) : value(std::move(str)) { // NOLINT: implicit on purpose, see above
+	explicit Identifier(string &&str) : value(std::move(str)) {
+	}
+	//! Construction from a string view is also explicit to be safe
+	explicit Identifier(const std::string_view str) : value(str) {
 	}
 
 	//! Named constructors for well-known identifiers
@@ -58,9 +56,9 @@ public:
 		return Identifier(TEMP_CATALOG);
 	}
 
-	//! NOTE(backport): Conversion back to a string (implicit here, explicit on DuckDB 2.0 - see the note on the
-	//! constructors above)
-	operator const string &() const { // NOLINT: implicit on purpose, see above
+	//! Conversion back to a string is explicit: it discards the case-insensitive semantics, so callers must opt in
+	//! (use GetIdentifierName() for the raw value). Keeping this explicit is what makes the Identifier type safe.
+	explicit operator const string &() const {
 		return value;
 	}
 

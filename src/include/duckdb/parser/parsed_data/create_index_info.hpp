@@ -15,6 +15,7 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 struct CreateIndexInfo : public CreateInfo {
@@ -22,24 +23,13 @@ struct CreateIndexInfo : public CreateInfo {
 	CreateIndexInfo(const CreateIndexInfo &info);
 
 	//! The table name of the underlying table
-	string table;
+	Identifier table;
 	//! The name of the index
-	string index_name;
-
-	//! NOTE(backport): DuckDB 2.0 stores catalog/schema/name in a single `QualifiedName` on `CreateInfo`; here they are
-	//! separate strings and the name lives on the subclass. These accessors only exist so that call sites can be
-	//! spelled exactly as they are on the 2.0 branch.
-	const string &GetIndexName() const {
-		return index_name;
+	const Identifier &GetIndexName() const {
+		return qualified_name.Name();
 	}
-	void SetIndexName(string name_p) {
-		index_name = std::move(name_p);
-	}
-	const string &GetEntryName() const override {
-		return index_name;
-	}
-	void SetEntryName(string name_p) override {
-		index_name = std::move(name_p);
+	void SetIndexName(Identifier name) {
+		qualified_name = qualified_name.WithName(std::move(name));
 	}
 
 	//! Options values (WITH ...)
@@ -58,7 +48,7 @@ struct CreateIndexInfo : public CreateInfo {
 	//! The types of the logical columns (necessary for scanning the table during CREATE INDEX)
 	vector<LogicalType> scan_types;
 	//! The names of the logical columns (necessary for scanning the table during CREATE INDEX)
-	vector<string> names;
+	vector<Identifier> names;
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;

@@ -14,15 +14,15 @@ namespace duckdb {
 
 class CreateTableRelation : public Relation {
 public:
-	CreateTableRelation(shared_ptr<Relation> child, string schema_name, string table_name, bool temporary,
+	CreateTableRelation(shared_ptr<Relation> child, Identifier schema_name, Identifier table_name, bool temporary,
 	                    OnCreateConflict on_conflict);
-	CreateTableRelation(shared_ptr<Relation> child, string catalog_name, string schema_name, string table_name,
-	                    bool temporary, OnCreateConflict on_conflict);
+	CreateTableRelation(shared_ptr<Relation> child, Identifier catalog_name, Identifier schema_name,
+	                    Identifier table_name, bool temporary, OnCreateConflict on_conflict);
 
 	shared_ptr<Relation> child;
-	string catalog_name;
-	string schema_name;
-	string table_name;
+	Identifier catalog_name;
+	Identifier schema_name;
+	Identifier table_name;
 	vector<ColumnDefinition> columns;
 	bool temporary;
 	OnCreateConflict on_conflict;

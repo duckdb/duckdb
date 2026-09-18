@@ -12,7 +12,7 @@ struct DuckDBMemoryData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBMemoryBind(ClientContext &context, TableFunctionBindInput &input,
-                                                 vector<LogicalType> &return_types, vector<string> &names) {
+                                                 vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("tag");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -47,19 +47,21 @@ void DuckDBMemoryFunction(ClientContext &context, TableFunctionInput &data_p, Da
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// tag, VARCHAR
+	auto &tag = output.data[0];
+	// memory_usage_bytes, BIGINT
+	auto &memory_usage_bytes = output.data[1];
+	// temporary_storage_bytes, BIGINT
+	auto &temporary_storage_bytes = output.data[2];
+
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
-		// return values:
-		idx_t col = 0;
-		// tag, VARCHAR
-		output.SetValue(col++, count, EnumUtil::ToString(entry.tag));
-		// memory_usage_bytes, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(ClampReportedMemory(entry.size)));
-		// temporary_storage_bytes, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(ClampReportedMemory(entry.evicted_data)));
+		tag.Append(Value(EnumUtil::ToString(entry.tag)));
+		memory_usage_bytes.Append(Value::BIGINT(ClampReportedMemory(entry.size)));
+		temporary_storage_bytes.Append(Value::BIGINT(ClampReportedMemory(entry.evicted_data)));
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBMemoryFun::RegisterFunction(BuiltinFunctions &set) {

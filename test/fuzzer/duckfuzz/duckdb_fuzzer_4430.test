@@ -3,7 +3,7 @@
 # group: [duckfuzz]
 
 statement ok
-ATTACH '__TEST_DIR__/duckdb_fuzzer_4430.db' AS db1
+ATTACH '{TEST_DIR}/duckdb_fuzzer_4430.db' AS db1
 
 # Write case: forbid DETACH after a write to db1 in the same transaction
 statement ok

@@ -1,0 +1,66 @@
+# name: test/sql/function/list/lambdas/interrupt.test_slow
+# description: Test that lambda functions respect query interruption via max_execution_time
+# group: [lambdas]
+
+# Pre-build the 1M-element list once, outside any timeout window.
+# Each interrupt test then only times the lambda execution phase itself.
+# Building the list under max_execution_time would make timing hardware-dependent:
+# the aggregation could be interrupted before the lambda even starts on slow runners,
+# or the whole query (aggregation + simple arithmetic) could finish in <50ms on fast ones.
+
+statement ok
+CREATE TABLE interrupt_list AS SELECT list(i) AS l FROM range(1000000) t(i)
+
+# list_transform — uses string formatting (printf) to ensure the per-element cost
+# is high enough (~250ms for 1M elements) that a 50ms deadline reliably fires.
+# Before the fix, ExecuteLambda had no InterruptCheck() calls so the interrupt flag
+# set at the deadline was never read until the entire loop finished.
+
+statement ok
+SET max_execution_time=50
+
+statement error
+SELECT list_transform(l, lambda x: printf('%09d-%09d-%09d', x, x * 2 + 1, x * 3 + 2))
+FROM interrupt_list
+----
+Query exceeded maximum execution time
+
+statement ok
+RESET max_execution_time
+
+# list_filter — same ExecuteLambda code path.
+
+statement ok
+SET max_execution_time=50
+
+statement error
+SELECT list_filter(l, lambda x: printf('%09d-%09d-%09d', x, x * 2 + 1, x * 3 + 2) LIKE '%999%')
+FROM interrupt_list
+----
+Query exceeded maximum execution time
+
+statement ok
+RESET max_execution_time
+
+# list_reduce — separate fold-left loop in list_reduce.cpp.
+# Sequential by nature (~1s for 1M elements), reliably interrupted by 50ms deadline.
+
+statement ok
+SET max_execution_time=50
+
+statement error
+SELECT list_reduce(l, lambda a, b: a + b + (b % 3))
+FROM interrupt_list
+----
+Query exceeded maximum execution time
+
+statement ok
+RESET max_execution_time
+
+# Sanity check: a short list completes without error after reset.
+
+statement ok
+SELECT list_transform(range(100), lambda x: x * 2)
+
+statement ok
+DROP TABLE interrupt_list

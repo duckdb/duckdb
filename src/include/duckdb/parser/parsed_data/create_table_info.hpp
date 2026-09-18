@@ -13,31 +13,21 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/column_list.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 class SchemaCatalogEntry;
 
 struct CreateTableInfo : public CreateInfo {
 	DUCKDB_API CreateTableInfo();
-	DUCKDB_API CreateTableInfo(string catalog, string schema, string name);
-	DUCKDB_API CreateTableInfo(SchemaCatalogEntry &schema, string name);
+	DUCKDB_API explicit CreateTableInfo(QualifiedName qualified_name);
+	DUCKDB_API CreateTableInfo(SchemaCatalogEntry &schema, const Identifier &name);
 
 	//! Table name to insert to
-	string table;
-
-	//! NOTE(backport): DuckDB 2.0 stores catalog/schema/name in a single `QualifiedName` on `CreateInfo`; here they are
-	//! separate strings and the name lives on the subclass. These accessors only exist so that call sites can be
-	//! spelled exactly as they are on the 2.0 branch.
-	const string &GetTableName() const {
-		return table;
+	const Identifier &GetTableName() const {
+		return qualified_name.Name();
 	}
-	void SetTableName(string name_p) {
-		table = std::move(name_p);
-	}
-	const string &GetEntryName() const override {
-		return table;
-	}
-	void SetEntryName(string name_p) override {
-		table = std::move(name_p);
+	void SetTableName(Identifier name) {
+		qualified_name = qualified_name.WithName(std::move(name));
 	}
 	//! List of columns of the table
 	ColumnList columns;

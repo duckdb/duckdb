@@ -16,7 +16,7 @@ namespace duckdb {
 class MaterializedRelation : public Relation {
 public:
 	MaterializedRelation(const shared_ptr<ClientContext> &context, unique_ptr<ColumnDataCollection> &&collection,
-	                     vector<string> names, string alias = "materialized");
+	                     vector<Identifier> names, const Identifier &alias = "materialized");
 	vector<ColumnDefinition> columns;
 	string alias;
 	shared_ptr<ColumnDataCollection> collection;
@@ -24,7 +24,7 @@ public:
 public:
 	const vector<ColumnDefinition> &Columns() override;
 	string ToString(idx_t depth) override;
-	string GetAlias() override;
+	Identifier GetAlias() override;
 	unique_ptr<TableRef> GetTableRef() override;
 	unique_ptr<QueryNode> GetQueryNode() override;
 };

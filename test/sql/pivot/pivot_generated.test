@@ -3,9 +3,6 @@
 # group: [pivot]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE Product(DaysToManufacture int, StandardCost int GENERATED ALWAYS AS (DaysToManufacture * 5));
 
 statement ok

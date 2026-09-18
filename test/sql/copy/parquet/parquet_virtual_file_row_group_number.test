@@ -1,0 +1,194 @@
+# name: test/sql/copy/parquet/parquet_virtual_file_row_group_number.test
+# description: Test file_row_group_number virtual column
+# group: [parquet]
+
+require parquet
+
+require json
+
+# write a parquet file with 5 row groups (2048 rows each, except the last)
+statement ok
+copy (select i, i * 2 as j from range(10000) t(i)) to '{TEST_DIR}/rg.parquet' (format parquet, ROW_GROUP_SIZE 2048);
+
+# sanity check: 5 row groups
+query I
+select count(distinct row_group_id) from parquet_metadata('{TEST_DIR}/rg.parquet');
+----
+5
+
+# the file_row_group_number is the file-relative row group index, starting at 0
+query IIII
+select file_row_group_number, count(*), min(i), max(i) from '{TEST_DIR}/rg.parquet' group by file_row_group_number order by file_row_group_number;
+----
+0	2048	0	2047
+1	2048	2048	4095
+2	2048	4096	6143
+3	2048	6144	8191
+4	1808	8192	9999
+
+# row group number is virtual - no values are NULL
+query I
+select count(*) from '{TEST_DIR}/rg.parquet' where file_row_group_number is null;
+----
+0
+
+# filtering by a specific row group returns only the rows in that row group
+query III
+select count(*), min(i), max(i) from '{TEST_DIR}/rg.parquet' where file_row_group_number = 2;
+----
+2048	4096	6143
+
+# filtering with a range works too
+query I
+select count(*) from '{TEST_DIR}/rg.parquet' where file_row_group_number >= 1 and file_row_group_number <= 3;
+----
+6144
+
+# reading multiple non-contiguous row groups via IN
+query III
+select count(*), min(i), max(i) from '{TEST_DIR}/rg.parquet' where file_row_group_number in (1, 3);
+----
+4096	2048	8191
+
+# the result only contains data from row groups 1 and 3
+query I
+select distinct file_row_group_number from '{TEST_DIR}/rg.parquet' where file_row_group_number in (1, 3) order by file_row_group_number;
+----
+1
+3
+
+# no data from any other row group leaks in (row group 2 covers i in [4096, 6143])
+query I
+select count(*) from '{TEST_DIR}/rg.parquet' where file_row_group_number in (1, 3) and i between 4096 and 6143;
+----
+0
+
+# a row group that does not exist returns no rows
+query I
+select count(*) from '{TEST_DIR}/rg.parquet' where file_row_group_number = 100;
+----
+0
+
+# combined projection with regular columns
+query III
+select i, j, file_row_group_number from '{TEST_DIR}/rg.parquet' where i in (0, 2048, 9999) order by i;
+----
+0	0	0
+2048	4096	1
+9999	19998	4
+
+#-------------------------------------------------------------------------------
+# verify that filtering by file_row_group_number short-circuits reads:
+# only the matching row group's data is read, the rest are skipped via row-group
+# pruning. The parquet scan reports this via the standard row-group profiling
+# metrics: row_groups_scanned = row groups read, total_row_groups_to_scan = all row
+# groups considered (so row groups skipped = total_row_groups_to_scan - row_groups_scanned).
+# (single threaded so the reported per-operator counts are deterministic)
+#-------------------------------------------------------------------------------
+
+statement ok
+set threads=1;
+
+# filtering on a single row group reads only that one (1) and considers all 5 (skips 4)
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+SET tracked_metrics = ['operator.row_groups_scanned', 'operator.total_row_groups_to_scan', 'operator.type'];
+
+statement ok
+select count(*) from '{TEST_DIR}/rg.parquet' where file_row_group_number = 2;
+
+statement ok
+PRAGMA disable_profiling;
+
+# view over the scanned / total row group counts of the parquet scan operator, read from
+# the last profiled query's output. Profiling must be disabled before querying this, so the
+# view query itself does not overwrite the output it is reading.
+statement ok
+CREATE VIEW parquet_scan_row_groups AS
+WITH RECURSIVE ops(op) AS (
+    SELECT unnest(operator)::JSON AS op FROM '{TEST_DIR}/profiling_output.json'
+    UNION ALL
+    SELECT unnest((op->'children')::JSON[]) FROM ops WHERE json_array_length(op->'children') > 0
+)
+SELECT (op->>'row_groups_scanned')::BIGINT AS scanned,
+       (op->>'total_row_groups_to_scan')::BIGINT AS total
+FROM ops
+WHERE op->>'type' = 'TABLE_SCAN';
+
+query II
+SELECT scanned, total - scanned AS skipped FROM parquet_scan_row_groups;
+----
+1	4
+
+# reading multiple non-contiguous row groups (IN (1, 3)) reads ONLY those two row
+# groups and skips the other three
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+SET tracked_metrics = ['operator.row_groups_scanned', 'operator.total_row_groups_to_scan', 'operator.type'];
+
+statement ok
+select count(*) from '{TEST_DIR}/rg.parquet' where file_row_group_number in (1, 3);
+
+statement ok
+PRAGMA disable_profiling;
+
+query II
+SELECT scanned, total - scanned AS skipped FROM parquet_scan_row_groups;
+----
+2	3
+
+# without a row-group filter, all row groups are read and none are skipped
+# (sum forces reading the column data - count(*) would be answered from metadata)
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+SET tracked_metrics = ['operator.row_groups_scanned', 'operator.total_row_groups_to_scan', 'operator.type'];
+
+statement ok
+select sum(j) from '{TEST_DIR}/rg.parquet';
+
+statement ok
+PRAGMA disable_profiling;
+
+query II
+SELECT scanned, total - scanned AS skipped FROM parquet_scan_row_groups;
+----
+5	0
+
+#-------------------------------------------------------------------------------
+# the row group number is file-relative: each file restarts the numbering at 0
+#-------------------------------------------------------------------------------
+
+statement ok
+copy (select i from range(5000) t(i)) to '{TEST_DIR}/rg_a.parquet' (format parquet, ROW_GROUP_SIZE 2048);
+
+statement ok
+copy (select i from range(3000) t(i)) to '{TEST_DIR}/rg_b.parquet' (format parquet, ROW_GROUP_SIZE 2048);
+
+query II
+select file_row_group_number, count(*) from read_parquet(['{TEST_DIR}/rg_a.parquet', '{TEST_DIR}/rg_b.parquet']) group by file_row_group_number order by file_row_group_number;
+----
+0	4096
+1	3000
+2	904
+
+# multi-file safety: rg_a has 3 row groups, rg_b has 2. Row group 2 exists only in rg_a,
+# so a filter on row group 2 must still return the rows from rg_a (and nothing from rg_b)
+query I
+select count(*) from read_parquet(['{TEST_DIR}/rg_a.parquet', '{TEST_DIR}/rg_b.parquet']) where file_row_group_number = 2;
+----
+904

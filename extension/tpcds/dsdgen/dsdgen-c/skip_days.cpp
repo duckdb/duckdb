@@ -5,7 +5,7 @@
 #include "parallel.h"
 
 ds_key_t skipDays(int nTable, ds_key_t *pRemainder) {
-	static date_t BaseDate;
+	static thread_local date_t BaseDate;
 	ds_key_t jDate;
 	ds_key_t kRowCount, kFirstRow, kDayCount, index = 1;
 

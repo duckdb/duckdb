@@ -1,0 +1,46 @@
+# name: test/sql/cte/materialized/materialized_cte_mixed_fanout.test_slow
+# description: Stress mixed direct and buffered materialized CTE fanout
+# group: [materialized]
+
+require no_alternative_verify
+
+statement ok
+SET threads=16
+
+# The buffered LIMIT may unregister while the direct aggregate still consumes input.
+loop iteration 0 100
+
+query II
+WITH d AS MATERIALIZED (SELECT i FROM range(1000000) r(i))
+SELECT (SELECT sum(i) FROM d), (SELECT i FROM d LIMIT 1)
+----
+499999500000	0
+
+endloop
+
+# A buffered consumer failure cancels the producer and wakes every exchange waiter.
+statement error
+WITH d AS MATERIALIZED (SELECT i FROM range(1000000) r(i))
+SELECT (SELECT sum(i) FROM d), (SELECT error('consumer failure') FROM d LIMIT 1)
+----
+<REGEX>:.*consumer failure.*
+
+query I
+SELECT 42
+----
+42
+
+# A producer failure wakes a buffered consumer waiting for more input.
+statement error
+WITH d AS MATERIALIZED (
+  SELECT CASE WHEN i = 100000 THEN error('producer failure') ELSE i END AS i
+  FROM range(1000000) r(i)
+)
+SELECT * FROM d
+----
+<REGEX>:.*producer failure.*
+
+query I
+SELECT 84
+----
+84

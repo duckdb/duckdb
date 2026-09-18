@@ -4,15 +4,15 @@
 
 namespace duckdb {
 
-bool ClientConfig::AnyVerification() const {
-	return query_verification_enabled || verify_external || verify_serializer || verify_fetch_row;
+static Identifier StringToIdentifier(const String &name) {
+	return Identifier(string(name.data(), name.size()));
 }
 
 void ClientConfig::SetUserVariable(const String &name, Value value) {
-	user_variables[name.ToStdString()] = std::move(value);
+	user_variables[StringToIdentifier(name)] = std::move(value);
 }
 
-bool ClientConfig::GetUserVariable(const string &name, Value &result) {
+bool ClientConfig::GetUserVariable(const Identifier &name, Value &result) {
 	auto entry = user_variables.find(name);
 	if (entry == user_variables.end()) {
 		return false;
@@ -21,18 +21,22 @@ bool ClientConfig::GetUserVariable(const string &name, Value &result) {
 	return true;
 }
 
+bool ClientConfig::GetUserVariable(const string &name, Value &result) {
+	return GetUserVariable(Identifier(name), result);
+}
+
 void ClientConfig::ResetUserVariable(const String &name) {
-	user_variables.erase(name.ToStdString());
+	user_variables.erase(StringToIdentifier(name));
 }
 
 void ClientConfig::SetDefaultStreamingBufferSize() {
 	auto memory = FileSystem::GetAvailableMemory();
-	auto default_size = ClientConfig().streaming_buffer_size;
+	auto default_size = ClientConfig().max_streaming_buffer_size;
 	if (!memory.IsValid()) {
-		streaming_buffer_size = default_size;
+		max_streaming_buffer_size = default_size;
 		return;
 	}
-	streaming_buffer_size = MinValue(memory.GetIndex(), default_size);
+	max_streaming_buffer_size = MinValue(memory.GetIndex(), default_size);
 }
 
 } // namespace duckdb

@@ -2,9 +2,6 @@
 # description: Fuzzer #29: test abs overflow
 # group: [sqlsmith]
 
-statement ok
-PRAGMA enable_verification
-
 # test abs function on extremes
 
 statement ok
@@ -13,12 +10,12 @@ CREATE TABLE numerics AS SELECT tinyint, smallint, int, bigint, hugeint FROM tes
 foreach type tinyint smallint int bigint hugeint
 
 statement error
-SELECT abs(${type}) FROM numerics;
+SELECT abs({type}) FROM numerics;
 ----
 Overflow on abs
 
 statement ok
-SELECT abs(${type}) FROM numerics WHERE ${type} > 0;
+SELECT abs({type}) FROM numerics WHERE {type} > 0;
 
 endloop
 

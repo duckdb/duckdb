@@ -12,7 +12,7 @@ struct DuckDBApproxDatabaseCountData : public GlobalTableFunctionState {
 
 static unique_ptr<FunctionData> DuckDBApproxDatabaseCountBind(ClientContext &context, TableFunctionBindInput &input,
                                                               vector<LogicalType> &return_types,
-                                                              vector<string> &names) {
+                                                              vector<Identifier> &names) {
 	names.emplace_back("approx_count");
 	return_types.emplace_back(LogicalType::UBIGINT);
 	return nullptr;
@@ -30,8 +30,7 @@ void DuckDBApproxDatabaseCountFunction(ClientContext &context, TableFunctionInpu
 	if (data.finished) {
 		return;
 	}
-	output.SetValue(0, 0, Value::UBIGINT(data.count));
-	output.SetCardinality(1);
+	output.data[0].Append(Value::UBIGINT(data.count));
 	data.finished = true;
 }
 

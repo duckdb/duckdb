@@ -2,9 +2,6 @@
 # description: Test that index entries are properly removed after aborted append
 # group: [transactions]
 
-statement ok
-PRAGMA enable_verification
-
 loop i 1 9
 
 statement ok con1
@@ -17,7 +14,7 @@ statement ok con2
 BEGIN TRANSACTION;
 
 statement ok con1
-INSERT INTO integers SELECT -10 + i FROM RANGE(${i}) tbl(i);
+INSERT INTO integers SELECT -10 + i FROM RANGE({i}) tbl(i);
 
 # insert the values [2..2048] into the table
 statement ok con2
@@ -36,7 +33,7 @@ COMMIT;
 ----
 
 query I con1
-SELECT COUNT(*)=${i} FROM integers
+SELECT COUNT(*)={i} FROM integers
 ----
 true
 
@@ -52,7 +49,7 @@ statement ok con2
 COMMIT;
 
 query IIII con1
-SELECT (COUNT(*)-2047)=${i}, MIN(i), MAX(i), (COUNT(i)-2047)=${i} FROM integers ORDER BY 1
+SELECT (COUNT(*)-2047)={i}, MIN(i), MAX(i), (COUNT(i)-2047)={i} FROM integers ORDER BY 1
 ----
 true	-10	2048	true
 

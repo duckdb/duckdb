@@ -239,6 +239,16 @@ struct ArrayLengthFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct OverlayFun {
+	static constexpr const char *Name = "overlay";
+	static constexpr const char *Parameters = "string,replacement,start,count";
+	static constexpr const char *Description = "Replaces a substring of `string` starting at character `start` with `replacement`. If `count` is not specified, it defaults to the length of `replacement`. Note that a `start` value of `1` refers to the first character of the `string`.";
+	static constexpr const char *Example = "overlay('hello' placing 'xyz' from 2 for 3)\002overlay('hello' placing 'xyz' from 2)";
+	static constexpr const char *Categories = "string";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct SubstringFun {
 	static constexpr const char *Name = "substring";
 	static constexpr const char *Parameters = "string,start,length";
@@ -317,7 +327,7 @@ struct RegexpSplitToArrayFun {
 
 struct RegexpFun {
 	static constexpr const char *Name = "regexp_full_match";
-	static constexpr const char *Parameters = "string,regex";
+	static constexpr const char *Parameters = "string,regex,options";
 	static constexpr const char *Description = "Returns `true` if the entire `string` matches the `regex`. A set of optional regex `options` can be set.";
 	static constexpr const char *Example = "regexp_full_match('anabanana', '(an)*')";
 	static constexpr const char *Categories = "regex";
@@ -347,10 +357,10 @@ struct RegexpReplaceFun {
 
 struct RegexpExtractFun {
 	static constexpr const char *Name = "regexp_extract";
-	static constexpr const char *Parameters = "string::VARCHAR,regex::VARCHAR\001string::VARCHAR,regex::VARCHAR,group::INTEGER\001string::VARCHAR,regex::VARCHAR,group::INTEGER,options::VARCHAR\001string::VARCHAR,regex::VARCHAR,name_list::VARCHAR[]\001string::VARCHAR,regex::VARCHAR,name_list::VARCHAR[],options::VARCHAR";
-	static constexpr const char *Description = "If `string` contains the `regex` pattern, returns the capturing group specified by optional parameter `group`; otherwise, returns the empty string. The `group` must be a constant value. If no `group` is given, it defaults to 0. A set of optional regex `options` can be set.\001If `string` contains the `regex` pattern, returns the capturing group specified by optional parameter `group`; otherwise, returns the empty string. The `group` must be a constant value. If no `group` is given, it defaults to 0. A set of optional regex `options` can be set.\001If `string` contains the `regex` pattern, returns the capturing group specified by optional parameter `group`; otherwise, returns the empty string. The `group` must be a constant value. If no `group` is given, it defaults to 0. A set of optional regex `options` can be set.\001If `string` contains the `regex` pattern, returns the capturing groups as a struct with corresponding names from `name_list`; otherwise, returns a struct with the same keys and empty strings as values. A set of optional regex `options` can be set.\001If `string` contains the `regex` pattern, returns the capturing groups as a struct with corresponding names from `name_list`; otherwise, returns a struct with the same keys and empty strings as values. A set of optional regex `options` can be set.";
-	static constexpr const char *Example = "regexp_extract('abcde', '[a-z]{3}')\001regexp_extract('abc', '([a-z])(b)', 1)\001regexp_extract('ABC', '([a-z])(b)', 1, 'i')\001regexp_extract('2023-04-15', '(\\d+)-(\\d+)-(\\d+)', ['y', 'm', 'd'])\001regexp_extract('John Doe', '([a-z]+) ([a-z]+)', ['first_name', 'last_name'], 'i')";
-	static constexpr const char *Categories = "regex\001regex\001regex\001regex\001regex";
+	static constexpr const char *Parameters = "string::VARCHAR,regex::VARCHAR\001string::VARCHAR,regex::VARCHAR,group::INTEGER\001string::VARCHAR,regex::VARCHAR,options::VARCHAR\001string::VARCHAR,regex::VARCHAR,group::INTEGER,options::VARCHAR\001string::VARCHAR,regex::VARCHAR,name_list::VARCHAR[]\001string::VARCHAR,regex::VARCHAR,name_list::VARCHAR[],options::VARCHAR";
+	static constexpr const char *Description = "If `string` contains the `regex` pattern, returns the capturing group specified by optional parameter `group`; otherwise, returns the empty string. The `group` must be a constant value. If no `group` is given, it defaults to 0. A set of optional regex `options` can be set.\001If `string` contains the `regex` pattern, returns the capturing group specified by optional parameter `group`; otherwise, returns the empty string. The `group` must be a constant value. If no `group` is given, it defaults to 0. A set of optional regex `options` can be set.\001If `string` contains the `regex` pattern, returns the capturing group specified by optional parameter `group`; otherwise, returns the empty string. The `group` must be a constant value. If no `group` is given, it defaults to 0. A set of optional regex `options` can be set.\001If `string` contains the `regex` pattern, returns the capturing group specified by optional parameter `group`; otherwise, returns the empty string. The `group` must be a constant value. If no `group` is given, it defaults to 0. A set of optional regex `options` can be set.\001If `string` contains the `regex` pattern, returns the capturing groups as a struct with corresponding names from `name_list`; otherwise, returns a struct with the same keys and empty strings as values. A set of optional regex `options` can be set.\001If `string` contains the `regex` pattern, returns the capturing groups as a struct with corresponding names from `name_list`; otherwise, returns a struct with the same keys and empty strings as values. A set of optional regex `options` can be set.";
+	static constexpr const char *Example = "regexp_extract('abcde', '[a-z]{3}')\001regexp_extract('abc', '([a-z])(b)', 1)\001regexp_extract('aaaBBBCC', '[A-Z][A-Z]', 'i')\001regexp_extract('ABC', '([a-z])(b)', 1, 'i')\001regexp_extract('2023-04-15', '(\\d+)-(\\d+)-(\\d+)', ['y', 'm', 'd'])\001regexp_extract('John Doe', '([a-z]+) ([a-z]+)', ['first_name', 'last_name'], 'i')";
+	static constexpr const char *Categories = "regex\001regex\001regex\001regex\001regex\001regex";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -375,9 +385,29 @@ struct RegexpEscapeFun {
 	static ScalarFunction GetFunction();
 };
 
+struct PathJoinFun {
+	static constexpr const char *Name = "path_join";
+	static constexpr const char *Parameters = "path,...";
+	static constexpr const char *Description = "Joins path components using the platform separator, normalizing duplicate separators and dot segments. Absolute RHS components must be compatible (same scheme/parent) or raise an error.";
+	static constexpr const char *Example = "path_join('dir', 'subdir', 'file')";
+	static constexpr const char *Categories = "string";
+
+	static ScalarFunction GetFunction();
+};
+
+struct HivePartitionComponentFun {
+	static constexpr const char *Name = "hive_partition_component";
+	static constexpr const char *Parameters = "name,value";
+	static constexpr const char *Description = "Returns the hive partition directory for a partition column and its value, e.g. name=value. The name and the value are escaped like url_encode does, a NULL value becomes __HIVE_DEFAULT_PARTITION__.";
+	static constexpr const char *Example = "hive_partition_component('year', 2024)";
+	static constexpr const char *Categories = "string";
+
+	static ScalarFunction GetFunction();
+};
+
 struct LikeFun {
 	static constexpr const char *Name = "~~";
-	static constexpr const char *Parameters = "";
+	static constexpr const char *Parameters = "string,pattern";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
 	static constexpr const char *Categories = "";
@@ -387,7 +417,7 @@ struct LikeFun {
 
 struct NotLikeFun {
 	static constexpr const char *Name = "!~~";
-	static constexpr const char *Parameters = "";
+	static constexpr const char *Parameters = "string,pattern";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
 	static constexpr const char *Categories = "";
@@ -397,7 +427,7 @@ struct NotLikeFun {
 
 struct GlobPatternFun {
 	static constexpr const char *Name = "~~~";
-	static constexpr const char *Parameters = "";
+	static constexpr const char *Parameters = "string,pattern";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
 	static constexpr const char *Categories = "";
@@ -407,7 +437,7 @@ struct GlobPatternFun {
 
 struct ILikeFun {
 	static constexpr const char *Name = "~~*";
-	static constexpr const char *Parameters = "";
+	static constexpr const char *Parameters = "string,pattern";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
 	static constexpr const char *Categories = "";
@@ -417,7 +447,7 @@ struct ILikeFun {
 
 struct NotILikeFun {
 	static constexpr const char *Name = "!~~*";
-	static constexpr const char *Parameters = "";
+	static constexpr const char *Parameters = "string,pattern";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
 	static constexpr const char *Categories = "";

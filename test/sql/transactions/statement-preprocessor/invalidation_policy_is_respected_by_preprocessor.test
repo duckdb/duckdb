@@ -2,7 +2,10 @@
 # group: [statement-preprocessor]
 
 statement ok
-ATTACH '__TEST_DIR__/wal_replay.db';
+SET default_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE';
+
+statement ok
+ATTACH '{TEST_DIR}/wal_replay.db';
 
 statement ok
 USE wal_replay;

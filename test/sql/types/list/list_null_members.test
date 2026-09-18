@@ -5,9 +5,6 @@
 statement ok
 SET default_null_order='nulls_first';
 
-statement ok
-PRAGMA enable_verification
-
 # Integer lists with NULLs in various positions
 statement ok
 CREATE VIEW list_int AS

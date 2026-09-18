@@ -1,8 +1,12 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {
+
+OperatorExpression::OperatorExpression() : ParsedExpression(ExpressionType::INVALID, ExpressionClass::OPERATOR) {
+}
 
 OperatorExpression::OperatorExpression(ExpressionType type, unique_ptr<ParsedExpression> left,
                                        unique_ptr<ParsedExpression> right)
@@ -23,25 +27,8 @@ string OperatorExpression::ToString() const {
 	return ToString<OperatorExpression, ParsedExpression>(*this);
 }
 
-bool OperatorExpression::Equal(const OperatorExpression &a, const OperatorExpression &b) {
-	if (a.children.size() != b.children.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < a.children.size(); i++) {
-		if (!a.children[i]->Equals(*b.children[i])) {
-			return false;
-		}
-	}
-	return true;
-}
-
-unique_ptr<ParsedExpression> OperatorExpression::Copy() const {
-	auto copy = make_uniq<OperatorExpression>(type);
-	copy->CopyProperties(*this);
-	for (auto &it : children) {
-		copy->children.push_back(it->Copy());
-	}
-	return std::move(copy);
+unique_ptr<ParsedExpression> OperatorExpression::EmptySliceBound() {
+	return make_uniq<FunctionExpression>("list_value", vector<unique_ptr<ParsedExpression>>());
 }
 
 } // namespace duckdb

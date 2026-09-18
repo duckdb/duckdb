@@ -15,10 +15,10 @@
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 struct BufferPoolPayload {
 	explicit BufferPoolPayload(unique_ptr<TempBufferPoolReservation> &&res) : reservation(std::move(res)) {

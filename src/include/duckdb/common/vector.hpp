@@ -41,7 +41,7 @@ private:
 		return;
 #else
 		if (DUCKDB_UNLIKELY(index >= size)) {
-			throw InternalException("Attempted to access index %ld within vector of size %ld", index, size);
+			ThrowVectorIndexOutOfBounds(index, size);
 		}
 #endif
 	}
@@ -98,16 +98,23 @@ public:
 
 	typename original::reference back() { // NOLINT: hiding on purpose
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			throw InternalException("'back' called on an empty vector!");
+			ThrowVectorBackOnEmpty();
 		}
 		return get<SAFE>(original::size() - 1);
 	}
 
 	typename original::const_reference back() const { // NOLINT: hiding on purpose
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			throw InternalException("'back' called on an empty vector!");
+			ThrowVectorBackOnEmpty();
 		}
 		return get<SAFE>(original::size() - 1);
+	}
+
+	void pop_back() { // NOLINT: hiding on purpose
+		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
+			ThrowVectorPopBackOnEmpty();
+		}
+		original::pop_back();
 	}
 
 	void unsafe_erase_at(idx_t idx) { // NOLINT: not using camelcase on purpose here

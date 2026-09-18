@@ -1,0 +1,19 @@
+# name: benchmark/micro/json/json_extract_bare_key.benchmark
+# description: Extract a top-level key from small JSON documents with the arrow operator
+# group: [json]
+
+name JSON extract bare key
+group json
+
+require json
+
+load
+CREATE TABLE docs AS
+SELECT json_object('id', i, 'user', json_object('name', 'user_' || i, 'tags', json_array(i % 10, i % 7)), 'ts', i * 1000) AS j
+FROM range(0, 5000000) t(i);
+
+run
+SELECT count(j->'user') FROM docs
+
+result I
+5000000

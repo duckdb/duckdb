@@ -1,9 +1,7 @@
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/function/function_binder.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/optimizer/aggregate_rewrite.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/optimizer/rule/ordered_aggregate_optimizer.hpp"
@@ -20,78 +18,43 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &context, 
                                                         vector<unique_ptr<Expression>> &groups,
                                                         optional_ptr<vector<GroupingSet>> grouping_sets,
                                                         bool &changes_made) {
-	if (!aggr.order_bys) {
+	if (!aggr.GetOrderBys()) {
 		// no ORDER BYs defined
 		return nullptr;
 	}
-	if (aggr.function.GetOrderDependent() == AggregateOrderDependent::NOT_ORDER_DEPENDENT) {
+	if (aggr.Function().GetOrderDependent() == AggregateOrderDependent::NOT_ORDER_DEPENDENT) {
 		// not an order dependent aggregate but we have an ORDER BY clause - remove it
-		aggr.order_bys.reset();
+		aggr.GetOrderBysMutable().reset();
 		changes_made = true;
 		return nullptr;
 	}
 
 	// Remove unnecessary ORDER BY clauses and return if nothing remains
-	if (aggr.order_bys->Simplify(groups, grouping_sets)) {
-		aggr.order_bys.reset();
+	if (aggr.GetOrderBysMutable()->Simplify(groups, grouping_sets)) {
+		aggr.GetOrderBysMutable().reset();
 		changes_made = true;
 		return nullptr;
 	}
 
-	//	Rewrite first/last/arbitrary/any_value to use arg_xxx[_null] and create_sort_key
-	const auto &aggr_name = aggr.function.name;
-	string arg_xxx_name;
-	if (aggr_name == "last") {
-		arg_xxx_name = "arg_max_null";
-	} else if (aggr_name == "first" || aggr_name == "arbitrary") {
-		arg_xxx_name = "arg_min_null";
-	} else if (aggr_name == "any_value") {
-		arg_xxx_name = "arg_min";
-	} else {
-		return nullptr;
-	}
-
-	FunctionBinder binder(context);
-	vector<unique_ptr<Expression>> sort_children;
-	for (auto &order : aggr.order_bys->orders) {
-		sort_children.emplace_back(std::move(order.expression));
-		sort_children.emplace_back(make_uniq<BoundConstantExpression>(Value(order.GetOrderModifier())));
-	}
-	aggr.order_bys.reset();
-
-	ErrorData error;
-	auto sort_key = binder.BindScalarFunction(DEFAULT_SCHEMA, "create_sort_key", std::move(sort_children), error);
-	if (!sort_key) {
-		error.Throw();
-	}
-
-	auto &children = aggr.children;
-	children.emplace_back(std::move(sort_key));
-
-	//  Look up the arg_xxx_name function in the catalog
-	QueryErrorContext error_context;
-	auto &func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, SYSTEM_CATALOG, DEFAULT_SCHEMA, arg_xxx_name,
-	                                                              error_context);
-	D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
-
-	// bind the aggregate
-	vector<LogicalType> types;
-	for (const auto &child : children) {
-		types.emplace_back(child->return_type);
-	}
-	auto best_function = binder.BindFunction(func.name, func.functions, types, error);
-	if (!best_function.IsValid()) {
-		error.Throw();
-	}
-	// found a matching function!
-	auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
-	return binder.BindAggregateFunction(bound_function, std::move(children), std::move(aggr.filter),
-	                                    aggr.IsDistinct() ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
+	AggregateRewriteInput input(context, aggr);
+	auto rewrite = TryDirectAggregateRewrite(input);
+	changes_made |= rewrite != nullptr;
+	return rewrite;
 }
 
 unique_ptr<Expression> OrderedAggregateOptimizer::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                         bool &changes_made, bool is_root) {
 	auto &aggr = bindings[0].get().Cast<BoundAggregateExpression>();
+
+	// only apply to LogicalAggregate nodes
+	if (op.type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		return nullptr;
+	}
+	// don't rewrite state-export aggregates - the rewrite would lose the STATE_EXPORT mode
+	if (aggr.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
+		return nullptr;
+	}
+
 	return Apply(rewriter.context, aggr, op.Cast<LogicalAggregate>().groups, op.Cast<LogicalAggregate>().grouping_sets,
 	             changes_made);
 }

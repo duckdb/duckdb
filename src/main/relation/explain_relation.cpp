@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-ExplainRelation::ExplainRelation(shared_ptr<Relation> child_p, ExplainType type, ExplainFormat format)
+ExplainRelation::ExplainRelation(shared_ptr<Relation> child_p, ExplainType type, const ProfilerPrintFormat &format)
     : Relation(child_p->context, RelationType::EXPLAIN_RELATION), child(std::move(child_p)), type(type),
       format(format) {
 	TryBindRelation(columns);

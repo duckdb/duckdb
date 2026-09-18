@@ -1,0 +1,113 @@
+# name: test/sql/catalog/nested_schema/nested_table.test
+# description: Test creating and dropping tables in nested schemas
+# group: [nested_schema]
+
+statement ok
+ATTACH ':memory:' AS db2;
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE SCHEMA s1.child;
+
+# create a table in a nested schema
+statement ok
+CREATE TABLE s1.child.t1(i INTEGER);
+
+statement ok
+CREATE TABLE s1.child.t2(j INTEGER);
+
+query III
+SELECT database_name, schema_name, table_name FROM duckdb_tables()
+WHERE table_name IN ('t1','t2') ORDER BY table_name;
+----
+memory	child	t1
+memory	child	t2
+
+# the table lives in the nested schema, not a top-level "child"
+query I
+SELECT count(*) FROM duckdb_tables() t, duckdb_schemas() s
+WHERE t.table_name = 't1' AND t.schema_oid = s.oid AND s.parent_schema = 's1';
+----
+1
+
+# create a table in a nested schema of an attached catalog (catalog.schema.table)
+statement ok
+CREATE SCHEMA db2.a;
+
+statement ok
+CREATE TABLE db2.a.tt(x INTEGER);
+
+query III
+SELECT database_name, schema_name, table_name FROM duckdb_tables() WHERE table_name = 'tt';
+----
+db2	a	tt
+
+# dropping a table in a nested schema
+statement ok
+DROP TABLE s1.child.t1;
+
+query I
+SELECT table_name FROM duckdb_tables() WHERE table_name IN ('t1','t2');
+----
+t2
+
+# dropping a non-existent nested table errors
+statement error
+DROP TABLE s1.child.nope;
+----
+<REGEX>:.*does not exist.*
+
+# DROP TABLE IF EXISTS does not error on a missing nested table
+statement ok
+DROP TABLE IF EXISTS s1.child.nope;
+
+# DROP TABLE IF EXISTS does not error when the parent schema is missing
+statement ok
+DROP TABLE IF EXISTS s1.missing.nope;
+
+# a non-cascade DROP SCHEMA is blocked by the table it contains
+statement error
+DROP SCHEMA s1.child;
+----
+<REGEX>:.*Cannot drop entry "child" because there are entries that depend on it.*
+
+# CASCADE drops the nested schema together with its tables
+statement ok
+DROP SCHEMA s1.child CASCADE;
+
+query I
+SELECT count(*) FROM duckdb_tables() WHERE table_name = 't2';
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_schemas() WHERE database_name = 'memory' AND schema_name = 'child';
+----
+0
+
+# CASCADE on the top-level schema removes the whole nested subtree (schemas + tables)
+statement ok
+CREATE SCHEMA s1.child;
+
+statement ok
+CREATE TABLE s1.child.t3(i INTEGER);
+
+statement error
+DROP SCHEMA s1;
+----
+<REGEX>:.*Cannot drop entry "s1" because there are entries that depend on it.*
+
+statement ok
+DROP SCHEMA s1 CASCADE;
+
+query I
+SELECT count(*) FROM duckdb_tables() WHERE table_name = 't3';
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_schemas() WHERE database_name = 'memory' AND schema_name IN ('s1','child');
+----
+0

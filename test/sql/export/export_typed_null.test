@@ -1,0 +1,23 @@
+# name: test/sql/export/export_typed_null.test
+# description: Test exporting and importing a typed NULL in a macro definition
+# group: [export]
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE MACRO typed_null(value := NULL::INTEGER) AS value
+
+statement ok
+EXPORT DATABASE '{TEST_DIR}/export_typed_null' (FORMAT CSV)
+
+statement ok
+ROLLBACK
+
+statement ok
+IMPORT DATABASE '{TEST_DIR}/export_typed_null'
+
+query II
+SELECT typeof(typed_null()), typed_null() IS NULL
+----
+INTEGER	true

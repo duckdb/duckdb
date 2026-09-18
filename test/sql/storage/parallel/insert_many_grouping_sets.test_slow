@@ -2,7 +2,7 @@
 # description: Test parallel insert from many groups
 # group: [parallel]
 
-load __TEST_DIR__/insert_many_grouping_sets.db
+load {TEST_DIR}/insert_many_grouping_sets.db
 
 
 query I

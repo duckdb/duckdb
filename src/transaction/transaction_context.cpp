@@ -1,4 +1,5 @@
 #include "duckdb/transaction/transaction_context.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
@@ -7,11 +8,14 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/settings.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
 TransactionContext::TransactionContext(ClientContext &context)
-    : context(context), auto_commit(true), current_transaction(nullptr) {
+    : context(context), auto_commit(true), invalidation_policy(TransactionInvalidationPolicy::STANDARD_POLICY),
+      auto_rollback(false), current_transaction(nullptr) {
 }
 
 TransactionContext::~TransactionContext() {
@@ -41,6 +45,14 @@ void TransactionContext::BeginTransaction() {
 	for (auto &state : context.registered_state->States()) {
 		state->TransactionBegin(*current_transaction, context);
 	}
+}
+
+void TransactionContext::SetInvalidationPolicy(TransactionInvalidationPolicy new_invalidation_policy) {
+	if (new_invalidation_policy == TransactionInvalidationPolicy::STANDARD_POLICY) {
+		// if no policy is specified explicitly use the default one from the settings
+		new_invalidation_policy = Settings::Get<DefaultTransactionInvalidationPolicySetting>(context);
+	}
+	invalidation_policy = new_invalidation_policy;
 }
 
 void TransactionContext::SetAutocheckpointError(ErrorData error) {

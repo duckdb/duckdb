@@ -17,12 +17,10 @@ if(NOT MSVC)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wimplicit-fallthrough")
   endif()
 endif()
-set(EXIT_TIME_DESTRUCTORS_WARNING FALSE)
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}"
                                                   STREQUAL "AppleClang")
-  set(EXIT_TIME_DESTRUCTORS_WARNING TRUE)
   set(CMAKE_CXX_FLAGS_DEBUG
-      "${CMAKE_CXX_FLAGS_DEBUG} -Wexit-time-destructors -Wimplicit-int-conversion -Wshorten-64-to-32 -Wnarrowing -Wsign-conversion -Wsign-compare -Wconversion -Wtype-limits"
+      "${CMAKE_CXX_FLAGS_DEBUG} -Wimplicit-int-conversion -Wshorten-64-to-32 -Wnarrowing -Wsign-conversion -Wsign-compare -Wconversion -Wtype-limits"
   )
 endif()
 
@@ -69,12 +67,10 @@ add_subdirectory(main)
 add_subdirectory(parallel)
 add_subdirectory(storage)
 add_subdirectory(transaction)
-add_subdirectory(verification)
 
 set(DUCKDB_LINK_LIBS
     duckdb_fsst
     duckdb_fmt
-    duckdb_pg_query
     duckdb_re2
     duckdb_miniz
     duckdb_utf8proc

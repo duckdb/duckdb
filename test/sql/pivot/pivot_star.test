@@ -1,7 +1,7 @@
 # name: test/sql/pivot/pivot_star.test
 # group: [pivot]
 
-load __TEST_DIR__/pivot_star.db readwrite v1.5.0
+load {TEST_DIR}/pivot_star.db readwrite v1.5.0
 
 statement ok
 CREATE TABLE t(id INT, jan INT, feb INT);
@@ -17,7 +17,7 @@ CREATE VIEW v AS PIVOT t ON id IN (CASE WHEN true THEN 'a' END) USING (SUM(feb))
 
 
 # ON v1.4.4 storage arbitrary expressions not supported
-load __TEST_DIR__/pivot_star_old.db readwrite v1.4.4
+load {TEST_DIR}/pivot_star_old.db readwrite v1.4.4
 
 statement ok
 CREATE TABLE t(id INT, jan INT, feb INT);
@@ -31,4 +31,4 @@ CREATE VIEW expr_view AS SELECT * FROM t UNPIVOT (val FOR col IN (1+2+id));
 statement error
 CREATE VIEW v AS PIVOT t ON id IN (CASE WHEN true THEN 'a' END) USING (SUM(feb))
 ----
-Cannot serialize non-constant expression 'CASE  WHEN (CAST('t' AS BOOLEAN)) THEN ('a') ELSE NULL END' in pivot list when targeting database storage version
+Cannot serialize non-constant expression 'CASE  WHEN (true) THEN ('a') ELSE NULL END' in pivot list when targeting database storage version

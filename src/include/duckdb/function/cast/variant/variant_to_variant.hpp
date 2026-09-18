@@ -93,6 +93,9 @@ struct VariantToVariantSizeAnalyzer {
 	static uint32_t VisitTimestampTZ(timestamp_tz_t, AnalyzeState &state) {
 		return sizeof(timestamp_tz_t);
 	}
+	static uint32_t VisitTimestampTZNanos(timestamp_tz_ns_t, AnalyzeState &state) {
+		return sizeof(timestamp_tz_ns_t);
+	}
 
 	static uint32_t VisitString(const string_t &str, AnalyzeState &state) {
 		auto length = static_cast<uint32_t>(str.GetSize());
@@ -192,6 +195,9 @@ struct VariantToVariantDataWriter {
 	static void VisitTimestampTZ(timestamp_tz_t val, WriteState &state) {
 		VisitInteger(val, state);
 	}
+	static void VisitTimestampTZNanos(timestamp_tz_ns_t val, WriteState &state) {
+		VisitInteger(val, state);
+	}
 
 	static void VisitString(const string_t &str, WriteState &state) {
 		auto length = str.GetSize();
@@ -252,7 +258,7 @@ bool ConvertVariantToVariant(ToVariantSourceData &source_data, ToVariantGlobalRe
 	auto blob_offset_data = OffsetData::GetBlob(result_data.offsets);
 
 	RecursiveUnifiedVectorFormat source_format;
-	Vector::RecursiveToUnifiedFormat(source_data.vec, source_data.source_size, source_format);
+	Vector::RecursiveToUnifiedFormat(source_data.vec, source_format);
 	UnifiedVariantVectorData source(source_format);
 
 	auto &result = result_data.variant;
@@ -283,9 +289,6 @@ bool ConvertVariantToVariant(ToVariantSourceData &source_data, ToVariantGlobalRe
 			//! Write the values_index for the parent of this column
 			result.values_index_data[values_index_selvec->get_index(source_index)] = values_offset;
 		}
-
-		//! FIXME: we might want to add some checks to make sure the NumericLimits<uint32_t>::Maximum isn't exceeded,
-		//! but that's hard to test
 
 		//! First write all children
 		//! NOTE: this has to happen first because we use 'values_offset', which is increased when we write the values
@@ -339,14 +342,14 @@ bool ConvertVariantToVariant(ToVariantSourceData &source_data, ToVariantGlobalRe
 			for (uint32_t source_value_index = 0; source_value_index < source_values_list_entry.length;
 			     source_value_index++) {
 				values_offset_data[result_index]++;
-				blob_size += VariantVisitor<VariantToVariantSizeAnalyzer>::Visit(source, scan_index, source_value_index,
-				                                                                 analyze_state);
+				OffsetData::AddBlobOffset(blob_size, VariantVisitor<VariantToVariantSizeAnalyzer>::Visit(
+				                                         source, scan_index, source_value_index, analyze_state));
 			}
 		}
 
 		keys_offset += keys_count;
 		children_offset += source_children_list_entry.length;
-		blob_offset += blob_size;
+		OffsetData::AddBlobOffset(blob_offset, blob_size);
 	}
 	return true;
 }

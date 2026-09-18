@@ -1,0 +1,10 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [aoc24]
+
+name ${BENCHMARK_NAME}
+group Advent of Code 2024
+
+run benchmark/aoc24/queries/${DAY}.sql
+
+result benchmark/aoc24/answers/${DAY}.csv

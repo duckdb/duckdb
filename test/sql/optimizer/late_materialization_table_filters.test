@@ -1,0 +1,226 @@
+# name: test/sql/optimizer/late_materialization_table_filters.test
+# description: Test that late materialization copies table_filters to LHS scan
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+CREATE TABLE lm_test (
+    id INTEGER,
+    grp INTEGER,
+    ts TIMESTAMP,
+    payload1 VARCHAR,
+    payload2 VARCHAR,
+    payload3 VARCHAR,
+    payload4 VARCHAR,
+    payload5 VARCHAR
+);
+
+# Insert 100K rows, 100 groups, interleaved to spread rowids
+statement ok
+INSERT INTO lm_test
+SELECT
+    i AS id,
+    (i % 100) + 1 AS grp,
+    TIMESTAMP '2024-01-01' + INTERVAL (i * 60) SECOND AS ts,
+    md5(i::VARCHAR || 'p1') AS payload1,
+    md5(i::VARCHAR || 'p2') AS payload2,
+    md5(i::VARCHAR || 'p3') AS payload3,
+    md5(i::VARCHAR || 'p4') AS payload4,
+    md5(i::VARCHAR || 'p5') AS payload5
+FROM generate_series(1, 100000) t(i);
+
+statement ok
+CHECKPOINT;
+
+# Verify data distribution
+query I
+SELECT count(*) FROM lm_test WHERE grp = 1
+----
+1000
+
+# Enable late materialization
+statement ok
+SET late_materialization_max_rows = 100;
+
+# Core correctness test: results must be the same with and without late materialization
+query I
+SELECT count(*) FROM (
+    SELECT id, grp, ts, payload1, payload2, payload3, payload4, payload5
+    FROM lm_test
+    WHERE grp = 1
+      AND ts >= TIMESTAMP '2024-01-01'
+      AND ts < TIMESTAMP '2024-07-01'
+    ORDER BY ts
+    LIMIT 20
+) sub
+----
+20
+
+# Verify the query plan shows filters on LHS TABLE_SCAN
+query II
+EXPLAIN
+SELECT id, grp, ts, payload1, payload2, payload3, payload4, payload5
+FROM lm_test
+WHERE grp = 1
+  AND ts >= TIMESTAMP '2024-01-01'
+  AND ts < TIMESTAMP '2024-07-01'
+ORDER BY ts
+LIMIT 20;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*SEMI.*
+
+# Verify result correctness: grp=1 when i%100=0, so i=100,200,300...
+query III
+SELECT id, grp, ts
+FROM lm_test
+WHERE grp = 1
+  AND ts >= TIMESTAMP '2024-01-01'
+  AND ts < TIMESTAMP '2024-07-01'
+ORDER BY ts
+LIMIT 3
+----
+100	1	2024-01-01 01:40:00
+200	1	2024-01-01 03:20:00
+300	1	2024-01-01 05:00:00
+
+# Compare with no late materialization - results must be identical
+statement ok
+SET late_materialization_max_rows = 0;
+
+query III
+SELECT id, grp, ts
+FROM lm_test
+WHERE grp = 1
+  AND ts >= TIMESTAMP '2024-01-01'
+  AND ts < TIMESTAMP '2024-07-01'
+ORDER BY ts
+LIMIT 3
+----
+100	1	2024-01-01 01:40:00
+200	1	2024-01-01 03:20:00
+300	1	2024-01-01 05:00:00
+
+# Verify payload columns are also correct
+statement ok
+SET late_materialization_max_rows = 100;
+
+query I
+SELECT payload1 = md5(id::VARCHAR || 'p1')
+FROM lm_test
+WHERE grp = 1
+  AND ts >= TIMESTAMP '2024-01-01'
+  AND ts < TIMESTAMP '2024-07-01'
+ORDER BY ts
+LIMIT 1
+----
+true
+
+# ─────────────────────────────────────────────────────────────
+# Test: ORDER BY + LIMIT without WHERE (dynamic filter must NOT be copied to LHS)
+# The TOP_N optimizer pushes a dynamic boundary filter into the RHS scan.
+# If this filter were copied to the LHS, it would use a stale boundary
+# and incorrectly filter out rows.
+# ─────────────────────────────────────────────────────────────
+
+statement ok
+SET late_materialization_max_rows = 100;
+
+query II
+EXPLAIN SELECT id, grp, ts, payload1, payload2, payload3, payload4, payload5
+FROM lm_test ORDER BY ts LIMIT 3;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*SEMI.*
+
+query III
+SELECT id, grp, ts
+FROM lm_test ORDER BY ts LIMIT 3
+----
+1	2	2024-01-01 00:01:00
+2	3	2024-01-01 00:02:00
+3	4	2024-01-01 00:03:00
+
+# ─────────────────────────────────────────────────────────────
+# Test: WHERE on a different column than ORDER BY
+# The WHERE filter (grp = 1) should be copied to the LHS as an optional
+# filter for zone-map pruning. The dynamic filter on ts must NOT be copied.
+# ─────────────────────────────────────────────────────────────
+
+query II
+EXPLAIN SELECT id, grp, ts, payload1
+FROM lm_test WHERE grp = 1 ORDER BY ts LIMIT 3;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*SEMI.*SEQ_SCAN.*optional.*grp.*
+
+query III
+SELECT id, grp, ts
+FROM lm_test WHERE grp = 1 ORDER BY ts LIMIT 3
+----
+100	1	2024-01-01 01:40:00
+200	1	2024-01-01 03:20:00
+300	1	2024-01-01 05:00:00
+
+# ─────────────────────────────────────────────────────────────
+# Test: WHERE on the same column as ORDER BY
+# When WHERE and TOP_N dynamic filter are on the same column, they are
+# ANDed together. The entire column filter is skipped on the LHS because
+# it contains a dynamic filter. This loses zone-map pruning for the
+# WHERE condition on that column, but guarantees correctness.
+# ─────────────────────────────────────────────────────────────
+
+query III
+SELECT id, grp, ts
+FROM lm_test WHERE ts >= TIMESTAMP '2024-03-01' ORDER BY ts LIMIT 3
+----
+86400	1	2024-03-01 00:00:00
+86401	2	2024-03-01 00:01:00
+86402	3	2024-03-01 00:02:00
+
+statement ok
+SET late_materialization_max_rows = 0;
+
+query III
+SELECT id, grp, ts
+FROM lm_test WHERE ts >= TIMESTAMP '2024-03-01' ORDER BY ts LIMIT 3
+----
+86400	1	2024-03-01 00:00:00
+86401	2	2024-03-01 00:01:00
+86402	3	2024-03-01 00:02:00
+
+# ─────────────────────────────────────────────────────────────
+# Test: WHERE on both same and different columns from ORDER BY
+# grp filter should be copied to LHS; ts filter should be skipped
+# (because it is ANDed with the dynamic filter on ts).
+# ─────────────────────────────────────────────────────────────
+
+statement ok
+SET late_materialization_max_rows = 100;
+
+query II
+EXPLAIN SELECT id, grp, ts, payload1
+FROM lm_test WHERE grp = 1 AND ts >= TIMESTAMP '2024-03-01' ORDER BY ts LIMIT 3;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*SEMI.*SEQ_SCAN.*optional.*grp.*
+
+query III
+SELECT id, grp, ts
+FROM lm_test WHERE grp = 1 AND ts >= TIMESTAMP '2024-03-01' ORDER BY ts LIMIT 3
+----
+86400	1	2024-03-01 00:00:00
+86500	1	2024-03-01 01:40:00
+86600	1	2024-03-01 03:20:00
+
+statement ok
+SET late_materialization_max_rows = 0;
+
+query III
+SELECT id, grp, ts
+FROM lm_test WHERE grp = 1 AND ts >= TIMESTAMP '2024-03-01' ORDER BY ts LIMIT 3
+----
+86400	1	2024-03-01 00:00:00
+86500	1	2024-03-01 01:40:00
+86600	1	2024-03-01 03:20:00
+
+statement ok
+DROP TABLE lm_test;

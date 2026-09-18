@@ -1,7 +1,7 @@
 # name: test/sql/storage/alter/alter_based_on_unfinished_insert_fails.test
 # group: [alter]
 
-load __TEST_DIR__/concurrent_rename_and_insert.db readwrite v1.5.4
+load {TEST_DIR}/concurrent_rename_and_insert.db readwrite v1.5.4
 
 foreach mode with_wal without_wal
 

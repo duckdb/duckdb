@@ -1,0 +1,7 @@
+{
+  "description": "Run on persistent databases with compression verification enabled.",
+  "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}__test__config__verify_compression.db",
+  "on_init": "SET debug_verification_mode='verify_compression';",
+  "skip_compiled": "true",
+  "inherit_skip_tests": "test/configs/force_storage.json"
+}

@@ -1,4 +1,6 @@
 #include "duckdb/main/appender.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
@@ -8,23 +10,17 @@
 namespace duckdb {
 
 TableCatalogEntry &CSVRejectsTable::GetErrorsTable(ClientContext &context) {
-	auto &temp_catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
-	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(context, TEMP_CATALOG, DEFAULT_SCHEMA, errors_table);
+	auto &temp_catalog = Catalog::GetCatalog(context, Identifier::TempCatalog());
+	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(
+	    context, QualifiedName(Identifier::TempCatalog(), Identifier::DefaultSchema(), Identifier(errors_table)));
 	return table_entry;
 }
 
 TableCatalogEntry &CSVRejectsTable::GetScansTable(ClientContext &context) {
-	auto &temp_catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
-	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(context, TEMP_CATALOG, DEFAULT_SCHEMA, scan_table);
+	auto &temp_catalog = Catalog::GetCatalog(context, Identifier::TempCatalog());
+	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(
+	    context, QualifiedName(Identifier::TempCatalog(), Identifier::DefaultSchema(), Identifier(scan_table)));
 	return table_entry;
-}
-
-idx_t CSVRejectsTable::GetCurrentFileIndex(idx_t query_id) {
-	if (current_query_id != query_id) {
-		current_query_id = query_id;
-		current_file_idx = 0;
-	}
-	return current_file_idx++;
 }
 
 shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context, const string &rejects_scan,
@@ -37,11 +33,15 @@ shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context,
 	auto key = StringUtil::Format("CSV_REJECTS_TABLE_CACHE_ENTRY_%s_%s", StringUtil::Upper(rejects_scan),
 	                              StringUtil::Upper(rejects_error));
 	auto &cache = ObjectCache::GetObjectCache(context);
-	auto &catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
-	auto rejects_scan_exist = catalog.GetEntry<TableCatalogEntry>(context, DEFAULT_SCHEMA, rejects_scan,
-	                                                              OnEntryNotFound::RETURN_NULL) != nullptr;
-	auto rejects_error_exist = catalog.GetEntry<TableCatalogEntry>(context, DEFAULT_SCHEMA, rejects_error,
-	                                                               OnEntryNotFound::RETURN_NULL) != nullptr;
+	auto &catalog = Catalog::GetCatalog(context, Identifier::TempCatalog());
+	auto rejects_scan_exist =
+	    catalog.GetEntry<TableCatalogEntry>(
+	        context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), Identifier(rejects_scan)),
+	        OnEntryNotFound::RETURN_NULL) != nullptr;
+	auto rejects_error_exist =
+	    catalog.GetEntry<TableCatalogEntry>(
+	        context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), Identifier(rejects_error)),
+	        OnEntryNotFound::RETURN_NULL) != nullptr;
 	if ((rejects_scan_exist || rejects_error_exist) && !cache.Get<CSVRejectsTable>(key)) {
 		std::ostringstream error;
 		if (rejects_scan_exist) {
@@ -57,9 +57,33 @@ shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context,
 	return cache.GetOrCreate<CSVRejectsTable>(key, rejects_scan, rejects_error);
 }
 
+idx_t CSVRejectsTable::GetFileIndexBase(idx_t query_id, const void *scan_key, idx_t file_count) {
+	const lock_guard<mutex> lock(file_index_lock);
+	if (file_index_query_id != query_id) {
+		// the file indexes are unique within a query
+		file_index_query_id = query_id;
+		next_file_index = 0;
+		scan_file_index_base.clear();
+	}
+	if (!scan_key) {
+		// we cannot tell which scan this file belongs to - give it an index of its own
+		return next_file_index++;
+	}
+	auto entry = scan_file_index_base.find(scan_key);
+	if (entry != scan_file_index_base.end()) {
+		return entry->second;
+	}
+	const idx_t base = next_file_index;
+	next_file_index += MaxValue<idx_t>(file_count, 1);
+	scan_file_index_base.emplace(scan_key, base);
+	return base;
+}
+
 void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData &data) {
+	// every file of a scan initializes the table it reports its rejects to, and files are opened in parallel
+	const lock_guard<mutex> lock(write_lock);
 	// (Re)Create the temporary rejects table
-	auto &catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
+	auto &catalog = Catalog::GetCatalog(context, Identifier::TempCatalog());
 
 	// Create CSV_ERROR_TYPE ENUM
 	string enum_name = "CSV_ERROR_TYPE";
@@ -81,7 +105,8 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 
 	// Create Rejects Scans Table
 	{
-		auto info = make_uniq<CreateTableInfo>(TEMP_CATALOG, DEFAULT_SCHEMA, scan_table);
+		auto info = make_uniq<CreateTableInfo>(
+		    QualifiedName(Identifier::TempCatalog(), Identifier::DefaultSchema(), Identifier(scan_table)));
 		info->temporary = true;
 		info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		// 0. Scan ID
@@ -114,7 +139,8 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 	}
 	{
 		// Create Rejects Error Table
-		auto info = make_uniq<CreateTableInfo>(TEMP_CATALOG, DEFAULT_SCHEMA, errors_table);
+		auto info = make_uniq<CreateTableInfo>(
+		    QualifiedName(Identifier::TempCatalog(), Identifier::DefaultSchema(), Identifier(errors_table)));
 		info->temporary = true;
 		info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		// 0. Scan ID

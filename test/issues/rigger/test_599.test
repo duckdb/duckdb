@@ -5,9 +5,6 @@
 statement ok
 SET default_null_order='nulls_first';
 
-statement ok
-PRAGMA enable_verification
-
 # UPDATE results in crash or ASan error
 statement ok
 CREATE TABLE t0(c0 INT, c1 VARCHAR);

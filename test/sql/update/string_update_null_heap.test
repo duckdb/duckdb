@@ -1,0 +1,18 @@
+# name: test/sql/update/string_update_null_heap.test
+# description: VARCHAR update where a leading row turns NULL and a trailing row gets a heap string
+# group: [update]
+
+statement ok
+CREATE TABLE test (id INTEGER, s VARCHAR);
+
+statement ok
+INSERT INTO test VALUES (1, 'a'), (2, 'b');
+
+statement ok
+UPDATE test SET s=CASE WHEN id=1 THEN NULL ELSE 'cccccccccccccccccccc' END;
+
+query IT
+SELECT * FROM test ORDER BY id;
+----
+1	NULL
+2	cccccccccccccccccccc

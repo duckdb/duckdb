@@ -3,9 +3,6 @@
 # group: [create_drop]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE A (A1 INTEGER,A2 VARCHAR, A3 INTEGER)
 
 statement ok

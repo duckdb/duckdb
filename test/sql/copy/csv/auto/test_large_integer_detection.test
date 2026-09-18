@@ -1,0 +1,81 @@
+# name: test/sql/copy/csv/auto/test_large_integer_detection.test
+# description: Test CSV type detection for large integer values
+# group: [auto]
+
+statement ok
+CREATE TABLE large_integer_detection AS
+SELECT * FROM (VALUES (
+	'12345678901234567890',
+	'340282366920938463463374607431768211456',
+	'+340282366920938463463374607431768211456',
+	'-340282366920938463463374607431768211456',
+	'-170141183460469231731687303715884105728',
+	'340282366920938463463374607431768211455',
+	'000340282366920938463463374607431768211456',
+	'1.5',
+	' 340282366920938463463374607431768211456 ',
+	' -340282366920938463463374607431768211456 ',
+	'340,282,366,920,938,463,463,374,607,431,768,211,456'
+)) AS t(
+	hugeint_value,
+	bignum_value,
+	plus_bignum_value,
+	negative_bignum_value,
+	signed_hugeint_value,
+	unsigned_hugeint_value,
+	leading_zero_bignum_value,
+	decimal_value,
+	whitespace_bignum_value,
+	negative_whitespace_bignum_value,
+	thousands_bignum_value
+);
+
+statement ok
+COPY large_integer_detection TO '{TEST_DIR}/csv_large_integer_detection.csv' (FORMAT CSV, HEADER);
+
+query T
+SELECT unnest([
+	typeof(hugeint_value) || ':' || hugeint_value::VARCHAR,
+	typeof(bignum_value) || ':' || bignum_value::VARCHAR,
+	typeof(plus_bignum_value) || ':' || plus_bignum_value::VARCHAR,
+	typeof(negative_bignum_value) || ':' || negative_bignum_value::VARCHAR,
+	typeof(signed_hugeint_value) || ':' || signed_hugeint_value::VARCHAR,
+	typeof(unsigned_hugeint_value) || ':' || unsigned_hugeint_value::VARCHAR,
+	typeof(leading_zero_bignum_value) || ':' || leading_zero_bignum_value,
+	typeof(decimal_value) || ':' || decimal_value::VARCHAR,
+	typeof(whitespace_bignum_value) || ':' || whitespace_bignum_value::VARCHAR,
+	typeof(negative_whitespace_bignum_value) || ':' || negative_whitespace_bignum_value::VARCHAR,
+	typeof(thousands_bignum_value) || ':' || thousands_bignum_value::VARCHAR
+])
+FROM read_csv_auto('{TEST_DIR}/csv_large_integer_detection.csv', thousands = ',');
+----
+HUGEINT:12345678901234567890
+BIGNUM:340282366920938463463374607431768211456
+VARCHAR:+340282366920938463463374607431768211456
+BIGNUM:-340282366920938463463374607431768211456
+HUGEINT:-170141183460469231731687303715884105728
+BIGNUM:340282366920938463463374607431768211455
+VARCHAR:000340282366920938463463374607431768211456
+DOUBLE:1.5
+BIGNUM:340282366920938463463374607431768211456
+BIGNUM:-340282366920938463463374607431768211456
+BIGNUM:340282366920938463463374607431768211456
+
+# Test CSV merge.
+statement ok
+COPY (SELECT * FROM (VALUES
+	('340282366920938463463374607431768211456')
+) AS t(value)) TO '{TEST_DIR}/csv_merge_bignum.csv' (FORMAT CSV, HEADER);
+
+statement ok
+COPY (SELECT * FROM (VALUES
+	('1.5')
+) AS t(value)) TO '{TEST_DIR}/csv_merge_double.csv' (FORMAT CSV, HEADER);
+
+query T
+SELECT typeof(value) FROM read_csv_auto([
+	'{TEST_DIR}/csv_merge_bignum.csv',
+	'{TEST_DIR}/csv_merge_double.csv'
+], files_to_sniff = -1) LIMIT 1;
+----
+DOUBLE

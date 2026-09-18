@@ -44,41 +44,36 @@ static idx_t GetStringSizeLimit(const idx_t available_space, const bool fsst_enc
 	return MinValue(DictFSSTCompression::STRING_SIZE_LIMIT, max_string_size + 1);
 }
 
-DictFSSTAnalyzeState::DictFSSTAnalyzeState(const CompressionInfo &info) : AnalyzeState(info) {
+DictFSSTAnalyzeState::DictFSSTAnalyzeState(BlockManager &block_manager) : AnalyzeState(block_manager) {
 	const auto block_size = info.GetBlockSize();
 
 	string_size_limit = GetStringSizeLimit(block_size, false);
 	fsst_string_size_limit = GetStringSizeLimit(block_size, true);
 }
 
-bool DictFSSTAnalyzeState::Analyze(Vector &input, idx_t count) {
-	UnifiedVectorFormat vector_format;
-	input.ToUnifiedFormat(count, vector_format);
-	const auto strings = vector_format.GetData<string_t>(vector_format);
-
-	for (idx_t i = 0; i < count; i++) {
-		const auto idx = vector_format.sel->get_index(i);
-		if (!vector_format.validity.RowIsValid(idx)) {
+bool DictFSSTAnalyzeState::Analyze(const Vector &input) {
+	for (auto entry : input.Values<string_t>()) {
+		if (!entry.IsValid()) {
 			contains_nulls = true;
-		} else {
-			const auto &str = strings[idx];
-			const auto str_len = str.GetSize();
-			total_string_length += str_len;
-			if (str_len > max_string_length) {
-				max_string_length = str_len;
-			}
-			if (str_len >= string_size_limit) {
-				// A segment cannot be spread out over multiple blocks, so if a string cannot fit in an empty segment
-				// the encoding will fail
-				return false;
-			}
-			if (str_len >= fsst_string_size_limit) {
-				// FSST strings may be up to two times larger than their plain equivalent
-				disable_fsst = true;
-			}
+			continue;
+		}
+		auto &str = entry.GetValue();
+		auto str_len = str.GetSize();
+		total_string_length += str_len;
+		if (str_len > max_string_length) {
+			max_string_length = str_len;
+		}
+		if (str_len >= string_size_limit) {
+			// A segment cannot be spread out over multiple blocks, so if a string cannot fit in an empty segment
+			// the encoding will fail
+			return false;
+		}
+		if (str_len >= fsst_string_size_limit) {
+			// FSST strings may be up to two times larger than their plain equivalent
+			disable_fsst = true;
 		}
 	}
-	total_count += count;
+	total_count += input.size();
 	return true;
 }
 

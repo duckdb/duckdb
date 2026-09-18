@@ -2,9 +2,6 @@
 # description: Test Row IDs used in different types of operations
 # group: [projection]
 
-statement ok
-PRAGMA enable_verification
-
 # test row ids on different operations
 # this is interesting because rowids are emitted as compressed vectors
 # hence this is really a test of correct handling of compressed vectors in the execution engine

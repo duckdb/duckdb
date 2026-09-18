@@ -1,6 +1,12 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -96,7 +102,7 @@ struct TestVectorFlat {
 		}
 		default: {
 			auto entry = info.test_type_map.find(type.id());
-			if (entry == info.test_type_map.end()) {
+			if (entry == info.test_type_map.end() || entry->second.type != type) {
 				throw NotImplementedException("Unimplemented type for test_vector_types %s", type.ToString());
 			}
 			result.push_back(entry->second.min_value);
@@ -125,10 +131,9 @@ struct TestVectorFlat {
 			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, result_values.Rows() - cur_row);
 			for (idx_t c = 0; c < info.types.size(); c++) {
 				for (idx_t i = 0; i < cardinality; i++) {
-					result->data[c].SetValue(i, result_values.GetValue(cur_row + i, c));
+					result->data[c].Append(result_values.GetValue(cur_row + i, c));
 				}
 			}
-			result->SetCardinality(cardinality);
 			info.entries.push_back(std::move(result));
 		}
 	}
@@ -142,10 +147,8 @@ struct TestVectorConstant {
 			result->Initialize(Allocator::DefaultAllocator(), info.types);
 			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, TestVectorFlat::TEST_VECTOR_CARDINALITY - cur_row);
 			for (idx_t c = 0; c < info.types.size(); c++) {
-				result->data[c].SetValue(0, values.GetValue(0, c));
-				result->data[c].SetVectorType(VectorType::CONSTANT_VECTOR);
+				result->data[c].Reference(values.GetValue(0, c), count_t(cardinality));
 			}
-			result->SetCardinality(cardinality);
 
 			info.entries.push_back(std::move(result));
 		}
@@ -166,7 +169,7 @@ struct TestVectorSequence {
 		case LogicalTypeId::UBIGINT:
 			result.Sequence(3, 2, 3);
 #if STANDARD_VECTOR_SIZE <= 2
-			result.Flatten(3);
+			result.Flatten();
 #endif
 			return;
 		default:
@@ -176,21 +179,18 @@ struct TestVectorSequence {
 		case PhysicalType::STRUCT: {
 			auto &child_entries = StructVector::GetEntries(result);
 			for (auto &child_entry : child_entries) {
-				GenerateVector(info, child_entry->GetType(), *child_entry);
+				GenerateVector(info, child_entry.GetType(), child_entry);
 			}
 			break;
 		}
 		case PhysicalType::LIST: {
 			D_ASSERT(type.id() != LogicalTypeId::MAP);
-			auto data = FlatVector::GetData<list_entry_t>(result);
-			data[0].offset = 0;
-			data[0].length = 2;
-			data[1].offset = 2;
-			data[1].length = 0;
-			data[2].offset = 2;
-			data[2].length = 1;
+			auto data = FlatVector::Writer<list_entry_t>(result, 3);
+			data.WriteValue(list_entry_t(0, 2));
+			data.WriteValue(list_entry_t(2, 0));
+			data.WriteValue(list_entry_t(2, 1));
 
-			GenerateVector(info, ListType::GetChildType(type), ListVector::GetEntry(result));
+			GenerateVector(info, ListType::GetChildType(type), ListVector::GetChildMutable(result));
 			ListVector::SetListSize(result, 3);
 			break;
 		}
@@ -199,9 +199,9 @@ struct TestVectorSequence {
 			if (entry == info.test_type_map.end()) {
 				throw NotImplementedException("Unimplemented type for test_vector_types %s", type.ToString());
 			}
-			result.SetValue(0, entry->second.min_value);
-			result.SetValue(1, entry->second.max_value);
-			result.SetValue(2, Value(type));
+			result.Append(entry->second.min_value);
+			result.Append(entry->second.max_value);
+			result.Append(Value(type));
 			break;
 		}
 		}
@@ -221,7 +221,7 @@ struct TestVectorSequence {
 			}
 			GenerateVector(info, info.types[c], result->data[c]);
 		}
-		result->SetCardinality(SEQ_CARDINALITY);
+		result->SetChildCardinality(SEQ_CARDINALITY);
 #if STANDARD_VECTOR_SIZE > 2
 		info.entries.push_back(std::move(result));
 #else
@@ -263,7 +263,7 @@ struct TestVectorDictionary {
 };
 
 static unique_ptr<FunctionData> TestVectorTypesBind(ClientContext &context, TableFunctionBindInput &input,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
+                                                    vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto result = make_uniq<TestVectorBindData>();
 	for (idx_t i = 0; i < input.inputs.size(); i++) {
 		string name = "test_vector";
@@ -271,6 +271,10 @@ static unique_ptr<FunctionData> TestVectorTypesBind(ClientContext &context, Tabl
 			name += to_string(i + 1);
 		}
 		auto &input_val = input.inputs[i];
+		if (TypeVisitor::Contains(input_val.type(), LogicalTypeId::VARIANT)) {
+			throw NotImplementedException("Unimplemented type for test_vector_types");
+		}
+
 		names.emplace_back(name);
 		return_types.push_back(input_val.type());
 		result->types.push_back(input_val.type());
@@ -297,7 +301,8 @@ unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context,
 
 	map<LogicalTypeId, TestType> test_type_map;
 	for (auto &test_type : test_types) {
-		test_type_map.insert(make_pair(test_type.type.id(), std::move(test_type)));
+		auto type_id = test_type.type.id();
+		test_type_map.insert(make_pair(type_id, std::move(test_type)));
 	}
 
 	TestVectorInfo info(bind_data.types, test_type_map, result->entries);
@@ -306,12 +311,12 @@ unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context,
 	TestVectorDictionary::Generate(info);
 	TestVectorSequence::Generate(info);
 	for (auto &entry : result->entries) {
-		entry->Verify();
+		entry->Verify(context);
 	}
 	if (bind_data.all_flat) {
 		for (auto &entry : result->entries) {
 			entry->Flatten();
-			entry->Verify();
+			entry->Verify(context);
 		}
 	}
 	return std::move(result);
@@ -330,7 +335,7 @@ void TestVectorTypesFunction(ClientContext &context, TableFunctionInput &data_p,
 void TestVectorTypesFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction test_vector_types("test_vector_types", {LogicalType::ANY}, TestVectorTypesFunction,
 	                                TestVectorTypesBind, TestVectorTypesInit);
-	test_vector_types.varargs = LogicalType::ANY;
+	test_vector_types.SetVarArgs(LogicalType::ANY);
 	test_vector_types.named_parameters["all_flat"] = LogicalType::BOOLEAN;
 
 	set.AddFunction(std::move(test_vector_types));

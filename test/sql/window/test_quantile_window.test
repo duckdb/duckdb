@@ -6,10 +6,7 @@ statement ok
 SET default_null_order='nulls_first';
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
-PRAGMA verify_external
+SET debug_force_external=true;
 
 statement ok
 create table quantiles as select range r from range(10) union all values (NULL), (NULL), (NULL);
@@ -452,7 +449,7 @@ ORDER BY 1, 2
 foreach windowmode "window" "combine" "separate"
 
 statement ok
-PRAGMA debug_window_mode=${windowmode}
+PRAGMA debug_window_mode={windowmode}
 
 query II
 WITH t(r, i, p, f) AS (VALUES

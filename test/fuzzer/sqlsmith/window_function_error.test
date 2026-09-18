@@ -3,9 +3,6 @@
 # group: [sqlsmith]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE tbl AS SELECT 'thisisastring42' AS r_name;
 
 statement error

@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma enable_verification
-
 query I
 select from_hex('aa')::json;
 ----

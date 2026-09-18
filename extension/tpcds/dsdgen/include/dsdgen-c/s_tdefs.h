@@ -33,7 +33,7 @@
  * Contributors:
  * Gradient Systems
  */
-tdef s_tdefs[] = {
+thread_local tdef s_tdefs[] = {
     {"s_brand", "s_br", FL_NOP | FL_SOURCE_DDL, S_BRAND_START, S_BRAND_END, S_BRAND, -1, NULL, 0, 0, 0, 0x0, 0x0, NULL},
     {"s_customer_address", "s_ca", FL_SOURCE_DDL | FL_PASSTHRU, S_CUSTOMER_ADDRESS_START, S_CUSTOMER_ADDRESS_END,
      S_CUSTOMER_ADDRESS, -1, NULL, 0, 0, 0, 0x0, 0x01, NULL},

@@ -1,0 +1,6 @@
+ConnectStatement <- 'CONNECT' SessionTarget?
+DisconnectStatement <- 'DISCONNECT'
+SessionTarget <- LocalSessionTarget / StringSessionTarget / CatalogSessionTarget
+LocalSessionTarget <- 'LOCAL'
+StringSessionTarget <- StringLiteral GenericCopyOptionList?
+CatalogSessionTarget <- CatalogName

@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/enums/pending_execution_result.hpp"
+#include "duckdb/common/enums/query_result_state.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/reference_map.hpp"
@@ -21,6 +21,7 @@
 #include <condition_variable>
 
 namespace duckdb {
+class BufferedData;
 class ClientContext;
 class DataChunk;
 class PhysicalOperator;
@@ -55,7 +56,15 @@ public:
 	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
 
 	void CancelTasks();
-	PendingExecutionResult ExecuteTask(bool dry_run = false);
+	//! Whether the thread driving ExecuteTask holds a partially processed task.
+	//! `task` is owned by that thread alone, so only it may call this.
+	bool HasTaskInProgress() const {
+		return task != nullptr;
+	}
+	//! Run one partial task slice on the calling thread and report the resulting state
+	QueryResultState ExecuteTask();
+	//! Report the execution state without running any task
+	QueryResultState Poll();
 	void WaitForTask();
 	void SignalTaskRescheduled(lock_guard<mutex> &);
 
@@ -75,7 +84,7 @@ public:
 	void ThrowException();
 
 	//! Work on tasks for this specific executor, until there are no tasks remaining
-	void WorkOnTasks();
+	bool WorkOnTasks();
 
 	//! Flush a thread context into the client context
 	void Flush(ThreadContext &context);
@@ -113,9 +122,11 @@ public:
 	void RegisterTask() {
 		executor_tasks++;
 	}
-	void UnregisterTask() {
-		executor_tasks--;
-	}
+	void UnregisterTask();
+
+	//! Set the buffer of the result this query produces. Called at submission, before execution starts
+	void SetResultBuffer(shared_ptr<BufferedData> result_buffer_p);
+	shared_ptr<BufferedData> GetResultBuffer();
 
 	idx_t GetTotalPipelines() const {
 		return total_pipelines;
@@ -126,20 +137,28 @@ public:
 	}
 
 private:
-	//! Check if the streaming query result is waiting to be fetched from, must hold the 'executor_lock'
+	//! Whether the result sink waits on the consumer: a producer is parked for the retention
+	//! decision, or for space that only a pop frees
 	bool ResultCollectorIsBlocked();
+	//! Whether this query's store can park a producer for the consumer at all. A store settled on
+	//! retained never parks, so the retained hot path skips the readiness checks
+	bool ResultStoreCanPark();
 	void InitializeInternal(PhysicalOperator &physical_plan);
 
 	void ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipelines);
 	void ScheduleEventsInternal(ScheduleEventData &event_data);
 
-	static void VerifyScheduledEvents(const ScheduleEventData &event_data);
+	static void VerifyScheduledEvents(const vector<shared_ptr<Event>> &events);
 	static void VerifyScheduledEventsInternal(const idx_t i, const vector<reference<Event>> &vertices,
 	                                          vector<bool> &visited, vector<bool> &recursion_stack);
 
-	void SchedulePipeline(const shared_ptr<MetaPipeline> &pipeline, ScheduleEventData &event_data);
-
 	bool NextExecutor();
+	//! The state to report when this thread has no task to run
+	QueryResultState IdleState();
+	//! Cancel all tasks and throw the recorded error
+	void FailExecution();
+	//! Advance to the next executor, or record and return FINISHED
+	QueryResultState FinishExecution();
 
 	shared_ptr<Pipeline> CreateChildPipeline(Pipeline &current, PhysicalOperator &op);
 
@@ -178,19 +197,24 @@ private:
 	bool cancelled;
 
 	//! The last pending execution result (if any)
-	PendingExecutionResult execution_result;
+	QueryResultState execution_result;
 	//! The current task in process (if any)
 	shared_ptr<Task> task;
 
 	//! Task that have been descheduled
-	unordered_map<Task *, shared_ptr<Task>> to_be_rescheduled_tasks;
+	reference_map_t<Task, shared_ptr<Task>> to_be_rescheduled_tasks;
 	//! The semaphore to signal task rescheduling
 	std::condition_variable task_reschedule;
 
 	//! Currently alive executor tasks
 	atomic<idx_t> executor_tasks;
+	//! Leaf lock for the result buffer slot. It must not share executor_lock, which is held while
+	//! readiness is checked
+	mutex result_buffer_lock;
+	//! The buffer of the result this query produces, or null for a query that has none
+	shared_ptr<BufferedData> result_buffer;
 
-	//! Total time blocked while waiting on tasks. In ticks. One tick corresponds to WAIT_TIME.
+	//! Total time blocked while waiting on tasks, in microseconds
 	atomic<idx_t> blocked_thread_time;
 };
 } // namespace duckdb

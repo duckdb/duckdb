@@ -36,18 +36,18 @@ select a from t1 where a=5 or a=899999;
 query II
 explain select * from t1 where a<5 or a>10;
 ----
-physical_plan	<REGEX>:.*optional.*a<5.*a>10.*
+physical_plan	<REGEX>:.*optional.*a < 5.*a >.*10.*
 
 # need to flip the comparison
 query II
 explain select * from t1 where 5>a or 10<a;
 ----
-physical_plan	<REGEX>:.*optional.*a<5.*a>10.*
+physical_plan	<REGEX>:.*optional.*a < 5.*a >.*10.*
 
 query II
 explain select * from t1 where 5>=a or 10<=a;
 ----
-physical_plan	<REGEX>:.*optional.*a<=5.*a>=10.*
+physical_plan	<REGEX>:.*optional.*a <= 5.*a.*>.*=.*10.*
 
 query II
 explain select * from t1 where a in (1, 5, 10);

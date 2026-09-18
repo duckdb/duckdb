@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma enable_verification
-
 # unlike JSON extract, this goes our NULL
 query T
 select json_value('{"foo": null}', '$.foo')

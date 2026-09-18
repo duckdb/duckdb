@@ -2,7 +2,7 @@
 # description: Test checkpoint with a transaction that needs to read old data
 # group: [checkpoint]
 
-load __TEST_DIR__/insert_checkpoint.db
+load {TEST_DIR}/insert_checkpoint.db
 
 statement ok
 create or replace table z(id integer);

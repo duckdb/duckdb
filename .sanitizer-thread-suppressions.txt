@@ -1,5 +1,4 @@
 deadlock:InitializeIndexes
-deadlock:TemplatedSortKeySetPayload
 race:InsertMatchesAndIncrementMisses
 race:NextInnerJoin
 race:NextRightSemiOrAntiJoin

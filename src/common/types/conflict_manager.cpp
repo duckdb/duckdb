@@ -2,6 +2,8 @@
 
 #include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 
 namespace duckdb {
 

@@ -53,6 +53,7 @@ enums:
       TYPE_TIME_NS: {value: 39, description: "duckdb_time_ns (nanoseconds)"}
       TYPE_GEOMETRY: {value: 40, description: "GEOMETRY type, WKB blob"}
       TYPE_VARIANT: {value: 41, description: "VARIANT type"}
+      TYPE_TIMESTAMP_TZ_NS: {value: 42, description: "duckdb_timestamp (nanoseconds)"}
   pending_state:
     lifecycle:
       - ["stable", "v0.5.0", "2022-09-04"]
@@ -154,6 +155,7 @@ enums:
       ERROR_MISSING_EXTENSION: {value: 39}
       ERROR_AUTOLOAD: {value: 40}
       ERROR_SEQUENCE: {value: 41}
+      ERROR_DATA_CORRUPTION: {value: 43}
       INVALID_CONFIGURATION: {value: 42}
   cast_mode:
     lifecycle:

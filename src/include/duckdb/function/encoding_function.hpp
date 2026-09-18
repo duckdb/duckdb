@@ -74,7 +74,7 @@ public:
 		return lookup_bytes;
 	}
 
-	//! Optional convertion map, that indicates byte replacements.
+	//! Optional conversion map, that indicates byte replacements.
 	const map_entry_encoding *conversion_map {};
 	size_t map_size {};
 

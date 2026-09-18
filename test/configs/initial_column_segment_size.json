@@ -1,0 +1,20 @@
+{
+  "description": "Run with an initial column segment size of 8 bytes.",
+  "on_init": "SET initial_column_segment_size = 8;",
+  "skip_compiled": "true",
+  "skip_tests": [
+  {
+    "reason": "FIXME: Different segment counts (could be expected).",
+    "paths": [
+      "test/sql/types/geo/geometry_shred_empty.test"
+    ]
+  },
+    {
+      "reason": "FIXME: Timeout (could be expected).",
+      "paths": [
+        "test/sql/copy/parquet/writer/parquet_write_memory_limit.test_slow",
+        "test/sql/copy/csv/batched_write/csv_write_memory_limit.test_slow"
+      ]
+    }
+]
+}

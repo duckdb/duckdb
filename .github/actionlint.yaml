@@ -1,0 +1,10 @@
+self-hosted-runner:
+  labels:
+    - namespace-profile-linux-slim
+    - namespace-profile-linux-small
+    - namespace-profile-linux-x64
+    - namespace-profile-linux-22-x64
+    - namespace-profile-linux-arm64
+    - namespace-profile-windows-x64
+    - namespace-profile-macos-arm64
+    - namespace-profile-macos-14-arm64

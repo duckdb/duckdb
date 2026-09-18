@@ -52,7 +52,7 @@
 
 #include <stdio.h>
 
-struct CATALOG_PAGE_TBL g_w_catalog_page;
+thread_local struct CATALOG_PAGE_TBL g_w_catalog_page;
 
 /*
  * Routine: mk_catalog_page()
@@ -73,9 +73,9 @@ struct CATALOG_PAGE_TBL g_w_catalog_page;
  * 20020903 jms cp_description needs to be randomized
  */
 int mk_w_catalog_page(void *info_arr, ds_key_t index) {
-	static date_t dStartDateStorage;
-	static date_t *dStartDate = &dStartDateStorage;
-	static int nCatalogPageMax;
+	static thread_local date_t dStartDateStorage;
+	static thread_local date_t *dStartDate = &dStartDateStorage;
+	static thread_local int nCatalogPageMax;
 	int nDuration, nOffset, nType;
 	struct CATALOG_PAGE_TBL *r;
 	int nCatalogInterval;
@@ -129,15 +129,15 @@ int mk_w_catalog_page(void *info_arr, ds_key_t index) {
 
 	append_row_start(info);
 
-	append_key(info, r->cp_catalog_page_sk);
-	append_varchar(info, r->cp_catalog_page_id);
-	append_key(info, r->cp_start_date_id);
-	append_key(info, r->cp_end_date_id);
-	append_varchar(info, &r->cp_department[0]);
-	append_integer(info, r->cp_catalog_number);
-	append_integer(info, r->cp_catalog_page_number);
-	append_varchar(info, &r->cp_description[0]);
-	append_varchar(info, r->cp_type);
+	append_key(info, r->cp_catalog_page_sk, CP_CATALOG_PAGE_SK);
+	append_varchar(info, r->cp_catalog_page_id, CP_CATALOG_PAGE_ID);
+	append_key(info, r->cp_start_date_id, CP_START_DATE_ID);
+	append_key(info, r->cp_end_date_id, CP_END_DATE_ID);
+	append_varchar(info, &r->cp_department[0], CP_DEPARTMENT);
+	append_integer(info, r->cp_catalog_number, CP_CATALOG_NUMBER);
+	append_integer(info, r->cp_catalog_page_number, CP_CATALOG_PAGE_NUMBER);
+	append_varchar(info, &r->cp_description[0], CP_DESCRIPTION);
+	append_varchar(info, r->cp_type, CP_TYPE);
 
 	append_row_end(info);
 

@@ -3,9 +3,6 @@
 # group: [transactions]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER)
 
 statement ok

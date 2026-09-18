@@ -1,6 +1,8 @@
 #include "duckdb/common/arrow/arrow_merge_event.hpp"
 #include "duckdb/common/arrow/arrow_util.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -9,10 +11,9 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 ArrowBatchTask::ArrowBatchTask(ArrowQueryResult &result, vector<idx_t> record_batch_indices, Executor &executor,
-                               shared_ptr<Event> event_p, BatchCollectionChunkScanState scan_state,
-                               vector<string> names, idx_t batch_size)
-    : ExecutorTask(executor, event_p), result(result), record_batch_indices(std::move(record_batch_indices)),
-      event(std::move(event_p)), batch_size(batch_size), names(std::move(names)), scan_state(std::move(scan_state)) {
+                               shared_ptr<Event> event_p, BatchCollectionChunkScanState scan_state, idx_t batch_size)
+    : ExecutorTask(executor, std::move(event_p)), result(result), record_batch_indices(std::move(record_batch_indices)),
+      batch_size(batch_size), scan_state(std::move(scan_state)) {
 }
 
 void ArrowBatchTask::ProduceRecordBatches() {
@@ -124,8 +125,7 @@ void ArrowMergeEvent::Schedule() {
 
 		BatchCollectionChunkScanState scan_state(batches, data.batches, pipeline->executor.context);
 		tasks.push_back(make_uniq<ArrowBatchTask>(result, std::move(record_batch_indices), pipeline->executor,
-		                                          shared_from_this(), std::move(scan_state), result.names,
-		                                          record_batch_size));
+		                                          shared_from_this(), std::move(scan_state), record_batch_size));
 	}
 
 	// Allocate the list of record batches inside the query result

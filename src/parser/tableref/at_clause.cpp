@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-AtClause::AtClause(string unit_p, unique_ptr<ParsedExpression> expr_p)
+AtClause::AtClause(Identifier unit_p, unique_ptr<ParsedExpression> expr_p)
     : unit(std::move(unit_p)), expr(std::move(expr_p)) {
 }
 

@@ -3,12 +3,12 @@
 # group: [constant]
 
 # load the DB from disk
-load __TEST_DIR__/constant_columns_types.db
+load {TEST_DIR}/constant_columns_types.db
 
 foreach type <numeric> decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
 
 statement ok
-CREATE TABLE a AS SELECT 1::${type} i FROM range(1000000)
+CREATE TABLE a AS SELECT 1::{type} i FROM range(1000000)
 
 query IIIII
 SELECT MIN(i), MAX(i), AVG(i), COUNT(*), COUNT(i) FROM a

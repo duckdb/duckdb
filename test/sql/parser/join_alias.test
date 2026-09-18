@@ -2,9 +2,6 @@
 # description: Fix #10685: JOIN clause can be aliased, but alias cannot be referenced
 # group: [parser]
 
-statement ok
-PRAGMA enable_verification
-
 query II rowsort
 select t.*
 from (

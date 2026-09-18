@@ -2,9 +2,6 @@
 # description: Test sampling of larger relations
 # group: [sample]
 
-statement ok
-PRAGMA enable_verification;
-
 # sample on a larger data set
 query I
 SELECT COUNT(*) FROM range(10000) USING SAMPLE 5

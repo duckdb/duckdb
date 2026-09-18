@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/statistics/stats_writer.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
@@ -11,17 +12,13 @@ class EmptyValidityCompression {
 public:
 	struct EmptyValidityCompressionState : public CompressionState {
 	public:
-		explicit EmptyValidityCompressionState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info)
-		    : CompressionState(info),
-		      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_EMPTY)),
-		      checkpoint_data(checkpoint_data) {
+		explicit EmptyValidityCompressionState(ColumnDataCheckpointData &checkpoint_data)
+		    : CompressionState(checkpoint_data, CompressionType::COMPRESSION_EMPTY) {
 		}
 		~EmptyValidityCompressionState() override {
 		}
 
 	public:
-		optional_ptr<const CompressionFunction> function;
-		ColumnDataCheckpointData &checkpoint_data;
 		idx_t count = 0;
 		idx_t non_nulls = 0;
 	};
@@ -43,12 +40,13 @@ public:
 public:
 	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
 	                                                    unique_ptr<AnalyzeState> state_p) {
-		return make_uniq<EmptyValidityCompressionState>(checkpoint_data, state_p->info);
+		return make_uniq<EmptyValidityCompressionState>(checkpoint_data);
 	}
-	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+	static void Compress(CompressionState &state_p, const Vector &scan_vector) {
 		auto &state = state_p.Cast<EmptyValidityCompressionState>();
 		UnifiedVectorFormat format;
-		scan_vector.ToUnifiedFormat(count, format);
+		scan_vector.ToUnifiedFormat(format);
+		const auto count = scan_vector.size();
 		state.non_nulls += format.validity.CountValid(count);
 		state.count += count;
 	}
@@ -56,22 +54,20 @@ public:
 		auto &state = state_p.Cast<EmptyValidityCompressionState>();
 		auto &checkpoint_data = state.checkpoint_data;
 
-		auto &db = checkpoint_data.GetDatabase();
-		auto &type = checkpoint_data.GetType();
-
-		auto &info = state.info;
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, *state.function, type, info.GetBlockSize(),
-		                                                                info.GetBlockManager());
+		auto compressed_segment = state.CreateNewSegment();
 		compressed_segment->count = state.count;
+
+		StatsWriter<void> stats_writer;
 		if (state.non_nulls != state.count) {
-			compressed_segment->stats.statistics.SetHasNullFast();
+			stats_writer.SetHasNull();
 		}
 		if (state.non_nulls != 0) {
-			compressed_segment->stats.statistics.SetHasNoNullFast();
+			stats_writer.SetHasValid();
 		}
+		stats_writer.Merge(compressed_segment->GetStatsMutable());
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
-		auto handle = buffer_manager.Pin(compressed_segment->block);
+		auto handle = buffer_manager.Pin(compressed_segment->GetBlockHandle());
 
 		auto &checkpoint_state = checkpoint_data.GetCheckpointState();
 		checkpoint_state.FlushSegment(std::move(compressed_segment), std::move(handle), 0);

@@ -2,9 +2,6 @@
 # group: [dependencies]
 
 statement ok
-pragma enable_verification;
-
-statement ok
 create table tbl(a varchar primary key);
 
 statement ok

@@ -3,9 +3,6 @@
 # group: [map_from_entries]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t1 (list STRUCT(a INT, b VARCHAR)[]);
 
 # Provide column as parameter

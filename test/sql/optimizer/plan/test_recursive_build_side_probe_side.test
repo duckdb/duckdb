@@ -1,0 +1,18 @@
+# name: test/sql/optimizer/plan/test_recursive_build_side_probe_side.test
+# description: Prefer recursive-dependent joins on the probe side when recursive hash join build reuse can apply
+# group: [plan]
+
+statement ok
+pragma explain_output='optimized_only'
+
+query II
+explain with recursive t(x) as (
+	select 1
+	union all
+	select t.x + 1
+	from range(100000) s(v) right join t on s.v = t.x
+	where t.x < 3
+)
+select * from t
+----
+logical_opt	<REGEX>:.*LEFT.*

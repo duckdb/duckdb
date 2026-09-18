@@ -11,7 +11,7 @@ CREATE TABLE album(artistid INTEGER, albumname TEXT, albumcover TEXT, UNIQUE (ar
 statement error
 CREATE TABLE db1.song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES album(artistid, albumname));
 ----
-across different schemas or catalogs
+Table with name album does not exist
 
 statement ok
 USE db1;

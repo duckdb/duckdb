@@ -1,0 +1,112 @@
+# name: test/sql/subquery/any_all/test_row_not_equal_any_null_semantics.test
+# description: Regression tests for uncorrelated row-valued <> ANY with NULLs
+# group: [any_all]
+
+query I
+SELECT (1, 2) <> ANY (SELECT * FROM (VALUES (1, NULL::INT)) t(x, y))
+----
+NULL
+
+query I
+SELECT (1, 2) <> ANY (SELECT * FROM (VALUES (NULL::INT, 2)) t(x, y))
+----
+NULL
+
+query I
+SELECT (1, 2) <> ANY (SELECT * FROM (VALUES (1, NULL::INT), (1, 2)) t(x, y))
+----
+NULL
+
+# A later mismatch must override an earlier UNKNOWN field comparison.
+query I
+SELECT (NULL::INT, 3) <> ANY (
+	SELECT * FROM (VALUES (1, 2)) rhs(a, b)
+)
+----
+true
+
+query I
+SELECT (3, NULL::INT) <> ANY (
+	SELECT * FROM (VALUES (2, 1)) rhs(a, b)
+)
+----
+true
+
+# Without a decisive mismatch the result remains UNKNOWN.
+query I
+SELECT (NULL::INT, 2) <> ANY (
+	SELECT * FROM (VALUES (1, 2)) rhs(a, b)
+)
+----
+NULL
+
+query I
+SELECT (1, NULL::INT) <> ANY (SELECT * FROM (VALUES (1, 2)) t(x, y))
+----
+NULL
+
+query I
+SELECT (NULL::INT, 2) <> ANY (SELECT * FROM (VALUES (1, 2)) t(x, y))
+----
+NULL
+
+query I
+SELECT (1, NULL::INT) <> ANY (SELECT * FROM (VALUES (2, 2)) t(x, y))
+----
+true
+
+query I
+SELECT (1, NULL::INT) <> ANY (SELECT * FROM (VALUES (1, 2), (2, 2)) t(x, y))
+----
+true
+
+query I
+SELECT (1, 2) <> ANY (SELECT * FROM (VALUES (1, 2)) t(x, y) WHERE false)
+----
+false
+
+# Both preserved row operands must be cast to a common tuple type.
+query I
+SELECT (1::SMALLINT, 2::SMALLINT) <> ANY (
+	SELECT * FROM (VALUES (1::BIGINT, 3::BIGINT)) rhs(a, b)
+)
+----
+true
+
+# A UNION member can be scalar; row comparison must not treat it as another row.
+query I
+SELECT (union_value(num := 1)::UNION(num INT, str VARCHAR), 2) <> ANY (
+	SELECT * FROM (VALUES (union_value(num := 1)::UNION(num INT, str VARCHAR), 3)) rhs(u, v)
+)
+----
+true
+
+statement error
+SELECT i, (1, 10) <> ANY (
+	SELECT x, y
+	FROM (VALUES (1, NULL::INT), (2, 20)) t(x, y)
+	WHERE x = i
+) FROM (VALUES (1), (2), (3)) outer_t(i)
+ORDER BY i;
+----
+not yet supported
+
+statement error
+SELECT i, (union_value(num := 1)::UNION(num INT, str VARCHAR), 2) <> ANY (
+	SELECT u, v
+	FROM (VALUES (1, union_value(num := 1)::UNION(num INT, str VARCHAR), 3)) rhs(k, u, v)
+	WHERE rhs.k = outer_t.i
+)
+FROM (VALUES (1)) outer_t(i);
+----
+not yet supported
+
+statement error
+SELECT row(a, b) <> ANY (
+	SELECT s
+	FROM (VALUES (1, row(1, NULL::INT))) rhs(k, s)
+	WHERE k = lhs.a
+)
+FROM (VALUES (1, 1)) lhs(a, b)
+----
+not yet supported

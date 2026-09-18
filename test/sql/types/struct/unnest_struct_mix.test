@@ -2,9 +2,6 @@
 # description: Test UNNEST of struct mixed with other constructs
 # group: [struct]
 
-statement ok
-PRAGMA enable_verification
-
 # unnest of struct in set operation
 statement ok
 CREATE TABLE tbl_structs AS SELECT {'a': 1, 'b': 2, 'c': 3} AS s;

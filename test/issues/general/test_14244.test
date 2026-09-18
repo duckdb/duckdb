@@ -3,9 +3,6 @@
 # group: [general]
 
 statement ok
-pragma enable_verification;
-
-statement ok
 create or replace function fun() as table (
   with recursive cte(i) as (
     select 0 AS i

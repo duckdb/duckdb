@@ -5,9 +5,9 @@
 require parquet
 
 statement ok
-COPY (SELECT 42 i) to '__TEST_DIR__/parquet_debug_use_openssl.parquet' (DEBUG_USE_OPENSSL true)
+COPY (SELECT 42 i) to '{TEST_DIR}/parquet_debug_use_openssl.parquet' (DEBUG_USE_OPENSSL true)
 
 query I
-SELECT * FROM read_parquet('__TEST_DIR__/parquet_debug_use_openssl.parquet', debug_use_openssl=false)
+SELECT * FROM read_parquet('{TEST_DIR}/parquet_debug_use_openssl.parquet', debug_use_openssl=false)
 ----
 42

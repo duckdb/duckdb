@@ -1,0 +1,119 @@
+# name: test/sql/trigger/trigger_after_update_referencing.test
+# description: Test AFTER UPDATE trigger with REFERENCING NEW TABLE AS <alias>
+# group: [trigger]
+
+require noforcestorage
+
+# Basic: alias exposes post-update rows
+statement ok
+CREATE TABLE target (id INTEGER, val INTEGER);
+
+statement ok
+CREATE TABLE audit (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO target VALUES (1, 100), (2, 200), (3, 300);
+
+statement ok
+CREATE TRIGGER trg_ref AFTER UPDATE ON target
+REFERENCING NEW TABLE AS updated
+FOR EACH STATEMENT
+    INSERT INTO audit SELECT id, val FROM updated;
+
+statement ok
+UPDATE target SET val = val + 1 WHERE id = 1;
+
+query II
+SELECT id, val FROM target WHERE id = 1;
+----
+1	101
+
+query II
+SELECT id, val FROM audit;
+----
+1	101
+
+# Multi-row UPDATE: all updated rows visible through the alias
+statement ok
+UPDATE target SET val = val * 10;
+
+query II rowsort
+SELECT id, val FROM audit;
+----
+1	101
+1	1010
+2	2000
+3	3000
+
+# Only the rows affected by the current UPDATE are in the alias
+statement ok
+CREATE TABLE t_partial (id INTEGER, val INTEGER);
+
+statement ok
+CREATE TABLE t_partial_log (n INTEGER);
+
+statement ok
+INSERT INTO t_partial VALUES (1, 10), (2, 20), (3, 30);
+
+statement ok
+CREATE TRIGGER trg_partial AFTER UPDATE ON t_partial
+REFERENCING NEW TABLE AS changed
+FOR EACH STATEMENT
+    INSERT INTO t_partial_log SELECT COUNT(*) FROM changed;
+
+statement ok
+UPDATE t_partial SET val = val + 1 WHERE id <= 2;
+
+query I
+SELECT n FROM t_partial_log;
+----
+2
+
+# Aggregate over alias
+statement ok
+CREATE TABLE t_agg (id INTEGER, val INTEGER);
+
+statement ok
+CREATE TABLE t_agg_log (total INTEGER, cnt INTEGER);
+
+statement ok
+INSERT INTO t_agg VALUES (1, 10), (2, 20), (3, 30);
+
+statement ok
+CREATE TRIGGER trg_agg AFTER UPDATE ON t_agg
+REFERENCING NEW TABLE AS new_vals
+FOR EACH STATEMENT
+    INSERT INTO t_agg_log SELECT SUM(val), COUNT(*) FROM new_vals;
+
+statement ok
+UPDATE t_agg SET val = val + 100 WHERE id >= 2;
+
+query II
+SELECT total, cnt FROM t_agg_log;
+----
+250	2
+
+# UPDATE with no matching rows still fires trigger (STATEMENT semantics)
+statement ok
+CREATE TABLE t_zero (id INTEGER, val INTEGER);
+
+statement ok
+CREATE TABLE t_zero_log (n INTEGER);
+
+statement ok
+INSERT INTO t_zero VALUES (1, 10);
+
+statement ok
+CREATE TRIGGER trg_zero AFTER UPDATE ON t_zero
+REFERENCING NEW TABLE AS changed
+FOR EACH STATEMENT
+    INSERT INTO t_zero_log SELECT COUNT(*) FROM changed;
+
+statement ok
+UPDATE t_zero SET val = 99 WHERE id = 999;
+
+query I
+SELECT n FROM t_zero_log;
+----
+0
+

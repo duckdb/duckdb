@@ -3,9 +3,6 @@
 # group: [monetdb]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE tbl_ProductSales (ColID int, Product_Category  varchar(64), Product_Name  varchar(64), TotalSales int)
 
 statement ok
@@ -32,12 +29,14 @@ GROUP BY ()
 ----
 1
 
-statement error
+query I
 SELECT
     GROUPING()
 FROM tbl_ProductSales
 GROUP BY Product_Category
 ----
+0
+0
 
 statement error
 SELECT

@@ -1,0 +1,29 @@
+# name: test/optimizer/not_in_null.test
+# description: Test that NOT IN with a constant NULL is pruned in filter context
+# group: [optimizer]
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (NULL);
+
+query II
+EXPLAIN SELECT count(*) FROM integers WHERE i NOT IN (NULL);
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM integers WHERE i NOT IN (NULL);
+----
+0
+
+query II
+EXPLAIN SELECT count(*) FROM integers WHERE i NOT IN (NULL) AND i > 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM integers WHERE i NOT IN (NULL) AND i > 0;
+----
+0

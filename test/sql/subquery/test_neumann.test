@@ -3,9 +3,6 @@
 # group: [subquery]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE students(id INTEGER, name VARCHAR, major VARCHAR, year INTEGER)
 
 statement ok

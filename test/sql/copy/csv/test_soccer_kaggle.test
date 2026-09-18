@@ -2,9 +2,6 @@
 # description: Test read CSV function with the kaggle soccer data sample
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 select count(*) from '{DATA_DIR}/csv/soccer_kaggle.csv'
 ----

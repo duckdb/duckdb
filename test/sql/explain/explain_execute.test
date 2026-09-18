@@ -3,9 +3,6 @@
 # group: [explain]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER)
 
 statement ok
@@ -17,4 +14,4 @@ PREPARE query AS SELECT * FROM integers
 query II
 EXPLAIN EXECUTE query
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*
+physical_plan	<REGEX>:.*Seq.Scan.*

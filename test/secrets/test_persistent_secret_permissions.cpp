@@ -15,7 +15,6 @@
 #endif
 
 using namespace duckdb;
-using namespace std;
 
 #ifndef _WIN32
 static void assert_correct_permission(string file) {

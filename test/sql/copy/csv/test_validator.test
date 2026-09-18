@@ -2,9 +2,6 @@
 # description: Test that the validator throws on parallel files that do not properly fit
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 # We need to do some precise byte math here
 require notwindows
 

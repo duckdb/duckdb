@@ -68,6 +68,11 @@ AdbcStatusCode BatchToArrayStream(struct ArrowArray *values, struct ArrowSchema 
 	}
 
 	struct SingleBatchArrayStream *impl = (struct SingleBatchArrayStream *)malloc(sizeof(*impl));
+	if (!impl) {
+		SetError(error, "Out of memory error");
+		return ADBC_STATUS_INTERNAL;
+	}
+
 	memcpy(&impl->schema, schema, sizeof(*schema));
 	memcpy(&impl->batch, values, sizeof(*values));
 	memset(schema, 0, sizeof(*schema));

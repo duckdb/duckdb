@@ -33,6 +33,10 @@ SET debug_checkpoint_sleep_ms=5000
 
 concurrentloop i 0 2
 
+onlyif i=1
+statement ok
+SET max_execution_time=15000
+
 # thread 0 takes the checkpoint lock and sleeps inside the checkpoint before binding the index.
 # If thread 1 got there first, this fails harmlessly instead of exercising the race.
 onlyif i=0

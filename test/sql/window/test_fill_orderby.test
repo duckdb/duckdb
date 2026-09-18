@@ -35,7 +35,7 @@ with source as (
 	select 
 		i, 
 		i * 3 % 5 as permuted,
-		if(permuted = ${nulled}, NULL, permuted) as missing
+		if(permuted = {nulled}, NULL, permuted) as missing
 	from range(5) tbl(i)
 )
 select
@@ -47,6 +47,21 @@ qualify filled <> permuted
 ----
 
 endloop
+
+# Regression: large DOUBLE ordering span should not overflow
+query R
+SELECT fill(y ORDER BY x) OVER ()
+FROM (
+    VALUES
+        (-1e308::DOUBLE, 1::DOUBLE),
+        (0::DOUBLE, NULL),
+        (1e308::DOUBLE, 3::DOUBLE)
+) t(x, y)
+ORDER BY x;
+----
+1.0
+2.0
+3.0
 
 # Single values
 query III
@@ -261,11 +276,11 @@ with source as (
 	select 
 		i, 
 		(i + 1) * 3 % 5 as permuted,
-		if(permuted = ${nullable}, NULL, permuted) as missing
+		if(permuted = {nullable}, NULL, permuted) as missing
 	from (
-		select range::${ordertype} as i from range(5)
+		select range::{ordertype} as i from range(5)
 		union all 
-		select ${unusable}::${ordertype} as i
+		select {unusable}::{ordertype} as i
 	) t(i)
 )
 select 
@@ -294,15 +309,15 @@ query II
 with source as (
 	(
 		select 
-			('2025-01-01'::DATE + INTERVAL (i) DAY)::${ordertype} as t, 
-			('2025-01-01'::DATE + INTERVAL ((i + 1) * 3 % 5) DAY)::${ordertype} as permuted,
-			if(i = ${nullable}, NULL, permuted) as missing
+			('2025-01-01'::DATE + INTERVAL (i) DAY)::{ordertype} as t, 
+			('2025-01-01'::DATE + INTERVAL ((i + 1) * 3 % 5) DAY)::{ordertype} as permuted,
+			if(i = {nullable}, NULL, permuted) as missing
 		from range(5) tbl(i)
 	)
 	union all
 	(
 		select
-			${unusable}::${ordertype} as t,
+			{unusable}::{ordertype} as t,
 			t as permuted,
 			permuted as missing
 	)
@@ -320,4 +335,17 @@ endloop
 endloop
 
 endloop
+
+# Regression (#23986): BIGINT value span overflows int64 arithmetic in generic InterpolateOperator
+query III
+SELECT x, y, fill(y ORDER BY x) OVER () AS filled
+FROM (VALUES
+    (0::BIGINT,  9223372036854775807::BIGINT),
+    (1::BIGINT,  NULL),
+    (2::BIGINT, -9223372036854775807::BIGINT)) t(x, y)
+ORDER BY x;
+----
+0	9223372036854775807	9223372036854775807
+1	NULL	0
+2	-9223372036854775807	-9223372036854775807
 

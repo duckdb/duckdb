@@ -2,9 +2,6 @@
 # description: Test Set/Drop NOT NULL in multiple transactions
 # group: [alter_col]
 
-statement ok
-PRAGMA enable_verification
-
 # Scenario #1, tran1 set not null, tran2 not able to insert
 statement ok con1
 CREATE TABLE t(i INTEGER, j INTEGER)

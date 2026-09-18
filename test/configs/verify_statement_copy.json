@@ -1,0 +1,5 @@
+{
+  "description": "Run with debug_verify_statement set to copy_statement - forcing all statements to be copied prior to being used",
+  "on_init": "SET debug_verify_statement='copy_statement';",
+  "skip_compiled": "true"
+}

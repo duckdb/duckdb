@@ -64,3 +64,13 @@ statement error
 Call dsdgen(sf=1, suffix=NULL);
 ----
 <REGEX>:.*Cannot use NULL.*
+
+statement error
+CALL dsdgen(sf='nan'::DOUBLE, suffix='_nan');
+----
+<REGEX>:Invalid Input Error:.*DSDGen requires a valid scale factor.*
+
+statement error
+CALL dsdgen(sf='inf'::DOUBLE, suffix='_inf');
+----
+<REGEX>:.*does not support a scale factor exceeding 100000.*

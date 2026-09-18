@@ -3,10 +3,7 @@
 # group: [aggregates]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
-PRAGMA verify_external
+SET debug_force_external=true;
 
 set seed 0.8675309
 
@@ -202,7 +199,7 @@ SELECT approx_quantile(r, 0.1, 0.2) FROM quantile
 statement error
 SELECT approx_quantile(42, CAST(NULL AS INT[]));
 ----
-APPROXIMATE QUANTILE parameter list cannot be NULL
+must not be NULL
 
 statement ok
 pragma threads=4
@@ -252,13 +249,7 @@ SELECT approx_quantile(i, [0.5]) FROM repro;
 
 # Test reservoir quantile
 statement ok
-PRAGMA disable_verification;
-
-statement ok
-PRAGMA disable_verify_external;
-
-statement ok
-PRAGMA disable_verify_fetch_row;
+SET debug_force_external=false;
 
 statement ok
 SELECT reservoir_quantile(r, 0.9)  from quantile
@@ -319,3 +310,27 @@ query I
 SELECT RESERVOIR_QUANTILE(0., 0.9, 1000);
 ----
 0
+
+# Test fix for APPROX_QUANTILE memory not being tracked
+statement ok
+SET memory_limit='80MB';
+
+statement ok
+SET threads=4;
+
+statement ok
+CREATE OR REPLACE TABLE tdigest_memory_test AS
+    SELECT i AS grp, random() AS r
+    FROM range(100000) g(i)
+    CROSS JOIN range(4) h(j);
+
+statement error
+SELECT grp, APPROX_QUANTILE(r, 0.5) FROM tdigest_memory_test GROUP BY grp;
+----
+Out of Memory
+
+statement ok
+RESET memory_limit;
+
+statement ok
+RESET threads;

@@ -5,15 +5,14 @@
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/filter/dynamic_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
-#include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 
@@ -67,9 +66,9 @@ bool TopN::CanOptimize(LogicalOperator &op, optional_ptr<ClientContext> context)
 void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	// pushdown dynamic filters through the Top-N operator
 	bool nulls_first = op.orders[0].null_order == OrderByNullType::NULLS_FIRST;
-	auto &type = op.orders[0].expression->return_type;
-	if (!TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::VARCHAR) {
-		// only supported for integral types currently
+	auto &type = op.orders[0].expression->GetReturnType();
+	if (!TypeIsNumeric(type.InternalType()) && type.id() != LogicalTypeId::VARCHAR) {
+		// only supported for numeric and varchar types
 		return;
 	}
 	if (op.orders[0].expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
@@ -83,13 +82,24 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	auto &colref = op.orders[0].expression->Cast<BoundColumnRefExpression>();
 	vector<JoinFilterPushdownColumn> columns;
 	JoinFilterPushdownColumn column;
-	column.probe_column_index = colref.binding;
+	column.probe_column_index = colref.Binding();
 	columns.emplace_back(column);
 	vector<PushdownFilterTarget> pushdown_targets;
 	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(*op.children[0], std::move(columns), pushdown_targets);
 	if (pushdown_targets.empty()) {
 		// no pushdown targets
 		return;
+	}
+	for (auto &target : pushdown_targets) {
+		auto &pushed_column = target.columns[0];
+		if (pushed_column.mode != JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION ||
+		    RuntimeFilterCastUtil::RuntimeFilterUsesTryCast(pushed_column) ||
+		    RuntimeFilterCastUtil::GetRuntimeFilterInputType(pushed_column, type) != type) {
+			// the pushed expression cannot be reconstructed on top of the raw scan value in the sort
+			// key's type (e.g. a non-integral cast or a VARIANT in between), or the cast chain is not
+			// order-preserving (an explicit TRY_CAST, or a cast that can throw) - bail out
+			return;
+		}
 	}
 	// found pushdown targets! generate dynamic filters
 	ExpressionType comparison_type;
@@ -105,9 +115,7 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		    op.orders.size() == 1 ? ExpressionType::COMPARE_GREATERTHAN : ExpressionType::COMPARE_GREATERTHANOREQUALTO;
 	}
 	Value minimum_value = type.InternalType() == PhysicalType::VARCHAR ? Value("") : Value::MinimumValue(type);
-	auto base_filter = make_uniq<ConstantFilter>(comparison_type, std::move(minimum_value));
-	auto filter_data = make_shared_ptr<DynamicFilterData>();
-	filter_data->filter = std::move(base_filter);
+	auto filter_data = make_shared_ptr<DynamicFilterData>(comparison_type, std::move(minimum_value));
 
 	// put the filter into the Top-N clause
 	op.dynamic_filter = filter_data;
@@ -115,22 +123,36 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	for (auto &target : pushdown_targets) {
 		auto &get = target.get;
 		D_ASSERT(target.columns.size() == 1);
-		auto col_idx = target.columns[0].probe_column_index.column_index;
+		auto &pushed_column = target.columns[0];
+		auto col_binding = pushed_column.probe_column_index;
+
+		// reconstruct the sort key on top of the raw scan column (an order-preserving cast chain,
+		// possibly empty), and evaluate the dynamic filter on the reconstructed value so the boundary
+		// constant - which is built in the sort key's type - is compared against values in that same
+		// type
+		bool preserves_cast_errors = false;
+		auto filter_input =
+		    RuntimeFilterCastUtil::CreateRuntimeFilterInputExpression(context, pushed_column, preserves_cast_errors);
+		D_ASSERT(filter_input->GetReturnType() == type);
+		D_ASSERT(!preserves_cast_errors);
 
 		// create the actual dynamic filter
-		auto dynamic_filter = make_uniq<DynamicFilter>(filter_data);
-		unique_ptr<TableFilter> pushed_filter = std::move(dynamic_filter);
+		auto pushed_expr = CreateDynamicFilterExpression(filter_data, type, filter_input->Copy());
 		if (nulls_first) {
-			auto or_filter = make_uniq<ConjunctionOrFilter>();
-			or_filter->child_filters.push_back(make_uniq<IsNullFilter>());
-			or_filter->child_filters.push_back(std::move(pushed_filter));
-			pushed_filter = std::move(or_filter);
+			// rows whose sort key evaluates to NULL must not be dropped by the filter: with
+			// NULLS FIRST they can be part of the top-N
+			auto or_filter = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
+			auto is_null =
+			    ExpressionFilter::CreateNullCheckExpression(std::move(filter_input), ExpressionType::OPERATOR_IS_NULL);
+			or_filter->GetChildrenMutable().push_back(std::move(is_null));
+			or_filter->GetChildrenMutable().push_back(std::move(pushed_expr));
+			pushed_expr = std::move(or_filter);
 		}
-		auto optional_filter = make_uniq<OptionalFilter>(std::move(pushed_filter));
 
 		// push the filter into the table scan
-		auto &column_index = get.GetColumnIds()[col_idx];
-		get.table_filters.PushFilter(column_index, std::move(optional_filter));
+		get.table_filters.PushFilter(col_binding.column_index,
+		                             make_uniq<ExpressionFilter>(CreateOptionalFilterExpression(
+		                                 std::move(pushed_expr), pushed_column.storage_type)));
 	}
 }
 

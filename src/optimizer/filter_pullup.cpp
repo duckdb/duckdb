@@ -86,8 +86,7 @@ unique_ptr<LogicalOperator> FilterPullup::PullupInnerJoin(unique_ptr<LogicalOper
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &comp_join = op->Cast<LogicalComparisonJoin>();
 		for (auto &cond : comp_join.conditions) {
-			expressions.push_back(
-			    make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right)));
+			expressions.push_back(JoinCondition::CreateExpression(std::move(cond)));
 		}
 		break;
 	}

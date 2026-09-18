@@ -2,9 +2,6 @@
 # description: Test INSERT OR REPLACE with a unique index.
 # group: [insert_or_replace]
 
-statement ok
-PRAGMA enable_verification
-
 # Single UNIQUE INDEX
 
 statement ok

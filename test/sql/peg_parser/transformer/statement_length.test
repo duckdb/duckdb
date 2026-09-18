@@ -8,9 +8,6 @@ statement ok
 SET allow_parser_override_extension = strict;
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok 
 ATTACH ':memory:' AS memory_compressed (COMPRESS);
 
 statement ok 

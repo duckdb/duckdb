@@ -1,0 +1,19 @@
+# name: benchmark/micro/json/json_set_path.benchmark
+# description: Set a nested path in small JSON documents
+# group: [json]
+
+name JSON set path
+group json
+
+require json
+
+load
+CREATE TABLE docs AS
+SELECT json_object('id', i, 'user', json_object('name', 'user_' || i, 'tags', json_array(i % 10, i % 7)), 'ts', i * 1000) AS j
+FROM range(0, 5000000) t(i);
+
+run
+SELECT count(json_set(j, '$.user.name', '"x"')) FROM docs
+
+result I
+5000000

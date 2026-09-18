@@ -50,6 +50,7 @@ static bool SwitchVarcharComparison(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::INTEGER_LITERAL:
 		return true;
@@ -77,7 +78,7 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 		break;
 	}
 	if (is_equality) {
-		res = LogicalType::ForceMaxLogicalType(left_type, right_type);
+		res = LogicalType::ForceMaxLogicalType(context, left_type, right_type);
 	} else {
 		if (!LogicalType::TryGetMaxLogicalType(context, left_type, right_type, res)) {
 			return false;
@@ -141,41 +142,36 @@ LogicalType BoundComparisonExpression::BindComparison(ClientContext &context, co
 
 LogicalType ExpressionBinder::GetExpressionReturnType(const Expression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-		if (expr.return_type == LogicalTypeId::VARCHAR && StringType::GetCollation(expr.return_type).empty()) {
+		if (expr.GetReturnType() == LogicalTypeId::VARCHAR && StringType::GetCollation(expr.GetReturnType()).empty()) {
 			return LogicalTypeId::STRING_LITERAL;
 		}
-		if (expr.return_type.IsIntegral()) {
+		if (expr.GetReturnType().IsIntegral()) {
 			auto &constant = expr.Cast<BoundConstantExpression>();
-			if (!constant.value.IsNull()) {
-				return LogicalType::INTEGER_LITERAL(constant.value);
+			if (!constant.GetValue().IsNull()) {
+				return LogicalType::INTEGER_LITERAL(constant.GetValue());
 			}
 		}
 	}
-	return expr.return_type;
+	return expr.GetReturnType();
 }
 
-BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t depth) {
-	// first try to bind the children of the case expression
-	ErrorData error;
-	BindChild(expr.left, depth, error);
-	BindChild(expr.right, depth, error);
-	if (error.HasError()) {
-		return BindResult(std::move(error));
-	}
-
-	// the children have been successfully resolved
-	auto &left = BoundExpression::GetExpression(*expr.left);
-	auto &right = BoundExpression::GetExpression(*expr.right);
+//! Unify the types of two bound operands and build the bound comparison over them. Returns nullptr and
+//! sets the error if the two types cannot be compared.
+unique_ptr<Expression> ExpressionBinder::CreateBoundComparison(ExpressionType comparison_type,
+                                                               unique_ptr<Expression> left,
+                                                               unique_ptr<Expression> right, ErrorData &error) {
 	auto left_sql_type = ExpressionBinder::GetExpressionReturnType(*left);
 	auto right_sql_type = ExpressionBinder::GetExpressionReturnType(*right);
 	// cast the input types to the same type
 	// now obtain the result type of the input types
 	LogicalType input_type;
 	if (!BoundComparisonExpression::TryBindComparison(context, left_sql_type, right_sql_type, input_type,
-	                                                  expr.GetExpressionType())) {
-		return BindResult(BinderException(expr,
-		                                  "Cannot compare values of type %s and type %s - an explicit cast is required",
-		                                  left_sql_type.ToString(), right_sql_type.ToString()));
+	                                                  comparison_type)) {
+		error =
+		    ErrorData(ExceptionType::BINDER,
+		              StringUtil::Format("Cannot compare values of type %s and type %s - an explicit cast is required",
+		                                 left_sql_type.ToString(), right_sql_type.ToString()));
+		return nullptr;
 	}
 	// add casts (if necessary)
 	left = BoundCastExpression::AddCastToType(context, std::move(left), input_type,
@@ -187,8 +183,25 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	PushCollation(context, right, input_type);
 
 	// now create the bound comparison expression
-	return BindResult(
-	    make_uniq<BoundComparisonExpression>(expr.GetExpressionType(), std::move(left), std::move(right)));
+	return BoundComparisonExpression::Create(comparison_type, std::move(left), std::move(right));
+}
+
+BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t depth) {
+	// first try to bind the children of the case expression
+	ErrorData error;
+	auto left = BindChild(expr.LeftMutable(), depth, error);
+	auto right = BindChild(expr.RightMutable(), depth, error);
+	if (error.HasError()) {
+		return BindResult(std::move(error));
+	}
+
+	ErrorData compare_error;
+	auto result = CreateBoundComparison(expr.GetExpressionType(), std::move(left), std::move(right), compare_error);
+	if (!result) {
+		compare_error.AddQueryLocation(expr);
+		return BindResult(std::move(compare_error));
+	}
+	return BindResult(std::move(result));
 }
 
 } // namespace duckdb

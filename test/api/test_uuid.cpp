@@ -3,7 +3,6 @@
 #include "catch.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test UUID API", "[api]") {
 	REQUIRE(UUID::ToString(UUID::FromUHugeint(uhugeint_t(0))) == "00000000-0000-0000-0000-000000000000");

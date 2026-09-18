@@ -3,8 +3,12 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/bignum.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -12,23 +16,178 @@ namespace {
 
 struct SumSetOperation {
 	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.Initialize();
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		if (!source.is_set) {
+			return;
+		}
+		if (!target.is_set) {
+			target.value = source.value;
+			target.is_set = true;
+		} else {
+			CombineSumStateValue(target.value, source.value);
+		}
 	}
+	template <class STATE>
+	static void AddValues(STATE &state, idx_t count) {
+		state.is_set = true;
+	}
+};
+
+struct KahanSumSetOperation {
 	template <class STATE>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		target.Combine(source);
 	}
 	template <class STATE>
 	static void AddValues(STATE &state, idx_t count) {
-		state.isset = true;
+		state.is_set = true;
 	}
 };
 
-struct IntegerSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd> {
+template <class BASE>
+struct ClusteredSumStateCopy : public BASE, public ClusteredStateCopy {
+	template <class STATE>
+	static void FlushClusteredLocal(STATE &state, STATE &local, bool saw_value) {
+		if (saw_value) {
+			local.is_set = true;
+		}
+		state = local;
+	}
+};
+
+template <class ADD_OP>
+struct ClusteredAddOp {
+	template <class STATE, class INPUT_TYPE>
+	static void Execute(STATE &local, const INPUT_TYPE &input) {
+		ADD_OP::template AddNumber<STATE, INPUT_TYPE>(local, input);
+	}
+
+	template <class STATE, class INPUT_TYPE>
+	static void Execute(STATE &local, const INPUT_TYPE &input, idx_t count) {
+		ADD_OP::template AddConstant<STATE, INPUT_TYPE>(local, input, count);
+	}
+};
+
+template <class BASE, class LOCAL_OP>
+struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
+	static constexpr bool ClusteredI64HugeintSum = std::is_same<LOCAL_OP, ClusteredAddOp<AddToHugeint>>::value;
+
+	template <class INPUT_TYPE, class STATE>
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input) {
+		LOCAL_OP::template Execute<STATE>(local, input);
+	}
+
+	template <class INPUT_TYPE, class STATE>
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input, idx_t count) {
+		LOCAL_OP::template Execute<STATE>(local, input, count);
+	}
+
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.isset) {
+		if (!state.is_set) {
+			finalize_data.ReturnNull();
+		} else {
+			target = state.value;
+		}
+	}
+
+	template <class STATE_TYPE, class INPUT_TYPE>
+	static void ExecuteFlatI64HugeintSum(const INPUT_TYPE *vals, const ClusteredAggr &clustered,
+	                                     const SelectionVector *isel, const sel_t *cluster_iter) {
+		idx_t pos = 0;
+		for (auto &run : clustered.runs()) {
+			auto &state = *reinterpret_cast<STATE_TYPE *>(run.state);
+			const auto *run_sel = run.sel;
+			const idx_t run_count = run.count;
+			if (run_count == 0) {
+				continue;
+			}
+			state.is_set = true;
+			int64_t local64 = 0;
+			auto add_row = [&](idx_t idx) {
+				const int64_t v = static_cast<int64_t>(vals[idx]);
+				if (DUCKDB_UNLIKELY(!I64VectorSumSafe(v))) {
+					state.value = Hugeint::Add(state.value, v);
+				} else {
+					local64 += v;
+				}
+			};
+			if (cluster_iter) {
+				for (idx_t k = 0; k < run_count; k++) {
+					add_row(cluster_iter[pos + k]);
+				}
+			} else if (isel && run_sel) {
+				for (idx_t k = 0; k < run_count; k++) {
+					add_row(isel->get_index(run_sel[k]));
+				}
+			} else if (isel) {
+				for (idx_t k = 0; k < run_count; k++) {
+					add_row(isel->get_index(k));
+				}
+			} else if (run_sel) {
+				for (idx_t k = 0; k < run_count; k++) {
+					add_row(run_sel[k]);
+				}
+			} else {
+				for (idx_t k = 0; k < run_count; k++) {
+					add_row(k);
+				}
+			}
+			pos += run_count;
+			state.value = Hugeint::Add(state.value, local64);
+		}
+	}
+
+	template <class STATE_TYPE>
+	static void ExecuteDictI64HugeintSum(Vector &input, const ClusteredAggr &clustered, const int64_t *safe_vals) {
+		UnifiedVectorFormat idata;
+		input.ToUnifiedFormat(idata);
+		const auto *dict_sel = idata.sel->data();
+		auto &validity = idata.validity;
+		for (auto &run : clustered.runs()) {
+			auto &state = *reinterpret_cast<STATE_TYPE *>(run.state);
+			const auto *run_sel = run.sel;
+			const idx_t run_count = run.count;
+			int64_t local64 = 0;
+			if (run_sel) {
+				for (idx_t k = 0; k < run_count; k++) {
+					local64 += safe_vals[dict_sel[run_sel[k]]];
+				}
+			} else {
+				for (idx_t k = 0; k < run_count; k++) {
+					local64 += safe_vals[dict_sel[k]];
+				}
+			}
+			if (local64 != 0) {
+				state.is_set = true;
+				state.value = Hugeint::Add(state.value, local64);
+			} else if (!state.is_set) { // rare: we added 0 -- were all values NULL?
+				if (!validity.CanHaveNull()) {
+					state.is_set = true;
+				} else {
+					for (idx_t k = 0; k < run_count; k++) {
+						const idx_t i = dict_sel[run_sel ? run_sel[k] : k];
+						if (validity.RowIsValidUnsafe(i)) { // we added non-NULL
+							state.is_set = true;
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
+};
+
+struct IntegerSumOperation
+    : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, RegularAdd>, ClusteredAddOp<RegularAdd>> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedSumState::Combine(source, target, input, count);
+	}
+
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.is_set) {
 			finalize_data.ReturnNull();
 		} else {
 			target = Hugeint::Convert(state.value);
@@ -36,10 +195,26 @@ struct IntegerSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd
 	}
 };
 
-struct SumToHugeintOperation : public BaseSumOperation<SumSetOperation, AddToHugeint> {
+struct SumToHugeintOperation
+    : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, AddToHugeint>, ClusteredAddOp<AddToHugeint>> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedSumState::Combine(source, target, input, count);
+	}
+};
+
+struct NumericSumOperation
+    : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, RegularAdd>, ClusteredAddOp<RegularAdd>> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedSumState::Combine(source, target, input, count);
+	}
+};
+
+struct KahanSumOperation : public BaseSumOperation<KahanSumSetOperation, KahanAdd> {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.isset) {
+		if (!state.is_set) {
 			finalize_data.ReturnNull();
 		} else {
 			target = state.value;
@@ -47,44 +222,43 @@ struct SumToHugeintOperation : public BaseSumOperation<SumSetOperation, AddToHug
 	}
 };
 
-template <class ADD_OPERATOR>
-struct DoubleSumOperation : public BaseSumOperation<SumSetOperation, ADD_OPERATOR> {
-	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.isset) {
-			finalize_data.ReturnNull();
-		} else {
-			target = state.value;
-		}
+struct HugeintSumOperation
+    : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, HugeintAdd>, ClusteredAddOp<HugeintAdd>> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedSumState::Combine(source, target, input, count);
 	}
 };
 
-using NumericSumOperation = DoubleSumOperation<RegularAdd>;
-using KahanSumOperation = DoubleSumOperation<KahanAdd>;
-
-struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, HugeintAdd> {
-	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.isset) {
-			finalize_data.ReturnNull();
-		} else {
-			target = state.value;
-		}
-	}
-};
-
-unique_ptr<FunctionData> SumNoOverflowBind(ClientContext &context, AggregateFunction &function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> SumNoOverflowBind(BindAggregateFunctionInput &input) {
 	throw BinderException("sum_no_overflow is for internal use only!");
 }
 
 void SumNoOverflowSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-                            const AggregateFunction &function) {
+                            const BoundAggregateFunction &function) {
 	return;
 }
 
-unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, AggregateFunction &function) {
-	function.SetReturnType(deserializer.Get<const LogicalType &>());
+unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, BoundAggregateFunction &function) {
+	auto &context = deserializer.Get<ClientContext &>();
+	auto &return_type = deserializer.Get<const LogicalType &>();
+	auto &children = deserializer.Get<const const_expression_list_t &>();
+	vector<unique_ptr<Expression>> arguments;
+	vector<LogicalType> argument_types;
+	for (auto &child : children) {
+		arguments.push_back(child.get().Copy());
+		argument_types.push_back(child.get().GetReturnType());
+	}
+	auto &entry = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
+	    context, QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(), Identifier("sum")));
+	FunctionBinder binder(context);
+	auto logical = binder.ResolveFunction(entry.functions.GetFunctionByArguments(context, argument_types), arguments);
+	if (logical.second || (!return_type.IsAggregateState() && logical.first.GetReturnType() != return_type)) {
+		throw SerializationException("Cannot reconstruct the logical sum signature");
+	}
+	logical.first.ReplaceImplementation(function);
+	function = std::move(logical.first);
+	function.SetReturnType(return_type);
 	return nullptr;
 }
 
@@ -93,7 +267,8 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 	case PhysicalType::INT32: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int32_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::INTEGER, LogicalType::HUGEINT);
-		function.name = "sum_no_overflow";
+		function.GetSignature().GetParameter(0).SetName("arg");
+		function.SetName("sum_no_overflow");
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		function.SetBindCallback(SumNoOverflowBind);
 		function.SetSerializeCallback(SumNoOverflowSerialize);
@@ -103,7 +278,8 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 	case PhysicalType::INT64: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int64_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::BIGINT, LogicalType::HUGEINT);
-		function.name = "sum_no_overflow";
+		function.GetSignature().GetParameter(0).SetName("arg");
+		function.SetName("sum_no_overflow");
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		function.SetBindCallback(SumNoOverflowBind);
 		function.SetSerializeCallback(SumNoOverflowSerialize);
@@ -116,8 +292,10 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 }
 
 AggregateFunction GetSumAggregateNoOverflowDecimal() {
-	AggregateFunction aggr({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr,
-	                       nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, SumNoOverflowBind);
+	AggregateFunction aggr({}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                       FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(),
+	                       SumNoOverflowBind);
+	aggr.GetSignature().AddParameter("arg", LogicalTypeId::DECIMAL);
 	aggr.SetSerializeCallback(SumNoOverflowSerialize);
 	aggr.SetDeserializeCallback(SumNoOverflowDeserialize);
 	return aggr;
@@ -125,37 +303,66 @@ AggregateFunction GetSumAggregateNoOverflowDecimal() {
 
 unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
                                              AggregateStatisticsInput &input) {
-	if (input.node_stats && input.node_stats->has_max_cardinality) {
-		auto &numeric_stats = input.child_stats[0];
-		if (!NumericStats::HasMinMax(numeric_stats)) {
-			return nullptr;
-		}
-		auto internal_type = numeric_stats.GetType().InternalType();
-		hugeint_t max_negative;
-		hugeint_t max_positive;
-		switch (internal_type) {
-		case PhysicalType::INT32:
-			max_negative = NumericStats::Min(numeric_stats).GetValueUnsafe<int32_t>();
-			max_positive = NumericStats::Max(numeric_stats).GetValueUnsafe<int32_t>();
-			break;
-		case PhysicalType::INT64:
-			max_negative = NumericStats::Min(numeric_stats).GetValueUnsafe<int64_t>();
-			max_positive = NumericStats::Max(numeric_stats).GetValueUnsafe<int64_t>();
-			break;
-		default:
-			throw InternalException("Unsupported type for propagate sum stats");
-		}
-		auto max_sum_negative = max_negative * Hugeint::Convert(input.node_stats->max_cardinality);
-		auto max_sum_positive = max_positive * Hugeint::Convert(input.node_stats->max_cardinality);
-		if (max_sum_positive >= NumericLimits<int64_t>::Maximum() ||
-		    max_sum_negative <= NumericLimits<int64_t>::Minimum()) {
-			// sum can potentially exceed int64_t bounds: use hugeint sum
-			return nullptr;
-		}
-		// total sum is guaranteed to fit in a single int64: use int64 sum instead of hugeint sum
-		expr.function = GetSumAggregateNoOverflow(internal_type);
+	if (!input.node_stats || !input.node_stats->has_max_cardinality) {
+		return nullptr;
 	}
-	return nullptr;
+	auto &numeric_stats = input.child_stats[0];
+	if (!NumericStats::HasMinMax(numeric_stats)) {
+		return nullptr;
+	}
+	auto internal_type = numeric_stats.GetType().InternalType();
+	hugeint_t max_negative = 0;
+	hugeint_t max_positive = 0;
+	switch (internal_type) {
+	case PhysicalType::BOOL:
+		max_negative = NumericStats::Min(numeric_stats).GetValueUnsafe<bool>() ? 1 : 0;
+		max_positive = NumericStats::Max(numeric_stats).GetValueUnsafe<bool>() ? 1 : 0;
+		break;
+	case PhysicalType::INT16:
+		max_negative = NumericStats::Min(numeric_stats).GetValueUnsafe<int16_t>();
+		max_positive = NumericStats::Max(numeric_stats).GetValueUnsafe<int16_t>();
+		break;
+	case PhysicalType::INT32:
+		max_negative = NumericStats::Min(numeric_stats).GetValueUnsafe<int32_t>();
+		max_positive = NumericStats::Max(numeric_stats).GetValueUnsafe<int32_t>();
+		break;
+	case PhysicalType::INT64:
+		max_negative = NumericStats::Min(numeric_stats).GetValueUnsafe<int64_t>();
+		max_positive = NumericStats::Max(numeric_stats).GetValueUnsafe<int64_t>();
+		break;
+	case PhysicalType::INT128:
+		max_negative = NumericStats::Min(numeric_stats).GetValueUnsafe<hugeint_t>();
+		max_positive = NumericStats::Max(numeric_stats).GetValueUnsafe<hugeint_t>();
+		break;
+	default:
+		throw InternalException("Unsupported type for propagate sum stats");
+	}
+
+	const auto max_card = Hugeint::Convert(input.node_stats->max_cardinality);
+	hugeint_t wide_negative = 0;
+	hugeint_t wide_positive = 0;
+	if (!Hugeint::TryMultiply(max_negative, max_card, wide_negative) ||
+	    !Hugeint::TryMultiply(max_positive, max_card, wide_positive)) {
+		return nullptr;
+	}
+
+	// Replace with fast implementation when possible: only INT32/INT64 have a narrower no-overflow implementation to
+	// swap in.
+	const bool has_no_overflow_variant = internal_type == PhysicalType::INT32 || internal_type == PhysicalType::INT64;
+	const bool sum_fits_in_int64 =
+	    wide_negative > NumericLimits<int64_t>::Minimum() && wide_positive < NumericLimits<int64_t>::Maximum();
+	if (has_no_overflow_variant && sum_fits_in_int64) {
+		expr.FunctionMutable().ReplaceImplementation(GetSumAggregateNoOverflow(internal_type));
+	}
+
+	// Propagate stats.
+	auto sum_min = max_negative <= 0 ? wide_negative : max_negative;
+	auto sum_max = max_positive >= 0 ? wide_positive : max_positive;
+	auto result = NumericStats::CreateEmpty(expr.GetReturnType()).ToUnique();
+	NumericStats::SetMin(*result, Value::HUGEINT(sum_min));
+	NumericStats::SetMax(*result, Value::HUGEINT(sum_max));
+	result->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
+	return result;
 }
 
 AggregateFunction GetSumAggregate(PhysicalType type) {
@@ -163,12 +370,16 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 	case PhysicalType::BOOL: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, bool, hugeint_t, IntegerSumOperation>(
 		    LogicalType::BOOLEAN, LogicalType::HUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
+		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
 	}
 	case PhysicalType::INT16: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int16_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::SMALLINT, LogicalType::HUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
+		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
 	}
@@ -177,6 +388,7 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, int32_t, hugeint_t, SumToHugeintOperation>(
 		        LogicalType::INTEGER, LogicalType::HUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
 		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
@@ -185,6 +397,7 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, int64_t, hugeint_t, SumToHugeintOperation>(
 		        LogicalType::BIGINT, LogicalType::HUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
 		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
@@ -193,6 +406,8 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, hugeint_t, hugeint_t, HugeintSumOperation>(
 		        LogicalType::HUGEINT, LogicalType::HUGEINT);
+		function.GetSignature().GetParameter(0).SetName("arg");
+		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
 	}
@@ -201,12 +416,13 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 	}
 }
 
-unique_ptr<FunctionData> BindDecimalSum(ClientContext &context, AggregateFunction &function,
-                                        vector<unique_ptr<Expression>> &arguments) {
-	auto decimal_type = arguments[0]->return_type;
-	function = GetSumAggregate(decimal_type.InternalType());
-	function.name = "sum";
-	function.arguments[0] = decimal_type;
+unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	auto decimal_type = arguments[0]->GetReturnType();
+	function.ReplaceImplementation(GetSumAggregate(decimal_type.InternalType()));
+	function.SetName("sum");
+	function.GetArguments()[0] = decimal_type;
 	function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type)));
 	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	return nullptr;
@@ -218,11 +434,6 @@ struct BignumState {
 };
 
 struct BignumOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.is_set = false;
-	}
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {
@@ -272,18 +483,23 @@ struct BignumOperation {
 AggregateFunctionSet SumFun::GetFunctions() {
 	AggregateFunctionSet sum;
 	// decimal
-	sum.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-	                                  BindDecimalSum));
+	AggregateFunction decimal_sum({}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                              FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, BindDecimalSum);
+	decimal_sum.GetSignature().AddParameter("arg", LogicalTypeId::DECIMAL);
+	sum.AddFunction(decimal_sum);
 	sum.AddFunction(GetSumAggregate(PhysicalType::BOOL));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT16));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT32));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT64));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
-	sum.AddFunction(AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE));
-	sum.AddFunction(AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, BignumOperation>(
-	    LogicalType::BIGNUM, LogicalType::BIGNUM));
+	auto sum_double = AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE);
+	sum_double.GetSignature().GetParameter(0).SetName("arg");
+	sum.AddFunction(sum_double);
+	auto sum_bignum = AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, BignumOperation>(
+	    LogicalType::BIGNUM, LogicalType::BIGNUM);
+	sum_bignum.GetSignature().GetParameter(0).SetName("arg");
+	sum.AddFunction(sum_bignum);
 	return sum;
 }
 
@@ -300,8 +516,10 @@ AggregateFunctionSet SumNoOverflowFun::GetFunctions() {
 }
 
 AggregateFunction KahanSumFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<KahanSumState, double, double, KahanSumOperation>(LogicalType::DOUBLE,
-	                                                                                           LogicalType::DOUBLE);
+	auto fun = AggregateFunction::UnaryAggregate<KahanSumState, double, double, KahanSumOperation>(LogicalType::DOUBLE,
+	                                                                                               LogicalType::DOUBLE);
+	fun.GetSignature().GetParameter(0).SetName("arg");
+	return fun;
 }
 
 } // namespace duckdb

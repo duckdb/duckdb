@@ -6,7 +6,6 @@
 #include <set>
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test autoload of extension settings", "[api]") {
 	DBConfig config;

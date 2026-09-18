@@ -1,9 +1,6 @@
 # name: test/sql/show_select/summarize_subquery.test
 # group: [show_select]
 
-statement ok
-pragma enable_verification;
-
 query II
 SELECT column_name, min FROM (SUMMARIZE SELECT 42 AS a);
 ----
@@ -16,3 +13,21 @@ query II
 SELECT column_name, min FROM (SUMMARIZE tbl);
 ----
 a	42
+
+# correlated summarize subquery
+statement ok
+SET threads=4
+
+query IIII
+SELECT i, column_name, min, max
+FROM range(2) t(i),
+LATERAL (
+	SUMMARIZE SELECT i + j AS x FROM range(2) u(j)
+)
+ORDER BY i;
+----
+0	x	0	1
+1	x	1	2
+
+statement ok
+RESET threads

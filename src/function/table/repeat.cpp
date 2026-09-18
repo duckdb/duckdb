@@ -18,11 +18,11 @@ struct RepeatOperatorData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> RepeatBind(ClientContext &context, TableFunctionBindInput &input,
-                                           vector<LogicalType> &return_types, vector<string> &names) {
+                                           vector<LogicalType> &return_types, vector<Identifier> &names) {
 	// the repeat function returns the type of the first argument
 	auto &inputs = input.inputs;
 	return_types.push_back(inputs[0].type());
-	names.push_back(inputs[0].ToString());
+	names.emplace_back(inputs[0].ToString());
 	if (inputs[1].IsNull()) {
 		throw BinderException("Repeat second parameter cannot be NULL");
 	}
@@ -42,8 +42,8 @@ static void RepeatFunction(ClientContext &context, TableFunctionInput &data_p, D
 	auto &state = data_p.global_state->Cast<RepeatOperatorData>();
 
 	idx_t remaining = MinValue<idx_t>(bind_data.target_count - state.current_count, STANDARD_VECTOR_SIZE);
-	output.data[0].Reference(bind_data.value);
-	output.SetCardinality(remaining);
+	output.data[0].Reference(bind_data.value, count_t(remaining));
+	output.SetChildCardinality(remaining);
 	state.current_count += remaining;
 }
 

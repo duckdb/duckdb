@@ -11,13 +11,20 @@ START_MARKER = (
 END_MARKER = "// End of the auto-generated list of settings structures"
 
 
+# escape a plain-text value so it can be emitted as a C++ string literal
+def escape_cpp_string(value: str) -> str:
+    return value.replace('\\', '\\\\').replace('"', '\\"')
+
+
 def extract_declarations(setting) -> str:
     definition = (
         f"struct {setting.struct_name} {{\n"
         f"    using RETURN_TYPE = {setting.return_type};\n"
         f"    static constexpr const char *Name = \"{setting.name}\";\n"
-        f"    static constexpr const char *Description = \"{setting.description}\";\n"
+        f"    static constexpr const char *Description = \"{escape_cpp_string(setting.description)}\";\n"
         f"    static constexpr const char *InputType = \"{setting.sql_type}\";\n"
+        f"    static constexpr bool IsDebug = {'true' if setting.is_debug else 'false'};\n"
+        f"    static constexpr bool IsDeprecated = {'true' if setting.is_deprecated else 'false'};\n"
     )
     if not setting.is_generic_setting:
         # non-generic setting
@@ -52,9 +59,7 @@ def extract_declarations(setting) -> str:
             definition += f"    static constexpr SettingScopeTarget Scope = SettingScopeTarget::{setting.default_scope}_DEFAULT;\n"
         else:
             definition += f"    static constexpr SettingScopeTarget Scope = SettingScopeTarget::{setting.scope}_ONLY;\n"
-        if setting.setting_index is None:
-            raise Exception("Setting index was not set")
-        definition += f"    static constexpr idx_t SettingIndex = {setting.setting_index};\n"
+        definition += f"    static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();\n"
         if setting.on_set:
             definition += f"    static void OnSet(SettingCallbackInfo &info, Value &input);\n"
 
@@ -75,17 +80,12 @@ def generate_content(header_file_path):
     end_section = SEPARATOR + source_code[end_index:]
 
     new_content = "".join(extract_declarations(setting) for setting in SettingsList)
-    max_setting_index = (
-        max([setting.setting_index for setting in SettingsList if setting.setting_index is not None]) + 1
-    )
     new_content += '''
 struct GeneratedSettingInfo {
-	static constexpr idx_t MaxSettingIndex = %s;
+	static constexpr idx_t MaxSettingIndex = NEXT_SETTING_INDEX();
 };
 
-''' % (
-        max_setting_index,
-    )
+'''
     return start_section + new_content + end_section
 
 

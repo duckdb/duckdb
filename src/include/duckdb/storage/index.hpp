@@ -9,19 +9,16 @@
 #pragma once
 
 #include "duckdb/common/enums/index_constraint_type.hpp"
-#include "duckdb/common/types/constraint_conflict_info.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/storage/table_storage_info.hpp"
 
 namespace duckdb {
 
-class ClientContext;
+class AttachedDatabase;
 class TableIOManager;
-class Transaction;
-class ConflictManager;
-
-struct IndexLock;
-struct IndexScanState;
 
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
@@ -55,7 +52,7 @@ public:
 	virtual const string &GetIndexType() const = 0;
 
 	//! The name of the index
-	virtual const string &GetIndexName() const = 0;
+	virtual const Identifier &GetIndexName() const = 0;
 
 	//! The index constraint type
 	virtual IndexConstraintType GetConstraintType() const = 0;

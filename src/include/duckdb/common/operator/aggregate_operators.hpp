@@ -29,4 +29,39 @@ struct Max {
 	}
 };
 
+struct LogicalAnd {
+	template <class T>
+	static inline T Operation(T left, T right) {
+		return left && right;
+	}
+};
+
+struct LogicalOr {
+	template <class T>
+	static inline T Operation(T left, T right) {
+		return left || right;
+	}
+};
+
+struct BitAnd {
+	template <class T>
+	static inline T Operation(T left, T right) {
+		return left & right;
+	}
+};
+
+struct BitOr {
+	template <class T>
+	static inline T Operation(T left, T right) {
+		return left | right;
+	}
+};
+
+struct BitXor {
+	template <class T>
+	static inline T Operation(T left, T right) {
+		return left ^ right;
+	}
+};
+
 } // namespace duckdb

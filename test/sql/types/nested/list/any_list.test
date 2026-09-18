@@ -2,9 +2,6 @@
 # description: Test ANY with lists
 # group: [list]
 
-statement ok
-PRAGMA enable_verification
-
 # scalar lists
 query I
 SELECT 1=ALL([1, 2, 3]);

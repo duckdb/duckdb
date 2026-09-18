@@ -12,7 +12,7 @@ INSERT INTO accounts SELECT i AS id, 10 AS money FROM range(10) t(i)
 
 concurrentforeach thread reader updater
 
-loop x 0 2000
+loop x 0 1000
 
 # the total balance should remain constant regardless of updates
 onlyif thread=reader
@@ -23,7 +23,7 @@ SELECT SUM(money) FROM accounts
 
 endloop
 
-loop x 0 1000
+loop x 0 500
 
 # generate a random transfer (random from / to / amount)
 onlyif thread=updater

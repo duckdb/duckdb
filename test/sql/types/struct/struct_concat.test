@@ -1,9 +1,6 @@
 # name: test/sql/types/struct/struct_concat.test
 # group: [struct]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT struct_concat({'a': 1}, {'b': NULL}, NULL::STRUCT(k INT), struct_pack( x := 'foobar'));;
 ----

@@ -8,11 +8,17 @@
 
 #pragma once
 
+#include <stdint.h>
+
 #include "duckdb.hpp"
 #include "parquet_rle_bp_decoder.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 class ColumnReader;
+class ResizeableBuffer;
+class Vector;
 
 class RLEDecoder {
 public:

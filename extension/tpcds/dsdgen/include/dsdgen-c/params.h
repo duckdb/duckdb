@@ -42,7 +42,7 @@
 
 #ifdef DECLARER
 
-option_t options[] = {{"ABREVIATION", OPT_STR, 0, "build table with abreviation <s>", NULL, ""},
+thread_local option_t options[] = {{"ABREVIATION", OPT_STR, 0, "build table with abreviation <s>", NULL, ""},
                       {"DELIMITER", OPT_STR | OPT_ADV, 1, "use <s> as output field separator", NULL, "|"},
                       {"DIR", OPT_STR, 2, "generate tables in directory <s>", NULL, "."},
                       {"DISTRIBUTIONS", OPT_STR | OPT_ADV, 3, "read distributions from file <s>", NULL, "NONE"},
@@ -69,10 +69,10 @@ option_t options[] = {{"ABREVIATION", OPT_STR, 0, "build table with abreviation 
                       {"RNGSEED", OPT_INT | OPT_ADV, 24, "set RNG seed", NULL, "19620718"},
                       {NULL}};
 
-char *params[23 + 2];
+thread_local char *params[23 + 2];
 #else
-extern option_t options[];
-extern char *params[];
+extern thread_local option_t options[];
+extern thread_local char *params[];
 extern char *szTableNames[];
 #endif
 

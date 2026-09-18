@@ -24,13 +24,13 @@ Catalog Error: Table with name "integers" already exists!
 statement error
 CREATE OR REPLACE VIEW integers AS SELECT 42;
 ----
-<REGEX>:.*Catalog Error: Existing object integers.*
+<REGEX>:.*Catalog Error: Existing object "integers".*
 
 # cannot use DROP VIEW to drop a table
 statement error
 DROP VIEW integers
 ----
-<REGEX>:.*Catalog Error: Existing object integers.*
+<REGEX>:.*Catalog Error: Existing object "integers".*
 
 # cannot drop a table that does not exist
 statement error
@@ -48,7 +48,7 @@ ALTER TABLE blabla RENAME COLUMN i TO k
 statement error
 DROP TABLE IF EXISTS vintegers
 ----
-<REGEX>:.*Catalog Error: Existing object vintegers.*
+<REGEX>:.*Catalog Error: Existing object "vintegers".*
 
 statement ok
 CREATE INDEX i_index ON integers(i);

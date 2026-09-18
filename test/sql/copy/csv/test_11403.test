@@ -2,9 +2,6 @@
 # description: Test CSV Sniffing detects correct quote for issue 11403
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 # requires notwindows for windows-style path backslash reasons
 require notwindows
 
