@@ -16,6 +16,7 @@
 			"paths": [
 				"test/parquet/test_parquet_schema.test",
 				"test/parquet/schema_nested_extract.test",
+				"test/parquet/test_parquet_schema_null_nested.test",
 				"test/parquet/test_parquet_schema_incompatible_nested_types.test"
 			]
 		}
