@@ -290,6 +290,15 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	result->IgnoreNullsMutable() = window.IgnoreNulls();
 	result->DistinctMutable() = window.Distinct();
 
+	const bool range_start = window.WindowStart() == WindowBoundary::EXPR_PRECEDING_RANGE ||
+	                         window.WindowStart() == WindowBoundary::EXPR_FOLLOWING_RANGE;
+	const bool range_end = window.WindowEnd() == WindowBoundary::EXPR_PRECEDING_RANGE ||
+	                       window.WindowEnd() == WindowBoundary::EXPR_FOLLOWING_RANGE;
+	if ((range_start || range_end) && bound_orders.size() == 1) {
+		result->RetainSQLRange(range_start ? bound_start.get() : nullptr, range_end ? bound_end.get() : nullptr,
+		                       bound_orders[0]->GetReturnType());
+	}
+
 	// Convert RANGE boundary expressions to ORDER +/- expressions.
 	// Note that PRECEDING and FOLLOWING refer to the sequential order in the frame,
 	// not the natural ordering of the type. This means that the offset arithmetic must be reversed

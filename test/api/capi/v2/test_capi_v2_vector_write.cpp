@@ -162,6 +162,45 @@ TEST_CASE("V2: vector_set_size auto-reserves", "[capi_v2][vector_write]") {
 }
 
 // ---------------------------------------------------------------------------
+// vector_reference
+// ---------------------------------------------------------------------------
+
+TEST_CASE("V2: vector_reference rejects a type mismatch", "[capi_v2][vector_write]") {
+	EnvFixture fx;
+	auto int_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto bigint_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	duckdb_v2_logical_type_handle types[2] = {int_type, bigint_type};
+
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	auto rc = duckdb_v2_data_chunk_create(types, 2, &chunk, nullptr);
+	duckdb_v2_logical_type_destroy(&int_type);
+	duckdb_v2_logical_type_destroy(&bigint_type);
+	REQUIRE(rc == DUCKDB_V2_ERROR_NONE);
+
+	duckdb_v2_vector_handle int_vec = nullptr;
+	duckdb_v2_vector_handle bigint_vec = nullptr;
+	REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, 0, &int_vec, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, 1, &bigint_vec, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vector_set_size(int_vec, 3, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vector_set_size(bigint_vec, 5, nullptr) == DUCKDB_V2_ERROR_NONE);
+
+	REQUIRE(duckdb_v2_vector_reference(nullptr, int_vec, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_vector_reference(int_vec, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+
+	duckdb_v2_error_info_handle err = nullptr;
+	REQUIRE(duckdb_v2_vector_reference(bigint_vec, int_vec, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(err != nullptr);
+	REQUIRE(duckdb_v2_error_info_destroy(&err) == DUCKDB_V2_ERROR_NONE);
+
+	// The rejected call left the vector untouched.
+	idx_t size = 0;
+	REQUIRE(duckdb_v2_vector_get_size(bigint_vec, &size, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(size == 5);
+
+	REQUIRE(duckdb_v2_data_chunk_destroy(&chunk) == DUCKDB_V2_ERROR_NONE);
+}
+
+// ---------------------------------------------------------------------------
 // vector_flatten / vector_make_constant / vector_make_sequence
 // ---------------------------------------------------------------------------
 

@@ -546,7 +546,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	} else {
 		config.file_system = make_uniq<VirtualFileSystem>(FileSystem::CreateLocal());
 	}
-	config.http_transport_manager->Initialize(DBConfig::GetSystemMaxThreads(*config.file_system));
+	config.http_transport_manager->Initialize(config);
 	if (database_path && !Settings::Get<EnableExternalAccessSetting>(*this)) {
 		config.AddAllowedDatabasePath(database_path);
 		if (!config.options.temporary_directory.empty()) {

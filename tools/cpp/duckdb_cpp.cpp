@@ -2010,6 +2010,10 @@ auto Vector::Flatten() const -> void {
 	CheckedAPICall(duckdb_v2_vector_flatten, handle());
 }
 
+auto Vector::Reference(const Vector &source) -> void {
+	CheckedAPICall(duckdb_v2_vector_reference, handle(), source.handle());
+}
+
 auto Vector::GetSize() const -> idx_t {
 	idx_t size = 0;
 	CheckedAPICall(duckdb_v2_vector_get_size, handle(), &size);

@@ -297,4 +297,14 @@ ScalarFunctionSet InternalDecompressIntegralUhugeintFun::GetFunctions() {
 	return GetIntegralDecompressFunctionSet(LogicalType(LogicalTypeId::UHUGEINT));
 }
 
+CMExpressionType CMUtils::GetIntegralType(const BoundScalarFunction &function) {
+	if (function.GetDeserializeCallback() == CMIntegralDeserialize<GetIntegralCompressFunctionInputSwitch>) {
+		return CMExpressionType::COMPRESS;
+	}
+	if (function.GetDeserializeCallback() == CMIntegralDeserialize<GetIntegralDecompressFunctionInputSwitch>) {
+		return CMExpressionType::DECOMPRESS;
+	}
+	return CMExpressionType::NONE;
+}
+
 } // namespace duckdb
