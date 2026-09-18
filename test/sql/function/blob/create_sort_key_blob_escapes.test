@@ -1,0 +1,101 @@
+# name: test/sql/function/blob/create_sort_key_blob_escapes.test
+# description: Test create_sort_key blob escaping around the word/block boundaries of the encoder
+# group: [blob]
+
+# blobs are copied verbatim, except for \x00 and \x01 which are escaped with \x01
+query I
+SELECT hex(create_sort_key('\xAA\x00\xBB\x01\xCC'::BLOB, 'ASC NULLS LAST'))
+----
+01AA0100BB0101CC00
+
+query I
+SELECT hex(create_sort_key('\xAA\x00\xBB\x01\xCC'::BLOB, 'DESC NULLS LAST'))
+----
+0155FEFF44FEFE33FF
+
+# an escape at every position of a blob that spans multiple encoder words/blocks
+statement ok
+CREATE TABLE sweep AS
+SELECT len, pos, esc,
+       CASE WHEN pos >= len THEN repeat('\xAA'::BLOB, len)
+            ELSE repeat('\xAA'::BLOB, pos) || esc || repeat('\xAA'::BLOB, len - pos - 1)
+       END AS b
+FROM range(0, 81) l(len), range(0, 81) p(pos),
+     (VALUES ('\x00'::BLOB), ('\x01'::BLOB), ('\x02'::BLOB)) e(esc)
+WHERE pos <= len;
+
+# the key is the validity byte, the payload, one byte per escaped character and the delimiter
+query I
+SELECT count(*) FROM sweep
+WHERE octet_length(create_sort_key(b, 'ASC NULLS LAST')) <>
+      octet_length(b) + CASE WHEN pos < len AND esc <= '\x01'::BLOB THEN 1 ELSE 0 END + 2;
+----
+0
+
+# the sort key must order identically to the blobs themselves
+query I
+SELECT count(*) FROM (
+    SELECT row_number() OVER (ORDER BY b ASC, len, pos, esc) AS by_blob,
+           row_number() OVER (ORDER BY create_sort_key(b, 'ASC NULLS LAST') ASC, len, pos, esc) AS by_key
+    FROM sweep
+) WHERE by_blob <> by_key;
+----
+0
+
+query I
+SELECT count(*) FROM (
+    SELECT row_number() OVER (ORDER BY b DESC, len, pos, esc) AS by_blob,
+           row_number() OVER (ORDER BY create_sort_key(b, 'DESC NULLS LAST') ASC, len, pos, esc) AS by_key
+    FROM sweep
+) WHERE by_blob <> by_key;
+----
+0
+
+# two adjacent escapes at every position, so that an escape can straddle a word boundary
+statement ok
+CREATE TABLE sweep_pairs AS
+SELECT len, pos, repeat('\xAA'::BLOB, pos) || '\x01\x00'::BLOB || repeat('\xAA'::BLOB, len - pos - 2) AS b
+FROM range(2, 81) l(len), range(0, 81) p(pos)
+WHERE pos + 2 <= len;
+
+query I
+SELECT count(*) FROM sweep_pairs
+WHERE octet_length(create_sort_key(b, 'DESC NULLS FIRST')) <> octet_length(b) + 4;
+----
+0
+
+query I
+SELECT count(*) FROM (
+    SELECT row_number() OVER (ORDER BY b ASC, len, pos) AS by_blob,
+           row_number() OVER (ORDER BY create_sort_key(b, 'ASC NULLS FIRST') ASC, len, pos) AS by_key
+    FROM sweep_pairs
+) WHERE by_blob <> by_key;
+----
+0
+
+# blobs that consist purely of escaped characters
+query I
+SELECT count(*) FROM range(0, 81) l(len)
+WHERE octet_length(create_sort_key(repeat('\x00\x01'::BLOB, len), 'ASC NULLS LAST')) <> 4 * len + 2;
+----
+0
+
+# strings are encoded by incrementing every byte - verify the same boundaries for varchar
+statement ok
+CREATE TABLE strings AS
+SELECT len, repeat(chr(255), len) || repeat('a', len) AS s FROM range(0, 81) l(len);
+
+query I
+SELECT count(*) FROM strings
+WHERE octet_length(create_sort_key(s, 'ASC NULLS LAST')) <> octet_length(encode(s)) + 2;
+----
+0
+
+query I
+SELECT count(*) FROM (
+    SELECT row_number() OVER (ORDER BY s ASC, len) AS by_string,
+           row_number() OVER (ORDER BY create_sort_key(s, 'ASC NULLS LAST') ASC, len) AS by_key
+    FROM strings
+) WHERE by_string <> by_key;
+----
+0

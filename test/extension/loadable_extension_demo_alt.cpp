@@ -8,7 +8,8 @@ static void LoadableExtensionDemoFun(DataChunk &args, ExpressionState &state, Ve
 }
 
 static void LoadableExtensionFunInit(ExtensionLoader &loader, string &function_name) {
-	loader.RegisterFunction(ScalarFunction(function_name, {}, LogicalType::VARCHAR, LoadableExtensionDemoFun));
+	loader.RegisterFunction(
+	    ScalarFunction(Identifier(function_name), {}, LogicalType::VARCHAR, LoadableExtensionDemoFun));
 }
 
 extern "C" {

@@ -3,6 +3,9 @@
 # group: [iejoin]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 SET merge_join_threshold=0
 
 statement ok

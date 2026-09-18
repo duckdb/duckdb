@@ -184,7 +184,7 @@ void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result,
 
 void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<ConcatFunctionData>();
+	auto &info = func_expr.BindInfo()->Cast<ConcatFunctionData>();
 	if (info.return_type.id() == LogicalTypeId::SQLNULL) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		return;
@@ -355,16 +355,16 @@ ScalarFunction ListConcatFun::GetFunction() {
 // the concat function, however, treats NULL values as an empty string
 // i.e. concat(NULL, 'hello') = 'hello'
 ScalarFunction ConcatFun::GetFunction() {
-	ScalarFunction concat =
-	    ScalarFunction("concat", {LogicalType::ANY}, LogicalType::ANY, ConcatFunction, BindConcatFunction);
+	ScalarFunction concat = ScalarFunction("concat", {}, LogicalType::ANY, ConcatFunction, BindConcatFunction);
+	concat.GetSignature().AddParameter("value", LogicalType::ANY);
 	concat.SetVarArgs(LogicalType::ANY);
 	concat.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return concat;
 }
 
 ScalarFunction ConcatOperatorFun::GetFunction() {
-	ScalarFunction concat_op = ScalarFunction("||", {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
-	                                          ConcatFunction, BindConcatOperator);
+	ScalarFunction concat_op = ScalarFunction("||", {}, LogicalType::ANY, ConcatFunction, BindConcatOperator);
+	concat_op.GetSignature().AddParameter("arg1", LogicalType::ANY).AddParameter("arg2", LogicalType::ANY);
 	return concat_op;
 }
 

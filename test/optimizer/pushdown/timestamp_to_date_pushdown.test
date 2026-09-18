@@ -2,6 +2,9 @@
 # description: Test Tpushdown of timestamp to date filters
 # group: [pushdown]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 require icu
 
 foreach timezone UTC ECT
@@ -27,12 +30,12 @@ insert into t1 select '2024-05-03 00:00:00'::timestamp ts, i from generate_serie
 query II
 explain select * from t1 where ts::date == '2024-05-02';
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Filters:.*
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters.*
 
 query II
 explain select * from t1 where '2024-05-02' == ts::date;
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Filters:.*
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters.*
 
 
 statement ok

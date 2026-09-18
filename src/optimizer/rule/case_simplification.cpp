@@ -14,8 +14,8 @@ CaseSimplificationRule::CaseSimplificationRule(ExpressionRewriter &rewriter) : R
 unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                      bool &changes_made, bool is_root) {
 	auto &root = bindings[0].get().Cast<BoundCaseExpression>();
-	for (idx_t i = 0; i < root.case_checks.size(); i++) {
-		auto &case_check = root.case_checks[i];
+	for (idx_t i = 0; i < root.CaseChecksMutable().size(); i++) {
+		auto &case_check = root.CaseChecksMutable()[i];
 		if (case_check.when_expr->IsFoldable()) {
 			// the WHEN check is a foldable expression
 			// use an ExpressionExecutor to execute the expression
@@ -25,21 +25,22 @@ unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector
 			auto condition = constant_value.DefaultCastAs(LogicalType::BOOLEAN);
 			if (condition.IsNull() || !BooleanValue::Get(condition)) {
 				// the condition is always false: remove this case check
-				root.case_checks.erase_at(i);
+				root.CaseChecksMutable().erase_at(i);
 				i--;
 			} else {
 				// the condition is always true
 				// move the THEN clause to the ELSE of the case
-				root.else_expr = std::move(case_check.then_expr);
+				root.ElseMutable() = std::move(case_check.then_expr);
 				// remove this case check and any case checks after this one
-				root.case_checks.erase(root.case_checks.begin() + NumericCast<int64_t>(i), root.case_checks.end());
+				root.CaseChecksMutable().erase(root.CaseChecksMutable().begin() + NumericCast<int64_t>(i),
+				                               root.CaseChecksMutable().end());
 				break;
 			}
 		}
 	}
-	if (root.case_checks.empty()) {
+	if (root.CaseChecksMutable().empty()) {
 		// no case checks left: return the ELSE expression
-		return std::move(root.else_expr);
+		return std::move(root.ElseMutable());
 	}
 	return nullptr;
 }

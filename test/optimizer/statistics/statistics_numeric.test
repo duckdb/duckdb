@@ -3,6 +3,9 @@
 # group: [statistics]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
 statement ok
@@ -176,3 +179,155 @@ query II
 SELECT s.min, s.max FROM (SELECT STATS(exp(x)) s FROM mixed LIMIT 1)
 ----
 1.0	2.718281828459045
+
+# sqrt is strictly increasing: perfect squares round exactly, so bounds are exact
+statement ok
+CREATE TABLE squares(x DOUBLE);
+
+statement ok
+INSERT INTO squares VALUES (4.0), (16.0);
+
+query II
+SELECT s.min, s.max FROM (SELECT STATS(sqrt(x)) s FROM squares LIMIT 1)
+----
+2.0	4.0
+
+# sqrt of a negative corner throws/NaN: propagator bails, no derived bounds
+statement ok
+CREATE TABLE maybe_negative(x DOUBLE);
+
+statement ok
+INSERT INTO maybe_negative VALUES (-5.0), (10.0);
+
+query II
+SELECT s.min, s.max FROM (SELECT STATS(sqrt(x)) s FROM maybe_negative LIMIT 1)
+----
+NULL	NULL
+
+# ln of a negative corner throws/NaN: propagator bails
+query II
+SELECT s.min, s.max FROM (SELECT STATS(ln(x)) s FROM maybe_negative LIMIT 1)
+----
+NULL	NULL
+
+# monotone logs: derived output range prunes impossible filters
+statement ok
+CREATE TABLE positives(x DOUBLE);
+
+statement ok
+INSERT INTO positives VALUES (1.0), (100.0);
+
+# ln(x) for x in [1, 100] is in [0, ln(100)]: ln(x) < -1 is impossible
+query II
+EXPLAIN SELECT count(*) FROM positives WHERE ln(x) < -1;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# log10(x) for x in [1, 100] is in [0, 2]: log10(x) > 3 is impossible
+query II
+EXPLAIN SELECT count(*) FROM positives WHERE log10(x) > 3;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# log2(x) for x in [1, 100] is in [0, log2(100)]: log2(x) > 7 is impossible
+query II
+EXPLAIN SELECT count(*) FROM positives WHERE log2(x) > 7;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# degrees is strictly increasing: degrees(x) for x in [1, 100] < 50 is impossible (degrees(1) ~= 57.3)
+query II
+EXPLAIN SELECT count(*) FROM positives WHERE degrees(x) < 50;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# radians is strictly increasing: radians(x) for x in [1, 100] > 2 is impossible (radians(100) ~= 1.75)
+query II
+EXPLAIN SELECT count(*) FROM positives WHERE radians(x) > 2;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# statistics propagation for decimals backed by hugeints
+statement ok
+CREATE TABLE decimal_stats(a DECIMAL(18,2), b DECIMAL(18,2), c DECIMAL(19,2), d DECIMAL(2,0));
+
+statement ok
+INSERT INTO decimal_stats VALUES
+	(1000000000000000.00, 0.02, 10000000000000000.00, -2),
+	(2000000000000000.00, 0.03, 20000000000000000.00, 3);
+
+query III
+SELECT type, s.min, s.max
+FROM (SELECT typeof(a + b) type, stats(a + b) s FROM decimal_stats LIMIT 1)
+----
+DECIMAL(19,2)	1000000000000000.02	2000000000000000.03
+
+query III
+SELECT type, s.min, s.max
+FROM (SELECT typeof(a - b) type, stats(a - b) s FROM decimal_stats LIMIT 1)
+----
+DECIMAL(19,2)	999999999999999.97	1999999999999999.98
+
+query III
+SELECT type, s.min, s.max
+FROM (SELECT typeof(c * d) type, stats(c * d) s FROM decimal_stats LIMIT 1)
+----
+DECIMAL(21,2)	-40000000000000000.00	60000000000000000.00
+
+# statistics propagation for hugeints
+statement ok
+CREATE TABLE hugeint_stats(a HUGEINT, b HUGEINT);
+
+statement ok
+INSERT INTO hugeint_stats VALUES (10000000000000000000, -2), (20000000000000000000, 3);
+
+query II
+SELECT s.min, s.max FROM (SELECT stats(a + b) s FROM hugeint_stats LIMIT 1)
+----
+9999999999999999998	20000000000000000003
+
+query II
+SELECT s.min, s.max FROM (SELECT stats(a - b) s FROM hugeint_stats LIMIT 1)
+----
+9999999999999999997	20000000000000000002
+
+query II
+SELECT s.min, s.max FROM (SELECT stats(a * b) s FROM hugeint_stats LIMIT 1)
+----
+-40000000000000000000	60000000000000000000
+
+# potentially overflowing hugeint statistics keep the checked operator
+statement ok
+CREATE TABLE hugeint_stats_overflow(
+	add_left HUGEINT,
+	add_right HUGEINT,
+	subtract_left HUGEINT,
+	subtract_right HUGEINT,
+	multiply_left HUGEINT,
+	multiply_right HUGEINT
+);
+
+statement ok
+INSERT INTO hugeint_stats_overflow VALUES (
+	170141183460469231731687303715884105727,
+	1,
+	-170141183460469231731687303715884105728,
+	1,
+	170141183460469231731687303715884105727,
+	2
+);
+
+statement error
+SELECT add_left + add_right FROM hugeint_stats_overflow
+----
+<REGEX>:Out of Range Error.*Overflow in addition of INT128.*
+
+statement error
+SELECT subtract_left - subtract_right FROM hugeint_stats_overflow
+----
+<REGEX>:Out of Range Error.*Overflow in subtraction of INT128.*
+
+statement error
+SELECT multiply_left * multiply_right FROM hugeint_stats_overflow
+----
+<REGEX>:Out of Range Error.*Overflow in multiplication of INT128.*

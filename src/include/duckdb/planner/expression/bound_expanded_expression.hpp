@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-//! BoundExpression is an intermediate dummy expression used by the binder.
+//! BoundExpandedExpression is an intermediate dummy expression used by the binder.
 //! It holds a set of expressions that will be "expanded" in the select list of a query
 class BoundExpandedExpression : public Expression {
 public:
@@ -21,14 +21,21 @@ public:
 public:
 	explicit BoundExpandedExpression(vector<unique_ptr<Expression>> expanded_expressions);
 
-	vector<unique_ptr<Expression>> expanded_expressions;
-
 public:
+	const vector<unique_ptr<Expression>> &GetChildren() const {
+		return children;
+	}
+	vector<unique_ptr<Expression>> &GetChildrenMutable() {
+		return children;
+	}
 	string ToString() const override;
 
 	bool Equals(const BaseExpression &other) const override;
 
 	unique_ptr<Expression> Copy() const override;
+
+private:
+	vector<unique_ptr<Expression>> children;
 };
 
 } // namespace duckdb

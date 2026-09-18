@@ -34,7 +34,7 @@ static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> root_
                                                     unordered_set<TableIndex> &right_bindings) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &bound_colref, unique_ptr<Expression> &expr) {
-		    if (right_bindings.find(bound_colref.binding.table_index) != right_bindings.end()) {
+		    if (right_bindings.find(bound_colref.Binding().table_index) != right_bindings.end()) {
 			    // bound colref belongs to RHS
 			    // replace it with a constant NULL
 			    expr = make_uniq<BoundConstantExpression>(Value(expr->GetReturnType()));
@@ -108,7 +108,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
                                                              unordered_set<TableIndex> &left_bindings,
                                                              unordered_set<TableIndex> &right_bindings) {
 	auto &join = op->Cast<LogicalJoin>();
-	FilterPushdown left_pushdown(optimizer, convert_mark_joins), right_pushdown(optimizer, convert_mark_joins);
+	FilterPushdown left_pushdown(optimizer, convert_mark_joins, projection_mode);
+	FilterPushdown right_pushdown(optimizer, convert_mark_joins, projection_mode);
 	// for a comparison join we create a FilterCombiner that checks if we can push conditions on LHS join conditions
 	// into the RHS of the join
 	FilterCombiner filter_combiner(optimizer);

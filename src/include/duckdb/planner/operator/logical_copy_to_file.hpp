@@ -24,15 +24,17 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_COPY_TO_FILE;
 
 public:
-	LogicalCopyToFile(CopyFunction function, unique_ptr<FunctionData> bind_data, unique_ptr<CopyInfo> copy_info)
+	LogicalCopyToFile(CopyFunction function, unique_ptr<FunctionData> bind_data, unique_ptr<CopyInfo> copy_info,
+	                  TableIndex table_index)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_COPY_TO_FILE), function(std::move(function)),
-	      bind_data(std::move(bind_data)), copy_info(std::move(copy_info)) {
+	      bind_data(std::move(bind_data)), copy_info(std::move(copy_info)), table_index(table_index) {
 	}
 
 public:
 	CopyFunction function;
 	unique_ptr<FunctionData> bind_data;
 	unique_ptr<CopyInfo> copy_info;
+	TableIndex table_index;
 
 	std::string file_path;
 	bool use_tmp_file;
@@ -55,7 +57,7 @@ public:
 	vector<idx_t> partition_columns;
 	vector<BoundOrderByNode> order_columns;
 
-	vector<string> names;
+	vector<Identifier> names;
 	vector<LogicalType> expected_types;
 
 public:
@@ -65,8 +67,9 @@ public:
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 	static vector<LogicalType> GetTypesWithoutPartitions(const vector<LogicalType> &col_types,
 	                                                     const vector<idx_t> &part_cols, bool write_part_cols);
-	static vector<string> GetNamesWithoutPartitions(const vector<string> &col_names, const vector<column_t> &part_cols,
-	                                                bool write_part_cols);
+	static vector<Identifier> GetNamesWithoutPartitions(const vector<Identifier> &col_names,
+	                                                    const vector<column_t> &part_cols, bool write_part_cols);
+	vector<TableIndex> GetTableIndex() const override;
 
 protected:
 	void ResolveTypes() override {

@@ -31,14 +31,15 @@ typedef void (*pragma_function_t)(ClientContext &context, const FunctionParamete
 class PragmaFunction : public SimpleNamedParameterFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	// Call
-	DUCKDB_API static PragmaFunction PragmaCall(const string &name, pragma_query_t query, vector<LogicalType> arguments,
+	DUCKDB_API static PragmaFunction PragmaCall(const Identifier &name, pragma_query_t query,
+	                                            vector<LogicalType> arguments,
 	                                            LogicalType varargs = LogicalType::INVALID);
-	DUCKDB_API static PragmaFunction PragmaCall(const string &name, pragma_function_t function,
+	DUCKDB_API static PragmaFunction PragmaCall(const Identifier &name, pragma_function_t function,
 	                                            vector<LogicalType> arguments,
 	                                            LogicalType varargs = LogicalType::INVALID);
 	// Statement
-	DUCKDB_API static PragmaFunction PragmaStatement(const string &name, pragma_query_t query);
-	DUCKDB_API static PragmaFunction PragmaStatement(const string &name, pragma_function_t function);
+	DUCKDB_API static PragmaFunction PragmaStatement(const Identifier &name, pragma_query_t query);
+	DUCKDB_API static PragmaFunction PragmaStatement(const Identifier &name, pragma_function_t function);
 
 	DUCKDB_API string ToString() const override;
 
@@ -50,7 +51,7 @@ public:
 	named_parameter_type_map_t named_parameters;
 
 private:
-	PragmaFunction(string name, PragmaType pragma_type, pragma_query_t query, pragma_function_t function,
+	PragmaFunction(Identifier name, PragmaType pragma_type, pragma_query_t query, pragma_function_t function,
 	               vector<LogicalType> arguments, LogicalType varargs);
 };
 

@@ -5,6 +5,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parallel/async_result.hpp"
 
 namespace duckdb {
 
@@ -110,7 +111,22 @@ void BufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	throw NotImplementedException("This type of BufferManager does not support 'AddToEvictionQueue");
 }
 
-void BufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {
+BufferHandle BufferManager::Allocate(QueryContext context, MemoryTag tag, idx_t block_size, bool can_destroy) {
+	return Allocate(tag, block_size, can_destroy);
+}
+
+BufferHandle BufferManager::Allocate(QueryContext context, MemoryTag tag, BlockManager *block_manager,
+                                     bool can_destroy) {
+	return Allocate(tag, block_manager, can_destroy);
+}
+
+vector<unique_ptr<AsyncTask>> BufferManager::CreatePrefetchTasks(QueryContext context,
+                                                                 vector<shared_ptr<BlockHandle>> &handles) {
+	Prefetch(context, handles);
+	return vector<unique_ptr<AsyncTask>>();
+}
+
+void BufferManager::WriteTemporaryBuffer(QueryContext context, MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {
 	throw NotImplementedException("This type of BufferManager does not support 'WriteTemporaryBuffer");
 }
 

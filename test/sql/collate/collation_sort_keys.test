@@ -1,0 +1,159 @@
+# name: test/sql/collate/collation_sort_keys.test
+# description: Test the sort keys the collations produce
+# group: [collate]
+
+require icu
+
+# The sort keys are part of the interface: they are compatible with the ones ICU produces, and
+# a collation only orders correctly if every part of the table it is built from is correct. The
+# keys below cover the root table, the algorithmic parts of it, and the kinds of tailoring.
+
+# the root collation: a single character, its uppercase, two characters, a digit and a space
+query I
+SELECT icu_sort_key('a', 'en')
+----
+2B01050105
+
+query I
+SELECT icu_sort_key('A', 'en')
+----
+2B010501DC
+
+query I
+SELECT icu_sort_key('ab', 'en')
+----
+2B2D01060106
+
+query I
+SELECT icu_sort_key('1', 'en')
+----
+1401050105
+
+query I
+SELECT icu_sort_key(' ', 'en')
+----
+0401050105
+
+# an expansion: æ has the weights of a and e, with a secondary difference
+query I
+SELECT icu_sort_key('æ', 'en')
+----
+2B3301700501C5D3
+
+# Han characters are weighted by radical and stroke count instead of by code point
+query I
+SELECT icu_sort_key(chr(19968), 'en')
+----
+FA020201050105
+
+query I
+SELECT icu_sort_key(chr(19969), 'en')
+----
+FA020601050105
+
+query I
+SELECT icu_sort_key(chr(40869), 'en')
+----
+FD2B0401050105
+
+# code points without a weight of their own get an implicit one
+query I
+SELECT icu_sort_key(chr(262144), 'en')
+----
+FE3D579C01050105
+
+# Hangul syllables are decomposed, so a syllable and its jamo have the same key
+query I
+SELECT icu_sort_key(chr(44032), 'en')
+----
+7C066701060106
+
+query I
+SELECT icu_sort_key(chr(44032), 'en') = icu_sort_key(chr(4352) || chr(4449), 'en')
+----
+true
+
+# a contraction: ch is a single letter in Czech
+query I
+SELECT icu_sort_key('ch', 'cs')
+----
+3A040401050105
+
+# a contraction that is tailored after a character: aa sorts as å in Danish
+query I
+SELECT icu_sort_key('aa', 'da')
+----
+5E79AB010501C821
+
+# a prefix context: the Japanese prolonged sound mark takes the vowel of the character before it
+query I
+SELECT icu_sort_key('ーあ', 'ja')
+----
+0D955F0601060106
+
+# a script reordering moves the lead byte of the primary weights
+query I
+SELECT icu_sort_key('α', 'el')
+----
+280601050105
+
+query I
+SELECT icu_sort_key('б', 'ru')
+----
+280C01050105
+
+# a case level, which Church Slavonic adds after the secondary level
+query I
+SELECT icu_sort_key('А', 'cu')
+----
+28060105011001DB
+
+# backwards secondary weights, which Canadian French compares from the end
+query I
+SELECT icu_sort_key('côte', 'fr_ca')
+----
+2F47513301448E060109
+
+# shifted punctuation, which Thai moves to the quaternary level
+query I
+SELECT icu_sort_key('-', 'th')
+----
+0101
+
+# the collation of a column writes the same key as a blob
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('a'), ('Müller'), ('ch'), ('aa'), ('ーあ'), (chr(44032)), (chr(19968)), ('')
+
+query I
+SELECT count(*) FROM strings WHERE hex(collate_de(s)) <> icu_sort_key(s, 'de')
+----
+0
+
+query I
+SELECT count(*) FROM strings WHERE hex(collate_de(s)) <> icu_collate_de(s)
+----
+0
+
+query II
+SELECT typeof(collate_de('a')), typeof(icu_collate_de('a'))
+----
+BLOB	VARCHAR
+
+# the contractions order the way the locale expects
+query I
+SELECT s FROM (VALUES ('h'), ('ch'), ('i')) t(s) ORDER BY s COLLATE cs
+----
+h
+ch
+i
+
+query I
+SELECT s FROM (VALUES ('z'), ('aa'), ('å'), ('a')) t(s) ORDER BY s COLLATE da, s
+----
+a
+z
+å
+aa

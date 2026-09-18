@@ -14,6 +14,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/enums/view_security_type.hpp"
 
 namespace duckdb {
 
@@ -25,7 +26,7 @@ enum class BindViewAction { BIND_IF_UNBOUND, FORCE_REBIND };
 
 struct ViewColumnInfo {
 	vector<LogicalType> types;
-	vector<string> names;
+	vector<Identifier> names;
 };
 
 //! A view catalog entry
@@ -43,14 +44,16 @@ public:
 	//! The SQL query (if any)
 	string sql;
 	//! The set of aliases associated with the view
-	vector<string> aliases;
+	vector<Identifier> aliases;
+	//! The security type of the view
+	ViewSecurityType security_type = ViewSecurityType::REGULAR_VIEW;
 
 	//! Returns the view column info, if the view is bound. Otherwise returns `nullptr`
 	virtual shared_ptr<ViewColumnInfo> GetColumnInfo() const;
 	//! Bind a view so we know the types / names returned by it
 	virtual void BindView(ClientContext &context, BindViewAction action = BindViewAction::BIND_IF_UNBOUND);
 	//! Update the view with a new set of types / names
-	virtual void UpdateBinding(const vector<LogicalType> &types, const vector<string> &names);
+	virtual void UpdateBinding(const vector<LogicalType> &types, const vector<Identifier> &names);
 	Value GetColumnComment(idx_t column_index);
 
 public:
@@ -73,7 +76,7 @@ private:
 	//! Current binding thread
 	atomic<thread_id> bind_thread;
 	//! The comments on the columns of the view: can be empty if there are no comments
-	unordered_map<string, Value> column_comments;
+	identifier_map_t<Value> column_comments;
 
 private:
 	void Initialize(CreateViewInfo &info);

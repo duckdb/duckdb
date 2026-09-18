@@ -1,0 +1,39 @@
+# name: test/sql/types/bignum/test_bignum_float_string_cast.test
+# description: Test consistent rounding when casting float strings to integer types
+# group: [bignum]
+
+# issue #23680: BIGNUM should round float strings like INTEGER and HUGEINT
+query III
+SELECT CAST('1.5' AS INTEGER) AS i1, CAST('1.5' AS HUGEINT) AS i2, CAST('1.5' AS BIGNUM) AS i3;
+----
+2	2	2
+
+query I
+SELECT CAST('1.4' AS BIGNUM);
+----
+1
+
+query I
+SELECT CAST('2.5' AS BIGNUM);
+----
+3
+
+query IIII
+SELECT CAST('0.4' AS BIGNUM), CAST('-0.4' AS BIGNUM), CAST('.4' AS BIGNUM), CAST('-.4' AS BIGNUM);
+----
+0	0	0	0
+
+query IIII
+SELECT CAST('0.5' AS BIGNUM), CAST('-0.5' AS BIGNUM), CAST('.5' AS BIGNUM), CAST('-.5' AS BIGNUM);
+----
+1	-1	1	-1
+
+query I
+SELECT CAST('-1.5' AS BIGNUM);
+----
+-2
+
+query I
+SELECT CAST('-1.4' AS BIGNUM);
+----
+-1

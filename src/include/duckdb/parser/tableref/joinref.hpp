@@ -8,8 +8,10 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/joinref_type.hpp"
+#include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/common/vector.hpp"
@@ -37,13 +39,21 @@ public:
 	//! Join condition type
 	JoinRefType ref_type;
 	//! The set of USING columns (if any)
-	vector<string> using_columns;
+	vector<Identifier> using_columns;
 	//! Duplicate eliminated columns (if any)
 	vector<unique_ptr<ParsedExpression>> duplicate_eliminated_columns;
 	//! If we have duplicate eliminated columns if the delim is flipped
 	bool delim_flipped = false;
 	//! Whether or not this is an implicit cross join
 	bool is_implicit = false;
+	//! The ranking expression (NEAREST only)
+	unique_ptr<ParsedExpression> ranking_expression;
+	//! How many nearest rows to return per left row (NEAREST only)
+	idx_t nearest_count = 1;
+	//! ASCENDING for BY DISTANCE, DESCENDING for BY SIMILARITY (NEAREST only)
+	OrderType nearest_order_type = OrderType::ASCENDING;
+	//! Whether APPROX was specified (NEAREST only) - defaults to EXACT, currently informational
+	bool nearest_approx = false;
 
 public:
 	string ToString() const override;
@@ -54,5 +64,9 @@ public:
 	//! Deserializes a blob back into a JoinRef
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<TableRef> Deserialize(Deserializer &source);
+
+private:
+	//! The ref_type to write - throws if the targeted storage version does not know about it
+	JoinRefType SerializedRefType(Serializer &serializer) const;
 };
 } // namespace duckdb

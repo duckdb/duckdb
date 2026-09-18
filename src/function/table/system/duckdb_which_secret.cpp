@@ -25,7 +25,7 @@ struct DuckDBWhichSecretBindData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> DuckDBWhichSecretBind(ClientContext &context, TableFunctionBindInput &input,
-                                                      vector<LogicalType> &return_types, vector<string> &names) {
+                                                      vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -59,7 +59,6 @@ void DuckDBWhichSecretFunction(ClientContext &context, TableFunctionInput &data_
 	auto secret_match = secret_manager.LookupSecret(transaction, path, type);
 	if (secret_match.HasMatch()) {
 		auto &secret_entry = *secret_match.secret_entry;
-		output.SetCardinality(1);
 		output.data[0].Append(Value(secret_entry.secret->GetName()));
 		output.data[1].Append(Value(EnumUtil::ToString(secret_entry.persist_type)));
 		output.data[2].Append(Value(secret_entry.storage_mode));

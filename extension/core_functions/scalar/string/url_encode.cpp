@@ -22,7 +22,9 @@ static void URLEncodeFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 ScalarFunction UrlEncodeFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, URLEncodeFunction);
+	ScalarFunction fun({}, LogicalType::VARCHAR, URLEncodeFunction);
+	fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	return fun;
 }
 
 struct URLDecodeOperator {
@@ -43,7 +45,11 @@ static void URLDecodeFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 ScalarFunction UrlDecodeFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, URLDecodeFunction);
+	ScalarFunction fun({}, LogicalType::VARCHAR, URLDecodeFunction);
+	fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	// throws if the decoded value is not valid UTF8
+	fun.SetFallible();
+	return fun;
 }
 
 } // namespace duckdb

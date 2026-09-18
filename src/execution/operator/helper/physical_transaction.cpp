@@ -38,6 +38,9 @@ SourceResultType PhysicalTransaction::GetDataInternal(ExecutionContext &context,
 				// if immediate transaction mode is enabled then start all transactions immediately
 				auto databases = DatabaseManager::Get(client).GetDatabases(client);
 				for (auto &db : databases) {
+					if (ValidChecker::IsInvalidated(*db)) {
+						continue;
+					}
 					context.client.transaction.ActiveTransaction().GetTransaction(*db);
 				}
 			}

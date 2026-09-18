@@ -9,9 +9,9 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/progress_bar/progress_bar_display.hpp"
 #include "duckdb/common/unicode_bar.hpp"
-#include "duckdb/common/progress_bar/unscented_kalman_filter.hpp"
 #include <chrono>
 
 namespace duckdb {
@@ -63,6 +63,8 @@ public:
 	void Finish() override;
 	static string FormatETA(double seconds, bool elapsed = false);
 	static string FormatProgressBar(const ProgressBarDisplayInfo &display_info, int32_t percentage);
+	static double EstimateRemainingSeconds(double percentage, double elapsed_seconds,
+	                                       double observed_progress_per_second = 0.0);
 
 private:
 	void PeriodicUpdate();
@@ -82,8 +84,16 @@ protected:
 	void StopPeriodicUpdates();
 
 private:
-	UnscentedKalmanFilter ukf;
+	double UpdateEstimatedRemainingSeconds(double percentage, double elapsed_seconds);
+
+private:
 	std::chrono::steady_clock::time_point start_time;
+	bool has_eta_sample = false;
+	double last_eta_percentage = 0.0;
+	double last_eta_sample_time = 0.0;
+	double last_eta_update_time = 0.0;
+	double smoothed_progress_per_second = 0.0;
+	double estimated_completion_time = 0.0;
 
 	// track the progress info that has been previously
 	// displayed to prevent redundant updates

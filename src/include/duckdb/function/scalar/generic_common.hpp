@@ -18,7 +18,6 @@ namespace duckdb {
 class BoundFunctionExpression;
 
 struct ConstantOrNull {
-	static unique_ptr<FunctionData> Bind(Value value);
 	static bool IsConstantOrNull(BoundFunctionExpression &expr, const Value &val);
 };
 
@@ -31,6 +30,7 @@ struct ExportAggregateFunctionBindData : public FunctionData {
 
 struct ExportAggregateFunction {
 	static unique_ptr<BoundAggregateExpression> Bind(unique_ptr<BoundAggregateExpression> child_aggregate);
+	static void SetStateExport(BoundAggregateExpression &aggregate, LogicalType state_layout);
 };
 
 } // namespace duckdb

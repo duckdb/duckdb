@@ -12,13 +12,14 @@ struct AsciiOperator {
 			return str[0];
 		}
 		int utf8_bytes = 4;
-		return Utf8Proc::UTF8ToCodepoint(str, utf8_bytes);
+		return Utf8Proc::UTF8ToCodepoint(str, utf8_bytes, input.GetSize());
 	}
 };
 
 ScalarFunction ASCIIFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::INTEGER,
-	                      ScalarFunction::UnaryFunction<string_t, int32_t, AsciiOperator>);
+	ScalarFunction fun({}, LogicalType::INTEGER, ScalarFunction::UnaryFunction<string_t, int32_t, AsciiOperator>);
+	fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	return fun;
 }
 
 } // namespace duckdb

@@ -1,0 +1,21 @@
+# name: test/sql/copy/parquet/read_ahead/readahead_active_jobs_hang.test
+# description: Decode error at read_ahead_depth=1 leaks active_jobs slot, hangs scan
+# group: [read_ahead]
+
+require parquet
+
+statement ok
+SET threads=4
+
+statement ok
+SET read_ahead_depth=1
+
+statement ok
+COPY (SELECT i AS id FROM range(60000) t(i)) TO '{TEST_DIR}/hang.parquet' (FORMAT parquet, ROW_GROUP_SIZE 2048)
+
+# id > 255 overflows UTINYINT -> Conversion Error during decode. The job's read-ahead slot must be
+# released regardless, or later produce attempts find no free slot and the scan hangs
+statement error
+SELECT id::UTINYINT FROM '{TEST_DIR}/hang.parquet'
+----
+<REGEX>:.*Conversion Error.*

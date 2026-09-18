@@ -4,6 +4,9 @@
 
 load {TEST_DIR}/partitioned_execution.duckdb
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 # create test table with doubles instead of integers to avoid compressed materialization
 statement ok
 CREATE TABLE test AS
@@ -27,12 +30,10 @@ SELECT hash(list(test ORDER BY t_high_cardinality_recurring ASC, t_high_cardinal
 FROM test;
 ----
 
-
 query I nosort desc_h
 SELECT hash(list(test ORDER BY t_high_cardinality_recurring DESC, t_high_cardinality_ordered DESC))
 FROM test;
 ----
-
 
 statement ok
 pragma explain_output='optimized_only'
@@ -91,7 +92,6 @@ WITH cte AS (
 SELECT bit_xor(hash(*COLUMNS('^t_')))
 FROM cte;
 ----
-
 
 endloop
 
@@ -164,7 +164,6 @@ WITH cte AS (
 SELECT bit_xor(hash(*COLUMNS('^t_')))
 FROM cte;
 ----
-
 
 # make sure the order is correct for the order by stuff with the order-preserving hash
 query I nosort asc_h

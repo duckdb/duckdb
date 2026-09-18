@@ -95,7 +95,7 @@ static void ListHasAnyFunction(DataChunk &args, ExpressionState &, Vector &resul
 
 static void ListHasAllFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto swap = func_expr.function.GetName() == "<@";
+	const auto swap = func_expr.Function().GetName() == "<@";
 
 	auto &l_vec = args.data[swap ? 1 : 0];
 	auto &r_vec = args.data[swap ? 0 : 1];
@@ -164,14 +164,18 @@ static void ListHasAllFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 ScalarFunction ListHasAnyFun::GetFunction() {
-	ScalarFunction fun({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::LIST(LogicalType::TEMPLATE("T"))},
-	                   LogicalType::BOOLEAN, ListHasAnyFunction);
+	ScalarFunction fun({}, LogicalType::BOOLEAN, ListHasAnyFunction);
+	fun.GetSignature()
+	    .AddParameter("list1", LogicalType::LIST(LogicalType::TEMPLATE("T")))
+	    .AddParameter("list2", LogicalType::LIST(LogicalType::TEMPLATE("T")));
 	return fun;
 }
 
 ScalarFunction ListHasAllFun::GetFunction() {
-	ScalarFunction fun({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::LIST(LogicalType::TEMPLATE("T"))},
-	                   LogicalType::BOOLEAN, ListHasAllFunction);
+	ScalarFunction fun({}, LogicalType::BOOLEAN, ListHasAllFunction);
+	fun.GetSignature()
+	    .AddParameter("list1", LogicalType::LIST(LogicalType::TEMPLATE("T")))
+	    .AddParameter("list2", LogicalType::LIST(LogicalType::TEMPLATE("T")));
 	return fun;
 }
 

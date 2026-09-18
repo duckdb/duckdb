@@ -9,11 +9,17 @@
 #pragma once
 
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
+#include "duckdb/function/partition_stats.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/profiler/profiling_node.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include <numeric>
 
 namespace duckdb {
@@ -22,27 +28,38 @@ struct MultiFileReaderInterface {
 	virtual ~MultiFileReaderInterface();
 
 	virtual void InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list);
+	//! Set the default multi-file options of this reader - called before any option is parsed
+	virtual void InitializeFileOptions(MultiFileOptions &file_options);
 	virtual unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                            optional_ptr<TableFunctionInfo> info) = 0;
-	virtual bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
-	                             BaseFileReaderOptions &options, vector<string> &expected_names,
+	virtual bool ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
+	                             BaseFileReaderOptions &options, vector<Identifier> &expected_names,
 	                             vector<LogicalType> &expected_types) = 0;
-	virtual bool ParseOption(ClientContext &context, const string &key, const Value &val,
+	virtual bool ParseOption(ClientContext &context, const Identifier &key, const Value &val,
 	                         MultiFileOptions &file_options, BaseFileReaderOptions &options) = 0;
 	virtual void FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options,
-	                              const vector<string> &expected_names, const vector<LogicalType> &expected_types);
+	                              const vector<Identifier> &expected_names, const vector<LogicalType> &expected_types);
 	virtual unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
 	                                                         unique_ptr<BaseFileReaderOptions> options) = 0;
-	virtual void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
+	virtual void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
 	                        MultiFileBindData &bind_data) = 0;
+	//! Combine the schemas of a set of files that were bound individually into a single schema
+	//! The default implementation combines the return types of the files by name
+	virtual void CombineSchemas(ClientContext &context, const vector<shared_ptr<BaseUnionData>> &union_data,
+	                            vector<LogicalType> &return_types, vector<Identifier> &names);
 	virtual void FinalizeBindData(MultiFileBindData &multi_file_data);
 	virtual void GetBindInfo(const TableFunctionData &bind_data, BindInfo &info);
 	virtual optional_idx MaxThreads(const MultiFileBindData &bind_data_p, const MultiFileGlobalState &global_state,
 	                                FileExpandResult expand_result);
+	virtual optional_idx MaxThreads(ClientContext &context, const MultiFileBindData &bind_data_p,
+	                                const MultiFileGlobalState &global_state, FileExpandResult expand_result);
 	virtual unique_ptr<GlobalTableFunctionState>
 	InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data, MultiFileGlobalState &global_state) = 0;
-	virtual unique_ptr<LocalTableFunctionState> InitializeLocalState(ExecutionContext &,
-	                                                                 GlobalTableFunctionState &) = 0;
+	virtual unique_ptr<LocalTableFunctionState> InitializeLocalState(ClientContext &, GlobalTableFunctionState &) = 0;
+
+	virtual bool SupportsReadAhead(const MultiFileBindData &bind_data) const {
+		return false;
+	}
 	virtual shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                                BaseUnionData &union_data,
 	                                                const MultiFileBindData &bind_data_p) = 0;
@@ -54,6 +71,11 @@ struct MultiFileReaderInterface {
 	                                                const MultiFileOptions &file_options);
 	virtual void FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
 	                           LocalTableFunctionState &local_state);
+	//! Emit one chunk after every file has been read. Implementations must sync inside this function so
+	//! chunk is produced once per scan
+	virtual bool FinalizeScan(ClientContext &context, GlobalTableFunctionState &global_state, DataChunk &output) {
+		return false;
+	}
 	virtual unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) {
 		return nullptr;
 	}
@@ -69,7 +91,7 @@ struct MultiFileReaderInterface {
 template <class OP>
 class MultiFileFunction : public TableFunction {
 public:
-	explicit MultiFileFunction(string name_p)
+	explicit MultiFileFunction(Identifier name_p)
 	    : TableFunction(std::move(name_p), {LogicalType::VARCHAR}, MultiFileScan, MultiFileBind, MultiFileInitGlobal,
 	                    MultiFileInitLocal) {
 		cardinality = MultiFileCardinality;
@@ -84,10 +106,14 @@ public:
 		MultiFileReader::AddParameters(*this);
 	}
 
+	static bool IsEmptyResult(const MultiFileBindData &bind_data) {
+		return bind_data.file_options.allow_empty && bind_data.file_list->IsEmpty();
+	}
+
 	static unique_ptr<FunctionData> MultiFileBindInternal(ClientContext &context,
 	                                                      unique_ptr<MultiFileReader> multi_file_reader_p,
 	                                                      shared_ptr<MultiFileList> multi_file_list_p,
-	                                                      vector<LogicalType> &return_types, vector<string> &names,
+	                                                      vector<LogicalType> &return_types, vector<Identifier> &names,
 	                                                      MultiFileOptions file_options_p,
 	                                                      unique_ptr<BaseFileReaderOptions> options_p,
 	                                                      unique_ptr<MultiFileReaderInterface> interface_p) {
@@ -100,6 +126,24 @@ public:
 		result->file_options = std::move(file_options_p);
 		result->bind_data = interface.InitializeBindData(*result, std::move(options_p));
 		result->interface = std::move(interface_p);
+
+		if (IsEmptyResult(*result)) {
+			result->types.emplace_back(LogicalType::BOOLEAN);
+			result->names.emplace_back("empty");
+			result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
+			return_types = result->types;
+			names = result->names;
+			return std::move(result);
+		}
+
+		if (result->file_list->IsEmpty() && !return_types.empty()) {
+			// restoring a serialized plan whose files were all pruned away by filter pushdown - there is no file
+			// left to bind the readers on, but the schema is already known so we can use it as-is
+			result->types = return_types;
+			result->names = names;
+			result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
+			return std::move(result);
+		}
 
 		// now bind the readers
 		// there are two ways of binding the readers
@@ -160,28 +204,45 @@ public:
 			}
 			// expected types - overwrite the types we want to read instead
 			result->types = return_types;
-			result->table_columns = names;
+			result->table_columns = IdentifiersToStrings(names);
 		}
 		result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
 		return std::move(result);
 	}
 
 	static unique_ptr<FunctionData> MultiFileBind(ClientContext &context, TableFunctionBindInput &input,
-	                                              vector<LogicalType> &return_types, vector<string> &names) {
-		auto interface = OP::CreateInterface(context);
+	                                              vector<LogicalType> &return_types, vector<Identifier> &names) {
+		return MultiFileBindInterface(context, input, return_types, names, OP::CreateInterface(context));
+	}
+
+	//! Bind using an explicitly provided interface - used by wrappers that construct the interface themselves
+	static unique_ptr<FunctionData> MultiFileBindInterface(ClientContext &context, TableFunctionBindInput &input,
+	                                                       vector<LogicalType> &return_types, vector<Identifier> &names,
+	                                                       unique_ptr<MultiFileReaderInterface> interface_p) {
+		auto interface = std::move(interface_p);
 		auto multi_file_reader = MultiFileReader::Create(input.table_function);
 
 		auto glob_input = multi_file_reader->GetGlobInput(*interface);
+
+		MultiFileOptions file_options;
+		interface->InitializeFileOptions(file_options);
+		for (auto &kv : input.named_parameters) {
+			if (kv.first == "allow_empty") {
+				multi_file_reader->ParseOption(kv.first, kv.second, file_options, context);
+				if (file_options.allow_empty) {
+					glob_input.allow_empty = true;
+				}
+				break;
+			}
+		}
+
 		auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0], glob_input);
 
 		interface->InitializeInterface(context, *multi_file_reader, *file_list);
 
-		MultiFileOptions file_options;
-
 		auto options = interface->InitializeOptions(context, input.info);
 		for (auto &kv : input.named_parameters) {
-			auto loption = StringUtil::Lower(kv.first);
-			if (multi_file_reader->ParseOption(loption, kv.second, file_options, context)) {
+			if (multi_file_reader->ParseOption(kv.first, kv.second, file_options, context)) {
 				continue;
 			}
 			if (interface->ParseOption(context, kv.first, kv.second, file_options, *options)) {
@@ -194,9 +255,17 @@ public:
 	}
 
 	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyFromFunctionBindInput &input,
-	                                                  vector<string> &expected_names,
+	                                                  vector<Identifier> &expected_names,
 	                                                  vector<LogicalType> &expected_types) {
-		auto interface = OP::CreateInterface(context);
+		return MultiFileBindCopyInterface(context, input, expected_names, expected_types, OP::CreateInterface(context));
+	}
+
+	//! Bind a COPY using an explicitly provided interface - used by wrappers that construct the interface themselves
+	static unique_ptr<FunctionData> MultiFileBindCopyInterface(ClientContext &context, CopyFromFunctionBindInput &input,
+	                                                           vector<Identifier> &expected_names,
+	                                                           vector<LogicalType> &expected_types,
+	                                                           unique_ptr<MultiFileReaderInterface> interface_p) {
+		auto interface = std::move(interface_p);
 		auto multi_file_reader = MultiFileReader::CreateDefault("COPY");
 		vector<string> paths = {input.info.file_path};
 		auto glob_input = multi_file_reader->GetGlobInput(*interface);
@@ -206,14 +275,15 @@ public:
 
 		auto options = interface->InitializeOptions(context, nullptr);
 		MultiFileOptions file_options;
+		interface->InitializeFileOptions(file_options);
 		file_options.auto_detect_hive_partitioning = false;
 
-		for (auto &option : input.info.options) {
-			auto loption = StringUtil::Lower(option.first);
-			if (interface->ParseCopyOption(context, loption, option.second, *options, expected_names, expected_types)) {
+		for (auto &[option_name, option_values] : input.info.options) {
+			if (interface->ParseCopyOption(context, option_name, option_values, *options, expected_names,
+			                               expected_types)) {
 				continue;
 			}
-			throw NotImplementedException("Unsupported option for COPY FROM: %s", option.first);
+			throw NotImplementedException("Unsupported option for COPY FROM: %s", option_name);
 		}
 		interface->FinalizeCopyBind(context, *options, expected_names, expected_types);
 
@@ -222,13 +292,14 @@ public:
 	}
 
 	static unique_ptr<MultiFileList> MultiFileFilterPushdown(ClientContext &context, const MultiFileBindData &data,
-	                                                         const vector<column_t> &column_ids,
+	                                                         const vector<ColumnIndex> &column_indexes,
 	                                                         optional_ptr<TableFilterSet> filters) {
 		if (!filters) {
 			return nullptr;
 		}
-		auto new_list = data.multi_file_reader->DynamicFilterPushdown(context, *data.file_list, data.file_options,
-		                                                              data.names, data.types, column_ids, *filters);
+		MultiFileDynamicPushdownInfo pushdown_info(context, data.file_options, data.names, data.types, column_indexes,
+		                                           *filters);
+		auto new_list = data.multi_file_reader->DynamicFilterPushdown(*data.file_list, pushdown_info);
 		return new_list;
 	}
 
@@ -263,15 +334,149 @@ public:
 		                                                     table_filters, context, global_state);
 	}
 
+	static bool TrySkipFileFromFilters(ClientContext &context, const MultiFileBindData &bind_data,
+	                                   MultiFileGlobalState &global_state, MultiFileReaderData &reader_data,
+	                                   idx_t file_index) {
+		D_ASSERT(reader_data.file_state == MultiFileFileState::UNOPENED);
+		if (reader_data.union_data || !MultiFileReader::CanSkipFileFromFilters(
+		                                  context, reader_data.file_to_be_opened, file_index, bind_data.file_options,
+		                                  bind_data.reader_bind, global_state.column_indexes, global_state.filters)) {
+			return false;
+		}
+		reader_data.file_state = MultiFileFileState::SKIPPED;
+		return true;
+	}
+
+	//! Opens a file already marked OPENING. The parallel lock must not be held on entry, it is re-locked on return.
+	static bool OpenMarkedFile(ClientContext &context, const MultiFileBindData &bind_data,
+	                           MultiFileGlobalState &global_state, MultiFileReaderData &current_reader_data,
+	                           idx_t current_file_index, unique_lock<mutex> &parallel_lock) {
+		D_ASSERT(!parallel_lock.owns_lock());
+		D_ASSERT(current_reader_data.file_state == MultiFileFileState::OPENING);
+		try {
+			// hold the lock on the file we are opening, so other threads can wait for the file to be opened
+			unique_lock<mutex> file_lock(*current_reader_data.file_mutex);
+
+			bool can_skip_file = false;
+			if (current_reader_data.union_data) {
+				auto &union_data = *current_reader_data.union_data;
+				current_reader_data.reader = bind_data.multi_file_reader->CreateReader(
+				    context, *global_state.global_state, union_data, bind_data);
+			} else {
+				current_reader_data.reader = bind_data.multi_file_reader->CreateReader(
+				    context, *global_state.global_state, current_reader_data.file_to_be_opened, current_file_index,
+				    bind_data);
+			}
+			auto init_result = InitializeReader(current_reader_data, bind_data, global_state.column_indexes,
+			                                    global_state.filters, context, current_file_index, global_state);
+			if (init_result == ReaderInitializeType::SKIP_READING_FILE) {
+				//! File can be skipped entirely, close it and move on
+				can_skip_file = true;
+			} else {
+				current_reader_data.reader->PrepareReader(context, *global_state.global_state);
+				if (global_state.read_ahead) {
+					current_reader_data.reader->PrepareReadAhead(context, *global_state.global_state);
+				}
+			}
+
+			// Now re-lock the state and add the reader
+			parallel_lock.lock();
+			global_state.files_opened++;
+			if (can_skip_file) {
+				current_reader_data.file_state = MultiFileFileState::SKIPPED;
+				// release the reader so its file handle is closed; skipped files are
+				// never scanned, so nothing else needs the reader
+				current_reader_data.reader = nullptr;
+				return false;
+			}
+			current_reader_data.file_state = MultiFileFileState::OPEN;
+			return true;
+		} catch (...) {
+			parallel_lock.lock();
+			global_state.error_opening_file = true;
+			throw;
+		}
+	}
+
+	static bool OpenFile(ClientContext &context, const MultiFileBindData &bind_data, MultiFileGlobalState &global_state,
+	                     MultiFileReaderData &current_reader_data, idx_t current_file_index,
+	                     unique_lock<mutex> &parallel_lock) {
+		D_ASSERT(parallel_lock.owns_lock());
+		D_ASSERT(current_reader_data.file_state == MultiFileFileState::UNOPENED);
+		current_reader_data.file_state = MultiFileFileState::OPENING;
+		parallel_lock.unlock();
+		return OpenMarkedFile(context, bind_data, global_state, current_reader_data, current_file_index, parallel_lock);
+	}
+
+	//! Open a file on the read-ahead async pool. Runs off the operator thread; records errors instead of throwing.
+	static void OpenMarkedFileAsync(ClientContext &context, const MultiFileBindData &bind_data,
+	                                MultiFileGlobalState &gstate, MultiFileReaderData &reader_data, idx_t file_index) {
+		// OpenMarkedFile expects the parallel lock unlocked on entry and locks it before it returns
+		unique_lock<mutex> parallel_lock(gstate.lock, std::defer_lock);
+		try {
+			OpenMarkedFile(context, bind_data, gstate, reader_data, file_index, parallel_lock);
+		} catch (std::exception &ex) {
+			if (!parallel_lock.owns_lock()) {
+				parallel_lock.lock();
+			}
+			gstate.read_ahead->PushError(ErrorData(ex));
+			gstate.error_opening_file = true;
+		} catch (...) { // LCOV_EXCL_START
+			if (!parallel_lock.owns_lock()) {
+				parallel_lock.lock();
+			}
+			gstate.read_ahead->PushError(ErrorData("Unknown exception while opening a file"));
+			gstate.error_opening_file = true;
+		} // LCOV_EXCL_STOP
+	}
+
+	//! Schedule async opens for upcoming unopened files on the async pool, ahead of decoding. Lock held on entry.
+	//! Always schedules the front unopened file (forward progress), then fills up to the open-ahead window.
+	static void ScheduleFileOpens(ClientContext &context, const MultiFileBindData &bind_data,
+	                              MultiFileGlobalState &gstate, unique_lock<mutex> &parallel_lock) {
+		auto &read_ahead = *gstate.read_ahead;
+		idx_t file_index = gstate.file_index;
+		bool progress_guaranteed = false;
+		while (!progress_guaranteed || read_ahead.CanScheduleOpen()) {
+			const bool has_file_to_read = file_index < gstate.readers.size();
+			if (!has_file_to_read && !TryGetNextFile(gstate, parallel_lock)) {
+				return;
+			}
+			auto current_file_index = file_index++;
+			auto &reader_data = *gstate.readers[current_file_index];
+			switch (reader_data.file_state) {
+			case MultiFileFileState::UNOPENED:
+				if (TrySkipFileFromFilters(context, bind_data, gstate, reader_data, current_file_index)) {
+					break; // skipped file - keep scanning for a real file to guarantee progress
+				}
+				reader_data.file_state = MultiFileFileState::OPENING;
+				{
+					MultiFileReaderData *reader_ptr = &reader_data;
+					read_ahead.ScheduleFileOpen([&context, &bind_data, &gstate, reader_ptr, current_file_index]() {
+						OpenMarkedFileAsync(context, bind_data, gstate, *reader_ptr, current_file_index);
+					});
+				}
+				progress_guaranteed = true;
+				break;
+			case MultiFileFileState::OPENING:
+			case MultiFileFileState::OPEN:
+				// the front file is already being/been opened - forward progress is guaranteed
+				progress_guaranteed = true;
+				break;
+			default:
+				break; // SKIPPED / CLOSED - keep scanning ahead
+			}
+		}
+	}
+
 	//! Helper function that try to start opening a next file. Parallel lock should be locked when calling.
 	static bool TryOpenNextFile(ClientContext &context, const MultiFileBindData &bind_data,
-	                            MultiFileLocalState &scan_data, MultiFileGlobalState &global_state,
-	                            unique_lock<mutex> &parallel_lock) {
+	                            MultiFileGlobalState &global_state, unique_lock<mutex> &parallel_lock) {
 		if (!parallel_lock.owns_lock()) {
 			throw InternalException("parallel_lock is not held in TryOpenNextFile, this should not happen");
 		}
 
-		const auto file_lookahead_limit = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+		const auto file_lookahead_limit = TaskScheduler::GetScheduler(context).NumberOfThreads();
 
 		idx_t file_index = global_state.file_index;
 		idx_t i = 0;
@@ -285,63 +490,16 @@ public:
 
 			auto &current_reader_data = *global_state.readers[current_file_index];
 			if (current_reader_data.file_state == MultiFileFileState::UNOPENED) {
-				// skip the file if pre-open-knowable filters already rule it out
-				if (!current_reader_data.union_data &&
-				    MultiFileReader::CanSkipFileFromFilters(
-				        context, current_reader_data.file_to_be_opened, current_file_index, bind_data.file_options,
-				        bind_data.reader_bind, global_state.column_indexes, global_state.filters)) {
-					current_reader_data.file_state = MultiFileFileState::SKIPPED;
+				if (TrySkipFileFromFilters(context, bind_data, global_state, current_reader_data, current_file_index)) {
 					//! Intentionally do not increase 'i'
 					continue;
 				}
 
-				current_reader_data.file_state = MultiFileFileState::OPENING;
-				// Get pointer to file mutex before unlocking
-				auto &current_file_lock = *current_reader_data.file_mutex;
-
-				// Now we switch which lock we are holding, instead of locking the global state, we grab the lock on
-				// the file we are opening. This file lock allows threads to wait for a file to be opened.
-				parallel_lock.unlock();
-				unique_lock<mutex> file_lock(current_file_lock);
-
-				bool can_skip_file = false;
-				try {
-					if (current_reader_data.union_data) {
-						auto &union_data = *current_reader_data.union_data;
-						current_reader_data.reader = bind_data.multi_file_reader->CreateReader(
-						    context, *global_state.global_state, union_data, bind_data);
-					} else {
-						current_reader_data.reader = bind_data.multi_file_reader->CreateReader(
-						    context, *global_state.global_state, current_reader_data.file_to_be_opened,
-						    current_file_index, bind_data);
-					}
-					auto init_result =
-					    InitializeReader(current_reader_data, bind_data, global_state.column_indexes,
-					                     global_state.filters, context, current_file_index, global_state);
-					if (init_result == ReaderInitializeType::SKIP_READING_FILE) {
-						//! File can be skipped entirely, close it and move on
-						can_skip_file = true;
-					} else {
-						current_reader_data.reader->PrepareReader(context, *global_state.global_state);
-					}
-				} catch (...) {
-					parallel_lock.lock();
-					global_state.error_opening_file = true;
-					throw;
-				}
-
-				// Now re-lock the state and add the reader
-				parallel_lock.lock();
-				global_state.files_opened++;
-				if (can_skip_file) {
-					current_reader_data.file_state = MultiFileFileState::SKIPPED;
-					// release the reader so its file handle is closed; skipped files are
-					// never scanned, so nothing else needs the reader
-					current_reader_data.reader = nullptr;
+				if (!OpenFile(context, bind_data, global_state, current_reader_data, current_file_index,
+				              parallel_lock)) {
 					//! Intentionally do not increase 'i'
 					continue;
 				}
-				current_reader_data.file_state = MultiFileFileState::OPEN;
 				return true;
 			}
 			i++;
@@ -374,24 +532,78 @@ public:
 		}
 	}
 
-	static void InitializeFileScanState(ClientContext &context, MultiFileReaderData &reader_data,
-	                                    MultiFileLocalState &lstate, vector<idx_t> &projection_ids) {
-		lstate.reader_data = reader_data;
-		auto &reader = *lstate.reader;
+	//! Wait for the front file's async open. Parallel lock should be locked when calling, it is held on return.
+	static void WaitForAsyncOpen(ClientContext &context, MultiFileGlobalState &gstate,
+	                             unique_lock<mutex> &parallel_lock) {
+		D_ASSERT(parallel_lock.owns_lock());
+		auto &read_ahead = *gstate.read_ahead;
+		while (HasFilesToRead(gstate, parallel_lock) && !gstate.error_opening_file &&
+		       gstate.readers[gstate.file_index]->file_state == MultiFileFileState::OPENING) {
+			parallel_lock.unlock();
+			// the open may be queued behind other async work or the async pool may be gone, so run tasks inline
+			if (!read_ahead.TryRunPendingTask()) {
+				context.InterruptCheck();
+				TaskScheduler::YieldThread();
+			}
+			parallel_lock.lock();
+		}
+	}
+
+	static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &lstate,
+	                                  MultiFileGlobalState &gstate) {
+		auto &job = *lstate.job;
+		auto &reader = *job.reader;
+		auto &reader_data = *job.reader_data;
+		auto &projection_ids = gstate.projection_ids;
+
+		if (!reader_data.extra_columns.empty()) {
+			if (!gstate.multi_file_reader_state || !gstate.multi_file_reader_state->supports_local_extra_columns) {
+				throw InternalException(
+				    "MultiFileReader added local extra columns without declaring support in its global state");
+			}
+		}
+		if (!projection_ids.empty()) {
+			vector<LogicalType> extra_columns;
+			if (gstate.multi_file_reader_state) {
+				extra_columns = reader_data.GetExtraColumns(*gstate.multi_file_reader_state);
+			}
+			const auto expected_expression_count = gstate.scanned_types.size() + extra_columns.size();
+			if (reader_data.expressions.size() != expected_expression_count) {
+				throw InternalException(
+				    "MultiFileReader input schema contains %llu columns, but the reader produced %llu expressions",
+				    expected_expression_count, reader_data.expressions.size());
+			}
+			for (idx_t i = 0; i < gstate.scanned_types.size(); i++) {
+				if (reader_data.expressions[i]->GetReturnType() != gstate.scanned_types[i]) {
+					throw InternalException(
+					    "MultiFileReader input column %llu has type %s, but the reader expression has type %s", i,
+					    gstate.scanned_types[i], reader_data.expressions[i]->GetReturnType());
+				}
+			}
+			for (idx_t i = 0; i < extra_columns.size(); i++) {
+				auto expression_idx = gstate.scanned_types.size() + i;
+				if (reader_data.expressions[expression_idx]->GetReturnType() != extra_columns[i]) {
+					throw InternalException(
+					    "MultiFileReader extra column %llu has type %s, but the reader expression has type %s", i,
+					    extra_columns[i], reader_data.expressions[expression_idx]->GetReturnType());
+				}
+			}
+		}
 		//! Initialize the intermediate chunk to be used by the underlying reader before being finalized
 		vector<LogicalType> intermediate_chunk_types;
 		auto &local_column_ids = reader.column_indexes;
-		auto &local_columns = lstate.reader->GetColumns();
+		auto &local_columns = reader.GetColumns();
 		for (idx_t i = 0; i < local_column_ids.size(); i++) {
 			auto &local_id = local_column_ids[i];
 
 			auto primary_index = local_id.GetPrimaryIndex();
 			auto cast_entry = reader.cast_map.find(primary_index);
-			auto expr_entry = reader.expression_map.find(primary_index);
+			auto expr_entry = reader.expression_map.find(ProjectionIndex(i));
 			if (cast_entry != reader.cast_map.end()) {
 				intermediate_chunk_types.push_back(cast_entry->second);
 			} else if (expr_entry != reader.expression_map.end()) {
-				intermediate_chunk_types.push_back(expr_entry->second->GetReturnType());
+				auto &expression = expr_entry->second.expression;
+				intermediate_chunk_types.push_back(expression->GetReturnType());
 			} else if (local_id.IsRowIdColumn()) {
 				//! FIXME: should this generically check for all virtual columns??
 				intermediate_chunk_types.push_back(LogicalType::ROW_TYPE);
@@ -419,43 +631,39 @@ public:
 				executor.AddExpression(*expr);
 			}
 		}
+		lstate.scan_chunk_file_index = job.file_index;
 	}
 
-	// This function looks for the next available row group. If not available, it will open files from bind_data.files
-	// until there is a row group available for scanning or the files runs out
-	static bool TryInitializeNextBatch(ClientContext &context, const MultiFileBindData &bind_data,
-	                                   MultiFileLocalState &scan_data, MultiFileGlobalState &gstate) {
+	static MultiFileClaimResult ClaimNextJobInternal(ClientContext &context, const MultiFileBindData &bind_data,
+	                                                 MultiFileGlobalState &gstate,
+	                                                 ScanReadAheadJobWrapper<MultiFileScanJobState> &job) {
 		unique_lock<mutex> parallel_lock(gstate.lock);
 
 		while (true) {
 			if (gstate.error_opening_file) {
-				return false;
+				return MultiFileClaimResult::EXHAUSTED;
 			}
 
 			//! If we don't have a file to read, and the MultiFileList has no new file for us - end the scan
 			if (!HasFilesToRead(gstate, parallel_lock) && !TryGetNextFile(gstate, parallel_lock)) {
-				bind_data.interface->FinishReading(context, *gstate.global_state, *scan_data.local_state);
-				return false;
+				bind_data.interface->FinishReading(context, *gstate.global_state, *job.scan_state);
+				return MultiFileClaimResult::EXHAUSTED;
 			}
 
 			auto &current_reader_data = *gstate.readers[gstate.file_index];
 			if (current_reader_data.file_state == MultiFileFileState::OPEN) {
-				if (current_reader_data.reader->TryInitializeScan(context, *gstate.global_state,
-				                                                  *scan_data.local_state)) {
-					scan_data.reader = current_reader_data.reader;
-					if (!scan_data.reader) {
+				if (current_reader_data.reader->TryInitializeScan(context, *gstate.global_state, *job.scan_state)) {
+					job.reader = current_reader_data.reader;
+					if (!job.reader) {
 						throw InternalException("MultiFileReader was moved");
 					}
 					// The current reader has data left to be scanned
-					scan_data.batch_index = gstate.batch_index++;
-					auto old_file_index = scan_data.file_index;
-					scan_data.file_index = gstate.file_index;
+					job.reader_data = current_reader_data;
+					job.batch_index = gstate.batch_index++;
+					job.file_index = gstate.file_index;
 					parallel_lock.unlock();
-					scan_data.reader->PrepareScan(context, *gstate.global_state, *scan_data.local_state);
-					if (old_file_index != scan_data.file_index) {
-						InitializeFileScanState(context, current_reader_data, scan_data, gstate.projection_ids);
-					}
-					return true;
+					job.reader->PrepareScan(context, *gstate.global_state, *job.scan_state);
+					return MultiFileClaimResult::CLAIMED;
 				} else {
 					// Set state to the next file
 					++gstate.file_index;
@@ -476,15 +684,27 @@ public:
 				continue;
 			}
 
-			if (TryOpenNextFile(context, bind_data, scan_data, gstate, parallel_lock)) {
+			if (gstate.read_ahead) {
+				// read-ahead: open files on the async pool ahead of decoding, then wait for the front one
+				ScheduleFileOpens(context, bind_data, gstate, parallel_lock);
+			} else if (TryOpenNextFile(context, bind_data, gstate, parallel_lock)) {
 				continue;
 			}
 
 			// Check if the current file is being opened, in that case we need to wait for it.
 			if (current_reader_data.file_state == MultiFileFileState::OPENING) {
-				WaitForFile(gstate.file_index, gstate, parallel_lock);
+				if (gstate.read_ahead) {
+					WaitForAsyncOpen(context, gstate, parallel_lock);
+				} else {
+					WaitForFile(gstate.file_index, gstate, parallel_lock);
+				}
 			}
 		}
+	}
+
+	static bool ClaimNextJob(ClientContext &context, const MultiFileBindData &bind_data, MultiFileGlobalState &gstate,
+	                         ScanReadAheadJobWrapper<MultiFileScanJobState> &job) {
+		return ClaimNextJobInternal(context, bind_data, gstate, job) == MultiFileClaimResult::CLAIMED;
 	}
 
 	static unique_ptr<LocalTableFunctionState>
@@ -492,15 +712,33 @@ public:
 		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
 		auto &gstate = gstate_p->Cast<MultiFileGlobalState>();
 
-		auto result = make_uniq<MultiFileLocalState>(context.client);
-		result->is_parallel = true;
-		result->batch_index = 0;
-		result->local_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
-
-		if (!TryInitializeNextBatch(context.client, bind_data, *result, gstate)) {
+		if (IsEmptyResult(bind_data)) {
 			return nullptr;
 		}
+
+		auto result = make_uniq<MultiFileLocalState>(context.client);
+
+		if (gstate.read_ahead) {
+			// read-ahead jobs bring their own scan state, start empty and claim a job in the first Scan() call
+			return std::move(result);
+		}
+
+		result->job = make_uniq<ScanReadAheadJobWrapper<MultiFileScanJobState>>();
+		result->job->scan_state = bind_data.interface->InitializeLocalState(context.client, *gstate.global_state);
+
+		if (!ClaimNextJob(context.client, bind_data, gstate, *result->job)) {
+			return nullptr;
+		}
+		result->job_state = MultiFileJobState::SCHEDULE;
 		return std::move(result);
+	}
+
+	static void InitializeReadAhead(ClientContext &context, const MultiFileBindData &bind_data,
+	                                MultiFileGlobalState &gstate) {
+		if (!bind_data.interface->SupportsReadAhead(bind_data)) {
+			return;
+		}
+		gstate.read_ahead = ScanReadAhead::Create(context);
 	}
 
 	static unique_ptr<GlobalTableFunctionState> MultiFileInitGlobal(ClientContext &context,
@@ -508,8 +746,19 @@ public:
 		auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData>();
 		unique_ptr<MultiFileGlobalState> result;
 
+		if (IsEmptyResult(bind_data)) {
+			result = make_uniq<MultiFileGlobalState>(*bind_data.file_list);
+			result->file_list.InitializeScan(result->file_list_scan);
+			result->file_index = 0;
+			result->column_indexes = input.column_indexes;
+			result->filters = input.filters.get();
+			result->op = input.op;
+			result->max_threads = 1;
+			return std::move(result);
+		}
+
 		// before instantiating a scan trigger a dynamic filter pushdown if possible
-		auto new_list = MultiFileFilterPushdown(context, bind_data, input.column_ids, input.filters);
+		auto new_list = MultiFileFilterPushdown(context, bind_data, input.column_indexes, input.filters);
 		if (new_list) {
 			result = make_uniq<MultiFileGlobalState>(std::move(new_list));
 		} else {
@@ -523,13 +772,13 @@ public:
 		    context, bind_data.file_options, bind_data.reader_bind, file_list, global_columns, input.column_indexes);
 
 		if (file_list.IsEmpty()) {
-			result->readers = {};
+			result->readers.clear();
 		} else if (!bind_data.union_readers.empty()) {
 			for (auto &reader : bind_data.union_readers) {
 				result->readers.push_back(make_uniq<MultiFileReaderData>(reader));
 			}
 			if (result->readers.size() != file_list.GetTotalFileCount()) {
-				result->readers = {};
+				result->readers.clear();
 			}
 		} else if (bind_data.initial_reader) {
 			// we can only use the initial reader if it was constructed from the first file
@@ -543,7 +792,7 @@ public:
 		result->filters = input.filters.get();
 		result->op = input.op;
 		result->global_state = bind_data.interface->InitializeGlobalState(context, bind_data, *result);
-		result->max_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+		result->max_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 
 		// Ensure all readers are initialized and FileListScan is sync with readers list
 		for (auto &reader_data : result->readers) {
@@ -572,7 +821,7 @@ public:
 		}
 
 		auto expand_result = bind_data.file_list->GetExpandResult();
-		auto max_threads = bind_data.interface->MaxThreads(bind_data, *result, expand_result);
+		auto max_threads = bind_data.interface->MaxThreads(context, bind_data, *result, expand_result);
 		if (max_threads.IsValid()) {
 			result->max_threads = MinValue<idx_t>(result->max_threads, max_threads.GetIndex());
 		}
@@ -598,15 +847,11 @@ public:
 					}
 					result->scanned_types.emplace_back(entry->second.type);
 				} else {
-					result->scanned_types.push_back(table_types[column_id]);
+					result->scanned_types.push_back(col_idx.HasType() ? col_idx.GetScanType() : table_types[column_id]);
 				}
 			}
 		}
-		if (require_extra_columns) {
-			for (const auto &column_type : result->multi_file_reader_state->extra_columns) {
-				result->scanned_types.push_back(column_type);
-			}
-		}
+		InitializeReadAhead(context, bind_data, *result);
 		return std::move(result);
 	}
 
@@ -615,15 +860,146 @@ public:
 		auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData>();
 		auto &data = input.local_state->Cast<MultiFileLocalState>();
 		auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
-		OperatorPartitionData partition_data(data.batch_index);
-		bind_data.multi_file_reader->GetPartitionData(context, bind_data.reader_bind, *data.reader_data,
+		auto &job = *data.job;
+		OperatorPartitionData partition_data(job.batch_index);
+		bind_data.multi_file_reader->GetPartitionData(context, bind_data.reader_bind, *job.reader_data,
 		                                              gstate.multi_file_reader_state, input.partition_info,
 		                                              partition_data);
 		return partition_data;
 	}
 
+	//! Emit the current output to the caller, or signal the loop to continue when there is nothing to emit yet.
+	static bool EmitOutput(TableFunctionInput &data_p, DataChunk &output) {
+		if (output.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+			return false;
+		}
+		data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
+		return true;
+	}
+
+	static MultiFileDecodeResult DecodeCurrentJob(ClientContext &context, TableFunctionInput &data_p,
+	                                              MultiFileLocalState &data, MultiFileGlobalState &gstate,
+	                                              MultiFileBindData &bind_data, DataChunk &output) {
+		auto &job = *data.job;
+		if (data.scan_chunk_file_index != job.file_index) {
+			// if the file changes we need to initialize the chunk again
+			InitializeDecodeChunk(context, data, gstate);
+		}
+		auto &scan_chunk = data.scan_chunk;
+		if (!data.resuming_blocked_scan) {
+			// A BLOCKED scan leaves partial data in the chunk (e.g. filter prefetch from parquet) that the resume must
+			// keep. Hence, we only reset if we are not resuming from a blocked scan.
+			scan_chunk.Reset();
+		}
+		auto res = job.reader->Scan(context, *gstate.global_state, *job.scan_state, scan_chunk);
+
+		data.resuming_blocked_scan = res.GetResultType() == AsyncResultType::BLOCKED;
+		if (res.GetResultType() == AsyncResultType::BLOCKED) {
+			return data_p.HandleBlocked(res) ? MultiFileDecodeResult::RETURN_TO_CALLER
+			                                 : MultiFileDecodeResult::CONTINUE;
+		}
+
+		output.SetChildCardinality(scan_chunk.size());
+		if (scan_chunk.size() > 0) {
+			data.rows_scanned += scan_chunk.size();
+			bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *job.reader, *job.reader_data, scan_chunk,
+			                                           output, data.executor, gstate.multi_file_reader_state);
+			output.SetChildCardinality(output.size());
+		}
+		if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
+			// More chunks left on this batch, lets keep going
+			return EmitOutput(data_p, output) ? MultiFileDecodeResult::RETURN_TO_CALLER
+			                                  : MultiFileDecodeResult::CONTINUE;
+		}
+		if (res.GetResultType() != AsyncResultType::FINISHED) {
+			throw InternalException("Unexpected result in MultiFileScan, must be FINISHED, is %s",
+			                        EnumUtil::ToChars(res.GetResultType()));
+		}
+		return MultiFileDecodeResult::JOB_FINISHED;
+	}
+
+	//! Claims the next job and schedules its I/O, filling io_tasks when the I/O was detached to the pool.
+	//! Returns null when there are no more jobs to produce.
+	static unique_ptr<ScanReadAheadJobWrapper<MultiFileScanJobState>>
+	ProduceJob(ClientContext &context, const MultiFileBindData &bind_data, MultiFileGlobalState &gstate,
+	           vector<unique_ptr<AsyncTask>> &io_tasks) {
+		auto job = make_uniq<ScanReadAheadJobWrapper<MultiFileScanJobState>>();
+		// jobs recycle finished scan states, create a fresh one when none was available
+		job->scan_state = gstate.state_pool.TryPop();
+		if (!job->scan_state) {
+			job->scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
+		}
+		if (!ClaimNextJob(context, bind_data, gstate, *job)) {
+			return nullptr;
+		}
+		auto scheduled = job->reader->ScheduleIO(context, *gstate.global_state, *job->scan_state);
+		if (scheduled.GetResultType() == AsyncResultType::BLOCKED) {
+			// if we got blocked, we have tasks for the pool
+			io_tasks = scheduled.ExtractAsyncTasks();
+		}
+		return job;
+	}
+
+	static ScanReadAheadAcquire AcquireNextPerThread(ClientContext &context, TableFunctionInput &input,
+	                                                 MultiFileLocalState &lstate, MultiFileGlobalState &gstate,
+	                                                 MultiFileBindData &bind_data) {
+		if (lstate.job_state == MultiFileJobState::NONE) {
+			if (!ClaimNextJob(context, bind_data, gstate, *lstate.job)) {
+				return ScanReadAheadAcquire::EXHAUSTED;
+			}
+			lstate.job_state = MultiFileJobState::SCHEDULE;
+		}
+		if (lstate.job_state == MultiFileJobState::SCHEDULE) {
+			auto &job = *lstate.job;
+			auto scheduled = job.reader->ScheduleIO(context, *gstate.global_state, *job.scan_state);
+			lstate.job_state = MultiFileJobState::DECODE;
+			if (scheduled.GetResultType() == AsyncResultType::BLOCKED && input.HandleBlocked(scheduled)) {
+				return ScanReadAheadAcquire::PARKED;
+			}
+		}
+		return ScanReadAheadAcquire::ACQUIRED;
+	}
+
+	static ScanReadAheadAcquire AcquireNextReadAhead(ClientContext &context, TableFunctionInput &data_p,
+	                                                 MultiFileLocalState &lstate, MultiFileGlobalState &gstate,
+	                                                 MultiFileBindData &bind_data) {
+		auto &read_ahead = *gstate.read_ahead;
+		if (lstate.job_state == MultiFileJobState::WAIT_IO) {
+			// resuming after parking, the job's I/O has completed
+			read_ahead.WaitForJob(*lstate.job);
+			lstate.job_state = MultiFileJobState::DECODE;
+			return ScanReadAheadAcquire::ACQUIRED;
+		}
+		unique_ptr<ScanReadAheadJob> claimed;
+		auto acquired = read_ahead.AcquireJob(
+		    context, data_p,
+		    [&](vector<unique_ptr<AsyncTask>> &io_tasks) { return ProduceJob(context, bind_data, gstate, io_tasks); },
+		    claimed);
+		if (acquired == ScanReadAheadAcquire::EXHAUSTED) {
+			// finish scan states left in the recycle pool so per-file accounting completes
+			auto pooled_states = gstate.state_pool.TakeAll();
+			unique_lock<mutex> parallel_lock(gstate.lock);
+			for (auto &state : pooled_states) {
+				bind_data.interface->FinishReading(context, *gstate.global_state, *state);
+			}
+			return acquired;
+		}
+		lstate.job =
+		    unique_ptr_cast<ScanReadAheadJob, ScanReadAheadJobWrapper<MultiFileScanJobState>>(std::move(claimed));
+		lstate.job_state =
+		    acquired == ScanReadAheadAcquire::PARKED ? MultiFileJobState::WAIT_IO : MultiFileJobState::DECODE;
+		return acquired;
+	}
+
 	static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 		if (!data_p.local_state) {
+			auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
+			auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
+			if (gstate.global_state && bind_data.interface &&
+			    bind_data.interface->FinalizeScan(context, *gstate.global_state, output)) {
+				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
+				return;
+			}
 			data_p.async_result = SourceResultType::FINISHED;
 			return;
 		}
@@ -631,72 +1007,43 @@ public:
 		auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
 		auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
 
-		if (gstate.finished) {
-			data_p.async_result = SourceResultType::FINISHED;
-			return;
-		}
-
 		do {
-			auto &scan_chunk = data.scan_chunk;
-			scan_chunk.Reset();
-
-			auto res = data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
-
-			if (res.GetResultType() == AsyncResultType::BLOCKED) {
-				if (scan_chunk.size() != 0) {
-					throw InternalException("Unexpected behaviour from Scan, no rows should be returned");
-				}
-				switch (data_p.results_execution_mode) {
-				case AsyncResultsExecutionMode::TASK_EXECUTOR:
-					data_p.async_result = std::move(res);
+			// Acquire a job whenever we don't hold one ready to decode
+			if (data.job_state != MultiFileJobState::DECODE) {
+				auto acquired = gstate.read_ahead ? AcquireNextReadAhead(context, data_p, data, gstate, bind_data)
+				                                  : AcquireNextPerThread(context, data_p, data, gstate, bind_data);
+				switch (acquired) {
+				case ScanReadAheadAcquire::PARKED:
 					return;
-				case AsyncResultsExecutionMode::SYNCHRONOUS:
-					res.ExecuteTasksSynchronously();
-					if (res.GetResultType() != AsyncResultType::HAVE_MORE_OUTPUT) {
-						throw InternalException("Unexpected behaviour from ExecuteTasksSynchronously");
+				case ScanReadAheadAcquire::EXHAUSTED:
+					if (bind_data.interface->FinalizeScan(context, *gstate.global_state, output)) {
+						data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
+						return;
 					}
-					// scan_chunk.size() is 0, see check above, and result is HAVE_MORE_OUTPUT, we need to loop again
-					continue;
-				}
-			}
-
-			output.SetCardinality(scan_chunk.size());
-
-			if (scan_chunk.size() > 0) {
-				data.rows_scanned += scan_chunk.size();
-				bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.reader, *data.reader_data,
-				                                           scan_chunk, output, data.executor,
-				                                           gstate.multi_file_reader_state);
-				output.SetChildCardinality(output.size());
-			}
-			if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
-				// Loop back to the same block
-				if (output.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
-					continue;
-				}
-				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
-				return;
-			}
-
-			if (res.GetResultType() != AsyncResultType::FINISHED) {
-				throw InternalException("Unexpected result in MultiFileScan, must be FINISHED, is %s",
-				                        EnumUtil::ToChars(res.GetResultType()));
-			}
-
-			if (!TryInitializeNextBatch(context, bind_data, data, gstate)) {
-				if (output.size() > 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
-					gstate.finished = true;
-					data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
-				} else {
 					data_p.async_result = SourceResultType::FINISHED;
+					return;
+				case ScanReadAheadAcquire::ACQUIRED:
+					break;
 				}
-			} else {
-				if (output.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
-					continue;
-				}
-				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
 			}
-			return;
+			switch (DecodeCurrentJob(context, data_p, data, gstate, bind_data, output)) {
+			case MultiFileDecodeResult::CONTINUE:
+				continue;
+			case MultiFileDecodeResult::RETURN_TO_CALLER:
+				return;
+			case MultiFileDecodeResult::JOB_FINISHED: {
+				if (gstate.read_ahead) {
+					// hand the scan state back so learned reader state carries over to jobs created later
+					gstate.state_pool.Push(std::move(data.job->scan_state));
+				}
+				data.job_state = MultiFileJobState::NONE;
+				// emit any trailing chunk, then loop to acquire the next job
+				if (EmitOutput(data_p, output)) {
+					return;
+				}
+				continue;
+			}
+			}
 		} while (true);
 	}
 
@@ -716,6 +1063,14 @@ public:
 
 		auto primary_index = column_index.GetPrimaryIndex();
 		const auto &col_name = bind_data.names[primary_index];
+
+		// a hive partitioning column overrides any file column of the same name - the statistics stored in the
+		// file describe the overridden column and can even have a different type, so they cannot be used here
+		for (auto &hive_partitioning_index : bind_data.reader_bind.hive_partitioning_indexes) {
+			if (hive_partitioning_index.index == primary_index) {
+				return nullptr;
+			}
+		}
 
 		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
 		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
@@ -808,6 +1163,9 @@ public:
 
 	static unique_ptr<NodeStatistics> MultiFileCardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<MultiFileBindData>();
+		if (IsEmptyResult(data)) {
+			return make_uniq<NodeStatistics>(idx_t(0));
+		}
 		auto file_list_cardinality_estimate = data.file_list->GetCardinality(context);
 		if (file_list_cardinality_estimate) {
 			return file_list_cardinality_estimate;
@@ -871,6 +1229,9 @@ public:
 
 	static TablePartitionInfo MultiFileGetPartitionInfo(ClientContext &context, TableFunctionPartitionInput &input) {
 		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
+		if (IsEmptyResult(bind_data)) {
+			return TablePartitionInfo::NOT_PARTITIONED;
+		}
 		return bind_data.multi_file_reader->GetPartitionInfo(context, bind_data.reader_bind, input);
 	}
 
@@ -878,6 +1239,9 @@ public:
 	                                                       optional_ptr<FunctionData> bind_data_p) {
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 		virtual_column_map_t result;
+		if (IsEmptyResult(bind_data)) {
+			return result;
+		}
 		MultiFileReader::GetVirtualColumns(context, bind_data.reader_bind, result);
 
 		bind_data.interface->GetVirtualColumns(context, bind_data, result);
@@ -907,15 +1271,6 @@ public:
 			}
 			auto list_of_types = StringUtil::Join(file_path_names, ", ");
 			input.operator_metrics.AddExtraInfo("Filename(s)", list_of_types);
-		}
-	}
-
-	static void PushdownType(ClientContext &context, optional_ptr<FunctionData> bind_data_p,
-	                         const unordered_map<idx_t, LogicalType> &new_column_types) {
-		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
-		for (auto &type : new_column_types) {
-			bind_data.types[type.first] = type.second;
-			bind_data.columns[type.first].type = type.second;
 		}
 	}
 

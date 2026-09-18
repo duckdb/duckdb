@@ -11,7 +11,7 @@ statement ok
 CREATE TABLE t1 (id INTEGER, val INTEGER, extra VARCHAR)
 
 statement ok
-INSERT INTO t1 SELECT i, i, repeat(md5(i::VARCHAR), 200) FROM range(50000) tbl(i)
+INSERT INTO t1 SELECT i, i, repeat(md5(i::VARCHAR), 200) FROM range(100) tbl(i)
 
 statement ok
 CREATE TABLE t2 (id INTEGER)

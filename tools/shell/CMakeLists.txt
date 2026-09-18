@@ -14,10 +14,12 @@ set(SHELL_SOURCES
     shell_extension.cpp
     shell.cpp
     shell_helpers.cpp
+    shell_manual.cpp
     shell_metadata_command.cpp
     shell_prompt.cpp
     shell_renderer.cpp
     shell_highlight.cpp
+    shell_profiler_renderer.cpp
     shell_progress_bar.cpp
     shell_render_table_metadata.cpp
     shell_windows.cpp)
@@ -73,6 +75,10 @@ if(WIN32 AND NOT MINGW)
   set(CMAKE_RC_FLAGS
       "${CMAKE_RC_FLAGS} -D DUCKDB_COPYRIGHT_YEAR=\"${DUCKDB_COPYRIGHT_YEAR}\"")
   target_sources(shell PRIVATE rc/duckdb.rc)
+  # Opt into the Windows Segment Heap to avoid the default NT heap's lock
+  # contention under multi-threaded allocation (see #24027). CMake merges
+  # .manifest sources into the linker manifest via mt.exe.
+  target_sources(shell PRIVATE rc/duckdb.manifest)
 endif()
 
 set_target_properties(shell PROPERTIES OUTPUT_NAME duckdb)

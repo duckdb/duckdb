@@ -9,23 +9,20 @@
 #pragma once
 
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/common/identifier.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
 
 class TableDescription {
 public:
-	TableDescription(const string &database_name, const string &schema_name, const string &table_name)
-	    : database(database_name), schema(schema_name), table(table_name) {};
+	explicit TableDescription(QualifiedName qualified_name_p) : qualified_name(std::move(qualified_name_p)) {};
 
 	TableDescription() = delete;
 
 public:
-	//! The database of the table.
-	string database;
-	//! The schema of the table.
-	string schema;
-	//! The name of the table.
-	string table;
+	//! The qualified name of the table (catalog/schema/name).
+	QualifiedName qualified_name;
 	//! True, if the catalog is readonly.
 	bool readonly;
 	//! The columns of the table.

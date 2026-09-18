@@ -13,16 +13,18 @@
   "inherit_skip_tests": "test/configs/force_storage.json",
   "skip_tests": [
     {
+      "reason": "Explicit constraint timing requires storage version v2.0.0 or higher.",
+      "paths": [
+        "test/sql/constraints/deferred/test_alter_constraint_timing.test",
+        "test/sql/constraints/deferred/test_deferred_syntax.test"
+      ]
+    },
+    {
       "reason": "TODO",
       "paths": [
-        "test/fuzzer/sqlsmith/current_schemas_null.test",
-        "test/sql/catalog/test_set_search_path.test",
         "test/sql/json/test_json_serialize_sql.test",
-        "test/sql/settings/drop_set_schema.test",
         "test/sql/storage/buffer_manager_temp_dir.test",
-        "test/sql/table_function/duckdb_databases.test",
-        "test/sql/tpch/dbgen_error.test",
-        "test/sql/storage/read_duckdb/read_duckdb_basic.test"
+        "test/sql/table_function/duckdb_databases.test"
       ]
     },
     {
@@ -32,9 +34,12 @@
       ]
     },
     {
-      "reason": "Make explicit use of the memory catalog.",
+      "reason": "CREATE SECURE VIEW requires v2.0.0 storage.",
       "paths": [
-        "test/sql/types/geo/geometry_compatability.test"
+        "test/sql/catalog/view/secure_view.test",
+        "test/sql/optimizer/secure_view_explain.test",
+        "test/sql/optimizer/secure_view_pushdown.test",
+        "test/sql/optimizer/secure_view_statistics.test"
       ]
     }
   ]

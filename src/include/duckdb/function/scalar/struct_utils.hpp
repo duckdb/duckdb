@@ -33,13 +33,14 @@ public:
 };
 
 inline bool TryGetStructExtractChildIndex(const BoundFunctionExpression &func, idx_t &child_idx) {
-	if (func.function.GetName() == "struct_extract_at") {
-		if (func.bind_info) {
-			child_idx = func.bind_info->Cast<StructExtractBindData>().index;
+	if (func.Function().GetName() == "struct_extract_at") {
+		if (func.BindInfo()) {
+			child_idx = func.BindInfo()->Cast<StructExtractBindData>().index;
 			return true;
 		}
-		if (func.children.size() > 1 && func.children[1]->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-			auto &field_value = func.children[1]->Cast<BoundConstantExpression>().value;
+		if (func.GetChildren().size() > 1 &&
+		    func.GetChildren()[1]->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+			auto &field_value = func.GetChildren()[1]->Cast<BoundConstantExpression>().GetValue();
 			if (field_value.IsNull()) {
 				return false;
 			}
@@ -52,16 +53,16 @@ inline bool TryGetStructExtractChildIndex(const BoundFunctionExpression &func, i
 		}
 		return false;
 	}
-	if (func.function.GetName() != "struct_extract" || func.children.size() <= 1 ||
-	    func.children[1]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
-	    func.children[0]->GetReturnType().id() != LogicalTypeId::STRUCT) {
+	if (func.Function().GetName() != "struct_extract" || func.GetChildren().size() <= 1 ||
+	    func.GetChildren()[1]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
+	    func.GetChildren()[0]->GetReturnType().id() != LogicalTypeId::STRUCT) {
 		return false;
 	}
-	auto &field_value = func.children[1]->Cast<BoundConstantExpression>().value;
+	auto &field_value = func.GetChildren()[1]->Cast<BoundConstantExpression>().GetValue();
 	if (field_value.IsNull() || field_value.type().id() != LogicalTypeId::VARCHAR) {
 		return false;
 	}
-	child_idx = StructType::GetChildIndexUnsafe(func.children[0]->GetReturnType(), field_value.GetValue<string>());
+	child_idx = StructType::GetChildIndexUnsafe(func.GetChildren()[0]->GetReturnType(), field_value.GetValue<string>());
 	return true;
 }
 

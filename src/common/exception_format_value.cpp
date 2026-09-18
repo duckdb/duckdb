@@ -7,6 +7,7 @@
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/common/types/string.hpp"
+#include "duckdb/common/identifier.hpp"
 
 namespace duckdb {
 
@@ -55,6 +56,11 @@ template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const String &value) {
 	return ExceptionFormatValue(value);
 }
+template <>
+ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const Identifier &value) {
+	return SQLQuotedIdentifier::ToString(value);
+}
+
 template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const SQLString &value) {
 	return SQLString::ToString(value.raw_string);

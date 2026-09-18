@@ -1,0 +1,12 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [recursive_cte]
+
+name ${BENCHMARK_NAME}
+group Recursive CTE
+
+load benchmark/recursive_cte/aoc2022/load/${DAY}.sql
+
+run benchmark/recursive_cte/queries/performance/aoc2022_${DAY}.sql
+
+result benchmark/recursive_cte/answers/performance/aoc2022_${DAY}.csv

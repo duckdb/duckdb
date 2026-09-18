@@ -6,7 +6,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/query_profiler.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/logical_operator_repeatability.hpp"
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/execution/operator/helper/physical_verify_vector.hpp"
@@ -63,7 +64,8 @@ unique_ptr<PhysicalPlan> PhysicalPlanGenerator::PlanInternal(LogicalOperator &op
 	auto debug_verify_vector = Settings::Get<DebugVerifyVectorSetting>(context);
 	if (debug_verify_vector != DebugVectorVerification::NONE) {
 		if (debug_verify_vector != DebugVectorVerification::DICTIONARY_EXPRESSION &&
-		    debug_verify_vector != DebugVectorVerification::VARIANT_VECTOR) {
+		    debug_verify_vector != DebugVectorVerification::VARIANT_VECTOR &&
+		    debug_verify_vector != DebugVectorVerification::SHREDDED_VECTOR) {
 			physical_plan->SetRoot(Make<PhysicalVerifyVector>(physical_plan->Root(), debug_verify_vector));
 		}
 	}
@@ -71,6 +73,15 @@ unique_ptr<PhysicalPlan> PhysicalPlanGenerator::PlanInternal(LogicalOperator &op
 }
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
+	const auto repeatable = ClassifyLogicalOperatorRepeatability(op) == LogicalOperatorRepeatability::REPEATABLE;
+	auto &result = CreatePlanInternal(op);
+	if (!repeatable) {
+		non_repeatable_operators.insert(result);
+	}
+	return result;
+}
+
+PhysicalOperator &PhysicalPlanGenerator::CreatePlanInternal(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET:
 		return CreatePlan(op.Cast<LogicalGet>());
@@ -126,6 +137,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 		return CreatePlan(op.Cast<LogicalUpdate>());
 	case LogicalOperatorType::LOGICAL_MERGE_INTO:
 		return CreatePlan(op.Cast<LogicalMergeInto>());
+	case LogicalOperatorType::LOGICAL_TRIGGER:
+		throw InternalException("LogicalTrigger must be rewritten before physical planning");
 	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
 		return CreatePlan(op.Cast<LogicalCreateTable>());
 	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
@@ -152,14 +165,23 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_VACUUM:
 		return CreatePlan(op.Cast<LogicalVacuum>());
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
+		return CreatePlan(op.Cast<LogicalTransaction>());
 	case LogicalOperatorType::LOGICAL_ALTER:
+		return CreatePlan(op.Cast<LogicalAlter>());
 	case LogicalOperatorType::LOGICAL_DROP:
+		return CreatePlan(op.Cast<LogicalDrop>());
 	case LogicalOperatorType::LOGICAL_LOAD:
+		return CreatePlan(op.Cast<LogicalLoad>());
 	case LogicalOperatorType::LOGICAL_ATTACH:
+		return CreatePlan(op.Cast<LogicalAttach>());
 	case LogicalOperatorType::LOGICAL_DETACH:
+		return CreatePlan(op.Cast<LogicalDetach>());
 	case LogicalOperatorType::LOGICAL_CONNECT:
+		return CreatePlan(op.Cast<LogicalConnect>());
 	case LogicalOperatorType::LOGICAL_DISCONNECT:
-		return CreatePlan(op.Cast<LogicalSimple>());
+		return CreatePlan(op.Cast<LogicalDisconnect>());
+	case LogicalOperatorType::LOGICAL_EXTERNAL_RESOURCE:
+		return CreatePlan(op.Cast<LogicalExternalResource>());
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 		return CreatePlan(op.Cast<LogicalRecursiveCTE>());
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
@@ -176,8 +198,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 		return CreatePlan(op.Cast<LogicalPivot>());
 	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
 		return CreatePlan(op.Cast<LogicalCopyDatabase>());
+	case LogicalOperatorType::LOGICAL_SECURE_VIEW:
+		return CreatePlan(op.Cast<LogicalSecureView>());
 	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
-		return CreatePlan(op.Cast<LogicalSimple>());
+		return CreatePlan(op.Cast<LogicalUpdateExtensions>());
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR: {
 		auto &extension_op = op.Cast<LogicalExtensionOperator>();
 		return extension_op.CreatePlan(context, *this);

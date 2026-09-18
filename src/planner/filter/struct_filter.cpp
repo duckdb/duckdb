@@ -7,7 +7,8 @@
 
 namespace duckdb {
 
-LegacyStructFilter::LegacyStructFilter(idx_t child_idx_p, string child_name_p, unique_ptr<TableFilter> child_filter_p)
+LegacyStructFilter::LegacyStructFilter(idx_t child_idx_p, Identifier child_name_p,
+                                       unique_ptr<TableFilter> child_filter_p)
     : TableFilter(TableFilterType::LEGACY_STRUCT_EXTRACT), child_idx(child_idx_p), child_name(std::move(child_name_p)),
       child_filter(std::move(child_filter_p)) {
 }

@@ -1,0 +1,51 @@
+# name: test/sql/delete/bulk_delete_version_info_memory.test
+# description: Test that bulk deletes of full vectors do not hold on to per-row version info memory
+# group: [delete]
+
+# 10 full row groups
+statement ok
+CREATE TABLE a AS SELECT i FROM range(1228800) t(i)
+
+# deleting the entire table stores the delete ids as per-vector constants - not as per-row delete ids
+statement ok
+BEGIN
+
+query I
+DELETE FROM a
+----
+1228800
+
+query I
+SELECT memory_usage_bytes < 1000000 FROM duckdb_memory() WHERE tag='BASE_TABLE'
+----
+true
+
+statement ok
+ROLLBACK
+
+# rollback restores all rows
+query I
+SELECT COUNT(*) FROM a
+----
+1228800
+
+query I
+SELECT memory_usage_bytes < 1000000 FROM duckdb_memory() WHERE tag='BASE_TABLE'
+----
+true
+
+query I
+DELETE FROM a
+----
+1228800
+
+query I
+SELECT COUNT(*) FROM a
+----
+0
+
+# after committing the bulk delete the version info remains compressed
+query I
+SELECT memory_usage_bytes < 1000000 FROM duckdb_memory() WHERE tag='BASE_TABLE'
+----
+true

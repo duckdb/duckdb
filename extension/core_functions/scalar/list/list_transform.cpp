@@ -19,8 +19,8 @@ static unique_ptr<FunctionData> ListTransformBind(BindScalarFunctionInput &input
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
-	bound_function.SetReturnType(LogicalType::LIST(bound_lambda_expr.lambda_expr->GetReturnType()));
-	auto has_index = bound_lambda_expr.parameter_count == 2;
+	bound_function.SetReturnType(LogicalType::LIST(bound_lambda_expr.LambdaExpr()->GetReturnType()));
+	auto has_index = bound_lambda_expr.ParameterCount() == 2;
 	return LambdaFunctions::ListLambdaBind(context, bound_function, arguments, has_index);
 }
 
@@ -31,13 +31,18 @@ static LogicalType ListTransformBindLambda(ClientContext &context, const vector<
 }
 
 ScalarFunction ListTransformFun::GetFunction() {
-	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA}, LogicalType::LIST(LogicalType::ANY),
-	                   LambdaFunctions::ListTransformFunction, ListTransformBind, nullptr, nullptr);
+	ScalarFunction fun({}, LogicalType::LIST(LogicalType::ANY), LambdaFunctions::ListTransformFunction,
+	                   ListTransformBind, nullptr, nullptr);
+	fun.GetSignature()
+	    .AddParameter("list", LogicalType::LIST(LogicalType::ANY))
+	    .AddParameter("lambda", LogicalType::LAMBDA);
 
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetSerializeCallback(ListLambdaBindData::Serialize);
 	fun.SetDeserializeCallback(ListLambdaBindData::Deserialize);
 	fun.SetBindLambdaCallback(ListTransformBindLambda);
+	// the lambda expression that is executed for every element can throw
+	fun.SetFallible();
 
 	return fun;
 }

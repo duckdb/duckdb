@@ -195,7 +195,7 @@ WITH t1 AS (
 SELECT * 
 FROM t1 
 ASOF JOIN t2 
-  ON t1=b == t2.d 
+  ON t1 = (b == t2.d)
   AND t1.b >= t2.d - INTERVAL '1' SECOND;
 ----
 Unimplemented type for cast

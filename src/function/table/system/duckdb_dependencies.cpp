@@ -27,7 +27,7 @@ struct DuckDBDependenciesData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBDependenciesBind(ClientContext &context, TableFunctionBindInput &input,
-                                                       vector<LogicalType> &return_types, vector<string> &names) {
+                                                       vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("classid");
 	return_types.emplace_back(LogicalType::BIGINT);
 
@@ -56,7 +56,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBDependenciesInit(ClientContext &conte
 	auto result = make_uniq<DuckDBDependenciesData>();
 
 	// scan all the schemas and collect them
-	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
+	auto &catalog = Catalog::GetCatalog(context, Identifier::InvalidCatalog());
 	auto dependency_manager = catalog.GetDependencyManager();
 	if (dependency_manager) {
 		dependency_manager->Scan(
@@ -113,7 +113,6 @@ void DuckDBDependenciesFunction(ClientContext &context, TableFunctionInput &data
 		data.offset++;
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBDependenciesFun::RegisterFunction(BuiltinFunctions &set) {

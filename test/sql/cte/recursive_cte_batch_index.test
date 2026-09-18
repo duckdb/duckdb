@@ -1,0 +1,107 @@
+# name: test/sql/cte/recursive_cte_batch_index.test
+# description: Reset batch index coordination between recursive CTE epochs
+# group: [cte]
+
+statement ok
+SET threads=4;
+
+statement ok
+SET preserve_insertion_order=true;
+
+# Regression from the Python replacement scan test, expressed with a reused materialized CTE.
+query I rowsort
+WITH RECURSIVE
+df(a) AS MATERIALIZED (VALUES (1), (2), (3)),
+RecursiveCTE AS (
+	SELECT Number FROM df t(Number)
+	UNION ALL
+	SELECT Number + (SELECT a FROM df OFFSET 2 LIMIT 1) + 1 AS new
+	FROM RecursiveCTE
+	WHERE new < 10
+)
+SELECT * FROM RecursiveCTE;
+----
+1
+2
+3
+5
+6
+7
+9
+
+# A batch-aware scalar subquery must restart from its base batch in every epoch.
+query I rowsort
+WITH RECURSIVE r(x) AS (
+	VALUES (1), (2), (3)
+	UNION ALL
+	SELECT x + (SELECT a FROM (VALUES (1), (2), (3)) df(a) LIMIT 1)
+	FROM r
+	WHERE x < 4
+)
+SELECT * FROM r;
+----
+1
+2
+2
+3
+3
+3
+4
+4
+4
+
+# Cover scheduled recursive execution without pooled executor reuse.
+statement ok
+SET enable_caching_operators=false;
+
+query I rowsort
+WITH RECURSIVE r(x) AS (
+	VALUES (1), (2), (3)
+	UNION ALL
+	SELECT x + (SELECT a FROM (VALUES (1), (2), (3)) df(a) LIMIT 1)
+	FROM r
+	WHERE x < 4
+)
+SELECT * FROM r;
+----
+1
+2
+2
+3
+3
+3
+4
+4
+4
+
+statement ok
+RESET enable_caching_operators;
+
+# UNION DISTINCT uses the same rescheduled batch-aware pipeline lifecycle.
+query I rowsort
+WITH RECURSIVE r(x) AS (
+	VALUES (1), (2), (3)
+	UNION
+	SELECT x + (SELECT a FROM (VALUES (1), (2), (3)) df(a) LIMIT 1)
+	FROM r
+	WHERE x < 4
+)
+SELECT * FROM r;
+----
+1
+2
+3
+4
+
+# Reset every executor placeholder when a broad epoch is followed by a narrow epoch.
+query II
+WITH RECURSIVE r(x) AS (
+	SELECT i FROM range(4096) t(i)
+	UNION ALL
+	SELECT x + (SELECT a FROM (VALUES (1), (2), (3)) df(a) LIMIT 1)
+	FROM r
+	WHERE x < 3
+)
+SELECT count(*), sum(x) FROM r;
+----
+4102	8386574

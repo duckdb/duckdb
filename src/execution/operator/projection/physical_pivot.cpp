@@ -23,12 +23,14 @@ PhysicalPivot::PhysicalPivot(PhysicalPlan &physical_plan, vector<LogicalType> ty
 	for (auto &aggr_expr : bound_pivot.aggregates) {
 		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
 		// for each aggregate, initialize an empty aggregate state and finalize it immediately
-		auto state = make_unsafe_uniq_array<data_t>(aggr.function.GetStateSizeCallback()(aggr.function));
-		aggr.function.GetStateInitCallback()(aggr.function, state.get());
+		AggregateStateInput state_input(aggr.Function(), aggr.BindInfo().get());
+		auto state = make_unsafe_uniq_array<data_t>(aggr.Function().GetStateSizeCallback()(state_input));
+		data_ptr_t state_ptr = state.get();
+		aggr.Function().GetStateInitCallback()(state_input, &state_ptr, 1);
 		Vector state_vector(Value::POINTER(CastPointerToValue(state.get())), count_t(1));
 		Vector result_vector(aggr_expr->GetReturnType());
-		AggregateInputData aggr_input_data(aggr.bind_info.get(), physical_plan.ArenaRef());
-		aggr.function.GetStateFinalizeCallback()(state_vector, aggr_input_data, result_vector, 1, 0);
+		AggregateFinalizeInputData aggr_input_data(aggr, physical_plan.ArenaRef());
+		aggr.Function().GetStateFinalizeCallback()(state_vector, aggr_input_data, result_vector, 1, 0);
 		empty_aggregates.push_back(result_vector.GetValue(0));
 	}
 }
@@ -79,7 +81,6 @@ OperatorResultType PhysicalPivot::Execute(ExecutionContext &context, DataChunk &
 			}
 		}
 	}
-	chunk.SetCardinality(input.size());
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 

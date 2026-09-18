@@ -47,7 +47,7 @@ public:
 };
 
 BooleanColumnWriter::BooleanColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema,
-                                         vector<string> schema_path_p)
+                                         vector<Identifier> schema_path_p)
     : PrimitiveColumnWriter(writer, std::move(column_schema), std::move(schema_path_p)) {
 }
 

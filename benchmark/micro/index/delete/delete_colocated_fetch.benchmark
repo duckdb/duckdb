@@ -1,0 +1,28 @@
+# name: benchmark/micro/index/delete/delete_colocated_fetch.benchmark
+# description: Stress test bulk RowGroupCollection::Fetch via indexed DELETE + COMMIT.
+# group: [delete]
+
+# This benchmark targets the RemoveFromIndexes path for indexed DELETEs. The
+# table is sorted by o_orderkey, so deleting a contiguous key range gives commit
+# a large batch of co-located row IDs to fetch before removing ART entries.
+
+name DELETE 500K co-located indexed rows, COMMIT path (SF10)
+group art
+
+require tpch
+
+cache tpch_sf10_orders_indexed_delete.duckdb
+
+load
+CALL dbgen(sf=10);
+CREATE TABLE orders_indexed AS FROM orders ORDER BY o_orderkey;
+ALTER TABLE orders_indexed ADD PRIMARY KEY (o_orderkey);
+CREATE TABLE delete_backup AS
+    SELECT * FROM orders_indexed OFFSET 1000000 LIMIT 1000000;
+
+run
+DELETE FROM orders_indexed
+WHERE o_orderkey IN (SELECT o_orderkey FROM delete_backup);
+
+cleanup
+INSERT INTO orders_indexed SELECT * FROM delete_backup ORDER BY o_orderkey;

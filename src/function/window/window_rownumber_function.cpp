@@ -5,6 +5,7 @@
 #include "duckdb/function/window_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -22,12 +23,12 @@ public:
 			//	If the argument order is prefix of the partition ordering,
 			//	then we can just use the partition ordering.
 			auto &wexpr = executor.wexpr;
-			auto &arg_orders = executor.wexpr.arg_orders;
-			const auto optimize = ClientConfig::GetConfig(client).enable_optimizer;
-			if (!optimize || BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) != arg_orders.size()) {
+			auto &arg_orders = executor.wexpr.ArgOrders();
+			const auto optimize = Settings::Get<EnableOptimizerSetting>(client);
+			if (!optimize || BoundWindowExpression::GetSharedOrders(wexpr.OrderBy(), arg_orders) != arg_orders.size()) {
 				//	"The ROW_NUMBER function can be computed by disambiguating duplicate elements based on their
 				//	position in the input data, such that two elements never compare as equal."
-				token_tree = make_uniq<WindowTokenTree>(client, executor.wexpr.arg_orders, executor.arg_order_idx,
+				token_tree = make_uniq<WindowTokenTree>(client, executor.wexpr.ArgOrders(), executor.arg_order_idx,
 				                                        payload_count, true);
 			}
 		}
@@ -119,12 +120,12 @@ struct WindowRowNumberExecutor {
 	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
 		return true;
 	}
-	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
-	                                                      const BoundWindowExpression &wexpr) {
+	static unique_ptr<WindowExecutorStreamingState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                                  const BoundWindowExpression &wexpr) {
 		return make_uniq<WindowRowNumberStreamingState>();
 	}
 	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
-	                       Vector &result, LocalSourceState &state) {
+	                       Vector &result, WindowExecutorStreamingState &state) {
 		state.Cast<WindowRowNumberStreamingState>().Evaluate(input.size(), result);
 	}
 };
@@ -142,7 +143,7 @@ WindowFunction RowNumberFun::GetFunction() {
 }
 
 void WindowRowNumberExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
-	if (wexpr.arg_orders.empty()) {
+	if (wexpr.ArgOrders().empty()) {
 		required.insert(PARTITION_BEGIN);
 	} else {
 		// Secondary orders need to know where the frame is
@@ -155,12 +156,12 @@ void WindowRowNumberExecutor::GetSharing(WindowExecutor &executor, WindowSharedE
 	const auto &wexpr = executor.wexpr;
 
 	auto &child_idx = executor.child_idx;
-	for (auto &child : wexpr.children) {
+	for (auto &child : wexpr.GetChildren()) {
 		child_idx.emplace_back(shared.RegisterEvaluate(child));
 	}
 
 	auto &arg_order_idx = executor.arg_order_idx;
-	for (const auto &order : wexpr.arg_orders) {
+	for (const auto &order : wexpr.ArgOrders()) {
 		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
 	}
 }
@@ -179,7 +180,7 @@ unique_ptr<LocalSinkState> WindowRowNumberExecutor::GetLocal(ExecutionContext &c
 void WindowRowNumberExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
                                       Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &grstate = sink.global_state.Cast<WindowRowNumberGlobalState>();
-	const auto count = eval_chunk.size();
+	const auto count = bounds.size();
 	auto rdata = FlatVector::Writer<int64_t>(result, count);
 
 	if (grstate.use_framing) {
@@ -193,7 +194,8 @@ void WindowRowNumberExecutor::GetData(ExecutionContext &context, DataChunk &eval
 			}
 		} else {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
-				rdata.WriteValue(UnsafeNumericCast<int64_t>(row_idx - frame_begin[i] + 1));
+				const auto frame_idx = MaxValue(frame_begin[i], MinValue(row_idx, frame_end[i]));
+				rdata.WriteValue(UnsafeNumericCast<int64_t>(frame_idx - frame_begin[i] + 1));
 			}
 		}
 		return;
@@ -226,15 +228,16 @@ public:
 };
 
 WindowFunction NtileFun::GetFunction() {
-	WindowFunction fun(Name, {LogicalType::BIGINT}, LogicalType::BIGINT, ExpressionType::WINDOW_NTILE, nullptr,
+	WindowFunction fun(Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_NTILE, nullptr,
 	                   WindowNtileExecutor::GetBounds, WindowNtileExecutor::GetSharing, WindowNtileExecutor::GetGlobal,
 	                   WindowNtileExecutor::GetLocal, WindowNtileLocalState::Sinker, WindowNtileLocalState::Finalizer,
 	                   WindowNtileExecutor::GetData);
+	fun.GetSignature().AddParameter("num_buckets", LogicalType::BIGINT);
 	return fun;
 }
 
 void WindowNtileExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
-	if (wexpr.arg_orders.empty()) {
+	if (wexpr.ArgOrders().empty()) {
 		required.insert(PARTITION_BEGIN);
 		required.insert(PARTITION_END);
 	} else {
@@ -251,7 +254,7 @@ unique_ptr<LocalSinkState> WindowNtileExecutor::GetLocal(ExecutionContext &conte
 void WindowNtileExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
                                   idx_t row_idx, OperatorSinkInput &sink) {
 	auto &grstate = sink.global_state.Cast<WindowRowNumberGlobalState>();
-	const auto count = eval_chunk.size();
+	const auto count = bounds.size();
 
 	auto partition_begin = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
 	auto partition_end = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
@@ -271,8 +274,14 @@ void WindowNtileExecutor::GetData(ExecutionContext &context, DataChunk &eval_chu
 			if (n_param < 1) {
 				throw InvalidInputException("Argument for ntile must be greater than zero");
 			}
+			const auto begin = partition_begin[i];
+			const auto end = MaxValue(partition_end[i], begin);
 			// With thanks from SQLite's ntileValueFunc()
-			auto n_total = NumericCast<int64_t>(partition_end[i] - partition_begin[i]);
+			auto n_total = NumericCast<int64_t>(end - begin);
+			if (n_total == 0) {
+				rdata.WriteNull();
+				continue;
+			}
 			if (n_param > n_total) {
 				// more groups allowed than we have values
 				// map every entry to a unique group
@@ -280,12 +289,12 @@ void WindowNtileExecutor::GetData(ExecutionContext &context, DataChunk &eval_chu
 			}
 			int64_t n_size = (n_total / n_param);
 			// find the row idx within the group
-			D_ASSERT(row_idx >= partition_begin[i]);
 			idx_t partition_idx = 0;
 			if (grstate.token_tree) {
-				partition_idx = grstate.token_tree->Rank(partition_begin[i], partition_end[i], row_idx) - 1;
+				partition_idx = MinValue(grstate.token_tree->Rank(begin, end, row_idx) - 1, idx_t(n_total - 1));
 			} else {
-				partition_idx = row_idx - partition_begin[i];
+				const auto frame_row_idx = MinValue(MaxValue(begin, row_idx), idx_t(end - 1));
+				partition_idx = frame_row_idx - begin;
 			}
 			auto adjusted_row_idx = NumericCast<int64_t>(partition_idx);
 

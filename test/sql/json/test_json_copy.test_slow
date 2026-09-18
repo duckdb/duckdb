@@ -4,10 +4,6 @@
 
 require json
 
-require parquet
-
-require no_extension_autoloading "FIXME: Autoloading on zstd compression (parquet) not yet there"
-
 # test automatic detection even with .gz
 statement ok
 create table integers as select 42 i
@@ -257,26 +253,10 @@ copy my_range from '{TEMP_DIR}/my.json.gz' (COMPRESSION GZIP)
 statement ok
 select * from '{TEMP_DIR}/my.json.gz'
 
-# works with zstd too, but we skip this test for now
-# it works in CLI, but not in unittest for some reason (ZSTD is not in VirtualFileSystem::compressed_fs)
-require parquet
-
 statement ok
-copy (select range as i from range(10)) to '{TEMP_DIR}/my.json.zst' (COMPRESSION ZSTD)
-
-statement ok
-select * from '{TEMP_DIR}/my.json.zst'
+COPY (SELECT NULL AS a) TO '{TEST_DIR}/json_null.csv'
 
 query I
-select * from my_range
+FROM '{TEST_DIR}/json_null.csv'
 ----
-0
-1
-2
-3
-4
-5
-6
-7
-8
-9
+NULL

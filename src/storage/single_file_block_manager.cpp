@@ -207,6 +207,35 @@ void MainHeader::CheckMagicBytes(QueryContext context, FileHandle &handle) {
 	}
 }
 
+void MainHeader::CheckMagicBytes(MemoryMappedFile &handle) {
+	auto magic_bytes = handle.GetData(MainHeader::MAGIC_BYTE_OFFSET, MainHeader::MAGIC_BYTE_SIZE);
+	if (memcmp(magic_bytes, MainHeader::MAGIC_BYTES, MainHeader::MAGIC_BYTE_SIZE) != 0) {
+		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.GetPath());
+	}
+}
+
+static void ShowUnsupportedStorageVersionError(const idx_t version_number) {
+	// Check the version number to determine if we can read this file.
+	auto version = GetDuckDBVersions(static_cast<StorageVersion>(version_number));
+	string version_text;
+	if (!version.empty()) {
+		// Known version.
+		version_text = "DuckDB version " + string(version);
+	} else if (version_number > VERSION_NUMBER_UPPER) {
+		version_text = "a newer version of DuckDB";
+	} else {
+		version_text = "an older development version of DuckDB";
+	}
+	throw IOException(
+	    "Trying to read a database file with storage version number %lld, but we can only read storage versions "
+	    "between %lld and %lld.\n"
+	    "The database file was created with %s.\n\n"
+	    "Newer DuckDB version might introduce backward incompatible changes (possibly guarded by compatibility "
+	    "settings).\n"
+	    "See the storage page for migration strategy and more information: https://duckdb.org/internals/storage",
+	    version_number, VERSION_NUMBER_LOWER, VERSION_NUMBER_UPPER, version_text);
+}
+
 MainHeader MainHeader::Read(ReadStream &source) {
 	data_t magic_bytes[MAGIC_BYTE_SIZE];
 
@@ -222,25 +251,7 @@ MainHeader MainHeader::Read(ReadStream &source) {
 		// if the version number in the main header is deprecated, then we just ignore the main header version number
 		// TODO: if we are confident, we can remove the check below
 	} else if (header.version_number < VERSION_NUMBER_LOWER || header.version_number > VERSION_NUMBER_UPPER) {
-		// Check the version number to determine if we can read this file.
-		auto version = GetDuckDBVersions(static_cast<StorageVersion>(header.version_number));
-		string version_text;
-		if (!version.empty()) {
-			// Known version.
-			version_text = "DuckDB version " + string(version);
-		} else {
-			version_text = string("an ") +
-			               (VERSION_NUMBER_UPPER > header.version_number ? "older development" : "newer") +
-			               string(" version of DuckDB");
-		}
-		throw IOException(
-		    "Trying to read a database file with version number %lld, but we can only read versions between %lld and "
-		    "%lld.\n"
-		    "The database file was created with %s.\n\n"
-		    "Newer DuckDB version might introduce backward incompatible changes (possibly guarded by compatibility "
-		    "settings).\n"
-		    "See the storage page for migration strategy and more information: https://duckdb.org/internals/storage",
-		    header.version_number, VERSION_NUMBER_LOWER, VERSION_NUMBER_UPPER, version_text);
+		ShowUnsupportedStorageVersionError(header.version_number);
 	}
 
 	// Read the flags.
@@ -287,7 +298,11 @@ void DatabaseHeader::SetStorageVersionInDatabaseHeader(DatabaseHeader &header, S
 			break;
 			// new versions should be added here
 		default:
-			throw InvalidInputException("Storage Version '%d' is not found!", static_cast<idx_t>(read_version));
+			if (static_cast<idx_t>(read_version) > VERSION_NUMBER_UPPER) {
+				ShowUnsupportedStorageVersionError(static_cast<idx_t>(read_version));
+			}
+			throw InvalidInputException("Unsupported Storage Version '%d' in the database header!",
+			                            static_cast<idx_t>(read_version));
 		}
 	} else {
 		// Before V2.0.0 the Storage Version in the main header could be written in two different ways
@@ -391,26 +406,6 @@ SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db_p, const str
 SingleFileBlockManager::~SingleFileBlockManager() {
 	// flip the flag to not perform UnregisterBlock on the block manager that is being destructed
 	this->in_destruction = true;
-}
-
-FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
-	FileOpenFlags result;
-	if (options.read_only) {
-		D_ASSERT(!create_new);
-		result = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS | FileLockType::READ_LOCK;
-	} else {
-		result = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ | FileLockType::WRITE_LOCK;
-		if (create_new) {
-			result |= FileFlags::FILE_FLAGS_FILE_CREATE;
-		}
-	}
-	if (options.use_direct_io) {
-		result |= FileFlags::FILE_FLAGS_DIRECT_IO;
-	}
-	// database files can be read from in parallel
-	result |= FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
-	result |= FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS;
-	return result;
 }
 
 void SingleFileBlockManager::AddStorageVersionTag() {
@@ -527,17 +522,14 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header) {
 }
 
 void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
-	auto flags = GetFileFlags(true);
-
 	auto encryption_enabled = options.encryption_options.encryption_enabled;
 	if (encryption_enabled) {
 		// Check if we can read/write the encrypted database
 		db.GetDatabase().GetEncryptionUtil(options.read_only);
 	}
 
-	// open the RDBMS handle
-	auto &fs = FileSystem::Get(db);
-	handle = fs.OpenFile(path, flags);
+	// MAP mode opens only the mmap; other modes open the FileHandle.
+	handle = DatabaseHandle::Open(db, path, options, DatabaseOpenMode::CREATE_NEW_FILE);
 	header_buffer.Clear();
 
 	if (options.storage_version == StorageVersion::INVALID) {
@@ -639,17 +631,9 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 }
 
 void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
-	auto flags = GetFileFlags(false);
+	handle = DatabaseHandle::Open(db, path, options, DatabaseOpenMode::OPEN_EXISTING_FILE);
+	handle->CheckMagicBytes(context);
 
-	// open the RDBMS handle
-	auto &fs = FileSystem::Get(db);
-	handle = fs.OpenFile(path, flags);
-	if (!handle) {
-		// this can only happen in read-only mode - as that is when we set FILE_FLAGS_NULL_IF_NOT_EXISTS
-		throw IOException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
-	}
-
-	MainHeader::CheckMagicBytes(context, *handle);
 	// otherwise, we check the metadata of the file
 	ReadAndChecksum(context, header_buffer, 0, true);
 
@@ -758,9 +742,10 @@ void SingleFileBlockManager::CheckChecksum(data_ptr_t start_ptr, uint64_t delta,
 
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
-		throw IOException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
-		                  "at location %llu",
-		                  computed_checksum, stored_checksum, start_ptr);
+		throw DataCorruptionException(
+		    "Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
+		    "at location %llu",
+		    computed_checksum, stored_checksum, start_ptr);
 	}
 }
 
@@ -781,16 +766,17 @@ void SingleFileBlockManager::CheckChecksum(FileBuffer &block, uint64_t location,
 
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
-		throw IOException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
-		                  "at location %llu",
-		                  computed_checksum, stored_checksum, location);
+		throw DataCorruptionException(
+		    "Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
+		    "at location %llu",
+		    computed_checksum, stored_checksum, location);
 	}
 }
 
 void SingleFileBlockManager::ReadAndChecksum(QueryContext context, FileBuffer &block, uint64_t location,
                                              bool skip_block_header) const {
 	// read the buffer from disk
-	block.Read(context, *handle, location);
+	handle->Read(context, block, location);
 
 	//! calculate delta header bytes (if any)
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
@@ -829,13 +815,20 @@ void SingleFileBlockManager::ChecksumAndWrite(QueryContext context, FileBuffer &
 		temp_buffer_manager =
 		    make_uniq<FileBuffer>(BlockAllocator::Get(db), block.GetBufferType(), block.Size(), GetBlockHeaderSize());
 		EncryptionEngine::EncryptBlock(db, key_id, block, *temp_buffer_manager, delta);
-		temp_buffer_manager->Write(context, *handle, location);
+		temp_buffer_manager->Write(context, handle->GetFileHandle(), location);
 	} else {
-		block.Write(context, *handle, location);
+		handle->Write(context, block, location);
 	}
 }
 
 void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size) {
+	try {
+		Storage::VerifyBlockAllocSize(header.block_alloc_size);
+	} catch (const InvalidInputException &) {
+		throw DataCorruptionException("Corrupt database file: invalid block allocation size %llu",
+		                              header.block_alloc_size);
+	}
+
 	free_list_id = header.free_list;
 	meta_block = header.meta_block;
 	iteration_count = header.iteration;
@@ -1189,7 +1182,7 @@ void SingleFileBlockManager::ReadBlock(data_ptr_t internal_buffer, uint64_t bloc
 void SingleFileBlockManager::ReadBlock(Block &block, bool skip_block_header) const {
 	// read the buffer from disk
 	auto location = GetBlockLocation(block.id);
-	block.Read(QueryContext(), *handle, location);
+	handle->Read(QueryContext(), block, location);
 
 	//! calculate delta header bytes (if any)
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
@@ -1208,13 +1201,14 @@ void SingleFileBlockManager::Read(QueryContext context, Block &block) {
 	ReadAndChecksum(context, block, GetBlockLocation(block.id));
 }
 
-void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) {
+void SingleFileBlockManager::ReadBlocks(QueryContext context, FileBuffer &buffer, block_id_t start_block,
+                                        idx_t block_count) {
 	D_ASSERT(start_block >= 0);
 	D_ASSERT(block_count >= 1);
 
 	// read the buffer from disk
 	auto location = GetBlockLocation(start_block);
-	buffer.Read(QueryContext(), *handle, location);
+	handle->Read(context, buffer, location);
 
 	// for each of the blocks - verify the checksum
 	auto ptr = buffer.InternalBuffer();
@@ -1253,7 +1247,8 @@ void SingleFileBlockManager::Truncate() {
 	}
 	// truncate the file
 	free_list.erase(free_list.lower_bound(max_block), free_list.end());
-	handle->Truncate(NumericCast<int64_t>(BLOCK_START + NumericCast<idx_t>(max_block) * GetBlockAllocSize()));
+	auto new_size = NumericCast<idx_t>(BLOCK_START + NumericCast<idx_t>(max_block) * GetBlockAllocSize());
+	handle->Truncate(new_size);
 }
 
 vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
@@ -1343,12 +1338,9 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	header.iteration = ++iteration_count;
 
 	set<block_id_t> all_free_blocks = free_list;
-	set<block_id_t> fully_freed_blocks;
-	for (auto &block : modified_blocks) {
+	auto checkpoint_freed_blocks = modified_blocks;
+	for (auto &block : checkpoint_freed_blocks) {
 		all_free_blocks.insert(block);
-		if (AddFreeBlock(lock, block)) {
-			fully_freed_blocks.insert(block);
-		}
 	}
 	auto written_multi_use_blocks = multi_use_blocks;
 	// newly used blocks are still free blocks for this checkpoint - so add them to the free list that we write
@@ -1356,7 +1348,6 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 		all_free_blocks.insert(newly_used_block);
 		written_multi_use_blocks.erase(newly_used_block);
 	}
-	modified_blocks.clear();
 
 	if (!free_list_blocks.empty()) {
 		// there are blocks to write, either in the free_list or in the modified_blocks
@@ -1384,7 +1375,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 		header.free_list = DConstants::INVALID_INDEX;
 	}
 	lock.unlock();
-	metadata_manager.Flush();
+	metadata_manager.Flush(context);
 
 	lock.lock();
 	header.block_count = NumericCast<idx_t>(max_block);
@@ -1425,6 +1416,16 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	active_header = 1 - active_header;
 	//! Ensure the header write ends up on disk
 	handle->Sync();
+	set<block_id_t> fully_freed_blocks;
+	{
+		unique_lock<mutex> release_lock(single_file_block_lock);
+		for (auto &block : checkpoint_freed_blocks) {
+			modified_blocks.erase(block);
+			if (AddFreeBlock(release_lock, block)) {
+				fully_freed_blocks.insert(block);
+			}
+		}
+	}
 	// Release the free fully freed blocks to the filesystem.
 	TrimFreeBlocks(fully_freed_blocks);
 }
@@ -1448,7 +1449,9 @@ void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
 
 void SingleFileBlockManager::TrimFreeBlockRange(block_id_t start, block_id_t end) {
 	auto block_count = NumericCast<idx_t>(end + 1 - start);
-	handle->Trim(BLOCK_START + (NumericCast<idx_t>(start) * GetBlockAllocSize()), block_count * GetBlockAllocSize());
+	auto offset = BLOCK_START + (NumericCast<idx_t>(start) * GetBlockAllocSize());
+	auto length = block_count * GetBlockAllocSize();
+	handle->Trim(offset, length);
 }
 
 void SingleFileBlockManager::TrimFreeBlocks(const set<block_id_t> &blocks) {

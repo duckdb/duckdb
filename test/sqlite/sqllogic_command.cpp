@@ -1,4 +1,5 @@
 #include "sqllogic_command.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "sqllogic_test_runner.hpp"
 #include "result_helper.hpp"
 #include "duckdb/main/connection_manager.hpp"
@@ -12,7 +13,7 @@
 #include "test_helpers.hpp"
 #include "test_config.hpp"
 #include "sqllogic_test_logger.hpp"
-#include "catch.hpp"
+#include "test_reporter.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -39,7 +40,7 @@ static Connection &GetConnection(SQLLogicTestRunner &runner, DuckDB &db,
 		if (!init_cmd.empty()) {
 			auto res = con->Query(runner.ReplaceKeywords(init_cmd));
 			if (res->HasError()) {
-				FAIL("Startup queries provided via on_new_connection failed: " + res->GetError());
+				TEST_FAIL("Startup queries provided via on_new_connection failed: " + res->GetError());
 			}
 		}
 		auto &res = *con;
@@ -48,7 +49,7 @@ static Connection &GetConnection(SQLLogicTestRunner &runner, DuckDB &db,
 		return res;
 	}
 	if (!RefersToSameObject(*entry->second->context->db, *db.instance)) {
-		FAIL("Named connection has been started with different target databases");
+		TEST_FAIL("Named connection has been started with different target databases");
 	}
 	return *entry->second;
 }
@@ -58,7 +59,7 @@ static Connection &GetConnection(SQLLogicTestRunner &runner,
 	if (StringUtil::Contains(con_name, ":")) {
 		auto splits = StringUtil::Split(con_name, ":");
 		if (splits.size() != 2) {
-			FAIL("Expected either connection name or database:connection");
+			TEST_FAIL("Expected either connection name or database:connection");
 		}
 		auto &db_name = splits[0];
 		auto &con_name = splits[1];
@@ -69,7 +70,7 @@ static Connection &GetConnection(SQLLogicTestRunner &runner,
 		}
 		// no database - create it
 		if (runner.named_connection_map.find(con_name) != runner.named_connection_map.end()) {
-			FAIL("Database did not exist, but named connection already existed");
+			TEST_FAIL("Database did not exist, but named connection already existed");
 		}
 		auto result = runner.CreateDatabase(":memory:", true);
 		auto &result_con = *result.con;
@@ -101,7 +102,7 @@ Connection &Command::CommandConnection(ExecuteContext &context) const {
 					if (context.is_parallel) {
 						throw std::runtime_error(error_msg);
 					} else {
-						FAIL(error_msg);
+						TEST_FAIL(error_msg);
 					}
 				}
 			}
@@ -185,7 +186,7 @@ void Command::RestartDatabase(ExecuteContext &context, reference<Connection> &co
 	}
 	bool query_fail = false;
 	try {
-		connection.get().context->ParseStatements(sql_query);
+		connection.get().ExtractStatements(sql_query);
 	} catch (...) {
 		query_fail = true;
 	}
@@ -215,11 +216,11 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 		parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
 		auto ccontext = connection.get().context;
 		auto result = ccontext->Query(context.sql_query, parameters);
-		if (result->type == QueryResultType::STREAM_RESULT) {
+		if (result->GetResultType() == QueryResultType::STREAM_RESULT) {
 			auto &stream_result = result->Cast<StreamQueryResult>();
 			return stream_result.Materialize();
 		} else {
-			D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
+			D_ASSERT(result->GetResultType() == QueryResultType::MATERIALIZED_RESULT);
 			return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 		}
 #else
@@ -311,18 +312,39 @@ void Command::Execute(ExecuteContext &context) const {
 		return;
 	}
 	if (!CheckLoopCondition(context, conditions)) {
-		// condition excludes this file
+		// a loop-variable onlyif/skipif excludes this statement — a per-execution skip, counted like
+		// a mode-skip so the tally accounts for it instead of dropping it
+		if (IsCountableStatement()) {
+			runner.CountSkipMode();
+		}
 		return;
 	}
 	if (context.running_loops.empty()) {
 		context.sql_query = base_sql_query;
+	} else {
+		// perform the string replacement
+		context.sql_query = runner.LoopReplacement(base_sql_query, context.running_loops);
+	}
+	// Per-statement outcome events (--emit-test-events): count + emit pass/fail for the countable
+	// command kinds (statement/query); infrastructure commands run untracked. A failing statement
+	// throws (Catch FAIL) — record the fail, then rethrow so the failure still propagates.
+	if (!IsCountableStatement()) {
 		ExecuteInternal(context);
 		return;
 	}
-	// perform the string replacement
-	context.sql_query = runner.LoopReplacement(base_sql_query, context.running_loops);
-	// execute the iterated statement
-	ExecuteInternal(context);
+	// In parallel (concurrentloop) execution a failing statement does NOT throw — the worker records
+	// the failure into the context (error_file) and unwinds normally, to be re-raised after join. So
+	// besides the throwing (serial) path, treat a newly-set error_file as a fail; otherwise a
+	// concurrent failure is miscounted as a pass.
+	const bool had_error = !context.error_file.empty();
+	try {
+		ExecuteInternal(context);
+	} catch (...) {
+		runner.CountStatement(false);
+		throw;
+	}
+	const bool newly_failed = !had_error && !context.error_file.empty();
+	runner.CountStatement(!newly_failed);
 }
 
 Statement::Statement(SQLLogicTestRunner &runner) : Command(runner) {
@@ -339,7 +361,7 @@ void ResetLabel::ExecuteInternal(ExecuteContext &context) const {
 		auto it = map.find(query_label);
 		//! should we allow this to be missing at all?
 		if (it == map.end()) {
-			FAIL_LINE(file_name, query_line, 0);
+			TEST_FAIL_LINE(file_name, query_line, "");
 		}
 		map.erase(it);
 	});
@@ -421,7 +443,47 @@ static void ParallelExecuteLoop(ParallelExecuteContext *execute_context) {
 	}
 }
 
-bool LoopCommand::ForEachTokenReplace(Connection &con, const string &parameter, vector<string> &result) const {
+bool SQLLogicTestRunner::IsVariableReplacement(const string &token_name) {
+	return StringUtil::StartsWith(token_name, "<variable:");
+}
+
+Value SQLLogicTestRunner::GetVariableReplacement(const string &token_name, string &variable_name) {
+	// variable - get variable name
+	auto var_size = string("<variable:").size();
+	if (token_name.back() != '>') {
+		throw InvalidInputException("Expected <variable:var_name>, got %s", token_name);
+	}
+	auto var_section = token_name.substr(var_size, token_name.size() - var_size - 1);
+	auto variable_components = StringUtil::Split(var_section, ":");
+	optional_ptr<Connection> var_con;
+	string connection_name;
+	if (variable_components.size() == 1) {
+		// no connection specified
+		connection_name = "main connection";
+		var_con = con.get();
+		variable_name = var_section;
+	} else if (variable_components.size() == 2) {
+		connection_name = variable_components[0];
+		variable_name = variable_components[1];
+		auto entry = named_connection_map.find(connection_name);
+		if (entry == named_connection_map.end()) {
+			throw InvalidInputException(
+			    "Attempting to find variable %s in connection %s - but could not find this connection", variable_name,
+			    connection_name);
+		}
+		var_con = entry->second.get();
+	} else {
+		throw InvalidInputException("Expected either <variable:variable_name> or <variable:connection:variable_name>");
+	}
+	Value value;
+	if (!ClientConfig::GetConfig(*var_con->context).GetUserVariable(variable_name, value)) {
+		throw InvalidInputException("Variable with name \"%s\" was not defined in connection %s", variable_name,
+		                            connection_name);
+	}
+	return value;
+}
+
+bool LoopCommand::ForEachTokenReplace(const string &parameter, vector<string> &result) const {
 	if (parameter.empty()) {
 		return true;
 	}
@@ -435,7 +497,6 @@ bool LoopCommand::ForEachTokenReplace(Connection &con, const string &parameter, 
 	bool is_signed = is_integral || token_name == "<signed>";
 	bool is_unsigned = is_integral || token_name == "<unsigned>";
 	bool is_all_types_column = token_name == "<all_types_columns>";
-	bool is_variable = StringUtil::StartsWith(token_name, "<variable:");
 	if (token_name[0] == '!') {
 		// !token tries to remove the token from the list of tokens
 		auto entry = std::find(result.begin(), result.end(), parameter.substr(1));
@@ -447,21 +508,13 @@ bool LoopCommand::ForEachTokenReplace(Connection &con, const string &parameter, 
 		result.erase(entry);
 		collection = true;
 	}
-	if (is_variable) {
-		// variable - get variable name
-		auto var_size = string("<variable:").size();
-		if (token_name.back() != '>') {
-			throw InvalidInputException("Expected <variable:var_name>, got %s", token_name);
-		}
-		auto variable_name = token_name.substr(var_size, token_name.size() - var_size - 1);
-		Value value;
-		if (!ClientConfig::GetConfig(*con.context).GetUserVariable(variable_name, value)) {
-			throw InvalidInputException("Variable with name \"%s\" was not defined", variable_name);
-		}
+	if (runner.IsVariableReplacement(token_name)) {
+		string variable_name;
+		auto value = runner.GetVariableReplacement(token_name, variable_name);
 		if (value.IsNull()) {
 			throw InvalidInputException("Variable with name \"%s\" is NULL - cannot iterate over this", variable_name);
 		}
-		auto list_val = value.CastAs(*con.context, LogicalType::LIST(LogicalType::VARCHAR));
+		auto list_val = value.CastAs(*runner.con->context, LogicalType::LIST(LogicalType::VARCHAR));
 		for (auto &val : ListValue::GetChildren(list_val)) {
 			result.push_back(StringValue::Get(val));
 		}
@@ -573,7 +626,7 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 		loop_def.tokens.clear();
 		// expand any parameters in the loop definition
 		for (auto &token : definition.tokens) {
-			if (!ForEachTokenReplace(*runner.con, token, loop_def.tokens)) {
+			if (!ForEachTokenReplace(token, loop_def.tokens)) {
 				loop_def.tokens.push_back(token);
 			}
 		}
@@ -635,10 +688,14 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 		}
 		for (auto &execute_context : contexts) {
 			if (!execute_context.success) {
+				// error_file/error_line hold the failing command's location on both the thrown and the
+				// error_file paths — same source as the serial fail sites, so the locator is consistent
+				runner.test_failure_locator =
+				    StringUtil::Format("%s:%d", execute_context.error_file, execute_context.error_line);
 				if (!execute_context.error_message.empty()) {
-					FAIL(execute_context.error_message);
+					TEST_FAIL(execute_context.error_message);
 				} else {
-					FAIL_LINE(execute_context.error_file, execute_context.error_line, 0);
+					TEST_FAIL_LINE(execute_context.error_file, execute_context.error_line, "");
 				}
 			}
 		}
@@ -710,7 +767,8 @@ void Query::ExecuteInternal(ExecuteContext &context) const {
 			context.error_file = file_name;
 			context.error_line = query_line;
 		} else {
-			FAIL_LINE(file_name, query_line, 0);
+			runner.test_failure_locator = StringUtil::Format("%s:%d", file_name, query_line);
+			TEST_FAIL_LINE(file_name, query_line, "");
 		}
 	}
 }
@@ -824,7 +882,8 @@ void Statement::ExecuteInternal(ExecuteContext &context) const {
 			context.error_file = file_name;
 			context.error_line = query_line;
 		} else {
-			FAIL_LINE(file_name, query_line, 0);
+			runner.test_failure_locator = StringUtil::Format("%s:%d", file_name, query_line);
+			TEST_FAIL_LINE(file_name, query_line, "");
 		}
 	}
 }
@@ -885,7 +944,7 @@ void LoadCommand::ExecuteInternal(ExecuteContext &context) const {
 			} catch (std::exception &ex) {
 				ErrorData err(ex);
 				SQLLogicTestLogger::LoadDatabaseFail(runner.file_name, dbpath, err.Message());
-				FAIL();
+				TEST_FAIL("");
 			}
 		}
 	}

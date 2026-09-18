@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 

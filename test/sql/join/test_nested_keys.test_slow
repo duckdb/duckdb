@@ -25,6 +25,7 @@ CREATE VIEW intlists AS SELECT * FROM (VALUES
 	(NULL::INTEGER, [13])
 	) lv(i, fk);
 
+# PG says array[null] = array[null] => t
 query III
 SELECT i, pk, fk FROM intlistdim, intlists WHERE pk = fk ORDER BY i
 ----

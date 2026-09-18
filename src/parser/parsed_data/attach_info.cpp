@@ -1,4 +1,6 @@
 #include "duckdb/parser/parsed_data/attach_info.hpp"
+
+#include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/main/config.hpp"
 
@@ -39,10 +41,12 @@ string AttachInfo::ToString() const {
 	if (!parsed_options.empty() || !options.empty()) {
 		vector<string> stringified;
 		for (auto &opt : parsed_options) {
-			stringified.push_back(StringUtil::Format("%s %s", opt.first, opt.second->ToString()));
+			stringified.push_back(
+			    StringUtil::Format("%s %s", SQLIdentifier::ToString(opt.first), opt.second->ToString()));
 		}
 		for (auto &opt : options) {
-			stringified.push_back(StringUtil::Format("%s %s", opt.first, opt.second.ToSQLString()));
+			stringified.push_back(
+			    StringUtil::Format("%s %s", SQLIdentifier::ToString(opt.first), opt.second.ToSQLString()));
 		}
 		result += " (" + StringUtil::Join(stringified, ", ") + ")";
 	}

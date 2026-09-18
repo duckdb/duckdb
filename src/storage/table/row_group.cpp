@@ -1,7 +1,10 @@
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/parallel/async_result.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -47,7 +50,7 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
       has_changes(false) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != collection_p.GetTypes().size()) {
-		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
+		throw DataCorruptionException("Row group column count is unaligned with table column count. Corrupt file?");
 	}
 	this->column_pointers = std::move(pointer.data_pointers);
 	this->columns.resize(column_pointers.size());
@@ -212,9 +215,9 @@ void RowGroup::LoadColumn(storage_t c) const {
 	this->columns[c] = ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, column_data_reader, types[c]);
 	is_loaded[c] = true;
 	if (this->columns[c]->count != this->count) {
-		throw InternalException("Corrupted database - loaded column with index %llu, count %llu did "
-		                        "not match count of row group %llu",
-		                        c, this->columns[c]->count.load(), this->count.load());
+		throw DataCorruptionException("Corrupted database - loaded column with index %llu, count %llu did "
+		                              "not match count of row group %llu",
+		                              c, this->columns[c]->count.load(), this->count.load());
 	}
 }
 
@@ -361,10 +364,11 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 	Initialize(context_p, type, column_id, options);
 }
 
-void CollectionScanState::Initialize(const QueryContext &context, const vector<LogicalType> &types) {
+void CollectionScanState::Initialize(const QueryContext &context_p, const vector<LogicalType> &types) {
+	context = context_p;
 	auto &column_ids = GetColumnIds();
 	D_ASSERT(column_scans.empty());
-	column_scans.reserve(column_scans.size());
+	column_scans.reserve(column_ids.size());
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		column_scans.emplace_back(*this);
 	}
@@ -378,55 +382,60 @@ void CollectionScanState::Initialize(const QueryContext &context, const vector<L
 	}
 }
 
-bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset) {
-	auto &column_ids = state.GetColumnIds();
+bool RowGroup::InitializeScanInternal(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset) {
 	auto &filters = state.GetFilterInfo();
-	if (!CheckZonemap(filters)) {
-		return false;
-	}
-	if (!RefersToSameObject(node.GetNode(), *this)) {
-		throw InternalException("RowGroup::InitializeScanWithOffset segment node mismatch");
-	}
-
-	state.row_group = node;
-	state.vector_index = vector_offset;
-	auto row_start = node.GetRowStart();
-	state.max_row_group_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
-	auto row_number = vector_offset * STANDARD_VECTOR_SIZE;
-	if (state.max_row_group_row == 0) {
-		// exceeded row groups to scan
-		return false;
-	}
-	D_ASSERT(!state.column_scans.empty());
-	for (idx_t i = 0; i < column_ids.size(); i++) {
-		const auto &column = column_ids[i];
-		auto &column_data = GetColumn(column);
-		column_data.InitializeScanWithOffset(state.column_scans[i], row_number);
-		state.column_scans[i].scan_options = &state.GetOptions();
-	}
-	return true;
-}
-
-bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> &node) {
-	auto &column_ids = state.GetColumnIds();
-	auto &filters = state.GetFilterInfo();
-	if (!CheckZonemap(filters)) {
+	if (!CheckZonemap(state.context.GetClientContext(), filters, node.GetRowStart())) {
 		return false;
 	}
 	if (!RefersToSameObject(node.GetNode(), *this)) {
 		throw InternalException("RowGroup::InitializeScan segment node mismatch");
 	}
-	auto row_start = node.GetRowStart();
+	D_ASSERT(state.prepared_vector.prepare_state == VectorPrepareState::NONE);
+	state.prepared_vector.Reset();
+	state.assignment_io_registered = false;
 	state.row_group = node;
-	state.vector_index = 0;
+	state.vector_index = vector_offset;
+	auto row_start = node.GetRowStart();
 	state.max_row_group_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
 	if (state.max_row_group_row == 0) {
+		// exceeded row groups to scan
 		return false;
 	}
 	D_ASSERT(!state.column_scans.empty());
+	return true;
+}
+
+bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset,
+                                        bool initialize_columns) {
+	if (!InitializeScanInternal(state, node, vector_offset)) {
+		return false;
+	}
+	state.column_scans_pending = true;
+	if (initialize_columns) {
+		InitializeColumnScans(state);
+	}
+	return true;
+}
+
+void RowGroup::InitializeColumnScans(CollectionScanState &state) {
+	D_ASSERT(state.column_scans_pending);
+	const auto &column_ids = state.GetColumnIds();
+	auto row_number = state.vector_index * STANDARD_VECTOR_SIZE;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		auto column = column_ids[i];
-		auto &column_data = GetColumn(column);
+		auto &column_data = GetColumn(column_ids[i]);
+		column_data.InitializeScanWithOffset(state.column_scans[i], row_number);
+		state.column_scans[i].scan_options = &state.GetOptions();
+	}
+	state.column_scans_pending = false;
+}
+
+bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> &node) {
+	if (!InitializeScanInternal(state, node, 0)) {
+		return false;
+	}
+	const auto &column_ids = state.GetColumnIds();
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto &column_data = GetColumn(column_ids[i]);
 		column_data.InitializeScan(state.column_scans[i]);
 		state.column_scans[i].scan_options = &state.GetOptions();
 	}
@@ -454,7 +463,8 @@ unique_ptr<RowGroup> RowGroup::CreateNewRowGroupCopy(RowGroupCollection &new_col
 unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, const LogicalType &target_type,
                                          idx_t changed_idx, ExpressionExecutor &executor,
                                          CollectionScanState &scan_state, SegmentNode<RowGroup> &node,
-                                         DataChunk &scan_chunk) {
+                                         DataChunk &scan_chunk, TransactionData transaction,
+                                         ColumnStatistics &changed_stats) {
 	Verify();
 
 	// construct a new column data for this type
@@ -471,16 +481,21 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	append_types.push_back(target_type);
 	append_chunk.Initialize(Allocator::DefaultAllocator(), append_types);
 	auto &append_vector = append_chunk.data[0];
+	Vector hashes(LogicalType::HASH);
+	ScanOptions options(transaction);
+	options.insert_type = InsertedScanType::ALL_ROWS;
+	options.delete_type = DeletedScanType::INCLUDE_ALL_DELETED;
 	while (true) {
 		// scan the table
 		scan_chunk.Reset();
-		Scan(scan_state, scan_chunk, TableScanType::TABLE_SCAN_ALL_ROWS);
+		Scan(options, scan_state, scan_chunk);
 		if (scan_chunk.size() == 0) {
 			break;
 		}
 		// execute the expression
 		append_chunk.Reset();
 		executor.ExecuteExpression(scan_chunk, append_vector);
+		changed_stats.UpdateDistinctStatistics(append_vector, scan_chunk.size(), hashes);
 		column_data->Append(append_state, append_vector, scan_chunk.size());
 	}
 	column_data->FinalizeAppend(nullptr, append_state);
@@ -513,7 +528,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	}
 	if (has_per_column_metadata_blocks) {
 		row_group->per_column_metadata_blocks = per_column_metadata_blocks;
-		row_group->per_column_metadata_blocks.RemoveColumn(changed_idx);
+		row_group->per_column_metadata_blocks.ClearColumn(changed_idx);
 	}
 	lock.unlock();
 	row_group->Verify();
@@ -521,7 +536,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 }
 
 unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, ColumnDefinition &new_column,
-                                         ExpressionExecutor &executor) {
+                                         ExpressionExecutor &executor, ColumnStatistics &new_column_stats) {
 	Verify();
 
 	// construct a new column data for the new column
@@ -534,14 +549,16 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 		DataChunk result_chunk;
 		result_chunk.Initialize(Allocator::DefaultAllocator(), {new_column.GetType()});
 		auto &result = result_chunk.data[0];
+		Vector hashes(LogicalType::HASH);
 
 		ColumnAppendState state;
 		added_column->InitializeAppend(state);
 		for (idx_t i = 0; i < rows_to_write; i += STANDARD_VECTOR_SIZE) {
 			idx_t rows_in_this_vector = MinValue<idx_t>(rows_to_write - i, STANDARD_VECTOR_SIZE);
-			dummy_chunk.SetCardinality(rows_in_this_vector);
+			dummy_chunk.SetChildCardinality(rows_in_this_vector);
 			result_chunk.Reset();
 			executor.ExecuteExpression(dummy_chunk, result);
+			new_column_stats.UpdateDistinctStatistics(result, rows_in_this_vector, hashes);
 			added_column->Append(state, result, rows_in_this_vector);
 		}
 		added_column->FinalizeAppend(nullptr, state);
@@ -607,7 +624,9 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 	}
 	if (has_per_column_metadata_blocks) {
 		row_group->per_column_metadata_blocks = per_column_metadata_blocks;
-		row_group->per_column_metadata_blocks.RemoveColumn(target_idx);
+		// the columns after the removed one shift down by one position, so their
+		// metadata block entries (keyed by column index) must shift down as well
+		row_group->per_column_metadata_blocks.RemoveColumn(removed_column);
 	}
 	lock.unlock();
 	row_group->Verify();
@@ -643,8 +662,13 @@ void RowGroup::CommitDrop() {
 	drop_state.FinalizeCommit();
 }
 
-void RowGroup::NextVector(CollectionScanState &state) {
+void RowGroup::FinishVector(CollectionScanState &state) {
 	state.vector_index++;
+	state.prepared_vector.Reset();
+}
+
+void RowGroup::NextVector(CollectionScanState &state) {
+	FinishVector(state);
 	const auto &column_ids = state.GetColumnIds();
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		const auto &column = column_ids[i];
@@ -652,18 +676,106 @@ void RowGroup::NextVector(CollectionScanState &state) {
 	}
 }
 
-FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row) {
-	// RowId columns dont have a zonemap, but we can trivially create stats to check the filter against.
-	BaseStatistics dummy_stats = NumericStats::CreateEmpty(LogicalType::ROW_TYPE);
-	dummy_stats.SetHasNoNullFast();
-	NumericStats::SetMin(dummy_stats, UnsafeNumericCast<row_t>(beg_row));
-	NumericStats::SetMax(dummy_stats, UnsafeNumericCast<row_t>(end_row));
-
-	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "RowGroup::CheckRowIdFilter");
-	return expr_filter.CheckStatistics(dummy_stats);
+static idx_t SystemRowsSelection(const ScanSamplingInfo &sampling_info, idx_t start_row, idx_t count,
+                                 SelectionVector &sel) {
+	auto rate = sampling_info.sample_rate;
+	if (rate >= 1) {
+		return count;
+	}
+	idx_t result_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		auto row_idx = start_row + i;
+		auto before = std::floor(LossyNumericCast<double>(row_idx) * rate + sampling_info.sample_phase);
+		auto after = std::floor(LossyNumericCast<double>(row_idx + 1) * rate + sampling_info.sample_phase);
+		if (after > before) {
+			sel.set_index(result_count++, i);
+		}
+	}
+	return result_count;
 }
 
-bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
+static idx_t IntersectSelections(const SelectionVector &left, idx_t left_count, const SelectionVector &right,
+                                 idx_t right_count, SelectionVector &result) {
+	idx_t left_idx = 0;
+	idx_t right_idx = 0;
+	idx_t result_count = 0;
+	while (left_idx < left_count && right_idx < right_count) {
+		auto left_entry = left.get_index(left_idx);
+		auto right_entry = right.get_index(right_idx);
+		if (left_entry == right_entry) {
+			result.set_index(result_count++, left_entry);
+			left_idx++;
+			right_idx++;
+		} else if (left_entry < right_entry) {
+			left_idx++;
+		} else {
+			right_idx++;
+		}
+	}
+	return result_count;
+}
+
+static BaseStatistics CreateRowIdStats(idx_t beg_row, idx_t end_row) {
+	D_ASSERT(end_row > beg_row);
+	auto result = NumericStats::CreateEmpty(LogicalType::ROW_TYPE);
+	result.SetHasNoNullFast();
+	NumericStats::SetMin(result, UnsafeNumericCast<row_t>(beg_row));
+	NumericStats::SetMax(result, UnsafeNumericCast<row_t>(end_row - 1));
+	return result;
+}
+
+FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row) {
+	if (end_row <= beg_row) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	// RowId columns dont have a zonemap, but we can trivially create stats to check the filter against.
+	auto rowid_stats = CreateRowIdStats(beg_row, end_row);
+
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "RowGroup::CheckRowIdFilter");
+	return expr_filter.CheckStatistics(rowid_stats);
+}
+
+bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo &filters, idx_t row_start) {
+	const auto table_filters = filters.GetTableFilters();
+	const auto column_ids = filters.GetColumnIds();
+	if (table_filters && column_ids) {
+		for (const auto &filter : table_filters->GetMultiColumnFilters()) {
+			const auto &expression_filter = ExpressionFilter::GetExpressionFilter(*filter, "RowGroup::CheckZonemap");
+			vector<BaseStatistics> input_stats;
+			input_stats.reserve(expression_filter.column_indexes.size());
+			bool supported = true;
+			for (const auto &column_index : expression_filter.column_indexes) {
+				if (column_index.GetIndex() >= column_ids->size()) {
+					throw InternalException("Multi-column filter column index out of range");
+				}
+				const auto &storage_index = (*column_ids)[column_index.GetIndex()];
+				if (storage_index.IsRowIdColumn()) {
+					input_stats.push_back(CreateRowIdStats(row_start, row_start + count));
+					continue;
+				}
+				if (storage_index.IsRowNumberColumn()) {
+					supported = false;
+					break;
+				}
+				auto column_stats = GetStatistics(storage_index);
+				if (!column_stats) {
+					supported = false;
+					break;
+				}
+				input_stats.push_back(column_stats->Copy());
+			}
+			if (!supported) {
+				continue;
+			}
+			const auto prune_result = ExpressionFilter::CheckExpressionStatistics(
+			    context, *expression_filter.expr,
+			    array_ptr<const BaseStatistics>(input_stats.data(), input_stats.size()));
+			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+			    prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+				return false;
+			}
+		}
+	}
 	auto &filter_list = filters.GetFilterList();
 	// new row group - label all filters as up for grabs again
 	filters.CheckAllFilters();
@@ -672,11 +784,18 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 		auto &filter = entry.filter;
 		const auto &base_column_index = entry.table_column_index;
 
-		auto prune_result = GetColumn(base_column_index).CheckZonemap(base_column_index, filter);
-		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+		FilterPropagateResult prune_result;
+		if (base_column_index.IsRowIdColumn()) {
+			// the row ids in this row group span exactly [row_start, row_start + count)
+			prune_result = CheckRowIdFilter(filter, row_start, row_start + count);
+		} else {
+			prune_result = GetColumn(base_column_index).CheckZonemap(context, base_column_index, filter);
+		}
+		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+		    prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
 			return false;
 		}
-		if (ExpressionFilter::IsRootOptionalFilter(filter)) {
+		if (ExpressionFilter::IsRootNonSelectivityOptionalFilter(filter)) {
 			// these are only for row group checking, set as always true so we don't check it
 			filters.SetFilterAlwaysTrue(i);
 		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
@@ -699,15 +818,16 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		auto column_idx = entry.scan_column_index;
 		auto base_column_idx = entry.table_column_index;
 		auto &filter = entry.filter;
+		auto &column_data = GetColumn(base_column_idx);
 
-		auto prune_result = GetColumn(base_column_idx).CheckZonemap(state.column_scans[column_idx], filter);
-		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+		optional_ptr<SegmentNode<ColumnSegment>> current_segment;
+		auto prune_result = column_data.CheckZonemap(state.column_scans[column_idx], filter, current_segment);
+		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE &&
+		    prune_result != FilterPropagateResult::FILTER_FALSE_OR_NULL) {
 			continue;
 		}
 
 		// check zone map segment.
-		auto &column_scan_state = state.column_scans[column_idx];
-		auto current_segment = column_scan_state.current;
 		if (!current_segment) {
 			// no segment to skip
 			continue;
@@ -746,23 +866,90 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 	}
 }
 
-void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &result) {
+bool RowGroup::RegisterScanIO(CollectionScanState &state, idx_t row_count, PrefetchState &prefetch_state) const {
+	if (!GetBlockManager().Prefetch()) {
+		return false;
+	}
 	const auto &column_ids = state.GetColumnIds();
-	auto &filter_info = state.GetFilterInfo();
-	auto &transaction = options.transaction;
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		GetColumn(column_ids[i]).InitializePrefetch(prefetch_state, state.column_scans[i], row_count);
+	}
+	return true;
+}
+
+void RowGroup::PrefetchScanIO(CollectionScanState &state, idx_t row_count) const {
+	PrefetchState prefetch_state;
+	if (!RegisterScanIO(state, row_count, prefetch_state)) {
+		return;
+	}
+	GetBlockManager().buffer_manager.Prefetch(state.context, prefetch_state.blocks);
+}
+
+vector<unique_ptr<AsyncTask>> RowGroup::CollectScanIOTasks(CollectionScanState &state, idx_t row_count) const {
+	PrefetchState prefetch_state;
+	if (!RegisterScanIO(state, row_count, prefetch_state)) {
+		return vector<unique_ptr<AsyncTask>>();
+	}
+	return GetBlockManager().buffer_manager.CreatePrefetchTasks(state.context, prefetch_state.blocks);
+}
+
+idx_t RowGroup::PrefetchRowCount(CollectionScanState &state) {
+	const idx_t start_row = state.vector_index * STANDARD_VECTOR_SIZE;
+	idx_t end_row = state.max_row_group_row;
+	auto context = state.context.GetClientContext();
+	for (auto &entry : state.GetFilterInfo().GetFilterList()) {
+		if (entry.IsAlwaysTrue() || entry.table_column_index.IsPushdownExtract()) {
+			continue;
+		}
+		auto &column_data = GetColumn(entry.table_column_index);
+		end_row = MinValue<idx_t>(end_row, column_data.ZonemapScanEnd(context, start_row, end_row, entry.filter));
+	}
+	return end_row > start_row ? end_row - start_row : 0;
+}
+
+bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
+	auto &prepared = state.prepared_vector;
+	if (prepared.prepare_state != VectorPrepareState::NONE) {
+		return true;
+	}
 	while (true) {
-		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row_group_row) {
+		const idx_t remaining_rows = state.RemainingAssignmentRows();
+		if (remaining_rows == 0) {
 			// exceeded the amount of rows to scan
-			return;
+			return false;
 		}
 		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
-		auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row_group_row - current_row);
+		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, remaining_rows);
+		bool has_sample_selection = false;
+		idx_t sample_count = max_count;
+		auto &sample_sel = prepared.sample_sel;
 
 		// check the sampling info if we have to sample this chunk
-		if (state.GetSamplingInfo().do_system_sample &&
-		    state.random.NextRandom() > state.GetSamplingInfo().sample_rate) {
-			NextVector(state);
-			continue;
+		if (state.GetSamplingInfo().do_system_sample) {
+			auto &sampling_info = state.GetSamplingInfo();
+			if (!sampling_info.is_percentage) {
+				double rate = sampling_info.sample_rate;
+				if (rate <= 0) {
+					NextVector(state);
+					continue;
+				}
+				if (rate < 1) {
+					auto row_group_start = state.row_group->GetRowStart();
+					sample_count =
+					    SystemRowsSelection(sampling_info, row_group_start + current_row, max_count, sample_sel);
+					if (sample_count == 0) {
+						NextVector(state);
+						continue;
+					}
+					has_sample_selection = true;
+				}
+			} else {
+				// percentage based system sampling
+				if (state.random.NextRandom() > sampling_info.sample_rate) {
+					NextVector(state);
+					continue;
+				}
+			}
 		}
 
 		//! first check the zonemap if we have to scan this partition
@@ -780,110 +967,142 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 		}
 		state.rows_scanned += count;
 
-		auto &block_manager = GetBlockManager();
-		if (block_manager.Prefetch()) {
-			PrefetchState prefetch_state;
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				const auto &column = column_ids[i];
-				GetColumn(column).InitializePrefetch(prefetch_state, state.column_scans[i], max_count);
+		prepared.prepare_state = VectorPrepareState::PREPARED;
+		prepared.max_count = max_count;
+		prepared.visible_count = count;
+		prepared.has_sample_selection = has_sample_selection;
+		prepared.sample_count = sample_count;
+		return true;
+	}
+}
+
+void RowGroup::ProcessPreparedScan(ScanOptions options, CollectionScanState &state, DataChunk &result) {
+	const auto &column_ids = state.GetColumnIds();
+	auto &filter_info = state.GetFilterInfo();
+	auto &transaction = options.transaction;
+	auto &prepared = state.prepared_vector;
+	D_ASSERT(prepared.prepare_state != VectorPrepareState::NONE);
+	idx_t max_count = prepared.max_count;
+	idx_t count = prepared.visible_count;
+	bool has_sample_selection = prepared.has_sample_selection;
+	idx_t sample_count = prepared.sample_count;
+	auto &sample_sel = prepared.sample_sel;
+
+	bool has_filters = filter_info.HasFilters();
+	if (count == max_count && !has_filters) {
+		// scan all vectors completely: full scan without deletions or table filters
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			const auto &column = column_ids[i];
+			auto &col_data = GetColumn(column);
+			state.column_scans[i].update_scan_type = options.update_type;
+			// pass max_count explicitly, concurrent inserts can grow the column past the count captured at scan init
+			col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i], max_count);
+			if (has_sample_selection) {
+				result.data[i].Slice(sample_sel, sample_count);
 			}
-			auto &buffer_manager = block_manager.buffer_manager;
-			buffer_manager.Prefetch(prefetch_state.blocks);
 		}
-
-		bool has_filters = filter_info.HasFilters();
-		if (count == max_count && !has_filters) {
-			// scan all vectors completely: full scan without deletions or table filters
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				const auto &column = column_ids[i];
-				auto &col_data = GetColumn(column);
-				state.column_scans[i].update_scan_type = options.update_type;
-				// pass max_count explicitly so we never read past the row count we captured at scan
-				// init time (concurrent inserts can grow the column past max_count)
-				col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i], max_count);
-			}
-		} else {
-			// partial scan: we have deletions or table filters
-			idx_t approved_tuple_count = count;
-			SelectionVector sel;
-			if (count != max_count) {
-				sel.Initialize(state.valid_sel);
-			} else {
-				sel.Initialize(nullptr);
-			}
-			//! first, we scan the columns with filters, fetch their data and generate a selection vector.
-			//! get runtime statistics
-			auto adaptive_filter = filter_info.GetAdaptiveFilter();
-			auto filter_state = filter_info.BeginFilter();
-			if (has_filters) {
-				auto &filter_list = filter_info.GetFilterList();
-				const auto &permutation = adaptive_filter->GetPermutation();
-				for (idx_t i = 0; i < filter_list.size(); i++) {
-					auto filter_idx = permutation[i];
-					auto &filter = filter_list[filter_idx];
-					if (filter.IsAlwaysTrue()) {
-						// this filter is always true - skip it
-						continue;
-					}
-					auto &table_filter_state = *filter.filter_state;
-
-					const auto scan_idx = filter.scan_column_index;
-					const auto column_idx = filter.table_column_index;
-
-					auto &result_vector = result.data[scan_idx];
-					if (approved_tuple_count == 0) {
-						auto &col_data = GetColumn(column_idx);
-						col_data.Skip(state.column_scans[scan_idx]);
-						continue;
-					}
-					auto &col_data = GetColumn(column_idx);
-					col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx], result_vector, sel,
-					                approved_tuple_count, filter.filter, table_filter_state);
-				}
-				for (auto &table_filter : filter_list) {
-					if (table_filter.IsAlwaysTrue()) {
-						continue;
-					}
-					result.data[table_filter.scan_column_index].Slice(sel, approved_tuple_count);
-				}
-			}
+		if (has_sample_selection) {
+			count = sample_count;
+		}
+	} else {
+		// partial scan: we have deletions or table filters
+		idx_t approved_tuple_count = count;
+		SelectionVector sel;
+		SelectionVector intersect_sel(STANDARD_VECTOR_SIZE);
+		if (has_sample_selection && count != max_count) {
+			approved_tuple_count = IntersectSelections(state.valid_sel, count, sample_sel, sample_count, intersect_sel);
 			if (approved_tuple_count == 0) {
-				// all rows were filtered out by the table filters
-				D_ASSERT(has_filters);
-				result.Reset();
-				// skip this vector in all the scans that were not scanned yet
-				for (idx_t i = 0; i < column_ids.size(); i++) {
-					auto &col_idx = column_ids[i];
-					if (has_filters && filter_info.ColumnHasFilters(i)) {
-						continue;
-					}
-					auto &col_data = GetColumn(col_idx);
-					col_data.Skip(state.column_scans[i]);
-				}
-				filter_info.EndFilter(filter_state);
-				state.vector_index++;
-				continue;
+				NextVector(state);
+				return;
 			}
-			//! Now we use the selection vector to fetch data for the other columns.
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				if (has_filters && filter_info.ColumnHasFilters(i)) {
-					// column has already been scanned as part of the filtering process
+			sel.Initialize(intersect_sel);
+		} else if (has_sample_selection) {
+			approved_tuple_count = sample_count;
+			sel.Initialize(sample_sel);
+		} else if (count != max_count) {
+			sel.Initialize(state.valid_sel);
+		} else {
+			sel.Initialize(nullptr);
+		}
+		//! first, we scan the columns with filters, fetch their data and generate a selection vector.
+		auto adaptive_filter = filter_info.GetAdaptiveFilter();
+		auto filter_state = filter_info.BeginFilter();
+		if (has_filters) {
+			auto &filter_list = filter_info.GetFilterList();
+			const auto &permutation = adaptive_filter->GetPermutation();
+			for (idx_t i = 0; i < filter_list.size(); i++) {
+				auto filter_idx = permutation[i];
+				auto &filter = filter_list[filter_idx];
+				if (filter.IsAlwaysTrue()) {
 					continue;
 				}
-				auto &column = column_ids[i];
-				auto &col_data = GetColumn(column);
-				state.column_scans[i].update_scan_type = options.update_type;
-				col_data.Select(transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
-				                approved_tuple_count);
+				auto &table_filter_state = *filter.filter_state;
+
+				const auto scan_idx = filter.scan_column_index;
+				const auto column_idx = filter.table_column_index;
+
+				auto &result_vector = result.data[scan_idx];
+				if (approved_tuple_count == 0) {
+					auto &col_data = GetColumn(column_idx);
+					col_data.Skip(state.column_scans[scan_idx]);
+					continue;
+				}
+				auto &col_data = GetColumn(column_idx);
+				col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx], result_vector, sel,
+				                approved_tuple_count, filter.filter, table_filter_state);
+			}
+			for (auto &table_filter : filter_list) {
+				if (table_filter.IsAlwaysTrue()) {
+					continue;
+				}
+				result.data[table_filter.scan_column_index].Slice(sel, approved_tuple_count);
+			}
+		}
+		if (approved_tuple_count == 0) {
+			// all rows were filtered out by the table filters
+			D_ASSERT(has_filters);
+			result.Reset();
+			// skip this vector in all the scans that were not scanned yet
+			for (idx_t i = 0; i < column_ids.size(); i++) {
+				auto &col_idx = column_ids[i];
+				if (has_filters && filter_info.ColumnHasFilters(i)) {
+					continue;
+				}
+				auto &col_data = GetColumn(col_idx);
+				col_data.Skip(state.column_scans[i]);
 			}
 			filter_info.EndFilter(filter_state);
-
-			D_ASSERT(approved_tuple_count > 0);
-			count = approved_tuple_count;
+			FinishVector(state);
+			return;
 		}
-		result.SetChildCardinality(count);
-		state.vector_index++;
-		break;
+		//! Now we use the selection vector to fetch data for the other columns.
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			if (has_filters && filter_info.ColumnHasFilters(i)) {
+				// column has already been scanned as part of the filtering process
+				continue;
+			}
+			auto &column = column_ids[i];
+			auto &col_data = GetColumn(column);
+			state.column_scans[i].update_scan_type = options.update_type;
+			col_data.Select(transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
+			                approved_tuple_count);
+		}
+		filter_info.EndFilter(filter_state);
+
+		D_ASSERT(approved_tuple_count > 0);
+		count = approved_tuple_count;
+	}
+	result.SetChildCardinality(count);
+	FinishVector(state);
+}
+
+void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &result) {
+	while (PrepareScan(options, state)) {
+		PrefetchScanIO(state, state.prepared_vector.max_count);
+		ProcessPreparedScan(options, state, result);
+		if (result.size() > 0) {
+			return;
+		}
 	}
 }
 
@@ -893,16 +1112,14 @@ ScanOptions::ScanOptions(TransactionData transaction) : transaction(transaction)
 void RowGroup::Scan(CollectionScanState &state, DataChunk &result, TableScanType type) {
 	auto &transaction_manager = DuckTransactionManager::Get(GetCollection().GetAttached());
 
-	transaction_t start_ts;
-	transaction_t transaction_id;
+	VisibilityBound visibility_bound;
 	if (type == TableScanType::TABLE_SCAN_COMMITTED_ROWS) {
-		start_ts = transaction_manager.GetLastCommit() + 1;
-		transaction_id = MAX_TRANSACTION_ID;
+		visibility_bound = VisibilityBound::Through(transaction_manager.GetLastCommit());
 	} else {
-		start_ts = transaction_manager.LowestActiveStart();
-		transaction_id = transaction_manager.LowestActiveId();
+		visibility_bound = transaction_manager.LowestVisibilityBound();
 	}
-	TransactionData transaction(transaction_id, start_ts);
+	// a scan on behalf of no transaction: there are no writes of its own to see
+	TransactionData transaction(MAX_TRANSACTION_ID, visibility_bound);
 
 	ScanOptions options(transaction);
 	options.insert_type = InsertedScanType::ALL_ROWS;
@@ -993,30 +1210,33 @@ idx_t RowGroup::GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVec
 	return vinfo->GetSelVector(options, vector_idx, sel_vector, max_count);
 }
 
-bool RowGroup::Fetch(TransactionData transaction, idx_t row) {
-	if (UnsafeNumericCast<idx_t>(row) > count) {
-		throw InternalException("RowGroup::Fetch - row_id out of range for row group");
+idx_t RowGroup::Fetch(TransactionData transaction, const idx_t *offsets, idx_t fetch_count,
+                      SelectionVector &visible_sel) {
+	if (fetch_count == 0) {
+		return 0;
 	}
 	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
-		return true;
+		// No version info at all, which means every row is visible.
+		return fetch_count;
 	}
-	return vinfo->Fetch(transaction, row);
+	return vinfo->GetVisibleRows(transaction, offsets, fetch_count, visible_sel);
 }
 
-void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, const vector<StorageIndex> &column_ids,
-                        row_t row_id, DataChunk &result, idx_t result_idx) {
-	if (UnsafeNumericCast<idx_t>(row_id) > count) {
-		throw InternalException("RowGroup::FetchRow - row_id out of range for row group");
+void RowGroup::FetchRows(TransactionData transaction, ColumnFetchState &state, const vector<StorageIndex> &column_ids,
+                         const idx_t *offsets, const SelectionVector &visible_sel, idx_t visible_count,
+                         DataChunk &result, idx_t result_offset) {
+	if (visible_count == 0) {
+		return;
 	}
+
 	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
 		auto &column = column_ids[col_idx];
 		auto &result_vector = result.data[col_idx];
 		D_ASSERT(result_vector.GetVectorType() == VectorType::FLAT_VECTOR);
-		D_ASSERT(!FlatVector::IsNull(result_vector, result_idx));
-		// regular column: fetch data from the base column
 		auto &col_data = GetColumn(column);
-		col_data.FetchRow(transaction, state, column, row_id, result_vector, result_idx);
+		col_data.FetchRows(transaction, state, column, offsets, visible_sel, visible_count, result_vector,
+		                   result_offset);
 	}
 }
 
@@ -1069,14 +1289,22 @@ RowGroupAppendState::RowGroupAppendState(TableAppendState &parent_p)
 RowGroupAppendState::~RowGroupAppendState() {
 }
 
-void RowGroup::InitializeAppend(RowGroupAppendState &append_state) {
-	append_state.row_group = this;
+void RowGroup::InitializeAppend(SegmentNode<RowGroup> &row_group, RowGroupAppendState &append_state) {
+	append_state.row_group = row_group;
+	row_group.GetNode().InitializeAppendInternal(append_state);
+}
+void RowGroup::InitializeAppendInternal(RowGroupAppendState &append_state) {
+	if (!RefersToSameObject(append_state.row_group->GetNode(), *this)) {
+		throw InternalException("RowGroup::InitializeAppend mismatch - call RowGroupAppendState::InitializeAppend");
+	}
 	append_state.offset_in_row_group = this->count;
 	// for each column, initialize the append state
 	append_state.states = make_unsafe_uniq_array<ColumnAppendState>(GetColumnCount());
 	for (idx_t i = 0; i < GetColumnCount(); i++) {
 		auto &col_data = GetColumn(i);
-		col_data.InitializeAppend(append_state.states[i]);
+		auto &state = append_state.states[i];
+		state.transient = &append_state.transient;
+		col_data.InitializeAppend(state);
 	}
 }
 
@@ -1108,9 +1336,9 @@ void RowGroup::FinalizeAppend(RowGroupAppendState &state) {
 	}
 }
 
-void RowGroup::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
+void RowGroup::CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t start, idx_t count) {
 	auto &vinfo = GetOrCreateVersionInfo();
-	vinfo.CleanupAppend(lowest_transaction, start, count);
+	vinfo.CleanupAppend(lowest_visibility_bound, start, count);
 }
 
 void RowGroup::Update(TransactionData transaction, DuckTableEntry &table_entry, DataChunk &update_chunk, row_t *ids,
@@ -1221,8 +1449,6 @@ CompressionType ColumnCheckpointInfo::GetCompressionType() {
 
 shared_ptr<ColumnData> RowGroup::CheckpointColumn(const RowGroup &row_group, idx_t column_idx, RowGroupWriteInfo &info,
                                                   RowGroupWriteData &write_data) {
-	// if we are loading a column just to checkpoint we unload it post-checkpoint
-	auto keep_column_loaded = row_group.ColumnIsLoaded(column_idx);
 	auto &column = row_group.GetColumn(column_idx);
 	ColumnCheckpointInfo checkpoint_info(info, column_idx);
 	auto checkpoint_state = column.Checkpoint(row_group, checkpoint_info);
@@ -1235,7 +1461,6 @@ shared_ptr<ColumnData> RowGroup::CheckpointColumn(const RowGroup &row_group, idx
 
 	write_data.statistics.push_back(stats->Copy());
 	write_data.states.push_back(std::move(checkpoint_state));
-	write_data.keep_column_loaded.push_back(keep_column_loaded);
 	return result_col;
 }
 
@@ -1247,8 +1472,8 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 	}
 
 	idx_t column_count = row_groups[0].get().GetColumnCount();
-	for (auto &row_group : row_groups) {
-		D_ASSERT(column_count == row_group.get().GetColumnCount());
+	for (idx_t row_group_idx = 0; row_group_idx < row_groups.size(); row_group_idx++) {
+		D_ASSERT(column_count == row_groups[row_group_idx].get().GetColumnCount());
 		RowGroupWriteData write_data;
 		write_data.states.reserve(column_count);
 		write_data.statistics.reserve(column_count);
@@ -1304,18 +1529,24 @@ idx_t RowGroup::GetCommittedRowCount() {
 	if (!vinfo) {
 		return count;
 	}
-	ScanOptions options(TransactionData(0, TRANSACTION_ID_START));
+	ScanOptions options(TransactionData(0, VisibilityBound::AllCommitted()));
 	options.insert_type = InsertedScanType::ALL_ROWS;
 	options.delete_type = DeletedScanType::OMIT_COMMITTED_DELETES;
 	return vinfo->GetRowCount(options, count);
 }
 
 idx_t RowGroup::GetVisibleRowCount(TransactionData transaction) {
+	return GetVisibleRowCount(transaction, 0, count);
+}
+
+idx_t RowGroup::GetVisibleRowCount(TransactionData transaction, idx_t start_vector, idx_t scan_count) {
+	D_ASSERT(start_vector * STANDARD_VECTOR_SIZE <= count);
+	D_ASSERT(scan_count <= count - start_vector * STANDARD_VECTOR_SIZE);
 	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
-		return count;
+		return scan_count;
 	}
-	return vinfo->GetRowCount(transaction, count);
+	return vinfo->GetRowCount(transaction, start_vector, scan_count);
 }
 
 bool RowGroup::HasUnloadedDeletes() const {
@@ -1461,6 +1692,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 
 	RowGroupWriteInfo info(writer.GetPartialBlockManager(), compression_types, writer.GetCheckpointOptions());
 
+	vector<idx_t> reused_columns;
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
 		bool column_has_changes = true;
 		if (partial_reuse) {
@@ -1474,8 +1706,8 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 		if (!column_has_changes) {
 			// reuse this column's metadata
 			result.states.push_back(nullptr);
+			reused_columns.emplace_back(column_idx);
 			result_row_group->column_pointers[column_idx] = column_pointers[column_idx];
-			result.keep_column_loaded.push_back(true);
 			// carry forward existing column data and statistics
 			if (!ColumnIsLoaded(column_idx)) {
 				result_row_group->columns[column_idx] = nullptr;
@@ -1499,6 +1731,16 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 			}
 			result_row_group->columns[column_idx] = CheckpointColumn(*this, column_idx, info, result);
 		}
+	}
+
+	if (partial_reuse) {
+		// carry forward the extras for reused columns onto the new row group, so RowGroup::Checkpoint
+		// can look them up via this->per_column_metadata_blocks
+		auto extras = per_column_metadata_blocks.GetBlocksForColumns(reused_columns);
+		for (idx_t i = 0; i < reused_columns.size(); i++) {
+			result_row_group->per_column_metadata_blocks.AddColumn(reused_columns[i], extras[i]);
+		}
+		result_row_group->has_per_column_metadata_blocks = true;
 	}
 
 	result.result_row_group = std::move(result_row_group);
@@ -1559,7 +1801,6 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	}
 	// write path: write column metadata to disk (with optional per-column reuse)
 	D_ASSERT(write_data.states.size() == GetColumnCount());
-	vector<idx_t> reused_columns;
 
 	// merge stats
 	{
@@ -1567,7 +1808,6 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
 			bool is_reused = !write_data.states[column_idx];
 			if (is_reused) {
-				reused_columns.emplace_back(column_idx);
 				if (!ColumnIsLoaded(column_idx) &&
 				    collection.get().GetTypes()[column_idx].id() != LogicalTypeId::VARIANT) {
 					writer.SetHasUnloadedColumn(column_idx);
@@ -1584,28 +1824,17 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 
 	// collect blocks that need to be preserved for reused columns
 	vector<MetaBlockPointer> reused_column_blocks;
-
-	vector<vector<idx_t>> extra_blocks_for_columns;
-	if (!reused_columns.empty()) {
-		extra_blocks_for_columns = per_column_metadata_blocks.GetBlocksForColumns(reused_columns);
-	}
-	idx_t reused_column_idx = 0;
+	// per-column extras for newly written columns, collected separately and merged with the
+	// partial map of reused-column extras (carried over onto this row group by WriteToDisk).
+	PerColumnMetadataBlocks written_column_blocks;
 
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
 		bool is_reused = !write_data.states[column_idx];
 		if (is_reused) {
-			// reuse existing column pointer and per-column blocks
+			// reuse existing column pointer (extras are already carried on this->per_column_metadata_blocks)
 			auto col_ptr = column_pointers[column_idx];
 			row_group_pointer.data_pointers.push_back(col_ptr);
-			auto &col_blocks = extra_blocks_for_columns[reused_column_idx];
-			row_group_pointer.per_column_metadata_blocks.AddColumn(column_idx, col_blocks);
-
-			// collect all blocks for this reused column for ClearModifiedBlocks
 			reused_column_blocks.push_back(col_ptr);
-			for (auto &block_id : col_blocks) {
-				reused_column_blocks.emplace_back(block_id, 0);
-			}
-			++reused_column_idx;
 			continue;
 		}
 		// write new metadata for this column
@@ -1645,16 +1874,35 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 				col_extra_blocks.push_back(written_ptr.block_pointer);
 			}
 		}
-		row_group_pointer.per_column_metadata_blocks.AddColumn(column_idx, col_extra_blocks);
+		written_column_blocks.AddColumn(column_idx, col_extra_blocks);
 	}
 
 	if (GetCollection().SupportsPerColumnWrites()) {
-		row_group_pointer.has_per_column_metadata_blocks = true; // blocks already populated above
+		row_group_pointer.has_per_column_metadata_blocks = true;
+		if (write_data.write_action == RowGroupWriteAction::PARTIALLY_REUSE_COLUMN_METADATA) {
+			// merge reused-column extras (on this) with newly-written-column extras
+			D_ASSERT(has_per_column_metadata_blocks);
+			row_group_pointer.per_column_metadata_blocks =
+			    PerColumnMetadataBlocks::Merge(per_column_metadata_blocks, written_column_blocks);
+
+			// reused column blocks must be preserved by ClearModifiedBlocks
+			per_column_metadata_blocks.ForEachBlock(
+			    [&](idx_t, idx_t block_id) { reused_column_blocks.emplace_back(block_id, 0); });
+		} else {
+			row_group_pointer.per_column_metadata_blocks = written_column_blocks;
+		}
+		row_group_pointer.has_metadata_blocks = false;
+		row_group_pointer.extra_metadata_blocks.clear();
 	} else {
-		row_group_pointer.has_metadata_blocks = true;
-		row_group_pointer.per_column_metadata_blocks.ForEachBlock(
-		    [&](idx_t, idx_t block_id) { row_group_pointer.extra_metadata_blocks.push_back(block_id); });
+		// Per-column reuse is not supported, so instead flatten the newly-written per-column extras into
+		// extra_metadata_blocks to still allow reusing the full row-group metadata on future checkpoints.
+		D_ASSERT(write_data.write_action != RowGroupWriteAction::PARTIALLY_REUSE_COLUMN_METADATA);
+		row_group_pointer.has_per_column_metadata_blocks = false;
 		row_group_pointer.per_column_metadata_blocks = {};
+		row_group_pointer.has_metadata_blocks = true;
+		row_group_pointer.extra_metadata_blocks.clear();
+		written_column_blocks.ForEachBlock(
+		    [&](idx_t, idx_t block_id) { row_group_pointer.extra_metadata_blocks.push_back(block_id); });
 	}
 
 	if (metadata_manager) {
@@ -1669,11 +1917,6 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	has_per_column_metadata_blocks = row_group_pointer.has_per_column_metadata_blocks;
 	per_column_metadata_blocks = row_group_pointer.per_column_metadata_blocks;
 
-	for (idx_t c = 0; c < columns.size(); c++) {
-		if (!write_data.keep_column_loaded[c]) {
-			UnloadColumn(c);
-		}
-	}
 	Verify();
 	return row_group_pointer;
 }
@@ -1721,6 +1964,18 @@ PersistentRowGroupData RowGroup::SerializeRowGroupInfo(idx_t row_group_start) co
 	return result;
 }
 
+void RowGroup::CompressVersionInfo(VisibilityBound lowest_visibility_bound) {
+	if (HasUnloadedDeletes()) {
+		// deletes were not loaded - they are still stored in their compact serialized form
+		return;
+	}
+	auto vinfo = GetVersionInfo();
+	if (!vinfo) {
+		return;
+	}
+	vinfo->CompressVersionIds(lowest_visibility_bound);
+}
+
 vector<MetaBlockPointer> RowGroup::CheckpointDeletes(RowGroupWriter &writer) {
 	if (HasUnloadedDeletes()) {
 		// deletes were not loaded so they cannot be changed
@@ -1748,15 +2003,12 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer, bool 
 	}
 	if (supports_per_column_writes) {
 		D_ASSERT(serializer.ShouldSerialize(StorageVersion::V1_4_0));
-		if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-			// also write legacy metadata blocks for v1.4 and v1.5
-			// TODO; serialiaztion version was 8, which points to v2.0, but comment implies v1.5
-			serializer.WriteProperty(104, "has_metadata_blocks", pointer.has_per_column_metadata_blocks);
-			vector<idx_t> extra_metadata_block_ids;
-			pointer.per_column_metadata_blocks.ForEachBlock(
-			    [&](idx_t, idx_t block_id) { extra_metadata_block_ids.push_back(block_id); });
-			serializer.WritePropertyWithDefault(105, "extra_metadata_blocks", extra_metadata_block_ids);
-		}
+		// also write legacy metadata blocks for v1.4 and v1.5
+		serializer.WriteProperty(104, "has_metadata_blocks", pointer.has_per_column_metadata_blocks);
+		vector<idx_t> extra_metadata_block_ids;
+		pointer.per_column_metadata_blocks.ForEachBlock(
+		    [&](idx_t, idx_t block_id) { extra_metadata_block_ids.push_back(block_id); });
+		serializer.WritePropertyWithDefault(105, "extra_metadata_blocks", extra_metadata_block_ids);
 		serializer.WriteProperty(106, "has_per_column_metadata_blocks", pointer.has_per_column_metadata_blocks);
 		serializer.WritePropertyWithDefault(107, "per_column_metadata_blocks", pointer.per_column_metadata_blocks.data);
 	}
@@ -1797,28 +2049,39 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 		return row_group->GetStatistics(storage_index);
 	}
 
-	bool MinMaxIsExact(const BaseStatistics &stats, const StorageIndex &) override {
-		if (!is_exact || row_group->HasChanges()) {
-			return false;
-		}
-		return true;
+	bool MinMaxIsExact(const StorageIndex &) override {
+		return is_exact;
+	}
+
+	bool HasPendingWrites() override {
+		return row_group->HasChanges();
 	}
 };
 
-PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group) {
+PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group, TransactionData transaction) {
 	auto &row_group_ref = row_group.GetNode();
 
 	PartitionStatistics result;
 	result.row_start = row_group.GetRowStart();
-	result.count = row_group_ref.count;
-	if (row_group_ref.HasUnloadedDeletes() || row_group_ref.GetVersionInfoIfLoaded()) {
-		// we have version info - approx count
+	if (row_group_ref.HasUnloadedDeletes()) {
+		result.count = row_group_ref.count;
 		result.count_type = CountType::COUNT_APPROXIMATE;
-		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), false);
-	} else {
-		result.count_type = CountType::COUNT_EXACT;
-		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), true);
+		result.partition_row_group =
+		    make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), /*is_exact_p=*/false);
+		return result;
 	}
+
+	auto vinfo = row_group_ref.GetVersionInfoIfLoaded();
+	bool has_uncommitted_changes = false;
+	if (vinfo) {
+		result.count = row_group_ref.GetVisibleRowCount(transaction);
+		has_uncommitted_changes = vinfo->HasUncommittedChanges();
+	} else {
+		result.count = row_group_ref.count;
+	}
+	result.count_type = has_uncommitted_changes ? CountType::COUNT_APPROXIMATE : CountType::COUNT_EXACT;
+	const bool is_exact = result.count == row_group_ref.count && (!vinfo || !vinfo->HasDeletes());
+	result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), is_exact);
 
 	return result;
 }
@@ -1921,7 +2184,7 @@ void VersionDeleteState::Flush() {
 	// it is possible for delete statements to delete the same tuple multiple times when combined with a USING clause
 	// in the current_info->Delete, we check which tuples are actually deleted (excluding duplicate deletions)
 	// this is returned in the actual_delete_count
-	auto actual_delete_count = info.DeleteRows(current_chunk, transaction.transaction_id, rows, count);
+	auto actual_delete_count = info.DeleteRows(current_chunk, transaction.GetTransactionId(), rows, count);
 	delete_count += actual_delete_count;
 	if (transaction.transaction && actual_delete_count > 0) {
 		// now push the delete into the undo buffer, but only if any deletes were actually performed

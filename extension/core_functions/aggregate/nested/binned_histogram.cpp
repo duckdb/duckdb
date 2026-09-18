@@ -1,14 +1,15 @@
+#include "core_functions/aggregate/histogram_helpers.hpp"
+#include "core_functions/aggregate/nested_functions.hpp"
+#include "core_functions/scalar/generic_functions.hpp"
+#include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/smaller_binary.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
-#include "core_functions/aggregate/nested_functions.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/common/types/vector.hpp"
-#include "core_functions/aggregate/histogram_helpers.hpp"
-#include "core_functions/scalar/generic_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/algorithm.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
 
@@ -20,11 +21,6 @@ struct HistogramBinState {
 
 	unsafe_vector<T> *bin_boundaries;
 	unsafe_vector<idx_t> *counts;
-
-	void Initialize() {
-		bin_boundaries = nullptr;
-		counts = nullptr;
-	}
 
 	void Destroy() {
 		if (bin_boundaries) {
@@ -75,16 +71,11 @@ struct HistogramBinState {
 			}
 		}
 
-		counts->resize(bin_list.length + 1);
+		counts->resize(bin_boundaries->size() + 1);
 	}
 };
 
 struct HistogramBinFunction {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.Initialize();
-	}
-
 	template <class STATE>
 	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
 		state.Destroy();
@@ -281,7 +272,7 @@ void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 template <class OP, class T>
-void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count,
+void HistogramBinFinalizeFunction(Vector &state_vector, AggregateFinalizeInputData &, Vector &result, idx_t count,
                                   idx_t offset) {
 	auto states = state_vector.Values<HistogramBinState<T> *>();
 
@@ -345,11 +336,13 @@ AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	const char *function_name = HIST::EXACT ? "histogram_exact" : "histogram";
 
 	auto struct_type = LogicalType::MAP(type, LogicalType::UBIGINT);
-	return AggregateFunction(
-	    function_name, {type, LogicalType::LIST(type)}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
+	AggregateFunction function(
+	    function_name, {}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
 	    AggregateFunction::StateInitialize<STATE_TYPE, HistogramBinFunction>, HistogramBinUpdateFunction<OP, T, HIST>,
 	    AggregateFunction::StateCombine<STATE_TYPE, HistogramBinFunction>, HistogramBinFinalizeFunction<OP, T>, nullptr,
 	    nullptr, AggregateFunction::StateDestroy<STATE_TYPE, HistogramBinFunction>);
+	function.GetSignature().AddParameter("arg", type).AddParameter("bins", LogicalType::LIST(type));
+	return function;
 }
 
 template <class HIST>
@@ -358,7 +351,7 @@ AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 		return GetHistogramBinFunction<HIST>(LogicalType::DOUBLE);
 	}
 	switch (type.InternalType()) {
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(binned_histogram_types)
 	case PhysicalType::BOOL:
 		return GetHistogramBinFunction<HistogramFunctor, bool, HIST>(type);
 	case PhysicalType::UINT8:
@@ -406,20 +399,27 @@ unique_ptr<FunctionData> HistogramBinBindFunction(BindAggregateFunctionInput &in
 } // namespace
 
 AggregateFunction HistogramFun::BinnedHistogramFunction() {
-	return AggregateFunction("histogram", {LogicalType::ANY, LogicalType::LIST(LogicalType::ANY)}, LogicalTypeId::MAP,
-	                         nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                         HistogramBinBindFunction<HistogramRange>, nullptr);
+	AggregateFunction function("histogram", {}, LogicalTypeId::MAP, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                           nullptr, HistogramBinBindFunction<HistogramRange>, nullptr);
+	function.GetSignature()
+	    .AddParameter("arg", LogicalType::ANY)
+	    .AddParameter("bins", LogicalType::LIST(LogicalType::ANY));
+	return function;
 }
 
 AggregateFunction HistogramExactFun::GetFunction() {
-	return AggregateFunction("histogram_exact", {LogicalType::ANY, LogicalType::LIST(LogicalType::ANY)},
-	                         LogicalTypeId::MAP, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                         HistogramBinBindFunction<HistogramExact>, nullptr);
+	AggregateFunction function("histogram_exact", {}, LogicalTypeId::MAP, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                           nullptr, HistogramBinBindFunction<HistogramExact>, nullptr);
+	function.GetSignature()
+	    .AddParameter("arg", LogicalType::ANY)
+	    .AddParameter("bins", LogicalType::LIST(LogicalType::ANY));
+	return function;
 }
 
 ScalarFunction IsHistogramOtherBinFun::GetFunction() {
-	return ScalarFunction("is_histogram_other_bin", {LogicalType::ANY}, LogicalType::BOOLEAN,
-	                      IsHistogramOtherBinFunction);
+	ScalarFunction fun("is_histogram_other_bin", {}, LogicalType::BOOLEAN, IsHistogramOtherBinFunction);
+	fun.GetSignature().AddParameter("val", LogicalType::ANY);
+	return fun;
 }
 
 } // namespace duckdb

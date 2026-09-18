@@ -3,6 +3,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 
 namespace duckdb {
 
@@ -35,7 +36,7 @@ bool ExpressionState::HasContext() {
 ClientContext &ExpressionState::GetContext() {
 	if (!HasContext()) {
 		throw BinderException("Cannot use %s in this context",
-		                      (expr.Cast<BoundFunctionExpression>()).function.GetName());
+		                      (expr.Cast<BoundFunctionExpression>()).Function().GetName());
 	}
 	return root.executor->GetContext();
 }

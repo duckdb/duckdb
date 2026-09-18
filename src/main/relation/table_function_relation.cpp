@@ -14,12 +14,12 @@
 namespace duckdb {
 
 void TableFunctionRelation::AddNamedParameter(const string &name, Value argument) {
-	named_parameters[name] = std::move(argument);
+	named_parameters[Identifier(name)] = std::move(argument);
 }
 
 void TableFunctionRelation::RemoveNamedParameterIfExists(const string &name) {
-	if (named_parameters.find(name) != named_parameters.end()) {
-		named_parameters.erase(name);
+	if (named_parameters.find(Identifier(name)) != named_parameters.end()) {
+		named_parameters.erase(Identifier(name));
 	}
 }
 
@@ -72,13 +72,13 @@ unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 	vector<unique_ptr<ParsedExpression>> children;
 	if (input_relation) { // input relation becomes first parameter if present, always
 		auto subquery = make_uniq<SubqueryExpression>();
-		subquery->subquery = make_uniq<SelectStatement>();
-		subquery->subquery->node = input_relation->GetQueryNode();
-		subquery->subquery_type = SubqueryType::SCALAR;
+		subquery->SubqueryMutable() = make_uniq<SelectStatement>();
+		subquery->SubqueryMutable()->node = input_relation->GetQueryNode();
+		subquery->GetSubqueryTypeMutable() = SubqueryType::SCALAR;
 		children.push_back(std::move(subquery));
 	}
 	for (auto &parameter : parameters) {
-		children.push_back(make_uniq<ConstantExpression>(parameter));
+		children.push_back(ConstantExpression::FromValue(parameter));
 	}
 
 	for (auto &parameter : named_parameters) {
@@ -86,7 +86,7 @@ unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 		// This is all but pretty, basically the named parameter is the column, the table is empty because that's what
 		// the function binder likes
 		auto column_ref = make_uniq<ColumnRefExpression>(parameter.first);
-		auto constant_value = make_uniq<ConstantExpression>(parameter.second);
+		auto constant_value = ConstantExpression::FromValue(parameter.second);
 		auto comparison = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(column_ref),
 		                                                  std::move(constant_value));
 		children.push_back(std::move(comparison));
@@ -98,7 +98,7 @@ unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 	return std::move(table_function);
 }
 
-string TableFunctionRelation::GetAlias() {
+Identifier TableFunctionRelation::GetAlias() {
 	return name;
 }
 

@@ -7,10 +7,12 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/operator/persistent/batch_memory_manager.hpp"
 #include "duckdb/execution/operator/persistent/batch_task_manager.hpp"
+#include "duckdb/execution/operator/persistent/copy_output_lifecycle.hpp"
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/logging/log_type.hpp"
 
@@ -43,8 +45,12 @@ PhysicalBatchCopyToFile::PhysicalBatchCopyToFile(PhysicalPlan &physical_plan, ve
 
 InsertionOrderPreservingMap<string> PhysicalBatchCopyToFile::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
-	result["FORMAT"] = StringUtil::Upper(function.name);
+	result["FORMAT"] = StringUtil::Upper(function.name.GetIdentifierName());
 	return result;
+}
+
+OperatorPartitionInfo PhysicalBatchCopyToFile::RequiredPartitionInfo() const {
+	return OperatorPartitionInfo::BatchIndex(batch_size.IsValid() ? batch_size : optional_idx(DEFAULT_ROW_GROUP_SIZE));
 }
 
 //===--------------------------------------------------------------------===//
@@ -80,11 +86,12 @@ public:
 
 public:
 	explicit FixedBatchCopyGlobalState(ClientContext &context_p, idx_t minimum_memory_per_thread)
-	    : memory_manager(context_p, minimum_memory_per_thread), initialized(false), rows_copied(0),
-	      scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false),
+	    : output_lifecycle(context_p), memory_manager(context_p, minimum_memory_per_thread), initialized(false),
+	      rows_copied(0), scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false),
 	      minimum_memory_per_thread(minimum_memory_per_thread) {
 	}
 
+	CopyOutputLifecycle output_lifecycle;
 	BatchMemoryManager memory_manager;
 	BatchTaskManager<BatchCopyTask> task_manager;
 	mutex lock;
@@ -95,6 +102,7 @@ public:
 	atomic<idx_t> rows_copied;
 	//! Global copy state
 	unique_ptr<GlobalFunctionData> global_state;
+	optional_idx lifecycle_file_index;
 	//! Unpartitioned batches
 	map<idx_t, unique_ptr<FixedRawBatchData>> raw_batches;
 	//! The prepared batch data by batch index - ready to flush
@@ -121,6 +129,7 @@ public:
 			return;
 		}
 		// initialize writing to the file
+		lifecycle_file_index = output_lifecycle.RegisterFile(op.file_path);
 		global_state = op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path);
 		if (op.function.initialize_operator) {
 			op.function.initialize_operator(*global_state, op);
@@ -302,7 +311,7 @@ public:
 public:
 	void Schedule() override {
 		vector<shared_ptr<Task>> tasks;
-		for (idx_t i = 0; i < idx_t(TaskScheduler::GetScheduler(context).NumberOfThreads()); i++) {
+		for (idx_t i = 0; i < TaskScheduler::GetScheduler(context).NumberOfThreads(); i++) {
 			auto process_task =
 			    make_uniq<ProcessRemainingBatchesTask>(pipeline->executor, shared_from_this(), gstate, context, op);
 			tasks.push_back(std::move(process_task));
@@ -329,14 +338,17 @@ SinkFinalizeType PhysicalBatchCopyToFile::FinalFlush(ClientContext &context, Glo
 	if (gstate.scheduled_batch_index != gstate.flushed_batch_index) {
 		throw InternalException("Not all batches were flushed to disk - incomplete file?");
 	}
+	gstate.memory_manager.FinalCheck();
 	if (function.copy_to_finalize && gstate.global_state) {
 		function.copy_to_finalize(context, *bind_data, *gstate.global_state);
+		D_ASSERT(gstate.lifecycle_file_index.IsValid());
+		gstate.output_lifecycle.MarkFileFinalized(gstate.lifecycle_file_index.GetIndex());
 
 		if (use_tmp_file) {
 			PhysicalCopyToFile::MoveTmpFile(context, file_path);
 		}
 	}
-	gstate.memory_manager.FinalCheck();
+	gstate.output_lifecycle.MarkSuccessful();
 	return SinkFinalizeType::READY;
 }
 
@@ -666,6 +678,13 @@ SinkNextBatchType PhysicalBatchCopyToFile::NextBatch(ExecutionContext &context,
 	return SinkNextBatchType::READY;
 }
 
+SinkNextBatchType PhysicalBatchCopyToFile::UpdateMinBatchIndex(ExecutionContext &,
+                                                               OperatorSinkNextBatchInput &input) const {
+	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
+	gstate.memory_manager.UpdateMinBatchIndex(input.local_state.partition_info.min_batch_index.GetIndex());
+	return SinkNextBatchType::READY;
+}
+
 unique_ptr<LocalSinkState> PhysicalBatchCopyToFile::GetLocalSinkState(ExecutionContext &context) const {
 	return make_uniq<FixedBatchCopyLocalState>(function.copy_to_initialize_local(context, *bind_data));
 }
@@ -692,7 +711,6 @@ SourceResultType PhysicalBatchCopyToFile::GetDataInternal(ExecutionContext &cont
 	switch (return_type) {
 	case CopyFunctionReturnType::CHANGED_ROWS:
 		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
-		chunk.SetCardinality(1);
 		break;
 	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST: {
 		vector<Value> file_list;
@@ -701,14 +719,12 @@ SourceResultType PhysicalBatchCopyToFile::GetDataInternal(ExecutionContext &cont
 		}
 		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
 		chunk.data[1].Append(Value::LIST(LogicalType::VARCHAR, std::move(file_list)));
-		chunk.SetCardinality(1);
 		break;
 	}
 	case CopyFunctionReturnType::WRITTEN_FILE_STATISTICS: {
 		if (g.written_file_info) {
 			g.written_file_info->file_path = std::move(fp);
 			PhysicalCopyToFile::ReturnStatistics(chunk, *g.written_file_info);
-			chunk.SetCardinality(1);
 		}
 		break;
 	}

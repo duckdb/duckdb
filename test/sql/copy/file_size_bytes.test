@@ -158,7 +158,29 @@ COPY (FROM bigdata) TO '{TEST_DIR}/file_size_bytes_csv7' (FORMAT CSV, FILE_SIZE_
 ----
 Not implemented Error
 
-statement error
-COPY (FROM bigdata) TO '{TEST_DIR}/file_size_bytes_csv7' (FORMAT CSV, FILE_SIZE_BYTES '190kb', PARTITION_BY col_a);
+# file rotation also works with partitioned CSV output
+statement ok
+COPY (SELECT col_a % 4 AS p, col_a, col_b FROM bigdata)
+TO '{TEST_DIR}/file_size_bytes_csv_partitioned'
+(FORMAT CSV, FILE_SIZE_BYTES '50kb', PARTITION_BY (p));
+
+query I
+SELECT count(*)
+FROM read_csv_auto('{TEST_DIR}/file_size_bytes_csv_partitioned/**/*.csv', hive_partitioning = true);
 ----
-Not implemented Error
+100000
+
+query I
+WITH files AS (
+	SELECT p, count(DISTINCT filename) file_count
+	FROM read_csv_auto(
+		'{TEST_DIR}/file_size_bytes_csv_partitioned/**/*.csv',
+		filename = true,
+		hive_partitioning = true
+	)
+	GROUP BY p
+)
+SELECT count(*) = 4 AND min(file_count) > 1
+FROM files;
+----
+true

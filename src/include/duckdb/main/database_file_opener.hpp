@@ -14,7 +14,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/logging/log_manager.hpp"
-#include "duckdb/common/http_util.hpp"
+#include "duckdb/main/http/http_util.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
@@ -28,11 +28,11 @@ public:
 		return Logger::Get(db);
 	}
 
-	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) override {
+	SettingLookupResult TryGetCurrentSetting(const Identifier &key, Value &result) override {
 		return db.TryGetCurrentSetting(key, result);
 	}
 
-	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result, FileOpenerInfo &) override {
+	SettingLookupResult TryGetCurrentSetting(const Identifier &key, Value &result, FileOpenerInfo &) override {
 		return db.TryGetCurrentSetting(key, result);
 	}
 

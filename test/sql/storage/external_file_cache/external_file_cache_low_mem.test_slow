@@ -6,6 +6,10 @@ require tpch
 
 require parquet
 
+# the cache skips local files unless forced, these tests exercise it with local files
+statement ok
+set cache_local_files=true;
+
 statement ok
 call dbgen(sf=1);
 
@@ -21,9 +25,6 @@ statement ok
 CREATE VIEW {table} AS FROM '{TEST_DIR}/efc_tpch_sf1/{table}.parquet';
 
 endloop
-
-statement ok
-set prefetch_all_parquet_files=true;
 
 statement ok
 pragma tpch(9);

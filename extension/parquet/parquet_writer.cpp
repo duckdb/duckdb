@@ -9,12 +9,14 @@
 #include "parquet_shredding.hpp"
 #include "resizable_buffer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
-#include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/serializer/async_file_writer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "writer/variant_column_writer.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -39,6 +41,7 @@
 #include "duckdb/storage/statistics/geometry_stats.hpp"
 #include "parquet_column_schema.hpp"
 #include "parquet_geometry.hpp"
+#include "parquet_statistics.hpp"
 #include "thrift/TBase.h"
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/protocol/TProtocol.h"
@@ -85,6 +88,28 @@ private:
 	WriteStream &serializer;
 };
 
+class ParquetPreparedWriteBuffer : public AsyncWriteBuffer {
+public:
+	explicit ParquetPreparedWriteBuffer(unique_ptr<MemoryStream> stream_p) : stream(std::move(stream_p)) {
+		D_ASSERT(stream);
+		data = stream->GetData();
+		size = stream->GetPosition();
+	}
+
+	data_ptr_t Ptr() override {
+		return data;
+	}
+
+	idx_t Size() const override {
+		return size;
+	}
+
+private:
+	unique_ptr<MemoryStream> stream;
+	data_ptr_t data;
+	idx_t size;
+};
+
 bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_ptr<Type::type> parquet_type_ptr,
                                       bool write_timestamp_as_int96) {
 	Type::type parquet_type;
@@ -118,6 +143,7 @@ bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_p
 		parquet_type = Type::BYTE_ARRAY;
 		break;
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIME_TZ:
 		parquet_type = Type::INT64;
 		break;
@@ -247,6 +273,12 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.logicalType.TIME.isAdjustedToUTC = (duckdb_type.id() == LogicalTypeId::TIME_TZ);
 		schema_ele.logicalType.TIME.unit.__isset.MICROS = true;
 		break;
+	case LogicalTypeId::TIME_NS:
+		schema_ele.__isset.logicalType = true;
+		schema_ele.logicalType.__isset.TIME = true;
+		schema_ele.logicalType.TIME.isAdjustedToUTC = false;
+		schema_ele.logicalType.TIME.unit.__isset.NANOS = true;
+		break;
 	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_SEC:
@@ -368,6 +400,39 @@ uint32_t ParquetWriter::WriteData(const const_data_ptr_t buffer, const uint32_t 
 	}
 }
 
+unique_ptr<AsyncWriteBuffer> ParquetWriter::PrepareWrite(const duckdb_apache::thrift::TBase &object) {
+	auto stream = make_uniq<MemoryStream>(BufferAllocator::Get(context));
+	TCompactProtocolFactoryT<MyTransport> tproto_factory;
+	auto stream_protocol = tproto_factory.getProtocol(duckdb_base_std::make_shared<MyTransport>(*stream));
+	if (options.encryption_config) {
+		ParquetCrypto::Write(object, *stream_protocol, options.encryption_config->GetFooterKey(), *encryption_util);
+	} else {
+		object.write(stream_protocol.get());
+	}
+	return make_uniq<ParquetPreparedWriteBuffer>(std::move(stream));
+}
+
+unique_ptr<AsyncWriteBuffer> ParquetWriter::PrepareWriteData(unique_ptr<AsyncWriteBuffer> buffer) {
+	if (!options.encryption_config) {
+		return buffer;
+	}
+
+	auto required_capacity =
+	    buffer->Size() + ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES + ParquetCrypto::TAG_BYTES;
+	auto stream = make_uniq<MemoryStream>(BufferAllocator::Get(context), NextPowerOfTwo(required_capacity));
+	TCompactProtocolFactoryT<MyTransport> tproto_factory;
+	auto stream_protocol = tproto_factory.getProtocol(duckdb_base_std::make_shared<MyTransport>(*stream));
+	ParquetCrypto::WriteData(*stream_protocol, buffer->Ptr(), NumericCast<uint32_t>(buffer->Size()),
+	                         options.encryption_config->GetFooterKey(), *encryption_util);
+	return make_uniq<ParquetPreparedWriteBuffer>(std::move(stream));
+}
+
+uint32_t ParquetWriter::WriteData(unique_ptr<AsyncWriteBuffer> buffer) {
+	auto buffer_size = NumericCast<uint32_t>(buffer->Size());
+	writer->WriteData(std::move(buffer));
+	return buffer_size;
+}
+
 static void VerifyUniqueNames(const vector<string> &names) {
 #ifdef DEBUG
 	unordered_set<string> name_set;
@@ -395,6 +460,8 @@ struct ColumnStatsUnifier {
 	bool all_nulls_set = true;
 	bool min_is_set = false;
 	bool max_is_set = false;
+	bool min_is_exact = true;
+	bool max_is_exact = true;
 	idx_t column_size_bytes = 0;
 	bool can_have_nan = false;
 	bool has_nan = false;
@@ -415,9 +482,13 @@ public:
 
 ParquetWriteTransformData::ParquetWriteTransformData(ClientContext &context, const vector<LogicalType> &types,
                                                      vector<unique_ptr<Expression>> expressions_p)
-    : buffer(context, types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR), expressions(std::move(expressions_p)),
-      executor(context, expressions) {
-	chunk.Initialize(buffer.GetAllocator(), types);
+    : buffer(context, types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR), types(std::move(types)),
+      expressions(std::move(expressions_p)), executor(context, expressions) {
+	chunk.Initialize(buffer.GetAllocator(), this->types);
+}
+
+bool ParquetWriteTransformData::MatchesTypes(const vector<LogicalType> &other_types) const {
+	return types == other_types;
 }
 
 //! TODO: this doesnt work.. the ParquetWriteTransformData is shared with all threads, the method is stateful, but has
@@ -437,8 +508,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWrit
                              const vector<pair<string, string>> &kv_metadata)
     : context(context), options(std::move(options_p)) {
 	// initialize the file writer
-	writer = make_uniq<BufferedFileWriter>(fs, options.file_name.c_str(),
-	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	writer = make_uniq<AsyncFileWriter>(context, fs, options.file_name.c_str(), options.open_flags);
 
 	if (options.encryption_config) {
 		// Get the encryption util
@@ -470,6 +540,21 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWrit
 		file_meta_data.__isset.key_value_metadata = true;
 	}
 
+	if (options.enable_bloom_filters) {
+		for (const auto &type : options.sql_types) {
+			if (!TypeVisitor::Contains(type, LogicalTypeId::INTERVAL)) {
+				continue;
+			}
+			duckdb_parquet::KeyValue kv;
+			kv.__set_key(ParquetStatisticsUtils::INTERVAL_BLOOM_FILTER_KEY);
+			kv.__set_value(ParquetStatisticsUtils::INTERVAL_BLOOM_FILTER_VALUE);
+			// Readers require this capability before probing the additional normalized hashes.
+			file_meta_data.key_value_metadata.push_back(std::move(kv));
+			file_meta_data.__isset.key_value_metadata = true;
+			break;
+		}
+	}
+
 	InitializeColumnWriters();
 }
 
@@ -486,10 +571,10 @@ void ParquetWriter::InitializeColumnWriters() {
 	column_writers.clear();
 	D_ASSERT(options.sql_types.size() == unique_names.size());
 	for (idx_t i = 0; i < options.sql_types.size(); i++) {
-		vector<string> path_in_schema;
+		vector<Identifier> path_in_schema;
 		const bool can_have_nulls = options.not_null_columns.empty() || !options.not_null_columns[i];
 		column_writers.push_back(ColumnWriter::CreateWriterRecursive(
-		    context, *this, path_in_schema, types[i], unique_names[i], allow_geometry, &options.field_ids,
+		    context, *this, path_in_schema, types[i], Identifier(unique_names[i]), allow_geometry, &options.field_ids,
 		    &options.shredding_types, 0, 1, can_have_nulls));
 	}
 }
@@ -550,7 +635,7 @@ PreparedParquetLayout ParquetWriter::ExportPreparedLayout() const {
 		if (!column_writer->TryExportPreparedShreddingType(column_shredding_type)) {
 			continue;
 		}
-		result.shredding_types.AddChild(column_writer->Schema().name, std::move(column_shredding_type));
+		result.shredding_types.AddChild(Identifier(column_writer->Schema().name), std::move(column_shredding_type));
 	}
 	return result;
 }
@@ -584,22 +669,28 @@ void ParquetWriter::VerifyPreparedRowGroup(const PreparedRowGroup &prepared) con
 }
 
 void ParquetWriter::InitializePreprocessing(unique_ptr<ParquetWriteTransformData> &transform_data) {
-	if (transform_data) {
-		return;
-	}
-
 	vector<LogicalType> transformed_types;
-	vector<unique_ptr<Expression>> transform_expressions;
 	for (idx_t col_idx = 0; col_idx < column_writers.size(); col_idx++) {
 		auto &column_writer = *column_writers[col_idx];
 		auto &original_type = options.sql_types[col_idx];
-		auto expr = make_uniq<BoundReferenceExpression>(original_type, col_idx);
 		if (!column_writer.HasTransform()) {
 			transformed_types.push_back(original_type);
-			transform_expressions.push_back(std::move(expr));
 			continue;
 		}
 		transformed_types.push_back(column_writer.TransformedType());
+	}
+	if (transform_data && transform_data->MatchesTypes(transformed_types)) {
+		return;
+	}
+
+	vector<unique_ptr<Expression>> transform_expressions;
+	for (idx_t col_idx = 0; col_idx < column_writers.size(); col_idx++) {
+		auto &column_writer = *column_writers[col_idx];
+		auto expr = make_uniq<BoundReferenceExpression>(options.sql_types[col_idx], col_idx);
+		if (!column_writer.HasTransform()) {
+			transform_expressions.push_back(std::move(expr));
+			continue;
+		}
 		transform_expressions.push_back(column_writer.TransformExpression(std::move(expr)));
 	}
 	transform_data = make_uniq<ParquetWriteTransformData>(context, transformed_types, std::move(transform_expressions));
@@ -610,10 +701,10 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRo
 	AnalyzeSchema(raw_buffer, column_writers);
 
 	bool requires_transform = false;
-	for (auto &writer_p : column_writers) {
-		auto &writer = *writer_p;
+	for (auto &col_writer_p : column_writers) {
+		auto &col_writer = *col_writer_p;
 
-		if (writer.HasTransform()) {
+		if (col_writer.HasTransform()) {
 			requires_transform = true;
 			break;
 		}
@@ -692,6 +783,10 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRo
 			}
 		}
 
+		for (idx_t i = 0; i < next; i++) {
+			col_writers[i].get().PrepareWrite(*write_states[i]);
+		}
+
 		for (auto &write_state : write_states) {
 			states.push_back(std::move(write_state));
 		}
@@ -735,38 +830,42 @@ static void ValidateColumnOffsets(const string &filename, idx_t file_length, con
 }
 
 void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
-	lock_guard<mutex> glock(lock);
-	auto &row_group = prepared.row_group;
-	auto &states = prepared.states;
-	if (states.empty()) {
-		throw InternalException("Attempting to flush a row group with no rows");
-	}
-	InitializeSchemaFromPreparedRowGroup(prepared);
-	VerifyPreparedRowGroup(prepared);
-	row_group.file_offset = NumericCast<int64_t>(writer->GetTotalWritten());
-	for (idx_t col_idx = 0; col_idx < states.size(); col_idx++) {
-		const auto &col_writer = column_writers[col_idx];
-		auto write_state = std::move(states[col_idx]);
-		col_writer->FinalizeWrite(*write_state);
-	}
-	// let's make sure all offsets are ay-okay
-	ValidateColumnOffsets(options.file_name, writer->GetTotalWritten(), row_group);
-
-	row_group.total_compressed_size = NumericCast<int64_t>(writer->GetTotalWritten()) - row_group.file_offset;
-	row_group.__isset.total_compressed_size = true;
-
-	if (options.encryption_config) {
-		const auto row_group_ordinal = file_meta_data.row_groups.size();
-		if (row_group_ordinal > std::numeric_limits<int16_t>::max()) {
-			throw InvalidInputException("RowGroup ordinal exceeds 32767 when encryption enabled");
+	auto batch_guard = writer->StartBatch();
+	{
+		lock_guard<mutex> glock(lock);
+		auto &row_group = prepared.row_group;
+		auto &states = prepared.states;
+		if (states.empty()) {
+			throw InternalException("Attempting to flush a row group with no rows");
 		}
-		row_group.ordinal = NumericCast<int16_t>(row_group_ordinal);
-		row_group.__isset.ordinal = true;
-	}
+		InitializeSchemaFromPreparedRowGroup(prepared);
+		VerifyPreparedRowGroup(prepared);
+		row_group.file_offset = NumericCast<int64_t>(writer->GetTotalWritten());
+		for (idx_t col_idx = 0; col_idx < states.size(); col_idx++) {
+			const auto &col_writer = column_writers[col_idx];
+			auto write_state = std::move(states[col_idx]);
+			col_writer->FinalizeWrite(*write_state);
+		}
+		// let's make sure all offsets are ay-okay
+		ValidateColumnOffsets(options.file_name, writer->GetTotalWritten(), row_group);
 
-	// append the row group to the file metadata
-	file_meta_data.row_groups.push_back(row_group);
-	file_meta_data.num_rows += row_group.num_rows;
+		row_group.total_compressed_size = NumericCast<int64_t>(writer->GetTotalWritten()) - row_group.file_offset;
+		row_group.__isset.total_compressed_size = true;
+
+		if (options.encryption_config) {
+			const auto row_group_ordinal = file_meta_data.row_groups.size();
+			if (row_group_ordinal > std::numeric_limits<int16_t>::max()) {
+				throw InvalidInputException("RowGroup ordinal exceeds 32767 when encryption enabled");
+			}
+			row_group.ordinal = NumericCast<int16_t>(row_group_ordinal);
+			row_group.__isset.ordinal = true;
+		}
+
+		// append the row group to the file metadata
+		file_meta_data.row_groups.push_back(row_group);
+		file_meta_data.num_rows += row_group.num_rows;
+	}
+	batch_guard.Finish();
 }
 
 void ParquetWriter::Flush(ColumnDataCollection &buffer, unique_ptr<ParquetWriteTransformData> &transform_data) {
@@ -832,16 +931,43 @@ struct DecimalStatsUnifier : public NumericStatsUnifier<T> {
 		if (stats.empty()) {
 			return string();
 		}
-
 		auto stats_data = const_data_ptr_cast(stats.data());
-
 		if (sizeof(T) == sizeof(hugeint_t)) {
-			auto _schema = ParquetColumnSchema();
-			auto numeric_val = ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size(), _schema);
+			auto schema = ParquetColumnSchema(); // schema unused for FLBA/hugeint_t
+			auto numeric_val = ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size(), schema);
 			return Value::DECIMAL(numeric_val, width, scale).ToString();
 		} else {
-			auto numeric_val = Load<T>(stats_data);
-			return Value::DECIMAL(numeric_val, width, scale).ToString();
+			return Value::DECIMAL(Load<T>(stats_data), width, scale).ToString();
+		}
+	}
+
+	void UnifyMinMax(const string &new_min, const string &new_max) override {
+		if (sizeof(T) != sizeof(hugeint_t)) {
+			// INT32/INT64-backed decimals are little-endian; the base compare is correct.
+			BaseNumericStatsUnifier<T>::UnifyMinMax(new_min, new_max);
+		} else {
+			// FLBA decimal stats are big-endian two's complement (most significant byte
+			// first), so a native little-endian Load would compare the wrong value; decode
+			// the bytes into a hugeint_t before comparing.
+			auto decode = [](const string &stats) {
+				auto schema = ParquetColumnSchema(); // schema unused for FLBA/hugeint_t
+				return ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(const_data_ptr_cast(stats.data()), stats.size(),
+				                                                        schema);
+			};
+
+			if (!this->min_is_set) {
+				this->global_min = new_min;
+				this->min_is_set = true;
+			} else if (LessThan::Operation(decode(new_min), decode(this->global_min))) {
+				this->global_min = new_min;
+			}
+
+			if (!this->max_is_set) {
+				this->global_max = new_max;
+				this->max_is_set = true;
+			} else if (GreaterThan::Operation(decode(new_max), decode(this->global_max))) {
+				this->global_max = new_max;
+			}
 		}
 	}
 };
@@ -1093,8 +1219,16 @@ void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk 
 			// if we have NaN values we have not written the min/max to the Parquet file
 			// BUT we can return them as part of RETURN STATS by fetching them from the stats directly
 			stats_unifier->UnifyMinMax(writer_stats->GetMin(), writer_stats->GetMax());
+			stats_unifier->min_is_exact = stats_unifier->min_is_exact && writer_stats->MinIsExact();
+			stats_unifier->max_is_exact = stats_unifier->max_is_exact && writer_stats->MaxIsExact();
 		} else if (column.meta_data.statistics.__isset.min_value && column.meta_data.statistics.__isset.max_value) {
 			stats_unifier->UnifyMinMax(column.meta_data.statistics.min_value, column.meta_data.statistics.max_value);
+			stats_unifier->min_is_exact = stats_unifier->min_is_exact &&
+			                              column.meta_data.statistics.__isset.is_min_value_exact &&
+			                              column.meta_data.statistics.is_min_value_exact;
+			stats_unifier->max_is_exact = stats_unifier->max_is_exact &&
+			                              column.meta_data.statistics.__isset.is_max_value_exact &&
+			                              column.meta_data.statistics.is_max_value_exact;
 		} else {
 			stats_unifier->all_min_max_set = false;
 		}
@@ -1125,9 +1259,11 @@ void ParquetWriter::GatherWrittenStatistics() {
 			auto max_value = stats_unifier->StatsToString(stats_unifier->global_max);
 			if (stats_unifier->min_is_set) {
 				column_stats["min"] = min_value;
+				column_stats["min_is_exact"] = Value::BOOLEAN(stats_unifier->min_is_exact);
 			}
 			if (stats_unifier->max_is_set) {
 				column_stats["max"] = max_value;
+				column_stats["max_is_exact"] = Value::BOOLEAN(stats_unifier->max_is_exact);
 			}
 		}
 		if (!stats_unifier->variant_type.empty()) {
@@ -1291,7 +1427,7 @@ void ParquetWriter::Finalize() {
 
 	Write(file_meta_data);
 
-	uint32_t footer_size = writer->GetTotalWritten() - metadata_start_offset;
+	auto footer_size = NumericCast<uint32_t>(writer->GetTotalWritten() - metadata_start_offset);
 	writer->Write<uint32_t>(footer_size);
 
 	if (options.encryption_config) {
@@ -1306,6 +1442,7 @@ void ParquetWriter::Finalize() {
 		GatherWrittenStatistics();
 		written_stats->file_size_bytes = writer->GetTotalWritten();
 		written_stats->footer_size_bytes = Value::UBIGINT(footer_size);
+		written_stats->extra_info["row_group_count"] = Value::UBIGINT(NumberOfRowGroups());
 	}
 
 	// flush to disk

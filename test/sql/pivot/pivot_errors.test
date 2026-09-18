@@ -41,3 +41,8 @@ statement error
 FROM tbl PIVOT (c FOR IN enum_val);
 ----
 Parser Error
+
+statement error
+SELECT * FROM (SELECT 1 AS a, 'x' AS b) t PIVOT (sum(a) FOR b IN (CAST(map() AS INTEGER)));
+----
+Conversion Error: Unimplemented type for cast

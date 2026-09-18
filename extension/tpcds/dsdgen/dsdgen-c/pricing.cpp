@@ -79,9 +79,9 @@ static ds_limits_t aPriceLimits[MAX_LIMIT] = {
  * TODO: None
  */
 void set_pricing(int nTabId, ds_pricing_t *pPricing) {
-	static int nLastId = -1, nQuantityMax, nQuantityMin = 1;
-	static decimal_t dQuantity, dMarkupMin, dDiscountMin, dWholesaleMin, dMarkupMax, dDiscountMax, dWholesaleMax,
-	    dCouponMin, dCouponMax, dZero, dOneHalf, d9pct, dOne, dTemp, dHundred;
+	static thread_local int nLastId = -1, nQuantityMax, nQuantityMin = 1;
+	static thread_local decimal_t dQuantity, dMarkupMin, dDiscountMin, dWholesaleMin, dMarkupMax, dDiscountMax,
+	    dWholesaleMax, dCouponMin, dCouponMax, dZero, dOneHalf, d9pct, dOne, dTemp, dHundred;
 	decimal_t dMarkup, dCoupon, dShipping, dDiscount, dTemp2;
 	int i, nCashPct, nCreditPct, nCouponUsage;
 

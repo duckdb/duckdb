@@ -21,6 +21,12 @@ class LocalSinkState;
 class WindowCollection;
 class BoundWindowFunction;
 
+class WindowExecutorStreamingState : public LocalSourceState {
+public:
+	//! The constant offset
+	int64_t offset = 0;
+};
+
 //	Column indexes of the bounds chunk
 enum WindowBounds : uint8_t {
 	PARTITION_BEGIN,
@@ -57,45 +63,42 @@ struct WindowFunctionInfo {
 	}
 };
 
-class BindWindowFunctionInput {
+class BindWindowFunctionInput : public BindFunctionInput {
 public:
-	using OptionalOrdering = optional_ptr<vector<OrderByNode>>;
+	using OptionalOrderTypes = optional_ptr<vector<LogicalType>>;
 
+	// Defined out-of-line: converting to the BindFunctionInput base requires the complete BoundWindowFunction.
 	BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
-	                        vector<unique_ptr<Expression>> &arguments_p, OptionalOrdering orders_p = nullptr,
-	                        OptionalOrdering arg_orders_p = nullptr)
-	    : context(context_p), bound_function(bound_function_p), arguments(arguments_p), orders(orders_p),
-	      arg_orders(arg_orders_p) {
-	}
+	                        vector<unique_ptr<Expression>> &arguments_p, const vector<Identifier> &argument_names_p,
+	                        OptionalOrderTypes order_types_p = nullptr, OptionalOrderTypes arg_order_types_p = nullptr);
 
-	ClientContext &GetClientContext() const {
-		return context;
-	}
+	//! Construct without argument names - looking arguments up by name is not available in this case.
+	BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
+	                        vector<unique_ptr<Expression>> &arguments_p, OptionalOrderTypes order_types_p = nullptr,
+	                        OptionalOrderTypes arg_order_types_p = nullptr);
+
 	BoundWindowFunction &GetBoundFunction() const {
 		return bound_function;
 	}
-	vector<unique_ptr<Expression>> &GetArguments() const {
-		return arguments;
-	}
 	bool HasOrders() const {
-		return orders.get();
+		return order_types.get();
 	}
-	const vector<OrderByNode> &GetOrders() const {
-		return *orders;
+	const vector<LogicalType> &GetOrderTypes() const {
+		return *order_types;
 	}
 	bool HasArgumentOrders() const {
-		return arg_orders.get();
+		return arg_order_types.get();
 	}
-	const vector<OrderByNode> &GetArgumentOrders() const {
-		return *arg_orders;
+	const vector<LogicalType> &GetArgumentOrderTypes() const {
+		return *arg_order_types;
 	}
 
 private:
-	ClientContext &context;
 	BoundWindowFunction &bound_function;
-	vector<unique_ptr<Expression>> &arguments;
-	OptionalOrdering orders;
-	OptionalOrdering arg_orders;
+	//! The types of the window's ORDER BY expressions (if provided by the binder)
+	OptionalOrderTypes order_types;
+	//! The types of the function's argument ORDER BY expressions (if provided by the binder)
+	OptionalOrderTypes arg_order_types;
 };
 
 //! Binds the window function and creates the function data
@@ -134,12 +137,12 @@ typedef void (*window_evaluate_function_t)(ExecutionContext &context, DataChunk 
 typedef bool (*window_canstream_function_t)(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta);
 
 //! Constructs a thread local state for the streaming function
-typedef unique_ptr<LocalSourceState> (*window_streaming_state_function_t)(ClientContext &client, DataChunk &input,
-                                                                          const BoundWindowExpression &wexpr);
+typedef unique_ptr<WindowExecutorStreamingState> (*window_streaming_state_function_t)(
+    ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr);
 
 //! Evaluates the next chunk of the streaming function
 typedef void (*window_stream_function_t)(ExecutionContext &context, DataChunk &input, DataChunk &delayed,
-                                         idx_t delayed_capacity, Vector &result, LocalSourceState &lstate);
+                                         idx_t delayed_capacity, Vector &result, WindowExecutorStreamingState &lstate);
 
 //! Serialization of the binding data (if any)
 typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
@@ -173,7 +176,7 @@ public:
 	//! The streaming evaluation function
 	window_stream_function_t stream = nullptr;
 
-	//! Serialization specialization. Not yet implemented
+	//! Serialization of the bind data. Both have to be set for a bound plan to round-trip.
 	window_serialize_t serialize = nullptr;
 	window_deserialize_t deserialize = nullptr;
 };
@@ -280,7 +283,7 @@ public: // Callbacks
 	auto GetStreamingDataCallback() const -> window_stream_function_t { return callbacks.stream; }
 	auto SetStreamingDataCallback(window_stream_function_t callback) -> void { callbacks.stream = callback; }
 
-	auto HasSerializationCallbacks() const -> bool { return false; } // TODO: implement this
+	auto HasSerializationCallbacks() const -> bool { return callbacks.serialize != nullptr && callbacks.deserialize != nullptr; }
 	auto SetSerializeCallback(window_serialize_t callback) -> void { callbacks.serialize = callback; }
 	auto SetDeserializeCallback(window_deserialize_t callback) -> void { callbacks.deserialize = callback; }
 	auto GetSerializeCallback() const -> window_serialize_t { return callbacks.serialize; }
@@ -314,7 +317,7 @@ protected:
 
 class WindowFunction : public BaseWindowFunction, public SimpleFunction { // NOLINT: work-around bug in clang-tidy
 public:
-	WindowFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
+	WindowFunction(const Identifier &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
 	               ExpressionType window_enum, window_bind_function_t bind = nullptr,
 	               window_bounds_function_t bounds = nullptr, window_sharing_function_t sharing = nullptr,
 	               window_global_function_t global = nullptr, window_local_function_t local = nullptr,
@@ -336,7 +339,7 @@ public:
 	               window_sharing_function_t sharing = nullptr, window_global_function_t global = nullptr,
 	               window_local_function_t local = nullptr, window_sink_function_t sink = nullptr,
 	               window_finalize_function_t finalize = nullptr, window_evaluate_function_t evaluate = nullptr)
-	    : WindowFunction(string(), arguments, return_type, window_enum, bind, bounds, sharing, global, local, sink,
+	    : WindowFunction(Identifier(), arguments, return_type, window_enum, bind, bounds, sharing, global, local, sink,
 	                     finalize, evaluate) {
 	}
 
@@ -359,12 +362,31 @@ public:
 class BoundWindowFunction : public BaseWindowFunction, public BoundSimpleFunction {
 public:
 	explicit BoundWindowFunction(const WindowFunction &base);
+	explicit BoundWindowFunction(shared_ptr<const WindowFunction> base);
 
 public:
 	const ExpressionType window_enum;
 
 	DUCKDB_API bool operator==(const BoundWindowFunction &rhs) const;
 	DUCKDB_API bool operator!=(const BoundWindowFunction &rhs) const;
+
+public:
+	//! The function this was bound from. Unaffected by later mutation of the bound function. For a function bound
+	//! from a WindowFunctionSet this is the set's own overload, so it compares equal by pointer across binds.
+	//! Functions bound outside of a set are copied into a definition of their own.
+	//! Only null in a moved-from bound function.
+	const shared_ptr<const WindowFunction> &GetDefinition() const {
+		return definition;
+	}
+	//! Restore the definition after the bound function has been replaced wholesale, together with the
+	//! qualification it carries - the replacement is a specialized implementation, not a different function
+	void SetDefinition(shared_ptr<const WindowFunction> definition_p) {
+		definition = std::move(definition_p);
+		if (definition) {
+			schema_name = definition->GetSchemaName();
+			catalog_name = definition->GetCatalogName();
+		}
+	}
 
 public:
 	void GetBounds(WindowBoundsSet &bounds, const BoundWindowExpression &wexpr) const {
@@ -411,17 +433,20 @@ public:
 		return GetCanStreamCallback()(client, wexpr, max_delta);
 	}
 
-	unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
-	                                               const BoundWindowExpression &wexpr) const {
+	unique_ptr<WindowExecutorStreamingState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                           const BoundWindowExpression &wexpr) const {
 		D_ASSERT(HasStreamingStateCallback());
 		return GetStreamingStateCallback()(client, input, wexpr);
 	}
 
 	void GetStreamingData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
-	                      Vector &result, LocalSourceState &lstate) const {
+	                      Vector &result, WindowExecutorStreamingState &lstate) const {
 		D_ASSERT(HasStreamingDataCallback());
 		GetStreamingDataCallback()(context, input, delayed, delayed_capacity, result, lstate);
 	}
+
+private:
+	shared_ptr<const WindowFunction> definition;
 };
 
 } // namespace duckdb

@@ -107,7 +107,7 @@ SELECT CAST(1 AS BOOLEAN) as a, CAST(0 AS BOOLEAN) as b, 1 as id UNION SELECT NU
 1	0	1
 NULL	NULL	2
 
-# NULL is auto-cast to integer for storage purposes
+# NULL is maintained also in tables
 statement ok
 CREATE TABLE tbl AS SELECT NULL UNION ALL SELECT NULL
 
@@ -120,7 +120,17 @@ NULL
 query I
 SELECT typeof(#1) FROM tbl LIMIT 1
 ----
-INTEGER
+"NULL"
+
+statement ok
+INSERT INTO tbl VALUES (NULL);
+
+query I
+SELECT * FROM tbl
+----
+NULL
+NULL
+NULL
 
 # views preserve NULLs
 statement ok

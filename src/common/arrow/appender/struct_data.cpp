@@ -27,7 +27,7 @@ void ArrowStructData::Append(ArrowAppendData &append_data, const Vector &input, 
 	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 		auto &child = children[child_idx];
 		auto &child_data = *append_data.child_data[child_idx];
-		child_data.append_vector(child_data, child, from, to, size);
+		child_data.AppendChild(child, from, to, input_size);
 	}
 	append_data.row_count += size;
 }

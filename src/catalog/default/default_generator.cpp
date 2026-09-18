@@ -8,12 +8,12 @@ DefaultGenerator::DefaultGenerator(Catalog &catalog) : catalog(catalog), created
 DefaultGenerator::~DefaultGenerator() {
 }
 
-unique_ptr<CatalogEntry> DefaultGenerator::CreateDefaultEntry(ClientContext &context, const string &entry_name) {
+unique_ptr<CatalogEntry> DefaultGenerator::CreateDefaultEntry(ClientContext &context, const Identifier &entry_name) {
 	throw InternalException("CreateDefaultEntry with ClientContext called but not supported in this generator");
 }
 
 unique_ptr<CatalogEntry> DefaultGenerator::CreateDefaultEntry(CatalogTransaction transaction,
-                                                              const string &entry_name) {
+                                                              const Identifier &entry_name) {
 	if (!transaction.context) {
 		// no context - cannot create default entry
 		return nullptr;

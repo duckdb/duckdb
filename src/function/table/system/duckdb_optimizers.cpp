@@ -16,7 +16,7 @@ struct DuckDBOptimizersData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBOptimizersBind(ClientContext &context, TableFunctionBindInput &input,
-                                                     vector<LogicalType> &return_types, vector<string> &names) {
+                                                     vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -48,7 +48,6 @@ void DuckDBOptimizersFunction(ClientContext &context, TableFunctionInput &data_p
 		name.Append(Value(entry));
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBOptimizersFun::RegisterFunction(BuiltinFunctions &set) {

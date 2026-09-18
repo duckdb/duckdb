@@ -1,0 +1,147 @@
+# name: test/sql/storage/rowid_gaps/indexes_geometry_legacy_no_merge_across_gap.test
+# description: a legacy-encoded geometry index blocks merging fully-live row groups across a rowid gap
+# group: [rowid_gaps]
+
+require noforcestorage
+
+# Build a legacy-encoded geometry index on v1.4.0 storage.
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_geom_no_merge.db' AS geom_no_merge (STORAGE_VERSION 'v1.4.0', ROW_GROUP_SIZE 4096);
+
+statement ok
+PRAGMA force_checkpoint;
+
+statement ok
+SET max_vacuum_tasks = 0;
+
+statement ok
+CREATE TABLE geom_no_merge.t(i INTEGER, geom GEOMETRY);
+
+statement ok
+INSERT INTO geom_no_merge.t
+SELECT i, ('POINT (' || i || ' ' || i || ')')::GEOMETRY FROM range(1000) tbl(i);
+
+statement ok
+CHECKPOINT geom_no_merge;
+
+statement ok
+INSERT INTO geom_no_merge.t
+SELECT i, ('POINT (' || i || ' ' || i || ')')::GEOMETRY FROM range(1000, 2000) tbl(i);
+
+statement ok
+CHECKPOINT geom_no_merge;
+
+statement ok
+INSERT INTO geom_no_merge.t
+SELECT i, ('POINT (' || i || ' ' || i || ')')::GEOMETRY FROM range(2000, 3000) tbl(i);
+
+statement ok
+CHECKPOINT geom_no_merge;
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('geom_no_merge.t');
+----
+3
+
+# The geometry index is serialized with the legacy pre-v1.5.0 key encoding.
+
+statement ok
+CREATE INDEX t_i_idx ON geom_no_merge.t(i);
+
+statement ok
+CREATE INDEX t_geom_idx ON geom_no_merge.t(geom);
+
+statement ok
+CHECKPOINT geom_no_merge;
+
+# Upgrade to latest storage: rowid gaps become persistable, but the legacy geometry index still blocks remap.
+
+statement ok
+DETACH geom_no_merge;
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_geom_no_merge.db' AS geom_no_merge (STORAGE_VERSION 'latest');
+
+query II
+SELECT rowid, i FROM geom_no_merge.t WHERE geom = 'POINT (1500 1500)'::GEOMETRY;
+----
+1500	1500
+
+# Kill the middle row group entirely and vacuum.
+
+statement ok
+DELETE FROM geom_no_merge.t WHERE i >= 1000 AND i < 2000;
+
+statement ok
+SET max_vacuum_tasks = 99;
+
+statement ok
+FORCE CHECKPOINT geom_no_merge;
+
+# The dead middle group is dropped, but the two live groups are not merged across the resulting gap.
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('geom_no_merge.t');
+----
+2
+
+query III
+SELECT min(rowid), max(rowid), count(*) FROM geom_no_merge.t;
+----
+0	2999	2000
+
+query I
+SELECT count(*) FROM geom_no_merge.t WHERE rowid >= 1000 AND rowid < 2000;
+----
+0
+
+query II
+SELECT rowid, i FROM geom_no_merge.t WHERE i IN (999, 2000) ORDER BY i;
+----
+999	999
+2000	2000
+
+# Both indexes are still consulted and still return the original rowids.
+
+query II
+EXPLAIN ANALYZE SELECT rowid, i FROM geom_no_merge.t WHERE i = 2000;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query II
+SELECT rowid, i FROM geom_no_merge.t WHERE i = 2000;
+----
+2000	2000
+
+query II
+SELECT rowid, i FROM geom_no_merge.t WHERE geom = 'POINT (2000 2000)'::GEOMETRY;
+----
+2000	2000
+
+# Reopen and check that the gap and rowids survive a checkpoint after reload.
+
+statement ok
+DETACH geom_no_merge;
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_geom_no_merge.db' AS geom_no_merge;
+
+statement ok
+FORCE CHECKPOINT geom_no_merge;
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('geom_no_merge.t');
+----
+2
+
+query II
+SELECT rowid, i FROM geom_no_merge.t WHERE i IN (999, 2000) ORDER BY i;
+----
+999	999
+2000	2000
+
+query II
+SELECT rowid, i FROM geom_no_merge.t WHERE geom = 'POINT (2000 2000)'::GEOMETRY;
+----
+2000	2000

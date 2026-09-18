@@ -21,6 +21,12 @@ const string &CachingTestFileGuard::GetPath() const {
 	return file_path;
 }
 
+DuckDB MakeCacheLocalFilesDB() {
+	DBConfig config;
+	config.SetOptionByName("cache_local_files", true);
+	return DuckDB(":memory:", &config);
+}
+
 string SimpleTrackingFileSystem::GetName() const {
 	return "TrackingFileSystem";
 }
@@ -33,8 +39,39 @@ bool SimpleTrackingFileSystem::CanSeek() {
 	return true;
 }
 
-string SimpleTrackingFileSystem::GetVersionTag(FileHandle &handle) {
-	return StringUtil::Format("%lld:%lld", GetFileSize(handle), GetLastModifiedTime(handle).value);
+FileMetadata SimpleTrackingFileSystem::Stats(FileHandle &handle) {
+	auto metadata = LocalFileSystem::Stats(handle);
+	metadata.version_tag = StringUtil::Format("%lld:%lld", metadata.file_size, metadata.last_modification_time.value);
+	return metadata;
+}
+
+string NoValidationMetadataFileSystem::GetName() const {
+	return "NoValidationMetadataFileSystem";
+}
+
+bool NoValidationMetadataFileSystem::CanHandleFile(const string &path) {
+	return StringUtil::StartsWith(path, TestDirectoryPath());
+}
+
+bool NoValidationMetadataFileSystem::CanSeek() {
+	return true;
+}
+
+FileMetadata NoValidationMetadataFileSystem::Stats(FileHandle &handle) {
+	auto metadata = LocalFileSystem::Stats(handle);
+	metadata.last_modification_time = timestamp_t(0);
+	metadata.version_tag.clear();
+	return metadata;
+}
+
+string FreshnessOnlyFileSystem::GetName() const {
+	return "FreshnessOnlyFileSystem";
+}
+
+FileMetadata FreshnessOnlyFileSystem::Stats(FileHandle &handle) {
+	auto metadata = NoValidationMetadataFileSystem::Stats(handle);
+	metadata.cache_valid_until = timestamp_t(Timestamp::GetCurrentTimestamp().value + max_age_micros);
+	return metadata;
 }
 
 } // namespace duckdb

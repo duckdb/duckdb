@@ -32,6 +32,7 @@ public:
 	void Write(CompressedFile &file, StreamData &stream_data, data_ptr_t buffer, int64_t nr_bytes) override;
 
 	void Close() override;
+	void AbortWrite() override;
 
 	void FlushStream();
 };
@@ -123,7 +124,7 @@ void ZstdStreamWrapper::Write(CompressedFile &file, StreamData &sd, data_ptr_t u
 		sd.out_buff_start += written_to_output;
 		if (sd.out_buff_start == sd.out_buff.get() + sd.out_buf_size) {
 			// no more output buffer available: flush
-			file.child_handle->Write(sd.out_buff.get(), sd.out_buff_start - sd.out_buff.get());
+			file.child_handle->Write(file.context, sd.out_buff.get(), sd.out_buff_start - sd.out_buff.get());
 			sd.out_buff_start = sd.out_buff.get();
 		}
 		uncompressed_data += input_consumed;
@@ -154,7 +155,7 @@ void ZstdStreamWrapper::FlushStream() {
 		idx_t written_to_output = out_buffer.pos;
 		sd.out_buff_start += written_to_output;
 		if (sd.out_buff_start > sd.out_buff.get()) {
-			file->child_handle->Write(sd.out_buff.get(), sd.out_buff_start - sd.out_buff.get());
+			file->child_handle->Write(file->context, sd.out_buff.get(), sd.out_buff_start - sd.out_buff.get());
 			sd.out_buff_start = sd.out_buff.get();
 		}
 		if (res == 0) {
@@ -170,6 +171,10 @@ void ZstdStreamWrapper::Close() {
 	if (writing) {
 		FlushStream();
 	}
+	AbortWrite();
+}
+
+void ZstdStreamWrapper::AbortWrite() {
 	if (zstd_stream_ptr) {
 		duckdb_zstd::ZSTD_freeDStream(zstd_stream_ptr);
 	}
@@ -200,8 +205,19 @@ public:
 
 unique_ptr<FileHandle> ZStdFileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
                                                           bool write) {
-	auto path = handle->path;
-	return make_uniq<ZStdFile>(context, std::move(handle), path, write);
+	try {
+		auto path = handle->path;
+		return make_uniq<ZStdFile>(context, std::move(handle), path, write);
+	} catch (...) {
+		auto error = std::current_exception();
+		if (handle) {
+			try {
+				handle->AbortWrite();
+			} catch (...) { // NOLINT
+			}
+		}
+		std::rethrow_exception(error);
+	}
 }
 
 unique_ptr<StreamWrapper> ZStdFileSystem::CreateStream() {

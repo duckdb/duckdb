@@ -49,7 +49,7 @@ TEST_CASE("Test ClientContextState", "[api]") {
 		    throw std::runtime_error("This is a test exception.");
 	    },
 	    [](ClientContext &, TableFunctionBindInput &, vector<LogicalType> &return_types,
-	       vector<string> &names) -> unique_ptr<FunctionData> {
+	       vector<Identifier> &names) -> unique_ptr<FunctionData> {
 		    return_types.push_back(LogicalType::VARCHAR);
 		    names.push_back("message");
 		    return nullptr;

@@ -60,10 +60,11 @@ SELECT (
     WHERE 'a' = s[n]
   )
 ) AS ends_in_a
-FROM unnest(['a','ab','ba']) _(s);
+FROM unnest(['a','ab','ba']) _(s)
+ORDER BY ALL;
 ----
-1
 NULL
+1
 2
 
 # same correlated scalar subquery used twice

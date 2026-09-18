@@ -176,6 +176,16 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 		}
 	}
 
+	//! Update stats for a value that was already passed to Update - only additive stats need to be re-counted
+	inline void UpdateRepeated(const string_t &value) {
+		if (is_geometry) {
+			Update(value);
+			return;
+		}
+		SetHasValid();
+		total_string_length += value.GetSize();
+	}
+
 	void Merge(BaseStatistics &other) const {
 		MergeBase(other);
 		if (is_geometry) {

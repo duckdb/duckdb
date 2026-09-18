@@ -95,7 +95,7 @@ It was not possible to automatically detect the CSV parsing dialect
 statement error
 COPY test_null_option FROM '{DATA_DIR}/csv/test/test_null_option.csv' (NULL);
 ----
-CSV Reader function option null requires a non-empty list of possible null strings (varchar) as input
+CSV Reader function option "null" requires a non-empty list of possible null strings (varchar) as input
 
 # empty integer column with non-default NULL string
 statement ok

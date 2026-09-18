@@ -39,7 +39,7 @@ public:
 	SinkFinalizeType Finalize(ClientContext &client, OperatorSinkFinalizeInput &finalize) const override;
 	ProgressData GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
 	                             const ProgressData source_progress) const override;
-	void Synchronize(const GlobalSinkState &source, GlobalSinkState &target) const override;
+	void Synchronize(ClientContext &client, const GlobalSinkState &source, GlobalSinkState &target) const override;
 
 public:
 	//===--------------------------------------------------------------------===//
@@ -75,6 +75,14 @@ public:
 	Orders orders;
 	//! The partition columns
 	vector<column_t> partition_ids;
+	//! The payload columns corresponding to the PARTITION BY keys
+	vector<column_t> partition_key_ids;
+	//! The PARTITION BY key types
+	vector<LogicalType> partition_key_types;
+	//! The number of PARTITION BY keys
+	idx_t partition_key_count = 0;
+	//! Whether single-key hash groups can skip sorting
+	bool can_bypass_single_key_sort = false;
 	//! Are we creating a dummy payload column?
 	bool force_payload = false;
 	// Key columns that must be computed

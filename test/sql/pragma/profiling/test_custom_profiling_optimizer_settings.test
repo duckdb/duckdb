@@ -97,7 +97,8 @@ FROM metrics_output;
 ----
 true
 
-# All phase timings must be collected when using detailed profiling mode.
+# All phase timings must be collected when all metrics are tracked.
+# 'detailed' is a deprecated alias of 'standard'.
 
 statement ok
 RESET tracked_metrics;

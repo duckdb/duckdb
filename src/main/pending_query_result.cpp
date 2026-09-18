@@ -1,6 +1,8 @@
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/main/stream_query_result.hpp"
 
 namespace duckdb {
 
@@ -80,13 +82,14 @@ unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &l
 	}
 	if (HasError()) {
 		if (allow_stream_result) {
-			return make_uniq<StreamQueryResult>(error);
+			return make_uniq<StreamQueryResult>(GetErrorObject());
 		} else {
-			return make_uniq<MaterializedQueryResult>(error);
+			return make_uniq<MaterializedQueryResult>(GetErrorObject());
 		}
 	}
 	auto result = context->FetchResultInternal(lock, *this);
-	Close();
+	// release our context reference (cannot use Close(): the context lock is already held here)
+	context.reset();
 	return result;
 }
 
@@ -96,6 +99,14 @@ unique_ptr<QueryResult> PendingQueryResult::Execute() {
 }
 
 void PendingQueryResult::Close() {
+	if (context) {
+		auto lock = LockContext();
+		if (context->IsActiveResult(*lock, *this)) {
+			// Abandoned before execution finished: release the active-query state now (matching
+			// InitialCleanup) instead of leaking it until the next query or context teardown.
+			context->CleanupInternal(*lock, this, false);
+		}
+	}
 	context.reset();
 }
 

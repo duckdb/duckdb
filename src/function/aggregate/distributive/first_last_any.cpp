@@ -1,29 +1,127 @@
 #include "duckdb/common/clustered_aggregate.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/create_sort_key.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/optimizer/aggregate_rewrite.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
 namespace {
 
+template <bool LAST, bool SKIP_NULLS>
+unique_ptr<Expression> RewriteOrderedFirst(AggregateRewriteInput &input) {
+	if (!input.aggregate.GetOrderBys()) {
+		return nullptr;
+	}
+	auto aggregate = unique_ptr_cast<Expression, BoundAggregateExpression>(input.aggregate.Copy());
+
+	FunctionBinder binder(input.context);
+	vector<unique_ptr<Expression>> sort_children;
+	for (auto &order : aggregate->GetOrderBysMutable()->orders) {
+		sort_children.emplace_back(std::move(order.expression));
+		sort_children.emplace_back(make_uniq<BoundConstantExpression>(Value(order.GetOrderModifier())));
+	}
+	aggregate->GetOrderBysMutable().reset();
+
+	ErrorData error;
+	auto sort_key =
+	    binder.BindScalarFunction(Identifier::DefaultSchema(), "create_sort_key", std::move(sort_children), error);
+	if (!sort_key) {
+		error.Throw();
+	}
+
+	auto children = std::move(aggregate->GetChildrenMutable());
+	children.emplace_back(std::move(sort_key));
+	const char *function_name;
+	if (LAST) {
+		function_name = "arg_max_null";
+	} else if (SKIP_NULLS) {
+		function_name = "arg_min";
+	} else {
+		function_name = "arg_min_null";
+	}
+
+	auto &catalog = Catalog::GetSystemCatalog(input.context);
+	auto &entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
+	    input.context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), function_name));
+	vector<LogicalType> child_types;
+	for (auto &child : children) {
+		child_types.push_back(child->GetReturnType());
+	}
+	const auto &function = entry.functions.GetFunctionByArguments(input.context, child_types);
+	auto result = binder.BindAggregateFunction(function, std::move(children), std::move(aggregate->GetFilterMutable()),
+	                                           aggregate->GetAggregateType());
+	return unique_ptr_cast<BoundAggregateExpression, Expression>(std::move(result));
+}
+
+//! The aggregate state of first/last/any_value is nullable on two levels: the state itself is NULL when no row has
+//! been seen yet (is_set, the outer optional), and the recorded value can itself be NULL (value_is_valid, the inner
+//! optional). Valid exported states are e.g. NULL, {'value': NULL} and {'value': 42}.
 template <class T>
 struct FirstState {
+	static constexpr const char *STATE_NAMES[] = {"value"};
+	//! The value is exported with the aggregate's return type (e.g. DATE or UUID instead of the physical type)
+	using STATE_TYPE = OptionalStateType<StructStateType<OptionalStateType<StateTypedValue<T, StateReturnType>>>>;
+
 	using VALUE_TYPE = T;
 	T value;
+	//! Whether the recorded value is valid (i.e. not NULL)
+	bool value_is_valid;
+	//! Whether the state has been set (i.e. we have seen a row)
 	bool is_set;
-	bool is_null;
+};
+
+//! String state variant: strings are stored in the arena allocator, re-using the previous allocation
+//! when overwriting the value (relevant for last, which overwrites the value for every row).
+struct FirstStringStateBase {
+	string_t value;
+	//! Whether the recorded value is valid (i.e. not NULL)
+	bool value_is_valid;
+	//! Whether the state has been set (i.e. we have seen a row)
+	bool is_set;
+	//! The size of the arena allocation for a non-inlined string value - not part of the exported state
+	uint32_t alloc_size;
+
+	void Assign(string_t input, AggregateInputData &input_data) {
+		if (input.IsInlined()) {
+			value = input;
+			alloc_size = 0;
+		} else {
+			auto len = UnsafeNumericCast<uint32_t>(input.GetSize());
+			char *ptr;
+			if (alloc_size >= len) {
+				ptr = value.GetDataWriteable();
+			} else {
+				alloc_size = UnsafeNumericCast<uint32_t>(NextPowerOfTwo(len));
+				ptr = char_ptr_cast(input_data.allocator.Allocate(alloc_size));
+			}
+			memcpy(ptr, input.GetData(), len);
+			value = string_t(ptr, len);
+		}
+	}
+};
+
+struct FirstStringState : FirstStringStateBase {
+	static constexpr const char *STATE_NAMES[] = {"value"};
+	//! The value is exported with the aggregate's return type - it can be e.g. a VARCHAR, BLOB or BIT value
+	using STATE_TYPE = OptionalStateType<StructStateType<OptionalStateType<StateString<StateReturnType>>>>;
+};
+
+//! State for arbitrary types - the value is stored as a binary sort key, exported as the aggregate's return type.
+struct FirstSortKeyState : FirstStringStateBase {
+	static constexpr const char *STATE_NAMES[] = {"value"};
+	using STATE_TYPE =
+	    OptionalStateType<StructStateType<OptionalStateType<StateSortKey<StateReturnType, OrderType::ASCENDING>>>>;
 };
 
 struct FirstFunctionBase {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.is_set = false;
-		state.is_null = false;
-	}
-
 	static bool IgnoreNull() {
 		return false;
 	}
@@ -54,11 +152,11 @@ struct FirstFunction : public FirstFunctionBase {
 			if (!unary_input.RowIsValid()) {
 				if (!SKIP_NULLS) {
 					state.is_set = true;
+					state.value_is_valid = false;
 				}
-				state.is_null = true;
 			} else {
 				state.is_set = true;
-				state.is_null = false;
+				state.value_is_valid = true;
 				state.value = input;
 			}
 		}
@@ -82,13 +180,13 @@ struct FirstFunction : public FirstFunctionBase {
 			auto idx = isel.get_index(sel ? sel[k] : k);
 			if (ALL_VALID || validity.RowIsValidUnsafe(idx)) {
 				state.is_set = true;
-				state.is_null = false;
+				state.value_is_valid = true;
 				state.value = vals[idx];
 				return true;
 			}
 			if (!SKIP_NULLS) {
 				state.is_set = true;
-				state.is_null = true;
+				state.value_is_valid = false;
 				return true;
 			}
 			return false;
@@ -114,7 +212,7 @@ struct FirstFunction : public FirstFunctionBase {
 
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.is_set || state.is_null) {
+		if (!state.is_set || !state.value_is_valid) {
 			finalize_data.ReturnNull();
 		} else {
 			target = state.value;
@@ -124,45 +222,24 @@ struct FirstFunction : public FirstFunctionBase {
 
 template <bool LAST, bool SKIP_NULLS>
 struct FirstFunctionStringBase : public FirstFunctionBase {
-	template <class STATE, bool COMBINE = false>
+	template <class STATE>
 	static void SetValue(STATE &state, AggregateInputData &input_data, string_t value, bool is_null) {
-		if (LAST && state.is_set) {
-			Destroy(state, input_data);
-		}
 		if (is_null) {
 			if (!SKIP_NULLS) {
 				state.is_set = true;
-				state.is_null = true;
+				state.value_is_valid = false;
 			}
 		} else {
 			state.is_set = true;
-			state.is_null = false;
-			if ((COMBINE && !LAST) || value.IsInlined()) {
-				// We use the aggregate allocator for 'first', so the allocation is already done when combining
-				// Of course, if the value is inlined, we also don't need to allocate
-				state.value = value;
-			} else {
-				// non-inlined string, need to allocate space for it
-				auto len = value.GetSize();
-				auto ptr = LAST ? new char[len] : char_ptr_cast(input_data.allocator.Allocate(len));
-				memcpy(ptr, value.GetData(), len);
-
-				state.value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
-			}
+			state.value_is_valid = true;
+			state.Assign(value, input_data);
 		}
 	}
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &input_data) {
 		if (source.is_set && (LAST || !target.is_set)) {
-			SetValue<STATE, true>(target, input_data, source.value, source.is_null);
-		}
-	}
-
-	template <class STATE>
-	static void Destroy(STATE &state, AggregateInputData &) {
-		if (state.is_set && !state.is_null && !state.value.IsInlined()) {
-			delete[] state.value.GetData();
+			SetValue<STATE>(target, input_data, source.value, !source.value_is_valid);
 		}
 	}
 };
@@ -211,7 +288,7 @@ struct FirstFunctionString : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.is_set || state.is_null) {
+		if (!state.is_set || !state.value_is_valid) {
 			finalize_data.ReturnNull();
 		} else {
 			target = StringVector::AddStringOrBlob(finalize_data.result, state.value);
@@ -221,7 +298,7 @@ struct FirstFunctionString : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 
 template <bool LAST, bool SKIP_NULLS>
 struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
-	using STATE = FirstState<string_t>;
+	using STATE = FirstSortKeyState;
 
 	static void Update(Vector inputs[], AggregateInputData &input_data, idx_t, Vector &state_vector, idx_t count) {
 		auto &input = inputs[0];
@@ -281,7 +358,7 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 
 	template <class STATE>
 	static void Finalize(STATE &state, AggregateFinalizeData &finalize_data) {
-		if (!state.is_set || state.is_null) {
+		if (!state.is_set || !state.value_is_valid) {
 			finalize_data.ReturnNull();
 		} else {
 			CreateSortKeyHelpers::DecodeSortKey(state.value, finalize_data.result, finalize_data.result_idx,
@@ -298,15 +375,6 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 		return nullptr;
 	}
 };
-
-LogicalType GetFirstStateType(const BoundAggregateFunction &function) {
-	child_list_t<LogicalType> child_types;
-	LogicalType value_type = function.GetArguments()[0];
-	child_types.emplace_back("value", value_type);
-	child_types.emplace_back("is_set", LogicalType::BOOLEAN);
-	child_types.emplace_back("is_null", LogicalType::BOOLEAN);
-	return LogicalType::STRUCT(std::move(child_types));
-}
 
 template <class T, bool LAST, bool SKIP_NULLS>
 void FirstFunctionClusterUpdate(Vector inputs[], AggregateInputData &aggregate_input_data, idx_t input_count,
@@ -334,7 +402,7 @@ AggregateFunction GetFirstAggregateTemplated(const LogicalType &type) {
 	                      AggregateFunction::StateCombine<FirstState<T>, FirstFunction<LAST, SKIP_NULLS>>,
 	                      AggregateFunction::StateFinalize<FirstState<T>, T, FirstFunction<LAST, SKIP_NULLS>>,
 	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, FirstFunctionClusterUpdate<T, LAST, SKIP_NULLS>);
-	result.SetStructStateExport(GetFirstStateType);
+	AggregateFunction::WireStructStateType<FirstState<T>>(result);
 	return result;
 }
 
@@ -393,26 +461,17 @@ AggregateFunction GetFirstFunction(const LogicalType &type) {
 	case PhysicalType::INTERVAL:
 		return GetFirstAggregateTemplated<interval_t, LAST, SKIP_NULLS>(type);
 	case PhysicalType::VARCHAR:
-		if (LAST) {
-			auto fun = AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t,
-			                                                       FirstFunctionString<LAST, SKIP_NULLS>>(type, type);
-			fun.SetStructStateExport(GetFirstStateType);
-			return fun;
-		} else {
-			auto fun = AggregateFunction::UnaryAggregate<FirstState<string_t>, string_t, string_t,
-			                                             FirstFunctionString<LAST, SKIP_NULLS>>(type, type);
-			fun.SetStructStateExport(GetFirstStateType);
-			return fun;
-		}
+		return AggregateFunction::UnaryAggregate<FirstStringState, string_t, string_t,
+		                                         FirstFunctionString<LAST, SKIP_NULLS>>(type, type);
 	default: {
 		using OP = FirstVectorFunction<LAST, SKIP_NULLS>;
-		using STATE = FirstState<string_t>;
+		using STATE = FirstSortKeyState;
 		auto fun = AggregateFunction(
 		    {type}, type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 		    OP::Update, AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>,
-		    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), OP::Bind,
-		    LAST ? AggregateFunction::StateDestroy<STATE, OP> : nullptr, nullptr, nullptr);
-		fun.SetStructStateExport(GetFirstStateType);
+		    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), OP::Bind, nullptr,
+		    nullptr, nullptr);
+		AggregateFunction::WireStructStateType<STATE>(fun);
 		return fun;
 	}
 	}
@@ -428,6 +487,9 @@ unique_ptr<FunctionData> BindDecimalFirst(BindAggregateFunctionInput &input) {
 	function.ReplaceImplementation(GetFirstFunction<LAST, SKIP_NULLS>(decimal_type));
 	function.SetName(std::move(name));
 	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
+	function.SetDirectRewriteCallback(RewriteOrderedFirst<LAST, SKIP_NULLS>);
+	function.SetSingleValueIdentity(true);
+	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	function.SetReturnType(decimal_type);
 	return nullptr;
 }
@@ -450,30 +512,43 @@ unique_ptr<FunctionData> BindFirst(BindAggregateFunctionInput &input) {
 	function.ReplaceImplementation(GetFirstOperator<LAST, SKIP_NULLS>(input_type));
 	function.SetName(std::move(name));
 	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
+	function.SetDirectRewriteCallback(RewriteOrderedFirst<LAST, SKIP_NULLS>);
+	function.SetSingleValueIdentity(true);
+	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	return nullptr;
 }
 
 template <bool LAST, bool SKIP_NULLS>
 void AddFirstOperator(AggregateFunctionSet &set) {
-	set.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-	                                  BindDecimalFirst<LAST, SKIP_NULLS>));
-	set.AddFunction(AggregateFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                                  FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-	                                  BindFirst<LAST, SKIP_NULLS>));
+	AggregateFunction decimal_fun({}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                              FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+	                              BindDecimalFirst<LAST, SKIP_NULLS>);
+	decimal_fun.GetSignature().AddParameter("arg", LogicalTypeId::DECIMAL);
+	set.AddFunction(decimal_fun);
+
+	AggregateFunction any_fun({}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                          FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, BindFirst<LAST, SKIP_NULLS>);
+	any_fun.GetSignature().AddParameter("arg", LogicalTypeId::ANY);
+	set.AddFunction(any_fun);
 }
 
 } // namespace
 
 AggregateFunction FirstFunctionGetter::GetFunction(const LogicalType &type) {
 	auto fun = GetFirstFunction<false, false>(type);
-	fun.name = "first";
+	fun.SetName("first");
+	fun.SetDirectRewriteCallback(RewriteOrderedFirst<false, false>);
+	fun.SetSingleValueIdentity(true);
+	fun.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	return fun;
 }
 
 AggregateFunction LastFunctionGetter::GetFunction(const LogicalType &type) {
 	auto fun = GetFirstFunction<true, false>(type);
-	fun.name = "last";
+	fun.SetName("last");
+	fun.SetDirectRewriteCallback(RewriteOrderedFirst<true, false>);
+	fun.SetSingleValueIdentity(true);
+	fun.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	return fun;
 }
 

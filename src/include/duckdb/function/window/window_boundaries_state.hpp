@@ -89,7 +89,7 @@ public:
 	WindowBoundariesState(ExecutionContext &context, const WindowExecutorGlobalState &gstate);
 
 	void Finalize(CollectionPtr collection);
-	void UpdateBounds(idx_t row_idx, DataChunk &eval_chunk);
+	void UpdateBounds(idx_t row_idx, DataChunk &eval_chunk, idx_t count);
 
 	//! The requested bounds.
 	DataChunk bounds;

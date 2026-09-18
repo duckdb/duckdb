@@ -7,9 +7,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/partition_stats.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -21,17 +19,23 @@
 #include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/storage_index.hpp"
-#include "duckdb/optimizer/matcher/expression_matcher.hpp"
 
 namespace duckdb {
 
 namespace {
+
+struct MinMaxColumnInfo {
+	ColumnBinding binding;
+	LogicalType input_type;
+	LogicalType result_type;
+};
 
 struct ValueComparator {
 	virtual ~ValueComparator() = default;
@@ -60,7 +64,7 @@ struct MaxValueComp : public ValueComparator {
 };
 
 template <typename StatsType>
-unique_ptr<ValueComparator> GetComparator(const string &fun_name) {
+unique_ptr<ValueComparator> GetComparator(const Identifier &fun_name) {
 	if (fun_name == "min") {
 		return make_uniq<MinValueComp<StatsType>>();
 	}
@@ -68,7 +72,7 @@ unique_ptr<ValueComparator> GetComparator(const string &fun_name) {
 	return make_uniq<MaxValueComp<StatsType>>();
 }
 
-unique_ptr<ValueComparator> GetComparator(const string &fun_name, const LogicalType &type) {
+unique_ptr<ValueComparator> GetComparator(const Identifier &fun_name, const LogicalType &type) {
 	if (type == LogicalType::VARCHAR) {
 		return GetComparator<StringStats>(fun_name);
 	} else if (type.IsNumeric() || type.IsTemporal()) {
@@ -77,8 +81,45 @@ unique_ptr<ValueComparator> GetComparator(const string &fun_name, const LogicalT
 	return nullptr;
 }
 
+bool IsSafeMinMaxCast(const LogicalType &source, const LogicalType &target) {
+	if (source == target) {
+		return true;
+	}
+	if (!source.IsIntegral() || !target.IsIntegral()) {
+		return false;
+	}
+	LogicalType max_type;
+	return LogicalType::DefaultTryGetMaxLogicalTypeUnchecked(source, target, max_type) && max_type == target;
+}
+
+bool TryGetMinMaxColumnInfo(const Expression &expr, MinMaxColumnInfo &info) {
+	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+		const auto &col_ref = expr.Cast<BoundColumnRefExpression>();
+		info.binding = col_ref.Binding();
+		info.input_type = col_ref.GetReturnType();
+		info.result_type = col_ref.GetReturnType();
+		return true;
+	}
+	if (!BoundCastExpression::IsCast(expr)) {
+		return false;
+	}
+	const auto &cast = expr.Cast<BoundFunctionExpression>();
+	const auto &cast_child = BoundCastExpression::Child(cast);
+	if (cast_child.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		return false;
+	}
+	const auto &col_ref = cast_child.Cast<BoundColumnRefExpression>();
+	if (!IsSafeMinMaxCast(col_ref.GetReturnType(), BoundCastExpression::TargetType(cast))) {
+		return false;
+	}
+	info.binding = col_ref.Binding();
+	info.input_type = col_ref.GetReturnType();
+	info.result_type = BoundCastExpression::TargetType(cast);
+	return true;
+}
+
 bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &storage_index,
-                          const ValueComparator &comparator, Value &result) {
+                          const ValueComparator &comparator, const LogicalType &result_type, Value &result) {
 	if (!stats.partition_row_group) {
 		return false;
 	}
@@ -86,7 +127,7 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 	if (!column_stats) {
 		return false;
 	}
-	if (!stats.partition_row_group->MinMaxIsExact(*column_stats, storage_index)) {
+	if (!stats.partition_row_group->MinMaxIsExact(storage_index) || stats.partition_row_group->HasPendingWrites()) {
 		return false;
 	}
 	if (column_stats->GetStatsType() == StatisticsType::NUMERIC_STATS) {
@@ -106,6 +147,14 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 		}
 	}
 	result = comparator.GetVal(*column_stats);
+	if (result.type() == result_type) {
+		return true;
+	}
+	auto cast = result.DefaultTryCastAs(result_type);
+	if (!cast) {
+		return false;
+	}
+	result = std::move(*cast);
 	return true;
 }
 
@@ -131,7 +180,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	}
 	// check if all aggregates are COUNT(*), MIN or MAX
 	vector<idx_t> count_star_idxs;
-	vector<ColumnBinding> min_max_bindings;
+	vector<MinMaxColumnInfo> min_max_columns;
 	vector<unique_ptr<ValueComparator>> comparators;
 
 	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
@@ -141,19 +190,25 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			return;
 		}
 		auto &aggr_expr = aggr_ref->Cast<BoundAggregateExpression>();
-		if (aggr_expr.filter) {
+		if (aggr_expr.GetFilter()) {
 			// aggregate has a filter - bail
 			return;
 		}
-		const string &fun_name = aggr_expr.function.GetName();
+		if (aggr_expr.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
+			// aggregate is in state export mode - cannot replace with a constant
+			return;
+		}
+		auto &fun_name = aggr_expr.Function().GetName();
 		if (fun_name == "min" || fun_name == "max") {
-			if (aggr_expr.children.size() != 1 ||
-			    aggr_expr.children[0]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+			if (aggr_expr.GetChildren().size() != 1) {
 				return;
 			}
-			const auto &col_ref = aggr_expr.children[0]->Cast<BoundColumnRefExpression>();
-			min_max_bindings.push_back(col_ref.binding);
-			auto comparator = GetComparator(fun_name, col_ref.GetReturnType());
+			MinMaxColumnInfo column_info;
+			if (!TryGetMinMaxColumnInfo(*aggr_expr.GetChildren()[0], column_info)) {
+				return;
+			}
+			min_max_columns.push_back(column_info);
+			auto comparator = GetComparator(fun_name, column_info.input_type);
 			if (!comparator) {
 				// Type has no min max statistics
 				return;
@@ -170,13 +225,18 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	// skip any projections
 	reference<LogicalOperator> child_ref = *aggr.children[0];
 	while (child_ref.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
-		for (auto &binding : min_max_bindings) {
+		for (auto &column_info : min_max_columns) {
 			auto &proj = child_ref.get().Cast<LogicalProjection>();
-			auto &expr = proj.GetExpression(binding);
-			if (expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+			auto &expr = proj.GetExpression(column_info.binding);
+			MinMaxColumnInfo projection_info;
+			if (!TryGetMinMaxColumnInfo(expr, projection_info)) {
 				return;
 			}
-			binding = expr.Cast<BoundColumnRefExpression>().binding;
+			if (!IsSafeMinMaxCast(projection_info.result_type, column_info.input_type)) {
+				return;
+			}
+			column_info.binding = projection_info.binding;
+			column_info.input_type = projection_info.input_type;
 		}
 		child_ref = *child_ref.get().children[0];
 	}
@@ -203,9 +263,9 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		return;
 	}
 
-	vector<StorageIndex> min_max_storage_indexes(min_max_bindings.size());
-	for (idx_t i = 0; i < min_max_bindings.size(); i++) {
-		auto &binding = min_max_bindings[i];
+	vector<StorageIndex> min_max_storage_indexes(min_max_columns.size());
+	for (idx_t i = 0; i < min_max_columns.size(); i++) {
+		auto &binding = min_max_columns[i].binding;
 		auto &column_index = get.GetColumnIndex(binding);
 		if (!get.TryGetStorageIndex(column_index, min_max_storage_indexes[i])) {
 			//! Can't get a storage index for this column, so it doesn't have stats we can use
@@ -249,9 +309,13 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				if (!column_stats) {
 					return;
 				}
+				if (!prg->MinMaxIsExact(storage_index) || prg->HasPendingWrites()) {
+					filter_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
+					break;
+				}
 				auto &expr_filter =
 				    ExpressionFilter::GetExpressionFilter(filter.get(), "AggregateStats::CheckPartitionFilters");
-				auto col_filter_result = expr_filter.CheckStatistics(*column_stats);
+				auto col_filter_result = expr_filter.CheckStatistics(context, *column_stats);
 				if (col_filter_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 					// all data in this partition is filtered out, remove this partition entirely
 					filter_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
@@ -280,26 +344,33 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		partition_stats = std::move(precomputed_partition_stats);
 	}
 
-	if (!min_max_bindings.empty()) {
+	if (partition_stats.empty()) {
+		// no partitions can be pre-computed
+		return;
+	}
+
+	if (!min_max_columns.empty()) {
 		// Execute min/max aggregates on partition statistics
 		for (idx_t agg_idx = 0; agg_idx < min_max_storage_indexes.size(); agg_idx++) {
 			const auto &storage_index = min_max_storage_indexes[agg_idx];
+			const auto &result_type = min_max_columns[agg_idx].result_type;
 			auto &comparator = comparators[agg_idx];
 
 			Value agg_result;
-			if (!TryGetValueFromStats(partition_stats[0], storage_index, *comparator, agg_result)) {
+			if (!TryGetValueFromStats(partition_stats[0], storage_index, *comparator, result_type, agg_result)) {
 				return;
 			}
 			for (idx_t partition_idx = 1; partition_idx < partition_stats.size(); partition_idx++) {
 				Value rhs;
-				if (!TryGetValueFromStats(partition_stats[partition_idx], storage_index, *comparator, rhs)) {
+				if (!TryGetValueFromStats(partition_stats[partition_idx], storage_index, *comparator, result_type,
+				                          rhs)) {
 					return;
 				}
 				if (!comparator->Compare(agg_result, rhs)) {
 					agg_result = rhs;
 				}
 			}
-			types.push_back(agg_result.GetTypeMutable());
+			types.push_back(agg_result.type());
 			auto expr = make_uniq<BoundConstantExpression>(agg_result);
 			agg_results.push_back(std::move(expr));
 		}
@@ -322,6 +393,13 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	}
 
 	if (need_to_scan) {
+		// Partial precomputation combines plan-time partition statistics with an execution-time scan that
+		// skips partitions by their index in the row-group list. That list can change in between
+		// (concurrent appends, checkpoints), in which case a skipped partition is scanned again and its
+		// rows are counted twice. Only the full precomputation (no scan) is safe.
+		return;
+	}
+	if (need_to_scan) {
 		// Partial precomputation: some partitions need scanning
 		// Insert a LogicalProjection above the aggregate that combines pre-computed constants with scan results
 		if (!get.function.set_partitions_to_scan) {
@@ -334,7 +412,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		vector<unique_ptr<Expression>> proj_expressions;
 		for (idx_t i = 0; i < aggr.expressions.size(); i++) {
 			auto &aggr_expr = aggr.expressions[i]->Cast<BoundAggregateExpression>();
-			const string &fun_name = aggr_expr.function.GetName();
+			auto &fun_name = aggr_expr.Function().GetName();
 
 			// Reference to the aggregate output column
 			auto agg_col_ref = make_uniq<BoundColumnRefExpression>(
@@ -350,12 +428,12 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				// For min: COALESCE(least(pre_min, agg_min), pre_min)
 				// For max: COALESCE(greatest(pre_max, agg_max), pre_max)
 				auto &pre_val_expr = agg_results[i];
-				string merge_func = (fun_name == "min") ? "least" : "greatest";
+				Identifier merge_func((fun_name == "min") ? "least" : "greatest");
 				auto merged = optimizer.BindScalarFunction(merge_func, pre_val_expr->Copy(), std::move(agg_col_ref));
 				auto coalesce =
 				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, aggr_expr.GetReturnType());
-				coalesce->children.push_back(std::move(merged));
-				coalesce->children.push_back(pre_val_expr->Copy());
+				coalesce->GetChildrenMutable().push_back(std::move(merged));
+				coalesce->GetChildrenMutable().push_back(pre_val_expr->Copy());
 				coalesce->SetAlias(aggr.expressions[i]->GetAlias());
 				proj_expressions.push_back(std::move(coalesce));
 			}
@@ -414,27 +492,9 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 		statistics_map[group_binding] = std::move(stats);
 	}
 
-	// Set up an expression matcher that detects COUNT(x)
-	FunctionBinder function_binder(context);
-	const auto count_fun = CountStarFun::GetFunction();
-	const auto count_matcher = make_uniq<AggregateExpressionMatcher>();
-	count_matcher->function = make_uniq<SpecificFunctionMatcher>("count");
-	count_matcher->policy = SetMatcher::Policy::ORDERED;
-	count_matcher->matchers.push_back(make_uniq<ExpressionMatcher>());
-
 	// propagate statistics in the aggregates
 	for (idx_t aggregate_idx = 0; aggregate_idx < aggr.expressions.size(); aggregate_idx++) {
 		auto &expr = aggr.expressions[aggregate_idx];
-
-		// Rewrite COUNT(x) to COUNT(*) if x cannot be NULL
-		vector<reference<Expression>> bindings;
-		if (count_matcher->Match(*expr, bindings)) {
-			auto &aggr_expr = expr->Cast<BoundAggregateExpression>();
-			const auto child_stats = PropagateExpression(aggr_expr.children[0]);
-			if (child_stats && !child_stats->CanHaveNull()) {
-				expr = function_binder.BindAggregateFunction(count_fun, {}, nullptr, AggregateType::NON_DISTINCT);
-			}
-		}
 
 		auto stats = PropagateExpression(expr);
 		if (!stats) {
@@ -456,14 +516,14 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 			break;
 		}
 		auto &aggr_expr = aggr_ref->Cast<BoundAggregateExpression>();
-		for (const auto &child : aggr_expr.children) {
+		for (const auto &child : aggr_expr.GetChildren()) {
 			if (child->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 				// Bail if bound aggregate child is not a colref
 				distinct_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES;
 				break;
 			}
 			const auto &col_ref = child->Cast<BoundColumnRefExpression>();
-			auto it = statistics_map.find(col_ref.binding);
+			auto it = statistics_map.find(col_ref.Binding());
 			if (it == statistics_map.end() || !it->second || it->second->CanHaveNull()) {
 				// Bail if no stats or if there can be a NULL
 				distinct_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES;

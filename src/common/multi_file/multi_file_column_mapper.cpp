@@ -4,11 +4,13 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/filter/list.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
@@ -84,7 +86,7 @@ struct ColumnMapper {
 	virtual ~ColumnMapper() = default;
 	virtual unique_ptr<ColumnMapper> Create(const vector<MultiFileColumnDefinition> &columns) const = 0;
 	virtual MultiFileLocalIndex Find(const MultiFileColumnDefinition &column) const = 0;
-	virtual unique_ptr<Expression> GetDefaultExpression(const MultiFileColumnDefinition &column,
+	virtual unique_ptr<Expression> GetDefaultExpression(ClientContext &context, const MultiFileColumnDefinition &column,
 	                                                    bool is_root) const = 0;
 	virtual idx_t MapCount() const = 0;
 };
@@ -113,21 +115,27 @@ struct FieldIdMapper : public ColumnMapper {
 		}
 		return entry->second;
 	}
-	static unique_ptr<Expression> GetDefault(const MultiFileColumnDefinition &column) {
+	static unique_ptr<Expression> GetDefault(ClientContext &context, const MultiFileColumnDefinition &column) {
 		auto &default_val = column.default_expression;
 		if (!default_val) {
 			throw InternalException("No default expression in FieldId Map");
 		}
-		if (default_val->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
-			throw NotImplementedException("Default expression that isn't constant is not supported yet");
+		auto binder = Binder::CreateBinder(context);
+		binder->SetCanContainNulls(true);
+		ConstantBinder constant_binder(*binder, context, "default value");
+		auto expr = default_val->Copy();
+		LogicalType target_type = column.type;
+		auto bound = constant_binder.Bind(expr, &target_type);
+		if (!bound->IsFoldable()) {
+			return bound;
 		}
-		auto &constant_expr = default_val->Cast<ConstantExpression>();
-		// return only the expression
-		return make_uniq<BoundConstantExpression>(constant_expr.GetValue());
+		// a constant default is kept as a constant so filters on the missing column can be evaluated up front
+		return make_uniq<BoundConstantExpression>(ExpressionExecutor::EvaluateScalar(context, *bound, true));
 	}
 
-	unique_ptr<Expression> GetDefaultExpression(const MultiFileColumnDefinition &column, bool is_root) const override {
-		return GetDefault(column);
+	unique_ptr<Expression> GetDefaultExpression(ClientContext &context, const MultiFileColumnDefinition &column,
+	                                            bool is_root) const override {
+		return GetDefault(context, column);
 	}
 	idx_t MapCount() const override {
 		return field_id_map.size();
@@ -155,10 +163,11 @@ struct NameMapper : public ColumnMapper {
 		}
 		return entry->second;
 	}
-	unique_ptr<Expression> GetDefaultExpression(const MultiFileColumnDefinition &column, bool is_root) const override {
+	unique_ptr<Expression> GetDefaultExpression(ClientContext &context, const MultiFileColumnDefinition &column,
+	                                            bool is_root) const override {
 		if (column.default_expression) {
 			// we have an explicit default - return it
-			return FieldIdMapper::GetDefault(column);
+			return FieldIdMapper::GetDefault(context, column);
 		}
 		// no explicit default and no match
 		if (is_root) {
@@ -296,10 +305,10 @@ static ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColu
 		result.column_map = Value::STRUCT(std::move(column_mapping));
 		if (!is_root) {
 			// if this is nested we need to refer to the current column at this level
-			child_list_t<Value> child_list;
-			child_list.emplace_back(string(), Value(local_column.name));
-			child_list.emplace_back(string(), std::move(result.column_map));
-			result.column_map = Value::STRUCT(std::move(child_list));
+			vector<Value> child_list;
+			child_list.push_back(Value(local_column.name));
+			child_list.push_back(std::move(result.column_map));
+			result.column_map = Value::TUPLE(std::move(child_list));
 		}
 	}
 	if (is_selected && child_map.default_value) {
@@ -344,6 +353,18 @@ MapColumnMapComponent(ClientContext &context,
 	return child_map;
 }
 
+static bool IsInvalidMapKeyDefault(const ColumnMapResult &mapping) {
+	if (!mapping.default_value) {
+		return false;
+	}
+	auto &expr = *mapping.default_value;
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+		return false;
+	}
+	auto &constant_expr = expr.Cast<BoundConstantExpression>();
+	return constant_expr.GetValue().IsNull();
+}
+
 static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColumnDefinition &global_column,
                                     const ColumnIndex &global_index, const MultiFileColumnDefinition &local_column,
                                     const MultiFileLocalIndex &local_id, const ColumnMapper &mapper,
@@ -384,6 +405,11 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 
 		auto map_result = MapColumnMapComponent(context, selected_children, global_index, *nested_mapper, i,
 		                                        global_component, local_key_value);
+		if (name == "key" && IsInvalidMapKeyDefault(map_result)) {
+			throw InvalidInputException(
+			    "'key' of MAP did not map to a value and the registered DEFAULT is NULL, which is not allowed");
+		}
+
 		if (map_result.column_index) {
 			child_indexes.push_back(std::move(*map_result.column_index));
 			mapping->child_mapping.insert(make_pair(i, std::move(map_result.mapping)));
@@ -405,10 +431,10 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 		result.column_map = Value::STRUCT(std::move(column_mapping));
 		if (!is_root) {
 			// if this is nested we need to refer to the current column at this level
-			child_list_t<Value> child_list;
-			child_list.emplace_back(string(), Value(local_column.name));
-			child_list.emplace_back(string(), std::move(result.column_map));
-			result.column_map = Value::STRUCT(std::move(child_list));
+			vector<Value> child_list;
+			child_list.push_back(Value(local_column.name));
+			child_list.push_back(std::move(result.column_map));
+			result.column_map = Value::TUPLE(std::move(child_list));
 		}
 	}
 	if (!default_expressions.empty()) {
@@ -497,7 +523,7 @@ static ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileCo
 		//! FIXME: the 'default_value' should only be used if the STRUCT's default value is not NULL
 		if (child_map.default_value) {
 			// found a default value for this child - emplace it
-			child_map.default_value->SetAlias(global_child.name);
+			child_map.default_value->SetAlias(Identifier(global_child.name));
 			default_expressions.push_back(std::move(child_map.default_value));
 		}
 	}
@@ -510,10 +536,10 @@ static ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileCo
 		result.column_map = Value::STRUCT(std::move(column_mapping));
 		if (!is_root) {
 			// if this is nested we need to refer to the current column at this level
-			child_list_t<Value> child_list;
-			child_list.emplace_back(string(), Value(local_column.name));
-			child_list.emplace_back(string(), std::move(result.column_map));
-			result.column_map = Value::STRUCT(std::move(child_list));
+			vector<Value> child_list;
+			child_list.push_back(Value(local_column.name));
+			child_list.push_back(std::move(result.column_map));
+			result.column_map = Value::TUPLE(std::move(child_list));
 		}
 	}
 
@@ -537,7 +563,7 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 	auto local_idx = mapper.Find(global_column);
 	if (!local_idx.IsValid()) {
 		// entry not present in map, use default value
-		result.default_value = mapper.GetDefaultExpression(global_column, is_root);
+		result.default_value = mapper.GetDefaultExpression(context, global_column, is_root);
 		return result;
 	}
 	// the field exists! get the local column
@@ -635,6 +661,7 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 		auto global_column_id = global_id.GetPrimaryIndex();
 		optional_ptr<MultiFileColumnDefinition> global_column_reference;
 
+		optional_ptr<const MultiFileColumnDefinition> global_column_p;
 		auto local_idx = MultiFileLocalIndex(reader.column_ids.size());
 		if (IsVirtualColumn(global_column_id)) {
 			// virtual column - look it up in the virtual column entry map
@@ -653,33 +680,42 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 			}
 			// the column is not constant for the file
 			// get the expression to evaluate the column OR the global column to read into
-			auto expr =
-			    multi_file_reader.GetVirtualColumnExpression(context, reader_data, local_columns, global_column_id,
-			                                                 virtual_column_type, local_idx, global_column_reference);
-			if ((!expr && !global_column_reference) || (expr && global_column_reference.get())) {
-				throw InternalException(R"(
-					The GetVirtualColumnExpression is expected to either:"
-					- return an expression applied in FinalizeChunk to create the value for this global column,
-					  forwarding the (potentially changed) 'global_column_id' to the reader to create the needed data for the expression.
-					- set the 'global_column_reference' to replace this virtual column with a MultiFileColumnDefinition, as if it was defined in the schema.
-					Doing neither or both is not a valid option.
-				)");
-			}
-			if (expr && expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-				// the column is constant after all - handle it
-				expressions.push_back(std::move(expr));
+			auto virtual_column_bind_result = multi_file_reader.GetVirtualColumnExpression(
+			    context, reader_data, local_columns, global_column_id, virtual_column_type, local_idx);
+			auto bind_result_type = virtual_column_bind_result.GetType();
+			switch (bind_result_type) {
+			case MultiFileReaderVirtualColumnBinding::VirtualColumnBindingType::CONSTANT: {
+				expressions.push_back(make_uniq<BoundConstantExpression>(virtual_column_bind_result.constant));
 				continue;
 			}
-			if (!global_column_reference) {
+			case MultiFileReaderVirtualColumnBinding::VirtualColumnBindingType::EXPRESSION: {
+				auto &expr = virtual_column_bind_result.expression;
+				auto &column_ids = virtual_column_bind_result.local_virtual_column_ids;
+
 				auto is_reference = expr->GetExpressionType() == ExpressionType::BOUND_REF;
 				expressions.push_back(std::move(expr));
 
-				MultiFileLocalColumnId local_id(reader.columns.size());
-				auto local_index = global_id.RemapRootIndex(local_id.GetId());
-
 				// add the virtual column to the reader
-				reader.columns.emplace_back(virtual_entry->second.name, virtual_column_type);
-				reader.AddVirtualColumn(global_column_id);
+				bool seen_virtual_column = false;
+				for (auto &id : column_ids) {
+					if (!IsVirtualColumn(id)) {
+						reader.column_ids.push_back(MultiFileLocalColumnId(id));
+						reader.column_indexes.push_back(global_id.RemapRootIndex(id));
+						continue;
+					}
+					if (seen_virtual_column) {
+						throw InternalException("GetVirtualColumnExpression is only allowed to return one virtual "
+						                        "column id for the EXPRESSION result");
+					}
+					seen_virtual_column = true;
+					MultiFileLocalColumnId local_id(reader.columns.size());
+					auto local_index = global_id.RemapRootIndex(local_id.GetId());
+
+					reader.columns.emplace_back(virtual_entry->second.name.GetIdentifierName(), virtual_column_type);
+					reader.column_ids.push_back(local_id);
+					reader.column_indexes.push_back(std::move(local_index));
+					reader.AddVirtualColumn(id);
+				}
 
 				// set it as being projected in this spot
 				MultiFileColumnMap index_mapping(local_idx, virtual_column_type, virtual_column_type);
@@ -687,19 +723,23 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 					index_mapping.filter_conversion = FilterConversionType::CANNOT_CONVERT;
 				}
 				result.global_to_local.insert(make_pair(global_idx, std::move(index_mapping)));
-				reader.column_ids.push_back(local_id);
-				reader.column_indexes.push_back(std::move(local_index));
 				continue;
 			}
+			case MultiFileReaderVirtualColumnBinding::VirtualColumnBindingType::COLUMN_REFERENCE: {
+				global_column_p = virtual_column_bind_result.global_column_reference;
+				break;
+			}
+			}
+		} else {
+			global_column_p = global_columns[global_column_id];
 		}
 
-		const auto &global_column =
-		    global_column_reference ? *global_column_reference : global_columns[global_column_id];
+		const auto &global_column = *global_column_p;
 		if (reader.UseCastMap()) {
 			// reader is responsible for converting types - perform a top-level match only
 			auto entry = mapper.Find(global_column);
 			if (!entry.IsValid()) {
-				ThrowColumnNotFoundError(global_column.name);
+				ThrowColumnNotFoundError(global_column.name.GetIdentifierName());
 			}
 			MultiFileLocalColumnId local_id(entry.GetIndex());
 			auto local_index = global_id.RemapRootIndex(local_id.GetId());
@@ -790,7 +830,7 @@ Value MultiFileColumnMapper::GetConstantValue(MultiFileGlobalIndex global_index)
 	auto global_column_id = global_column_ids[global_index].GetPrimaryIndex();
 	auto &expr = reader_data.expressions[global_index];
 	if (expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		return expr->Cast<BoundConstantExpression>().value;
+		return expr->Cast<BoundConstantExpression>().GetValue();
 	}
 	for (idx_t i = 0; i < reader_data.constant_map.size(); i++) {
 		auto &constant_map_entry = reader_data.constant_map[MultiFileConstantMapIndex(i)];
@@ -853,10 +893,17 @@ static unique_ptr<Expression> CreateStructExtractExpression(unique_ptr<Expressio
 }
 
 static bool TryCastConstant(Value &constant, const LogicalType &target_type) {
-	if (!StatisticsPropagator::CanPropagateCast(constant.type(), target_type)) {
+	// this filter replaces the global one in the reader, so a constant that does not survive the cast
+	// exactly would silently change which rows match
+	if (!BoundCastExpression::CastIsInvertible(constant.type(), target_type)) {
 		return false;
 	}
-	return constant.DefaultTryCastAs(target_type);
+	auto cast = constant.DefaultTryCastAs(target_type);
+	if (!cast) {
+		return false;
+	}
+	constant = std::move(*cast);
+	return true;
 }
 
 struct RewrittenMappedExpression {
@@ -881,7 +928,7 @@ static RewrittenMappedExpression RewriteMappedValueExpression(const Expression &
 		if (!TryGetStructExtractChildIndex(func, child_idx)) {
 			return result;
 		}
-		auto child_result = RewriteMappedValueExpression(*func.children[0], mapping, target_type);
+		auto child_result = RewriteMappedValueExpression(*func.GetChildren()[0], mapping, target_type);
 		if (!child_result.expr || !child_result.mapping || !child_result.type ||
 		    child_result.type->id() != LogicalTypeId::STRUCT) {
 			return result;
@@ -921,11 +968,11 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.function.GetName() == OptionalFilterScalarFun::NAME) {
-			if (!func.bind_info) {
+		if (func.Function().GetName() == OptionalFilterScalarFun::NAME) {
+			if (!func.BindInfo()) {
 				return CreateOptionalFilterExpression(nullptr, target_type);
 			}
-			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
+			auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
 			auto child_expr = data.child_filter_expr
 			                      ? TryCastFilterExpression(*data.child_filter_expr, mapping, target_type)
 			                      : nullptr;
@@ -934,11 +981,11 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 			}
 			return CreateOptionalFilterExpression(std::move(child_expr), target_type);
 		}
-		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME) {
-			if (!func.bind_info) {
+		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME) {
+			if (!func.BindInfo()) {
 				return CreateSelectivityOptionalFilterExpression(nullptr, target_type, 0.5f, idx_t(6));
 			}
-			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
+			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
 			auto child_expr = data.child_filter_expr
 			                      ? TryCastFilterExpression(*data.child_filter_expr, mapping, target_type)
 			                      : nullptr;
@@ -948,11 +995,11 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 			return CreateSelectivityOptionalFilterExpression(std::move(child_expr), target_type,
 			                                                 data.selectivity_threshold, data.n_vectors_to_check);
 		}
-		if (func.function.GetName() == DynamicFilterScalarFun::NAME) {
-			if (!func.bind_info) {
+		if (func.Function().GetName() == DynamicFilterScalarFun::NAME) {
+			if (!func.BindInfo()) {
 				return nullptr;
 			}
-			auto &data = func.bind_info->Cast<DynamicFilterFunctionData>();
+			auto &data = func.BindInfo()->Cast<DynamicFilterFunctionData>();
 			return RewriteDynamicFilterExpression(data.filter_data, target_type);
 		}
 		if (!BoundComparisonExpression::IsComparison(expr)) {
@@ -968,7 +1015,7 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 		if (!lhs.expr || !lhs.type) {
 			return nullptr;
 		}
-		auto constant = right.Cast<BoundConstantExpression>().value;
+		auto constant = right.Cast<BoundConstantExpression>().GetValue();
 		if (!TryCastConstant(constant, *lhs.type)) {
 			return nullptr;
 		}
@@ -978,12 +1025,12 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 	case ExpressionClass::BOUND_CONJUNCTION: {
 		auto &conjunction = expr.Cast<BoundConjunctionExpression>();
 		auto result = make_uniq<BoundConjunctionExpression>(conjunction.GetExpressionType());
-		for (auto &child : conjunction.children) {
+		for (auto &child : conjunction.GetChildren()) {
 			auto rewritten_child = TryCastFilterExpression(*child, mapping, target_type);
 			if (!rewritten_child) {
 				return nullptr;
 			}
-			result->children.push_back(std::move(rewritten_child));
+			result->GetChildrenMutable().push_back(std::move(rewritten_child));
 		}
 		return std::move(result);
 	}
@@ -992,36 +1039,36 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 		switch (op.GetExpressionType()) {
 		case ExpressionType::OPERATOR_IS_NULL:
 		case ExpressionType::OPERATOR_IS_NOT_NULL: {
-			if (op.children.size() != 1) {
+			if (op.GetChildren().size() != 1) {
 				return nullptr;
 			}
-			auto child = RewriteMappedValueExpression(*op.children[0], mapping, target_type);
+			auto child = RewriteMappedValueExpression(*op.GetChildren()[0], mapping, target_type);
 			if (!child.expr) {
 				return nullptr;
 			}
 			auto result = make_uniq<BoundOperatorExpression>(op.GetExpressionType(), op.GetReturnType());
-			result->children.push_back(std::move(child.expr));
+			result->GetChildrenMutable().push_back(std::move(child.expr));
 			return std::move(result);
 		}
 		case ExpressionType::COMPARE_IN: {
-			if (op.children.empty()) {
+			if (op.GetChildren().empty()) {
 				return nullptr;
 			}
-			auto lhs = RewriteMappedValueExpression(*op.children[0], mapping, target_type);
+			auto lhs = RewriteMappedValueExpression(*op.GetChildren()[0], mapping, target_type);
 			if (!lhs.expr || !lhs.type) {
 				return nullptr;
 			}
 			auto result = make_uniq<BoundOperatorExpression>(op.GetExpressionType(), op.GetReturnType());
-			result->children.push_back(std::move(lhs.expr));
-			for (idx_t i = 1; i < op.children.size(); i++) {
-				if (op.children[i]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+			result->GetChildrenMutable().push_back(std::move(lhs.expr));
+			for (idx_t i = 1; i < op.GetChildren().size(); i++) {
+				if (op.GetChildren()[i]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 					return nullptr;
 				}
-				auto constant = op.children[i]->Cast<BoundConstantExpression>().value;
+				auto constant = op.GetChildren()[i]->Cast<BoundConstantExpression>().GetValue();
 				if (!TryCastConstant(constant, *lhs.type)) {
 					return nullptr;
 				}
-				result->children.push_back(make_uniq<BoundConstantExpression>(std::move(constant)));
+				result->GetChildrenMutable().push_back(make_uniq<BoundConstantExpression>(std::move(constant)));
 			}
 			return std::move(result);
 		}
@@ -1046,21 +1093,23 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 	return make_uniq<ExpressionFilter>(std::move(rewritten_expr));
 }
 
-static void SetIndexToZero(unique_ptr<Expression> &root_expr) {
-#ifdef DEBUG
-	optional_idx index;
-	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(root_expr, [&](BoundReferenceExpression &ref,
-	                                                                                    unique_ptr<Expression> &expr) {
-		if (index.IsValid() && index.GetIndex() != ref.index) {
-			throw InternalException("Expected an expression that only references a single column, but found multiple!");
-		}
-		index = ref.index;
-		ref.index = 0;
-	});
-#else
+static idx_t StartIndexAtZero(unique_ptr<Expression> &root_expr) {
+	map<idx_t, vector<reference<BoundReferenceExpression>>> reference_map;
+
+	//! First gather all references, sorted by their index
 	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
-	    root_expr, [&](BoundReferenceExpression &ref, unique_ptr<Expression> &expr) { ref.index = 0; });
-#endif
+	    root_expr, [&reference_map](BoundReferenceExpression &ref, unique_ptr<Expression> &expr) {
+		    reference_map[ref.Index()].push_back(ref);
+	    });
+	idx_t new_index = 0;
+	//! Then assign all the references a new index, starting at 0
+	for (auto &[_, references] : reference_map) {
+		auto index = new_index++;
+		for (auto &ref : references) {
+			ref.get().IndexMutable() = index;
+		}
+	}
+	return new_index;
 }
 
 unique_ptr<TableFilterSet>
@@ -1073,6 +1122,7 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 	auto &global_to_local = mapping.global_to_local;
 	auto result = make_uniq<TableFilterSet>();
 	map<idx_t, MultiFileGlobalIndex> local_to_global;
+
 	for (auto &it : filters) {
 		auto &global_index = it.first;
 		auto &global_filter = it.second.get().Cast<ExpressionFilter>();
@@ -1083,10 +1133,8 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 			    "Error in 'EvaluateConstantFilters', this filter should not end up in CreateFilters!");
 		}
 		auto &map_entry = local_it->second;
-		auto local_id = map_entry.mapping.index;
-		auto filter_idx = reader.column_indexes[local_id].GetPrimaryIndex();
+		auto local_id = MultiFileLocalIndex(map_entry.mapping.index.GetIndex());
 		auto &local_type = map_entry.local_type;
-		auto &global_type = map_entry.global_type;
 
 		unique_ptr<TableFilter> local_filter;
 		switch (map_entry.filter_conversion) {
@@ -1112,11 +1160,19 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 			// add the expression to the expression map - we are now evaluating this inside the reader directly
 			// we need to set the index of the references inside the expression to 0
 			auto &expr = reader_data.expressions[global_index.GetIndex()];
-			SetIndexToZero(expr);
-			reader.expression_map[filter_idx] = std::move(expr);
+			auto unique_ref_count = StartIndexAtZero(expr);
+			auto expression_type = expr->GetReturnType();
+
+			vector<ColumnIndex> expression_column_indexes;
+			for (idx_t i = 0; i < unique_ref_count; i++) {
+				auto index = local_id + i;
+				expression_column_indexes.push_back(reader.column_indexes[index]);
+			}
+			reader.expression_map.emplace(ProjectionIndex(local_id.GetIndex()),
+			                              BaseFileReaderExpression(std::move(expr), expression_column_indexes));
 
 			// reset the expression - since we are evaluating it in the reader we can just reference it
-			expr = make_uniq<BoundReferenceExpression>(global_type, local_id);
+			expr = make_uniq<BoundReferenceExpression>(std::move(expression_type), local_id);
 		}
 		local_to_global.emplace(local_id, global_index);
 	}

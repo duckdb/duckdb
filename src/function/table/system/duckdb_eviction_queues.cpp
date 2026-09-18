@@ -13,7 +13,7 @@ struct DuckDBEvictionQueuesData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBEvictionQueuesBind(ClientContext &context, TableFunctionBindInput &input,
-                                                         vector<LogicalType> &return_types, vector<string> &names) {
+                                                         vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("queue_index");
 	return_types.emplace_back(LogicalType::BIGINT);
 
@@ -65,7 +65,6 @@ void DuckDBEvictionQueuesFunction(ClientContext &context, TableFunctionInput &da
 		total_insertions.Append(Value::BIGINT(UnsafeNumericCast<int64_t>(entry.total_insertions)));
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBEvictionQueuesFun::RegisterFunction(BuiltinFunctions &set) {

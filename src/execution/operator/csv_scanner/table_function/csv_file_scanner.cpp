@@ -7,7 +7,7 @@
 namespace duckdb {
 
 CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, CSVReaderOptions options_p,
-                         const MultiFileOptions &file_options, const vector<string> &names,
+                         const MultiFileOptions &file_options, const vector<Identifier> &names,
                          const vector<LogicalType> &types, CSVSchema &file_schema, bool per_file_single_threaded,
                          shared_ptr<CSVBufferManager> buffer_manager_p, bool fixed_schema)
     : BaseFileReader(file_p), buffer_manager(std::move(buffer_manager_p)),
@@ -15,7 +15,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, CSV
       options(std::move(options_p)) {
 	// Initialize Buffer Manager
 	if (!buffer_manager) {
-		buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file, per_file_single_threaded);
+		buffer_manager = CSVBufferManager::Open(context, options, file, per_file_single_threaded);
 	}
 	// Initialize On Disk and Size of file
 	on_disk_file = buffer_manager->file_handle->OnDiskFile();
@@ -53,7 +53,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, con
                          const MultiFileOptions &file_options)
     : BaseFileReader(file_p), error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
       options(options_p) {
-	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file);
+	buffer_manager = CSVBufferManager::Open(context, options, file);
 	// Initialize On Disk and Size of file
 	on_disk_file = buffer_manager->file_handle->OnDiskFile();
 	file_size = buffer_manager->file_handle->FileSize();
@@ -94,10 +94,10 @@ void CSVFileScan::SetStart() {
 	start_iterator = skip_scanner.GetIterator();
 }
 
-void CSVFileScan::SetNamesAndTypes(const vector<string> &names_p, const vector<LogicalType> &types_p) {
-	names = names_p;
+void CSVFileScan::SetNamesAndTypes(const vector<Identifier> &names_p, const vector<LogicalType> &types_p) {
+	names = IdentifiersToStrings(names_p);
 	types = types_p;
-	columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(names, types);
+	columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(names_p, types);
 }
 
 void CSVFileScan::InitializeFileNamesTypes() {

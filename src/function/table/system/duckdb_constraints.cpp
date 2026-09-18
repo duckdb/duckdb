@@ -38,11 +38,11 @@ struct DuckDBConstraintsData : public GlobalTableFunctionState {
 	idx_t offset;
 	idx_t constraint_offset;
 	idx_t unique_constraint_offset;
-	case_insensitive_set_t constraint_names;
+	identifier_set_t constraint_names;
 };
 
 static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, TableFunctionBindInput &input,
-                                                      vector<LogicalType> &return_types, vector<string> &names) {
+                                                      vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("database_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -119,14 +119,14 @@ unique_ptr<GlobalTableFunctionState> DuckDBConstraintsInit(ClientContext &contex
 
 struct ExtraConstraintInfo {
 	vector<LogicalIndex> column_indexes;
-	vector<string> column_names;
-	string referenced_table;
-	vector<string> referenced_columns;
+	vector<Identifier> column_names;
+	Identifier referenced_table;
+	vector<Identifier> referenced_columns;
 };
 
-void ExtractReferencedColumns(const ParsedExpression &root_expr, vector<string> &result) {
+void ExtractReferencedColumns(const ParsedExpression &root_expr, vector<Identifier> &result) {
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
-	    root_expr, [&](const ColumnRefExpression &colref) { result.push_back(colref.GetColumnName()); });
+	    root_expr, [&](const ColumnRefExpression &colref) { result.emplace_back(colref.GetColumnName()); });
 }
 
 ExtraConstraintInfo GetExtraConstraintInfo(const TableCatalogEntry &table, const Constraint &constraint) {
@@ -154,7 +154,7 @@ ExtraConstraintInfo GetExtraConstraintInfo(const TableCatalogEntry &table, const
 	case ConstraintType::FOREIGN_KEY: {
 		auto &fk = constraint.Cast<ForeignKeyConstraint>();
 		result.referenced_columns = fk.pk_columns;
-		result.referenced_table = fk.info.table;
+		result.referenced_table = Identifier(fk.info.table.GetIdentifierName());
 		result.column_names = fk.fk_columns;
 		break;
 	}
@@ -164,12 +164,13 @@ ExtraConstraintInfo GetExtraConstraintInfo(const TableCatalogEntry &table, const
 	if (result.column_indexes.empty()) {
 		// generate column indexes from names
 		for (auto &name : result.column_names) {
-			result.column_indexes.push_back(table.GetColumnIndex(name));
+			auto col_name = name;
+			result.column_indexes.push_back(table.GetColumnIndex(col_name));
 		}
 	} else {
 		// generate names from column indexes
 		for (auto &index : result.column_indexes) {
-			result.column_names.push_back(table.GetColumn(index).GetName());
+			result.column_names.emplace_back(table.GetColumn(index).GetName());
 		}
 	}
 	return result;
@@ -178,10 +179,10 @@ ExtraConstraintInfo GetExtraConstraintInfo(const TableCatalogEntry &table, const
 string GetConstraintName(const TableCatalogEntry &table, Constraint &constraint, const ExtraConstraintInfo &info) {
 	string result = table.name + "_";
 	for (auto &col : info.column_names) {
-		result += StringUtil::Lower(col) + "_";
+		result += StringUtil::Lower(col.GetIdentifierName()) + "_";
 	}
 	for (auto &col : info.referenced_columns) {
-		result += StringUtil::Lower(col) + "_";
+		result += StringUtil::Lower(col.GetIdentifierName()) + "_";
 	}
 	switch (constraint.type) {
 	case ConstraintType::CHECK:
@@ -288,10 +289,10 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 
 			auto info = GetExtraConstraintInfo(table, *constraint);
 			auto constraint_name = GetConstraintName(table, *constraint, info);
-			if (data.constraint_names.find(constraint_name) != data.constraint_names.end()) {
+			if (data.constraint_names.find(Identifier(constraint_name)) != data.constraint_names.end()) {
 				// duplicate constraint name
 				idx_t index = 2;
-				while (data.constraint_names.find(constraint_name + "_" + to_string(index)) !=
+				while (data.constraint_names.find(Identifier(constraint_name + "_" + to_string(index))) !=
 				       data.constraint_names.end()) {
 					index++;
 				}
@@ -315,15 +316,15 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 				column_index_list.push_back(Value::UBIGINT(col_index.index));
 			}
 			for (auto &name : info.column_names) {
-				column_name_list.push_back(Value(std::move(name)));
+				column_name_list.push_back(Value(name));
 			}
 			for (auto &name : info.referenced_columns) {
-				referenced_column_name_list.push_back(Value(std::move(name)));
+				referenced_column_name_list.push_back(Value(name));
 			}
 			constraint_column_indexes.Append(Value::LIST(LogicalType::BIGINT, std::move(column_index_list)));
 			constraint_column_names.Append(Value::LIST(LogicalType::VARCHAR, std::move(column_name_list)));
 			constraint_name_vec.Append(Value(std::move(constraint_name)));
-			referenced_table.Append(info.referenced_table.empty() ? Value() : Value(std::move(info.referenced_table)));
+			referenced_table.Append(info.referenced_table.empty() ? Value() : Value(info.referenced_table));
 			referenced_column_names.Append(Value::LIST(LogicalType::VARCHAR, std::move(referenced_column_name_list)));
 			count++;
 		}
@@ -333,7 +334,6 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			data.offset++;
 		}
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBConstraintsFun::RegisterFunction(BuiltinFunctions &set) {

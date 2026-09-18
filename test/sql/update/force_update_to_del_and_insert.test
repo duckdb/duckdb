@@ -1,0 +1,53 @@
+# name: test/sql/update/force_update_to_del_and_insert.test
+# description: Test the force_update_to_del_and_insert setting
+# group: [update]
+
+# default value is false
+query I
+SELECT current_setting('force_update_to_del_and_insert')
+----
+false
+
+statement ok
+CREATE TABLE t(i INTEGER, j INTEGER, k INTEGER);
+
+statement ok
+INSERT INTO t VALUES (1, 10, 100), (2, 20, 200), (3, 30, 300);
+
+statement ok
+SET force_update_to_del_and_insert=true;
+
+query I
+SELECT current_setting('force_update_to_del_and_insert')
+----
+true
+
+# the update still produces correct results when forced to del + insert
+statement ok
+UPDATE t SET j=j+1 WHERE i>1;
+
+query III
+SELECT * FROM t ORDER BY i
+----
+1	10	100
+2	21	200
+3	31	300
+
+# resetting the setting brings back in-place updates
+statement ok
+RESET force_update_to_del_and_insert;
+
+query I
+SELECT current_setting('force_update_to_del_and_insert')
+----
+false
+
+statement ok
+UPDATE t SET k=k+1;
+
+query III
+SELECT * FROM t ORDER BY i
+----
+1	10	101
+2	21	201
+3	31	301

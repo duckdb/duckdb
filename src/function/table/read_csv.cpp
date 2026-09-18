@@ -1,4 +1,5 @@
 #include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/function/table/read_duckdb.hpp"
 
 #include "duckdb/common/enum_util.hpp"
@@ -20,6 +21,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/base_scanner.hpp"
@@ -141,18 +143,43 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(Deserializer &deserializer,
 	// return bind_data;
 }
 
+static bool PushdownProjectionExpression(ClientContext &context, const TableFunctionProjectionExpressionInput &input) {
+	if (!BoundCastExpression::IsCast(input.expr)) {
+		return false;
+	}
+	const auto &cast = input.expr.Cast<BoundFunctionExpression>();
+	const auto &target_type = cast.GetReturnType();
+	auto &bind_data = input.get.bind_data->Cast<MultiFileBindData>();
+	const idx_t idx = input.get.GetColumnIds()[input.column_index].GetPrimaryIndex();
+	// Hive-partition and filename columns are produced from the file path by
+	// separate finalize expressions, not parsed from the file. Retyping them
+	// here would desync those expressions, so leave the cast in place.
+	// See test/sql/copy/csv/csv_hive.test
+	for (const auto &partition : bind_data.reader_bind.hive_partitioning_indexes) {
+		if (partition.index == idx) {
+			return false;
+		}
+	}
+	if (bind_data.reader_bind.filename_idx.IsValid() && bind_data.reader_bind.filename_idx.GetIndex() == idx) {
+		return false;
+	}
+	bind_data.types[idx] = target_type;
+	bind_data.columns[idx].type = target_type;
+	return true;
+}
+
 TableFunction ReadCSVTableFunction::GetFunction() {
 	MultiFileFunction<CSVMultiFileInfo> read_csv("read_csv");
 	read_csv.serialize = CSVReaderSerialize;
 	read_csv.deserialize = CSVReaderDeserialize;
-	read_csv.type_pushdown = MultiFileFunction<CSVMultiFileInfo>::PushdownType;
+	read_csv.projection_expression_pushdown = PushdownProjectionExpression;
 	ReadCSVAddNamedParameters(read_csv);
 	return static_cast<TableFunction>(read_csv);
 }
 
 TableFunction ReadCSVTableFunction::GetAutoFunction() {
 	auto read_csv_auto = ReadCSVTableFunction::GetFunction();
-	read_csv_auto.name = "read_csv_auto";
+	read_csv_auto.SetName("read_csv_auto");
 	return read_csv_auto;
 }
 
@@ -180,12 +207,12 @@ unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, ReplacementScanI
 	}
 	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
+	children.push_back(ConstantExpression::String(table_name));
 	table_function->function = make_uniq<FunctionExpression>("read_csv_auto", std::move(children));
 
 	if (!FileSystem::HasGlob(table_name)) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		table_function->alias = fs.ExtractBaseName(table_name);
+		table_function->alias = Identifier(fs.ExtractBaseName(table_name));
 	}
 
 	return std::move(table_function);

@@ -24,10 +24,10 @@ public:
 
 public:
 	//! Creates a default entry with the specified name, or returns nullptr if no such entry can be generated
-	virtual unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name);
-	virtual unique_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const string &entry_name);
+	virtual unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const Identifier &entry_name);
+	virtual unique_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const Identifier &entry_name);
 	//! Get a list of all default entries in the generator
-	virtual vector<string> GetDefaultEntries() = 0;
+	virtual vector<Identifier> GetDefaultEntries() = 0;
 	//! Whether or not we should keep the lock while calling CreateDefaultEntry
 	//! If this is set to false, CreateDefaultEntry might be called multiple times in parallel also for the same entry
 	//! Otherwise it will be called exactly once per entry

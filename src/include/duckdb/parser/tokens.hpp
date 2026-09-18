@@ -19,6 +19,7 @@ class AlterStatement;
 class AttachStatement;
 class CallStatement;
 class ConnectStatement;
+class ExternalResourceStatement;
 class CopyStatement;
 class CreateStatement;
 class DetachStatement;
@@ -59,6 +60,7 @@ class StatementNode;
 class UpdateQueryNode;
 class DeleteQueryNode;
 class InsertQueryNode;
+class MergeQueryNode;
 
 //===--------------------------------------------------------------------===//
 // Expressions

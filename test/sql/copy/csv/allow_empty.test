@@ -1,0 +1,36 @@
+# name: test/sql/copy/csv/allow_empty.test
+# description: Test allow_empty for CSV reads
+# group: [csv]
+
+statement error
+SELECT * FROM read_csv('{TEST_DIR}/allow_empty_missing.csv');
+----
+No files found that match the pattern
+
+query TT
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_csv('{TEST_DIR}/allow_empty_missing.csv', allow_empty = true));
+----
+empty	BOOLEAN
+
+query I
+SELECT count(*) FROM read_csv('{TEST_DIR}/allow_empty_missing.csv', allow_empty = true);
+----
+0
+
+statement ok
+CREATE TABLE allow_empty_source(id INTEGER, payload VARCHAR);
+
+statement ok
+INSERT INTO allow_empty_source VALUES (1, 'first row'), (2, 'second row');
+
+statement ok
+COPY allow_empty_source TO '{TEST_DIR}/allow_empty.csv' (FORMAT CSV, HEADER TRUE);
+
+query IT
+SELECT *
+FROM read_csv('{TEST_DIR}/allow_empty.csv', header = true, columns = {'id': 'INTEGER', 'payload': 'VARCHAR'}, allow_empty = true)
+ORDER BY id;
+----
+1	first row
+2	second row

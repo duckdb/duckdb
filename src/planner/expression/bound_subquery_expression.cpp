@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 
@@ -24,6 +25,13 @@ unique_ptr<Expression> BoundSubqueryExpression::Copy() const {
 bool BoundSubqueryExpression::PropagatesNullValues() const {
 	// TODO this can be optimized further by checking the actual subquery node
 	return false;
+}
+
+bool BoundSubqueryExpression::IsVolatile() const {
+	if (Expression::IsVolatile()) {
+		return true;
+	}
+	return subquery.plan && subquery.plan->HasVolatileExpressions();
 }
 
 } // namespace duckdb

@@ -25,3 +25,104 @@ WITH RECURSIVE t(x) AS
 NULL	5
 NULL	7
 NULL	9
+
+# Inequality conditions use a nested loop join and preserve duplicate recursive rows
+query II
+WITH RECURSIVE t(x) AS
+(
+  SELECT 1
+    UNION ALL
+  SELECT x + 1
+  FROM   (SELECT t.x+1 FROM v AS _(p) FULL OUTER JOIN t ON t.x <= p) AS _(x)
+  WHERE  x < 10
+) SELECT * FROM v AS _(p) RIGHT OUTER JOIN t ON t.x = p ORDER BY p, t NULLS LAST;
+----
+1	1
+3	3
+3	3
+3	3
+NULL	5
+NULL	5
+NULL	5
+NULL	7
+NULL	7
+NULL	7
+NULL	9
+NULL	9
+NULL	9
+
+# Reuse the local source state of a full outer nested loop join across recursive iterations
+query I
+WITH RECURSIVE t(x) AS
+(
+  SELECT 1
+    UNION ALL
+  SELECT COALESCE(t.x, p) + 1
+  FROM   (VALUES (NULL::INTEGER)) AS v(p) FULL OUTER JOIN t ON t.x <= p
+  WHERE  COALESCE(t.x, p) < 3
+) SELECT * FROM t ORDER BY x;
+----
+1
+2
+3
+
+query II
+EXPLAIN WITH RECURSIVE t(x) AS
+(
+  SELECT 1
+    UNION ALL
+  SELECT COALESCE(t.x, p) + 1
+  FROM   (VALUES (NULL::INTEGER)) AS v(p) FULL OUTER JOIN t ON t.x <= p
+  WHERE  COALESCE(t.x, p) < 3
+) SELECT * FROM t;
+----
+physical_plan	<REGEX>:.*Nested Loop Join[\s\S]*Join Type: FULL.*
+
+# Equality conditions should continue to use a hash join
+query II
+EXPLAIN WITH RECURSIVE t(x) AS
+(
+  SELECT 1
+    UNION ALL
+  SELECT t.x + 1
+  FROM   (VALUES (3)) AS v(p) FULL OUTER JOIN t ON t.x = p
+  WHERE  t.x < 3
+) SELECT * FROM t;
+----
+physical_plan	<REGEX>:.*Hash Join.*
+
+# Inner nested loop joins do not use the outer source state
+query I
+WITH RECURSIVE t(x) AS
+(
+  SELECT 1
+    UNION ALL
+  SELECT t.x + 1
+  FROM   (VALUES (3)) AS v(p) INNER JOIN t ON t.x < p
+  WHERE  t.x < 3
+) SELECT * FROM t ORDER BY x;
+----
+1
+2
+3
+
+# Exercise the adjacent physical right outer join without optimizer join flipping
+statement ok
+PRAGMA disable_optimizer
+
+query I
+WITH RECURSIVE t(x) AS
+(
+  SELECT 1
+    UNION ALL
+  SELECT t.x + 1
+  FROM   (VALUES (NULL::INTEGER)) AS v(p) RIGHT OUTER JOIN t ON t.x <= p
+  WHERE  t.x < 3
+) SELECT * FROM t ORDER BY x;
+----
+1
+2
+3
+
+statement ok
+PRAGMA enable_optimizer

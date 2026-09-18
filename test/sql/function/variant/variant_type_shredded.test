@@ -1,0 +1,137 @@
+# name: test/sql/function/variant/variant_type_shredded.test
+# description: Test variant_type with shredded VARIANT values
+# group: [variant]
+
+load {TEST_DIR}/variant_type_shredded.db readwrite v1.5.0
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+SET force_variant_shredding = 'STRUCT(b INTEGER, a INTEGER)';
+
+statement ok
+CREATE TABLE variants(id INTEGER, v VARIANT);
+
+statement ok
+INSERT INTO variants VALUES
+	-- partially shredded
+	(1, {'z': 9, 'a': 1, 'b': 2}::VARIANT),
+	-- VARIANT_NULL
+	(2, {'a': 10, 'b': NULL}::VARIANT),
+	-- missing value in shredded schema
+	(3, {'a': 20}::VARIANT),
+	-- root with different type than shredded schema
+	(4, 42::VARIANT),
+	-- SQL-NULL
+	(5, NULL::VARIANT);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT DISTINCT vector_type(v) FROM variants;
+----
+SHREDDED_VECTOR
+
+# Try to resolve key in shredded schema
+query II
+SELECT variant_type(v), variant_type(v, 'b') FROM variants ORDER BY id;
+----
+OBJECT	INT32
+OBJECT	VARIANT_NULL
+OBJECT	NULL
+INT32	NULL
+NULL	NULL
+
+# Try to resolve key outside shredded schema
+query I
+SELECT variant_type(v, 'z') FROM variants ORDER BY id;
+----
+INT32
+NULL
+NULL
+NULL
+NULL
+
+# Multiple paths
+query I
+SELECT variant_type(v, ['b', 'z', 'missing']) FROM variants ORDER BY id;
+----
+[INT32, INT32, NULL]
+[VARIANT_NULL, NULL, NULL]
+[NULL, NULL, NULL]
+[NULL, NULL, NULL]
+NULL
+
+# --- Fully consistent primitive VARIANT ---
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+SET force_variant_shredding = 'INTEGER';
+
+statement ok
+CREATE TABLE fully_shredded(id INTEGER, v VARIANT);
+
+statement ok
+INSERT INTO fully_shredded VALUES
+	(1, 42::INTEGER::VARIANT),
+	(2, 84::INTEGER::VARIANT),
+	(3, NULL::VARIANT);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT DISTINCT vector_type(v) FROM fully_shredded;
+----
+SHREDDED_VECTOR
+
+query I
+SELECT variant_type(v) FROM fully_shredded ORDER BY id;
+----
+INT32
+INT32
+NULL
+
+# --- Fully consistent object VARIANT ---
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+SET force_variant_shredding = 'STRUCT(b INTEGER, a INTEGER)';
+
+statement ok
+CREATE TABLE fully_shredded_objects(id INTEGER, v VARIANT);
+
+statement ok
+INSERT INTO fully_shredded_objects VALUES
+	(1, {'a': 1, 'b': 2}::VARIANT),
+	(2, {'a': 3, 'b': 4}::VARIANT),
+	(3, NULL::VARIANT);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT DISTINCT vector_type(v) FROM fully_shredded_objects;
+----
+SHREDDED_VECTOR
+
+query II
+SELECT variant_type(v), variant_type(v, 'b')
+FROM fully_shredded_objects
+ORDER BY id;
+----
+OBJECT	INT32
+OBJECT	INT32
+NULL	NULL

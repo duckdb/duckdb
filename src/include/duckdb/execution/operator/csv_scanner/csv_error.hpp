@@ -55,7 +55,7 @@ public:
 	         const string &fixes, const String &current_path);
 	CSVError(string error_message, CSVErrorType type, LinesPerBoundary error_info);
 	//! Produces error messages for column name -> type mismatch.
-	static CSVError ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
+	static CSVError ColumnTypesError(identifier_map_t<idx_t> sql_types_per_column, const vector<Identifier> &names);
 	//! Produces error messages for casting errors
 	static CSVError CastError(const CSVReaderOptions &options, const string &column_name, string &cast_error,
 	                          idx_t column_idx, string &csv_row, LinesPerBoundary error_info, idx_t row_byte_position,

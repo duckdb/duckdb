@@ -20,14 +20,14 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_AGGREGATE: {
 		auto &aggr_expr = expr.Cast<BoundAggregateExpression>();
-		for (auto &child : aggr_expr.children) {
+		for (auto &child : aggr_expr.GetChildrenMutable()) {
 			callback(child);
 		}
-		if (aggr_expr.filter) {
-			callback(aggr_expr.filter);
+		if (aggr_expr.GetFilter()) {
+			callback(aggr_expr.GetFilterMutable());
 		}
-		if (aggr_expr.order_bys) {
-			for (auto &order : aggr_expr.order_bys->orders) {
+		if (aggr_expr.GetOrderBys()) {
+			for (auto &order : aggr_expr.GetOrderBysMutable()->orders) {
 				callback(order.expression);
 			}
 		}
@@ -35,77 +35,76 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	}
 	case ExpressionClass::BOUND_CASE: {
 		auto &case_expr = expr.Cast<BoundCaseExpression>();
-		for (auto &case_check : case_expr.case_checks) {
+		for (auto &case_check : case_expr.CaseChecksMutable()) {
 			callback(case_check.when_expr);
 			callback(case_check.then_expr);
 		}
-		callback(case_expr.else_expr);
-		break;
-	}
-	case ExpressionClass::BOUND_CAST: {
-		auto &cast_expr = expr.Cast<BoundCastExpression>();
-		callback(cast_expr.child);
+		callback(case_expr.ElseMutable());
 		break;
 	}
 	case ExpressionClass::BOUND_CONJUNCTION: {
 		auto &conj_expr = expr.Cast<BoundConjunctionExpression>();
-		for (auto &child : conj_expr.children) {
+		for (auto &child : conj_expr.GetChildrenMutable()) {
 			callback(child);
 		}
 		break;
 	}
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &func_expr = expr.Cast<BoundFunctionExpression>();
-		for (auto &child : func_expr.children) {
+		for (auto &child : func_expr.GetChildrenMutable()) {
 			callback(child);
 		}
 		break;
 	}
 	case ExpressionClass::BOUND_OPERATOR: {
 		auto &op_expr = expr.Cast<BoundOperatorExpression>();
-		for (auto &child : op_expr.children) {
+		for (auto &child : op_expr.GetChildrenMutable()) {
 			callback(child);
 		}
 		break;
 	}
 	case ExpressionClass::BOUND_SUBQUERY: {
 		auto &subquery_expr = expr.Cast<BoundSubqueryExpression>();
-		for (auto &child : subquery_expr.children) {
+		for (auto &child : subquery_expr.GetChildrenMutable()) {
 			callback(child);
 		}
 		break;
 	}
 	case ExpressionClass::BOUND_WINDOW: {
 		auto &window_expr = expr.Cast<BoundWindowExpression>();
-		for (auto &partition : window_expr.partitions) {
+		for (auto &partition : window_expr.PartitionsMutable()) {
 			callback(partition);
 		}
-		for (auto &order : window_expr.orders) {
+		for (auto &order : window_expr.OrderByMutable()) {
 			callback(order.expression);
 		}
-		for (auto &child : window_expr.children) {
+		for (auto &child : window_expr.GetChildrenMutable()) {
 			callback(child);
 		}
-		if (window_expr.filter_expr) {
-			callback(window_expr.filter_expr);
+		if (window_expr.FilterMutable()) {
+			callback(window_expr.FilterMutable());
 		}
-		if (window_expr.start_expr) {
-			callback(window_expr.start_expr);
+		if (window_expr.StartExprMutable()) {
+			callback(window_expr.StartExprMutable());
 		}
-		if (window_expr.end_expr) {
-			callback(window_expr.end_expr);
+		if (window_expr.EndExprMutable()) {
+			callback(window_expr.EndExprMutable());
 		}
-		for (auto &order : window_expr.arg_orders) {
+		for (auto &order : window_expr.ArgOrdersMutable()) {
 			callback(order.expression);
 		}
 		break;
 	}
 	case ExpressionClass::BOUND_UNNEST: {
 		auto &unnest_expr = expr.Cast<BoundUnnestExpression>();
-		callback(unnest_expr.child);
+		callback(unnest_expr.ChildMutable());
 		break;
 	}
 	case ExpressionClass::BOUND_COLUMN_REF:
+	// TODO: enumerate the lambda body here. That would give volatility, CanThrow and Hash for free,
+	// but the body's BoundReferenceExpressions index the lambda's own input chunk rather than the
+	// outer one, so every pass that rewrites references must first be shown to leave them alone.
+	case ExpressionClass::BOUND_LAMBDA:
 	case ExpressionClass::BOUND_LAMBDA_REF:
 	case ExpressionClass::BOUND_CONSTANT:
 	case ExpressionClass::BOUND_DEFAULT:

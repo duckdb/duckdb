@@ -27,7 +27,7 @@ public:
 
 static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<ConstantOrNullBindData>();
+	auto &info = func_expr.BindInfo()->Cast<ConstantOrNullBindData>();
 	result.Reference(info.value, count_t(args.size()));
 	for (idx_t idx = 1; idx < args.ColumnCount(); idx++) {
 		switch (args.data[idx].GetVectorType()) {
@@ -71,41 +71,30 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 }
 
 unique_ptr<FunctionData> ConstantOrNullBind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &arguments = input.GetArguments();
 	auto &function = input.GetBoundFunction();
 
-	if (arguments[0]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[0]->IsFoldable()) {
-		throw BinderException("ConstantOrNull requires a constant input");
-	}
+	auto value = input.GetConstant(0);
 	D_ASSERT(arguments.size() >= 2);
-	auto value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
 	function.SetReturnType(arguments[0]->GetReturnType());
 	return make_uniq<ConstantOrNullBindData>(std::move(value));
 }
 
 } // namespace
 
-unique_ptr<FunctionData> ConstantOrNull::Bind(Value value) {
-	return make_uniq<ConstantOrNullBindData>(std::move(value));
-}
-
 bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, const Value &val) {
-	if (expr.function.GetName() != "constant_or_null") {
+	if (expr.Function().GetName() != "constant_or_null") {
 		return false;
 	}
-	D_ASSERT(expr.bind_info);
-	auto &bind_data = expr.bind_info->Cast<ConstantOrNullBindData>();
+	D_ASSERT(expr.BindInfo());
+	auto &bind_data = expr.BindInfo()->Cast<ConstantOrNullBindData>();
 	D_ASSERT(bind_data.value.type() == val.type());
 	return bind_data.value == val;
 }
 
 ScalarFunction ConstantOrNullFun::GetFunction() {
-	auto fun = ScalarFunction("constant_or_null", {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
-	                          ConstantOrNullFunction);
+	auto fun = ScalarFunction("constant_or_null", {}, LogicalType::ANY, ConstantOrNullFunction);
+	fun.GetSignature().AddParameter("arg1", LogicalType::ANY).AddParameter("arg2", LogicalType::ANY);
 	fun.SetBindCallback(ConstantOrNullBind);
 	fun.SetVarArgs(LogicalType::ANY);
 	return fun;

@@ -3,8 +3,8 @@ PivotStatement <- PivotKeyword TableRef PivotOn? PivotUsing? PivotGroupByList?
 PivotOn <- 'ON' PivotColumnList
 PivotUsing <- 'USING' TargetList
 PivotColumnList <- List(PivotColumnEntry)
-PivotColumnEntry <- PivotColumnSubquery / PivotValueList / PivotColumnEntryInternal
-PivotColumnEntryInternal <- Expression
+PivotColumnEntry <- PivotColumnSubquery / PivotValueList / PivotColumnExpression
+PivotColumnExpression <- Expression
 PivotColumnSubquery <- BaseExpression 'IN' Parens(SelectStatementInternal)
 
 PivotKeyword <- 'PIVOT' / 'PIVOT_WIDER'
@@ -12,9 +12,13 @@ UnpivotKeyword <- 'UNPIVOT' / 'PIVOT_LONGER'
 
 UnpivotStatement <- UnpivotKeyword TableRef 'ON' TargetList IntoNameValues?
 
-IntoNameValues <- 'INTO' 'NAME' ColIdOrString ValueOrValues List(Identifier)
+IntoNameValues <- 'INTO' 'NAME' ColIdOrString ValueOrValues OptionalParensNameList
 
 ValueOrValues <- 'VALUE' / 'VALUES'
+
+OptionalParensNameList <- ParenthesizedNameList / BareNameList
+ParenthesizedNameList <- Parens(List(ColIdOrString))
+BareNameList <- List(ColIdOrString)
 
 IncludeOrExcludeNulls <- IncludeNulls / ExcludeNulls
 IncludeNulls <- 'INCLUDE' 'NULLS'

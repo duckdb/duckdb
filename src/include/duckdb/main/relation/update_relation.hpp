@@ -16,15 +16,15 @@ namespace duckdb {
 class UpdateRelation : public Relation {
 public:
 	UpdateRelation(shared_ptr<ClientContextWrapper> &context, unique_ptr<ParsedExpression> condition,
-	               string catalog_name, string schema_name, string table_name, vector<string> update_columns,
-	               vector<unique_ptr<ParsedExpression>> expressions);
+	               Identifier catalog_name, Identifier schema_name, Identifier table_name,
+	               vector<Identifier> update_columns, vector<unique_ptr<ParsedExpression>> expressions);
 
 	vector<ColumnDefinition> columns;
 	unique_ptr<ParsedExpression> condition;
-	string catalog_name;
-	string schema_name;
-	string table_name;
-	vector<string> update_columns;
+	Identifier catalog_name;
+	Identifier schema_name;
+	Identifier table_name;
+	vector<Identifier> update_columns;
 	vector<unique_ptr<ParsedExpression>> expressions;
 
 public:

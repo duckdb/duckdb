@@ -1,0 +1,159 @@
+module: connection
+functions:
+  connect:
+    offset: 3
+    lifecycle:
+      - ["stable", "v0.1.0", "2019-06-27"]
+    role: constructor
+    belongs_to: connection
+    parameters:
+      database:
+        type: database
+        description: The database file to connect to.
+      out_connection:
+        type: connection
+        indirection: 1
+        kind: OUT
+        description: The result connection object.
+    return_type: state
+    description: |
+      Opens a connection to a database. Connections are required to query the database, and store transactional state
+      associated with the connection.
+      The instantiated connection should be closed using 'duckdb_disconnect'.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  interrupt:
+    offset: 4
+    lifecycle:
+      - ["stable", "v0.9.0", "2023-09-26"]
+    parameters:
+      connection:
+        type: connection
+        description: The connection to interrupt
+    return_type: opaque
+    description: |
+      Interrupt running query
+  query_progress:
+    offset: 5
+    lifecycle:
+      # The name dates to v0.9.0, where it returned a double; the struct-returning
+      # signature described here arrived with query_progress_type in v0.10.0.
+      - ["stable", "v0.10.0", "2024-02-13"]
+    parameters:
+      connection:
+        type: connection
+        description: The connection running the query.
+    return_type: query_progress_type
+    description: |
+      Get the progress of the running query.
+    return_description: The query progress type containing progress information.
+  disconnect:
+    offset: 6
+    lifecycle:
+      - ["stable", "v0.1.0", "2019-06-27"]
+    role: destructor
+    belongs_to: connection
+    parameters:
+      connection:
+        type: connection
+        indirection: 1
+        description: The connection to close.
+    return_type: opaque
+    description: |
+      Closes the specified connection and de-allocates all memory allocated for that connection.
+  connection_get_client_context:
+    offset: 502
+    lifecycle:
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
+    parameters:
+      connection:
+        type: connection
+        description: The connection.
+      out_context:
+        type: client_context
+        indirection: 1
+        kind: OUT
+        description: The client context of the connection. Must be destroyed with `duckdb_destroy_client_context`.
+    return_type: opaque
+    description: |
+      Retrieves the client context of the connection.
+  connection_get_arrow_options:
+    offset: 504
+    lifecycle:
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
+    parameters:
+      connection:
+        type: connection
+        description: The connection.
+      out_arrow_options:
+        type: arrow_options
+        indirection: 1
+        kind: OUT
+    return_type: opaque
+    description: |
+      Retrieves the arrow options of the connection.
+  client_context_get_connection_id:
+    offset: 500
+    lifecycle:
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
+    parameters:
+      context:
+        type: client_context
+        description: The client context.
+    return_type: idx
+    description: |
+      Returns the connection id of the client context.
+    return_description: The connection id of the client context.
+  destroy_client_context:
+    offset: 501
+    lifecycle:
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
+    role: destructor
+    belongs_to: client_context
+    parameters:
+      context:
+        type: client_context
+        indirection: 1
+        description: The client context to destroy.
+    return_type: opaque
+    description: |
+      Destroys the client context and deallocates its memory.
+  destroy_arrow_options:
+    offset: 505
+    lifecycle:
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
+    role: destructor
+    belongs_to: arrow_options
+    parameters:
+      arrow_options:
+        type: arrow_options
+        indirection: 1
+        description: The arrow options to destroy.
+    return_type: opaque
+    description: |
+      Destroys the arrow options and deallocates its memory.
+  get_table_names:
+    offset: 503
+    lifecycle:
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
+    parameters:
+      connection:
+        type: connection
+        description: The connection for which to get the table names.
+      query:
+        type: char
+        indirection: 1
+        const: true
+        description: The query for which to get the table names.
+      qualified:
+        type: bool
+        description: Returns fully qualified table names (catalog.schema.table), if set to true, else only the (not escaped) table names.
+    return_type: value
+    description: |
+      Get the list of (fully qualified) table names of the query.
+    return_description: A duckdb_value of type VARCHAR[] containing the (fully qualified) table names of the query. Must be destroyed with duckdb_destroy_value.

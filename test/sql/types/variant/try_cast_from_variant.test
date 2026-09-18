@@ -81,3 +81,20 @@ select try_cast(a as UNION(a integer, b decimal)) from cte;
 NULL
 NULL
 NULL
+
+require json
+
+query I
+select try_cast(json('["1","x"]')::VARIANT as INTEGER[]);
+----
+NULL
+
+query I
+select try_cast(json('["1","x"]')::VARIANT as INTEGER[2]);
+----
+NULL
+
+statement error
+select cast(json('["1","x"]')::VARIANT as INTEGER[2]);
+----
+Conversion Error

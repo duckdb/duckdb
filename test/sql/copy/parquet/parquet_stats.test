@@ -217,3 +217,33 @@ select row_group_bytes, row_group_compressed_bytes from parquet_metadata('{DATA_
 ----
 200	208
 200	208
+
+# min/max over safe widening casts can use exact parquet statistics
+statement ok
+COPY (SELECT i::INTEGER AS i FROM range(8192) t(i)) TO '{TEST_DIR}/minmax_cast_stats.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048);
+
+query IIII
+SELECT min(i::BIGINT), max(i::BIGINT), typeof(min(i::BIGINT)), typeof(max(i::BIGINT))
+FROM read_parquet('{TEST_DIR}/minmax_cast_stats.parquet');
+----
+0	8191	BIGINT	BIGINT
+
+# Query doesn't read any row group, it directly gets stats from row group.
+query II
+EXPLAIN ANALYZE SELECT min(i::BIGINT), max(i::BIGINT)
+FROM read_parquet('{TEST_DIR}/minmax_cast_stats.parquet');
+----
+analyzed_plan	<!REGEX>:(?s).*Row Groups Scanned: [0-9]+ / 4.*
+
+query IIII
+SELECT min(TRY_CAST(i AS BIGINT)), max(TRY_CAST(i AS BIGINT)), typeof(min(TRY_CAST(i AS BIGINT))), typeof(max(TRY_CAST(i AS BIGINT)))
+FROM read_parquet('{TEST_DIR}/minmax_cast_stats.parquet');
+----
+0	8191	BIGINT	BIGINT
+
+# Query doesn't read any row group, it directly gets stats from row group.
+query II
+EXPLAIN ANALYZE SELECT min(TRY_CAST(i AS BIGINT)), max(TRY_CAST(i AS BIGINT))
+FROM read_parquet('{TEST_DIR}/minmax_cast_stats.parquet');
+----
+analyzed_plan	<!REGEX>:(?s).*Row Groups Scanned: [0-9]+ / 4.*

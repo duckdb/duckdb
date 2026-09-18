@@ -21,7 +21,7 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_RECURSIVE_CTE;
 
 public:
-	LogicalRecursiveCTE(string ctename_p, TableIndex table_index, idx_t column_count, bool union_all,
+	LogicalRecursiveCTE(Identifier ctename_p, TableIndex table_index, idx_t column_count, bool union_all,
 	                    vector<unique_ptr<Expression>> key_targets, unique_ptr<LogicalOperator> top,
 	                    unique_ptr<LogicalOperator> bottom);
 

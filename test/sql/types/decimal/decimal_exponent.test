@@ -117,3 +117,114 @@ statement error
 SELECT '1f3'::DECIMAL
 ----
 <REGEX>:Conversion Error.*Could not convert string.*
+
+# large negative exponent with mantissa >= 5 should truncate to 0, not round up (issue #23768)
+query I
+SELECT '5.8207660913467407e-11'::DECIMAL(18,4)
+----
+0.0000
+
+query I
+SELECT '5.5e-11'::DECIMAL(18,4)
+----
+0.0000
+
+query I
+SELECT '4.9e-11'::DECIMAL(18,4)
+----
+0.0000
+
+query I
+SELECT '9.9e-11'::DECIMAL(18,4)
+----
+0.0000
+
+query I
+SELECT '5e-11'::DECIMAL(18,4)
+----
+0.0000
+
+query I
+SELECT '1e-10'::DECIMAL(18,4)
+----
+0.0000
+
+# negative mantissa with large negative exponent
+query I
+SELECT '-5.5e-11'::DECIMAL(18,4)
+----
+0.0000
+
+query I
+SELECT '-9.9e-11'::DECIMAL(18,4)
+----
+0.0000
+
+query I
+SELECT '-5e-11'::DECIMAL(18,4)
+----
+0.0000
+
+# large negative exponent with higher precision scale
+query I
+SELECT '5.5e-11'::DECIMAL(18,10)
+----
+0.0000000001
+
+query I
+SELECT '4.9e-11'::DECIMAL(18,10)
+----
+0.0000000000
+
+query I
+SELECT '5.5e-12'::DECIMAL(18,10)
+----
+0.0000000000
+
+# rounding at the boundary: exponent close to scale should still round correctly
+query I
+SELECT '5e-4'::DECIMAL(18,4)
+----
+0.0005
+
+query I
+SELECT '5e-5'::DECIMAL(18,4)
+----
+0.0001
+
+query I
+SELECT '4.9e-5'::DECIMAL(18,4)
+----
+0.0000
+
+query I
+SELECT '5.5e-5'::DECIMAL(18,4)
+----
+0.0001
+
+# default DECIMAL precision (18,3) with large negative exponent
+query I
+SELECT '5.5e-10'::DECIMAL
+----
+0.000
+
+query I
+SELECT '9.9e-10'::DECIMAL
+----
+0.000
+
+# large negative exponent with varying DECIMAL scales
+query I
+SELECT '5.5e-6'::DECIMAL(18,6)
+----
+0.000006
+
+query I
+SELECT '5.5e-7'::DECIMAL(18,6)
+----
+0.000001
+
+query I
+SELECT '5.5e-8'::DECIMAL(18,6)
+----
+0.000000

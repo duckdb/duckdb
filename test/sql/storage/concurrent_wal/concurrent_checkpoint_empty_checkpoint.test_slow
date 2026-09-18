@@ -37,13 +37,11 @@ onlyif threadid<>10
 statement maybe
 INSERT INTO main_db.integers SELECT * FROM range({x} * 2000 + {threadid} * 100, {x} * 2000 + ({threadid} + 1) * 100);
 ----
-database has been invalidated because of a previous fatal error
+<REGEX>:.*Database "main_db" has been invalidated because checkpointing failed.*
 
 onlyif threadid<>10
-statement maybe
+statement ok
 INSERT INTO other_db.ranges VALUES ({x} * 2000 + {threadid} * 100, {x} * 2000 + ({threadid} + 1) * 100);
-----
-database has been invalidated because of a previous fatal error
 
 endloop
 
@@ -51,7 +49,7 @@ onlyif threadid=10
 statement error
 CHECKPOINT main_db
 ----
-Checkpoint aborted
+<REGEX>:.*Checkpoint failed for database "main_db".*Checkpoint aborted.*
 
 endloop
 

@@ -3,7 +3,13 @@
 # group: [topn]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)
 
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;

@@ -1,0 +1,72 @@
+# name: test/sql/join/asof/test_asof_join_nulls.test
+# description: Test NULL handling in ASOF joins
+# group: [asof]
+
+# Force the physical ASOF operator for NULL-sensitive condition tests
+statement ok
+PRAGMA asof_loop_join_threshold = 0;
+
+statement ok
+CREATE TABLE null_trades(id INTEGER, symbol VARCHAR, venue INTEGER, ts INTEGER);
+
+statement ok
+INSERT INTO null_trades VALUES
+	(1, NULL, 1, 5),
+	(2, NULL, 1, 1),
+	(3, 'A', NULL, 5),
+	(4, 'A', 1, NULL);
+
+statement ok
+CREATE TABLE null_prices(id INTEGER, symbol VARCHAR, venue INTEGER, ts INTEGER);
+
+statement ok
+INSERT INTO null_prices VALUES
+	(10, NULL, 1, 3),
+	(20, 'A', NULL, 3),
+	(30, 'A', 1, 3);
+
+# NULL-safe partition keys match
+query II
+SELECT t.id, p.id
+FROM null_trades t ASOF LEFT JOIN null_prices p
+  ON t.symbol IS NOT DISTINCT FROM p.symbol AND t.ts >= p.ts
+WHERE t.id = 1;
+----
+1	10
+
+query II
+SELECT t.id, p.id
+FROM null_trades t ASOF LEFT JOIN null_prices p
+  ON t.symbol IS NOT DISTINCT FROM p.symbol AND t.ts <= p.ts
+WHERE t.id = 2;
+----
+2	10
+
+# Fixed-width NULL partition keys only occupy one sort-key byte
+query II
+SELECT t.id, p.id
+FROM (VALUES (1, NULL::INTEGER, 1)) t(id, symbol, ts)
+ASOF LEFT JOIN (VALUES (40, NULL::INTEGER, 65537)) p(id, symbol, ts)
+  ON t.symbol IS NOT DISTINCT FROM p.symbol AND t.ts <= p.ts;
+----
+1	40
+
+# Ordinary equality remains NULL-sensitive when it is not the first partition key
+query II
+SELECT t.id, p.id
+FROM null_trades t ASOF LEFT JOIN null_prices p
+  ON t.symbol IS NOT DISTINCT FROM p.symbol
+ AND t.venue = p.venue
+ AND t.ts >= p.ts
+WHERE t.id = 3;
+----
+3	NULL
+
+# The ASOF ordering condition remains NULL-sensitive after a partition key
+query II
+SELECT t.id, p.id
+FROM null_trades t ASOF LEFT JOIN null_prices p
+  ON t.symbol IS NOT DISTINCT FROM p.symbol AND t.ts >= p.ts
+WHERE t.id = 4;
+----
+4	NULL

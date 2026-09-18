@@ -389,6 +389,12 @@ def test_read(shell, generated_file):
     result = test.run()
     result.check_stdout("42")
 
+def test_recursive_read(shell, tmp_path):
+    sql_file = tmp_path / "recursive_read.sql"
+    sql_file.write_text(f".read {sql_file.as_posix()}")
+    result = ShellTest(shell).statement(f".read {sql_file.as_posix()}").run()
+    result.check_stderr("recursive .read")
+
 @pytest.mark.parametrize('generated_file', ["select 42"], indirect=True)
 def test_execute_file(shell, generated_file):
     test = (
@@ -441,6 +447,7 @@ def test_volatile_commands(shell, cmd):
     ""
 ])
 def test_schema(shell, pattern):
+    # .schema pretty-prints the statements using the SQL formatter by default
     test = (
         ShellTest(shell)
         .statement("create table test (a int, b varchar);")
@@ -448,7 +455,7 @@ def test_schema(shell, pattern):
         .statement(f".schema {pattern}")
     )
     result = test.run()
-    result.check_stdout("CREATE TABLE test(a INTEGER, b VARCHAR);")
+    result.check_stdout("CREATE TABLE test(\n    a INTEGER,\n    b VARCHAR\n);")
 
 def test_schema_indent(shell):
     test = (
@@ -458,6 +465,27 @@ def test_schema_indent(shell):
     )
     result = test.run()
     result.check_stdout("CREATE TABLE test(\n")
+
+@pytest.mark.parametrize("option", ["--no-indent", "--no-format"])
+def test_schema_no_indent(shell, option):
+    # --no-indent / --no-format prints the statements as they are stored (single line)
+    test = (
+        ShellTest(shell)
+        .statement("create table test (a int, b varchar);")
+        .statement(f".schema {option}")
+    )
+    result = test.run()
+    result.check_stdout("CREATE TABLE test(a INTEGER, b VARCHAR);")
+
+def test_schema_unknown_option(shell):
+    test = (
+        ShellTest(shell)
+        .statement("create table test (a int, b varchar);")
+        .statement(".schema -x")
+    )
+    result = test.run()
+    assert result.status_code == 1
+    result.check_stderr('unknown option "-x"')
 
 def test_tables(shell):
     test = (
@@ -567,7 +595,7 @@ def test_schema_pattern(shell):
         .statement(".schema %p")
     )
     result = test.run()
-    result.check_stdout("CREATE TABLE duckdb_p(a INTEGER, b VARCHAR, c BIT);")
+    result.check_stdout("CREATE TABLE duckdb_p(\n    a INTEGER,\n    b VARCHAR,\n    c BIT\n);")
 
 @pytest.mark.skipif(os.name == 'nt', reason="Windows treats newlines in a problematic manner")
 def test_schema_pattern_extended(shell):
@@ -579,8 +607,8 @@ def test_schema_pattern_extended(shell):
     )
     result = test.run()
     expected = [
-        "CREATE TABLE duckdb_p(a INTEGER, b VARCHAR, c BIT);",
-        "CREATE TABLE p_duck(d INTEGER, f DATE);"
+        "CREATE TABLE duckdb_p(\n    a INTEGER,\n    b VARCHAR,\n    c BIT\n);",
+        "CREATE TABLE p_duck(\n    d INTEGER,\n    f DATE\n);"
     ]
     result.check_stdout(expected)
 
@@ -936,7 +964,7 @@ def test_profiling_select(shell):
         .statement("select 42")
     )
     result = test.run()
-    result.check_stderr('Query Profiling Information')
+    result.check_stderr('Total Time')
     result.check_stdout('42')
 
 @pytest.mark.skipif(os.name == 'nt', reason="echo does not exist on Windows")
@@ -967,7 +995,7 @@ def test_profiling_optimizer(shell):
         .statement("SELECT 42;")
     )
     result = test.run()
-    result.check_stderr('Optimizer')
+    result.check_stderr('Total Time')
     result.check_stdout('42')
 
 def test_profiling_optimizer_detailed(shell):
@@ -978,7 +1006,7 @@ def test_profiling_optimizer_detailed(shell):
         .statement("SELECT 42;")
     )
     result = test.run()
-    result.check_stderr('Optimizer')
+    result.check_stderr('Total Time')
     result.check_stdout('42')
 
 def test_profiling_optimizer_json(shell):
@@ -1098,6 +1126,35 @@ def test_duckbox(shell):
     )
     result = test.run()
     result.check_stdout('0 rows')
+
+def test_duckbox_enum_type_rendering(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode duckbox")
+        .statement("SELECT 'A'::ENUM('A','a') AS upper_a, 'A'::ENUM('a','A') AS lower_a LIMIT 0")
+    )
+    result = test.run()
+    result.check_stdout("enum('A', 'a')")
+    result.check_stdout("enum('a', 'A')")
+    result.check_not_exist("enum('a', 'a')")
+
+def test_duckbox_malformed_json(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode duckbox")
+        .statement("select union_value(\"c1\" := '}');")
+    )
+    result = test.run()
+    result.check_stdout('}')
+
+    # nested object
+    test = (
+        ShellTest(shell)
+        .statement(".mode duckbox")
+        .statement("select union_value(\"c1\" := '[\"a\", {]');")
+    )
+    result = test.run()
+    result.check_stdout('[\"a\", {]')
 
 # Original comment: #5411 - with maxrows=2, we still display all 4 rows (hiding them would take up more space)
 def test_maxrows(shell):

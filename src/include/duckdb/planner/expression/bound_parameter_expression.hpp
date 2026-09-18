@@ -18,12 +18,22 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_PARAMETER;
 
 public:
-	explicit BoundParameterExpression(const string &identifier);
-
-	string identifier;
-	shared_ptr<BoundParameterData> parameter_data;
+	explicit BoundParameterExpression(const duckdb::Identifier &identifier);
 
 public:
+	const duckdb::Identifier &Identifier() const {
+		return identifier;
+	}
+	duckdb::Identifier &IdentifierMutable() {
+		return identifier;
+	}
+	const shared_ptr<BoundParameterData> &ParameterData() const {
+		return parameter_data;
+	}
+	shared_ptr<BoundParameterData> &ParameterDataMutable() {
+		return parameter_data;
+	}
+
 	//! Invalidate a bound parameter expression - forcing a rebind on any subsequent filters
 	DUCKDB_API static void Invalidate(Expression &expr);
 	//! Invalidate all parameters within an expression
@@ -44,8 +54,12 @@ public:
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
 
 private:
-	BoundParameterExpression(bound_parameter_map_t &global_parameter_set, string identifier, LogicalType return_type,
-	                         shared_ptr<BoundParameterData> parameter_data);
+	BoundParameterExpression(bound_parameter_map_t &global_parameter_set, duckdb::Identifier identifier,
+	                         LogicalType return_type, shared_ptr<BoundParameterData> parameter_data);
+
+private:
+	duckdb::Identifier identifier;
+	shared_ptr<BoundParameterData> parameter_data;
 };
 
 } // namespace duckdb

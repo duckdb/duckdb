@@ -26,7 +26,7 @@ struct GroupRemoval {
 // Stops once a second distinct binding is seen.
 bool CollectColumnRefBindings(const Expression &expr, column_binding_set_t &result) {
 	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		result.insert(expr.Cast<BoundColumnRefExpression>().binding);
+		result.insert(expr.Cast<BoundColumnRefExpression>().Binding());
 		return result.size() <= 1;
 	}
 	bool ok = true;
@@ -66,7 +66,7 @@ void CollectGroupRemovals(const LogicalAggregate &aggr, vector<GroupRemoval> &re
 		if (group->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			continue;
 		}
-		const auto &binding = group->Cast<BoundColumnRefExpression>().binding;
+		const auto &binding = group->Cast<BoundColumnRefExpression>().Binding();
 		auto it = first_occurrence.find(binding);
 		if (it == first_occurrence.end()) {
 			first_occurrence.emplace(binding, group_idx);
@@ -184,7 +184,7 @@ BuildDerivedProjection(LogicalAggregate &aggr, idx_t num_original_groups, idx_t 
 			continue;
 		}
 		auto base_post = group_binding_map.at(ColumnBinding(original_group_index, r.target_idx));
-		const auto &base_source = aggr.groups[base_post.column_index]->Cast<BoundColumnRefExpression>().binding;
+		const auto &base_source = aggr.groups[base_post.column_index]->Cast<BoundColumnRefExpression>().Binding();
 		rebinder.replacement_bindings.clear();
 		rebinder.replacement_bindings.emplace_back(base_source, base_post);
 		rebinder.VisitExpression(&r.derived_expr);

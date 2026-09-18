@@ -13,21 +13,7 @@ CommonTableExpressionMap::CommonTableExpressionMap() {
 CommonTableExpressionMap CommonTableExpressionMap::Copy() const {
 	CommonTableExpressionMap res;
 	for (auto &kv : this->map) {
-		auto kv_info = make_uniq<CommonTableExpressionInfo>();
-		for (auto &al : kv.second->aliases) {
-			kv_info->aliases.push_back(al);
-		}
-		for (auto &al : kv.second->key_targets) {
-			kv_info->key_targets.push_back(al->Copy());
-		}
-		for (auto &al : kv.second->payload_aggregates) {
-			kv_info->payload_aggregates.push_back(al->Copy());
-		}
-		if (kv.second->query_node) {
-			kv_info->query_node = kv.second->query_node->Copy();
-		}
-		kv_info->materialized = kv.second->materialized;
-		res.map[kv.first] = std::move(kv_info);
+		res.map[kv.first] = kv.second->Copy();
 	}
 
 	return res;
@@ -111,18 +97,14 @@ string QueryNode::ResultModifiersToString() const {
 		} else if (modifier.type == ResultModifierType::LIMIT_MODIFIER) {
 			auto &limit_modifier = modifier.Cast<LimitModifier>();
 			if (limit_modifier.limit) {
-				result += " LIMIT " + limit_modifier.limit->ToString();
+				if (limit_modifier.limit_type == LimitValueType::PERCENTAGE) {
+					result += " LIMIT (" + limit_modifier.limit->ToString() + ") %";
+				} else {
+					result += " LIMIT " + limit_modifier.limit->ToString();
+				}
 			}
 			if (limit_modifier.offset) {
 				result += " OFFSET " + limit_modifier.offset->ToString();
-			}
-		} else if (modifier.type == ResultModifierType::LIMIT_PERCENT_MODIFIER) {
-			auto &limit_p_modifier = modifier.Cast<LimitPercentModifier>();
-			if (limit_p_modifier.limit) {
-				result += " LIMIT (" + limit_p_modifier.limit->ToString() + ") %";
-			}
-			if (limit_p_modifier.offset) {
-				result += " OFFSET " + limit_p_modifier.offset->ToString();
 			}
 		}
 	}
@@ -173,7 +155,7 @@ bool QueryNode::Equals(const QueryNode *other) const {
 			return false;
 		}
 	}
-	return other->type == type;
+	return true;
 }
 
 void QueryNode::CopyProperties(QueryNode &other) const {
@@ -181,21 +163,7 @@ void QueryNode::CopyProperties(QueryNode &other) const {
 		other.modifiers.push_back(modifier->Copy());
 	}
 	for (auto &kv : cte_map.map) {
-		auto kv_info = make_uniq<CommonTableExpressionInfo>();
-		for (auto &al : kv.second->aliases) {
-			kv_info->aliases.push_back(al);
-		}
-		for (auto &key : kv.second->key_targets) {
-			kv_info->key_targets.push_back(key->Copy());
-		}
-		for (auto &agg : kv.second->payload_aggregates) {
-			kv_info->payload_aggregates.push_back(agg->Copy());
-		}
-		if (kv.second->query_node) {
-			kv_info->query_node = kv.second->query_node->Copy();
-		}
-		kv_info->materialized = kv.second->materialized;
-		other.cte_map.map[kv.first] = std::move(kv_info);
+		other.cte_map.map[kv.first] = kv.second->Copy();
 	}
 }
 
@@ -209,8 +177,7 @@ void QueryNode::AddDistinct() {
 				// we have a DISTINCT without an ON clause - this distinct does not need to be added
 				return;
 			}
-		} else if (modifier.type == ResultModifierType::LIMIT_MODIFIER ||
-		           modifier.type == ResultModifierType::LIMIT_PERCENT_MODIFIER) {
+		} else if (modifier.type == ResultModifierType::LIMIT_MODIFIER) {
 			// we encountered a LIMIT or LIMIT PERCENT - these change the result of DISTINCT, so we do need to push a
 			// DISTINCT relation
 			break;

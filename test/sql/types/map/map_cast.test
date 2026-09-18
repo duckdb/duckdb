@@ -33,6 +33,21 @@ SELECT MAP([1, 2, 3], ['A', 'B', 'C'])::MAP(TINYINT, VARCHAR)
 ----
 {1=A, 2=B, 3=C}
 
+statement error
+SELECT MAP(['1', '01'], [10, 20])::MAP(INTEGER, INTEGER)
+----
+Invalid Input Error: Map keys must be unique.
+
+query I
+SELECT TRY_CAST(MAP(['1', '01'], [10, 20]) AS MAP(INTEGER, INTEGER))
+----
+NULL
+
+query I
+SELECT TRY_CAST(MAP(['a'], ['x']) AS MAP(VARCHAR, INTEGER))
+----
+{a=NULL}
+
 query I
 SELECT TRY_CAST([MAP{'a':1}, MAP{'3':3}, MAP{'b':2}] AS MAP(INT,INT)[])
 ----

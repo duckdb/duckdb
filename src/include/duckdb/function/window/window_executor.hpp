@@ -49,12 +49,6 @@ public:
 	WindowBoundariesState state;
 };
 
-class WindowExecutorStreamingState : public LocalSourceState {
-public:
-	//! The constant offset
-	int64_t offset = 0;
-};
-
 class WindowExecutor {
 public:
 	using CollectionPtr = optional_ptr<WindowCollection>;
@@ -74,7 +68,7 @@ public:
 	virtual void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) const;
 
 	void Evaluate(ExecutionContext &context, idx_t row_idx, DataChunk &eval_chunk, Vector &result,
-	              OperatorSinkInput &sink) const;
+	              OperatorSinkInput &sink, idx_t count) const;
 
 	// The function
 	const BoundWindowExpression &wexpr;

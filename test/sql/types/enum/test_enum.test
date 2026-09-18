@@ -182,6 +182,11 @@ SELECT enum_range(NULL::mood) AS my_enum_range;
 ----
 []
 
+query II
+SELECT enum_first(NULL::mood), enum_last(NULL::mood);
+----
+NULL	NULL
+
 require skip_reload
 
 # CREATE TEMPORARY TYPE

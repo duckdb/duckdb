@@ -118,7 +118,7 @@ void CTEFilterPusher::PushFilterIntoCTE(MaterializedCTEInfo &info) {
 	new_cte->children.push_back(std::move(info.materialized_cte.children[0]));
 
 	// Push down the filter
-	FilterPushdown pushdown(optimizer);
+	FilterPushdown pushdown(optimizer, true, FilterPushdown::ProjectionMode::PRESERVE_COMPUTED_EXPRESSIONS);
 	new_cte = pushdown.Rewrite(std::move(new_cte));
 
 	info.materialized_cte.children[0] = std::move(new_cte);

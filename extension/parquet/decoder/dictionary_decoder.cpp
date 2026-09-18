@@ -58,12 +58,9 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional
 		filter_result = make_unsafe_uniq_array<bool>(duckdb_dictionary_size);
 
 		// apply the filter
-		UnifiedVectorFormat vdata;
-		dictionary_data.ToUnifiedFormat(vdata);
 		SelectionVector dict_sel;
 		filter_count = duckdb_dictionary_size;
-		ColumnSegment::FilterSelection(dict_sel, dictionary_data, vdata, *filter, *filter_state, duckdb_dictionary_size,
-		                               filter_count);
+		ColumnSegment::FilterSelection(dict_sel, dictionary_data, *filter_state, duckdb_dictionary_size, filter_count);
 
 		// now set all matching tuples to true
 		for (idx_t i = 0; i < filter_count; i++) {
@@ -161,6 +158,11 @@ bool DictionaryDecoder::DictionarySupportsFilter(const TableFilter &filter, Tabl
 
 bool DictionaryDecoder::CanFilter(const TableFilter &filter, TableFilterState &filter_state) {
 	if (dictionary_size == 0) {
+		return false;
+	}
+	if (filter_state.can_throw) {
+		// the dictionary holds the values of every row in the page - evaluating a filter that can throw over it
+		// would raise errors for rows that are never returned
 		return false;
 	}
 	// We can only push the filter if the filter removes NULL values

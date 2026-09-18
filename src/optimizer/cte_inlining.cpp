@@ -150,7 +150,7 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 		auto ref_count = CountCTEReferences(*op, cte.table_index);
 		if (ref_count == 0) {
 			if (cte.children[0]->HasSideEffects()) {
-				// DML CTEs must always execute for side effects even when unreferenced
+				// Side-effecting CTEs must always execute even when unreferenced
 				return;
 			}
 			// this CTE is not referenced, we can remove it
@@ -158,11 +158,8 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 			return;
 		}
 		if (cte.children[0]->HasSideEffects()) {
-			// Never inline a DML CTE: inlining removes the LOGICAL_MATERIALIZED_CTE
-			// node that guarantees the DML executes exactly once and before the query
-			// side reads the modified table.  With ref_count==1, inlining would merge
-			// the DML into the query pipeline so it no longer precedes the scan.
-			// With ref_count>1 and requires_copy, the DML would execute once per copy.
+			// Never inline a side-effecting CTE: the LOGICAL_MATERIALIZED_CTE guarantees
+			// that it executes exactly once and before the query side.
 			return;
 		}
 		if (ContainsDelimGet(*cte.children[0]) && HasCTEReferenceBelowDelimJoin(*op->children[1], cte.table_index)) {
@@ -299,7 +296,7 @@ void PreventInlining::VisitExpression(unique_ptr<Expression> *expression) {
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &bound_function = expr->Cast<BoundFunctionExpression>();
 		// if we encounter the ErrorFun function, we still want to inline
-		if (bound_function.function.GetName() == "error") {
+		if (bound_function.Function().GetName() == "error") {
 			return;
 		}
 

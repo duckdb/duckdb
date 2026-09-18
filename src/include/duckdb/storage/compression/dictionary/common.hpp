@@ -65,7 +65,7 @@ public:
 			} else if (new_string) {
 				state.AddNewString(entry.GetValue());
 			} else {
-				state.AddLastLookup();
+				state.AddLastLookup(entry.GetValue());
 			}
 
 			state.Verify();

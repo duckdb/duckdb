@@ -37,15 +37,50 @@ static void BitStringFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 ScalarFunctionSet BitStringFun::GetFunctions() {
-	ScalarFunctionSet bitstring;
-	bitstring.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::BIT, BitStringFunction<true>));
-	bitstring.AddFunction(
-	    ScalarFunction({LogicalType::BIT, LogicalType::INTEGER}, LogicalType::BIT, BitStringFunction<false>));
-	for (auto &func : bitstring.functions) {
-		func.SetFallible();
+	ScalarFunctionSet set("bitstring");
+
+	ScalarFunction fun_varchar({}, LogicalType::BIT, BitStringFunction<true>);
+	fun_varchar.GetSignature()
+	    .AddParameter("bitstring", LogicalType::VARCHAR)
+	    .AddParameter("length", LogicalType::INTEGER);
+	set.AddFunction(std::move(fun_varchar));
+
+	ScalarFunction fun_bit({}, LogicalType::BIT, BitStringFunction<false>);
+	fun_bit.GetSignature().AddParameter("bitstring", LogicalType::BIT).AddParameter("length", LogicalType::INTEGER);
+	set.AddFunction(std::move(fun_bit));
+
+	set.SetFallible();
+	return set;
+}
+
+namespace {
+
+// Keep the key bytes above the BLOB escape range while preserving 0 < 1.
+constexpr data_t BIT_SORT_KEY_ZERO = 2;
+constexpr data_t BIT_SORT_KEY_ONE = 3;
+
+string_t CreateBitStringSortKey(string_t input, Vector &result) {
+	const auto bit_length = Bit::BitLength(input);
+	auto target = StringVector::EmptyString(result, bit_length);
+	auto data = data_ptr_cast(target.GetDataWriteable());
+	for (idx_t bit_idx = 0; bit_idx < bit_length; bit_idx++) {
+		data[bit_idx] = Bit::GetBit(input, bit_idx) ? BIT_SORT_KEY_ONE : BIT_SORT_KEY_ZERO;
 	}
-	return bitstring;
+	target.Finalize();
+	return target;
+}
+
+} // namespace
+
+static void BitStringSortKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result,
+	                                           [&](string_t input) { return CreateBitStringSortKey(input, result); });
+}
+
+ScalarFunction BitStringSortKeyFun::GetFunction() {
+	ScalarFunction func({}, LogicalType::BLOB, BitStringSortKeyFunction);
+	func.GetSignature().AddParameter("bitstring", LogicalType::BIT);
+	return func;
 }
 
 //===--------------------------------------------------------------------===//
@@ -66,8 +101,9 @@ struct GetBitOperator {
 
 } // namespace
 ScalarFunction GetBitFun::GetFunction() {
-	ScalarFunction func({LogicalType::BIT, LogicalType::INTEGER}, LogicalType::INTEGER,
+	ScalarFunction func({}, LogicalType::INTEGER,
 	                    ScalarFunction::BinaryFunction<string_t, int32_t, int32_t, GetBitOperator>);
+	func.GetSignature().AddParameter("bitstring", LogicalType::BIT).AddParameter("index", LogicalType::INTEGER);
 	func.SetFallible();
 	return func;
 }
@@ -93,8 +129,11 @@ static void SetBitOperation(DataChunk &args, ExpressionState &state, Vector &res
 }
 
 ScalarFunction SetBitFun::GetFunction() {
-	ScalarFunction function({LogicalType::BIT, LogicalType::INTEGER, LogicalType::INTEGER}, LogicalType::BIT,
-	                        SetBitOperation);
+	ScalarFunction function({}, LogicalType::BIT, SetBitOperation);
+	function.GetSignature()
+	    .AddParameter("bitstring", LogicalType::BIT)
+	    .AddParameter("index", LogicalType::INTEGER)
+	    .AddParameter("new_value", LogicalType::INTEGER);
 	function.SetFallible();
 	return function;
 }
@@ -117,8 +156,10 @@ struct BitPositionOperator {
 } // namespace
 
 ScalarFunction BitPositionFun::GetFunction() {
-	return ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::INTEGER,
-	                      ScalarFunction::BinaryFunction<string_t, string_t, int32_t, BitPositionOperator>);
+	ScalarFunction func({}, LogicalType::INTEGER,
+	                    ScalarFunction::BinaryFunction<string_t, string_t, int32_t, BitPositionOperator>);
+	func.GetSignature().AddParameter("substring", LogicalType::BIT).AddParameter("bitstring", LogicalType::BIT);
+	return func;
 }
 
 } // namespace duckdb

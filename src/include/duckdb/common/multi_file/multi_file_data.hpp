@@ -8,9 +8,8 @@
 
 #pragma once
 
-#include "duckdb/function/table_function.hpp"
-#include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/common/open_file_info.hpp"
 #include <numeric>
@@ -39,6 +38,10 @@ struct HivePartitioningIndex {
 
 struct MultiFileColumnDefinition {
 public:
+	MultiFileColumnDefinition(const Identifier &name, const LogicalType &type) : name(name), type(type) {
+	}
+	MultiFileColumnDefinition(const char *name, const LogicalType &type) : name(name), type(type) {
+	}
 	MultiFileColumnDefinition(const string &name, const LogicalType &type) : name(name), type(type) {
 	}
 
@@ -60,7 +63,7 @@ public:
 	}
 
 public:
-	static MultiFileColumnDefinition CreateFromNameAndType(const string &name, const LogicalType &type) {
+	static MultiFileColumnDefinition CreateFromNameAndType(const Identifier &name, const LogicalType &type) {
 		MultiFileColumnDefinition result(name, type);
 		if (type.id() == LogicalTypeId::STRUCT) {
 			// recursively create for children
@@ -71,7 +74,7 @@ public:
 		return result;
 	}
 
-	static vector<MultiFileColumnDefinition> ColumnsFromNamesAndTypes(const vector<string> &names,
+	static vector<MultiFileColumnDefinition> ColumnsFromNamesAndTypes(const vector<Identifier> &names,
 	                                                                  const vector<LogicalType> &types) {
 		vector<MultiFileColumnDefinition> columns;
 		D_ASSERT(names.size() == types.size());
@@ -88,7 +91,7 @@ public:
 		D_ASSERT(names.empty());
 		D_ASSERT(types.empty());
 		for (auto &column : columns) {
-			names.push_back(column.name);
+			names.push_back(column.name.GetIdentifierName());
 			types.push_back(column.type);
 		}
 	}
@@ -102,23 +105,14 @@ public:
 	string GetIdentifierName() const {
 		if (identifier.IsNull()) {
 			// No identifier was provided, assume the name as the identifier
-			return name;
+			return name.GetIdentifierName();
 		}
 		D_ASSERT(identifier.type().id() == LogicalTypeId::VARCHAR);
 		return identifier.GetValue<string>();
 	}
 
-	Value GetDefaultValue() const {
-		D_ASSERT(default_expression);
-		if (default_expression->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
-			throw NotImplementedException("Default expression that isn't constant is not supported yet");
-		}
-		auto &constant_expr = default_expression->Cast<ConstantExpression>();
-		return constant_expr.GetValue();
-	}
-
 public:
-	string name;
+	Identifier name;
 	LogicalType type;
 	vector<MultiFileColumnDefinition> children;
 	unique_ptr<ParsedExpression> default_expression;

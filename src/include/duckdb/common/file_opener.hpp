@@ -32,8 +32,8 @@ public:
 	}
 	virtual ~FileOpener() {};
 
-	virtual SettingLookupResult TryGetCurrentSetting(const string &key, Value &result, FileOpenerInfo &info);
-	virtual SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) = 0;
+	virtual SettingLookupResult TryGetCurrentSetting(const Identifier &key, Value &result, FileOpenerInfo &info);
+	virtual SettingLookupResult TryGetCurrentSetting(const Identifier &key, Value &result) = 0;
 	virtual optional_ptr<ClientContext> TryGetClientContext() = 0;
 	virtual optional_ptr<DatabaseInstance> TryGetDatabase() = 0;
 	virtual HTTPUtil &GetHTTPUtil() = 0;
@@ -43,14 +43,14 @@ public:
 	DUCKDB_API static optional_ptr<ClientContext> TryGetClientContext(optional_ptr<FileOpener> opener);
 	DUCKDB_API static optional_ptr<DatabaseInstance> TryGetDatabase(optional_ptr<FileOpener> opener);
 	DUCKDB_API static optional_ptr<SecretManager> TryGetSecretManager(optional_ptr<FileOpener> opener);
-	DUCKDB_API static SettingLookupResult TryGetCurrentSetting(optional_ptr<FileOpener> opener, const string &key,
+	DUCKDB_API static SettingLookupResult TryGetCurrentSetting(optional_ptr<FileOpener> opener, const Identifier &key,
 	                                                           Value &result);
-	DUCKDB_API static SettingLookupResult TryGetCurrentSetting(optional_ptr<FileOpener> opener, const string &key,
+	DUCKDB_API static SettingLookupResult TryGetCurrentSetting(optional_ptr<FileOpener> opener, const Identifier &key,
 	                                                           Value &result, FileOpenerInfo &info);
 
 	template <class TYPE>
-	static SettingLookupResult TryGetCurrentSetting(optional_ptr<FileOpener> opener, const string &key, TYPE &result,
-	                                                optional_ptr<FileOpenerInfo> info) {
+	static SettingLookupResult TryGetCurrentSetting(optional_ptr<FileOpener> opener, const Identifier &key,
+	                                                TYPE &result, optional_ptr<FileOpenerInfo> info) {
 		Value output;
 		SettingLookupResult lookup_result;
 

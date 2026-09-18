@@ -8,6 +8,7 @@ add_library_unity(
   blob_cast.cpp
   bit_cast.cpp
   cast_function_set.cpp
+  cast_statistics.cpp
   decimal_cast.cpp
   default_casts.cpp
   enum_casts.cpp
@@ -18,6 +19,7 @@ add_library_unity(
   pointer_cast.cpp
   string_cast.cpp
   struct_cast.cpp
+  tuple_cast.cpp
   time_casts.cpp
   type_cast.cpp
   union_casts.cpp

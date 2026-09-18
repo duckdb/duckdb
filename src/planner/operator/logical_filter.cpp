@@ -29,11 +29,11 @@ bool LogicalFilter::SplitPredicates(vector<unique_ptr<Expression>> &expressions)
 			auto &conjunction = expressions[i]->Cast<BoundConjunctionExpression>();
 			found_conjunction = true;
 			// AND expression, append the other children
-			for (idx_t k = 1; k < conjunction.children.size(); k++) {
-				expressions.push_back(std::move(conjunction.children[k]));
+			for (idx_t k = 1; k < conjunction.GetChildrenMutable().size(); k++) {
+				expressions.push_back(std::move(conjunction.GetChildrenMutable()[k]));
 			}
 			// replace this expression with the first child of the conjunction
-			expressions[i] = std::move(conjunction.children[0]);
+			expressions[i] = std::move(conjunction.GetChildrenMutable()[0]);
 			// we move back by one so the right child is checked again
 			// in case it is an AND expression as well
 			i--;

@@ -35,10 +35,10 @@ static string_t TranslateScalarFunction(const string_t &haystack, const string_t
 	// Character to be replaced
 	unordered_map<int32_t, int32_t> to_replace;
 	while (i < size_needle && j < size_thread) {
-		auto codepoint_needle = Utf8Proc::UTF8ToCodepoint(input_needle, sz);
+		auto codepoint_needle = Utf8Proc::UTF8ToCodepoint(input_needle, sz, size_needle - i);
 		input_needle += sz;
 		i += UnsafeNumericCast<idx_t>(sz);
-		auto codepoint_thread = Utf8Proc::UTF8ToCodepoint(input_thread, sz);
+		auto codepoint_thread = Utf8Proc::UTF8ToCodepoint(input_thread, sz, size_thread - j);
 		input_thread += sz;
 		j += UnsafeNumericCast<idx_t>(sz);
 		// Ignore unicode character that is existed in to_replace
@@ -50,7 +50,7 @@ static string_t TranslateScalarFunction(const string_t &haystack, const string_t
 	// Character to be deleted
 	unordered_set<int32_t> to_delete;
 	while (i < size_needle) {
-		auto codepoint_needle = Utf8Proc::UTF8ToCodepoint(input_needle, sz);
+		auto codepoint_needle = Utf8Proc::UTF8ToCodepoint(input_needle, sz, size_needle - i);
 		input_needle += sz;
 		i += UnsafeNumericCast<idx_t>(sz);
 		// Add unicode character that will be deleted
@@ -61,7 +61,7 @@ static string_t TranslateScalarFunction(const string_t &haystack, const string_t
 
 	char c[5] = {'\0', '\0', '\0', '\0', '\0'};
 	for (i = 0; i < size_haystack; i += UnsafeNumericCast<idx_t>(sz)) {
-		auto codepoint_haystack = Utf8Proc::UTF8ToCodepoint(input_haystack, sz);
+		auto codepoint_haystack = Utf8Proc::UTF8ToCodepoint(input_haystack, sz, size_haystack - i);
 		if (to_replace.count(codepoint_haystack) != 0) {
 			Utf8Proc::CodepointToUtf8(to_replace[codepoint_haystack], c_sz, c);
 			result.insert(result.end(), c, c + c_sz);
@@ -89,8 +89,12 @@ static void TranslateFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 ScalarFunction TranslateFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                      TranslateFunction);
+	ScalarFunction fun({}, LogicalType::VARCHAR, TranslateFunction);
+	fun.GetSignature()
+	    .AddParameter("string", LogicalType::VARCHAR)
+	    .AddParameter("from", LogicalType::VARCHAR)
+	    .AddParameter("to", LogicalType::VARCHAR);
+	return fun;
 }
 
 } // namespace duckdb

@@ -6,8 +6,11 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/execution/index/index_lock.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/column/column_data_scan_states.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
 
@@ -15,7 +18,7 @@ namespace duckdb {
 // Bound index
 //-------------------------------------------------------------------------------
 
-BoundIndex::BoundIndex(const string &name, const string &index_type, IndexConstraintType index_constraint_type,
+BoundIndex::BoundIndex(const Identifier &name, const string &index_type, IndexConstraintType index_constraint_type,
                        const vector<column_t> &column_ids, TableIOManager &table_io_manager,
                        const vector<unique_ptr<Expression>> &unbound_expressions_p, AttachedDatabase &db)
     : Index(column_ids, table_io_manager, db), name(name), index_type(index_type),
@@ -29,24 +32,19 @@ BoundIndex::BoundIndex(const string &name, const string &index_type, IndexConstr
 	}
 }
 
-void BoundIndex::InitializeLock(IndexLock &state) {
-	state.index_lock = unique_lock<mutex>(lock);
-}
-
 ErrorData BoundIndex::Append(DataChunk &chunk, Vector &row_ids) {
-	IndexLock l;
-	InitializeLock(l);
+	IndexLock l(*this);
 	return Append(l, chunk, row_ids);
 }
 
 ErrorData BoundIndex::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info) {
+	l.AssertHeld(*this);
 	// Fallback to the old Append.
 	return Append(l, chunk, row_ids);
 }
 
 ErrorData BoundIndex::Append(DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info) {
-	IndexLock l;
-	InitializeLock(l);
+	IndexLock l(*this);
 	return Append(l, chunk, row_ids, info);
 }
 
@@ -59,30 +57,29 @@ void BoundIndex::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, Confl
 }
 
 void BoundIndex::ResetStorage() {
-	IndexLock index_lock;
-	InitializeLock(index_lock);
+	IndexLock index_lock(*this);
 	ResetStorage(index_lock);
 }
 
 idx_t BoundIndex::TryDelete(DataChunk &entries, Vector &row_identifiers, optional_ptr<SelectionVector> deleted_sel,
                             optional_ptr<SelectionVector> non_deleted_sel) {
-	IndexLock state;
-	InitializeLock(state);
+	IndexLock state(*this);
 	return TryDelete(state, entries, row_identifiers, deleted_sel, non_deleted_sel);
 }
 
 idx_t BoundIndex::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_identifiers,
                             optional_ptr<SelectionVector> deleted_sel, optional_ptr<SelectionVector> non_deleted_sel) {
+	state.AssertHeld(*this);
 	throw InternalException("TryDelete not implemented");
 }
 
 void BoundIndex::Delete(DataChunk &entries, Vector &row_identifiers) {
-	IndexLock state;
-	InitializeLock(state);
+	IndexLock state(*this);
 	Delete(state, entries, row_identifiers);
 }
 
 void BoundIndex::Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) {
+	state.AssertHeld(*this);
 	auto deleted_rows = TryDelete(state, entries, row_identifiers);
 	if (deleted_rows != entries.size()) {
 		throw InvalidInputException("Failed to delete all rows from index. Only deleted %d out of %d rows.\nChunk: %s",
@@ -91,64 +88,70 @@ void BoundIndex::Delete(IndexLock &state, DataChunk &entries, Vector &row_identi
 }
 
 ErrorData BoundIndex::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info) {
+	l.AssertHeld(*this);
 	throw NotImplementedException("this implementation of Insert does not exist.");
 }
 
 bool BoundIndex::MergeIndexes(BoundIndex &other_index) {
-	IndexLock state;
-	InitializeLock(state);
+	IndexLock state(*this);
 	return MergeIndexes(state, other_index);
 }
 
 void BoundIndex::Verify() {
-	IndexLock l;
-	InitializeLock(l);
+	IndexLock l(*this);
 	Verify(l);
 }
 
 string BoundIndex::ToString(bool display_ascii) {
-	IndexLock l;
-	InitializeLock(l);
+	IndexLock l(*this);
 	return ToString(l, display_ascii);
 }
 
 void BoundIndex::VerifyAllocations() {
-	IndexLock l;
-	InitializeLock(l);
+	IndexLock l(*this);
 	return VerifyAllocations(l);
 }
 
 void BoundIndex::VerifyBuffers(IndexLock &l) {
+	l.AssertHeld(*this);
 	throw NotImplementedException("this implementation of VerifyBuffers does not exist");
 }
 
 void BoundIndex::VerifyBuffers() {
-	IndexLock l;
-	InitializeLock(l);
+	IndexLock l(*this);
 	return VerifyBuffers(l);
 }
 
 void BoundIndex::Vacuum() {
-	IndexLock state;
-	InitializeLock(state);
+	IndexLock state(*this);
 	Vacuum(state);
 }
 
-idx_t BoundIndex::GetInMemorySize() {
-	IndexLock state;
-	InitializeLock(state);
+idx_t BoundIndex::GetInMemorySize() const {
+	IndexLock state(*this);
 	return GetInMemorySize(state);
 }
 
-void BoundIndex::ExecuteExpressions(DataChunk &input, DataChunk &result) {
+void BoundIndex::ExecuteExpressions(DataChunk &input, DataChunk &result) const {
 	executor.Execute(input, result);
+}
+
+idx_t BoundIndex::UnboundExpressionCount() const {
+	return unbound_expressions.size();
+}
+
+unique_ptr<Expression> BoundIndex::CopyUnboundExpression(const idx_t index) const {
+	D_ASSERT(index < unbound_expressions.size());
+	auto &expression = unbound_expressions[index];
+	D_ASSERT(expression);
+	return expression->Copy();
 }
 
 unique_ptr<Expression> BoundIndex::BindExpression(unique_ptr<Expression> root_expr) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &bound_colref, unique_ptr<Expression> &expr) {
 		    expr = make_uniq<BoundReferenceExpression>(expr->GetReturnType(),
-		                                               column_ids[bound_colref.binding.column_index]);
+		                                               column_ids[bound_colref.Binding().column_index]);
 	    });
 	return root_expr;
 }
@@ -166,8 +169,12 @@ bool BoundIndex::SupportsDeltaIndexes() const {
 	return false;
 }
 
-unique_ptr<BoundIndex> BoundIndex::CreateDeltaIndex(DeltaIndexType delta_index_type) const {
-	throw InternalException("BoundIndex::CreateDeltaIndex is not supported for this index type");
+unique_ptr<BoundIndex> BoundIndex::CreateEmptyCopy(IndexConstraintType) const {
+	throw InternalException("BoundIndex::CreateEmptyCopy is not supported for this index type");
+}
+
+ErrorData BoundIndex::MergeCheckpointDelta(IndexDeltaType, BoundIndex &) {
+	throw InternalException("BoundIndex::MergeCheckpointDelta is not supported for this index type");
 }
 
 IndexStorageInfo BoundIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
@@ -244,12 +251,13 @@ void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types, Bu
 
 			SelectionVector sel(offset_in_chunk, rows_to_process);
 
+			// Buffered chunks are in mapped_column_ids layout (plus a trailing rowid column).
+			D_ASSERT(state.current_chunk.ColumnCount() == mapped_column_ids.size() + 1);
 			for (idx_t col_idx = 0; col_idx < state.current_chunk.ColumnCount() - 1; col_idx++) {
 				const auto col_id = mapped_column_ids[col_idx].GetPrimaryIndex();
 				table_chunk.data[col_id].Reference(state.current_chunk.data[col_idx]);
 				table_chunk.data[col_id].Slice(sel, rows_to_process);
 			}
-			table_chunk.SetCardinality(rows_to_process);
 			Vector row_ids(state.current_chunk.data.back(), sel, rows_to_process);
 
 			if (replay_range.type == BufferedIndexReplay::INSERT_ENTRY) {

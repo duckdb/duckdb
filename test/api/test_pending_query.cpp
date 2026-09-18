@@ -3,6 +3,7 @@
 
 #include <thread>
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/main/stream_query_result.hpp"
 
 using namespace duckdb;
 
@@ -110,6 +111,235 @@ TEST_CASE("Test Pending Query API", "[api][.]") {
 		auto pending_query = con.PendingQuery("SELCT 32;");
 		REQUIRE(pending_query->HasError());
 		REQUIRE(duckdb::StringUtil::Contains(pending_query->GetError(), "SYNTAX_ERROR"));
+	}
+}
+
+TEST_CASE("Abandoned pending query must release the active query", "[api]") {
+	// A pending query created but never executed must not leak the active-query state (executor, plan,
+	// autocommit transaction). We observe the autocommit transaction it opens, which is created and
+	// released together with the active query: abandoning the pending must release it immediately, not
+	// defer it to the next query or context teardown.
+	DuckDB db;
+	Connection con(db);
+
+	REQUIRE(!con.context->transaction.HasActiveTransaction());
+
+	SECTION("Abandon via Close()") {
+		auto pending_query = con.PendingQuery("SELECT 42");
+		REQUIRE(!pending_query->HasError());
+		REQUIRE(con.context->transaction.HasActiveTransaction());
+
+		pending_query->Close();
+		REQUIRE(!con.context->transaction.HasActiveTransaction());
+	}
+	SECTION("Abandon an ATTACH via Close()") {
+		auto pending_query = con.PendingQuery("ATTACH ':memory:' AS abandoned_db");
+		REQUIRE(!pending_query->HasError());
+		REQUIRE(con.context->transaction.HasActiveTransaction());
+
+		pending_query->Close();
+		REQUIRE(!con.context->transaction.HasActiveTransaction());
+	}
+	SECTION("Abandon a prepared pending query") {
+		auto prepared = con.Prepare("SELECT 42");
+		REQUIRE(!prepared->HasError());
+		auto pending_query = prepared->PendingQuery();
+		REQUIRE(!pending_query->HasError());
+		REQUIRE(con.context->transaction.HasActiveTransaction());
+
+		pending_query->Close();
+		REQUIRE(!con.context->transaction.HasActiveTransaction());
+	}
+	// the connection must remain usable after abandoning pending queries
+	auto result = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+}
+
+TEST_CASE("Abandoned streaming result must release the active query", "[api]") {
+	// A streaming result keeps the active-query state alive to feed the stream; it is normally
+	// released when the stream is fully consumed. A stream abandoned before being drained must still
+	// release that state, not leak it until the next query or context teardown.
+	DuckDB db;
+	Connection con(db);
+
+	REQUIRE(!con.context->transaction.HasActiveTransaction());
+
+	SECTION("Abandon via Close() before consuming") {
+		auto result = con.SendQuery("SELECT * FROM range(10000)");
+		REQUIRE(!result->HasError());
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+		// the stream is in flight: the active query is still open
+		REQUIRE(con.context->transaction.HasActiveTransaction());
+
+		result->Cast<StreamQueryResult>().Close();
+		REQUIRE(!con.context->transaction.HasActiveTransaction());
+	}
+	SECTION("Abandon via Close() after a partial fetch") {
+		auto result = con.SendQuery("SELECT * FROM range(10000)");
+		REQUIRE(!result->HasError());
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+		auto chunk = result->Fetch(); // consume one chunk; the stream is not drained
+		REQUIRE(chunk);
+		REQUIRE(con.context->transaction.HasActiveTransaction());
+
+		result->Cast<StreamQueryResult>().Close();
+		REQUIRE(!con.context->transaction.HasActiveTransaction());
+	}
+	// the connection must remain usable after abandoning streaming results
+	auto check = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(check, 0, {42}));
+}
+
+TEST_CASE("PROBE cancel a streaming producer parked on a full buffer", "[api][.]") {
+	// Force the producer to park on a full buffer (result >> streaming_buffer_size), abandon the
+	// stream mid-flight, then run another query so InitialCleanup -> CleanupInternal -> CancelTasks
+	// runs against the parked producer. If CancelTasks cannot reap a parked result-collector task,
+	// this hangs (busy-spins in `while (executor_tasks > 0) WorkOnTasks()`).
+	DuckDB db;
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='16KB'"));
+
+	SECTION("abandon by dropping, then run another query") {
+		auto result = con.SendQuery("SELECT * FROM range(10000000)");
+		REQUIRE(!result->HasError());
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+		auto chunk = result->Fetch(); // ensure the pipeline is actually streaming and re-parks
+		REQUIRE(chunk);
+		result.reset(); // abandon while the producer is parked on the full buffer
+
+		auto check = con.Query("SELECT 42");
+		REQUIRE(CHECK_COLUMN(check, 0, {42}));
+	}
+	SECTION("abandon via Close(), then run another query") {
+		auto result = con.SendQuery("SELECT * FROM range(10000000)");
+		REQUIRE(!result->HasError());
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+		auto chunk = result->Fetch();
+		REQUIRE(chunk);
+		result->Cast<StreamQueryResult>().Close();
+
+		auto check = con.Query("SELECT 42");
+		REQUIRE(CHECK_COLUMN(check, 0, {42}));
+	}
+}
+
+TEST_CASE("Interrupt is observed by PendingQueryResult::ExecuteTask", "[api]") {
+	DuckDB db;
+	Connection con(db);
+
+	// Single thread + tiny streaming buffer make the parked-collector RESULT_READY state reachable fast.
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='16KB'"));
+
+	auto pending = con.PendingQuery("SELECT * FROM range(10000000)", true);
+	REQUIRE(!pending->HasError());
+
+	PendingExecutionResult state = PendingExecutionResult::RESULT_NOT_READY;
+	for (idx_t i = 0; i < 1000000; i++) {
+		state = pending->ExecuteTask();
+		if (state == PendingExecutionResult::RESULT_READY || state == PendingExecutionResult::EXECUTION_ERROR) {
+			break;
+		}
+	}
+	REQUIRE(state == PendingExecutionResult::RESULT_READY);
+
+	con.Interrupt();
+
+	// Without the fix the parked collector keeps reporting RESULT_READY and the interrupt is never seen.
+	bool saw_error = false;
+	for (idx_t j = 0; j < 1000; j++) {
+		if (pending->ExecuteTask() == PendingExecutionResult::EXECUTION_ERROR) {
+			saw_error = true;
+			break;
+		}
+	}
+	REQUIRE(saw_error);
+}
+
+TEST_CASE("Stream results from materialized CTE exchanges", "[api]") {
+	DuckDB db;
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("SET threads=4"));
+	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='16KB'"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers AS SELECT i FROM range(1000000) t(i)"));
+
+	SECTION("Direct batch-indexed exchange") {
+		auto pending = con.PendingQuery("WITH c AS MATERIALIZED (SELECT i FROM integers) SELECT i FROM c", true);
+		REQUIRE(!pending->HasError());
+
+		auto result = pending->Execute();
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+		idx_t count = 0;
+		while (auto chunk = result->Fetch()) {
+			REQUIRE(chunk->GetValue(0, 0).GetValue<int64_t>() == NumericCast<int64_t>(count));
+			count += chunk->size();
+		}
+		REQUIRE(!result->HasError());
+		REQUIRE(count == 1000000);
+	}
+	SECTION("Buffered unordered exchange") {
+		REQUIRE_NO_FAIL(con.Query("SET preserve_insertion_order=false"));
+		auto pending = con.PendingQuery("WITH c AS MATERIALIZED (SELECT i FROM integers) SELECT i FROM c", true);
+		REQUIRE(!pending->HasError());
+
+		auto result = pending->Execute();
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+		idx_t count = 0;
+		while (auto chunk = result->Fetch()) {
+			count += chunk->size();
+		}
+		REQUIRE(count == 1000000);
+	}
+	SECTION("Buffered batch-indexed exchange") {
+		auto pending = con.PendingQuery("WITH c AS MATERIALIZED ("
+		                                "SELECT i FROM integers WHERE i < 500000 "
+		                                "UNION ALL "
+		                                "SELECT i FROM integers WHERE i >= 500000) "
+		                                "SELECT i FROM c",
+		                                true);
+		REQUIRE(!pending->HasError());
+
+		auto result = pending->Execute();
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+		idx_t count = 0;
+		while (auto chunk = result->Fetch()) {
+			REQUIRE(chunk->GetValue(0, 0).GetValue<int64_t>() == NumericCast<int64_t>(count));
+			count += chunk->size();
+		}
+		REQUIRE(!result->HasError());
+		REQUIRE(count == 1000000);
+	}
+	SECTION("Abandon buffered batch-indexed exchange") {
+		auto result = con.SendQuery("WITH c AS MATERIALIZED ("
+		                            "SELECT i FROM integers WHERE i < 500000 "
+		                            "UNION ALL "
+		                            "SELECT i FROM integers WHERE i >= 500000) "
+		                            "SELECT i FROM c");
+		REQUIRE(!result->HasError());
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+		REQUIRE(result->Fetch());
+
+		result->Cast<StreamQueryResult>().Close();
+		auto check = con.Query("SELECT 42");
+		REQUIRE(CHECK_COLUMN(check, 0, {42}));
+	}
+	SECTION("Ordered sink pipeline sequencing") {
+		auto pending = con.PendingQuery("WITH c1 AS MATERIALIZED (SELECT i FROM range(10000) t(i)), "
+		                                "c2 AS MATERIALIZED (SELECT i FROM c1), "
+		                                "c3 AS MATERIALIZED (SELECT i + 10000 AS i FROM c1) "
+		                                "SELECT i FROM c2 UNION ALL SELECT i FROM c3",
+		                                true);
+		REQUIRE(!pending->HasError());
+
+		auto result = pending->Execute();
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+		idx_t count = 0;
+		while (auto chunk = result->Fetch()) {
+			REQUIRE(chunk->GetValue(0, 0).GetValue<int64_t>() == NumericCast<int64_t>(count));
+			count += chunk->size();
+		}
+		REQUIRE(count == 20000);
 	}
 }
 

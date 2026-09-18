@@ -80,19 +80,27 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 	// the compression functions need to support this
 	auto compression = GetCompressionFunction();
 	bool has_filter = compression && compression->filter;
+	bool filter_includes_validity = compression && compression->validity == CompressionValidity::NO_VALIDITY_REQUIRED;
 	auto validity_compression = validity->GetCompressionFunction();
-	bool validity_has_filter = validity_compression && validity_compression->filter;
+	bool validity_has_filter = filter_includes_validity || (validity_compression && validity_compression->filter);
 	auto target_count = GetVectorCount(vector_index);
 	auto scan_type = GetVectorScanType(state, target_count, result);
 	bool scan_entire_vector = scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR;
 	bool verify_fetch_row = state.scan_options && state.scan_options->force_fetch_row;
-	if (!has_filter || !validity_has_filter || !scan_entire_vector || verify_fetch_row) {
+	if (!has_filter || !validity_has_filter || !scan_entire_vector || verify_fetch_row || filter_state.can_throw) {
 		// we are not scanning an entire vector - this can have several causes (updates, etc)
+		// a filter that can throw is excluded as well: the compression-level filters evaluate it over the distinct
+		// values of the segment (e.g. the dictionary, or the RLE runs), which includes values of rows that another
+		// filter already removed - pushing the filter down there must not raise errors that would not occur otherwise
 		ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter, filter_state);
 		return;
 	}
 	FilterVector(state, result, target_count, sel, count, filter, filter_state);
-	validity->FilterVector(state.child_states[0], result, target_count, sel, count, filter, filter_state);
+	if (!filter_includes_validity) {
+		validity->FilterVector(state.child_states[0], result, target_count, sel, count, filter, filter_state);
+	} else {
+		validity->Skip(state.child_states[0], target_count);
+	}
 }
 
 void StandardColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -181,7 +189,11 @@ void StandardColumnData::UpdateColumn(TransactionData transaction, DuckTableEntr
 }
 
 unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
-	auto stats = updates ? updates->GetStatistics() : nullptr;
+	unique_ptr<BaseStatistics> stats;
+	{
+		lock_guard<mutex> update_guard(update_lock);
+		stats = updates ? updates->GetStatistics() : nullptr;
+	}
 	auto validity_stats = validity->GetUpdateStatistics();
 	if (!stats && !validity_stats) {
 		return nullptr;
@@ -195,15 +207,16 @@ unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
 	return stats;
 }
 
-void StandardColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state,
-                                  const StorageIndex &storage_index, row_t row_id, Vector &result, idx_t result_idx) {
-	// find the segment the row belongs to
+void StandardColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state,
+                                   const StorageIndex &storage_index, const idx_t *offsets, const SelectionVector &sel,
+                                   idx_t fetch_count, Vector &result, idx_t result_offset) {
 	if (state.child_states.empty()) {
-		auto child_state = make_uniq<ColumnFetchState>();
-		state.child_states.push_back(std::move(child_state));
+		state.child_states.emplace_back(make_uniq<ColumnFetchState>());
 	}
-	ColumnData::FetchRow(transaction, state, storage_index, row_id, result, result_idx);
-	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
+	// Bulk fetch the data and the validity in two passes.
+	FetchRowsAtSegmentLevel(transaction, state, offsets, sel, fetch_count, result, result_offset);
+	validity->FetchRowsAtSegmentLevel(transaction, *state.child_states[0], offsets, sel, fetch_count, result,
+	                                  result_offset);
 }
 
 void StandardColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {

@@ -155,6 +155,18 @@ select variant_keys(NULL::VARIANT, 'a');
 ----
 NULL
 
+query I
+select variant_keys(j, 'a') from (values ({'a': {'x': 1}}::VARIANT), (NULL::VARIANT)) t(j);
+----
+[x]
+NULL
+
+query I
+select variant_keys(j, ['a', 'b']) from (values ({'a': {'x': 1}}::VARIANT), (NULL::VARIANT)) t(j);
+----
+[[x], NULL]
+NULL
+
 # VARIANT_NULL
 
 query I
@@ -193,10 +205,27 @@ NULL
 statement error
 select variant_keys({'a': 1}::VARIANT, [1]);
 ----
+<REGEX>:.*No function matches the given name and argument types 'variant_keys\(VARIANT, INTEGER\[\]\)'.*
 
 statement error
 select variant_keys({'a': 1}::VARIANT, [NULL]);
 ----
+Binder Error: 'variant_keys' does not accept NULL paths
+
+statement error
+select variant_keys({'a': 1}::VARIANT, [NULL::VARCHAR]);
+----
+Binder Error: 'variant_keys' does not accept NULL paths
+
+statement error
+select variant_keys({'c': 1}::VARIANT, ['c', NULL]::VARCHAR[]);
+----
+Binder Error: 'variant_keys' does not accept NULL paths
+
+query I
+select variant_keys({'c': 1}::VARIANT, []::VARCHAR[]);
+----
+[]
 
 # FIXME: malformed JSON object should result in an error
 

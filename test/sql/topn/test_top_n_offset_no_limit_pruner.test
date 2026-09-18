@@ -1,0 +1,35 @@
+# name: test/sql/topn/test_top_n_offset_no_limit_pruner.test
+# description: RowGroupPruner must not truncate scan when LIMIT is unset
+# group: [topn]
+
+load {TEST_DIR}/top_n_offset_no_limit_pruner.duckdb
+
+# 300,000 rows -> 3 default-size row groups (122880 / 122880 / 54240)
+statement ok
+CREATE TABLE t AS SELECT range AS id FROM range(300000)
+
+restart
+
+# OFFSET 0 with no LIMIT must return all rows (previously returned 0)
+query I
+SELECT COUNT(*) FROM (SELECT id FROM t ORDER BY id OFFSET 0)
+----
+300000
+
+# OFFSET past a row-group boundary with no LIMIT must keep trailing groups
+query I
+SELECT COUNT(*) FROM (SELECT id FROM t ORDER BY id OFFSET 200000)
+----
+100000
+
+# Trailing values must be present (regression: group 2 was being dropped)
+query I
+SELECT MAX(id) FROM (SELECT id FROM t ORDER BY id OFFSET 200000)
+----
+299999
+
+# Sanity: large LIMIT + OFFSET still correct
+query I
+SELECT COUNT(*) FROM (SELECT id FROM t ORDER BY id LIMIT 100000000 OFFSET 200000)
+----
+100000

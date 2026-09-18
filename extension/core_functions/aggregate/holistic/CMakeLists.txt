@@ -4,6 +4,7 @@ add_library_unity(
   approx_top_k.cpp
   quantile.cpp
   reservoir_quantile.cpp
+  lttb.cpp
   mad.cpp
   approximate_quantile.cpp
   mode.cpp)

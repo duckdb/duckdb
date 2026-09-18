@@ -1,7 +1,9 @@
 SelectStatement <- SelectStatementInternal
 SelectStatementInternal <- WithClause? SelectSetOpChain ResultModifiers?
-SelectSetOpChain <- IntersectChain (SetopClause IntersectChain)*
-IntersectChain <- SelectAtom (SetIntersectClause SelectAtom)*
+SelectSetOpChain <- IntersectChain SelectSetOpChainTail*
+SelectSetOpChainTail <- SetopClause IntersectChain
+IntersectChain <- SelectAtom IntersectChainTail*
+IntersectChainTail <- SetIntersectClause SelectAtom
 SetIntersectClause <- 'INTERSECT' DistinctOrAll?
 SelectAtom <- SelectParens / SelectStatementType
 
@@ -15,9 +17,11 @@ ByName <- 'BY' 'NAME'
 
 SelectStatementType <- OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement
 ResultModifiers <- OrderByClause? LimitOffset?
-LimitOffset <- LimitOffsetClause / OffsetLimitClause
+LimitOffset <- LimitOffsetClause / OffsetFetchClause / OffsetLimitClause / FetchOnlyClause
 LimitOffsetClause <- LimitClause OffsetClause?
 OffsetLimitClause <- OffsetClause LimitClause?
+OffsetFetchClause <- OffsetClause FetchClause
+FetchOnlyClause <- FetchClause
 TableStatement <- 'TABLE' BaseTableName
 OptionalParensSimpleSelect <- SimpleSelectParens / SimpleSelect
 SimpleSelectParens <- Parens(SimpleSelect)
@@ -27,8 +31,9 @@ SelectFrom <- SelectFromClause / FromSelectClause
 SelectFromClause <- SelectClause FromClause?
 FromSelectClause <- FromClause SelectClause?
 WithStatement <- ColIdOrString InsertColumnList? UsingKey? 'AS' Materialized? CTEBody
-CTEBody <- Parens(CTEBodyContent)
-CTEBodyContent <- SelectStatementInternal / Statement
+CTEBody <- CTESelectBody / CTEDMLBody
+CTESelectBody <- Parens(SelectStatementInternal)
+CTEDMLBody <- Parens(Statement)
 UsingKey <- 'USING' 'KEY' Parens(TargetList)
 Materialized <- 'NOT'? 'MATERIALIZED'
 WithClause <- 'WITH' Recursive? List(WithStatement)
@@ -45,37 +50,46 @@ DistinctOnTargets <- 'ON' Parens(List(Expression))
 InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef
 
 TableRef <- InnerTableRef JoinOrPivot*
-TableSubquery <- Lateral? SubqueryReference TableAlias?
+TableSubquery <- TableAliasColon? Lateral? SubqueryReference TableAlias?
 BaseTableRef <- TableAliasColon? BaseTableName TableAlias? AtClause? SampleClause?
 TableAliasColon <- ColIdOrString ':'
-ValuesRef <- ValuesClause TableAlias?
+ValuesRef <- TableAliasColon? ValuesClause TableAlias?
 ParensTableRef <- TableAliasColon? Parens(TableRef) TableAlias? SampleClause?
 
-JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
+JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause / TableMatchRecognizeClause
 
-TablePivotClause <- 'PIVOT' Parens(TargetList 'FOR' PivotValueList+ PivotGroupByList?) TableAlias?
-PivotGroupByList <- 'GROUP' 'BY' List(ColIdOrString)
-TableUnpivotClause <- 'UNPIVOT' IncludeOrExcludeNulls? Parens(UnpivotHeader 'FOR' UnpivotValueList+) TableAlias?
+TablePivotClause <- 'PIVOT' Parens(TablePivotClauseBody) TableAlias?
+TablePivotClauseBody <- TargetList 'FOR' PivotValueList+ PivotGroupByList?
+PivotGroupByList <- 'GROUP' 'BY' OptionalParensNameList
+TableUnpivotClause <- 'UNPIVOT' IncludeOrExcludeNulls? Parens(TableUnpivotClauseBody) TableAlias?
+TableUnpivotClauseBody <- UnpivotHeader 'FOR' UnpivotValueList+
 
 PivotHeader <- BaseExpression
-PivotValueList <- PivotHeader 'IN' (Identifier / PivotTargetList)
+PivotValueList <- PivotHeader 'IN' PivotValueTarget
+PivotValueTarget <- PivotEnumTarget / PivotListTarget
+PivotEnumTarget <- Identifier
+PivotListTarget <- PivotTargetList
 UnpivotValueList <- UnpivotHeader 'IN' UnpivotTargetList
 PivotTargetList <- Parens(TargetList)
 UnpivotTargetList <- Parens(TargetList)
 
 Lateral <- 'LATERAL'
 
-BaseTableName <- CatalogReservedSchemaTable / SchemaReservedTable / TableName
+BaseTableName <- QualifiedTableName / UnqualifiedBaseTableName
+UnqualifiedBaseTableName <- TableName
+QualifiedTableName <- CatalogReservedSchemaTable / SchemaReservedTable
 SchemaReservedTable <- SchemaQualification ReservedTableName
-CatalogReservedSchemaTable <- CatalogQualification ReservedSchemaQualification ReservedTableName
+CatalogReservedSchemaTable <- CatalogQualification ReservedSchemaQualification+ ReservedTableName
 
 TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon
 TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality? TableAlias?
 TableFunctionAliasColon <- TableAliasColon QualifiedTableFunction TableFunctionArguments WithOrdinality? SampleClause?
 WithOrdinality <- 'WITH' 'ORDINALITY'
-QualifiedTableFunction <- CatalogQualification? SchemaQualification? TableFunctionName
+QualifiedTableFunction <- CatalogQualification? SchemaQualification* TableFunctionName
 TableFunctionArguments <- Parens(List(FunctionArgument)?)
-FunctionArgument <- NamedParameter / Expression
+FunctionArgument <- NamedFunctionArgument / PositionalFunctionArgument
+NamedFunctionArgument <- NamedParameter
+PositionalFunctionArgument <- Expression
 NamedParameter <- TypeFuncName Type? NamedParameterAssignment Expression
 NamedParameterAssignment <- ':=' / '=>'
 
@@ -85,11 +99,33 @@ TableAliasWithoutAs <- Identifier ColumnAliases?
 
 AtClause <- 'AT' Parens(AtSpecifier)
 AtSpecifier <- AtUnit '=>' Expression
-AtUnit <- 'VERSION' / 'TIMESTAMP'
+AtUnit <- VersionAtUnit / TimestampAtUnit
+VersionAtUnit <- 'VERSION'
+TimestampAtUnit <- 'TIMESTAMP'
 
-JoinClause <- RegularJoinClause / JoinWithoutOnClause
-RegularJoinClause <- 'ASOF'? JoinType? 'JOIN' TableRef JoinQualifier
-JoinWithoutOnClause <- JoinPrefix 'JOIN' TableRef
+JoinClause <- JoinByClause / RegularJoinClause / JoinWithoutOnClause / NearestJoinClause
+# NEAREST BY has two alternatives so PEG can backtrack: the bare form uses alias-less target mirrors (tried
+# first, so an unaliased target does not greedily consume NEAREST/APPROX/EXACT as an alias), and the aliased
+# form falls back to a full TableRef when a real alias identifier follows the target.
+NearestJoinClause <- NearestJoinBare / NearestJoinAliased
+NearestJoinAliased <- JoinType? 'JOIN' TableRef ApproxOrExact? 'NEAREST' NumberLiteral? 'BY' DistanceOrSimilarity Expression
+NearestJoinBare <- JoinType? 'JOIN' NearestBareTableRef ApproxOrExact? 'NEAREST' NumberLiteral? 'BY' DistanceOrSimilarity Expression
+NearestBareTableRef <- NearestValuesRef / NearestTableFunction / NearestTableSubquery / NearestBaseTableRef / NearestParensTableRef
+NearestValuesRef <- ValuesClause
+NearestTableFunction <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality?
+NearestTableSubquery <- Lateral? SubqueryReference
+NearestBaseTableRef <- BaseTableName AtClause? SampleClause?
+NearestParensTableRef <- Parens(TableRef) SampleClause?
+ApproxOrExact <- NearestApprox / NearestExact
+NearestApprox <- 'APPROX'
+NearestExact <- 'EXACT'
+DistanceOrSimilarity <- NearestDistance / NearestSimilarity
+NearestDistance <- 'DISTANCE'
+NearestSimilarity <- 'SIMILARITY'
+RegularJoinClause <- Asof? JoinType? 'JOIN' TableRef JoinQualifier
+JoinByClause <- 'JOIN' 'BY' Parens('TYPE' ColLabel) TableRef JoinQualifier
+Asof <- 'ASOF'
+JoinWithoutOnClause <- JoinPrefix 'JOIN' InnerTableRef
 JoinQualifier <- OnClause / UsingClause
 OnClause <- 'ON' Expression
 UsingClause <- 'USING' Parens(List(ColumnName))
@@ -135,11 +171,14 @@ SampleRows <- 'ROWS'
 GroupByExpressions <- GroupByList / GroupByAll
 GroupByAll <- 'ALL'
 GroupByList <- List(GroupByExpression)
-GroupByExpression <- EmptyGroupingItem / CubeOrRollupClause / GroupingSetsClause / Expression
+GroupByExpression <- EmptyGroupingItem / CubeOrRollupClause / GroupingSetsClause / GroupByBaseExpression
+GroupByBaseExpression <- Expression
 EmptyGroupingItem <- '(' ')'
 CubeOrRollupClause <- CubeOrRollup Parens(List(Expression)?)
-CubeOrRollup <- 'CUBE' / 'ROLLUP'
-GroupingSetsClause <- 'GROUPING' 'SETS' Parens(GroupByList)
+CubeOrRollup <- CubeKeyword / RollupKeyword
+CubeKeyword <- 'CUBE'
+RollupKeyword <- 'ROLLUP'
+GroupingSetsClause <- 'GROUPING' 'SETS' Parens(List(GroupByExpression))
 
 SubqueryReference <- Parens(SelectStatementInternal)
 
@@ -163,6 +202,9 @@ LimitValue <- LimitAll / LimitLiteralPercent / LimitExpression
 LimitAll <- 'ALL'
 LimitLiteralPercent <- NumberLiteral 'PERCENT'
 LimitExpression <- Expression '%'?
+FetchClause <- 'FETCH' FirstOrNext FetchValue RowOrRows 'ONLY'
+FirstOrNext <- 'FIRST' / 'NEXT'
+FetchValue <- Expression
 
 AliasedExpression <- ColIdExpression / ExpressionAsCollabel / ExpressionOptIdentifier
 ColIdExpression <- ColId ':' Expression

@@ -45,16 +45,6 @@ struct TableFilterOptionalFun {
 	static ScalarFunction GetFunction();
 };
 
-struct TableFilterPerfectHashJoinFun {
-	static constexpr const char *Name = "__internal_tablefilter_perfect_hash_join";
-	static constexpr const char *Parameters = "";
-	static constexpr const char *Description = "";
-	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
-
-	static ScalarFunction GetFunction();
-};
-
 struct TableFilterPrefixRangeFun {
 	static constexpr const char *Name = "__internal_tablefilter_prefix_range";
 	static constexpr const char *Parameters = "";

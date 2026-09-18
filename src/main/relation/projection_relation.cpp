@@ -7,7 +7,8 @@
 namespace duckdb {
 
 ProjectionRelation::ProjectionRelation(shared_ptr<Relation> child_p,
-                                       vector<unique_ptr<ParsedExpression>> parsed_expressions, vector<string> aliases)
+                                       vector<unique_ptr<ParsedExpression>> parsed_expressions,
+                                       vector<Identifier> aliases)
     : Relation(child_p->context, RelationType::PROJECTION_RELATION), expressions(std::move(parsed_expressions)),
       child(std::move(child_p)) {
 	if (!aliases.empty()) {
@@ -47,7 +48,7 @@ unique_ptr<QueryNode> ProjectionRelation::GetQueryNode() {
 	return result;
 }
 
-string ProjectionRelation::GetAlias() {
+Identifier ProjectionRelation::GetAlias() {
 	return child->GetAlias();
 }
 

@@ -3,6 +3,9 @@
 # group: [left_outer]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 set explain_output='optimized_only';
 
 statement ok

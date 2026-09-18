@@ -1,0 +1,77 @@
+# name: test/sql/pragma/test_table_info_quoted_names.test
+# description: Test quoted identifier handling when parsing qualified names, e.g. in pragma_table_info
+# group: [pragma]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE SCHEMA "my.schema"
+
+statement ok
+CREATE TABLE "my.schema"."dotted.name"(i INTEGER)
+
+# a dot inside quotes is part of the name, not a separator
+query I
+SELECT count(*) FROM pragma_table_info('"my.schema"."dotted.name"')
+----
+1
+
+# a doubled quote inside a quoted identifier is a literal quote
+statement ok
+CREATE TABLE "quo""ted"(i INTEGER, j INTEGER)
+
+query I
+SELECT count(*) FROM pragma_table_info('"quo""ted"')
+----
+2
+
+# ...and does not silently match a table without the quote in its name
+statement ok
+CREATE TABLE quoted(i INTEGER)
+
+query I
+SELECT count(*) FROM pragma_table_info('"quo""ted"')
+----
+2
+
+# a table whose name is a single quote character
+statement ok
+CREATE TABLE """"(i INTEGER)
+
+query I
+SELECT count(*) FROM pragma_table_info('""""')
+----
+1
+
+# an unterminated quote is a parser error
+statement error
+SELECT * FROM pragma_table_info('"unterminated')
+----
+Unterminated quote
+
+# a quote in the middle of a component is a parser error, like in the SQL parser
+statement error
+SELECT * FROM pragma_table_info('abc"xyz"')
+----
+Unexpected quote in the middle
+
+# text directly after a closing quote is a parser error, like in the SQL parser
+statement error
+SELECT * FROM pragma_table_info('"abc"xyz')
+----
+Unexpected character after a quoted identifier
+
+statement ok
+CREATE TABLE t(i INTEGER)
+
+# an empty quoted component is a parser error, not an absent schema
+statement error
+SELECT * FROM pragma_table_info('""."t"')
+----
+Zero-length delimited identifier
+
+statement error
+SELECT * FROM pragma_table_info('""')
+----
+Zero-length delimited identifier

@@ -126,7 +126,7 @@ struct ICUListRange : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 3);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &bind_info = func_expr.bind_info->Cast<BindData>();
+		auto &bind_info = func_expr.BindInfo()->Cast<BindData>();
 		TZCalendar calendar(*bind_info.calendar, bind_info.cal_setting);
 
 		RangeInfoStruct<INCLUSIVE_BOUND> info(args);
@@ -154,17 +154,28 @@ struct ICUListRange : public ICUDateFunc {
 
 	static void AddICUListRangeFunction(ExtensionLoader &loader) {
 		ScalarFunctionSet range("range");
-		range.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
-		                                 LogicalType::LIST(LogicalType::TIMESTAMP_TZ), ICUListRangeFunction<false>,
-		                                 Bind));
+		ScalarFunction range_fun({}, LogicalType::LIST(LogicalType::TIMESTAMP_TZ), ICUListRangeFunction<false>, Bind);
+		range_fun.GetSignature()
+		    .AddParameter("start", LogicalType::TIMESTAMP_TZ)
+		    .AddParameter("stop", LogicalType::TIMESTAMP_TZ)
+		    .AddParameter("step", LogicalType::INTERVAL);
+		range.AddFunction(range_fun);
+		// throws for infinite or mixed-sign intervals
+		range.SetFallible();
 		loader.RegisterFunction(range);
 
 		// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
 		ScalarFunctionSet generate_series("generate_series");
-		generate_series.AddFunction(
-		    ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
-		                   LogicalType::LIST(LogicalType::TIMESTAMP_TZ), ICUListRangeFunction<true>, Bind));
+		ScalarFunction generate_series_fun({}, LogicalType::LIST(LogicalType::TIMESTAMP_TZ), ICUListRangeFunction<true>,
+		                                   Bind);
+		generate_series_fun.GetSignature()
+		    .AddParameter("start", LogicalType::TIMESTAMP_TZ)
+		    .AddParameter("stop", LogicalType::TIMESTAMP_TZ)
+		    .AddParameter("step", LogicalType::INTERVAL);
+		generate_series.AddFunction(generate_series_fun);
 
+		// throws for infinite or mixed-sign intervals
+		generate_series.SetFallible();
 		loader.RegisterFunction(generate_series);
 	}
 };

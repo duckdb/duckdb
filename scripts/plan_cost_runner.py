@@ -4,7 +4,11 @@ import json
 import os
 import subprocess
 import sys
-from tqdm import tqdm
+
+if __package__:
+    from .regression.local_extensions import extension_loading_args
+else:
+    from regression.local_extensions import extension_loading_args
 
 
 OLD_DB_NAME = "old.duckdb"
@@ -16,42 +20,62 @@ PROFILE_OUTPUT = f"PRAGMA profile_output='{PROFILE_FILENAME}'"
 
 BANNER_SIZE = 52
 RETRIES = 2
-RETRIABLE_EXIT_CODES = {134, -6}
 
 
-def run_with_retry(command, context, **kwargs):
+def run_command(command, **kwargs):
+    return subprocess.run(
+        command,
+        check=False,
+        **kwargs,
+    )
+
+
+def run_sql_file(cli, dbname, sql_file, extensions=None, **kwargs):
+    command = [cli, *extension_loading_args(cli, extensions or []), dbname]
+    with open(sql_file, 'rb') as sql_input:
+        return run_command(command, stdin=sql_input, **kwargs)
+
+
+def init_db(cli, dbname, benchmark_dir, extensions=None):
+    print(f"INITIALIZING {dbname} ...")
     attempts = RETRIES + 1
+    if os.path.exists(dbname):
+        os.remove(dbname)
+
     for attempt in range(1, attempts + 1):
-        completed = subprocess.run(command, shell=True, check=False, **kwargs)
+        completed = run_sql_file(
+            cli,
+            dbname,
+            f"{benchmark_dir}/init/schema.sql",
+            stdout=subprocess.DEVNULL,
+        )
         if completed.returncode == 0:
-            return completed
-        if completed.returncode in RETRIABLE_EXIT_CODES and attempt < attempts:
+            completed = run_sql_file(
+                cli,
+                dbname,
+                f"{benchmark_dir}/init/load.sql",
+                extensions,
+                stdout=subprocess.DEVNULL,
+            )
+            if completed.returncode == 0:
+                print("INITIALIZATION DONE")
+                return
+
+        if attempt < attempts:
+            if os.path.exists(dbname):
+                os.remove(dbname)
             print(
-                f"Retrying crash-like failure in {context} "
+                f"Retrying failure in init db ({dbname}) "
                 f"(attempt {attempt + 1}/{attempts}, return code {completed.returncode})"
             )
             continue
+
         raise subprocess.CalledProcessError(
             completed.returncode,
-            command,
+            completed.args,
             output=completed.stdout,
             stderr=completed.stderr,
         )
-
-
-def init_db(cli, dbname, benchmark_dir):
-    print(f"INITIALIZING {dbname} ...")
-    run_with_retry(
-        f"{cli} {dbname} < {benchmark_dir}/init/schema.sql",
-        context=f"init schema ({dbname})",
-        stdout=subprocess.DEVNULL,
-    )
-    run_with_retry(
-        f"{cli} {dbname} < {benchmark_dir}/init/load.sql",
-        context=f"init load ({dbname})",
-        stdout=subprocess.DEVNULL,
-    )
-    print("INITIALIZATION DONE")
 
 
 class PlanCost:
@@ -157,11 +181,27 @@ def op_inspect(op) -> PlanCost:
 
 def query_plan_cost(cli, dbname, query):
     try:
-        run_with_retry(
-            f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\"",
-            context=f"query profiling ({dbname})",
-            capture_output=True,
-        )
+        command = [cli, '--readonly', dbname, '-c', f"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}"]
+        attempts = RETRIES + 1
+        for attempt in range(1, attempts + 1):
+            completed = run_command(
+                command,
+                capture_output=True,
+            )
+            if completed.returncode == 0:
+                break
+            if attempt < attempts:
+                print(
+                    f"Retrying failure in query profiling ({dbname}) "
+                    f"(attempt {attempt + 1}/{attempts}, return code {completed.returncode})"
+                )
+                continue
+            raise subprocess.CalledProcessError(
+                completed.returncode,
+                completed.args,
+                output=completed.stdout,
+                stderr=completed.stderr,
+            )
     except subprocess.CalledProcessError as e:
         print("-------------------------")
         print("--------Failure----------")
@@ -209,6 +249,7 @@ def main():
     parser.add_argument("--old", type=str, help="Path to the old runner.", required=True)
     parser.add_argument("--new", type=str, help="Path to the new runner.", required=True)
     parser.add_argument("--dir", type=str, help="Path to the benchmark directory.", required=True)
+    parser.add_argument("--extension", action="append", default=[], help="Extension required to initialize the data.")
 
     args = parser.parse_args()
 
@@ -216,8 +257,8 @@ def main():
     new = args.new
     benchmark_dir = args.dir
 
-    init_db(old, OLD_DB_NAME, benchmark_dir)
-    init_db(new, NEW_DB_NAME, benchmark_dir)
+    init_db(old, OLD_DB_NAME, benchmark_dir, args.extension)
+    init_db(new, NEW_DB_NAME, benchmark_dir, args.extension)
 
     improvements = []
     regressions = []
@@ -227,7 +268,7 @@ def main():
 
     print("")
     print("RUNNING BENCHMARK QUERIES")
-    for f in tqdm(files):
+    for f in files:
         query_name = f.split("/")[-1].replace(".sql", "")
 
         with open(f, "r") as file:

@@ -7,6 +7,8 @@
 #include "duckdb/logging/logging.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/extension_entries.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 namespace duckdb {
 
@@ -44,8 +46,18 @@ static void EnableLogging(ClientContext &context, TableFunctionInput &data, Data
 	}
 }
 
+//! Log types are registered by extensions when they are loaded, so an unknown type may just belong to an extension
+//! that is not loaded yet
+static void TryAutoloadLogTypeExtension(ClientContext &context, const string &log_type) {
+	auto &db = *context.db;
+	if (db.GetLogManager().LookupLogType(log_type)) {
+		return;
+	}
+	ExtensionHelper::TryAutoloadFromEntry(db, Identifier(log_type), EXTENSION_LOG_TYPES);
+}
+
 static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableFunctionBindInput &input,
-                                                  vector<LogicalType> &return_types, vector<string> &names) {
+                                                  vector<LogicalType> &return_types, vector<Identifier> &names) {
 	if (input.inputs.size() > 1) {
 		throw InvalidInputException("EnableLogging: expected 0 or 1 parameter");
 	}
@@ -55,7 +67,7 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 	bool storage_isset = false;
 
 	for (const auto &param : input.named_parameters) {
-		auto key = StringUtil::Lower(param.first);
+		auto &key = param.first;
 		if (key == "level") {
 			result->config.level = EnumUtil::FromString<LogLevel>(param.second.ToString());
 		} else if (key == "storage") {
@@ -67,7 +79,8 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 			}
 			auto &children = StructValue::GetChildren(param.second);
 			for (idx_t i = 0; i < children.size(); i++) {
-				result->storage_config[StructType::GetChildName(param.second.type(), i)] = children[i];
+				result->storage_config[StructType::GetChildName(param.second.type(), i).GetIdentifierName()] =
+				    children[i];
 			}
 		} else if (key == "storage_path") {
 			result->storage_config["path"] = param.second;
@@ -91,6 +104,24 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 		}
 	}
 
+	// File logging requires a path. Reject switching to file storage without one before mutating any
+	// state, so the active storage is preserved instead of becoming a path-less storage that throws
+	// on every later flush (end-of-query and shutdown included).
+	if (StringUtil::Lower(result->config.storage) == LogConfig::FILE_STORAGE_NAME) {
+		auto current_storage = StringUtil::Lower(context.db->GetLogManager().GetConfig().storage);
+		// Already-active file storage keeps its existing path; only guard a fresh switch.
+		if (current_storage != LogConfig::FILE_STORAGE_NAME) {
+			auto path_entry = result->storage_config.find("path");
+			bool has_usable_path = path_entry != result->storage_config.end() && !path_entry->second.IsNull() &&
+			                       !path_entry->second.ToString().empty();
+			if (!has_usable_path) {
+				throw InvalidInputException(
+				    "Cannot enable 'file' log storage without a valid path. Provide one via storage_path, "
+				    "e.g. CALL enable_logging(storage='file', storage_path='mylog.csv');");
+			}
+		}
+	}
+
 	// Process positional params
 	if (!input.inputs.empty()) {
 		if (input.inputs[0].type() == LogicalType::VARCHAR) {
@@ -102,6 +133,10 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 		} else {
 			throw BinderException("Unexpected type positional parameter to enable_logging");
 		}
+	}
+
+	for (const auto &log_type : result->log_types_to_set) {
+		TryAutoloadLogTypeExtension(context, log_type);
 	}
 
 	return_types.emplace_back(LogicalType::BOOLEAN);
@@ -121,7 +156,7 @@ static void TruncateLogs(ClientContext &context, TableFunctionInput &data, DataC
 }
 
 static unique_ptr<FunctionData> BindDisableLogging(ClientContext &context, TableFunctionBindInput &input,
-                                                   vector<LogicalType> &return_types, vector<string> &names) {
+                                                   vector<LogicalType> &return_types, vector<Identifier> &names) {
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
 
@@ -129,7 +164,7 @@ static unique_ptr<FunctionData> BindDisableLogging(ClientContext &context, Table
 }
 
 static unique_ptr<FunctionData> BindTruncateLogs(ClientContext &context, TableFunctionBindInput &input,
-                                                 vector<LogicalType> &return_types, vector<string> &names) {
+                                                 vector<LogicalType> &return_types, vector<Identifier> &names) {
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
 

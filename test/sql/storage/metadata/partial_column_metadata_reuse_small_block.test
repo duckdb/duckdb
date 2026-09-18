@@ -1,0 +1,44 @@
+# name: test/sql/storage/metadata/partial_column_metadata_reuse_small_block.test
+# description: Regression test for PARTIALLY_REUSE_COLUMN_METADATA losing per-column extras for reused columns
+# group: [metadata]
+
+# small block size shrinks the metadata block size (block_size / 64), so per-row-group
+# column metadata easily spills past one metadata block and reused columns end up with extras
+statement ok
+ATTACH '{TEST_DIR}/partial_reuse_carries_column_extras.db' (BLOCK_SIZE 16384, STORAGE_VERSION 'latest')
+
+statement ok
+USE partial_reuse_carries_column_extras
+
+statement ok
+SET debug_skip_checkpoint_on_commit=true
+
+statement ok
+SET force_column_metadata_reuse=true
+
+statement ok
+SET debug_verify_blocks=true
+
+statement ok
+CREATE TABLE wide_tbl AS SELECT
+    i AS c0, i AS c1, i AS c2, i AS c3, i AS c4,
+    i AS c5, i AS c6, i AS c7, i AS c8, i AS c9,
+    i AS c10, i AS c11, i AS c12, i AS c13, i AS c14, i AS c15
+FROM range(500000) t(i)
+
+# Initial checkpoint persists all column metadata, spilling into extra metadata blocks
+statement ok
+CHECKPOINT
+
+# Partial update: only c6 and c7 change, all others remain reused
+statement ok
+UPDATE wide_tbl SET c6 = c6 + 1, c7 = c7 + 1 WHERE c0 < 100
+
+# Without the fix this checkpoint fails because reused-column extras are dropped
+statement ok
+CHECKPOINT
+
+query II
+SELECT COUNT(*), SUM(c0) FROM wide_tbl
+----
+500000	124999750000

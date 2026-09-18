@@ -265,6 +265,23 @@
     ]
   },
   {
+    "class": "LogicalSecureView",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_SECURE_VIEW",
+    "members": [
+      {
+        "id": 200,
+        "name": "view_name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "pushed_filters",
+        "type": "vector<string>"
+      }
+    ]
+  },
+  {
     "class": "LogicalColumnDataGet",
     "base": "LogicalOperator",
     "enum": "LOGICAL_CHUNK_GET",
@@ -283,13 +300,19 @@
         "id": 202,
         "name": "collection",
         "type": "optionally_owned_ptr<ColumnDataCollection>"
+      },
+      {
+        "id": 203,
+        "name": "column_ids",
+        "type": "vector<column_t>"
       }
     ],
     "constructor": [
       "table_index",
       "chunk_types",
       "collection"
-    ]
+    ],
+    "custom_implementation": true
   },
   {
     "class": "LogicalDelimGet",
@@ -394,7 +417,7 @@
       {
         "id": 203,
         "name": "bound_columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 204,
@@ -579,7 +602,7 @@
       {
         "id": 201,
         "name": "ctename",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 202,
@@ -631,7 +654,7 @@
       {
         "id": 202,
         "name": "ctename",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 203,
@@ -664,7 +687,9 @@
       {
         "id": 202,
         "name": "column_index_map",
-        "type": "IndexVector<idx_t, PhysicalIndex>"
+        "type": "IndexVector<idx_t, PhysicalIndex>",
+        "default": "IndexVector<idx_t, PhysicalIndex>()",
+        "required_until": "v2.0.0"
       },
       {
         "id": 203,
@@ -852,6 +877,23 @@
       },
       {
         "id": 207,
+        "name": "capture_old_rows",
+        "type": "bool",
+        "default": "false"
+      },
+      {
+        "id": 208,
+        "name": "old_row_columns",
+        "type": "vector<idx_t>"
+      },
+      {
+        "id": 209,
+        "name": "row_id_handling",
+        "type": "RowIdHandling",
+        "default": "RowIdHandling::ASSUME_UNIQUE"
+      },
+      {
+        "id": 210,
         "name": "skip_unchanged_fk_delete_check",
         "type": "bool",
         "default": "false"
@@ -937,7 +979,9 @@
       {
         "id": 204,
         "name": "column_index_map",
-        "type": "IndexVector<idx_t, PhysicalIndex>"
+        "type": "IndexVector<idx_t, PhysicalIndex>",
+        "default": "IndexVector<idx_t, PhysicalIndex>()",
+        "required_until": "v2.0.0"
       },
       {
         "id": 205,
@@ -1031,7 +1075,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -1058,7 +1102,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -1072,27 +1116,148 @@
     ]
   },
   {
-    "class": "LogicalSimple",
+    "class": "LogicalAlter",
     "base": "LogicalOperator",
-    "enum": [
-      "LOGICAL_ALTER",
-      "LOGICAL_LOAD",
-      "LOGICAL_ATTACH",
-      "LOGICAL_TRANSACTION",
-      "LOGICAL_DROP",
-      "LOGICAL_DETACH",
-      "LOGICAL_CONNECT",
-      "LOGICAL_DISCONNECT"
-    ],
+    "enum": "LOGICAL_ALTER",
     "members": [
       {
         "id": 200,
         "name": "info",
-        "type": "ParseInfo*"
+        "type": "AlterInfo*",
+        "base": "ParseInfo"
       }
     ],
     "constructor": [
-      "type",
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalLoad",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_LOAD",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "LoadInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalAttach",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_ATTACH",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "AttachInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalTransaction",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_TRANSACTION",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "TransactionInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalDrop",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_DROP",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "DropInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalDetach",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_DETACH",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "DetachInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalConnect",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_CONNECT",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "ConnectInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalExternalResource",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_EXTERNAL_RESOURCE",
+    "includes": [
+      "duckdb/planner/operator/logical_external_resource.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "data",
+        "type": "BoundExternalResource"
+      }
+    ],
+    "constructor": [
+      "data"
+    ]
+  },
+  {
+    "class": "LogicalDisconnect",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_DISCONNECT",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "DisconnectInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
       "info"
     ]
   },

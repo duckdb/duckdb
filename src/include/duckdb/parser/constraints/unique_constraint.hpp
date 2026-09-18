@@ -9,19 +9,25 @@
 #pragma once
 
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/enums/index_constraint_type.hpp"
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/parser/constraint.hpp"
 
 namespace duckdb {
+
+enum class ConstraintTiming : uint8_t { DEFAULT, IMMEDIATE, DEFERRED };
 
 class UniqueConstraint : public Constraint {
 public:
 	static constexpr const ConstraintType TYPE = ConstraintType::UNIQUE;
 
 public:
-	DUCKDB_API UniqueConstraint(const LogicalIndex index, const bool is_primary_key);
-	DUCKDB_API UniqueConstraint(const LogicalIndex index, string column_name, const bool is_primary_key);
-	DUCKDB_API UniqueConstraint(vector<string> columns, const bool is_primary_key);
+	DUCKDB_API UniqueConstraint(const LogicalIndex index, const bool is_primary_key,
+	                            ConstraintTiming timing = ConstraintTiming::DEFAULT);
+	DUCKDB_API UniqueConstraint(const LogicalIndex index, Identifier column_name, const bool is_primary_key,
+	                            ConstraintTiming timing = ConstraintTiming::DEFAULT);
+	DUCKDB_API UniqueConstraint(vector<Identifier> columns, const bool is_primary_key,
+	                            ConstraintTiming timing = ConstraintTiming::DEFAULT);
 
 public:
 	DUCKDB_API string ToString() const override;
@@ -31,6 +37,10 @@ public:
 
 	//! Returns true, if the constraint is a PRIMARY KEY constraint.
 	bool IsPrimaryKey() const;
+	//! Returns true if the constraint was declared with the DEFERRED modifier.
+	bool IsDeferred() const;
+	//! Returns the index constraint type used to enforce this constraint.
+	IndexConstraintType GetIndexConstraintType() const;
 	//! Returns true, if the constraint is defined on a single column.
 	bool HasIndex() const;
 	//! Returns the column index on which the constraint is defined.
@@ -38,13 +48,13 @@ public:
 	//! Sets the column index of the constraint.
 	void SetIndex(const LogicalIndex new_index);
 	//! Returns a constant reference to the column names on which the constraint is defined.
-	const vector<string> &GetColumnNames() const;
+	const vector<Identifier> &GetColumnNames() const;
 	//! Returns a mutable reference to the column names on which the constraint is defined.
-	vector<string> &GetColumnNamesMutable();
+	vector<Identifier> &GetColumnNamesMutable();
 	//! Returns the column indexes on which the constraint is defined.
 	vector<LogicalIndex> GetLogicalIndexes(const ColumnList &columns) const;
 	//! Get the name of the constraint.
-	string GetName(const string &table_name) const;
+	Identifier GetName(const Identifier &table_name) const;
 
 private:
 	UniqueConstraint();
@@ -58,9 +68,11 @@ public:
 	//! The indexed column of the constraint. Only used for single-column constraints, invalid otherwise.
 	LogicalIndex index;
 	//! The names of the columns on which this constraint is defined. Only set if the index field is not set.
-	vector<string> columns;
+	vector<Identifier> columns;
 	//! Whether this is a PRIMARY KEY constraint, or a UNIQUE constraint.
 	bool is_primary_key;
+	//! The declared constraint timing, or DEFAULT when no modifier was specified.
+	ConstraintTiming timing;
 };
 
 } // namespace duckdb

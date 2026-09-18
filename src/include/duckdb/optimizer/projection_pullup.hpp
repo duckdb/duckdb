@@ -9,13 +9,14 @@ namespace duckdb {
 class Optimizer;
 class LogicalOperator;
 
-class ProjectionPullup {
+class ProjectionPullup : public LogicalOperatorVisitor {
 public:
 	explicit ProjectionPullup(Optimizer &optimizer_p, unique_ptr<LogicalOperator> &root)
 	    : optimizer(optimizer_p), root(root) {
 	}
 
 	void Optimize(unique_ptr<LogicalOperator> &op);
+	void VisitOperator(unique_ptr<LogicalOperator> &op) override;
 
 private:
 	Optimizer &optimizer;

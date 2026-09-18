@@ -1,0 +1,168 @@
+# name: test/sql/copy/copy_cte.test
+# description: Test COPY TO statements as CTE bodies
+# group: [copy]
+
+require parquet
+
+statement ok
+CREATE TABLE copy_cte_source (i INTEGER, s VARCHAR);
+
+statement ok
+INSERT INTO copy_cte_source VALUES (1, 'one'), (2, 'two'), (3, 'three');
+
+# Write the result of a Parquet COPY with RETURN_STATS through an outer CSV COPY.
+query I
+COPY (
+    WITH stats AS (
+        COPY (SELECT * FROM copy_cte_source ORDER BY i)
+        TO '{TEST_DIR}/copy_cte_data.parquet' (FORMAT PARQUET, RETURN_STATS)
+    )
+    SELECT filename, count FROM stats
+) TO '{TEST_DIR}/copy_cte_stats.csv' (FORMAT CSV, HEADER);
+----
+1
+
+query II
+SELECT filename LIKE '%copy_cte_data.parquet', count
+FROM read_csv('{TEST_DIR}/copy_cte_stats.csv', HEADER = true, AUTO_DETECT = true);
+----
+true	3
+
+query II rowsort
+SELECT * FROM read_parquet('{TEST_DIR}/copy_cte_data.parquet');
+----
+1	one
+2	two
+3	three
+
+# Table-source COPY TO is supported and exposes the normal Count result.
+query I
+WITH copied(rows_written) AS (
+    COPY copy_cte_source TO '{TEST_DIR}/copy_cte_table.csv' (FORMAT CSV, HEADER)
+)
+SELECT rows_written FROM copied;
+----
+3
+
+# An unreferenced COPY CTE still executes for its side effect.
+query I
+WITH copied AS (
+    COPY (SELECT * FROM copy_cte_source)
+    TO '{TEST_DIR}/copy_cte_unreferenced.parquet' (FORMAT PARQUET)
+)
+SELECT 42;
+----
+42
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/copy_cte_unreferenced.parquet');
+----
+3
+
+# Multiple references consume one materialized COPY result; the file is written once.
+query II
+WITH copied AS (
+    COPY (SELECT * FROM copy_cte_source)
+    TO '{TEST_DIR}/copy_cte_once.parquet' (FORMAT PARQUET)
+)
+SELECT lhs.Count, rhs.Count FROM copied lhs, copied rhs;
+----
+3	3
+
+# Distinct COPY CTEs expose independent result bindings.
+query II
+WITH first_copy AS (
+    COPY copy_cte_source TO '{TEST_DIR}/copy_cte_first.csv' (FORMAT CSV)
+), second_copy AS (
+    COPY copy_cte_source TO '{TEST_DIR}/copy_cte_second.csv' (FORMAT CSV)
+)
+SELECT first_copy.Count, second_copy.Count
+FROM first_copy, second_copy;
+----
+3	3
+
+query II
+SELECT
+    (SELECT count(*) FROM glob('{TEST_DIR}/copy_cte_first.csv')),
+    (SELECT count(*) FROM glob('{TEST_DIR}/copy_cte_second.csv'));
+----
+1	1
+
+# EmptyResultPullup must retain a COPY CTE when the outer query is empty.
+query I
+WITH copied AS (
+    COPY copy_cte_source TO '{TEST_DIR}/copy_cte_empty_consumer.csv' (FORMAT CSV)
+)
+SELECT 42 WHERE false;
+----
+
+query I
+SELECT count(*) FROM glob('{TEST_DIR}/copy_cte_empty_consumer.csv');
+----
+1
+
+# RETURN_FILES retains its existing two-column result shape inside a CTE.
+query II
+WITH copied AS (
+    COPY (SELECT * FROM copy_cte_source)
+    TO '{TEST_DIR}/copy_cte_return_files.parquet' (FORMAT PARQUET, RETURN_FILES)
+)
+SELECT Count, len(Files) FROM copied;
+----
+3	1
+
+# Prepared plans can rebuild and execute the side-effecting CTE more than once.
+statement ok
+PREPARE copy_cte_prepared AS
+WITH copied AS (
+    COPY (SELECT * FROM copy_cte_source)
+    TO ($1) (FORMAT PARQUET, OVERWRITE)
+)
+SELECT * FROM copied;
+
+query I
+EXECUTE copy_cte_prepared('{TEST_DIR}/copy_cte_prepared.parquet');
+----
+3
+
+query I
+EXECUTE copy_cte_prepared('{TEST_DIR}/copy_cte_prepared.parquet');
+----
+3
+
+# COPY FROM is an ingestion statement and is not accepted as a CTE body.
+statement error
+WITH copied AS (
+    COPY copy_cte_source FROM '{TEST_DIR}/copy_cte_table.csv' (FORMAT CSV, HEADER)
+)
+SELECT * FROM copied;
+----
+<REGEX>:.*COPY FROM cannot be used as a CTE body.*
+
+statement error
+WITH RECURSIVE copied AS (
+    COPY copy_cte_source TO '{TEST_DIR}/copy_cte_recursive.csv' (FORMAT CSV)
+)
+SELECT * FROM copied;
+----
+<REGEX>:.*Recursive CTEs with COPY statements are not supported.*
+
+# Like DML CTEs, COPY CTEs must be at the top-level query scope.
+statement error
+SELECT * FROM (
+    WITH copied AS (
+        COPY copy_cte_source TO '{TEST_DIR}/copy_cte_nested.csv' (FORMAT CSV)
+    )
+    SELECT * FROM copied
+);
+----
+<REGEX>:.*WITH clause containing a COPY statement must be at the top level.*
+
+statement error
+CREATE VIEW copy_cte_view AS
+WITH copied AS (
+    COPY copy_cte_source TO '{TEST_DIR}/copy_cte_view.csv' (FORMAT CSV)
+)
+SELECT * FROM copied;
+----
+<REGEX>:.*COPY statements are not allowed as CTE bodies inside a VIEW.*

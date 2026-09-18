@@ -60,7 +60,7 @@ void BinaryDecodeFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	// decode is also a nop cast, but requires verification if the provided string is actually
 	BinaryExecutor::Execute<string_t, string_t, string_t>(
 	    args.data[0], args.data[1], result, [&](string_t input, string_t error_option) {
-		    auto input_data = input.GetDataWriteable();
+		    auto input_data = input.GetData();
 		    auto input_length = input.GetSize();
 
 		    if (Utf8Proc::Analyze(input_data, input_length) != UnicodeType::INVALID) {
@@ -69,9 +69,14 @@ void BinaryDecodeFunction(DataChunk &args, ExpressionState &state, Vector &resul
 		    auto const error_behavior = GetDecodeErrorBehavior(error_option);
 
 		    switch (error_behavior) {
-		    case DecodeErrorBehavior::REPLACE:
-			    Utf8Proc::MakeValid(input_data, input_length);
-			    return input;
+		    case DecodeErrorBehavior::REPLACE: {
+			    auto target = StringVector::EmptyString(result, input_length);
+			    auto output = target.GetDataWriteable();
+			    memcpy(output, input_data, input_length);
+			    Utf8Proc::MakeValid(output, input_length);
+			    target.Finalize();
+			    return target;
+		    }
 
 		    case DecodeErrorBehavior::IGNORE: {
 			    auto new_str = Utf8Proc::RemoveInvalid(input_data, input_length);
@@ -100,21 +105,25 @@ void BinaryDecodeFunction(DataChunk &args, ExpressionState &state, Vector &resul
 } // namespace
 
 ScalarFunction EncodeFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, EncodeFunction);
+	ScalarFunction func({}, LogicalType::BLOB, EncodeFunction);
+	func.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	return func;
 }
 
 ScalarFunctionSet DecodeFun::GetFunctions() {
 	ScalarFunctionSet decode("decode");
 
-	ScalarFunction unary_function({LogicalType::BLOB}, LogicalType::VARCHAR, UnaryDecodeFunction);
-	ScalarFunction binary_function({LogicalType::BLOB, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                               BinaryDecodeFunction);
+	ScalarFunction unary_function({}, LogicalType::VARCHAR, UnaryDecodeFunction);
+	unary_function.GetSignature().AddParameter("blob", LogicalType::BLOB);
 
-	unary_function.SetFallible();
-	binary_function.SetFallible();
+	ScalarFunction binary_function({}, LogicalType::VARCHAR, BinaryDecodeFunction);
+	binary_function.GetSignature()
+	    .AddParameter("blob", LogicalType::BLOB)
+	    .AddParameter("error_option", LogicalType::VARCHAR);
 
 	decode.AddFunction(unary_function);
 	decode.AddFunction(binary_function);
+	decode.SetFallible();
 
 	return decode;
 }

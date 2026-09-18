@@ -1,0 +1,43 @@
+# name: test/issues/general/test_25167.test
+# description: Issue 25167 - INTERNAL Error binding a base column through comma-join UNNEST with a failing CAST filter
+# group: [general]
+
+statement ok
+CREATE TABLE t0(c1 INTEGER[]);
+
+statement ok
+INSERT INTO t0 VALUES ([1]);
+
+statement ok
+SET debug_verify_column_bindings = true;
+
+# Projecting the outer list through lateral UNNEST must raise Conversion Error, not INTERNAL.
+statement error
+SELECT t0.c1 FROM t0, unnest(t0.c1) AS x(c0) WHERE CAST('x' AS BOOLEAN);
+----
+Conversion Error: Could not convert string 'x' to BOOL
+
+statement error
+SELECT t0.c1, x.c0 FROM t0, unnest(t0.c1) AS x(c0) WHERE CAST('x' AS BOOLEAN);
+----
+Conversion Error: Could not convert string 'x' to BOOL
+
+statement error
+SELECT 1 FROM t0, unnest(t0.c1) AS x(c0) WHERE CAST('x' AS BOOLEAN);
+----
+Conversion Error: Could not convert string 'x' to BOOL
+
+statement error
+SELECT t0.c1 FROM t0 WHERE CAST('x' AS BOOLEAN);
+----
+Conversion Error: Could not convert string 'x' to BOOL
+
+query I
+SELECT t0.c1 FROM t0, unnest(t0.c1) AS x(c0);
+----
+[1]
+
+query I
+SELECT t0.c1 FROM t0, unnest(t0.c1) AS x(c0) WHERE CAST('true' AS BOOLEAN);
+----
+[1]

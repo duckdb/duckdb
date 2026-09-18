@@ -4,11 +4,11 @@
 
 namespace duckdb {
 
-BoundParameterMap::BoundParameterMap(case_insensitive_map_t<BoundParameterData> &parameter_data)
+BoundParameterMap::BoundParameterMap(identifier_map_t<BoundParameterData> &parameter_data)
     : parameter_data(parameter_data) {
 }
 
-LogicalType BoundParameterMap::GetReturnType(const string &identifier) {
+LogicalType BoundParameterMap::GetReturnType(const Identifier &identifier) {
 	D_ASSERT(!identifier.empty());
 	auto it = parameter_data.find(identifier);
 	if (it == parameter_data.end()) {
@@ -25,25 +25,25 @@ const bound_parameter_map_t &BoundParameterMap::GetParameters() {
 	return parameters;
 }
 
-const case_insensitive_map_t<BoundParameterData> &BoundParameterMap::GetParameterData() {
+const identifier_map_t<BoundParameterData> &BoundParameterMap::GetParameterData() {
 	return parameter_data;
 }
 
-shared_ptr<BoundParameterData> BoundParameterMap::CreateOrGetData(const string &identifier) {
+shared_ptr<BoundParameterData> BoundParameterMap::CreateOrGetData(const Identifier &identifier) {
 	auto entry = parameters.find(identifier);
 	if (entry == parameters.end()) {
 		// no entry yet: create a new one
 		auto data = make_shared_ptr<BoundParameterData>();
 		data->return_type = GetReturnType(identifier);
 
-		CreateNewParameter(identifier, data);
+		CreateNewParameter(identifier.GetIdentifierName(), data);
 		return data;
 	}
 	return entry->second;
 }
 
 unique_ptr<BoundParameterExpression> BoundParameterMap::BindParameterExpression(ParameterExpression &expr) {
-	auto &identifier = expr.identifier;
+	auto &identifier = expr.Identifier();
 	D_ASSERT(!parameter_data.count(identifier));
 
 	// No value has been supplied yet,
@@ -52,7 +52,7 @@ unique_ptr<BoundParameterExpression> BoundParameterMap::BindParameterExpression(
 	auto param_data = CreateOrGetData(identifier);
 	auto bound_expr = make_uniq<BoundParameterExpression>(identifier);
 
-	bound_expr->parameter_data = param_data;
+	bound_expr->ParameterDataMutable() = param_data;
 	bound_expr->SetAlias(expr.GetAlias());
 
 	auto param_type = param_data->return_type;
@@ -70,7 +70,7 @@ unique_ptr<BoundParameterExpression> BoundParameterMap::BindParameterExpression(
 }
 
 void BoundParameterMap::CreateNewParameter(const string &id, const shared_ptr<BoundParameterData> &param_data) {
-	D_ASSERT(!parameters.count(id));
+	D_ASSERT(!parameters.count(Identifier(id)));
 	parameters.emplace(std::make_pair(id, param_data));
 }
 

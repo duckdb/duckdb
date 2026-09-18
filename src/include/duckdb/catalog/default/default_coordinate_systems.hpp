@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/catalog/default/default_generator.hpp"
-#include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/common/array_ptr.hpp"
 #include "duckdb/catalog/default/default_table_functions.hpp"
 
@@ -23,8 +22,8 @@ public:
 	SchemaCatalogEntry &schema;
 
 public:
-	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override;
-	vector<string> GetDefaultEntries() override;
+	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const Identifier &entry_name) override;
+	vector<Identifier> GetDefaultEntries() override;
 };
 
 } // namespace duckdb

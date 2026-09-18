@@ -18,6 +18,10 @@ public:
 	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                optional_ptr<FileOpener> opener = nullptr) override;
 
+	unique_ptr<MemoryMappedFile> MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
+	                                           const MMapOptions &options,
+	                                           optional_ptr<FileOpener> opener = nullptr) override;
+
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
@@ -29,6 +33,7 @@ public:
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 	//! Write nr_bytes from the buffer into the file, moving the file pointer forward by nr_bytes.
 	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
+	FileWriteMode GetWriteMode(FileHandle &handle) override;
 	//! Excise a range of the file. The file-system is free to deallocate this
 	//! range (sparse file support). Reads to the range will succeed but will return
 	//! undefined data.
@@ -52,20 +57,27 @@ public:
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Create a directory if it does not exist
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
+	bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
+	                             optional_ptr<FileOpener> opener = nullptr) override;
+	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Recursively remove a directory and all files in it
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
+	bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+	                             optional_ptr<FileOpener> opener = nullptr) override;
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Check if a file exists
 	bool FileExists(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
 
-	//! Check if path is a pipe
+	//! Check if path is a pipe or character device
 	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Remove a file from disk
 	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Sync a file handle to disk
 	void FileSync(FileHandle &handle) override;
+	//! Close and remove an incomplete output file
+	void AbortFileWrite(FileHandle &handle) override;
 
 	//! Checks if path is is an absolute path
 	bool IsPathAbsolute(const string &path) override;

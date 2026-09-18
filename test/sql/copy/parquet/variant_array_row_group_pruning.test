@@ -1,0 +1,25 @@
+# name: test/sql/copy/parquet/variant_array_row_group_pruning.test
+# description: Test row-group pruning for VARIANT array element filters
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (
+	SELECT [i::INTEGER]::VARIANT AS v
+	FROM range(8192) t(i)
+) TO '{TEST_DIR}/variant_array_row_group_pruning.parquet' (ROW_GROUP_SIZE 2048)
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/variant_array_row_group_pruning.parquet'
+WHERE v[1]::INTEGER BETWEEN 4096 AND 4100
+----
+5
+
+query II
+EXPLAIN ANALYZE SELECT count(*)
+FROM '{TEST_DIR}/variant_array_row_group_pruning.parquet'
+WHERE v[1]::INTEGER BETWEEN 4096 AND 4100
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 4.*

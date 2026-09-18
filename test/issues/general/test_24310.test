@@ -1,0 +1,29 @@
+# name: test/issues/general/test_24310.test
+# description: Hive partition column colliding with the generated filename column
+# group: [general]
+
+require parquet
+
+statement ok
+CREATE TABLE source AS SELECT * FROM (VALUES ('part_a', 1), ('part_b', 2)) v(filename, id);
+
+statement ok
+COPY source TO '{TEST_DIR}/partition_filename_collision' (
+	FORMAT PARQUET,
+	PARTITION_BY (filename)
+);
+
+statement error
+SELECT filename, id
+FROM read_parquet('{TEST_DIR}/partition_filename_collision/**/*.parquet',
+	hive_partitioning = true, filename = true);
+----
+Option filename adds column "filename", but a hive partition column with this name also exists. Try setting a different name: filename='<filename column name>'
+
+query III rowsort
+SELECT filename, parse_filename(file_path), id
+FROM read_parquet('{TEST_DIR}/partition_filename_collision/**/*.parquet',
+	hive_partitioning = true, filename = 'file_path');
+----
+part_a	data_0.parquet	1
+part_b	data_0.parquet	2

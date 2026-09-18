@@ -14,6 +14,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "json_functions.hpp"
+#include "yyjson_memory.hpp"
 
 namespace duckdb {
 
@@ -41,7 +42,7 @@ public:
 	template <class T, bool SET_NULL_IF_NOT_FOUND = true>
 	static void BinaryExecute(DataChunk &args, ExpressionState &state, Vector &result, const json_function_t<T> fun) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		const auto &info = func_expr.bind_info->Cast<JSONReadFunctionData>();
+		const auto &info = func_expr.BindInfo()->Cast<JSONReadFunctionData>();
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator->GetYYAlc();
 
@@ -52,7 +53,9 @@ public:
 			if (info.path_type == JSONCommon::JSONPathType::REGULAR) {
 				UnaryExecutor::Execute<string_t, T>(inputs, result, [&](string_t input) -> optional<T> {
 					auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
-					auto val = JSONCommon::GetUnsafe(doc->root, ptr, len);
+					// Use the path elements parsed at bind time when available
+					auto val = info.use_elements ? JSONCommon::GetPathElements(doc->root, info.elements)
+					                             : JSONCommon::GetUnsafe(doc->root, ptr, len);
 					if (SET_NULL_IF_NOT_FOUND && !val) {
 						return nullopt;
 					} else {
@@ -80,7 +83,7 @@ public:
 					for (idx_t i = 0; i < vals.size(); i++) {
 						auto &val = vals[i];
 						D_ASSERT(val != nullptr); // Wildcard extract shouldn't give back nullptrs
-						auto fun_result = fun(val, alc, result);
+						auto fun_result = fun(val, alc, child_entry);
 						if (fun_result.has_value()) {
 							child_vals[current_size + i] = fun_result.value();
 						} else {
@@ -120,7 +123,7 @@ public:
 	template <class T, bool SET_NULL_IF_NOT_FOUND = true>
 	static void ExecuteMany(DataChunk &args, ExpressionState &state, Vector &result, const json_function_t<T> fun) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		const auto &info = func_expr.bind_info->Cast<JSONReadManyFunctionData>();
+		const auto &info = func_expr.BindInfo()->Cast<JSONReadManyFunctionData>();
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator->GetYYAlc();
 		D_ASSERT(info.ptrs.size() == info.lens.size());
@@ -154,7 +157,9 @@ public:
 			auto doc = JSONCommon::ReadDocument(inputs[idx], JSONCommon::READ_FLAG, alc);
 			for (idx_t path_i = 0; path_i < num_paths; path_i++) {
 				auto child_idx = offset + path_i;
-				val = JSONCommon::GetUnsafe(doc->root, info.ptrs[path_i], info.lens[path_i]);
+				val = info.use_elements[path_i]
+				          ? JSONCommon::GetPathElements(doc->root, info.elements[path_i])
+				          : JSONCommon::GetUnsafe(doc->root, info.ptrs[path_i], info.lens[path_i]);
 				if (SET_NULL_IF_NOT_FOUND && !val) {
 					child_validity.SetInvalid(child_idx);
 				} else {

@@ -169,7 +169,6 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	for (idx_t i = table.ColumnCount(); i < l_state.delete_chunk.ColumnCount(); i++) {
 		l_state.delete_chunk.data[i].Reference(row_ids);
 	}
-	l_state.delete_chunk.SetCardinality(chunk.size());
 
 	// Slice down to the claimed rows (RETURNING only)
 	if (return_chunk && delete_count != chunk.size()) {
@@ -181,7 +180,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 		annotated_lock_guard<annotated_mutex> index_guard(g_state.index_lock);
 		auto &local_storage = LocalStorage::Get(context.client, table.db);
 		auto storage = local_storage.GetStorage(table);
-		storage->AppendToDeleteIndexes(row_ids, l_state.delete_chunk);
+		storage->AppendToDeleteIndexes(delete_row_ids, l_state.delete_chunk);
 	}
 
 	auto deleted = table.Delete(*l_state.delete_state, context.client, tableref, delete_row_ids, delete_count);
@@ -262,7 +261,6 @@ SourceResultType PhysicalDelete::GetDataInternal(ExecutionContext &context, Data
 	auto &state = input.global_state.Cast<DeleteSourceState>();
 	auto &g = sink_state->Cast<DeleteGlobalState>();
 	if (!return_chunk) {
-		chunk.SetCardinality(1);
 		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.deleted_count.load())));
 		return SourceResultType::FINISHED;
 	}

@@ -6,15 +6,20 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformLoadStatement(PEGTransformer &transformer,
-                                                                       const string &col_id_or_string,
-                                                                       const string &extension_alias) {
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformLoadStatement(PEGTransformer &transformer, const Identifier &col_id_or_string,
+                                              const optional<ExtensionRepositoryInfo> &from_source,
+                                              const optional<Identifier> &extension_alias) {
 	auto result = make_uniq<LoadStatement>();
 	auto info = make_uniq<LoadInfo>();
 	info->repo_is_alias = false;
-	info->filename = col_id_or_string;
-	if (!extension_alias.empty()) {
-		info->alias = extension_alias;
+	info->filename = col_id_or_string.GetIdentifierName();
+	if (from_source) {
+		info->repository = from_source->name.GetIdentifierName();
+		info->repo_is_alias = from_source->repository_is_alias;
+	}
+	if (extension_alias) {
+		info->alias = *extension_alias;
 		info->load_type = LoadType::LOAD_AS;
 	} else {
 		info->load_type = LoadType::LOAD;
@@ -23,31 +28,37 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformLoadStatement(PEGTransf
 	return std::move(result);
 }
 
-string PEGTransformerFactory::TransformExtensionAlias(PEGTransformer &transformer, const string &identifier) {
+Identifier PEGTransformerFactory::TransformExtensionAlias(PEGTransformer &transformer, const Identifier &identifier) {
 	return identifier;
 }
 
+bool PEGTransformerFactory::TransformInstallAndLoad(PEGTransformer &transformer) {
+	return true;
+}
+
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformInstallStatement(
-    PEGTransformer &transformer, const QualifiedName &identifier_or_string_literal,
-    const ExtensionRepositoryInfo &from_source, const string &version_number) {
+    PEGTransformer &transformer, const bool &has_result, const optional<bool> &install_and_load,
+    const QualifiedName &identifier_or_string_literal, const optional<ExtensionRepositoryInfo> &from_source,
+    const optional<string> &version_number) {
 	auto result = make_uniq<LoadStatement>();
 	auto info = make_uniq<LoadInfo>();
-	info->load_type = LoadType::INSTALL;
-	info->filename = identifier_or_string_literal.name;
+	info->load_type = has_result ? LoadType::FORCE_INSTALL : LoadType::INSTALL;
+	info->load_after_install = install_and_load.has_value();
+	info->filename = identifier_or_string_literal.Name().GetIdentifierName();
 	info->repo_is_alias = false;
-	if (!from_source.name.empty()) {
-		info->repository = from_source.name;
-		info->repo_is_alias = from_source.repository_is_alias;
+	if (from_source) {
+		info->repository = from_source->name.GetIdentifierName();
+		info->repo_is_alias = from_source->repository_is_alias;
 	}
-	if (!version_number.empty()) {
-		info->version = version_number;
+	if (version_number) {
+		info->version = *version_number;
 	}
 	result->info = std::move(info);
 	return std::move(result);
 }
 
 ExtensionRepositoryInfo PEGTransformerFactory::TransformFromSourceIdentifier(PEGTransformer &transformer,
-                                                                             const string &identifier) {
+                                                                             const Identifier &identifier) {
 	ExtensionRepositoryInfo result;
 	result.name = identifier;
 	result.repository_is_alias = true;
@@ -57,23 +68,73 @@ ExtensionRepositoryInfo PEGTransformerFactory::TransformFromSourceIdentifier(PEG
 ExtensionRepositoryInfo PEGTransformerFactory::TransformFromSourceString(PEGTransformer &transformer,
                                                                          const string &string_literal) {
 	ExtensionRepositoryInfo result;
-	result.name = string_literal;
+	result.name = Identifier(string_literal);
 	result.repository_is_alias = false;
 	return result;
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformUpdateExtensionsStatement(PEGTransformer &transformer,
-                                                                                   const vector<string> &identifier) {
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformUpdateExtensionsStatement(PEGTransformer &transformer,
+                                                          const optional<vector<Identifier>> &identifier) {
 	auto result = make_uniq<UpdateExtensionsStatement>();
 	auto info = make_uniq<UpdateExtensionsInfo>();
-	info->extensions_to_update = identifier;
+	if (identifier) {
+		info->extensions_to_update = *identifier;
+	}
 	result->info = std::move(info);
 	return std::move(result);
 }
 
 string PEGTransformerFactory::TransformVersionNumber(PEGTransformer &transformer,
                                                      const QualifiedName &identifier_or_string_literal) {
-	return identifier_or_string_literal.name;
+	return identifier_or_string_literal.Name().GetIdentifierName();
+}
+
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformCreateExtensionRepositoryStmt(
+    PEGTransformer &transformer, const optional<bool> &or_replace, const optional<bool> &if_not_exists,
+    const Identifier &col_id_or_string, const string &repository_prefix,
+    const optional<vector<string>> &repository_public_key) {
+	auto result = make_uniq<LoadStatement>();
+	auto info = make_uniq<LoadInfo>();
+	info->load_type = LoadType::CREATE_REPOSITORY;
+	info->repo_is_alias = false;
+	info->repository = col_id_or_string.GetIdentifierName();
+	info->repository_url = repository_prefix;
+	if (repository_public_key) {
+		info->public_keys = *repository_public_key;
+	}
+	if (or_replace && if_not_exists) {
+		throw ParserException("Cannot combine OR REPLACE with IF NOT EXISTS");
+	}
+	if (or_replace) {
+		info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+	} else if (if_not_exists) {
+		info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	}
+	result->info = std::move(info);
+	return std::move(result);
+}
+
+string PEGTransformerFactory::TransformRepositoryPrefix(PEGTransformer &transformer, const bool &has_result,
+                                                        const string &string_literal) {
+	return string_literal;
+}
+
+vector<string> PEGTransformerFactory::TransformRepositoryPublicKey(PEGTransformer &transformer, const bool &has_result,
+                                                                   const vector<string> &string_literal) {
+	return string_literal;
+}
+
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformDropExtensionRepositoryStmt(
+    PEGTransformer &transformer, const optional<bool> &if_exists, const Identifier &col_id_or_string) {
+	auto result = make_uniq<LoadStatement>();
+	auto info = make_uniq<LoadInfo>();
+	info->load_type = LoadType::DROP_REPOSITORY;
+	info->repo_is_alias = false;
+	info->repository = col_id_or_string.GetIdentifierName();
+	info->missing_ok = if_exists.has_value();
+	result->info = std::move(info);
+	return std::move(result);
 }
 
 } // namespace duckdb

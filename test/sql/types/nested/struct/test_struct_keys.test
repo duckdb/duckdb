@@ -79,7 +79,7 @@ NULL
 statement error
 select struct_keys(ROW(1, 2));
 ----
-Invalid Input Error: struct_keys() cannot be applied to an unnamed STRUCT
+struct_keys() expects a STRUCT argument
 
 # Error cases: non-STRUCT inputs should fail
 statement error

@@ -47,8 +47,8 @@
 #include "permute.h"
 #include "scaling.h"
 
-static int s_nCountyCount = 0;
-static int s_nCityCount = 0;
+static thread_local int s_nCountyCount = 0;
+static thread_local int s_nCityCount = 0;
 
 void resetCountCount(void) {
 	s_nCountyCount = 0;
@@ -74,7 +74,7 @@ void resetCountCount(void) {
 int mk_address(ds_addr_t *pAddr, int nColumn) {
 	int i, nRegion;
 	char *szZipPrefix, szAddr[100];
-	static int nMaxCities, nMaxCounties;
+	static thread_local int nMaxCities, nMaxCounties;
 	tdef *pTdef;
 
 	if (!InitConstants::mk_address_init) {

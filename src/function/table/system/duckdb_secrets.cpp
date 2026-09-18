@@ -28,7 +28,7 @@ public:
 };
 
 static unique_ptr<FunctionData> DuckDBSecretsBind(ClientContext &context, TableFunctionBindInput &input,
-                                                  vector<LogicalType> &return_types, vector<string> &names) {
+                                                  vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto result = make_uniq<DuckDBSecretsBindData>();
 
 	auto entry = input.named_parameters.find("redact");
@@ -132,7 +132,6 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 		data.offset++;
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBSecretsFun::RegisterFunction(BuiltinFunctions &set) {

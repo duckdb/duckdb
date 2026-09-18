@@ -1,6 +1,7 @@
 include_directories(../third_party/catch)
 include_directories(../third_party/sqlite/include)
 include_directories(include)
+include_directories(extension/debug_fs/include)
 
 # Allows loading tests from registered extensions
 include_directories("${PROJECT_BINARY_DIR}/codegen/include/")
@@ -50,6 +51,39 @@ endif()
 
 add_executable(unittest unittest.cpp ${UNITTEST_OBJECT_FILES})
 
+# Enable best-effort stack traces for fatal signals in the test runner without
+# enabling stack traces for every DuckDB exception.
+if((CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT MUSL_ENABLED) OR APPLE)
+  target_compile_definitions(unittest PRIVATE DUCKDB_UNITTEST_CRASH_STACKTRACE)
+endif()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT MUSL_ENABLED)
+  set_target_properties(unittest PROPERTIES ENABLE_EXPORTS ON)
+endif()
+
+set(RUN_WRAPPER_UNITTEST_NAME "unittest")
+if(WIN32)
+  set(RUN_WRAPPER_UNITTEST_NAME "unittest.exe")
+  configure_file("${PROJECT_SOURCE_DIR}/scripts/ci/test_runner_wrapper.py.in"
+                 "${CMAKE_CURRENT_BINARY_DIR}/run.py" @ONLY)
+  configure_file("${PROJECT_SOURCE_DIR}/scripts/ci/test_runner_wrapper.bat.in"
+                 "${CMAKE_CURRENT_BINARY_DIR}/run.bat" @ONLY)
+else()
+  configure_file("${PROJECT_SOURCE_DIR}/scripts/ci/test_runner_wrapper.py.in"
+                 "${CMAKE_CURRENT_BINARY_DIR}/run" @ONLY)
+  file(
+    CHMOD
+    "${CMAKE_CURRENT_BINARY_DIR}/run"
+    PERMISSIONS
+    OWNER_READ
+    OWNER_WRITE
+    OWNER_EXECUTE
+    GROUP_READ
+    GROUP_EXECUTE
+    WORLD_READ
+    WORLD_EXECUTE)
+endif()
+
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_compile_options(unittest PRIVATE -Wno-error=maybe-uninitialized)
 endif()
@@ -57,10 +91,11 @@ endif()
 if(TARGET duckdb AND NOT WIN32)
   # Some tests reference internal third-party symbols (e.g. re2/mbedtls) that
   # are linked into duckdb but not exported from the shared library.
-  target_link_libraries(unittest duckdb test_helpers duckdb_re2 duckdb_mbedtls)
+  target_link_libraries(unittest duckdb test_helpers duckdb_re2 duckdb_mbedtls
+                        duckdb_cpp_api)
 else()
   # On Windows, tests require internal DuckDB symbols that are not DLL-exported.
-  target_link_libraries(unittest duckdb_static test_helpers)
+  target_link_libraries(unittest duckdb_static test_helpers duckdb_cpp_api)
   link_extension_libraries(unittest "")
 endif()
 

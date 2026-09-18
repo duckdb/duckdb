@@ -1,4 +1,5 @@
 #include "duckdb/function/table/system_functions.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -14,7 +15,7 @@ struct DuckDBDatabasesData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBDatabasesBind(ClientContext &context, TableFunctionBindInput &input,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
+                                                    vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("database_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -131,7 +132,6 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBDatabasesFun::RegisterFunction(BuiltinFunctions &set) {

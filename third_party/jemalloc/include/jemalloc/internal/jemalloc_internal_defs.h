@@ -205,18 +205,16 @@
 /* #undef JEMALLOC_EXPERIMENTAL_SMALLOCX_API */
 
 /* JEMALLOC_PROF enables allocation profiling. */
-#define JEMALLOC_PROF
+/* #undef JEMALLOC_PROF */
 
 /* Use libunwind for profile backtracing if defined. */
 /* #undef JEMALLOC_PROF_LIBUNWIND */
 
 /* Use libgcc for profile backtracing if defined. */
-#ifdef __GLIBC__
-#define JEMALLOC_PROF_LIBGCC
-#endif
+/* #undef JEMALLOC_PROF_LIBGCC */
 
 /* Use gcc intrinsics for profile backtracing if defined. */
-#define JEMALLOC_PROF_GCC
+/* #undef JEMALLOC_PROF_GCC */
 
 /* JEMALLOC_PAGEID enabled page id */
 /* #undef JEMALLOC_PAGEID */
@@ -265,6 +263,8 @@
 #define LG_PAGE 12 // x86 and x86_64 typically have a 4KB page size
 #elif defined(__powerpc__) || defined(__ppc__)
 #define LG_PAGE 16 // PowerPC architectures often use 64KB page size
+#elif defined(__loongarch__)
+#define LG_PAGE 14 // LoongArch architectures uses a 16KB page size
 #elif defined(__sparc__)
 #define LG_PAGE 13 // SPARC architectures usually have an 8KB page size
 #elif defined(__aarch64__) || defined(__ARM_ARCH)

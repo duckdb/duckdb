@@ -24,12 +24,12 @@ class Expression;
 
 class BoundAggregateExpression;
 class BoundCaseExpression;
-class BoundCastExpression;
 class BoundColumnRefExpression;
 class BoundConjunctionExpression;
 class BoundConstantExpression;
 class BoundDefaultExpression;
 class BoundFunctionExpression;
+class BoundLambdaExpression;
 class BoundLambdaRefExpression;
 class BoundOperatorExpression;
 class BoundParameterExpression;

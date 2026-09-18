@@ -34,7 +34,7 @@ WALWriteState::WALWriteState(DuckTransaction &transaction_p, WriteAheadLog &log,
 void WALWriteState::SwitchTable(DuckTableEntry &table_entry, UndoFlags new_op) {
 	if (current_table_entry.get() != &table_entry) {
 		// write the current table to the log
-		log.WriteSetTable(table_entry.schema.name, table_entry.name);
+		log.WriteSetTable(QualifiedName(table_entry.schema.GetSchemaPath(), table_entry.name));
 		current_table_entry = table_entry;
 	}
 }
@@ -49,8 +49,12 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 
 	switch (parent.type) {
 	case CatalogType::TRIGGER_ENTRY:
-		// Triggers do not support ALTER — always a CREATE
 		D_ASSERT(entry.type != CatalogType::RENAMED_ENTRY);
+		if (entry.type == parent.type) {
+			// Column-rename propagation from the owning ALTER TABLE — the ALTER_INFO record
+			// already covers this on replay; writing a second CREATE_TRIGGER would be redundant.
+			return;
+		}
 		log.WriteCreateTrigger(parent.Cast<TriggerCatalogEntry>());
 		break;
 	case CatalogType::TABLE_ENTRY:

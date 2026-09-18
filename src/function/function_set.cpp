@@ -6,21 +6,21 @@ namespace duckdb {
 ScalarFunctionSet::ScalarFunctionSet() : FunctionSet("") {
 }
 
-ScalarFunctionSet::ScalarFunctionSet(string name) : FunctionSet(std::move(name)) {
+ScalarFunctionSet::ScalarFunctionSet(Identifier name) : FunctionSet(std::move(name)) {
 }
 
-ScalarFunctionSet::ScalarFunctionSet(ScalarFunction fun) : FunctionSet(std::move(fun.name)) {
-	functions.push_back(std::move(fun));
+ScalarFunctionSet::ScalarFunctionSet(ScalarFunction fun) : FunctionSet(fun.name) {
+	AddFunction(std::move(fun));
 }
 
-const ScalarFunction &ScalarFunctionSet::GetFunctionByArguments(ClientContext &context,
-                                                                const vector<LogicalType> &arguments) {
+shared_ptr<const ScalarFunction> ScalarFunctionSet::GetFunctionByArguments(ClientContext &context,
+                                                                           const vector<LogicalType> &arguments) {
 	ErrorData error;
 	FunctionBinder binder(context);
 	auto index = binder.BindFunction(name, *this, arguments, error);
 	if (!index.IsValid()) {
-		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-		                        error.Message());
+		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
+		                      error.RawMessage());
 	}
 	return GetFunctionByOffset(index.GetIndex());
 }
@@ -28,15 +28,15 @@ const ScalarFunction &ScalarFunctionSet::GetFunctionByArguments(ClientContext &c
 AggregateFunctionSet::AggregateFunctionSet() : FunctionSet("") {
 }
 
-AggregateFunctionSet::AggregateFunctionSet(string name) : FunctionSet(std::move(name)) {
+AggregateFunctionSet::AggregateFunctionSet(Identifier name) : FunctionSet(std::move(name)) {
 }
 
-AggregateFunctionSet::AggregateFunctionSet(AggregateFunction fun) : FunctionSet(std::move(fun.name)) {
-	functions.push_back(std::move(fun));
+AggregateFunctionSet::AggregateFunctionSet(AggregateFunction fun) : FunctionSet(fun.name) {
+	AddFunction(std::move(fun));
 }
 
-const AggregateFunction &AggregateFunctionSet::GetFunctionByArguments(ClientContext &context,
-                                                                      const vector<LogicalType> &arguments) {
+shared_ptr<const AggregateFunction> AggregateFunctionSet::GetFunctionByArguments(ClientContext &context,
+                                                                                 const vector<LogicalType> &arguments) {
 	ErrorData error;
 	FunctionBinder binder(context);
 	auto index = binder.BindFunction(name, *this, arguments, error);
@@ -45,7 +45,7 @@ const AggregateFunction &AggregateFunctionSet::GetFunctionByArguments(ClientCont
 		// this is used for functions such as quantile or string_agg that delete part of their arguments during bind
 		// FIXME: we should come up with a better solution here
 		for (auto &func : functions) {
-			auto &sig = func.GetSignature();
+			auto &sig = func->GetSignature();
 			if (arguments.size() >= sig.GetParameters().size()) {
 				continue;
 			}
@@ -60,8 +60,8 @@ const AggregateFunction &AggregateFunctionSet::GetFunctionByArguments(ClientCont
 				return func;
 			}
 		}
-		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-		                        error.Message());
+		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
+		                      error.RawMessage());
 	}
 	return GetFunctionByOffset(index.GetIndex());
 }
@@ -69,49 +69,49 @@ const AggregateFunction &AggregateFunctionSet::GetFunctionByArguments(ClientCont
 WindowFunctionSet::WindowFunctionSet() : FunctionSet("") {
 }
 
-WindowFunctionSet::WindowFunctionSet(string name) : FunctionSet(std::move(name)) {
+WindowFunctionSet::WindowFunctionSet(Identifier name) : FunctionSet(std::move(name)) {
 }
 
-WindowFunctionSet::WindowFunctionSet(WindowFunction fun) : FunctionSet(std::move(fun.name)) {
-	functions.push_back(std::move(fun));
+WindowFunctionSet::WindowFunctionSet(WindowFunction fun) : FunctionSet(fun.name) {
+	AddFunction(std::move(fun));
 }
 
-const WindowFunction &WindowFunctionSet::GetFunctionByArguments(ClientContext &context,
-                                                                const vector<LogicalType> &arguments) {
+shared_ptr<const WindowFunction> WindowFunctionSet::GetFunctionByArguments(ClientContext &context,
+                                                                           const vector<LogicalType> &arguments) {
 	ErrorData error;
 	FunctionBinder binder(context);
 	auto index = binder.BindFunction(name, *this, arguments, error);
 	if (!index.IsValid()) {
-		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-		                        error.Message());
+		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
+		                      error.RawMessage());
 	}
 	return GetFunctionByOffset(index.GetIndex());
 }
 
-TableFunctionSet::TableFunctionSet(string name) : FunctionSet(std::move(name)) {
+TableFunctionSet::TableFunctionSet(Identifier name) : FunctionSet(std::move(name)) {
 }
 
-TableFunctionSet::TableFunctionSet(TableFunction fun) : FunctionSet(std::move(fun.name)) {
-	functions.push_back(std::move(fun));
+TableFunctionSet::TableFunctionSet(TableFunction fun) : FunctionSet(fun.name) {
+	AddFunction(std::move(fun));
 }
 
-const TableFunction &TableFunctionSet::GetFunctionByArguments(ClientContext &context,
-                                                              const vector<LogicalType> &arguments) {
+shared_ptr<const TableFunction> TableFunctionSet::GetFunctionByArguments(ClientContext &context,
+                                                                         const vector<LogicalType> &arguments) {
 	ErrorData error;
 	FunctionBinder binder(context);
 	auto index = binder.BindFunction(name, *this, arguments, error);
 	if (!index.IsValid()) {
-		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-		                        error.Message());
+		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
+		                      error.RawMessage());
 	}
 	return GetFunctionByOffset(index.GetIndex());
 }
 
-PragmaFunctionSet::PragmaFunctionSet(string name) : FunctionSet(std::move(name)) {
+PragmaFunctionSet::PragmaFunctionSet(Identifier name) : FunctionSet(std::move(name)) {
 }
 
-PragmaFunctionSet::PragmaFunctionSet(PragmaFunction fun) : FunctionSet(std::move(fun.name)) {
-	functions.push_back(std::move(fun));
+PragmaFunctionSet::PragmaFunctionSet(PragmaFunction fun) : FunctionSet(fun.name) {
+	AddFunction(std::move(fun));
 }
 
 } // namespace duckdb

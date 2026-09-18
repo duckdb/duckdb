@@ -155,6 +155,7 @@ static idx_t SelectivityOptionalFilterSelect(DataChunk &args, ExpressionState &s
 
 ScalarFunction SelectivityOptionalFilterScalarFun::GetFunction(const LogicalType &input_type) {
 	ScalarFunction func(NAME, {input_type}, LogicalType::BOOLEAN, nullptr, TableFilterFunctions::Bind);
+	func.GetSignature().GetParameter(0).SetName("col");
 	func.SetInitStateCallback(SelectivityOptionalFilterInitLocalState);
 	func.SetSelectCallback(SelectivityOptionalFilterSelect);
 	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
@@ -172,7 +173,11 @@ FilterPropagateResult SelectivityOptionalFilterScalarFun::FilterPrune(const Func
 	if (!data.child_filter_expr) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	return ExpressionFilter::CheckExpressionStatistics(*data.child_filter_expr, input.stats);
+	auto column_stats = input.ChildStats(0);
+	if (!column_stats) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	return ExpressionFilter::CheckExpressionStatistics(*data.child_filter_expr, *column_stats);
 }
 
 string SelectivityOptionalFilterScalarFun::ToString(const string &child_filter_string) {

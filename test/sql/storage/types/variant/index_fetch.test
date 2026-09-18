@@ -12,7 +12,12 @@ SELECT v FROM tbl WHERE i=42;
 ----
 {'a': 42, 'b': 2}
 
-# Now test the same with a persistent db, checkpointed (shredded VARIANT)
+query I
+SELECT v['a']::INTEGER FROM tbl WHERE i=42;
+----
+42
+
+# Now test the same with a persistent DB. This row group stays unshredded because it is below the default threshold.
 
 statement ok
 ATTACH '{TEST_DIR}/variant_index_fetch.db' as db2 (STORAGE_VERSION 'v1.5.0');
@@ -33,6 +38,11 @@ query I
 SELECT v FROM tbl WHERE i=42;
 ----
 {'a': 42, 'b': 2}
+
+query I
+SELECT v['a']::INTEGER FROM tbl WHERE i=42;
+----
+42
 
 statement ok
 SET debug_force_fetch_row=true;

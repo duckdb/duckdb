@@ -90,10 +90,9 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 
 void RowGroupPruner::GetLimitAndOffset(const LogicalLimit &logical_limit, optional_idx &row_limit,
                                        optional_idx &row_offset) const {
+	// UNSET = no LIMIT = unbounded; leave row_limit invalid.
 	if (logical_limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE) {
 		row_limit = logical_limit.limit_val.GetConstantValue();
-	} else if (logical_limit.limit_val.Type() == LimitNodeType::UNSET) {
-		row_limit = 0;
 	}
 
 	if (logical_limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
@@ -133,7 +132,7 @@ optional_ptr<LogicalGet> RowGroupPruner::FindLogicalGet(const LogicalOrder &logi
 	auto &colref = primary_order.expression->Cast<BoundColumnRefExpression>();
 
 	JoinFilterPushdownColumn column;
-	column.probe_column_index = colref.binding;
+	column.probe_column_index = colref.Binding();
 	vector<JoinFilterPushdownColumn> columns {std::move(column)};
 	vector<PushdownFilterTarget> pushdown_targets;
 	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(*logical_order.children[0], std::move(columns),
@@ -144,6 +143,15 @@ optional_ptr<LogicalGet> RowGroupPruner::FindLogicalGet(const LogicalOrder &logi
 	}
 
 	D_ASSERT(pushdown_targets.size() == 1);
+	auto &pushed_column = pushdown_targets[0].columns[0];
+	if (pushed_column.mode != JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION ||
+	    RuntimeFilterCastUtil::RuntimeFilterUsesTryCast(pushed_column)) {
+		// the sort key reaches the scan through a cast chain that does not preserve the raw column's
+		// ordering (an explicit TRY_CAST, or a cast that can throw) - ordering row groups by the raw
+		// column statistics would be incorrect - bail out
+		return nullptr;
+	}
+
 	auto &logical_get = pushdown_targets.front().get;
 
 	if (!logical_get.function.set_scan_order) {

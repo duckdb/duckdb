@@ -16,7 +16,7 @@ struct DuckDBSecretTypesData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBSecretTypesBind(ClientContext &context, TableFunctionBindInput &input,
-                                                      vector<LogicalType> &return_types, vector<string> &names) {
+                                                      vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("type");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -64,7 +64,6 @@ void DuckDBSecretTypesFunction(ClientContext &context, TableFunctionInput &data_
 
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBSecretTypesFun::RegisterFunction(BuiltinFunctions &set) {

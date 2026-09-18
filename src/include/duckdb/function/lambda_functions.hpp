@@ -14,11 +14,19 @@
 #include "duckdb/execution/expression_executor.hpp"
 
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_lambda_expression.hpp"
 
 namespace duckdb {
 
-struct ListLambdaBindData final : public FunctionData {
+struct LambdaFunctionData : public FunctionData {
+	DUCKDB_API virtual optional_ptr<const Expression> GetLambdaExpression() const = 0;
+	//! Rebuilds the BoundLambdaExpression child from the bind data. Plans serialized before the lambda was
+	//! kept in the children do not contain it, so it has to be recovered when they are deserialized.
+	//! Returns nullptr if this bind data carries no lambda (e.g. a NULL list argument).
+	DUCKDB_API virtual unique_ptr<Expression> RecoverLambdaChild() const = 0;
+};
+
+struct ListLambdaBindData final : public LambdaFunctionData {
 public:
 	ListLambdaBindData(const LogicalType &return_type, unique_ptr<Expression> lambda_expr, const bool has_index = false,
 	                   const bool has_initial = false)
@@ -50,6 +58,22 @@ public:
 	                      const BoundScalarFunction &function);
 	//! Deserializes a lambda function's bind data
 	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunction &);
+
+	optional_ptr<const Expression> GetLambdaExpression() const override {
+		return lambda_expr.get();
+	}
+
+	//! Defined inline so that this class keeps emitting its vtable in every translation unit that uses it -
+	//! it is constructed both in core and in the core_functions extension
+	unique_ptr<Expression> RecoverLambdaChild() const override {
+		if (!lambda_expr) {
+			return nullptr;
+		}
+		// the parameter count is only read while binding, so recovering it approximately is good enough here
+		const idx_t parameter_count = has_index ? 2 : 1;
+		return make_uniq<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA, lambda_expr->Copy(),
+		                                        parameter_count);
+	}
 };
 
 class LambdaFunctions {
@@ -108,7 +132,7 @@ public:
 
 			// get the lambda expression
 			auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-			auto &bind_info = func_expr.bind_info->Cast<ListLambdaBindData>();
+			auto &bind_info = func_expr.BindInfo()->Cast<ListLambdaBindData>();
 			lambda_expr = bind_info.lambda_expr;
 			is_volatile = lambda_expr->IsVolatile();
 			has_index = bind_info.has_index;

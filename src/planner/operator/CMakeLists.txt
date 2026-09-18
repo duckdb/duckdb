@@ -37,11 +37,22 @@ add_library_unity(
   logical_recursive_cte.cpp
   logical_materialized_cte.cpp
   logical_sample.cpp
+  logical_secure_view.cpp
   logical_set.cpp
   logical_reset.cpp
   logical_set_operation.cpp
-  logical_simple.cpp
+  logical_alter.cpp
+  logical_attach.cpp
+  logical_connect.cpp
+  logical_external_resource.cpp
+  logical_detach.cpp
+  logical_disconnect.cpp
+  logical_drop.cpp
+  logical_load.cpp
+  logical_transaction.cpp
+  logical_update_extensions.cpp
   logical_top_n.cpp
+  logical_trigger.cpp
   logical_unconditional_join.cpp
   logical_unnest.cpp
   logical_update.cpp

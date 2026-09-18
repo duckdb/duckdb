@@ -1,0 +1,61 @@
+# name: test/sql/optimizer/test_not_comparison_simplification.test
+# description: Test NOT(comparison) simplification
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output = 'OPTIMIZED_ONLY';
+
+statement ok
+CREATE TABLE t AS SELECT * FROM (VALUES (1),(2),(3),(NULL)) v(a);
+
+query II
+EXPLAIN SELECT * FROM t WHERE NOT (a > 2);
+----
+logical_opt	<REGEX>:.*a <= 2.*
+
+query II
+EXPLAIN SELECT * FROM t WHERE NOT (a >= 2);
+----
+logical_opt	<REGEX>:.*a < 2.*
+
+query II
+EXPLAIN SELECT * FROM t WHERE NOT (a < 2);
+----
+logical_opt	<REGEX>:.*a >= 2.*
+
+query II
+EXPLAIN SELECT * FROM t WHERE NOT (a <= 2);
+----
+logical_opt	<REGEX>:.*a > 2.*
+
+query II
+EXPLAIN SELECT * FROM t WHERE NOT (a = 2);
+----
+logical_opt	<REGEX>:.*a != 2.*
+
+query II
+EXPLAIN SELECT * FROM t WHERE NOT (a != 2);
+----
+logical_opt	<REGEX>:.*a = 2.*
+
+query II
+EXPLAIN SELECT * FROM t WHERE NOT (a IS DISTINCT FROM 2);
+----
+logical_opt	<REGEX>:.*a IS NOT DISTINCT FROM 2.*
+
+query II
+EXPLAIN SELECT * FROM t WHERE NOT (a IS NOT DISTINCT FROM 2);
+----
+logical_opt	<REGEX>:.*a IS DISTINCT FROM 2.*
+
+query I rowsort
+SELECT * FROM t WHERE NOT (a > 2)
+----
+1
+2
+
+query I rowsort
+SELECT * FROM t WHERE NOT (a = 1) ORDER BY a
+----
+2
+3

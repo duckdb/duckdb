@@ -32,12 +32,14 @@ public:
 	            SelectionVector &sel, idx_t count) override;
 
 	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
-	void FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index, row_t row_id,
-	              Vector &result, idx_t result_idx) override;
+	void FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+	               const idx_t *offsets, const SelectionVector &sel, idx_t count, Vector &result,
+	               idx_t result_offset) override;
 
 	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) override;
 
-	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
+	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter,
+	                                   optional_ptr<SegmentNode<ColumnSegment>> &checked_segment) override;
 
 	void InitializeAppend(ColumnAppendState &state) override;
 	void Append(ColumnAppendState &state, const Vector &vector, idx_t count) override;

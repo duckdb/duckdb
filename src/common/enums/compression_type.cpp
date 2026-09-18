@@ -1,6 +1,7 @@
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
@@ -35,8 +36,12 @@ CompressionAvailabilityResult CompressionTypeIsAvailable(CompressionType compres
 	     {CompressionType::COMPRESSION_CHIMP, StorageVersion::INVALID, StorageVersion::V0_10_2}, // phased out
 	     {CompressionType::COMPRESSION_DICTIONARY, StorageVersion::V0_10_2, StorageVersion::V1_2_0},
 	     {CompressionType::COMPRESSION_FSST, StorageVersion::V0_10_2, StorageVersion::V1_2_0},
-	     // why was max storage version invalid for compression_dict_fsst?
-	     {CompressionType::COMPRESSION_DICT_FSST, StorageVersion::V1_3_0, StorageVersion::LATEST}});
+	     {CompressionType::COMPRESSION_ROARING, StorageVersion::V1_2_0, StorageVersion::LATEST},
+	     {CompressionType::COMPRESSION_ZSTD, StorageVersion::V1_2_0, StorageVersion::LATEST},
+	     {CompressionType::COMPRESSION_DICT_FSST, StorageVersion::V1_3_0, StorageVersion::LATEST},
+	     // Not implemented yet
+	     {CompressionType::COMPRESSION_PFOR_DELTA, (StorageVersion)((int)StorageVersion::LATEST + 1),
+	      StorageVersion::INVALID}});
 
 	StorageVersion current_storage_version = StorageVersion::INVALID;
 	if (storage_manager && storage_manager->HasStorageVersion()) {

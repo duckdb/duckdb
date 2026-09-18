@@ -16,37 +16,37 @@ struct WriteBlobBindData final : public TableFunctionData {
 	FileCompressionType compression_type = FileCompressionType::AUTO_DETECT;
 };
 
-string ParseStringOption(const Value &value, const string &loption) {
+string ParseStringOption(const Value &value, const Identifier &option_name) {
 	if (value.IsNull()) {
 		return string();
 	}
 	if (value.type().id() == LogicalTypeId::LIST) {
 		auto &children = ListValue::GetChildren(value);
 		if (children.size() != 1) {
-			throw BinderException("\"%s\" expects a single argument as a string value", loption);
+			throw BinderException("%s expects a single argument as a string value", option_name);
 		}
-		return ParseStringOption(children[0], loption);
+		return ParseStringOption(children[0], option_name);
 	}
 	if (value.type().id() != LogicalTypeId::VARCHAR) {
-		throw BinderException("\"%s\" expects a string argument!", loption);
+		throw BinderException("%s expects a string argument!", option_name);
 	}
 	return value.GetValue<string>();
 }
 
 unique_ptr<FunctionData> WriteBlobBind(ClientContext &context, CopyFunctionBindInput &input,
-                                       const vector<string> &names, const vector<LogicalType> &sql_types) {
+                                       const vector<Identifier> &names, const vector<LogicalType> &sql_types) {
 	if (sql_types.size() != 1 || sql_types.back().id() != LogicalTypeId::BLOB) {
 		throw BinderException("\"COPY (FORMAT BLOB)\" only supports a single BLOB column");
 	}
 
 	auto result = make_uniq<WriteBlobBindData>();
 
-	for (auto &lopt : input.info.options) {
-		if (StringUtil::CIEquals(lopt.first, "compression")) {
-			auto compression_str = ParseStringOption(lopt.second[0], lopt.first);
-			result->compression_type = FileCompressionTypeFromString(compression_str);
+	for (auto &[option_name, option_values] : input.info.options) {
+		if (option_name == "compression") {
+			auto compression_str = ParseStringOption(option_values[0], option_name);
+			result->compression_type = FileCompressionType(compression_str);
 		} else {
-			throw BinderException("Unrecognized option for COPY (FORMAT BLOB): \"%s\"", lopt.first);
+			throw BinderException("Unrecognized option for COPY (FORMAT BLOB): %s", SQLIdentifier(option_name));
 		}
 	}
 

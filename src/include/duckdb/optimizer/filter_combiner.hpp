@@ -18,6 +18,7 @@
 #include <map>
 
 namespace duckdb {
+class LogicalGet;
 class Optimizer;
 
 enum class ValueComparisonResult { PRUNE_LEFT, PRUNE_RIGHT, UNSATISFIABLE_CONDITION, PRUNE_NOTHING };
@@ -51,6 +52,8 @@ public:
 
 	void GenerateFilters(const std::function<void(unique_ptr<Expression> filter)> &callback);
 	bool HasFilters();
+	void GenerateEquivalentFilters(const Expression &filter,
+	                               const std::function<void(unique_ptr<Expression> filter)> &callback);
 	TableFilterSet GenerateTableScanFilters(const vector<ColumnIndex> &column_ids,
 	                                        vector<FilterPushdownResult> &pushdown_results);
 

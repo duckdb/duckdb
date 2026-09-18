@@ -1,0 +1,170 @@
+# name: test/sql/optimizer/sum_aggregate_stats_propagation.test
+# description: sum(x) output stats should be bounded by [cardinality * min(x), cardinality * max(x)]
+# group: [optimizer]
+
+# INT32 baseline: sum bounds fold impossible HAVING on both sides and preserve satisfiable ones
+statement ok
+CREATE TABLE t AS SELECT range::INTEGER AS x FROM range(10000);
+
+query II
+EXPLAIN SELECT sum(x) FROM t HAVING sum(x) < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT sum(x) AS s FROM t HAVING sum(x) < 0);
+----
+0
+
+query II
+EXPLAIN SELECT sum(x) FROM t HAVING sum(x) > 100000000;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT sum(x) AS s FROM t HAVING sum(x) > 100000000);
+----
+0
+
+query II
+EXPLAIN SELECT sum(x) FROM t HAVING sum(x) > 0;
+----
+physical_plan	<!REGEX>:.*Empty Result.*
+
+query I
+SELECT sum(x) FROM t HAVING sum(x) > 0;
+----
+49995000
+
+# BOOL input: sum(b) is bounded by [0, cardinality]
+statement ok
+CREATE TABLE tb AS SELECT (range % 3 = 0) AS b FROM range(10000);
+
+query II
+EXPLAIN SELECT sum(b) FROM tb HAVING sum(b) < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT sum(b) FROM tb HAVING sum(b) > 0;
+----
+3334
+
+# SMALLINT (INT16) input
+statement ok
+CREATE TABLE tsh AS SELECT (range % 100)::SMALLINT AS s FROM range(10000);
+
+query II
+EXPLAIN SELECT sum(s) FROM tsh HAVING sum(s) < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT sum(s) FROM tsh HAVING sum(s) > 0;
+----
+495000
+
+# negative-valued SMALLINT: sum bounds must flip direction
+statement ok
+CREATE TABLE tshn AS SELECT (-(range % 100))::SMALLINT AS s FROM range(10000);
+
+query II
+EXPLAIN SELECT sum(s) FROM tshn HAVING sum(s) > 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT sum(s) FROM tshn HAVING sum(s) < 0;
+----
+-495000
+
+# HUGEINT (INT128) input: overflow-checked bounds still fold impossible HAVING
+statement ok
+CREATE TABLE thh AS SELECT range::HUGEINT AS x FROM range(10000);
+
+query II
+EXPLAIN SELECT sum(x) FROM thh HAVING sum(x) < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT sum(x) FROM thh HAVING sum(x) > 0;
+----
+49995000
+
+# unsigned integer inputs reach the callback via an implicit widening cast:
+#   UTINYINT / USMALLINT / UINTEGER -> BIGINT  -> INT64 case
+#   UBIGINT                         -> HUGEINT -> INT128 case
+
+statement ok
+CREATE TABLE tu8  AS SELECT (range % 100)::UTINYINT  AS x FROM range(10000);
+
+statement ok
+CREATE TABLE tu16 AS SELECT (range % 100)::USMALLINT AS x FROM range(10000);
+
+statement ok
+CREATE TABLE tu32 AS SELECT (range % 100)::UINTEGER  AS x FROM range(10000);
+
+statement ok
+CREATE TABLE tu64 AS SELECT (range % 100)::UBIGINT   AS x FROM range(10000);
+
+query II
+EXPLAIN SELECT sum(x) FROM tu8  HAVING sum(x) < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query II
+EXPLAIN SELECT sum(x) FROM tu16 HAVING sum(x) < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query II
+EXPLAIN SELECT sum(x) FROM tu32 HAVING sum(x) < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query II
+EXPLAIN SELECT sum(x) FROM tu64 HAVING sum(x) < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT sum(x) FROM tu64 HAVING sum(x) > 0;
+----
+495000
+
+statement ok
+CREATE TABLE tallneg AS SELECT range::INTEGER AS g, (-1 - (range % 100))::INTEGER AS v FROM range(10000);
+
+query II
+EXPLAIN SELECT g FROM tallneg GROUP BY g HAVING sum(v) > -50;
+----
+physical_plan	<!REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT g FROM tallneg GROUP BY g HAVING sum(v) > -50);
+----
+4900
+
+query II
+EXPLAIN SELECT g FROM tallneg GROUP BY g HAVING sum(v) > 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+statement ok
+CREATE TABLE tallpos AS SELECT range::INTEGER AS g, (1 + (range % 100))::INTEGER AS v FROM range(10000);
+
+query II
+EXPLAIN SELECT g FROM tallpos GROUP BY g HAVING sum(v) < 50;
+----
+physical_plan	<!REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT g FROM tallpos GROUP BY g HAVING sum(v) < 50);
+----
+4900
+
+query II
+EXPLAIN SELECT g FROM tallpos GROUP BY g HAVING sum(v) < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*

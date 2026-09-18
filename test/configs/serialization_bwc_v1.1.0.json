@@ -129,8 +129,7 @@
       "reason": "Unknown failure (empty reason)",
       "paths": [
         "test/sql/copy/parquet/test_parquet_remote.test",
-        "test/sql/parallelism/intraquery/depth_first_evaluation_union_and_join.test",
-        "test/sql/types/enum/test_enum_to_numbers.test"
+        "test/sql/parallelism/intraquery/depth_first_evaluation_union_and_join.test"
       ]
     },
     {

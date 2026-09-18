@@ -29,7 +29,7 @@ struct SetseedBindData : public FunctionData {
 
 void SetSeedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<SetseedBindData>();
+	auto &info = func_expr.BindInfo()->Cast<SetseedBindData>();
 	auto &input = args.data[0];
 	input.Flatten();
 
@@ -56,7 +56,8 @@ unique_ptr<FunctionData> SetSeedBind(BindScalarFunctionInput &input) {
 } // namespace
 
 ScalarFunction SetseedFun::GetFunction() {
-	ScalarFunction setseed("setseed", {LogicalType::DOUBLE}, LogicalType::SQLNULL, SetSeedFunction, SetSeedBind);
+	ScalarFunction setseed("setseed", {}, LogicalType::SQLNULL, SetSeedFunction, SetSeedBind);
+	setseed.GetSignature().AddParameter("seed", LogicalType::DOUBLE);
 	setseed.SetVolatile();
 	setseed.SetFallible();
 	return setseed;

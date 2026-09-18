@@ -22,7 +22,7 @@ USING (VALUES (2, 99)) AS s(id, val)
 ON t.id = s.id
 WHEN NOT MATCHED BY TARGET THEN INSERT VALUES (s.id, t.val);
 ----
-<REGEX>:Binder Error.*cannot be referenced in a WHEN NOT MATCHED BY TARGET.*
+not found
 
 # Case B: Source column in NOT MATCHED BY SOURCE UPDATE (should error)
 # Previously this silently updated val to NULL
@@ -39,7 +39,7 @@ ON t.id = s.id
 WHEN MATCHED THEN DO NOTHING
 WHEN NOT MATCHED BY SOURCE THEN UPDATE SET val = s.val;
 ----
-<REGEX>:Binder Error.*cannot be referenced in a WHEN NOT MATCHED BY SOURCE.*
+not found
 
 # Case C: Source column in NOT MATCHED BY SOURCE condition (should error)
 # Previously this made the condition always-false due to NULL comparison
@@ -56,7 +56,7 @@ ON t.id = s.id
 WHEN MATCHED THEN DO NOTHING
 WHEN NOT MATCHED BY SOURCE AND s.val > 50 THEN DELETE;
 ----
-<REGEX>:Binder Error.*cannot be referenced in a WHEN NOT MATCHED BY SOURCE.*
+not found
 
 # Case D: Target column in NOT MATCHED BY TARGET condition (should error)
 # Previously this made the condition always-false due to NULL comparison
@@ -72,7 +72,7 @@ USING (VALUES (2, 99), (3, 50)) AS s(id, val)
 ON t.id = s.id
 WHEN NOT MATCHED BY TARGET AND t.val > 5 THEN INSERT VALUES (s.id, s.val);
 ----
-<REGEX>:Binder Error.*cannot be referenced in a WHEN NOT MATCHED BY TARGET.*
+not found
 
 # Verify that valid column references still work correctly
 

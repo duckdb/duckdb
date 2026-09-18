@@ -5,6 +5,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/main/secret/secret_storage.hpp"
 
 namespace duckdb {
 
@@ -14,6 +16,8 @@ MetaTransaction::MetaTransaction(ClientContext &context_p, timestamp_t start_tim
       transaction_validity(*context_p.db), active_query(MAXIMUM_QUERY_ID), modified_database(nullptr),
       is_read_only(false) {
 }
+
+MetaTransaction::~MetaTransaction() = default;
 
 MetaTransaction &MetaTransaction::Get(ClientContext &context) {
 	return context.transaction.ActiveTransaction();
@@ -54,6 +58,9 @@ optional_ptr<Transaction> MetaTransaction::TryGetTransaction(AttachedDatabase &d
 }
 
 Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
+	if (ValidChecker::IsInvalidated(db)) {
+		throw IOException("%s", ValidChecker::InvalidatedMessage(db));
+	}
 	lock_guard<mutex> guard(lock);
 	auto entry = transactions.find(db);
 	if (entry == transactions.end()) {
@@ -62,8 +69,12 @@ Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
 #ifdef DEBUG
 		VerifyAllTransactionsUnique(db, all_transactions);
 #endif
-		all_transactions.push_back(db);
+		// Rollback looks every entry of all_transactions up in transactions, so the two must not get out of sync:
+		// reserve first, then insert, so that a failing allocation happens before either is modified and the
+		// push_back that follows cannot allocate.
+		all_transactions.reserve(all_transactions.size() + 1);
 		transactions.insert(make_pair(reference<AttachedDatabase>(db), TransactionReference(new_transaction)));
+		all_transactions.push_back(db);
 		auto shared_db = db.shared_from_this();
 		UseDatabase(shared_db);
 
@@ -127,6 +138,10 @@ ErrorData MetaTransaction::Commit() {
 
 		auto &transaction_manager = db.GetTransactionManager();
 		auto &transaction_ref = entry->second;
+		if (ValidChecker::IsInvalidated(db)) {
+			error.Merge(ErrorData(IOException("%s", ValidChecker::InvalidatedMessage(db))));
+			continue;
+		}
 		if (transaction_ref.state != TransactionState::UNCOMMITTED) {
 			continue;
 		}
@@ -158,6 +173,10 @@ void MetaTransaction::Rollback() {
 		auto entry = transactions.find(db);
 		D_ASSERT(entry != transactions.end());
 		auto &transaction_ref = entry->second;
+		if (ValidChecker::IsInvalidated(db)) {
+			error.Merge(ErrorData(IOException("%s", ValidChecker::InvalidatedMessage(db))));
+			continue;
+		}
 		if (transaction_ref.state != TransactionState::UNCOMMITTED) {
 			continue;
 		}
@@ -188,13 +207,14 @@ idx_t MetaTransaction::GetActiveQuery() {
 }
 
 void MetaTransaction::SetActiveQuery(transaction_t query_number) {
+	lock_guard<mutex> guard(lock);
 	active_query = query_number;
 	for (auto &entry : transactions) {
 		entry.second.transaction.active_query = query_number;
 	}
 }
 
-optional_ptr<AttachedDatabase> MetaTransaction::GetReferencedDatabase(const string &name) {
+optional_ptr<AttachedDatabase> MetaTransaction::GetReferencedDatabase(const Identifier &name) {
 	lock_guard<mutex> guard(referenced_database_lock);
 	auto entry = used_databases.find(name);
 	if (entry != used_databases.end()) {
@@ -203,10 +223,10 @@ optional_ptr<AttachedDatabase> MetaTransaction::GetReferencedDatabase(const stri
 	return nullptr;
 }
 
-shared_ptr<AttachedDatabase> MetaTransaction::GetReferencedDatabaseOwning(const string &name) {
+shared_ptr<AttachedDatabase> MetaTransaction::GetReferencedDatabaseOwning(const Identifier &name) {
 	lock_guard<mutex> guard(referenced_database_lock);
 	for (auto &entry : referenced_databases) {
-		if (StringUtil::CIEquals(entry.first.get().name, name)) {
+		if (entry.first.get().name == name) {
 			return entry.second;
 		}
 	}
@@ -255,7 +275,7 @@ void MetaTransaction::ModifyDatabase(AttachedDatabase &db, DatabaseModificationT
 	}
 	if (&db != modified_database.get()) {
 		throw TransactionException(
-		    "Attempting to write to database \"%s\" in a transaction that has already modified database \"%s\" - a "
+		    "Attempting to write to database %s in a transaction that has already modified database %s - a "
 		    "single transaction can only write to a single attached database.",
 		    db.GetName(), modified_database->GetName());
 	}

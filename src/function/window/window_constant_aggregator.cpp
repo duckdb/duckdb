@@ -23,8 +23,6 @@ public:
 		statef.Destroy();
 	}
 
-	//! Partition starts
-	vector<idx_t> partition_offsets;
 	//! Reused result state container for the window functions
 	WindowAggregateStates statef;
 	//! Aggregate results
@@ -36,40 +34,13 @@ WindowConstantAggregatorGlobalState::WindowConstantAggregatorGlobalState(ClientC
                                                                          idx_t group_count,
                                                                          const ValidityMask &partition_mask)
     : WindowAggregatorGlobalState(client, aggregator, STANDARD_VECTOR_SIZE), statef(client, aggr) {
-	// Locate the partition boundaries
-	if (partition_mask.CannotHaveNull()) {
-		partition_offsets.emplace_back(0);
-	} else {
-		idx_t entry_idx;
-		idx_t shift;
-		for (idx_t start = 0; start < group_count;) {
-			partition_mask.GetEntryIndex(start, entry_idx, shift);
-
-			//	If start is aligned with the start of a block,
-			//	and the block is blank, then skip forward one block.
-			const auto block = partition_mask.GetValidityEntry(entry_idx);
-			if (partition_mask.NoneValid(block) && !shift) {
-				start += ValidityMask::BITS_PER_VALUE;
-				continue;
-			}
-
-			// Loop over the block
-			for (; shift < ValidityMask::BITS_PER_VALUE && start < group_count; ++shift, ++start) {
-				if (partition_mask.RowIsValid(block, shift)) {
-					partition_offsets.emplace_back(start);
-				}
-			}
-		}
-	}
+	BuildPartitionOffsets(group_count, partition_mask);
 
 	//	Initialise the vector for caching the results
-	results = make_uniq<Vector>(aggregator.result_type, partition_offsets.size());
+	results = make_uniq<Vector>(aggregator.result_type, partition_offsets.size() - 1);
 
 	//	Initialise the final states
-	statef.Initialize(partition_offsets.size());
-
-	// Add final guard
-	partition_offsets.emplace_back(group_count);
+	statef.Initialize(partition_offsets.size() - 1);
 }
 
 //===--------------------------------------------------------------------===//
@@ -124,27 +95,27 @@ WindowConstantAggregatorLocalState::WindowConstantAggregatorLocalState(
 // WindowConstantAggregator
 //===--------------------------------------------------------------------===//
 bool WindowConstantAggregator::CanAggregate(const BoundWindowExpression &wexpr) {
-	if (!wexpr.aggregate) {
+	if (!wexpr.AggregateFunction()) {
 		return false;
 	}
 
 	// The function must be able to be used as an aggregate
-	if (!wexpr.aggregate->CanAggregate()) {
+	if (!wexpr.AggregateFunction()->CanAggregate()) {
 		return false;
 	}
 
 	// window exclusion cannot be handled by constant aggregates
-	if (wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
+	if (wexpr.WindowExclude() != WindowExcludeMode::NO_OTHER) {
 		return false;
 	}
 
 	// 	DISTINCT aggregation cannot be handled by constant aggregation
-	if (wexpr.distinct) {
+	if (wexpr.Distinct()) {
 		return false;
 	}
 
 	//	COUNT(*) is already handled efficiently by segment trees.
-	if (wexpr.children.empty()) {
+	if (wexpr.GetChildren().empty()) {
 		return false;
 	}
 
@@ -165,11 +136,11 @@ bool WindowConstantAggregator::CanAggregate(const BoundWindowExpression &wexpr) 
 	    offset PRECEDING and offset FOLLOWING options vary in meaning
 	    depending on the frame mode.
 	*/
-	switch (wexpr.start) {
+	switch (wexpr.WindowStart()) {
 	case WindowBoundary::UNBOUNDED_PRECEDING:
 		break;
 	case WindowBoundary::CURRENT_ROW_RANGE:
-		if (!wexpr.orders.empty()) {
+		if (!wexpr.OrderBy().empty()) {
 			return false;
 		}
 		break;
@@ -177,11 +148,11 @@ bool WindowConstantAggregator::CanAggregate(const BoundWindowExpression &wexpr) 
 		return false;
 	}
 
-	switch (wexpr.end) {
+	switch (wexpr.WindowEnd()) {
 	case WindowBoundary::UNBOUNDED_FOLLOWING:
 		break;
 	case WindowBoundary::CURRENT_ROW_RANGE:
-		if (!wexpr.orders.empty()) {
+		if (!wexpr.OrderBy().empty()) {
 			return false;
 		}
 		break;
@@ -202,7 +173,7 @@ WindowConstantAggregator::WindowConstantAggregator(BoundWindowExpression &wexpr,
                                                    ClientContext &context)
     : WindowAggregator(RebindAggregate(context, wexpr)) {
 	// We only need these values for Sink
-	for (auto &child : wexpr.children) {
+	for (auto &child : wexpr.GetChildren()) {
 		child_idx.emplace_back(shared.RegisterSink(child));
 	}
 }
@@ -238,7 +209,7 @@ void WindowConstantAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 		payload_chunk.data[c].Reference(sink_chunk.data[child_idx[c]]);
 	}
 
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), statef.allocator);
+	AggregateInputData aggr_input_data(aggr, statef.allocator);
 	idx_t begin = 0;
 	idx_t filter_idx = 0;
 	auto partition_end = partition_offsets[partition + 1];
@@ -278,14 +249,15 @@ void WindowConstantAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 			}
 		} else {
 			//	Slice to [begin, end)
-			if (begin) {
+			if (begin == 0 && end == sink_chunk.size()) {
+				inputs.Reference(payload_chunk);
+			} else {
+				//	we cannot resize non-flat vectors (e.g. dictionary vectors), so we have to slice
 				for (idx_t c = 0; c < payload_chunk.ColumnCount(); ++c) {
 					inputs.data[c].Slice(payload_chunk.data[c], begin, end);
 				}
-			} else {
-				inputs.Reference(payload_chunk);
 			}
-			inputs.SetCardinality(end - begin);
+			inputs.SetChildCardinality(end - begin);
 		}
 
 		//	Aggregate the filtered rows into a single state

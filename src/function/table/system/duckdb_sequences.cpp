@@ -19,7 +19,7 @@ struct DuckDBSequencesData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBSequencesBind(ClientContext &context, TableFunctionBindInput &input,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
+                                                    vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("database_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -153,7 +153,6 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBSequencesFun::RegisterFunction(BuiltinFunctions &set) {

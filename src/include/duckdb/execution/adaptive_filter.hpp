@@ -10,17 +10,17 @@
 
 #include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/time_point.hpp"
 
 namespace duckdb {
 
 class Logger;
 
 struct AdaptiveFilterState {
-	time_point<high_resolution_clock> start_time;
+	TimePoint monotonic_start;
 };
 
 enum class AdaptiveFilterSource : uint8_t {

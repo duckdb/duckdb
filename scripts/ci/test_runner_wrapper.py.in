@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+import sys
+
+SOURCE_ROOT = r"@PROJECT_SOURCE_DIR@"
+if SOURCE_ROOT not in sys.path:
+    sys.path.insert(0, SOURCE_ROOT)
+
+from scripts.ci.test_runner_wrapper import main
+
+
+if __name__ == "__main__":
+    raise SystemExit(
+        main(sys.argv[1:], wrapper_path=__file__, source_root=SOURCE_ROOT, unittest_name="@RUN_WRAPPER_UNITTEST_NAME@")
+    )

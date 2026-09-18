@@ -1,0 +1,23 @@
+From 4223695711eaab383adc0c3cea8c14af7fb463a9 Mon Sep 17 00:00:00 2001
+From: Copilot <copilot@localhost>
+Date: Fri, 28 Aug 2026 13:12:34 +0200
+Subject: [PATCH 7/8] Use MSG_NOSIGNAL when available
+
+
+diff --git a/third_party/httplib/httplib.hpp b/third_party/httplib/httplib.hpp
+index e446393..27de210 100644
+--- a/third_party/httplib/httplib.hpp
++++ b/third_party/httplib/httplib.hpp
+@@ -195,8 +195,12 @@
+ #endif
+ 
+ #ifndef CPPHTTPLIB_SEND_FLAGS
++#ifdef MSG_NOSIGNAL
++#define CPPHTTPLIB_SEND_FLAGS MSG_NOSIGNAL
++#else
+ #define CPPHTTPLIB_SEND_FLAGS 0
+ #endif
++#endif
+ 
+ #ifndef CPPHTTPLIB_LISTEN_BACKLOG
+ #define CPPHTTPLIB_LISTEN_BACKLOG 128

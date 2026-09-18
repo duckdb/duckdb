@@ -2,36 +2,26 @@
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector/fsst_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
-#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/sequence_vector.hpp"
 #include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
-#include "duckdb/common/vector/union_vector.hpp"
-#include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
-
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/fsst.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/type_visitor.hpp"
-#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/common/types/value_map.hpp"
-#include "duckdb/common/types/bignum.hpp"
-#include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
-#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/storage/buffer/buffer_handle.hpp"
-#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/enums/debug_verification_mode.hpp"
+#include "duckdb/common/types/geometry.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -131,27 +121,79 @@ void Vector::ReferenceAndSetType(const Vector &other) {
 	Reference(other);
 }
 
+void CheckTypeIsReinterpretable(const LogicalType &a, const LogicalType &b) {
+	if (DBConfigOptions::global_verification_mode != DebugVerificationMode::VERIFY_VECTORS) {
+		return;
+	}
+	bool left_is_nested = a.IsNested();
+	bool right_is_nested = b.IsNested();
+	if (left_is_nested != right_is_nested) {
+		throw InternalException("Vector::Reinterpret (%s -> %s) - nested mismatch in reinterpret - either both need to "
+		                        "be nested or neither should be nested",
+		                        a, b);
+	}
+	auto left_internal = a.InternalType();
+	auto right_internal = b.InternalType();
+	if (!left_is_nested) {
+		// non-nested types - type size should be identical
+		if (GetTypeIdSize(left_internal) != GetTypeIdSize(right_internal)) {
+			throw InternalException(
+			    "Vector::Reinterpret (%s -> %s) - attempting to reinterpret between types with different type sizes", a,
+			    b);
+		}
+		return;
+	}
+	if (left_internal != right_internal) {
+		throw InternalException(
+		    "Vector::Reinterpret (%s -> %s) - attempting to reinterpret between different nested types", a, b);
+	}
+	// recurse into children
+	switch (left_internal) {
+	case PhysicalType::STRUCT: {
+		auto &left_child_types = StructType::GetChildTypes(a);
+		auto &right_child_types = StructType::GetChildTypes(b);
+		if (left_child_types.size() != right_child_types.size()) {
+			throw InternalException(
+			    "Vector::Reinterpret (%s -> %s) - attempting to reinterpret between struct types of different sizes", a,
+			    b);
+		}
+		for (idx_t child_idx = 0; child_idx < left_child_types.size(); ++child_idx) {
+			CheckTypeIsReinterpretable(left_child_types[child_idx].second, right_child_types[child_idx].second);
+		}
+		break;
+	}
+	case PhysicalType::LIST: {
+		auto &left_child_type = ListType::GetChildType(a);
+		auto &right_child_type = ListType::GetChildType(b);
+		CheckTypeIsReinterpretable(left_child_type, right_child_type);
+		break;
+	}
+	case PhysicalType::ARRAY: {
+		auto &left_child_type = ArrayType::GetChildType(a);
+		auto &right_child_type = ArrayType::GetChildType(b);
+		CheckTypeIsReinterpretable(left_child_type, right_child_type);
+		break;
+	}
+	default:
+		throw InternalException("Unsupported nested type in CheckTypeIsReinterpretable");
+	}
+}
+
 void Vector::Reinterpret(const Vector &other) {
 	auto &this_type = GetType();
 	auto &other_type = other.GetType();
-#ifdef DEBUG
-	auto type_is_same = other_type == this_type;
-	bool this_is_nested = this_type.IsNested();
-	bool other_is_nested = other_type.IsNested();
-
-	bool not_nested = this_is_nested == false && other_is_nested == false;
-	bool type_size_equal = GetTypeIdSize(this_type.InternalType()) == GetTypeIdSize(other_type.InternalType());
-	//! Either the types are completely identical, or they are not nested and their physical type size is the same
-	//! The reason nested types are not allowed is because copying the auxiliary buffer does not happen recursively
-	//! e.g DOUBLE[] to BIGINT[], the type of the LIST would say BIGINT but the child Vector says DOUBLE
-	D_ASSERT((not_nested && type_size_equal) || type_is_same);
-#endif
+	if (DBConfigOptions::global_verification_mode == DebugVerificationMode::VERIFY_VECTORS) {
+		CheckTypeIsReinterpretable(this_type, other_type);
+	}
 	ConstReference(other);
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR && other_type != this_type) {
 		Vector new_vector(this_type, nullptr);
 		new_vector.Reinterpret(DictionaryVector::Child(other));
 		auto &old_dict = buffer->Cast<DictionaryBuffer>();
 		auto new_entry = make_shared_ptr<DictionaryEntry>(std::move(new_vector));
+		// reinterpret re-mints the entry; the id and global flag are one contract and must survive together
+		new_entry->id = old_dict.GetEntry().id;
+		new_entry->global_dictionary = old_dict.GetEntry().global_dictionary;
 		buffer = make_buffer<DictionaryBuffer>(old_dict.GetSelVector(), old_dict.Capacity(), std::move(new_entry));
 	}
 }
@@ -315,9 +357,9 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 
 Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 	auto value = GetValueInternal(v_p, index_p);
-	// set the alias of the type to the correct value, if there is a type alias
+	// the value's type is reconstructed from the data - restore the source type so that the alias survives
 	if (v_p.GetType().HasAlias()) {
-		value.GetTypeMutable().CopyAuxInfo(v_p.GetType());
+		value = value.WithType(v_p.GetType());
 	}
 	if (v_p.GetType().id() != LogicalTypeId::LEGACY_AGGREGATE_STATE &&
 	    value.type().id() != LogicalTypeId::LEGACY_AGGREGATE_STATE) {
@@ -847,6 +889,18 @@ void Vector::SetVectorType(VectorType new_vector_type) {
 	}
 }
 
+void Vector::FlattenAndSetConstant() {
+	if (GetVectorType() != VectorType::FLAT_VECTOR && GetVectorType() != VectorType::CONSTANT_VECTOR) {
+		Flatten();
+	}
+	// Struct buffers propagate vector type changes to their children. A flat or constant struct vector can still
+	// contain non-flat descendants, e.g. after slicing a list of structs, so normalize only those descendants first.
+	if (GetType().InternalType() == PhysicalType::STRUCT) {
+		BufferMutable().Cast<VectorStructBuffer>().PrepareChildrenForSetConstant();
+	}
+	SetVectorType(VectorType::CONSTANT_VECTOR);
+}
+
 void Vector::Verify(idx_t) const {
 	Verify();
 }
@@ -919,6 +973,7 @@ void Vector::DebugTransformToDictionary(Vector &vector) {
 void Vector::DebugShuffleNestedVector(Vector &vector) {
 	const auto count = vector.size();
 	switch (vector.GetType().id()) {
+	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::STRUCT: {
 		auto &entries = StructVector::GetEntries(vector);
 		// recurse into child elements

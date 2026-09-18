@@ -32,28 +32,20 @@ struct SwitchFunctionBindData : FunctionData {
 	}
 };
 
-idx_t FindMapArgumentIndex(const vector<unique_ptr<Expression>> &arguments) {
-	for (idx_t i = 0; i < arguments.size(); i++) {
-		if (arguments[i]->GetReturnType().id() == LogicalTypeId::MAP) {
-			return i;
-		}
-	}
-	return DConstants::INVALID_INDEX;
-}
-
+//! Which argument holds the cases map is a property of the overload that was resolved, not of the
+//! argument types: a MAP-typed key argument makes the types ambiguous. Each variation binds its own index.
+template <idx_t MAP_INDEX>
 unique_ptr<FunctionData> SwitchBindReturnType(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &arguments = input.GetArguments();
-	auto map_index = FindMapArgumentIndex(arguments);
-	if (map_index == DConstants::INVALID_INDEX) {
-		throw BinderException("Switch: No map argument found");
-	}
+	constexpr idx_t map_index = MAP_INDEX;
+	D_ASSERT(map_index < arguments.size());
 	auto &cases = arguments[map_index];
 	if (cases->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		throw BinderException("SWITCH expected a constant map for the cases");
 	}
 	auto &func = cases->Cast<BoundFunctionExpression>();
-	if (func.function.GetName() != "map") {
+	if (func.Function().GetName() != "map" || !cases->IsFoldable()) {
 		throw BinderException("SWITCH expected a constant map for the cases");
 	}
 	auto map_value = ExpressionExecutor::EvaluateScalar(context, *cases);
@@ -66,13 +58,13 @@ void ExtractConstantExprFromList(unique_ptr<Expression> &expr, vector<unique_ptr
 		throw BinderException("Expected a function for the cases");
 	}
 	auto &list_function = expr->Cast<BoundFunctionExpression>();
-	if (list_function.function.GetName() != "list_value") {
+	if (list_function.Function().GetName() != "list_value") {
 		throw BinderException("Expected a list function");
 	}
-	if (list_function.children.empty()) {
+	if (list_function.GetChildren().empty()) {
 		throw BinderException("No values provided for SWITCH expression");
 	}
-	for (auto &list_child : list_function.children) {
+	for (auto &list_child : list_function.GetChildrenMutable()) {
 		if (list_child->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
 			throw NotImplementedException("Only constant expressions are supported for keys inside SWITCH");
 		}
@@ -96,26 +88,26 @@ unique_ptr<Expression> SwitchBindExpression(FunctionBindExpressionInput &input) 
 		default_expr = std::move(input.children[map_index + 1]);
 	}
 	unique_ptr<Expression> cases;
-	if (input.children[map_index]->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
-		cases = std::move(input.children[map_index]);
-	} else if (input.children[map_index]->GetExpressionClass() == ExpressionClass::BOUND_CAST) {
-		auto &cast_expr = input.children[map_index]->Cast<BoundCastExpression>();
-		if (cast_expr.child->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+	if (BoundCastExpression::IsCast(*input.children[map_index])) {
+		auto &cast_expr = input.children[map_index]->Cast<BoundFunctionExpression>();
+		if (BoundCastExpression::Child(cast_expr).GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 			throw BinderException("SWITCH expected a map function for the cases");
 		}
-		cases = std::move(cast_expr.child);
+		cases = std::move(BoundCastExpression::ChildMutable(cast_expr));
+	} else if (input.children[map_index]->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		cases = std::move(input.children[map_index]);
 	} else {
 		throw BinderException("SWITCH expected a map function for the cases");
 	}
 	auto &cases_func = cases->Cast<BoundFunctionExpression>();
-	D_ASSERT(cases_func.children.size() == 2);
+	D_ASSERT(cases_func.GetChildren().size() == 2);
 
 	vector<unique_ptr<Expression>> keys_unpacked;
 	vector<unique_ptr<Expression>> values_unpacked;
-	ExtractConstantExprFromList(cases_func.children[0], keys_unpacked);
-	ExtractConstantExprFromList(cases_func.children[1], values_unpacked);
+	ExtractConstantExprFromList(cases_func.GetChildrenMutable()[0], keys_unpacked);
+	ExtractConstantExprFromList(cases_func.GetChildrenMutable()[1], values_unpacked);
 
-	result->case_checks.reserve(keys_unpacked.size());
+	result->CaseChecksMutable().reserve(keys_unpacked.size());
 	for (idx_t i = 0; i < keys_unpacked.size(); i++) {
 		BoundCaseCheck case_check;
 		if (base_expr) {
@@ -136,12 +128,12 @@ unique_ptr<Expression> SwitchBindExpression(FunctionBindExpressionInput &input) 
 			    function_data.return_type.ToString(), then_type.ToString());
 		}
 		case_check.then_expr = std::move(values_unpacked[i]);
-		result->case_checks.push_back(std::move(case_check));
+		result->CaseChecksMutable().push_back(std::move(case_check));
 	}
 	if (default_expr) {
-		result->else_expr = std::move(default_expr);
+		result->ElseMutable() = std::move(default_expr);
 	} else {
-		result->else_expr = BoundCastExpression::AddCastToType(
+		result->ElseMutable() = BoundCastExpression::AddCastToType(
 		    input.context, make_uniq<BoundConstantExpression>(Value()), function_data.return_type);
 	}
 	return std::move(result);
@@ -154,13 +146,19 @@ ScalarFunctionSet SwitchFun::GetFunctions() {
 	auto val_type = LogicalType::TEMPLATE("V");
 	ScalarFunctionSet func_set;
 
-	vector<vector<LogicalType>> function_variations = {{key_type, LogicalType::MAP(key_type, val_type)},
-	                                                   {key_type, LogicalType::MAP(key_type, val_type), val_type},
-	                                                   {LogicalType::MAP(key_type, val_type), val_type},
-	                                                   {LogicalType::MAP(key_type, val_type)}};
+	// each variation is paired with the bind function matching the position of its MAP(K, V) parameter
+	vector<pair<vector<pair<Identifier, LogicalType>>, bind_scalar_function_t>> function_variations = {
+	    {{{"key", key_type}, {"map", LogicalType::MAP(key_type, val_type)}}, SwitchBindReturnType<1>},
+	    {{{"key", key_type}, {"map", LogicalType::MAP(key_type, val_type)}, {"value", val_type}},
+	     SwitchBindReturnType<1>},
+	    {{{"map", LogicalType::MAP(key_type, val_type)}, {"value", val_type}}, SwitchBindReturnType<0>},
+	    {{{"map", LogicalType::MAP(key_type, val_type)}}, SwitchBindReturnType<0>}};
 
 	for (const auto &variation : function_variations) {
-		auto switch_expression = ScalarFunction(variation, val_type, nullptr, SwitchBindReturnType, nullptr);
+		auto switch_expression = ScalarFunction(vector<LogicalType> {}, val_type, nullptr, variation.second, nullptr);
+		for (const auto &param : variation.first) {
+			switch_expression.GetSignature().AddParameter(param.first, param.second);
+		}
 		switch_expression.SetBindExpressionCallback(SwitchBindExpression);
 		func_set.AddFunction(std::move(switch_expression));
 	}

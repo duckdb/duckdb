@@ -3,6 +3,9 @@
 # group: [pushdown]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 CREATE TABLE t0(c0 INT, c1 BOOLEAN);
 
 statement ok

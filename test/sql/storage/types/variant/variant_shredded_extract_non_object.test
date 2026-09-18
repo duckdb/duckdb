@@ -1,0 +1,33 @@
+# name: test/sql/storage/types/variant/variant_shredded_extract_non_object.test
+# group: [variant]
+
+load {TEST_DIR}/variant_struct_checkpoint.db readwrite v2.0.0
+
+statement ok
+set variant_minimum_shredding_size = 0;
+
+statement ok
+create table t(
+	col struct(
+		f1 integer,
+		f2 VARIANT
+	)
+);
+
+statement ok
+insert into t select {
+	'f1': 1
+};
+
+restart
+
+statement ok
+checkpoint;
+
+# f2 is shredded on NULL (integer), it's not an OBJECT(a), can't extract
+query I
+select
+	col.f2.a::integer
+from t;
+----
+NULL

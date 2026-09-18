@@ -17,9 +17,9 @@ HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNo
 }
 
 BindResult HavingBinder::BindLambdaReference(LambdaRefExpression &expr, idx_t depth) {
-	D_ASSERT(lambda_bindings && expr.lambda_idx < lambda_bindings->size());
+	D_ASSERT(lambda_bindings && expr.LambdaIndex() < lambda_bindings->size());
 	auto &lambda_ref = expr.Cast<LambdaRefExpression>();
-	return (*lambda_bindings)[expr.lambda_idx].Bind(lambda_ref, depth);
+	return (*lambda_bindings)[expr.LambdaIndex()].Bind(lambda_ref, depth);
 }
 
 BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
@@ -51,8 +51,12 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 	}
 
 	if (aggregate_handling != AggregateHandling::FORCE_AGGREGATES) {
-		return BindResult(StringUtil::Format(
-		    "column %s must appear in the GROUP BY clause or be used in an aggregate function", column_name));
+		// the name is not a group of this query, but it may belong to an enclosing one
+		ErrorData local_error(
+		    ExceptionType::BINDER,
+		    StringUtil::Format("column %s must appear in the GROUP BY clause or be used in an aggregate function",
+		                       column_name));
+		return BindInEnclosingScope(expr_ptr->Cast<ColumnRefExpression>(), depth, expr_ptr, std::move(local_error));
 	}
 
 	if (depth > 0) {
@@ -77,10 +81,18 @@ BindResult HavingBinder::BindWindowExpression(WindowExpression &expr, idx_t dept
 	throw BinderException::Unsupported(expr, "HAVING clause cannot contain window functions!");
 }
 
+unique_ptr<ColumnQualifier> HavingBinder::CreateColumnQualifier() {
+	return make_uniq<ColumnQualifier>(binder, lambda_bindings, nullptr, *this);
+}
+
 void ExpressionBinder::QualifyColumnNames(HavingBinder &having_binder, unique_ptr<ParsedExpression> &expr) {
 	ColumnQualifier qualifier(having_binder.binder, having_binder.lambda_bindings, nullptr, having_binder);
-	vector<unordered_set<string>> lambda_params;
+	vector<identifier_set_t> lambda_params;
 	qualifier.QualifyColumnNames(expr, lambda_params);
+}
+
+bool HavingBinder::ClaimsAlias(ColumnRefExpression &colref) {
+	return column_alias_binder.DoesColumnAliasExist(colref);
 }
 
 } // namespace duckdb

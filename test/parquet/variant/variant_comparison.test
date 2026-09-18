@@ -17,20 +17,43 @@ insert into tbl select * from (VALUES
 	((100.5::decimal(5,1))::VARIANT)
 ) t(col)
 
-statement error
-select col from tbl where col > 100
+# VARIANT comparison uses a total, type-first sort-key order (via variant_comparator) instead of
+# throwing on incompatible types. Integers, decimals and bignums fold into one NUMBER rank and
+# compare by numeric value; FLOAT/DOUBLE fold into REAL; the remaining types order by type rank
+# first, value second. Here the VARCHAR values rank above NUMBER, so they sort after 100.5.
+query I
+select col from tbl where col > 100 order by col
 ----
-Invalid Input Error: Can't compare values of type VARCHAR (test) and type INTEGER (100) - an explicit cast is required
+100.5
+1
+101
+99
+test
 
+# col > 0 : the NUMBER fold compares decimals and integers by numeric value
 query I
 select col from tbl where variant_typeof(col) != 'VARCHAR' and col > 0
 ----
 100.5
 
+# the NUMBER fold makes -123 (stored as BIGINT) compare equal to the INTEGER literal -123
 query I
 select col from tbl where variant_typeof(col) != 'VARCHAR' and col == -123
 ----
 -123
+
+# regression: a VARIANT comparison in a WHERE clause is subject to filter pushdown, which copies the
+# cast-to-VARIANT bind data - this must not re-shred the (already shredded) cast target type
+query I
+select * from range(-10, 10) t(i) where i::variant = -10 order by all
+----
+-10
+
+query I
+select i from range(-3, 3) t(i) where i::variant > 0 order by i::variant
+----
+1
+2
 
 statement ok
 delete from tbl;
@@ -41,10 +64,13 @@ insert into tbl select * from (VALUES
 	([1::VARIANT, 2, {'this is a long string': 'test'}])
 )
 
-statement error
-select col, col > 100 from tbl
+# OBJECT and ARRAY have their own ranks (above all scalar types), so comparing them to an
+# integer no longer errors - they simply sort above it
+query I
+select col > 100 from tbl
 ----
-Invalid Input Error: Can't compare values of type STRUCT(a INTEGER, b INTEGER) ({'a': 21, 'b': 42}) and type INTEGER (100) - an explicit cast is required
+true
+true
 
 query I
 select col.a > 100 from tbl

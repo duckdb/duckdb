@@ -70,92 +70,84 @@ ConstChildrenView ParsedExpression::Children() const {
 	}
 	case ExpressionClass::COMPARISON: {
 		auto &cast_expr = Cast<ComparisonExpression>();
-		if (cast_expr.left) {
-			result.Append(*cast_expr.left);
-		}
-		if (cast_expr.right) {
-			result.Append(*cast_expr.right);
-		}
+		result.Append(cast_expr.Left());
+		result.Append(cast_expr.Right());
 		break;
 	}
 	case ExpressionClass::CONJUNCTION: {
 		auto &cast_expr = Cast<ConjunctionExpression>();
-		for (auto &child : cast_expr.children) {
+		for (auto &child : cast_expr.GetChildren()) {
 			result.Append(*child);
 		}
 		break;
 	}
 	case ExpressionClass::FUNCTION: {
 		auto &cast_expr = Cast<FunctionExpression>();
-		for (auto &child : cast_expr.children) {
-			result.Append(*child);
+		if (cast_expr.Filter()) {
+			result.Append(*cast_expr.Filter());
 		}
-		if (cast_expr.filter) {
-			result.Append(*cast_expr.filter);
-		}
-		if (cast_expr.order_bys) {
-			for (auto &order : cast_expr.order_bys->orders) {
+		if (cast_expr.OrderBy()) {
+			for (auto &order : cast_expr.OrderBy()->orders) {
 				result.Append(*order.expression);
 			}
+		}
+		for (auto &arg : cast_expr.GetArguments()) {
+			result.Append(arg.GetExpression());
 		}
 		break;
 	}
 	case ExpressionClass::LAMBDA: {
 		auto &cast_expr = Cast<LambdaExpression>();
-		if (cast_expr.lhs) {
-			result.Append(*cast_expr.lhs);
-		}
-		if (cast_expr.expr) {
-			result.Append(*cast_expr.expr);
-		}
+		result.Append(cast_expr.Left());
+		result.Append(cast_expr.Right());
 		break;
 	}
 	case ExpressionClass::OPERATOR: {
 		auto &cast_expr = Cast<OperatorExpression>();
-		for (auto &child : cast_expr.children) {
+		for (auto &child : cast_expr.GetChildren()) {
 			result.Append(*child);
 		}
 		break;
 	}
 	case ExpressionClass::STAR: {
 		auto &cast_expr = Cast<StarExpression>();
-		for (auto &item : cast_expr.replace_list) {
+		for (auto &item : cast_expr.ReplaceList()) {
 			result.Append(*item.second);
 		}
-		if (cast_expr.expr) {
-			result.Append(*cast_expr.expr);
+		if (cast_expr.Expression()) {
+			result.Append(*cast_expr.Expression());
 		}
 		break;
 	}
 	case ExpressionClass::SUBQUERY: {
 		auto &cast_expr = Cast<SubqueryExpression>();
-		if (cast_expr.child) {
-			result.Append(*cast_expr.child);
+		if (cast_expr.GetChild()) {
+			result.Append(*cast_expr.GetChild());
 		}
 		break;
 	}
 	case ExpressionClass::WINDOW: {
 		auto &cast_expr = Cast<WindowExpression>();
-		for (auto &child : cast_expr.children) {
+		for (auto &child : cast_expr.Partitions()) {
 			result.Append(*child);
 		}
-		for (auto &child : cast_expr.partitions) {
-			result.Append(*child);
-		}
-		for (auto &order : cast_expr.orders) {
+		for (auto &order : cast_expr.OrderBy()) {
 			result.Append(*order.expression);
 		}
-		if (cast_expr.start_expr) {
-			result.Append(*cast_expr.start_expr);
+		if (cast_expr.StartExpr()) {
+			result.Append(*cast_expr.StartExpr());
 		}
-		if (cast_expr.end_expr) {
-			result.Append(*cast_expr.end_expr);
+		if (cast_expr.EndExpr()) {
+			result.Append(*cast_expr.EndExpr());
 		}
-		if (cast_expr.filter_expr) {
-			result.Append(*cast_expr.filter_expr);
+		if (cast_expr.Filter()) {
+			result.Append(*cast_expr.Filter());
 		}
-		for (auto &order : cast_expr.arg_orders) {
+		for (auto &order : cast_expr.ArgOrders()) {
 			result.Append(*order.expression);
+		}
+		for (auto &arg : cast_expr.GetArguments()) {
+			result.Append(arg.GetExpression());
 		}
 		break;
 	}
@@ -166,7 +158,31 @@ ConstChildrenView ParsedExpression::Children() const {
 		}
 		break;
 	}
-	case ExpressionClass::BOUND_EXPRESSION:
+	case ExpressionClass::PATTERN: {
+		switch (GetExpressionType()) {
+		case ExpressionType::ALTERNATION: {
+			auto &cast_expr = Cast<AlternationExpression>();
+			result.Append(*cast_expr.child_left);
+			result.Append(*cast_expr.child_right);
+			break;
+		}
+		case ExpressionType::CONCATENATION:
+			for (auto &child : Cast<ConcatenationExpression>().children) {
+				result.Append(*child);
+			}
+			break;
+		case ExpressionType::QUANTIFIER:
+			result.Append(*Cast<QuantifiedExpression>().child);
+			break;
+		case ExpressionType::ANCHOR:
+			// an anchor takes no row and has nothing under it
+			break;
+		default:
+			throw NotImplementedException("Unimplemented pattern expression type %s",
+			                              ExpressionTypeToString(GetExpressionType()));
+		}
+		break;
+	}
 	case ExpressionClass::COLUMN_REF:
 	case ExpressionClass::LAMBDA_REF:
 	case ExpressionClass::CONSTANT:
@@ -212,92 +228,84 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 	}
 	case ExpressionClass::COMPARISON: {
 		auto &cast_expr = Cast<ComparisonExpression>();
-		if (cast_expr.left) {
-			result.Append(cast_expr.left);
-		}
-		if (cast_expr.right) {
-			result.Append(cast_expr.right);
-		}
+		result.Append(cast_expr.LeftMutable());
+		result.Append(cast_expr.RightMutable());
 		break;
 	}
 	case ExpressionClass::CONJUNCTION: {
 		auto &cast_expr = Cast<ConjunctionExpression>();
-		for (auto &child : cast_expr.children) {
+		for (auto &child : cast_expr.GetChildrenMutable()) {
 			result.Append(child);
 		}
 		break;
 	}
 	case ExpressionClass::FUNCTION: {
 		auto &cast_expr = Cast<FunctionExpression>();
-		for (auto &child : cast_expr.children) {
-			result.Append(child);
+		if (cast_expr.FilterMutable()) {
+			result.Append(cast_expr.FilterMutable());
 		}
-		if (cast_expr.filter) {
-			result.Append(cast_expr.filter);
-		}
-		if (cast_expr.order_bys) {
-			for (auto &order : cast_expr.order_bys->orders) {
+		if (cast_expr.OrderByMutable()) {
+			for (auto &order : cast_expr.OrderByMutable()->orders) {
 				result.Append(order.expression);
 			}
+		}
+		for (auto &arg : cast_expr.GetArgumentsMutable()) {
+			result.Append(arg.GetExpressionMutable());
 		}
 		break;
 	}
 	case ExpressionClass::LAMBDA: {
 		auto &cast_expr = Cast<LambdaExpression>();
-		if (cast_expr.lhs) {
-			result.Append(cast_expr.lhs);
-		}
-		if (cast_expr.expr) {
-			result.Append(cast_expr.expr);
-		}
+		result.Append(cast_expr.LeftMutable());
+		result.Append(cast_expr.RightMutable());
 		break;
 	}
 	case ExpressionClass::OPERATOR: {
 		auto &cast_expr = Cast<OperatorExpression>();
-		for (auto &child : cast_expr.children) {
+		for (auto &child : cast_expr.GetChildrenMutable()) {
 			result.Append(child);
 		}
 		break;
 	}
 	case ExpressionClass::STAR: {
 		auto &cast_expr = Cast<StarExpression>();
-		for (auto &item : cast_expr.replace_list) {
+		for (auto &item : cast_expr.ReplaceListMutable()) {
 			result.Append(item.second);
 		}
-		if (cast_expr.expr) {
-			result.Append(cast_expr.expr);
+		if (cast_expr.ExpressionMutable()) {
+			result.Append(cast_expr.ExpressionMutable());
 		}
 		break;
 	}
 	case ExpressionClass::SUBQUERY: {
 		auto &cast_expr = Cast<SubqueryExpression>();
-		if (cast_expr.child) {
-			result.Append(cast_expr.child);
+		if (cast_expr.GetChildMutable()) {
+			result.Append(cast_expr.GetChildMutable());
 		}
 		break;
 	}
 	case ExpressionClass::WINDOW: {
 		auto &cast_expr = Cast<WindowExpression>();
-		for (auto &child : cast_expr.children) {
+		for (auto &child : cast_expr.PartitionsMutable()) {
 			result.Append(child);
 		}
-		for (auto &child : cast_expr.partitions) {
-			result.Append(child);
-		}
-		for (auto &order : cast_expr.orders) {
+		for (auto &order : cast_expr.OrderByMutable()) {
 			result.Append(order.expression);
 		}
-		if (cast_expr.start_expr) {
-			result.Append(cast_expr.start_expr);
+		if (cast_expr.StartExprMutable()) {
+			result.Append(cast_expr.StartExprMutable());
 		}
-		if (cast_expr.end_expr) {
-			result.Append(cast_expr.end_expr);
+		if (cast_expr.EndExprMutable()) {
+			result.Append(cast_expr.EndExprMutable());
 		}
-		if (cast_expr.filter_expr) {
-			result.Append(cast_expr.filter_expr);
+		if (cast_expr.FilterMutable()) {
+			result.Append(cast_expr.FilterMutable());
 		}
-		for (auto &order : cast_expr.arg_orders) {
+		for (auto &order : cast_expr.ArgOrdersMutable()) {
 			result.Append(order.expression);
+		}
+		for (auto &arg : cast_expr.GetArgumentsMutable()) {
+			result.Append(arg.GetExpressionMutable());
 		}
 		break;
 	}
@@ -308,7 +316,31 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 		}
 		break;
 	}
-	case ExpressionClass::BOUND_EXPRESSION:
+	case ExpressionClass::PATTERN: {
+		switch (GetExpressionType()) {
+		case ExpressionType::ALTERNATION: {
+			auto &cast_expr = Cast<AlternationExpression>();
+			result.Append(cast_expr.child_left);
+			result.Append(cast_expr.child_right);
+			break;
+		}
+		case ExpressionType::CONCATENATION:
+			for (auto &child : Cast<ConcatenationExpression>().children) {
+				result.Append(child);
+			}
+			break;
+		case ExpressionType::QUANTIFIER:
+			result.Append(Cast<QuantifiedExpression>().child);
+			break;
+		case ExpressionType::ANCHOR:
+			// an anchor takes no row and has nothing under it
+			break;
+		default:
+			throw NotImplementedException("Unimplemented pattern expression type %s",
+			                              ExpressionTypeToString(GetExpressionType()));
+		}
+		break;
+	}
 	case ExpressionClass::COLUMN_REF:
 	case ExpressionClass::LAMBDA_REF:
 	case ExpressionClass::CONSTANT:
@@ -328,6 +360,7 @@ void ParsedExpression::CopyBase(const ParsedExpression &other) {
 	type = other.type;
 	alias = other.alias;
 	query_location = other.query_location;
+	query_location.length = other.query_location.length;
 }
 
 bool BetweenExpression::Equals(const ParsedExpression &other) const {
@@ -401,7 +434,10 @@ bool CastExpression::Equals(const ParsedExpression &other) const {
 	if (!ParsedExpression::Equals(child, other_p.child)) {
 		return false;
 	}
-	if (cast_type != other_p.cast_type) {
+	if (static_cast<bool>(cast_type) != static_cast<bool>(other_p.cast_type)) {
+		return false;
+	}
+	if (cast_type && !cast_type->Equals(*other_p.cast_type)) {
 		return false;
 	}
 	if (try_cast != other_p.try_cast) {
@@ -412,7 +448,7 @@ bool CastExpression::Equals(const ParsedExpression &other) const {
 
 hash_t CastExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, cast_type.Hash());
+	hash = CombineHash(hash, cast_type ? cast_type->Hash() : 0);
 	hash = CombineHash(hash, duckdb::Hash<bool>(try_cast));
 	return hash;
 }
@@ -420,7 +456,7 @@ hash_t CastExpression::Hash() const {
 unique_ptr<ParsedExpression> CastExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<CastExpression>(new CastExpression());
 	copy->child = child ? child->Copy() : nullptr;
-	copy->cast_type = cast_type;
+	copy->cast_type = cast_type ? unique_ptr_cast<ParsedExpression, TypeExpression>(cast_type->Copy()) : nullptr;
 	copy->try_cast = try_cast;
 	copy->CopyBase(*this);
 	return std::move(copy);
@@ -463,7 +499,7 @@ bool ColumnRefExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	for (idx_t i = 0; i < column_names.size(); i++) {
-		if (!StringUtil::CIEquals(column_names[i], other_p.column_names[i])) {
+		if (column_names[i] != other_p.column_names[i]) {
 			return false;
 		}
 	}
@@ -473,7 +509,7 @@ bool ColumnRefExpression::Equals(const ParsedExpression &other) const {
 hash_t ColumnRefExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
 	for (auto &s : column_names) {
-		hash = CombineHash(hash, StringUtil::CIHash(s));
+		hash = CombineHash(hash, s.Hash());
 	}
 	return hash;
 }
@@ -493,7 +529,7 @@ bool LambdaRefExpression::Equals(const ParsedExpression &other) const {
 	if (lambda_idx != other_p.lambda_idx) {
 		return false;
 	}
-	if (!StringUtil::CIEquals(column_name, other_p.column_name)) {
+	if (column_name != other_p.column_name) {
 		return false;
 	}
 	return true;
@@ -502,7 +538,7 @@ bool LambdaRefExpression::Equals(const ParsedExpression &other) const {
 hash_t LambdaRefExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
 	hash = CombineHash(hash, duckdb::Hash<uint64_t>(lambda_idx));
-	hash = CombineHash(hash, StringUtil::CIHash(column_name));
+	hash = CombineHash(hash, column_name.Hash());
 	return hash;
 }
 
@@ -559,7 +595,7 @@ bool ConstantExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	auto &other_p = other.Cast<ConstantExpression>();
-	if (value.type() != other_p.value.type() || ValueOperations::DistinctFrom(value, other_p.value)) {
+	if (literal != other_p.literal) {
 		return false;
 	}
 	return true;
@@ -567,13 +603,13 @@ bool ConstantExpression::Equals(const ParsedExpression &other) const {
 
 hash_t ConstantExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, value.Hash());
+	hash = CombineHash(hash, literal.Hash());
 	return hash;
 }
 
 unique_ptr<ParsedExpression> ConstantExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<ConstantExpression>(new ConstantExpression());
-	copy->value = value;
+	copy->literal = literal;
 	copy->CopyBase(*this);
 	return std::move(copy);
 }
@@ -597,13 +633,7 @@ bool FunctionExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	auto &other_p = other.Cast<FunctionExpression>();
-	if (function_name != other_p.function_name) {
-		return false;
-	}
-	if (schema != other_p.schema) {
-		return false;
-	}
-	if (!ParsedExpression::ListEquals(children, other_p.children)) {
+	if (qualified_name != other_p.qualified_name) {
 		return false;
 	}
 	if (!ParsedExpression::Equals(filter, other_p.filter)) {
@@ -618,35 +648,37 @@ bool FunctionExpression::Equals(const ParsedExpression &other) const {
 	if (export_state != other_p.export_state) {
 		return false;
 	}
-	if (catalog != other_p.catalog) {
+	if (arguments.size() != other_p.arguments.size()) {
 		return false;
+	}
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		if (!arguments[i].Equals(other_p.arguments[i])) {
+			return false;
+		}
 	}
 	return true;
 }
 
 hash_t FunctionExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, duckdb::Hash<const char *>(function_name.c_str()));
-	hash = CombineHash(hash, duckdb::Hash<const char *>(schema.c_str()));
+	hash = CombineHash(hash, qualified_name.Hash());
 	hash = CombineHash(hash, duckdb::Hash<bool>(distinct));
 	hash = CombineHash(hash, duckdb::Hash<bool>(export_state));
-	hash = CombineHash(hash, duckdb::Hash<const char *>(catalog.c_str()));
 	return hash;
 }
 
 unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<FunctionExpression>(new FunctionExpression());
-	copy->function_name = function_name;
-	copy->schema = schema;
-	for (auto &child : children) {
-		copy->children.push_back(child->Copy());
-	}
+	copy->is_legacy_function_call = is_legacy_function_call;
+	copy->qualified_name = qualified_name;
 	copy->filter = filter ? filter->Copy() : nullptr;
 	copy->order_bys = order_bys ? unique_ptr_cast<ResultModifier, OrderModifier>(order_bys->Copy()) : nullptr;
 	copy->distinct = distinct;
 	copy->is_operator = is_operator;
 	copy->export_state = export_state;
-	copy->catalog = catalog;
+	for (auto &arg : arguments) {
+		copy->arguments.emplace_back(arg.Copy());
+	}
 	copy->CopyBase(*this);
 	return std::move(copy);
 }
@@ -701,7 +733,7 @@ bool ParameterExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	auto &other_p = other.Cast<ParameterExpression>();
-	if (!StringUtil::CIEquals(identifier, other_p.identifier)) {
+	if (identifier != other_p.identifier) {
 		return false;
 	}
 	return true;
@@ -709,7 +741,7 @@ bool ParameterExpression::Equals(const ParsedExpression &other) const {
 
 hash_t ParameterExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, StringUtil::CIHash(identifier));
+	hash = CombineHash(hash, identifier.Hash());
 	return hash;
 }
 
@@ -781,7 +813,7 @@ bool StarExpression::Equals(const ParsedExpression &other) const {
 
 hash_t StarExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, duckdb::Hash<const char *>(relation_name.c_str()));
+	hash = CombineHash(hash, relation_name.Hash());
 	hash = CombineHash(hash, duckdb::Hash<bool>(columns));
 	return hash;
 }
@@ -842,16 +874,7 @@ bool WindowExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	auto &other_p = other.Cast<WindowExpression>();
-	if (function_name != other_p.function_name) {
-		return false;
-	}
-	if (schema != other_p.schema) {
-		return false;
-	}
-	if (catalog != other_p.catalog) {
-		return false;
-	}
-	if (!ParsedExpression::ListEquals(children, other_p.children)) {
+	if (qualified_name != other_p.qualified_name) {
 		return false;
 	}
 	if (!ParsedExpression::ListEquals(partitions, other_p.partitions)) {
@@ -912,14 +935,20 @@ bool WindowExpression::Equals(const ParsedExpression &other) const {
 	if (has_ignore_nulls != other_p.has_ignore_nulls) {
 		return false;
 	}
+	if (arguments.size() != other_p.arguments.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		if (!arguments[i].Equals(other_p.arguments[i])) {
+			return false;
+		}
+	}
 	return true;
 }
 
 hash_t WindowExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, duckdb::Hash<const char *>(function_name.c_str()));
-	hash = CombineHash(hash, duckdb::Hash<const char *>(schema.c_str()));
-	hash = CombineHash(hash, duckdb::Hash<const char *>(catalog.c_str()));
+	hash = CombineHash(hash, qualified_name.Hash());
 	for (idx_t i = 0; i < orders.size(); i++) {
 		hash = CombineHash(hash, duckdb::Hash<uint32_t>(static_cast<uint32_t>(orders[i].type)));
 		hash = CombineHash(hash, duckdb::Hash<uint32_t>(static_cast<uint32_t>(orders[i].null_order)));
@@ -939,12 +968,8 @@ hash_t WindowExpression::Hash() const {
 
 unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<WindowExpression>(new WindowExpression());
-	copy->function_name = function_name;
-	copy->schema = schema;
-	copy->catalog = catalog;
-	for (auto &child : children) {
-		copy->children.push_back(child->Copy());
-	}
+	copy->is_legacy_function_call = is_legacy_function_call;
+	copy->qualified_name = qualified_name;
 	for (auto &child : partitions) {
 		copy->partitions.push_back(child->Copy());
 	}
@@ -963,6 +988,9 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 		copy->arg_orders.emplace_back(order.type, order.null_order, order.expression->Copy());
 	}
 	copy->has_ignore_nulls = has_ignore_nulls;
+	for (auto &arg : arguments) {
+		copy->arguments.emplace_back(arg.Copy());
+	}
 	copy->CopyBase(*this);
 	return std::move(copy);
 }
@@ -972,16 +1000,10 @@ bool TypeExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	auto &other_p = other.Cast<TypeExpression>();
-	if (catalog != other_p.catalog) {
-		return false;
-	}
-	if (schema != other_p.schema) {
-		return false;
-	}
-	if (type_name != other_p.type_name) {
-		return false;
-	}
 	if (!ParsedExpression::ListEquals(children, other_p.children)) {
+		return false;
+	}
+	if (qualified_name != other_p.qualified_name) {
 		return false;
 	}
 	return true;
@@ -989,20 +1011,16 @@ bool TypeExpression::Equals(const ParsedExpression &other) const {
 
 hash_t TypeExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, duckdb::Hash<const char *>(catalog.c_str()));
-	hash = CombineHash(hash, duckdb::Hash<const char *>(schema.c_str()));
-	hash = CombineHash(hash, duckdb::Hash<const char *>(type_name.c_str()));
+	hash = CombineHash(hash, qualified_name.Hash());
 	return hash;
 }
 
 unique_ptr<ParsedExpression> TypeExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<TypeExpression>(new TypeExpression());
-	copy->catalog = catalog;
-	copy->schema = schema;
-	copy->type_name = type_name;
 	for (auto &child : children) {
 		copy->children.push_back(child->Copy());
 	}
+	copy->qualified_name = qualified_name;
 	copy->CopyBase(*this);
 	return std::move(copy);
 }

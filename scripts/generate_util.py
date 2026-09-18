@@ -51,7 +51,9 @@ def is_order_modifier_ptr(type_str):
 
 
 def is_expression_map(type_str):
-    return 'case_insensitive_map_t<' in type_str and 'ParsedExpression*' in type_str
+    return (
+        'case_insensitive_map_t<' in type_str or 'identifier_map_t<' in type_str
+    ) and 'ParsedExpression*' in type_str
 
 
 def member_should_be_compared(member):
@@ -109,6 +111,22 @@ def generate_case_check_comparison(field_name, indent):
     ]
 
 
+def generate_func_arg_comparison(field_name, indent):
+    i = indent
+    ii = indent + '\t'
+    iii = indent + '\t\t'
+    return [
+        f'{i}if ({field_name}.size() != other_p.{field_name}.size()) {{',
+        f'{ii}return false;',
+        f'{i}}}',
+        f'{i}for (idx_t i = 0; i < {field_name}.size(); i++) {{',
+        f'{ii}if (!{field_name}[i].Equals(other_p.{field_name}[i])) {{',
+        f'{iii}return false;',
+        f'{ii}}}',
+        f'{i}}}',
+    ]
+
+
 def generate_expression_map_comparison(field_name, indent):
     i = indent
     ii = indent + '\t'
@@ -137,7 +155,7 @@ def generate_ci_vector_string_comparison(field_name, indent):
         f'{ii}return false;',
         f'{indent}}}',
         f'{indent}for (idx_t i = 0; i < {field_name}.size(); i++) {{',
-        f'{ii}if (!StringUtil::CIEquals({field_name}[i], other_p.{field_name}[i])) {{',
+        f'{ii}if ({field_name}[i] != other_p.{field_name}[i]) {{',
         f'{iii}return false;',
         f'{ii}}}',
         f'{indent}}}',
@@ -148,9 +166,9 @@ def generate_member_comparison(member, indent='\t'):
     field_name = get_member_field_name(member)
     type_str = member['type']
 
-    if type_str == 'Identifier':
+    if type_str in ('Identifier', 'duckdb::Identifier', 'Literal'):
         return [
-            f'{indent}if (!StringUtil::CIEquals({field_name}, other_p.{field_name})) {{',
+            f'{indent}if ({field_name} != other_p.{field_name}) {{',
             f'{indent}\treturn false;',
             f'{indent}}}',
         ]
@@ -175,6 +193,15 @@ def generate_member_comparison(member, indent='\t'):
             f'{indent}\treturn false;',
             f'{indent}}}',
         ]
+    elif type_str == 'TypeExpression*':
+        return [
+            f'{indent}if (static_cast<bool>({field_name}) != static_cast<bool>(other_p.{field_name})) {{',
+            f'{indent}\treturn false;',
+            f'{indent}}}',
+            f'{indent}if ({field_name} && !{field_name}->Equals(*other_p.{field_name})) {{',
+            f'{indent}\treturn false;',
+            f'{indent}}}',
+        ]
     elif type_str == 'SelectStatement*':
         return [
             f'{indent}if (!{field_name} || !other_p.{field_name} || !{field_name}->Equals(*other_p.{field_name})) {{',
@@ -191,6 +218,8 @@ def generate_member_comparison(member, indent='\t'):
         return generate_order_by_comparison(field_name, indent)
     elif type_str == 'vector<CaseCheck>':
         return generate_case_check_comparison(field_name, indent)
+    elif type_str == 'vector<FunctionArgument>':
+        return generate_func_arg_comparison(field_name, indent)
     elif is_expression_map(type_str):
         return generate_expression_map_comparison(field_name, indent)
     else:
@@ -275,6 +304,11 @@ def generate_member_copy(member, indent='\t'):
         base = member.get('base', 'ResultModifier')
         return [f'{indent}copy->{field} = {field} ? unique_ptr_cast<{base}, OrderModifier>({field}->Copy()) : nullptr;']
 
+    if type_str == 'TypeExpression*':
+        return [
+            f'{indent}copy->{field} = {field} ? unique_ptr_cast<ParsedExpression, TypeExpression>({field}->Copy()) : nullptr;'
+        ]
+
     if type_str == 'SelectStatement*':
         return [
             f'{indent}copy->{field} = {field} ? unique_ptr_cast<SQLStatement, SelectStatement>({field}->Copy()) : nullptr;'
@@ -287,6 +321,13 @@ def generate_member_copy(member, indent='\t'):
             f'{ii}new_check.when_expr = check.when_expr->Copy();',
             f'{ii}new_check.then_expr = check.then_expr->Copy();',
             f'{ii}copy->{field}.push_back(std::move(new_check));',
+            f'{indent}}}',
+        ]
+
+    if type_str == 'vector<FunctionArgument>':
+        return [
+            f'{indent}for (auto &arg : {field}) {{',
+            f'{ii}copy->{field}.emplace_back(arg.Copy());',
             f'{indent}}}',
         ]
 
@@ -329,6 +370,9 @@ def generate_subclass_copy(entry):
 
     lines = [f'unique_ptr<ParsedExpression> {class_name}::Copy() const {{']
     lines.append(f'\tauto copy = duckdb::unique_ptr<{class_name}>(new {class_name}());')
+
+    if class_name == 'FunctionExpression' or class_name == 'WindowExpression':
+        lines.append('\tcopy->is_legacy_function_call = is_legacy_function_call;')
 
     for member in entry.get('members', []):
         if member_should_be_copied(member):
@@ -373,6 +417,8 @@ def generate_member_hash(member, indent='\t'):
     field_name = get_member_field_name(member)
     type_str = member['type']
 
+    if type_str == 'TypeExpression*':
+        return [f'{indent}hash = CombineHash(hash, {field_name} ? {field_name}->Hash() : 0);']
     # Covered by EnumerateChildren in ParsedExpression::Hash
     if is_parsed_expression_ptr(type_str):
         return []
@@ -384,18 +430,20 @@ def generate_member_hash(member, indent='\t'):
         return []
     if type_str == 'vector<CaseCheck>':
         return []
+    if type_str == 'vector<FunctionArgument>':
+        return []
     if is_expression_map(type_str):
         return []
     # complex key types — skip
     if 'qualified_column_map_t' in type_str or 'qualified_column_set_t' in type_str:
         return []
 
-    if type_str == 'Identifier':
-        return [f'{indent}hash = CombineHash(hash, StringUtil::CIHash({field_name}));']
+    if type_str in ('Identifier', 'duckdb::Identifier', 'Literal'):
+        return [f'{indent}hash = CombineHash(hash, {field_name}.Hash());']
     if type_str == 'vector<Identifier>':
         return [
             f'{indent}for (auto &s : {field_name}) {{',
-            f'{indent}\thash = CombineHash(hash, StringUtil::CIHash(s));',
+            f'{indent}\thash = CombineHash(hash, s.Hash());',
             f'{indent}}}',
         ]
 
@@ -404,6 +452,8 @@ def generate_member_hash(member, indent='\t'):
     if type_str == 'Value':
         return [f'{indent}hash = CombineHash(hash, {field_name}.Hash());']
     if type_str == 'LogicalType':
+        return [f'{indent}hash = CombineHash(hash, {field_name}.Hash());']
+    if type_str == 'QualifiedName':
         return [f'{indent}hash = CombineHash(hash, {field_name}.Hash());']
     if type_str == 'bool':
         return [f'{indent}hash = CombineHash(hash, duckdb::Hash<bool>({field_name}));']
@@ -475,6 +525,7 @@ def member_is_iterable_expression(member):
         or is_parsed_expression_list(type_str)
         or type_str == 'vector<CaseCheck>'
         or type_str == 'vector<OrderByNode>'
+        or type_str == 'vector<FunctionArgument>'
         or is_expression_map(type_str)
         or is_order_modifier_ptr(type_str)
     )
@@ -488,6 +539,13 @@ def generate_member_children_appends(member, expr_var):
     if iterate_via:
         access = f'{expr_var}.{iterate_via}'
         if is_parsed_expression_ptr(type_str):
+            # If nullable, generate a null guard using the accessor_mut (which returns unique_ptr&)
+            if member.get('nullable'):
+                return [
+                    f'\t\tif ({access}) {{',
+                    f'\t\t\tresult.Append({access});',
+                    f'\t\t}}',
+                ]
             return [f'\t\tresult.Append({access});']
         if is_parsed_expression_list(type_str):
             return [
@@ -500,6 +558,32 @@ def generate_member_children_appends(member, expr_var):
                 f'\t\tfor (auto &check : {access}) {{',
                 f'\t\t\tresult.Append(check.when_expr);',
                 f'\t\t\tresult.Append(check.then_expr);',
+                f'\t\t}}',
+            ]
+        if is_expression_map(type_str):
+            return [
+                f'\t\tfor (auto &item : {access}) {{',
+                f'\t\t\tresult.Append(item.second);',
+                f'\t\t}}',
+            ]
+        if type_str == 'vector<FunctionArgument>':
+            return [
+                f'\t\tfor (auto &arg : {access}) {{',
+                f'\t\t\tresult.Append(arg.GetExpressionMutable());',
+                f'\t\t}}',
+            ]
+        if type_str == 'vector<OrderByNode>':
+            return [
+                f'\t\tfor (auto &order : {access}) {{',
+                f'\t\t\tresult.Append(order.expression);',
+                f'\t\t}}',
+            ]
+        if is_order_modifier_ptr(type_str):
+            return [
+                f'\t\tif ({access}) {{',
+                f'\t\t\tfor (auto &order : {access}->orders) {{',
+                f'\t\t\t\tresult.Append(order.expression);',
+                f'\t\t\t}}',
                 f'\t\t}}',
             ]
         return []
@@ -556,7 +640,14 @@ def generate_member_const_children_appends(member, expr_var):
     if const_via:
         access = f'{expr_var}.{const_via}'
         if is_parsed_expression_ptr(type_str):
-            # const accessor returns const ParsedExpression& directly
+            # If nullable, the accessor returns a unique_ptr ref that may be null — check and deref
+            if member.get('nullable'):
+                return [
+                    f'\t\tif ({access}) {{',
+                    f'\t\t\tresult.Append(*{access});',
+                    f'\t\t}}',
+                ]
+            # Non-nullable: const accessor returns const ParsedExpression& directly (assume non-null)
             return [f'\t\tresult.Append({access});']
         if is_parsed_expression_list(type_str):
             return [
@@ -569,6 +660,32 @@ def generate_member_const_children_appends(member, expr_var):
                 f'\t\tfor (auto &check : {access}) {{',
                 f'\t\t\tresult.Append(*check.when_expr);',
                 f'\t\t\tresult.Append(*check.then_expr);',
+                f'\t\t}}',
+            ]
+        if is_expression_map(type_str):
+            return [
+                f'\t\tfor (auto &item : {access}) {{',
+                f'\t\t\tresult.Append(*item.second);',
+                f'\t\t}}',
+            ]
+        if type_str == 'vector<OrderByNode>':
+            return [
+                f'\t\tfor (auto &order : {access}) {{',
+                f'\t\t\tresult.Append(*order.expression);',
+                f'\t\t}}',
+            ]
+        if is_order_modifier_ptr(type_str):
+            return [
+                f'\t\tif ({access}) {{',
+                f'\t\t\tfor (auto &order : {access}->orders) {{',
+                f'\t\t\t\tresult.Append(*order.expression);',
+                f'\t\t\t}}',
+                f'\t\t}}',
+            ]
+        if type_str == 'vector<FunctionArgument>':
+            return [
+                f'\t\tfor (auto &arg : {access}) {{',
+                f'\t\t\tresult.Append(arg.GetExpression());',
                 f'\t\t}}',
             ]
         return []
@@ -617,6 +734,39 @@ def generate_member_const_children_appends(member, expr_var):
     return []
 
 
+# The pattern expressions (MATCH_RECOGNIZE) all share ExpressionClass::PATTERN, so they cannot be
+# expressed as one case per class like every other expression - emit their nested switch directly.
+def _pattern_children_case(deref):
+    star = '*' if deref else ''
+    return [
+        '\tcase ExpressionClass::PATTERN: {',
+        '\t\tswitch (GetExpressionType()) {',
+        '\t\tcase ExpressionType::ALTERNATION: {',
+        '\t\t\tauto &cast_expr = Cast<AlternationExpression>();',
+        f'\t\t\tresult.Append({star}cast_expr.child_left);',
+        f'\t\t\tresult.Append({star}cast_expr.child_right);',
+        '\t\t\tbreak;',
+        '\t\t}',
+        '\t\tcase ExpressionType::CONCATENATION:',
+        '\t\t\tfor (auto &child : Cast<ConcatenationExpression>().children) {',
+        f'\t\t\t\tresult.Append({star}child);',
+        '\t\t\t}',
+        '\t\t\tbreak;',
+        '\t\tcase ExpressionType::QUANTIFIER:',
+        f'\t\t\tresult.Append({star}Cast<QuantifiedExpression>().child);',
+        '\t\t\tbreak;',
+        '\t\tcase ExpressionType::ANCHOR:',
+        '\t\t\t// an anchor takes no row and has nothing under it',
+        '\t\t\tbreak;',
+        '\t\tdefault:',
+        '\t\t\tthrow NotImplementedException("Unimplemented pattern expression type %s",',
+        '\t\t\t                              ExpressionTypeToString(GetExpressionType()));',
+        '\t\t}',
+        '\t\tbreak;',
+        '\t}',
+    ]
+
+
 def _generate_base_children_switch(entries, base_functions, sig, result_type, member_appends_fn):
     lines = [sig, f'\t{result_type} result;', '\tswitch (GetExpressionClass()) {']
     no_child_enums = []
@@ -639,7 +789,7 @@ def _generate_base_children_switch(entries, base_functions, sig, result_type, me
             lines.extend(member_appends_fn(member, 'cast_expr'))
         lines.append('\t\tbreak;')
         lines.append('\t}')
-    lines.append('\tcase ExpressionClass::BOUND_EXPRESSION:')
+    lines.extend(_pattern_children_case(result_type == 'ConstChildrenView'))
     for enum_val in no_child_enums:
         lines.append(f'\tcase ExpressionClass::{enum_val}:')
     lines.append('\t\t// these node types have no children')
@@ -687,6 +837,12 @@ def emit(output_lines, block, first_ref):
 def main():
     with open(JSON_PATH, 'r') as f:
         entries = json.load(f)
+
+    # An entry that both hands off its switch case and writes its own class code is a dispatcher rather than a
+    # concrete expression - it has no members to generate these methods from
+    entries = [
+        entry for entry in entries if not (entry.get('custom_implementation') and entry.get('custom_switch_code'))
+    ]
 
     # Collect base (parent) functions for inheritance
     base_functions = []

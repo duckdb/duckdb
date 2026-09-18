@@ -130,23 +130,31 @@ static string_t HandleString(Vector &vec, const char *buf, idx_t start, idx_t en
 	for (idx_t i = 0; i < length; i++) {
 		auto current_char = buf[start + i];
 		if (!escaped) {
-			if (scopes.empty() && current_char == '\\') {
-				if (quoted || (start + i + 1 < end && (buf[start + i + 1] == '\'' || buf[start + i + 1] == '"'))) {
+			if (current_char == '\\') {
+				if (quoted || (scopes.empty() && start + i + 1 < end &&
+				               (buf[start + i + 1] == '\'' || buf[start + i + 1] == '"'))) {
 					//! Start of escape
 					escaped = true;
+					if (!scopes.empty()) {
+						string_data[copied_count++] = current_char;
+					}
 					continue;
 				}
 			}
-			if (scopes.empty() && (current_char == '\'' || current_char == '"')) {
+			if (current_char == '\'' || current_char == '"') {
 				if (quoted && current_char == quote_char) {
 					quoted = false;
-					//! Skip the ending quote
-					continue;
+					if (scopes.empty()) {
+						//! Skip the ending quote
+						continue;
+					}
 				} else if (!quoted) {
 					quoted = true;
 					quote_char = current_char;
-					//! Skip the starting quote
-					continue;
+					if (scopes.empty()) {
+						//! Skip the starting quote
+						continue;
+					}
 				}
 			}
 			if (!quoted && !scopes.empty() && current_char == scopes.top()) {
@@ -459,6 +467,9 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<Vector> &va
 	auto end_char = buf[pos] == '{' ? '}' : ')';
 	pos++;
 	SkipWhitespace(input_state);
+	if (pos == len) {
+		return false;
+	}
 	if (buf[pos] == end_char) {
 		pos++;
 		SkipWhitespace(input_state);
@@ -599,6 +610,10 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<Vector> &va
 			child_idx++;
 			pos++;
 			SkipWhitespace(input_state);
+			if (pos < len && buf[pos] == ')') {
+				// allow a trailing comma, e.g. the single-element tuple "(1,)"
+				break;
+			}
 		}
 		(void)child_idx;
 	}

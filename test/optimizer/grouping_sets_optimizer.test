@@ -1,0 +1,250 @@
+# name: test/optimizer/grouping_sets_optimizer.test
+# description: Test the GroupingSetsOptimizer - cascading ROLLUP/CUBE/GROUPING SETS aggregations
+# group: [optimizer]
+
+statement ok
+CREATE TABLE sales (region VARCHAR, product VARCHAR, amount INTEGER);
+
+statement ok
+INSERT INTO sales VALUES
+	('eu', 'fish', 1),
+	('eu', 'bread', 2),
+	('us', 'fish', 3),
+	('us', NULL, 4),
+	(NULL, 'bread', 5),
+	('eu', 'fish', 10),
+	('us', 'bread', NULL);
+
+# the optimizer should kick in for a ROLLUP - verify the plan contains a materialized CTE
+query II
+EXPLAIN SELECT region, product, SUM(amount) FROM sales GROUP BY ROLLUP(region, product);
+----
+physical_plan	<REGEX>:.*CTE.*
+
+# .. but not when it is disabled
+statement ok
+SET disabled_optimizers='grouping_sets';
+
+query II
+EXPLAIN SELECT region, product, SUM(amount) FROM sales GROUP BY ROLLUP(region, product);
+----
+physical_plan	<!REGEX>:.*CTE.*
+
+statement ok
+SET disabled_optimizers='';
+
+# ROLLUP with various aggregates
+query IIIIII
+SELECT region, product, SUM(amount), COUNT(*), COUNT(amount), MIN(amount) FROM sales GROUP BY ROLLUP(region, product) ORDER BY ALL;
+----
+eu	bread	2	1	1	2
+eu	fish	11	2	2	1
+eu	NULL	13	3	3	1
+us	bread	NULL	1	0	NULL
+us	fish	3	1	1	3
+us	NULL	4	1	1	4
+us	NULL	7	3	2	3
+NULL	bread	5	1	1	5
+NULL	NULL	5	1	1	5
+NULL	NULL	25	7	6	1
+
+# CUBE
+query IIII
+SELECT region, product, SUM(amount), COUNT(*) FROM sales GROUP BY CUBE(region, product) ORDER BY ALL;
+----
+eu	bread	2	1
+eu	fish	11	2
+eu	NULL	13	3
+us	bread	NULL	1
+us	fish	3	1
+us	NULL	4	1
+us	NULL	7	3
+NULL	bread	5	1
+NULL	bread	7	3
+NULL	fish	14	3
+NULL	NULL	4	1
+NULL	NULL	5	1
+NULL	NULL	25	7
+
+# explicit GROUPING SETS, including a duplicate set
+query IIII
+SELECT region, product, SUM(amount), COUNT(*) FROM sales GROUP BY GROUPING SETS ((region, product), (region), (region), ()) ORDER BY ALL;
+----
+eu	bread	2	1
+eu	fish	11	2
+eu	NULL	13	3
+eu	NULL	13	3
+us	bread	NULL	1
+us	fish	3	1
+us	NULL	4	1
+us	NULL	7	3
+us	NULL	7	3
+NULL	bread	5	1
+NULL	NULL	5	1
+NULL	NULL	5	1
+NULL	NULL	25	7
+
+# GROUPING functions are constant within each grouping set
+query IIIIII
+SELECT region, product, GROUPING(region), GROUPING(product), GROUPING(region, product), SUM(amount) FROM sales GROUP BY ROLLUP(region, product) ORDER BY ALL;
+----
+eu	bread	0	0	0	2
+eu	fish	0	0	0	11
+eu	NULL	0	1	1	13
+us	bread	0	0	0	NULL
+us	fish	0	0	0	3
+us	NULL	0	0	0	4
+us	NULL	0	1	1	7
+NULL	bread	0	0	0	5
+NULL	NULL	0	1	1	5
+NULL	NULL	1	1	3	25
+
+# aggregates with a FILTER clause - the filter is only applied at the finest level
+query III
+SELECT region, product, SUM(amount) FILTER (region = 'eu') FROM sales GROUP BY ROLLUP(region, product) ORDER BY ALL;
+----
+eu	bread	2
+eu	fish	11
+eu	NULL	13
+us	bread	NULL
+us	fish	NULL
+us	NULL	NULL
+us	NULL	NULL
+NULL	bread	NULL
+NULL	NULL	13
+NULL	NULL	NULL
+
+# expressions as groups
+query III
+SELECT UPPER(region), product || '!', SUM(amount) FROM sales GROUP BY ROLLUP(UPPER(region), product || '!') ORDER BY ALL;
+----
+EU	bread!	2
+EU	fish!	11
+EU	NULL	13
+US	bread!	NULL
+US	fish!	3
+US	NULL	4
+US	NULL	7
+NULL	bread!	5
+NULL	NULL	5
+NULL	NULL	25
+
+# HAVING on top of a ROLLUP
+query III
+SELECT region, product, SUM(amount) FROM sales GROUP BY ROLLUP(region, product) HAVING SUM(amount) > 5 ORDER BY ALL;
+----
+eu	fish	11
+eu	NULL	13
+us	NULL	7
+NULL	NULL	25
+
+# rollup over an empty table - only the empty grouping set produces a row
+statement ok
+CREATE TABLE empty_sales (region VARCHAR, product VARCHAR, amount INTEGER);
+
+query IIII
+SELECT region, product, SUM(amount), COUNT(*) FROM empty_sales GROUP BY ROLLUP(region, product) ORDER BY ALL;
+----
+NULL	NULL	NULL	0
+
+# DISTINCT aggregates cannot be cascaded - but still produce correct results through the regular path
+query III
+SELECT region, product, COUNT(DISTINCT amount) FROM sales GROUP BY ROLLUP(region, product) ORDER BY ALL;
+----
+eu	bread	1
+eu	fish	2
+eu	NULL	3
+us	bread	0
+us	fish	1
+us	NULL	1
+us	NULL	2
+NULL	bread	1
+NULL	NULL	1
+NULL	NULL	6
+
+# grouping sets without a common superset cannot be cascaded - regular path
+query III
+SELECT region, product, SUM(amount) FROM sales GROUP BY GROUPING SETS ((region), (product)) ORDER BY ALL;
+----
+eu	NULL	13
+us	NULL	7
+NULL	bread	7
+NULL	fish	14
+NULL	NULL	4
+NULL	NULL	5
+
+# ROLLUP with more payload types
+statement ok
+CREATE TABLE measurements (grp INTEGER, subgrp INTEGER, d DECIMAL(18,3), s VARCHAR, f DOUBLE);
+
+statement ok
+INSERT INTO measurements SELECT i % 3, i % 7, i * 0.001, 'str_' || i, i * 0.5 FROM range(1000) t(i);
+
+query IIIIIII
+SELECT grp, subgrp, SUM(d), MIN(s), MAX(s), SUM(f), COUNT(*) FROM measurements GROUP BY ROLLUP(grp, subgrp) ORDER BY ALL;
+----
+0	0	23.688	str_0	str_987	11844.0	48
+0	1	23.406	str_120	str_99	11703.0	47
+0	2	24.120	str_114	str_996	12060.0	48
+0	3	23.832	str_108	str_990	11916.0	48
+0	4	23.547	str_102	str_984	11773.5	47
+0	5	24.264	str_117	str_999	12132.0	48
+0	6	23.976	str_111	str_993	11988.0	48
+0	NULL	166.833	str_0	str_999	83416.5	334
+1	0	24.024	str_112	str_994	12012.0	48
+1	1	23.736	str_1	str_988	11868.0	48
+1	2	23.453	str_100	str_982	11726.5	47
+1	3	24.168	str_10	str_997	12084.0	48
+1	4	23.880	str_109	str_991	11940.0	48
+1	5	23.594	str_103	str_985	11797.0	47
+1	6	23.312	str_118	str_979	11656.0	47
+1	NULL	166.167	str_1	str_997	83083.5	333
+2	0	23.359	str_119	str_980	11679.5	47
+2	1	24.072	str_113	str_995	12036.0	48
+2	2	23.784	str_107	str_989	11892.0	48
+2	3	23.500	str_101	str_983	11750.0	47
+2	4	24.216	str_11	str_998	12108.0	48
+2	5	23.928	str_110	str_992	11964.0	48
+2	6	23.641	str_104	str_986	11820.5	47
+2	NULL	166.500	str_101	str_998	83250.0	333
+NULL	NULL	499.500	str_0	str_999	249750.0	1000
+
+# three-level rollup
+query IIII
+SELECT grp, subgrp, grp + subgrp, COUNT(*) FROM measurements GROUP BY ROLLUP(grp, subgrp, grp + subgrp) ORDER BY ALL LIMIT 15;
+----
+0	0	0	48
+0	0	NULL	48
+0	1	1	47
+0	1	NULL	47
+0	2	2	48
+0	2	NULL	48
+0	3	3	48
+0	3	NULL	48
+0	4	4	47
+0	4	NULL	47
+0	5	5	48
+0	5	NULL	48
+0	6	6	48
+0	6	NULL	48
+0	NULL	NULL	334
+
+# cube over three columns
+query IIII
+SELECT grp, subgrp, grp % 2, COUNT(*) FROM measurements GROUP BY CUBE(grp, subgrp, grp % 2) ORDER BY ALL LIMIT 15;
+----
+0	0	0	48
+0	0	NULL	48
+0	1	0	47
+0	1	NULL	47
+0	2	0	48
+0	2	NULL	48
+0	3	0	48
+0	3	NULL	48
+0	4	0	47
+0	4	NULL	47
+0	5	0	48
+0	5	NULL	48
+0	6	0	48
+0	6	NULL	48
+0	NULL	0	334

@@ -207,9 +207,9 @@ public:
 public:
 	//! Binds an arrow table
 	static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, TableFunctionBindInput &input,
-	                                              vector<LogicalType> &return_types, vector<string> &names);
+	                                              vector<LogicalType> &return_types, vector<Identifier> &names);
 	static unique_ptr<FunctionData> ArrowScanBindDumb(ClientContext &context, TableFunctionBindInput &input,
-	                                                  vector<LogicalType> &return_types, vector<string> &names);
+	                                                  vector<LogicalType> &return_types, vector<Identifier> &names);
 	//! Actual conversion from Arrow to DuckDB
 	static void ArrowToDuckDB(ArrowScanLocalState &scan_state, const arrow_column_map_t &arrow_convert_data,
 	                          DataChunk &output, bool arrow_scan_is_projected = true,

@@ -1,4 +1,5 @@
 #include "duckdb/main/settings.hpp"
+#include "duckdb/function/partition_stats.hpp"
 
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/aggregate/physical_perfecthash_aggregate.hpp"
@@ -55,7 +56,7 @@ bool PhysicalPlanGenerator::HasSingleValuePartitions(ClientContext &context,
 			return false;
 		}
 		auto &ref = group_expr->Cast<BoundReferenceExpression>();
-		partition_columns.push_back(ref.index);
+		partition_columns.push_back(ref.Index());
 	}
 	// traverse the children of the aggregate to find the source operator
 	reference<PhysicalOperator> child_ref(child);
@@ -73,7 +74,7 @@ bool PhysicalPlanGenerator::HasSingleValuePartitions(ClientContext &context,
 					return false;
 				}
 				auto &ref = expr->Cast<BoundReferenceExpression>();
-				new_columns.push_back(ref.index);
+				new_columns.push_back(ref.Index());
 			}
 			// continue into child node with new columns
 			partition_columns = std::move(new_columns);
@@ -95,16 +96,26 @@ bool PhysicalPlanGenerator::HasSingleValuePartitions(ClientContext &context,
 		return false;
 	}
 	// get the base columns by projecting over the projection_ids/column_ids
-	if (!table_scan.projection_ids.empty()) {
-		for (auto &partition_col : partition_columns) {
-			partition_col = table_scan.projection_ids[partition_col];
-		}
-	}
 	vector<column_t> base_columns;
-	for (const auto &partition_idx : partition_columns) {
-		auto col_idx = partition_idx;
-		col_idx = table_scan.column_ids[col_idx].GetPrimaryIndex();
-		base_columns.push_back(col_idx);
+	if (!table_scan.function.projection_pushdown) {
+		// Non-pushdown scans output every base column in order. Any projection above the scan already maps references
+		// into that base-column space.
+		base_columns = partition_columns;
+	} else {
+		if (!table_scan.projection_ids.empty()) {
+			for (auto &partition_col : partition_columns) {
+				if (partition_col >= table_scan.projection_ids.size()) {
+					return false;
+				}
+				partition_col = table_scan.projection_ids[partition_col];
+			}
+		}
+		for (const auto &partition_idx : partition_columns) {
+			if (partition_idx >= table_scan.column_ids.size()) {
+				return false;
+			}
+			base_columns.push_back(table_scan.column_ids[partition_idx].GetPrimaryIndex());
+		}
 	}
 	// check if the source operator is partitioned by the grouping columns
 	TableFunctionPartitionInput input(table_scan.bind_data.get(), base_columns);
@@ -227,7 +238,7 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 	}
 	for (auto &expression : op.expressions) {
 		auto &aggregate = expression->Cast<BoundAggregateExpression>();
-		if (aggregate.IsDistinct() || !aggregate.function.HasStateCombineCallback()) {
+		if (aggregate.IsDistinct() || !aggregate.Function().HasStateCombineCallback()) {
 			// distinct aggregates are not supported in perfect hash aggregates
 			return false;
 		}
@@ -244,7 +255,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 	bool can_use_simple_aggregation = true;
 	for (auto &expression : op.expressions) {
 		auto &aggregate = expression->Cast<BoundAggregateExpression>();
-		if (!aggregate.function.GetStateClusterUpdateCallback()) {
+		if (!aggregate.Function().GetStateClusterUpdateCallback()) {
 			// unsupported aggregate for simple aggregation: use hash aggregation
 			can_use_simple_aggregation = false;
 			break;
@@ -309,7 +320,7 @@ PhysicalOperator &PhysicalPlanGenerator::ExtractAggregateExpressions(PhysicalOpe
 	// bind sorted aggregates
 	for (auto &aggr : aggregates) {
 		auto &bound_aggr = aggr->Cast<BoundAggregateExpression>();
-		if (bound_aggr.order_bys) {
+		if (bound_aggr.GetOrderBys()) {
 			// sorted aggregate!
 			FunctionBinder::BindSortedAggregate(context, bound_aggr, groups, grouping_sets);
 		}
@@ -322,18 +333,18 @@ PhysicalOperator &PhysicalPlanGenerator::ExtractAggregateExpressions(PhysicalOpe
 	}
 	for (auto &aggr : aggregates) {
 		auto &bound_aggr = aggr->Cast<BoundAggregateExpression>();
-		for (auto &child_expr : bound_aggr.children) {
+		for (auto &child_expr : bound_aggr.GetChildrenMutable()) {
 			auto ref = make_uniq<BoundReferenceExpression>(child_expr->GetReturnType(), expressions.size());
 			types.push_back(child_expr->GetReturnType());
 			expressions.push_back(std::move(child_expr));
 			child_expr = std::move(ref);
 		}
-		if (bound_aggr.filter) {
-			auto &filter = bound_aggr.filter;
+		if (bound_aggr.GetFilter()) {
+			auto &filter = bound_aggr.GetFilterMutable();
 			auto ref = make_uniq<BoundReferenceExpression>(filter->GetReturnType(), expressions.size());
 			types.push_back(filter->GetReturnType());
 			expressions.push_back(std::move(filter));
-			bound_aggr.filter = std::move(ref);
+			bound_aggr.GetFilterMutable() = std::move(ref);
 		}
 	}
 	if (expressions.empty()) {

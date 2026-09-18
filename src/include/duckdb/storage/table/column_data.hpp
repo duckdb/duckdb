@@ -16,13 +16,20 @@
 #include "duckdb/storage/table/column_segment_tree.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/enums/scan_vector_type.hpp"
+#include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/atomic_ptr.hpp"
 
 namespace duckdb {
 class ColumnData;
+class ExpressionFilter;
 class ColumnSegment;
 class DatabaseInstance;
+class PartialBlockManager;
+class DuckTableEntry;
+struct ColumnCheckpointState;
+struct ColumnSegmentInfo;
+struct ColumnSegmentInfoScanOptions;
 class RowGroup;
 class RowGroupWriter;
 class StorageManager;
@@ -36,6 +43,7 @@ struct TransactionData;
 struct PersistentColumnData;
 class ValidityColumnData;
 struct ColumnDataFinalizeAppendState;
+struct SuballocationBlock;
 
 using column_segment_vector_t = vector<SegmentNode<ColumnSegment>>;
 
@@ -74,7 +82,8 @@ public:
 	LogicalType type;
 
 public:
-	virtual FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter);
+	virtual FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter,
+	                                           optional_ptr<SegmentNode<ColumnSegment>> &checked_segment);
 
 	BlockManager &GetBlockManager() const {
 		return block_manager;
@@ -167,9 +176,13 @@ public:
 
 	//! Fetch the vector from the column data that belongs to this specific row
 	virtual idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result);
-	//! Fetch a specific row id and append it to the vector
-	virtual void FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
-	                      row_t row_id, Vector &result, idx_t result_idx);
+	//! Fetch a batch of row offsets and append them to the vector
+	virtual void FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+	                       const idx_t *offsets, const SelectionVector &sel, idx_t count, Vector &result,
+	                       idx_t result_offset);
+	//! Fetches a batch of row offsets for leaf columns.
+	void FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetchState &state, const idx_t *offsets,
+	                             const SelectionVector &sel, idx_t count, Vector &result, idx_t result_offset);
 
 	virtual void Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
 	                    Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start);
@@ -203,7 +216,10 @@ public:
 	                                  vector<ColumnSegmentInfo> &result, const ColumnSegmentInfoScanOptions &options);
 	virtual void Verify(RowGroup &parent);
 
-	FilterPropagateResult CheckZonemap(const StorageIndex &index, TableFilter &filter);
+	FilterPropagateResult CheckZonemap(optional_ptr<ClientContext> context, const StorageIndex &index,
+	                                   TableFilter &filter);
+	//! End of the last vector in [start_row, end_row) that the segment zonemaps do not reject for the filter
+	idx_t ZonemapScanEnd(optional_ptr<ClientContext> context, idx_t start_row, idx_t end_row, TableFilter &filter);
 
 	static shared_ptr<ColumnData> CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
 	                                           const LogicalType &type,
@@ -217,7 +233,8 @@ public:
 
 protected:
 	//! Append a transient segment
-	void AppendTransientSegment(SegmentLock &l, idx_t start_row, optional_ptr<ColumnSegment> prev_segment);
+	void AppendTransientSegment(SegmentLock &l, optional_ptr<SuballocationBlock> transient,
+	                            optional_ptr<ColumnSegment> prev_segment);
 	void AppendSegment(SegmentLock &l, unique_ptr<ColumnSegment> segment);
 
 	void BeginScanVectorInternal(ColumnScanState &state);
@@ -243,6 +260,14 @@ protected:
 	idx_t FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector &base_vector, idx_t row_group_start);
 
 	idx_t GetVectorCount(idx_t vector_index) const;
+
+	static bool IsDirectNullCheckFilter(const TableFilter &filter);
+	//! Checks the filter against the statistics of one segment
+	FilterPropagateResult CheckSegmentStatistics(optional_ptr<ClientContext> context,
+	                                             SegmentNode<ColumnSegment> &segment, ExpressionFilter &expr_filter);
+	FilterPropagateResult CheckValidityZonemap(ColumnScanState &state, TableFilter &filter,
+	                                           optional_ptr<SegmentNode<ColumnSegment>> &checked_segment,
+	                                           ColumnData &validity_column);
 
 private:
 	void UpdateCompressionFunction(SegmentLock &l, const CompressionFunction &function);

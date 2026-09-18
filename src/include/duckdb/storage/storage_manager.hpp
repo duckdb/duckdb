@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/prefetched_file_data.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
@@ -16,6 +17,7 @@
 #include "duckdb/storage/storage_options.hpp"
 
 namespace duckdb {
+struct AttachOptions;
 class ActiveCheckpointWrapper;
 class BlockManager;
 class Catalog;
@@ -35,8 +37,10 @@ public:
 
 	//! Revert the commit
 	virtual void RevertCommit() = 0;
-	// Make the commit persistent
-	virtual void FlushCommit() = 0;
+	//! Write the commit's WAL flush marker. With sync_now the WAL is synced up to it before returning;
+	//! otherwise the marker is only pushed to the OS and the WAL offset to sync up to is returned (0 if
+	//! nothing was written, or it was synced here)
+	virtual idx_t FlushCommit(bool sync_now) = 0;
 
 	virtual void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
 	                             unique_ptr<PersistentCollectionData> row_group_data) = 0;
@@ -185,6 +189,8 @@ protected:
 	atomic<idx_t> wal_entries_count;
 	//! Storage options passed in through configuration
 	StorageOptions storage_options;
+	//! Header prefetched during file-type detection, consumed by LoadDatabase. Empty unless a DuckDB file via ATTACH.
+	PrefetchedFileData prefetched_file;
 
 public:
 	template <class TARGET>

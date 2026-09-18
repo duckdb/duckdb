@@ -2,6 +2,9 @@
 # description: Test count_star, min, and max execution on row group statistics
 # group: [optimizer]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 # Alternative verify disables eager aggregate execution
 require no_alternative_verify
 

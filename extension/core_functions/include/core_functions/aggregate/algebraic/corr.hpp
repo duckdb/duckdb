@@ -15,6 +15,9 @@
 namespace duckdb {
 
 struct CorrState {
+	static constexpr const char *STATE_NAMES[] = {"cov_pop", "dev_pop_x", "dev_pop_y"};
+	using STATE_TYPE = StructStateType<CovarState, StddevState, StddevState>;
+
 	CovarState cov_pop;
 	StddevState dev_pop_x;
 	StddevState dev_pop_y;
@@ -23,13 +26,6 @@ struct CorrState {
 // Returns the correlation coefficient for non-null pairs in a group.
 // CORR(y, x) = COVAR_POP(y, x) / (STDDEV_POP(x) * STDDEV_POP(y))
 struct CorrOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		CovarOperation::Initialize<CovarState>(state.cov_pop);
-		STDDevBaseOperation::Initialize<StddevState>(state.dev_pop_x);
-		STDDevBaseOperation::Initialize<StddevState>(state.dev_pop_y);
-	}
-
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
 		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(state.cov_pop, y, x, idata);

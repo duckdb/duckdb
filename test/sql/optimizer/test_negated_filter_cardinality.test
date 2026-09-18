@@ -1,0 +1,48 @@
+# name: test/sql/optimizer/test_negated_filter_cardinality.test
+# description: Test cardinality estimates for negated table filters.
+# group: [optimizer]
+
+statement ok
+CREATE TABLE strings(value VARCHAR NOT NULL);
+
+statement ok
+INSERT INTO strings SELECT CASE WHEN i % 10 = 0 THEN 'special requests' ELSE 'ordinary' END FROM range(1000) t(i);
+
+statement ok
+CREATE TABLE nullable_strings AS SELECT CASE WHEN i = 0 THEN NULL ELSE 'ordinary' END AS value FROM range(1000) t(i);
+
+statement ok
+CREATE TABLE one_string(value VARCHAR NOT NULL);
+
+statement ok
+INSERT INTO one_string VALUES ('ordinary');
+
+statement ok
+PRAGMA disable_verification;
+
+statement ok
+PRAGMA explain_output='optimized_only';
+
+# LIKE retains the default 20% selectivity.
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM strings WHERE value LIKE '%special%requests%';
+----
+logical_opt	<REGEX>:.*"name":\s*"SEQ_SCAN".*"Estimated Cardinality":\s*"200".*
+
+# NOT LIKE uses the complement of the LIKE fallback.
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM strings WHERE value NOT LIKE '%special%requests%';
+----
+logical_opt	<REGEX>:.*"name":\s*"SEQ_SCAN".*"Estimated Cardinality":\s*"800".*
+
+# A non-empty input must not be rounded down to zero rows.
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM one_string WHERE value NOT LIKE '%special%requests%';
+----
+logical_opt	<REGEX>:.*"name":\s*"SEQ_SCAN".*"Estimated Cardinality":\s*"1".*
+
+# A nullable input cannot use the complement because NULL satisfies neither LIKE nor NOT LIKE.
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM nullable_strings WHERE value NOT LIKE '%special%requests%';
+----
+logical_opt	<REGEX>:.*"name":\s*"SEQ_SCAN".*"Estimated Cardinality":\s*"200".*

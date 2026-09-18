@@ -3,7 +3,7 @@
 # group: [inner]
 
 statement ok
-SET disabled_optimizers = 'join_order,build_side_probe_side';
+SET disabled_optimizers = 'join_order,build_side_probe_side,compressed_materialization';
 
 statement ok
 CREATE OR REPLACE TABLE probe AS
@@ -15,6 +15,36 @@ CREATE OR REPLACE TABLE build AS
 SELECT (i * 2)::BIGINT AS k, (i % 7)::INTEGER AS g
 FROM range(0, 30000) t(i);
 
+statement ok
+CREATE OR REPLACE TABLE probe_perfect_hash AS
+SELECT (1000000000000 + i)::BIGINT AS k
+FROM range(0, 100000) t(i);
+
+statement ok
+CREATE OR REPLACE TABLE build_perfect_hash AS
+SELECT (1000000000000 + i)::BIGINT AS k
+FROM range(1000, 2000) t(i);
+
+# The build-side keys are unique, integral, and span a small range, so this join can use
+# a perfect hash join while still pushing an exact PRF into the probe-side scan.
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe_perfect_hash p
+JOIN build_perfect_hash b
+  ON p.k = b.k;
+----
+analyzed_plan	<REGEX>:(?s).*IN.*PRF.*\(k\).*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe_perfect_hash p
+JOIN build_perfect_hash b
+  ON p.k = b.k;
+----
+analyzed_plan	<!REGEX>:(?s).*IN.*BF.*\(k\).*
+
 query II
 EXPLAIN ANALYZE
 SELECT count(*)
@@ -23,7 +53,7 @@ JOIN build b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:.*IN PRF\(k\).*
+analyzed_plan	<REGEX>:(?s).*IN.*PRF.*\(k\).*
 
 statement ok
 SELECT count(*)
@@ -68,7 +98,7 @@ JOIN build_timestamp b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:.*IN PRF\(k\).*
+analyzed_plan	<REGEX>:(?s).*IN.*PRF.*\(k\).*
 
 statement ok
 CREATE OR REPLACE TABLE probe_varchar AS
@@ -105,7 +135,7 @@ JOIN build_hugeint b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<!REGEX>:.*IN PRF\(k\).*
+analyzed_plan	<!REGEX>:(?s).*IN.*PRF.*\(k\).*
 
 # COMPARE_NOT_DISTINCT_FROM would be the path where filters_null_values could be false,
 # but join filter pushdown does not currently generate PRF filters for it.
@@ -117,7 +147,7 @@ JOIN build b
   ON p.k IS NOT DISTINCT FROM b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<!REGEX>:.*IN PRF\(k\).*
+analyzed_plan	<!REGEX>:(?s).*IN.*PRF.*\(k\).*
 
 statement ok
 SET disabled_optimizers = '';
@@ -366,4 +396,3 @@ ORDER BY ALL;
 -2	NULL
 5	5
 6	6
-

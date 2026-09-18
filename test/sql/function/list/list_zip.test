@@ -24,7 +24,7 @@ INSERT INTO integers2 VALUES ([]), (NULL)
 query I
 SELECT list_zip([1,2,3])
 ----
-[(1), (2), (3)]
+[(1,), (2,), (3,)]
 
 query I
 SELECT list_zip([1,2,3], [2,3,4], [3,4,5], []);
@@ -105,7 +105,7 @@ SELECT list_zip(a.i, b.i, b.i) FROM integers AS a, integers AS b order by all
 query I
 SELECT list_zip([1,2,3], true)
 ----
-[(1), (2), (3)]
+[(1,), (2,), (3,)]
 
 query I
 SELECT list_zip([1,2,3], [1,2,3], true)
@@ -151,23 +151,23 @@ SELECT list_zip([1,2,3], [true, false, NULL], [{'list_1': 1}, {'list_1': 2}, {'l
 query I
 SELECT list_zip([true, false, NULL])
 ----
-[(true), (false), (NULL)]
+[(true,), (false,), (NULL,)]
 
 query I
 SELECT list_zip([NULL::BOOLEAN, true])
 ----
-[(NULL), (true)]
+[(NULL,), (true,)]
 
 # VARCHAR
 query I
 SELECT list_zip(['aa', 'a'])
 ----
-[(aa), (a)]
+[(aa,), (a,)]
 
 query I
 SELECT list_zip([NULL::VARCHAR])
 ----
-[(NULL)]
+[(NULL,)]
 
 # INTEGER types
 foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
@@ -175,12 +175,12 @@ foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger
 query I
 SELECT list_zip([1::{type}, NULL, 2::{type}])
 ----
-[(1), (NULL), (2)]
+[(1,), (NULL,), (2,)]
 
 query I
 SELECT list_zip([NULL::{type}])
 ----
-[(NULL)]
+[(NULL,)]
 
 endloop
 
@@ -194,7 +194,7 @@ SELECT list_zip([1::{type}])
 query I
 SELECT list_zip([NULL::{type}])
 ----
-[(NULL)]
+[(NULL,)]
 
 endloop
 
@@ -204,62 +204,62 @@ endloop
 query I
 SELECT list_zip(['2021-08-20'::DATE])
 ----
-[(2021-08-20)]
+[(2021-08-20,)]
 
 # time
 query III
 SELECT list_zip(['14:59:37'::TIME]) a, a::VARCHAR::STRUCT("time" TIME)[] b, a == b
 ----
-[('14:59:37')]	[{'time': '14:59:37'}]	true
+[('14:59:37',)]	[{'time': '14:59:37'}]	true
 
 # timestamp
 query I
 SELECT list_zip(['2021-08-20'::TIMESTAMP])
 ----
-[('2021-08-20 00:00:00')]
+[('2021-08-20 00:00:00',)]
 
 # timestamp s
 query I
 SELECT list_zip(['2021-08-20'::TIMESTAMP_S])
 ----
-[('2021-08-20 00:00:00')]
+[('2021-08-20 00:00:00',)]
 
 # timestamp ms
 query I
 SELECT list_zip(['2021-08-20 00:00:00.123'::TIMESTAMP_MS])
 ----
-[('2021-08-20 00:00:00.123')]
+[('2021-08-20 00:00:00.123',)]
 
 # timestamp ns
 query I
 SELECT list_zip(['2021-08-20 00:00:00.123456'::TIMESTAMP_NS])
 ----
-[('2021-08-20 00:00:00.123456')]
+[('2021-08-20 00:00:00.123456',)]
 
 # time with time zone
 query I
 SELECT list_zip(['14:59:37'::TIMETZ])
 ----
-[('14:59:37+00')]
+[('14:59:37+00',)]
 
 # timestamp with time zone
 query I
 SELECT list_zip(['2021-08-20'::TIMESTAMPTZ])
 ----
-[('2021-08-20 00:00:00+00')]
+[('2021-08-20 00:00:00+00',)]
 
 # interval
 query I
 SELECT list_zip([INTERVAL 1 YEAR])
 ----
-[(1 year)]
+[(1 year,)]
 
 foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval
 
 query I
 SELECT list_zip([NULL::{type}])
 ----
-[(NULL)]
+[(NULL,)]
 
 endloop
 
@@ -268,18 +268,18 @@ endloop
 query I
 SELECT list_zip(['{a: 1}'::BLOB, '{a: 3}'::BLOB])
 ----
-[('{a: 1}'), ('{a: 3}')]
+[('{a: 1}',), ('{a: 3}',)]
 
 query III
 SELECT list_zip(['{a: 1'::BLOB, '{a: 3'::BLOB]) a, a::VARCHAR::STRUCT(a BLOB)[] b, a == b
 ----
-[('{a: 1'), ('{a: 3')]	[{'a': '{a: 1'}, {'a': '{a: 3'}]	true
+[('{a: 1',), ('{a: 3',)]	[{'a': '{a: 1'}, {'a': '{a: 3'}]	true
 
 
 query I
 SELECT list_zip([NULL::BLOB])
 ----
-[(NULL)]
+[(NULL,)]
 
 # ENUMS
 
@@ -295,19 +295,19 @@ INSERT INTO enums VALUES (['happy', 'sad'])
 query I
 SELECT list_zip(e) FROM enums
 ----
-[(happy), (sad)]
+[(happy,), (sad,)]
 
 # NESTED types
 
 query I
 SELECT list_zip([[1], [1, 2], NULL])
 ----
-[([1]), ([1, 2]), (NULL)]
+[([1],), ([1, 2],), (NULL,)]
 
 query I
 SELECT list_zip([{'a': 1}, {'a': 5}, {'a': 3}])
 ----
-[({'a': 1}), ({'a': 5}), ({'a': 3})]
+[({'a': 1},), ({'a': 5},), ({'a': 3},)]
 
 # nested element types with empty or NULL second arg (previously segfaulted)
 

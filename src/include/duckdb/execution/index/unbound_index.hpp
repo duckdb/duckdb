@@ -15,8 +15,10 @@
 
 namespace duckdb {
 
+class BoundIndex;
 class ColumnDataCollection;
 class DataChunk;
+class IndexBinder;
 
 enum class BufferedIndexReplay : uint8_t { INSERT_ENTRY = 0, DEL_ENTRY = 1 };
 
@@ -69,15 +71,18 @@ private:
 	//! Buffered for index operations during WAL replay. They are replayed upon index binding.
 	BufferedIndexReplays buffered_replays;
 
-	//! Maps the column IDs in the buffered replays to a physical table offset.
-	//! For example, column [i] in a buffered ColumnDataCollection is the data for an Indexed column with
-	//! physical table index mapped_column_ids[i].
-	//! This is in sorted order of physical column IDs.
+	//! Physical table columns stored in each buffered replay chunk, in buffer order.
+	//! Derived from this index's column IDs at construction, deduplicated and sorted.
 	vector<StorageIndex> mapped_column_ids;
+
+	//! Whether persistent blocks referenced by `storage_info` have been reclaimed
+	//! or handed off to a bound index.
+	bool storage_reclaimed = false;
 
 public:
 	UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo storage_info, TableIOManager &table_io_manager,
 	             AttachedDatabase &db);
+	~UnboundIndex() override;
 
 public:
 	void ResetStorage() override;
@@ -88,8 +93,8 @@ public:
 	const string &GetIndexType() const override {
 		return GetCreateInfo().index_type;
 	}
-	const string &GetIndexName() const override {
-		return GetCreateInfo().index_name;
+	const Identifier &GetIndexName() const override {
+		return GetCreateInfo().GetIndexName();
 	}
 	IndexConstraintType GetConstraintType() const override {
 		return GetCreateInfo().constraint_type;
@@ -100,18 +105,19 @@ public:
 	const IndexStorageInfo &GetStorageInfo() const {
 		return storage_info;
 	}
+	IndexStorageInfo CopyStorageInfo() const;
 	const vector<unique_ptr<ParsedExpression>> &GetParsedExpressions() const {
 		return GetCreateInfo().parsed_expressions;
 	}
-	const string &GetTableName() const {
+	const Identifier &GetTableName() const {
 		return GetCreateInfo().table;
 	}
 
-	//! Buffer Index delete or insert (replay_type) data chunk.
-	//! See note above on mapped_column_ids, this function assumes that index_column_chunk maps into
-	//! mapped_column_ids_p to get the physical column index for each Indexed column in the chunk.
-	void BufferChunk(DataChunk &index_column_chunk, Vector &row_ids, const vector<StorageIndex> &mapped_column_ids_p,
-	                 BufferedIndexReplay replay_type);
+	//! Buffers an insert or delete (replay_type) chunk, to be replayed once the index is bound.
+	//! table_chunk uses physical table layout: data[j] holds physical column j. It may be sparse,
+	//! but all columns required by this index must be populated.
+	void BufferChunk(DataChunk &table_chunk, Vector &row_ids, BufferedIndexReplay replay_type);
+	unique_ptr<BoundIndex> Bind(IndexBinder &binder, const vector<LogicalType> &physical_column_types);
 	bool HasBufferedReplays() const {
 		return buffered_replays.HasBufferedReplays();
 	}

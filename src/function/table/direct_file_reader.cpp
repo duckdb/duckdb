@@ -20,7 +20,7 @@ DirectFileReader::DirectFileReader(OpenFileInfo file_p, const LogicalType &type)
 DirectFileReader::~DirectFileReader() {
 }
 
-unique_ptr<BaseStatistics> DirectFileReader::GetStatistics(ClientContext &context, const string &name) {
+unique_ptr<BaseStatistics> DirectFileReader::GetStatistics(ClientContext &context, const Identifier &name) {
 	return nullptr;
 }
 
@@ -76,7 +76,6 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 		// At least verify that the file exist
 		// The globbing behavior in remote filesystems can lead to files being listed that do not actually exist
 		if (FileSystem::IsRemoteFile(file.path) && !fs.FileExists(file.path)) {
-			output.SetCardinality(0);
 			done = true;
 			return SourceResultType::FINISHED;
 		}
@@ -111,8 +110,8 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 				while (remaining_bytes > 0) {
 					const auto bytes_to_read = MinValue(remaining_bytes, MAX_READ_SIZE);
 					state.stream->GrowCapacity(bytes_to_read);
-					idx_t actually_read = NumericCast<idx_t>(
-					    file_handle->Read(state.stream->GetData() + state.stream->GetPosition(), bytes_to_read));
+					idx_t actually_read = NumericCast<idx_t>(file_handle->Read(
+					    context, state.stream->GetData() + state.stream->GetPosition(), bytes_to_read));
 					state.stream->SetPosition(state.stream->GetPosition() + actually_read);
 					AssertMaxFileSize(file.path, state.stream->GetPosition());
 

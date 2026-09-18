@@ -24,8 +24,8 @@ class ColumnDefinition;
 //! A column of a table.
 class ColumnDefinition {
 public:
-	DUCKDB_API ColumnDefinition(string name, LogicalType type);
-	DUCKDB_API ColumnDefinition(string name, LogicalType type, unique_ptr<ParsedExpression> expression,
+	DUCKDB_API ColumnDefinition(Identifier name, LogicalType type);
+	DUCKDB_API ColumnDefinition(Identifier name, LogicalType type, unique_ptr<ParsedExpression> expression,
 	                            TableColumnType category);
 
 public:
@@ -40,8 +40,8 @@ public:
 	void SetType(const LogicalType &type);
 
 	//! name
-	DUCKDB_API const string &Name() const;
-	void SetName(const string &name);
+	DUCKDB_API const Identifier &Name() const;
+	void SetName(const Identifier &name);
 
 	//! comment
 	DUCKDB_API const Value &Comment() const;
@@ -87,13 +87,13 @@ public:
 	void ChangeGeneratedExpressionType(const LogicalType &type);
 	void GetListOfDependencies(vector<string> &dependencies) const;
 
-	string GetName() const;
+	Identifier GetName() const;
 
 	LogicalType GetType() const;
 
 private:
 	//! The name of the entry
-	string name;
+	Identifier name;
 	//! The type of the column
 	LogicalType type;
 	//! Compression Type used for this column

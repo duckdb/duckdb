@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/exception.hpp"
 
@@ -36,10 +37,10 @@ enum class ForeignKeyType : uint8_t {
 
 struct ForeignKeyInfo {
 	ForeignKeyType type;
-	string schema;
+	Identifier schema;
 	//! if type is FK_TYPE_FOREIGN_KEY_TABLE, means main key table, if type is FK_TYPE_PRIMARY_KEY_TABLE, means foreign
 	//! key table
-	string table;
+	Identifier table;
 	//! The set of main key table's column's index
 	vector<PhysicalIndex> pk_keys;
 	//! The set of foreign key table's column's index

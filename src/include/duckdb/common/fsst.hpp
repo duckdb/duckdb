@@ -10,7 +10,6 @@
 
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/fsst.hpp"
 #include "fsst.h"
@@ -61,8 +60,9 @@ public:
 		    duckdb_fsst_decompress(fsst_decoder, compressed_string_len, compressed_string_ptr,
 		                           string_t::INLINE_LENGTH + sizeof(StringWithExtraSpace::extra_space), target_ptr);
 		if (decompressed_string_size > string_t::INLINE_LENGTH) {
-			throw IOException("Corrupt database file: decoded FSST string of >=%llu bytes (should be <=%llu bytes)",
-			                  decompressed_string_size, string_t::INLINE_LENGTH);
+			throw DataCorruptionException(
+			    "Corrupt database file: decoded FSST string of >=%llu bytes (should be <=%llu bytes)",
+			    decompressed_string_size, string_t::INLINE_LENGTH);
 		}
 		D_ASSERT(decompressed_string_size <= string_t::INLINE_LENGTH);
 		result.str.SetSizeAndFinalize(UnsafeNumericCast<uint32_t>(decompressed_string_size), string_t::INLINE_LENGTH);

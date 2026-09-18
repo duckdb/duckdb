@@ -50,10 +50,19 @@
         "type": "aggregate_function_set"
     },
     {
+        "name": "decimal_average",
+        "parameters": "arg",
+        "description": "Computes the average of a DECIMAL column using exact integer arithmetic with banker's rounding. Returns a DECIMAL with the same width and scale as the input.",
+        "example": "decimal_average(col::DECIMAL(18,2))",
+        "type": "aggregate_function_set",
+        "struct": "DecimalAverageFun"
+    },
+    {
         "name": "combine_aggr",
         "parameters": "arg",
         "description": "Combines exported aggregate states",
         "example": "combine_aggr(state_column)",
-        "type": "aggregate_function"
+        "type": "aggregate_function_set",
+        "extra_functions": ["static AggregateFunction GetFunction();"]
     }
 ]

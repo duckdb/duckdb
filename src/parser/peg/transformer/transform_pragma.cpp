@@ -1,4 +1,5 @@
 #include "duckdb/parser/statement/pragma_statement.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 
@@ -10,7 +11,7 @@ PEGTransformerFactory::TransformPragmaStatement(PEGTransformer &transformer,
 }
 
 unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformPragmaAssign(PEGTransformer &transformer, const string &setting_name,
+PEGTransformerFactory::TransformPragmaAssign(PEGTransformer &transformer, const Identifier &setting_name,
                                              vector<unique_ptr<ParsedExpression>> variable_list) {
 	// Rule: PragmaAssign <- SettingName '=' Expression
 	auto result = make_uniq<PragmaStatement>();
@@ -23,9 +24,9 @@ PEGTransformerFactory::TransformPragmaAssign(PEGTransformer &transformer, const 
 	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr->Cast<ColumnRefExpression>();
 		if (!colref.IsQualified()) {
-			info.parameters.emplace_back(make_uniq<ConstantExpression>(Value(colref.GetColumnName())));
+			info.parameters.emplace_back(ConstantExpression::String(colref.GetColumnName().GetIdentifierName()));
 		} else {
-			info.parameters.emplace_back(make_uniq<ConstantExpression>(Value(expr->ToString())));
+			info.parameters.emplace_back(ConstantExpression::String(expr->ToString()));
 		}
 	} else {
 		info.parameters.emplace_back(std::move(expr));
@@ -34,7 +35,7 @@ PEGTransformerFactory::TransformPragmaAssign(PEGTransformer &transformer, const 
 	// "PRAGMA table_info='integers'"
 	// "PRAGMA table_info('integers')"
 	// for compatibility, any pragmas that match the SQLite ones are parsed as calls
-	case_insensitive_set_t sqlite_compat_pragmas {"table_info"};
+	identifier_set_t sqlite_compat_pragmas {"table_info"};
 	if (sqlite_compat_pragmas.find(info.name) != sqlite_compat_pragmas.end()) {
 		return std::move(result);
 	}
@@ -43,28 +44,29 @@ PEGTransformerFactory::TransformPragmaAssign(PEGTransformer &transformer, const 
 }
 
 unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformPragmaFunction(PEGTransformer &transformer, const string &pragma_name,
-                                               vector<unique_ptr<ParsedExpression>> pragma_parameters) {
+PEGTransformerFactory::TransformPragmaFunction(PEGTransformer &transformer, const Identifier &pragma_name,
+                                               optional<vector<unique_ptr<ParsedExpression>>> pragma_parameters) {
 	// Rule: PragmaFunction <- PragmaName PragmaParameters?
 	auto result = make_uniq<PragmaStatement>();
 	result->info->name = pragma_name;
-	if (pragma_parameters.empty()) {
+	if (!pragma_parameters) {
 		return std::move(result);
 	}
-	for (auto &parameter : pragma_parameters) {
+	for (auto &parameter : *pragma_parameters) {
 		if (parameter->GetExpressionType() == ExpressionType::COMPARE_EQUAL) {
 			auto &comp = parameter->Cast<ComparisonExpression>();
-			if (comp.left->GetExpressionType() != ExpressionType::COLUMN_REF) {
+			if (comp.Left().GetExpressionType() != ExpressionType::COLUMN_REF) {
 				throw ParserException("Named parameter requires a column reference on the LHS");
 			}
-			auto &columnref = comp.left->Cast<ColumnRefExpression>();
-			result->info->named_parameters.insert(make_pair(columnref.GetName(), std::move(comp.right)));
+			auto &columnref = comp.Left().Cast<ColumnRefExpression>();
+			result->info->named_parameters.insert(make_pair(columnref.GetName(), std::move(comp.RightMutable())));
 		} else if (parameter->GetExpressionType() == ExpressionType::COLUMN_REF) {
 			auto &colref = parameter->Cast<ColumnRefExpression>();
 			if (!colref.IsQualified()) {
-				result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(colref.GetColumnName())));
+				result->info->parameters.emplace_back(
+				    ConstantExpression::String(colref.GetColumnName().GetIdentifierName()));
 			} else {
-				result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(parameter->ToString())));
+				result->info->parameters.emplace_back(ConstantExpression::String(parameter->ToString()));
 			}
 		} else {
 			result->info->parameters.emplace_back(std::move(parameter));

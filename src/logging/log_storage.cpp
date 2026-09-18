@@ -1,4 +1,5 @@
 #include "duckdb/logging/log_storage.hpp"
+#include "duckdb/function/table_function.hpp"
 
 #include "duckdb/common/csv_writer.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -50,7 +51,7 @@ vector<LogicalType> LogStorage::GetSchema(LoggingTargetTable table) {
 	}
 }
 
-vector<string> LogStorage::GetColumnNames(LoggingTargetTable table) {
+vector<Identifier> LogStorage::GetColumnNames(LoggingTargetTable table) {
 	switch (table) {
 	case LoggingTargetTable::ALL_LOGS: {
 		auto all_logs = GetColumnNames(LoggingTargetTable::LOG_CONTEXTS);
@@ -141,7 +142,6 @@ void CSVLogStorage::ExecuteCast(LoggingTargetTable table, DataChunk &chunk) {
 	for (idx_t i = 0; i < chunk.data.size(); i++) {
 		VectorOperations::DefaultCast(chunk.data[i], cast_buffer.data[i], count, false);
 	}
-	cast_buffer.SetCardinality(count);
 }
 
 void CSVLogStorage::ResetAllBuffers() {
@@ -200,7 +200,7 @@ void CSVLogStorage::ResetCastChunk() {
 	InitializeCastChunk(LoggingTargetTable::ALL_LOGS);
 }
 
-void CSVLogStorage::SetWriterConfigs(CSVWriter &writer, vector<string> column_names) {
+void CSVLogStorage::SetWriterConfigs(CSVWriter &writer, vector<Identifier> column_names) {
 	writer.options = *reader_options;
 	writer.writer_options = *writer_options;
 
@@ -356,8 +356,11 @@ void FileLogStorage::Truncate() {
 		}
 		// Truncate the file writer
 		file_writer->Truncate(0);
-		// Re-initialize the corresponding CSVWriter
-		GetWriter(it.first).Initialize(true);
+		auto &writer = GetWriter(it.first);
+		// Reset writer and header option, then re-initialize
+		writer.Reset(nullptr);
+		writer.options.dialect_options.header = CSVOption<bool>(true);
+		writer.Initialize(true);
 	}
 }
 
@@ -537,18 +540,20 @@ BufferingLogStorage::BufferingLogStorage(DatabaseInstance &db_p, idx_t buffer_si
 
 void BufferingLogStorage::ResetLogBuffers() {
 	idx_t buffer_size = MaxValue<idx_t>(buffer_limit, 1);
+	// initialize the new buffers before replacing the old ones - initializing allocates, and a buffer that is
+	// replaced but not initialized has no columns, so every later write to it indexes out of bounds
 	if (normalize_contexts) {
-		buffers[LoggingTargetTable::LOG_ENTRIES] = make_uniq<DataChunk>();
-		buffers[LoggingTargetTable::LOG_CONTEXTS] = make_uniq<DataChunk>();
-		buffers[LoggingTargetTable::LOG_ENTRIES]->Initialize(Allocator::DefaultAllocator(),
-		                                                     GetSchema(LoggingTargetTable::LOG_ENTRIES), buffer_size);
-		buffers[LoggingTargetTable::LOG_CONTEXTS]->Initialize(Allocator::DefaultAllocator(),
-		                                                      GetSchema(LoggingTargetTable::LOG_CONTEXTS), buffer_size);
-
+		auto log_entries = make_uniq<DataChunk>();
+		auto log_contexts = make_uniq<DataChunk>();
+		log_entries->Initialize(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::LOG_ENTRIES), buffer_size);
+		log_contexts->Initialize(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::LOG_CONTEXTS),
+		                         buffer_size);
+		buffers[LoggingTargetTable::LOG_ENTRIES] = std::move(log_entries);
+		buffers[LoggingTargetTable::LOG_CONTEXTS] = std::move(log_contexts);
 	} else {
-		buffers[LoggingTargetTable::ALL_LOGS] = make_uniq<DataChunk>();
-		buffers[LoggingTargetTable::ALL_LOGS]->Initialize(Allocator::DefaultAllocator(),
-		                                                  GetSchema(LoggingTargetTable::ALL_LOGS), buffer_size);
+		auto all_logs = make_uniq<DataChunk>();
+		all_logs->Initialize(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::ALL_LOGS), buffer_size);
+		buffers[LoggingTargetTable::ALL_LOGS] = std::move(all_logs);
 	}
 	registered_contexts.clear();
 }
@@ -626,7 +631,7 @@ static void WriteLoggingContextsToChunk(DataChunk &chunk, const RegisteredLoggin
 		FlatVector::ValidityMutable(chunk.data[col++]).SetInvalid(size);
 	}
 
-	chunk.SetCardinality(size + 1);
+	chunk.SetChildCardinality(size + 1);
 }
 
 void BufferingLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
@@ -669,7 +674,7 @@ void BufferingLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, c
 	auto message_data = FlatVector::GetDataMutable<string_t>(log_entries_buffer->data[col]);
 	message_data[size] = StringVector::AddString(log_entries_buffer->data[col++], log_message);
 
-	log_entries_buffer->SetCardinality(size + 1);
+	log_entries_buffer->SetChildCardinality(size + 1);
 
 	if (size + 1 >= buffer_limit) {
 		if (normalize_contexts) {

@@ -3,6 +3,9 @@
 # group: [window]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 PRAGMA explain_output = PHYSICAL_ONLY;
 
 query TT

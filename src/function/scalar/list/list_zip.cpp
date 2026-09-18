@@ -151,17 +151,17 @@ static unique_ptr<FunctionData> ListZipBind(BindScalarFunctionInput &input) {
 		}
 	}
 
-	case_insensitive_set_t struct_names;
+	identifier_set_t struct_names;
 	for (idx_t i = 0; i < size; i++) {
 		auto &child = arguments[i];
 		switch (child->GetReturnType().id()) {
 		case LogicalTypeId::LIST:
 		case LogicalTypeId::ARRAY:
 			child = BoundCastExpression::AddArrayCastToList(context, std::move(child));
-			struct_children.push_back(make_pair(string(), ListType::GetChildType(child->GetReturnType())));
+			struct_children.emplace_back(make_pair(string(), ListType::GetChildType(child->GetReturnType())));
 			break;
 		case LogicalTypeId::SQLNULL:
-			struct_children.push_back(make_pair(string(), LogicalTypeId::SQLNULL));
+			struct_children.emplace_back(make_pair(string(), LogicalTypeId::SQLNULL));
 			break;
 		case LogicalTypeId::UNKNOWN:
 			throw ParameterNotResolvedException();
@@ -169,7 +169,7 @@ static unique_ptr<FunctionData> ListZipBind(BindScalarFunctionInput &input) {
 			throw BinderException("Parameter type needs to be List");
 		}
 	}
-	bound_function.SetReturnType(LogicalType::LIST(LogicalType::STRUCT(struct_children)));
+	bound_function.SetReturnType(LogicalType::LIST(LogicalType::TUPLE(struct_children)));
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 

@@ -1,0 +1,133 @@
+# name: test/sql/json/table/read_geojson_featurecollection.test
+# description: Read a GeoJSON FeatureCollection as a table
+# group: [table]
+
+require json
+
+# The .geojson extension enables GeoJSON handling, so the FeatureCollection becomes one row per Feature
+query IIII
+SELECT ST_AsText(geometry), name, pop, area
+FROM read_json('data/json/geojson/features.geojson');
+----
+POINT (1 2)	alpha	100	1.5
+LINESTRING (0 0, 1 1)	beta	200	2.5
+POLYGON ((0 0, 1 0, 1 1, 0 0))	gamma	300	NULL
+NULL	delta	NULL	NULL
+
+# Property types are inferred across all features
+query II
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_json('data/json/geojson/features.geojson'));
+----
+geometry	GEOMETRY
+name	VARCHAR
+pop	BIGINT
+area	DOUBLE
+
+query I
+SELECT count(*) FROM read_json('data/json/geojson/features.geojson');
+----
+4
+
+# The replacement scan picks up .geojson files too
+query II
+SELECT ST_AsText(geometry), name FROM 'data/json/geojson/features.geojson' LIMIT 2;
+----
+POINT (1 2)	alpha
+LINESTRING (0 0, 1 1)	beta
+
+query I
+SELECT count(*) FROM 'data/json/geojson/features.geojsonl';
+----
+3
+
+# Projection pushdown: only properties
+query II
+SELECT name, pop FROM read_json('data/json/geojson/features.geojson') WHERE pop IS NOT NULL ORDER BY pop;
+----
+alpha	100
+beta	200
+gamma	300
+
+# Projection pushdown: only the geometry
+query I
+SELECT count(geometry) FROM read_json('data/json/geojson/features.geojson');
+----
+3
+
+# Members of the FeatureCollection other than "features" are not exposed as columns
+statement error
+SELECT name AS n, "type" FROM read_json('data/json/geojson/features.geojson');
+----
+<REGEX>:.*type.*
+
+# Turning GeoJSON handling off gives the raw document instead
+query II
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_json('data/json/geojson/features.geojson', geojson=false));
+----
+type	VARCHAR
+name	VARCHAR
+features	STRUCT("type" VARCHAR, geometry STRUCT("type" VARCHAR, coordinates JSON[]), properties STRUCT("name" VARCHAR, pop BIGINT, area DOUBLE))[]
+
+# geojson=true works on a file that is not named .geojson
+statement ok
+COPY (SELECT content FROM read_text('data/json/geojson/features.geojson')) TO '{TEST_DIR}/fc_copy.json' (FORMAT CSV, HEADER false, QUOTE '', ESCAPE '');
+
+query I
+SELECT count(*) FROM read_json('{TEST_DIR}/fc_copy.json', geojson=true);
+----
+4
+
+# Without the option, a .json FeatureCollection is a single row
+query I
+SELECT count(*) FROM read_json('{TEST_DIR}/fc_copy.json');
+----
+1
+
+# An object with a "features" array that is not a FeatureCollection is left alone
+statement ok
+COPY (SELECT '{"type":"Inventory","features":[{"a":1},{"a":2}]}' AS c) TO '{TEST_DIR}/not_fc.geojson' (FORMAT CSV, HEADER false, QUOTE '', ESCAPE '');
+
+query II
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_json('{TEST_DIR}/not_fc.geojson'));
+----
+type	VARCHAR
+features	STRUCT(a BIGINT)[]
+
+# "features" may come before "type"
+statement ok
+COPY (SELECT '{"features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[1,2]},"properties":{"k":1}}],"type":"FeatureCollection"}' AS c) TO '{TEST_DIR}/fc_reorder.geojson' (FORMAT CSV, HEADER false, QUOTE '', ESCAPE '');
+
+query II
+SELECT ST_AsText(geometry), k FROM read_json('{TEST_DIR}/fc_reorder.geojson');
+----
+POINT (1 2)	1
+
+# An empty FeatureCollection
+statement ok
+COPY (SELECT '{"type":"FeatureCollection","features":[]}' AS c) TO '{TEST_DIR}/fc_empty.geojson' (FORMAT CSV, HEADER false, QUOTE '', ESCAPE '');
+
+query I
+SELECT count(*) FROM read_json('{TEST_DIR}/fc_empty.geojson');
+----
+0
+
+# Members after the "features" array are ignored
+statement ok
+COPY (SELECT '{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[1,2]},"properties":{"k":1}}],"bbox":[1.0,2.0,1.0,2.0],"name":"tail"}' AS c) TO '{TEST_DIR}/fc_trailing.geojson' (FORMAT CSV, HEADER false, QUOTE '', ESCAPE '');
+
+query II
+SELECT ST_AsText(geometry), k FROM read_json('{TEST_DIR}/fc_trailing.geojson');
+----
+POINT (1 2)	1
+
+# Members after an empty "features" array are ignored too
+statement ok
+COPY (SELECT '{"type":"FeatureCollection","features":[],"bbox":[0.0,0.0,0.0,0.0],"name":"tail"}' AS c) TO '{TEST_DIR}/fc_empty_trailing.geojson' (FORMAT CSV, HEADER false, QUOTE '', ESCAPE '');
+
+query I
+SELECT count(*) FROM read_json('{TEST_DIR}/fc_empty_trailing.geojson');
+----
+0

@@ -21,7 +21,7 @@ BoundStatement Binder::Bind(LogicalPlanStatement &stmt) {
 	BoundStatement result;
 	result.types = stmt.plan->types;
 	for (idx_t i = 0; i < result.types.size(); i++) {
-		result.names.push_back(StringUtil::Format("col%d", i));
+		result.names.emplace_back(StringUtil::Format("col%d", i));
 	}
 	result.plan = std::move(stmt.plan);
 

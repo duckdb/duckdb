@@ -1,0 +1,96 @@
+# name: test/sql/timezone/test_icu_datetime_overflow.test
+# description: Field arithmetic at the extremes of what the calendars can represent
+# group: [timezone]
+
+require icu
+
+statement ok
+SET TimeZone='UTC';
+
+# Adding a field amount that does not fit has to be reported rather than wrapping around.
+# The intermediate values overflow well before the result does, so these are all errors
+# even though the interval itself is representable.
+
+statement error
+SELECT '2000-01-01 00:00:00+00'::TIMESTAMPTZ - INTERVAL 2147483647 MONTH;
+----
+<REGEX>:.*(out of range|overflow).*
+
+statement error
+SELECT date_add('2000-01-01 00:00:00+00'::TIMESTAMPTZ, INTERVAL 2147483647 MONTH);
+----
+<REGEX>:.*(out of range|overflow).*
+
+statement error
+SELECT date_add('2000-01-01 00:00:00+00'::TIMESTAMPTZ, INTERVAL (-2147483648) MONTH);
+----
+<REGEX>:.*(out of range|overflow).*
+
+# the same additions in every calendar, none of which may wrap round to a plausible date
+
+foreach cal gregorian buddhist roc iso8601 coptic ethiopic ethiopic-amete-alem persian indian islamic islamic-civil islamic-rgsa islamic-tbla islamic-umalqura hebrew japanese chinese dangi
+
+statement ok
+SET Calendar='{cal}';
+
+statement error
+SELECT date_add('1900-01-01 00:00:00+00'::TIMESTAMPTZ, INTERVAL 2147483647 MONTH);
+----
+<REGEX>:.*(out of range|overflow|13 month calendars).*
+
+statement error
+SELECT date_add('1900-01-01 00:00:00+00'::TIMESTAMPTZ, INTERVAL (-2147483648) MONTH);
+----
+<REGEX>:.*(out of range|overflow|13 month calendars).*
+
+endloop
+
+# A calendar that cannot represent an instant reports it as an error about the value, not as
+# an internal one: an internal error would take the whole database down with it.
+
+statement ok
+SET Calendar='chinese';
+
+statement error
+SELECT date_part(['decade','timezone'], '294247-01-10 04:00:54.775806+00'::TIMESTAMPTZ);
+----
+<REGEX>:.*(Conversion|out of range|Out of Range).*
+
+# the connection is still usable afterwards
+query I
+SELECT 1;
+----
+1
+
+statement ok
+SET Calendar='gregorian';
+
+# Ordinary arithmetic is unaffected by the checks above.
+
+query I
+SELECT date_add('2000-01-01 00:00:00+00'::TIMESTAMPTZ, INTERVAL 3 MONTH);
+----
+2000-04-01 00:00:00+00
+
+query I
+SELECT date_add('2000-01-31 00:00:00+00'::TIMESTAMPTZ, INTERVAL 1 MONTH);
+----
+2000-02-29 00:00:00+00
+
+query I
+SELECT '2000-01-01 00:00:00+00'::TIMESTAMPTZ - INTERVAL 1 MONTH;
+----
+1999-12-01 00:00:00+00
+
+# A failure part way through a multi-field addition must survive the rest of the sequence
+# instead of being cleared by the field that follows it.
+
+statement error
+SELECT date_add('1900-01-01 00:00:00+00'::TIMESTAMPTZ, INTERVAL '2147483647 months 5 days 3 hours');
+----
+<REGEX>:.*(out of range|overflow|13 month calendars).*
+
+statement error
+SELECT date_add('1900-01-01 00:00:00+00'::TIMESTAMPTZ, INTERVAL '-2147483648 months -5 days -3 hours');
+----
+<REGEX>:.*(out of range|overflow|13 month calendars).*

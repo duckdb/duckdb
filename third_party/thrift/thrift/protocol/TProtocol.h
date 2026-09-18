@@ -89,6 +89,18 @@ static inline To bitwise_cast(From from) {
 #  define __THRIFT_BYTE_ORDER BYTE_ORDER
 #  define __THRIFT_LITTLE_ENDIAN LITTLE_ENDIAN
 #  define __THRIFT_BIG_ENDIAN BIG_ENDIAN
+# elif defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__) && defined(__ORDER_BIG_ENDIAN__)
+   // GCC / Clang builtin (macOS, Linux, MinGW, ...). Reliable without relying on system headers happening to have
+   // defined BYTE_ORDER already.
+#  define __THRIFT_BYTE_ORDER __BYTE_ORDER__
+#  define __THRIFT_LITTLE_ENDIAN __ORDER_LITTLE_ENDIAN__
+#  define __THRIFT_BIG_ENDIAN __ORDER_BIG_ENDIAN__
+# elif defined(_WIN32)
+   // All Windows targets (x86, x64, ARM, ARM64) are little-endian. MSVC does not define BYTE_ORDER, so without this
+   // we would fall through to the broken default below and byteswap every double on the wire.
+#  define __THRIFT_BYTE_ORDER 1234
+#  define __THRIFT_LITTLE_ENDIAN __THRIFT_BYTE_ORDER
+#  define __THRIFT_BIG_ENDIAN 0
 # else
 //#  include <boost/predef/other/endian.h>
 #  if BOOST_ENDIAN_BIG_BYTE
@@ -104,6 +116,13 @@ static inline To bitwise_cast(From from) {
 #  else
 #  endif
 # endif
+#endif
+
+// Guard against silently falling into the big-endian byteswap path.
+// if detection failed above, __THRIFT_BYTE_ORDER and __THRIFT_BIG_ENDIAN both expand to 0 and the comparison below
+// would be (0 == 0) -> true, byte-swapping every double.
+#if !defined(__THRIFT_BYTE_ORDER) || !defined(__THRIFT_LITTLE_ENDIAN) || !defined(__THRIFT_BIG_ENDIAN)
+# error "Could not detect endianness for Thrift; define __THRIFT_BYTE_ORDER explicitly."
 #endif
 
 #if __THRIFT_BYTE_ORDER == __THRIFT_BIG_ENDIAN

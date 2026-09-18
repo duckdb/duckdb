@@ -22,26 +22,29 @@ public:
 
 public:
 	//! Specify both the column and table name
-	ColumnRefExpression(string column_name, string table_name);
+	ColumnRefExpression(Identifier column_name, Identifier table_name);
 	//! Specify both the column and table alias
-	ColumnRefExpression(string column_name, const BindingAlias &alias);
+	ColumnRefExpression(Identifier column_name, const BindingAlias &alias);
 	//! Only specify the column name, the table name will be derived later
-	explicit ColumnRefExpression(string column_name);
+	explicit ColumnRefExpression(Identifier column_name);
 	//! Specify a set of names
-	explicit ColumnRefExpression(vector<string> column_names);
-
-	//! The stack of names in order of which they appear (column_names[0].column_names[1].column_names[2]....)
-	vector<string> column_names;
+	explicit ColumnRefExpression(vector<Identifier> column_names);
 
 public:
+	const vector<Identifier> &ColumnNames() const {
+		return column_names;
+	}
+	vector<Identifier> &ColumnNamesMutable() {
+		return column_names;
+	}
+
 	bool IsQualified() const;
-	const string &GetColumnName() const;
-	const string &GetTableName() const;
+	const Identifier &GetColumnName() const;
 	bool IsScalar() const override {
 		return false;
 	}
 
-	string GetName() const override;
+	Identifier GetName() const override;
 	string ToString() const override;
 
 	bool Equals(const ParsedExpression &other) const override;
@@ -51,6 +54,10 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
+
+private:
+	//! The stack of names in order of which they appear (column_names[0].column_names[1].column_names[2]....)
+	vector<Identifier> column_names;
 
 private:
 	ColumnRefExpression();

@@ -3,7 +3,6 @@
 #include "core_functions/scalar/struct_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
@@ -20,8 +19,8 @@ static void StructUpdateFunction(DataChunk &args, ExpressionState &state, Vector
 
 	auto &starting_types = StructType::GetChildTypes(starting_vec.GetType());
 
-	auto &func_args = state.expr.Cast<BoundFunctionExpression>().children;
-	auto new_entries = case_insensitive_tree_t<idx_t>();
+	auto &func_args = state.expr.Cast<BoundFunctionExpression>().GetChildren();
+	auto new_entries = identifier_tree_t<idx_t>();
 	auto is_new_field = vector<bool>(args.ColumnCount(), true);
 
 	for (idx_t arg_idx = 1; arg_idx < func_args.size(); arg_idx++) {
@@ -69,7 +68,7 @@ static unique_ptr<FunctionData> StructUpdateBind(BindScalarFunctionInput &input)
 	child_list_t<LogicalType> new_children;
 	auto &existing_children = StructType::GetChildTypes(arguments[0]->GetReturnType());
 
-	auto incoming_children = case_insensitive_tree_t<idx_t>();
+	auto incoming_children = identifier_tree_t<idx_t>();
 	auto is_new_field = vector<bool>(arguments.size(), true);
 
 	// Validate incoming arguments and record names
@@ -93,7 +92,7 @@ static unique_ptr<FunctionData> StructUpdateBind(BindScalarFunctionInput &input)
 			// Update the struct with the new data of the same name
 			auto arg_idx = update->second;
 			auto &new_child = arguments[arg_idx];
-			new_children.push_back(make_pair(new_child->GetAlias(), new_child->GetReturnType()));
+			new_children.emplace_back(make_pair(new_child->GetAlias(), new_child->GetReturnType()));
 			is_new_field[arg_idx] = false;
 		}
 	}
@@ -102,7 +101,7 @@ static unique_ptr<FunctionData> StructUpdateBind(BindScalarFunctionInput &input)
 	for (idx_t arg_idx = 1; arg_idx < arguments.size(); arg_idx++) {
 		if (is_new_field[arg_idx]) {
 			auto &child = arguments[arg_idx];
-			new_children.push_back(make_pair(child->GetAlias(), child->GetReturnType()));
+			new_children.emplace_back(make_pair(child->GetAlias(), child->GetReturnType()));
 		}
 	}
 
@@ -114,12 +113,13 @@ static unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, Func
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 
-	auto incoming_children = case_insensitive_tree_t<idx_t>();
-	auto is_new_field = vector<bool>(expr.children.size(), true);
+	auto incoming_children = identifier_tree_t<idx_t>();
+	auto is_new_field = vector<bool>(expr.GetChildren().size(), true);
 	auto new_stats = StructStats::CreateUnknown(expr.GetReturnType());
+	new_stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 
-	for (idx_t arg_idx = 1; arg_idx < expr.children.size(); arg_idx++) {
-		auto &new_child = expr.children[arg_idx];
+	for (idx_t arg_idx = 1; arg_idx < expr.GetChildren().size(); arg_idx++) {
+		auto &new_child = expr.GetChildren()[arg_idx];
 		incoming_children.emplace(new_child->GetAlias(), arg_idx);
 	}
 
@@ -138,7 +138,7 @@ static unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, Func
 		}
 	}
 
-	for (idx_t arg_idx = 1, field_idx = existing_count; arg_idx < expr.children.size(); arg_idx++) {
+	for (idx_t arg_idx = 1, field_idx = existing_count; arg_idx < expr.GetChildren().size(); arg_idx++) {
 		if (is_new_field[arg_idx]) {
 			StructStats::SetChildStats(new_stats, field_idx++, child_stats[arg_idx]);
 		}
@@ -151,6 +151,7 @@ ScalarFunction StructUpdateFun::GetFunction() {
 	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructUpdateFunction, StructUpdateBind, StructUpdateStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetVarArgs(LogicalType::ANY);
+	fun.GetProperties().SetRequiresExpressionNames(true);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
 	return fun;

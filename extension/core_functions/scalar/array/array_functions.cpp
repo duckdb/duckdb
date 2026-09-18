@@ -2,6 +2,7 @@
 #include "core_functions/scalar/array_functions.hpp"
 #include "core_functions/array_kernels.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/storage/statistics/array_stats.hpp"
 
 namespace duckdb {
 
@@ -24,15 +25,15 @@ static unique_ptr<FunctionData> ArrayGenericBinaryBind(BindScalarFunctionInput &
 
 	if (bound_function.GetArguments()[0].id() != LogicalTypeId::ARRAY ||
 	    bound_function.GetArguments()[1].id() != LogicalTypeId::ARRAY) {
-		throw InvalidInputException(
-		    StringUtil::Format("%s: Arguments must be arrays of FLOAT or DOUBLE", bound_function.GetName()));
+		throw InvalidInputException(StringUtil::Format("%s: Arguments must be arrays of FLOAT or DOUBLE",
+		                                               SQLIdentifier(bound_function.GetName())));
 	}
 
 	const auto lhs_size = ArrayType::GetSize(bound_function.GetArguments()[0]);
 	const auto rhs_size = ArrayType::GetSize(bound_function.GetArguments()[1]);
 
 	if (lhs_size != rhs_size) {
-		throw BinderException("%s: Array arguments must be of the same size", bound_function.GetName());
+		throw BinderException("%s: Array arguments must be of the same size", SQLIdentifier(bound_function.GetName()));
 	}
 
 	const auto &lhs_element_type = ArrayType::GetChildType(bound_function.GetArguments()[0]);
@@ -42,12 +43,14 @@ static unique_ptr<FunctionData> ArrayGenericBinaryBind(BindScalarFunctionInput &
 	LogicalType common_type;
 	if (!LogicalType::TryGetMaxLogicalType(context, lhs_element_type, rhs_element_type, common_type)) {
 		throw BinderException("%s: Cannot infer common element type (left = '%s', right = '%s')",
-		                      bound_function.GetName(), lhs_element_type.ToString(), rhs_element_type.ToString());
+		                      SQLIdentifier(bound_function.GetName()), lhs_element_type.ToString(),
+		                      rhs_element_type.ToString());
 	}
 
 	// Ensure it is float or double
 	if (common_type.id() != LogicalTypeId::FLOAT && common_type.id() != LogicalTypeId::DOUBLE) {
-		throw BinderException("%s: Arguments must be arrays of FLOAT or DOUBLE", bound_function.GetName());
+		throw BinderException("%s: Arguments must be arrays of FLOAT or DOUBLE",
+		                      SQLIdentifier(bound_function.GetName()));
 	}
 
 	// The important part is just that we resolve the size of the input arrays
@@ -87,7 +90,7 @@ template <class TYPE, class OP, idx_t N>
 static void ArrayFixedCombine(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto &lstate = state.Cast<ExecuteFunctionState>();
 	const auto &expr = lstate.expr.Cast<BoundFunctionExpression>();
-	const auto &func_name = expr.function.GetName();
+	const auto &func_name = expr.Function().GetName();
 
 	const auto count = args.size();
 	auto &lhs_child = ArrayVector::GetChildMutable(args.data[0]);
@@ -118,13 +121,14 @@ static void ArrayFixedCombine(DataChunk &args, ExpressionState &state, Vector &r
 
 		const auto left_offset = lhs_idx * N;
 		if (!lhs_child_validity.CheckAllValid(left_offset + N, left_offset)) {
-			throw InvalidInputException(StringUtil::Format("%s: left argument can not contain NULL values", func_name));
+			throw InvalidInputException(
+			    StringUtil::Format("%s: left argument can not contain NULL values", SQLIdentifier(func_name)));
 		}
 
 		const auto right_offset = rhs_idx * N;
 		if (!rhs_child_validity.CheckAllValid(right_offset + N, right_offset)) {
 			throw InvalidInputException(
-			    StringUtil::Format("%s: right argument can not contain NULL values", func_name));
+			    StringUtil::Format("%s: right argument can not contain NULL values", SQLIdentifier(func_name)));
 		}
 		const auto result_offset = i * N;
 
@@ -149,7 +153,7 @@ template <class TYPE, class OP>
 static void ArrayGenericFold(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto &lstate = state.Cast<ExecuteFunctionState>();
 	const auto &expr = lstate.expr.Cast<BoundFunctionExpression>();
-	const auto &func_name = expr.function.GetName();
+	const auto &func_name = expr.Function().GetName();
 
 	const auto count = args.size();
 	auto &lhs_child = ArrayVector::GetChildMutable(args.data[0]);
@@ -182,13 +186,14 @@ static void ArrayGenericFold(DataChunk &args, ExpressionState &state, Vector &re
 
 		const auto left_offset = lhs_idx * array_size;
 		if (!lhs_child_validity.CheckAllValid(left_offset + array_size, left_offset)) {
-			throw InvalidInputException(StringUtil::Format("%s: left argument can not contain NULL values", func_name));
+			throw InvalidInputException(
+			    StringUtil::Format("%s: left argument can not contain NULL values", SQLIdentifier(func_name)));
 		}
 
 		const auto right_offset = rhs_idx * array_size;
 		if (!rhs_child_validity.CheckAllValid(right_offset + array_size, right_offset)) {
 			throw InvalidInputException(
-			    StringUtil::Format("%s: right argument can not contain NULL values", func_name));
+			    StringUtil::Format("%s: right argument can not contain NULL values", SQLIdentifier(func_name)));
 		}
 
 		const auto lhs_data_ptr = lhs_data + left_offset;
@@ -202,6 +207,33 @@ static void ArrayGenericFold(DataChunk &args, ExpressionState &state, Vector &re
 	}
 }
 
+static auto ArrayGenericFoldStats(ClientContext &context, FunctionStatisticsInput &input)
+    -> unique_ptr<BaseStatistics> {
+	// Propagate validity
+	const auto &lhs_stats = input.child_stats[0];
+	const auto &rhs_stats = input.child_stats[1];
+	auto new_stats = NumericStats::CreateUnknown(input.expr.GetReturnType());
+	new_stats.CombineValidity(lhs_stats, rhs_stats);
+	if (!lhs_stats.CanHaveNoNull() || !rhs_stats.CanHaveNoNull()) {
+		new_stats.Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
+	}
+
+	auto &lhs_child_stats = ArrayStats::GetChildStats(lhs_stats);
+	auto &rhs_child_stats = ArrayStats::GetChildStats(rhs_stats);
+
+	const auto has_any_nulls = lhs_child_stats.CanHaveNull() || rhs_child_stats.CanHaveNull();
+
+	if (has_any_nulls) {
+		// We will throw an error if the child arrays have nulls, so don't propagate any stats
+		return new_stats.ToUnique();
+	}
+
+	// If the child has no nulls, we won't throw.
+	input.expr.FunctionMutable().GetProperties().SetErrorMode(FunctionErrors::CANNOT_ERROR);
+
+	return new_stats.ToUnique();
+}
+
 //------------------------------------------------------------------------------
 // Function Registration
 //------------------------------------------------------------------------------
@@ -210,19 +242,26 @@ static void ArrayGenericFold(DataChunk &args, ExpressionState &state, Vector &re
 // extension.
 
 template <class OP>
-static void AddArrayFoldFunction(ScalarFunctionSet &set, const LogicalType &type) {
-	const auto array = LogicalType::ARRAY(type, optional_idx());
-	if (type.id() == LogicalTypeId::FLOAT) {
-		ScalarFunction function({array, array}, type, ArrayGenericFold<float, OP>, ArrayGenericBinaryBind);
-		function.SetFallible();
-		set.AddFunction(function);
-	} else if (type.id() == LogicalTypeId::DOUBLE) {
-		ScalarFunction function({array, array}, type, ArrayGenericFold<double, OP>, ArrayGenericBinaryBind);
-		function.SetFallible();
-		set.AddFunction(function);
-	} else {
+static scalar_function_t GetArrayFoldFunction(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::FLOAT:
+		return ArrayGenericFold<float, OP>;
+	case LogicalTypeId::DOUBLE:
+		return ArrayGenericFold<double, OP>;
+	default:
 		throw NotImplementedException("Array function not implemented for type %s", type.ToString());
 	}
+}
+
+template <class OP>
+static void AddArrayFoldFunction(ScalarFunctionSet &set, const LogicalType &type) {
+	ScalarFunction func({}, type, GetArrayFoldFunction<OP>(type), ArrayGenericBinaryBind, ArrayGenericFoldStats);
+	auto array = LogicalType::ARRAY(type, optional_idx());
+
+	func.SetFallible();
+	func.GetSignature().AddParameter("array1", array).AddParameter("array2", array);
+
+	set.AddFunction(func);
 }
 
 ScalarFunctionSet ArrayDistanceFun::GetFunctions() {
@@ -270,13 +309,17 @@ ScalarFunctionSet ArrayCrossProductFun::GetFunctions() {
 
 	auto float_array = LogicalType::ARRAY(LogicalType::FLOAT, 3);
 	auto double_array = LogicalType::ARRAY(LogicalType::DOUBLE, 3);
-	set.AddFunction(
-	    ScalarFunction({float_array, float_array}, float_array, ArrayFixedCombine<float, CrossProductOp, 3>));
-	set.AddFunction(
-	    ScalarFunction({double_array, double_array}, double_array, ArrayFixedCombine<double, CrossProductOp, 3>));
-	for (auto &func : set.functions) {
-		func.SetFallible();
-	}
+
+	ScalarFunction float_fun({}, float_array, ArrayFixedCombine<float, CrossProductOp, 3>);
+	float_fun.GetSignature().AddParameter("array1", float_array).AddParameter("array2", float_array);
+	set.AddFunction(float_fun);
+
+	ScalarFunction double_fun({}, double_array, ArrayFixedCombine<double, CrossProductOp, 3>);
+	double_fun.GetSignature().AddParameter("array1", double_array).AddParameter("array2", double_array);
+	set.AddFunction(double_fun);
+
+	set.SetFallible();
+
 	return set;
 }
 

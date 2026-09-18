@@ -88,13 +88,14 @@ void CSVSchema::MergeSchemas(CSVSchema &other, bool null_padding) {
 	}
 }
 
-CSVSchema::CSVSchema(const vector<string> &names, const vector<LogicalType> &types, const string &file_path,
+CSVSchema::CSVSchema(const vector<Identifier> &names, const vector<LogicalType> &types, const string &file_path,
                      idx_t rows_read_p, const bool empty_p)
     : rows_read(rows_read_p), empty(empty_p) {
 	Initialize(names, types, file_path);
 }
 
-void CSVSchema::Initialize(const vector<string> &names, const vector<LogicalType> &types, const string &file_path_p) {
+void CSVSchema::Initialize(const vector<Identifier> &names, const vector<LogicalType> &types,
+                           const string &file_path_p) {
 	if (!columns.empty()) {
 		throw InternalException("CSV Schema is already populated, this should not happen.");
 	}
@@ -112,7 +113,7 @@ void CSVSchema::Initialize(const vector<string> &names, const vector<LogicalType
 vector<string> CSVSchema::GetNames() const {
 	vector<string> names;
 	for (auto &column : columns) {
-		names.push_back(column.name);
+		names.push_back(column.name.GetIdentifierName());
 	}
 	return names;
 }
@@ -161,7 +162,7 @@ bool CSVSchema::SchemasMatch(string &error_message, SnifferResult &sniffer_resul
 
 	for (idx_t i = 0; i < sniffer_result.names.size(); i++) {
 		// Populate our little schema
-		current_schema[sniffer_result.names[i]] = {sniffer_result.return_types[i], i};
+		current_schema[sniffer_result.names[i].GetIdentifierName()] = {sniffer_result.return_types[i], i};
 	}
 	if (is_minimal_sniffer) {
 		auto min_sniffer = static_cast<AdaptiveSnifferResult &>(sniffer_result);
@@ -169,7 +170,7 @@ bool CSVSchema::SchemasMatch(string &error_message, SnifferResult &sniffer_resul
 			bool min_sniff_match = true;
 			// If we don't have more than one row, either the names must match or the types must match.
 			for (auto &column : columns) {
-				if (current_schema.find(column.name) == current_schema.end()) {
+				if (current_schema.find(column.name.GetIdentifierName()) == current_schema.end()) {
 					min_sniff_match = false;
 					break;
 				}
@@ -194,7 +195,7 @@ bool CSVSchema::SchemasMatch(string &error_message, SnifferResult &sniffer_resul
 				// If we got here, we have the right types but the wrong names, lets fix the names
 				idx_t sniff_name_idx = 0;
 				for (auto &column : columns) {
-					sniffer_result.names[sniff_name_idx++] = column.name;
+					sniffer_result.names[sniff_name_idx++] = Identifier(column.name);
 				}
 				return true;
 			}
@@ -212,15 +213,15 @@ bool CSVSchema::SchemasMatch(string &error_message, SnifferResult &sniffer_resul
 	error << "Current file: " << cur_file_path << "\n";
 
 	for (auto &column : columns) {
-		if (current_schema.find(column.name) == current_schema.end()) {
-			error << "Column with name: \"" << column.name << "\" is missing"
+		if (current_schema.find(column.name.GetIdentifierName()) == current_schema.end()) {
+			error << "Column with name: \"" << column.name.GetIdentifierName() << "\" is missing"
 			      << "\n";
 			match = false;
 		} else {
-			if (!CanWeCastIt(current_schema[column.name].type.id(), column.type.id())) {
-				error << "Column with name: \"" << column.name
+			if (!CanWeCastIt(current_schema[column.name.GetIdentifierName()].type.id(), column.type.id())) {
+				error << "Column with name: \"" << column.name.GetIdentifierName()
 				      << "\" is expected to have type: " << column.type.ToString();
-				error << " But has type: " << current_schema[column.name].type.ToString() << "\n";
+				error << " But has type: " << current_schema[column.name.GetIdentifierName()].type.ToString() << "\n";
 				match = false;
 			}
 		}

@@ -26,4 +26,10 @@ SELECT COUNT(*) > 0 FROM parquet_schema('{TEST_DIR}/{type}_variant.parquet') WHE
 ----
 1
 
+# Parquet can't shred on these types, so this field is never fully shredded
+query I
+select stats(obj.field1) from '{TEST_DIR}/{type}_variant.parquet' limit 1;
+----
+{'has_no_null': true, 'has_null': true, 'shredding_state': INCONSISTENT}
+
 endloop

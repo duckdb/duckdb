@@ -18,10 +18,6 @@ struct CSVSniffFunctionData : public TableFunctionData {
 	string path;
 	// The CSV reader options
 	CSVReaderOptions options;
-	// Return Types of CSV (If given by the user)
-	vector<LogicalType> return_types_csv;
-	// Column Names of CSV (If given by the user)
-	vector<string> names_csv;
 	// If we want to force the match of the sniffer types
 	bool force_match = true;
 };
@@ -37,7 +33,7 @@ static unique_ptr<GlobalTableFunctionState> CSVSniffInitGlobal(ClientContext &co
 }
 
 static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFunctionBindInput &input,
-                                             vector<LogicalType> &return_types, vector<string> &names) {
+                                             vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto result = make_uniq<CSVSniffFunctionData>();
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("sniff_csv cannot take NULL as a file path parameter");
@@ -144,14 +140,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	auto sniffer_options = data.options;
 	sniffer_options.file_path = files[0].path;
 
-	auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, sniffer_options, sniffer_options.file_path, 0);
-	if (sniffer_options.name_list.empty()) {
-		sniffer_options.name_list = data.names_csv;
-	}
-
-	if (sniffer_options.sql_type_list.empty()) {
-		sniffer_options.sql_type_list = data.return_types_csv;
-	}
+	auto buffer_manager = CSVBufferManager::Open(context, sniffer_options, sniffer_options.file_path, false);
 	MultiFileOptions file_options;
 	CSVSniffer sniffer(sniffer_options, file_options, buffer_manager, CSVStateMachineCache::Get(context));
 	auto sniffer_result = sniffer.SniffCSV(data.force_match);
@@ -176,8 +165,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 	string str_opt;
 	string separator = ", ";
-	// Set output
-	output.SetCardinality(1);
+	// Set output (called after all Appends below)
 
 	// 1. Delimiter
 	str_opt = sniffer_options.dialect_options.state_machine_options.delimiter.FormatValue();
@@ -207,7 +195,8 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 		child_list_t<Value> struct_children {{"name", sniffer_result.names[i]},
 		                                     {"type", {sniffer_result.return_types[i].ToString()}}};
 		values.emplace_back(Value::STRUCT(struct_children));
-		columns << "'" << sniffer_result.names[i] << "': '" << sniffer_result.return_types[i].ToString() << "'";
+		columns << "'" << sniffer_result.names[i].GetIdentifierName() << "': '"
+		        << sniffer_result.return_types[i].ToString() << "'";
 		if (i != sniffer_result.return_types.size() - 1) {
 			columns << separator;
 		}

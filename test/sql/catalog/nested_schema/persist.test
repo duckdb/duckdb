@@ -1,0 +1,39 @@
+# name: test/sql/catalog/nested_schema/persist.test
+# description: Persisting nested schemas (checkpoint + WAL) on storage v2.0.0
+# group: [nested_schema]
+
+load {TEST_DIR}/nested_persist.db readwrite v2.0.0
+
+statement ok
+CREATE SCHEMA parent;
+
+statement ok
+CREATE SCHEMA parent.child;
+
+statement ok
+CREATE SCHEMA parent.child.grandchild;
+
+# force a checkpoint so the schemas go through storage serialization (not just the WAL)
+statement ok
+CHECKPOINT;
+
+restart
+
+query II
+SELECT schema_name, parent_schema FROM duckdb_schemas() WHERE schema_name IN ('parent','child','grandchild') ORDER BY schema_name;
+----
+child	parent
+grandchild	child
+parent	NULL
+
+# create another nested schema and DO NOT checkpoint - exercise the WAL replay path
+statement ok
+CREATE SCHEMA parent.child.walschema;
+
+restart
+
+query II
+SELECT schema_name, parent_schema FROM duckdb_schemas() WHERE schema_name IN ('walschema','grandchild') ORDER BY schema_name;
+----
+grandchild	child
+walschema	child

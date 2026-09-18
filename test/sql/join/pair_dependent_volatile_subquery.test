@@ -1,0 +1,36 @@
+# name: test/sql/join/pair_dependent_volatile_subquery.test
+# description: Preserve per-pair volatile evaluation while decorrelating non-inner join conditions
+# group: [join]
+
+# Pair-dependent quantified predicates must retain their physical-pair domain without relying on FilterPullup.
+statement ok
+SET disabled_optimizers='filter_pullup';
+
+statement ok
+CREATE SEQUENCE pair_volatile_any_no_pullup_seq START 1;
+
+query III
+SELECT count(*), count(rid), currval('pair_volatile_any_no_pullup_seq')
+FROM (VALUES (1, 1), (2, 1)) l(lid, a)
+LEFT JOIN (VALUES (10, 1), (20, 1)) r(rid, b) ON l.a = ANY (
+	SELECT r.b
+	WHERE nextval('pair_volatile_any_no_pullup_seq') = 2
+);
+----
+2	1	4
+
+statement ok
+CREATE SEQUENCE pair_volatile_not_in_no_pullup_seq START 1;
+
+query III
+SELECT count(*), count(rid), currval('pair_volatile_not_in_no_pullup_seq')
+FROM (VALUES (1, 1), (2, 1)) l(lid, a)
+LEFT JOIN (VALUES (10, 1), (20, 1)) r(rid, b) ON l.a NOT IN (
+	SELECT r.b
+	WHERE nextval('pair_volatile_not_in_no_pullup_seq') = 2
+);
+----
+3	3	4
+
+statement ok
+SET disabled_optimizers='';

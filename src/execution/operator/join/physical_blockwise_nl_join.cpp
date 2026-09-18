@@ -216,7 +216,7 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 InsertionOrderPreservingMap<string> PhysicalBlockwiseNLJoin::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["Join Type"] = EnumUtil::ToString(join_type);
-	result["Condition"] = condition->GetName();
+	result["Condition"] = condition->GetName().GetIdentifierName();
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }

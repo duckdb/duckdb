@@ -13,6 +13,16 @@
 
 namespace duckdb {
 
+struct SelectionVector;
+class Vector;
+
+struct ExpressionFilterExecutor {
+	virtual ~ExpressionFilterExecutor() = default;
+
+	virtual idx_t FilterSelection(SelectionVector &sel, Vector &vector, idx_t scan_count,
+	                              idx_t &approved_tuple_count) = 0;
+};
+
 //! Thread-local state for executing a table filter
 struct TableFilterState {
 public:
@@ -20,6 +30,11 @@ public:
 
 public:
 	static unique_ptr<TableFilterState> Initialize(ClientContext &context, const TableFilter &filter);
+
+	//! Whether evaluating the filter can throw. Such a filter must only ever be evaluated on the rows that are still
+	//! selected - evaluating it on the distinct values of a segment (a dictionary, the RLE runs) would raise errors
+	//! for rows that another filter already removed
+	bool can_throw = false;
 
 public:
 	template <class TARGET>
@@ -37,6 +52,7 @@ public:
 struct ExpressionFilterState : public TableFilterState {
 public:
 	ExpressionFilterState(ClientContext &context, const Expression &expression);
+	~ExpressionFilterState() override;
 
 	ClientContext &GetContext() {
 		D_ASSERT(executor);
@@ -44,6 +60,7 @@ public:
 	}
 
 	unique_ptr<ExpressionExecutor> executor;
+	unique_ptr<ExpressionFilterExecutor> fast_executor;
 };
 
 } // namespace duckdb

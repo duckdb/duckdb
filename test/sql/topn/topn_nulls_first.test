@@ -3,6 +3,9 @@
 # group: [topn]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 CREATE TABLE topn_nulls(v INTEGER)
 
 statement ok

@@ -226,8 +226,8 @@ int strtodt(date_t *dest, char *s) {
  * TODO: 20000110 Need to handle more than Y4MD-
  */
 char *dttostr(date_t *d) {
-	static char *res;
-	static int init = 0;
+	static thread_local char *res;
+	static thread_local int init = 0;
 
 	if (!init) {
 		res = (char *)malloc(sizeof(char) * 11);
@@ -387,11 +387,11 @@ int itodt(date_t *dest, int src) {
  * Side Effects:
  * TODO:
  */
-static int doomsday[4] = {3, 2, 0, 5};
-static int known[13] = {0, 3, 0, 0, 4, 9, 6, 11, 8, 5, 10, 7, 12};
+static thread_local int doomsday[4] = {3, 2, 0, 5};
+static thread_local int known[13] = {0, 3, 0, 0, 4, 9, 6, 11, 8, 5, 10, 7, 12};
 int set_dow(date_t *d) {
 
-	static int last_year = -1, dday;
+	static thread_local int last_year = -1, dday;
 	int res, q, r, s;
 
 	if (d->year != last_year) {

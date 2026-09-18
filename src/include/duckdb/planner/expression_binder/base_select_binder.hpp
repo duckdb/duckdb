@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
@@ -34,6 +33,8 @@ public:
 		this->bound_columns.clear();
 	}
 
+	static bool IsFunctionallyDependent(const unique_ptr<Expression> &expr, const vector<reference<Expression>> &deps);
+
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
 	                          bool root_expression = false) override;
@@ -47,6 +48,8 @@ protected:
 	virtual BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression);
 
 	ProjectionIndex TryBindGroup(ParsedExpression &expr);
+	bool MatchesGroup(ParsedExpression &expr) override;
+	bool ClaimsAlias(ColumnRefExpression &colref) override;
 	BindResult BindGroup(ParsedExpression &expr, idx_t depth, ProjectionIndex group_index);
 
 protected:

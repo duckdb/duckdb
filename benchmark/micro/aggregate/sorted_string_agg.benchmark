@@ -1,0 +1,19 @@
+# name: benchmark/micro/aggregate/sorted_string_agg.benchmark
+# description: STRING_AGG with ORDER BY over many groups
+# group: [aggregate]
+
+name Sorted String Agg (Grouped)
+group aggregate
+
+load
+CREATE TABLE t AS SELECT range % 100000 AS g, range AS r, 'val' || (range % 97)::VARCHAR AS v FROM range(20000000);
+
+run
+SELECT count(*), max(strlen(s)) FROM (
+	SELECT g, STRING_AGG(v, ',' ORDER BY r DESC) AS s
+	FROM t
+	GROUP BY g
+)
+
+result II
+100000	1179

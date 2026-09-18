@@ -17,10 +17,10 @@ namespace duckdb {
 //! The CHECK binder is responsible for binding an expression within a CHECK constraint
 class CheckBinder : public ExpressionBinder {
 public:
-	CheckBinder(Binder &binder, ClientContext &context, string table, const ColumnList &columns,
+	CheckBinder(Binder &binder, ClientContext &context, Identifier table, const ColumnList &columns,
 	            physical_index_set_t &bound_columns);
 
-	string table;
+	Identifier table;
 	const ColumnList &columns;
 	physical_index_set_t &bound_columns;
 

@@ -1,6 +1,6 @@
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/metrics_manager.hpp"
+#include "duckdb/main/profiler/metrics_manager.hpp"
 
 namespace duckdb {
 
@@ -13,7 +13,7 @@ struct DuckDBMetricsData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBMetricsBind(ClientContext &context, TableFunctionBindInput &input,
-                                                  vector<LogicalType> &return_types, vector<string> &names) {
+                                                  vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("metric_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -56,7 +56,6 @@ void DuckDBMetricsFunction(ClientContext &context, TableFunctionInput &data_p, D
 		unit.Append(Value(entry.unit));
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBMetricsFun::RegisterFunction(BuiltinFunctions &set) {

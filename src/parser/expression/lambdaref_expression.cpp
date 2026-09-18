@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-LambdaRefExpression::LambdaRefExpression(idx_t lambda_idx, string column_name_p)
+LambdaRefExpression::LambdaRefExpression(idx_t lambda_idx, Identifier column_name_p)
     : ParsedExpression(ExpressionType::LAMBDA_REF, ExpressionClass::LAMBDA_REF), lambda_idx(lambda_idx),
       column_name(std::move(column_name_p)) {
 	alias = column_name;
@@ -15,7 +15,7 @@ bool LambdaRefExpression::IsScalar() const {
 	throw InternalException("lambda reference expressions are transient, IsScalar should never be called");
 }
 
-string LambdaRefExpression::GetName() const {
+Identifier LambdaRefExpression::GetName() const {
 	return column_name;
 }
 
@@ -25,7 +25,7 @@ string LambdaRefExpression::ToString() const {
 
 unique_ptr<ParsedExpression>
 LambdaRefExpression::FindMatchingBinding(optional_ptr<vector<DummyBinding>> &lambda_bindings,
-                                         const string &column_name) {
+                                         const Identifier &column_name) {
 	// if this is a lambda parameter, then we temporarily add a BoundLambdaRef,
 	// which we capture and remove later
 

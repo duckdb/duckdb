@@ -23,7 +23,7 @@ public:
 
 void StatsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<StatsBindData>();
+	auto &info = func_expr.BindInfo()->Cast<StatsBindData>();
 	result.Reference(info.stats, count_t(args.size()));
 }
 
@@ -42,7 +42,8 @@ unique_ptr<BaseStatistics> StatsPropagateStats(ClientContext &context, FunctionS
 } // namespace
 
 ScalarFunction StatsFun::GetFunction() {
-	ScalarFunction stats({LogicalType::ANY}, LogicalType::VARIANT(), StatsFunction, StatsBind, StatsPropagateStats);
+	ScalarFunction stats({}, LogicalType::VARIANT(), StatsFunction, StatsBind, StatsPropagateStats);
+	stats.GetSignature().AddParameter("expression", LogicalType::ANY);
 	stats.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	stats.SetStability(FunctionStability::VOLATILE);
 	return stats;

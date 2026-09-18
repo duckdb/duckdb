@@ -1,12 +1,16 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/common/checksum.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/storage/metadata/metadata_manager.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 #include <chrono>
+#include <fstream>
 #include <thread>
 
 using namespace duckdb;
@@ -135,9 +139,8 @@ TEST_CASE("Test closing database with open prepared statements", "[api]") {
 	db.reset();
 	conn.reset();
 
-	// the prepared statements are still valid
-	// the database is only destroyed when the prepared statements are destroyed
-	REQUIRE_NO_FAIL(p2->Execute());
+	// the prepared statements live in the connection - they can no longer be executed once it is gone
+	REQUIRE_FAIL(p2->Execute());
 	p1.reset();
 	p2.reset();
 }
@@ -260,7 +263,7 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	// error in binding
 	result = con.SendQuery("SELECT * FROM nonexistanttable");
 	REQUIRE(!result->ToString().empty());
-	REQUIRE(result->type == QueryResultType::MATERIALIZED_RESULT);
+	REQUIRE(result->GetResultType() == QueryResultType::MATERIALIZED_RESULT);
 	REQUIRE_FAIL(result);
 
 	// error in stream that only happens after fetching
@@ -279,7 +282,7 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	result = con.SendQuery(
 	    "SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);");
 	REQUIRE(!result->ToString().empty());
-	REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+	REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
 	result = ((StreamQueryResult &)*result).Materialize();
 	REQUIRE_FAIL(result);
 
@@ -293,7 +296,7 @@ TEST_CASE("Test streaming API errors", "[api]") {
 		}
 	}
 	REQUIRE(!result->ToString().empty());
-	REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+	REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
 	result = ((StreamQueryResult &)*result).Materialize();
 	REQUIRE_FAIL(result);
 }
@@ -382,7 +385,7 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 
 	// test materialize
 	result1 = conn->SendQuery("SELECT 42");
-	REQUIRE(result1->type == QueryResultType::STREAM_RESULT);
+	REQUIRE(result1->GetResultType() == QueryResultType::STREAM_RESULT);
 	auto materialized = ((StreamQueryResult &)*result1).Materialize();
 	result2 = conn->SendQuery("SELECT 84");
 
@@ -392,7 +395,7 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 }
 
 static void VerifyStreamResult(duckdb::unique_ptr<QueryResult> result) {
-	REQUIRE(result->types[0] == LogicalType::INTEGER);
+	REQUIRE(result->GetTypes()[0] == LogicalType::INTEGER);
 	size_t current_row = 0;
 	int current_expected_value = 0;
 	size_t expected_rows = 500 * 5;
@@ -569,6 +572,60 @@ TEST_CASE("Test opening an invalid database file", "[api]") {
 		REQUIRE(StringUtil::Contains(ex.what(), "DuckDB"));
 	}
 	REQUIRE(!success);
+}
+
+TEST_CASE("Test opening a database with invalid metadata block index", "[api]") {
+	auto path = TestCreatePath("invalid_metadata_block_index.db");
+	TestDeleteFile(path);
+	{
+		DuckDB db(path);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT 42 AS i"));
+		REQUIRE_NO_FAIL(con.Query("CHECKPOINT"));
+	}
+
+	vector<data_t> header_buffer(Storage::FILE_HEADER_SIZE);
+	auto read_header = [&](std::fstream &file, idx_t location) {
+		file.seekg(location);
+		file.read(reinterpret_cast<char *>(header_buffer.data()), NumericCast<std::streamsize>(header_buffer.size()));
+		REQUIRE(file.good());
+		auto data = header_buffer.data() + Storage::DEFAULT_BLOCK_HEADER_SIZE;
+		auto iteration = Load<uint64_t>(data);
+		auto meta_block = Load<idx_t>(data + sizeof(uint64_t));
+		return std::make_pair(iteration, meta_block);
+	};
+
+	std::fstream file(path, std::ios::in | std::ios::out | std::ios::binary);
+	REQUIRE(file.is_open());
+	auto h1 = read_header(file, Storage::FILE_HEADER_SIZE);
+	auto h2 = read_header(file, Storage::FILE_HEADER_SIZE * 2);
+	auto active_header = h1.first > h2.first ? Storage::FILE_HEADER_SIZE : Storage::FILE_HEADER_SIZE * 2;
+	auto active_meta_block = h1.first > h2.first ? h1.second : h2.second;
+
+	file.seekg(active_header);
+	file.read(reinterpret_cast<char *>(header_buffer.data()), NumericCast<std::streamsize>(header_buffer.size()));
+	REQUIRE(file.good());
+	auto data = header_buffer.data() + Storage::DEFAULT_BLOCK_HEADER_SIZE;
+	auto invalid_meta_block =
+	    (active_meta_block & ~(idx_t(0xFF) << 56ULL)) | (idx_t(MetadataManager::METADATA_BLOCK_COUNT) << 56ULL);
+	Store<idx_t>(invalid_meta_block, data + sizeof(uint64_t));
+	auto checksum = Checksum(data, Storage::FILE_HEADER_SIZE - Storage::DEFAULT_BLOCK_HEADER_SIZE);
+	Store<uint64_t>(checksum, header_buffer.data());
+	file.seekp(active_header);
+	file.write(reinterpret_cast<const char *>(header_buffer.data()),
+	           NumericCast<std::streamsize>(header_buffer.size()));
+	REQUIRE(file.good());
+	file.close();
+
+	bool success = false;
+	try {
+		DuckDB db(path);
+		success = true;
+	} catch (std::exception &ex) {
+		REQUIRE(StringUtil::Contains(ex.what(), "Metadata block index"));
+	}
+	REQUIRE(!success);
+	TestDeleteFile(path);
 }
 
 TEST_CASE("Test large number of connections to a single database", "[api]") {

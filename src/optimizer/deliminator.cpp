@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/expression_nullability.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_delim_get.hpp"
@@ -15,6 +16,9 @@
 #include <algorithm>
 
 namespace duckdb {
+
+Deliminator::Deliminator(ClientContext &context_p) : context(context_p) {
+}
 
 struct JoinWithDelimGet {
 	JoinWithDelimGet(unique_ptr<LogicalOperator> &join_p, idx_t depth_p) : join(join_p), depth(depth_p) {
@@ -58,7 +62,6 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 	if (candidates.empty()) {
 		return op;
 	}
-
 	for (auto &candidate : candidates) {
 		auto &delim_join = candidate.delim_join;
 
@@ -222,7 +225,7 @@ bool Deliminator::RemoveJoinWithDelimGet(LogicalComparisonJoin &delim_join, cons
 		}
 		auto &delim_colref = delim_side.Cast<BoundColumnRefExpression>();
 		auto &other_colref = other_side.Cast<BoundColumnRefExpression>();
-		replacement_bindings.emplace_back(delim_colref.binding, other_colref.binding);
+		replacement_bindings.emplace_back(delim_colref.Binding(), other_colref.Binding());
 
 		// Only add IS NOT NULL filter for regular equality/inequality comparisons
 		// Do NOT add for DISTINCT FROM variants, as they handle NULL correctly
@@ -230,7 +233,7 @@ bool Deliminator::RemoveJoinWithDelimGet(LogicalComparisonJoin &delim_join, cons
 		    cond.GetComparisonType() != ExpressionType::COMPARE_DISTINCT_FROM) {
 			auto is_not_null_expr =
 			    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-			is_not_null_expr->children.push_back(other_side.Copy());
+			is_not_null_expr->GetChildrenMutable().push_back(other_side.Copy());
 			filter_expressions.push_back(std::move(is_not_null_expr));
 		}
 	}
@@ -276,7 +279,7 @@ bool FindAndReplaceBindings(vector<ColumnBinding> &traced_bindings, const vector
 		}
 
 		auto &colref = expressions[current_idx]->Cast<BoundColumnRefExpression>();
-		binding = colref.binding;
+		binding = colref.Binding();
 	}
 	return true;
 }
@@ -291,6 +294,7 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 	    delim_conditions.size() != join_conditions.size()) {
 		return false;
 	}
+	NotNullExpressionAnalyzer nullability(context, root);
 
 	// TODO: we cannot perform the optimization here because our pure inequality joins don't implement
 	//  JoinType::SINGLE yet, and JoinType::MARK is a special case
@@ -311,7 +315,7 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 			return false;
 		}
 		auto &colref = cond.GetRHS().Cast<BoundColumnRefExpression>();
-		traced_bindings.emplace_back(colref.binding);
+		traced_bindings.emplace_back(colref.Binding());
 	}
 
 	// Now we trace down the bindings to the join (for now, we only trace it through a few operators)
@@ -323,7 +327,10 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 
 		switch (current_op.get().type) {
 		case LogicalOperatorType::LOGICAL_PROJECTION:
-			FindAndReplaceBindings(traced_bindings, current_op.get().expressions, current_op.get().GetColumnBindings());
+			if (!FindAndReplaceBindings(traced_bindings, current_op.get().expressions,
+			                            current_op.get().GetColumnBindings())) {
+				return false;
+			}
 			break;
 		case LogicalOperatorType::LOGICAL_FILTER:
 			break; // Doesn't change bindings
@@ -336,9 +343,15 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 	// Get the index (left or right) of the DelimGet side of the join
 	const idx_t delim_idx = OperatorIsDelimGet(*join->children[0]) ? 0 : 1;
 
+	vector<JoinCondition> rewritten_conditions;
+	rewritten_conditions.reserve(delim_conditions.size());
+	for (auto &condition : delim_conditions) {
+		rewritten_conditions.push_back(condition.Copy());
+	}
+
 	bool found_all = true;
-	for (idx_t cond_idx = 0; cond_idx < delim_conditions.size(); cond_idx++) {
-		auto &delim_condition = delim_conditions[cond_idx];
+	for (idx_t cond_idx = 0; cond_idx < rewritten_conditions.size(); cond_idx++) {
+		auto &delim_condition = rewritten_conditions[cond_idx];
 		if (!delim_condition.IsComparison()) {
 			continue;
 		}
@@ -348,12 +361,18 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 		for (auto &join_condition : join_conditions) {
 			auto &delim_side = delim_idx == 0 ? join_condition.GetLHS() : join_condition.GetRHS();
 			auto &colref = delim_side.Cast<BoundColumnRefExpression>();
-			if (colref.binding == traced_binding) {
+			if (colref.Binding() == traced_binding) {
 				if (!join_condition.IsComparison()) {
 					continue;
 				}
 				auto join_comparison = join_condition.GetComparisonType();
 				auto original_join_comparison = join_condition.GetComparisonType(); // Save original for later check
+				if (delim_join.join_type == JoinType::MARK &&
+				    original_join_comparison == ExpressionType::COMPARE_NOTEQUAL) {
+					if (!nullability.IsNotNull(*delim_join.children[0], delim_condition.GetLHS())) {
+						return false;
+					}
+				}
 				if (delim_condition.GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM ||
 				    delim_condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 					// We need to compare NULL values
@@ -371,8 +390,8 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 				auto left_copy = delim_condition.LeftReference()->Copy();
 				auto right_copy = delim_condition.RightReference()->Copy();
 
-				delim_conditions[cond_idx] = JoinCondition(std::move(left_copy), std::move(right_copy),
-				                                           FlipComparisonExpression(join_comparison));
+				rewritten_conditions[cond_idx] = JoinCondition(std::move(left_copy), std::move(right_copy),
+				                                               FlipComparisonExpression(join_comparison));
 				// join condition was a not equal and filtered out all NULLS.
 				// DELIM JOIN need to do that for not DELIM_GET side. Easiest way is to change the
 				// comparison expression type. See duckdb/duckdb#16803
@@ -380,15 +399,15 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 				if (delim_join.join_type != JoinType::MARK &&
 				    original_join_comparison != ExpressionType::COMPARE_DISTINCT_FROM &&
 				    original_join_comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-					auto final_comparison = delim_conditions[cond_idx].GetComparisonType();
+					auto final_comparison = rewritten_conditions[cond_idx].GetComparisonType();
 					if (final_comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
 						final_comparison = ExpressionType::COMPARE_NOTEQUAL;
 					} else if (final_comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 						final_comparison = ExpressionType::COMPARE_EQUAL;
 					}
-					delim_conditions[cond_idx] =
-					    JoinCondition(delim_conditions[cond_idx].LeftReference()->Copy(),
-					                  delim_conditions[cond_idx].RightReference()->Copy(), final_comparison);
+					rewritten_conditions[cond_idx] =
+					    JoinCondition(rewritten_conditions[cond_idx].LeftReference()->Copy(),
+					                  rewritten_conditions[cond_idx].RightReference()->Copy(), final_comparison);
 				}
 				found = true;
 				break;
@@ -397,7 +416,11 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 		found_all = found_all && found;
 	}
 
-	return found_all;
+	if (!found_all) {
+		return false;
+	}
+	delim_join.conditions = std::move(rewritten_conditions);
+	return true;
 }
 
 void Deliminator::TrySwitchSingleToLeft(LogicalComparisonJoin &delim_join) {
@@ -413,7 +436,7 @@ void Deliminator::TrySwitchSingleToLeft(LogicalComparisonJoin &delim_join) {
 			return;
 		}
 		auto &colref = cond.GetRHS().Cast<BoundColumnRefExpression>();
-		join_bindings.emplace_back(colref.binding);
+		join_bindings.emplace_back(colref.Binding());
 	}
 
 	// Now try to find an aggr in the RHS such that the join_column_bindings is a superset of the groups

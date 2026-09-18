@@ -1,0 +1,14 @@
+# name: test/sql/binder/legacy_null_type.test
+# description: Test legacy null type binding
+# group: [binder]
+
+statement ok
+SET legacy_disable_null_type=true;
+
+statement ok
+CREATE TABLE t AS SELECT NULL c
+
+query I
+SELECT TYPEOF(c) FROM t
+----
+INTEGER

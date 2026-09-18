@@ -1,6 +1,10 @@
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -57,15 +61,71 @@ struct BitStringLenOperator {
 	}
 };
 
+template <bool COUNTS_CODEPOINTS>
 unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 1);
-	// can only propagate stats if the children have stats
-	if (!StringStats::CanContainUnicode(child_stats[0])) {
-		expr.function.SetFunctionCallback(ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>);
+	const bool can_contain_unicode = StringStats::CanContainUnicode(child_stats[0]);
+	if (!can_contain_unicode) {
+		expr.FunctionMutable().SetFunctionCallback(ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>);
 	}
-	return nullptr;
+	if (!StringStats::HasMaxStringLength(child_stats[0])) {
+		return nullptr;
+	}
+
+	// String stats are stored as byte length, so we need to convert to character length
+	const auto max_length = NumericCast<int64_t>(StringStats::MaxStringLength(child_stats[0]));
+	int64_t min_length = 0;
+	auto min_string_length = StringStats::MinStringLength(child_stats[0]);
+	if (min_string_length.IsValid()) {
+		if (!can_contain_unicode) {
+			// ASCII-only: the character count is exactly the byte count
+			min_length = NumericCast<int64_t>(min_string_length.GetIndex());
+		} else if (min_string_length.GetIndex() > 0) {
+			if (COUNTS_CODEPOINTS) {
+				// every codepoint takes at most four bytes
+				min_length = NumericCast<int64_t>((min_string_length.GetIndex() + 3) / 4);
+			} else {
+				// a grapheme cluster can span arbitrarily many codepoints - no better bound exists
+				min_length = 1;
+			}
+		}
+	}
+	auto result = NumericStats::CreateEmpty(expr.GetReturnType());
+	NumericStats::SetMin(result, Value::BIGINT(min_length));
+	NumericStats::SetMax(result, Value::BIGINT(max_length));
+	result.CopyValidity(child_stats[0]);
+	return result.ToUnique();
+}
+
+unique_ptr<BaseStatistics> StringSizePropagateStats(FunctionStatisticsInput &input, int64_t multiplier) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
+	D_ASSERT(child_stats.size() == 1);
+	if (!StringStats::HasMaxStringLength(child_stats[0])) {
+		return nullptr;
+	}
+
+	int64_t min_length = 0;
+	const auto min_string_length = StringStats::MinStringLength(child_stats[0]);
+	if (min_string_length.IsValid()) {
+		min_length = NumericCast<int64_t>(min_string_length.GetIndex()) * multiplier;
+	}
+	const auto max_length = NumericCast<int64_t>(StringStats::MaxStringLength(child_stats[0])) * multiplier;
+	auto result = NumericStats::CreateEmpty(expr.GetReturnType());
+	NumericStats::SetMin(result, Value::BIGINT(min_length));
+	NumericStats::SetMax(result, Value::BIGINT(max_length));
+	result.CopyValidity(child_stats[0]);
+	return result.ToUnique();
+}
+
+unique_ptr<BaseStatistics> ByteLengthPropagateStats(ClientContext &, FunctionStatisticsInput &input) {
+	return StringSizePropagateStats(input, /*multiplier=*/1);
+}
+
+unique_ptr<BaseStatistics> BitLengthPropagateStats(ClientContext &, FunctionStatisticsInput &input) {
+	return StringSizePropagateStats(input, /*multiplier=*/8);
 }
 
 //------------------------------------------------------------------
@@ -157,7 +217,7 @@ void ArrayLengthBinaryFunction(DataChunk &args, ExpressionState &state, Vector &
 	const auto &dimension = args.data[1];
 
 	auto &expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &data = expr.bind_info->Cast<ArrayLengthBinaryFunctionData>();
+	auto &data = expr.BindInfo()->Cast<ArrayLengthBinaryFunctionData>();
 	auto &dimensions = data.dimensions;
 	auto max_dimension = static_cast<int64_t>(dimensions.size());
 
@@ -209,57 +269,89 @@ unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(BindScalarFunctionInput &in
 
 ScalarFunctionSet LengthFun::GetFunctions() {
 	ScalarFunctionSet length("length");
-	length.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                                  ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator>, nullptr,
-	                                  LengthPropagateStats));
-	length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
-	                                  ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>));
-	length.AddFunction(
-	    ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBind));
+
+	ScalarFunction string_fun({}, LogicalType::BIGINT,
+	                          ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator>, nullptr,
+	                          LengthPropagateStats<true>);
+	string_fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	length.AddFunction(string_fun);
+
+	ScalarFunction bit_fun({}, LogicalType::BIGINT,
+	                       ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>);
+	bit_fun.GetSignature().AddParameter("bit", LogicalType::BIT);
+	length.AddFunction(bit_fun);
+
+	ScalarFunction list_fun({}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBind);
+	list_fun.GetSignature().AddParameter("list", LogicalType::LIST(LogicalType::ANY));
+	length.AddFunction(list_fun);
+
 	return (length);
 }
 
 ScalarFunctionSet LengthGraphemeFun::GetFunctions() {
 	ScalarFunctionSet length_grapheme("length_grapheme");
-	length_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                                           ScalarFunction::UnaryFunction<string_t, int64_t, GraphemeCountOperator>,
-	                                           nullptr, LengthPropagateStats));
+	ScalarFunction fun({}, LogicalType::BIGINT, ScalarFunction::UnaryFunction<string_t, int64_t, GraphemeCountOperator>,
+	                   nullptr, LengthPropagateStats<false>);
+	fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	length_grapheme.AddFunction(fun);
 	return (length_grapheme);
 }
 
 ScalarFunctionSet ArrayLengthFun::GetFunctions() {
 	ScalarFunctionSet array_length("array_length");
-	array_length.AddFunction(
-	    ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBind));
-	array_length.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT},
-	                                        LogicalType::BIGINT, nullptr, ArrayOrListLengthBinaryBind));
-	for (auto &func : array_length.functions) {
-		func.SetFallible();
-	}
+
+	ScalarFunction unary({}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBind);
+	unary.GetSignature().AddParameter("list", LogicalType::LIST(LogicalType::ANY));
+	array_length.AddFunction(unary);
+
+	ScalarFunction binary({}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBinaryBind);
+	binary.GetSignature()
+	    .AddParameter("list", LogicalType::LIST(LogicalType::ANY))
+	    .AddParameter("dimension", LogicalType::BIGINT);
+	array_length.AddFunction(binary);
+
+	array_length.SetFallible();
 	return (array_length);
 }
 
 ScalarFunction StrlenFun::GetFunction() {
-	return ScalarFunction("strlen", {LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                      ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>);
+	ScalarFunction fun("strlen", {}, LogicalType::BIGINT,
+	                   ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>, nullptr,
+	                   ByteLengthPropagateStats);
+	fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	return fun;
 }
 
 ScalarFunctionSet BitLengthFun::GetFunctions() {
 	ScalarFunctionSet bit_length("bit_length");
-	bit_length.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                                      ScalarFunction::UnaryFunction<string_t, int64_t, BitLenOperator>));
-	bit_length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
-	                                      ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>));
+
+	ScalarFunction string_fun({}, LogicalType::BIGINT, ScalarFunction::UnaryFunction<string_t, int64_t, BitLenOperator>,
+	                          nullptr, BitLengthPropagateStats);
+	string_fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	bit_length.AddFunction(string_fun);
+
+	ScalarFunction bit_fun({}, LogicalType::BIGINT,
+	                       ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>);
+	bit_fun.GetSignature().AddParameter("bit", LogicalType::BIT);
+	bit_length.AddFunction(bit_fun);
+
 	return (bit_length);
 }
 
 ScalarFunctionSet OctetLengthFun::GetFunctions() {
 	// length for BLOB type
 	ScalarFunctionSet octet_length("octet_length");
-	octet_length.AddFunction(ScalarFunction({LogicalType::BLOB}, LogicalType::BIGINT,
-	                                        ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>));
-	octet_length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
-	                                        ScalarFunction::UnaryFunction<string_t, int64_t, OctetLenOperator>));
+
+	ScalarFunction blob_fun({}, LogicalType::BIGINT, ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>,
+	                        nullptr, ByteLengthPropagateStats);
+	blob_fun.GetSignature().AddParameter("blob", LogicalType::BLOB);
+	octet_length.AddFunction(blob_fun);
+
+	ScalarFunction bitstring_fun({}, LogicalType::BIGINT,
+	                             ScalarFunction::UnaryFunction<string_t, int64_t, OctetLenOperator>);
+	bitstring_fun.GetSignature().AddParameter("bitstring", LogicalType::BIT);
+	octet_length.AddFunction(bitstring_fun);
+
 	return (octet_length);
 }
 

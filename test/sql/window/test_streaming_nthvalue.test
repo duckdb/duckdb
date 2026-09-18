@@ -3,6 +3,9 @@
 # group: [window]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 PRAGMA explain_output = PHYSICAL_ONLY;
 
 # Nth_Value requires running totals
@@ -59,6 +62,19 @@ NULL	NULL
 A	NULL
 NULL	NULL
 B	B
+
+# Regression: later NULL rows should not overwrite the found value
+query II
+WITH src(id, x) AS (VALUES (1, 10), (2, 20), (3, NULL), (4, 30))
+SELECT id, NTH_VALUE(x, 2 IGNORE NULLS) OVER (
+	ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+) AS actual
+FROM src ORDER BY id
+----
+1	NULL
+2	20
+3	20
+4	20
 
 # Test short circuit
 query II

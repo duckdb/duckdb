@@ -3,7 +3,8 @@
 
 namespace duckdb {
 
-CopyDatabaseStatement::CopyDatabaseStatement(string from_database_p, string to_database_p, CopyDatabaseType copy_type)
+CopyDatabaseStatement::CopyDatabaseStatement(Identifier from_database_p, Identifier to_database_p,
+                                             CopyDatabaseType copy_type)
     : SQLStatement(StatementType::COPY_DATABASE_STATEMENT), from_database(std::move(from_database_p)),
       to_database(std::move(to_database_p)), copy_type(copy_type) {
 }

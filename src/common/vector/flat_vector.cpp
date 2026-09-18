@@ -76,6 +76,18 @@ void StandardVectorBuffer::VerifyInternal(const LogicalType &type, const Selecti
 			throw InternalException("Count %d out of range for capacity %d", count, Capacity());
 		}
 	}
+	if (type.id() == LogicalTypeId::VARCHAR) {
+		// verify the strings themselves - this catches entries a producer left uninitialized
+		// only for actual VARCHAR: BLOB/BIT/VARINT/aggregate states share the physical type but are not UTF8
+		// ForceVerify: we only get here in VERIFY_VECTORS mode, which is also run against release builds
+		const auto strings = reinterpret_cast<const string_t *>(data_ptr);
+		for (idx_t i = 0; i < count; i++) {
+			const auto idx = sel.get_index(i);
+			if (validity.RowIsValid(idx)) {
+				strings[idx].ForceVerify();
+			}
+		}
+	}
 }
 
 buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {

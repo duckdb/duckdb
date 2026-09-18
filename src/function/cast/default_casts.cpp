@@ -14,6 +14,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -23,13 +24,37 @@ BindCastInfo::~BindCastInfo() {
 BoundCastData::~BoundCastData() {
 }
 
+CastStatisticsInput::CastStatisticsInput(BoundCastInfo &bound_cast_p, const LogicalType &source_type_p,
+                                         const LogicalType &target_type_p, const BaseStatistics &child_stats_p,
+                                         optional_ptr<ClientContext> context_p)
+    : source_type(source_type_p), target_type(target_type_p), child_stats(child_stats_p), context(context_p),
+      bound_cast(bound_cast_p) {
+}
+
+void CastStatisticsInput::SetFunction(cast_function_t new_function) {
+	bound_cast.function = new_function;
+}
+
 BoundCastInfo::BoundCastInfo(cast_function_t function_p, unique_ptr<BoundCastData> cast_data_p,
                              init_cast_local_state_t init_local_state_p)
     : function(function_p), init_local_state(init_local_state_p), cast_data(std::move(cast_data_p)) {
 }
 
 BoundCastInfo BoundCastInfo::Copy() const {
-	return BoundCastInfo(function, cast_data ? cast_data->Copy() : nullptr, init_local_state);
+	auto result = BoundCastInfo(function, cast_data ? cast_data->Copy() : nullptr, init_local_state);
+	result.statistics = statistics;
+	return result;
+}
+
+unique_ptr<BaseStatistics> BoundCastInfo::PropagateStatistics(const LogicalType &source_type,
+                                                              const LogicalType &target_type,
+                                                              const BaseStatistics &child_stats,
+                                                              optional_ptr<ClientContext> context) {
+	if (!statistics) {
+		return nullptr;
+	}
+	CastStatisticsInput input(*this, source_type, target_type, child_stats, context);
+	return statistics(input);
 }
 
 bool DefaultCasts::NopCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -42,7 +67,7 @@ void HandleCastError::AssignError(const string &error_message, CastParameters &p
 }
 
 void HandleCastError::AssignError(const string &error_message, string *error_message_ptr,
-                                  optional_ptr<const Expression> cast_source, optional_idx error_location) {
+                                  optional_ptr<const Expression> cast_source, QueryLocation error_location) {
 	string column;
 	if (cast_source && cast_source->HasAlias()) {
 		column = " when casting from source column " + cast_source->GetAlias();
@@ -71,52 +96,12 @@ bool DefaultCasts::ReinterpretCast(Vector &source, Vector &result, idx_t count, 
 	return true;
 }
 
-static bool AggregateStateToBlobCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	if (result.GetType().id() != LogicalTypeId::BLOB) {
-		throw TypeMismatchException(source.GetType(), result.GetType(),
-		                            "Cannot cast LEGACY_AGGREGATE_STATE to anything but BLOB");
-	}
-	result.Reinterpret(source);
-	return true;
-}
-
-static bool AggregateStateToStructReinterpret(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	// Both `AGGREGATE_STATE` and `STRUCT` are `PhysicalType::STRUCT`
-	// However, we can't use Reinterpret because it's blocked by D_ASSERT for nested types
-	// Instead, we manually reference the entries
-	auto &source_entries = StructVector::GetEntries(source);
-	auto &result_entries = StructVector::GetEntries(result);
-
-	D_ASSERT(source_entries.size() == result_entries.size());
-
-	for (idx_t i = 0; i < source_entries.size(); i++) {
-		result_entries[i].Reference(source_entries[i]);
-	}
-
-	source.Flatten();
-	FlatVector::ValidityMutable(result) = FlatVector::Validity(source);
-	FlatVector::SetSize(result, count_t(count));
-	result.Verify();
-	return true;
-}
-
 bool BoundCastInfo::IsNopCast() const {
 	return function == DefaultCasts::NopCast;
 }
 
-static BoundCastInfo AggregateStateCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
-	D_ASSERT(source.IsAggregateStateStructType());
-
-	LogicalType dummy_struct = LogicalType::STRUCT(AggregateStateType::GetChildTypes(source));
-	auto cast_info = input.GetCastFunction(dummy_struct, target);
-	if (cast_info.IsNopCast()) {
-		// 1. `NopCast` cannot be used since it expects the types to be the same.
-		// 2. `ReinterpretCast` cannot be used since it's blocked for nested types.
-		// 3. We don't want to use `StructToStructCast` in this case as it introduces more complexity while we know
-		// that we don't have casting to perform
-		cast_info.SetFunction(AggregateStateToStructReinterpret);
-	}
-	return cast_info;
+bool BoundCastInfo::IsNullCast() const {
+	return function == DefaultCasts::TryVectorNullCast;
 }
 
 static bool NullTypeCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -194,7 +179,11 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 	case LogicalTypeId::MAP:
 		return MapCastSwitch(input, source, target);
 	case LogicalTypeId::STRUCT:
-		return StructCastSwitch(input, source, target);
+		// an unnamed STRUCT (e.g. from variant shredding with empty keys) is cast positionally, like a TUPLE
+		return StructType::IsUnnamed(source) ? TupleCastSwitch(input, source, target)
+		                                     : StructCastSwitch(input, source, target);
+	case LogicalTypeId::TUPLE:
+		return TupleCastSwitch(input, source, target);
 	case LogicalTypeId::LIST:
 		return ListCastSwitch(input, source, target);
 	case LogicalTypeId::UNION:
@@ -211,10 +200,6 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return TypeCastSwitch(input, source, target);
 	case LogicalTypeId::BIGNUM:
 		return BignumCastSwitch(input, source, target);
-	case LogicalTypeId::LEGACY_AGGREGATE_STATE:
-		return AggregateStateToBlobCast;
-	case LogicalTypeId::AGGREGATE_STATE:
-		return AggregateStateCast(input, source, target);
 	default:
 		return nullptr;
 	}

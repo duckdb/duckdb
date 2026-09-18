@@ -15,7 +15,7 @@ struct DuckDBKeywordsData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBKeywordsBind(ClientContext &context, TableFunctionBindInput &input,
-                                                   vector<LogicalType> &return_types, vector<string> &names) {
+                                                   vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("keyword_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -71,7 +71,6 @@ void DuckDBKeywordsFunction(ClientContext &context, TableFunctionInput &data_p, 
 
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBKeywordsFun::RegisterFunction(BuiltinFunctions &set) {

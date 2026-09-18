@@ -3,7 +3,6 @@
 #include "core_functions/scalar/struct_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
@@ -43,7 +42,7 @@ static unique_ptr<FunctionData> StructInsertBind(BindScalarFunctionInput &input)
 		throw InvalidInputException("Can't insert nothing into a STRUCT");
 	}
 
-	case_insensitive_set_t name_collision_set;
+	identifier_set_t name_collision_set;
 	child_list_t<LogicalType> new_children;
 	auto &existing_children = StructType::GetChildTypes(arguments[0]->GetReturnType());
 
@@ -63,7 +62,7 @@ static unique_ptr<FunctionData> StructInsertBind(BindScalarFunctionInput &input)
 			throw BinderException("Duplicate struct entry name \"%s\"", child->GetAlias());
 		}
 		name_collision_set.insert(child->GetAlias());
-		new_children.push_back(make_pair(child->GetAlias(), arguments[i]->GetReturnType()));
+		new_children.emplace_back(make_pair(child->GetAlias(), arguments[i]->GetReturnType()));
 	}
 
 	bound_function.SetReturnType(LogicalType::STRUCT(new_children));
@@ -74,6 +73,7 @@ static unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, Func
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	auto new_stats = StructStats::CreateUnknown(expr.GetReturnType());
+	new_stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 
 	auto existing_count = StructType::GetChildCount(child_stats[0].GetType());
 	auto existing_stats = StructStats::GetChildStats(child_stats[0]);
@@ -93,6 +93,7 @@ ScalarFunction StructInsertFun::GetFunction() {
 	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructInsertFunction, StructInsertBind, StructInsertStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetVarArgs(LogicalType::ANY);
+	fun.GetProperties().SetRequiresExpressionNames(true);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
 	return fun;

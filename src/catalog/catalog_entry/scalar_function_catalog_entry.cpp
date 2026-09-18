@@ -4,6 +4,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
 
@@ -13,9 +14,16 @@ ScalarFunctionCatalogEntry::ScalarFunctionCatalogEntry(Catalog &catalog, SchemaC
                                                        CreateScalarFunctionInfo &info)
     : FunctionEntry(CatalogType::SCALAR_FUNCTION_ENTRY, catalog, schema, info), functions(info.functions) {
 	for (auto &function : functions.functions) {
-		function.catalog_name = catalog.GetAttached().GetName();
-		function.schema_name = schema.name;
+		function = FinalizeFunction(*function);
 	}
+}
+
+shared_ptr<const ScalarFunction> ScalarFunctionCatalogEntry::FinalizeFunction(ScalarFunction function) const {
+	auto result = make_shared_ptr<ScalarFunction>(std::move(function));
+	result->SetName(name);
+	result->SetCatalogName(catalog.GetAttached().GetName());
+	result->SetSchemaName(schema.name);
+	return result;
 }
 
 unique_ptr<CatalogEntry> ScalarFunctionCatalogEntry::AlterEntry(CatalogTransaction transaction, AlterInfo &info) {

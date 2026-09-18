@@ -14,10 +14,10 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 			continue;
 		}
 		auto &colref = group->Cast<BoundColumnRefExpression>();
-		if (group_binding_set.find(colref.binding) != group_binding_set.end()) {
+		if (group_binding_set.find(colref.Binding()) != group_binding_set.end()) {
 			return; // Duplicate group - don't compress
 		}
-		group_binding_set.insert(colref.binding);
+		group_binding_set.insert(colref.Binding());
 	}
 	auto &group_stats = aggregate.group_stats;
 
@@ -35,11 +35,25 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 	vector<CompressedMaterializationType> materialization_types(groups.size(), CompressedMaterializationType::INVALID);
 	vector<unique_ptr<BaseStatistics>> stored_group_stats;
 	stored_group_stats.resize(groups.size());
+	auto try_compress_group = [&](idx_t group_idx, Expression &group_expr, optional_ptr<BaseStatistics> stats) {
+		if (!stats) {
+			return false;
+		}
+		auto compress_expr = GetCompressExpression(group_expr.Copy(), *stats);
+		if (!compress_expr) {
+			return false;
+		}
+		materialization_types[group_idx] = compress_expr->materialization_type;
+		stored_group_stats[group_idx] = stats->ToUnique();
+		groups[group_idx] = std::move(compress_expr->expression);
+		group_stats[group_idx] = std::move(compress_expr->stats);
+		return true;
+	};
 	for (idx_t group_idx = 0; group_idx < groups.size(); group_idx++) {
 		auto &group_expr = *groups[group_idx];
 		if (group_expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 			auto &colref = group_expr.Cast<BoundColumnRefExpression>();
-			group_bindings[group_idx] = colref.binding;
+			group_bindings[group_idx] = colref.Binding();
 			continue; // Will be compressed generically
 		}
 
@@ -47,18 +61,10 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 		GetReferencedBindings(group_expr, referenced_bindings);
 
 		// The non-colref expression won't be compressed generically, so try to compress it here
-		if (!group_stats[group_idx]) {
-			continue; // Can't compress without stats
+		if (try_compress_group(group_idx, group_expr, GetVariantWrapperStats(group_expr))) {
+			continue;
 		}
-
-		// Try to compress, if successful, replace the expression
-		auto compress_expr = GetCompressExpression(group_expr.Copy(), *group_stats[group_idx]);
-		if (compress_expr) {
-			materialization_types[group_idx] = compress_expr->materialization_type;
-			stored_group_stats[group_idx] = std::move(group_stats[group_idx]);
-			groups[group_idx] = std::move(compress_expr->expression);
-			group_stats[group_idx] = std::move(compress_expr->stats);
-		}
+		try_compress_group(group_idx, group_expr, group_stats[group_idx].get());
 	}
 
 	// Anything referenced in the aggregate functions is also excluded
@@ -66,14 +72,14 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 		const auto &expr = *aggregate.expressions[expr_idx];
 		D_ASSERT(expr.GetExpressionType() == ExpressionType::BOUND_AGGREGATE);
 		const auto &aggr_expr = expr.Cast<BoundAggregateExpression>();
-		for (const auto &child : aggr_expr.children) {
+		for (const auto &child : aggr_expr.GetChildren()) {
 			GetReferencedBindings(*child, referenced_bindings);
 		}
-		if (aggr_expr.filter) {
-			GetReferencedBindings(*aggr_expr.filter, referenced_bindings);
+		if (aggr_expr.GetFilter()) {
+			GetReferencedBindings(*aggr_expr.GetFilter(), referenced_bindings);
 		}
-		if (aggr_expr.order_bys) {
-			for (const auto &order : aggr_expr.order_bys->orders) {
+		if (aggr_expr.GetOrderBys()) {
+			for (const auto &order : aggr_expr.GetOrderBys()->orders) {
 				const auto &order_expr = *order.expression;
 				if (order_expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 					GetReferencedBindings(order_expr, referenced_bindings);
@@ -133,7 +139,7 @@ void CompressedMaterialization::UpdateAggregateStats(unique_ptr<LogicalOperator>
 		if (colref.GetReturnType() == group_stats[group_idx]->GetType()) {
 			continue;
 		}
-		auto it = statistics_map.find(colref.binding);
+		auto it = statistics_map.find(colref.Binding());
 		if (it != statistics_map.end() && it->second) {
 			group_stats[group_idx] = it->second->ToUnique();
 		}

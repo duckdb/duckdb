@@ -50,7 +50,7 @@
 
 #include <stdio.h>
 
-struct W_TIME_TBL g_w_time;
+thread_local struct W_TIME_TBL g_w_time;
 
 /*
  * mk_time

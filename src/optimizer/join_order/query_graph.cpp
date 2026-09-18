@@ -8,6 +8,11 @@ namespace duckdb {
 
 using QueryEdge = QueryGraphEdges::QueryEdge;
 
+NeighborInfo::NeighborInfo(optional_ptr<JoinRelationSet> neighbor, optional_ptr<JoinOrderOperator> join_operator,
+                           bool generated_cross_product)
+    : neighbor(neighbor), join_operator(join_operator), generated_cross_product(generated_cross_product) {
+}
+
 // LCOV_EXCL_START
 static string QueryEdgeToString(const QueryEdge *info, vector<RelationIndex> prefix) {
 	string result = "";
@@ -53,26 +58,26 @@ optional_ptr<QueryEdge> QueryGraphEdges::GetQueryEdge(JoinRelationSet &left) {
 	return info;
 }
 
-void QueryGraphEdges::CreateEdge(JoinRelationSet &left, JoinRelationSet &right, optional_ptr<FilterInfo> filter_info) {
+void QueryGraphEdges::CreateEdge(JoinRelationSet &left, JoinRelationSet &right, optional_ptr<JoinPredicate> predicate,
+                                 optional_ptr<JoinOrderOperator> join_operator, bool generated_cross_product) {
 	D_ASSERT(left.count > 0 && right.count > 0);
 	// find the EdgeInfo corresponding to the left set
 	auto info = GetQueryEdge(left);
 	// now insert the edge to the right relation, if it does not exist
 	for (idx_t i = 0; i < info->neighbors.size(); i++) {
-		if (info->neighbors[i]->neighbor == &right) {
-			if (filter_info) {
-				// neighbor already exists just add the filter, if we have any
-				info->neighbors[i]->filters.push_back(filter_info);
+		if (info->neighbors[i]->neighbor == right && info->neighbors[i]->join_operator == join_operator &&
+		    info->neighbors[i]->generated_cross_product == generated_cross_product) {
+			if (predicate) {
+				// neighbor already exists, just add the predicate if we have one
+				info->neighbors[i]->predicates.push_back(*predicate);
 			}
 			return;
 		}
 	}
 	// neighbor does not exist, create it
-	auto n = make_uniq<NeighborInfo>(&right);
-	// if the edge represents a cross product, filter_info is null. The easiest way then to determine
-	// if an edge is for a cross product is if the filters are empty
-	if (info && filter_info) {
-		n->filters.push_back(filter_info);
+	auto n = make_uniq<NeighborInfo>(&right, join_operator, generated_cross_product);
+	if (info && predicate) {
+		n->predicates.push_back(*predicate);
 	}
 	info->neighbors.push_back(std::move(n));
 }

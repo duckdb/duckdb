@@ -119,7 +119,7 @@ public:
 template <class SRC, class TGT, class OP = ParquetCastOperator>
 class StandardColumnWriter : public PrimitiveColumnWriter {
 public:
-	StandardColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<string> schema_path_p)
+	StandardColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<Identifier> schema_path_p)
 	    : PrimitiveColumnWriter(writer, std::move(column_schema), std::move(schema_path_p)) {
 	}
 	~StandardColumnWriter() override = default;
@@ -295,8 +295,10 @@ public:
 		         state.encoding == duckdb_parquet::Encoding::PLAIN_DICTIONARY);
 
 		if (writer.EnableBloomFilters()) {
+			auto bloom_filter_entries =
+			    state.dictionary.GetSize() * OP::template BloomFilterEntriesPerValue<SRC, TGT>();
 			state.bloom_filter =
-			    make_uniq<ParquetBloomFilter>(state.dictionary.GetSize(), writer.BloomFilterFalsePositiveRatio());
+			    make_uniq<ParquetBloomFilter>(bloom_filter_entries, writer.BloomFilterFalsePositiveRatio());
 		}
 
 		state.dictionary.IterateValues([&](const SRC &src_value, const TGT &tgt_value) {
@@ -306,11 +308,16 @@ public:
 				// update the bloom filter
 				auto hash = OP::template XXHash64<SRC, TGT>(tgt_value);
 				state.bloom_filter->FilterInsert(hash);
+				auto extra_hash = OP::template GetExtraBloomFilterHash<SRC, TGT>(src_value, tgt_value);
+				if (extra_hash) {
+					state.bloom_filter->FilterInsert(*extra_hash);
+				}
 			}
 		});
 
 		// flush the dictionary page and add it to the to-be-written pages
-		WriteDictionary(state, state.dictionary.GetTargetMemoryStream(), state.dictionary.GetSize());
+		auto dictionary_size = state.dictionary.GetSize();
+		WriteDictionary(state, state.dictionary.TakeTargetData(), dictionary_size);
 		// bloom filter will be queued for writing in ParquetWriter::BufferBloomFilter one level up
 	}
 

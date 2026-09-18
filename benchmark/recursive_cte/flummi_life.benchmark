@@ -1,0 +1,8 @@
+# name: benchmark/recursive_cte/flummi_life.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/recursive_cte.benchmark.in
+TIER=performance
+QUERY=flummi_life
+BENCHMARK_NAME=Flummi Conway's Game of Life
+DESCRIPTION=Run Flummi's generated Conway's Game of Life program

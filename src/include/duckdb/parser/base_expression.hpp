@@ -10,7 +10,9 @@
 
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/query_location.hpp"
 
 namespace duckdb {
 
@@ -41,13 +43,18 @@ public:
 		type = new_type;
 	}
 
-	//! Returns the location in the query (if any)
-	optional_idx GetQueryLocation() const {
+	//! Returns the source location in the query (if any). Implicitly converts to optional_idx (start offset).
+	QueryLocation GetQueryLocation() const {
 		return query_location;
 	}
 
 	//! Sets the location in the query
 	void SetQueryLocation(optional_idx location) {
+		query_location = location;
+	}
+
+	//! Sets the source location in the query
+	void SetQueryLocation(QueryLocation location) {
 		query_location = location;
 	}
 
@@ -62,17 +69,12 @@ public:
 	}
 
 	//! Returns the alias of the expression
-	const string &GetAlias() const {
+	const Identifier &GetAlias() const {
 		return alias;
 	}
 
 	//! Sets the alias of the expression
-	void SetAlias(const string &alias_p) {
-		alias = alias_p;
-	}
-
-	//! Sets the alias of the expression
-	void SetAlias(string &&alias_p) {
+	void SetAlias(Identifier alias_p) {
 		alias = std::move(alias_p);
 	}
 
@@ -89,10 +91,10 @@ protected:
 	ExpressionClass expression_class;
 
 	//! The alias of the expression,
-	string alias;
+	Identifier alias;
 
-	//! The location in the query (if any)
-	optional_idx query_location;
+	//! The source location in the query (if any)
+	QueryLocation query_location;
 
 protected:
 	//! Sets the class of the expression unsafely. In general expressions are immutable and should not be changed after
@@ -121,7 +123,7 @@ public:
 	virtual bool HasParameter() const = 0;
 
 	//! Get the name of the expression
-	virtual string GetName() const;
+	virtual Identifier GetName() const;
 	//! Convert the Expression to a String
 	virtual string ToString() const = 0;
 	//! Print the expression to stdout

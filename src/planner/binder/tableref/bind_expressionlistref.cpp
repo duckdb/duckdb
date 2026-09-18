@@ -14,7 +14,7 @@ BoundStatement Binder::Bind(ExpressionListRef &expr) {
 	result.names = expr.expected_names;
 
 	vector<vector<unique_ptr<Expression>>> values;
-	auto prev_can_contain_nulls = this->can_contain_nulls;
+	auto prev_can_contain_nulls = CanContainNulls();
 	// bind value list
 	InsertBinder binder(*this, context);
 	binder.target_type = LogicalType(LogicalTypeId::INVALID);
@@ -23,33 +23,59 @@ BoundStatement Binder::Bind(ExpressionListRef &expr) {
 		if (result.names.empty()) {
 			// no names provided, generate them
 			for (idx_t val_idx = 0; val_idx < expression_list.size(); val_idx++) {
-				result.names.push_back("col" + to_string(val_idx));
+				result.names.emplace_back("col" + to_string(val_idx));
 			}
 		}
 
-		this->can_contain_nulls = true;
+		SetCanContainNulls(true);
 		vector<unique_ptr<Expression>> list;
 		for (idx_t val_idx = 0; val_idx < expression_list.size(); val_idx++) {
 			if (!result.types.empty()) {
 				D_ASSERT(result.types.size() == expression_list.size());
 				binder.target_type = result.types[val_idx];
+			} else {
+				binder.target_type = LogicalType(LogicalTypeId::INVALID);
 			}
 			auto bound_expr = binder.Bind(expression_list[val_idx]);
 			list.push_back(std::move(bound_expr));
 		}
 		values.push_back(std::move(list));
-		this->can_contain_nulls = prev_can_contain_nulls;
+		this->SetCanContainNulls(prev_can_contain_nulls);
 	}
-	if (result.types.empty() && !expr.values.empty()) {
-		// there are no types specified
-		// we have to figure out the result types
+	bool infer_types = result.types.empty();
+	if (!infer_types) {
+		for (auto &type : result.types) {
+			if (!type.IsValid()) {
+				infer_types = true;
+				break;
+			}
+		}
+	}
+	if (infer_types && !expr.values.empty()) {
+		// there are no types specified, or some types were left invalid
+		// we have to figure out the result types for those columns
 		// for each column, we iterate over all of the expressions and select the max logical type
 		// we initialize all types to SQLNULL
-		result.types.resize(expr.values[0].size(), LogicalType::SQLNULL);
+		vector<uint8_t> should_infer(expr.values[0].size(), true);
+		if (result.types.empty()) {
+			result.types.resize(expr.values[0].size(), LogicalType::SQLNULL);
+		} else {
+			for (idx_t i = 0; i < result.types.size(); i++) {
+				auto &type = result.types[i];
+				if (!type.IsValid()) {
+					type = LogicalType::SQLNULL;
+				} else {
+					should_infer[i] = false;
+				}
+			}
+		}
 		// now loop over the lists and select the max logical type
 		for (idx_t list_idx = 0; list_idx < values.size(); list_idx++) {
 			auto &list = values[list_idx];
 			for (idx_t val_idx = 0; val_idx < list.size(); val_idx++) {
+				if (!should_infer[val_idx]) {
+					continue;
+				}
 				auto &current_type = result.types[val_idx];
 				auto next_type = ExpressionBinder::GetExpressionReturnType(*list[val_idx]);
 				result.types[val_idx] = LogicalType::MaxLogicalType(context, current_type, next_type);
@@ -62,6 +88,9 @@ BoundStatement Binder::Bind(ExpressionListRef &expr) {
 		for (idx_t list_idx = 0; list_idx < values.size(); list_idx++) {
 			auto &list = values[list_idx];
 			for (idx_t val_idx = 0; val_idx < list.size(); val_idx++) {
+				if (!should_infer[val_idx]) {
+					continue;
+				}
 				list[val_idx] =
 				    BoundCastExpression::AddCastToType(context, std::move(list[val_idx]), result.types[val_idx]);
 			}

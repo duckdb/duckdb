@@ -138,12 +138,11 @@ insert into excluded AS target values(1, '2') on conflict (key) do update set da
 statement ok
 insert into excluded AS target values(1, '2') on conflict (key) do update set data = target.data RETURNING *;
 
-## -- We don't support excluded in RETURNING, also, this is ambiguous??? -- ##
-# make sure excluded isn't a problem in returning clause
+## -- We don't support excluded in RETURNING
 statement error
 insert into excluded values(1, '2') on conflict (key) do update set data = 3 RETURNING excluded.*;
 ----
-Ambiguous reference to table "excluded"
+not supported in the RETURNING
 
 # clean up
 statement ok

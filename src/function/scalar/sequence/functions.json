@@ -1,16 +1,23 @@
 [
     {
         "name": "currval",
-        "parameters": "'sequence_name'",
+        "parameters": "sequence_name",
         "description": "Return the current value of the sequence. Note that nextval must be called at least once prior to calling currval.",
         "example": "currval('my_sequence_name')",
         "type": "scalar_function"
     },
     {
         "name": "nextval",
-        "parameters": "'sequence_name'",
+        "parameters": "sequence_name",
         "description": "Return the following value of the sequence.",
         "example": "nextval('my_sequence_name')",
         "type": "scalar_function"
+    },
+    {
+      "name": "setval",
+      "parameters": "sequence_name, value[, is_called]",
+      "description": "Set the value of the sequence to the specified value. If is_called is true, the sequence is called. If is_called is false, the sequence is not called.",
+      "example": "setval('my_sequence_name', 100, true)",
+      "type": "scalar_function_set"
     }
 ]

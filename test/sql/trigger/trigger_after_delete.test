@@ -44,12 +44,28 @@ SELECT COUNT(*) FROM audit;
 ----
 3
 
-# FOR EACH ROW is not yet supported - blocked at CREATE TRIGGER time
-statement error
-CREATE TRIGGER trg_row AFTER DELETE ON target FOR EACH ROW
-    INSERT INTO audit VALUES ('row');
+# FOR EACH ROW DELETE fires once per deleted row, OLD.col carries the deleted value
+statement ok
+CREATE TABLE row_target (id INTEGER);
+
+statement ok
+CREATE TABLE row_audit (deleted_id INTEGER);
+
+statement ok
+CREATE TRIGGER trg_row AFTER DELETE ON row_target FOR EACH ROW
+    INSERT INTO row_audit VALUES (OLD.id);
+
+statement ok
+INSERT INTO row_target VALUES (10), (20), (30);
+
+statement ok
+DELETE FROM row_target WHERE id IN (10, 20);
+
+query I
+SELECT deleted_id FROM row_audit ORDER BY deleted_id;
 ----
-Not implemented Error: FOR EACH ROW triggers are not yet supported
+10
+20
 
 # Trigger body failure rolls back the entire statement
 statement ok
@@ -83,7 +99,7 @@ SELECT COUNT(*) FROM strict_log;
 ----
 1
 
-# Multiple triggers on the same event are not yet supported
+# Multiple triggers on the same event are supported
 statement ok
 CREATE TABLE t_multi (id INTEGER);
 
@@ -94,11 +110,20 @@ statement ok
 CREATE TRIGGER trg_multi_a AFTER DELETE ON t_multi FOR EACH STATEMENT
     INSERT INTO t_multi_audit VALUES ('a');
 
-statement error
+statement ok
 CREATE TRIGGER trg_multi_b AFTER DELETE ON t_multi FOR EACH STATEMENT
     INSERT INTO t_multi_audit VALUES ('b');
+
+statement ok
+INSERT INTO t_multi VALUES (1);
+
+statement ok
+DELETE FROM t_multi;
+
+query I
+SELECT COUNT(*) FROM t_multi_audit;
 ----
-Not implemented Error: Multiple triggers per table event are not yet supported
+2
 
 # Trigger body can be an UPDATE statement
 statement ok

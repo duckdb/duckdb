@@ -1,4 +1,8 @@
 #include "duckdb/common/sorting/full_sort.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
@@ -176,8 +180,6 @@ SinkResultType FullSort::Sink(ExecutionContext &context, DataChunk &input_chunk,
 		ConstantVector::SetNull(vec, count_t(input_chunk.size()));
 	}
 
-	payload_chunk.SetCardinality(input_chunk);
-
 	//	OVER(ORDER BY...)
 	auto &sort_local = lstate.sort_local;
 	D_ASSERT(sort_local);
@@ -250,7 +252,7 @@ FullSort::FullSort(ClientContext &client, const vector<BoundOrderByNode> &order_
 		auto &expr = *order.expression;
 		if (expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {
 			auto &ref = expr.Cast<BoundReferenceExpression>();
-			sort_ids.emplace_back(ref.index);
+			sort_ids.emplace_back(ref.Index());
 			continue;
 		}
 

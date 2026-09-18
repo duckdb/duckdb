@@ -139,62 +139,31 @@ def get_relative_path(source_dir, target_file):
     return target_file
 
 
-######
-# MAIN_BRANCH_VERSIONING default should be 'True' for main branch and feature branches
-# MAIN_BRANCH_VERSIONING default should be 'False' for release branches
-# MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
-# - CMakeLists.txt
-# - scripts/package_build.py
-######
-MAIN_BRANCH_VERSIONING = True
-if os.getenv('MAIN_BRANCH_VERSIONING') == "0":
-    MAIN_BRANCH_VERSIONING = False
-if os.getenv('MAIN_BRANCH_VERSIONING') == "1":
-    MAIN_BRANCH_VERSIONING = True
+def release_version():
+    version_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ci', 'release_version.txt')
+    with open_utf8(version_path, 'r') as version_file:
+        version = version_file.read().strip()
+    if re.fullmatch(r'[0-9]+\.[0-9]+', version) is None:
+        raise ValueError("Invalid release version '{}' in {}".format(version, version_path))
+    return version
 
 
-def get_git_describe():
-    override_git_describe = os.getenv('OVERRIDE_GIT_DESCRIBE') or ''
-    versioning_tag_match = 'v*.*.*'
-    if MAIN_BRANCH_VERSIONING:
-        versioning_tag_match = 'v*.*.0'
-    # empty override_git_describe, either since env was empty string or not existing
-    # -> ask git (that can fail, so except in place)
-    if len(override_git_describe) == 0:
-        try:
-            return (
-                subprocess.check_output(
-                    ['git', 'describe', '--tags', '--long', '--debug', '--match', versioning_tag_match]
-                )
-                .strip()
-                .decode('utf8')
-            )
-        except subprocess.CalledProcessError:
-            return "v0.0.0-0-gdeadbeeff"
-    if len(override_git_describe.split('-')) == 3:
-        return override_git_describe
-    if len(override_git_describe.split('-')) == 1:
-        override_git_describe += "-0"
-    assert len(override_git_describe.split('-')) == 2
+def git_commit_count():
     try:
-        return (
-            override_git_describe
-            + "-g"
-            + subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
-        )
-    except subprocess.CalledProcessError:
-        return override_git_describe + "-g" + "deadbeeff"
+        return subprocess.check_output(['git', 'rev-list', '--count', 'HEAD'], text=True).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return '0'
 
 
 def git_commit_hash():
     if 'SETUPTOOLS_SCM_PRETEND_HASH' in os.environ:
-        return os.environ['SETUPTOOLS_SCM_PRETEND_HASH']
+        return os.environ['SETUPTOOLS_SCM_PRETEND_HASH'][:10]
+    if os.getenv('DUCKDB_COMMIT'):
+        return os.environ['DUCKDB_COMMIT'][:10]
     try:
-        git_describe = get_git_describe()
-        hash = git_describe.split('-')[2].lstrip('g')
-        return hash
-    except:
-        return "deadbeeff"
+        return subprocess.check_output(['git', 'log', '-1', '--format=%H'], text=True).strip()[:10]
+    except (OSError, subprocess.CalledProcessError):
+        return "0123456789"
 
 
 def prefix_version(version):
@@ -207,25 +176,13 @@ def prefix_version(version):
 def git_dev_version():
     if 'SETUPTOOLS_SCM_PRETEND_VERSION' in os.environ:
         return prefix_version(os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'])
-    try:
-        long_version = get_git_describe()
-        version_splits = long_version.split('-')[0].lstrip('v').split('.')
-        dev_version = long_version.split('-')[1]
-        if int(dev_version) == 0:
-            # directly on a tag: emit the regular version
-            return "v" + '.'.join(version_splits)
-        else:
-            # not on a tag: increment the version by one and add a -devX suffix
-            # this needs to keep in sync with changes to CMakeLists.txt
-            if MAIN_BRANCH_VERSIONING == True:
-                # increment minor version
-                version_splits[1] = str(int(version_splits[1]) + 1)
-            else:
-                # increment patch version
-                version_splits[2] = str(int(version_splits[2]) + 1)
-            return "v" + '.'.join(version_splits) + "-dev" + dev_version
-    except:
-        return "v0.0.0"
+    if os.getenv('DUCKDB_VERSION'):
+        return prefix_version(os.environ['DUCKDB_VERSION'])
+    if os.getenv('OVERRIDE_GIT_DESCRIBE'):
+        return prefix_version(os.environ['OVERRIDE_GIT_DESCRIBE'])
+    if os.getenv('DUCKDB_EXPLICIT_VERSION'):
+        return prefix_version(os.environ['DUCKDB_EXPLICIT_VERSION'])
+    return 'v{}.0-dev{}'.format(release_version(), git_commit_count())
 
 
 def include_package(pkg_name, pkg_dir, include_files, include_list, source_list):
@@ -238,12 +195,15 @@ def include_package(pkg_name, pkg_dir, include_files, include_list, source_list)
 
     ext_include_dirs = ext_pkg.include_directories
     ext_source_files = ext_pkg.source_files
+    ext_kind = getattr(ext_pkg, 'extension_kind', 'CPP').upper()
 
     include_files += amalgamation.list_includes_files(ext_include_dirs)
     include_list += ext_include_dirs
     source_list += ext_source_files
 
     sys.path = original_path
+
+    return ext_kind
 
 
 def get_extension_linked_define(extension):
@@ -305,13 +265,14 @@ def build_package(
     # include the main extension helper
     include_files += [os.path.join('src', 'include', 'duckdb', 'main', 'extension_helper.hpp')]
     # include the separate extensions
-    ext_loader_body = ''
+    ext_register_body = ''
     ext_loader_defines = ''
     ext_headers = ''
     ext_name_vector_initializer = ''
+    ext_capi_declarations = ''
     for ext in extensions:
         ext_path = os.path.join(scripts_dir, '..', 'extension', ext)
-        include_package(ext, ext_path, include_files, include_list, source_list)
+        ext_kind = include_package(ext, ext_path, include_files, include_list, source_list)
 
         ext_linked_define = get_extension_linked_define(ext)
         ext_linked_default = 1 if ext in default_linked_extensions else 0
@@ -320,26 +281,52 @@ def build_package(
             f"#ifndef {ext_linked_define}\n" f"#define {ext_linked_define} {ext_linked_default}\n" "#endif\n\n"
         )
 
-        ext_headers += f'#if {ext_linked_define}\n#include "{ext}_extension.hpp"\n#endif\n'
-
         # handle generated_extension_loader
         # this - beautifully - approximates code in extension/CMakeLists.txt
-        ext_name_camelcase = ext.replace('_', ' ').title().replace(' ', '')
-
-        ext_loader_body += (
-            f"#if {ext_linked_define}\n"
-            f"    if (extension==\"{ext}\") {{\n"
-            f"        db.LoadStaticExtension<{ext_name_camelcase}Extension>();\n"
-            "        return ExtensionLoadResult::LOADED_EXTENSION;\n"
-            "    }\n"
-            "#endif\n"
-        )
+        if ext_kind == 'CAPI':
+            ext_capi_declarations += (
+                f'#if {ext_linked_define}\n'
+                f'extern "C" bool {ext}_init_c_api(duckdb_extension_info, duckdb_extension_access *);\n'
+                "#endif\n"
+            )
+            ext_register_body += (
+                f"#if {ext_linked_define}\n"
+                f"    config.linked_extensions.push_back({{\"{ext}\", [](DuckDB &db) {{\n"
+                f"        db.LoadStaticCAPIExtension(\"{ext}\", {ext}_init_c_api);\n"
+                "    }});\n"
+                "#endif\n"
+            )
+        elif ext_kind == 'CAPI_V2':
+            ext_capi_declarations += (
+                f'#if {ext_linked_define}\n'
+                f'extern "C" void {ext}_init_c_api_v2(struct duckdb_v2_extension_input *);\n'
+                "#endif\n"
+            )
+            ext_loader_body += (
+                f"#if {ext_linked_define}\n"
+                f"    if (extension==\"{ext}\") {{\n"
+                f"        db.LoadStaticCAPIExtensionV2(\"{ext}\", {ext}_init_c_api_v2);\n"
+                "        return ExtensionLoadResult::LOADED_EXTENSION;\n"
+                "    }\n"
+                "#endif\n"
+            )
+        else:
+            ext_headers += f'#if {ext_linked_define}\n#include "{ext}_extension.hpp"\n#endif\n'
+            ext_name_camelcase = ext.replace('_', ' ').title().replace(' ', '')
+            ext_register_body += (
+                f"#if {ext_linked_define}\n"
+                f"    config.linked_extensions.push_back({{\"{ext}\", [](DuckDB &db) {{\n"
+                f"        db.LoadStaticExtension<{ext_name_camelcase}Extension>();\n"
+                "    }});\n"
+                "#endif\n"
+            )
 
         ext_name_vector_initializer += f"\n#if {ext_linked_define}\n" f"        \"{ext}\",\n" "#endif"
 
     loader_code = open(os.path.join('extension', 'generated_extension_loader.cpp.in'), 'rb').read().decode('utf8')
     loader_code = (
-        loader_code.replace('${EXT_LOADER_BODY}', ext_loader_body)
+        loader_code.replace('${EXT_REGISTER_BODY}', ext_register_body)
+        .replace('${EXT_CAPI_DECLARATIONS}', ext_capi_declarations)
         .replace('${EXT_NAME_VECTOR_INITIALIZER}', ext_name_vector_initializer)
         .replace('${EXT_TEST_PATH_INITIALIZER}', '')
         .replace('CMake', 'package_build.py')
@@ -476,6 +463,7 @@ def build_package(
                     # directly use the source files
                     new_source_files += [os.path.join(folder_name, file) for file in current_files]
             if unity_files:
+                unity_files.sort()
                 unity_base = dirname.replace(os.path.sep, '_')
                 unity_name = f'ub_{unity_base}.cpp'
                 new_source_files.append(generate_unity_build(unity_files, unity_name, linenumbers))

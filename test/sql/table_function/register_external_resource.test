@@ -1,0 +1,103 @@
+# name: test/sql/table_function/register_external_resource.test
+# description: register_external_resource / deregister_external_resource — registry writes into the instance manager
+# group: [table_function]
+
+# A registry that starts empty.
+query I
+SELECT count(*) FROM duckdb_external_resources();
+----
+0
+
+# Register an already-provisioned resource: appears as managed = true, with its cached display fields.
+statement ok
+CALL register_external_resource('mock@local', 'r1', MAP {'id': 'abc'},
+    uri := 'quack:localhost:9494', attached_db_type := 'quack', deleter_function := 'mock_destroy');
+
+query TTTTTT
+SELECT name, type, managed, uri, attached_db_type, handle FROM duckdb_external_resources();
+----
+r1	mock@local	true	quack:localhost:9494	quack	{id=abc}
+
+# The durable identity is (type, handle); the optional fields default to NULL when omitted.
+statement ok
+CALL register_external_resource('mock@local', 'r2', MAP {'id': 'def'});
+
+query TTTT
+SELECT name, uri, attached_db_type, handle FROM duckdb_external_resources() WHERE name = 'r2';
+----
+r2	NULL	NULL	{id=def}
+
+# A name is claimed by its first registration.
+statement error
+CALL register_external_resource('mock@local', 'r1', MAP {'id': 'other'});
+----
+<REGEX>:.*already registered.*
+
+# name and type are both required.
+statement error
+CALL register_external_resource('mock@local', '', MAP {'id': 'x'});
+----
+<REGEX>:.*must have a name.*
+
+statement error
+CALL register_external_resource('', 'r3', MAP {'id': 'x'});
+----
+<REGEX>:.*a type is required.*
+
+# NULL is rejected up front: it would otherwise reach StringValue::Get and surface as an internal error.
+statement error
+CALL register_external_resource(NULL, 'r3', MAP {'id': 'x'});
+----
+<REGEX>:.*must not be NULL.*
+
+statement error
+CALL register_external_resource('mock@local', NULL, MAP {'id': 'x'});
+----
+<REGEX>:.*must not be NULL.*
+
+# A registration survives the rollback of the transaction that made it. This is deliberate, and the opposite
+# of what a catalog entry would do: the resource is already provisioned out in the world, so forgetting the
+# record here would strand it with nothing left to reap it.
+statement ok
+BEGIN;
+
+statement ok
+CALL register_external_resource('mock@local', 'r_txn', MAP {'id': 'txn'});
+
+statement ok
+ROLLBACK;
+
+query I
+SELECT count(*) FROM duckdb_external_resources() WHERE name = 'r_txn';
+----
+1
+
+statement ok
+CALL deregister_external_resource('r_txn');
+
+# Deregister removes the entry (without tearing the resource down).
+statement ok
+CALL deregister_external_resource('r1');
+
+query I
+SELECT count(*) FROM duckdb_external_resources();
+----
+1
+
+# Deregistering an unknown name is an error.
+statement error
+CALL deregister_external_resource('nope');
+----
+<REGEX>:.*not registered.*
+
+# The name frees up after deregistration and can be reclaimed.
+statement ok
+CALL deregister_external_resource('r2');
+
+statement ok
+CALL register_external_resource('mock@local', 'r1', MAP {'id': 'abc'});
+
+query I
+SELECT count(*) FROM duckdb_external_resources();
+----
+1

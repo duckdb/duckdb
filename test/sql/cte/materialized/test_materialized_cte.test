@@ -8,6 +8,42 @@ WITH t(x) AS MATERIALIZED (SELECT 1) SELECT * FROM t;
 1
 
 query II
+EXPLAIN WITH t AS MATERIALIZED (SELECT i FROM range(3) tbl(i))
+SELECT * FROM t LIMIT 1;
+----
+physical_plan	<REGEX>:.*PIPELINE_DEPENDENT.*CTE( Scan|_SCAN).*
+
+query II
+EXPLAIN ANALYZE WITH d AS (SELECT i AS a, i AS b FROM range(10) tbl(i))
+SELECT (SELECT sum(a) FROM d), (SELECT sum(b) FROM d);
+----
+analyzed_plan	<REGEX>:.*Fanout Mode: DIRECT.*Direct Consumers: 2.*Buffered Consumers: 0.*
+
+query II
+EXPLAIN ANALYZE WITH d AS MATERIALIZED (SELECT i FROM range(10000) tbl(i))
+SELECT sum(i) FROM d;
+----
+analyzed_plan	<REGEX>:.*CTE Mode: DIRECT.*10,000 rows.*
+
+query II
+EXPLAIN ANALYZE WITH d AS MATERIALIZED (SELECT i FROM range(10) tbl(i))
+SELECT * FROM d ORDER BY i LIMIT 3;
+----
+analyzed_plan	<REGEX>:.*Fanout Mode: BUFFERED.*Direct Consumers: 0.*Buffered Consumers: 1.*
+
+query II
+EXPLAIN ANALYZE WITH d AS (SELECT i AS a FROM range(10) tbl(i))
+SELECT * FROM (SELECT sum(a) FROM d), (SELECT a FROM d ORDER BY a LIMIT 1);
+----
+analyzed_plan	<REGEX>:.*Execution Mode: HYBRID_FANOUT.*Fanout Mode: DIRECT.*Direct Consumers: 1.*Buffered Consumers: 0.*Materialized Consumers: 1.*
+
+query II
+EXPLAIN ANALYZE WITH d AS (SELECT i AS a FROM range(10) tbl(i))
+SELECT * FROM (SELECT sum(a) FROM d), (SELECT a FROM d LIMIT 1);
+----
+analyzed_plan	<REGEX>:.*Execution Mode: STREAMING_FANOUT.*Fanout Mode: MIXED.*Direct Consumers: 1.*Buffered Consumers: 1.*
+
+query II
 WITH t(x) AS MATERIALIZED (SELECT t FROM generate_series(1,3) AS _(t)) SELECT t1.x,1 as y FROM t AS t1 ORDER BY x;
 ----
 1	1
@@ -33,6 +69,150 @@ WITH t(x) AS MATERIALIZED (SELECT t FROM generate_series(1,3) AS _(t)) SELECT t1
 3	1
 3	2
 3	3
+
+query I
+WITH t AS MATERIALIZED (SELECT i FROM range(3) tbl(i))
+SELECT sum(a.i + b.i) FROM t a, t b;
+----
+18
+
+query I
+WITH t AS MATERIALIZED (
+  SELECT CASE WHEN i > 5000000 THEN error('cte should not fully materialize') ELSE i END AS i
+  FROM range(10000000) tbl(i)
+)
+SELECT * FROM t LIMIT 5;
+----
+0
+1
+2
+3
+4
+
+statement ok
+PRAGMA threads=1
+
+query I
+WITH d AS MATERIALIZED (
+  SELECT
+    CASE WHEN i > 80000 THEN error('cte limit should stop producer') ELSE i END AS c00,
+    i AS c01, i AS c02, i AS c03, i AS c04, i AS c05, i AS c06, i AS c07,
+    i AS c08, i AS c09, i AS c10, i AS c11, i AS c12, i AS c13, i AS c14, i AS c15,
+    i AS c16, i AS c17, i AS c18, i AS c19, i AS c20, i AS c21, i AS c22, i AS c23,
+    i AS c24, i AS c25, i AS c26, i AS c27, i AS c28, i AS c29, i AS c30, i AS c31,
+    i AS c32, i AS c33, i AS c34, i AS c35, i AS c36, i AS c37, i AS c38, i AS c39,
+    i AS c40, i AS c41, i AS c42, i AS c43, i AS c44, i AS c45, i AS c46, i AS c47,
+    i AS c48, i AS c49, i AS c50, i AS c51, i AS c52, i AS c53, i AS c54, i AS c55,
+    i AS c56, i AS c57, i AS c58, i AS c59, i AS c60, i AS c61, i AS c62, i AS c63
+  FROM range(1000000) tbl(i)
+)
+SELECT sum(c00 + c01 + c02 + c03 + c04 + c05 + c06 + c07 +
+           c08 + c09 + c10 + c11 + c12 + c13 + c14 + c15 +
+           c16 + c17 + c18 + c19 + c20 + c21 + c22 + c23 +
+           c24 + c25 + c26 + c27 + c28 + c29 + c30 + c31 +
+           c32 + c33 + c34 + c35 + c36 + c37 + c38 + c39 +
+           c40 + c41 + c42 + c43 + c44 + c45 + c46 + c47 +
+           c48 + c49 + c50 + c51 + c52 + c53 + c54 + c55 +
+           c56 + c57 + c58 + c59 + c60 + c61 + c62 + c63)
+FROM (SELECT * FROM d LIMIT 10);
+----
+2880
+
+query II
+WITH d AS MATERIALIZED (
+  SELECT
+    i AS c00,
+    i AS c01, i AS c02, i AS c03, i AS c04, i AS c05, i AS c06, i AS c07,
+    i AS c08, i AS c09, i AS c10, i AS c11, i AS c12, i AS c13, i AS c14, i AS c15
+  FROM range(300000) tbl(i)
+)
+SELECT (SELECT sum(c00 + c01 + c02 + c03 + c04 + c05 + c06 + c07 +
+                   c08 + c09 + c10 + c11 + c12 + c13 + c14 + c15)
+        FROM (SELECT * FROM d LIMIT 10)),
+       (SELECT sum(c00 + c01 + c02 + c03 + c04 + c05 + c06 + c07 +
+                   c08 + c09 + c10 + c11 + c12 + c13 + c14 + c15)
+        FROM (SELECT * FROM d LIMIT 10));
+----
+720	720
+
+statement ok
+PRAGMA threads=4
+
+query II
+WITH d AS (
+  SELECT
+    i AS c00, i + 1 AS c01, i + 2 AS c02, i + 3 AS c03, i + 4 AS c04,
+    i + 5 AS c05, i + 6 AS c06, i + 7 AS c07, i + 8 AS c08, i + 9 AS c09,
+    i + 10 AS c10, i + 11 AS c11, i + 12 AS c12, i + 13 AS c13, i + 14 AS c14,
+    i + 15 AS c15, i + 16 AS c16, i + 17 AS c17, i + 18 AS c18, i + 19 AS c19
+  FROM range(220000) tbl(i)
+  GROUP BY ALL
+)
+SELECT (SELECT count(c00) FROM d), (SELECT count(c01) FROM d);
+----
+220000	220000
+
+query I
+WITH d AS MATERIALIZED (
+  SELECT i, i AS q
+  FROM range(256) tbl(i)
+)
+SELECT count(*)
+FROM d lhs
+WHERE q < (SELECT avg(q) + 1 FROM d rhs WHERE rhs.i = lhs.i);
+----
+256
+
+query II
+EXPLAIN ANALYZE WITH d AS MATERIALIZED (
+  SELECT i % 8 AS k, i AS v
+  FROM range(64) tbl(i)
+)
+SELECT count(*)
+FROM d lhs
+WHERE v < (SELECT avg(v) + 1 FROM d rhs WHERE rhs.k = lhs.k);
+----
+analyzed_plan	<REGEX>:.*Execution Mode: HYBRID_FANOUT.*Fanout Mode: DIRECT.*Direct Consumers: (1|2).*Buffered Consumers: 0.*Materialized Consumers: 1.*
+
+query IIII
+WITH d AS (
+  SELECT i::INTEGER AS c0, CASE WHEN i % 4 = 0 THEN NULL ELSE i::INTEGER END AS c1
+  FROM range(16) tbl(i)
+)
+SELECT (SELECT sum(c0) FROM d), (SELECT sum(c1) FROM d), (SELECT count(c0) FROM d), (SELECT count(c1) FROM d);
+----
+120	96	16	12
+
+query II
+WITH d AS (
+  SELECT
+    i AS c00, i + 1 AS c01, i + 2 AS c02, i + 3 AS c03, i + 4 AS c04,
+    i + 5 AS c05, i + 6 AS c06, i + 7 AS c07, i + 8 AS c08, i + 9 AS c09,
+    i + 10 AS c10, i + 11 AS c11, i + 12 AS c12, i + 13 AS c13, i + 14 AS c14,
+    i + 15 AS c15, i + 16 AS c16, i + 17 AS c17, i + 18 AS c18, i + 19 AS c19,
+    i + 20 AS c20, i + 21 AS c21, i + 22 AS c22, i + 23 AS c23, i + 24 AS c24,
+    i + 25 AS c25, i + 26 AS c26, i + 27 AS c27, i + 28 AS c28, i + 29 AS c29,
+    i + 30 AS c30, i + 31 AS c31, i + 32 AS c32, i + 33 AS c33, i + 34 AS c34,
+    i + 35 AS c35, i + 36 AS c36, i + 37 AS c37, i + 38 AS c38, i + 39 AS c39,
+    i + 40 AS c40, i + 41 AS c41, i + 42 AS c42, i + 43 AS c43, i + 44 AS c44,
+    i + 45 AS c45, i + 46 AS c46, i + 47 AS c47, i + 48 AS c48, i + 49 AS c49,
+    i + 50 AS c50, i + 51 AS c51, i + 52 AS c52, i + 53 AS c53, i + 54 AS c54,
+    i + 55 AS c55, i + 56 AS c56, i + 57 AS c57, i + 58 AS c58, i + 59 AS c59,
+    i + 60 AS c60, i + 61 AS c61, i + 62 AS c62, i + 63 AS c63
+  FROM range(70000) tbl(i)
+)
+SELECT (SELECT sum(c00) FROM d),
+       (SELECT sum(c00 + c01 + c02 + c03 + c04 + c05 + c06 + c07 +
+                   c08 + c09 + c10 + c11 + c12 + c13 + c14 + c15 +
+                   c16 + c17 + c18 + c19 + c20 + c21 + c22 + c23 +
+                   c24 + c25 + c26 + c27 + c28 + c29 + c30 + c31 +
+                   c32 + c33 + c34 + c35 + c36 + c37 + c38 + c39 +
+                   c40 + c41 + c42 + c43 + c44 + c45 + c46 + c47 +
+                   c48 + c49 + c50 + c51 + c52 + c53 + c54 + c55 +
+                   c56 + c57 + c58 + c59 + c60 + c61 + c62 + c63)
+        FROM (SELECT * FROM d ORDER BY c00 DESC LIMIT 10));
+----
+2449965000	44816640
 
 query II
 WITH t(x) AS MATERIALIZED (SELECT 1),

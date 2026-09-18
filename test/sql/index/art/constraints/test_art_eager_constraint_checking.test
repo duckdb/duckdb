@@ -5,6 +5,10 @@
 statement ok
 SET immediate_transaction_mode = true;
 
+# Keep rowid assertions stable under automatic checkpoints.
+statement ok
+SET max_vacuum_tasks = 0;
+
 # Original issue: 7182
 
 statement ok

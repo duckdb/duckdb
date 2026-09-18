@@ -62,7 +62,7 @@ comment_on_column	test_view	test_view_column	very gezellige view column
 statement error
 COMMENT ON COLUMN bla.bloe.blie.blo IS NULL
 ----
-Catalog "bla" does not exist!
+Table with name "bla.bloe.blie" does not exist because schema "bla.bloe" does not exist.
 
 statement error
 COMMENT ON COLUMN blie.blo IS NULL

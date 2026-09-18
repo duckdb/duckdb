@@ -42,6 +42,7 @@ public:
 		return children;
 	}
 	void SetVectorType(VectorType vector_type) override;
+	void PrepareChildrenForSetConstant();
 
 public:
 	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;

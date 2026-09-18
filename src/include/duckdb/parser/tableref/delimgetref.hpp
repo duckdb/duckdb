@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/tableref.hpp"
 
 namespace duckdb {
@@ -21,7 +22,7 @@ public:
 		}
 	}
 
-	vector<string> internal_aliases;
+	vector<Identifier> internal_aliases;
 	vector<LogicalType> types;
 
 public:

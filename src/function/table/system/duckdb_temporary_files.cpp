@@ -12,7 +12,7 @@ struct DuckDBTemporaryFilesData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBTemporaryFilesBind(ClientContext &context, TableFunctionBindInput &input,
-                                                         vector<LogicalType> &return_types, vector<string> &names) {
+                                                         vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("path");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -50,7 +50,6 @@ void DuckDBTemporaryFilesFunction(ClientContext &context, TableFunctionInput &da
 		size.Append(Value::BIGINT(NumericCast<int64_t>(entry.size)));
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBTemporaryFilesFun::RegisterFunction(BuiltinFunctions &set) {

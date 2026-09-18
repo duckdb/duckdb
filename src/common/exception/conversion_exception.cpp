@@ -1,4 +1,5 @@
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/query_location.hpp"
 #include "duckdb/common/types.hpp"
 
 namespace duckdb {
@@ -16,7 +17,7 @@ ConversionException::ConversionException(const LogicalType &orig_type, const Log
 ConversionException::ConversionException(const string &msg) : Exception(ExceptionType::CONVERSION, msg) {
 }
 
-ConversionException::ConversionException(optional_idx error_location, const string &msg)
+ConversionException::ConversionException(QueryLocation error_location, const string &msg)
     : Exception(Exception::InitializeExtraInfo(error_location), ExceptionType::CONVERSION, msg) {
 }
 

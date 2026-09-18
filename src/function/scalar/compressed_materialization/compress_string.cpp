@@ -233,7 +233,7 @@ unique_ptr<FunctionData> CMStringDecompressDeserialize(Deserializer &deserialize
 }
 
 ScalarFunctionSet GetStringDecompressFunctionSet() {
-	ScalarFunctionSet set(StringDecompressFunctionName());
+	ScalarFunctionSet set {Identifier(StringDecompressFunctionName())};
 	auto string_types = CMUtils::StringTypes();
 	// For backwards compatibility, see internal issue 5306
 	string_types.push_back(LogicalType::HUGEINT);
@@ -246,8 +246,9 @@ ScalarFunctionSet GetStringDecompressFunctionSet() {
 } // namespace
 
 ScalarFunction CMStringCompressFun::GetFunction(const LogicalType &result_type) {
-	ScalarFunction result(StringCompressFunctionName(result_type), {LogicalType::VARCHAR}, result_type,
+	ScalarFunction result(Identifier(StringCompressFunctionName(result_type)), {LogicalType::VARCHAR}, result_type,
 	                      GetStringCompressFunctionSwitch(result_type), CMUtils::Bind);
+	result.GetSignature().GetParameter(0).SetName("value");
 	result.SetSerializeCallback(CMStringCompressSerialize);
 	result.SetDeserializeCallback(CMStringCompressDeserialize);
 #if defined(D_ASSERT_IS_ENABLED)
@@ -259,9 +260,10 @@ ScalarFunction CMStringCompressFun::GetFunction(const LogicalType &result_type) 
 }
 
 ScalarFunction CMStringDecompressFun::GetFunction(const LogicalType &input_type) {
-	ScalarFunction result(StringDecompressFunctionName(), {input_type}, LogicalType::VARCHAR,
+	ScalarFunction result(Identifier(StringDecompressFunctionName()), {input_type}, LogicalType::VARCHAR,
 	                      GetStringDecompressFunctionSwitch(input_type), CMUtils::Bind, nullptr,
 	                      StringDecompressLocalState::Init);
+	result.GetSignature().GetParameter(0).SetName("value");
 	result.SetSerializeCallback(CMStringDecompressSerialize);
 	result.SetDeserializeCallback(CMStringDecompressDeserialize);
 	return result;

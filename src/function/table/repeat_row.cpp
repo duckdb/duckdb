@@ -19,11 +19,11 @@ struct RepeatRowOperatorData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> RepeatRowBind(ClientContext &context, TableFunctionBindInput &input,
-                                              vector<LogicalType> &return_types, vector<string> &names) {
+                                              vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto &inputs = input.inputs;
 	for (idx_t input_idx = 0; input_idx < inputs.size(); input_idx++) {
 		return_types.push_back(inputs[input_idx].type());
-		names.push_back("column" + std::to_string(input_idx));
+		names.emplace_back("column" + std::to_string(input_idx));
 	}
 	auto entry = input.named_parameters.find("num_rows");
 	if (entry == input.named_parameters.end()) {
@@ -47,7 +47,7 @@ static void RepeatRowFunction(ClientContext &context, TableFunctionInput &data_p
 	for (idx_t val_idx = 0; val_idx < bind_data.values.size(); val_idx++) {
 		output.data[val_idx].Reference(bind_data.values[val_idx], count_t(remaining));
 	}
-	output.SetCardinality(remaining);
+	output.SetChildCardinality(remaining);
 	state.current_count += remaining;
 }
 

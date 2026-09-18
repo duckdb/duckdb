@@ -2,6 +2,9 @@
 # description: Test eager count_star, min, and max execution on parquet
 # group: [optimizer]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 require parquet
 
 statement ok

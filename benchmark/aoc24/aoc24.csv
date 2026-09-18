@@ -13,9 +13,13 @@ benchmark/aoc24/day12.benchmark
 benchmark/aoc24/day13.benchmark
 benchmark/aoc24/day14.benchmark
 benchmark/aoc24/day15.benchmark
+benchmark/aoc24/day16.benchmark
+benchmark/aoc24/day17.benchmark
 benchmark/aoc24/day18.benchmark
 benchmark/aoc24/day19.benchmark
 benchmark/aoc24/day20.benchmark
 benchmark/aoc24/day21.benchmark
+benchmark/aoc24/day22.benchmark
 benchmark/aoc24/day23.benchmark
+benchmark/aoc24/day24.benchmark
 benchmark/aoc24/day25.benchmark

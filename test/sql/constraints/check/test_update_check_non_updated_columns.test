@@ -47,7 +47,7 @@ INSERT INTO v1 VALUES (1, 1, 1);
 statement error
 UPDATE v1 SET c = 2;
 ----
-CHECK constraint failed on table v1
+CHECK constraint failed on table "v1"
 
 # Table remains unchanged
 query III
@@ -75,7 +75,7 @@ INSERT INTO v2 VALUES (2, 3, 5);
 statement error
 UPDATE v2 SET z = 7 WHERE x = 2;
 ----
-CHECK constraint failed on table v2
+CHECK constraint failed on table "v2"
 
 # Data unchanged
 query III
@@ -124,19 +124,19 @@ INSERT INTO v_char VALUES ('alice', 'active');
 statement error
 INSERT INTO v_char VALUES ('ab', 'active');
 ----
-CHECK constraint failed on table v_char
+CHECK constraint failed on table "v_char"
 
 # Invalid: status not in allowed set
 statement error
 INSERT INTO v_char VALUES ('charlie', 'pending');
 ----
-CHECK constraint failed on table v_char
+CHECK constraint failed on table "v_char"
 
 # UPDATE that violates CHECK(status IN (...)) must fail
 statement error
 UPDATE v_char SET status = 'deleted' WHERE username = 'alice';
 ----
-CHECK constraint failed on table v_char
+CHECK constraint failed on table "v_char"
 
 # UPDATE that keeps constraints satisfied must succeed
 statement ok

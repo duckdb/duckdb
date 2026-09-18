@@ -1,0 +1,27 @@
+# name: test/sql/function/timestamp/test_strptime_nonascii.test
+# description: strptime with non-ascii bytes in the input string
+# group: [timestamp]
+
+# non-ascii bytes reaching the %B month-name lookup must not match and must not be UB
+query I
+SELECT try_strptime('21 Jüne, 2018', '%d %B, %Y')
+----
+NULL
+
+# non-ascii byte reaching the %A day-name lookup
+query I
+SELECT try_strptime('Mänday', '%A')
+----
+NULL
+
+# non-ascii byte reaching the %p AM/PM lookup
+query I
+SELECT try_strptime('10 äm', '%I %p')
+----
+NULL
+
+# a valid ascii month name still parses after the fix
+query I
+SELECT try_strptime('21 June, 2018', '%d %B, %Y')
+----
+2018-06-21 00:00:00

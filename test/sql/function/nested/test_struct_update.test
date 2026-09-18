@@ -40,7 +40,7 @@ SELECT struct_update(123, a := 1);
 statement error
 SELECT struct_update({a: 1, b: 2}, a := 2, a := 3);
 ----
-<REGEX>:Invalid Input Error.*Duplicate named argument .*
+<REGEX>:Binder Error:.*Duplicate named argument .*
 
 # Test changing a value in a STRUCT field
 query T

@@ -24,9 +24,9 @@ struct AggregateSortKeyHelpers {
 		auto modifiers = OrderModifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST);
 		CreateSortKeyHelpers::CreateSortKey(input, modifiers, sort_key);
 
-		UnifiedVectorFormat idata;
+		optional<VectorValidityIterator> input_validity;
 		if (IGNORE_NULLS) {
-			input.ToUnifiedFormat(idata);
+			input_validity = input.Validity();
 		}
 
 		UnifiedVectorFormat kdata;
@@ -40,8 +40,7 @@ struct AggregateSortKeyHelpers {
 		for (idx_t i = 0; i < count; i++) {
 			const auto sidx = sdata.sel->get_index(i);
 			if (IGNORE_NULLS) {
-				auto idx = idata.sel->get_index(i);
-				if (!idata.validity.RowIsValid(idx)) {
+				if (!input_validity.value().IsValid(i)) {
 					continue;
 				}
 			}

@@ -12,7 +12,7 @@ struct DuckDBMemoryData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBMemoryBind(ClientContext &context, TableFunctionBindInput &input,
-                                                 vector<LogicalType> &return_types, vector<string> &names) {
+                                                 vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("tag");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -62,7 +62,6 @@ void DuckDBMemoryFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		temporary_storage_bytes.Append(Value::BIGINT(ClampReportedMemory(entry.evicted_data)));
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBMemoryFun::RegisterFunction(BuiltinFunctions &set) {

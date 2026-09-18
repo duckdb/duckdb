@@ -47,7 +47,7 @@
 
 #include <stdio.h>
 
-struct W_INCOME_BAND_TBL g_w_income_band;
+thread_local struct W_INCOME_BAND_TBL g_w_income_band;
 
 /*
  * mk_income_band

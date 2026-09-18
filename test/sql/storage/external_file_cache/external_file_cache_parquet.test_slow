@@ -4,6 +4,10 @@
 
 require parquet
 
+# the cache skips local files unless forced, these tests exercise it with local files
+statement ok
+set cache_local_files=true;
+
 statement ok
 copy (
     select range % 1500000 l_orderkey,
@@ -19,10 +23,6 @@ query II
 select round(nr_bytes / 1048576), loaded from duckdb_external_file_cache() order by location;
 ----
 
-
-# for now, caching is only triggered when prefetching (mainly used for remote files), so let's force it
-statement ok
-set prefetch_all_parquet_files=true;
 
 statement ok
 create view lineitem as from '{TEST_DIR}/test_efc_lineitem.parquet';

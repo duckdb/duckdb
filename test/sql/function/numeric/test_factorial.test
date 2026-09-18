@@ -7,10 +7,10 @@ SELECT factorial(0);
 ----
 1
 
-query I
+statement error
 SELECT factorial(-1);
 ----
-1
+factorial of a negative number is undefined
 
 query I
 SELECT factorial(NULL);

@@ -285,9 +285,9 @@ idx_t SumApproxSize(const vector<EvictionQueueInformation> &info) {
 
 // Regression test for eviction-queue dead-node accounting.
 //
-// Only blocks with a live queue entry (eviction_seq_num > 0) should increment dead_nodes on
-// destruction. Blocks that were evicted via IterateUnloadableBlocks have their seq_num reset
-// to 0 and their queue entry already consumed — they must NOT inflate the counter.
+// Only blocks with a live queue entry (has_queue_entry == true) should increment dead_nodes on
+// destruction. Blocks that were evicted via IterateUnloadableBlocks had their live entry consumed
+// (has_queue_entry cleared) — they must NOT inflate the counter.
 TEST_CASE("Test eviction queue: dead_nodes is incremented only for blocks with live queue entries",
           "[storage][buffer_pool]") {
 	DuckDB db;
@@ -332,9 +332,9 @@ TEST_CASE("Test eviction queue: dead_nodes is incremented only for blocks with l
 
 	const idx_t dead_before = SumDeadNodes(buffer_pool.GetEvictionQueueInfo());
 
-	// Drop all BlockHandles. Only the still-loaded blocks (which have eviction_seq_num > 0
-	// and a live queue entry) should increment dead_nodes. Evicted blocks had their entries
-	// consumed by IterateUnloadableBlocks and seq_num reset to 0.
+	// Drop all BlockHandles. Only the still-loaded blocks (which still have a live queue entry,
+	// has_queue_entry == true) should increment dead_nodes. Evicted blocks had their entries
+	// consumed by IterateUnloadableBlocks, which cleared has_queue_entry.
 	handles.clear();
 
 	const idx_t dead_after = SumDeadNodes(buffer_pool.GetEvictionQueueInfo());

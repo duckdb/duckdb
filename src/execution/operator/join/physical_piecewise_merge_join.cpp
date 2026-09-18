@@ -452,24 +452,11 @@ static idx_t MergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, MergeJoinGlo
 	const auto strict = MergeJoinStrictComparison(comparison);
 
 	switch (lstate.sort_key_type) {
-	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		return TemplatedMergeJoinSimpleBlocks<SortKeyType::NO_PAYLOAD_FIXED_8>(lstate, gstate, match, strict);
-	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		return TemplatedMergeJoinSimpleBlocks<SortKeyType::NO_PAYLOAD_FIXED_16>(lstate, gstate, match, strict);
-	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		return TemplatedMergeJoinSimpleBlocks<SortKeyType::NO_PAYLOAD_FIXED_24>(lstate, gstate, match, strict);
-	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		return TemplatedMergeJoinSimpleBlocks<SortKeyType::NO_PAYLOAD_FIXED_32>(lstate, gstate, match, strict);
-	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		return TemplatedMergeJoinSimpleBlocks<SortKeyType::NO_PAYLOAD_VARIABLE_32>(lstate, gstate, match, strict);
-	case SortKeyType::PAYLOAD_FIXED_16:
-		return TemplatedMergeJoinSimpleBlocks<SortKeyType::PAYLOAD_FIXED_16>(lstate, gstate, match, strict);
-	case SortKeyType::PAYLOAD_FIXED_24:
-		return TemplatedMergeJoinSimpleBlocks<SortKeyType::PAYLOAD_FIXED_24>(lstate, gstate, match, strict);
-	case SortKeyType::PAYLOAD_FIXED_32:
-		return TemplatedMergeJoinSimpleBlocks<SortKeyType::PAYLOAD_FIXED_32>(lstate, gstate, match, strict);
-	case SortKeyType::PAYLOAD_VARIABLE_32:
-		return TemplatedMergeJoinSimpleBlocks<SortKeyType::PAYLOAD_VARIABLE_32>(lstate, gstate, match, strict);
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		return TemplatedMergeJoinSimpleBlocks<SortKeyType::SORT_KEY_TYPE>(lstate, gstate, match, strict);
+		DUCKDB_FOR_EACH_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
 	default:
 		throw NotImplementedException("MergeJoinSimpleBlocks for %s", EnumUtil::ToString(lstate.sort_key_type));
 	}
@@ -614,24 +601,11 @@ static idx_t MergeJoinComplexBlocks(const SortKeyType &sort_key_type, ChunkMerge
 	const auto strict = MergeJoinStrictComparison(comparison);
 
 	switch (sort_key_type) {
-	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		return TemplatedMergeJoinComplexBlocks<SortKeyType::NO_PAYLOAD_FIXED_8>(l, r, strict, prev_left_index);
-	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		return TemplatedMergeJoinComplexBlocks<SortKeyType::NO_PAYLOAD_FIXED_16>(l, r, strict, prev_left_index);
-	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		return TemplatedMergeJoinComplexBlocks<SortKeyType::NO_PAYLOAD_FIXED_24>(l, r, strict, prev_left_index);
-	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		return TemplatedMergeJoinComplexBlocks<SortKeyType::NO_PAYLOAD_FIXED_32>(l, r, strict, prev_left_index);
-	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		return TemplatedMergeJoinComplexBlocks<SortKeyType::NO_PAYLOAD_VARIABLE_32>(l, r, strict, prev_left_index);
-	case SortKeyType::PAYLOAD_FIXED_16:
-		return TemplatedMergeJoinComplexBlocks<SortKeyType::PAYLOAD_FIXED_16>(l, r, strict, prev_left_index);
-	case SortKeyType::PAYLOAD_FIXED_24:
-		return TemplatedMergeJoinComplexBlocks<SortKeyType::PAYLOAD_FIXED_24>(l, r, strict, prev_left_index);
-	case SortKeyType::PAYLOAD_FIXED_32:
-		return TemplatedMergeJoinComplexBlocks<SortKeyType::PAYLOAD_FIXED_32>(l, r, strict, prev_left_index);
-	case SortKeyType::PAYLOAD_VARIABLE_32:
-		return TemplatedMergeJoinComplexBlocks<SortKeyType::PAYLOAD_VARIABLE_32>(l, r, strict, prev_left_index);
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		return TemplatedMergeJoinComplexBlocks<SortKeyType::SORT_KEY_TYPE>(l, r, strict, prev_left_index);
+		DUCKDB_FOR_EACH_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
 	default:
 		throw NotImplementedException("MergeJoinSimpleBlocks for %s", EnumUtil::ToString(sort_key_type));
 	}
@@ -708,7 +682,6 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 					chunk.data[col_idx].Reference(state.rhs_input.data[col_idx - left_cols]);
 				}
 			}
-			chunk.SetCardinality(result_count);
 
 			auto sel = FlatVector::IncrementalSelectionVector();
 			if (tail_cols) {
@@ -745,12 +718,14 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 					}
 				}
 			}
-			chunk.SetCardinality(result_count);
 
 			//	Apply any arbitrary predicate
 			if (predicate) {
 				result_count = state.pred_executor.SelectExpression(chunk, state.pred_matches);
 				chunk.Slice(state.pred_matches, result_count);
+				for (idx_t i = 0; i < result_count; i++) {
+					state.pred_matches.set_index(i, sel->get_index(state.pred_matches.get_index(i)));
+				}
 				sel = &state.pred_matches;
 			}
 
@@ -904,7 +879,6 @@ SourceResultType PhysicalPiecewiseMergeJoin::GetDataInternal(ExecutionContext &c
 			for (idx_t col_idx = 0; col_idx < right_column_count; ++col_idx) {
 				result.data[left_column_count + col_idx].Slice(rhs_chunk.data[col_idx], rsel, result_count);
 			}
-			result.SetCardinality(result_count);
 			break;
 		}
 	}

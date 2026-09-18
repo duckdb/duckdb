@@ -1,10 +1,12 @@
 #include "duckdb/function/scalar/system_functions.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/types/value.hpp"
 
 #include "utf8proc.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -36,7 +38,7 @@ unique_ptr<FunctionData> CurrentTransactionIdBind(BindScalarFunctionInput &input
 
 void CurrentTransactionIdFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<CurrentTransactionIdData>();
+	const auto &info = func_expr.BindInfo()->Cast<CurrentTransactionIdData>();
 	result.Reference(info.transaction_id, count_t(args.size()));
 }
 

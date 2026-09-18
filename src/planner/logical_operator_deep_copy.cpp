@@ -250,9 +250,9 @@ void TableBindingReplacer::VisitExpression(unique_ptr<Expression> *expression) {
 	auto &expr = *expression;
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		auto &bound_column_ref = expr->Cast<BoundColumnRefExpression>();
-		auto entry = table_idx_replacements.find(bound_column_ref.binding.table_index);
+		auto entry = table_idx_replacements.find(bound_column_ref.Binding().table_index);
 		if (entry != table_idx_replacements.end()) {
-			bound_column_ref.binding.table_index = entry->second;
+			bound_column_ref.BindingMutable().table_index = entry->second;
 		}
 	} else if (expr->GetExpressionClass() == ExpressionClass::BOUND_PARAMETER) {
 		// we have to replace the parameter data if it is a bound parameter
@@ -260,9 +260,9 @@ void TableBindingReplacer::VisitExpression(unique_ptr<Expression> *expression) {
 		// correct pointer to the parameter data
 		auto &bound_parameter = expr->Cast<BoundParameterExpression>();
 		if (parameter_data) {
-			auto entry = parameter_data->find(bound_parameter.identifier);
+			auto entry = parameter_data->find(bound_parameter.Identifier());
 			if (entry != parameter_data->end()) {
-				bound_parameter.parameter_data = entry->second;
+				bound_parameter.ParameterDataMutable() = entry->second;
 			}
 		}
 	}

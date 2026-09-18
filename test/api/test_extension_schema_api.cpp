@@ -19,7 +19,7 @@ static void ReturnMainSchema(DataChunk &args, ExpressionState &, Vector &result)
 
 static ExtensionLoader CreateExtensionLoader(DuckDB &db, const string &name) {
 	ExtensionInfo extension_info {};
-	ExtensionActiveLoad load_info {*db.instance, extension_info, name, ""};
+	ExtensionActiveLoad load_info {*db.instance, extension_info, duckdb::Identifier(name), duckdb::Identifier()};
 	return ExtensionLoader {load_info};
 }
 

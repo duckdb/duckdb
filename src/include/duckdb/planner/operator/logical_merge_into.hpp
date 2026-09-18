@@ -14,6 +14,7 @@
 #include "duckdb/planner/bound_constraint.hpp"
 
 namespace duckdb {
+struct CreateInfo;
 class TableCatalogEntry;
 class LogicalGet;
 class LogicalProjection;
@@ -28,7 +29,7 @@ public:
 	vector<PhysicalIndex> columns;
 	//! Set of expressions for INSERT or UPDATE
 	vector<unique_ptr<Expression>> expressions;
-	//! Column index map (for INSERT)
+	//! Deprecated: Column index map (for INSERT)
 	physical_index_vector_t<idx_t> column_index_map;
 	//! Whether or not an UPDATE is a DELETE + INSERT
 	bool update_is_del_and_insert = false;

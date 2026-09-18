@@ -25,11 +25,81 @@ struct BetweenFun {
 	static ScalarFunction GetFunction();
 };
 
-struct ComparisonFun {
-	static constexpr const char *Name = "__comparison";
+struct OperatorEqualFun {
+	static constexpr const char *Name = "=";
 	static constexpr const char *Parameters = "left,right";
-	static constexpr const char *Description = "Performs a comparison between left / right.";
-	static constexpr const char *Example = "__comparison(3, 0";
+	static constexpr const char *Description = "Returns whether left is equal to right.";
+	static constexpr const char *Example = "1 = 1";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct OperatorNotEqualFun {
+	static constexpr const char *Name = "!=";
+	static constexpr const char *Parameters = "left,right";
+	static constexpr const char *Description = "Returns whether left is not equal to right.";
+	static constexpr const char *Example = "1 != 2";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct OperatorLessThanFun {
+	static constexpr const char *Name = "<";
+	static constexpr const char *Parameters = "left,right";
+	static constexpr const char *Description = "Returns whether left is less than right.";
+	static constexpr const char *Example = "1 < 2";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct OperatorLessThanEqualsFun {
+	static constexpr const char *Name = "<=";
+	static constexpr const char *Parameters = "left,right";
+	static constexpr const char *Description = "Returns whether left is less than or equal to right.";
+	static constexpr const char *Example = "1 <= 2";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct OperatorGreaterThanFun {
+	static constexpr const char *Name = ">";
+	static constexpr const char *Parameters = "left,right";
+	static constexpr const char *Description = "Returns whether left is greater than right.";
+	static constexpr const char *Example = "2 > 1";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct OperatorGreaterThanEqualsFun {
+	static constexpr const char *Name = ">=";
+	static constexpr const char *Parameters = "left,right";
+	static constexpr const char *Description = "Returns whether left is greater than or equal to right.";
+	static constexpr const char *Example = "2 >= 1";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct IsDistinctFromFun {
+	static constexpr const char *Name = "IS DISTINCT FROM";
+	static constexpr const char *Parameters = "left,right";
+	static constexpr const char *Description = "Returns whether left is distinct from right, treating null as a comparable value.";
+	static constexpr const char *Example = "1 IS DISTINCT FROM NULL";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct IsNotDistinctFromFun {
+	static constexpr const char *Name = "IS NOT DISTINCT FROM";
+	static constexpr const char *Parameters = "left,right";
+	static constexpr const char *Description = "Returns whether left is not distinct from right, treating null as a comparable value.";
+	static constexpr const char *Example = "NULL IS NOT DISTINCT FROM NULL";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();

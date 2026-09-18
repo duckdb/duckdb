@@ -5,7 +5,7 @@
 require parquet
 
 statement ok
-create table all_types as select * exclude(small_enum, medium_enum, large_enum, "union", bit) from test_all_types();
+create table all_types as select * exclude(small_enum, medium_enum, large_enum, "union", bit, empty_struct) from test_all_types();
 
 statement ok
 copy all_types to '{TEST_DIR}/sample_all_types.csv' (FORMAT CSV);

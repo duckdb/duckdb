@@ -1,0 +1,213 @@
+# name: test/sql/cte/materialized/materialized_cte_parallel_buffered.test
+# description: Test parallel buffered CTE scans with batch indexes
+# group: [materialized]
+
+require vector_size 2048
+
+statement ok
+PRAGMA threads=4;
+
+statement ok
+CREATE TABLE cte_parallel_left AS SELECT i FROM range(600000) tbl(i);
+
+statement ok
+CREATE TABLE cte_parallel_right AS SELECT i + 600000 AS i FROM range(600000) tbl(i);
+
+statement ok
+PRAGMA verify_parallelism;
+
+query II
+EXPLAIN ANALYZE
+CREATE TABLE cte_parallel_plan AS
+WITH t AS MATERIALIZED (
+	SELECT * FROM cte_parallel_left
+	UNION ALL
+	SELECT * FROM cte_parallel_right
+)
+SELECT i FROM t;
+----
+analyzed_plan	<REGEX>:.*Fanout Mode: BUFFERED.*Scan Mode: BATCH.*
+
+loop run 0 5
+
+query I
+CREATE OR REPLACE TABLE cte_parallel_copy AS
+WITH t AS MATERIALIZED (
+	SELECT * FROM cte_parallel_left
+	UNION ALL
+	SELECT * FROM cte_parallel_right
+)
+SELECT i, i % 97 AS bucket FROM t;
+----
+1200000
+
+query III
+SELECT count(*), min(i), max(i) FROM cte_parallel_copy;
+----
+1200000	0	1199999
+
+query I
+SELECT count(*)
+FROM cte_parallel_copy
+WHERE i != rowid;
+----
+0
+
+endloop
+
+# Fewer produced batches than scan tasks must not leave idle tasks pinned to an older batch.
+query I
+CREATE TABLE cte_parallel_short AS
+WITH t AS MATERIALIZED (
+	SELECT i FROM range(1000) tbl(i)
+	UNION ALL
+	SELECT i + 1000 AS i FROM range(1000) tbl(i)
+)
+SELECT i FROM t;
+----
+2000
+
+query I
+SELECT count(*) FROM cte_parallel_short WHERE i != rowid;
+----
+0
+
+statement ok
+PREPARE cte_parallel_prepared AS
+WITH t AS MATERIALIZED (
+	SELECT * FROM cte_parallel_left
+	UNION ALL
+	SELECT * FROM cte_parallel_right
+)
+SELECT i FROM t LIMIT 1 OFFSET 750000;
+
+loop run 0 5
+
+query I
+EXECUTE cte_parallel_prepared;
+----
+750000
+
+endloop
+
+# Early source termination must release every outstanding batch claim.
+query I
+CREATE TABLE cte_parallel_limit AS
+WITH t AS MATERIALIZED (
+	SELECT * FROM cte_parallel_left
+	UNION ALL
+	SELECT * FROM cte_parallel_right
+)
+SELECT i FROM t LIMIT 250000;
+----
+250000
+
+query III
+SELECT count(*), min(i), max(i) FROM cte_parallel_limit;
+----
+250000	0	249999
+
+# Minimum batch advances must propagate through nested buffered exchanges.
+query I
+CREATE TABLE cte_parallel_nested AS
+WITH first AS MATERIALIZED (
+	SELECT * FROM cte_parallel_left
+	UNION ALL
+	SELECT * FROM cte_parallel_right
+), second AS MATERIALIZED (
+	SELECT i FROM first
+)
+SELECT i FROM second LIMIT 750000;
+----
+750000
+
+query III
+SELECT count(*), min(i), max(i) FROM cte_parallel_nested;
+----
+750000	0	749999
+
+query I
+SELECT count(*)
+FROM cte_parallel_nested
+WHERE i != rowid;
+----
+0
+
+# A direct all-data consumer forces the early-stopping batch consumer through the shared spool.
+query I
+CREATE TABLE cte_parallel_mixed AS
+WITH t AS MATERIALIZED (
+	SELECT * FROM cte_parallel_left
+	UNION ALL
+	SELECT * FROM cte_parallel_right
+)
+SELECT i, (SELECT count(*) FROM t) AS total FROM t LIMIT 250000;
+----
+250000
+
+query IIII
+SELECT count(*), min(i), max(i), min(total) FROM cte_parallel_mixed;
+----
+250000	0	249999	1200000
+
+# Empty and sparse producer batches must not introduce gaps or reorder later batches.
+query I
+CREATE TABLE cte_parallel_sparse AS
+WITH t AS MATERIALIZED (
+	SELECT i FROM cte_parallel_left WHERE i % 7 != 0
+	UNION ALL
+	SELECT i FROM cte_parallel_right WHERE i % 11 != 0
+)
+SELECT i FROM t;
+----
+1059740
+
+query I
+SELECT count(*)
+FROM cte_parallel_sparse current_row
+JOIN cte_parallel_sparse previous_row
+	ON current_row.rowid = previous_row.rowid + 1
+WHERE current_row.i <= previous_row.i;
+----
+0
+
+query I
+CREATE TABLE cte_parallel_empty AS
+WITH t AS MATERIALIZED (
+	SELECT i FROM cte_parallel_left WHERE false
+	UNION ALL
+	SELECT i FROM cte_parallel_right WHERE false
+)
+SELECT i FROM t;
+----
+0
+
+query I
+SELECT count(*) FROM cte_parallel_empty;
+----
+0
+
+# The batch scan remains valid when the pipeline has only one executor.
+statement ok
+PRAGMA threads=1;
+
+query I
+CREATE TABLE cte_single_thread AS
+WITH t AS MATERIALIZED (
+	SELECT * FROM cte_parallel_left
+	UNION ALL
+	SELECT * FROM cte_parallel_right
+)
+SELECT i FROM t;
+----
+1200000
+
+query III
+SELECT count(*), min(i), max(i) FROM cte_single_thread;
+----
+1200000	0	1199999
+
+query I
+SELECT count(*) FROM cte_single_thread WHERE i != rowid;
+----
+0

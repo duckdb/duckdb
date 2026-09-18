@@ -49,24 +49,26 @@ static bool AreMatchesPossible(const LogicalType &left, const LogicalType &right
 unique_ptr<Expression> EnumComparisonRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                  bool &changes_made, bool is_root) {
 	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
-	auto &left_child = bindings[1].get().Cast<BoundCastExpression>();
-	auto &right_child = bindings[3].get().Cast<BoundCastExpression>();
+	auto &left_child = bindings[1].get().Cast<BoundFunctionExpression>();
+	auto &right_child = bindings[3].get().Cast<BoundFunctionExpression>();
 
-	if (!AreMatchesPossible(left_child.child->GetReturnType(), right_child.child->GetReturnType())) {
+	if (!AreMatchesPossible(BoundCastExpression::Child(left_child).GetReturnType(),
+	                        BoundCastExpression::Child(right_child).GetReturnType())) {
 		vector<unique_ptr<Expression>> children;
 		children.push_back(std::move(BoundComparisonExpression::LeftMutable(root)));
 		children.push_back(std::move(BoundComparisonExpression::RightMutable(root)));
-		return ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(false));
+		return ExpressionRewriter::ConstantOrNull(GetContext(), std::move(children), Value::BOOLEAN(false));
 	}
 
 	if (!is_root || op.type != LogicalOperatorType::LOGICAL_FILTER) {
 		return nullptr;
 	}
 
-	auto cast_left_to_right = BoundCastExpression::AddDefaultCastToType(std::move(left_child.child),
-	                                                                    right_child.child->GetReturnType(), true);
+	auto cast_left_to_right =
+	    BoundCastExpression::AddDefaultCastToType(std::move(BoundCastExpression::ChildMutable(left_child)),
+	                                              BoundCastExpression::Child(right_child).GetReturnType(), true);
 	return BoundComparisonExpression::Create(root.GetExpressionType(), std::move(cast_left_to_right),
-	                                         std::move(right_child.child));
+	                                         std::move(BoundCastExpression::ChildMutable(right_child)));
 }
 
 } // namespace duckdb

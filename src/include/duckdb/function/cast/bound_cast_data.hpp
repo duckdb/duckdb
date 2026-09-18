@@ -73,6 +73,8 @@ struct StructBoundCastData : public BoundCastData {
 	static unique_ptr<BoundCastData> BindStructToStructCast(BindCastInput &input, const LogicalType &source,
 	                                                        const LogicalType &target);
 	static unique_ptr<FunctionLocalState> InitStructCastLocalState(CastLocalStateParameters &parameters);
+	//! The shared (positional/by-name) value cast - used by both the STRUCT and TUPLE cast switches
+	static bool StructToStructCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
 
 public:
 	unique_ptr<BoundCastData> Copy() const override {

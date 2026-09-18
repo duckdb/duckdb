@@ -1,0 +1,29 @@
+# name: test/sql/alter/add_col/test_add_col_if_not_exists_default.test
+# group: [add_col]
+
+statement ok
+CREATE TABLE t (i INTEGER)
+
+statement ok
+INSERT INTO t VALUES (1), (2)
+
+statement ok
+ALTER TABLE t ADD COLUMN IF NOT EXISTS b BOOLEAN DEFAULT false
+
+statement ok
+UPDATE t SET b = true
+
+query I
+SELECT b FROM t
+----
+true
+true
+
+statement ok
+ALTER TABLE t ADD COLUMN IF NOT EXISTS b BOOLEAN DEFAULT false
+
+query I
+SELECT b FROM t
+----
+true
+true

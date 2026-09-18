@@ -24,6 +24,10 @@ struct MultiFileOptions {
 	bool auto_detect_hive_partitioning = true;
 	bool union_by_name = false;
 	bool hive_types_autocast = true;
+	bool allow_empty = false;
+	//! The maximum number of files that are opened to determine the schema - the schemas of the sampled files are
+	//! combined into one. NumericLimits<idx_t>::Maximum() samples every file
+	idx_t maximum_sample_files = 1;
 	MultiFileColumnMappingMode mapping = MultiFileColumnMappingMode::BY_NAME;
 
 	case_insensitive_map_t<LogicalType> hive_types_schema;
@@ -44,6 +48,11 @@ struct MultiFileOptions {
 	DUCKDB_API LogicalType GetHiveLogicalType(const string &hive_partition_column) const;
 	DUCKDB_API Value GetHivePartitionValue(const string &base, const string &entry, ClientContext &context) const;
 	DUCKDB_API bool AnySet() const;
+	//! Whether the global schema is a union of the schemas of several files - individual files are then allowed to
+	//! be missing columns that are present in the global schema
+	bool SchemaIsUnion() const {
+		return union_by_name || maximum_sample_files > 1;
+	}
 };
 
 } // namespace duckdb

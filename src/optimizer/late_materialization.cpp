@@ -67,6 +67,7 @@ vector<ColumnBinding> LateMaterialization::ConstructRHS(unique_ptr<LogicalOperat
 			if (filter.HasProjectionMap()) {
 				// if the filter has a projection map, we need to project the new column
 				filter.projection_map.emplace_back(column_count - 1);
+				column_count = filter.projection_map.size();
 			}
 			break;
 		}
@@ -122,7 +123,7 @@ void LateMaterialization::ReplaceTopLevelTableIndex(LogicalOperator &root, Table
 void LateMaterialization::ReplaceTableReferences(unique_ptr<Expression> &root_expr, TableIndex new_table_index) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &bound_column_ref, unique_ptr<Expression> &expr) {
-		    bound_column_ref.binding.table_index = new_table_index;
+		    bound_column_ref.BindingMutable().table_index = new_table_index;
 	    });
 }
 
@@ -134,7 +135,7 @@ unique_ptr<Expression> LateMaterialization::GetExpression(LogicalOperator &op, P
 		auto &column_id = get.GetColumnIndex(column_binding);
 		auto column_name = get.GetColumnName(column_id);
 		auto &column_type = get.GetColumnType(column_id);
-		auto expr = make_uniq<BoundColumnRefExpression>(column_name, column_type, column_binding);
+		auto expr = make_uniq<BoundColumnRefExpression>(Identifier(column_name), column_type, column_binding);
 		return std::move(expr);
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
@@ -151,7 +152,7 @@ unique_ptr<Expression> LateMaterialization::GetExpression(LogicalOperator &op, P
 void LateMaterialization::ReplaceExpressionReferences(LogicalOperator &next_op, unique_ptr<Expression> &root_expr) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &bound_column_ref, unique_ptr<Expression> &expr) {
-		    expr = GetExpression(next_op, bound_column_ref.binding.column_index);
+		    expr = GetExpression(next_op, bound_column_ref.Binding().column_index);
 	    });
 }
 
@@ -226,6 +227,11 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	}
 	if (!get.function.late_materialization) {
 		// this function does not support late materialization
+		return false;
+	}
+	if (get.extra_info.sample_options && !get.extra_info.sample_options->is_percentage) {
+		// we should not apply late materialization when row-count sampling is pushed down
+		// the sample scan is already fast and creating a semi-join would duplicate the full table scan
 		return false;
 	}
 	if (!get.function.get_row_id_columns) {

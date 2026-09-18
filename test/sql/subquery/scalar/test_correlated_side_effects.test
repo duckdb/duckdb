@@ -2,10 +2,6 @@
 # description: Test correlated subqueries with side effects
 # group: [scalar]
 
-# FIXME: we should not perform duplicate elimination for subqueries that have side-effects
-
-mode skip instable
-
 query I
 SELECT COUNT(DISTINCT
 	(SELECT concat(gen_random_uuid()::VARCHAR, r::VARCHAR))
@@ -13,3 +9,21 @@ SELECT COUNT(DISTINCT
 FROM (SELECT 1 FROM generate_series(1, 100, 1)) AS t(r)
 ----
 100
+
+# Volatile correlated subqueries must run once per physical outer row, including
+# rows that have the same values for every referenced correlated column.
+statement ok
+CREATE SEQUENCE correlated_effect_seq START 1;
+
+query II
+SELECT count(*) FILTER (WHERE result), currval('correlated_effect_seq')
+FROM (
+	SELECT EXISTS (
+		SELECT 1
+		WHERE nextval('correlated_effect_seq') = 2
+		  AND outer_values.a = 1
+	) AS result
+	FROM (VALUES (1, 1), (2, 1)) outer_values(id, a)
+);
+----
+1	2

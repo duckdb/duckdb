@@ -22,7 +22,7 @@ class Serializer;
 struct ChildFieldIDs {
 	ChildFieldIDs();
 	ChildFieldIDs Copy() const;
-	unique_ptr<case_insensitive_map_t<FieldID>> ids;
+	unique_ptr<identifier_map_t<FieldID>> ids;
 
 	void Serialize(Serializer &serializer) const;
 	static ChildFieldIDs Deserialize(Deserializer &source);
@@ -42,7 +42,7 @@ public:
 	static FieldID Deserialize(Deserializer &source);
 
 public:
-	static void GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const vector<string> &names,
+	static void GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const vector<Identifier> &names,
 	                             const vector<LogicalType> &sql_types);
 	static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 	                        unordered_set<uint32_t> &unique_field_ids,

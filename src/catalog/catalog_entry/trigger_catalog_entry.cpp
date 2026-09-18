@@ -4,19 +4,45 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 
 namespace duckdb {
 
 TriggerCatalogEntry::TriggerCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTriggerInfo &info)
-    : StandardEntry(CatalogType::TRIGGER_ENTRY, schema, catalog, info.trigger_name),
+    : StandardEntry(CatalogType::TRIGGER_ENTRY, schema, catalog, info.GetTriggerName()),
       base_table(unique_ptr_cast<TableRef, BaseTableRef>(info.base_table->Copy())), timing(info.timing),
       event_type(info.event_type), columns(info.columns), for_each(info.for_each),
       referencing_new_table(info.referencing_new_table), referencing_old_table(info.referencing_old_table),
       trigger_action(info.trigger_action->Copy()) {
 	this->temporary = info.temporary;
+	this->dependencies = info.dependencies;
 	this->comment = info.comment;
 	this->tags = info.tags;
+}
+
+unique_ptr<CatalogEntry> TriggerCatalogEntry::AlterEntry(CatalogTransaction transaction, AlterInfo &alter_info) {
+	if (alter_info.type != AlterType::ALTER_TABLE) {
+		return CatalogEntry::AlterEntry(transaction, alter_info);
+	}
+	auto &table_info = alter_info.Cast<AlterTableInfo>();
+	if (table_info.alter_table_type != AlterTableType::RENAME_COLUMN) {
+		return CatalogEntry::AlterEntry(transaction, alter_info);
+	}
+	auto &rename_info = alter_info.Cast<RenameColumnInfo>();
+	auto info_copy = GetInfo();
+	auto &cast_info = info_copy->Cast<CreateTriggerInfo>();
+	bool updated = false;
+	for (auto &col : cast_info.columns) {
+		if (col == rename_info.old_name) {
+			col = rename_info.new_name;
+			updated = true;
+		}
+	}
+	if (!updated) {
+		return nullptr;
+	}
+	return make_uniq<TriggerCatalogEntry>(catalog, schema, cast_info);
 }
 
 unique_ptr<CatalogEntry> TriggerCatalogEntry::Copy(ClientContext &context) const {
@@ -27,9 +53,7 @@ unique_ptr<CatalogEntry> TriggerCatalogEntry::Copy(ClientContext &context) const
 
 unique_ptr<CreateInfo> TriggerCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateTriggerInfo>();
-	result->catalog = catalog.GetName();
-	result->schema = schema.name;
-	result->trigger_name = name;
+	result->SetQualifiedName(schema.GetQualifiedName(name));
 	result->base_table = unique_ptr_cast<TableRef, BaseTableRef>(base_table->Copy());
 	result->timing = timing;
 	result->event_type = event_type;
@@ -62,7 +86,7 @@ string TriggerCatalogEntry::ToSQL() const {
 		}
 	}
 	ss << " ON ";
-	ss << ParseInfo::QualifierToString(base_table->catalog_name, base_table->schema_name, base_table->table_name);
+	ss << base_table->GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	if (!referencing_new_table.empty() || !referencing_old_table.empty()) {
 		ss << " REFERENCING";
 		if (!referencing_new_table.empty()) {

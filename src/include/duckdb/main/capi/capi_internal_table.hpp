@@ -48,12 +48,16 @@ struct CTableBindData : public TableFunctionData {
 	void *bind_data = nullptr;
 	duckdb_delete_callback_t delete_callback = nullptr;
 	unique_ptr<NodeStatistics> stats;
+
+	bool SupportStatementCache() const override {
+		return false;
+	}
 };
 
 struct CTableInternalBindInfo {
 	CTableInternalBindInfo(ClientContext &context, const vector<Value> &parameters,
 	                       const named_parameter_map_t &named_parameters, vector<LogicalType> &return_types,
-	                       vector<string> &names, CTableBindData &bind_data, CTableFunctionInfo &function_info)
+	                       vector<Identifier> &names, CTableBindData &bind_data, CTableFunctionInfo &function_info)
 	    : context(context), parameters(parameters), named_parameters(named_parameters), return_types(return_types),
 	      names(names), bind_data(bind_data), function_info(function_info), success(true) {
 	}
@@ -64,7 +68,7 @@ struct CTableInternalBindInfo {
 	named_parameter_map_t named_parameters;
 
 	vector<LogicalType> &return_types;
-	vector<string> &names;
+	vector<Identifier> &names;
 	CTableBindData &bind_data;
 	CTableFunctionInfo &function_info;
 	bool success;

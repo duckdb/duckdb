@@ -39,6 +39,14 @@ public:
 		return internal_vector.empty();
 	}
 
+	bool operator==(const IndexVector<T, INDEX_TYPE> &other) const {
+		return internal_vector == other.internal_vector;
+	}
+
+	bool operator!=(const IndexVector<T, INDEX_TYPE> &other) const {
+		return !(*this == other);
+	}
+
 	void reserve(idx_t size) { // NOLINT: match stl API
 		internal_vector.reserve(size);
 	}

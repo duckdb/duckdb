@@ -9,17 +9,14 @@ namespace duckdb {
 namespace {
 
 struct RegrState {
+	static constexpr const char *STATE_NAMES[] = {"sum", "count"};
+	using STATE_TYPE = StructStateType<double, uint64_t>;
+
 	double sum;
 	uint64_t count;
 };
 
 struct RegrAvgFunction {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.sum = 0;
-		state.count = 0;
-	}
-
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		target.sum += source.sum;
@@ -54,25 +51,22 @@ struct RegrAvgYFunction : RegrAvgFunction {
 	}
 };
 
-LogicalType GetRegrAvgStateType(const BoundAggregateFunction &) {
-	child_list_t<LogicalType> child_types;
-	child_types.emplace_back("sum", LogicalType::DOUBLE);
-	child_types.emplace_back("count", LogicalType::UBIGINT);
-	return LogicalType::STRUCT(std::move(child_types));
-}
-
 } // namespace
 
 AggregateFunction RegrAvgxFun::GetFunction() {
-	return AggregateFunction::BinaryAggregate<RegrState, double, double, double, RegrAvgXFunction>(
-	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
-	    .SetStructStateExport(GetRegrAvgStateType);
+	auto fun = AggregateFunction::BinaryAggregate<RegrState, double, double, double, RegrAvgXFunction>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
+	fun.GetSignature().GetParameter(0).SetName("y");
+	fun.GetSignature().GetParameter(1).SetName("x");
+	return fun;
 }
 
 AggregateFunction RegrAvgyFun::GetFunction() {
-	return AggregateFunction::BinaryAggregate<RegrState, double, double, double, RegrAvgYFunction>(
-	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
-	    .SetStructStateExport(GetRegrAvgStateType);
+	auto fun = AggregateFunction::BinaryAggregate<RegrState, double, double, double, RegrAvgYFunction>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
+	fun.GetSignature().GetParameter(0).SetName("y");
+	fun.GetSignature().GetParameter(1).SetName("x");
+	return fun;
 }
 
 } // namespace duckdb

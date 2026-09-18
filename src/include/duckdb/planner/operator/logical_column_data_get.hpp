@@ -32,10 +32,14 @@ public:
 	TableIndex table_index;
 	//! The types of the chunk
 	vector<LogicalType> chunk_types;
+	//! Column ids that are scanned from the collection
+	vector<column_t> column_ids;
 	//! (optionally owned) column data collection
 	optionally_owned_ptr<ColumnDataCollection> collection;
 
 public:
+	void SetColumnIds(vector<column_t> column_ids);
+	const vector<column_t> &GetColumnIds() const;
 	vector<ColumnBinding> GetColumnBindings() override;
 
 	void Serialize(Serializer &serializer) const override;
@@ -46,8 +50,12 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		// types are resolved in the constructor
-		this->types = chunk_types;
+		types.clear();
+		types.reserve(column_ids.size());
+		for (auto column_id : column_ids) {
+			D_ASSERT(column_id < chunk_types.size());
+			types.push_back(chunk_types[column_id]);
+		}
 	}
 };
 } // namespace duckdb

@@ -297,7 +297,7 @@ void ColumnDataCollectionSegment::ReadChunk(idx_t chunk_index, ChunkManagementSt
 		D_ASSERT(vector_idx < chunk_meta.vector_data.size());
 		ReadVector(state, chunk_meta.vector_data[vector_idx], chunk.data[i]);
 	}
-	chunk.SetCardinality(chunk_meta.count);
+	chunk.SetChildCardinality(chunk_meta.count);
 }
 
 idx_t ColumnDataCollectionSegment::ChunkCount() const {

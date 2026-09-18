@@ -2,9 +2,9 @@ name: Windows
 on:
   workflow_call:
     inputs:
-      override_git_describe:
+      duckdb_version:
         type: string
-      git_ref:
+      duckdb_commit:
         type: string
       skip_tests:
         type: boolean
@@ -12,31 +12,17 @@ on:
         type: boolean
       runners:
         type: string
-  workflow_dispatch:
-    inputs:
-      override_git_describe:
+      runner_provider:
         type: string
-      git_ref:
-        type: string
-      skip_tests:
-        type: boolean
-        default: false
-      run_all:
-        type: boolean
-        default: true
-      runners:
-        description: 'JSON object with runner labels, e.g. {"windows_2022_x64":"windows-2022","linux_slim":"ubuntu-latest"}'
-        type: string
-        required: false
-        default: '{}'
-
+        required: true
 concurrency:
-  group: windows-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
+  group: windows-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.duckdb_version }}
   cancel-in-progress: true
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
+  DUCKDB_VERSION: ${{ inputs.duckdb_version }}
+  DUCKDB_COMMIT: ${{ inputs.duckdb_commit }}
   AZURE_CODESIGN_ENDPOINT: https://eus.codesigning.azure.net/
   AZURE_CODESIGN_ACCOUNT: duckdb-signing-2
   AZURE_CODESIGN_PROFILE: duckdb-certificate-profile
@@ -48,11 +34,15 @@ jobs:
     runs-on: ${{ fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022' }}
     env:
       GEN: ninja
+      CC: clang-cl
+      CXX: clang-cl
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
+        runner_provider: ${{ inputs.runner_provider }}
+        fetch_depth: 0
+        ref: ${{ inputs.duckdb_commit }}
 
     - uses: actions/setup-python@v6
       with:
@@ -65,8 +55,17 @@ jobs:
     - name: Build
       shell: bash
       run: |
+        clang-cl --version
         python scripts/ci/retry.py -- python scripts/windows_ci.py
         python scripts/ci/retry.py -- make windows_release
+
+    - name: Verify architecture flags
+      shell: pwsh
+      run: |
+        $commands = Get-Content compile_commands.json -Raw
+        if (!$commands.Contains('-march=haswell') -or !$commands.Contains('-mtune=generic')) {
+          throw 'Windows amd64 Release compile commands are missing the CLI architecture flags'
+        }
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: pwsh
@@ -80,7 +79,7 @@ jobs:
       shell: bash
       if: ${{ !inputs.skip_tests }}
       run: |
-        python scripts/ci/run_tests.py test/unittest.exe
+        python test/run.py
 
     - name: Test with VS2019 C++ stdlib
       shell: bash
@@ -88,7 +87,7 @@ jobs:
       run: |
         python scripts/ci/retry.py -- curl -L --output ./test/msvcp140.dll https://blobs.duckdb.org/ci/msvcp140.dll
         ls ./test
-        python scripts/ci/run_tests.py test/unittest.exe
+        python test/run.py
         rm ./test/msvcp140.dll
 
     - name: Tools Test
@@ -115,6 +114,19 @@ jobs:
         timestamp-rfc3161:            http://timestamp.acs.microsoft.com
         timestamp-digest:             SHA256
 
+    - name: CLI check
+      shell: bash
+      run: |
+        ./duckdb.exe -c "PRAGMA platform; PRAGMA version;"
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          # Fail on non-zero major version.
+          ./duckdb.exe -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
+        fi
+
+    - name: Bundle static libraries
+      shell: bash
+      run: make gather-libs GATHER_LIBS_BUILD_DIR=. GATHER_LIBS_PREFIX= GATHER_LIBS_EXTENSION=lib
+
     - name: Deploy
       shell: bash
       env:
@@ -122,20 +134,25 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        "/c/Program Files/7-Zip/7z.exe" a -tzip duckdb_cli-windows-amd64.zip duckdb.exe
-        tmp_zip_dir="$(mktemp -d)"
-        lib_archive_path="$(pwd)/libduckdb-windows-amd64.zip"
-        cp src/duckdb.dll src/duckdb.lib src/include/duckdb.h "${tmp_zip_dir}/"
-        (cd "${tmp_zip_dir}" && "/c/Program Files/7-Zip/7z.exe" a -tzip "${lib_archive_path}" ./*)
-        rm -rf "${tmp_zip_dir}"
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip
+        make cli-release-artifact ARTIFACT_SUFFIX=windows-amd64 CLI_BINARY=duckdb.exe
+        make shared-libs-release-artifact ARTIFACT_SUFFIX=windows-amd64 SHARED_LIBRARIES="src/duckdb.dll src/duckdb.lib"
+        make static-libs-release-artifact ARTIFACT_SUFFIX=windows-amd64 STATIC_LIBRARIES="libs/*"
+        ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-windows-amd64.tar.gz duckdb-shared-libs-windows-amd64.tar.gz duckdb-static-libs-windows-amd64.tar.gz
 
     - uses: actions/upload-artifact@v7
       with:
-        name: duckdb-binaries-windows-amd64
-        path: |
-          libduckdb-windows-amd64.zip
-          duckdb_cli-windows-amd64.zip
+        path: duckdb-cli-windows-amd64.tar.gz
+        archive: false
+
+    - uses: actions/upload-artifact@v7
+      with:
+        path: duckdb-shared-libs-windows-amd64.tar.gz
+        archive: false
+
+    - uses: actions/upload-artifact@v7
+      with:
+        path: duckdb-static-libs-windows-amd64.tar.gz
+        archive: false
 
  win-release-32:
     name: Windows (32 Bit)
@@ -147,10 +164,12 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
+        runner_provider: ${{ inputs.runner_provider }}
+        fetch_depth: 0
+        ref: ${{ inputs.duckdb_commit }}
 
     - uses: actions/setup-python@v6
       with:
@@ -170,10 +189,12 @@ jobs:
 
     - name: Test
       shell: bash
-      run: python scripts/ci/run_tests.py test/unittest.exe
+      if: ${{ !inputs.skip_tests }}
+      run: python test/run.py
 
     - name: Tools Test
       shell: bash
+      if: ${{ !inputs.skip_tests }}
       run: |
         python scripts/ci/retry.py -- python -m pip install pytest
         python -m pytest tools/shell/tests --shell-binary duckdb.exe
@@ -186,12 +207,15 @@ jobs:
    runs-on: windows-2025-vs2026
    env:
      GEN: ninja
+     CC: clang-cl
+     CXX: clang-cl
+     EXTRA_CMAKE_VARIABLES: -DBUILD_UNITTESTS=FALSE -DCMAKE_C_COMPILER_TARGET=arm64-pc-windows-msvc -DCMAKE_CXX_COMPILER_TARGET=arm64-pc-windows-msvc
 
    steps:
      - uses: actions/checkout@v6
        with:
          fetch-depth: 0
-         ref: ${{ inputs.git_ref }}
+         ref: ${{ inputs.duckdb_commit }}
 
      - uses: actions/setup-python@v6
        with:
@@ -207,7 +231,16 @@ jobs:
      - name: Build
        shell: bash
        run: |
-         python scripts/ci/retry.py -- make DUCKDB_PLATFORM=windows_arm64 EXTRA_CMAKE_VARIABLES=-DBUILD_UNITTESTS=FALSE windows_release
+         clang-cl --version
+         python scripts/ci/retry.py -- make DUCKDB_PLATFORM=windows_arm64 windows_release
+
+     - name: Verify architecture flags
+       shell: pwsh
+       run: |
+         $commands = Get-Content compile_commands.json -Raw
+         if (!$commands.Contains('-march=armv8-a') -or !$commands.Contains('-mtune=generic')) {
+           throw 'Windows ARM64 Release compile commands are missing the architecture flags'
+         }
 
      - name: Sign files with Azure Trusted Signing (TM)
        if: github.repository == 'duckdb/duckdb' && github.event_name != 'pull_request'
@@ -226,6 +259,10 @@ jobs:
          timestamp-rfc3161:            http://timestamp.acs.microsoft.com
          timestamp-digest:             SHA256
 
+     - name: Bundle static libraries
+       shell: bash
+       run: make gather-libs GATHER_LIBS_BUILD_DIR=. GATHER_LIBS_PREFIX= GATHER_LIBS_EXTENSION=lib
+
      - name: Deploy
        shell: bash
        env:
@@ -233,35 +270,42 @@ jobs:
          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
        run: |
-         "/c/Program Files/7-Zip/7z.exe" a -tzip duckdb_cli-windows-arm64.zip duckdb.exe
-         tmp_zip_dir="$(mktemp -d)"
-         lib_archive_path="$(pwd)/libduckdb-windows-arm64.zip"
-         cp src/duckdb.dll src/duckdb.lib src/include/duckdb.h "${tmp_zip_dir}/"
-         (cd "${tmp_zip_dir}" && "/c/Program Files/7-Zip/7z.exe" a -tzip "${lib_archive_path}" ./*)
-         rm -rf "${tmp_zip_dir}"
-         ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-arm64.zip duckdb_cli-windows-arm64.zip
+         make cli-release-artifact ARTIFACT_SUFFIX=windows-arm64 CLI_BINARY=duckdb.exe
+         make shared-libs-release-artifact ARTIFACT_SUFFIX=windows-arm64 SHARED_LIBRARIES="src/duckdb.dll src/duckdb.lib"
+         make static-libs-release-artifact ARTIFACT_SUFFIX=windows-arm64 STATIC_LIBRARIES="libs/*"
+         ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-windows-arm64.tar.gz duckdb-shared-libs-windows-arm64.tar.gz duckdb-static-libs-windows-arm64.tar.gz
 
      - uses: actions/upload-artifact@v7
        with:
-         name: duckdb-binaries-windows-arm64
-         path: |
-           libduckdb-windows-arm64.zip
-           duckdb_cli-windows-arm64.zip
+         path: duckdb-cli-windows-arm64.tar.gz
+         archive: false
+
+     - uses: actions/upload-artifact@v7
+       with:
+         path: duckdb-shared-libs-windows-arm64.tar.gz
+         archive: false
+
+     - uses: actions/upload-artifact@v7
+       with:
+         path: duckdb-static-libs-windows-arm64.tar.gz
+         archive: false
 
  mingw:
      name: MinGW (64 Bit)
      needs:
       - win-release-64
-     if: ${{ !inputs.skip_tests }}
      runs-on: ${{ fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022' }}
      env:
        GEN: ninja
+       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
        ENABLE_EXTENSION_AUTOLOADING: 1
        ENABLE_EXTENSION_AUTOINSTALL: 1
      steps:
-       - uses: actions/checkout@v6
+       - name: "Checkout"
+         uses: duckdb/duckdb-ci/.github/actions/checkout@main
          with:
-           ref: ${{ inputs.git_ref }}
+           runner_provider: ${{ inputs.runner_provider }}
+           ref: ${{ inputs.duckdb_commit }}
 
        - uses: actions/setup-python@v6
          with:
@@ -325,27 +369,23 @@ jobs:
          run: python scripts/ci/retry.py -- make release
 
        - name: Test
-         run: make unittest_release SKIP_BUILD=1
+         if: ${{ !inputs.skip_tests }}
+         run: python build/release/test/run.py
 
- win-packaged-upload:
-   runs-on: ${{ fromJSON(inputs.runners).linux_slim || 'ubuntu-latest' }}
-   needs:
-     - win-release-64
-     - win-release-arm64
-   steps:
-    - uses: actions/download-artifact@v8
-      with:
-        name: duckdb-binaries-windows-arm64
+       - name: Bundle static libraries
+         run: make gather-libs
 
-    - uses: actions/download-artifact@v8
-      with:
-        name: duckdb-binaries-windows-amd64
+       - name: Deploy static libraries
+         shell: bash
+         env:
+           AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+         run: |
+           make static-libs-release-artifact ARTIFACT_SUFFIX=windows-mingw STATIC_LIBRARIES="build/release/libs/*"
+           ./scripts/upload-assets-to-staging.sh github_release duckdb-static-libs-windows-mingw.tar.gz
 
-    - uses: actions/upload-artifact@v7
-      with:
-        name: duckdb-binaries-windows
-        path: |
-          libduckdb-windows-amd64.zip
-          duckdb_cli-windows-amd64.zip
-          libduckdb-windows-arm64.zip
-          duckdb_cli-windows-arm64.zip
+       - uses: actions/upload-artifact@v7
+         with:
+           path: duckdb-static-libs-windows-mingw.tar.gz
+           archive: false

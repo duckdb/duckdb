@@ -14,11 +14,13 @@
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types/string_type.hpp"
-#include "duckdb/main/query_context.hpp"
+#include "duckdb/common/query_context.hpp"
 
 namespace duckdb {
 
 struct FileHandle;
+class MemoryMappedFile;
+class QueryContext;
 
 //! The standard row group size
 #define DEFAULT_ROW_GROUP_SIZE 122880ULL
@@ -134,10 +136,14 @@ enum class StorageVersion : uint64_t {
     V1_4_2 = 67,
     V1_4_3 = 67,
     V1_4_4 = 67,
+    V1_4_5 = 67,
     V1_5_0 = 68,
     V1_5_1 = 68,
     V1_5_2 = 68,
     V1_5_3 = 68,
+    V1_5_4 = 68,
+    V1_5_5 = 68,
+    V1_5_6 = 68,
     V2_0_0 = 69,
     LATEST = 69,
     DEPRECATED = 999,
@@ -167,10 +173,14 @@ enum class SerializationVersionDeprecated : uint64_t {
     V1_4_2 = 6,
     V1_4_3 = 6,
     V1_4_4 = 6,
+    V1_4_5 = 6,
     V1_5_0 = 7,
     V1_5_1 = 7,
     V1_5_2 = 7,
     V1_5_3 = 7,
+    V1_5_4 = 7,
+    V1_5_5 = 7,
+    V1_5_6 = 7,
     V2_0_0 = 8,
     LATEST = 8,
     INVALID = UINT64_MAX
@@ -180,7 +190,7 @@ enum class SerializationVersionDeprecated : uint64_t {
 
 struct StorageVersionInfo {
 	// When the default storage version has to be updated, do it here
-	static constexpr StorageVersion DEFAULT_STORAGE_VERSION_INFO = StorageVersion::V0_10_2;
+	static constexpr StorageVersion DEFAULT_STORAGE_VERSION_INFO = StorageVersion::V2_0_0;
 
 	const char *version_name;
 	StorageVersion storage_version;
@@ -269,6 +279,7 @@ public:
 	static constexpr uint64_t AES_TAG_LEN = 16;
 
 	static void CheckMagicBytes(QueryContext context, FileHandle &handle);
+	static void CheckMagicBytes(MemoryMappedFile &handle);
 
 	string LibraryGitDesc() {
 		return string(char_ptr_cast(library_git_desc), MAX_VERSION_SIZE);

@@ -5,10 +5,11 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 struct GenericCopyOption {
-	string name;
+	Identifier name;
 	vector<Value> children; // Default value
 	unique_ptr<ParsedExpression> expression = nullptr;
 
@@ -41,7 +42,7 @@ struct GenericCopyOption {
 
 	unique_ptr<ParsedExpression> GetFirstChildOrExpression() const {
 		if (!children.empty()) {
-			return make_uniq<ConstantExpression>(children[0]);
+			return ConstantExpression::FromValue(children[0]);
 		}
 		if (!expression) {
 			throw InvalidInputException("No expression in GenericCopyOption");

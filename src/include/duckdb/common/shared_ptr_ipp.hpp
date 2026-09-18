@@ -23,7 +23,7 @@ private:
 		return;
 #else
 		if (DUCKDB_UNLIKELY(null)) {
-			throw duckdb::InternalException("Attempted to dereference shared_ptr that is NULL!");
+			ThrowNullSharedPtrDereference();
 		}
 #endif
 	}

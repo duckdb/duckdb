@@ -24,9 +24,13 @@ public:
 	DUCKDB_API ConjunctionExpression(ExpressionType type, unique_ptr<ParsedExpression> left,
 	                                 unique_ptr<ParsedExpression> right);
 
-	vector<unique_ptr<ParsedExpression>> children;
-
 public:
+	const vector<unique_ptr<ParsedExpression>> &GetChildren() const {
+		return children;
+	}
+	vector<unique_ptr<ParsedExpression>> &GetChildrenMutable() {
+		return children;
+	}
 	void AddExpression(unique_ptr<ParsedExpression> expr);
 
 	string ToString() const override;
@@ -41,12 +45,16 @@ public:
 private:
 	ConjunctionExpression();
 
+private:
+	vector<unique_ptr<ParsedExpression>> children;
+
 public:
 	template <class T, class BASE>
 	static string ToString(const T &entry) {
-		string result = "(" + entry.children[0]->ToString();
-		for (idx_t i = 1; i < entry.children.size(); i++) {
-			result += " " + ExpressionTypeToOperator(entry.GetExpressionType()) + " " + entry.children[i]->ToString();
+		auto &children = entry.GetChildren();
+		string result = "(" + children[0]->ToString();
+		for (idx_t i = 1; i < children.size(); i++) {
+			result += " " + ExpressionTypeToOperator(entry.GetExpressionType()) + " " + children[i]->ToString();
 		}
 		return result + ")";
 	}

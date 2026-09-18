@@ -74,6 +74,12 @@ public:
 		return false;
 	}
 
+	//! Whether this command is a countable test assertion (statement/query) for per-test outcome
+	//! stats (--emit-test-events). Infrastructure commands (mode/loop/load/...) return false.
+	virtual bool IsCountableStatement() const {
+		return false;
+	}
+
 private:
 	void RestartDatabase(ExecuteContext &context, reference<Connection> &connection, const string &sql_query) const;
 };
@@ -89,6 +95,9 @@ public:
 	void ExecuteInternal(ExecuteContext &context) const override;
 
 	bool SupportsConcurrent() const override {
+		return true;
+	}
+	bool IsCountableStatement() const override {
 		return true;
 	}
 };
@@ -124,6 +133,9 @@ public:
 	bool SupportsConcurrent() const override {
 		return true;
 	}
+	bool IsCountableStatement() const override {
+		return true;
+	}
 };
 
 class RestartCommand : public Command {
@@ -156,7 +168,7 @@ public:
 	bool SupportsConcurrent() const override;
 
 private:
-	bool ForEachTokenReplace(Connection &con, const string &parameter, vector<string> &result) const;
+	bool ForEachTokenReplace(const string &parameter, vector<string> &result) const;
 };
 
 class ContinueCommand : public Command {

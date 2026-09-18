@@ -1,0 +1,66 @@
+module: logging
+#
+# Writing to DuckDB's log. Entries land in the duckdb_logs table.
+#
+# What is actually recorded is decided by the database's log configuration, not
+# by the caller: logging may be disabled entirely, restricted to a level, or
+# restricted to an enumerated set of log types. A call that is filtered out
+# succeeds and writes nothing, so logging is never an error path.
+enums:
+  LOG_LEVEL:
+    description: |
+      Severity of a log message. Mirrors DuckDB's own log levels, and is
+      compared against the configured threshold: an entry below it is dropped.
+    values:
+      LOG_LEVEL_TRACE:
+        value: 10
+        description: "Finest detail; off in any default configuration."
+      LOG_LEVEL_DEBUG:
+        value: 20
+        description: "Diagnostic detail."
+      LOG_LEVEL_INFO:
+        value: 30
+        description: "Ordinary progress information."
+      LOG_LEVEL_WARNING:
+        value: 40
+        description: "A recoverable problem."
+      LOG_LEVEL_ERROR:
+        value: 50
+        description: "An operation failed."
+      LOG_LEVEL_FATAL:
+        value: 60
+        description: "An unrecoverable failure."
+functions:
+  context_log:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: |
+      Writes a message to DuckDB's log.
+
+      The entry is attributed to the context's connection scope, so it carries
+      that connection's ids. Whether it is recorded at all is up to the
+      database's log configuration: if logging is off, or level is below the
+      configured threshold, or log_type is not among the enabled types, the
+      call succeeds and writes nothing. An empty log_type selects the default
+      type. Read entries back with `SELECT * FROM duckdb_logs`.
+    role: method
+    belongs_to: context
+    parameters:
+      ctx:
+        type: context
+        description: The context to log through.
+      level:
+        type: LOG_LEVEL
+        description: Severity of the message.
+      log_type:
+        type: str
+        description: The log type to record under, matched case-sensitively. Empty selects the default type.
+      message:
+        type: str
+        description: The message body. Borrowed for the call only.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR

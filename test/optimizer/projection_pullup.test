@@ -3,6 +3,9 @@
 # group: [optimizer]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 CREATE TABLE t1 AS SELECT range a FROM range(3, 10000);
 
 statement ok
@@ -112,11 +115,38 @@ statement ok
 CREATE OR REPLACE TABLE t2 AS SELECT range i FROM range(100);
 
 statement ok
-CREATE VIEW v1 AS SELECT i, i * 42 j FROM t1 JOIN t2 using (i);
+CREATE VIEW v1 AS SELECT i, length(i::VARCHAR) j FROM t1 JOIN t2 using (i);
 
 # Pullup projections with non colref expressions
 query II
 EXPLAIN SELECT i, j1.j FROM v1 j1 JOIN v1 j2 using (i);
+----
+logical_opt	<!REGEX>:.*JOIN.*PROJECTION.*
+
+# Computed expressions remain eligible for general projection pullup
+statement ok
+CREATE TABLE pullup_variable(i INTEGER, v VARCHAR);
+
+query II
+EXPLAIN SELECT s
+FROM (SELECT i, substring(v, 1, 20) AS s FROM pullup_variable) p
+JOIN t2 USING (i);
+----
+logical_opt	<!REGEX>:.*JOIN.*PROJECTION.*
+
+# Expression placement is handled separately after statistics propagation
+query II
+EXPLAIN SELECT n
+FROM (SELECT i, length(v) AS n FROM pullup_variable) p
+JOIN t2 USING (i);
+----
+logical_opt	<!REGEX>:.*JOIN.*PROJECTION.*
+
+# Variable-size column references can still be removed
+query II
+EXPLAIN SELECT p.v
+FROM (SELECT i, v FROM pullup_variable) p
+JOIN t2 USING (i);
 ----
 logical_opt	<!REGEX>:.*JOIN.*PROJECTION.*
 
@@ -136,6 +166,41 @@ SELECT a, v.c FROM tbl1 LEFT JOIN v ON tbl1.a = v.b;
 0	0
 1	NULL
 2	NULL
+
+# Projection pullup has to keep filter projection maps in sync when pulling up duplicate grouped expressions
+statement ok
+CREATE TABLE pullup_category(category_name VARCHAR, category_valuation BIGINT);
+
+statement ok
+CREATE TABLE pullup_product(product_category_name VARCHAR);
+
+statement ok
+CREATE TABLE pullup_address(address_valuation BIGINT);
+
+statement ok
+INSERT INTO pullup_category VALUES ('a', 432), ('b', 1);
+
+statement ok
+INSERT INTO pullup_product VALUES ('a'), ('b');
+
+statement ok
+INSERT INTO pullup_address VALUES (432), (120);
+
+query I
+SELECT COUNT(*)
+FROM pullup_category AS root
+LEFT JOIN (
+	SELECT
+		product_category_name,
+		MIN(DISTINCT address_valuation) AS rp_207,
+		MIN(DISTINCT address_valuation) AS rp_208,
+		MIN(DISTINCT address_valuation) AS rp_212
+	FROM pullup_product, pullup_address
+	GROUP BY product_category_name
+) AS rp ON root.category_name = rp.product_category_name
+WHERE COALESCE(rp.rp_207, root.category_valuation) IN (432, 120, 150, 160, 110, 800, 450, 330);
+----
+2
 
 
 # Test correctness

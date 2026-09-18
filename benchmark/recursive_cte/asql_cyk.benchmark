@@ -1,0 +1,8 @@
+# name: benchmark/recursive_cte/asql_cyk.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/asql_ws2526/recursive_cte_asql.benchmark.in
+LOAD=cyk
+QUERY=asql_cyk
+BENCHMARK_NAME=Advanced SQL CYK parser
+DESCRIPTION=Parse a deterministic arithmetic token stream with recursive knowledge reinjection

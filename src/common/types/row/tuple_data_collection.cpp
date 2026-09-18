@@ -1,3 +1,4 @@
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
@@ -5,7 +6,6 @@
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 
-#include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/type_visitor.hpp"
@@ -14,18 +14,20 @@
 #include "duckdb/parallel/parallel_destroy_task.hpp"
 
 #include <algorithm>
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
 TupleDataCollection::TupleDataCollection(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr_p,
-                                         MemoryTag tag_p, shared_ptr<ArenaAllocator> stl_allocator_p)
+                                         MemoryTag tag_p, shared_ptr<ArenaAllocator> stl_allocator_p,
+                                         QueryContext context)
     : scheduler(TaskScheduler::GetScheduler(buffer_manager.GetDatabase())),
       stl_allocator(stl_allocator_p ? std::move(stl_allocator_p)
                                     : make_shared_ptr<ArenaAllocator>(buffer_manager.GetBufferAllocator())),
       layout_ptr(std::move(layout_ptr_p)), layout(*layout_ptr), tag(tag_p),
-      allocator(make_shared_ptr<TupleDataAllocator>(buffer_manager, layout_ptr, tag, stl_allocator)),
+      allocator(make_shared_ptr<TupleDataAllocator>(buffer_manager, layout_ptr, tag, stl_allocator, context)),
       segments(*stl_allocator), scatter_functions(*stl_allocator), gather_functions(*stl_allocator) {
 	Initialize();
 }
@@ -33,7 +35,7 @@ TupleDataCollection::TupleDataCollection(BufferManager &buffer_manager, shared_p
 TupleDataCollection::TupleDataCollection(ClientContext &context, shared_ptr<TupleDataLayout> layout_ptr, MemoryTag tag,
                                          shared_ptr<ArenaAllocator> stl_allocator)
     : TupleDataCollection(BufferManager::GetBufferManager(context), std::move(layout_ptr), tag,
-                          std::move(stl_allocator)) {
+                          std::move(stl_allocator), context) {
 }
 
 TupleDataCollection::~TupleDataCollection() {
@@ -66,7 +68,8 @@ void TupleDataCollection::Initialize() {
 }
 
 unique_ptr<TupleDataCollection> TupleDataCollection::CreateUnique() const {
-	return make_uniq<TupleDataCollection>(allocator->GetBufferManager(), layout_ptr, tag);
+	return make_uniq<TupleDataCollection>(allocator->GetBufferManager(), layout_ptr, tag, nullptr,
+	                                      allocator->GetContext());
 }
 
 void GetAllColumnIDsInternal(vector<column_t> &column_ids, const idx_t column_count) {
@@ -422,11 +425,11 @@ void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataCh
 	if (append_sel.IsSet()) {
 		for (idx_t i = 0; i < append_count; i++) {
 			const auto idx = append_sel[i];
-			FastMemcpy(target_locations[i], source_locations[idx], row_width);
+			memcpy(target_locations[i], source_locations[idx], row_width);
 		}
 	} else {
 		for (idx_t i = 0; i < append_count; i++) {
-			FastMemcpy(target_locations[i], source_locations[i], row_width);
+			memcpy(target_locations[i], source_locations[i], row_width);
 		}
 	}
 
@@ -458,12 +461,16 @@ void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataCh
 		if (!append_sel.IsSet()) {
 			// Fast path
 			for (idx_t i = 0; i < append_count; i++) {
-				FastMemcpy(target_heap_locations[i], source_heap_locations[i], heap_sizes[i]);
+				if (heap_sizes[i] > 0) {
+					memcpy(target_heap_locations[i], source_heap_locations[i], heap_sizes[i]);
+				}
 			}
 		} else {
 			for (idx_t i = 0; i < append_count; i++) {
 				auto idx = append_sel.get_index(i);
-				FastMemcpy(target_heap_locations[i], source_heap_locations[idx], heap_sizes[idx]);
+				if (heap_sizes[idx] > 0) {
+					memcpy(target_heap_locations[i], source_heap_locations[idx], heap_sizes[idx]);
+				}
 			}
 		}
 
@@ -651,7 +658,7 @@ bool TupleDataCollection::Scan(TupleDataScanState &state, DataChunk &result) {
 		if (!segments.empty()) {
 			FinalizePinState(state.pin_state, *segments[segment_index_before]);
 		}
-		result.SetCardinality(0);
+		result.SetChildCardinality(0);
 		return false;
 	}
 	if (segment_index_before != DConstants::INVALID_INDEX && segment_index != segment_index_before) {
@@ -671,7 +678,7 @@ bool TupleDataCollection::Scan(TupleDataParallelScanState &gstate, TupleDataLoca
 			if (!segments.empty()) {
 				FinalizePinState(lstate.pin_state, *segments[segment_index_before]);
 			}
-			result.SetCardinality(0);
+			result.SetChildCardinality(0);
 			return false;
 		}
 	}

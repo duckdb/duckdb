@@ -20,10 +20,10 @@ unique_ptr<FunctionData> TableFilterFunctions::Bind(BindScalarFunctionInput &inp
 	throw BinderException("Table filter functions are for internal use only!");
 }
 
-bool TableFilterFunctions::IsTableFilterFunction(const string &name) {
-	static const char *const TABLE_FILTER_FUNCTIONS[] = {
-	    BloomFilterScalarFun::NAME,     DynamicFilterScalarFun::NAME, OptionalFilterScalarFun::NAME,
-	    PerfectHashJoinScalarFun::NAME, PrefixRangeScalarFun::NAME,   SelectivityOptionalFilterScalarFun::NAME};
+bool TableFilterFunctions::IsTableFilterFunction(const Identifier &name) {
+	static const char *const TABLE_FILTER_FUNCTIONS[] = {BloomFilterScalarFun::NAME, DynamicFilterScalarFun::NAME,
+	                                                     OptionalFilterScalarFun::NAME, PrefixRangeScalarFun::NAME,
+	                                                     SelectivityOptionalFilterScalarFun::NAME};
 	for (auto function_name : TABLE_FILTER_FUNCTIONS) {
 		if (name == function_name) {
 			return true;
@@ -37,12 +37,10 @@ void GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType type, float &se
                                    idx_t &n_vectors_to_check) {
 	static constexpr float MIN_MAX_THRESHOLD = 0.9f;
 	static constexpr float BF_THRESHOLD = 0.5f;
-	static constexpr float PHJ_THRESHOLD = 0.3f;
 	static constexpr float PRF_THRESHOLD = 0.5f;
 
 	static constexpr idx_t MIN_MAX_CHECK_N = 6;
 	static constexpr idx_t BF_CHECK_N = 6;
-	static constexpr idx_t PHJ_CHECK_N = 6;
 	static constexpr idx_t PRF_CHECK_N = 6;
 
 	switch (type) {
@@ -53,10 +51,6 @@ void GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType type, float &se
 	case SelectivityOptionalFilterType::BF:
 		selectivity_threshold = BF_THRESHOLD;
 		n_vectors_to_check = BF_CHECK_N;
-		return;
-	case SelectivityOptionalFilterType::PHJ:
-		selectivity_threshold = PHJ_THRESHOLD;
-		n_vectors_to_check = PHJ_CHECK_N;
 		return;
 	case SelectivityOptionalFilterType::PRF:
 		selectivity_threshold = PRF_THRESHOLD;
@@ -95,9 +89,22 @@ unique_ptr<Expression> CreateSelectivityOptionalFilterExpression(unique_ptr<Expr
 
 unique_ptr<Expression> CreateDynamicFilterExpression(shared_ptr<DynamicFilterData> filter_data,
                                                      const LogicalType &target_type) {
+	return CreateDynamicFilterExpression(std::move(filter_data), target_type, nullptr);
+}
+
+unique_ptr<Expression> CreateDynamicFilterExpression(shared_ptr<DynamicFilterData> filter_data,
+                                                     const LogicalType &target_type, unique_ptr<Expression> input) {
 	auto function = DynamicFilterScalarFun::GetFunction(target_type);
 	auto bind_data = make_uniq<DynamicFilterFunctionData>(std::move(filter_data));
-	return CreateSingleArgumentFunctionExpression(function, target_type, std::move(bind_data));
+	if (!input) {
+		input = make_uniq<BoundReferenceExpression>(target_type, storage_t(0));
+	} else {
+		D_ASSERT(input->GetReturnType() == target_type);
+	}
+	vector<unique_ptr<Expression>> arguments;
+	arguments.push_back(std::move(input));
+	return make_uniq<BoundFunctionExpression>(BoundScalarFunction(function), std::move(arguments),
+	                                          std::move(bind_data));
 }
 
 void TableFilterFunctionSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
@@ -110,11 +117,8 @@ unique_ptr<FunctionData> TableFilterFunctionDeserialize(Deserializer &deserializ
 	if (function.GetName() == BloomFilterScalarFun::NAME) {
 		return make_uniq<BloomFilterFunctionData>(nullptr, false, string(), key_type, 0.0f, idx_t(0));
 	}
-	if (function.GetName() == PerfectHashJoinScalarFun::NAME) {
-		return make_uniq<PerfectHashJoinFunctionData>(nullptr, string(), 0.0f, idx_t(0));
-	}
 	if (function.GetName() == PrefixRangeScalarFun::NAME) {
-		return make_uniq<PrefixRangeFunctionData>(nullptr, string(), key_type, 0.0f, idx_t(0));
+		return make_uniq<PrefixRangeFunctionData>(nullptr, true, string(), key_type, 0.0f, idx_t(0));
 	}
 	if (function.GetName() == DynamicFilterScalarFun::NAME) {
 		return make_uniq<DynamicFilterFunctionData>(nullptr);

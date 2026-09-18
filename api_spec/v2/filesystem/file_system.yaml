@@ -1,0 +1,513 @@
+module: file system
+#
+# Access to the file system DuckDB itself reads and writes through, so an
+# extension or embedder opens files the same way the engine does -- honouring
+# whatever is configured, including virtual and remote file systems registered
+# by other extensions.
+#
+# A file system is borrowed from a context or a connection and lives as long as
+# that does. Files opened through it are owned by the caller.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Enums
+#-----------------------------------------------------------------------------------------------------------------------
+enums:
+  FILE_FLAG:
+    description: |
+      How `[[file_system_open]]` opens a file. These are not a bitmask -- apply
+      them one at a time with `[[file_open_options_set_flag]]`, calling it once
+      per behaviour you want, e.g. `FILE_FLAG_WRITE` then `FILE_FLAG_CREATE` to
+      write to a file and create it when it does not exist.
+    values:
+      FILE_FLAG_INVALID:
+        value: 0
+        description: Not a flag. The zero value, so that an uninitialized variable does not name a behaviour; applying it is an error.
+      FILE_FLAG_READ:
+        value: 1
+        description: Open the file with "read" capabilities.
+      FILE_FLAG_WRITE:
+        value: 2
+        description: Open the file with "write" capabilities.
+      FILE_FLAG_CREATE:
+        value: 3
+        description: Create the file if it does not exist, and open it as it is if it does.
+      FILE_FLAG_CREATE_NEW:
+        value: 4
+        description: Create the file if it does not exist, and truncate it to empty if it does. To fail instead of truncating, combine `FILE_FLAG_CREATE` with `FILE_FLAG_EXCLUSIVE_CREATE`.
+      FILE_FLAG_APPEND:
+        value: 5
+        description: Open the file in "append" mode.
+      FILE_FLAG_EXCLUSIVE_CREATE:
+        value: 6
+        description: Fail if the file already exists. A modifier on `FILE_FLAG_CREATE`, and meaningless without it.
+      FILE_FLAG_PARALLEL_ACCESS:
+        value: 7
+        description: |
+          The file will be read and written at explicit offsets from several threads at once. Pass it whenever
+          `[[file_read_at]]` or `[[file_write_at]]` are used concurrently -- a file system that would otherwise
+          assume sequential access, by caching, buffering, or keeping a single cursor, needs to know not to.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Handles
+#-----------------------------------------------------------------------------------------------------------------------
+handles:
+  file_system:
+    description: |
+      A borrowed opaque handle to a file system. Obtained from
+      `[[file_system_get_from_context]]` or `[[file_system_get_from_connection]]`, and used to open files with
+      `[[file_system_open]]`. Borrowed: the handle belongs to the context or connection it came from, is valid only
+      for as long as that is, and must not be destroyed.
+
+  file_open_options:
+    description: |
+      An owned opaque handle to the options a file is opened with. Created with `[[file_open_options_create]]`,
+      configured with `[[file_open_options_set_flag]]` and `[[file_open_options_set_value]]`, passed to
+      `[[file_system_open]]`, and destroyed with `[[file_open_options_destroy]]`. One options object can open any number
+      of files, and destroying it does not affect files already opened with it.
+
+  file:
+    description: |
+      An owned opaque handle to an open file, produced by `[[file_system_open]]` and destroyed with
+      `[[file_destroy]]`. Read, write, seek and sync through the `file_*` functions. Only usable while the file
+      system it was opened through is still valid.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+functions:
+  #---------------------------------------------------------------------------------------------------------------------
+  # File System
+  #---------------------------------------------------------------------------------------------------------------------
+  file_system_get_from_context:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Borrows the file system of a context.
+
+      Use this from inside a callback, where a context is in hand. The returned handle is borrowed: it is valid only
+      for as long as the context is, and must not be destroyed.
+    parameters:
+      context:
+        type: context
+        description: The context to take the file system from.
+      file_system:
+        type: file_system
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed file system.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_system_get_from_connection:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Borrows the file system of a connection.
+
+      The connection form of `[[file_system_get_from_context]]`, for callers outside a callback. The returned handle
+      is borrowed: it is valid only for as long as the connection is, and must not be destroyed.
+    parameters:
+      connection:
+        type: connection
+        description: The connection to take the file system from.
+      file_system:
+        type: file_system
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed file system.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_open_options_create:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Creates a set of open options for a file system.
+
+      The options start out empty: give them flags with `[[file_open_options_set_flag]]`, which is required, and
+      optionally attach values with `[[file_open_options_set_value]]`. They are then passed to `[[file_system_open]]`,
+      and can be reused for as many opens as you like. The caller owns the returned handle and must destroy it with
+      `[[file_open_options_destroy]]`.
+
+      The options belong to the file system they were created from, since which values mean anything depends on
+      which file system ends up handling the path.
+    parameters:
+      file_system:
+        type: file_system
+        description: The file system the options are for.
+      options:
+        type: file_open_options
+        indirection: 1
+        kind: OUT
+        description: On success, receives the new options. Owned by the caller; destroy via `[[file_open_options_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_open_options_set_flag:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Applies one flag to the options.
+
+      Additive: call it once per behaviour you want, and applying the same flag twice is harmless. At least one
+      flag must be applied before the options can open anything, since the flags are what say whether the file is
+      being read or written. There is no way to take a flag back -- build a fresh set of options instead.
+
+      `FILE_FLAG_INVALID` names no behaviour and is rejected, as is any value that is not a `[[FILE_FLAG]]`.
+    parameters:
+      options:
+        type: file_open_options
+        description: The options to apply the flag to.
+      flag:
+        type: FILE_FLAG
+        description: The flag to apply.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_open_options_set_value:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Attaches a named value to the options.
+
+      These are hints for whichever file system ends up handling the path, and what they mean is that file system's
+      business: a value it does not recognise is ignored rather than rejected, and the same name can mean different
+      things to different file systems. They are the same values a file system reports when listing files, so a
+      known file size or modification time learned from a listing can be handed straight back to avoid re-reading
+      it.
+
+      The name and the value are borrowed and copied, so the caller may destroy the value immediately after.
+      Setting the same name again replaces the previous value. Names are case-sensitive.
+    parameters:
+      options:
+        type: file_open_options
+        description: The options to set the value on.
+      name:
+        type: str
+        description: The name of the value. Borrowed and copied.
+      value:
+        type: value
+        description: The value. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_open_options_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Destroys the options, releasing their resources.
+
+      Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+      double-destruction. Files already opened with these options are unaffected.
+    parameters:
+      options:
+        type: file_open_options
+        description: The options to destroy.
+        indirection: 1
+    return_type: ERROR
+
+  file_system_open:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Opens a file.
+
+      Opens the file at the given path through the file system, which routes it the way the engine would -- a path
+      handled by a registered virtual or remote file system goes there rather than to local disk. The returned
+      handle is owned by the caller and must be destroyed with `[[file_destroy]]`.
+
+      The options carry the flags and any file-system-specific values; see `[[file_open_options_create]]`. Opening
+      without having set flags fails, since the flags are what say whether the file is being read or written.
+
+      Failure to open -- a missing file without `FILE_FLAG_CREATE`, insufficient permissions, an existing file
+      under `FILE_FLAG_EXCLUSIVE_CREATE` -- is reported as an error.
+
+      Flag combinations that contradict each other, such as naming neither read nor write or combining
+      `FILE_FLAG_CREATE` with `FILE_FLAG_CREATE_NEW`, are a programming error rather than a supported input. An
+      assertion build catches them; elsewhere the behaviour is whatever the underlying file system does with them.
+    parameters:
+      file_system:
+        type: file_system
+        description: The file system to open the file through.
+      file_path:
+        type: str
+        description: The path of the file to open. Borrowed for the call only.
+      options:
+        type: file_open_options
+        description: How to open the file. Borrowed for the call only, and reusable across opens.
+      file:
+        type: file
+        indirection: 1
+        kind: OUT
+        description: On success, receives the open file. Owned by the caller; destroy via `[[file_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # File
+  #---------------------------------------------------------------------------------------------------------------------
+  file_read:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Reads from the file into a caller-supplied buffer.
+
+      Reads up to `buffer_size` bytes from the file's current position, advancing it by however many were read.
+      Fewer bytes than asked for is normal at the end of the file, and zero means there is nothing left; neither is
+      an error. The file must have been opened with `FILE_FLAG_READ`.
+
+      Use `[[file_read_at]]` to read at an explicit offset instead, which leaves the position alone and so can run
+      on several threads at once.
+    parameters:
+      file:
+        type: file
+        description: The file to read from.
+      buffer:
+        type: void
+        indirection: 1
+        description: A caller-owned buffer of at least `buffer_size` bytes, receiving what was read.
+      buffer_size:
+        type: idx
+        description: The maximum number of bytes to read.
+      bytes_read:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives how many bytes were actually read, which may be fewer than `buffer_size` at the end of the file.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_write:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Writes a caller-supplied buffer to the file.
+
+      Writes up to `buffer_size` bytes at the file's current position, advancing it by however many were written.
+      The file must have been opened with `FILE_FLAG_WRITE` or `FILE_FLAG_APPEND`. Writes may be buffered; use
+      `[[file_sync]]` to force them out.
+
+      Use `[[file_write_at]]` to write at an explicit offset instead, which leaves the position alone and so can run
+      on several threads at once.
+    parameters:
+      file:
+        type: file
+        description: The file to write to.
+      buffer:
+        type: void
+        const: true
+        indirection: 1
+        description: A caller-owned buffer of at least `buffer_size` bytes, holding what to write.
+      buffer_size:
+        type: idx
+        description: The number of bytes to write.
+      bytes_written:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives how many bytes were actually written.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_read_at:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Reads from a fixed offset, without moving the file's position.
+
+      Reads exactly `buffer_size` bytes starting at `location`. Unlike `[[file_read]]`, a short read is an error
+      rather than a result: reaching the end of the file before `buffer_size` bytes fails, so there is no count to
+      report back. The file's read/write position is untouched, which is what makes this safe to call from several
+      threads at once -- provided the file was opened with `FILE_FLAG_PARALLEL_ACCESS`.
+
+      The file must have been opened with `FILE_FLAG_READ`.
+    parameters:
+      file:
+        type: file
+        description: The file to read from.
+      buffer:
+        type: void
+        indirection: 1
+        description: A caller-owned buffer of at least `buffer_size` bytes, receiving what was read.
+      buffer_size:
+        type: idx
+        description: The number of bytes to read. All of them are read, or the call fails.
+      location:
+        type: idx
+        description: The absolute byte offset to read from, measured from the start of the file.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_write_at:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Writes at a fixed offset, without moving the file's position.
+
+      Writes exactly `buffer_size` bytes starting at `location`, extending the file when the offset is past its end.
+      Unlike `[[file_write]]` there is no count to report back: all of the bytes are written, or the call fails. The
+      file's read/write position is untouched, which is what makes this safe to call from several threads at once --
+      provided the file was opened with `FILE_FLAG_PARALLEL_ACCESS`, and that the threads write disjoint ranges.
+
+      The file must have been opened with `FILE_FLAG_WRITE`. Writes may be buffered; use `[[file_sync]]` to force
+      them out.
+    parameters:
+      file:
+        type: file
+        description: The file to write to.
+      buffer:
+        type: void
+        const: true
+        indirection: 1
+        description: A caller-owned buffer of at least `buffer_size` bytes, holding what to write.
+      buffer_size:
+        type: idx
+        description: The number of bytes to write. All of them are written, or the call fails.
+      location:
+        type: idx
+        description: The absolute byte offset to write at, measured from the start of the file.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_tell:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: Returns the file's current read/write position, as a byte offset from the start of the file.
+    parameters:
+      file:
+        type: file
+        description: The file to query.
+      position:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the current position, as a byte offset from the start of the file.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_size:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: Returns the total size of the file in bytes.
+    parameters:
+      file:
+        type: file
+        description: The file to query.
+      size:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the total size of the file in bytes.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_seek:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Moves the file's read/write position.
+
+      Sets the position to an absolute byte offset from the start of the file; subsequent reads and writes start
+      there. Seeking past the end is allowed, and reading from there yields nothing.
+    parameters:
+      file:
+        type: file
+        description: The file to seek within.
+      position:
+        type: idx
+        description: The absolute byte offset to seek to, measured from the start of the file.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_sync:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Flushes buffered writes to persistent storage.
+
+      Forces anything still buffered out to storage, which is what makes writes durable across a crash or a
+      process exit. Closing or destroying the handle flushes as well.
+    parameters:
+      file:
+        type: file
+        description: The file to synchronize.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_close:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Closes the file without destroying the handle.
+
+      Releases the operating-system resources behind the file, such as its descriptor. The handle itself stays
+      valid and must still be destroyed with `[[file_destroy]]`, but it can no longer read, write or seek.
+    parameters:
+      file:
+        type: file
+        description: The file to close.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Destroy
+  #---------------------------------------------------------------------------------------------------------------------
+  file_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Destroys the file, closing it if it is still open.
+
+      Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+      double-destruction.
+    parameters:
+      file:
+        type: file
+        description: The file to destroy.
+        indirection: 1
+    return_type: ERROR

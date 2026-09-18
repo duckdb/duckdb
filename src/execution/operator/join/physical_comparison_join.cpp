@@ -1,6 +1,8 @@
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
 
@@ -36,9 +38,9 @@ InsertionOrderPreservingMap<string> PhysicalComparisonJoin::ParamsToString() con
 			condition_info += "\n";
 		}
 		D_ASSERT(join_condition.IsComparison());
-		condition_info += StringUtil::Format("%s %s %s", join_condition.GetLHS().GetName(),
+		condition_info += StringUtil::Format("%s %s %s", join_condition.GetLHS().GetName().GetIdentifierName(),
 		                                     ExpressionTypeToOperator(join_condition.GetComparisonType()),
-		                                     join_condition.GetRHS().GetName());
+		                                     join_condition.GetRHS().GetName().GetIdentifierName());
 	}
 
 	if (predicate) {
@@ -123,7 +125,7 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 		// MARK join with empty hash table
 		D_ASSERT(result.ColumnCount() == input.ColumnCount() + 1);
 		// for every data vector, we just reference the child chunk
-		result.SetCardinality(input);
+		result.SetChildCardinality(input.size());
 		for (idx_t i = 0; i < input.ColumnCount(); i++) {
 			result.data[i].Reference(input.data[i]);
 		}
@@ -146,7 +148,7 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 	} else if (join_type == JoinType::LEFT || join_type == JoinType::OUTER || join_type == JoinType::SINGLE) {
 		// LEFT/FULL OUTER/SINGLE join and build side is empty
 		// for the LHS we reference the data
-		result.SetCardinality(input.size());
+		result.SetChildCardinality(input.size());
 		for (idx_t i = 0; i < input.ColumnCount(); i++) {
 			result.data[i].Reference(input.data[i]);
 		}

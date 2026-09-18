@@ -8,27 +8,75 @@
 
 #pragma once
 
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 class FunctionSerializer {
+private:
+	class DeserializeContext {
+	public:
+		DeserializeContext(Deserializer &deserializer_p, const LogicalType &return_type,
+		                   const const_expression_list_t &children)
+		    : deserializer(deserializer_p) {
+			deserializer.Set<const LogicalType &>(return_type);
+			try {
+				deserializer.Set<const const_expression_list_t &>(children);
+			} catch (...) {
+				deserializer.Unset<LogicalType>();
+				throw;
+			}
+		}
+		~DeserializeContext() {
+			deserializer.Unset<const_expression_list_t>();
+			deserializer.Unset<LogicalType>();
+		}
+		DeserializeContext(const DeserializeContext &) = delete;
+		DeserializeContext &operator=(const DeserializeContext &) = delete;
+
+	private:
+		Deserializer &deserializer;
+	};
+
+	template <class FUNC>
+	static void RestoreLogicalSignature(FUNC &function, const vector<unique_ptr<Expression>> &children,
+	                                    const LogicalType &return_type) {
+		auto arguments = function.GetArguments();
+		for (idx_t index = 0; index < arguments.size() && index < children.size(); index++) {
+			if (!arguments[index].IsComplete()) {
+				arguments[index] = children[index]->GetReturnType();
+			}
+		}
+		function.SetLogicalArguments(std::move(arguments));
+		function.SetLogicalReturnType(return_type.IsAggregateState() ? function.GetReturnType() : return_type);
+	}
+
+	static void RestoreLogicalSignature(BoundWindowFunction &, const vector<unique_ptr<Expression>> &,
+	                                    const LogicalType &) {
+	}
+
 public:
 	template <class FUNC>
 	static void Serialize(Serializer &serializer, const FUNC &function, optional_ptr<FunctionData> bind_info) {
 		D_ASSERT(!function.GetName().empty());
 		serializer.WriteProperty(500, "name", function.GetName());
 		serializer.WriteProperty(501, "arguments", function.GetArguments());
-		serializer.WriteProperty(502, "original_arguments", function.GetOriginalArguments());
+		if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+			// binds no longer erase the arguments they fold into their bind data, so the argument list above is
+			// always the full one - older versions read this field unconditionally, so write it (empty) for them
+			serializer.WriteProperty(502, "original_arguments", vector<LogicalType>());
+		}
 		// These are optional fields that are written out of numeric order, older
 		// databases won't contain the fields, so the defaults will be used, but if
 		// the fields are present, they will be used.
-		serializer.WritePropertyWithDefault<string>(505, "catalog_name", function.GetCatalogName(), "");
-		serializer.WritePropertyWithDefault<string>(506, "schema_name", function.GetSchemaName(), "");
+		serializer.WritePropertyWithDefault<Identifier>(505, "catalog_name", function.GetCatalogName(), Identifier());
+		serializer.WritePropertyWithDefault<Identifier>(506, "schema_name", function.GetSchemaName(), Identifier());
 
 		bool has_serialize = function.HasSerializationCallbacks();
 		serializer.WriteProperty(503, "has_serialize", has_serialize);
@@ -39,41 +87,50 @@ public:
 		}
 	}
 
+	//! Plans written by versions whose binds erased the arguments they folded into their bind data record the
+	//! pre-erase list separately - use that as the argument list, so that the function looks the same either way
+	static void RestoreErasedArguments(vector<LogicalType> &arguments, vector<LogicalType> &original_arguments) {
+		if (!original_arguments.empty()) {
+			arguments = std::move(original_arguments);
+		}
+	}
+
 	template <class FUNC, class CATALOG_ENTRY>
-	static FUNC DeserializeFunction(ClientContext &context, CatalogType catalog_type, const string &catalog_name,
-	                                const string &schema_name, const string &name, const vector<LogicalType> &arguments,
-	                                const vector<LogicalType> &original_arguments) {
-		EntryLookupInfo lookup_info(catalog_type, name);
+	static FUNC DeserializeFunction(ClientContext &context, CatalogType catalog_type, const Identifier &catalog_name,
+	                                const Identifier &schema_name, const Identifier &name,
+	                                const vector<LogicalType> &arguments) {
+		EntryLookupInfo lookup_info(catalog_type, QualifiedName(name));
 		auto &func_catalog =
-		    Catalog::GetEntry(context, catalog_type, catalog_name.empty() ? SYSTEM_CATALOG : catalog_name,
-		                      schema_name.empty() ? DEFAULT_SCHEMA : schema_name, name);
+		    Catalog::GetEntry(context, catalog_type,
+		                      QualifiedName(catalog_name.empty() ? Identifier::SystemCatalog() : catalog_name,
+		                                    schema_name.empty() ? Identifier::DefaultSchema() : schema_name, name));
 
 		if (func_catalog.type != catalog_type) {
-			throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name);
+			throw InternalException("DeserializeFunction - cant find catalog entry for function %s",
+			                        name.GetIdentifierName());
 		}
 		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
-		auto function = functions.functions.GetFunctionByArguments(
-		    context, original_arguments.empty() ? arguments : original_arguments);
-		return function;
+		return *functions.functions.GetFunctionByArguments(context, arguments);
 	}
 
 	template <class FUNC, class CATALOG_ENTRY>
 	static pair<FUNC, bool> DeserializeBase(Deserializer &deserializer, CatalogType catalog_type,
 	                                        optional_ptr<vector<unique_ptr<Expression>>> children = nullptr) {
 		auto &context = deserializer.Get<ClientContext &>();
-		auto name = deserializer.ReadProperty<string>(500, "name");
+		auto name = deserializer.ReadProperty<Identifier>(500, "name");
 		auto arguments = deserializer.ReadProperty<vector<LogicalType>>(501, "arguments");
-		auto original_arguments = deserializer.ReadProperty<vector<LogicalType>>(502, "original_arguments");
-		auto catalog_name = deserializer.ReadPropertyWithDefault<string>(505, "catalog_name");
-		auto schema_name = deserializer.ReadPropertyWithDefault<string>(506, "schema_name");
+		auto original_arguments = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(502, "original_arguments");
+		auto catalog_name = deserializer.ReadPropertyWithDefault<Identifier>(505, "catalog_name");
+		auto schema_name = deserializer.ReadPropertyWithDefault<Identifier>(506, "schema_name");
 		if (catalog_name.empty()) {
-			catalog_name = SYSTEM_CATALOG;
+			catalog_name = Identifier::SystemCatalog();
 		}
 		if (schema_name.empty()) {
-			schema_name = DEFAULT_SCHEMA;
+			schema_name = Identifier::DefaultSchema();
 		}
+		RestoreErasedArguments(arguments, original_arguments);
 
-		if (arguments.empty() && original_arguments.empty() && children && !children->empty()) {
+		if (arguments.empty() && children && !children->empty()) {
 			// The function is specified as having no arguments, but somehow expressions were passed anyway
 			// Assume this is a "varargs" function and use the types of the expressions as the arguments
 			// This can happen when we change a function that used to take varargs, to no longer do so.
@@ -83,12 +140,11 @@ public:
 			}
 		}
 
-		auto function = DeserializeFunction<FUNC, CATALOG_ENTRY>(context, catalog_type, catalog_name, schema_name, name,
-		                                                         arguments, original_arguments);
+		auto function =
+		    DeserializeFunction<FUNC, CATALOG_ENTRY>(context, catalog_type, catalog_name, schema_name, name, arguments);
 		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
 		if (has_serialize) {
 			function.GetArguments() = std::move(arguments);
-			function.GetOriginalArguments() = std::move(original_arguments);
 		}
 		return make_pair(std::move(function), has_serialize);
 	}
@@ -130,6 +186,7 @@ public:
 			}
 			return TypeRequiresAssignment(ArrayType::GetChildType(type));
 		case LogicalTypeId::STRUCT:
+		case LogicalTypeId::TUPLE:
 			if (!type.AuxInfo()) {
 				return true;
 			}
@@ -148,21 +205,22 @@ public:
 	                                                        LogicalType return_type) { // NOLINT: clang-tidy bug
 		auto &context = deserializer.Get<ClientContext &>();
 
-		auto name = deserializer.ReadProperty<string>(500, "name");
+		auto name = deserializer.ReadProperty<Identifier>(500, "name");
 		auto arguments = deserializer.ReadProperty<vector<LogicalType>>(501, "arguments");
-		auto original_arguments = deserializer.ReadProperty<vector<LogicalType>>(502, "original_arguments");
-		auto catalog_name = deserializer.ReadPropertyWithDefault<string>(505, "catalog_name");
-		auto schema_name = deserializer.ReadPropertyWithDefault<string>(506, "schema_name");
+		auto original_arguments = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(502, "original_arguments");
+		auto catalog_name = deserializer.ReadPropertyWithDefault<Identifier>(505, "catalog_name");
+		auto schema_name = deserializer.ReadPropertyWithDefault<Identifier>(506, "schema_name");
 		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
 
 		if (catalog_name.empty()) {
-			catalog_name = SYSTEM_CATALOG;
+			catalog_name = Identifier::SystemCatalog();
 		}
 		if (schema_name.empty()) {
-			schema_name = DEFAULT_SCHEMA;
+			schema_name = Identifier::DefaultSchema();
 		}
+		RestoreErasedArguments(arguments, original_arguments);
 
-		if (arguments.empty() && original_arguments.empty() && !children.empty()) {
+		if (arguments.empty() && !children.empty()) {
 			// The function is specified as having no arguments, but somehow expressions were passed anyway
 			// Assume this is a "varargs" function and use the types of the expressions as the arguments
 			// This can happen when we change a function that used to take varargs, to no longer do so.
@@ -173,15 +231,15 @@ public:
 		}
 
 		// Now lookup the function in the catalog.
-		EntryLookupInfo lookup_info(catalog_type, name);
-		auto &func_catalog = Catalog::GetEntry(context, catalog_type, catalog_name, schema_name, name);
+		EntryLookupInfo lookup_info(catalog_type, QualifiedName(name));
+		auto &func_catalog = Catalog::GetEntry(context, catalog_type, QualifiedName(catalog_name, schema_name, name));
 
 		if (func_catalog.type != catalog_type) {
-			throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name);
+			throw InternalException("DeserializeFunction - cant find catalog entry for function %s",
+			                        name.GetIdentifierName());
 		}
 		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
-		const auto &function = functions.functions.GetFunctionByArguments(
-		    context, original_arguments.empty() ? arguments : original_arguments);
+		const auto function = functions.functions.GetFunctionByArguments(context, arguments);
 
 		// Does this function support serializing its bound data?
 		if (!has_serialize) {
@@ -206,12 +264,18 @@ public:
 		// Otherwise, construct the bound function from its parts
 		FUNC bound_function(function);
 		bound_function.GetArguments() = std::move(arguments);
-		bound_function.GetOriginalArguments() = std::move(original_arguments);
+		RestoreLogicalSignature(bound_function, children, return_type);
 
 		// Invoke deserialization function
-		deserializer.Set<const LogicalType &>(return_type);
-		auto bound_data = FunctionDeserialize(deserializer, bound_function);
-		deserializer.Unset<LogicalType>();
+		const_expression_list_t child_references;
+		for (auto &child : children) {
+			child_references.emplace_back(*child);
+		}
+		unique_ptr<FunctionData> bound_data;
+		{
+			DeserializeContext scope(deserializer, return_type, child_references);
+			bound_data = FunctionDeserialize(deserializer, bound_function);
+		}
 
 		if (TypeRequiresAssignment(bound_function.GetReturnType())) {
 			bound_function.SetReturnType(std::move(return_type));

@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 #include "utf8proc.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -35,7 +36,7 @@ unique_ptr<FunctionData> CurrentQueryIdBind(BindScalarFunctionInput &input) {
 
 void CurrentQueryIdFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<CurrentQueryIdData>();
+	const auto &info = func_expr.BindInfo()->Cast<CurrentQueryIdData>();
 	result.Reference(info.query_id, count_t(args.size()));
 }
 

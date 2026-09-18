@@ -1,0 +1,106 @@
+# name: test/sql/function/variant/variant_group_array_shredded.test
+# description: Test variant_group_array with shredded VARIANT values
+# group: [variant]
+
+load {TEST_DIR}/variant_group_array_shredded.db readwrite v1.5.0
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+SET force_variant_shredding = 'STRUCT(b INTEGER, a INTEGER)';
+
+statement ok
+CREATE TABLE variants(id INTEGER, v VARIANT);
+
+statement ok
+INSERT INTO variants VALUES
+	-- partially shredded
+	(1, {'z': 9, 'a': 1, 'b': 2}::VARIANT),
+	-- VARIANT_NULL
+	(2, {'a': 10, 'b': NULL}::VARIANT),
+	-- missing value in shredded schema
+	(3, {'a': 20}::VARIANT),
+	-- root with different type than shredded schema
+	(4, 42::VARIANT),
+	-- SQL-NULL
+	(5, NULL::VARIANT);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT DISTINCT vector_type(v) FROM variants;
+----
+SHREDDED_VECTOR
+
+query T
+SELECT variant_group_array(v) FROM (SELECT v FROM variants ORDER BY id);
+----
+[{'a': 1, 'b': 2, 'z': 9}, {'a': 10, 'b': NULL}, {'a': 20}, 42, NULL]
+
+# --- Fully consistent primitive VARIANT ---
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+SET force_variant_shredding = 'INTEGER';
+
+statement ok
+CREATE TABLE fully_shredded(id INTEGER, v VARIANT);
+
+statement ok
+INSERT INTO fully_shredded VALUES
+	(1, 42::INTEGER::VARIANT),
+	(2, 84::INTEGER::VARIANT),
+	(3, NULL::VARIANT);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT DISTINCT vector_type(v) FROM fully_shredded;
+----
+SHREDDED_VECTOR
+
+query T
+SELECT variant_group_array(v) FROM (SELECT v FROM fully_shredded ORDER BY id);
+----
+[42, 84, NULL]
+
+# --- Fully consistent object VARIANT ---
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+SET force_variant_shredding = 'STRUCT(b INTEGER, a INTEGER)';
+
+statement ok
+CREATE TABLE fully_shredded_objects(id INTEGER, v VARIANT);
+
+statement ok
+INSERT INTO fully_shredded_objects VALUES
+	(1, {'a': 1, 'b': 2}::VARIANT),
+	(2, {'a': 3, 'b': 4}::VARIANT),
+	(3, NULL::VARIANT);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT DISTINCT vector_type(v) FROM fully_shredded_objects;
+----
+SHREDDED_VECTOR
+
+query T
+SELECT variant_group_array(v) FROM (SELECT v FROM fully_shredded_objects ORDER BY id);
+----
+[{'a': 1, 'b': 2}, {'a': 3, 'b': 4}, NULL]

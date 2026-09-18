@@ -1,107 +1,221 @@
 #include "duckdb/execution/index/art/prefix_handle.hpp"
 
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {
 
-PrefixHandle::PrefixHandle(const ART &art, const Node node)
-    : segment_handle(Node::GetAllocator(art, PREFIX).GetHandle(node)) {
-	data = segment_handle.GetPtr();
-	child = reinterpret_cast<Node *>(data + art.PrefixCount() + 1);
-	segment_handle.MarkModified();
-}
+PrefixHandle PrefixHandle::NewInternal(ART &art, NodePtr &node, const_data_ptr_t data, const uint8_t count,
+                                       const idx_t offset) {
+	node = NodePtr::GetAllocator(art, PREFIX).New();
+	node.SetMetadata(static_cast<uint8_t>(PREFIX));
 
-PrefixHandle::PrefixHandle(FixedSizeAllocator &allocator, const Node node, const uint8_t count)
-    : segment_handle(allocator.GetHandle(node)) {
-	data = segment_handle.GetPtr();
-	child = reinterpret_cast<Node *>(data + count + 1);
-	segment_handle.MarkModified();
-}
-
-PrefixHandle::PrefixHandle(PrefixHandle &&other) noexcept
-    : data(other.data), child(other.child), segment_handle(std::move(other.segment_handle)) {
-	other.data = nullptr;
-	other.child = nullptr;
-}
-
-PrefixHandle &PrefixHandle::operator=(PrefixHandle &&other) noexcept {
-	if (this != &other) {
-		// old segment handle reader count gets decremented on this move.
-		segment_handle = std::move(other.segment_handle);
-
-		data = other.data;
-		child = other.child;
-
-		other.data = nullptr;
-		other.child = nullptr;
+	PrefixHandle prefix(NodeHandle(art, node));
+	prefix.SetCount(art, count);
+	if (data) {
+		D_ASSERT(count);
+		memcpy(prefix.Data(), data + offset, count);
 	}
-	return *this;
+	prefix.Child(art).Clear();
+	return prefix;
 }
 
-PrefixHandle PrefixHandle::NewDeprecated(FixedSizeAllocator &allocator, Node &node) {
+PrefixChain PrefixHandle::New(ART &art, const ARTKey &key, const idx_t depth, const idx_t count) {
+	D_ASSERT(count > 0);
+
+	NodePtr root_ptr;
+	auto root_count = UnsafeNumericCast<uint8_t>(MinValue<idx_t>(art.PrefixCount(), count));
+	auto prefix_handle = NewInternal(art, root_ptr, key.data, root_count, depth);
+	auto tail_handle = std::move(prefix_handle);
+
+	idx_t offset = root_count;
+	while (offset < count) {
+		auto this_count = UnsafeNumericCast<uint8_t>(MinValue<idx_t>(art.PrefixCount(), count - offset));
+		auto next_handle = NewInternal(art, tail_handle.Child(art), key.data, this_count, depth + offset);
+		tail_handle = std::move(next_handle);
+
+		offset += this_count;
+	}
+	return {root_ptr, std::move(tail_handle)};
+}
+
+PrefixHandle PrefixHandle::AppendByte(ART &art, PrefixHandle prefix, const uint8_t byte) {
+	const auto count = prefix.GetCount(art);
+	if (count != art.PrefixCount()) {
+		prefix.SetByte(count, byte);
+		prefix.SetCount(art, UnsafeNumericCast<uint8_t>(count + 1));
+		return prefix;
+	}
+
+	return NewInternal(art, prefix.Child(art), &byte, 1, 0);
+}
+
+void PrefixHandle::Append(ART &art, PrefixHandle prefix, NodePtr other) {
+	D_ASSERT(other.HasMetadata());
+
+	while (other.GetType() == PREFIX) {
+		if (other.GetGateStatus() == GateStatus::GATE_SET) {
+			prefix.Child(art) = other;
+			return;
+		}
+
+		NodePtr next;
+		{
+			PrefixHandle other_prefix(NodeHandle(art, other));
+			const auto count = other_prefix.GetCount(art);
+			for (idx_t i = 0; i < count; i++) {
+				prefix = AppendByte(art, std::move(prefix), other_prefix.GetByte(i));
+			}
+			next = other_prefix.Child(art);
+			prefix.Child(art) = next;
+		}
+
+		NodePtr::FreeNode(art, other);
+		other = next;
+	}
+	prefix.Child(art) = other;
+}
+
+NodePtr PrefixHandle::Split(ART &art, NodePtr &prefix_ptr, NodePtr &branching_node4, const uint8_t pos) {
+	D_ASSERT(prefix_ptr.HasMetadata());
+	D_ASSERT(prefix_ptr.GetType() == PREFIX);
+	D_ASSERT(branching_node4.HasMetadata());
+
+	NodePtr child;
+	{
+		PrefixHandle prefix(NodeHandle(art, prefix_ptr));
+		const auto count = prefix.GetCount(art);
+		D_ASSERT(pos < count);
+
+		if (pos + 1 < count) {
+			// The split is not at the last prefix byte.
+			// After the caller attaches the returned child, we get:
+			// [this prefix minus split byte, minus remaining bytes (omitted if pos == 0)] ->
+			// [new node at split byte] --(split byte)-->
+			// [child with remaining bytes, and possibly remaining prefix nodes].
+
+			// Create a new prefix and
+			// 1. copy the remaining bytes of this prefix.
+			// 2. append remaining prefix nodes.
+			const auto suffix_count = UnsafeNumericCast<uint8_t>(count - pos - 1);
+			auto suffix = NewInternal(art, child, prefix.Data(), suffix_count, pos + 1);
+			Append(art, std::move(suffix), prefix.Child(art));
+		} else {
+			// The split is at the last prefix byte, whether the prefix is full or not.
+			// There are no bytes left in this prefix after the split.
+			// After the caller attaches the returned child, we get:
+			// [this prefix minus split byte (omitted if pos == 0)] ->
+			// [new node at split byte] --(split byte)-->
+			// [child at split byte: prefix.Child(art)].
+			child = prefix.Child(art);
+		}
+
+		if (pos != 0) {
+			// There are bytes left before the split.
+			// The subsequent node replaces the split byte.
+			// Any gate stays on this prefix.
+			prefix.SetCount(art, pos);
+			prefix.Child(art) = branching_node4;
+			return child;
+		}
+		// No bytes left before the split, so branching_node4 inherits the prefix's gate before we free it.
+		branching_node4.SetGateStatus(prefix_ptr.GetGateStatus());
+	}
+
+	// Release the prefix handle before freeing its node, which may destroy the allocator buffer.
+	NodePtr::FreeNode(art, prefix_ptr);
+	prefix_ptr = branching_node4;
+	return child;
+}
+
+NodeHandle PrefixHandle::NewDeprecated(FixedSizeAllocator &allocator, NodePtr &node) {
 	node = allocator.New();
 	node.SetMetadata(static_cast<uint8_t>(PREFIX));
 
-	PrefixHandle handle(allocator, node, DEPRECATED_COUNT);
-	handle.data[DEPRECATED_COUNT] = 0;
+	NodeHandle handle(allocator, node, PREFIX);
+	auto data = handle.GetPtr();
+	data[DEPRECATED_COUNT] = 0;
 	return handle;
 }
 
-optional_ptr<Node> PrefixHandle::TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state) {
+OptionalNodePtr PrefixHandle::TransformToDeprecated(ART &art, NodePtr &node, TransformToDeprecatedState &state) {
 	// Early-out, if we do not need any transformations.
 	if (!state.HasAllocator()) {
-		reference<Node> ref(node);
-		auto &allocator = Node::GetAllocator(art, PREFIX);
-		while (ref.get().GetType() == PREFIX && ref.get().GetGateStatus() == GateStatus::GATE_NOT_SET) {
-			if (!allocator.LoadedFromStorage(ref)) {
-				return nullptr;
+		NodePtr current = node;
+		auto &allocator = NodePtr::GetAllocator(art, PREFIX);
+		while (current.GetType() == PREFIX && current.GetGateStatus() == GateStatus::GATE_NOT_SET) {
+			if (!allocator.LoadedFromStorage(current)) {
+				return OptionalNodePtr();
 			}
-			PrefixHandle handle(art, ref);
-			ref = *handle.child;
+			NodeHandle handle(art, current);
+			auto &child = ChildRef(art, handle);
+			current = child;
+			// Handle gated endpoints while the parent of the prefix chain is still pinned.
+			if (current.HasMetadata() && current.GetGateStatus() == GateStatus::GATE_SET) {
+				Leaf::TransformToDeprecated(art, child);
+				return OptionalNodePtr();
+			}
 		}
-		return ref.get();
+		return current;
 	}
 
 	// We need to create a new prefix (chain) in the deprecated format.
 	auto &deprecated_allocator = state.GetAllocator();
-	Node new_node;
-	auto new_handle = NewDeprecated(deprecated_allocator, new_node);
+	NodePtr rebuilt_prefix;
+	auto tail_handle = NewDeprecated(deprecated_allocator, rebuilt_prefix);
 
-	auto &allocator = Node::GetAllocator(art, PREFIX);
-	Node current_node = node;
-	while (current_node.GetType() == PREFIX && current_node.GetGateStatus() == GateStatus::GATE_NOT_SET) {
-		if (!allocator.LoadedFromStorage(current_node)) {
-			return nullptr;
+	auto &allocator = NodePtr::GetAllocator(art, PREFIX);
+	NodePtr source_prefix = node;
+	while (source_prefix.GetType() == PREFIX && source_prefix.GetGateStatus() == GateStatus::GATE_NOT_SET) {
+		if (!allocator.LoadedFromStorage(source_prefix)) {
+			return OptionalNodePtr();
 		}
 		{
-			// Decrease the readers on current_handle after moving all data over.
-			PrefixHandle current_handle(art, current_node);
-			for (idx_t i = 0; i < current_handle.data[art.PrefixCount()]; i++) {
-				new_handle = new_handle.TransformToDeprecatedAppend(art, deprecated_allocator, current_handle.data[i]);
+			// Decrease the readers on source_handle after moving all data over.
+			NodeHandle source_handle(art, source_prefix);
+			auto source_data = source_handle.GetPtr();
+			auto &source_child = ChildRef(art, source_handle);
+
+			for (idx_t i = 0; i < source_data[art.PrefixCount()]; i++) {
+				tail_handle =
+				    TransformToDeprecatedAppend(std::move(tail_handle), art, deprecated_allocator, source_data[i]);
 			}
-			*new_handle.child = *current_handle.child;
+			auto &tail_child = ChildRefWithCount(tail_handle, DEPRECATED_COUNT);
+			tail_child = source_child;
 		}
 
 		// Freeing the node here can trigger a buffer removal (last segment on the buffer).
 		// In that case, there cannot be any readers left on the buffer.
-		Node::FreeNode(art, current_node);
-		current_node = *new_handle.child;
+		NodePtr::FreeNode(art, source_prefix);
+		auto &tail_child = ChildRefWithCount(tail_handle, DEPRECATED_COUNT);
+		source_prefix = tail_child;
 	}
 
-	node = new_node;
-	return new_handle.child;
+	node = rebuilt_prefix;
+	auto &tail_child = ChildRefWithCount(tail_handle, DEPRECATED_COUNT);
+	// Handle gated endpoints while the new prefix is still pinned.
+	NodePtr endpoint = tail_child;
+	if (endpoint.HasMetadata() && endpoint.GetGateStatus() == GateStatus::GATE_SET) {
+		Leaf::TransformToDeprecated(art, tail_child);
+		return OptionalNodePtr();
+	}
+	return endpoint;
 }
 
-PrefixHandle PrefixHandle::TransformToDeprecatedAppend(ART &art, FixedSizeAllocator &allocator, const uint8_t byte) {
-	if (data[DEPRECATED_COUNT] != DEPRECATED_COUNT) {
-		data[data[DEPRECATED_COUNT]] = byte;
-		data[DEPRECATED_COUNT]++;
-		return std::move(*this);
+NodeHandle PrefixHandle::TransformToDeprecatedAppend(NodeHandle tail_handle, ART &art, FixedSizeAllocator &allocator,
+                                                     const uint8_t byte) {
+	auto tail_data = tail_handle.GetPtr();
+	if (tail_data[DEPRECATED_COUNT] != DEPRECATED_COUNT) {
+		tail_data[tail_data[DEPRECATED_COUNT]] = byte;
+		tail_data[DEPRECATED_COUNT]++;
+		return tail_handle;
 	}
 
-	auto new_prefix = NewDeprecated(allocator, *child);
-	return new_prefix.TransformToDeprecatedAppend(art, allocator, byte);
+	auto &tail_child = ChildRefWithCount(tail_data, DEPRECATED_COUNT);
+	auto new_tail_handle = NewDeprecated(allocator, tail_child);
+	return TransformToDeprecatedAppend(std::move(new_tail_handle), art, allocator, byte);
 }
 
 } // namespace duckdb

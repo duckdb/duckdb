@@ -26,6 +26,9 @@ INSERT INTO variant_list SELECT {
 } from range(1000) t(i)
 
 statement ok
+INSERT INTO variant_list VALUES(row(3000, 'test', 'hello world', 42));
+
+statement ok
 checkpoint;
 
 restart
@@ -35,7 +38,7 @@ select
 	col.f2.a::INTEGER,
 	col.f2.b::VARCHAR,
 	col.f4
-from variant_list limit 10
+from variant_list order by col.f1 limit 10
 ----
 0	val0	true
 1	val1	false

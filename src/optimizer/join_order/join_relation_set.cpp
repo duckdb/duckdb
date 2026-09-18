@@ -1,4 +1,4 @@
-#include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
@@ -8,6 +8,10 @@
 namespace duckdb {
 
 using JoinRelationTreeNode = JoinRelationSetManager::JoinRelationTreeNode;
+
+JoinRelationSet::JoinRelationSet(unsafe_unique_array<RelationIndex> relations, idx_t count)
+    : relations(std::move(relations)), count(count) {
+}
 
 // LCOV_EXCL_START
 string JoinRelationSet::ToString() const {
@@ -19,8 +23,12 @@ string JoinRelationSet::ToString() const {
 }
 // LCOV_EXCL_STOP
 
+bool JoinRelationSet::Empty() const {
+	return count == 0;
+}
+
 //! Returns true if sub is a subset of super
-bool JoinRelationSet::IsSubset(JoinRelationSet &super, JoinRelationSet &sub) {
+bool JoinRelationSet::IsSubset(const JoinRelationSet &super, const JoinRelationSet &sub) {
 	D_ASSERT(sub.count > 0);
 	if (sub.count > super.count) {
 		return false;
@@ -32,6 +40,22 @@ bool JoinRelationSet::IsSubset(JoinRelationSet &super, JoinRelationSet &sub) {
 			if (j == sub.count) {
 				return true;
 			}
+		}
+	}
+	return false;
+}
+
+bool JoinRelationSet::Intersects(const JoinRelationSet &left, const JoinRelationSet &right) {
+	idx_t left_idx = 0;
+	idx_t right_idx = 0;
+	while (left_idx < left.count && right_idx < right.count) {
+		if (left.relations[left_idx] == right.relations[right_idx]) {
+			return true;
+		}
+		if (left.relations[left_idx] < right.relations[right_idx]) {
+			left_idx++;
+		} else {
+			right_idx++;
 		}
 	}
 	return false;
@@ -65,6 +89,14 @@ JoinRelationSet &JoinRelationSetManager::GetJoinRelation(RelationIndex index) {
 	relations[0] = index;
 	idx_t count = 1;
 	return GetJoinRelation(std::move(relations), count);
+}
+
+JoinRelationSet &JoinRelationSetManager::GetEmptyJoinRelationSet() {
+	if (!empty_relation_set) {
+		const unordered_set<RelationIndex> empty_bindings = {};
+		empty_relation_set = GetJoinRelation(empty_bindings);
+	}
+	return *empty_relation_set.get();
 }
 
 JoinRelationSet &JoinRelationSetManager::GetJoinRelation(const unordered_set<RelationIndex> &bindings) {

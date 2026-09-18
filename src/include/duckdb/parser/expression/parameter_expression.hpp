@@ -34,9 +34,13 @@ public:
 public:
 	ParameterExpression();
 
-	string identifier;
-
 public:
+	const duckdb::Identifier &Identifier() const {
+		return identifier;
+	}
+	duckdb::Identifier &IdentifierMutable() {
+		return identifier;
+	}
 	bool IsScalar() const override {
 		return true;
 	}
@@ -53,5 +57,8 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
+
+private:
+	duckdb::Identifier identifier;
 };
 } // namespace duckdb

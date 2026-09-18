@@ -22,7 +22,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/atomic.hpp"
-#include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/serializer/async_file_writer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "parquet_statistics.hpp"
@@ -109,10 +109,13 @@ public:
 
 public:
 	ColumnDataCollection &ApplyTransform(ColumnDataCollection &input);
+	bool MatchesTypes(const vector<LogicalType> &other_types) const;
 
 private:
 	//! The buffer to store the transformed chunks of a rowgroup
 	ColumnDataCollection buffer;
+	//! The types used to bind the expressions and initialize the buffer
+	vector<LogicalType> types;
 	//! The expression(s) to apply to the input chunk
 	vector<unique_ptr<Expression>> expressions;
 	//! The expression executor used to transform the input chunk
@@ -148,6 +151,8 @@ public:
 struct ParquetWriterOptions {
 	//! The file path to use for the written parquet file
 	string file_name;
+	//! The flags to use when opening the written parquet file
+	FileOpenFlags open_flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
 	//! Types of the columns
 	vector<LogicalType> sql_types;
 	//! Names of the columns
@@ -164,6 +169,8 @@ struct ParquetWriterOptions {
 	optional_idx dictionary_size_limit;
 	//! The maximum bytes of string-data to put into the dictionary, per column/field
 	idx_t string_dictionary_page_size_limit;
+	//! The maximum uncompressed size of a data page
+	idx_t data_page_size_limit;
 	//! Whether to use bloom filters or not
 	bool enable_bloom_filters;
 	//! Maximum ratio of false-positives to allow in the written bloom filter
@@ -216,7 +223,7 @@ public:
 	LogicalType GetSQLType(idx_t schema_idx) const {
 		return options.sql_types[schema_idx];
 	}
-	BufferedFileWriter &GetWriter() {
+	AsyncFileWriter &GetWriter() {
 		return *writer;
 	}
 	idx_t FileSize() const {
@@ -227,6 +234,9 @@ public:
 	}
 	idx_t StringDictionaryPageSizeLimit() const {
 		return options.string_dictionary_page_size_limit;
+	}
+	idx_t DataPageSizeLimit() const {
+		return options.data_page_size_limit;
 	}
 	bool EnableBloomFilters() const {
 		return options.enable_bloom_filters;
@@ -259,6 +269,9 @@ public:
 
 	uint32_t Write(const duckdb_apache::thrift::TBase &object);
 	uint32_t WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size);
+	unique_ptr<AsyncWriteBuffer> PrepareWrite(const duckdb_apache::thrift::TBase &object);
+	unique_ptr<AsyncWriteBuffer> PrepareWriteData(unique_ptr<AsyncWriteBuffer> buffer);
+	uint32_t WriteData(unique_ptr<AsyncWriteBuffer> buffer);
 
 	GeoParquetFileMetadata &GetGeoParquetData();
 
@@ -292,7 +305,7 @@ private:
 	ParquetWriterOptions options;
 	shared_ptr<EncryptionUtil> encryption_util;
 
-	unique_ptr<BufferedFileWriter> writer;
+	unique_ptr<AsyncFileWriter> writer;
 	std::shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
 	duckdb_parquet::FileMetaData file_meta_data;
 	std::mutex lock;

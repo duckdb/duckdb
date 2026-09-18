@@ -1,0 +1,5 @@
+{
+  "description": "Run with debug_verification_mode set to verify_functions - verifying NULL handling of scalar and aggregate functions",
+  "on_init": "SET debug_verification_mode='verify_functions';",
+  "skip_compiled": "true"
+}

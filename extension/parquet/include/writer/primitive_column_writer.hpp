@@ -13,6 +13,7 @@
 #include <string>
 
 #include "column_writer.hpp"
+#include "duckdb/common/serializer/async_file_writer.hpp"
 #include "writer/parquet_write_stats.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "parquet_statistics.hpp"
@@ -29,6 +30,7 @@ class ParquetWriter;
 class Vector;
 class WriteStream;
 struct ParquetColumnSchema;
+struct PrimitiveDictionaryTargetData;
 
 struct PageInformation {
 	idx_t offset = 0;
@@ -48,6 +50,8 @@ struct PageWriteInformation {
 	size_t compressed_size;
 	data_ptr_t compressed_data;
 	AllocatedData compressed_buf;
+	unique_ptr<AsyncWriteBuffer> prepared_header;
+	unique_ptr<AsyncWriteBuffer> prepared_payload;
 };
 
 class PrimitiveColumnWriterState : public ColumnWriterState {
@@ -72,7 +76,7 @@ public:
 //! Base class for writing non-compound types (ex. numerics, strings)
 class PrimitiveColumnWriter : public ColumnWriter {
 public:
-	PrimitiveColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<string> schema_path);
+	PrimitiveColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<Identifier> schema_path);
 	~PrimitiveColumnWriter() override = default;
 
 	//! We limit the uncompressed page size to 100MB
@@ -88,6 +92,7 @@ public:
 	             bool vector_can_span_multiple_pages) override;
 	void BeginWrite(ColumnWriterState &state) override;
 	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override;
+	void PrepareWrite(ColumnWriterState &state) override;
 	void FinalizeWrite(ColumnWriterState &state) override;
 	idx_t FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) override;
 
@@ -121,6 +126,7 @@ protected:
 	//! The number of elements in the dictionary
 	virtual idx_t DictionarySize(PrimitiveColumnWriterState &state_p);
 	void WriteDictionary(PrimitiveColumnWriterState &state, unique_ptr<MemoryStream> temp_writer, idx_t row_count);
+	void WriteDictionary(PrimitiveColumnWriterState &state, PrimitiveDictionaryTargetData target_data, idx_t row_count);
 	virtual void FlushDictionary(PrimitiveColumnWriterState &state, ColumnWriterStatistics *stats);
 
 	void SetParquetStatistics(PrimitiveColumnWriterState &state, duckdb_parquet::ColumnChunk &column);
