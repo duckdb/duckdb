@@ -64,6 +64,8 @@ public:
 	optional_ptr<ClientContext> context;
 	optional_ptr<FileOpener> opener;
 	optional_ptr<CV2VirtualFileSystem> owner;
+	//! Whether this is the open callback's info, which the vfs_file_open functions are valid on.
+	bool is_open = false;
 };
 
 // An open file. The position is the engine's cursor, used only when the file system does not own one.
@@ -93,34 +95,36 @@ public:
 	CV2VirtualFileSystemInfo op_info;
 };
 
-class CV2VirtualFileOpenInfo {
+// The open callback's info: the operation plus the open request it answers.
+class CV2VirtualFileOpenInfo : public CV2VirtualFileSystemInfo {
 public:
 	const OpenFileInfo *file = nullptr;
 	FileOpenFlags flags;
-	optional_ptr<FileOpener> opener;
 	//! Owned as soon as it is attached, so it is destroyed on every path out of the open.
 	CV2UserData data;
 	bool is_seekable = true;
 	bool is_on_disk = false;
 	//! What a listing reported about the file, decoded from the open options on first request.
 	unique_ptr<CV2FileMetadata> listed_metadata;
-	//! The flags as a list, in enum order, built on first request and handed out borrowed.
-	vector<DUCKDB_V2_FILE_FLAG> flag_list;
-	bool flag_list_built = false;
 };
 
-static auto Convert(duckdb_v2_vfs_open_request_handle info) -> CV2VirtualFileOpenInfo * {
-	return reinterpret_cast<CV2VirtualFileOpenInfo *>(info);
-}
-static auto Convert(CV2VirtualFileOpenInfo *info) -> duckdb_v2_vfs_open_request_handle {
-	return reinterpret_cast<duckdb_v2_vfs_open_request_handle>(info);
-}
 static auto Convert(duckdb_v2_vfs_info_handle info) -> CV2VirtualFileSystemInfo * {
 	return reinterpret_cast<CV2VirtualFileSystemInfo *>(info);
 }
 static auto Convert(CV2VirtualFileSystemInfo *info) -> duckdb_v2_vfs_info_handle {
 	return reinterpret_cast<duckdb_v2_vfs_info_handle>(info);
 }
+
+// The open callback's info behind a handle, for the functions only valid there.
+static CV2VirtualFileOpenInfo &OpenInfoOf(duckdb_v2_vfs_info_handle info, const char *function) {
+	auto &base = *Convert(info);
+	if (!base.is_open) {
+		throw InvalidInputException("%s is only valid in the file open callback", function);
+	}
+	return static_cast<CV2VirtualFileOpenInfo &>(base);
+}
+
+static vector<DUCKDB_V2_FILE_FLAG> FlagList(const FileOpenFlags &flags);
 
 // Runs a callback against a fresh error slot, handing back what it reported for the caller to decide on.
 template <class FN>
@@ -214,13 +218,14 @@ public:
 		}
 
 		CV2VirtualFileOpenInfo info;
+		static_cast<CV2VirtualFileSystemInfo &>(info) = SystemInfo(opener);
+		info.is_open = true;
 		info.file = &file;
 		info.flags = flags;
-		info.opener = opener;
-		auto system_info = SystemInfo(opener);
+		auto flag_list = FlagList(flags);
 
 		auto err = TryInvokeCallback([&](duckdb_v2_error_info_handle err) {
-			cb.open(Convert(&system_info), Convert(file.path), Convert(&info), &err);
+			cb.open(Convert(&info), Convert(file.path), flag_list.data(), flag_list.size(), &err);
 		});
 		if (err.HasError()) {
 			// Whatever the callback attached is destroyed with `info`.
@@ -787,6 +792,26 @@ static bool HasFlag(FileOpenFlags flags, DUCKDB_V2_FILE_FLAG flag) {
 	}
 }
 
+// Every flag that is set, in enum order.
+static vector<DUCKDB_V2_FILE_FLAG> FlagList(const FileOpenFlags &flags) {
+	static constexpr DUCKDB_V2_FILE_FLAG ALL_FLAGS[] = {DUCKDB_V2_FILE_FLAG_READ,
+	                                                    DUCKDB_V2_FILE_FLAG_WRITE,
+	                                                    DUCKDB_V2_FILE_FLAG_CREATE,
+	                                                    DUCKDB_V2_FILE_FLAG_CREATE_NEW,
+	                                                    DUCKDB_V2_FILE_FLAG_APPEND,
+	                                                    DUCKDB_V2_FILE_FLAG_EXCLUSIVE_CREATE,
+	                                                    DUCKDB_V2_FILE_FLAG_PARALLEL_ACCESS,
+	                                                    DUCKDB_V2_FILE_FLAG_SHARED_LOCK,
+	                                                    DUCKDB_V2_FILE_FLAG_EXCLUSIVE_LOCK};
+	vector<DUCKDB_V2_FILE_FLAG> result;
+	for (auto flag : ALL_FLAGS) {
+		if (HasFlag(flags, flag)) {
+			result.push_back(flag);
+		}
+	}
+	return result;
+}
+
 static auto ContextHandle(optional_ptr<ClientContext> context) -> duckdb_v2_context_handle {
 	return context ? Convert(context.get()) : nullptr;
 }
@@ -998,46 +1023,15 @@ DUCKDB_V2_ERROR duckdb_v2_vfs_set_move_callback(duckdb_v2_vfs_handle file_system
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.move = callback; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_vfs_open_request_get_flags(duckdb_v2_vfs_open_request_handle info,
-                                                     const DUCKDB_V2_FILE_FLAG **flags, idx_t *count,
-                                                     duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(flags);
-	DUCKDB_CHECK_ARG(count);
-	*flags = nullptr;
-	*count = 0;
-	return WithErrorHandler(err, [&]() {
-		auto &open_info = *Convert(info);
-		if (!open_info.flag_list_built) {
-			static constexpr DUCKDB_V2_FILE_FLAG ALL_FLAGS[] = {DUCKDB_V2_FILE_FLAG_READ,
-			                                                    DUCKDB_V2_FILE_FLAG_WRITE,
-			                                                    DUCKDB_V2_FILE_FLAG_CREATE,
-			                                                    DUCKDB_V2_FILE_FLAG_CREATE_NEW,
-			                                                    DUCKDB_V2_FILE_FLAG_APPEND,
-			                                                    DUCKDB_V2_FILE_FLAG_EXCLUSIVE_CREATE,
-			                                                    DUCKDB_V2_FILE_FLAG_PARALLEL_ACCESS,
-			                                                    DUCKDB_V2_FILE_FLAG_SHARED_LOCK,
-			                                                    DUCKDB_V2_FILE_FLAG_EXCLUSIVE_LOCK};
-			for (auto flag : ALL_FLAGS) {
-				if (HasFlag(open_info.flags, flag)) {
-					open_info.flag_list.push_back(flag);
-				}
-			}
-			open_info.flag_list_built = true;
-		}
-		*flags = open_info.flag_list.data();
-		*count = open_info.flag_list.size();
-	});
-}
-
-DUCKDB_V2_ERROR duckdb_v2_vfs_open_request_get_value(duckdb_v2_vfs_open_request_handle info, duckdb_v2_str name,
-                                                     duckdb_v2_value_handle *value, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_get_value(duckdb_v2_vfs_info_handle info, duckdb_v2_str name,
+                                                  duckdb_v2_value_handle *value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(name);
 	DUCKDB_CHECK_ARG(value);
 	*value = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto &extended_info = Convert(info)->file->extended_info;
+		auto &open_info = OpenInfoOf(info, "duckdb_v2_vfs_file_open_get_value");
+		auto &extended_info = open_info.file->extended_info;
 		if (!extended_info) {
 			return;
 		}
@@ -1049,14 +1043,14 @@ DUCKDB_V2_ERROR duckdb_v2_vfs_open_request_get_value(duckdb_v2_vfs_open_request_
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_vfs_open_request_get_metadata(duckdb_v2_vfs_open_request_handle info,
-                                                        duckdb_v2_file_metadata_handle *metadata,
-                                                        duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_get_metadata(duckdb_v2_vfs_info_handle info,
+                                                     duckdb_v2_file_metadata_handle *metadata,
+                                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(metadata);
 	*metadata = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto &open_info = *Convert(info);
+		auto &open_info = OpenInfoOf(info, "duckdb_v2_vfs_file_open_get_metadata");
 		if (!open_info.listed_metadata) {
 			open_info.listed_metadata =
 			    duckdb::make_uniq<CV2FileMetadata>(CV2FileMetadata::FromOptions(*open_info.file));
@@ -1065,14 +1059,14 @@ DUCKDB_V2_ERROR duckdb_v2_vfs_open_request_get_metadata(duckdb_v2_vfs_open_reque
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_vfs_open_request_get_options(duckdb_v2_vfs_open_request_handle info,
-                                                       duckdb_v2_file_open_options_handle *options,
-                                                       duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_get_options(duckdb_v2_vfs_info_handle info,
+                                                    duckdb_v2_file_open_options_handle *options,
+                                                    duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(options);
 	*options = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto &open_info = *Convert(info);
+		auto &open_info = OpenInfoOf(info, "duckdb_v2_vfs_file_open_get_options");
 		auto copy = duckdb::make_uniq<CV2FileOpenOptions>();
 		copy->flags = open_info.flags;
 		copy->has_flags = true;
@@ -1084,27 +1078,27 @@ DUCKDB_V2_ERROR duckdb_v2_vfs_open_request_get_options(duckdb_v2_vfs_open_reques
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_vfs_open_request_set_file_data(duckdb_v2_vfs_open_request_handle info, duckdb_v2_opaque *data,
-                                                         duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_set_data(duckdb_v2_vfs_info_handle info, duckdb_v2_opaque *data,
+                                                 duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() {
 		// Assigning destroys whatever was attached before.
-		Convert(info)->data = CV2UserData(data->ptr, data->destroy, data->equals);
+		OpenInfoOf(info, "duckdb_v2_vfs_file_open_set_data").data = CV2UserData(data->ptr, data->destroy, data->equals);
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_vfs_open_request_set_property(duckdb_v2_vfs_open_request_handle info,
-                                                        DUCKDB_V2_FILE_PROPERTY property, bool value,
-                                                        duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_set_property(duckdb_v2_vfs_info_handle info, DUCKDB_V2_FILE_PROPERTY property,
+                                                     bool value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	return WithErrorHandler(err, [&]() {
+		auto &open_info = OpenInfoOf(info, "duckdb_v2_vfs_file_open_set_property");
 		switch (property) {
 		case DUCKDB_V2_FILE_PROPERTY_IS_SEEKABLE:
-			Convert(info)->is_seekable = value;
+			open_info.is_seekable = value;
 			break;
 		case DUCKDB_V2_FILE_PROPERTY_IS_ON_DISK:
-			Convert(info)->is_on_disk = value;
+			open_info.is_on_disk = value;
 			break;
 		default:
 			throw duckdb::InvalidInputException("'%d' is not a file property.", static_cast<int>(property));

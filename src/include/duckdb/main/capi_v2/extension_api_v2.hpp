@@ -1359,26 +1359,23 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_vfs_create_with_extension)
 	(duckdb_v2_extension_handle extension, duckdb_v2_vfs_handle *file_system, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_vfs_destroy)(duckdb_v2_vfs_handle *file_system);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_file_open_get_metadata)
+	(duckdb_v2_vfs_info_handle info, duckdb_v2_file_metadata_handle *metadata, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_file_open_get_options)
+	(duckdb_v2_vfs_info_handle info, duckdb_v2_file_open_options_handle *options, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_file_open_get_value)
+	(duckdb_v2_vfs_info_handle info, duckdb_v2_str name, duckdb_v2_value_handle *value,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_file_open_set_data)
+	(duckdb_v2_vfs_info_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_file_open_set_property)
+	(duckdb_v2_vfs_info_handle info, DUCKDB_V2_FILE_PROPERTY property, bool value, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vfs_info_get_file_system)
 	(duckdb_v2_vfs_info_handle info, duckdb_v2_file_system_handle *file_system, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vfs_info_get_user_data)
 	(duckdb_v2_vfs_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vfs_info_try_get_context)
 	(duckdb_v2_vfs_info_handle info, duckdb_v2_context_handle *context, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_vfs_open_request_get_metadata)
-	(duckdb_v2_vfs_open_request_handle info, duckdb_v2_file_metadata_handle *metadata,
-	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_vfs_open_request_get_options)
-	(duckdb_v2_vfs_open_request_handle info, duckdb_v2_file_open_options_handle *options,
-	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_vfs_open_request_get_value)
-	(duckdb_v2_vfs_open_request_handle info, duckdb_v2_str name, duckdb_v2_value_handle *value,
-	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_vfs_open_request_set_file_data)
-	(duckdb_v2_vfs_open_request_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_vfs_open_request_set_property)
-	(duckdb_v2_vfs_open_request_handle info, DUCKDB_V2_FILE_PROPERTY property, bool value,
-	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_vfs_register)(duckdb_v2_vfs_handle file_system, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_claim_callback)
 	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_claim_callback_fn callback, duckdb_v2_error_info_handle *err);
@@ -1430,9 +1427,6 @@ typedef struct {
 	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_stat_callback_fn callback, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_user_data)
 	(duckdb_v2_vfs_handle file_system, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_vfs_open_request_get_flags)
-	(duckdb_v2_vfs_open_request_handle info, const DUCKDB_V2_FILE_FLAG **flags, idx_t *count,
-	 duckdb_v2_error_info_handle *err);
 } duckdb_ext_api_v2;
 
 //===--------------------------------------------------------------------===//
@@ -2050,14 +2044,14 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_vfs_create_with_connection = duckdb_v2_vfs_create_with_connection;
 	result.duckdb_v2_vfs_create_with_extension = duckdb_v2_vfs_create_with_extension;
 	result.duckdb_v2_vfs_destroy = duckdb_v2_vfs_destroy;
+	result.duckdb_v2_vfs_file_open_get_metadata = duckdb_v2_vfs_file_open_get_metadata;
+	result.duckdb_v2_vfs_file_open_get_options = duckdb_v2_vfs_file_open_get_options;
+	result.duckdb_v2_vfs_file_open_get_value = duckdb_v2_vfs_file_open_get_value;
+	result.duckdb_v2_vfs_file_open_set_data = duckdb_v2_vfs_file_open_set_data;
+	result.duckdb_v2_vfs_file_open_set_property = duckdb_v2_vfs_file_open_set_property;
 	result.duckdb_v2_vfs_info_get_file_system = duckdb_v2_vfs_info_get_file_system;
 	result.duckdb_v2_vfs_info_get_user_data = duckdb_v2_vfs_info_get_user_data;
 	result.duckdb_v2_vfs_info_try_get_context = duckdb_v2_vfs_info_try_get_context;
-	result.duckdb_v2_vfs_open_request_get_metadata = duckdb_v2_vfs_open_request_get_metadata;
-	result.duckdb_v2_vfs_open_request_get_options = duckdb_v2_vfs_open_request_get_options;
-	result.duckdb_v2_vfs_open_request_get_value = duckdb_v2_vfs_open_request_get_value;
-	result.duckdb_v2_vfs_open_request_set_file_data = duckdb_v2_vfs_open_request_set_file_data;
-	result.duckdb_v2_vfs_open_request_set_property = duckdb_v2_vfs_open_request_set_property;
 	result.duckdb_v2_vfs_register = duckdb_v2_vfs_register;
 	result.duckdb_v2_vfs_set_claim_callback = duckdb_v2_vfs_set_claim_callback;
 	result.duckdb_v2_vfs_set_create_directory_callback = duckdb_v2_vfs_set_create_directory_callback;
@@ -2081,7 +2075,6 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_vfs_set_remove_file_callback = duckdb_v2_vfs_set_remove_file_callback;
 	result.duckdb_v2_vfs_set_stat_callback = duckdb_v2_vfs_set_stat_callback;
 	result.duckdb_v2_vfs_set_user_data = duckdb_v2_vfs_set_user_data;
-	result.duckdb_v2_vfs_open_request_get_flags = duckdb_v2_vfs_open_request_get_flags;
 	return result;
 }
 

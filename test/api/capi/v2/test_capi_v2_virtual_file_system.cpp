@@ -112,17 +112,12 @@ void MemDestroyHandle(void *data) {
 	delete handle;
 }
 
-void MemOpen(duckdb_v2_vfs_info_handle info, duckdb_v2_str path_view, duckdb_v2_vfs_open_request_handle open_info,
-             duckdb_v2_error_info_handle *err) {
+void MemOpen(duckdb_v2_vfs_info_handle info, duckdb_v2_str path_view, const DUCKDB_V2_FILE_FLAG *flags,
+             idx_t flag_count, duckdb_v2_error_info_handle *err) {
 	auto &fs = VfsOf(info, err);
 	auto path = Convert(path_view);
 
 	// Walk the complete flag list first: an open carrying a flag this file system does not know is refused.
-	const DUCKDB_V2_FILE_FLAG *flags = nullptr;
-	idx_t flag_count = 0;
-	if (duckdb_v2_vfs_open_request_get_flags(open_info, &flags, &flag_count, err) != DUCKDB_V2_ERROR_NONE) {
-		return;
-	}
 	fs.last_open_flags.assign(flags, flags + flag_count);
 	for (idx_t i = 0; i < flag_count; i++) {
 		if (flags[i] > DUCKDB_V2_FILE_FLAG_EXCLUSIVE_LOCK) {
@@ -142,11 +137,11 @@ void MemOpen(duckdb_v2_vfs_info_handle info, duckdb_v2_str path_view, duckdb_v2_
 	           exclusive_lock = has(DUCKDB_V2_FILE_FLAG_EXCLUSIVE_LOCK);
 
 	duckdb_v2_value_handle value = nullptr;
-	if (duckdb_v2_vfs_open_request_get_value(open_info, Convert("mem_hint"), &value, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_vfs_file_open_get_value(info, Convert("mem_hint"), &value, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	duckdb_v2_file_metadata_handle listed = nullptr;
-	duckdb_v2_vfs_open_request_get_metadata(open_info, &listed, err);
+	duckdb_v2_vfs_file_open_get_metadata(info, &listed, err);
 	idx_t listed_size = 0;
 	bool listed_size_known = false;
 	duckdb_v2_file_metadata_get_size(listed, &listed_size, &listed_size_known, err);
@@ -158,9 +153,9 @@ void MemOpen(duckdb_v2_vfs_info_handle info, duckdb_v2_str path_view, duckdb_v2_
 	handle->fs = &fs;
 	handle->path = path;
 	duckdb_v2_opaque data {handle, MemDestroyHandle, nullptr};
-	duckdb_v2_vfs_open_request_set_file_data(open_info, &data, err);
-	duckdb_v2_vfs_open_request_set_property(open_info, DUCKDB_V2_FILE_PROPERTY_IS_SEEKABLE, fs.seekable, err);
-	duckdb_v2_vfs_open_request_set_property(open_info, DUCKDB_V2_FILE_PROPERTY_IS_ON_DISK, fs.on_disk, err);
+	duckdb_v2_vfs_file_open_set_data(info, &data, err);
+	duckdb_v2_vfs_file_open_set_property(info, DUCKDB_V2_FILE_PROPERTY_IS_SEEKABLE, fs.seekable, err);
+	duckdb_v2_vfs_file_open_set_property(info, DUCKDB_V2_FILE_PROPERTY_IS_ON_DISK, fs.on_disk, err);
 
 	std::lock_guard<std::mutex> guard(fs.lock);
 	fs.last_open_path = path;
@@ -222,6 +217,12 @@ void MemReadAt(duckdb_v2_vfs_info_handle info, void *file, void *buffer, idx_t b
 	duckdb_v2_vfs_info_try_get_context(info, &context, err);
 	if (user_data != &fs || context) {
 		VfsFail(err, DUCKDB_V2_ERROR_IO_GENERAL, "mem: unexpected info in a file callback");
+		return;
+	}
+	// The open-only functions refuse the info of any other callback.
+	duckdb_v2_file_open_options_handle options = nullptr;
+	if (duckdb_v2_vfs_file_open_get_options(info, &options, nullptr) != DUCKDB_V2_ERROR_INPUT_INVALID) {
+		VfsFail(err, DUCKDB_V2_ERROR_IO_GENERAL, "mem: an open-only function accepted a read's info");
 		return;
 	}
 	std::lock_guard<std::mutex> guard(fs.lock);
@@ -676,7 +677,7 @@ TEST_CASE("V2 virtual file system: registration requires a name, routing and the
 	// Null arguments are reported, not dereferenced.
 	REQUIRE(duckdb_v2_vfs_create_with_connection(nullptr, &vfs, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_vfs_register(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_vfs_open_request_set_property(nullptr, DUCKDB_V2_FILE_PROPERTY_IS_ON_DISK, true, nullptr) ==
+	REQUIRE(duckdb_v2_vfs_file_open_set_property(nullptr, DUCKDB_V2_FILE_PROPERTY_IS_ON_DISK, true, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 }
 
@@ -1206,7 +1207,7 @@ TEST_CASE("V2 virtual file system: an open that attaches no file data fails", "[
 	// Reports success without attaching any state.
 	REQUIRE(duckdb_v2_vfs_set_file_open_callback(
 	            vfs,
-	            [](duckdb_v2_vfs_info_handle, duckdb_v2_str, duckdb_v2_vfs_open_request_handle,
+	            [](duckdb_v2_vfs_info_handle, duckdb_v2_str, const DUCKDB_V2_FILE_FLAG *, idx_t,
 	               duckdb_v2_error_info_handle *) {},
 	            nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_vfs_set_file_read_at_callback(vfs, MemReadAt, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -1291,12 +1292,12 @@ void OverlayDestroyFile(void *data) {
 	delete file_data;
 }
 
-void OverlayOpen(duckdb_v2_vfs_info_handle info, duckdb_v2_str path, duckdb_v2_vfs_open_request_handle open_info,
+void OverlayOpen(duckdb_v2_vfs_info_handle info, duckdb_v2_str path, const DUCKDB_V2_FILE_FLAG *, idx_t,
                  duckdb_v2_error_info_handle *err) {
 	auto &overlay = OverlayOf(info, err);
 	// Forward the request as received: same flags, same values, path with the overlay's prefix stripped.
 	duckdb_v2_file_open_options_handle options = nullptr;
-	if (duckdb_v2_vfs_open_request_get_options(open_info, &options, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_vfs_file_open_get_options(info, &options, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	duckdb_v2_file_handle file = nullptr;
@@ -1306,7 +1307,7 @@ void OverlayOpen(duckdb_v2_vfs_info_handle info, duckdb_v2_str path, duckdb_v2_v
 		return;
 	}
 	duckdb_v2_opaque data {new OverlayFileData {&overlay, file}, OverlayDestroyFile, nullptr};
-	duckdb_v2_vfs_open_request_set_file_data(open_info, &data, err);
+	duckdb_v2_vfs_file_open_set_data(info, &data, err);
 	overlay.opens++;
 }
 
