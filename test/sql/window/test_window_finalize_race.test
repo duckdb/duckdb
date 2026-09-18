@@ -1,0 +1,64 @@
+# name: test/sql/window/test_window_finalize_race.test
+# description: Window FINALIZE must wait for all SINK tasks to complete, not just for all rows to be sunk
+# group: [window]
+
+# When the window operator's input has empty chunks (e.g. from a FILTER that produced 0 rows
+# unioned with a non-empty stream), the hash group ends up with multiple blocks but only some
+# carry rows. Each block gets its own SINK task, and each SINK task is responsible for
+# initialising the per-thread_idx local state used by the FINALIZE task with the same thread_idx.
+#
+# The SINK -> FINALIZE transition was gated only on (sunk == count), where sunk counts rows.
+# The empty-block SINK task does not contribute rows, so the transition could fire as soon as
+# the row-bearing SINK task completed, before the empty-block task had even started. The
+# corresponding FINALIZE task then read a still-empty thread_states[thread_idx] and crashed
+# with "Attempted to access index 0 within vector of size 0".
+
+statement ok
+PRAGMA threads=2
+
+# Run the racing query many times in a single session. Before the fix this is highly likely
+# to fail (and once it does, the database is invalidated and every subsequent statement fails).
+loop i 0 200
+
+query II
+WITH t AS (SELECT 0 AS x),
+u AS (
+    SELECT * FROM t WHERE x >= 5000
+    UNION ALL
+    SELECT * FROM t
+)
+SELECT x, count() OVER () FROM u ORDER BY x DESC;
+----
+0	1
+
+endloop
+
+# Also exercise the original report shape (NOT EXISTS subquery + ORDER BY DESC + LIMIT)
+loop i 0 200
+
+query II
+WITH final_cols AS (
+    SELECT i AS x
+    FROM range(1) t(i)
+),
+final_people AS (
+    SELECT *
+    FROM final_cols
+    WHERE x >= 5000
+    UNION ALL
+    SELECT *
+    FROM final_cols
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM final_cols
+        WHERE x >= 5000
+    )
+)
+SELECT x, count() OVER () AS full_count
+FROM final_people
+ORDER BY x DESC
+LIMIT 5;
+----
+0	1
+
+endloop
