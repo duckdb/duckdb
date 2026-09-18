@@ -180,6 +180,44 @@ template void CompressedStringScanState::ScanToFlatVector<false>(Vector &result,
 template void CompressedStringScanState::ScanToFlatVector<true>(Vector &result, idx_t result_offset, idx_t start,
                                                                 idx_t scan_count);
 
+void CompressedStringScanState::Select(Vector &result, idx_t start, const SelectionVector &sel, idx_t sel_count) {
+	static constexpr idx_t GROUP_SIZE = BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+
+	auto result_data = FlatVector::Writer<string_t>(result, sel_count);
+
+	// A dictionary vector emitted by an earlier scan can still reference sel_vec, so unpack into a
+	// local buffer rather than reusing it.
+	sel_t group[GROUP_SIZE];
+
+	// Only unpack the bitpacking groups that actually contain a selected row, instead of every group
+	// spanned by the vector.
+	bool has_error = false;
+	idx_t unpacked_group = DConstants::INVALID_INDEX;
+	for (idx_t i = 0; i < sel_count; i++) {
+		idx_t index = start + sel.get_index(i);
+		idx_t group_start = index - (index % GROUP_SIZE);
+		if (group_start != unpacked_group) {
+			data_ptr_t src = &base_data[(group_start * current_width) / 8];
+			BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(group), src, GROUP_SIZE, current_width);
+			unpacked_group = group_start;
+		}
+		auto string_number = group[index - group_start];
+		const bool elem_error = string_number >= index_buffer_count;
+		string_number = elem_error ? 0 : string_number;
+		has_error |= elem_error;
+
+		const auto dict_offset = index_buffer_ptr[string_number];
+		const auto str_len = GetStringLength(string_number);
+		result_data.WriteStringRef(FetchStringFromDict(dict_offset, str_len));
+	}
+
+	if (has_error) {
+		throw DataCorruptionException(
+		    "Failed to scan dictionary string - dictionary index was out of range. Database file appears "
+		    "to be corrupted.");
+	}
+}
+
 void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset,
                                                        idx_t start, idx_t scan_count) {
 	D_ASSERT(scan_count == STANDARD_VECTOR_SIZE);
