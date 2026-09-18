@@ -118,7 +118,7 @@ string PartitionCopy(const string &source, const string &out, const string &colu
 	return "COPY " + source + " TO '" + out + "' (FORMAT parquet, PARTITION_BY (" + columns + "), OVERWRITE_OR_IGNORE)";
 }
 
-void RequireCaseCollision(duckdb::unique_ptr<MaterializedQueryResult> result) {
+void RequireCaseCollision(duckdb::unique_ptr<QueryResult> result) {
 	REQUIRE(result->HasError());
 	REQUIRE(StringUtil::Contains(result->GetError(), "only in case"));
 }
