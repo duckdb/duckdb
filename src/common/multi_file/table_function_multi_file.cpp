@@ -544,11 +544,16 @@ bool TableFunctionMultiFileWrapper::SupportsReadAhead(const MultiFileBindData &b
 		return false;
 	}
 	auto &data = bind_data.bind_data->Cast<TableFunctionMultiFileData>();
-	if (!data.options.schema_bind_data) {
+	auto file_bind_data = data.options.schema_bind_data;
+	if (!file_bind_data && !bind_data.union_readers.empty()) {
+		// the schema was combined from the files rather than taken from one of them - ask the first of them
+		file_bind_data = bind_data.union_readers[0]->Cast<TableFunctionUnionData>().bind_data;
+	}
+	if (!file_bind_data) {
 		// we do not have the bind of a file of this scan to ask
 		return false;
 	}
-	return function.supports_read_ahead(*data.options.schema_bind_data);
+	return function.supports_read_ahead(*file_bind_data);
 }
 
 void TableFunctionMultiFileWrapper::FinishReading(ClientContext &context, GlobalTableFunctionState &,
