@@ -919,6 +919,13 @@
         ]
     },
     {
+        "name": "fsync_mode",
+        "description": "How to synchronize database file changes to stable storage (STANDARD, NONE or FULL). NONE may cause database corruption after an operating system or hardware crash. FULL uses fullfsync on macOS.",
+        "type": "ENUM<FileSyncMode>",
+        "scope": "global",
+        "default_value": "STANDARD"
+    },
+    {
         "name": "geometry_minimum_shredding_size",
         "description": "Minimum size of a rowgroup to enable GEOMETRY shredding, or set to -1 to disable entirely. Defaults to 1/4th of a rowgroup",
         "type": "BIGINT",

@@ -231,7 +231,7 @@ functions:
         type: data_chunk
         indirection: 1
         kind: OUT
-        description: Receives an owned chunk iff *out_status is CHUNK; set to nullptr otherwise.
+        description: Receives an owned chunk if *out_status is CHUNK; set to nullptr otherwise.
       out_status:
         type: RESULT_STEP_STATUS
         indirection: 1

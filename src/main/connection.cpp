@@ -236,6 +236,13 @@ shared_ptr<Relation> Connection::TableFunction(const string &fname, const vector
 	return make_shared_ptr<TableFunctionRelation>(context, fname, values, named_parameters);
 }
 
+shared_ptr<Relation> Connection::TableFunction(const string &fname, const vector<Value> &values,
+                                               const named_parameter_map_t &named_parameters,
+                                               shared_ptr<TableFunctionInfo> bind_info) {
+	return make_shared_ptr<TableFunctionRelation>(context, fname, values, named_parameters, nullptr, true,
+	                                              std::move(bind_info));
+}
+
 shared_ptr<Relation> Connection::TableFunction(const string &fname, const vector<Value> &values) {
 	return make_shared_ptr<TableFunctionRelation>(context, fname, values);
 }

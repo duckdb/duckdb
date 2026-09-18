@@ -4,6 +4,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/buffered_data/batched_buffered_data.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/result_unit.hpp"
 #include "result_wait_helpers.hpp"
 #include "duckdb/main/query_result_stream.hpp"
 
@@ -73,7 +74,7 @@ TEST_CASE("A blocking fetch on a batched stream observes an interrupt with chunk
 	auto &stream = *result;
 	// Wait until at least one chunk is observably buffered, then cancel before fetching
 	Deadline deadline;
-	while (!stream.GetBufferedData().HasObservableChunk()) {
+	while (!stream.GetBufferedData().HasObservableUnit()) {
 		REQUIRE(!IsTerminal(stream.ExecuteTask()));
 		REQUIRE(!deadline.Passed());
 		std::this_thread::sleep_for(std::chrono::microseconds(100));
@@ -380,25 +381,29 @@ TEST_CASE("A parked read-ahead batch does not report the batched buffer waiting 
 	weak_ptr<InterruptDoneSignalState> weak_signal(signal);
 	InterruptState read_ahead(weak_signal);
 
+	auto chunk_unit = [&chunk]() {
+		return make_uniq<ChunkUnit>(BufferedData::CopyForBuffering(chunk));
+	};
+
 	idx_t appended = 0;
-	while (!buffered.AppendOrBlock(chunk, 1, read_ahead)) {
+	while (!buffered.AppendOrBlock(chunk_unit(), 1, read_ahead)) {
 		appended++;
 		REQUIRE(appended <= 4);
 	}
 	REQUIRE(appended == 3);
 	REQUIRE(buffered.HasBlockedSink());
-	REQUIRE(!buffered.HasObservableChunk());
+	REQUIRE(!buffered.HasObservableUnit());
 	// The park waits on the minimum batch, not on the consumer: reporting otherwise makes a consumer
 	// that waits for a task spin until the minimum batch delivers
 	REQUIRE(!buffered.WaitsOnConsumer());
 
-	// The minimum batch always gets its reserve, and its chunk is what the consumer pops
+	// The minimum batch always gets its reserve, and its unit is what the consumer pops
 	InterruptState minimum(weak_signal);
-	REQUIRE(!buffered.AppendOrBlock(chunk, 0, minimum));
-	REQUIRE(buffered.HasObservableChunk());
+	REQUIRE(!buffered.AppendOrBlock(chunk_unit(), 0, minimum));
+	REQUIRE(buffered.HasObservableUnit());
 	REQUIRE(buffered.WaitsOnConsumer());
 	REQUIRE(buffered.Scan());
-	REQUIRE(!buffered.HasObservableChunk());
+	REQUIRE(!buffered.HasObservableUnit());
 	REQUIRE(!buffered.WaitsOnConsumer());
 }
 
@@ -419,7 +424,7 @@ TEST_CASE("Poll on a draining stream reports READY exactly when a chunk is poppa
 		idx_t unparked_polls = 0;
 		while (true) {
 			// Nothing but this thread pops, so a chunk observed here is still there for the poll
-			const bool observable = buffered.HasObservableChunk();
+			const bool observable = buffered.HasObservableUnit();
 			const bool engine_waits = buffered.WaitsOnConsumer();
 			const auto polled = stream.Poll();
 			if (observable) {
@@ -429,7 +434,7 @@ TEST_CASE("Poll on a draining stream reports READY exactly when a chunk is poppa
 				}
 			}
 			if (polled == QueryResultState::READY) {
-				REQUIRE(buffered.HasObservableChunk());
+				REQUIRE(buffered.HasObservableUnit());
 			}
 			unique_ptr<DataChunk> chunk;
 			auto state = stream.TryFetch(chunk);
