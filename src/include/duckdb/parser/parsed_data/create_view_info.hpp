@@ -40,6 +40,8 @@ public:
 	vector<Identifier> names;
 	//! Comments on columns of the query. Note: vector can be empty when no comments are set
 	identifier_map_t<Value> column_comments_map;
+	//! Tags on columns of the query.
+	identifier_map_t<InsertionOrderPreservingMap<string>> column_tags_map;
 	//! The SelectStatement of the view
 	unique_ptr<SelectStatement> query;
 	//! Whether or not to bind the view on create

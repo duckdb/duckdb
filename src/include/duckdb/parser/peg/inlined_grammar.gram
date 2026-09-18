@@ -29,6 +29,7 @@ Statement <-
 	ExportStatement /
 	ImportStatement /
 	CommentStatement /
+	TagStatement /
 	DeallocateStatement /
 	TruncateStatement /
 	LoadStatement /
@@ -1958,6 +1959,16 @@ SetAssignment <- VariableAssign VariableList
 
 VariableAssign <- '=' / 'TO'
 VariableList <- List(Expression)
+
+TagStatement <- 'TAG' 'ON' TagOnType DottedIdentifier TagActionInfo
+TagOnType <- CommentTable / CommentSequence / CommentFunction / CommentMacroTable / CommentMacro / CommentView /
+             CommentIndex / CommentType / CommentColumn
+TagActionInfo <- TagSetAction / TagUnsetAction
+TagSetAction <- 'SET' TagAssignmentList
+TagUnsetAction <- 'UNSET' TagNameList
+TagAssignmentList <- '{' List(TagAssignment) '}'
+TagNameList <- '[' List(StringLiteral) ']'
+TagAssignment <- StringLiteral ':' StringLiteral
 
 TransactionStatement <- BeginTransaction / RollbackTransaction / CommitTransaction
 

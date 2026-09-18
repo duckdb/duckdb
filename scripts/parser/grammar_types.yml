@@ -66,6 +66,7 @@ SQLStatement:
     - CallStatement
     - CheckpointStatement
     - CommentStatement
+    - TagStatement
     - ConnectStatement
     - CopyStatement
     - CopyVariations
@@ -1275,6 +1276,7 @@ CatalogType:
   by_value: false
   rules:
     - CommentOnType
+    - TagOnType
     - CommentTable
     - CommentSequence
     - CommentFunction
@@ -1288,6 +1290,14 @@ CatalogType:
     - CommentColumn
     - TableOrView
     - MaterializedViewEntry
+
+TagActionInfo:
+  type: "TagActionInfo"
+  by_value: true
+  rules:
+    - TagActionInfo
+    - TagSetAction
+    - TagUnsetAction
 
 
 Value:
@@ -1606,6 +1616,16 @@ overrides:
   # common.gram
   ColIdType: "pair<Identifier, LogicalType>"
   ColIdTypeList: "child_list_t<LogicalType>"
+  # tag.gram
+  TagAssignment:
+    type: "pair<string, string>"
+    by_value: true
+  TagAssignmentList:
+    type: "vector<pair<string, string>>"
+    by_value: true
+  TagNameList:
+    type: "vector<string>"
+    by_value: true
   # create_index.gram
   RelOption:
     type: "pair<Identifier, unique_ptr<ParsedExpression>>"

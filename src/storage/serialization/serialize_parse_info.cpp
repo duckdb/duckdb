@@ -9,6 +9,7 @@
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
+#include "duckdb/parser/parsed_data/set_tags_info.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/parser/parsed_data/copy_database_info.hpp"
@@ -122,6 +123,9 @@ unique_ptr<ParseInfo> AlterInfo::Deserialize(Deserializer &deserializer) {
 		break;
 	case AlterType::SET_COMMENT:
 		result = SetCommentInfo::Deserialize(deserializer);
+		break;
+	case AlterType::SET_TAGS:
+		result = SetTagsInfo::Deserialize(deserializer);
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of AlterInfo!");
@@ -730,6 +734,25 @@ void SetTableOptionsInfo::Serialize(Serializer &serializer) const {
 unique_ptr<AlterTableInfo> SetTableOptionsInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SetTableOptionsInfo>(new SetTableOptionsInfo());
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(400, "table_options", result->table_options);
+	return std::move(result);
+}
+
+void SetTagsInfo::Serialize(Serializer &serializer) const {
+	AlterInfo::Serialize(serializer);
+	serializer.WriteProperty<CatalogType>(300, "entry_catalog_type", entry_catalog_type);
+	serializer.WritePropertyWithDefault<Identifier>(301, "column_name", column_name);
+	serializer.WriteProperty<TagAction>(302, "action", action);
+	serializer.WritePropertyWithDefault<InsertionOrderPreservingMap<string>>(303, "tags", tags);
+	serializer.WritePropertyWithDefault<vector<string>>(304, "tag_names", tag_names);
+}
+
+unique_ptr<AlterInfo> SetTagsInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<SetTagsInfo>(new SetTagsInfo());
+	deserializer.ReadProperty<CatalogType>(300, "entry_catalog_type", result->entry_catalog_type);
+	deserializer.ReadPropertyWithDefault<Identifier>(301, "column_name", result->column_name);
+	deserializer.ReadProperty<TagAction>(302, "action", result->action);
+	deserializer.ReadPropertyWithDefault<InsertionOrderPreservingMap<string>>(303, "tags", result->tags);
+	deserializer.ReadPropertyWithDefault<vector<string>>(304, "tag_names", result->tag_names);
 	return std::move(result);
 }
 
