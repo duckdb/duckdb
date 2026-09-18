@@ -17,6 +17,7 @@ add_library_unity(
   window_naive_aggregator.cpp
   window_rank_function.cpp
   window_rownumber_function.cpp
+  window_scalar_function.cpp
   window_segment_tree.cpp
   window_shared_expressions.cpp
   window_token_tree.cpp

@@ -1,14 +1,128 @@
 #include "duckdb/execution/operator/aggregate/physical_streaming_window.hpp"
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/main/client_config.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/window_function.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
+
+namespace {
+
+bool HasDegenerateFrameCase1(ClientContext &client, BoundWindowExpression &wexpr) {
+	const auto start_boundary = wexpr.WindowStart();
+	const auto end_boundary = wexpr.WindowEnd();
+	if (start_boundary == WindowBoundary::CURRENT_ROW_ROWS && end_boundary == WindowBoundary::CURRENT_ROW_ROWS) {
+		return true;
+	}
+
+	if (start_boundary != WindowBoundary::EXPR_PRECEDING_ROWS && end_boundary != WindowBoundary::EXPR_FOLLOWING_ROWS) {
+		return false;
+	}
+
+	auto &start_expr = wexpr.StartExpr();
+	if (!start_expr || !start_expr->IsFoldable()) {
+		return false;
+	}
+	const auto start_val = ExpressionExecutor::EvaluateScalar(client, *start_expr);
+	if (start_val.GetValue<int64_t>()) {
+		return false;
+	}
+
+	auto &end_expr = wexpr.EndExpr();
+	if (!end_expr || !end_expr->IsFoldable()) {
+		return false;
+	}
+	const auto end_val = ExpressionExecutor::EvaluateScalar(client, *end_expr);
+	if (end_val.GetValue<int64_t>()) {
+		return false;
+	}
+
+	return true;
+}
+
+bool HasDegenerateFrameCase2(BoundWindowExpression &wexpr) {
+	switch (wexpr.WindowStart()) {
+	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
+		break;
+	default:
+		return false;
+	}
+	switch (wexpr.WindowEnd()) {
+	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
+		break;
+	default:
+		return false;
+	}
+	return wexpr.WindowExclude() == WindowExcludeMode::TIES;
+}
+
+bool HasDegenerateFrameCase3(BoundWindowExpression &wexpr) {
+	switch (wexpr.WindowStart()) {
+	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
+		break;
+	default:
+		return false;
+	}
+	switch (wexpr.WindowEnd()) {
+	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
+		break;
+	default:
+		return false;
+	}
+
+	//	TODO: Model UCC for ordering
+	return false;
+}
+
+bool HasDegenerateFrameCase4(BoundWindowExpression &wexpr) {
+	//	TODO: Model UCC for partitioning
+	return false;
+}
+
+bool HasDegenerateFrame(ClientContext &client, BoundWindowExpression &wexpr) {
+	//	From https://www.vldb.org/pvldb/vol19/p3525-lindner.pdf §4 Frame Analysis
+	const bool case_iv = HasDegenerateFrameCase4(wexpr);
+	const bool case_i_iv = case_iv || HasDegenerateFrameCase1(client, wexpr) || HasDegenerateFrameCase2(wexpr) ||
+	                       HasDegenerateFrameCase3(wexpr);
+	if (!case_i_iv) {
+		return false;
+	}
+
+	//	Aggregates are simple
+	if (wexpr.AggregateFunction()) {
+		return true;
+	}
+
+	//	For window functions, we need to check their bounds needs
+	const BoundWindowFunction wfunc(*wexpr.WindowFunction());
+	if (!wfunc.HasBoundsCallback()) {
+		return false;
+	}
+
+	WindowBoundsSet bounds;
+	wfunc.GetBoundsCallback()(bounds, wexpr);
+
+	//	Partition-only functions can only use case iv
+	const auto part_bounds = bounds.count(WindowBounds::PARTITION_BEGIN) + bounds.count(WindowBounds::PARTITION_END);
+	if (part_bounds == bounds.size()) {
+		return case_iv;
+	}
+
+	//	Everything else can use cases i-iv
+	return case_i_iv;
+}
+
+}; // namespace
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 	D_ASSERT(op.children.size() == 1);
@@ -28,17 +142,20 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 	const auto input_width = types.size() - op.expressions.size();
 	types.resize(input_width);
 
-	// Identify streaming windows and partitioned windows
+	// Identify streaming windows, partitioned windows and degenerate frames (0,1)
 	using Columns = vector<column_t>;
 	const bool enable_optimizer = Settings::Get<EnableOptimizerSetting>(context);
 	vector<idx_t> blocking_windows;
 	vector<idx_t> streaming_windows;
 	vector<idx_t> partitioned_windows;
+	vector<idx_t> degenerate_frames;
 	vector<Columns> partitioned_columns;
 	for (idx_t expr_idx = 0; expr_idx < op.expressions.size(); expr_idx++) {
 		auto &wexpr = op.expressions[expr_idx]->Cast<BoundWindowExpression>();
 		Columns partition_columns;
-		if (enable_optimizer && PhysicalStreamingWindow::IsStreamingFunction(context, wexpr)) {
+		if (HasDegenerateFrame(context, wexpr)) {
+			degenerate_frames.emplace_back(expr_idx);
+		} else if (enable_optimizer && PhysicalStreamingWindow::IsStreamingFunction(context, wexpr)) {
 			streaming_windows.push_back(expr_idx);
 		} else if (!wexpr.Partitions().empty() &&
 		           HasSingleValuePartitions(context, wexpr.Partitions(), plan, partition_columns)) {
@@ -182,20 +299,25 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 	}
 
 	// Put everything back into place if it moved
-	if (!projection_map.empty()) {
-		vector<unique_ptr<Expression>> select_list(op.types.size());
-		// The inputs don't move
-		for (idx_t i = 0; i < input_width; ++i) {
-			select_list[i] = make_uniq<BoundReferenceExpression>(op.types[i], i);
-		}
-		// The outputs have been rearranged
-		for (const auto &p : projection_map) {
-			select_list[p.first] = make_uniq<BoundReferenceExpression>(op.types[p.first], p.second);
-		}
-		auto &proj = Make<PhysicalProjection>(op.types, std::move(select_list), op.estimated_cardinality);
-		proj.children.push_back(plan);
-		plan = proj;
+	vector<unique_ptr<Expression>> select_list(op.types.size());
+	// The inputs don't move
+	for (idx_t i = 0; i < input_width; ++i) {
+		select_list[i] = make_uniq<BoundReferenceExpression>(op.types[i], i);
 	}
+	// The outputs have been rearranged
+	for (const auto &p : projection_map) {
+		select_list[p.first] = make_uniq<BoundReferenceExpression>(op.types[p.first], p.second);
+	}
+	// Evaluate the degenerate functions as scalar window functions
+	FunctionBinder binder(context);
+	for (const auto &expr_idx : degenerate_frames) {
+		auto &wexpr = op.expressions[expr_idx]->Cast<BoundWindowExpression>();
+		select_list[input_width + expr_idx] = binder.BindScalarWindowFunction(wexpr);
+	}
+
+	auto &proj = Make<PhysicalProjection>(op.types, std::move(select_list), op.estimated_cardinality);
+	proj.children.push_back(plan);
+	plan = proj;
 
 	return plan;
 }
