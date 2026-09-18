@@ -134,20 +134,10 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        tmp_zip_dir="$(mktemp -d)"
-        archive_path="$(pwd)/static-libs-windows-amd64.zip"
-        cp \
-          src/include/duckdb.h \
-          src/include/duckdb_v2.h \
-          src/include/duckdb_extension.h \
-          src/include/duckdb_extension_v2.h \
-          "${tmp_zip_dir}/"
-        find libs -type f -exec cp {} "${tmp_zip_dir}/" \;
-        (cd "${tmp_zip_dir}" && "/c/Program Files/7-Zip/7z.exe" a -tzip "${archive_path}" ./*)
-        rm -rf "${tmp_zip_dir}"
         make cli-release-artifact ARTIFACT_SUFFIX=windows-amd64 CLI_BINARY=duckdb.exe
         make shared-libs-release-artifact ARTIFACT_SUFFIX=windows-amd64 SHARED_LIBRARIES="src/duckdb.dll src/duckdb.lib"
-        ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-windows-amd64.tar.gz duckdb-shared-libs-windows-amd64.tar.gz static-libs-windows-amd64.zip
+        make static-libs-release-artifact ARTIFACT_SUFFIX=windows-amd64 STATIC_LIBRARIES="libs/*"
+        ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-windows-amd64.tar.gz duckdb-shared-libs-windows-amd64.tar.gz duckdb-static-libs-windows-amd64.tar.gz
 
     - uses: actions/upload-artifact@v7
       with:
@@ -161,8 +151,8 @@ jobs:
 
     - uses: actions/upload-artifact@v7
       with:
-        name: duckdb-static-libs-windows-amd64
-        path: static-libs-windows-amd64.zip
+        path: duckdb-static-libs-windows-amd64.tar.gz
+        archive: false
 
  win-release-32:
     name: Windows (32 Bit)
@@ -280,20 +270,10 @@ jobs:
          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
        run: |
-         tmp_zip_dir="$(mktemp -d)"
-         archive_path="$(pwd)/static-libs-windows-arm64.zip"
-         cp \
-           src/include/duckdb.h \
-           src/include/duckdb_v2.h \
-           src/include/duckdb_extension.h \
-           src/include/duckdb_extension_v2.h \
-           "${tmp_zip_dir}/"
-         find libs -type f -exec cp {} "${tmp_zip_dir}/" \;
-         (cd "${tmp_zip_dir}" && "/c/Program Files/7-Zip/7z.exe" a -tzip "${archive_path}" ./*)
-         rm -rf "${tmp_zip_dir}"
          make cli-release-artifact ARTIFACT_SUFFIX=windows-arm64 CLI_BINARY=duckdb.exe
          make shared-libs-release-artifact ARTIFACT_SUFFIX=windows-arm64 SHARED_LIBRARIES="src/duckdb.dll src/duckdb.lib"
-         ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-windows-arm64.tar.gz duckdb-shared-libs-windows-arm64.tar.gz static-libs-windows-arm64.zip
+         make static-libs-release-artifact ARTIFACT_SUFFIX=windows-arm64 STATIC_LIBRARIES="libs/*"
+         ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-windows-arm64.tar.gz duckdb-shared-libs-windows-arm64.tar.gz duckdb-static-libs-windows-arm64.tar.gz
 
      - uses: actions/upload-artifact@v7
        with:
@@ -307,8 +287,8 @@ jobs:
 
      - uses: actions/upload-artifact@v7
        with:
-         name: duckdb-static-libs-windows-arm64
-         path: static-libs-windows-arm64.zip
+         path: duckdb-static-libs-windows-arm64.tar.gz
+         archive: false
 
  mingw:
      name: MinGW (64 Bit)
@@ -402,20 +382,10 @@ jobs:
            AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
            AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
          run: |
-           tmp_zip_dir="$(mktemp -d)"
-           archive_path="$(pwd)/static-libs-windows-mingw.zip"
-           cp \
-             src/include/duckdb.h \
-             src/include/duckdb_v2.h \
-             src/include/duckdb_extension.h \
-             src/include/duckdb_extension_v2.h \
-             "${tmp_zip_dir}/"
-           find build/release/libs -type f -exec cp {} "${tmp_zip_dir}/" \;
-           (cd "${tmp_zip_dir}" && "/c/Program Files/7-Zip/7z.exe" a -tzip "${archive_path}" ./*)
-           rm -rf "${tmp_zip_dir}"
-           ./scripts/upload-assets-to-staging.sh github_release static-libs-windows-mingw.zip
+           make static-libs-release-artifact ARTIFACT_SUFFIX=windows-mingw STATIC_LIBRARIES="build/release/libs/*"
+           ./scripts/upload-assets-to-staging.sh github_release duckdb-static-libs-windows-mingw.tar.gz
 
        - uses: actions/upload-artifact@v7
          with:
-           name: duckdb-static-libs-windows-mingw
-           path: static-libs-windows-mingw.zip
+           path: duckdb-static-libs-windows-mingw.tar.gz
+           archive: false

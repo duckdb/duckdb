@@ -79,7 +79,7 @@ jobs:
           build: python3 scripts/ci/retry.py -- make release
           bundle: make release-artifact
           upload-name: linux-release-build
-          vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+          vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
           save-cache: ${{ inputs.save_cache }}
 
       - name: Select base ref
@@ -124,7 +124,7 @@ jobs:
           build: python3 scripts/ci/retry.py -- make release
           bundle: make release-artifact
           upload-name: linux-base-build
-          vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+          vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
           save-cache: ${{ inputs.save_cache }}
 
   regression-bench:
@@ -142,6 +142,8 @@ jobs:
             benchmark: .github/regression/ingestion.csv
           - name: Micro
             benchmark: .github/regression/micro.csv
+          - name: Parser
+            benchmark: .github/regression/parser.csv
           - name: H2OAI
             benchmark: .github/regression/h2oai.csv
           - name: IMDB
@@ -191,19 +193,13 @@ jobs:
 
       - name: Run regression benchmark
         run: |
-          extra_args=(--benchmark-cache=clear)
-          if [[ "${{ matrix.benchmark }}" == ".github/regression/realnest.csv" ]]; then
-            extra_args=()
-          fi
-
           python scripts/regression/test_runner.py \
             --old build/base/release/benchmark/benchmark_runner \
             --new build/current/release/benchmark/benchmark_runner \
             --benchmarks "${{ matrix.benchmark }}" \
             --verbose \
             --early-stop \
-            --threads 2 \
-            "${extra_args[@]}"
+            --threads 2
 
   regression-bench-tpc:
     name: Bench ${{ matrix.name }}
@@ -267,7 +263,6 @@ jobs:
             --benchmarks ${{ matrix.benchmarks }} \
             --verbose \
             --early-stop \
-            --benchmark-cache=clear \
             --disable-timeout \
             --benchmark-argument sf=${{ matrix.sf }} \
             --threads ${{ matrix.threads }}
@@ -319,7 +314,7 @@ jobs:
 
       - name: Run regression benchmark
         run: |
-          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --early-stop --threads 2 --benchmark-cache=clear
+          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --early-stop --threads 2
 
   regression-test-storage:
     name: Storage Size Regression Test
@@ -399,9 +394,9 @@ jobs:
           rm -rf build/base/release
           tar -xzf build/base/release-artifact.tar.gz -C build/base
 
-      - name: Regression Test Extension binary size
+      - name: Regression Test binary size
         run: |
-          python scripts/regression_test_extension_size.py --old build/base/release/repository --new build/current/release/repository --expect json,parquet,tpch,tpcds
+          python scripts/regression_test_extension_size.py --old build/base/release --new build/current/release --expect cli,json,parquet,tpch,tpcds
 
   regression-test-plan-cost:
     name: Regression Test Join Order Plan Cost

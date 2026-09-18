@@ -72,8 +72,7 @@ inline void ListClusterUpdate(Vector inputs[], AggregateInputData &aggr_input_da
 	ListSegmentFunctions functions;
 	GetSegmentDataFunctions(functions, input.GetType());
 
-	for (idx_t run_idx = 0; run_idx < clustered.n_group_runs; run_idx++) {
-		auto &run = clustered.group_runs[run_idx];
+	for (auto &run : clustered.runs()) {
 		auto &state = *reinterpret_cast<ListAggState *>(run.state);
 		auto run_sel = run.sel;
 

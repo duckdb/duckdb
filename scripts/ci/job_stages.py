@@ -12,7 +12,8 @@ COMMON_JOBS = [
     "linux-relassert",
     "linux-relassert-tests",
     "tidy-check",
-    "extensions",
+    "extensions-build",
+    "extensions-deploy",
     "wasm-eh",
     "linux-release",
     "linux-release-tests",
@@ -48,7 +49,7 @@ MERGE_GROUP_JOBS = [
 
 RELEASE_JOBS = [
     "osx",
-    "staged-extension-install",
+    "extensions-install",
 ]
 
 SKIP_TESTS_JOBS = {

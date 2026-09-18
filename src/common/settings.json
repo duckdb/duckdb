@@ -270,8 +270,7 @@
         "name": "current_dialect",
         "description": "The SQL dialect used by the parser",
         "type": "VARCHAR",
-        "scope": "global",
-        "default_value": "duckdb",
+        "scope": "local",
         "on_callbacks": [
             "set",
             "reset"
@@ -438,6 +437,13 @@
         "struct": "ForceVariantShredding"
     },
     {
+        "name": "debug_local_file_system_delay_ms",
+        "description": "DEBUG SETTING: time to sleep before local file system open/read/write operations",
+        "type": "UBIGINT",
+        "scope": "global",
+        "default_value": "0"
+    },
+    {
         "name": "debug_order_verification",
         "description": "DEBUG SETTING: verify ORDER BY results by rewriting the ordering (NONE, CREATE_SORT_KEY or VARIANT)",
         "type": "ENUM<DebugOrderVerification>",
@@ -455,13 +461,6 @@
         "description": "DEBUG SETTING: skip checkpointing on commit",
         "type": "BOOLEAN",
         "default_scope": "global",
-        "default_value": "false"
-    },
-    {
-        "name": "debug_transformer_trampoline_style",
-        "description": "Use the experimental trampoline-style parser transformer",
-        "type": "BOOLEAN",
-        "default_scope": "local",
         "default_value": "false"
     },
     {
@@ -787,6 +786,16 @@
         "custom_implementation": true
     },
     {
+        "name": "error_on_division_by_zero",
+        "description": "Throw an error instead of returning NULL when dividing by zero.",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "true",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "errors_as_json",
         "description": "Output error messages as structured JSON instead of as a raw string",
         "type": "BOOLEAN",
@@ -916,13 +925,6 @@
         "scope": "global",
         "default_value": "30000",
         "struct": "GeometryMinimumShreddingSize"
-    },
-    {
-        "name": "heap_based_parser",
-        "description": "Use the heap-based PEG parser",
-        "type": "BOOLEAN",
-        "default_scope": "local",
-        "default_value": "true"
     },
     {
         "name": "home_directory",
@@ -1154,16 +1156,6 @@
         "default_value": "5"
     },
     {
-        "name": "null_on_division_by_zero",
-        "description": "Return NULL instead of throwing an error when dividing by zero.",
-        "type": "BOOLEAN",
-        "default_scope": "local",
-        "default_value": "false",
-        "on_callbacks": [
-            "set"
-        ]
-    },
-    {
         "name": "old_implicit_casting",
         "description": "DEPRECATED: Compatibility setting for the pre-0.10 implicit VARCHAR casting behavior; will be removed",
         "type": "BOOLEAN",
@@ -1326,7 +1318,7 @@
     },
     {
         "name": "read_ahead_depth",
-        "description": "Number of scan jobs the multi-file reader prefetches ahead of decoding. -1 = automatic (based on thread count), 0 = disabled.",
+        "description": "Number of scan jobs prefetched ahead of decoding. -1 = automatic (backlog bounded by a memory budget), 0 = disabled.",
         "type": "BIGINT",
         "default_scope": "global",
         "default_value": "-1",

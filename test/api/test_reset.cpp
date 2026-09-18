@@ -4,7 +4,7 @@
 #include "duckdb/common/enums/dialect_compatibility_mode.hpp"
 #include "duckdb/common/enums/table_function_identifier_conversion.hpp"
 #include "duckdb/common/enums/show_behavior.hpp"
-#include "duckdb/parser/dialect_extension.hpp"
+#include "duckdb/parser/peg/dialect_extension.hpp"
 #include "test_helpers.hpp"
 
 #include <iostream>
@@ -125,7 +125,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"enable_progress_bar_print", {false}},
 	    {"scalar_subquery_error_on_multiple_rows", {false}},
 	    {"ieee_floating_point_ops", {false}},
-	    {"null_on_division_by_zero", {true}},
+	    {"error_on_division_by_zero", {false}},
 	    {"progress_bar_time", {0}},
 	    {"regex_match_operator_semantics", {"full"}},
 	    {"temp_directory", {"tmp"}},
@@ -145,7 +145,6 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"storage_block_prefetch", {"always_prefetch"}},
 	    {"operator_memory_limit", {"4.0 GiB"}},
 	    {"pin_threads", {"off"}},
-	    {"current_dialect", {"test"}},
 	    {"current_transaction_invalidation_policy", {"SYNTACTIC_ERRORS_DO_NOT_INVALIDATE"}},
 	    {"default_transaction_invalidation_policy", {"SYNTACTIC_ERRORS_DO_NOT_INVALIDATE"}},
 	    {"checkpoint_on_detach", {"ENABLED"}},
@@ -186,6 +185,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "allowed_directories",
 	    "allowed_paths",
 	    "schema",
+	    "current_dialect",
 	    "search_path",
 	    "debug_window_mode",
 	    "experimental_parallel_csv",
@@ -228,8 +228,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "tracked_metrics",
 	    "debug_verification_mode",
 	    "standard_vector_size",
-	    "warnings_as_errors", // requires logging to be enabled
-	    "heap_based_parser",
+	    "warnings_as_errors",      // requires logging to be enabled
 	    "block_allocator_memory"}; // cant reduce
 	return excluded_options.count(name) == 1;
 }
@@ -263,7 +262,6 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 	// Create a connection
 	DBConfig config;
 	config.options.load_extensions = false;
-	DialectExtension::Register(config, DialectExtension("test"));
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 	con.Query("BEGIN TRANSACTION");

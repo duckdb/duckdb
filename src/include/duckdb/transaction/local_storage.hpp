@@ -174,8 +174,8 @@ public:
 	void Scan(CollectionScanState &state, const vector<StorageIndex> &column_ids, DataChunk &result);
 
 	void InitializeParallelScan(DataTable &table, ParallelCollectionScanState &state);
-	bool NextParallelScan(ClientContext &context, DataTable &table, ParallelCollectionScanState &state,
-	                      CollectionScanState &scan_state);
+	optional_idx NextParallelScan(ClientContext &context, DataTable &table, ParallelCollectionScanState &state,
+	                              CollectionScanState &scan_state, bool initialize_columns = true);
 
 	//! The local row ranges appended to under the given statement number
 	vector<AppendedRows> GetAppendedRows(transaction_t query_number);
@@ -239,6 +239,9 @@ public:
 
 	ClientContext &GetClientContext() const {
 		return context;
+	}
+	DuckTransaction &GetTransaction() const {
+		return transaction;
 	}
 
 	void FlushBulkAppendBlocksAndSync(AttachedDatabase &db);

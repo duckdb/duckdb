@@ -13,6 +13,8 @@
 
 namespace duckdb {
 
+class BufferedData;
+
 class ResultSinkGlobalState;
 class ResultSinkLocalState;
 
@@ -38,7 +40,8 @@ public:
 
 public:
 	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) const override;
-	bool HasBlockedResultProducer(GlobalSinkState &state) const override;
+	//! Hand the sink the buffer created at submission. Called once, before execution starts
+	void SetResultBuffer(shared_ptr<BufferedData> buffer);
 
 	// Sink interface
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
@@ -68,8 +71,11 @@ private:
 	SinkResultType SinkRetained(ExecutionContext &context, ResultSinkLocalState &lstate, DataChunk &chunk) const;
 	SinkCombineResultType CombineDraining(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
 	SinkCombineResultType CombineRetained(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
-	unique_ptr<QueryResult> GetStreamResult(ResultSinkGlobalState &gstate) const;
 	unique_ptr<QueryResult> GetMaterializedResult(ResultSinkGlobalState &gstate) const;
+
+private:
+	//! The buffer created at submission, which also holds the retention decision
+	shared_ptr<BufferedData> result_buffer;
 };
 
 } // namespace duckdb

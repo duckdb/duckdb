@@ -450,17 +450,11 @@ const vector<ParquetMetadataCacheEntry> &ParquetReadBindData::TryLoadCaches(cons
 			return caches;
 		}
 		// check if the file has any deletes
+		// if it has, skip emitting partition stats
+		// FIXME: we could emit partition stats but set count to `COUNT_APPROXIMATE` instead of `COUNT_EXACT`
 		bool has_deletes = false;
 		if (file.extended_info) {
-			auto entry = file.extended_info->options.find("has_deletes");
-			if (entry != file.extended_info->options.end()) {
-				if (BooleanValue::Get(entry->second)) {
-					// the file has deletes - skip emitting partition stats
-					// FIXME: we could emit partition stats but set count to `COUNT_APPROXIMATE` instead of
-					// `COUNT_EXACT`
-					has_deletes = true;
-				}
-			}
+			file.extended_info->TryGetOption("has_deletes", has_deletes);
 		}
 
 		// check if the cache is valid based ONLY on the OpenFileInfo (do not do any file system requests here)
@@ -756,14 +750,13 @@ unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(ClientContext &c
 			estimated_file_row_count = 0;
 			break;
 		}
-		auto entry = file.extended_info->options.find("file_size");
-		if (entry == file.extended_info->options.end()) {
+		idx_t current_file_size;
+		if (!file.extended_info->TryGetOption("file_size", current_file_size)) {
 			// no file size available
 			estimated_file_row_count = 0;
 			break;
 		}
 		// we have the file size - estimate row count based on estimated bytes per row
-		auto current_file_size = entry->second.GetValue<uint64_t>();
 		files_with_sizes++;
 		idx_t rows_in_this_file = MaxValue<idx_t>(current_file_size / estimated_bytes_per_row, 1ULL);
 		estimated_file_row_count += rows_in_this_file;

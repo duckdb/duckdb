@@ -384,10 +384,10 @@ void FirstFunctionClusterUpdate(Vector inputs[], AggregateInputData &aggregate_i
 	inputs[0].ToUnifiedFormat(idata);
 	auto input_data = UnifiedVectorFormat::GetData<T>(idata);
 	AggregateUnaryInput unary_input(aggregate_input_data, idata.validity);
-	for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-		auto &state = *reinterpret_cast<FirstState<T> *>(clustered.group_runs[r].state);
-		const auto *run_sel = clustered.group_runs[r].sel;
-		const auto run_count = clustered.group_runs[r].count;
+	for (auto &run : clustered.runs()) {
+		auto &state = *reinterpret_cast<FirstState<T> *>(run.state);
+		const auto *run_sel = run.sel;
+		const auto run_count = run.count;
 		FirstFunction<LAST, SKIP_NULLS>::template ClusteredOp<T, FirstState<T>, FirstFunction<LAST, SKIP_NULLS>>(
 		    state, input_data, unary_input, run_sel, *idata.sel, idata.validity, 0, run_count);
 	}
@@ -520,12 +520,16 @@ unique_ptr<FunctionData> BindFirst(BindAggregateFunctionInput &input) {
 
 template <bool LAST, bool SKIP_NULLS>
 void AddFirstOperator(AggregateFunctionSet &set) {
-	set.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-	                                  BindDecimalFirst<LAST, SKIP_NULLS>));
-	set.AddFunction(AggregateFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                                  FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-	                                  BindFirst<LAST, SKIP_NULLS>));
+	AggregateFunction decimal_fun({}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                              FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+	                              BindDecimalFirst<LAST, SKIP_NULLS>);
+	decimal_fun.GetSignature().AddParameter("arg", LogicalTypeId::DECIMAL);
+	set.AddFunction(decimal_fun);
+
+	AggregateFunction any_fun({}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                          FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, BindFirst<LAST, SKIP_NULLS>);
+	any_fun.GetSignature().AddParameter("arg", LogicalTypeId::ANY);
+	set.AddFunction(any_fun);
 }
 
 } // namespace

@@ -56,7 +56,7 @@ public:
 		}
 	}
 
-	bool MergeFunctionSet(FunctionSet<T> new_functions, bool override = false) {
+	bool MergeFunctionSet(const FunctionSet<T> &new_functions, bool override = false) {
 		D_ASSERT(!new_functions.functions.empty());
 		for (auto &new_func : new_functions.functions) {
 			bool overwritten = false;

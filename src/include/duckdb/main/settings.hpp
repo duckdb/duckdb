@@ -546,10 +546,11 @@ struct CurrentDialectSetting {
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
-	static constexpr const char *DefaultValue = "duckdb";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-	static void OnSet(SettingCallbackInfo &info, Value &input);
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static bool OnLocalSet(ClientContext &context, const Value &input);
+	static bool OnLocalReset(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct CurrentTransactionInvalidationPolicySetting {
@@ -780,6 +781,19 @@ struct ForceVariantShredding {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DebugLocalFileSystemDelayMsSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "debug_local_file_system_delay_ms";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: time to sleep before local file system open/read/write operations";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "0";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugOrderVerificationSetting {
 	using RETURN_TYPE = DebugOrderVerification;
 	static constexpr const char *Name = "debug_order_verification";
@@ -816,18 +830,6 @@ struct DebugSkipCheckpointOnCommitSetting {
 	static constexpr bool IsDeprecated = false;
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-};
-
-struct DebugTransformerTrampolineStyleSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "debug_transformer_trampoline_style";
-	static constexpr const char *Description = "Use the experimental trampoline-style parser transformer";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr bool IsDebug = false;
-	static constexpr bool IsDeprecated = false;
-	static constexpr const char *DefaultValue = "false";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
@@ -1348,6 +1350,19 @@ struct EnabledLogTypes {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ErrorOnDivisionByZeroSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "error_on_division_by_zero";
+	static constexpr const char *Description = "Throw an error instead of returning NULL when dividing by zero.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct ErrorsAsJSONSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "errors_as_json";
@@ -1532,18 +1547,6 @@ struct GeometryMinimumShreddingSize {
 	static constexpr bool IsDeprecated = false;
 	static constexpr const char *DefaultValue = "30000";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-};
-
-struct HeapBasedParserSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "heap_based_parser";
-	static constexpr const char *Description = "Use the heap-based PEG parser";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr bool IsDebug = false;
-	static constexpr bool IsDeprecated = false;
-	static constexpr const char *DefaultValue = "true";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
@@ -1913,19 +1916,6 @@ struct NestedLoopJoinThresholdSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
-struct NullOnDivisionByZeroSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "null_on_division_by_zero";
-	static constexpr const char *Description = "Return NULL instead of throwing an error when dividing by zero.";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr bool IsDebug = false;
-	static constexpr bool IsDeprecated = false;
-	static constexpr const char *DefaultValue = "false";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-	static void OnSet(SettingCallbackInfo &info, Value &input);
-};
-
 struct OldImplicitCastingSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "old_implicit_casting";
@@ -2189,8 +2179,8 @@ struct ProgressBarTimeSetting {
 struct ReadAheadDepthSetting {
 	using RETURN_TYPE = int64_t;
 	static constexpr const char *Name = "read_ahead_depth";
-	static constexpr const char *Description = "Number of scan jobs the multi-file reader prefetches ahead of "
-	                                           "decoding. -1 = automatic (based on thread count), 0 = disabled.";
+	static constexpr const char *Description = "Number of scan jobs prefetched ahead of decoding. -1 = automatic "
+	                                           "(backlog bounded by a memory budget), 0 = disabled.";
 	static constexpr const char *InputType = "BIGINT";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;

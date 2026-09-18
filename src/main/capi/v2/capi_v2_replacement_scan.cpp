@@ -68,12 +68,12 @@ public:
 		case CV2ReplacementScanClaim::FUNCTION: {
 			vector<unique_ptr<ParsedExpression>> children;
 			for (auto &argument : out_arguments) {
-				children.push_back(make_uniq<ConstantExpression>(std::move(argument)));
+				children.push_back(ConstantExpression::FromValue(argument));
 			}
 			for (auto &named_argument : out_named_arguments) {
 				// A named argument is an argument whose alias is the parameter name: the binder recovers the name
 				// from the expression alias, and drops FunctionArgument::name outright.
-				auto child = make_uniq<ConstantExpression>(std::move(named_argument.second));
+				auto child = ConstantExpression::FromValue(named_argument.second);
 				child->SetAlias(named_argument.first);
 				children.push_back(std::move(child));
 			}
@@ -209,7 +209,9 @@ DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create_with_database(duckdb_v2_databa
 	DUCKDB_CHECK_ARG(out_scan);
 	*out_scan = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto &db = *Convert(database)->database->instance;
+		auto &db_wrapper = *Convert(database);
+		duckdb::lock_guard<duckdb::mutex> guard(db_wrapper.lock);
+		auto &db = *db_wrapper.GetDatabase().instance;
 		auto scan = duckdb::make_uniq<CV2DatabaseReplacementScan>(db);
 		*out_scan = Convert(scan.release());
 	});

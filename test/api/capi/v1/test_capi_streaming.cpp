@@ -66,7 +66,7 @@ TEST_CASE("Test other methods on streaming results in C API", "[capi]") {
 		}
 	}
 
-	// Once we've done this, the StreamQueryResult is made
+	// Once we've done this, the stream is opened
 	result = pending.Execute();
 	REQUIRE(result);
 	REQUIRE(!result->HasError());
