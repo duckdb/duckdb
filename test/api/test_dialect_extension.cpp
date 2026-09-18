@@ -67,12 +67,12 @@ TEST_CASE("Register and select a dialect extension", "[api][dialect_extension]")
 	auto dialects = con.Query("SELECT dialect_name FROM duckdb_dialects() ORDER BY dialect_name");
 	REQUIRE_NO_FAIL(*dialects);
 	REQUIRE(dialects->RowCount() == 1);
-	REQUIRE(dialects->GetValue(0, 0) == Value("test"));
+	REQUIRE(dialects->Collection().GetValue(0, 0) == Value("test"));
 
 	REQUIRE_NO_FAIL(con.Query("SET current_dialect = 'test'"));
 	auto current_dialect = con.Query("SELECT current_setting('current_dialect')");
 	REQUIRE_NO_FAIL(*current_dialect);
-	REQUIRE(current_dialect->GetValue(0, 0) == Value("test"));
+	REQUIRE(current_dialect->Collection().GetValue(0, 0) == Value("test"));
 }
 
 TEST_CASE("Dialect tokenizer hooks are opt-in", "[api][dialect_extension]") {

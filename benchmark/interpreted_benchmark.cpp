@@ -784,9 +784,10 @@ string InterpretedBenchmark::VerifyInternal(BenchmarkState *state_p, const Bench
 		                          (int64_t)result_values.size(), (int64_t)result.RowCount(), result.ToString());
 	}
 	// compare values
+	auto rows = result.Collection().GetRows();
 	for (idx_t r = 0; r < result_values.size(); r++) {
 		for (idx_t c = 0; c < query.column_count; c++) {
-			auto value = result.GetValue(c, r);
+			auto value = rows.GetValue(c, r);
 			if (result_values[r][c] == "NULL" && value.IsNull()) {
 				continue;
 			}
