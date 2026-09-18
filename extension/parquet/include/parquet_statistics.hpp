@@ -74,8 +74,9 @@ struct ParquetStatisticsUtils {
 	                           ParquetIntervalBloomFilterVersion interval_bloom_filter_version);
 
 	static bool BloomFilterExcludes(const TableFilter &filter, const duckdb_parquet::ColumnMetaData &column_meta_data,
-	                                duckdb_apache::thrift::protocol::TProtocol &file_proto, Allocator &allocator,
-	                                const ParquetColumnSchema &schema, ParquetBloomFilterHashStrategy hash_strategy);
+	                                duckdb_apache::thrift::protocol::TProtocol &file_proto,
+	                                BufferManager &buffer_manager, const ParquetColumnSchema &schema,
+	                                ParquetBloomFilterHashStrategy hash_strategy);
 
 	static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type, const ParquetColumnSchema &schema_ele,
 	                                                     const duckdb_parquet::Statistics &parquet_stats);
