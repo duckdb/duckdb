@@ -1,5 +1,23 @@
-add_library_unity(test_sql_export OBJECT bound_expression_sql_export.cpp
-                  logical_plan_sql_export.cpp sql_export_verification.cpp)
+add_library_unity(
+  test_sql_export
+  OBJECT
+  bound_expression_sql_export_test_helpers.cpp
+  logical_plan_sql_export_test_helpers.cpp
+  sql_export_expression_aggregates.cpp
+  sql_export_expression_functions.cpp
+  sql_export_expression_literals.cpp
+  sql_export_expression_structure.cpp
+  sql_export_plan_chunks.cpp
+  sql_export_plan_cte_limit.cpp
+  sql_export_plan_extensions.cpp
+  sql_export_plan_joins.cpp
+  sql_export_plan_pivot.cpp
+  sql_export_plan_relations.cpp
+  sql_export_plan_sources.cpp
+  sql_export_plan_values.cpp
+  sql_export_verification_admission.cpp
+  sql_export_verification_lifecycle.cpp
+  sql_export_verification_test_helpers.cpp)
 
 set(UNITTEST_OBJECT_FILES
     ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_export>
