@@ -72,3 +72,25 @@ WHEN MATCHED THEN DELETE
 RETURNING *, merge_action;
 ----
 30	300	DELETE
+
+# NOT MATCHED BY SOURCE UPDATE must return the full (new) row, not zeroed values
+statement ok
+CREATE TABLE arch(item_id int, balance int, is_current boolean);
+
+statement ok
+INSERT INTO arch VALUES (1, 100, true), (2, 200, true), (3, 300, true);
+
+statement ok
+CREATE TABLE live(item_id int);
+
+statement ok
+INSERT INTO live VALUES (1);
+
+query IIII rowsort
+MERGE INTO arch USING live ON arch.item_id = live.item_id
+WHEN NOT MATCHED BY SOURCE AND arch.is_current = true
+THEN UPDATE SET is_current = false
+RETURNING merge_action, *;
+----
+UPDATE	2	200	false
+UPDATE	3	300	false
