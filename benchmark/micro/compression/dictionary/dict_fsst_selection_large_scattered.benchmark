@@ -1,6 +1,5 @@
 # name: benchmark/micro/compression/dictionary/dict_fsst_selection_large_scattered.benchmark
-# description: Storing large scattered duplicates with automatic compression selection, which has to weigh
-#              the dictionary being rebuilt for every block
+# description: Storing large scattered duplicates, letting the compression selection weigh the per block dictionary
 # group: [dictionary]
 
 name Dictionary Compression Write
