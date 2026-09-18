@@ -1,0 +1,14 @@
+# name: test/sql/copy/csv/test_gzip_short_refill.test
+# description: Read GZIP files whose bytes after the footer are too few to hold another member header
+# group: [csv]
+
+query I
+SELECT count(*) FROM read_csv('{DATA_DIR}/csv/gzip_short_trailer_buffer_end.csv.gz', auto_detect=false, columns={'a':'VARCHAR'}, header=false)
+----
+1
+
+query II
+SELECT a, b FROM '{DATA_DIR}/csv/gzip_short_trailer.csv.gz'
+----
+1	2
+3	4

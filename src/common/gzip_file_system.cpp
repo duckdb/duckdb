@@ -164,7 +164,7 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 	// Handling for the concatenated files
 	if (sd.refresh) {
 		auto available = static_cast<uint32_t>(sd.in_buff_end - sd.in_buff_start);
-		if (available <= GZIP_FOOTER_SIZE) {
+		if (available < static_cast<uint32_t>(GZIP_FOOTER_SIZE) + GZIP_HEADER_MINSIZE) {
 			// Only footer is available so we just close and return finished
 			Close();
 			return true;
