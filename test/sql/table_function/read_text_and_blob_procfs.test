@@ -1,0 +1,29 @@
+# name: test/sql/table_function/read_text_and_blob_procfs.test
+# description: Test reading procfs files with a reported size of zero
+# group: [table_function]
+
+# Platforms without procfs return zero rows and skip the content check
+query I
+SELECT count(*) = 0 OR bool_and(size = 0 AND length(content) > 0)
+FROM read_text('/proc/self/status');
+----
+true
+
+query I
+SELECT count(*) = 0 OR bool_and(size = 0 AND octet_length(content) > 0)
+FROM read_blob('/proc/self/status');
+----
+true
+
+# A genuinely empty regular file should remain empty
+query II
+SELECT size, length(content)
+FROM read_text('{DATA_DIR}/csv/test/empty.csv');
+----
+0	0
+
+query II
+SELECT size, octet_length(content)
+FROM read_blob('{DATA_DIR}/csv/test/empty.csv');
+----
+0	0
