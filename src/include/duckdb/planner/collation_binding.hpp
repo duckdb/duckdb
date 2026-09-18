@@ -41,6 +41,10 @@ public:
 	DUCKDB_API bool PushCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type,
 	                              CollationType type) const;
 
+	//! Whether two types carry the same collation. Type equality deliberately ignores collations, so this is the
+	//! way to tell a collated type apart from an otherwise identical uncollated one.
+	DUCKDB_API static bool SameCollation(const LogicalType &lhs, const LogicalType &rhs);
+
 private:
 	vector<CollationCallback> collations;
 };
