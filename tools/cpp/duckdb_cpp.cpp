@@ -2118,9 +2118,21 @@ auto Vector::CheckWriteRange(idx_t start, idx_t count) const -> void {
 }
 
 auto Vector::AssignString(idx_t index, std::string_view data) -> void {
-	CheckWriteRange(index, 1);
+	duckdb_v2_logical_type_handle type = nullptr;
+	CheckedAPICall(duckdb_v2_vector_get_logical_type, handle(), &type);
+	auto logical_type = detail::Factory::Make<LogicalType>(type);
+	if (logical_type.GetTypeId() != LogicalTypeId::VARCHAR) {
+		AssignStringUnsafe(index, data);
+		return;
+	}
 	auto heap = GetHeap();
-	GetDataMutable<blob_t>()[index] = heap.AddString(data);
+	SetString(index, heap.AddString(data));
+}
+
+auto Vector::AssignStringUnsafe(idx_t index, std::string_view data) -> void {
+	auto heap = GetHeap();
+	auto bytes = heap.AddBlob(data);
+	SetString(index, varchar_t(bytes.data(), bytes.size()));
 }
 
 auto Vector::GetHeap() -> Arena {
@@ -2132,6 +2144,10 @@ auto Vector::GetHeap() -> Arena {
 auto Vector::SetString(idx_t index, varchar_t value) -> void {
 	CheckWriteRange(index, 1);
 	GetDataMutable<varchar_t>()[index] = value;
+}
+
+void ValidateUTF8(std::string_view text) {
+	CheckedAPICall(duckdb_v2_validate_utf8, ToStr(text));
 }
 
 //----------------------------------------------------------------------------------------------------------------------

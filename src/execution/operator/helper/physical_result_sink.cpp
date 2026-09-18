@@ -9,6 +9,7 @@
 #include "duckdb/main/buffered_data/simple_buffered_data.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/main/result_unit.hpp"
 
 namespace duckdb {
 
@@ -37,7 +38,7 @@ public:
 class ResultSinkLocalState : public LocalSinkState {
 public:
 	//! Set when a park deposited the chunk, so the re-delivery is not appended again. Parks deposit
-	//! so that a parked producer always implies a poppable chunk
+	//! so that a parked producer always implies a poppable unit
 	bool chunk_deposited = false;
 	//! The batch this producer is currently sinking
 	idx_t current_batch = 0;
@@ -112,6 +113,11 @@ SinkResultType PhysicalResultSink::SinkRetained(ExecutionContext &context, Resul
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
+static unique_ptr<ResultUnit> FinishChunkUnit(DataChunk &chunk) {
+	// Built outside the buffer's lock, so parallel producers copy concurrently
+	return make_uniq<ChunkUnit>(BufferedData::CopyForBuffering(chunk));
+}
+
 SinkResultType PhysicalResultSink::SinkDraining(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
                                                 DataChunk &chunk, OperatorSinkInput &input) const {
 	if (lstate.chunk_deposited) {
@@ -124,14 +130,14 @@ SinkResultType PhysicalResultSink::SinkDraining(ResultSinkGlobalState &gstate, R
 		lstate.current_batch = batch;
 		auto &buffered_data = gstate.buffered_data->Cast<BatchedBufferedData>();
 		buffered_data.UpdateMinBatchIndex(min_batch_index);
-		if (buffered_data.AppendOrBlock(chunk, batch, input.interrupt_state)) {
+		if (buffered_data.AppendOrBlock(FinishChunkUnit(chunk), batch, input.interrupt_state)) {
 			lstate.chunk_deposited = true;
 			return SinkResultType::BLOCKED;
 		}
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 	auto &buffered_data = gstate.buffered_data->Cast<SimpleBufferedData>();
-	if (buffered_data.AppendOrBlock(chunk, input.interrupt_state)) {
+	if (buffered_data.AppendOrBlock(FinishChunkUnit(chunk), input.interrupt_state)) {
 		lstate.chunk_deposited = true;
 		return SinkResultType::BLOCKED;
 	}

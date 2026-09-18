@@ -403,6 +403,9 @@ functions:
       Any other representation returns ERROR_INPUT_INVALID. The pointer is
       valid until the owning chunk is destroyed, and the vector's storage shape
       must not change — through a flatten, say — while it is in use.
+
+      When writing VARCHAR values, the caller must ensure that the bytes
+      contain valid UTF-8.
     role: getter
     belongs_to: vector
     parameters:
@@ -877,6 +880,28 @@ functions:
         indirection: 1
         kind: OUT
         description: Receives the storage size in bytes — written on success and on ERROR_INPUT_OBJECT_SIZE.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  validate_utf8:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-17" ]
+    description: |
+      Validates all text.len bytes as UTF-8, including bytes after embedded NUL characters.
+
+      Returns ERROR_INPUT_INVALID if either:
+      - text.ptr is NULL and text.len is nonzero.
+      - The input contains malformed UTF-8.
+
+      A NULL pointer with zero length is valid.
+    parameters:
+      text:
+        type: str
+        description: The bytes to validate.
       err:
         type: error_info
         indirection: 1
