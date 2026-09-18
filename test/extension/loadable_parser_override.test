@@ -64,3 +64,55 @@ query I
 SELECT 1;
 ----
 1
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE sort_override(i BIGINT, s VARCHAR, m mood, st STRUCT(a INTEGER, b VARCHAR), l INTEGER[]);
+
+statement ok
+INSERT INTO sort_override VALUES
+	(2, 'b', 'happy', {'a': 2, 'b': 'y'}, [2, 1]),
+	(1, 'c', 'sad', {'a': 1, 'b': 'z'}, [3]),
+	(3, NULL, 'ok', {'a': 3, 'b': 'x'}, NULL),
+	(1, 'a', NULL, NULL, [1, 2]);
+
+foreach override_mode strict fallback default
+
+statement ok
+set allow_parser_override_extension={override_mode};
+
+query IT
+SELECT i, s FROM sort_override ORDER BY i, s DESC NULLS FIRST;
+----
+1	c
+1	a
+2	b
+3	NULL
+
+query T
+SELECT m FROM sort_override ORDER BY m DESC NULLS LAST;
+----
+happy
+ok
+sad
+NULL
+
+query I
+SELECT i FROM sort_override ORDER BY st NULLS FIRST, l;
+----
+1
+1
+2
+3
+
+query I
+SELECT i FROM sort_override ORDER BY l NULLS LAST, i;
+----
+1
+2
+1
+3
+
+endloop

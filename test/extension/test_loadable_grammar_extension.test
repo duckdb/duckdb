@@ -50,3 +50,42 @@ FROM produce
   |> SELECT item, sales, doubled_sales;
 ----
 cashews	30	60
+
+statement ok
+CREATE TYPE sort_mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE sort_grammar(i BIGINT, s VARCHAR, m sort_mood, st STRUCT(a INTEGER, b VARCHAR));
+
+statement ok
+INSERT INTO sort_grammar VALUES
+	(2, 'b', 'happy', {'a': 2, 'b': 'y'}),
+	(1, 'c', 'sad', {'a': 1, 'b': 'z'}),
+	(3, NULL, 'ok', NULL),
+	(1, 'a', NULL, {'a': 0, 'b': 'w'});
+
+query IT
+SELECT i, s FROM sort_grammar ORDER BY i DESC, s;
+----
+3	NULL
+2	b
+1	a
+1	c
+
+query I
+SELECT i FROM sort_grammar ORDER BY m NULLS FIRST, st;
+----
+1
+1
+3
+2
+
+query IT
+FROM sort_grammar
+  |> SELECT i, s
+  |> ORDER BY s DESC NULLS LAST, i;
+----
+1	c
+2	b
+1	a
+3	NULL
