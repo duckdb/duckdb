@@ -1,0 +1,77 @@
+# name: test/sql/alter/alter_col/test_alter_nested_field.test
+# description: Test ALTER TABLE ALTER COLUMN on a nested struct field
+# group: [alter_col]
+
+statement ok
+CREATE TABLE t(s STRUCT(a INTEGER, b INTEGER))
+
+statement ok
+INSERT INTO t VALUES ({'a': NULL, 'b': 1})
+
+# SET NOT NULL on a struct field must not silently constrain the top-level column
+statement error
+ALTER TABLE t ALTER s.a SET NOT NULL
+----
+SET NOT NULL is not supported for nested fields
+
+query I
+SELECT COUNT(*) FROM duckdb_constraints() WHERE table_name='t'
+----
+0
+
+statement ok
+INSERT INTO t VALUES (NULL)
+
+query I
+SELECT COUNT(*) FROM t
+----
+2
+
+statement error
+ALTER TABLE t ALTER s.a DROP NOT NULL
+----
+DROP NOT NULL is not supported for nested fields
+
+statement error
+ALTER TABLE t ALTER s.a SET DEFAULT 42
+----
+SET DEFAULT is not supported for nested fields
+
+statement error
+ALTER TABLE t ALTER s.a DROP DEFAULT
+----
+DROP DEFAULT is not supported for nested fields
+
+statement error
+ALTER TABLE t ALTER s.a TYPE VARCHAR
+----
+ALTER COLUMN TYPE is not supported for nested fields
+
+# top-level columns are unaffected
+statement ok
+DROP TABLE t
+
+statement ok
+CREATE TABLE t(s STRUCT(a INTEGER, b INTEGER))
+
+statement ok
+ALTER TABLE t ALTER s SET NOT NULL
+
+statement error
+INSERT INTO t VALUES (NULL)
+----
+NOT NULL constraint failed
+
+statement ok
+INSERT INTO t VALUES ({'a': NULL, 'b': 1})
+
+statement ok
+ALTER TABLE t ALTER s DROP NOT NULL
+
+statement ok
+INSERT INTO t VALUES (NULL)
+
+query I
+SELECT COUNT(*) FROM t
+----
+2

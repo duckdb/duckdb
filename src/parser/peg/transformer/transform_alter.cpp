@@ -328,26 +328,36 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformDropConstraint(PEGTra
 	throw NotImplementedException("No support for that ALTER TABLE option yet!");
 }
 
+static const Identifier &GetAlterColumnName(const ColumnRefExpression &nested_column_name,
+                                            const string &alter_description) {
+	auto &column_names = nested_column_name.ColumnNames();
+	if (column_names.size() != 1) {
+		throw NotImplementedException("%s is not supported for nested fields, cannot alter \"%s\"", alter_description,
+		                              nested_column_name.ToString());
+	}
+	return column_names[0];
+}
+
 unique_ptr<AlterTableInfo>
 PEGTransformerFactory::TransformAlterColumn(PEGTransformer &transformer, const bool &has_result,
                                             unique_ptr<ColumnRefExpression> nested_column_name,
                                             unique_ptr<AlterTableInfo> alter_column_entry) {
 	if (alter_column_entry->alter_table_type == AlterTableType::SET_DEFAULT) {
 		auto set_default_entry = unique_ptr_cast<AlterTableInfo, SetDefaultInfo>(std::move(alter_column_entry));
-		// TODO(Dtenwolde) Figure out with nested names;
-		set_default_entry->column_name = nested_column_name->ColumnNames()[0];
+		set_default_entry->column_name =
+		    GetAlterColumnName(*nested_column_name, set_default_entry->expression ? "SET DEFAULT" : "DROP DEFAULT");
 		return std::move(set_default_entry);
 	} else if (alter_column_entry->alter_table_type == AlterTableType::DROP_NOT_NULL) {
 		auto drop_not_null = unique_ptr_cast<AlterTableInfo, DropNotNullInfo>(std::move(alter_column_entry));
-		drop_not_null->column_name = nested_column_name->ColumnNames()[0];
+		drop_not_null->column_name = GetAlterColumnName(*nested_column_name, "DROP NOT NULL");
 		return std::move(drop_not_null);
 	} else if (alter_column_entry->alter_table_type == AlterTableType::SET_NOT_NULL) {
 		auto set_not_null = unique_ptr_cast<AlterTableInfo, SetNotNullInfo>(std::move(alter_column_entry));
-		set_not_null->column_name = nested_column_name->ColumnNames()[0];
+		set_not_null->column_name = GetAlterColumnName(*nested_column_name, "SET NOT NULL");
 		return std::move(set_not_null);
 	} else if (alter_column_entry->alter_table_type == AlterTableType::ALTER_COLUMN_TYPE) {
 		auto change_column_type = unique_ptr_cast<AlterTableInfo, ChangeColumnTypeInfo>(std::move(alter_column_entry));
-		change_column_type->column_name = nested_column_name->ColumnNames()[0];
+		change_column_type->column_name = GetAlterColumnName(*nested_column_name, "ALTER COLUMN TYPE");
 		if (!change_column_type->expression) {
 			change_column_type->expression =
 			    make_uniq<CastExpression>(change_column_type->target_type, std::move(nested_column_name));
