@@ -370,15 +370,15 @@ auto Environment::GetInstanceCount() const -> size_t {
 }
 
 auto Environment::CreateInstance() -> Instance {
-	duckdb_v2_instance_handle db = nullptr;
-	CheckedAPICall(duckdb_v2_instance_create, handle(), &db);
-	return detail::Factory::Make<Instance>(db);
+	duckdb_v2_instance_handle instance = nullptr;
+	CheckedAPICall(duckdb_v2_instance_create, handle(), &instance);
+	return detail::Factory::Make<Instance>(instance);
 }
 
 auto Environment::Open(const std::string &path) -> Instance {
-	auto db = CreateInstance();
-	db.Attach(path, true);
-	return db;
+	auto instance = CreateInstance();
+	instance.Attach(path, true);
+	return instance;
 }
 
 //---------------------------------------------------------------------------
