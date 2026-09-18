@@ -24,7 +24,7 @@ class LogicalPivot;
 class LogicalLimit;
 class LogicalSetOperation;
 class LogicalAggregate;
-class LogicalExtensionOperator;
+struct LogicalExtensionOperator;
 class ClientContext;
 
 namespace logical_plan_sql_export {

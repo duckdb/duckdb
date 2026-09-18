@@ -394,6 +394,9 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportCast(const B
 		}
 		return CastToConstructedType(expression.GetReturnType(), std::move(child.GetValue()), path);
 	}
+	if (RequiresConstantConstructor(expression.GetReturnType()) && !BoundCastExpression::IsTryCast(expression)) {
+		return CastToConstructedType(expression.GetReturnType(), std::move(child.GetValue()), path);
+	}
 	return BoundExpressionSQLExportResult::Success(
 	    SQLCast(expression.GetReturnType(), std::move(child.GetValue()), BoundCastExpression::IsTryCast(expression)));
 }

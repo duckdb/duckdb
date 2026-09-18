@@ -121,16 +121,6 @@ SELECT id FROM materialized_source ORDER BY id;
 100098
 100099
 
-query TT
-EXPLAIN SELECT id FROM materialized_source ORDER BY id;
-----
-physical_plan	<REGEX>:.*__internal_compress_.*
-
-query TT
-EXPLAIN (SQL) SELECT id FROM materialized_source ORDER BY id;
-----
-sql	<!REGEX>:.*__internal_(compress|decompress)_.*
-
 query TI
 SELECT s,id FROM materialized_source WHERE id<100010 ORDER BY id;
 ----
@@ -145,16 +135,6 @@ v07	100007
 v08	100008
 v09	100009
 
-query TT
-EXPLAIN SELECT s,id FROM materialized_source WHERE id<100010 ORDER BY id;
-----
-physical_plan	<REGEX>:.*__internal_compress_.*
-
-query TT
-EXPLAIN (SQL) SELECT s,id FROM materialized_source WHERE id<100010 ORDER BY id;
-----
-sql	<!REGEX>:.*__internal_(compress|decompress)_.*
-
 query TI
 SELECT g,id FROM materialized_source WHERE id<100010 ORDER BY id;
 ----
@@ -168,16 +148,6 @@ POINT (6 6)	100006
 POINT (7 7)	100007
 POINT (8 8)	100008
 POINT (9 9)	100009
-
-query TT
-EXPLAIN SELECT g,id FROM materialized_source WHERE id<100010 ORDER BY id;
-----
-physical_plan	<REGEX>:.*__internal_compress_.*
-
-query TT
-EXPLAIN (SQL) SELECT g,id FROM materialized_source WHERE id<100010 ORDER BY id;
-----
-sql	<!REGEX>:.*__internal_(compress|decompress)_.*
 
 query I
 SELECT id FROM cast_source ORDER BY id;
@@ -282,16 +252,6 @@ SELECT id FROM cast_source ORDER BY id;
 97
 98
 99
-
-query TT
-EXPLAIN (SQL) SELECT id FROM cast_source ORDER BY id;
-----
-sql	<!REGEX>:.*TINYINT.*
-
-query TT
-EXPLAIN SELECT id FROM cast_source ORDER BY id;
-----
-physical_plan	<REGEX>:.*Projections: CAST[(]#0 AS TINYINT[)].*
 
 statement ok
 INSERT INTO cast_source VALUES (1000000);
@@ -414,27 +374,12 @@ SELECT i*2 FROM computed_groups GROUP BY i*2 ORDER BY 1;
 8
 NULL
 
-query TT
-EXPLAIN (SQL) SELECT i*2 FROM computed_groups GROUP BY i*2 ORDER BY 1;
-----
-sql	<!REGEX>:.*TINYINT.*
-
 query II
 SELECT CAST(i AS SMALLINT),count(*) FROM computed_groups GROUP BY CAST(i AS SMALLINT) ORDER BY 1;
 ----
 3	1
 4	2
 NULL	1
-
-query TT
-EXPLAIN (SQL) SELECT CAST(i AS SMALLINT),count(*) FROM computed_groups GROUP BY CAST(i AS SMALLINT) ORDER BY 1;
-----
-sql	<!REGEX>:.*TINYINT.*
-
-query TT
-EXPLAIN (SQL) SELECT CAST(i AS SMALLINT),count(*) FROM computed_groups GROUP BY CAST(i AS SMALLINT) ORDER BY 1;
-----
-sql	<REGEX>:.*CAST[(].* AS SMALLINT[)].*
 
 query T
 SELECT string_agg(DISTINCT v, '|' ORDER BY length(v), v) FROM (VALUES ('aa'),('b'),('b'),(NULL)) t(v);

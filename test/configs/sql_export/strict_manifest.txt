@@ -49,6 +49,7 @@ test/sql/sql_export/tuple_type_constants.test
 test/sql/sql_export/verification_results.test
 test/sql/sql_export/verification_logging.test
 test/sql/sql_export/constant_values.test
+test/sql/sql_export/variant_key_order.test
 test/sql/sql_export/correlated_metadata.test
 test/sql/sql_export/geometry_values.test
 test/sql/sql_export/rewritten_functions.test

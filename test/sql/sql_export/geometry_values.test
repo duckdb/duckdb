@@ -5,6 +5,11 @@
 statement ok
 SET debug_verify_sql_export='strict';
 
+foreach optimizer enable disable
+
+statement ok
+PRAGMA {optimizer}_optimizer;
+
 query TTTTTTTTTTTTTTTTTTTT
 SELECT
 	ST_SetCRS('POINT(0 1)'::GEOMETRY, 'GEäDCRS'),
@@ -46,3 +51,18 @@ SELECT
 	typeof({'m': map([1], [ST_SetCRS('POINT(0 1)'::GEOMETRY, 'GEäDCRS')])});
 ----
 [POINT (0 1), NULL]	GEOMETRY('GEäDCRS')[2]	[]	GEOMETRY('GEäDCRS')[]	NULL	GEOMETRY('GEäDCRS')[]	NULL	GEOMETRY('GEäDCRS')	GEOMETRY('GEäDCRS')[]	TYPE	{'m': {1='POINT (0 1)'}}	STRUCT(m MAP(INTEGER, GEOMETRY('GEäDCRS')))
+
+query TT
+SELECT first(g ORDER BY i), list(g ORDER BY i) FROM (SELECT i, ST_SetCRS('POINT(0 1)'::GEOMETRY, 'GEäDCRS') g FROM range(2) t(i)) q;
+----
+POINT (0 1)	['POINT (0 1)', 'POINT (0 1)']
+
+query TT
+SELECT TRY_CAST(NULL::VARCHAR AS GEOMETRY('OGC:CRS84')), TRY_CAST('POINT(0 1)' AS GEOMETRY('OGC:CRS84'));
+----
+NULL	POINT (0 1)
+
+endloop
+
+statement ok
+PRAGMA enable_optimizer;

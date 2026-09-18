@@ -118,7 +118,7 @@ TEST_CASE("Logical plan field types follow expression SQL type admission", "[sql
 			LogicalPlanSQLExportOptions options;
 			options.extension_resolver = [](const LogicalPlanSQLExportExtensionInput &input) {
 				auto query = make_uniq<SelectNode>();
-				for (auto &type : input.op.types) {
+				for (idx_t i = 0; i < input.op.types.size(); i++) {
 					query->select_list.push_back(ConstantExpression::Null());
 				}
 				return LogicalPlanSQLExportExtensionResult::Exported(std::move(query));

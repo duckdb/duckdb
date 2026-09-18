@@ -100,7 +100,8 @@ public:
 
 private:
 	struct ChildExpression {
-		ChildExpression(optional_ptr<const Expression> expression_p, optional<LogicalType> expected_type_p = {})
+		explicit ChildExpression(optional_ptr<const Expression> expression_p,
+		                         optional<LogicalType> expected_type_p = {})
 		    : expression(expression_p), expected_type(std::move(expected_type_p)) {
 		}
 

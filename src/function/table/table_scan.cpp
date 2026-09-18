@@ -1259,7 +1259,7 @@ static unique_ptr<ParsedExpression> TableScanColumnToSQL(const ColumnIndex &inde
 	}
 	auto extract = make_uniq<OperatorExpression>(ExpressionType::ARRAY_EXTRACT);
 	extract->GetChildrenMutable().push_back(std::move(expression));
-	extract->GetChildrenMutable().push_back(ConstantExpression::FromValue(std::move(key)));
+	extract->GetChildrenMutable().push_back(ConstantExpression::FromValue(key));
 	return TableScanColumnToSQL(child, child_type, std::move(extract));
 }
 

@@ -141,6 +141,34 @@
       "paths": [
         "test/sql/join/natural/natural_join.test"
       ]
+    },
+    {
+      "reason": "SQL export of these recursive plans requires CTE inlining to preserve evaluation.",
+      "paths": [
+        "test/sql/sql_export/basic_plan_shapes.test",
+        "test/sql/sql_export/explain_sql_roundtrip.test",
+        "test/sql/sql_export/explain_sql_scopes.test"
+      ]
+    },
+    {
+      "reason": "Checks pruning of a throwing unused secure-view output and safe caller filter pushdown.",
+      "paths": [
+        "test/sql/sql_export/secure_view_sql_export.test"
+      ]
+    },
+    {
+      "reason": "Recursive LIMIT cases require short-circuiting optimization; native execution also exceeds the deadline.",
+      "paths": [
+        "test/sql/sql_export/recursive_state.test",
+        "test/sql/sql_export/single_child_union.test"
+      ]
+    },
+    {
+      "reason": "Checks folded nested collated constants; unoptimized CASE expressions are explicitly unsupported by SQL export.",
+      "paths": [
+        "test/sql/sql_export/nested_collated_nulls.test",
+        "test/sql/sql_export/nested_collations.test"
+      ]
     }
   ]
 }
