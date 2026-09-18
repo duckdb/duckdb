@@ -74,6 +74,7 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 		                                          /*row_id_handling=*/RowIdHandling::ASSUME_UNIQUE);
 		auto &cast_update = result->op->Cast<PhysicalUpdate>();
 		cast_update.update_is_del_and_insert = action.update_is_del_and_insert;
+		cast_update.skip_unchanged_fk_delete_check = action.skip_unchanged_fk_delete_check;
 		result->op->children.push_back(action_input);
 		break;
 	}
