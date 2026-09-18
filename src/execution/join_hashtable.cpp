@@ -18,9 +18,37 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/planner/joinside.hpp"
 
+#ifndef _WIN32
+#include <sys/mman.h>
+#endif
+
 namespace duckdb {
 
 using ValidityBytes = JoinHashTable::ValidityBytes;
+
+namespace {
+
+//! Ask for huge page backing: the entry array is probed at random and is typically far larger than the TLB can cover.
+void AdviseHugePages(const AllocatedData &data) {
+#if defined(MADV_HUGEPAGE)
+	static constexpr idx_t HUGE_PAGE_SIZE = 2ULL * 1024 * 1024;
+	static constexpr idx_t MIN_ADVISE_SIZE = 4 * HUGE_PAGE_SIZE;
+
+	if (data.GetSize() < MIN_ADVISE_SIZE) {
+		return;
+	}
+	// Only the interior span is advised, a partial huge page at either end cannot be backed by one.
+	const auto base = reinterpret_cast<uintptr_t>(data.get());
+	const auto start = (base + HUGE_PAGE_SIZE - 1) & ~(HUGE_PAGE_SIZE - 1);
+	const auto end = (base + data.GetSize()) & ~(HUGE_PAGE_SIZE - 1);
+	if (end > start) {
+		madvise(reinterpret_cast<void *>(start), end - start, MADV_HUGEPAGE);
+	}
+#endif
+}
+
+} // namespace
+
 using ScanStructure = JoinHashTable::ScanStructure;
 using ProbeSpill = JoinHashTable::ProbeSpill;
 using ProbeSpillLocalState = JoinHashTable::ProbeSpillLocalAppendState;
@@ -1065,6 +1093,7 @@ void JoinHashTable::AllocatePointerTable() {
 		if (capacity > current_capacity) {
 			// Need more space
 			hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(ht_entry_t));
+			AdviseHugePages(hash_map);
 		} else {
 			// Just use the current hash map
 			capacity = current_capacity;
@@ -1072,6 +1101,7 @@ void JoinHashTable::AllocatePointerTable() {
 	} else {
 		// Allocate a hash map
 		hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(ht_entry_t));
+		AdviseHugePages(hash_map);
 	}
 	D_ASSERT(hash_map.GetSize() == capacity * sizeof(ht_entry_t));
 
