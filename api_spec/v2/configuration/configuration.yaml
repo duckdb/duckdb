@@ -1,6 +1,6 @@
 module: configuration
 # The option handle is a read-only descriptor of one config option as seen
-# from a database, connection, or context: its canonical name, its current
+# from an instance, connection, or context: its canonical name, its current
 # setting at that source's scope, its default setting, description, target
 # scope, and aliases. Options are written with the *_set_option functions,
 # which take a name and a setting directly; descriptors come back from the
@@ -10,15 +10,15 @@ module: configuration
 # Terminology used in this module:
 #   * option  — a named, registered config item (e.g. "memory_limit").
 #   * setting — the string-encoded value of an option at some scope.
-#   * config  — a collection of option settings (database GLOBAL or
+#   * config  — a collection of option settings (instance GLOBAL or
 #               connection LOCAL).
 #
-# Implementation note: *_set_option, on both database and connection,
+# Implementation note: *_set_option, on both instance and connection,
 # delegates to PhysicalSet::SetVariable once the instance has started, so SQL
 # `SET` and the V2 C API share one resolution and dispatch path: lock check,
 # core-then-extension lookup with autoload, scope target validation, value
 # cast, and generic vs legacy apply. V2 therefore inherits any change to the
-# behavior of `SET` automatically. Before startup, database_set_option writes
+# behavior of `SET` automatically. Before startup, instance_set_option writes
 # the startup DBConfig instead (DBConfig::SetOptionByName), which is how
 # startup-only options reach the instance. See
 # src/include/duckdb/execution/operator/helper/physical_set.hpp.
@@ -33,7 +33,7 @@ enums:
         value: 0
         description: "Target scope is not known."
       OPTION_TARGET_SCOPE_GLOBAL_ONLY:
-        description: "May only be written at GLOBAL (database) scope."
+        description: "May only be written at GLOBAL (instance) scope."
       OPTION_TARGET_SCOPE_LOCAL_ONLY:
         description: "May only be written at LOCAL (session) scope."
       OPTION_TARGET_SCOPE_GLOBAL_DEFAULT:
@@ -44,7 +44,7 @@ enums:
     description: |
       Destination scope for a connection-side option write, as taken by
       connection_option_set. AUTOMATIC defers to the option's target scope,
-      like SQL `SET name = value`. GLOBAL writes through to the database,
+      like SQL `SET name = value`. GLOBAL writes through to the instance,
       visible to all connections, like `SET GLOBAL`. LOCAL writes to the
       connection's session only, like `SET LOCAL` / `SET SESSION`.
     values:
@@ -52,7 +52,7 @@ enums:
         value: 0
         description: "Resolve from the option's target scope."
       SETTING_SCOPE_GLOBAL:
-        description: "Write through to the database (visible to all connections)."
+        description: "Write through to the instance (visible to all connections)."
       SETTING_SCOPE_LOCAL:
         description: "Write to the connection's session only."
 
@@ -106,7 +106,7 @@ functions:
     description: |
       Borrows the option's current setting (its string-encoded value).
 
-      The effective setting at the scope of the database, connection, or
+      The effective setting at the scope of the instance, connection, or
       context the descriptor was read from.
     role: getter
     belongs_to: option
@@ -264,7 +264,7 @@ functions:
       connection set one, otherwise the GLOBAL value, otherwise the static
       default. Aliases resolve transparently, and an unknown name returns
       ERROR_INPUT_INVALID. The caller destroys the returned option. A context
-      is a read scope: options are written through a database or connection.
+      is a read scope: options are written through an instance or connection.
     role: getter
     belongs_to: context
     parameters:
@@ -292,8 +292,8 @@ functions:
     description: |
       Returns the number of config options visible to this context.
 
-      The same count `[[database_get_option_count]]` reports for the underlying
-      database: core plus extension options, aliases excluded.
+      The same count `[[instance_get_option_count]]` reports for the underlying
+      instance: core plus extension options, aliases excluded.
     role: getter
     belongs_to: context
     parameters:
@@ -319,7 +319,7 @@ functions:
       Reads the config option at the given index visible to this context.
 
       Index space: [0, core_count) addresses core options, [core_count, total)
-      the extension options visible from this context's database. An
+      the extension options visible from this context's instance. An
       out-of-range index returns ERROR_INPUT_INVALID. The caller destroys the
       returned option.
     role: getter

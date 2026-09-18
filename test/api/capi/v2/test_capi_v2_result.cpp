@@ -775,10 +775,10 @@ TEST_CASE("V2: destroying a half-consumed result is clean", "[capi_v2][query_res
 #if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: a fetched chunk outlives result, connection, and database", "[capi_v2][query_result]") {
 	duckdb_v2_environment_handle env = nullptr;
-	duckdb_v2_database_handle db = nullptr;
+	duckdb_v2_instance_handle db = nullptr;
 	duckdb_v2_connection_handle conn = nullptr;
 	REQUIRE(duckdb_v2_environment_create(&env, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(OpenDatabase(env, duckdb_v2_str {nullptr, 0}, &db, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(OpenInstance(env, duckdb_v2_str {nullptr, 0}, &db, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_connection_create(db, &conn, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_result_handle r = nullptr;
@@ -788,7 +788,7 @@ TEST_CASE("V2: a fetched chunk outlives result, connection, and database", "[cap
 
 	duckdb_v2_result_destroy(&r);
 	duckdb_v2_connection_destroy(&conn);
-	duckdb_v2_database_destroy(&db);
+	duckdb_v2_instance_destroy(&db);
 	duckdb_v2_environment_destroy(&env);
 
 	// The chunk owns its data; producers are all gone.
@@ -1270,10 +1270,10 @@ TEST_CASE("V2: result_fetch_chunk drains a CHANGED_ROWS result", "[capi_v2][quer
 #if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: an undrained result survives disconnect and close", "[capi_v2][query_result]") {
 	duckdb_v2_environment_handle env = nullptr;
-	duckdb_v2_database_handle db = nullptr;
+	duckdb_v2_instance_handle db = nullptr;
 	duckdb_v2_connection_handle conn = nullptr;
 	REQUIRE(duckdb_v2_environment_create(&env, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(OpenDatabase(env, duckdb_v2_str {nullptr, 0}, &db, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(OpenInstance(env, duckdb_v2_str {nullptr, 0}, &db, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_connection_create(db, &conn, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_result_handle r = nullptr;
@@ -1283,7 +1283,7 @@ TEST_CASE("V2: an undrained result survives disconnect and close", "[capi_v2][qu
 	duckdb_v2_data_chunk_destroy(&chunk);
 
 	duckdb_v2_connection_destroy(&conn);
-	duckdb_v2_database_destroy(&db);
+	duckdb_v2_instance_destroy(&db);
 
 	// Metadata still reads off the wrapper.
 	REQUIRE(ColumnCount(r) == 1);

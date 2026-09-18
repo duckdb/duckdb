@@ -157,7 +157,7 @@ inline auto Convert(StatementType type) -> DUCKDB_V2_STATEMENT_TYPE {
 class CV2Environment {
 public:
 	unique_ptr<DBInstanceCache> cache;
-	std::atomic<idx_t> database_count {0};
+	std::atomic<idx_t> instance_count {0};
 };
 
 inline auto Convert(CV2Environment *env) -> duckdb_v2_environment_handle {
@@ -169,17 +169,17 @@ inline auto Convert(duckdb_v2_environment_handle env) -> CV2Environment * {
 }
 
 class CV2Option;
-class CV2Database;
+class CV2Instance;
 
 //! The SQL ATTACH `(KEY value)` options of one attach, as the text values a quoted literal produces. Bound to the
-//! database handle it was created from, which is what future per-instance resources (an allocator, say) would be
+//! instance handle it was created from, which is what future per-instance resources (an allocator, say) would be
 //! taken from.
 class CV2AttachOptions {
 public:
-	explicit CV2AttachOptions(CV2Database &db) : db(db) {
+	explicit CV2AttachOptions(CV2Instance &instance) : instance(instance) {
 	}
 
-	CV2Database &db;
+	CV2Instance &instance;
 	unordered_map<string, Value> options;
 };
 
@@ -191,12 +191,12 @@ inline auto Convert(CV2AttachOptions *options) -> duckdb_v2_attach_options_handl
 	return reinterpret_cast<duckdb_v2_attach_options_handle>(options);
 }
 
-//! A database handle: a DuckDB instance plus the configuration it starts with. The instance starts on first use
-//! (database_attach or connection_create); until then options are staged in the startup config. Every entry point
+//! An instance handle: a DuckDB instance plus the configuration it starts with. The instance starts on first use
+//! (instance_attach or connection_create); until then options are staged in the startup config. Every entry point
 //! holds `lock`, which also serializes use of the internal connection.
-class CV2Database {
+class CV2Instance {
 public:
-	explicit CV2Database(CV2Environment &env);
+	explicit CV2Instance(CV2Environment &env);
 
 	bool IsStarted() const {
 		return database != nullptr;
@@ -231,12 +231,12 @@ private:
 	unique_ptr<Connection> internal_connection;
 };
 
-inline auto Convert(duckdb_v2_database_handle db) -> CV2Database * {
-	return reinterpret_cast<CV2Database *>(db);
+inline auto Convert(duckdb_v2_instance_handle instance) -> CV2Instance * {
+	return reinterpret_cast<CV2Instance *>(instance);
 }
 
-inline auto Convert(CV2Database *db) -> duckdb_v2_database_handle {
-	return reinterpret_cast<duckdb_v2_database_handle>(db);
+inline auto Convert(CV2Instance *instance) -> duckdb_v2_instance_handle {
+	return reinterpret_cast<duckdb_v2_instance_handle>(instance);
 }
 
 using CV2Connection = duckdb::Connection;

@@ -1,72 +1,72 @@
-module: database
-# A database handle is a DuckDB instance: a buffer pool, a scheduler, a set
+module: instance
+# An instance handle is a DuckDB instance: a buffer pool, a scheduler, a set
 # of GLOBAL settings, and the databases attached to it. Creating the handle,
 # attaching a database, and choosing the default database are separate steps:
 #
-#   database_create(env, &db);
-#   database_set_option(db, "access_mode", "READ_ONLY");   // startup option
-#   database_attach(db, "path/to/file.db", NULL, NULL, true); // like ATTACH, and the default database
-#   database_set_option(db, "memory_limit", "4GB");        // SET GLOBAL
-#   connection_create(db, &conn);
+#   instance_create(env, &instance);
+#   instance_set_option(instance, "access_mode", "READ_ONLY");   // startup option
+#   instance_attach(instance, "path/to/file.db", NULL, NULL, true); // like ATTACH, and the default database
+#   instance_set_option(instance, "memory_limit", "4GB");        // SET GLOBAL
+#   connection_create(instance, &conn);
 #
-# The instance starts on its first use: the first database_attach or
+# The instance starts on its first use: the first instance_attach or
 # connection_create. Options set before that point go into the startup
 # configuration, so options that can only be chosen at startup (access_mode,
 # enable_external_access, threads, block sizes, ...) are set through the same
 # call as the ones that can change at runtime. After startup,
-# database_set_option is SQL `SET GLOBAL`.
+# instance_set_option is SQL `SET GLOBAL`.
 #
-# Nothing is attached until database_attach: only the system catalog and each
+# Nothing is attached until instance_attach: only the system catalog and each
 # connection's temporary catalog exist. Attaching never picks a default
-# database; until database_set_default names one, statements that need a
+# database; until instance_set_default names one, statements that need a
 # default database (an unqualified CREATE TABLE, say) fail, while everything
 # else binds against the system and temporary catalogs and against databases
 # referred to by name. Each connection binds to the default database in force
-# when it is created; database_set_default, or attaching with make_default,
-# changes it for connections created afterwards. database_detach detaches a database again, and clears the
+# when it is created; instance_set_default, or attaching with make_default,
+# changes it for connections created afterwards. instance_detach detaches a database again, and clears the
 # default for new connections if it was the default.
 handles:
   attach_options:
     description: |
       An opaque, owned handle to the `(KEY value)` options of one
-      `[[database_attach]]` call, as SQL `ATTACH` accepts them. Created from the
-      database handle it will be used with via `[[attach_options_create]]`; destroy
+      `[[instance_attach]]` call, as SQL `ATTACH` accepts them. Created from the
+      instance handle it will be used with via `[[attach_options_create]]`; destroy
       it via `[[attach_options_destroy]]`.
     cleanup_with: attach_options_destroy
 functions:
-  database_create:
+  instance_create:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Creates a database handle under the environment.
+      Creates an instance handle under the environment.
 
       The handle starts with no database attached and with its instance not
-      yet started; set startup options with `[[database_set_option]]`, then attach
-      a database with `[[database_attach]]` and pick the default with
-      `[[database_set_default]]`, or connect with `[[connection_create]]`. The caller destroys it
-      via `[[database_destroy]]`.
+      yet started; set startup options with `[[instance_set_option]]`, then attach
+      a database with `[[instance_attach]]` and pick the default with
+      `[[instance_set_default]]`, or connect with `[[connection_create]]`. The caller destroys it
+      via `[[instance_destroy]]`.
     role: constructor
-    belongs_to: database
+    belongs_to: instance
     parameters:
       env:
         type: environment
         description: "The environment."
-      out_db:
-        type: database
+      out_instance:
+        type: instance
         indirection: 1
         kind: OUT
-        description: "Receives the new database handle."
+        description: "Receives the new instance handle."
       err:
         type: error_info
         indirection: 1
         kind: OUT
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
-  database_destroy:
+  instance_destroy:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Destroys the database handle.
+      Destroys the instance handle.
 
       Always succeeds. Every attached database is closed with the instance.
       The instance itself stays alive for as long as any connection still
@@ -74,18 +74,18 @@ functions:
       database files become available to open again. On success the handle
       is set to null. Safe to call on an already-null slot.
     role: destructor
-    belongs_to: database
+    belongs_to: instance
     parameters:
-      db:
-        type: database
+      instance:
+        type: instance
         indirection: 1
-        description: "The database handle to destroy."
+        description: "The instance handle to destroy."
     return_type: ERROR
-  database_attach:
+  instance_attach:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Attaches a database to the handle, starting the instance if it has not
+      Attaches a database to the instance, starting it if it has not
       started yet.
 
       Attaches the database at `path` exactly like `ATTACH 'path'`:
@@ -99,20 +99,20 @@ functions:
       the same base name, or `:memory:` twice, attach side by side. `options`
       may be null; it carries the `(KEY value)` options of SQL `ATTACH`, for
       per-database options such as READ_ONLY, BLOCK_SIZE or ENCRYPTION_KEY,
-      and must have been created from this database handle. `make_default`
+      and must have been created from this instance handle. `make_default`
       makes the attached
       database the default for connections created afterwards, exactly as a
-      `[[database_set_default]]` call right after the attach would; otherwise the
+      `[[instance_set_default]]` call right after the attach would; otherwise the
       default is left alone. A path that is already attached on this or any
-      other database of the environment returns ERROR_RESOURCE_IN_USE, and a
+      other instance of the environment returns ERROR_RESOURCE_IN_USE, and a
       name that is already attached fails. Options that only apply at startup
       must be set before the first attach or connection.
     role: method
-    belongs_to: database
+    belongs_to: instance
     parameters:
-      db:
-        type: database
-        description: "The database handle."
+      instance:
+        type: instance
+        description: "The instance handle."
       path:
         type: str
         description: "Path to the database file, or `:memory:` / an empty view for an in-memory database."
@@ -122,7 +122,7 @@ functions:
         description: "Optional. The name to attach under; null or an empty view for the name derived from the path. Borrowed and copied."
       options:
         type: attach_options
-        description: "Optional attach options created from `db`, or null to attach with defaults under the derived name."
+        description: "Optional attach options created from `instance`, or null to attach with defaults under the derived name."
       make_default:
         type: bool
         description: "Whether to make the attached database the default for connections created afterwards."
@@ -132,7 +132,7 @@ functions:
         kind: OUT
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
-  database_detach:
+  instance_detach:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
@@ -140,19 +140,19 @@ functions:
 
       Detaches it like `DETACH`, checkpointing a file database first. Unlike
       SQL, the default database may be detached too; new connections then
-      start without a default until `[[database_set_default]]` names another, and
+      start without a default until `[[instance_set_default]]` names another, and
       existing connections bound to it keep it alive until their transaction
       on it ends and fail unqualified DDL afterwards. The path is matched
-      against the attached databases as `[[database_attach]]` recorded it, so pass
-      the path that was passed to `[[database_attach]]`. Returns ERROR_INPUT_INVALID
+      against the attached databases as `[[instance_attach]]` recorded it, so pass
+      the path that was passed to `[[instance_attach]]`. Returns ERROR_INPUT_INVALID
       when no database attached from that path exists. Connections that still
       reference the database keep it alive until they release it.
     role: method
-    belongs_to: database
+    belongs_to: instance
     parameters:
-      db:
-        type: database
-        description: "The database handle."
+      instance:
+        type: instance
+        description: "The instance handle."
       path:
         type: str
         description: "The path the database was attached from, or the name it is attached under."
@@ -162,7 +162,7 @@ functions:
         kind: OUT
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
-  database_set_default:
+  instance_set_default:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-15" ]
     description: |
@@ -174,18 +174,18 @@ functions:
       when they connected, or what they chose with `USE`. The default is where
       unqualified DDL and unqualified table lookups that miss the temporary
       catalog go. It stays the default for new connections until another
-      `[[database_set_default]]` call or until it is detached; a connection whose
+      `[[instance_set_default]]` call or until it is detached; a connection whose
       default has been detached fails unqualified DDL with a message saying
       so until it selects another with `USE`. `path` is either the path that
-      was passed to `[[database_attach]]` or the name the database is attached
+      was passed to `[[instance_attach]]` or the name the database is attached
       under; a name match wins. Returns ERROR_INPUT_INVALID when neither
       matches an attached database.
     role: method
-    belongs_to: database
+    belongs_to: instance
     parameters:
-      db:
-        type: database
-        description: "The database handle."
+      instance:
+        type: instance
+        description: "The instance handle."
       path:
         type: str
         description: "The path the database was attached from, or the name it is attached under."
@@ -199,8 +199,8 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-15" ]
     description: |
-      Creates an empty set of attach options for use with `[[database_attach]]` on
-      `db`.
+      Creates an empty set of attach options for use with `[[instance_attach]]` on
+      `instance`.
 
       Starts empty. The caller destroys it via `[[attach_options_destroy]]`; the
       options may be destroyed as soon as the attach call returns, and reused
@@ -208,9 +208,9 @@ functions:
     role: constructor
     belongs_to: attach_options
     parameters:
-      db:
-        type: database
-        description: "The database handle the options will be used with."
+      instance:
+        type: instance
+        description: "The instance handle the options will be used with."
       out_options:
         type: attach_options
         indirection: 1
@@ -270,13 +270,13 @@ functions:
         indirection: 1
         description: "The attach options to destroy."
     return_type: ERROR
-  database_set_option:
+  instance_set_option:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Sets a config option on the database (GLOBAL scope).
+      Sets a config option on the instance (GLOBAL scope).
 
-      Before the instance has started (no `[[database_attach]]` or
+      Before the instance has started (no `[[instance_attach]]` or
       `[[connection_create]]` yet), the option goes into the startup configuration: this is the only
       way to set an option that can only be chosen at startup, such as
       access_mode or enable_external_access. Unknown names are kept for an
@@ -286,11 +286,11 @@ functions:
       be autoloaded. Returns ERROR_INPUT_INVALID for an option declared
       LOCAL_ONLY, and for a legacy option with no global setter.
     role: setter
-    belongs_to: database
+    belongs_to: instance
     parameters:
-      db:
-        type: database
-        description: "The database handle."
+      instance:
+        type: instance
+        description: "The instance handle."
       name:
         type: identifier
         description: "Option name (canonical or alias)."
@@ -303,11 +303,11 @@ functions:
         kind: OUT
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
-  database_get_option_by_name:
+  instance_get_option_by_name:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Reads a config option from the database (GLOBAL scope) by name.
+      Reads a config option from the instance (GLOBAL scope) by name.
 
       Allocates a fully populated option: canonical name, current GLOBAL
       setting, default setting, description, target scope, and aliases.
@@ -318,11 +318,11 @@ functions:
       option of an extension that has not loaded yet, even if a setting for
       it has been staged. The caller destroys the returned option.
     role: getter
-    belongs_to: database
+    belongs_to: instance
     parameters:
-      db:
-        type: database
-        description: "The database handle."
+      instance:
+        type: instance
+        description: "The instance handle."
       name:
         type: identifier
         description: "Option name (canonical or alias)."
@@ -337,21 +337,21 @@ functions:
         kind: OUT
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
-  database_get_option_count:
+  instance_get_option_count:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Returns the number of config options registered on the database.
+      Returns the number of config options registered on the instance.
 
       Counts core options plus the extension options registered on this
-      database. Aliases are NOT counted separately; each one is reachable
+      instance. Aliases are NOT counted separately; each one is reachable
       through its canonical option's alias array.
     role: getter
-    belongs_to: database
+    belongs_to: instance
     parameters:
-      db:
-        type: database
-        description: "The database handle."
+      instance:
+        type: instance
+        description: "The instance handle."
       out_count:
         type: idx
         indirection: 1
@@ -363,22 +363,22 @@ functions:
         kind: OUT
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
-  database_get_option_by_index:
+  instance_get_option_by_index:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Reads the config option at the given index from the database.
+      Reads the config option at the given index from the instance.
 
       Index space: [0, core_count) addresses core options, [core_count, total)
       extension options. The mapping is stable for as long as no extension
       registers new options. An out-of-range index returns ERROR_INPUT_INVALID.
       The caller destroys the returned option.
     role: getter
-    belongs_to: database
+    belongs_to: instance
     parameters:
-      db:
-        type: database
-        description: "The database handle."
+      instance:
+        type: instance
+        description: "The instance handle."
       index:
         type: idx
         description: "The option index, in [0, option_count)."

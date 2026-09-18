@@ -10,9 +10,9 @@ namespace test_capi_v2 {
 
 namespace {
 
-std::string DbSetting(duckdb_v2_database_handle db, const char *name) {
+std::string DbSetting(duckdb_v2_instance_handle db, const char *name) {
 	duckdb_v2_option_handle opt = nullptr;
-	REQUIRE(duckdb_v2_database_get_option_by_name(db, Convert(name), &opt, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_instance_get_option_by_name(db, Convert(name), &opt, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_str setting = {nullptr, 0};
 	REQUIRE(duckdb_v2_option_get_setting(opt, &setting, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto result = Convert(setting);
@@ -88,7 +88,7 @@ TEST_CASE("V2 db option: set + get round-trip", "[capi_v2][db][option]") {
 
 	// Read the default before mutating so we can compare against it.
 	auto default_value = DbSetting(fx.db, "memory_limit");
-	REQUIRE(duckdb_v2_database_set_option(fx.db, Convert("memory_limit"), Convert("1GB"), nullptr) ==
+	REQUIRE(duckdb_v2_instance_set_option(fx.db, Convert("memory_limit"), Convert("1GB"), nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 	auto after = DbSetting(fx.db, "memory_limit");
 	REQUIRE(!after.empty());
@@ -101,7 +101,7 @@ TEST_CASE("V2 db option: get populates description and aliases", "[capi_v2][db][
 	EnvFixture fx;
 
 	duckdb_v2_option_handle opt = nullptr;
-	REQUIRE(duckdb_v2_database_get_option_by_name(fx.db, Convert("memory_limit"), &opt, nullptr) ==
+	REQUIRE(duckdb_v2_instance_get_option_by_name(fx.db, Convert("memory_limit"), &opt, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 
 	// "memory_limit" is an alias; the canonical name is "max_memory", and the alias list carries "memory_limit".
@@ -129,7 +129,7 @@ TEST_CASE("V2 db option: get populates description and aliases", "[capi_v2][db][
 	duckdb_v2_option_destroy(&opt);
 
 	// A declared scope target is reported; allow_community_extensions is GLOBAL_ONLY.
-	REQUIRE(duckdb_v2_database_get_option_by_name(fx.db, Convert("allow_community_extensions"), &opt, nullptr) ==
+	REQUIRE(duckdb_v2_instance_get_option_by_name(fx.db, Convert("allow_community_extensions"), &opt, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 	DUCKDB_V2_OPTION_TARGET_SCOPE scope = DUCKDB_V2_OPTION_TARGET_SCOPE_UNKNOWN;
 	duckdb_v2_option_get_target_scope(opt, &scope, nullptr);
@@ -141,7 +141,7 @@ TEST_CASE("V2 db option: get unknown name errors", "[capi_v2][db][option]") {
 	EnvFixture fx;
 	duckdb_v2_option_handle out = nullptr;
 	duckdb_v2_error_info_handle err = nullptr;
-	REQUIRE(duckdb_v2_database_get_option_by_name(fx.db, Convert("this_option_does_not_exist"), &out, &err) ==
+	REQUIRE(duckdb_v2_instance_get_option_by_name(fx.db, Convert("this_option_does_not_exist"), &out, &err) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(out == nullptr);
 	REQUIRE(err != nullptr);
@@ -151,14 +151,14 @@ TEST_CASE("V2 db option: get unknown name errors", "[capi_v2][db][option]") {
 TEST_CASE("V2 db option: get_option_count and get_option_by_index", "[capi_v2][db][option]") {
 	EnvFixture fx;
 	idx_t count = 0;
-	REQUIRE(duckdb_v2_database_get_option_count(fx.db, &count, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_instance_get_option_count(fx.db, &count, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(count > 0);
 
 	// Walk the first few entries — each should produce a populated handle.
 	idx_t to_check = count < 5 ? count : 5;
 	for (idx_t i = 0; i < to_check; i++) {
 		duckdb_v2_option_handle opt = nullptr;
-		REQUIRE(duckdb_v2_database_get_option_by_index(fx.db, i, &opt, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_instance_get_option_by_index(fx.db, i, &opt, nullptr) == DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_str name = {nullptr, 0};
 		duckdb_v2_option_get_name(opt, &name, nullptr);
 		REQUIRE(name.ptr != nullptr);
@@ -168,7 +168,7 @@ TEST_CASE("V2 db option: get_option_count and get_option_by_index", "[capi_v2][d
 
 	duckdb_v2_option_handle out_of_range = nullptr;
 	duckdb_v2_error_info_handle err = nullptr;
-	REQUIRE(duckdb_v2_database_get_option_by_index(fx.db, count + 100, &out_of_range, &err) ==
+	REQUIRE(duckdb_v2_instance_get_option_by_index(fx.db, count + 100, &out_of_range, &err) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_error_info_destroy(&err);
 }
@@ -176,11 +176,11 @@ TEST_CASE("V2 db option: get_option_count and get_option_by_index", "[capi_v2][d
 TEST_CASE("V2 db option: set rejects an unparseable setting and a LOCAL_ONLY option", "[capi_v2][db][option]") {
 	EnvFixture fx;
 	duckdb_v2_error_info_handle err = nullptr;
-	REQUIRE(duckdb_v2_database_set_option(fx.db, Convert("threads"), Convert("lots"), &err) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_instance_set_option(fx.db, Convert("threads"), Convert("lots"), &err) != DUCKDB_V2_ERROR_NONE);
 	REQUIRE(err != nullptr);
 	duckdb_v2_error_info_destroy(&err);
 	// A malformed setting view (null ptr, nonzero len) is caught up front.
-	REQUIRE(duckdb_v2_database_set_option(fx.db, Convert("threads"), duckdb_v2_str {nullptr, 1}, nullptr) ==
+	REQUIRE(duckdb_v2_instance_set_option(fx.db, Convert("threads"), duckdb_v2_str {nullptr, 1}, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 }
 
@@ -253,11 +253,11 @@ TEST_CASE("V2 db option: options set before the first open are startup options",
 	duckdb_v2_environment_create(&env, nullptr);
 
 	SECTION("a staged setting is reported before startup and applied at startup") {
-		duckdb_v2_database_handle db = nullptr;
-		duckdb_v2_database_create(env, &db, nullptr);
+		duckdb_v2_instance_handle db = nullptr;
+		duckdb_v2_instance_create(env, &db, nullptr);
 
 		auto default_value = DbSetting(db, "memory_limit");
-		REQUIRE(duckdb_v2_database_set_option(db, Convert("memory_limit"), Convert("2GB"), nullptr) ==
+		REQUIRE(duckdb_v2_instance_set_option(db, Convert("memory_limit"), Convert("2GB"), nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
 		// Before startup the staged text is reported verbatim, under the alias as well as the canonical name.
 		REQUIRE(DbSetting(db, "memory_limit") == "2GB");
@@ -265,14 +265,14 @@ TEST_CASE("V2 db option: options set before the first open are startup options",
 
 		// Discovery works before startup too.
 		idx_t count = 0;
-		REQUIRE(duckdb_v2_database_get_option_count(db, &count, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_instance_get_option_count(db, &count, nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(count > 0);
 		duckdb_v2_option_handle first = nullptr;
-		REQUIRE(duckdb_v2_database_get_option_by_index(db, 0, &first, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_instance_get_option_by_index(db, 0, &first, nullptr) == DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_option_destroy(&first);
 
 		// Once started, the engine reports the applied value, which differs from the untouched default.
-		REQUIRE(duckdb_v2_database_attach(db, duckdb_v2_str {nullptr, 0}, nullptr, nullptr, false, nullptr) ==
+		REQUIRE(duckdb_v2_instance_attach(db, duckdb_v2_str {nullptr, 0}, nullptr, nullptr, false, nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
 		auto applied = DbSetting(db, "memory_limit");
 		REQUIRE(applied != default_value);
@@ -281,28 +281,28 @@ TEST_CASE("V2 db option: options set before the first open are startup options",
 		duckdb_v2_connection_create(db, &conn, nullptr);
 		REQUIRE(ConnSetting(conn, "memory_limit") == applied);
 		duckdb_v2_connection_destroy(&conn);
-		duckdb_v2_database_destroy(&db);
+		duckdb_v2_instance_destroy(&db);
 	}
 
 	SECTION("a startup-only option is accepted before startup and rejected after") {
 		auto path = duckdb::TestCreatePath("v2_option_readonly.db");
 		duckdb::DeleteDatabase(path);
 		{
-			duckdb_v2_database_handle db = nullptr;
-			OpenDatabase(env, Convert(path), &db, nullptr);
+			duckdb_v2_instance_handle db = nullptr;
+			OpenInstance(env, Convert(path), &db, nullptr);
 			duckdb_v2_connection_handle conn = nullptr;
 			duckdb_v2_connection_create(db, &conn, nullptr);
 			ExecSQL(conn, "CREATE TABLE t(i INTEGER)");
 			duckdb_v2_connection_destroy(&conn);
-			duckdb_v2_database_destroy(&db);
+			duckdb_v2_instance_destroy(&db);
 		}
 
-		duckdb_v2_database_handle db = nullptr;
-		duckdb_v2_database_create(env, &db, nullptr);
-		REQUIRE(duckdb_v2_database_set_option(db, Convert("access_mode"), Convert("READ_ONLY"), nullptr) ==
+		duckdb_v2_instance_handle db = nullptr;
+		duckdb_v2_instance_create(env, &db, nullptr);
+		REQUIRE(duckdb_v2_instance_set_option(db, Convert("access_mode"), Convert("READ_ONLY"), nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_database_attach(db, Convert(path), nullptr, nullptr, false, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_database_set_default(db, Convert(path), nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_instance_attach(db, Convert(path), nullptr, nullptr, false, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_instance_set_default(db, Convert(path), nullptr) == DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_connection_handle conn = nullptr;
 		duckdb_v2_connection_create(db, &conn, nullptr);
 
@@ -312,28 +312,28 @@ TEST_CASE("V2 db option: options set before the first open are startup options",
 		duckdb_v2_error_info_destroy(&err);
 
 		// Once running, access_mode can no longer change: the same error SET GLOBAL gives.
-		REQUIRE(duckdb_v2_database_set_option(db, Convert("access_mode"), Convert("READ_WRITE"), &err) ==
+		REQUIRE(duckdb_v2_instance_set_option(db, Convert("access_mode"), Convert("READ_WRITE"), &err) ==
 		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		REQUIRE(err != nullptr);
 		duckdb_v2_error_info_destroy(&err);
 
 		duckdb_v2_connection_destroy(&conn);
-		duckdb_v2_database_destroy(&db);
+		duckdb_v2_instance_destroy(&db);
 		duckdb::DeleteDatabase(path);
 	}
 
 	SECTION("an unknown option is kept for startup, where nothing consumes it") {
-		duckdb_v2_database_handle db = nullptr;
-		duckdb_v2_database_create(env, &db, nullptr);
-		REQUIRE(duckdb_v2_database_set_option(db, Convert("no_such_option_xyz"), Convert("1"), nullptr) ==
+		duckdb_v2_instance_handle db = nullptr;
+		duckdb_v2_instance_create(env, &db, nullptr);
+		REQUIRE(duckdb_v2_instance_set_option(db, Convert("no_such_option_xyz"), Convert("1"), nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
 		// Reading it back is not possible until an extension defines it.
 		duckdb_v2_option_handle opt = nullptr;
-		REQUIRE(duckdb_v2_database_get_option_by_name(db, Convert("no_such_option_xyz"), &opt, nullptr) ==
+		REQUIRE(duckdb_v2_instance_get_option_by_name(db, Convert("no_such_option_xyz"), &opt, nullptr) ==
 		        DUCKDB_V2_ERROR_INPUT_INVALID);
 
 		duckdb_v2_error_info_handle err = nullptr;
-		REQUIRE(duckdb_v2_database_attach(db, duckdb_v2_str {nullptr, 0}, nullptr, nullptr, false, &err) !=
+		REQUIRE(duckdb_v2_instance_attach(db, duckdb_v2_str {nullptr, 0}, nullptr, nullptr, false, &err) !=
 		        DUCKDB_V2_ERROR_NONE);
 		REQUIRE(err != nullptr);
 		duckdb_v2_str msg = {nullptr, 0};
@@ -344,7 +344,7 @@ TEST_CASE("V2 db option: options set before the first open are startup options",
 		duckdb_v2_connection_handle conn = nullptr;
 		REQUIRE(duckdb_v2_connection_create(db, &conn, nullptr) != DUCKDB_V2_ERROR_NONE);
 		REQUIRE(conn == nullptr);
-		duckdb_v2_database_destroy(&db);
+		duckdb_v2_instance_destroy(&db);
 	}
 
 	duckdb_v2_environment_destroy(&env);
@@ -376,7 +376,7 @@ TEST_CASE("V2 context option: read through a context inside a callback", "[capi_
 TEST_CASE("V2 option: descriptor accessors", "[capi_v2][option]") {
 	EnvFixture fx;
 	duckdb_v2_option_handle opt = nullptr;
-	REQUIRE(duckdb_v2_database_get_option_by_name(fx.db, Convert("threads"), &opt, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_instance_get_option_by_name(fx.db, Convert("threads"), &opt, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	SECTION("get_default_setting is populated") {
 		duckdb_v2_str def = {nullptr, 0};
@@ -416,7 +416,7 @@ TEST_CASE("V2 option: descriptor accessors", "[capi_v2][option]") {
 
 	SECTION("handles are independent") {
 		duckdb_v2_option_handle other = nullptr;
-		REQUIRE(duckdb_v2_database_get_option_by_name(fx.db, Convert("memory_limit"), &other, nullptr) ==
+		REQUIRE(duckdb_v2_instance_get_option_by_name(fx.db, Convert("memory_limit"), &other, nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_option_destroy(&other);
 		duckdb_v2_str still = {nullptr, 0};
@@ -430,7 +430,7 @@ TEST_CASE("V2 option: descriptor accessors", "[capi_v2][option]") {
 TEST_CASE("V2 option: accessor null-arg validation", "[capi_v2][option]") {
 	EnvFixture fx;
 	duckdb_v2_option_handle opt = nullptr;
-	REQUIRE(duckdb_v2_database_get_option_by_name(fx.db, Convert("threads"), &opt, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_instance_get_option_by_name(fx.db, Convert("threads"), &opt, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	SECTION("get_name rejects null option") {
 		duckdb_v2_str out = {nullptr, 0};
@@ -470,12 +470,12 @@ TEST_CASE("V2 option: accessor null-arg validation", "[capi_v2][option]") {
 		REQUIRE(duckdb_v2_option_get_alias(nullptr, 0, &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	}
 	SECTION("set_option / get_option reject null and malformed arguments") {
-		REQUIRE(duckdb_v2_database_set_option(nullptr, Convert("threads"), Convert("1"), nullptr) ==
+		REQUIRE(duckdb_v2_instance_set_option(nullptr, Convert("threads"), Convert("1"), nullptr) ==
 		        DUCKDB_V2_ERROR_INPUT_INVALID);
-		REQUIRE(duckdb_v2_database_set_option(fx.db, duckdb_v2_str {nullptr, 1}, Convert("1"), nullptr) ==
+		REQUIRE(duckdb_v2_instance_set_option(fx.db, duckdb_v2_str {nullptr, 1}, Convert("1"), nullptr) ==
 		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_option_handle out = nullptr;
-		REQUIRE(duckdb_v2_database_get_option_by_name(fx.db, Convert("threads"), nullptr, nullptr) ==
+		REQUIRE(duckdb_v2_instance_get_option_by_name(fx.db, Convert("threads"), nullptr, nullptr) ==
 		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		REQUIRE(duckdb_v2_connection_set_option(nullptr, Convert("threads"), Convert("1"),
 		                                        DUCKDB_V2_SETTING_SCOPE_AUTOMATIC,
