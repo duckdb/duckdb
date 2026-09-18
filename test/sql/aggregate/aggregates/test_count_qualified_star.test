@@ -16,10 +16,6 @@ INSERT INTO a (id) VALUES (1), (2), (3);
 statement ok
 INSERT INTO b (id) VALUES (2), (3), (3);
 
-
-statement ok
-EXPLAIN SELECT a.id, COUNT(*), COUNT(a.*) AS a_start, COUNT(b.*) AS b_star, COUNT(b.id) AS b_id FROM a LEFT JOIN b ON a.id = b.id GROUP BY a.id;
-
 query IIIII
 SELECT a.id, COUNT(*), COUNT(a.*) AS a_start, COUNT(b.*) AS b_star, COUNT(b.id) AS b_id FROM a LEFT JOIN b ON a.id = b.id GROUP BY a.id ORDER BY a.id;
 ----
@@ -86,14 +82,62 @@ ORDER BY a.id;
 2	2	2	2	2	2
 3	10	10	10	10	8
 
-# a row in which all columns are NULL is not counted
+# a row in which all columns are NULL is still a row
 statement ok
 INSERT INTO b VALUES (NULL, NULL);
 
 query III
 SELECT COUNT(*), COUNT(b.*), COUNT(b.id) FROM b;
 ----
-7	6	6
+7	7	6
+
+# ... unless it is NULL-extended by an outer join (the unmatched all-NULL row of b is still counted)
+query IIII
+SELECT COUNT(*), COUNT(a.*), COUNT(b.*), COUNT(b.id) FROM b FULL OUTER JOIN a ON a.id = b.id;
+----
+15	14	13	12
+
+# all-NULL rows that match each other are real rows on both sides
+statement ok
+CREATE TABLE nx(v INT);
+
+statement ok
+CREATE TABLE ny(v INT);
+
+statement ok
+INSERT INTO nx VALUES (NULL), (1);
+
+statement ok
+INSERT INTO ny VALUES (NULL), (2);
+
+query III
+SELECT count(*), count(nx.*), count(ny.*) FROM nx FULL OUTER JOIN ny ON nx.v IS NOT DISTINCT FROM ny.v;
+----
+3	2	2
+
+# a regular column that hides the row id
+statement ok
+CREATE TABLE shadow(rowid INT, v INT);
+
+statement ok
+INSERT INTO shadow VALUES (NULL, 1), (NULL, NULL);
+
+query II
+SELECT count(shadow.*), count(shadow.v) FROM a LEFT JOIN shadow ON a.id = shadow.v;
+----
+2	2
+
+# a relation that wraps an outer join is not NULL-extended itself
+query II
+SELECT COUNT(t.*), COUNT(t.id) FROM (SELECT b.* FROM a LEFT JOIN b ON a.id = b.id) t;
+----
+14	12
+
+# an inner join does not NULL-extend
+query I
+SELECT COUNT(b.*) FROM a JOIN b ON true WHERE a.id = 1;
+----
+14
 
 # ---- COUNT(tbl.*) in every clause that allows aggregates ----
 
@@ -310,7 +354,19 @@ SELECT count(t.*) FROM range(3) t;
 query I
 SELECT count(t.*) FROM (VALUES (1, 2), (NULL, NULL)) t(x, y);
 ----
-1
+2
+
+# window over rows in which all columns are NULL
+query II
+SELECT count(*) OVER (), count(t.*) OVER () FROM (VALUES (NULL::INT, NULL::INT)) AS t(x, y);
+----
+1	1
+
+# positional join - the shorter side is NULL-extended
+query II
+SELECT count(p.*), count(q.*) FROM range(3) p POSITIONAL JOIN range(1) q;
+----
+3	1
 
 # struct columns are expanded as well
 query I
@@ -321,7 +377,13 @@ SELECT count(st.*) FROM (SELECT {'x': 1, 'y': 2} AS st) t;
 query I
 SELECT count(st.*) FROM (SELECT {'x': NULL, 'y': NULL} AS st) t;
 ----
-0
+1
+
+# a struct of a NULL-extended relation
+query I
+SELECT count(st.*) FROM l LEFT JOIN (SELECT 2 AS id, {'x': NULL} AS st) t ON l.id = t.id;
+----
+1
 
 # ---- statements that re-bind the expression ----
 
@@ -353,6 +415,28 @@ EXECUTE p(1);
 ----
 2
 
+# macro
+statement ok
+CREATE MACRO count_rows() AS count(t.*);
+
+query I
+SELECT count_rows() FROM (VALUES (NULL::INT, NULL::INT)) AS t(x, y);
+----
+1
+
+query I
+SELECT count_rows() FROM l LEFT JOIN r AS t ON l.id = t.id;
+----
+2
+
+statement ok
+CREATE MACRO count_rows_over() AS count(t.*) OVER ();
+
+query I
+SELECT count_rows_over() FROM (VALUES (NULL::INT, NULL::INT)) AS t(x, y);
+----
+1
+
 # PIVOT - the aggregate is rewritten, the pivot group keys are unaffected
 statement ok
 CREATE TABLE piv(g INT, y VARCHAR);
@@ -383,6 +467,16 @@ statement error
 SELECT count(r.* EXCLUDE (y)) FROM r;
 ----
 <REGEX>:.*STAR expression is only allowed as the root element.*
+
+statement error
+SELECT count(r.* RENAME (y AS z)) FROM r;
+----
+<REGEX>:.*STAR expression is only allowed as the root element.*
+
+statement error
+SELECT count(* RENAME (y AS z)) FROM r;
+----
+<REGEX>:.*STAR expression.*
 
 # GROUP BY tbl.* keeps its existing meaning (GROUP BY ALL)
 query II

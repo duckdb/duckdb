@@ -151,10 +151,19 @@ bool PEGTransformerFactory::ExpressionIsEmptyStar(const ParsedExpression &expr) 
 		return false;
 	}
 	auto &star = expr.Cast<StarExpression>();
-	if (!star.IsColumns() && star.ExcludeList().empty() && star.ReplaceList().empty()) {
-		return true;
+	if (star.IsColumns()) {
+		return false;
 	}
-	return false;
+	if (!star.ExcludeList().empty()) {
+		return false;
+	}
+	if (!star.ReplaceList().empty()) {
+		return false;
+	}
+	if (!star.RenameList().empty()) {
+		return false;
+	}
+	return true;
 }
 
 QualifiedName PEGTransformerFactory::StringToQualifiedName(vector<string> input) {

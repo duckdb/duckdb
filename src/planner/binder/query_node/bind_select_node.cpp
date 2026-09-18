@@ -450,7 +450,6 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 }
 
 void Binder::NormalizeFilterStarExpression(ParsedExpression &expr) {
-	TransformQualifiedCountStar(expr);
 	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &function = expr.Cast<FunctionExpression>();
 		if (function.Filter()) {

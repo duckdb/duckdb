@@ -87,6 +87,10 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		                                           std::move(window.FilterMutable()), nullptr, window.Distinct());
 		return BindMacro(*macro, entry->Cast<ScalarMacroCatalogEntry>(), depth, macro_expr);
 	}
+	auto count_star = binder.TryRewriteQualifiedCountStar(window);
+	if (count_star) {
+		return BindWindowExpression(count_star->Cast<WindowExpression>(), depth);
+	}
 
 	auto name = window.GetAlias();
 
