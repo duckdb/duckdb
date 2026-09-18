@@ -155,6 +155,7 @@ TEST_CASE("GZIP reads tolerate short reads at member boundaries", "[file_system]
 TEST_CASE("GZIP rejects truncated member boundaries", "[file_system][gzip]") {
 	auto compressed_data = ReadGZipTestFile("concat.gz");
 	auto next_header = FindNextGZipHeader(compressed_data);
+	auto next_header_end = FindGZipHeaderEnd(compressed_data, next_header);
 
 	for (idx_t footer_bytes = 1; footer_bytes < GZIP_FOOTER_SIZE; footer_bytes++) {
 		CAPTURE(footer_bytes);
@@ -166,5 +167,30 @@ TEST_CASE("GZIP rejects truncated member boundaries", "[file_system][gzip]") {
 		CAPTURE(header_bytes);
 		vector<data_t> truncated(compressed_data.begin(), compressed_data.begin() + next_header + header_bytes);
 		REQUIRE_THROWS_AS(ReadCompressedData(truncated, truncated.size()), IOException);
+	}
+
+	SECTION("EOF after a complete subsequent member header") {
+		vector<data_t> truncated(compressed_data.begin(), compressed_data.begin() + next_header_end);
+		REQUIRE_THROWS_AS(ReadCompressedData(truncated, truncated.size()), IOException);
+	}
+	SECTION("EOF inside a subsequent member") {
+		auto compressed_size = NumericCast<idx_t>(compressed_data.size());
+		for (auto end : {next_header_end + 1, compressed_size - GZIP_FOOTER_SIZE, compressed_size - 1}) {
+			CAPTURE(end);
+			vector<data_t> truncated(compressed_data.begin(), compressed_data.begin() + end);
+			REQUIRE_THROWS_AS(ReadCompressedData(truncated, truncated.size()), IOException);
+		}
+	}
+	SECTION("EOF inside the first member") {
+		auto first_header_end = FindGZipHeaderEnd(compressed_data, 0);
+		for (auto end : {first_header_end, next_header - GZIP_FOOTER_SIZE - 1, next_header - GZIP_FOOTER_SIZE}) {
+			CAPTURE(end);
+			vector<data_t> truncated(compressed_data.begin(), compressed_data.begin() + end);
+			REQUIRE_THROWS_AS(ReadCompressedData(truncated, truncated.size()), IOException);
+		}
+	}
+	SECTION("EOF between complete members") {
+		vector<data_t> first_member(compressed_data.begin(), compressed_data.begin() + next_header);
+		REQUIRE_NOTHROW(ReadCompressedData(first_member, first_member.size()));
 	}
 }

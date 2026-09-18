@@ -8,6 +8,9 @@ namespace duckdb {
 StreamWrapper::~StreamWrapper() {
 }
 
+void StreamWrapper::FinalizeRead(StreamData &) {
+}
+
 void StreamWrapper::AbortWrite() {
 	Close();
 }
@@ -119,11 +122,9 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 			stream_data.in_buff_end = stream_data.in_buff_start;
 			auto sz = child_handle->Read(context, stream_data.in_buff.get(), stream_data.in_buf_size);
 			if (sz <= 0) {
-				if (!stream_data.refresh) {
-					stream_wrapper.reset();
-					break;
-				}
-				stream_data.input_eof = true;
+				stream_wrapper->FinalizeRead(stream_data);
+				stream_wrapper.reset();
+				break;
 			} else {
 				stream_data.in_buff_end = stream_data.in_buff_start + sz;
 			}
@@ -163,7 +164,6 @@ void CompressedFile::ResetStreamData() {
 	stream_data.in_buf_size = 0;
 	stream_data.out_buf_size = 0;
 	stream_data.refresh = false;
-	stream_data.input_eof = false;
 }
 
 void CompressedFile::Close() {

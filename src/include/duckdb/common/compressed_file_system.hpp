@@ -19,7 +19,6 @@ struct StreamData {
 	// various buffers & pointers
 	bool write = false;
 	bool refresh = false;
-	bool input_eof = false;
 	unsafe_unique_array<data_t> in_buff;
 	unsafe_unique_array<data_t> out_buff;
 	data_ptr_t out_buff_start = nullptr;
@@ -36,6 +35,7 @@ struct StreamWrapper {
 
 	DUCKDB_API virtual void Initialize(QueryContext context, CompressedFile &file, bool write) = 0;
 	DUCKDB_API virtual bool Read(StreamData &stream_data) = 0;
+	DUCKDB_API virtual void FinalizeRead(StreamData &stream_data);
 	DUCKDB_API virtual void Write(CompressedFile &file, StreamData &stream_data, data_ptr_t buffer,
 	                              int64_t nr_bytes) = 0;
 	DUCKDB_API virtual void Close() = 0;

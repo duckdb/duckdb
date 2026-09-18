@@ -103,6 +103,7 @@ public:
 	void Initialize(QueryContext context, CompressedFile &file, bool write) override;
 
 	bool Read(StreamData &stream_data) override;
+	void FinalizeRead(StreamData &stream_data) override;
 	void Write(CompressedFile &file, StreamData &stream_data, data_ptr_t buffer, int64_t nr_bytes) override;
 
 	void Close() override;
@@ -286,13 +287,6 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 		read_state = GZipReadState::FOOTER;
 		state_bytes_remaining = GZIP_FOOTER_SIZE;
 	}
-	if (sd.input_eof) {
-		if (read_state == GZipReadState::HEADER && gzip_header_bytes == 0) {
-			Close();
-			return true;
-		}
-		throw IOException("Unexpected end of GZIP stream: %s", file->path);
-	}
 	if (read_state != GZipReadState::DEFLATE) {
 		if (!ReadNextMemberHeader(sd)) {
 			return false;
@@ -327,6 +321,13 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 		sd.refresh = true;
 	}
 	return false;
+}
+
+void MiniZStreamWrapper::FinalizeRead(StreamData &) {
+	if (read_state == GZipReadState::HEADER && gzip_header_bytes == 0) {
+		return;
+	}
+	throw IOException("Unexpected end of GZIP stream: %s", file->path);
 }
 
 void MiniZStreamWrapper::Write(CompressedFile &file, StreamData &sd, data_ptr_t uncompressed_data,
