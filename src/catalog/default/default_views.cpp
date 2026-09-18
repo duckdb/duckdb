@@ -166,8 +166,8 @@ static const DefaultView internal_views[] = {
      "default_character_set_catalog, NULL::VARCHAR default_character_set_schema, NULL::VARCHAR "
      "default_character_set_name, sql sql_path FROM duckdb_schemas()"},
     {"information_schema", "tables",
-     "SELECT database_name table_catalog, schema_name table_schema, table_name, CASE WHEN temporary THEN 'LOCAL "
-     "TEMPORARY' ELSE 'BASE TABLE' END table_type, NULL::VARCHAR self_referencing_column_name, NULL::VARCHAR "
+     "SELECT database_name table_catalog, schema_name table_schema, table_name, table_type, NULL::VARCHAR "
+     "self_referencing_column_name, NULL::VARCHAR "
      "reference_generation, NULL::VARCHAR user_defined_type_catalog, NULL::VARCHAR user_defined_type_schema, "
      "NULL::VARCHAR user_defined_type_name, 'YES' is_insertable_into, 'NO' is_typed, CASE WHEN temporary THEN "
      "'PRESERVE' ELSE NULL END commit_action, comment AS TABLE_COMMENT FROM duckdb_tables() UNION ALL SELECT "

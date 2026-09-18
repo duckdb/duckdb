@@ -40,6 +40,10 @@ bool TableCatalogEntry::HasGeneratedColumns() const {
 	return columns.LogicalColumnCount() != columns.PhysicalColumnCount();
 }
 
+string TableCatalogEntry::GetSQLTableType() const {
+	return temporary ? "LOCAL TEMPORARY" : "BASE TABLE";
+}
+
 StorageIndex TableCatalogEntry::GetStorageIndex(const ColumnIndex &column_id) const {
 	if (column_id.IsRowIdColumn()) {
 		return StorageIndex(COLUMN_IDENTIFIER_ROW_ID);

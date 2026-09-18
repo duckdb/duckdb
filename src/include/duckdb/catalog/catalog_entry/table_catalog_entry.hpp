@@ -112,6 +112,8 @@ public:
 	virtual bool IsDuckTable() const {
 		return false;
 	}
+	//! The SQL-standard table type exposed by information_schema.tables
+	DUCKDB_API virtual string GetSQLTableType() const;
 
 	DUCKDB_API static string ColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints);
 
