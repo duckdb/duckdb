@@ -41,12 +41,12 @@ struct MemFs {
 	std::atomic<int> file_data_destroyed {0};
 	std::atomic<int> read_at_calls {0};
 	std::atomic<int> write_at_calls {0};
-	std::atomic<int> read_calls {0};
-	std::atomic<int> write_calls {0};
-	std::atomic<int> seek_calls {0};
-	std::atomic<int> tell_calls {0};
 	std::atomic<int> sync_calls {0};
 	std::atomic<int> user_data_destroyed {0};
+
+	// Whether a read or write ever started anywhere but where the previous one on that file ended.
+	std::atomic<bool> read_out_of_order {false};
+	std::atomic<bool> write_out_of_order {false};
 
 	// What the open callback reports for every file.
 	bool seekable = true;
@@ -81,7 +81,9 @@ struct MemFs {
 struct MemHandle {
 	MemFs *fs;
 	std::string path;
-	idx_t cursor = 0;
+	// Where the previous read and write ended.
+	idx_t read_end = 0;
+	idx_t write_end = 0;
 };
 
 void VfsFail(duckdb_v2_error_info_handle *err, DUCKDB_V2_ERROR code, const std::string &message) {
@@ -192,9 +194,7 @@ void MemOpen(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_open_info_handle
 	} else if (create_new) {
 		fs.files[path].clear();
 	}
-	if (append) {
-		handle->cursor = fs.files[path].size();
-	}
+	handle->write_end = append ? fs.files[path].size() : 0;
 	// What the engine reports about the file when there is no file stat callback.
 	duckdb_v2_file_metadata_set_size(listed, fs.files[path].size(), err);
 	fs.opens++;
@@ -230,6 +230,9 @@ void MemReadAt(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_read_at_info_h
 		return;
 	}
 	std::lock_guard<std::mutex> guard(fs.lock);
+	if (location != handle.read_end) {
+		fs.read_out_of_order = true;
+	}
 	auto &data = fs.files[handle.path];
 	if (location >= data.size()) {
 		*bytes_read = 0;
@@ -238,6 +241,7 @@ void MemReadAt(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_read_at_info_h
 	// pread semantics: a short read at the end, never an error.
 	auto count = std::min<idx_t>(buffer_size, data.size() - location);
 	std::memcpy(buffer, data.data() + location, count);
+	handle.read_end = location + count;
 	*bytes_read = count;
 }
 
@@ -247,56 +251,16 @@ void MemWriteAt(duckdb_v2_vfs_info_handle, duckdb_v2_vfs_file_write_at_info_hand
 	auto &handle = VfsFile(file);
 	fs.write_at_calls++;
 	std::lock_guard<std::mutex> guard(fs.lock);
+	if (location != handle.write_end) {
+		fs.write_out_of_order = true;
+	}
+	handle.write_end = location + buffer_size;
 	auto &data = fs.files[handle.path];
 	if (location + buffer_size > data.size()) {
 		data.resize(location + buffer_size, '\0');
 	}
 	std::memcpy(&data[location], buffer, buffer_size);
 	*bytes_written = buffer_size;
-}
-
-void MemRead(duckdb_v2_vfs_info_handle, duckdb_v2_vfs_file_read_info_handle, void *file, void *buffer,
-             idx_t buffer_size, idx_t *bytes_read, duckdb_v2_error_info_handle *err) {
-	auto &fs = VfsOf(file);
-	auto &handle = VfsFile(file);
-	fs.read_calls++;
-	std::lock_guard<std::mutex> guard(fs.lock);
-	auto &data = fs.files[handle.path];
-	if (handle.cursor >= data.size()) {
-		*bytes_read = 0;
-		return;
-	}
-	auto count = std::min<idx_t>(buffer_size, data.size() - handle.cursor);
-	std::memcpy(buffer, data.data() + handle.cursor, count);
-	handle.cursor += count;
-	*bytes_read = count;
-}
-
-void MemWrite(duckdb_v2_vfs_info_handle, duckdb_v2_vfs_file_write_info_handle, void *file, const void *buffer,
-              idx_t buffer_size, idx_t *bytes_written, duckdb_v2_error_info_handle *err) {
-	auto &fs = VfsOf(file);
-	auto &handle = VfsFile(file);
-	fs.write_calls++;
-	std::lock_guard<std::mutex> guard(fs.lock);
-	auto &data = fs.files[handle.path];
-	if (handle.cursor + buffer_size > data.size()) {
-		data.resize(handle.cursor + buffer_size, '\0');
-	}
-	std::memcpy(&data[handle.cursor], buffer, buffer_size);
-	handle.cursor += buffer_size;
-	*bytes_written = buffer_size;
-}
-
-void MemSeek(duckdb_v2_vfs_info_handle, duckdb_v2_vfs_file_seek_info_handle, void *file, idx_t position,
-             duckdb_v2_error_info_handle *err) {
-	VfsOf(file).seek_calls++;
-	VfsFile(file).cursor = position;
-}
-
-void MemTell(duckdb_v2_vfs_info_handle, duckdb_v2_vfs_file_tell_info_handle, void *file, idx_t *position,
-             duckdb_v2_error_info_handle *err) {
-	VfsOf(file).tell_calls++;
-	*position = VfsFile(file).cursor;
 }
 
 void MemStat(duckdb_v2_vfs_info_handle, duckdb_v2_vfs_file_stat_info_handle, void *file,
@@ -490,7 +454,6 @@ void MemDestroyUserData(void *data) {
 // ---------------------------------------------------------------------------
 
 struct MemFsOptions {
-	bool cursor_callbacks = false; // read / write / seek / tell
 	bool write_at = true;
 	bool path_callbacks = true; // stat path / list / glob / remove / mkdir / rmdir / move
 	bool stat_path = true;      // the stat path callback, when the path callbacks are set
@@ -529,12 +492,6 @@ void RegisterMemFs(duckdb_v2_connection_handle conn, MemFs &fs, const MemFsOptio
 	}
 	if (options.write_at) {
 		REQUIRE(duckdb_v2_vfs_set_file_write_at_callback(vfs, MemWriteAt, nullptr) == DUCKDB_V2_ERROR_NONE);
-	}
-	if (options.cursor_callbacks) {
-		REQUIRE(duckdb_v2_vfs_set_file_read_callback(vfs, MemRead, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_vfs_set_file_write_callback(vfs, MemWrite, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_vfs_set_file_seek_callback(vfs, MemSeek, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_vfs_set_file_tell_callback(vfs, MemTell, nullptr) == DUCKDB_V2_ERROR_NONE);
 	}
 	if (options.path_callbacks) {
 		if (options.stat_path) {
@@ -680,11 +637,6 @@ TEST_CASE("V2 virtual file system: registration requires a name, routing and the
 	REQUIRE(duckdb_v2_vfs_set_file_open_callback(vfs, MemOpen, nullptr) == DUCKDB_V2_ERROR_NONE);
 	expect_failure("Read at");
 	REQUIRE(duckdb_v2_vfs_set_file_read_at_callback(vfs, MemReadAt, nullptr) == DUCKDB_V2_ERROR_NONE);
-	// Owning the cursor needs tell. What else it takes is decided by the open that needs it.
-	REQUIRE(duckdb_v2_vfs_set_file_seek_callback(vfs, MemSeek, nullptr) == DUCKDB_V2_ERROR_NONE);
-	expect_failure("Tell");
-	REQUIRE(duckdb_v2_vfs_set_file_tell_callback(vfs, MemTell, nullptr) == DUCKDB_V2_ERROR_NONE);
-
 	duckdb_v2_opaque user_data {&mem, nullptr, nullptr};
 	REQUIRE(duckdb_v2_vfs_set_user_data(vfs, &user_data, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_vfs_register(vfs, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -693,16 +645,6 @@ TEST_CASE("V2 virtual file system: registration requires a name, routing and the
 	expect_failure("already been registered");
 	REQUIRE(duckdb_v2_vfs_set_name(vfs, Convert("mem_again"), nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_vfs_register(vfs, nullptr) == DUCKDB_V2_ERROR_NONE);
-
-	// A file system that owns the cursor without a read callback cannot open a file for reading.
-	mem.files["mem://r.txt"] = "data";
-	duckdb_v2_file_handle handle = nullptr;
-	duckdb_v2_error_info_handle open_err = nullptr;
-	REQUIRE(VfsTryOpen(VfsEngineFs(fx.conn), "mem://r.txt", {DUCKDB_V2_FILE_FLAG_READ}, &handle, &open_err) !=
-	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(handle == nullptr);
-	REQUIRE(ErrorTextOf(&open_err).find("no \"read\" callback") != std::string::npos);
-	REQUIRE(mem.opens == 0);
 
 	REQUIRE(duckdb_v2_vfs_destroy(&vfs) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(vfs == nullptr);
@@ -745,7 +687,6 @@ TEST_CASE("V2 virtual file system: read_csv reads a seekable file at offsets", "
 	REQUIRE(rows == std::vector<std::string> {"one", "two"});
 
 	REQUIRE(mem.read_at_calls > 0);
-	REQUIRE(mem.read_calls == 0);
 	REQUIRE(mem.opens > 0);
 	REQUIRE(mem.opens == mem.closes);
 	REQUIRE(mem.opens == mem.file_data_destroyed);
@@ -753,20 +694,19 @@ TEST_CASE("V2 virtual file system: read_csv reads a seekable file at offsets", "
 	REQUIRE(mem.last_open_had_context);
 }
 
-TEST_CASE("V2 virtual file system: a stream-like file is read through its cursor", "[capi_v2][vfs]") {
+TEST_CASE("V2 virtual file system: a stream-like file is read from front to back", "[capi_v2][vfs]") {
 	EnvFixture fx;
 	MemFs mem;
 	mem.files["mem://data/a.csv"] = CSV_A;
 	MemFsOptions options;
-	options.cursor_callbacks = true;
-	// Seekable files are read at offsets, cache or no cache; only a file that cannot seek is streamed.
+	// A file that cannot seek is only ever read from where the previous read ended.
 	mem.seekable = false;
 	RegisterMemFs(fx.conn, mem, options);
 
 	auto rows = VfsQueryStrings(fx.conn, "SELECT i FROM read_csv('mem://data/a.csv') ORDER BY i");
 	REQUIRE(rows == std::vector<std::string> {"1", "2"});
-	REQUIRE(mem.read_calls > 0);
-	REQUIRE(mem.read_at_calls == 0);
+	REQUIRE(mem.read_at_calls > 0);
+	REQUIRE(!mem.read_out_of_order);
 }
 
 TEST_CASE("V2 virtual file system: patterns are expanded by the glob callback", "[capi_v2][vfs]") {
@@ -796,10 +736,22 @@ TEST_CASE("V2 virtual file system: patterns are expanded by the glob callback", 
 	auto missing = VfsQueryStrings(fx.conn, "SELECT file FROM glob('mem://data/missing.csv')");
 	REQUIRE(missing.empty());
 
-	// The whole thing feeds a multi-file reader, and what the glob knew reaches the open.
+	// The whole thing feeds a multi-file reader.
 	auto rows = VfsQueryStrings(fx.conn, "SELECT count(*) FROM read_csv('mem://data/**.csv')");
 	REQUIRE(rows == std::vector<std::string> {"6"});
-	// The first file of a scan is reopened from its bare path for sniffing, so only later files carry it.
+
+	// What the glob knew about an entry reaches the open that is handed the entry's metadata.
+	auto fs = VfsEngineFs(fx.conn);
+	duckdb_v2_file_listing_handle listing = nullptr;
+	REQUIRE(duckdb_v2_file_system_glob(fs, Convert("mem://data/sub/*.csv"), &listing, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_file_metadata_handle entry = nullptr;
+	REQUIRE(duckdb_v2_file_listing_get_entry_metadata(listing, 0, &entry, nullptr) == DUCKDB_V2_ERROR_NONE);
+	const DUCKDB_V2_FILE_FLAG read_flag = DUCKDB_V2_FILE_FLAG_READ;
+	duckdb_v2_file_handle handle = nullptr;
+	REQUIRE(duckdb_v2_file_system_open(fs, Convert("mem://data/sub/c.csv"), &read_flag, 1, entry, &handle, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_file_destroy(&handle);
+	duckdb_v2_file_listing_destroy(&listing);
 	REQUIRE(mem.listed_sizes["mem://data/sub/c.csv"] == std::strlen(CSV_C));
 }
 
@@ -863,15 +815,15 @@ TEST_CASE("V2 virtual file system: without a glob callback every path names one 
 // Writing through SQL
 // ---------------------------------------------------------------------------
 
-TEST_CASE("V2 virtual file system: COPY TO writes through the cursor callbacks", "[capi_v2][vfs]") {
+TEST_CASE("V2 virtual file system: COPY TO appends to a file that cannot seek", "[capi_v2][vfs]") {
 	EnvFixture fx;
 	MemFs mem;
 	MemFsOptions options;
-	options.cursor_callbacks = true;
 	RegisterMemFs(fx.conn, mem, options);
 
 	ExecSQL(fx.conn, "COPY (SELECT range AS i, 'v' || range AS s FROM range(5)) TO 'mem://out/x.csv' (HEADER)");
-	REQUIRE(mem.write_calls > 0);
+	REQUIRE(mem.write_at_calls > 0);
+	REQUIRE(!mem.write_out_of_order);
 	REQUIRE(mem.files.count("mem://out/x.csv") == 1);
 	// The engine's writers ask for an exclusive lock, and the open callback is told.
 	REQUIRE(mem.last_open_lock == 2);
@@ -888,15 +840,13 @@ TEST_CASE("V2 virtual file system: COPY TO writes through the cursor callbacks",
 	REQUIRE(mem.opens == mem.file_data_destroyed);
 }
 
-TEST_CASE("V2 virtual file system: COPY TO is served through write_at when the engine keeps the cursor",
-          "[capi_v2][vfs]") {
+TEST_CASE("V2 virtual file system: COPY TO is served through write_at", "[capi_v2][vfs]") {
 	EnvFixture fx;
 	MemFs mem;
 	RegisterMemFs(fx.conn, mem);
 
 	ExecSQL(fx.conn, "COPY (SELECT range AS i FROM range(3)) TO 'mem://out/y.csv' (HEADER)");
 	REQUIRE(mem.write_at_calls > 0);
-	REQUIRE(mem.write_calls == 0);
 
 	auto rows = VfsQueryStrings(fx.conn, "SELECT i FROM read_csv('mem://out/y.csv') ORDER BY i");
 	REQUIRE(rows == std::vector<std::string> {"0", "1", "2"});
@@ -906,7 +856,6 @@ TEST_CASE("V2 virtual file system: partitioned COPY TO uses the directory callba
 	EnvFixture fx;
 	MemFs mem;
 	MemFsOptions options;
-	options.cursor_callbacks = true;
 	RegisterMemFs(fx.conn, mem, options);
 
 	ExecSQL(fx.conn, "COPY (SELECT range % 2 AS p, range AS i FROM range(6)) TO 'mem://part' "
@@ -940,7 +889,6 @@ TEST_CASE("V2 virtual file system: a failed COPY aborts the file instead of clos
 	EnvFixture fx;
 	MemFs mem;
 	MemFsOptions options;
-	options.cursor_callbacks = true;
 	options.abort_callback = true;
 	RegisterMemFs(fx.conn, mem, options);
 
@@ -1135,7 +1083,6 @@ TEST_CASE("V2 virtual file system: parallel access reads and writes at offsets",
 	EnvFixture fx;
 	MemFs mem;
 	MemFsOptions options;
-	options.cursor_callbacks = true;
 	RegisterMemFs(fx.conn, mem, options);
 	auto fs = VfsEngineFs(fx.conn);
 
@@ -1155,7 +1102,6 @@ TEST_CASE("V2 virtual file system: parallel access reads and writes at offsets",
 	}
 	REQUIRE(mem.files["mem://p.bin"] == "hello world");
 	REQUIRE(mem.write_at_calls == 2);
-	REQUIRE(mem.write_calls == 0);
 	// The one sync is the explicit one: closing a written file does not sync it.
 	REQUIRE(mem.sync_calls == 1);
 
@@ -1172,40 +1118,10 @@ TEST_CASE("V2 virtual file system: parallel access reads and writes at offsets",
 		REQUIRE(std::string(buffer, 2) == "ld");
 		duckdb_v2_file_destroy(&handle);
 	}
-	REQUIRE(mem.read_calls == 0);
 	REQUIRE(mem.opens == mem.closes);
 }
 
-TEST_CASE("V2 virtual file system: parallel writes need a write_at callback", "[capi_v2][vfs]") {
-	EnvFixture fx;
-	MemFs mem;
-	MemFsOptions options;
-	options.cursor_callbacks = true;
-	options.write_at = false;
-	RegisterMemFs(fx.conn, mem, options);
-	auto fs = VfsEngineFs(fx.conn);
-
-	duckdb_v2_file_handle handle = nullptr;
-	duckdb_v2_error_info_handle err = nullptr;
-	REQUIRE(VfsTryOpen(fs, "mem://q.bin",
-	                   {DUCKDB_V2_FILE_FLAG_WRITE, DUCKDB_V2_FILE_FLAG_CREATE, DUCKDB_V2_FILE_FLAG_PARALLEL_ACCESS},
-	                   &handle, &err) != DUCKDB_V2_ERROR_NONE);
-	REQUIRE(handle == nullptr);
-	REQUIRE(ErrorTextOf(&err).find("write at") != std::string::npos);
-	// The open callback was never reached.
-	REQUIRE(mem.opens == 0);
-
-	// Without parallel access the cursor write serves it.
-	handle = VfsOpen(fs, "mem://q.bin", {DUCKDB_V2_FILE_FLAG_WRITE, DUCKDB_V2_FILE_FLAG_CREATE});
-	idx_t written = 0;
-	REQUIRE(duckdb_v2_file_write(handle, "abc", 3, &written, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(written == 3);
-	duckdb_v2_file_destroy(&handle);
-	REQUIRE(mem.write_calls == 1);
-	REQUIRE(mem.files["mem://q.bin"] == "abc");
-}
-
-TEST_CASE("V2 virtual file system: the engine keeps the cursor when the file system has none", "[capi_v2][vfs]") {
+TEST_CASE("V2 virtual file system: the engine keeps the position of sequential reads and writes", "[capi_v2][vfs]") {
 	EnvFixture fx;
 	MemFs mem;
 	mem.files["mem://c.txt"] = "0123456789";
@@ -1227,12 +1143,9 @@ TEST_CASE("V2 virtual file system: the engine keeps the cursor when the file sys
 	REQUIRE(std::string(buffer, read) == "89");
 	REQUIRE(duckdb_v2_file_read(handle, buffer, 4, &read, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(read == 0);
-	REQUIRE(mem.read_calls == 0);
-	REQUIRE(mem.seek_calls == 0);
-	REQUIRE(mem.tell_calls == 0);
 	duckdb_v2_file_destroy(&handle);
 
-	// Appending through write_at starts the engine's cursor at the end.
+	// Appending starts at the end.
 	handle = VfsOpen(fs, "mem://c.txt", {DUCKDB_V2_FILE_FLAG_WRITE, DUCKDB_V2_FILE_FLAG_APPEND});
 	idx_t written = 0;
 	REQUIRE(duckdb_v2_file_write(handle, "ab", 2, &written, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -1241,81 +1154,38 @@ TEST_CASE("V2 virtual file system: the engine keeps the cursor when the file sys
 	REQUIRE(mem.write_at_calls == 1);
 }
 
-TEST_CASE("V2 virtual file system: the file system owns the cursor", "[capi_v2][vfs]") {
+TEST_CASE("V2 virtual file system: a file that cannot seek is only accessed in order", "[capi_v2][vfs]") {
 	EnvFixture fx;
 	MemFs mem;
-	mem.files["mem://c.txt"] = "0123456789";
-	MemFsOptions options;
-	options.cursor_callbacks = true;
-	RegisterMemFs(fx.conn, mem, options);
+	mem.files["mem://s.txt"] = "0123456789";
+	mem.seekable = false;
+	RegisterMemFs(fx.conn, mem);
 	auto fs = VfsEngineFs(fx.conn);
 
-	auto handle = VfsOpen(fs, "mem://c.txt", {DUCKDB_V2_FILE_FLAG_READ});
+	auto handle = VfsOpen(fs, "mem://s.txt", {DUCKDB_V2_FILE_FLAG_READ});
 	char buffer[4];
 	idx_t read = 0;
 	REQUIRE(duckdb_v2_file_read(handle, buffer, 4, &read, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(std::string(buffer, read) == "0123");
-	REQUIRE(mem.read_calls == 1);
-
 	idx_t position = 0;
 	REQUIRE(duckdb_v2_file_tell(handle, &position, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(position == 4);
-	REQUIRE(mem.tell_calls == 1);
 
-	REQUIRE(duckdb_v2_file_seek(handle, 8, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(mem.seek_calls == 1);
-	REQUIRE(duckdb_v2_file_read(handle, buffer, 4, &read, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(std::string(buffer, read) == "89");
-	REQUIRE(duckdb_v2_file_read(handle, buffer, 4, &read, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(read == 0);
-
-	// Offset reads never touch the cursor.
-	idx_t read_at = 0;
-	REQUIRE(duckdb_v2_file_read_at(handle, buffer, 4, 0, &read_at, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(read_at == 4);
-	REQUIRE(std::string(buffer, 4) == "0123");
-	REQUIRE(duckdb_v2_file_tell(handle, &position, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(position == 10);
-	duckdb_v2_file_destroy(&handle);
-
-	// Appending starts the cursor at the end, which is the open callback's job.
-	handle = VfsOpen(fs, "mem://c.txt", {DUCKDB_V2_FILE_FLAG_WRITE, DUCKDB_V2_FILE_FLAG_APPEND});
-	idx_t written = 0;
-	REQUIRE(duckdb_v2_file_write(handle, "ab", 2, &written, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_file_destroy(&handle);
-	REQUIRE(mem.files["mem://c.txt"] == "0123456789ab");
-}
-
-TEST_CASE("V2 virtual file system: a cursor owner without a seek callback fails seeks loudly", "[capi_v2][vfs]") {
-	EnvFixture fx;
-	MemFs mem;
-	mem.files["mem://c.txt"] = "0123456789";
-
-	duckdb_v2_vfs_handle vfs = nullptr;
-	REQUIRE(duckdb_v2_vfs_create_with_connection(fx.conn, &vfs, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_vfs_set_name(vfs, Convert("mem"), nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_opaque user_data {&mem, nullptr, nullptr};
-	REQUIRE(duckdb_v2_vfs_set_user_data(vfs, &user_data, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_vfs_add_prefix(vfs, Convert(SCHEME), nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_vfs_set_file_open_callback(vfs, MemOpen, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_vfs_set_file_read_at_callback(vfs, MemReadAt, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_vfs_set_file_stat_callback(vfs, MemStat, nullptr) == DUCKDB_V2_ERROR_NONE);
-	// A stream-only cursor: read and tell, no seek.
-	REQUIRE(duckdb_v2_vfs_set_file_read_callback(vfs, MemRead, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_vfs_set_file_tell_callback(vfs, MemTell, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_vfs_register(vfs, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_vfs_destroy(&vfs);
-	auto fs = VfsEngineFs(fx.conn);
-
-	auto handle = VfsOpen(fs, "mem://c.txt", {DUCKDB_V2_FILE_FLAG_READ});
-	char buffer[4];
-	idx_t read = 0;
-	REQUIRE(duckdb_v2_file_read(handle, buffer, 4, &read, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(std::string(buffer, read) == "0123");
-	REQUIRE(mem.read_calls == 1);
+	// Going back fails before it reaches the file system, by seek or by offset.
 	duckdb_v2_error_info_handle err = nullptr;
 	REQUIRE(duckdb_v2_file_seek(handle, 0, &err) != DUCKDB_V2_ERROR_NONE);
-	REQUIRE(ErrorTextOf(&err).find("no \"seek\" callback") != std::string::npos);
+	REQUIRE(ErrorTextOf(&err).find("not seekable") != std::string::npos);
+	auto calls = mem.read_at_calls.load();
+	REQUIRE(duckdb_v2_file_read_at(handle, buffer, 4, 0, &read, &err) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(ErrorTextOf(&err).find("not seekable") != std::string::npos);
+	REQUIRE(mem.read_at_calls == calls);
+
+	// Continuing from where the previous read ended is fine, by offset as well.
+	REQUIRE(duckdb_v2_file_read_at(handle, buffer, 4, 4, &read, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(std::string(buffer, read) == "4567");
+	REQUIRE(duckdb_v2_file_read(handle, buffer, 4, &read, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(std::string(buffer, read) == "89");
+	REQUIRE(!mem.read_out_of_order);
 	duckdb_v2_file_destroy(&handle);
 }
 
@@ -1416,24 +1286,6 @@ TEST_CASE("V2 virtual file system: an open that attaches no file data fails", "[
 
 	auto text = VfsQueryError(fx.conn, "SELECT * FROM read_csv('bare://x.csv')");
 	REQUIRE(text.find("without attaching file data") != std::string::npos);
-}
-
-TEST_CASE("V2 virtual file system: a non-seekable file needs a file system that owns the cursor", "[capi_v2][vfs]") {
-	EnvFixture fx;
-	MemFs mem;
-	mem.files["mem://s.txt"] = "stream";
-	mem.seekable = false;
-	RegisterMemFs(fx.conn, mem);
-	auto fs = VfsEngineFs(fx.conn);
-
-	duckdb_v2_file_handle handle = nullptr;
-	duckdb_v2_error_info_handle err = nullptr;
-	REQUIRE(VfsTryOpen(fs, "mem://s.txt", {DUCKDB_V2_FILE_FLAG_READ}, &handle, &err) != DUCKDB_V2_ERROR_NONE);
-	REQUIRE(handle == nullptr);
-	REQUIRE(ErrorTextOf(&err).find("owns the cursor") != std::string::npos);
-	// The open callback ran and its state was released.
-	REQUIRE(mem.opens == 1);
-	REQUIRE(mem.file_data_destroyed == 1);
 }
 
 // ---------------------------------------------------------------------------

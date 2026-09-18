@@ -12251,10 +12251,11 @@ typedef enum DUCKDB_V2_FILE_PROPERTY {
 	DUCKDB_V2_FILE_PROPERTY_INVALID = 0,
 
 	/*!
-	 * Whether the file's cursor can be moved to an arbitrary position. It defaults to true. Set it to false for a file
-	 * that can only be read forward, such as a stream. The engine then reads it sequentially through the cursor and
-	 * avoids readers that need to seek. Reporting false from a file system that leaves the cursor to the engine makes
-	 * the open fail, since the engine's own cursor is a position in the file.
+	 * Whether the file can be read and written at arbitrary offsets. It defaults to true. Set it to false for a file
+	 * that can only be read forward, such as a stream, or only be written at its end, such as an upload to an object
+	 * store. The engine then avoids readers and writers that need to seek, and every "read at" and "write at" it makes
+	 * on the file starts exactly where the previous one ended, so the callback can ignore the offset. Anything else, a
+	 * seek included, fails before it reaches the file system.
 	 */
 	DUCKDB_V2_FILE_PROPERTY_IS_SEEKABLE = 1,
 
@@ -12291,30 +12292,22 @@ typedef enum DUCKDB_V2_FILE_PROPERTY {
  * Once a file system is registered, everything in DuckDB that reads or writes files (`read_parquet`, `read_csv`, `COPY
  * TO`, `ATTACH`, ...) can make use of it.
  *
- * DuckDB reads and writes files in two ways, either through "positional" or "cursor"-based operations. Positional reads
- * and writes (`read_at`, `write_at`) pass an absolute byte offset with every call, like `pread` and `pwrite`, and never
- * touch the file's cursor. On a file opened with `FILE_FLAG_PARALLEL_ACCESS` they may run from several threads at once.
- *
- * Cursor-based reads and writes (`read`, `write`) start at the file's cursor and advance it past the bytes transferred,
- * like a POSIX file descriptor's offset. `seek` moves the cursor and `tell` reports where it is. Cursor operations
- * never run concurrently on the same file.
- *
- * The cursor-based callbacks are optional. Set none of `read`, `write`, `seek` and `tell` and DuckDB keeps the cursor:
- * it tracks a position per file and serves all four through `read_at` and `write_at`. Set any of them and the file
- * system keeps the cursor, for every file and in both directions, so that reads and writes interleaved on one file move
- * a single cursor. A file system that keeps the cursor must set `tell`. It needs `read` to open a file for reading,
- * `write` to open one for writing, and `seek` for any file the engine seeks, and a missing one is reported as an error
- * by the open or the seek that needs it. A file that cannot seek, such as a stream, has no position for DuckDB to track
- * and can therefore only be served by a file system that keeps the cursor.
+ * All I/O is positional. Reads and writes (`read_at`, `write_at`) pass an absolute byte offset with every call, like
+ * `pread` and `pwrite`, and a file system keeps no cursor. Where the engine reads or writes a file sequentially, it
+ * keeps the position itself and passes it along, the way SQLite does with its VFS: a file opened with
+ * `FILE_FLAG_APPEND` starts at its end, and every sequential write to it lands at its end. On a file opened with
+ * `FILE_FLAG_PARALLEL_ACCESS` the callbacks may run from several threads at once. A file that cannot be accessed at
+ * arbitrary offsets reports `FILE_PROPERTY_IS_SEEKABLE` as false, and is then only ever read or written from where the
+ * previous call ended.
  *
  * Callbacks come in two groups. File system callbacks (`claim`, `stat`, `list`, `glob`, `remove_file`,
  * `create_directory`, `remove_directory`, `move`) operate on a path. File callbacks (`open`, `close`, `abort`,
- * `read_at`, `write_at`, `read`, `write`, `seek`, `tell`, `stat`, `sync`, `truncate`) operate on one file: "open"
- * produces it from a path, the others act on what it produced. Every callback receives the shared info handle as its
- * first argument and the handle of its own operation as its second. `claim`, `open` and the path callbacks receive the
- * path as a plain argument next to it, `open` its flags and metadata after that, and the other file callbacks the
- * per-file state. The file system's user data is reachable from the shared info; a file callback finds what it needs in
- * the per-file state the "open" callback attached.
+ * `read_at`, `write_at`, `stat`, `sync`, `truncate`) operate on one file: "open" produces it from a path, the others
+ * act on what it produced. Every callback receives the shared info handle as its first argument and the handle of its
+ * own operation as its second. `claim`, `open` and the path callbacks receive the path as a plain argument next to it,
+ * `open` its flags and metadata after that, and the other file callbacks the per-file state. The file system's user
+ * data is reachable from the shared info; a file callback finds what it needs in the per-file state the "open" callback
+ * attached.
  *
  * A callback reports a missing path the way the `file_system` function of the same name reports it to its caller, so
  * that an overlay can pass the answer on as it received it. The file system `stat` leaves its `exists` output `false`
@@ -12422,26 +12415,6 @@ typedef struct _duckdb_v2_vfs_file_write_at_info {
 	void *internal_ptr;
 } * duckdb_v2_vfs_file_write_at_info_handle;
 
-//! A borrowed opaque handle to one file read operation.
-typedef struct _duckdb_v2_vfs_file_read_info {
-	void *internal_ptr;
-} * duckdb_v2_vfs_file_read_info_handle;
-
-//! A borrowed opaque handle to one file write operation.
-typedef struct _duckdb_v2_vfs_file_write_info {
-	void *internal_ptr;
-} * duckdb_v2_vfs_file_write_info_handle;
-
-//! A borrowed opaque handle to one file seek operation.
-typedef struct _duckdb_v2_vfs_file_seek_info {
-	void *internal_ptr;
-} * duckdb_v2_vfs_file_seek_info_handle;
-
-//! A borrowed opaque handle to one file tell operation.
-typedef struct _duckdb_v2_vfs_file_tell_info {
-	void *internal_ptr;
-} * duckdb_v2_vfs_file_tell_info_handle;
-
 //! A borrowed opaque handle to one file stat operation.
 typedef struct _duckdb_v2_vfs_file_stat_info {
 	void *internal_ptr;
@@ -12481,8 +12454,9 @@ typedef void (*duckdb_v2_vfs_claim_callback_fn)(duckdb_v2_vfs_info_handle info, 
  * It receives what `duckdb_v2_file_system_open()` takes: the path, the flags as a complete list, and the metadata
  * accompanying the open. The context of the query opening the file is read from `info`. On success the callback
  * attaches per-file state via `duckdb_v2_vfs_file_open_set_data()`, which every other file callback then receives, and
- * reports any property of the file via `duckdb_v2_vfs_file_open_set_property()`. A file opened with `FILE_FLAG_APPEND`
- * starts with its cursor at the end.
+ * reports any property of the file via `duckdb_v2_vfs_file_open_set_property()`. For a file opened with
+ * `FILE_FLAG_APPEND` the engine learns where the end is from the size in the metadata, or from the file "stat"
+ * callback.
  *
  * A failed open reports the reason through `err`. State attached before the failure is destroyed. Report a missing file
  * as `ERROR_IO_FILE_NOT_FOUND`, which lets the engine give a precise error message, and lets callers that asked for it
@@ -12528,9 +12502,9 @@ typedef void (*duckdb_v2_vfs_file_abort_callback_fn)(duckdb_v2_vfs_info_handle i
  *
  * Fills the buffer with up to `buffer_size` bytes starting at `location`, and reports how many were read. Reading fewer
  * bytes than asked for is allowed, and the engine calls again for the rest. Zero means the offset is at or past the end
- * of the file, which is also how the engine detects the end of a file whose cursor it keeps itself. The read never
- * moves the cursor, like `pread`. It may be called from several threads at once on a file opened with
- * `FILE_FLAG_PARALLEL_ACCESS`.
+ * of the file, which is how the engine detects the end of a file it reads sequentially. It may be called from several
+ * threads at once on a file opened with `FILE_FLAG_PARALLEL_ACCESS`. On a file that reported
+ * `FILE_PROPERTY_IS_SEEKABLE` as false, `location` is always where the previous read ended.
  */
 typedef void (*duckdb_v2_vfs_file_read_at_callback_fn)(duckdb_v2_vfs_info_handle info,
                                                        duckdb_v2_vfs_file_read_at_info_handle op_info, void *file,
@@ -12543,54 +12517,15 @@ typedef void (*duckdb_v2_vfs_file_read_at_callback_fn)(duckdb_v2_vfs_info_handle
  * Writes up to `buffer_size` bytes starting at `location`, extending the file if the offset is past its end, and
  * reports how many were written. Writing fewer bytes than asked for is allowed, and the engine calls again for the
  * rest. Zero means nothing could be written, like `pwrite`, and the engine then fails the write it needed the bytes
- * for. The write never moves the cursor, like `pwrite`, and writes at `location` even on a file opened with
- * `FILE_FLAG_APPEND`. It may be called from several threads at once on a file opened with `FILE_FLAG_PARALLEL_ACCESS`,
- * always for disjoint ranges.
+ * for. It writes at `location` even on a file opened with `FILE_FLAG_APPEND`, for which the engine passes the end of
+ * the file itself. It may be called from several threads at once on a file opened with `FILE_FLAG_PARALLEL_ACCESS`,
+ * always for disjoint ranges. On a file that reported `FILE_PROPERTY_IS_SEEKABLE` as false, `location` is always where
+ * the previous write ended, which makes this an append.
  */
 typedef void (*duckdb_v2_vfs_file_write_at_callback_fn)(duckdb_v2_vfs_info_handle info,
                                                         duckdb_v2_vfs_file_write_at_info_handle op_info, void *file,
                                                         const void *buffer, idx_t buffer_size, idx_t location,
                                                         idx_t *bytes_written, duckdb_v2_error_info_handle *err);
-
-/*!
- * Reads from the cursor.
- *
- * Reads up to `buffer_size` bytes from the cursor, advancing it by however many were read. Reading fewer bytes than
- * asked for is normal at the end of the file, and zero means there is nothing left. It is never called concurrently on
- * the same file, although positional reads may run alongside it on a file opened with `FILE_FLAG_PARALLEL_ACCESS`.
- */
-typedef void (*duckdb_v2_vfs_file_read_callback_fn)(duckdb_v2_vfs_info_handle info,
-                                                    duckdb_v2_vfs_file_read_info_handle op_info, void *file,
-                                                    void *buffer, idx_t buffer_size, idx_t *bytes_read,
-                                                    duckdb_v2_error_info_handle *err);
-
-/*!
- * Writes at the cursor.
- *
- * Writes up to `buffer_size` bytes at the cursor, advancing it by however many were written, and reports how many that
- * was. Writing fewer bytes than asked for is allowed, and the engine calls again for the rest. Zero means nothing could
- * be written, and the engine then fails the write it needed the bytes for. It is never called concurrently on the same
- * file.
- */
-typedef void (*duckdb_v2_vfs_file_write_callback_fn)(duckdb_v2_vfs_info_handle info,
-                                                     duckdb_v2_vfs_file_write_info_handle op_info, void *file,
-                                                     const void *buffer, idx_t buffer_size, idx_t *bytes_written,
-                                                     duckdb_v2_error_info_handle *err);
-
-/*!
- * Moves the cursor.
- *
- * Sets the position the next cursor read or write starts from, as an absolute byte offset. Seeking past the end is
- * allowed. It is never called on a file that reported `FILE_PROPERTY_IS_SEEKABLE` as false.
- */
-typedef void (*duckdb_v2_vfs_file_seek_callback_fn)(duckdb_v2_vfs_info_handle info,
-                                                    duckdb_v2_vfs_file_seek_info_handle op_info, void *file,
-                                                    idx_t position, duckdb_v2_error_info_handle *err);
-
-//! Reports the cursor's position, as an absolute byte offset from the start of the file.
-typedef void (*duckdb_v2_vfs_file_tell_callback_fn)(duckdb_v2_vfs_info_handle info,
-                                                    duckdb_v2_vfs_file_tell_info_handle op_info, void *file,
-                                                    idx_t *position, duckdb_v2_error_info_handle *err);
 
 /*!
  * Reports what is known about an open file.
@@ -12927,10 +12862,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_set_file_read_at_callback(duckdb_v2_v
 /*!
  * Sets the optional "write at" callback of the virtual file system.
  *
- * The callback writes at an explicit offset. See `duckdb_v2_vfs_file_write_at_callback_fn`. It is required for files
- * opened for writing with `FILE_FLAG_PARALLEL_ACCESS`, which is how database files are written. Data files written by
- * `COPY` go through the cursor instead. Without it and without a "write" callback the file system is read-only, and
- * opening a file for writing fails.
+ * The callback writes at an explicit offset. See `duckdb_v2_vfs_file_write_at_callback_fn`. Without it the file system
+ * is read-only, and opening a file for writing fails. A backend that can only append, such as an object store, reports
+ * its files as not seekable and is then only ever asked to write at the end.
  *
  * history:
  * - stable: v2.0.0
@@ -12944,88 +12878,6 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_set_file_read_at_callback(duckdb_v2_v
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_set_file_write_at_callback(duckdb_v2_vfs_handle file_system,
                                                                       duckdb_v2_vfs_file_write_at_callback_fn callback,
                                                                       duckdb_v2_error_info_handle *err);
-
-/*!
- * Sets the optional "read" callback of the virtual file system.
- *
- * The callback reads from the cursor. See `duckdb_v2_vfs_file_read_callback_fn`. Setting it makes the file system keep
- * the cursor, which then also requires "tell". Without it, and without any other cursor callback, the engine keeps the
- * cursor itself and serves cursor reads through "read at". A file system that keeps the cursor without it cannot open a
- * file for reading.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param file_system The file system to set the callback of.
- * @param callback The callback to set.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_set_file_read_callback(duckdb_v2_vfs_handle file_system,
-                                                                  duckdb_v2_vfs_file_read_callback_fn callback,
-                                                                  duckdb_v2_error_info_handle *err);
-
-/*!
- * Sets the optional "write" callback of the virtual file system.
- *
- * The callback writes at the cursor. See `duckdb_v2_vfs_file_write_callback_fn`. This is how `COPY` writes data files,
- * so a backend that can only append, such as an object store, implements this one. Setting it makes the file system
- * keep the cursor, which then also requires "tell". Without it, and without any other cursor callback, the engine keeps
- * the cursor itself and serves cursor writes through "write at". A file system that keeps the cursor without it cannot
- * open a file for writing.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param file_system The file system to set the callback of.
- * @param callback The callback to set.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_set_file_write_callback(duckdb_v2_vfs_handle file_system,
-                                                                   duckdb_v2_vfs_file_write_callback_fn callback,
-                                                                   duckdb_v2_error_info_handle *err);
-
-/*!
- * Sets the optional "seek" callback of the virtual file system.
- *
- * The callback moves the cursor. See `duckdb_v2_vfs_file_seek_callback_fn`. Only a file system that owns the cursor
- * needs it, and only for files that report `FILE_PROPERTY_IS_SEEKABLE` as true, since the engine seeks those. If the
- * file system owns the cursor and the engine seeks a file without this callback, the seek fails.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param file_system The file system to set the callback of.
- * @param callback The callback to set.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_set_file_seek_callback(duckdb_v2_vfs_handle file_system,
-                                                                  duckdb_v2_vfs_file_seek_callback_fn callback,
-                                                                  duckdb_v2_error_info_handle *err);
-
-/*!
- * Sets the optional "tell" callback of the virtual file system.
- *
- * The callback reports the cursor's position. See `duckdb_v2_vfs_file_tell_callback_fn`. It is required whenever the
- * file system owns the cursor, since the engine asks for the position of every file it writes through the cursor.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param file_system The file system to set the callback of.
- * @param callback The callback to set.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_set_file_tell_callback(duckdb_v2_vfs_handle file_system,
-                                                                  duckdb_v2_vfs_file_tell_callback_fn callback,
-                                                                  duckdb_v2_error_info_handle *err);
 
 /*!
  * Sets the optional file "stat" callback of the virtual file system.
@@ -13320,9 +13172,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_info_try_get_context(duckdb_v2_vfs_in
  *
  * The file system is registered on the database given at creation, the connection's or the loading extension's.
  * Registration requires a name that is not already taken, at least one prefix or a "claim" callback, the "open"
- * callback, and "read at" unless the file system is a write-only sink with a "write" or "write at" callback. A file
- * system that keeps the cursor by setting any of "read", "write", "seek" or "tell" must set "tell". Every other
- * callback is optional, and its absence is only reported as an error when the engine needs it.
+ * callback, and "read at" unless the file system is a write-only sink with a "write at" callback. Every other callback
+ * is optional, and its absence is only reported as an error when the engine needs it.
  *
  * Registration copies the configuration, so destroying the handle afterwards or calling its setters again does not
  * affect the registered file system. Registering the same handle again fails, since its name is now taken. After

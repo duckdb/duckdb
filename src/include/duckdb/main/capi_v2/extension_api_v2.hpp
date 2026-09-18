@@ -1408,24 +1408,16 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_file_read_at_callback)
 	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_read_at_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_file_read_callback)
-	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_read_callback_fn callback, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_file_seek_callback)
-	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_seek_callback_fn callback, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_file_stat_callback)
 	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_stat_callback_fn callback, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_file_sync_callback)
 	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_sync_callback_fn callback, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_file_tell_callback)
-	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_tell_callback_fn callback, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_file_truncate_callback)
 	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_truncate_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_file_write_at_callback)
 	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_write_at_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_file_write_callback)
-	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_write_callback_fn callback, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_glob_callback)
 	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_glob_callback_fn callback, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_list_callback)
@@ -2084,14 +2076,10 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_vfs_set_file_close_callback = duckdb_v2_vfs_set_file_close_callback;
 	result.duckdb_v2_vfs_set_file_open_callback = duckdb_v2_vfs_set_file_open_callback;
 	result.duckdb_v2_vfs_set_file_read_at_callback = duckdb_v2_vfs_set_file_read_at_callback;
-	result.duckdb_v2_vfs_set_file_read_callback = duckdb_v2_vfs_set_file_read_callback;
-	result.duckdb_v2_vfs_set_file_seek_callback = duckdb_v2_vfs_set_file_seek_callback;
 	result.duckdb_v2_vfs_set_file_stat_callback = duckdb_v2_vfs_set_file_stat_callback;
 	result.duckdb_v2_vfs_set_file_sync_callback = duckdb_v2_vfs_set_file_sync_callback;
-	result.duckdb_v2_vfs_set_file_tell_callback = duckdb_v2_vfs_set_file_tell_callback;
 	result.duckdb_v2_vfs_set_file_truncate_callback = duckdb_v2_vfs_set_file_truncate_callback;
 	result.duckdb_v2_vfs_set_file_write_at_callback = duckdb_v2_vfs_set_file_write_at_callback;
-	result.duckdb_v2_vfs_set_file_write_callback = duckdb_v2_vfs_set_file_write_callback;
 	result.duckdb_v2_vfs_set_glob_callback = duckdb_v2_vfs_set_glob_callback;
 	result.duckdb_v2_vfs_set_list_callback = duckdb_v2_vfs_set_list_callback;
 	result.duckdb_v2_vfs_set_move_callback = duckdb_v2_vfs_set_move_callback;

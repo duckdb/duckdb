@@ -110,7 +110,7 @@ auto FileOf(VirtualFile &file) -> MemFile & {
 	return static_cast<MemFile &>(file);
 }
 
-// ---- file callbacks: the file system leaves the cursor to the engine, so only positional operations ----
+// ---- file callbacks: all I/O is positional ----
 
 auto MemOpen(VirtualFileSystem::OpenInput &input) -> std::unique_ptr<VirtualFile> {
 	auto &store = StoreOf(input);
@@ -443,16 +443,10 @@ TEST_CASE("Stable C++ API: virtual file system registration is validated", "[cpp
 		vfs.SetName("mem").AddPrefix(SCHEME).SetFileReadAtCallback(MemReadAt).SetFileStatCallback(MemStat);
 		REQUIRE_THROWS_MATCHES(vfs.Register(conn), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
-	// Owning the cursor without reporting where it is.
-	{
-		auto vfs = CreateMem(store);
-		vfs.SetFileSeekCallback([](Info &, VirtualFile &, idx_t) {});
-		REQUIRE_THROWS_MATCHES(vfs.Register(conn), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
-	}
 	// A callback can be taken back again before registering.
 	{
 		auto vfs = CreateMem(store);
-		vfs.SetFileSeekCallback([](Info &, VirtualFile &, idx_t) {}).SetFileSeekCallback(nullptr);
+		vfs.SetFileTruncateCallback([](Info &, VirtualFile &, idx_t) {}).SetFileTruncateCallback(nullptr);
 		vfs.Register(conn);
 	}
 }

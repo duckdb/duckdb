@@ -18,10 +18,6 @@ struct CV2VirtualFileSystemCallbacks {
 	duckdb_v2_vfs_file_abort_callback_fn abort = nullptr;
 	duckdb_v2_vfs_file_read_at_callback_fn read_at = nullptr;
 	duckdb_v2_vfs_file_write_at_callback_fn write_at = nullptr;
-	duckdb_v2_vfs_file_read_callback_fn read = nullptr;
-	duckdb_v2_vfs_file_write_callback_fn write = nullptr;
-	duckdb_v2_vfs_file_seek_callback_fn seek = nullptr;
-	duckdb_v2_vfs_file_tell_callback_fn tell = nullptr;
 	duckdb_v2_vfs_file_stat_callback_fn stat = nullptr;
 	duckdb_v2_vfs_file_sync_callback_fn sync = nullptr;
 	duckdb_v2_vfs_file_truncate_callback_fn truncate = nullptr;
@@ -44,14 +40,10 @@ struct CV2VirtualFileSystemConfig {
 	shared_ptr<CV2UserData> user_data;
 
 	bool IsWritable() const {
-		return callbacks.write || callbacks.write_at;
+		return callbacks.write_at != nullptr;
 	}
 	bool CanRead() const {
 		return callbacks.read_at != nullptr;
-	}
-	//! Whether the file system owns the cursor. Otherwise the engine keeps one per file over the offset callbacks.
-	bool OwnsCursor() const {
-		return callbacks.read || callbacks.write || callbacks.seek || callbacks.tell;
 	}
 };
 
@@ -75,7 +67,7 @@ static HANDLE EmptyOperationInfo() {
 	return reinterpret_cast<HANDLE>(&info);
 }
 
-// An open file. The position is the engine's cursor, used only when the file system does not own one.
+// An open file, along with the position the engine's sequential reads and writes continue from.
 class CV2VirtualFile final : public FileHandle {
 public:
 	CV2VirtualFile(CV2VirtualFileSystem &fs, string path, FileOpenFlags flags, CV2UserData data);
@@ -93,8 +85,11 @@ public:
 public:
 	CV2UserData data;
 	bool closed = false;
-	//! The engine's cursor, for a file system that keeps none.
+	//! Where the engine's sequential reads and writes continue, since the file system keeps no cursor. For a file
+	//! that is not seekable it is also where the previous call ended, which is the only place the next may start.
 	idx_t position = 0;
+	//! The end of the file as far as the writes through this handle moved it, for appending.
+	std::atomic<idx_t> end {0};
 	//! Reported by the open callback; see FILE_PROPERTY.
 	bool is_seekable = true;
 	bool is_on_disk = false;
@@ -150,7 +145,7 @@ static void InvokeCallback(FN &&fn) {
 }
 
 // The engine-side file system: routes every engine call to the matching callback, and fills in what the callbacks
-// leave out (the engine's cursor, plain-path globs, directory globs over listings, try-removal).
+// leave out (the position of sequential reads and writes, plain paths without a glob callback, try-removal).
 class CV2VirtualFileSystem final : public FileSystem {
 public:
 	CV2VirtualFileSystem(CV2VirtualFileSystemConfig config_p, DatabaseInstance &db)
@@ -208,25 +203,10 @@ protected:
 		auto &cb = config.callbacks;
 		if (flags.OpenForWriting() || flags.OpenForAppending()) {
 			if (!config.IsWritable()) {
-				throw PermissionException("File system \"%s\" is read-only: it has no write callback, so \"%s\" cannot "
-				                          "be opened for writing",
+				throw PermissionException("File system \"%s\" is read-only: it has no \"write at\" callback, so "
+				                          "\"%s\" cannot be opened for writing",
 				                          config.name, file.path);
 			}
-			if (flags.RequireParallelAccess() && !cb.write_at) {
-				throw NotImplementedException("File system \"%s\" has no \"write at\" callback, which \"%s\" needs "
-				                              "since it is opened for parallel access",
-				                              config.name, file.path);
-			}
-			if (config.OwnsCursor() && !cb.write) {
-				throw NotImplementedException("File system \"%s\" owns the cursor but has no \"write\" callback, which "
-				                              "\"%s\" needs since it is opened for writing",
-				                              config.name, file.path);
-			}
-		}
-		if (flags.OpenForReading() && config.OwnsCursor() && !cb.read) {
-			throw NotImplementedException("File system \"%s\" owns the cursor but has no \"read\" callback, which "
-			                              "\"%s\" needs since it is opened for reading",
-			                              config.name, file.path);
 		}
 		if (flags.OpenForReading() && !config.CanRead()) {
 			throw PermissionException("File system \"%s\" is write-only: it has no \"read at\" callback, so \"%s\" "
@@ -258,12 +238,6 @@ protected:
 			                            config.name, file.path);
 		}
 
-		if (!info.is_seekable && !config.OwnsCursor()) {
-			// The engine's cursor is a position in the file, which a stream does not have. `info` releases the state.
-			throw NotImplementedException("File system \"%s\" reports \"%s\" as not seekable, which only a file "
-			                              "system that owns the cursor can serve",
-			                              config.name, file.path);
-		}
 		auto handle = make_uniq<CV2VirtualFile>(*this, file.path, flags, std::move(info.data));
 		handle->op_info = SystemInfo(nullptr);
 		handle->is_seekable = info.is_seekable;
@@ -271,9 +245,9 @@ protected:
 		if (!cb.stat) {
 			handle->metadata = std::move(metadata.data);
 		}
-		if (flags.OpenForAppending() && !config.OwnsCursor()) {
-			// The engine's cursor starts at the end; the file system's own cursor is its business.
-			handle->position = NumericCast<idx_t>(GetFileSize(*handle));
+		if (flags.OpenForAppending()) {
+			handle->end = NumericCast<idx_t>(GetFileSize(*handle));
+			handle->position = handle->end;
 		}
 		return std::move(handle);
 	}
@@ -336,96 +310,54 @@ public:
 
 	void Write(FileHandle &handle_p, void *buffer, int64_t nr_bytes, idx_t location) override {
 		auto &handle = handle_p.Cast<CV2VirtualFile>();
-		auto &cb = config.callbacks;
-		RequireCallback(cb.write_at, "write at");
-		handle.written = true;
 		auto total = NumericCast<idx_t>(nr_bytes);
 		auto *data = static_cast<const_data_ptr_t>(buffer);
 		// The callback may come up short; the engine's contract here is all or nothing.
 		idx_t done = 0;
 		while (done < total) {
-			idx_t written = 0;
-			InvokeCallback([&](duckdb_v2_error_info_handle err) {
-				cb.write_at(Convert(&handle.op_info), EmptyOperationInfo<duckdb_v2_vfs_file_write_at_info_handle>(),
-				            handle.Data(), data + done, total - done, location + done, &written, &err);
-			});
-			CheckWritten(handle, "write at", written, total, done);
+			auto written = WriteAt(handle, data + done, total - done, location + done);
+			if (written == 0) {
+				throw IOException("Could not write all bytes to file \"%s\": wanted %llu bytes, but only %llu could "
+				                  "be written",
+				                  handle.path, total, done);
+			}
 			done += written;
 		}
 	}
 
+	// The file system keeps no cursor: the engine's sequential reads and writes are served at a position kept here.
 	int64_t Read(FileHandle &handle_p, void *buffer, int64_t nr_bytes) override {
 		auto &handle = handle_p.Cast<CV2VirtualFile>();
-		auto &cb = config.callbacks;
-		auto count = NumericCast<idx_t>(nr_bytes);
-		if (!config.OwnsCursor()) {
-			// One offset read at the engine's cursor: short reads and a zero at the end are what it wants.
-			auto bytes_read = ReadAt(handle, buffer, count, handle.position);
+		// One offset read at the position: short reads and a zero at the end are what the engine wants.
+		auto bytes_read = ReadAt(handle, buffer, NumericCast<idx_t>(nr_bytes), handle.position);
+		if (handle.is_seekable) {
 			handle.position += bytes_read;
-			return NumericCast<int64_t>(bytes_read);
 		}
-		RequireCallback(cb.read, "read");
-		idx_t bytes_read = 0;
-		InvokeCallback([&](duckdb_v2_error_info_handle err) {
-			cb.read(Convert(&handle.op_info), EmptyOperationInfo<duckdb_v2_vfs_file_read_info_handle>(), handle.Data(),
-			        buffer, count, &bytes_read, &err);
-		});
 		return NumericCast<int64_t>(bytes_read);
 	}
 
 	int64_t Write(FileHandle &handle_p, void *buffer, int64_t nr_bytes) override {
 		auto &handle = handle_p.Cast<CV2VirtualFile>();
-		auto &cb = config.callbacks;
-		if (!config.OwnsCursor()) {
-			Write(handle, buffer, nr_bytes, handle.position);
-			handle.position += NumericCast<idx_t>(nr_bytes);
-			return nr_bytes;
-		}
-		RequireCallback(cb.write, "write");
-		handle.written = true;
-		auto total = NumericCast<idx_t>(nr_bytes);
-		auto *data = static_cast<const_data_ptr_t>(buffer);
-		// The callback may come up short; the engine's writers expect everything to be written.
-		idx_t done = 0;
-		while (done < total) {
-			idx_t written = 0;
-			InvokeCallback([&](duckdb_v2_error_info_handle err) {
-				cb.write(Convert(&handle.op_info), EmptyOperationInfo<duckdb_v2_vfs_file_write_info_handle>(),
-				         handle.Data(), data + done, total - done, &written, &err);
-			});
-			CheckWritten(handle, "write", written, total, done);
-			done += written;
+		// Every sequential write to a file opened for appending lands at its end.
+		auto location = handle.flags.OpenForAppending() ? handle.end.load() : handle.position;
+		Write(handle, buffer, nr_bytes, location);
+		if (handle.is_seekable) {
+			handle.position = location + NumericCast<idx_t>(nr_bytes);
 		}
 		return nr_bytes;
 	}
 
 	void Seek(FileHandle &handle_p, idx_t location) override {
 		auto &handle = handle_p.Cast<CV2VirtualFile>();
-		auto &cb = config.callbacks;
-		if (!config.OwnsCursor()) {
-			handle.position = location;
-			return;
+		if (!handle.is_seekable && location != handle.position) {
+			throw NotImplementedException("File \"%s\" of file system \"%s\" is not seekable", handle.path,
+			                              config.name);
 		}
-		RequireCallback(cb.seek, "seek");
-		InvokeCallback([&](duckdb_v2_error_info_handle err) {
-			cb.seek(Convert(&handle.op_info), EmptyOperationInfo<duckdb_v2_vfs_file_seek_info_handle>(), handle.Data(),
-			        location, &err);
-		});
+		handle.position = location;
 	}
 
 	idx_t SeekPosition(FileHandle &handle_p) override {
-		auto &handle = handle_p.Cast<CV2VirtualFile>();
-		auto &cb = config.callbacks;
-		if (!config.OwnsCursor()) {
-			return handle.position;
-		}
-		RequireCallback(cb.tell, "tell");
-		idx_t position = 0;
-		InvokeCallback([&](duckdb_v2_error_info_handle err) {
-			cb.tell(Convert(&handle.op_info), EmptyOperationInfo<duckdb_v2_vfs_file_tell_info_handle>(), handle.Data(),
-			        &position, &err);
-		});
-		return position;
+		return handle_p.Cast<CV2VirtualFile>().position;
 	}
 
 	int64_t GetFileSize(FileHandle &handle) override {
@@ -469,6 +401,7 @@ public:
 		auto &cb = config.callbacks;
 		RequireCallback(cb.truncate, "truncate");
 		handle.written = true;
+		handle.end = NumericCast<idx_t>(new_size);
 		InvokeCallback([&](duckdb_v2_error_info_handle err) {
 			cb.truncate(Convert(&handle.op_info), EmptyOperationInfo<duckdb_v2_vfs_file_truncate_info_handle>(),
 			            handle.Data(), NumericCast<idx_t>(new_size), &err);
@@ -680,23 +613,19 @@ private:
 		return info;
 	}
 
-	//! The engine's writers need every byte, so a write that stops making progress fails.
-	void CheckWritten(CV2VirtualFile &handle, const char *what, idx_t written, idx_t total, idx_t done) const {
-		if (written > total - done) {
-			throw IOException("The %s callback of file system \"%s\" reported %llu bytes written from a buffer of "
-			                  "%llu",
-			                  what, config.name, written, total - done);
-		}
-		if (written == 0) {
-			throw IOException("Could not write all bytes to file \"%s\": wanted %llu bytes, but only %llu could be "
-			                  "written",
-			                  handle.path, total, done);
+	//! A file that is not seekable is only ever read or written from where the previous call ended.
+	void RequireSequential(CV2VirtualFile &handle, const char *what, idx_t location) const {
+		if (!handle.is_seekable && location != handle.position) {
+			throw NotImplementedException("Cannot %s file \"%s\" at offset %llu: file system \"%s\" reports it as "
+			                              "not seekable, and the previous call ended at offset %llu",
+			                              what, handle.path, location, config.name, handle.position);
 		}
 	}
 
 	idx_t ReadAt(CV2VirtualFile &handle, void *buffer, idx_t count, idx_t location) {
 		auto &cb = config.callbacks;
 		RequireCallback(cb.read_at, "read at");
+		RequireSequential(handle, "read", location);
 		idx_t bytes_read = 0;
 		InvokeCallback([&](duckdb_v2_error_info_handle err) {
 			cb.read_at(Convert(&handle.op_info), EmptyOperationInfo<duckdb_v2_vfs_file_read_at_info_handle>(),
@@ -707,7 +636,35 @@ private:
 			                  "of %llu",
 			                  config.name, bytes_read, count);
 		}
+		if (!handle.is_seekable) {
+			handle.position += bytes_read;
+		}
 		return bytes_read;
+	}
+
+	idx_t WriteAt(CV2VirtualFile &handle, const_data_ptr_t buffer, idx_t count, idx_t location) {
+		auto &cb = config.callbacks;
+		RequireCallback(cb.write_at, "write at");
+		RequireSequential(handle, "write", location);
+		handle.written = true;
+		idx_t written = 0;
+		InvokeCallback([&](duckdb_v2_error_info_handle err) {
+			cb.write_at(Convert(&handle.op_info), EmptyOperationInfo<duckdb_v2_vfs_file_write_at_info_handle>(),
+			            handle.Data(), buffer, count, location, &written, &err);
+		});
+		if (written > count) {
+			throw IOException("The write at callback of file system \"%s\" reported %llu bytes written from a "
+			                  "buffer of %llu",
+			                  config.name, written, count);
+		}
+		if (!handle.is_seekable) {
+			handle.position += written;
+		}
+		// Several threads may write disjoint ranges at once, so the end only ever moves forward.
+		auto end = handle.end.load();
+		while (location + written > end && !handle.end.compare_exchange_weak(end, location + written)) {
+		}
+		return written;
 	}
 
 	//! What is known about an open file, which is a regular file unless it was said to be a pipe.
@@ -826,13 +783,8 @@ public:
 		}
 		if (!config.CanRead() && !config.IsWritable()) {
 			throw InvalidInputException(
-			    "Read at callback must be set for the file system, unless it is a write-only sink with a write "
-			    "or write at callback.");
-		}
-		// Owning the cursor means saying where it is; what else it takes depends on how a file is opened.
-		if (config.OwnsCursor() && !cb.tell) {
-			throw InvalidInputException("Tell callback must be set for a file system that owns the cursor by "
-			                            "setting any of the read, write, seek or tell callbacks.");
+			    "Read at callback must be set for the file system, unless it is a write-only sink with a write at "
+			    "callback.");
 		}
 		auto fs = make_uniq<CV2VirtualFileSystem>(config, db);
 		FileSystem::GetFileSystem(db).RegisterSubSystem(std::move(fs));
@@ -1017,34 +969,6 @@ duckdb_v2_vfs_set_file_write_at_callback(duckdb_v2_vfs_handle file_system,
                                          duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.write_at = callback; });
-}
-
-DUCKDB_V2_ERROR
-duckdb_v2_vfs_set_file_read_callback(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_read_callback_fn callback,
-                                     duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(file_system);
-	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.read = callback; });
-}
-
-DUCKDB_V2_ERROR
-duckdb_v2_vfs_set_file_write_callback(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_write_callback_fn callback,
-                                      duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(file_system);
-	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.write = callback; });
-}
-
-DUCKDB_V2_ERROR
-duckdb_v2_vfs_set_file_seek_callback(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_seek_callback_fn callback,
-                                     duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(file_system);
-	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.seek = callback; });
-}
-
-DUCKDB_V2_ERROR
-duckdb_v2_vfs_set_file_tell_callback(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_tell_callback_fn callback,
-                                     duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(file_system);
-	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.tell = callback; });
 }
 
 DUCKDB_V2_ERROR

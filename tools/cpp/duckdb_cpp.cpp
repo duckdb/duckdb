@@ -5757,10 +5757,6 @@ struct VirtualFileSystemInfo {
 	VirtualFileSystem::MoveCallback move = nullptr;
 	VirtualFileSystem::FileReadAtCallback file_read_at = nullptr;
 	VirtualFileSystem::FileWriteAtCallback file_write_at = nullptr;
-	VirtualFileSystem::FileReadCallback file_read = nullptr;
-	VirtualFileSystem::FileWriteCallback file_write = nullptr;
-	VirtualFileSystem::FileSeekCallback file_seek = nullptr;
-	VirtualFileSystem::FileTellCallback file_tell = nullptr;
 	VirtualFileSystem::FileStatCallback file_stat = nullptr;
 	VirtualFileSystem::FileSyncCallback file_sync = nullptr;
 	VirtualFileSystem::FileTruncateCallback file_truncate = nullptr;
@@ -5906,38 +5902,6 @@ void WriteAtTrampoline(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_write_
 	});
 }
 
-void ReadTrampoline(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_read_info_handle, void *file, void *buffer,
-                    idx_t size, idx_t *bytes_read, duckdb_v2_error_info_handle *err) {
-	WithExceptionGuard(err, [&]() {
-		auto wrapped = InfoOf(info);
-		*bytes_read = TableOf(info).file_read(wrapped, FileOf(file), buffer, size);
-	});
-}
-
-void WriteTrampoline(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_write_info_handle, void *file,
-                     const void *buffer, idx_t size, idx_t *bytes_written, duckdb_v2_error_info_handle *err) {
-	WithExceptionGuard(err, [&]() {
-		auto wrapped = InfoOf(info);
-		*bytes_written = TableOf(info).file_write(wrapped, FileOf(file), buffer, size);
-	});
-}
-
-void SeekTrampoline(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_seek_info_handle, void *file, idx_t position,
-                    duckdb_v2_error_info_handle *err) {
-	WithExceptionGuard(err, [&]() {
-		auto wrapped = InfoOf(info);
-		TableOf(info).file_seek(wrapped, FileOf(file), position);
-	});
-}
-
-void TellTrampoline(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_tell_info_handle, void *file, idx_t *position,
-                    duckdb_v2_error_info_handle *err) {
-	WithExceptionGuard(err, [&]() {
-		auto wrapped = InfoOf(info);
-		*position = TableOf(info).file_tell(wrapped, FileOf(file));
-	});
-}
-
 void FileStatTrampoline(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_stat_info_handle, void *file,
                         duckdb_v2_file_metadata_handle metadata, duckdb_v2_error_info_handle *err) {
 	WithExceptionGuard(err, [&]() {
@@ -6057,26 +6021,6 @@ auto VirtualFileSystem::SetFileWriteAtCallback(FileWriteAtCallback callback) & -
 	return *this;
 }
 
-auto VirtualFileSystem::SetFileReadCallback(FileReadCallback callback) & -> VirtualFileSystem & {
-	file_read = callback;
-	return *this;
-}
-
-auto VirtualFileSystem::SetFileWriteCallback(FileWriteCallback callback) & -> VirtualFileSystem & {
-	file_write = callback;
-	return *this;
-}
-
-auto VirtualFileSystem::SetFileSeekCallback(FileSeekCallback callback) & -> VirtualFileSystem & {
-	file_seek = callback;
-	return *this;
-}
-
-auto VirtualFileSystem::SetFileTellCallback(FileTellCallback callback) & -> VirtualFileSystem & {
-	file_tell = callback;
-	return *this;
-}
-
 auto VirtualFileSystem::SetFileStatCallback(FileStatCallback callback) & -> VirtualFileSystem & {
 	file_stat = callback;
 	return *this;
@@ -6134,10 +6078,6 @@ auto VirtualFileSystem::RegisterInternal(void *vfs) -> void {
 	CheckedAPICall(duckdb_v2_vfs_set_file_open_callback, handle, open ? OpenTrampoline : nullptr);
 	CheckedAPICall(duckdb_v2_vfs_set_file_read_at_callback, handle, file_read_at ? ReadAtTrampoline : nullptr);
 	CheckedAPICall(duckdb_v2_vfs_set_file_write_at_callback, handle, file_write_at ? WriteAtTrampoline : nullptr);
-	CheckedAPICall(duckdb_v2_vfs_set_file_read_callback, handle, file_read ? ReadTrampoline : nullptr);
-	CheckedAPICall(duckdb_v2_vfs_set_file_write_callback, handle, file_write ? WriteTrampoline : nullptr);
-	CheckedAPICall(duckdb_v2_vfs_set_file_seek_callback, handle, file_seek ? SeekTrampoline : nullptr);
-	CheckedAPICall(duckdb_v2_vfs_set_file_tell_callback, handle, file_tell ? TellTrampoline : nullptr);
 	CheckedAPICall(duckdb_v2_vfs_set_file_stat_callback, handle, file_stat ? FileStatTrampoline : nullptr);
 	CheckedAPICall(duckdb_v2_vfs_set_file_sync_callback, handle, file_sync ? SyncTrampoline : nullptr);
 	CheckedAPICall(duckdb_v2_vfs_set_file_truncate_callback, handle, file_truncate ? TruncateTrampoline : nullptr);
@@ -6158,10 +6098,6 @@ auto VirtualFileSystem::RegisterInternal(void *vfs) -> void {
 	table->move = move;
 	table->file_read_at = file_read_at;
 	table->file_write_at = file_write_at;
-	table->file_read = file_read;
-	table->file_write = file_write;
-	table->file_seek = file_seek;
-	table->file_tell = file_tell;
 	table->file_stat = file_stat;
 	table->file_sync = file_sync;
 	table->file_truncate = file_truncate;

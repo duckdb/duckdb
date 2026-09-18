@@ -5510,18 +5510,15 @@ private:
 // callbacks and registered on a connection or an extension; the open callback returns the per-file state, an object
 // deriving from `VirtualFile`, which the file callbacks then receive.
 //
-// The engine reads and writes files two ways. Positional reads and writes (the "read at" and "write at" callbacks)
-// name an absolute offset in every call, have `pread`/`pwrite` semantics, never move the cursor, and on a file opened
-// with `FileFlags::PARALLEL_ACCESS` happen from several threads at once. Cursor reads and writes (the "read" and
-// "write" callbacks) go through the file's cursor, which "seek" moves and "tell" reports, and never happen
-// concurrently on one file. A file system that sets any of the "read", "write", "seek" or "tell" callbacks owns the
-// cursor, for every file and in both directions, and must then set "tell"; it needs "read" to open a file for
-// reading and "write" to open one for writing. One that sets none of them leaves the cursor to the engine, which
-// serves cursor reads and writes through "read at" and "write at" at the position it keeps.
+// All I/O is positional: the "read at" and "write at" callbacks name an absolute offset in every call, with
+// `pread`/`pwrite` semantics, and on a file opened with `FileFlags::PARALLEL_ACCESS` happen from several threads at
+// once. A file system keeps no cursor. Where the engine reads or writes a file sequentially it keeps the position
+// itself and passes it along, and a file reported as not seekable is only ever read or written from where the
+// previous call ended.
 
 /// The per-file state of a virtual file system: whatever the open callback returns, handed to every file callback
 /// for that file and destroyed by the engine once it is done with the file, after the close or abort callback.
-/// Derive from it and keep in it what the file callbacks need -- the path, a descriptor, a buffer, a cursor.
+/// Derive from it and keep in it what the file callbacks need -- the path, a descriptor, a buffer.
 class VirtualFile {
 public:
 	virtual ~VirtualFile() = default;
@@ -5545,8 +5542,7 @@ public:
 /// Which file system handles a path is decided by registration order: of all the registered file systems that claim
 /// it, built-in and extension ones included, the most recently registered wins. A file system claims a path by
 /// prefix (`AddPrefix`) or by callback (`SetClaimCallback`), and needs at least one of the two. Which callbacks are
-/// set is what decides its capabilities: whether it is writable, whether it owns the cursor, whether it can truncate,
-/// list or glob.
+/// set is what decides its capabilities: whether it is writable, whether it can truncate, list or glob.
 class VirtualFileSystem {
 public:
 	class Info;
@@ -5582,27 +5578,17 @@ public:
 	using MoveCallback = void (*)(Info &info, std::string_view source, std::string_view target);
 
 	/// Fills the buffer with up to `size` bytes starting at `location` and returns how many. Fewer than asked for is
-	/// allowed, and zero means the offset is at or past the end of the file. Positional, with `pread` semantics:
-	/// never moves the cursor. Required for a file system that reads.
+	/// allowed, and zero means the offset is at or past the end of the file. Required for a file system that reads.
+	/// On a file reported as not seekable, `location` is always where the previous read ended.
 	using FileReadAtCallback = idx_t (*)(Info &info, VirtualFile &file, void *buffer, idx_t size, idx_t location);
 	/// Writes up to `size` bytes starting at `location`, extending the file when the offset is past its end, and
 	/// returns how many. Fewer than asked for is allowed, and the engine calls again for the rest; zero means
 	/// nothing could be written.
-	/// Positional, with `pwrite` semantics: never moves the cursor, and writes at `location` even on a file opened
-	/// with `FileFlags::APPEND`. Setting it makes the file system writable.
+	/// It writes at `location` even on a file opened with `FileFlags::APPEND`, for which the engine passes the end
+	/// of the file itself. Setting it makes the file system writable. On a file reported as not seekable,
+	/// `location` is always where the previous write ended, which makes this an append.
 	using FileWriteAtCallback = idx_t (*)(Info &info, VirtualFile &file, const void *buffer, idx_t size,
 	                                      idx_t location);
-	/// Reads up to `size` bytes from the cursor, advancing it by however many were read, and returns how many; zero
-	/// means nothing is left.
-	using FileReadCallback = idx_t (*)(Info &info, VirtualFile &file, void *buffer, idx_t size);
-	/// Writes up to `size` bytes at the cursor, advancing it by however many were written, and returns how many.
-	/// Fewer than asked for is allowed, and the engine calls again for the rest; zero means nothing could be
-	/// written.
-	using FileWriteCallback = idx_t (*)(Info &info, VirtualFile &file, const void *buffer, idx_t size);
-	/// Moves the cursor to an absolute byte offset. Seeking past the end is allowed.
-	using FileSeekCallback = void (*)(Info &info, VirtualFile &file, idx_t position);
-	/// Returns the cursor's position, as an absolute byte offset from the start of the file.
-	using FileTellCallback = idx_t (*)(Info &info, VirtualFile &file);
 	/// Reports the file's size, and when known its modification time and version tag. Optional: without it the
 	/// engine reports what the open callback left in `OpenInput::GetMetadata`, and no longer knows the size of a
 	/// file once it is written.
@@ -5648,10 +5634,6 @@ public:
 	auto SetFileOpenCallback(OpenCallback callback) & -> VirtualFileSystem &;
 	auto SetFileReadAtCallback(FileReadAtCallback callback) & -> VirtualFileSystem &;
 	auto SetFileWriteAtCallback(FileWriteAtCallback callback) & -> VirtualFileSystem &;
-	auto SetFileReadCallback(FileReadCallback callback) & -> VirtualFileSystem &;
-	auto SetFileWriteCallback(FileWriteCallback callback) & -> VirtualFileSystem &;
-	auto SetFileSeekCallback(FileSeekCallback callback) & -> VirtualFileSystem &;
-	auto SetFileTellCallback(FileTellCallback callback) & -> VirtualFileSystem &;
 	auto SetFileStatCallback(FileStatCallback callback) & -> VirtualFileSystem &;
 	auto SetFileSyncCallback(FileSyncCallback callback) & -> VirtualFileSystem &;
 	auto SetFileTruncateCallback(FileTruncateCallback callback) & -> VirtualFileSystem &;
@@ -5659,8 +5641,8 @@ public:
 	auto SetFileAbortCallback(FileAbortCallback callback) & -> VirtualFileSystem &;
 
 	/// Registers the file system on the connection's database, permanently. Validates the configuration: a name, a
-	/// prefix or claim callback and the open callback are required, "read at" unless the file system is a
-	/// write-only sink, and a file system that owns the cursor must set "tell".
+	/// prefix or claim callback and the open callback are required, and "read at" unless the file system is a
+	/// write-only sink.
 	/// @throws InvalidInputException When the configuration is incomplete or inconsistent.
 	auto Register(const Connection &conn) -> void;
 	/// Registers the file system through the loading extension, permanently; see the connection overload.
@@ -5682,10 +5664,6 @@ private:
 	MoveCallback move = nullptr;
 	FileReadAtCallback file_read_at = nullptr;
 	FileWriteAtCallback file_write_at = nullptr;
-	FileReadCallback file_read = nullptr;
-	FileWriteCallback file_write = nullptr;
-	FileSeekCallback file_seek = nullptr;
-	FileTellCallback file_tell = nullptr;
 	FileStatCallback file_stat = nullptr;
 	FileSyncCallback file_sync = nullptr;
 	FileTruncateCallback file_truncate = nullptr;
@@ -5745,8 +5723,9 @@ public:
 		/// What it holds when the open callback returns is what the engine reports about the file when there is no
 		/// file stat callback. An overlay passes it on to `FileSystem::OpenFile` with the flags. Borrowed.
 		auto GetMetadata() const -> FileMetadata;
-		/// Reports whether the file's cursor can be moved to an arbitrary position; true unless reported otherwise.
-		/// A file that cannot seek, such as a stream, can only be served by a file system that owns the cursor.
+		/// Reports whether the file can be read and written at arbitrary offsets; true unless reported otherwise.
+		/// A file that cannot, such as a stream or an upload to an object store, is only ever read or written from
+		/// where the previous call ended.
 		auto SetSeekable(bool seekable) -> void;
 		/// Reports whether the file lives on local disk; false unless reported otherwise.
 		auto SetOnDisk(bool on_disk) -> void;
