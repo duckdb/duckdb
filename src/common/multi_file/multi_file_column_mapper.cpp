@@ -322,6 +322,9 @@ static ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColu
 		result.default_value = BindBuiltinScalarFunction(context, StructPackFun::Name, std::move(default_expressions));
 	}
 	result.column_index = make_uniq<ColumnIndex>(local_id.GetIndex(), std::move(child_indexes));
+	if (global_index.HasType()) {
+		result.column_index->SetType(global_column.type);
+	}
 	result.mapping = std::move(mapping);
 	return result;
 }
@@ -446,6 +449,9 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 	map_indexes.emplace_back(0, std::move(child_indexes));
 
 	result.column_index = make_uniq<ColumnIndex>(local_id.GetIndex(), std::move(map_indexes));
+	if (global_index.HasType()) {
+		result.column_index->SetType(global_column.type);
+	}
 	result.mapping = std::move(mapping);
 	return result;
 }
