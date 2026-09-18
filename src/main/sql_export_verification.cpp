@@ -334,7 +334,7 @@ static bool CompatibleTypes(const vector<LogicalType> &left, const vector<Logica
 		return false;
 	}
 	for (idx_t i = 0; i < left.size(); i++) {
-		if (!left[i].EqualsWithCollation(right[i])) {
+		if (!left[i].EqualsIncludingCollation(right[i])) {
 			return false;
 		}
 	}
@@ -463,7 +463,7 @@ void SQLExportVerification::RoundTrip(Planner &planner) {
 		return;
 	}
 	for (idx_t i = 0; i < planner.types.size(); i++) {
-		if (!relation.fields[i].type.EqualsWithCollation(planner.types[i])) {
+		if (!relation.fields[i].type.EqualsIncludingCollation(planner.types[i])) {
 			Failure(SQLExportOutcome::OUTPUT_SCHEMA_MISMATCH, "EXPORTED_FIELD_TYPE");
 			return;
 		}

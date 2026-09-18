@@ -1213,9 +1213,9 @@ TEST_CASE("SQL export distinguishes inherited and unrepresented collations",
 			return child.id() == LogicalTypeId::VARCHAR ? LogicalType::VARCHAR : child;
 		});
 		REQUIRE(type == plain);
-		REQUIRE_FALSE(type.EqualsWithCollation(plain));
-		REQUIRE_FALSE(plain.EqualsWithCollation(type));
-		REQUIRE(type.EqualsWithCollation(type));
+		REQUIRE_FALSE(type.EqualsIncludingCollation(plain));
+		REQUIRE_FALSE(plain.EqualsIncludingCollation(type));
+		REQUIRE(type.EqualsIncludingCollation(type));
 		BoundColumnRefExpression column(type, binding);
 		auto matching = ResolveBinding(binding, {Identifier("v")}, type);
 		auto exported = BoundExpressionSQLExporter::Export(column, matching);
@@ -1289,7 +1289,7 @@ TEST_CASE("Nested SQL cast reconstruction distinguishes collation and error sema
 					REQUIRE(exported.IsSuccess());
 					auto rebound = connection.Query("SELECT " + exported.GetValue()->ToString());
 					REQUIRE_NO_FAIL(*rebound);
-					REQUIRE(rebound->GetTypes()[0].EqualsWithCollation(target));
+					REQUIRE(rebound->GetTypes()[0].EqualsIncludingCollation(target));
 					REQUIRE(rebound->GetValue(0, 0).IsNull());
 				}
 			}
@@ -1351,8 +1351,8 @@ TEST_CASE("Aggregate SQL clauses retain logical result annotations",
 			auto call = BoundExpressionSQLExporter::ExportAggregateCallAtPath(*aggregate, context, path);
 			REQUIRE(call.IsSuccess());
 			REQUIRE(call.GetValue()->GetExpressionClass() == ExpressionClass::FUNCTION);
-			REQUIRE(aggregate->GetReturnType().EqualsWithCollation(type));
-			REQUIRE(aggregate->Function().GetLogicalReturnType().EqualsWithCollation(type));
+			REQUIRE(aggregate->GetReturnType().EqualsIncludingCollation(type));
+			REQUIRE(aggregate->Function().GetLogicalReturnType().EqualsIncludingCollation(type));
 			aggregate =
 			    unique_ptr_cast<Expression, BoundAggregateExpression>(BinaryRoundTrip(*connection.context, *aggregate));
 		}

@@ -291,7 +291,7 @@ private:
 };
 
 static unique_ptr<QueryResult> ExecuteExplainedSQLInternal(Connection &connection, const string &sql,
-                                                                       const string &file, idx_t line) {
+                                                           const string &file, idx_t line) {
 	auto statements = connection.ExtractStatements(sql);
 	if (statements.size() != 1 || statements[0]->type != StatementType::SELECT_STATEMENT) {
 		TEST_FAIL_LINE(file, line, "explain_sql requires exactly one query");
@@ -322,7 +322,7 @@ static unique_ptr<QueryResult> ExecuteExplainedSQLInternal(Connection &connectio
 		TEST_FAIL_LINE(file, line, "EXPLAIN (SQL) changed the output names or logical types");
 	}
 	for (idx_t i = 0; i < original->GetTypes().size(); i++) {
-		if (!prepared->GetTypes()[i].EqualsWithCollation(original->GetTypes()[i])) {
+		if (!prepared->GetTypes()[i].EqualsIncludingCollation(original->GetTypes()[i])) {
 			TEST_FAIL_LINE(file, line, "EXPLAIN (SQL) changed output collation annotations");
 		}
 	}
@@ -330,8 +330,8 @@ static unique_ptr<QueryResult> ExecuteExplainedSQLInternal(Connection &connectio
 	return prepared->Execute(parameters);
 }
 
-static unique_ptr<QueryResult> ExecuteExplainedSQL(Connection &connection, const string &sql,
-                                                               const string &file, idx_t line) {
+static unique_ptr<QueryResult> ExecuteExplainedSQL(Connection &connection, const string &sql, const string &file,
+                                                   idx_t line) {
 	ExplainSQLVerificationOverride verification(*connection.context);
 	unique_ptr<QueryResult> result;
 	try {
@@ -345,7 +345,7 @@ static unique_ptr<QueryResult> ExecuteExplainedSQL(Connection &connection, const
 }
 
 unique_ptr<QueryResult> Command::ExecuteQuery(ExecuteContext &context, reference<Connection> connection,
-                                                          string file_name, idx_t query_line) const {
+                                              string file_name, idx_t query_line) const {
 	query_break(query_line);
 
 	if (TestConfiguration::TestForceReload() && TestConfiguration::TestForceStorage()) {

@@ -195,7 +195,7 @@ static unique_ptr<ParsedExpression> TableFunctionColumn(const LogicalGet &get, c
 	vector<Identifier> path {function_ref.alias, function_ref.column_name_alias[primary_index]};
 	if (!index.IsPushdownExtract()) {
 		auto column = make_uniq<ColumnRefExpression>(std::move(path));
-		if (index.HasType() && !get.returned_types[primary_index].EqualsWithCollation(index.GetScanType())) {
+		if (index.HasType() && !get.returned_types[primary_index].EqualsIncludingCollation(index.GetScanType())) {
 			return make_uniq<CastExpression>(index.GetScanType(), std::move(column));
 		}
 		return std::move(column);
@@ -207,7 +207,7 @@ static unique_ptr<ParsedExpression> TableFunctionColumn(const LogicalGet &get, c
 		return nullptr;
 	}
 	auto column = make_uniq<ColumnRefExpression>(std::move(path));
-	if (!source_type.EqualsWithCollation(index.GetScanType())) {
+	if (!source_type.EqualsIncludingCollation(index.GetScanType())) {
 		return make_uniq<CastExpression>(index.GetScanType(), std::move(column));
 	}
 	return std::move(column);

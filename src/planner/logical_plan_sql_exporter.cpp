@@ -639,7 +639,7 @@ static bool IsIdentityProjection(const LogicalProjection &projection, const vect
 		}
 		auto &column = expression.Cast<BoundColumnRefExpression>();
 		if (column.Depth() != 0 || column.Binding() != fields[i].source_binding ||
-		    !column.GetReturnType().EqualsWithCollation(fields[i].type)) {
+		    !column.GetReturnType().EqualsIncludingCollation(fields[i].type)) {
 			return false;
 		}
 	}
@@ -763,7 +763,7 @@ private:
 					continue;
 				}
 				auto value = ConstantSQLInput(*arguments[i], *op.children[0]);
-				if (value && value->type().EqualsWithCollation(arguments[i]->GetReturnType())) {
+				if (value && value->type().EqualsIncludingCollation(arguments[i]->GetReturnType())) {
 					if (!restored) {
 						restored = expression.Copy();
 					}
@@ -1059,6 +1059,24 @@ private:
 		return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields.GetValue())});
 	}
 
+	string MarkConditionUnsupportedReason(const LogicalComparisonJoin &join) {
+		bool comparisons_only = !join.conditions.empty();
+		bool all_equal = true;
+		bool all_null_safe = true;
+		for (auto &condition : join.conditions) {
+			if (!condition.IsComparison()) {
+				comparisons_only = false;
+				continue;
+			}
+			all_equal &= condition.GetComparisonType() == ExpressionType::COMPARE_EQUAL;
+			all_null_safe &= condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+		}
+		if (!comparisons_only || (join.conditions.size() != 1 && !all_equal && !all_null_safe)) {
+			return "The MARK condition requires conjunction execution semantics";
+		}
+		return string();
+	}
+
 	bool RequiresMarkGroupMetadata(const LogicalComparisonJoin &join) {
 		if (join.join_type != JoinType::MARK || join.mark_types.empty()) {
 			return false;
@@ -1155,21 +1173,9 @@ private:
 					                                          "The join requires a duplicate-eliminated input scope"));
 				}
 				if (comparison.join_type == JoinType::MARK) {
-					bool comparisons_only = !comparison.conditions.empty();
-					bool all_equal = true;
-					bool all_null_safe = true;
-					for (auto &condition : comparison.conditions) {
-						if (!condition.IsComparison()) {
-							comparisons_only = false;
-							continue;
-						}
-						all_equal &= condition.GetComparisonType() == ExpressionType::COMPARE_EQUAL;
-						all_null_safe &= condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-					}
-					if (!comparisons_only || (comparison.conditions.size() != 1 && !all_equal && !all_null_safe)) {
-						return PlanFailure(
-						    PlanUnsupportedFeature(path, "mark_condition_semantics",
-						                           "The MARK condition requires conjunction execution semantics"));
+					auto reason = MarkConditionUnsupportedReason(comparison);
+					if (!reason.empty()) {
+						return PlanFailure(PlanUnsupportedFeature(path, "mark_condition_semantics", reason));
 					}
 				}
 				if (RequiresMarkGroupMetadata(comparison)) {
@@ -1712,7 +1718,7 @@ private:
 		select->from_table = std::move(table);
 		for (idx_t i = 0; i < fields.GetValue().size(); i++) {
 			if (view.output_bindings[i] != fields.GetValue()[i].source_binding ||
-			    !view.output_expressions[i]->GetReturnType().EqualsWithCollation(fields.GetValue()[i].type)) {
+			    !view.output_expressions[i]->GetReturnType().EqualsIncludingCollation(fields.GetValue()[i].type)) {
 				return PlanFailure(PlanUnsupportedFeature(
 				    path, "secure_view_output", "The secure view output mapping does not match its current schema"));
 			}
@@ -1941,7 +1947,7 @@ private:
 				    PlanUnsupportedFeature(path, "pivot_layout", "The PIVOT aggregate metadata is incomplete"));
 			}
 			auto &aggregate = expression->Cast<BoundAggregateExpression>();
-			if (!aggregate.GetReturnType().EqualsWithCollation(
+			if (!aggregate.GetReturnType().EqualsIncludingCollation(
 			        fields.GetValue()[info.group_count + aggregate_idx].type)) {
 				return PlanFailure(PlanUnsupportedFeature(
 				    path, "pivot_layout", "The PIVOT aggregate metadata does not match its output types"));
@@ -1958,9 +1964,9 @@ private:
 				auto output_idx = info.group_count + target_idx * aggregate_count + aggregate_idx;
 				if (info.pivot_values[target_idx * aggregate_count + aggregate_idx] !=
 				        info.pivot_values[target_idx * aggregate_count] ||
-				    !info.aggregates[aggregate_idx]->GetReturnType().EqualsWithCollation(
+				    !info.aggregates[aggregate_idx]->GetReturnType().EqualsIncludingCollation(
 				        fields.GetValue()[output_idx].type) ||
-				    !info.types[output_idx].EqualsWithCollation(fields.GetValue()[output_idx].type)) {
+				    !info.types[output_idx].EqualsIncludingCollation(fields.GetValue()[output_idx].type)) {
 					return PlanFailure(PlanUnsupportedFeature(
 					    path, "pivot_layout", "The PIVOT target blocks do not match the retained aggregate layout"));
 				}
@@ -1976,8 +1982,8 @@ private:
 			    PlanUnsupportedFeature(path, "pivot_layout", "The PIVOT child does not contain aligned lists"));
 		}
 		for (idx_t group_idx = 0; group_idx < info.group_count; group_idx++) {
-			if (!info.types[group_idx].EqualsWithCollation(fields.GetValue()[group_idx].type) ||
-			    !child.GetValue().relation.fields[group_idx].type.EqualsWithCollation(
+			if (!info.types[group_idx].EqualsIncludingCollation(fields.GetValue()[group_idx].type) ||
+			    !child.GetValue().relation.fields[group_idx].type.EqualsIncludingCollation(
 			        fields.GetValue()[group_idx].type)) {
 				return PlanFailure(
 				    PlanUnsupportedFeature(path, "pivot_layout", "The PIVOT group types do not match its child"));
@@ -1985,7 +1991,7 @@ private:
 		}
 		for (idx_t aggregate_idx = 0; aggregate_idx < aggregate_count; aggregate_idx++) {
 			auto &list_type = child.GetValue().relation.fields[info.group_count + aggregate_idx].type;
-			if (list_type.id() != LogicalTypeId::LIST || !ListType::GetChildType(list_type).EqualsWithCollation(
+			if (list_type.id() != LogicalTypeId::LIST || !ListType::GetChildType(list_type).EqualsIncludingCollation(
 			                                                 info.aggregates[aggregate_idx]->GetReturnType())) {
 				return PlanFailure(PlanUnsupportedFeature(path, "pivot_layout",
 				                                          "The PIVOT aggregate list type does not match its output"));

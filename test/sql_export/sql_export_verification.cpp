@@ -6,13 +6,14 @@
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/stream_query_result.hpp"
+#include "sql_export_test_helpers.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator_extension.hpp"
+#include "duckdb/planner/logical_plan_sql_exporter.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
@@ -127,9 +128,6 @@ TEST_CASE("SQL export verification excludes control and prepare paths", "[sql_ex
 	REQUIRE(TakeSQLExportRecord(*observer).outcome == SQLExportOutcome::NOT_APPLICABLE);
 	auto prepared_result = prepared->Execute(42);
 	REQUIRE_NO_FAIL(*prepared_result);
-	if (prepared_result->GetResultType() == QueryResultType::STREAM_RESULT) {
-		REQUIRE_NO_FAIL(prepared_result->Cast<StreamQueryResult>().Materialize());
-	}
 	REQUIRE(TakeSQLExportRecord(*observer).outcome == SQLExportOutcome::NOT_APPLICABLE);
 	REQUIRE_NO_FAIL(con.Query("VALUES (42)"));
 	REQUIRE(TakeSQLExportRecord(*observer).outcome == SQLExportOutcome::STRUCTURALLY_VALIDATED);
@@ -367,12 +365,12 @@ TEST_CASE("SQL export streaming observations are published only on completion",
 	auto observer = SQLExportVerificationState::GetOrCreate(*con.context);
 	SetSQLExportMode(con, *observer, "strict");
 	QueryParameters parameters;
-	parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
-	auto result = con.context->Query("VALUES (1),(2)", parameters);
+	parameters.result_eagerness = ResultEagerness::AUTO;
+	auto result = SubmitSQLExportResult(*con.context, "VALUES (1),(2)", parameters);
 	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+	REQUIRE(result->IsOpen());
 	REQUIRE(observer->TakeRecords().empty());
-	auto materialized = result->Cast<StreamQueryResult>().Materialize();
+	auto materialized = MaterializeSQLExportStream(std::move(result));
 	REQUIRE_NO_FAIL(*materialized);
 	REQUIRE(materialized->RowCount() == 2);
 	REQUIRE(TakeSQLExportRecord(*observer).route == SQLExportExecutionRoute::GENERATED);
@@ -687,7 +685,7 @@ TEST_CASE("SQL export inventories lambda bodies and window callables", "[sql_exp
 	}
 }
 
-TEST_CASE("SQL export covers parameter-free statement and pending APIs", "[sql_export][sql_export_verification]") {
+TEST_CASE("SQL export covers parameter-free statement and submission APIs", "[sql_export][sql_export_verification]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	auto observer = SQLExportVerificationState::GetOrCreate(*con.context);
@@ -695,14 +693,16 @@ TEST_CASE("SQL export covers parameter-free statement and pending APIs", "[sql_e
 	auto statements = con.ExtractStatements("VALUES (42)");
 	REQUIRE_NO_FAIL(con.Query(std::move(statements[0])));
 	REQUIRE(TakeSQLExportRecord(*observer).route == SQLExportExecutionRoute::GENERATED);
-	auto pending = con.PendingQuery("VALUES (43)");
+	auto pending = con.Submit("VALUES (43)");
 	REQUIRE_FALSE(pending->HasError());
-	REQUIRE_NO_FAIL(pending->Execute());
+	pending->Complete();
+	REQUIRE_NO_FAIL(*pending);
 	REQUIRE(TakeSQLExportRecord(*observer).route == SQLExportExecutionRoute::GENERATED);
 	vector<Value> parameters {Value::INTEGER(44)};
-	pending = con.PendingQuery("VALUES (?)", parameters);
+	pending = con.Submit("VALUES (?)", parameters);
 	REQUIRE_FALSE(pending->HasError());
-	REQUIRE_NO_FAIL(pending->Execute());
+	pending->Complete();
+	REQUIRE_NO_FAIL(*pending);
 	auto record = TakeSQLExportRecord(*observer);
 	REQUIRE(record.code == "PARAMETERS");
 	REQUIRE(record.route == SQLExportExecutionRoute::ORIGINAL_NOT_APPLICABLE);
@@ -1022,15 +1022,14 @@ TEST_CASE("SQL export renders error positions against their generated source",
 				observer->TakeRecords();
 			}
 			QueryParameters parameters;
-			parameters.output_type =
-			    streaming ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
+			parameters.result_eagerness = streaming ? ResultEagerness::AUTO : ResultEagerness::FORCED;
 			auto rows = streaming ? StringUtil::Repeat("('1'),", STANDARD_VECTOR_SIZE * 2) : string();
-			auto result =
-			    con.context->Query("SELECT CAST(x AS UTINYINT) FROM (VALUES " + rows + "('hello'))t(x)", parameters);
+			auto result = SubmitSQLExportResult(
+			    *con.context, "SELECT CAST(x AS UTINYINT) FROM (VALUES " + rows + "('hello'))t(x)", parameters);
 			if (streaming) {
 				REQUIRE_NO_FAIL(*result);
-				REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
-				result = result->Cast<StreamQueryResult>().Materialize();
+				REQUIRE(result->IsOpen());
+				result = MaterializeSQLExportStream(std::move(result));
 			}
 			REQUIRE(result->HasError());
 			REQUIRE(StringUtil::Contains(result->GetError(), "Could not convert string 'hello' to UINT8"));
@@ -1070,10 +1069,10 @@ TEST_CASE("SQL export keeps auxiliary parse errors independent of active streams
 			const idx_t count = STANDARD_VECTOR_SIZE * 2 + 1;
 			auto sql = "SELECT x AS original_name FROM (VALUES " + StringUtil::Repeat("(1),", count - 1) + "(2))t(x)";
 			QueryParameters parameters;
-			parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
-			auto stream = con.context->Query(sql, parameters);
+			parameters.result_eagerness = ResultEagerness::AUTO;
+			auto stream = SubmitSQLExportResult(*con.context, sql, parameters);
 			REQUIRE_NO_FAIL(*stream);
-			REQUIRE(stream->GetResultType() == QueryResultType::STREAM_RESULT);
+			REQUIRE(stream->IsOpen());
 			REQUIRE(stream->GetNames() == vector<Identifier> {Identifier("original_name")});
 			REQUIRE(con.context->GetCurrentQuery() == sql);
 			string error;
@@ -1086,7 +1085,7 @@ TEST_CASE("SQL export keeps auxiliary parse errors independent of active streams
 			REQUIRE(StringUtil::Contains(error, "^"));
 			REQUIRE_FALSE(StringUtil::Contains(error, "LINE 1: SELECT r0.c0"));
 			REQUIRE(con.context->GetCurrentQuery() == sql);
-			auto result = stream->Cast<StreamQueryResult>().Materialize();
+			auto result = MaterializeSQLExportStream(std::move(stream));
 			REQUIRE_NO_FAIL(*result);
 			REQUIRE(result->RowCount() == count);
 			if (observer && string(mode) != "off") {

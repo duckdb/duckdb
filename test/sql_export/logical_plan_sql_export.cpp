@@ -1,3 +1,4 @@
+#include "sql_export_test_helpers.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "catch.hpp"
@@ -12,7 +13,6 @@
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
-#include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/window_function.hpp"
 #include "duckdb/main/config.hpp"
@@ -504,7 +504,7 @@ TEST_CASE("Logical plan SQL export applies requested output names", "[sql_export
 	REQUIRE(!prepared->HasError());
 	vector<Value> parameters;
 	auto execute_explain = [&]() {
-		return unique_ptr_cast<QueryResult, MaterializedQueryResult>(prepared->Execute(parameters, false));
+		return prepared->Execute(parameters);
 	};
 	auto first = execute_explain();
 	REQUIRE_NO_FAIL(*first);
@@ -943,7 +943,7 @@ TEST_CASE("SQL export inlines plain join sources without alias capture", "[sql_e
 
 namespace {
 
-static vector<string> SQLExportRows(MaterializedQueryResult &result, bool ordered) {
+static vector<string> SQLExportRows(QueryResult &result, bool ordered) {
 	vector<string> rows;
 	for (idx_t row = 0; row < result.RowCount(); row++) {
 		string text;
@@ -976,10 +976,10 @@ static void RequirePivotStreamingEffects(Connection &connection) {
 		           sequence +
 		           "') e FROM range(5000)t(i)) t PIVOT (sum(v) AS s, max(e) AS effect FOR k IN ('a','b','z'))";
 		QueryParameters parameters;
-		parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
+		parameters.result_eagerness = ResultEagerness::AUTO;
 		unique_ptr<QueryResult> result;
 		if (route == 0) {
-			result = connection.context->Query(sql, parameters);
+			result = SubmitSQLExportResult(*connection.context, sql, parameters);
 		} else {
 			auto plan = OptimizeLogicalPlanExportQuery(connection, sql);
 			if (route == 3) {
@@ -993,18 +993,19 @@ static void RequirePivotStreamingEffects(Connection &connection) {
 			if (route == 2) {
 				auto statement = make_uniq<SelectStatement>();
 				statement->node = std::move(exported.GetValue().query);
-				result = connection.context->Query(std::move(statement), parameters);
+				result = SubmitSQLExportResult(*connection.context, std::move(statement), parameters);
 			} else {
-				result = connection.context->Query(exported.GetValue().query->ToString(), parameters);
+				result = SubmitSQLExportResult(*connection.context, exported.GetValue().query->ToString(), parameters);
 			}
 		}
 		REQUIRE_FALSE(result->HasError());
-		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
-		auto first = result->Fetch();
+		REQUIRE(result->IsOpen());
+		QueryResultStream stream(std::move(result));
+		auto first = stream.Fetch();
 		REQUIRE(first);
 		REQUIRE(first->size() > 0);
-		result->Cast<StreamQueryResult>().Close();
-		REQUIRE_FALSE(result->HasError());
+		stream.Close();
+		REQUIRE_FALSE(stream.HasError());
 		auto effect = connection.Query("SELECT currval('" + sequence + "')");
 		REQUIRE_NO_FAIL(*effect);
 		REQUIRE(effect->GetValue(0, 0) == Value::BIGINT(5000));
@@ -1381,7 +1382,7 @@ static void CheckValuesRoundTrip(Connection &connection, unique_ptr<LogicalOpera
 	auto statement = make_uniq<SelectStatement>();
 	statement->node = std::move(exported.GetValue().query);
 	auto ast = connection.Query(std::move(statement));
-	for (auto &result_ref : vector<reference<MaterializedQueryResult>> {*generated, *ast}) {
+	for (auto &result_ref : vector<reference<QueryResult>> {*generated, *ast}) {
 		auto &result = result_ref.get();
 		REQUIRE_NO_FAIL(result);
 		REQUIRE(result.GetTypes() == direct->GetTypes());
@@ -2003,11 +2004,16 @@ TEST_CASE("Owned chunk SQL export retains delivered rows before conversion error
 			        LogicalPlanVerificationConstructIdentity::ExportFeature("chunk_consumer_evaluation"));
 		}
 		QueryParameters parameters;
-		parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
+		parameters.result_eagerness = ResultEagerness::AUTO;
 		auto drain = [&](unique_ptr<QueryResult> result) {
+			unique_ptr<QueryResultStream> stream;
+			if (!result->HasError()) {
+				stream = make_uniq<QueryResultStream>(std::move(result));
+			}
+
 			idx_t rows = 0;
-			while (!result->HasError()) {
-				auto chunk = result->Fetch();
+			while (stream && !stream->HasError()) {
+				auto chunk = stream->Fetch();
 				if (!chunk) {
 					break;
 				}
@@ -2016,20 +2022,22 @@ TEST_CASE("Owned chunk SQL export retains delivered rows before conversion error
 				}
 				rows += chunk->size();
 			}
-			REQUIRE(result->HasError());
-			REQUIRE(StringUtil::Contains(result->GetError(), "Could not convert string"));
+			REQUIRE((stream ? stream->HasError() : result->HasError()));
+			REQUIRE(
+			    StringUtil::Contains((stream ? stream->GetError() : result->GetError()), "Could not convert string"));
 			return rows;
 		};
 		REQUIRE_NO_FAIL(connection.Query("PRAGMA disable_optimizer"));
-		auto native_rows =
-		    drain(connection.context->Query(make_uniq<LogicalPlanStatement>(std::move(plan)), parameters));
+		auto native_rows = drain(
+		    SubmitSQLExportResult(*connection.context, make_uniq<LogicalPlanStatement>(std::move(plan)), parameters));
 		connection.Rollback();
 		REQUIRE_NO_FAIL(connection.Query("PRAGMA enable_optimizer"));
 		if (count == STANDARD_VECTOR_SIZE) {
-			auto text_rows = drain(connection.context->Query(exported.GetValue().query->ToString(), parameters));
+			auto text_rows =
+			    drain(SubmitSQLExportResult(*connection.context, exported.GetValue().query->ToString(), parameters));
 			auto statement = make_uniq<SelectStatement>();
 			statement->node = std::move(exported.GetValue().query);
-			auto ast_rows = drain(connection.context->Query(std::move(statement), parameters));
+			auto ast_rows = drain(SubmitSQLExportResult(*connection.context, std::move(statement), parameters));
 			REQUIRE(text_rows == native_rows);
 			REQUIRE(ast_rows == native_rows);
 		} else {
@@ -2168,11 +2176,16 @@ TEST_CASE("Owned chunk SQL export accounts for intrinsic SINGLE join errors",
 					REQUIRE(exported.IsSuccess());
 				}
 				QueryParameters parameters;
-				parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
+				parameters.result_eagerness = ResultEagerness::AUTO;
 				auto drain = [&](unique_ptr<QueryResult> result) {
+					unique_ptr<QueryResultStream> stream;
+					if (!result->HasError()) {
+						stream = make_uniq<QueryResultStream>(std::move(result));
+					}
+
 					idx_t rows = 0;
-					while (!result->HasError()) {
-						auto chunk = result->Fetch();
+					while (stream && !stream->HasError()) {
+						auto chunk = stream->Fetch();
 						if (!chunk) {
 							break;
 						}
@@ -2184,28 +2197,30 @@ TEST_CASE("Owned chunk SQL export accounts for intrinsic SINGLE join errors",
 						REQUIRE(equal);
 						rows += chunk->size();
 					}
-					REQUIRE(result->HasError() == error_on_multiple);
+					REQUIRE((stream ? stream->HasError() : result->HasError()) == error_on_multiple);
 					if (error_on_multiple) {
-						REQUIRE(result->GetErrorType() == ExceptionType::INVALID_INPUT);
-						REQUIRE(StringUtil::Contains(result->GetError(), "More than one row returned"));
+						REQUIRE((stream ? stream->GetErrorType() : result->GetErrorType()) ==
+						        ExceptionType::INVALID_INPUT);
+						REQUIRE(StringUtil::Contains((stream ? stream->GetError() : result->GetError()),
+						                             "More than one row returned"));
 					} else {
 						REQUIRE(rows == count + 1);
 					}
 					return rows;
 				};
 				REQUIRE_NO_FAIL(connection.Query("PRAGMA disable_optimizer"));
-				auto native_rows =
-				    drain(connection.context->Query(make_uniq<LogicalPlanStatement>(std::move(join)), parameters));
+				auto native_rows = drain(SubmitSQLExportResult(
+				    *connection.context, make_uniq<LogicalPlanStatement>(std::move(join)), parameters));
 				connection.Rollback();
 				REQUIRE_NO_FAIL(connection.Query("PRAGMA enable_optimizer"));
 				if (sensitive) {
 					REQUIRE(native_rows == count);
 				} else {
-					auto text_rows =
-					    drain(connection.context->Query(exported.GetValue().query->ToString(), parameters));
+					auto text_rows = drain(
+					    SubmitSQLExportResult(*connection.context, exported.GetValue().query->ToString(), parameters));
 					auto statement = make_uniq<SelectStatement>();
 					statement->node = std::move(exported.GetValue().query);
-					auto ast_rows = drain(connection.context->Query(std::move(statement), parameters));
+					auto ast_rows = drain(SubmitSQLExportResult(*connection.context, std::move(statement), parameters));
 					REQUIRE(text_rows == native_rows);
 					REQUIRE(ast_rows == native_rows);
 				}
@@ -2429,7 +2444,7 @@ TEST_CASE("Logical plan SQL export preserves partial CTE streams and errors",
 		auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
 		REQUIRE(exported.IsSuccess());
 		QueryParameters parameters;
-		parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
+		parameters.result_eagerness = ResultEagerness::AUTO;
 		auto check = [&](unique_ptr<QueryResult> result) {
 			if (producer) {
 				REQUIRE(result->HasError());
@@ -2437,33 +2452,35 @@ TEST_CASE("Logical plan SQL export preserves partial CTE streams and errors",
 				return idx_t(0);
 			}
 			REQUIRE_FALSE(result->HasError());
-			REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+			REQUIRE(result->IsOpen());
+			QueryResultStream stream(std::move(result));
 			idx_t count = 0;
-			while (auto chunk = result->Fetch()) {
+			while (auto chunk = stream.Fetch()) {
 				REQUIRE(chunk->size() > 0);
 				REQUIRE(chunk->GetValue(0, 0) == Value::INTEGER(1));
 				count += chunk->size();
 				if (!finish) {
-					result->Cast<StreamQueryResult>().Close();
+					stream.Close();
 					break;
 				}
 			}
-			REQUIRE(result->HasError() == finish);
+			REQUIRE(stream.HasError() == finish);
 			if (finish) {
-				REQUIRE(result->GetErrorType() == ExceptionType::CONVERSION);
+				REQUIRE(stream.GetErrorType() == ExceptionType::CONVERSION);
 			}
 			REQUIRE(count > 0);
 			return count;
 		};
 		REQUIRE_NO_FAIL(connection.Query("SET debug_disable_optimizer=true"));
-		auto native_count =
-		    check(connection.context->Query(make_uniq<LogicalPlanStatement>(std::move(plan)), parameters));
+		auto native_count = check(
+		    SubmitSQLExportResult(*connection.context, make_uniq<LogicalPlanStatement>(std::move(plan)), parameters));
 		connection.Rollback();
 		REQUIRE_NO_FAIL(connection.Query("SET debug_disable_optimizer=false"));
-		REQUIRE(check(connection.context->Query(exported.GetValue().query->ToString(), parameters)) == native_count);
+		REQUIRE(check(SubmitSQLExportResult(*connection.context, exported.GetValue().query->ToString(), parameters)) ==
+		        native_count);
 		auto statement = make_uniq<SelectStatement>();
 		statement->node = std::move(exported.GetValue().query);
-		REQUIRE(check(connection.context->Query(std::move(statement), parameters)) == native_count);
+		REQUIRE(check(SubmitSQLExportResult(*connection.context, std::move(statement), parameters)) == native_count);
 		REQUIRE_NO_FAIL(connection.Query("SELECT 42"));
 	}
 }
@@ -2654,20 +2671,25 @@ TEST_CASE("Logical plan SQL export retains sampling errors and partial consumpti
 					auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
 					REQUIRE(exported.IsSuccess());
 					QueryParameters parameters;
-					parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
+					parameters.result_eagerness = ResultEagerness::AUTO;
 					unique_ptr<QueryResult> result;
 					if (route == 0) {
-						result = connection.context->Query(sql, parameters);
+						result = SubmitSQLExportResult(*connection.context, sql, parameters);
 					} else if (route == 3) {
-						result = connection.context->Query(exported.GetValue().query->ToString(), parameters);
+						result = SubmitSQLExportResult(*connection.context, exported.GetValue().query->ToString(),
+						                               parameters);
 					} else {
 						auto statement = make_uniq<SelectStatement>();
 						statement->node = std::move(exported.GetValue().query);
-						result = connection.context->Query(std::move(statement), parameters);
+						result = SubmitSQLExportResult(*connection.context, std::move(statement), parameters);
+					}
+					unique_ptr<QueryResultStream> stream;
+					if (!result->HasError()) {
+						stream = make_uniq<QueryResultStream>(std::move(result));
 					}
 					vector<string> rows;
-					while (!result->HasError()) {
-						auto chunk = result->Fetch();
+					while (stream && !stream->HasError()) {
+						auto chunk = stream->Fetch();
 						if (!chunk) {
 							break;
 						}
@@ -2680,11 +2702,13 @@ TEST_CASE("Logical plan SQL export retains sampling errors and partial consumpti
 							break;
 						}
 					}
-					auto has_error = result->HasError();
+					auto has_error = (stream ? stream->HasError() : result->HasError());
 					if (has_error) {
 						REQUIRE(late_error);
-						REQUIRE(StringUtil::Contains(result->GetError(), "sample input reached"));
+						REQUIRE(StringUtil::Contains((stream ? stream->GetError() : result->GetError()),
+						                             "sample input reached"));
 					}
+					stream.reset();
 					result.reset();
 					connection.Rollback();
 					auto sequence = connection.Query("SELECT currval('seq')");
@@ -2735,21 +2759,26 @@ TEST_CASE("Table row number SQL export retains stream effects",
 				auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
 				REQUIRE(exported.IsSuccess());
 				QueryParameters parameters;
-				parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
+				parameters.result_eagerness = ResultEagerness::AUTO;
 				unique_ptr<QueryResult> result;
 				plan.reset();
 				if (route == 0) {
-					result = connection.context->Query(sql, parameters);
+					result = SubmitSQLExportResult(*connection.context, sql, parameters);
 				} else if (route == 3 || route == 4) {
-					result = connection.context->Query(exported.GetValue().query->ToString(), parameters);
+					result =
+					    SubmitSQLExportResult(*connection.context, exported.GetValue().query->ToString(), parameters);
 				} else {
 					auto statement = make_uniq<SelectStatement>();
 					statement->node = std::move(exported.GetValue().query);
-					result = connection.context->Query(std::move(statement), parameters);
+					result = SubmitSQLExportResult(*connection.context, std::move(statement), parameters);
+				}
+				unique_ptr<QueryResultStream> stream;
+				if (!result->HasError()) {
+					stream = make_uniq<QueryResultStream>(std::move(result));
 				}
 				vector<string> rows;
-				while (!result->HasError()) {
-					auto chunk = result->Fetch();
+				while (stream && !stream->HasError()) {
+					auto chunk = stream->Fetch();
 					if (!chunk) {
 						break;
 					}
@@ -2764,10 +2793,12 @@ TEST_CASE("Table row number SQL export retains stream effects",
 						break;
 					}
 				}
-				auto has_error = result->HasError();
+				auto has_error = (stream ? stream->HasError() : result->HasError());
 				if (has_error) {
-					REQUIRE(StringUtil::Contains(result->GetError(), "row number stream"));
+					REQUIRE(
+					    StringUtil::Contains((stream ? stream->GetError() : result->GetError()), "row number stream"));
 				}
+				stream.reset();
 				result.reset();
 				connection.Rollback();
 				auto sequence = connection.Query("SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq'");
