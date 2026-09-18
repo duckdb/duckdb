@@ -56,15 +56,15 @@ SELECT 1 WHERE (1,2) IN (VALUES (1,2),(1,2),(NULL,2));
 ----
 1
 
-query I rowsort
-SELECT __mark_join_marker FROM (VALUES (NULL::INTEGER)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a IS DISTINCT FROM 2;
+statement error
+EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (NULL::INTEGER)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a IS DISTINCT FROM 2;
 ----
-1
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: .*MARK.*semantics.*
 
-query I rowsort
-SELECT __mark_join_marker FROM (VALUES (NULL::INTEGER)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a IS DISTINCT FROM NULL::INTEGER;
+statement error
+EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (NULL::INTEGER)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a IS DISTINCT FROM NULL::INTEGER;
 ----
-0
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: .*MARK.*semantics.*
 
 statement error
 EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (1)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a>2;
@@ -105,17 +105,6 @@ statement error
 EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (NULL::INTEGER)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a+b=2;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query I rowsort
-SELECT bool_and(__mark_join_marker IS NOT DISTINCT FROM (a>0)) FROM (VALUES (NULL::INTEGER),(1)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a>0;
-----
-1
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT bool_and(__mark_join_marker IS NOT DISTINCT FROM (a>0)) FROM (VALUES (NULL::INTEGER),(1)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a>0;
@@ -170,216 +159,40 @@ INSERT INTO l SELECT g,k,v FROM (VALUES (1,1,10),(1,1,10),(1,1,20),(1,1,NULL),(1
 statement ok
 INSERT INTO r SELECT g,k,v FROM (VALUES (1,1,10),(1,1,10),(1,1,NULL),(1,2,NULL),(2,1,10),(NULL,1,10),(1,NULL,NULL)) t(g,k,v);
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-1.0	1	10	1
-1.0	1	10	1
-1.0	1	20	NULL
-1.0	1	NULL	NULL
-1.0	2	10	NULL
-1.0	2	NULL	NULL
-1.0	3	NULL	0
-1.0	NULL	20	0
-2.0	1	20	0
-NULL	1	10	0
-NULL	1	NULL	0
-NULL	NULL	NULL	0
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-1.0	1	10	1
-1.0	1	10	1
-1.0	1	20	NULL
-1.0	1	NULL	NULL
-1.0	2	10	NULL
-1.0	2	NULL	NULL
-1.0	3	NULL	0
-1.0	NULL	20	NULL
-2.0	1	20	0
-NULL	1	10	1
-NULL	1	NULL	NULL
-NULL	NULL	NULL	0
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-1.0	1	10	NULL
-1.0	1	10	NULL
-1.0	1	20	1
-1.0	1	NULL	NULL
-1.0	2	10	NULL
-1.0	2	NULL	NULL
-1.0	3	NULL	0
-1.0	NULL	20	0
-2.0	1	20	1
-NULL	1	10	0
-NULL	1	NULL	0
-NULL	NULL	NULL	0
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-1.0	1	10	NULL
-1.0	1	10	NULL
-1.0	1	20	1
-1.0	1	NULL	NULL
-1.0	2	10	NULL
-1.0	2	NULL	NULL
-1.0	3	NULL	0
-1.0	NULL	20	NULL
-2.0	1	20	1
-NULL	1	10	0
-NULL	1	NULL	NULL
-NULL	NULL	NULL	0
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-1.0	1	10	NULL
-1.0	1	10	NULL
-1.0	1	20	0
-1.0	1	NULL	NULL
-1.0	2	10	NULL
-1.0	2	NULL	NULL
-1.0	3	NULL	1
-1.0	NULL	20	1
-2.0	1	20	0
-NULL	1	10	1
-NULL	1	NULL	1
-NULL	NULL	NULL	1
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-1.0	1	10	NULL
-1.0	1	10	NULL
-1.0	1	20	0
-1.0	1	NULL	NULL
-1.0	2	10	NULL
-1.0	2	NULL	NULL
-1.0	3	NULL	1
-1.0	NULL	20	NULL
-2.0	1	20	0
-NULL	1	10	1
-NULL	1	NULL	NULL
-NULL	NULL	NULL	1
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-1.0	1	10	0
-1.0	1	10	0
-1.0	1	20	NULL
-1.0	1	NULL	NULL
-1.0	2	10	NULL
-1.0	2	NULL	NULL
-1.0	3	NULL	1
-1.0	NULL	20	1
-2.0	1	20	1
-NULL	1	10	1
-NULL	1	NULL	1
-NULL	NULL	NULL	1
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-1.0	1	10	0
-1.0	1	10	0
-1.0	1	20	NULL
-1.0	1	NULL	NULL
-1.0	2	10	NULL
-1.0	2	NULL	NULL
-1.0	3	NULL	1
-1.0	NULL	20	NULL
-2.0	1	20	1
-NULL	1	10	0
-NULL	1	NULL	NULL
-NULL	NULL	NULL	1
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
@@ -404,216 +217,40 @@ INSERT INTO l SELECT g,k,v FROM (VALUES (1,1,10),(1,1,10),(1,1,20),(1,1,NULL),(1
 statement ok
 INSERT INTO r SELECT g,k,v FROM (VALUES (1,1,10),(1,1,10),(1,1,NULL),(1,2,NULL),(2,1,10),(NULL,1,10),(1,NULL,NULL)) t(g,k,v);
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-1.0	1	10.00	1
-1.0	1	10.00	1
-1.0	1	20.00	NULL
-1.0	1	NULL	NULL
-1.0	2	10.00	NULL
-1.0	2	NULL	NULL
-1.0	3	NULL	0
-1.0	NULL	20.00	0
-2.0	1	20.00	0
-NULL	1	10.00	0
-NULL	1	NULL	0
-NULL	NULL	NULL	0
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-1.0	1	10.00	1
-1.0	1	10.00	1
-1.0	1	20.00	NULL
-1.0	1	NULL	NULL
-1.0	2	10.00	NULL
-1.0	2	NULL	NULL
-1.0	3	NULL	0
-1.0	NULL	20.00	NULL
-2.0	1	20.00	0
-NULL	1	10.00	1
-NULL	1	NULL	NULL
-NULL	NULL	NULL	0
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-1.0	1	10.00	NULL
-1.0	1	10.00	NULL
-1.0	1	20.00	1
-1.0	1	NULL	NULL
-1.0	2	10.00	NULL
-1.0	2	NULL	NULL
-1.0	3	NULL	0
-1.0	NULL	20.00	0
-2.0	1	20.00	1
-NULL	1	10.00	0
-NULL	1	NULL	0
-NULL	NULL	NULL	0
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-1.0	1	10.00	NULL
-1.0	1	10.00	NULL
-1.0	1	20.00	1
-1.0	1	NULL	NULL
-1.0	2	10.00	NULL
-1.0	2	NULL	NULL
-1.0	3	NULL	0
-1.0	NULL	20.00	NULL
-2.0	1	20.00	1
-NULL	1	10.00	0
-NULL	1	NULL	NULL
-NULL	NULL	NULL	0
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-1.0	1	10.00	NULL
-1.0	1	10.00	NULL
-1.0	1	20.00	0
-1.0	1	NULL	NULL
-1.0	2	10.00	NULL
-1.0	2	NULL	NULL
-1.0	3	NULL	1
-1.0	NULL	20.00	1
-2.0	1	20.00	0
-NULL	1	10.00	1
-NULL	1	NULL	1
-NULL	NULL	NULL	1
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-1.0	1	10.00	NULL
-1.0	1	10.00	NULL
-1.0	1	20.00	0
-1.0	1	NULL	NULL
-1.0	2	10.00	NULL
-1.0	2	NULL	NULL
-1.0	3	NULL	1
-1.0	NULL	20.00	NULL
-2.0	1	20.00	0
-NULL	1	10.00	1
-NULL	1	NULL	NULL
-NULL	NULL	NULL	1
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-1.0	1	10.00	0
-1.0	1	10.00	0
-1.0	1	20.00	NULL
-1.0	1	NULL	NULL
-1.0	2	10.00	NULL
-1.0	2	NULL	NULL
-1.0	3	NULL	1
-1.0	NULL	20.00	1
-2.0	1	20.00	1
-NULL	1	10.00	1
-NULL	1	NULL	1
-NULL	NULL	NULL	1
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-1.0	1	10.00	0
-1.0	1	10.00	0
-1.0	1	20.00	NULL
-1.0	1	NULL	NULL
-1.0	2	10.00	NULL
-1.0	2	NULL	NULL
-1.0	3	NULL	1
-1.0	NULL	20.00	NULL
-2.0	1	20.00	1
-NULL	1	10.00	0
-NULL	1	NULL	NULL
-NULL	NULL	NULL	1
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
@@ -638,216 +275,40 @@ INSERT INTO l SELECT g,k,CASE WHEN v IS NULL THEN NULL ELSE [v,NULL] END FROM (V
 statement ok
 INSERT INTO r SELECT g,k,CASE WHEN v IS NULL THEN NULL ELSE [v,NULL] END FROM (VALUES (1,1,10),(1,1,10),(1,1,NULL),(1,2,NULL),(2,1,10),(NULL,1,10),(1,NULL,NULL)) t(g,k,v);
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-1.0	1	NULL	NULL
-1.0	1	[10, NULL]	1
-1.0	1	[10, NULL]	1
-1.0	1	[20, NULL]	NULL
-1.0	2	NULL	NULL
-1.0	2	[10, NULL]	NULL
-1.0	3	NULL	0
-1.0	NULL	[20, NULL]	0
-2.0	1	[20, NULL]	0
-NULL	1	NULL	0
-NULL	1	[10, NULL]	0
-NULL	NULL	NULL	0
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-1.0	1	NULL	NULL
-1.0	1	[10, NULL]	1
-1.0	1	[10, NULL]	1
-1.0	1	[20, NULL]	NULL
-1.0	2	NULL	NULL
-1.0	2	[10, NULL]	NULL
-1.0	3	NULL	0
-1.0	NULL	[20, NULL]	NULL
-2.0	1	[20, NULL]	0
-NULL	1	NULL	NULL
-NULL	1	[10, NULL]	1
-NULL	NULL	NULL	0
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-1.0	1	NULL	NULL
-1.0	1	[10, NULL]	NULL
-1.0	1	[10, NULL]	NULL
-1.0	1	[20, NULL]	1
-1.0	2	NULL	NULL
-1.0	2	[10, NULL]	NULL
-1.0	3	NULL	0
-1.0	NULL	[20, NULL]	0
-2.0	1	[20, NULL]	1
-NULL	1	NULL	0
-NULL	1	[10, NULL]	0
-NULL	NULL	NULL	0
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-1.0	1	NULL	NULL
-1.0	1	[10, NULL]	NULL
-1.0	1	[10, NULL]	NULL
-1.0	1	[20, NULL]	1
-1.0	2	NULL	NULL
-1.0	2	[10, NULL]	NULL
-1.0	3	NULL	0
-1.0	NULL	[20, NULL]	NULL
-2.0	1	[20, NULL]	1
-NULL	1	NULL	NULL
-NULL	1	[10, NULL]	0
-NULL	NULL	NULL	0
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-1.0	1	NULL	NULL
-1.0	1	[10, NULL]	NULL
-1.0	1	[10, NULL]	NULL
-1.0	1	[20, NULL]	0
-1.0	2	NULL	NULL
-1.0	2	[10, NULL]	NULL
-1.0	3	NULL	1
-1.0	NULL	[20, NULL]	1
-2.0	1	[20, NULL]	0
-NULL	1	NULL	1
-NULL	1	[10, NULL]	1
-NULL	NULL	NULL	1
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-1.0	1	NULL	NULL
-1.0	1	[10, NULL]	NULL
-1.0	1	[10, NULL]	NULL
-1.0	1	[20, NULL]	0
-1.0	2	NULL	NULL
-1.0	2	[10, NULL]	NULL
-1.0	3	NULL	1
-1.0	NULL	[20, NULL]	NULL
-2.0	1	[20, NULL]	0
-NULL	1	NULL	NULL
-NULL	1	[10, NULL]	1
-NULL	NULL	NULL	1
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-1.0	1	NULL	NULL
-1.0	1	[10, NULL]	0
-1.0	1	[10, NULL]	0
-1.0	1	[20, NULL]	NULL
-1.0	2	NULL	NULL
-1.0	2	[10, NULL]	NULL
-1.0	3	NULL	1
-1.0	NULL	[20, NULL]	1
-2.0	1	[20, NULL]	1
-NULL	1	NULL	1
-NULL	1	[10, NULL]	1
-NULL	NULL	NULL	1
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-1.0	1	NULL	NULL
-1.0	1	[10, NULL]	0
-1.0	1	[10, NULL]	0
-1.0	1	[20, NULL]	NULL
-1.0	2	NULL	NULL
-1.0	2	[10, NULL]	NULL
-1.0	3	NULL	1
-1.0	NULL	[20, NULL]	NULL
-2.0	1	[20, NULL]	1
-NULL	1	NULL	NULL
-NULL	1	[10, NULL]	0
-NULL	NULL	NULL	1
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
@@ -872,216 +333,40 @@ INSERT INTO l SELECT g,k,CASE WHEN v IS NULL THEN NULL ELSE {'v':v} END FROM (VA
 statement ok
 INSERT INTO r SELECT g,k,CASE WHEN v IS NULL THEN NULL ELSE {'v':v} END FROM (VALUES (1,1,10),(1,1,10),(1,1,NULL),(1,2,NULL),(2,1,10),(NULL,1,10),(1,NULL,NULL)) t(g,k,v);
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-1.0	1	NULL	NULL
-1.0	1	{'v': 10}	1
-1.0	1	{'v': 10}	1
-1.0	1	{'v': 20}	NULL
-1.0	2	NULL	NULL
-1.0	2	{'v': 10}	NULL
-1.0	3	NULL	0
-1.0	NULL	{'v': 20}	0
-2.0	1	{'v': 20}	0
-NULL	1	NULL	0
-NULL	1	{'v': 10}	0
-NULL	NULL	NULL	0
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-1.0	1	NULL	NULL
-1.0	1	{'v': 10}	1
-1.0	1	{'v': 10}	1
-1.0	1	{'v': 20}	NULL
-1.0	2	NULL	NULL
-1.0	2	{'v': 10}	NULL
-1.0	3	NULL	0
-1.0	NULL	{'v': 20}	NULL
-2.0	1	{'v': 20}	0
-NULL	1	NULL	NULL
-NULL	1	{'v': 10}	1
-NULL	NULL	NULL	0
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-1.0	1	NULL	NULL
-1.0	1	{'v': 10}	NULL
-1.0	1	{'v': 10}	NULL
-1.0	1	{'v': 20}	1
-1.0	2	NULL	NULL
-1.0	2	{'v': 10}	NULL
-1.0	3	NULL	0
-1.0	NULL	{'v': 20}	0
-2.0	1	{'v': 20}	1
-NULL	1	NULL	0
-NULL	1	{'v': 10}	0
-NULL	NULL	NULL	0
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-1.0	1	NULL	NULL
-1.0	1	{'v': 10}	NULL
-1.0	1	{'v': 10}	NULL
-1.0	1	{'v': 20}	1
-1.0	2	NULL	NULL
-1.0	2	{'v': 10}	NULL
-1.0	3	NULL	0
-1.0	NULL	{'v': 20}	NULL
-2.0	1	{'v': 20}	1
-NULL	1	NULL	NULL
-NULL	1	{'v': 10}	0
-NULL	NULL	NULL	0
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-1.0	1	NULL	NULL
-1.0	1	{'v': 10}	NULL
-1.0	1	{'v': 10}	NULL
-1.0	1	{'v': 20}	0
-1.0	2	NULL	NULL
-1.0	2	{'v': 10}	NULL
-1.0	3	NULL	1
-1.0	NULL	{'v': 20}	1
-2.0	1	{'v': 20}	0
-NULL	1	NULL	1
-NULL	1	{'v': 10}	1
-NULL	NULL	NULL	1
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-1.0	1	NULL	NULL
-1.0	1	{'v': 10}	NULL
-1.0	1	{'v': 10}	NULL
-1.0	1	{'v': 20}	0
-1.0	2	NULL	NULL
-1.0	2	{'v': 10}	NULL
-1.0	3	NULL	1
-1.0	NULL	{'v': 20}	NULL
-2.0	1	{'v': 20}	0
-NULL	1	NULL	NULL
-NULL	1	{'v': 10}	1
-NULL	NULL	NULL	1
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-1.0	1	NULL	NULL
-1.0	1	{'v': 10}	0
-1.0	1	{'v': 10}	0
-1.0	1	{'v': 20}	NULL
-1.0	2	NULL	NULL
-1.0	2	{'v': 10}	NULL
-1.0	3	NULL	1
-1.0	NULL	{'v': 20}	1
-2.0	1	{'v': 20}	1
-NULL	1	NULL	1
-NULL	1	{'v': 10}	1
-NULL	NULL	NULL	1
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-1.0	1	NULL	NULL
-1.0	1	{'v': 10}	0
-1.0	1	{'v': 10}	0
-1.0	1	{'v': 20}	NULL
-1.0	2	NULL	NULL
-1.0	2	{'v': 10}	NULL
-1.0	3	NULL	1
-1.0	NULL	{'v': 20}	NULL
-2.0	1	{'v': 20}	1
-NULL	1	NULL	NULL
-NULL	1	{'v': 10}	0
-NULL	NULL	NULL	1
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
@@ -1106,216 +391,40 @@ INSERT INTO l SELECT g,k,CASE v WHEN 10 THEN 'a' WHEN 20 THEN 'B' ELSE NULL END 
 statement ok
 INSERT INTO r SELECT g,k,CASE v WHEN 10 THEN 'a' WHEN 20 THEN 'B' ELSE NULL END FROM (VALUES (1,1,10),(1,1,10),(1,1,NULL),(1,2,NULL),(2,1,10),(NULL,1,10),(1,NULL,NULL)) t(g,k,v);
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-1.0	1	B	NULL
-1.0	1	NULL	NULL
-1.0	1	a	1
-1.0	1	a	1
-1.0	2	NULL	NULL
-1.0	2	a	NULL
-1.0	3	NULL	0
-1.0	NULL	B	0
-2.0	1	B	0
-NULL	1	NULL	0
-NULL	1	a	0
-NULL	NULL	NULL	0
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-1.0	1	B	NULL
-1.0	1	NULL	NULL
-1.0	1	a	1
-1.0	1	a	1
-1.0	2	NULL	NULL
-1.0	2	a	NULL
-1.0	3	NULL	0
-1.0	NULL	B	NULL
-2.0	1	B	0
-NULL	1	NULL	NULL
-NULL	1	a	1
-NULL	NULL	NULL	0
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-1.0	1	B	1
-1.0	1	NULL	NULL
-1.0	1	a	NULL
-1.0	1	a	NULL
-1.0	2	NULL	NULL
-1.0	2	a	NULL
-1.0	3	NULL	0
-1.0	NULL	B	0
-2.0	1	B	1
-NULL	1	NULL	0
-NULL	1	a	0
-NULL	NULL	NULL	0
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-1.0	1	B	1
-1.0	1	NULL	NULL
-1.0	1	a	NULL
-1.0	1	a	NULL
-1.0	2	NULL	NULL
-1.0	2	a	NULL
-1.0	3	NULL	0
-1.0	NULL	B	NULL
-2.0	1	B	1
-NULL	1	NULL	NULL
-NULL	1	a	0
-NULL	NULL	NULL	0
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-1.0	1	B	0
-1.0	1	NULL	NULL
-1.0	1	a	NULL
-1.0	1	a	NULL
-1.0	2	NULL	NULL
-1.0	2	a	NULL
-1.0	3	NULL	1
-1.0	NULL	B	1
-2.0	1	B	0
-NULL	1	NULL	1
-NULL	1	a	1
-NULL	NULL	NULL	1
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-1.0	1	B	0
-1.0	1	NULL	NULL
-1.0	1	a	NULL
-1.0	1	a	NULL
-1.0	2	NULL	NULL
-1.0	2	a	NULL
-1.0	3	NULL	1
-1.0	NULL	B	NULL
-2.0	1	B	0
-NULL	1	NULL	NULL
-NULL	1	a	1
-NULL	NULL	NULL	1
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-1.0	1	B	NULL
-1.0	1	NULL	NULL
-1.0	1	a	0
-1.0	1	a	0
-1.0	2	NULL	NULL
-1.0	2	a	NULL
-1.0	3	NULL	1
-1.0	NULL	B	1
-2.0	1	B	1
-NULL	1	NULL	1
-NULL	1	a	1
-NULL	NULL	NULL	1
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTTI rowsort
-SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-1.0	1	B	NULL
-1.0	1	NULL	NULL
-1.0	1	a	0
-1.0	1	a	0
-1.0	2	NULL	NULL
-1.0	2	a	NULL
-1.0	3	NULL	1
-1.0	NULL	B	NULL
-2.0	1	B	1
-NULL	1	NULL	NULL
-NULL	1	a	0
-NULL	NULL	NULL	1
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;

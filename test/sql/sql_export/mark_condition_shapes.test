@@ -2,6 +2,9 @@
 # description: SQL export retains supported MARK comparison shapes
 # group: [sql_export]
 
+statement ok
+SET debug_verify_sql_export='strict';
+
 query III
 SELECT a,b,__mark_join_marker FROM (VALUES (1,1),(2,2),(NULL,2)) l(a,b)
 JOIN BY (TYPE MARK) (VALUES (1,1),(1,1),(2,NULL)) r(c,d) ON a=c AND b=d
@@ -34,3 +37,36 @@ JOIN BY (TYPE MARK) (SELECT 1 b WHERE false) r ON a=b ORDER BY a NULLS LAST;
 ----
 1	false
 NULL	false
+
+# Reject forms whose native MARK NULL handling cannot be reconstructed safely.
+statement ok
+SET debug_verify_serializer=true;
+
+statement ok
+CREATE TABLE mark_boundary_l(i INTEGER,t TUPLE(INTEGER,INTEGER));
+
+statement ok
+CREATE TABLE mark_boundary_r(i INTEGER,t TUPLE(INTEGER,INTEGER));
+
+statement ok
+INSERT INTO mark_boundary_l VALUES (NULL,(1,NULL)),(1,(2,3));
+
+statement ok
+INSERT INTO mark_boundary_r VALUES (NULL,(1,2)),(2,(3,4));
+
+statement error
+EXPLAIN (SQL) SELECT __mark_join_marker FROM mark_boundary_l l JOIN BY (TYPE MARK) mark_boundary_r r ON l.i IS DISTINCT FROM r.i;
+----
+<REGEX>:.*MARK DISTINCT FROM comparisons cannot preserve NULL semantics.*
+
+foreach comparison < > <= >=
+
+statement error
+EXPLAIN (SQL) SELECT __mark_join_marker FROM mark_boundary_l l JOIN BY (TYPE MARK) mark_boundary_r r ON l.t{comparison}r.t;
+----
+<REGEX>:.*MARK ordering comparisons on nested types cannot preserve NULL semantics.*
+
+endloop
+
+statement ok
+SET debug_verify_serializer=false;

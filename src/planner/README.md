@@ -24,6 +24,8 @@ SQL mode accepts supported SELECT, VALUES, and WITH queries. It does not combine
 
 PIVOT with values discovered from data is rejected because column discovery requires executing auxiliary statements. Specify the values with an explicit IN list to export supported PIVOT queries. Unresolved parameters and explicit optimizer opt-outs may also leave unsupported plan nodes.
 
+MARK joins, used by queries such as `IN` and `ANY`, support ordinary scalar comparisons and conjunctions containing only equality or only `IS NOT DISTINCT FROM` comparisons. `IS DISTINCT FROM`, ordering comparisons on nested types, mixed or arbitrary predicates, and plans requiring group-specific NULL handling or duplicate-eliminated input scopes are rejected. These restrictions preserve the distinction between false and unknown results.
+
 ## Execution and effects
 
 Explaining does not execute the query or its generated replacement. Ordinary binding and optimization still occur, including catalog lookup and source schema discovery. Representable runtime or effecting calls may appear in the returned SQL:

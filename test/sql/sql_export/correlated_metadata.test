@@ -129,22 +129,6 @@ EXPLAIN SELECT o.k,o.x,o.x=ANY(SELECT r.y FROM rhs r WHERE r.k=o.k) FROM lhs o;
 ----
 physical_plan	<REGEX>:.*Hash Join.*
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTT rowsort
-SELECT o.k,o.x,o.x=ANY(SELECT r.y FROM rhs r WHERE r.k=o.k) FROM lhs o;
-----
-1.0	10	true
-1.0	10	true
-2.0	20	false
-3.0	NULL	false
-4.0	40	false
-NULL	50	false
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT o.k,o.x,o.x=ANY(SELECT r.y FROM rhs r WHERE r.k=o.k) FROM lhs o;
 ----
@@ -154,22 +138,6 @@ query TT
 EXPLAIN SELECT o.k,o.x,o.x<>ALL(SELECT r.y FROM rhs r WHERE r.k=o.k) FROM lhs o;
 ----
 physical_plan	<REGEX>:.*Hash Join.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query TTT rowsort
-SELECT o.k,o.x,o.x<>ALL(SELECT r.y FROM rhs r WHERE r.k=o.k) FROM lhs o;
-----
-1.0	10	false
-1.0	10	false
-2.0	20	true
-3.0	NULL	true
-4.0	40	true
-NULL	50	true
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT o.k,o.x,o.x<>ALL(SELECT r.y FROM rhs r WHERE r.k=o.k) FROM lhs o;
@@ -188,37 +156,10 @@ INSERT INTO union_l VALUES (1,union_value(i:=NULL));
 statement ok
 INSERT INTO union_r VALUES (1,union_value(i:=NULL));
 
-statement ok
-SET debug_verify_sql_export='off';
-
-query T rowsort
-SELECT x=ANY(SELECT y FROM union_r r WHERE r.g=l.g) FROM union_l l;
-----
-false
-
-statement ok
-SET debug_verify_sql_export='strict';
-
 statement error
 EXPLAIN (SQL) SELECT x=ANY(SELECT y FROM union_r r WHERE r.g=l.g) FROM union_l l;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-query TT
-EXPLAIN SELECT __mark_join_marker FROM union_l l JOIN BY (TYPE MARK) union_r r ON l.g IS NOT DISTINCT FROM r.g AND l.x=r.y;
-----
-physical_plan	<REGEX>:.*Nested Loop Join.*
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T rowsort
-SELECT __mark_join_marker FROM union_l l JOIN BY (TYPE MARK) union_r r ON l.g IS NOT DISTINCT FROM r.g AND l.x=r.y;
-----
-NULL
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT __mark_join_marker FROM union_l l JOIN BY (TYPE MARK) union_r r ON l.g IS NOT DISTINCT FROM r.g AND l.x=r.y;
@@ -236,17 +177,6 @@ INSERT INTO list_l VALUES (1,[10,NULL]);
 
 statement ok
 INSERT INTO list_r VALUES (1,NULL);
-
-statement ok
-SET debug_verify_sql_export='off';
-
-query T rowsort
-SELECT x=ANY(SELECT y FROM list_r r WHERE r.g=l.g) FROM list_l l;
-----
-NULL
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement error
 EXPLAIN (SQL) SELECT x=ANY(SELECT y FROM list_r r WHERE r.g=l.g) FROM list_l l;

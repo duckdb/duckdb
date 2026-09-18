@@ -1074,6 +1074,22 @@ private:
 		if (!comparisons_only || (join.conditions.size() != 1 && !all_equal && !all_null_safe)) {
 			return "The MARK condition requires conjunction execution semantics";
 		}
+		for (auto &condition : join.conditions) {
+			switch (condition.GetComparisonType()) {
+			case ExpressionType::COMPARE_DISTINCT_FROM:
+				return "MARK DISTINCT FROM comparisons cannot preserve NULL semantics";
+			case ExpressionType::COMPARE_LESSTHAN:
+			case ExpressionType::COMPARE_GREATERTHAN:
+			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+				if (condition.GetLHS().GetReturnType().IsNested() || condition.GetRHS().GetReturnType().IsNested()) {
+					return "MARK ordering comparisons on nested types cannot preserve NULL semantics";
+				}
+				break;
+			default:
+				break;
+			}
+		}
 		return string();
 	}
 
