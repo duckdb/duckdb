@@ -1,5 +1,10 @@
 #include "test_capi_v2.hpp"
 
+// duckdb.h, included first, defines DUCKDB_API_ALLOW_UNSTABLE as 0 by default, so v2 must not read it as an opt-in.
+static_assert(DUCKDB_API_ALLOW_UNSTABLE == 0,
+              "duckdb.h must precede duckdb_v2.h for the next assertion to mean anything");
+static_assert(DUCKDB_V2_API_ALLOW_UNSTABLE == 0, "the v2 unstable surface must be off unless opted into");
+
 namespace test_capi_v2 {
 //----------------------------------------------------------------------------------------------------------------------
 // Basic tests for the environment / database / connection lifecycle: create, open, close, destroy.
