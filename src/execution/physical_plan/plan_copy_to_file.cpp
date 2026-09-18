@@ -84,6 +84,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 	cast_copy.write_empty_file = op.write_empty_file;
 	cast_copy.hive_file_pattern = op.hive_file_pattern;
 	cast_copy.order_columns = std::move(op.order_columns);
+	cast_copy.partition_path_expression = std::move(op.partition_path_expression);
 
 	cast_copy.children.push_back(plan);
 	return copy;
