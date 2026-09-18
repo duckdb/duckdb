@@ -350,6 +350,25 @@ struct LayoutGate {
 
 static idx_t GetBuildSpaceRequirement(ClientContext &context, const JoinHashTable &ht, idx_t num_threads);
 
+//! A bloom filter is only useful if we expect to probe more rows than we build, and it can only be pushed into a
+//! scan for a single equality condition. Both are decided up front, because the filter is filled during Sink.
+static bool ShouldBuildBloomFilter(const PhysicalHashJoin &op) {
+	if (!op.filter_pushdown || op.filter_pushdown->probe_info.empty()) {
+		return false;
+	}
+	idx_t equality_count = 0;
+	for (auto &cond : op.conditions) {
+		const auto cmp = cond.GetComparisonType();
+		if (cmp == ExpressionType::COMPARE_EQUAL || cmp == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			equality_count++;
+		}
+	}
+	if (equality_count != 1) {
+		return false;
+	}
+	return op.children[1].get().estimated_cardinality <= op.children[0].get().estimated_cardinality;
+}
+
 class HashJoinGlobalSinkState : public GlobalSinkState {
 public:
 	HashJoinGlobalSinkState(const PhysicalHashJoin &op_p, ClientContext &context_p)
@@ -384,6 +403,18 @@ public:
 			}
 			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
 		}
+		InitializeBloomFilter();
+	}
+
+	//! Creates the bloom filter that every thread-local hash table inserts into during Sink
+	void InitializeBloomFilter() {
+		if (skip_filter_pushdown || !ShouldBuildBloomFilter(op)) {
+			hash_table->SetBloomFilter(nullptr);
+			return;
+		}
+		auto filter = make_shared_ptr<BloomFilter>();
+		filter->Initialize(context, MaxValue<idx_t>(op.children[1].get().estimated_cardinality, 1));
+		hash_table->SetBloomFilter(std::move(filter));
 	}
 
 	~HashJoinGlobalSinkState() override {
@@ -431,6 +462,7 @@ public:
 			}
 			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
 		}
+		InitializeBloomFilter();
 		// The next iteration's first chunk publishes the layout afresh: the rerun build may deliver a different
 		// dictionary (or none), so neither a narrowed slot nor the dictionary it indexes into can be carried over.
 		// ResetForNewIterationSinglePartition returned the global JHT to the unpublished state accordingly.
@@ -514,6 +546,8 @@ public:
 		}
 
 		hash_table = op.InitializeHashTable(context, gstate.hash_table->GetRadixBits());
+		// every thread inserts into this one filter - InsertOne is an atomic fetch_or, so it needs no lock
+		hash_table->SetBloomFilter(gstate.hash_table->GetBloomFilter());
 		// sink_collection exists only after the layout is published on the first build chunk, so
 		// InitializeAppendState runs lazily inside Sink.
 		keep_hash_table = gstate.keep_local_hash_tables;
@@ -561,6 +595,7 @@ public:
 			hash_table = op.InitializeHashTable(context.client, gstate.hash_table->GetRadixBits());
 			append_state_initialised = false;
 		}
+		hash_table->SetBloomFilter(gstate.hash_table->GetBloomFilter());
 		keep_hash_table = gstate.keep_local_hash_tables;
 		gstate.active_local_states++;
 		if (op.filter_pushdown) {
@@ -1229,6 +1264,24 @@ void HashJoinGlobalSinkState::InitializeProbeSpill() {
 	}
 }
 
+//! Computes and registers the runtime filters of an external join. Both external paths call this exactly once,
+//! after the whole build side has been merged into the global hash table and before the finalize event is
+//! scheduled. Every input is accumulated during Sink, so it does not matter which partitions are materialized.
+static void FinalizeExternalRuntimeFilters(ClientContext &context, const PhysicalHashJoin &op,
+                                           HashJoinGlobalSinkState &sink) {
+	if (!op.filter_pushdown || sink.skip_filter_pushdown) {
+		return;
+	}
+	auto &ht = *sink.hash_table;
+	if (ht.GetSinkCollection().Count() == 0) {
+		return;
+	}
+	auto filter_min_max = op.filter_pushdown->FinalizeMinMax(*sink.global_filter_state);
+	// prefix-range filters are built from the materialized hash table, which only ever holds one round
+	op.filter_pushdown->FinalizeFilters(context, op, std::move(filter_min_max), &ht, true, false,
+	                                    sink.global_filter_state.get());
+}
+
 class HashJoinRepartitionTask : public ExecutorTask {
 public:
 	HashJoinRepartitionTask(shared_ptr<Event> event_p, ClientContext &context, JoinHashTable &global_ht,
@@ -1322,6 +1375,8 @@ public:
 		                                                   sink.hash_table->PointerTableSize(sink.max_partition_count) +
 		                                                   sink.probe_side_requirement);
 		sink.temporary_memory_state->UpdateReservation(executor.context);
+
+		FinalizeExternalRuntimeFilters(sink.context, op, sink);
 
 		D_ASSERT(sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
 		sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() -
@@ -1531,13 +1586,15 @@ static unique_ptr<Expression> CreateRuntimeFilterExpression(ClientContext &conte
 	unique_ptr<Expression> filter_expr;
 	switch (deferred.type) {
 	case DeferredRuntimeFilterType::BLOOM_FILTER: {
-		D_ASSERT(ht.GetBloomFilter().IsInitialized());
-		if (!ht.GetBloomFilter().IsInitialized()) {
+		auto bloom_filter = ht.GetBloomFilter();
+		D_ASSERT(bloom_filter && bloom_filter->IsInitialized() && bloom_filter->IsSealed());
+		// a filter that is not sealed does not describe the complete build side - publishing it would drop rows
+		if (!bloom_filter || !bloom_filter->IsInitialized() || !bloom_filter->IsSealed()) {
 			return nullptr;
 		}
 		filter_expr = make_uniq<BoundFunctionExpression>(
 		    BoundScalarFunction(BloomFilterScalarFun::GetFunction(filter_input_type)), std::move(children),
-		    make_uniq<BloomFilterFunctionData>(ht.GetBloomFilter(), filters_null_values, key_name, key_type,
+		    make_uniq<BloomFilterFunctionData>(std::move(bloom_filter), filters_null_values, key_name, key_type,
 		                                       selectivity_threshold, n_vectors_to_check));
 		break;
 	}
@@ -1849,9 +1906,8 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 					CreateDynamicMinMaxFilters(op, info, context, pushdown_column, filter_col_idx, cmp, min_val,
 					                           max_val, condition_type, reconstruct_filter_expression, false);
 				}
-				if (allow_bloom_filters && can_emit_runtime_filters && ht && gstate &&
+				if (allow_bloom_filters && can_emit_runtime_filters && ht && gstate && ht->GetBloomFilter() &&
 				    CanUseBloomFilter(info, context, op, cmp, ht)) {
-					ht->SetBuildBloomFilter(true);
 					DeferRuntimeFilter(DeferredRuntimeFilterType::BLOOM_FILTER, op, info, pushdown_column,
 					                   filter_col_idx, *gstate);
 				}
@@ -1872,6 +1928,9 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
                                             OperatorSinkFinalizeInput &input) const {
 	auto &sink = input.global_state.Cast<HashJoinGlobalSinkState>();
 	auto &ht = *sink.hash_table;
+
+	// the filter covers the whole build side once Sink is done
+	ht.SealBloomFilter();
 
 	sink.temporary_memory_state->UpdateReservation(context);
 	sink.external = sink.temporary_memory_state->GetReservation() < sink.total_size;
@@ -1927,12 +1986,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 			}
 			sink.local_hash_tables.clear();
 			sink.owned_local_hash_tables.clear();
-			if (filter_pushdown && !sink.skip_filter_pushdown && ht.GetSinkCollection().Count() > 0) {
-				auto filter_min_max = filter_pushdown->FinalizeMinMax(*sink.global_filter_state);
-				filter_pushdown->FinalizeFilters(context, *this, std::move(filter_min_max), &ht, false, false,
-				                                 sink.global_filter_state.get());
-			}
-			ht.PrepareBloomFilterForFinalize();
+			FinalizeExternalRuntimeFilters(context, *this, sink);
 			D_ASSERT(sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
 			sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() -
 			                                         sink.probe_side_requirement);
@@ -1989,7 +2043,6 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 
 	// In case of a large build side or duplicates, use regular hash join
 	if (!use_perfect_hash) {
-		ht.PrepareBloomFilterForFinalize();
 		sink.ScheduleFinalize(pipeline, event);
 	}
 	sink.finalized = true;
