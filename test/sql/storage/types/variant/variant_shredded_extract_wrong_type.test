@@ -1,0 +1,70 @@
+# name: test/sql/storage/types/variant/variant_shredded_extract_wrong_type.test
+# description: Shredded VARIANT extraction checks payload types and preserves out-of-bounds NULLs
+# group: [variant]
+
+load {TEST_DIR}/variant_shredded_extract_wrong_type.db readwrite v1.5.0
+
+foreach threshold -1 0
+
+statement ok
+SET variant_minimum_shredding_size = {threshold};
+
+foreach value true 42 4.2 'duck' [42] [[42]] [] [NULL] {'x':42} [{'x':42}] NULL
+
+statement ok
+CREATE OR REPLACE TABLE wrong_type AS
+SELECT i AS id, ({value})::VARIANT AS v, {'a': {value}}::VARIANT AS obj
+FROM range(5) t(i);
+
+statement ok
+CHECKPOINT;
+
+foreach optimizer enable_optimizer disable_optimizer
+
+statement ok
+PRAGMA {optimizer};
+
+# Exercise both storage extraction pushdown and expression execution.
+query I
+SELECT variant_extract(v, 'missing') FROM wrong_type WHERE id = 1;
+----
+NULL
+
+query I
+SELECT count(variant_extract(v, 'missing')) FROM wrong_type;
+----
+0
+
+# Repeat the type mismatch below an object, including wrappers around arrays.
+query I
+SELECT count(obj.a.missing) FROM wrong_type;
+----
+0
+
+# Keep successful array extraction and VARCHAR casts on the same scan path.
+query I
+SELECT count(variant_extract(v, 1)) = 5 * (variant_extract(({value})::VARIANT, 1) IS NOT NULL)::INTEGER
+FROM wrong_type;
+----
+true
+
+query I
+SELECT bool_and(v::VARCHAR IS NOT DISTINCT FROM ({value})::VARIANT::VARCHAR) FROM wrong_type;
+----
+true
+
+# Out-of-bounds extraction is nullable even when every stored element is non-NULL.
+query IIIII
+SELECT count(v[2]), count(v[2]::VARCHAR), count(v[2]::BIGINT), count(v[2].x::BIGINT),
+       count(*) FILTER (WHERE v[2] IS NULL) FROM wrong_type;
+----
+0	0	0	0	5
+
+endloop
+
+statement ok
+PRAGMA enable_optimizer;
+
+endloop
+
+endloop
