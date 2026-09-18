@@ -124,6 +124,10 @@ public:
 	}
 	~StandardColumnWriter() override = default;
 
+	//! Dictionary encoding normally updates the statistics once per distinct dictionary value.
+	//! Floating point statistics include nan_count, which counts every NaN value written, so they are updated per row.
+	static constexpr bool STATS_PER_OCCURRENCE = std::is_same<OP, FloatingPointOperator>::value;
+
 public:
 	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override {
 		auto result = make_uniq<StandardColumnWriterState<SRC, TGT, OP>>(writer, row_group, row_group.columns.size());
@@ -302,8 +306,10 @@ public:
 		}
 
 		state.dictionary.IterateValues([&](const SRC &src_value, const TGT &tgt_value) {
-			// update the statistics
-			OP::template HandleStats<SRC, TGT>(stats, tgt_value);
+			if (!STATS_PER_OCCURRENCE) {
+				// update the statistics
+				OP::template HandleStats<SRC, TGT>(stats, tgt_value);
+			}
 			if (state.bloom_filter) {
 				// update the bloom filter
 				auto hash = OP::template XXHash64<SRC, TGT>(tgt_value);
@@ -366,6 +372,9 @@ private:
 					continue;
 				}
 				const auto &src_value = data_ptr[r];
+				if (STATS_PER_OCCURRENCE) {
+					OP::template HandleStats<SRC, TGT>(stats, OP::template Operation<SRC, TGT>(src_value));
+				}
 				const auto value_index = page_state.dictionary.GetIndex(src_value);
 				page_state.dict_encoder.WriteValue(temp_writer, value_index);
 			}

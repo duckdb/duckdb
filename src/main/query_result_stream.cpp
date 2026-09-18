@@ -3,6 +3,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/buffered_data/buffered_data.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/result_unit.hpp"
 
 namespace duckdb {
 
@@ -94,7 +95,9 @@ QueryResultState QueryResultStream::TryFetch(unique_ptr<DataChunk> &out_chunk) {
 			return state;
 		}
 		if (state == QueryResultState::READY) {
-			out_chunk = buffer.Scan();
+			if (auto unit = buffer.Scan()) {
+				out_chunk = std::move(unit->Cast<ChunkUnit>().chunk);
+			}
 		}
 		if (out_chunk && out_chunk->size() != 0) {
 			return QueryResultState::READY;
@@ -108,7 +111,7 @@ QueryResultState QueryResultStream::TryFetch(unique_ptr<DataChunk> &out_chunk) {
 			return handle->HasError() ? QueryResultState::EXECUTION_ERROR : QueryResultState::FINISHED;
 		}
 		if (state == QueryResultState::READY) {
-			// A chunk was announced but the scan came up empty: the stream has not ended yet
+			// A unit was announced but the scan came up empty: the stream has not ended yet
 			return QueryResultState::NOT_READY;
 		}
 		return state;
@@ -127,7 +130,9 @@ unique_ptr<DataChunk> QueryResultStream::FetchInternal(ClientContextLock &lock) 
 		if (state == QueryResultState::EXECUTION_ERROR) {
 			return nullptr;
 		}
-		chunk = buffer.Scan();
+		if (auto unit = buffer.Scan()) {
+			chunk = std::move(unit->Cast<ChunkUnit>().chunk);
+		}
 		if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
 			handle->EndQuery(lock);
 			return nullptr;

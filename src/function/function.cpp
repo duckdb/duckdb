@@ -210,7 +210,8 @@ hash_t BoundSimpleFunction::Hash() const {
 }
 
 string BoundSimpleFunction::ToString() const {
-	return Function::CallToString(catalog_name, schema_name, name, arguments, LogicalTypeId::INVALID, return_type);
+	return Function::CallToString(GetCatalogName(), GetSchemaName(), GetName(), arguments, LogicalTypeId::INVALID,
+	                              return_type);
 }
 
 bool FunctionParameter::operator==(const FunctionParameter &other) const {

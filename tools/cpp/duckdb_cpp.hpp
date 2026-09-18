@@ -2234,6 +2234,14 @@ public:
 	/// beforehand do not survive this.
 	auto Flatten() const -> void;
 
+	/// Repoints the vector at another vector's data, without copying: the two then alias the same buffers, in the
+	/// source's layout, until one of them is reset or re-referenced. Works for any type, including nested ones, and
+	/// is the way to hand an already-materialized vector to an output vector without a per-row copy. Pointers and
+	/// views taken from this vector beforehand do not survive this.
+	/// @param source The vector to reference. Its data must outlive every read of this vector.
+	/// @throws InvalidInputException When the source's type does not match the vector's.
+	auto Reference(const Vector &source) -> void;
+
 	/// How many rows the vector holds.
 	auto GetSize() const -> idx_t;
 

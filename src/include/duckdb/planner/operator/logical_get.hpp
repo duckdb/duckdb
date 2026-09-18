@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/common/enums/ordinality_request_type.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/common/extra_operator_info.hpp"
@@ -51,6 +52,8 @@ public:
 	vector<Value> parameters;
 	//! The set of named input parameters for the table function
 	named_parameter_map_t named_parameters;
+	//! Whether the source invocation requested an ordinality column
+	OrdinalityType source_ordinality = OrdinalityType::WITHOUT_ORDINALITY;
 	//! The set of named input table types for the table-in table-out function
 	vector<LogicalType> input_table_types;
 	//! The set of named input table names for the table-in table-out function

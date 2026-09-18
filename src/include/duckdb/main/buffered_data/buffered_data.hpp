@@ -21,27 +21,24 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/thread_annotation.hpp"
+#include "duckdb/main/result_unit.hpp"
 
 namespace duckdb {
 
 class QueryResult;
 class ClientContextLock;
 
-//! A blocked sink. Holds the InterruptState and owns the finished copy of the chunk it could not append.
+//! A blocked sink. Holds the InterruptState and owns the finished unit it could not append.
 struct BlockedSink {
 public:
 	InterruptState state;
-	idx_t pending_bytes;
-	unique_ptr<DataChunk> pending_chunk;
-};
+	unique_ptr<ResultUnit> pending_unit;
 
-//! One unread buffered chunk, in consumption order. The buffer owns the copy until it is popped, and the consumer
-//! owns it afterwards.
-struct BufferedChunk {
 public:
-	unique_ptr<DataChunk> chunk;
-	//! The bytes this chunk counts against the cap
-	idx_t data_size;
+	//! The bytes the parked unit counts against the cap, zero once the unit has been deposited
+	idx_t PendingBytes() const {
+		return pending_unit ? pending_unit->byte_size : 0;
+	}
 };
 
 class BufferedData {
@@ -66,15 +63,15 @@ public:
 	//! Whether the engine waits on the consumer: a producer is parked for the retention decision, or for
 	//! space that only a pop frees
 	bool WaitsOnConsumer();
-	//! Blocking call that executes tasks on the calling thread until a chunk is buffered or execution reaches a
+	//! Blocking call that executes tasks on the calling thread until a unit is buffered or execution reaches a
 	//! terminal state.
 	QueryResultState ReplenishBuffer(ClientContextLock &context_lock, QueryResult &result);
 	//! Lend the calling thread to production: settle draining, wake parked producers and run at most one
-	//! task slice. Reports whether a chunk is poppable. Never waits
+	//! task slice. Reports whether a unit is poppable. Never waits
 	QueryResultState Participate(ClientContextLock &context_lock, QueryResult &result);
-	//! Reports whether a chunk is poppable, else where execution stands. Runs no task, never waits
+	//! Reports whether a unit is poppable, else where execution stands. Runs no task, never waits
 	QueryResultState Poll(ClientContextLock &context_lock, QueryResult &result);
-	virtual unique_ptr<DataChunk> Scan() = 0;
+	virtual unique_ptr<ResultUnit> Scan() = 0;
 	virtual void UnblockSinks() = 0;
 	shared_ptr<ClientContext> GetContext() {
 		return context.lock();
@@ -83,8 +80,8 @@ public:
 	virtual idx_t PeakBufferedBytes() = 0;
 	//! Whether a producer is parked for space.
 	virtual bool HasBlockedSink() = 0;
-	//! Whether a chunk is ready for the consumer to pop.
-	virtual bool HasObservableChunk() = 0;
+	//! Whether a unit is ready for the consumer to pop.
+	virtual bool HasObservableUnit() = 0;
 	//! Debug assert that no blocked sinks exist.
 	virtual void AssertNoBlockedSinks() = 0;
 	//! An owned, exactly-sized copy: the producer reuses its output chunk, and the copy's GetDataSize is what the
@@ -122,7 +119,7 @@ protected:
 	//! Record on the result that it is no longer the connection's active query, and report it as an
 	//! error state
 	static QueryResultState Cancelled(QueryResult &result);
-	//! Whether the blocking replenish can stop: a chunk is poppable, and the buffer will
+	//! Whether the blocking replenish can stop: a unit is poppable, and the buffer will
 	//! not accept more input right now
 	virtual bool ReplenishSatisfied() = 0;
 	//! Pops below this mark restart blocked sinks. The floor keeps it reachable for tiny buffers

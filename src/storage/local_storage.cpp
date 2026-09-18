@@ -44,6 +44,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_data
 	parent_collection.CommitDropColumn(alter_column_index);
 	row_groups = std::move(parent.row_groups);
 	row_groups->collection = std::move(new_collection);
+	row_groups->ResetCollectionAccounting();
 
 	append_indexes.Move(parent.append_indexes);
 	delete_indexes.Move(parent.delete_indexes);
@@ -60,6 +61,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_data_table, LocalTableStorag
 	parent_collection.CommitDropColumn(drop_column_index);
 	row_groups = std::move(parent.row_groups);
 	row_groups->collection = std::move(new_collection);
+	row_groups->ResetCollectionAccounting();
 
 	append_indexes.Move(parent.append_indexes);
 	delete_indexes.Move(parent.delete_indexes);
@@ -74,6 +76,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
 	auto new_collection = parent_collection.AddColumn(context, new_column, default_executor);
 	row_groups = std::move(parent.row_groups);
 	row_groups->collection = std::move(new_collection);
+	row_groups->ResetCollectionAccounting();
 	append_indexes.Move(parent.append_indexes);
 	delete_indexes.Move(parent.delete_indexes);
 }

@@ -1064,11 +1064,7 @@ String:
     - QualifiedOperator
     - QualifiedOperatorContents
     - ColIdDot
-    - AnyOp
-    - StringOperator
-    - JsonOperator
-    - InetOperator
-    - ListOperator
+    - AnyOperatorLiteral
     - BitOperator
     - Term
     - Factor
@@ -1802,6 +1798,9 @@ matcher_rule_overrides:
   OperatorLiteral:
     allow_type_overlap: true
     matcher: operator
+  AnyOperatorLiteral:
+    allow_type_overlap: true
+    matcher: all_operators
 
 packrat_memoized_rules:
   - Expression

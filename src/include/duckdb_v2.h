@@ -3824,18 +3824,18 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_get_data_mutable(duckdb_v2_vector_
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_flatten(duckdb_v2_vector_handle vector, duckdb_v2_error_info_handle *err);
 
 /*!
- * Repoints a vector at another vector's data and type, without copying.
+ * Repoints a vector at another vector's data, without copying.
  *
- * `vector` takes on the storage and logical type of `source`: no data moves, and the two alias the same buffers until
- * one of them is reset or re-referenced. Works for any type, including nested types. The source's data must outlive
- * every read of `vector`. Use it to hand an already-materialized vector straight to an output vector without a per-row
- * copy.
+ * `vector` takes on the storage of `source`: no data moves, and the two alias the same buffers until one of them is
+ * reset or re-referenced. Works for any type, including nested types. The source's logical type must equal the
+ * vector's; a mismatch returns ERROR_INPUT_INVALID. The source's data must outlive every read of `vector`. Use it to
+ * hand an already-materialized vector straight to an output vector without a per-row copy.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param vector The vector to repoint at the source's data.
- * @param source The vector whose data and logical type to reference.
+ * @param source The vector whose data to reference. Its logical type must equal the vector's.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
