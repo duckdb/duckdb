@@ -658,6 +658,24 @@ static void TableFunctionMultiFileGetMetrics(TableFunctionGetMetricsInput &input
 	input.operator_metrics.total_row_groups_to_scan = scan_state.total_high_water;
 }
 
+//! The row groups of the scan, as the wrapped function describes those of its files. Only reported when the whole
+//! scan is one file - the files after it have not been opened at this point, so their row groups are unknown
+static vector<PartitionStatistics> TableFunctionMultiFileGetPartitionStats(ClientContext &context,
+                                                                          GetPartitionStatsInput &input) {
+	vector<PartitionStatistics> result;
+	auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
+	if (bind_data.file_list->GetExpandResult() != FileExpandResult::SINGLE_FILE || !bind_data.initial_reader) {
+		return result;
+	}
+	auto &reader = bind_data.initial_reader->Cast<TableFunctionFileReader>();
+	auto &function = reader.GetFunction();
+	if (!function.get_file_partition_stats || !reader.bind_data) {
+		return result;
+	}
+	function.get_file_partition_stats(context, *reader.bind_data, result);
+	return result;
+}
+
 TableFunction TableFunctionMultiFileWrapper::CreateFunction(TableFunction single_file_function, Identifier name,
                                                             TableFunctionMultiFileSettings settings) {
 	if (single_file_function.GetArguments().size() != 1 ||
@@ -680,6 +698,10 @@ TableFunction TableFunctionMultiFileWrapper::CreateFunction(TableFunction single
 	result.filter_prune = single_file_function.filter_prune;
 	result.supports_pushdown_type = single_file_function.supports_pushdown_type;
 	result.late_materialization = single_file_function.late_materialization;
+	if (single_file_function.get_file_partition_stats) {
+		// the row groups of the scan are those of its files
+		result.get_partition_stats = TableFunctionMultiFileGetPartitionStats;
+	}
 	if (single_file_function.get_metrics) {
 		// the metrics of the scan include those the wrapped function keeps per file
 		result.get_metrics = TableFunctionMultiFileGetMetrics;

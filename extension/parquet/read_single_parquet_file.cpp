@@ -333,6 +333,17 @@ static void ReadSingleParquetFileGetMetrics(TableFunctionGetMetricsInput &input)
 	input.operator_metrics.total_row_groups_to_scan += gstate.state.total_row_groups_to_scan.load();
 }
 
+//! The row groups of this file, read from its metadata
+static void ReadSingleParquetFilePartitionStats(ClientContext &context, const FunctionData &bind_data_p,
+                                                vector<PartitionStatistics> &result) {
+	auto &parquet_data = bind_data_p.Cast<ReadSingleParquetFileData>();
+	if (!parquet_data.metadata) {
+		return;
+	}
+	auto options = parquet_data.options;
+	ParquetReader::GetPartitionStats(*parquet_data.metadata->metadata, result, nullptr, options);
+}
+
 TableFunction ParquetScanFunction::GetSingleFileFunction() {
 	TableFunction read_parquet("read_single_parquet_file", {LogicalType::VARCHAR}, ReadSingleParquetFileFunction,
 	                           ReadSingleParquetFileBind, ReadSingleParquetFileInitGlobal,
@@ -346,6 +357,7 @@ TableFunction ParquetScanFunction::GetSingleFileFunction() {
 	read_parquet.statistics = ReadSingleParquetFileStatistics;
 	read_parquet.get_virtual_columns = ReadSingleParquetFileVirtualColumns;
 	read_parquet.get_file_columns = ReadSingleParquetFileColumns;
+	read_parquet.get_file_partition_stats = ReadSingleParquetFilePartitionStats;
 	read_parquet.get_metrics = ReadSingleParquetFileGetMetrics;
 	read_parquet.projection_pushdown = true;
 	read_parquet.late_materialization = true;
