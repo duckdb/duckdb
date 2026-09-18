@@ -12,26 +12,26 @@
 namespace duckdb::capiv2 {
 
 struct CV2VirtualFileSystemCallbacks {
-	duckdb_v2_virtual_file_system_claim_callback_fn claim = nullptr;
-	duckdb_v2_virtual_file_system_open_callback_fn open = nullptr;
-	duckdb_v2_virtual_file_close_callback_fn close = nullptr;
-	duckdb_v2_virtual_file_abort_callback_fn abort = nullptr;
-	duckdb_v2_virtual_file_read_at_callback_fn read_at = nullptr;
-	duckdb_v2_virtual_file_write_at_callback_fn write_at = nullptr;
-	duckdb_v2_virtual_file_read_callback_fn read = nullptr;
-	duckdb_v2_virtual_file_write_callback_fn write = nullptr;
-	duckdb_v2_virtual_file_seek_callback_fn seek = nullptr;
-	duckdb_v2_virtual_file_tell_callback_fn tell = nullptr;
-	duckdb_v2_virtual_file_stat_callback_fn stat = nullptr;
-	duckdb_v2_virtual_file_sync_callback_fn sync = nullptr;
-	duckdb_v2_virtual_file_truncate_callback_fn truncate = nullptr;
-	duckdb_v2_virtual_file_system_stat_callback_fn stat_path = nullptr;
-	duckdb_v2_virtual_file_system_list_callback_fn list = nullptr;
-	duckdb_v2_virtual_file_system_glob_callback_fn glob = nullptr;
-	duckdb_v2_virtual_file_system_remove_file_callback_fn remove_file = nullptr;
-	duckdb_v2_virtual_file_system_create_directory_callback_fn create_directory = nullptr;
-	duckdb_v2_virtual_file_system_remove_directory_callback_fn remove_directory = nullptr;
-	duckdb_v2_virtual_file_system_move_callback_fn move = nullptr;
+	duckdb_v2_vfs_claim_callback_fn claim = nullptr;
+	duckdb_v2_vfs_file_open_callback_fn open = nullptr;
+	duckdb_v2_vfs_file_close_callback_fn close = nullptr;
+	duckdb_v2_vfs_file_abort_callback_fn abort = nullptr;
+	duckdb_v2_vfs_file_read_at_callback_fn read_at = nullptr;
+	duckdb_v2_vfs_file_write_at_callback_fn write_at = nullptr;
+	duckdb_v2_vfs_file_read_callback_fn read = nullptr;
+	duckdb_v2_vfs_file_write_callback_fn write = nullptr;
+	duckdb_v2_vfs_file_seek_callback_fn seek = nullptr;
+	duckdb_v2_vfs_file_tell_callback_fn tell = nullptr;
+	duckdb_v2_vfs_file_stat_callback_fn stat = nullptr;
+	duckdb_v2_vfs_file_sync_callback_fn sync = nullptr;
+	duckdb_v2_vfs_file_truncate_callback_fn truncate = nullptr;
+	duckdb_v2_vfs_stat_callback_fn stat_path = nullptr;
+	duckdb_v2_vfs_list_callback_fn list = nullptr;
+	duckdb_v2_vfs_glob_callback_fn glob = nullptr;
+	duckdb_v2_vfs_remove_file_callback_fn remove_file = nullptr;
+	duckdb_v2_vfs_create_directory_callback_fn create_directory = nullptr;
+	duckdb_v2_vfs_remove_directory_callback_fn remove_directory = nullptr;
+	duckdb_v2_vfs_move_callback_fn move = nullptr;
 };
 
 // Everything the builder collects. Copied into the engine-side file system at registration, so the builder can be
@@ -109,17 +109,17 @@ public:
 	bool flag_list_built = false;
 };
 
-static auto Convert(duckdb_v2_virtual_file_open_info_handle info) -> CV2VirtualFileOpenInfo * {
+static auto Convert(duckdb_v2_vfs_open_request_handle info) -> CV2VirtualFileOpenInfo * {
 	return reinterpret_cast<CV2VirtualFileOpenInfo *>(info);
 }
-static auto Convert(CV2VirtualFileOpenInfo *info) -> duckdb_v2_virtual_file_open_info_handle {
-	return reinterpret_cast<duckdb_v2_virtual_file_open_info_handle>(info);
+static auto Convert(CV2VirtualFileOpenInfo *info) -> duckdb_v2_vfs_open_request_handle {
+	return reinterpret_cast<duckdb_v2_vfs_open_request_handle>(info);
 }
-static auto Convert(duckdb_v2_virtual_file_system_info_handle info) -> CV2VirtualFileSystemInfo * {
+static auto Convert(duckdb_v2_vfs_info_handle info) -> CV2VirtualFileSystemInfo * {
 	return reinterpret_cast<CV2VirtualFileSystemInfo *>(info);
 }
-static auto Convert(CV2VirtualFileSystemInfo *info) -> duckdb_v2_virtual_file_system_info_handle {
-	return reinterpret_cast<duckdb_v2_virtual_file_system_info_handle>(info);
+static auto Convert(CV2VirtualFileSystemInfo *info) -> duckdb_v2_vfs_info_handle {
+	return reinterpret_cast<duckdb_v2_vfs_info_handle>(info);
 }
 
 // Runs a callback against a fresh error slot, handing back what it reported for the caller to decide on.
@@ -745,11 +745,11 @@ private:
 	DatabaseInstance &db;
 };
 
-static auto Convert(duckdb_v2_virtual_file_system_handle fs) -> CV2VirtualFileSystemBuilder * {
+static auto Convert(duckdb_v2_vfs_handle fs) -> CV2VirtualFileSystemBuilder * {
 	return reinterpret_cast<CV2VirtualFileSystemBuilder *>(fs);
 }
-static auto Convert(CV2VirtualFileSystemBuilder *fs) -> duckdb_v2_virtual_file_system_handle {
-	return reinterpret_cast<duckdb_v2_virtual_file_system_handle>(fs);
+static auto Convert(CV2VirtualFileSystemBuilder *fs) -> duckdb_v2_vfs_handle {
+	return reinterpret_cast<duckdb_v2_vfs_handle>(fs);
 }
 
 // The engine bit behind one C flag. The C enum is a list of names rather than a bitmask, so each value maps to
@@ -799,9 +799,9 @@ static auto ContextHandle(optional_ptr<ClientContext> context) -> duckdb_v2_cont
 
 using namespace duckdb::capiv2;
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_create_with_connection(duckdb_v2_connection_handle connection,
-                                                                     duckdb_v2_virtual_file_system_handle *file_system,
-                                                                     duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_create_with_connection(duckdb_v2_connection_handle connection,
+                                                     duckdb_v2_vfs_handle *file_system,
+                                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(connection);
 	DUCKDB_CHECK_ARG(file_system);
 	*file_system = nullptr;
@@ -812,9 +812,9 @@ DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_create_with_connection(duckdb_v2_c
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_create_with_extension(duckdb_v2_extension_handle extension,
-                                                                    duckdb_v2_virtual_file_system_handle *file_system,
-                                                                    duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_create_with_extension(duckdb_v2_extension_handle extension,
+                                                    duckdb_v2_vfs_handle *file_system,
+                                                    duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(extension);
 	DUCKDB_CHECK_ARG(file_system);
 	*file_system = nullptr;
@@ -825,15 +825,15 @@ DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_create_with_extension(duckdb_v2_ex
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_set_name(duckdb_v2_virtual_file_system_handle file_system,
-                                                       duckdb_v2_str name, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_set_name(duckdb_v2_vfs_handle file_system, duckdb_v2_str name,
+                                       duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	DUCKDB_CHECK_ARG(name);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.name = duckdb::string(Convert(name)); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_add_prefix(duckdb_v2_virtual_file_system_handle file_system,
-                                                         duckdb_v2_str prefix, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_add_prefix(duckdb_v2_vfs_handle file_system, duckdb_v2_str prefix,
+                                         duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	DUCKDB_CHECK_ARG(prefix);
 	return WithErrorHandler(err, [&]() {
@@ -845,8 +845,8 @@ DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_add_prefix(duckdb_v2_virtual_file_
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_set_user_data(duckdb_v2_virtual_file_system_handle file_system,
-                                                            duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_set_user_data(duckdb_v2_vfs_handle file_system, duckdb_v2_opaque *data,
+                                            duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() {
@@ -856,162 +856,151 @@ DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_set_user_data(duckdb_v2_virtual_fi
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_virtual_file_system_set_claim_callback(duckdb_v2_virtual_file_system_handle file_system,
-                                                 duckdb_v2_virtual_file_system_claim_callback_fn callback,
-                                                 duckdb_v2_error_info_handle *err) {
+duckdb_v2_vfs_set_claim_callback(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_claim_callback_fn callback,
+                                 duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.claim = callback; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_set_open_callback(duckdb_v2_virtual_file_system_handle file_system,
-                                                                duckdb_v2_virtual_file_system_open_callback_fn callback,
-                                                                duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_set_file_open_callback(duckdb_v2_vfs_handle file_system,
+                                                     duckdb_v2_vfs_file_open_callback_fn callback,
+                                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.open = callback; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_virtual_file_system_set_file_close_callback(duckdb_v2_virtual_file_system_handle file_system,
-                                                      duckdb_v2_virtual_file_close_callback_fn callback,
-                                                      duckdb_v2_error_info_handle *err) {
+duckdb_v2_vfs_set_file_close_callback(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_close_callback_fn callback,
+                                      duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.close = callback; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_virtual_file_system_set_file_abort_callback(duckdb_v2_virtual_file_system_handle file_system,
-                                                      duckdb_v2_virtual_file_abort_callback_fn callback,
-                                                      duckdb_v2_error_info_handle *err) {
+duckdb_v2_vfs_set_file_abort_callback(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_abort_callback_fn callback,
+                                      duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.abort = callback; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_virtual_file_system_set_file_read_at_callback(duckdb_v2_virtual_file_system_handle file_system,
-                                                        duckdb_v2_virtual_file_read_at_callback_fn callback,
-                                                        duckdb_v2_error_info_handle *err) {
+duckdb_v2_vfs_set_file_read_at_callback(duckdb_v2_vfs_handle file_system,
+                                        duckdb_v2_vfs_file_read_at_callback_fn callback,
+                                        duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.read_at = callback; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_virtual_file_system_set_file_write_at_callback(duckdb_v2_virtual_file_system_handle file_system,
-                                                         duckdb_v2_virtual_file_write_at_callback_fn callback,
-                                                         duckdb_v2_error_info_handle *err) {
+duckdb_v2_vfs_set_file_write_at_callback(duckdb_v2_vfs_handle file_system,
+                                         duckdb_v2_vfs_file_write_at_callback_fn callback,
+                                         duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.write_at = callback; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_virtual_file_system_set_file_read_callback(duckdb_v2_virtual_file_system_handle file_system,
-                                                     duckdb_v2_virtual_file_read_callback_fn callback,
-                                                     duckdb_v2_error_info_handle *err) {
+duckdb_v2_vfs_set_file_read_callback(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_read_callback_fn callback,
+                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.read = callback; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_virtual_file_system_set_file_write_callback(duckdb_v2_virtual_file_system_handle file_system,
-                                                      duckdb_v2_virtual_file_write_callback_fn callback,
-                                                      duckdb_v2_error_info_handle *err) {
+duckdb_v2_vfs_set_file_write_callback(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_write_callback_fn callback,
+                                      duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.write = callback; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_virtual_file_system_set_file_seek_callback(duckdb_v2_virtual_file_system_handle file_system,
-                                                     duckdb_v2_virtual_file_seek_callback_fn callback,
-                                                     duckdb_v2_error_info_handle *err) {
+duckdb_v2_vfs_set_file_seek_callback(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_seek_callback_fn callback,
+                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.seek = callback; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_virtual_file_system_set_file_tell_callback(duckdb_v2_virtual_file_system_handle file_system,
-                                                     duckdb_v2_virtual_file_tell_callback_fn callback,
-                                                     duckdb_v2_error_info_handle *err) {
+duckdb_v2_vfs_set_file_tell_callback(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_tell_callback_fn callback,
+                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.tell = callback; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_virtual_file_system_set_file_stat_callback(duckdb_v2_virtual_file_system_handle file_system,
-                                                     duckdb_v2_virtual_file_stat_callback_fn callback,
-                                                     duckdb_v2_error_info_handle *err) {
+duckdb_v2_vfs_set_file_stat_callback(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_stat_callback_fn callback,
+                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.stat = callback; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_virtual_file_system_set_file_sync_callback(duckdb_v2_virtual_file_system_handle file_system,
-                                                     duckdb_v2_virtual_file_sync_callback_fn callback,
-                                                     duckdb_v2_error_info_handle *err) {
+duckdb_v2_vfs_set_file_sync_callback(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_sync_callback_fn callback,
+                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.sync = callback; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_virtual_file_system_set_file_truncate_callback(duckdb_v2_virtual_file_system_handle file_system,
-                                                         duckdb_v2_virtual_file_truncate_callback_fn callback,
-                                                         duckdb_v2_error_info_handle *err) {
+duckdb_v2_vfs_set_file_truncate_callback(duckdb_v2_vfs_handle file_system,
+                                         duckdb_v2_vfs_file_truncate_callback_fn callback,
+                                         duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.truncate = callback; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_virtual_file_system_set_stat_callback(duckdb_v2_virtual_file_system_handle file_system,
-                                                duckdb_v2_virtual_file_system_stat_callback_fn callback,
-                                                duckdb_v2_error_info_handle *err) {
+duckdb_v2_vfs_set_stat_callback(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_stat_callback_fn callback,
+                                duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.stat_path = callback; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_set_list_callback(duckdb_v2_virtual_file_system_handle file_system,
-                                                                duckdb_v2_virtual_file_system_list_callback_fn callback,
-                                                                duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_set_list_callback(duckdb_v2_vfs_handle file_system,
+                                                duckdb_v2_vfs_list_callback_fn callback,
+                                                duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.list = callback; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_set_glob_callback(duckdb_v2_virtual_file_system_handle file_system,
-                                                                duckdb_v2_virtual_file_system_glob_callback_fn callback,
-                                                                duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_set_glob_callback(duckdb_v2_vfs_handle file_system,
+                                                duckdb_v2_vfs_glob_callback_fn callback,
+                                                duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.glob = callback; });
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_virtual_file_system_set_remove_file_callback(duckdb_v2_virtual_file_system_handle file_system,
-                                                       duckdb_v2_virtual_file_system_remove_file_callback_fn callback,
-                                                       duckdb_v2_error_info_handle *err) {
+duckdb_v2_vfs_set_remove_file_callback(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_remove_file_callback_fn callback,
+                                       duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.remove_file = callback; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_set_create_directory_callback(
-    duckdb_v2_virtual_file_system_handle file_system,
-    duckdb_v2_virtual_file_system_create_directory_callback_fn callback, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_set_create_directory_callback(duckdb_v2_vfs_handle file_system,
+                                                            duckdb_v2_vfs_create_directory_callback_fn callback,
+                                                            duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.create_directory = callback; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_set_remove_directory_callback(
-    duckdb_v2_virtual_file_system_handle file_system,
-    duckdb_v2_virtual_file_system_remove_directory_callback_fn callback, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_set_remove_directory_callback(duckdb_v2_vfs_handle file_system,
+                                                            duckdb_v2_vfs_remove_directory_callback_fn callback,
+                                                            duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.remove_directory = callback; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_set_move_callback(duckdb_v2_virtual_file_system_handle file_system,
-                                                                duckdb_v2_virtual_file_system_move_callback_fn callback,
-                                                                duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_set_move_callback(duckdb_v2_vfs_handle file_system,
+                                                duckdb_v2_vfs_move_callback_fn callback,
+                                                duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->config.callbacks.move = callback; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_open_info_get_flags(duckdb_v2_virtual_file_open_info_handle info,
-                                                           const DUCKDB_V2_FILE_FLAG **flags, idx_t *count,
-                                                           duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_open_request_get_flags(duckdb_v2_vfs_open_request_handle info,
+                                                     const DUCKDB_V2_FILE_FLAG **flags, idx_t *count,
+                                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(flags);
 	DUCKDB_CHECK_ARG(count);
@@ -1041,9 +1030,8 @@ DUCKDB_V2_ERROR duckdb_v2_virtual_file_open_info_get_flags(duckdb_v2_virtual_fil
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_open_info_get_value(duckdb_v2_virtual_file_open_info_handle info,
-                                                           duckdb_v2_str name, duckdb_v2_value_handle *value,
-                                                           duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_open_request_get_value(duckdb_v2_vfs_open_request_handle info, duckdb_v2_str name,
+                                                     duckdb_v2_value_handle *value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(name);
 	DUCKDB_CHECK_ARG(value);
@@ -1061,9 +1049,9 @@ DUCKDB_V2_ERROR duckdb_v2_virtual_file_open_info_get_value(duckdb_v2_virtual_fil
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_open_info_get_metadata(duckdb_v2_virtual_file_open_info_handle info,
-                                                              duckdb_v2_file_metadata_handle *metadata,
-                                                              duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_open_request_get_metadata(duckdb_v2_vfs_open_request_handle info,
+                                                        duckdb_v2_file_metadata_handle *metadata,
+                                                        duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(metadata);
 	*metadata = nullptr;
@@ -1077,9 +1065,9 @@ DUCKDB_V2_ERROR duckdb_v2_virtual_file_open_info_get_metadata(duckdb_v2_virtual_
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_open_info_get_options(duckdb_v2_virtual_file_open_info_handle info,
-                                                             duckdb_v2_file_open_options_handle *options,
-                                                             duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_open_request_get_options(duckdb_v2_vfs_open_request_handle info,
+                                                       duckdb_v2_file_open_options_handle *options,
+                                                       duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(options);
 	*options = nullptr;
@@ -1096,9 +1084,8 @@ DUCKDB_V2_ERROR duckdb_v2_virtual_file_open_info_get_options(duckdb_v2_virtual_f
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_open_info_set_file_data(duckdb_v2_virtual_file_open_info_handle info,
-                                                               duckdb_v2_opaque *data,
-                                                               duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_open_request_set_file_data(duckdb_v2_vfs_open_request_handle info, duckdb_v2_opaque *data,
+                                                         duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() {
@@ -1107,9 +1094,9 @@ DUCKDB_V2_ERROR duckdb_v2_virtual_file_open_info_set_file_data(duckdb_v2_virtual
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_open_info_set_property(duckdb_v2_virtual_file_open_info_handle info,
-                                                              DUCKDB_V2_FILE_PROPERTY property, bool value,
-                                                              duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_open_request_set_property(duckdb_v2_vfs_open_request_handle info,
+                                                        DUCKDB_V2_FILE_PROPERTY property, bool value,
+                                                        duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	return WithErrorHandler(err, [&]() {
 		switch (property) {
@@ -1125,38 +1112,36 @@ DUCKDB_V2_ERROR duckdb_v2_virtual_file_open_info_set_property(duckdb_v2_virtual_
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_info_get_user_data(duckdb_v2_virtual_file_system_info_handle info,
-                                                                 void **data, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_info_get_user_data(duckdb_v2_vfs_info_handle info, void **data,
+                                                 duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() { *data = Convert(info)->owner->UserData(); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_info_get_file_system(duckdb_v2_virtual_file_system_info_handle info,
-                                                                   duckdb_v2_file_system_handle *file_system,
-                                                                   duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_info_get_file_system(duckdb_v2_vfs_info_handle info,
+                                                   duckdb_v2_file_system_handle *file_system,
+                                                   duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(file_system);
 	*file_system = nullptr;
 	return WithErrorHandler(err, [&]() { *file_system = Convert(&Convert(info)->owner->DelegateSlot()); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_info_try_get_context(duckdb_v2_virtual_file_system_info_handle info,
-                                                                   duckdb_v2_context_handle *context,
-                                                                   duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_info_try_get_context(duckdb_v2_vfs_info_handle info, duckdb_v2_context_handle *context,
+                                                   duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(context);
 	*context = nullptr;
 	return WithErrorHandler(err, [&]() { *context = ContextHandle(Convert(info)->context); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_register(duckdb_v2_virtual_file_system_handle file_system,
-                                                       duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_register(duckdb_v2_vfs_handle file_system, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
 	return WithErrorHandler(err, [&]() { Convert(file_system)->Register(); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_virtual_file_system_destroy(duckdb_v2_virtual_file_system_handle *file_system) {
+DUCKDB_V2_ERROR duckdb_v2_vfs_destroy(duckdb_v2_vfs_handle *file_system) {
 	return WithErrorHandler(nullptr, [&]() {
 		if (!file_system) {
 			return;
