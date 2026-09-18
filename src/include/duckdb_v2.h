@@ -2075,16 +2075,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_environment_create(duckdb_v2_environment_
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_environment_destroy(duckdb_v2_environment_handle *env);
 
 /*!
- * Returns the number of instance handles currently alive under the environment.
+ * Returns the number of instances currently alive under the environment.
  *
- * A diagnostic accessor, for tracking down leaked instance handles when `duckdb_v2_environment_destroy()` returns
+ * A diagnostic accessor, for tracking down leaked instances when `duckdb_v2_environment_destroy()` returns
  * ERROR_RESOURCE_IN_USE. The count is a snapshot and may change before the next call.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param env The environment.
- * @param out_count Receives the number of live instance handles.
+ * @param out_count Receives the number of live instances.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
@@ -8291,9 +8291,9 @@ typedef void (*duckdb_v2_replacement_scan_callback_fn)(duckdb_v2_replacement_sca
 /*!
  * Creates a new replacement scan that will be registered on the connection.
  *
- * The scan is visible only to queries on this connection and is released when the connection closes. It is consulted
- * before every instance-wide scan, so it can claim a name that a built-in scan would otherwise take. The scan starts
- * out empty: configure it with `duckdb_v2_replacement_scan_set_callback()` and optionally
+ * The scan is visible only to queries on this connection and is released when the connection is destroyed. It is
+ * consulted before every instance-wide scan, so it can claim a name that a built-in scan would otherwise take. The scan
+ * starts out empty: configure it with `duckdb_v2_replacement_scan_set_callback()` and optionally
  * `duckdb_v2_replacement_scan_set_user_data()`, then make it available with `duckdb_v2_replacement_scan_register()`.
  * The caller owns the returned handle and must destroy it with `duckdb_v2_replacement_scan_destroy()`, also after
  * registration.
@@ -8314,8 +8314,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create_with_connection(d
 /*!
  * Creates a new replacement scan that will be registered on the instance.
  *
- * The scan is visible to every connection to the instance and lives until the instance closes. The scan starts out
- * empty: configure it with `duckdb_v2_replacement_scan_set_callback()` and optionally
+ * The scan is visible to every connection to the instance and lives until the instance is destroyed. The scan starts
+ * out empty: configure it with `duckdb_v2_replacement_scan_set_callback()` and optionally
  * `duckdb_v2_replacement_scan_set_user_data()`, then make it available with `duckdb_v2_replacement_scan_register()`.
  * The caller owns the returned handle and must destroy it with `duckdb_v2_replacement_scan_destroy()`, also after
  * registration.
@@ -8337,7 +8337,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create_with_instance(duc
  * Creates a new replacement scan that will be registered on the loading extension's instance.
  *
  * Use this from an extension load callback, where an extension handle is available. The scan is visible to every
- * connection to that instance and lives until the instance closes. The scan starts out empty: configure it with
+ * connection to that instance and lives until the instance is destroyed. The scan starts out empty: configure it with
  * `duckdb_v2_replacement_scan_set_callback()` and optionally `duckdb_v2_replacement_scan_set_user_data()`, then make it
  * available with `duckdb_v2_replacement_scan_register()`. The caller owns the returned handle and must destroy it with
  * `duckdb_v2_replacement_scan_destroy()`, also after registration.

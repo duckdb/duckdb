@@ -12,11 +12,11 @@ module: replacement scan
 #
 # Scope follows the constructor. A scan created with
 # `[[replacement_scan_create_with_connection]]` is visible only to that
-# connection, is released when it closes, and is consulted before every
+# connection, is released when the connection is destroyed, and is consulted before every
 # instance-wide scan, including the built-in file scans. A scan created with
 # `[[replacement_scan_create_with_instance]]` or
 # `[[replacement_scan_create_with_extension]]` is visible to every connection
-# to that instance and lives until the instance closes. A registered scan
+# to that instance and lives until the instance is destroyed. A registered scan
 # cannot be unregistered.
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -69,7 +69,7 @@ functions:
     description: |
       Creates a new replacement scan that will be registered on the connection.
 
-      The scan is visible only to queries on this connection and is released when the connection closes. It is
+      The scan is visible only to queries on this connection and is released when the connection is destroyed. It is
       consulted before every instance-wide scan, so it can claim a name that a built-in scan would otherwise take.
       The scan starts out empty: configure it with `[[replacement_scan_set_callback]]` and optionally
       `[[replacement_scan_set_user_data]]`, then make it available with `[[replacement_scan_register]]`. The caller
@@ -95,7 +95,7 @@ functions:
     description: |
       Creates a new replacement scan that will be registered on the instance.
 
-      The scan is visible to every connection to the instance and lives until the instance closes. The scan starts
+      The scan is visible to every connection to the instance and lives until the instance is destroyed. The scan starts
       out empty: configure it with `[[replacement_scan_set_callback]]` and optionally
       `[[replacement_scan_set_user_data]]`, then make it available with `[[replacement_scan_register]]`. The caller
       owns the returned handle and must destroy it with `[[replacement_scan_destroy]]`, also after registration.
@@ -121,7 +121,7 @@ functions:
       Creates a new replacement scan that will be registered on the loading extension's instance.
 
       Use this from an extension load callback, where an extension handle is available. The scan is visible to every
-      connection to that instance and lives until the instance closes. The scan starts out empty: configure it with
+      connection to that instance and lives until the instance is destroyed. The scan starts out empty: configure it with
       `[[replacement_scan_set_callback]]` and optionally `[[replacement_scan_set_user_data]]`, then make it available
       with `[[replacement_scan_register]]`. The caller owns the returned handle and must destroy it with
       `[[replacement_scan_destroy]]`, also after registration.

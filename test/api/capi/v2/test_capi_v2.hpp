@@ -63,16 +63,16 @@ inline DUCKDB_V2_ERROR OpenInstance(duckdb_v2_environment_handle env, duckdb_v2_
 
 struct EnvFixture {
 	duckdb_v2_environment_handle env = nullptr;
-	duckdb_v2_instance_handle db = nullptr;
+	duckdb_v2_instance_handle instance = nullptr;
 	duckdb_v2_connection_handle conn = nullptr;
 	EnvFixture() {
 		duckdb_v2_environment_create(&env, nullptr);
-		OpenInstance(env, duckdb_v2_str {nullptr, 0}, &db, nullptr);
-		duckdb_v2_connection_create(db, &conn, nullptr);
+		OpenInstance(env, duckdb_v2_str {nullptr, 0}, &instance, nullptr);
+		duckdb_v2_connection_create(instance, &conn, nullptr);
 	}
 	~EnvFixture() {
 		duckdb_v2_connection_destroy(&conn);
-		duckdb_v2_instance_destroy(&db);
+		duckdb_v2_instance_destroy(&instance);
 		duckdb_v2_environment_destroy(&env);
 	}
 };
