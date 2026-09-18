@@ -2,6 +2,7 @@
 
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/path.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/sorting/sort_strategy.hpp"
@@ -3145,13 +3146,19 @@ PartitionDirectory PartitionFileRequestBuilder::BuildDirectory(string path) cons
 	auto &context = partitioned_copy.context;
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto partition_path = EvaluatePartitionPath(context, partitioned_copy.op, *partitioned_copy.partition_path, values);
-	if (fs.IsPathAbsolute(partition_path) || FileSystem::IsRemoteFile(partition_path)) {
+	// This is a relative path fragment, not a file to resolve through the VFS. Resolving it
+	// would require the local filesystem even when the COPY target is remote.
+	auto parsed_path = Path::FromString(partition_path);
+	if (parsed_path.IsAbsolute() || FileSystem::IsRemoteFile(partition_path)) {
 		throw InvalidInputException("PARTITION_PATH must be relative to the COPY target, but got \"%s\"",
 		                            partition_path);
 	}
-	auto separator = fs.PathSeparator(partition_path);
+	auto separator = fs.PathSeparator(result.path);
+	if (!FileSystem::IsRemoteFile(result.path)) {
+		partition_path = fs.ConvertSeparators(partition_path);
+	}
 	vector<string> components;
-	for (auto &component : StringUtil::Split(fs.ConvertSeparators(partition_path), separator)) {
+	for (auto &component : StringUtil::Split(partition_path, separator)) {
 		if (component.empty() || component == ".") {
 			continue;
 		}
