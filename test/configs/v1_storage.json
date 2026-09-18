@@ -31,6 +31,12 @@
       ]
     },
     {
+      "reason": "TIME_NS requires v2.0.0 storage.",
+      "paths": [
+        "test/sql/optimizer/monotone_preimage.test"
+      ]
+    },
+    {
       "reason": "CREATE SECURE VIEW requires v2.0.0 storage.",
       "paths": [
         "test/sql/catalog/view/secure_view.test",
