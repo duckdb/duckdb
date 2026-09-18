@@ -4,6 +4,7 @@
       "reason": "Statistics are not set without optimizers.",
       "paths": [
         "test/optimizer/statistics/statistics_numeric.test",
+        "test/optimizer/joins/always_true_scan_filter_estimate.test",
         "test/sql/optimizer/power_zonemap_pruning.test",
         "test/fuzzer/pedro/vacuum_table_with_generated_column.test",
         "test/fuzzer/duckfuzz/bitstring_agg_uhugeint.test",
