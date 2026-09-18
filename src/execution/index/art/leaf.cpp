@@ -85,9 +85,10 @@ void Leaf::TransformToNested(ART &art, NodePtr &node) {
 	NodePtr root = NodePtr();
 
 	// Move all row IDs into the nested leaf.
-	reference<const NodePtr> leaf_ref(node);
-	while (leaf_ref.get().HasMetadata()) {
-		auto &leaf = NodePtr::Ref<const Leaf>(art, leaf_ref, LEAF);
+	NodePtr current = node;
+	while (current.HasMetadata()) {
+		ConstNodeHandle handle(art, current);
+		auto &leaf = handle.Get<Leaf>();
 		for (uint8_t i = 0; i < leaf.count; i++) {
 			auto row_id = ARTKey::CreateARTKey<row_t>(arena, leaf.row_ids[i]);
 			auto conflict_type = ARTOperator::Insert(arena, art, root, row_id, 0, row_id, GateStatus::GATE_SET,
@@ -96,7 +97,7 @@ void Leaf::TransformToNested(ART &art, NodePtr &node) {
 				throw InternalException("invalid conflict type in Leaf::TransformToNested");
 			}
 		}
-		leaf_ref = leaf.next_leaf;
+		current = leaf.next_leaf;
 	}
 
 	root.SetGateStatus(GateStatus::GATE_SET);
@@ -151,9 +152,12 @@ void Leaf::TransformToDeprecated(ART &art, NodePtr &node) {
 
 void Leaf::DeprecatedFree(ART &art, NodePtr &node) {
 	D_ASSERT(node.GetType() == LEAF);
-	NodePtr next;
 	while (node.HasMetadata()) {
-		next = NodePtr::Ref<Leaf>(art, node, LEAF).next_leaf;
+		NodePtr next;
+		{
+			ConstNodeHandle handle(art, node);
+			next = handle.Get<Leaf>().next_leaf;
+		}
 		NodePtr::FreeNode(art, node);
 		node = next;
 	}
