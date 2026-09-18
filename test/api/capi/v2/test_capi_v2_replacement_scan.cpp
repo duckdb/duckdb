@@ -418,7 +418,7 @@ TEST_CASE("V2 replacement scan: not consulted for names the catalog resolves", "
 TEST_CASE("V2 replacement scan: connection scope and precedence", "[capi_v2][replacement_scan]") {
 	EnvFixture fx;
 	duckdb_v2_connection_handle other = nullptr;
-	REQUIRE(duckdb_v2_connect(fx.db, &other, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create(fx.db, &other, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	ReplReset();
 	ReplRegisterOnConnection(fx.conn, ReplClaimRange);
@@ -436,17 +436,17 @@ TEST_CASE("V2 replacement scan: connection scope and precedence", "[capi_v2][rep
 
 	REQUIRE(ReplQueryI64(other, "SELECT * FROM anything") == std::vector<int64_t> {0, 1});
 	duckdb_v2_connection_handle later = nullptr;
-	REQUIRE(duckdb_v2_connect(fx.db, &later, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create(fx.db, &later, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(ReplQueryI64(later, "SELECT * FROM anything") == std::vector<int64_t> {0, 1});
-	duckdb_v2_disconnect(&later);
+	duckdb_v2_connection_destroy(&later);
 
-	duckdb_v2_disconnect(&other);
+	duckdb_v2_connection_destroy(&other);
 }
 
 TEST_CASE("V2 replacement scan: outranks the built-in file scans", "[capi_v2][replacement_scan]") {
 	EnvFixture fx;
 	duckdb_v2_connection_handle other = nullptr;
-	REQUIRE(duckdb_v2_connect(fx.db, &other, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create(fx.db, &other, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	ReplReset();
 	ReplRegisterOnConnection(fx.conn, ReplClaimCsv);
@@ -458,7 +458,7 @@ TEST_CASE("V2 replacement scan: outranks the built-in file scans", "[capi_v2][re
 	// Names it declines still reach the built-ins.
 	REQUIRE(ReplQueryError(fx.conn, "SELECT * FROM 'no_such_file.parquet'") != DUCKDB_V2_ERROR_NONE);
 
-	duckdb_v2_disconnect(&other);
+	duckdb_v2_connection_destroy(&other);
 }
 
 TEST_CASE("V2 replacement scan: registration order, first claim wins", "[capi_v2][replacement_scan]") {

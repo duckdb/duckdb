@@ -147,7 +147,7 @@ void WriteData(duckdb_column *column, ColumnDataCollection &source, const vector
 	}
 }
 
-duckdb_state deprecated_duckdb_translate_column(MaterializedQueryResult &result, duckdb_column *column, idx_t col) {
+duckdb_state deprecated_duckdb_translate_column(QueryResult &result, duckdb_column *column, idx_t col) {
 	D_ASSERT(!result.HasError());
 	auto &collection = result.Collection();
 	idx_t row_count = collection.Count();
@@ -296,6 +296,29 @@ duckdb_state deprecated_duckdb_translate_column(MaterializedQueryResult &result,
 	return DuckDBSuccess;
 }
 
+duckdb_state DuckDBTranslateStreamResult(unique_ptr<QueryResultStream> stream_p, duckdb_result *out) {
+	D_ASSERT(stream_p);
+	auto &stream = *stream_p;
+	if (!out) {
+		// no result to write to, only return the status
+		return !stream.HasError() ? DuckDBSuccess : DuckDBError;
+	}
+	memset(out, 0, sizeof(duckdb_result));
+
+	auto result_data = new DuckDBResultData();
+	result_data->stream = std::move(stream_p);
+	result_data->result_set_type = CAPIResultSetType::CAPI_RESULT_TYPE_NONE;
+	out->internal_data = result_data;
+
+	if (stream.HasError()) {
+		out->deprecated_error_message = (char *)stream.GetError().c_str(); // NOLINT
+		return DuckDBError;
+	}
+	out->deprecated_column_count = stream.ColumnCount();
+	out->deprecated_rows_changed = 0;
+	return DuckDBSuccess;
+}
+
 duckdb_state DuckDBTranslateResult(unique_ptr<QueryResult> result_p, duckdb_result *out) {
 	auto &result = *result_p;
 	D_ASSERT(result_p);
@@ -324,12 +347,30 @@ duckdb_state DuckDBTranslateResult(unique_ptr<QueryResult> result_p, duckdb_resu
 	return DuckDBSuccess;
 }
 
+//! Drain a stream into a retained result, for the random-access deprecated result set
+static unique_ptr<QueryResult> DrainStreamIntoResult(QueryResultStream &stream) {
+	auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), stream.GetTypes());
+	ColumnDataAppendState append_state;
+	collection->InitializeAppend(append_state);
+	while (auto chunk = stream.Fetch()) {
+		if (chunk->size() == 0) {
+			break;
+		}
+		collection->Append(append_state, *chunk);
+	}
+	if (stream.HasError()) {
+		return make_uniq<QueryResult>(stream.GetErrorObject());
+	}
+	return make_uniq<QueryResult>(stream.GetStatementType(), stream.GetStatementProperties(), stream.GetNames(),
+	                              std::move(collection), stream.GetClientProperties());
+}
+
 bool DeprecatedMaterializeResult(duckdb_result *result) {
 	if (!result) {
 		return false;
 	}
 	auto result_data = reinterpret_cast<duckdb::DuckDBResultData *>(result->internal_data);
-	if (result_data->result->HasError()) {
+	if (result_data->HasError()) {
 		return false;
 	}
 	if (result_data->result_set_type == CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED) {
@@ -346,27 +387,29 @@ bool DeprecatedMaterializeResult(duckdb_result *result) {
 	}
 	// materialize as deprecated result set
 	result_data->result_set_type = CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED;
-	auto column_count = result_data->result->ColumnCount();
+	auto column_count = result_data->ColumnCount();
 	result->deprecated_columns = (duckdb_column *)duckdb_malloc(sizeof(duckdb_column) * column_count);
 	if (!result->deprecated_columns) { // LCOV_EXCL_START
 		// malloc failure
 		return DuckDBError;
 	} // LCOV_EXCL_STOP
 
-	if (result_data->result->GetResultType() == QueryResultType::STREAM_RESULT) {
-		// if we are dealing with a stream result, convert it to a materialized result first
-		auto &stream_result = (StreamQueryResult &)*result_data->result;
-		result_data->result = stream_result.Materialize();
+	if (result_data->IsStreaming()) {
+		// The deprecated result set is random-access: drain the stream into a collection
+		result_data->result = DrainStreamIntoResult(*result_data->stream);
+		result_data->stream.reset();
+		if (result_data->result->HasError()) {
+			return false;
+		}
 	}
-	D_ASSERT(result_data->result->GetResultType() == QueryResultType::MATERIALIZED_RESULT);
-	auto &materialized = reinterpret_cast<MaterializedQueryResult &>(*result_data->result);
+	auto &materialized = *result_data->result;
 
 	// convert the result to a materialized result
 	// zero initialize the columns (so we can cleanly delete it in case a malloc fails)
 	memset(result->deprecated_columns, 0, sizeof(duckdb_column) * column_count);
 	for (idx_t i = 0; i < column_count; i++) {
-		result->deprecated_columns[i].deprecated_type = LogicalTypeIdToC(result_data->result->GetTypes()[i].id());
-		result->deprecated_columns[i].deprecated_name = (char *)result_data->result->ColumnName(i).c_str(); // NOLINT
+		result->deprecated_columns[i].deprecated_type = LogicalTypeIdToC(materialized.GetTypes()[i].id());
+		result->deprecated_columns[i].deprecated_name = (char *)materialized.ColumnName(i).c_str(); // NOLINT
 	}
 
 	result->deprecated_row_count = materialized.RowCount();
@@ -439,7 +482,7 @@ const char *duckdb_column_name(duckdb_result *result, idx_t col) {
 		return nullptr;
 	}
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result->internal_data));
-	return result_data.result->ColumnName(col).c_str();
+	return result_data.ColumnName(col).c_str();
 }
 
 duckdb_type duckdb_column_type(duckdb_result *result, idx_t col) {
@@ -447,7 +490,7 @@ duckdb_type duckdb_column_type(duckdb_result *result, idx_t col) {
 		return DUCKDB_TYPE_INVALID;
 	}
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result->internal_data));
-	return duckdb::LogicalTypeIdToC(result_data.result->GetTypes()[col].id());
+	return duckdb::LogicalTypeIdToC(result_data.GetTypes()[col].id());
 }
 
 duckdb_logical_type duckdb_column_logical_type(duckdb_result *result, idx_t col) {
@@ -455,7 +498,7 @@ duckdb_logical_type duckdb_column_logical_type(duckdb_result *result, idx_t col)
 		return nullptr;
 	}
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result->internal_data));
-	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(result_data.result->GetTypes()[col]));
+	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(result_data.GetTypes()[col]));
 }
 
 duckdb_arrow_options duckdb_result_get_arrow_options(duckdb_result *result) {
@@ -463,10 +506,10 @@ duckdb_arrow_options duckdb_result_get_arrow_options(duckdb_result *result) {
 		return nullptr;
 	}
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result->internal_data));
-	if (!result_data.result) {
+	if (!result_data.result && !result_data.stream) {
 		return nullptr;
 	}
-	auto arrow_options_wrapper = new duckdb::CClientArrowOptionsWrapper(result_data.result->client_properties);
+	auto arrow_options_wrapper = new duckdb::CClientArrowOptionsWrapper(result_data.GetClientProperties());
 	return reinterpret_cast<duckdb_arrow_options>(arrow_options_wrapper);
 }
 
@@ -478,7 +521,7 @@ idx_t duckdb_column_count(duckdb_result *result) {
 		return 0;
 	}
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result->internal_data));
-	return result_data.result->ColumnCount();
+	return result_data.ColumnCount();
 }
 
 idx_t duckdb_row_count(duckdb_result *result) {
@@ -486,12 +529,11 @@ idx_t duckdb_row_count(duckdb_result *result) {
 		return 0;
 	}
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result->internal_data));
-	if (result_data.result->GetResultType() == duckdb::QueryResultType::STREAM_RESULT) {
+	if (result_data.IsStreaming()) {
 		// We can't know the row count beforehand
 		return 0;
 	}
-	auto &materialized = reinterpret_cast<duckdb::MaterializedQueryResult &>(*result_data.result);
-	return materialized.RowCount();
+	return result_data.Retained().RowCount();
 }
 
 idx_t duckdb_rows_changed(duckdb_result *result) {
@@ -503,7 +545,10 @@ idx_t duckdb_rows_changed(duckdb_result *result) {
 		// not a materialized result
 		return result->deprecated_rows_changed;
 	}
-	auto &materialized = reinterpret_cast<duckdb::MaterializedQueryResult &>(*result_data.result);
+	if (result_data.IsStreaming()) {
+		return 0;
+	}
+	auto &materialized = result_data.Retained();
 	if (materialized.GetStatementProperties().return_type != duckdb::StatementReturnType::CHANGED_ROWS) {
 		// we can only use this function for CHANGED_ROWS result types
 		return 0;
@@ -540,7 +585,7 @@ const char *duckdb_result_error(duckdb_result *result) {
 		return nullptr;
 	}
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result->internal_data));
-	return !result_data.result->HasError() ? nullptr : result_data.result->GetError().c_str();
+	return !result_data.HasError() ? nullptr : result_data.GetError().c_str();
 }
 
 duckdb_error_type duckdb_result_error_type(duckdb_result *result) {
@@ -548,10 +593,10 @@ duckdb_error_type duckdb_result_error_type(duckdb_result *result) {
 		return DUCKDB_ERROR_INVALID;
 	}
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result->internal_data));
-	if (!result_data.result->HasError()) {
+	if (!result_data.HasError()) {
 		return DUCKDB_ERROR_INVALID;
 	}
-	return duckdb::ErrorTypeToC(result_data.result->GetErrorType());
+	return duckdb::ErrorTypeToC(result_data.GetErrorType());
 }
 
 idx_t duckdb_result_chunk_count(duckdb_result result) {
@@ -562,12 +607,11 @@ idx_t duckdb_result_chunk_count(duckdb_result result) {
 	if (result_data.result_set_type == duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED) {
 		return 0;
 	}
-	if (result_data.result->GetResultType() != duckdb::QueryResultType::MATERIALIZED_RESULT) {
+	if (result_data.IsStreaming()) {
 		// Can't know beforehand how many chunks are returned.
 		return 0;
 	}
-	auto &materialized = reinterpret_cast<duckdb::MaterializedQueryResult &>(*result_data.result);
-	return materialized.Collection().ChunkCount();
+	return result_data.Retained().Collection().ChunkCount();
 }
 
 duckdb_data_chunk duckdb_result_get_chunk(duckdb_result result, idx_t chunk_idx) {
@@ -578,13 +622,12 @@ duckdb_data_chunk duckdb_result_get_chunk(duckdb_result result, idx_t chunk_idx)
 	if (result_data.result_set_type == duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED) {
 		return nullptr;
 	}
-	if (result_data.result->GetResultType() != duckdb::QueryResultType::MATERIALIZED_RESULT) {
-		// This API is only supported for materialized query results
+	if (result_data.IsStreaming()) {
+		// This API is only supported for retained query results
 		return nullptr;
 	}
 	result_data.result_set_type = duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_MATERIALIZED;
-	auto &materialized = reinterpret_cast<duckdb::MaterializedQueryResult &>(*result_data.result);
-	auto &collection = materialized.Collection();
+	auto &collection = result_data.Retained().Collection();
 	if (chunk_idx >= collection.ChunkCount()) {
 		return nullptr;
 	}
@@ -602,7 +645,7 @@ bool duckdb_result_is_streaming(duckdb_result result) {
 		return false;
 	}
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result.internal_data));
-	return result_data.result->GetResultType() == duckdb::QueryResultType::STREAM_RESULT;
+	return result_data.IsStreaming();
 }
 
 duckdb_result_type duckdb_result_return_type(duckdb_result result) {
@@ -610,7 +653,7 @@ duckdb_result_type duckdb_result_return_type(duckdb_result result) {
 		return DUCKDB_RESULT_TYPE_INVALID;
 	}
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result.internal_data));
-	switch (result_data.result->GetStatementProperties().return_type) {
+	switch (result_data.GetStatementProperties().return_type) {
 	case duckdb::StatementReturnType::CHANGED_ROWS:
 		return DUCKDB_RESULT_TYPE_CHANGED_ROWS;
 	case duckdb::StatementReturnType::NOTHING:
@@ -628,5 +671,5 @@ duckdb_statement_type duckdb_result_statement_type(duckdb_result result) {
 	}
 	auto &pres = *(reinterpret_cast<duckdb::DuckDBResultData *>(result.internal_data));
 
-	return StatementTypeToC(pres.result->GetStatementType());
+	return StatementTypeToC(pres.GetStatementType());
 }

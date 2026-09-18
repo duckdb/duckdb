@@ -44,7 +44,19 @@ bool BoundFunctionExpression::RequiresOrderedExecution() const {
 }
 
 bool BoundFunctionExpression::IsVolatile() const {
-	return function.GetStability() == FunctionStability::VOLATILE ? true : Expression::IsVolatile();
+	if (function.GetStability() == FunctionStability::VOLATILE) {
+		return true;
+	}
+	// Lambda bodies live in bind data rather than the ordinary expression children.
+	if (function.HasBindLambdaCallback()) {
+		D_ASSERT(bind_info);
+		auto &lambda_bind_data = bind_info->Cast<LambdaFunctionData>();
+		auto lambda_expr = lambda_bind_data.GetLambdaExpression();
+		if (lambda_expr && lambda_expr->IsVolatile()) {
+			return true;
+		}
+	}
+	return Expression::IsVolatile();
 }
 
 bool BoundFunctionExpression::IsConsistent() const {
@@ -155,6 +167,9 @@ void BoundFunctionExpression::Serialize(Serializer &serializer) const {
 		// serialize legacy expression for backwards compatibility
 		FunctionToStringInput input(function, bind_info.get(), children);
 		auto legacy_expr = function.GetLegacySerializeCallback()(input);
+		legacy_expr->SetReturnType(return_type);
+		legacy_expr->SetAlias(alias);
+		legacy_expr->SetQueryLocation(query_location);
 		legacy_expr->Serialize(serializer);
 		return;
 	}
@@ -212,7 +227,10 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 		// replace the function expression with the bound expression
 		auto bound_expression = entry.first.GetBindExpressionCallback()(bind_input);
 		if (bound_expression) {
-			return bound_expression;
+			if (bound_expression->GetReturnType() != return_type) {
+				return BoundCastExpression::AddCastToType(context, std::move(bound_expression), return_type);
+			}
+			return Expression::PreserveReturnType(return_type, std::move(bound_expression));
 		}
 		// Otherwise, fall through and continue on normally
 	}
@@ -224,7 +242,7 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 		auto &context = deserializer.Get<ClientContext &>();
 		return BoundCastExpression::AddCastToType(context, std::move(result), return_type);
 	}
-	return std::move(result);
+	return Expression::PreserveReturnType(return_type, std::move(result));
 }
 
 } // namespace duckdb

@@ -186,7 +186,7 @@ string CSVErrorTypeToEnum(CSVErrorType type) {
 
 void CSVErrorHandler::FillRejectsTable(InternalAppender &errors_appender, const idx_t file_idx, const idx_t scan_idx,
                                        const CSVFileScan &file, CSVRejectsTable &rejects,
-                                       const MultiFileBindData &bind_data, const idx_t limit) {
+                                       const vector<Identifier> &column_names, const idx_t limit) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	// We first insert the file into the file scans table
 	for (auto &error : file.error_handler->errors) {
@@ -232,15 +232,15 @@ void CSVErrorHandler::FillRejectsTable(InternalAppender &errors_appender, const 
 				errors_appender.Append(Value());
 				break;
 			case CSVErrorType::TOO_FEW_COLUMNS:
-				if (col_idx + 1 < bind_data.names.size()) {
-					errors_appender.Append(string_t(bind_data.names[col_idx + 1].GetIdentifierName()));
+				if (col_idx + 1 < column_names.size()) {
+					errors_appender.Append(string_t(column_names[col_idx + 1].GetIdentifierName()));
 				} else {
 					errors_appender.Append(Value());
 				}
 				break;
 			default:
-				if (col_idx < bind_data.names.size()) {
-					errors_appender.Append(string_t(bind_data.names[col_idx].GetIdentifierName()));
+				if (col_idx < column_names.size()) {
+					errors_appender.Append(string_t(column_names[col_idx].GetIdentifierName()));
 				} else {
 					errors_appender.Append(Value());
 				}

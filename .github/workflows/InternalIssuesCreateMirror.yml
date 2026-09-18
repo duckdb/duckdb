@@ -37,7 +37,9 @@ jobs:
           gh issue comment --repo duckdb/duckdb ${{ github.event.issue.number }} --body-file needs-reproducible-example-comment.md
 
   create_or_label_mirror_issue:
-    if: github.event.label.name == 'reproduced' || github.event.label.name == 'under review'
+    # Disable mirror creation, now owned by the community-issue-tracker.
+    if: false
+    # if: github.event.label.name == 'reproduced' || github.event.label.name == 'under review'
     runs-on: ubuntu-latest
     steps:
       - name: Remove 'needs triage' / 'under review' if 'reproduced'
