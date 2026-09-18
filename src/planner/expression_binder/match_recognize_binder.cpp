@@ -251,6 +251,61 @@ static bool BoundByLambda(optional_ptr<vector<DummyBinding>> lambda_bindings, co
 }
 
 //===--------------------------------------------------------------------===//
+// Reading the rows of a pattern variable
+//===--------------------------------------------------------------------===//
+//! Whether a name is a pattern variable. The two clauses hold their symbols differently, so which
+//! names are theirs is the caller's to say.
+using MatchRecognizeSymbols = std::function<bool(const string &)>;
+
+//! A reference qualified by a pattern variable reads the rows that variable matched. The qualifier is
+//! this clause's name rather than the input's, so it is resolved here: it is dropped from the
+//! reference, and the variable it named is reported back through \p scope.
+static void ScopeToVariable(unique_ptr<ParsedExpression> &expr, const MatchRecognizeSymbols &symbols,
+                            case_insensitive_set_t &scope, vector<identifier_set_t> &lambda_parameters) {
+	if (expr->GetExpressionClass() == ExpressionClass::LAMBDA) {
+		identifier_set_t parameters;
+		if (MatchRecognizeLambdaParameters(*expr, parameters)) {
+			lambda_parameters.push_back(std::move(parameters));
+			ScopeToVariable(expr->Cast<LambdaExpression>().RightMutable(), symbols, scope, lambda_parameters);
+			lambda_parameters.pop_back();
+			return;
+		}
+	}
+	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
+		auto &colref = expr->Cast<ColumnRefExpression>();
+		auto &names = colref.ColumnNames();
+		if (names.size() >= 2 && !LambdaExpression::IsLambdaParameter(lambda_parameters, names[0]) &&
+		    symbols(names[0].GetIdentifierName())) {
+			scope.insert(names[0].GetIdentifierName());
+			expr = MatchRecognizeWithoutQualifier(colref);
+		}
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { ScopeToVariable(child, symbols, scope, lambda_parameters); });
+}
+
+static void ScopeToVariable(unique_ptr<ParsedExpression> &expr, const MatchRecognizeSymbols &symbols,
+                            case_insensitive_set_t &scope) {
+	vector<identifier_set_t> lambda_parameters;
+	ScopeToVariable(expr, symbols, scope, lambda_parameters);
+}
+
+//! The pattern variable a navigation reads its row from. What the navigation reports is an expression
+//! of the clause's own, so a variable may appear anywhere within it rather than only in front of it -
+//! but it navigates to one row, so the expression cannot name two variables to read it from.
+static string NavigationVariable(unique_ptr<ParsedExpression> &inner, const MatchRecognizeSymbols &symbols,
+                                 const string &function_name) {
+	case_insensitive_set_t scope;
+	ScopeToVariable(inner, symbols, scope);
+	if (scope.size() > 1) {
+		throw BinderException("%s() reads one row of the match, so \"%s\" cannot also read a row of \"%s\"",
+		                      function_name, *scope.begin(), *std::next(scope.begin()));
+	}
+	return scope.empty() ? string() : *scope.begin();
+}
+
+//===--------------------------------------------------------------------===//
 // DEFINE
 //===--------------------------------------------------------------------===//
 unique_ptr<Expression> MatchRecognizeConditionInputs::Project(unique_ptr<Expression> value, const string &base) {
@@ -387,16 +442,11 @@ BindResult MatchRecognizeDefineBinder::BindNavigation(FunctionExpression &functi
 		offset = MatchRecognizeNavigationOffset(function_name, arguments[1].GetExpression());
 	}
 	auto inner = std::move(arguments[0].GetExpressionMutable());
-	string symbol;
-	if (inner->GetExpressionType() == ExpressionType::COLUMN_REF) {
-		auto &colref = inner->Cast<ColumnRefExpression>();
-		auto &names = colref.ColumnNames();
-		if (names.size() >= 2 && symbols.count(names[0].GetIdentifierName())) {
-			symbol = MatchRecognizeDefineColumn(names[0].GetIdentifierName());
-			inner = MatchRecognizeWithoutQualifier(colref);
-		}
-	}
-	return BindNavigated(std::move(inner), symbol, function_name == "LAST", offset, depth);
+	auto variable = NavigationVariable(
+	    inner, [&](const string &name) { return symbols.count(name) > 0; }, function_name);
+	// the qualifiers are gone, so what is left is read off the row this navigates to
+	auto symbol = variable.empty() ? string() : MatchRecognizeDefineColumn(variable);
+	return BindNavigated(std::move(inner), std::move(symbol), function_name == "LAST", offset, depth);
 }
 
 BindResult MatchRecognizeDefineBinder::BindNavigated(unique_ptr<ParsedExpression> inner, string symbol, bool last,
@@ -422,39 +472,6 @@ BindResult MatchRecognizeDefineBinder::BindNavigated(unique_ptr<ParsedExpression
 //===--------------------------------------------------------------------===//
 // MEASURES
 //===--------------------------------------------------------------------===//
-//! An aggregate in MEASURES aggregates the rows of the match its arguments name a variable for. The
-//! variable is this clause's name rather than the input's, so it is resolved here.
-static void ScopeToVariable(unique_ptr<ParsedExpression> &expr, const case_insensitive_map_t<vector<string>> &symbols,
-                            case_insensitive_set_t &scope, vector<identifier_set_t> &lambda_parameters) {
-	if (expr->GetExpressionClass() == ExpressionClass::LAMBDA) {
-		identifier_set_t parameters;
-		if (MatchRecognizeLambdaParameters(*expr, parameters)) {
-			lambda_parameters.push_back(std::move(parameters));
-			ScopeToVariable(expr->Cast<LambdaExpression>().RightMutable(), symbols, scope, lambda_parameters);
-			lambda_parameters.pop_back();
-			return;
-		}
-	}
-	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
-		auto &colref = expr->Cast<ColumnRefExpression>();
-		auto &names = colref.ColumnNames();
-		if (names.size() >= 2 && !LambdaExpression::IsLambdaParameter(lambda_parameters, names[0]) &&
-		    symbols.find(names[0].GetIdentifierName()) != symbols.end()) {
-			scope.insert(names[0].GetIdentifierName());
-			expr = MatchRecognizeWithoutQualifier(colref);
-		}
-		return;
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { ScopeToVariable(child, symbols, scope, lambda_parameters); });
-}
-
-static void ScopeToVariable(unique_ptr<ParsedExpression> &expr, const case_insensitive_map_t<vector<string>> &symbols,
-                            case_insensitive_set_t &scope) {
-	vector<identifier_set_t> lambda_parameters;
-	ScopeToVariable(expr, symbols, scope, lambda_parameters);
-}
-
 MatchRecognizeMeasureBinder::MatchRecognizeMeasureBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,
                                                          string state_p, const MatchRecognizeConfig &config_p,
                                                          const case_insensitive_map_t<vector<string>> &symbols_p,
@@ -536,18 +553,21 @@ BindResult MatchRecognizeMeasureBinder::BindAggregate(FunctionExpression &expr, 
 BindResult MatchRecognizeMeasureBinder::BindOverMatch(FunctionExpression &expr, idx_t depth) {
 	// naming a variable restricts the aggregate to the rows it matched
 	case_insensitive_set_t scope;
+	const MatchRecognizeSymbols is_symbol = [&](const string &name) {
+		return symbols.find(name) != symbols.end();
+	};
 	for (auto &argument : expr.GetArgumentsMutable()) {
-		ScopeToVariable(argument.GetExpressionMutable(), symbols, scope);
+		ScopeToVariable(argument.GetExpressionMutable(), is_symbol, scope);
 	}
 	if (expr.OrderByMutable()) {
 		for (auto &order : expr.OrderByMutable()->orders) {
-			ScopeToVariable(order.expression, symbols, scope);
+			ScopeToVariable(order.expression, is_symbol, scope);
 		}
 	}
 	// the filter decides which of the match's rows the aggregate sees, so it reads the match the
 	// same way the arguments do
 	if (expr.FilterMutable()) {
-		ScopeToVariable(expr.FilterMutable(), symbols, scope);
+		ScopeToVariable(expr.FilterMutable(), is_symbol, scope);
 	}
 	if (scope.size() > 1) {
 		throw BinderException("An aggregate in MEASURES reads the rows of one pattern variable, so \"%s\" "
@@ -612,15 +632,13 @@ BindResult MatchRecognizeMeasureBinder::BindNavigation(FunctionExpression &funct
 		offset = MatchRecognizeNavigationOffset(function_name, function.GetArguments()[1].GetExpression());
 	}
 	auto inner = std::move(function.GetArgumentsMutable()[0].GetExpressionMutable());
+	auto variable = NavigationVariable(
+	    inner, [&](const string &name) { return symbols.find(name) != symbols.end(); }, function_name);
 	vector<string> symbol;
-	if (inner->GetExpressionType() == ExpressionType::COLUMN_REF) {
-		auto &colref = inner->Cast<ColumnRefExpression>();
-		auto &names = colref.ColumnNames();
-		auto entry = names.size() >= 2 ? symbols.find(names[0].GetIdentifierName()) : symbols.end();
-		if (entry != symbols.end()) {
-			symbol = entry->second;
-			inner = MatchRecognizeWithoutQualifier(colref);
-		}
+	if (!variable.empty()) {
+		auto entry = symbols.find(variable);
+		D_ASSERT(entry != symbols.end());
+		symbol = entry->second;
 	}
 	// what is navigated is an expression of the clause's own, so it is read the way one is
 	auto packed = PackValue(state, std::move(inner));
