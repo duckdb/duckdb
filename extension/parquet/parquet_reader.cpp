@@ -99,6 +99,20 @@ ParquetPrefetchStrategyOption ParquetPrefetchStrategyOptionFromString(const stri
 	throw BinderException("Unrecognized prefetch_strategy '%s' (supported: 'auto', 'whole_group')", value);
 }
 
+ParquetInt96AsOption ParquetInt96AsOptionFromString(const string &value) {
+	auto lower = StringUtil::Lower(value);
+	if (lower == "timestamp") {
+		return ParquetInt96AsOption::TIMESTAMP;
+	}
+	if (lower == "timestamp_ns") {
+		return ParquetInt96AsOption::TIMESTAMP_NS;
+	}
+	if (lower == "blob") {
+		return ParquetInt96AsOption::BLOB;
+	}
+	throw BinderException("Unrecognized int96_as '%s' (supported: 'timestamp', 'timestamp_ns', 'blob')", value);
+}
+
 static idx_t ParquetColumnChunkFileOffset(const duckdb_parquet::ColumnChunk &chunk) {
 	idx_t offset = NumericCast<idx_t>(chunk.meta_data.data_page_offset);
 	if (chunk.meta_data.__isset.dictionary_page_offset) {
@@ -593,7 +607,16 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 			return LogicalType::BIGINT;
 		case Type::INT96: // always a timestamp it would seem
 			schema.type_info = ParquetExtraTypeInfo::IMPALA_TIMESTAMP;
-			return LogicalType::TIMESTAMP;
+			switch (parquet_options.int96_as) {
+			case ParquetInt96AsOption::TIMESTAMP:
+				return LogicalType::TIMESTAMP;
+			case ParquetInt96AsOption::TIMESTAMP_NS:
+				return LogicalType::TIMESTAMP_NS;
+			case ParquetInt96AsOption::BLOB:
+				return LogicalType::BLOB;
+			default:
+				throw InternalException("Unrecognized int96_as option");
+			}
 		case Type::FLOAT:
 			return LogicalType::FLOAT;
 		case Type::DOUBLE:

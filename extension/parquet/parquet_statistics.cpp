@@ -519,6 +519,11 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 		break;
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR: {
+		if (schema.parquet_type == Type::INT96) {
+			// INT96 is exposed as its raw bytes when int96_as='blob' - the byte ordering does not match BLOB
+			// comparison order, so we cannot safely emit min/max statistics for it
+			return StringStats::CreateEmpty(type).ToUnique();
+		}
 		const bool is_varchar = type.id() == LogicalTypeId::VARCHAR;
 		auto min_stats_type = parquet_stats.__isset.is_min_value_exact && parquet_stats.is_min_value_exact
 		                          ? StringStatsType::EXACT_STATS
