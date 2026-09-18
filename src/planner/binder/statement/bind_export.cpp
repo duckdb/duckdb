@@ -278,6 +278,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	                                          stmt.info->GetQualifiedName().Name()));
 	// prepare the options for export
 	auto &format = stmt.info->format;
+	format = StringUtil::Lower(format);
 	auto &options = stmt.info->options;
 	if (format == "csv") {
 		// insert default csv options, if not specified
