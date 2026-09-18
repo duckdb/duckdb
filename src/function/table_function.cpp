@@ -24,7 +24,7 @@ BaseTableFunction::BaseTableFunction(table_function_t function_, table_function_
       function(function_), in_out_function(nullptr), in_out_function_final(nullptr), statistics(nullptr),
       statistics_extended(nullptr), dependency(nullptr), cardinality(nullptr), get_metrics(nullptr),
       pushdown_complex_filter(nullptr), pushdown_expression(nullptr), combine_schema(nullptr), get_file_columns(nullptr), get_file_partition_stats(nullptr), claim_batch(nullptr),
-      finish_batch(nullptr), supports_read_ahead(nullptr), schedule_io(nullptr), to_string(nullptr),
+      finish_batch(nullptr), supports_read_ahead(nullptr), schedule_io(nullptr), prepare_read_ahead(nullptr), to_string(nullptr),
       table_scan_progress(nullptr), get_partition_data(nullptr), get_bind_info(nullptr),
       projection_expression_pushdown(nullptr), get_multi_file_reader(nullptr), supports_pushdown_type(nullptr),
       supports_pushdown_extract(nullptr), is_repeatable(nullptr), get_partition_info(nullptr),
@@ -103,6 +103,7 @@ BoundTableFunction::BoundTableFunction(shared_ptr<const TableFunction> function_
 	finish_batch = function.finish_batch;
 	supports_read_ahead = function.supports_read_ahead;
 	schedule_io = function.schedule_io;
+	prepare_read_ahead = function.prepare_read_ahead;
 	to_string = function.to_string;
 	to_sql = function.to_sql;
 	table_scan_progress = function.table_scan_progress;
