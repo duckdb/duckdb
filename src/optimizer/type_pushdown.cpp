@@ -88,10 +88,10 @@ void FindGetsAndProjections(LogicalOperator &op, Analyses &analyses, Projections
 }
 
 optional<GetBinding> Resolve(ColumnBinding binding, Analyses &analyses, const Projections &projections) {
-	if (IsVirtualColumn(binding.column_index)) {
-		return nullopt;
-	}
 	if (const auto it = analyses.find(binding.table_index); it != analyses.end()) {
+		if (it->second.get.GetColumnIds()[binding.column_index].IsVirtualColumn()) {
+			return nullopt;
+		}
 		return {{it->second, binding.column_index, nullptr}};
 	}
 
@@ -106,10 +106,10 @@ optional<GetBinding> Resolve(ColumnBinding binding, Analyses &analyses, const Pr
 		return nullopt;
 	}
 	const ColumnBinding get_binding = inner->Cast<BoundColumnRefExpression>().Binding();
-	if (IsVirtualColumn(get_binding.column_index)) {
-		return nullopt;
-	}
 	if (const auto it = analyses.find(get_binding.table_index); it != analyses.end()) {
+		if (it->second.get.GetColumnIds()[get_binding.column_index].IsVirtualColumn()) {
+			return nullopt;
+		}
 		return {{it->second, get_binding.column_index, &projection}};
 	}
 	return nullopt;
