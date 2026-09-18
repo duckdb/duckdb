@@ -1144,6 +1144,77 @@ TEST_CASE("ManagedAsyncWriteStreamQueue drains oversized sequential tails under 
 	}
 }
 
+TEST_CASE("ManagedAsyncWriteStreamQueue rechecks concurrent batches under backpressure", "[async_write_queue]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db);
+	REQUIRE_NO_FAIL(con->Query("SET threads=1; SET memory_limit='512MB'"));
+	AsyncThreadBlocker async_thread_blocker(*con->context, 1);
+	REQUIRE(async_thread_blocker.WaitForStarted());
+	BlockingAsyncWriteTarget target;
+	SequentialAsyncWriteStreamTarget stream_target(target, false);
+	ManagedAsyncWriteStreamQueue queue(*con->context, stream_target);
+
+	auto head_size = AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD;
+	auto tail_capacity = ManagedAsyncMemoryConfig::MAX_PENDING_BYTES_PER_THREAD + 1;
+	queue.BeginBatch();
+	queue.RegisterWrite(make_uniq<AllocatedAsyncWriteBuffer>(
+	                        *con->context, string(UnsafeNumericCast<size_t>(head_size), 'a'), head_size),
+	                    0);
+	queue.RegisterWrite(make_uniq<AllocatedAsyncWriteBuffer>(*con->context, "end", tail_capacity), head_size);
+	queue.LeaveBatch();
+
+	mutex pressure_lock;
+	std::condition_variable pressure_cv;
+	bool pressure_finished = false;
+	string pressure_error;
+	std::thread pressure_thread([&]() {
+		pressure_error = CaptureException([&]() { queue.ApplyBackpressure(); });
+		{
+			lock_guard<mutex> guard(pressure_lock);
+			pressure_finished = true;
+		}
+		pressure_cv.notify_all();
+	});
+	auto entered_write = target.WaitForEnteredWrites(1);
+	auto peer_batch_error = CaptureException([&]() { queue.BeginBatch(); });
+	target.ReleaseWrites();
+	bool returned_during_batch;
+	{
+		unique_lock<mutex> guard(pressure_lock);
+		returned_during_batch =
+		    pressure_cv.wait_for(guard, std::chrono::seconds(5), [&]() { return pressure_finished; });
+	}
+	auto retained_during_batch = ManagedAsyncWriteQueueTest::RetainedBytes(queue);
+	if (peer_batch_error.empty()) {
+		// Model a peer BatchGuard unwinding without Finish() after a write-preparation error.
+		queue.LeaveBatch();
+	}
+	async_thread_blocker.Release();
+	string abort_error;
+	if (!returned_during_batch) {
+		abort_error = CaptureException([&]() { queue.AbortWrites(); });
+	}
+	pressure_thread.join();
+	auto writes_before_resume = target.write_sizes;
+	auto resume_error = CaptureException([&]() {
+		queue.ApplyBackpressure();
+		queue.Close();
+	});
+
+	REQUIRE(entered_write);
+	REQUIRE(peer_batch_error.empty());
+	REQUIRE(returned_during_batch);
+	REQUIRE(pressure_error.empty());
+	REQUIRE(abort_error.empty());
+	REQUIRE(resume_error.empty());
+	REQUIRE(retained_during_batch == tail_capacity);
+	REQUIRE(writes_before_resume == vector<idx_t> {head_size});
+	REQUIRE(ManagedAsyncWriteQueueTest::RetainedBytes(queue) == 0);
+	REQUIRE(target.write_sizes == vector<idx_t> {head_size, 3});
+	REQUIRE(target.offsets == vector<idx_t> {0, head_size});
+	REQUIRE(target.MaxActiveWrites() == 1);
+}
+
 TEST_CASE("ManagedAsyncWriteQueue releases allocation capacity after write failure", "[async_write_queue]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db);

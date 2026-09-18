@@ -276,6 +276,8 @@ private:
 	void SchedulePendingWritesInternal(SchedulePolicy policy = SchedulePolicy::THRESHOLD);
 	//! Grow the TemporaryMemoryState reservation coarsely; it is released only when the queue closes.
 	void UpdateMemoryState(MemoryUpdateMode mode = MemoryUpdateMode::COARSE);
+	//! Refresh the reservation and help execute one queued async task.
+	void DrainOneTask();
 
 	//! Return the current async backlog budget after applying the fixed queue cap.
 	idx_t BackpressureBudget();

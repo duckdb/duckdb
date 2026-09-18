@@ -792,10 +792,15 @@ void ManagedAsyncWriteQueue::ApplyBackpressure() {
 		if (current_pending_bytes <= BackpressureBudget()) {
 			return;
 		}
-		SchedulePendingWrites(SchedulePolicy::FORCE);
-		write_queue->WorkOnPendingTask();
-		RethrowTaskError();
+		DrainOneTask();
 	}
+}
+
+void ManagedAsyncWriteQueue::DrainOneTask() {
+	UpdateMemoryState(MemoryUpdateMode::FORCE);
+	SchedulePendingWrites(SchedulePolicy::FORCE);
+	write_queue->WorkOnPendingTask();
+	RethrowTaskError();
 }
 
 void ManagedAsyncWriteQueue::WaitAll() {
@@ -1517,10 +1522,6 @@ void ManagedAsyncWriteStreamQueue::ApplyBackpressure() {
 	}
 	write_queue->UpdateMemoryState(ManagedAsyncWriteQueue::MemoryUpdateMode::FORCE);
 	SchedulePendingWrites();
-	auto set_force_completion_refill = [&](bool enabled) {
-		annotated_lock_guard<annotated_mutex> guard(lock);
-		force_completion_refill = enabled;
-	};
 	while (true) {
 		{
 			annotated_lock_guard<annotated_mutex> guard(lock);
@@ -1531,17 +1532,9 @@ void ManagedAsyncWriteStreamQueue::ApplyBackpressure() {
 		if (write_queue->RetainedBytes() <= write_queue->BackpressureBudget()) {
 			return;
 		}
-		// Sequential targets can only submit one request at a time. A small physical tail may still retain more
-		// memory than the budget, so completions must keep scheduling it while backpressure waits for that memory.
-		set_force_completion_refill(true);
-		try {
-			SchedulePendingWrites(SchedulePolicy::FORCE);
-			write_queue->ApplyBackpressure();
-		} catch (...) {
-			set_force_completion_refill(false);
-			throw;
-		}
-		set_force_completion_refill(false);
+		SchedulePendingWrites(SchedulePolicy::FORCE);
+		// Recheck the owning stream after each task: a concurrent batch may prevent completion-driven refills.
+		write_queue->DrainOneTask();
 		RethrowTaskError();
 	}
 }
