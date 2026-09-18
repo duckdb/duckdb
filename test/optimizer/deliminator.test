@@ -489,6 +489,7 @@ ORDER BY x, z;
 1	1	true
 
 # Complex marker expressions preserve only the marker domains they reference
+# Build/probe orientation depends on the estimated delimiter group cardinality.
 query II
 EXPLAIN SELECT x, z,
 	EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x AND y = p.z),
@@ -497,7 +498,7 @@ EXPLAIN SELECT x, z,
 FROM range(1000000) o(x), range(1000000) p(z)
 WHERE x < 10 AND z < 10;
 ----
-logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*CTE Name: __duckdb_delim.*Join Type: RIGHT_SEMI.*Join Type: RIGHT_SEMI.*
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*CTE Name: __duckdb_delim.*Join Type: (RIGHT_)?SEMI.*Join Type: (RIGHT_)?SEMI.*
 
 query II
 EXPLAIN SELECT x, z,
@@ -520,7 +521,7 @@ WHERE x < 10 AND z < 10
 		OR EXISTS (SELECT 1 FROM range(1000000000) c(y) WHERE y = o.x)
 	);
 ----
-logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*CTE Name: __duckdb_delim.*Join Type: RIGHT_SEMI.*Join Type: RIGHT_SEMI.*
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*CTE Name: __duckdb_delim.*Join Type: (RIGHT_)?SEMI.*Join Type: (RIGHT_)?SEMI.*
 
 query II
 EXPLAIN SELECT count(*)
