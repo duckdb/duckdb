@@ -58,22 +58,14 @@ public:
 	atomic<idx_t> updated_count;
 	unordered_set<row_t> updated_rows;
 	ColumnDataCollection return_collection;
-	unique_ptr<TableDeleteState> delete_state;
-
-	TableDeleteState &GetDeleteState(DataTable &table, TableCatalogEntry &tableref, ClientContext &context,
-	                                 const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
-		if (!delete_state) {
-			delete_state = table.InitializeDelete(tableref, context, bound_constraints);
-		}
-		return *delete_state;
-	}
 };
 
 class UpdateLocalState : public LocalSinkState {
 public:
 	UpdateLocalState(ClientContext &context, const vector<unique_ptr<Expression>> &expressions,
-	                 const vector<LogicalType> &table_types, const vector<unique_ptr<Expression>> &bound_defaults)
-	    : default_executor(context, bound_defaults) {
+	                 const vector<LogicalType> &table_types, const vector<unique_ptr<Expression>> &bound_defaults,
+	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints)
+	    : default_executor(context, bound_defaults), bound_constraints(bound_constraints) {
 		// Initialize the update chunk.
 		auto &allocator = Allocator::Get(context);
 		vector<LogicalType> update_types;
@@ -92,10 +84,18 @@ public:
 	DataChunk mock_chunk;
 	DataChunk delete_chunk;
 	ExpressionExecutor default_executor;
+	unique_ptr<TableDeleteState> delete_state;
 	unique_ptr<TableUpdateState> update_state;
+	const vector<unique_ptr<BoundConstraint>> &bound_constraints;
 
-	TableUpdateState &GetUpdateState(DataTable &table, TableCatalogEntry &tableref, ClientContext &context,
-	                                 const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
+	TableDeleteState &GetDeleteState(DataTable &table, TableCatalogEntry &tableref, ClientContext &context) {
+		if (!delete_state) {
+			delete_state = table.InitializeDelete(tableref, context, bound_constraints);
+		}
+		return *delete_state;
+	}
+
+	TableUpdateState &GetUpdateState(DataTable &table, TableCatalogEntry &tableref, ClientContext &context) {
 		if (!update_state) {
 			update_state = table.InitializeUpdate(tableref, context, bound_constraints);
 		}
@@ -137,7 +137,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 				mock_chunk.data[columns[i].index].Reference(update_chunk.data[i]);
 			}
 		}
-		auto &update_state = l_state.GetUpdateState(table, tableref, context.client, bound_constraints);
+		auto &update_state = l_state.GetUpdateState(table, tableref, context.client);
 		table.Update(update_state, context.client, row_ids, columns, update_chunk);
 
 		if (return_chunk) {
@@ -188,7 +188,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 		table.Fetch(transaction, delete_chunk, column_ids, row_ids, update_count, fetch_state);
 	}
 
-	auto &delete_state = g_state.GetDeleteState(table, tableref, context.client, bound_constraints);
+	auto &delete_state = l_state.GetDeleteState(table, tableref, context.client);
 	table.Delete(delete_state, context.client, del_row_ids, update_count);
 
 	// Arrange the columns in the standard table order.
@@ -211,7 +211,8 @@ unique_ptr<GlobalSinkState> PhysicalUpdate::GetGlobalSinkState(ClientContext &co
 }
 
 unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<UpdateLocalState>(context.client, expressions, table.GetTypes(), bound_defaults);
+	return make_uniq<UpdateLocalState>(context.client, expressions, table.GetTypes(), bound_defaults,
+	                                   bound_constraints);
 }
 
 SinkCombineResultType PhysicalUpdate::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {

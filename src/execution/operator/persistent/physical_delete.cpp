@@ -34,12 +34,15 @@ public:
 			storage.InitializeLocalStorage(delete_index_append_state, table, context, bound_constraints);
 			has_unique_indexes = true;
 		}
-		delete_state = storage.InitializeDelete(table, context, bound_constraints);
+		// acquire the table lock once, on the thread that initializes the pipeline: the tasks then find it in the
+		// transaction and never wait for it, so a DELETE waiting for a checkpoint pins one thread instead of one per
+		// task
+		checkpoint_lock = DuckTransaction::Get(context, storage.db).SharedLockTable(*storage.GetDataTableInfo());
 	}
 
 	mutex delete_lock;
+	shared_ptr<CheckpointLock> checkpoint_lock;
 	idx_t deleted_count;
-	unique_ptr<TableDeleteState> delete_state;
 	ColumnDataCollection return_collection;
 	unordered_set<row_t> deleted_row_ids;
 	LocalAppendState delete_index_append_state;
@@ -49,14 +52,25 @@ public:
 class DeleteLocalState : public LocalSinkState {
 public:
 	DeleteLocalState(ClientContext &context, TableCatalogEntry &table,
-	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
+	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints,
+	                 optional_ptr<DeleteGlobalState> g_state) {
 		const auto &types = table.GetTypes();
 		auto initialize = vector<bool>(types.size(), false);
 		delete_chunk.Initialize(Allocator::Get(context), types, initialize);
+
+		auto &storage = table.GetStorage();
+		delete_state = storage.InitializeDelete(table, context, bound_constraints);
+		// the tasks own the lock from here on, so that it is released with their states however the query ends, also
+		// when the plan is cached in a prepared statement
+		if (g_state) {
+			lock_guard<mutex> delete_guard(g_state->delete_lock);
+			g_state->checkpoint_lock.reset();
+		}
 	}
 
 public:
 	DataChunk delete_chunk;
+	unique_ptr<TableDeleteState> delete_state;
 };
 
 SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
@@ -68,7 +82,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	lock_guard<mutex> delete_guard(g_state.delete_lock);
 	if (!return_chunk && !g_state.has_unique_indexes) {
-		g_state.deleted_count += table.Delete(*g_state.delete_state, context.client, row_ids, chunk.size());
+		g_state.deleted_count += table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
@@ -133,7 +147,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 		storage->AppendToDeleteIndexes(row_ids, l_state.delete_chunk);
 	}
 
-	auto deleted_count = table.Delete(*g_state.delete_state, context.client, row_ids, chunk.size());
+	auto deleted_count = table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
 	g_state.deleted_count += deleted_count;
 
 	// Append the return_chunk to the return collection.
@@ -175,7 +189,12 @@ unique_ptr<GlobalSinkState> PhysicalDelete::GetGlobalSinkState(ClientContext &co
 }
 
 unique_ptr<LocalSinkState> PhysicalDelete::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<DeleteLocalState>(context.client, tableref, bound_constraints);
+	// MERGE INTO keeps the states of its actions itself, in which case there is no global state here
+	optional_ptr<DeleteGlobalState> g_state;
+	if (sink_state) {
+		g_state = sink_state->Cast<DeleteGlobalState>();
+	}
+	return make_uniq<DeleteLocalState>(context.client, tableref, bound_constraints, g_state);
 }
 
 //===--------------------------------------------------------------------===//

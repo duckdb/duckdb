@@ -1,0 +1,104 @@
+# name: test/sql/storage/checkpoint/checkpoint_after_prepared_dml.test
+# description: A cached prepared DELETE/UPDATE must not hold the table's checkpoint lock after it finishes
+# group: [checkpoint]
+
+load __TEST_DIR__/checkpoint_after_prepared_dml.db
+
+statement ok
+CREATE TABLE t AS SELECT i FROM range(100000) t(i);
+
+statement ok
+CREATE TABLE lists AS SELECT i, [i] AS l FROM range(10000) t(i);
+
+statement ok
+CREATE TABLE pk(i INTEGER PRIMARY KEY, j INTEGER);
+
+statement ok
+INSERT INTO pk SELECT i, i FROM range(10000) t(i);
+
+statement ok
+CHECKPOINT
+
+# prepared statements without parameters keep their physical plan between executions
+statement ok
+PREPARE del AS DELETE FROM t WHERE i < 10;
+
+statement ok
+EXECUTE del
+
+statement ok
+CHECKPOINT
+
+# re-executing the same cached plan
+statement ok
+EXECUTE del
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT count(*) FROM t
+----
+99990
+
+# DELETE with RETURNING
+statement ok
+PREPARE del_ret AS DELETE FROM t WHERE i = 10 RETURNING i;
+
+query I
+EXECUTE del_ret
+----
+10
+
+statement ok
+CHECKPOINT
+
+# UPDATE on a LIST column is executed as a delete + insert
+statement ok
+PREPARE upd_list AS UPDATE lists SET l = [42] WHERE i = 5;
+
+statement ok
+EXECUTE upd_list
+
+statement ok
+CHECKPOINT
+
+# UPDATE on an indexed column is executed as a delete + insert
+statement ok
+PREPARE upd_pk AS UPDATE pk SET i = i + 100000 WHERE i < 10;
+
+statement ok
+EXECUTE upd_pk
+
+statement ok
+CHECKPOINT
+
+# the automatic checkpoint at commit of the prepared statement itself
+statement ok
+SET checkpoint_threshold='1KB'
+
+statement ok
+PREPARE del_auto AS DELETE FROM t WHERE i < 50000;
+
+statement ok
+EXECUTE del_auto
+
+statement ok
+RESET checkpoint_threshold
+
+restart
+
+query I
+SELECT count(*) FROM t
+----
+50000
+
+query I
+SELECT l FROM lists WHERE i = 5
+----
+[42]
+
+query II
+SELECT count(*), min(i) FROM pk WHERE i >= 100000
+----
+10	100000
