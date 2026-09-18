@@ -4,7 +4,7 @@
 
 # test basic repeat usage
 query I
-SELECT * FROM repeat(0, 3)
+SELECT * FROM repeat(0, 3::UBIGINT)
 ----
 0
 0
@@ -12,48 +12,48 @@ SELECT * FROM repeat(0, 3)
 
 # NULL
 query I
-SELECT * FROM repeat(NULL, 2)
+SELECT * FROM repeat(NULL, 2::UBIGINT)
 ----
 NULL
 NULL
 
 # varchar
 query I
-SELECT * FROM repeat('hello', 2)
+SELECT * FROM repeat('hello', 2::UBIGINT)
 ----
 hello
 hello
 
 # long varchar
 query I
-SELECT * FROM repeat('thisisalongstring', 2)
+SELECT * FROM repeat('thisisalongstring', 2::UBIGINT)
 ----
 thisisalongstring
 thisisalongstring
 
 # blob
 query I
-SELECT * FROM repeat(blob '\x00\x00hello', 2)
+SELECT * FROM repeat(blob '\x00\x00hello', 2::UBIGINT)
 ----
 \x00\x00hello
 \x00\x00hello
 
 # many values
 query I
-SELECT * FROM repeat(1, 10000)
+SELECT * FROM repeat(1, 10000::UBIGINT)
 ----
 10000 values hashing to 532e2dcdbf025eccc86cb25898ca8e7a
 
 # date
 query I
-SELECT * FROM repeat(DATE '1992-01-01', 2)
+SELECT * FROM repeat(DATE '1992-01-01', 2::UBIGINT)
 ----
 1992-01-01
 1992-01-01
 
 # interval
 query I
-SELECT * FROM repeat(INTERVAL '30 days', 2)
+SELECT * FROM repeat(INTERVAL '30 days', 2::UBIGINT)
 ----
 30 days
 30 days
