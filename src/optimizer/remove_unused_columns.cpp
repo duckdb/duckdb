@@ -1654,6 +1654,14 @@ static bool TryGetCastChild(unique_ptr<Expression> &expr, optional_ptr<unique_pt
 }
 
 void BaseColumnPruner::VisitExpression(unique_ptr<Expression> *expression) {
+	if ((*expression)->GetExpressionType() == ExpressionType::OPERATOR_TRY) {
+		auto previous_mode = mode;
+		mode = BaseColumnPrunerMode::DISABLE_PUSHDOWN_EXTRACT;
+		LogicalOperatorVisitor::VisitExpression(expression);
+		mode = previous_mode;
+		return;
+	}
+
 	//! Check if this is a struct extract wrapped in a cast
 	optional_ptr<unique_ptr<Expression>> cast_child;
 	if (TryGetCastChild(*expression, cast_child)) {

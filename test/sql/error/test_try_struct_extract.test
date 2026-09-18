@@ -1,0 +1,16 @@
+# name: test/sql/error/test_try_struct_extract.test
+# description: TRY over a cast of a struct field
+# group: [error]
+
+statement ok
+CREATE TABLE t AS SELECT {'bar': 'abc'} AS s;
+
+query I
+SELECT TRY(s.bar::INTEGER) FROM t
+----
+NULL
+
+query I
+SELECT TRY(struct_extract(s, 'bar')::INTEGER) FROM t
+----
+NULL
