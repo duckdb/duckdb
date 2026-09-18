@@ -185,8 +185,12 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		catalog.Alter(context, *alter_table_info);
 	}
 
-	// Add the index to the storage.
-	storage.AddIndex(std::move(bound_index), index_oid);
+	if (!alter_table_info) {
+		D_ASSERT(index_oid.IsValid());
+		storage.AddIndex(std::move(bound_index), index_oid.GetIndex());
+	} else {
+		storage.AddConstraintIndex(std::move(bound_index));
+	}
 
 	return SinkFinalizeType::READY;
 }

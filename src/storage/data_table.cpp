@@ -360,8 +360,12 @@ bool DataTable::HasUniqueIndexes() const {
 	return info->indexes.HasUniqueIndexes();
 }
 
-void DataTable::AddIndex(unique_ptr<Index> index, optional_idx index_oid) {
+void DataTable::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
 	info->indexes.AddIndex(std::move(index), index_oid);
+}
+
+void DataTable::AddConstraintIndex(unique_ptr<Index> index) {
+	info->indexes.AddIndex(std::move(index));
 }
 
 bool DataTable::HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type) {
