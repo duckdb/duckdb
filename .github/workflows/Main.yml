@@ -24,34 +24,9 @@ on:
       - 'feature'
       - 'v*.*-*'
       - 'gh-readonly-queue/**'
-    paths:
-      - '**'
-      - '!**.md'
-      - '!tools/**'
-      - 'tools/shell/**'
-      - '!.github/patches/duckdb-wasm/**'
-      - '!.github/workflows/**'
-      - '.github/workflows/Main.yml'
-      - '.github/workflows/Swift.yml'
-      - '.github/workflows/Windows.yml'
-      - '.github/workflows/Regression.yml'
-      - '.github/workflows/OSX.yml'
   merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review, converted_to_draft, synchronize]
-    paths:
-      - '**'
-      - '!**.md'
-      - '!tools/**'
-      - 'tools/shell/**'
-      - '!.github/patches/duckdb-wasm/**'
-      - '!.github/workflows/**'
-      - '.github/workflows/Main.yml'
-      - '.github/workflows/Swift.yml'
-      - '.github/workflows/Windows.yml'
-      - '.github/workflows/Regression.yml'
-      - '.github/workflows/OSX.yml'
-
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
