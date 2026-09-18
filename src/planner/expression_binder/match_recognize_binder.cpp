@@ -554,6 +554,10 @@ BindResult MatchRecognizeDefineBinder::BindNeighbour(FunctionExpression &functio
 	auto variable = MatchRecognizeNavigationVariable(
 	    inner, [&](const string &name) { return symbols.count(name) > 0; }, universal, function_name);
 	auto stepped = MatchRecognizePeelStep(inner);
+	if (stepped.final_semantics) {
+		throw BinderException("FINAL reads the whole match, which a DEFINE condition is still assembling, so "
+		                      "only RUNNING is available there");
+	}
 	auto neighbour = window_template.Copy();
 	auto &window = neighbour->Cast<WindowExpression>();
 	window.SetFunctionName(function_name == "PREV" ? "lag" : "lead");
@@ -561,15 +565,16 @@ BindResult MatchRecognizeDefineBinder::BindNeighbour(FunctionExpression &functio
 	if (arguments.size() == 2) {
 		window.GetArgumentsMutable().push_back(std::move(arguments[1].GetExpressionMutable()));
 	}
-	if (variable.empty() && !stepped.navigated) {
-		// nothing said where to start from, so the step starts on the row the matcher is testing
+	// While a variable's own condition is being settled, the row it denotes is the row being tested:
+	// its rows are the ones up to and including that one, so the last of them is that one. A step
+	// naming it therefore reads exactly what a step naming nothing reads, and can be the same plain
+	// window rather than a position the matcher resolves per candidate row.
+	const bool own_row =
+	    !variable.empty() && StringUtil::CIEquals(variable, define_name) && stepped.last && stepped.offset_value == 0;
+	if ((variable.empty() && !stepped.navigated) || own_row) {
 		expr_ptr = std::move(neighbour);
 		// it is a window like any other from here on, so it is bound like one
 		return BindExpression(expr_ptr, depth, false);
-	}
-	if (stepped.final_semantics) {
-		throw BinderException("FINAL reads the whole match, which a DEFINE condition is still assembling, so "
-		                      "only RUNNING is available there");
 	}
 	auto symbol = variable.empty() ? string() : MatchRecognizeDefineColumn(variable);
 	return BindNavigated(std::move(neighbour), std::move(symbol), stepped.last, stepped.offset_value, depth);
