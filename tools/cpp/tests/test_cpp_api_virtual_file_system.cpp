@@ -292,8 +292,8 @@ void MemMove(Info &info, std::string_view source_view, std::string_view target_v
 	store.files.erase(it);
 }
 
-auto CreateMem(const Connection &conn, MemStore &store) -> VirtualFileSystem {
-	auto vfs = VirtualFileSystem::Create(conn);
+auto CreateMem(MemStore &store) -> VirtualFileSystem {
+	VirtualFileSystem vfs;
 	vfs.SetName("mem")
 	    .AddPrefix(SCHEME)
 	    .SetUserData<MemStore *>(&store)
@@ -314,7 +314,7 @@ auto CreateMem(const Connection &conn, MemStore &store) -> VirtualFileSystem {
 }
 
 void RegisterMem(const Connection &conn, MemStore &store) {
-	CreateMem(conn, store).Register();
+	CreateMem(store).Register(conn);
 }
 
 } // namespace
@@ -428,27 +428,27 @@ TEST_CASE("Stable C++ API: virtual file system registration is validated", "[cpp
 
 	// No name.
 	{
-		auto vfs = VirtualFileSystem::Create(conn);
+		VirtualFileSystem vfs;
 		vfs.AddPrefix(SCHEME).SetFileOpenCallback(MemOpen).SetFileReadAtCallback(MemReadAt).SetFileStatCallback(
 		    MemStat);
-		REQUIRE_THROWS_MATCHES(vfs.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_MATCHES(vfs.Register(conn), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
 	// No open callback.
 	{
-		auto vfs = VirtualFileSystem::Create(conn);
+		VirtualFileSystem vfs;
 		vfs.SetName("mem").AddPrefix(SCHEME).SetFileReadAtCallback(MemReadAt).SetFileStatCallback(MemStat);
-		REQUIRE_THROWS_MATCHES(vfs.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_MATCHES(vfs.Register(conn), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
 	// Owning the cursor without reporting where it is.
 	{
-		auto vfs = CreateMem(conn, store);
+		auto vfs = CreateMem(store);
 		vfs.SetFileSeekCallback([](Info &, VirtualFile &, idx_t) {});
-		REQUIRE_THROWS_MATCHES(vfs.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_MATCHES(vfs.Register(conn), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
 	// A callback can be taken back again before registering.
 	{
-		auto vfs = CreateMem(conn, store);
+		auto vfs = CreateMem(store);
 		vfs.SetFileSeekCallback([](Info &, VirtualFile &, idx_t) {}).SetFileSeekCallback(nullptr);
-		vfs.Register();
+		vfs.Register(conn);
 	}
 }

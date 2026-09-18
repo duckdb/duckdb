@@ -5493,17 +5493,16 @@ public:
 	}
 };
 
-/// A user-defined file system, built up with callbacks and registered on a connection or an extension. Once
-/// registered it lasts for the life of the database and its name stays taken; the builder itself is then done with.
+/// A user-defined file system: a configuration of callbacks, built up here and then registered on a connection or an
+/// extension with `Register`. Registration is permanent -- the file system lasts for the life of the database and its
+/// name stays taken -- and consumes the user data; the object itself is done with afterwards.
 ///
 /// Which file system handles a path is decided by registration order: of all the registered file systems that claim
 /// it, built-in and extension ones included, the most recently registered wins. A file system claims a path by
 /// prefix (`AddPrefix`) or by callback (`SetClaimCallback`), and needs at least one of the two. Which callbacks are
 /// set is what decides its capabilities: whether it is writable, whether it owns the cursor, whether it can truncate,
 /// list or glob.
-class VirtualFileSystem final : public detail::Handle<VirtualFileSystem> {
-	friend detail::Factory;
-
+class VirtualFileSystem {
 public:
 	class Info;
 	class OpenInput;
@@ -5556,15 +5555,9 @@ public:
 	/// close callback; without it, such a file is closed.
 	using FileAbortCallback = void (*)(Info &info, VirtualFile &file);
 
+	VirtualFileSystem() = default;
 	VirtualFileSystem(VirtualFileSystem &&) noexcept = default;
 	VirtualFileSystem &operator=(VirtualFileSystem &&) noexcept = default;
-
-	~VirtualFileSystem() override;
-
-	/// Creates a file system that `Register` adds to the connection's database.
-	static auto Create(const Connection &conn) -> VirtualFileSystem;
-	/// Creates a file system that `Register` adds through the loading extension.
-	static auto Create(const Extension &extension) -> VirtualFileSystem;
 
 	/// Names the file system; required, and unique among the registered ones.
 	auto SetName(std::string_view name) & -> VirtualFileSystem &;
@@ -5576,7 +5569,7 @@ public:
 	template <class T, class... ARGS>
 	auto SetUserData(ARGS &&...args) & -> VirtualFileSystem & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
-		SetUserDataInternal(ptr, detail::TypedDelete<T>);
+		user_data = detail::UserData(ptr, detail::TypedDelete<T>);
 		return *this;
 	}
 
@@ -5602,18 +5595,20 @@ public:
 	auto SetFileCloseCallback(FileCloseCallback callback) & -> VirtualFileSystem &;
 	auto SetFileAbortCallback(FileAbortCallback callback) & -> VirtualFileSystem &;
 
-	/// Registers the file system on the target it was created against, permanently. Validates the configuration: a
-	/// name, a prefix or claim callback, the open callback and the file stat callback are required, "read at" unless
-	/// the file system is a write-only sink, and a file system that owns the cursor must set "tell", "read" if it
-	/// reads, and "write" if it writes.
+	/// Registers the file system on the connection's database, permanently. Validates the configuration: a name, a
+	/// prefix or claim callback, the open callback and the file stat callback are required, "read at" unless the
+	/// file system is a write-only sink, and a file system that owns the cursor must set "tell", "read" if it reads,
+	/// and "write" if it writes.
 	/// @throws InvalidInputException When the configuration is incomplete or inconsistent.
-	auto Register() -> void;
+	auto Register(const Connection &conn) -> void;
+	/// Registers the file system through the loading extension, permanently; see the connection overload.
+	auto Register(const Extension &extension) -> void;
 
 private:
-	explicit VirtualFileSystem(void *impl);
+	auto RegisterInternal(void *vfs) -> void;
 
-	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
-
+	std::string name;
+	std::vector<std::string> prefixes;
 	ClaimCallback claim = nullptr;
 	OpenCallback open = nullptr;
 	StatCallback stat = nullptr;
