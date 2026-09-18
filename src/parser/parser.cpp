@@ -12,6 +12,12 @@
 #include "duckdb/parser/statement/extension_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/parser/parsed_data/create_macro_info.hpp"
+#include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
@@ -236,6 +242,95 @@ string Parser::NormalizeSQLString(const string &query) {
 	return query;
 }
 
+// Iteratively (i.e. without recursing on the C stack) verify that an expression tree does not
+// exceed max_expression_depth. The transformer builds arbitrarily deep trees, and downstream passes
+// (star expansion, column qualification, hashing, ...) walk them recursively - rejecting an over-deep
+// tree here, at the parser/binder interface, keeps every one of those passes from overflowing.
+static void VerifyExpressionDepth(const ParsedExpression &root, idx_t max_expression_depth) {
+	vector<reference<const ParsedExpression>> expr_stack;
+	vector<idx_t> depth_stack;
+	expr_stack.emplace_back(root);
+	depth_stack.emplace_back(1);
+	while (!expr_stack.empty()) {
+		auto &expr = expr_stack.back().get();
+		auto depth = depth_stack.back();
+		expr_stack.pop_back();
+		depth_stack.pop_back();
+		if (depth > max_expression_depth) {
+			throw ParserException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" "
+			                      "to increase the maximum expression depth.",
+			                      max_expression_depth);
+		}
+		ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
+			expr_stack.emplace_back(child);
+			depth_stack.emplace_back(depth + 1);
+		});
+	}
+}
+
+static void VerifyStatementDepth(SQLStatement &statement, idx_t max_expression_depth) {
+	auto verify = [&](const unique_ptr<ParsedExpression> &expr) {
+		if (expr) {
+			VerifyExpressionDepth(*expr, max_expression_depth);
+		}
+	};
+	// EnumerateQueryNodeChildren yields every expression of a query tree (select list, WHERE, GROUP BY,
+	// HAVING, QUALIFY, modifiers, CTEs and nested subqueries), so one pass covers a whole node.
+	auto verify_node = [&](optional_ptr<QueryNode> node) {
+		if (node) {
+			ParsedExpressionIterator::EnumerateQueryNodeChildren(*node, verify);
+		}
+	};
+	switch (statement.type) {
+	case StatementType::SELECT_STATEMENT:
+		verify_node(statement.Cast<SelectStatement>().node.get());
+		break;
+	case StatementType::CREATE_STATEMENT: {
+		auto &info = *statement.Cast<CreateStatement>().info;
+		switch (info.type) {
+		case CatalogType::VIEW_ENTRY: {
+			auto &view = info.Cast<CreateViewInfo>();
+			verify_node(view.query ? view.query->node.get() : nullptr);
+			break;
+		}
+		case CatalogType::INDEX_ENTRY: {
+			auto &index = info.Cast<CreateIndexInfo>();
+			for (auto &expr : index.expressions) {
+				verify(expr);
+			}
+			for (auto &expr : index.parsed_expressions) {
+				verify(expr);
+			}
+			break;
+		}
+		case CatalogType::MACRO_ENTRY:
+		case CatalogType::TABLE_MACRO_ENTRY: {
+			auto &macro_info = info.Cast<CreateMacroInfo>();
+			for (auto &macro : macro_info.macros) {
+				if (macro->type == MacroType::SCALAR_MACRO) {
+					verify(macro->Cast<ScalarMacroFunction>().expression);
+				} else if (macro->type == MacroType::TABLE_MACRO) {
+					verify_node(macro->Cast<TableMacroFunction>().query_node.get());
+				}
+			}
+			break;
+		}
+		case CatalogType::TABLE_ENTRY: {
+			// CREATE TABLE AS SELECT - column defaults / CHECK constraints are depth-checked by the binder
+			auto &table = info.Cast<CreateTableInfo>();
+			verify_node(table.query ? table.query->node.get() : nullptr);
+			break;
+		}
+		default:
+			break;
+		}
+		break;
+	}
+	default:
+		break;
+	}
+}
+
 void Parser::ParseQuery(const string &query_p) {
 	const string query = NormalizeSQLString(query_p);
 	if (options.extensions) {
@@ -356,7 +451,13 @@ unique_ptr<SQLStatement> Parser::ParseTopLevelStatement(TokenIterator &token_ite
 		return nullptr;
 	}
 	auto &compiled_grammar = GetGrammar();
-	return PEGTransformerFactory::TransformTopLevelStatement(token_iterator, options, compiled_grammar);
+	auto statement = PEGTransformerFactory::TransformTopLevelStatement(token_iterator, options, compiled_grammar);
+	if (statement) {
+		// Reject over-deep expression trees at the parser/binder interface (covers both ParseQuery and
+		// the lazy ParseIterator), before any recursive binder pass can overflow the C stack.
+		VerifyStatementDepth(*statement, options.max_expression_depth);
+	}
+	return statement;
 }
 
 vector<SimplifiedToken> Parser::Tokenize(const string &query) {
