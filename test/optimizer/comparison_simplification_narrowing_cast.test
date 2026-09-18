@@ -1,0 +1,27 @@
+# name: test/optimizer/comparison_simplification_narrowing_cast.test
+# description: Ensure narrowing integer casts are not incorrectly rewritten away in comparisons
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t(a INT);
+
+statement ok
+INSERT INTO t VALUES (51), (127), (128), (200), (300), (-200);
+
+# Values outside TINYINT's range must not be silently included -
+# TRY_CAST(a AS TINYINT) should evaluate to NULL for those, failing the '> 50' filter.
+query I
+SELECT a FROM t WHERE TRY_CAST(a AS TINYINT) > 50 ORDER BY a
+----
+51
+127
+
+# Confirm the optimizer isn't stripping the cast from the filter expression -
+# it must still appear in the optimized plan, not get simplified down to 'a > 50'.
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+query II
+EXPLAIN SELECT a FROM t WHERE TRY_CAST(a AS TINYINT) > 50
+----
+logical_opt	<REGEX>:.*TRY_CAST.*
