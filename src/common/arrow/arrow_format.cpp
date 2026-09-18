@@ -13,8 +13,8 @@ ArrowUnit::ArrowUnit(idx_t row_count, idx_t byte_size) : ResultUnit(row_count, b
 }
 
 ArrowFormatGlobalState::ArrowFormatGlobalState(vector<LogicalType> types_p, const vector<Identifier> &names,
-                                               const ClientProperties &properties_p, idx_t batch_size)
-    : types(std::move(types_p)), properties(properties_p), batch_size(batch_size) {
+                                               const ClientProperties &properties_p)
+    : types(std::move(types_p)), properties(properties_p) {
 	if (!properties.client_context) {
 		throw InternalException("The Arrow format needs the client context of the query that settled it");
 	}
@@ -62,7 +62,7 @@ unique_ptr<ResultFormatGlobalState> ArrowFormat::InitGlobal(const vector<Logical
                                                             const vector<Identifier> &names,
                                                             const ClientProperties &properties,
                                                             ResultOrdering ordering) {
-	return make_uniq<ArrowFormatGlobalState>(types, names, properties, batch_size);
+	return make_uniq<ArrowFormatGlobalState>(types, names, properties);
 }
 
 unique_ptr<ResultFormatLocalState> ArrowFormat::InitLocal(ResultFormatGlobalState &gstate) {

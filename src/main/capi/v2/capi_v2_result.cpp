@@ -135,15 +135,16 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::HandleExecutionError(ErrorData err
 void ResultWrapperV2::SettlePrincipal() {
 	principal_settled = true;
 	bool materialized = handle->GetStatementProperties().result_eagerness == ResultEagerness::FORCED;
+	if (requested_format && !handle->HasBufferedData()) {
+		throw InvalidInputException("A result format cannot be combined with a custom result collector");
+	}
 	if (requested_format && !materialized) {
 		handle->SetFormat(requested_format);
 		unit_stream = make_uniq<FormattedResultStream<ArrowFormat>>(std::move(handle));
-		format_state = unit_stream->GetBufferedData().SharedFormatState();
 		return;
 	}
 	if (requested_format) {
-		// Built before Complete ends the query: a handle born materialized cannot take a format, and
-		// resolving the Arrow schema and the extension types reads the catalog under its transaction
+		// A handle born materialized cannot take a format: its chunks are converted as they are fetched
 		format_state =
 		    requested_format->InitGlobal(types, names, handle->client_properties, handle->GetBufferedData().Ordering());
 		format_lstate = requested_format->InitLocal(*format_state);
