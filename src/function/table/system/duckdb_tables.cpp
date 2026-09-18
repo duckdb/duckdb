@@ -71,6 +71,9 @@ static unique_ptr<FunctionData> DuckDBTablesBind(ClientContext &context, TableFu
 	names.emplace_back("sql");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("table_type");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	return nullptr;
 }
 
@@ -138,6 +141,8 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 	auto &check_constraint_count = output.data[14];
 	// sql, VARCHAR
 	auto &sql = output.data[15];
+	// table_type, VARCHAR
+	auto &table_type = output.data[16];
 
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++].get();
@@ -170,6 +175,7 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		auto table_info = table.GetInfo();
 		table_info->StripCatalogQualification();
 		sql.Append(Value(table_info->ToString()));
+		table_type.Append(Value(table.GetSQLTableType()));
 		count++;
 	}
 }
