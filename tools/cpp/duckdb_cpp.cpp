@@ -183,6 +183,18 @@ template <>
 struct HandleTraits<FileOpenOptions> {
 	using handle = duckdb_v2_file_open_options_handle;
 };
+template <>
+struct HandleTraits<FileMetadata> {
+	using handle = duckdb_v2_file_metadata_handle;
+};
+template <>
+struct HandleTraits<FileListing> {
+	using handle = duckdb_v2_file_listing_handle;
+};
+template <>
+struct HandleTraits<VirtualFileSystem> {
+	using handle = duckdb_v2_vfs_handle;
+};
 
 } // namespace detail
 
@@ -206,7 +218,7 @@ namespace {
 // Perform a DuckDB C-API call, setup an error info object, and throw an exception if it fails.
 // This is used to simplify error handling in the C++ wrapper.
 template <class F, class... ARGS>
-auto CheckedAPICall(F &&func, ARGS &&... args) -> void {
+auto CheckedAPICall(F &&func, ARGS &&...args) -> void {
 	duckdb_v2_error_info_handle err = nullptr;
 	const auto code = func(std::forward<ARGS>(args)..., &err);
 	if (code != DUCKDB_V2_ERROR_NONE) {
@@ -293,7 +305,7 @@ private:
 // then a buffer with room for the terminator receives the text. The library
 // never allocates, so there is nothing to free.
 template <class F, class... ARGS>
-auto RenderText(F &&func, ARGS &&... args) -> std::string {
+auto RenderText(F &&func, ARGS &&...args) -> std::string {
 	idx_t length = 0;
 	CheckedAPICall(func, args..., static_cast<char *>(nullptr), static_cast<idx_t>(0), &length);
 	std::string out;
@@ -5507,6 +5519,650 @@ void FileHandle::ReadAt(void *buffer, idx_t size, idx_t location) {
 
 void FileHandle::WriteAt(const void *buffer, idx_t size, idx_t location) {
 	CheckedAPICall(duckdb_v2_file_write_at, handle(), buffer, size, location);
+}
+
+auto FileHandle::Stat() const -> FileMetadata {
+	duckdb_v2_file_metadata_handle metadata = nullptr;
+	CheckedAPICall(duckdb_v2_file_stat, handle(), &metadata);
+	return detail::Factory::Make<FileMetadata>(metadata, true);
+}
+
+auto FileSystem::Stat(const std::string &path) const -> FileMetadata {
+	duckdb_v2_file_metadata_handle metadata = nullptr;
+	CheckedAPICall(duckdb_v2_file_system_stat, handle(), ToStr(path), &metadata);
+	return detail::Factory::Make<FileMetadata>(metadata, true);
+}
+
+auto FileSystem::List(const std::string &path) const -> FileListing {
+	duckdb_v2_file_listing_handle listing = nullptr;
+	CheckedAPICall(duckdb_v2_file_system_list, handle(), ToStr(path), &listing);
+	return detail::Factory::Make<FileListing>(listing, true);
+}
+
+auto FileSystem::Glob(const std::string &pattern) const -> FileListing {
+	duckdb_v2_file_listing_handle listing = nullptr;
+	CheckedAPICall(duckdb_v2_file_system_glob, handle(), ToStr(pattern), &listing);
+	return detail::Factory::Make<FileListing>(listing, true);
+}
+
+void FileSystem::RemoveFile(const std::string &path) const {
+	CheckedAPICall(duckdb_v2_file_system_remove_file, handle(), ToStr(path));
+}
+
+void FileSystem::CreateDirectory(const std::string &path) const {
+	CheckedAPICall(duckdb_v2_file_system_create_directory, handle(), ToStr(path));
+}
+
+void FileSystem::RemoveDirectory(const std::string &path) const {
+	CheckedAPICall(duckdb_v2_file_system_remove_directory, handle(), ToStr(path));
+}
+
+void FileSystem::Move(const std::string &source, const std::string &target) const {
+	CheckedAPICall(duckdb_v2_file_system_move, handle(), ToStr(source), ToStr(target));
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// File Metadata
+//----------------------------------------------------------------------------------------------------------------------
+
+FileMetadata::FileMetadata(void *impl, bool owned) : detail::Handle<FileMetadata>(impl), owned(owned) {
+}
+
+FileMetadata::~FileMetadata() {
+	if (owned && handle()) {
+		auto _h = handle();
+		duckdb_v2_file_metadata_destroy(&_h);
+	}
+}
+
+auto FileMetadata::GetType() const -> FileType {
+	auto type = DUCKDB_V2_FILE_TYPE_INVALID;
+	CheckedAPICall(duckdb_v2_file_metadata_get_type, handle(), &type);
+	return static_cast<FileType>(type);
+}
+
+auto FileMetadata::GetSize() const -> std::optional<idx_t> {
+	idx_t size = 0;
+	bool known = false;
+	CheckedAPICall(duckdb_v2_file_metadata_get_size, handle(), &size, &known);
+	if (!known) {
+		return std::nullopt;
+	}
+	return size;
+}
+
+auto FileMetadata::GetLastModified() const -> std::optional<timestamp_t> {
+	int64_t micros = 0;
+	bool known = false;
+	CheckedAPICall(duckdb_v2_file_metadata_get_last_modified, handle(), &micros, &known);
+	if (!known) {
+		return std::nullopt;
+	}
+	timestamp_t result;
+	result.micros = micros;
+	return result;
+}
+
+auto FileMetadata::GetVersionTag() const -> std::optional<std::string> {
+	duckdb_v2_str tag {nullptr, 0};
+	bool known = false;
+	CheckedAPICall(duckdb_v2_file_metadata_get_version_tag, handle(), &tag, &known);
+	if (!known) {
+		return std::nullopt;
+	}
+	return std::string(FromStr(tag));
+}
+
+auto FileMetadata::SetType(FileType type) -> FileMetadata & {
+	CheckedAPICall(duckdb_v2_file_metadata_set_type, handle(), static_cast<DUCKDB_V2_FILE_TYPE>(type));
+	return *this;
+}
+
+auto FileMetadata::SetSize(idx_t size) -> FileMetadata & {
+	CheckedAPICall(duckdb_v2_file_metadata_set_size, handle(), size);
+	return *this;
+}
+
+auto FileMetadata::SetLastModified(timestamp_t time) -> FileMetadata & {
+	CheckedAPICall(duckdb_v2_file_metadata_set_last_modified, handle(), time.micros);
+	return *this;
+}
+
+auto FileMetadata::SetVersionTag(std::string_view tag) -> FileMetadata & {
+	CheckedAPICall(duckdb_v2_file_metadata_set_version_tag, handle(), ToStr(tag));
+	return *this;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// File Listing
+//----------------------------------------------------------------------------------------------------------------------
+
+FileListing::FileListing(void *impl, bool owned) : detail::Handle<FileListing>(impl), owned(owned) {
+}
+
+FileListing::~FileListing() {
+	if (owned && handle()) {
+		auto _h = handle();
+		duckdb_v2_file_listing_destroy(&_h);
+	}
+}
+
+auto FileListing::AddEntry(std::string_view path, FileType type) -> FileMetadata {
+	duckdb_v2_file_metadata_handle metadata = nullptr;
+	CheckedAPICall(duckdb_v2_file_listing_add_entry, handle(), ToStr(path), static_cast<DUCKDB_V2_FILE_TYPE>(type),
+	               &metadata);
+	return detail::Factory::Make<FileMetadata>(metadata, false);
+}
+
+auto FileListing::GetEntryCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_file_listing_get_entry_count, handle(), &count);
+	return count;
+}
+
+auto FileListing::GetEntryPath(idx_t index) const -> std::string {
+	duckdb_v2_str path {nullptr, 0};
+	CheckedAPICall(duckdb_v2_file_listing_get_entry_path, handle(), index, &path);
+	return std::string(FromStr(path));
+}
+
+auto FileListing::GetEntryType(idx_t index) const -> FileType {
+	auto type = DUCKDB_V2_FILE_TYPE_INVALID;
+	CheckedAPICall(duckdb_v2_file_listing_get_entry_type, handle(), index, &type);
+	return static_cast<FileType>(type);
+}
+
+auto FileListing::GetEntryMetadata(idx_t index) const -> FileMetadata {
+	duckdb_v2_file_metadata_handle metadata = nullptr;
+	CheckedAPICall(duckdb_v2_file_listing_get_entry_metadata, handle(), index, &metadata);
+	return detail::Factory::Make<FileMetadata>(metadata, false);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Virtual File System
+//----------------------------------------------------------------------------------------------------------------------
+
+namespace {
+
+// The callback table for one registered file system: rides the C user_data slot so the trampolines can find it; the
+// user's own slot (SetUserData) rides inside it. Owned by the registered file system, freed when the database closes.
+struct VirtualFileSystemInfo {
+	VirtualFileSystem::ClaimCallback claim = nullptr;
+	VirtualFileSystem::OpenCallback open = nullptr;
+	VirtualFileSystem::StatCallback stat = nullptr;
+	VirtualFileSystem::ListCallback list = nullptr;
+	VirtualFileSystem::GlobCallback glob = nullptr;
+	VirtualFileSystem::PathCallback remove_file = nullptr;
+	VirtualFileSystem::PathCallback create_directory = nullptr;
+	VirtualFileSystem::PathCallback remove_directory = nullptr;
+	VirtualFileSystem::MoveCallback move = nullptr;
+	VirtualFileSystem::FileReadAtCallback file_read_at = nullptr;
+	VirtualFileSystem::FileWriteAtCallback file_write_at = nullptr;
+	VirtualFileSystem::FileReadCallback file_read = nullptr;
+	VirtualFileSystem::FileWriteCallback file_write = nullptr;
+	VirtualFileSystem::FileSeekCallback file_seek = nullptr;
+	VirtualFileSystem::FileTellCallback file_tell = nullptr;
+	VirtualFileSystem::FileStatCallback file_stat = nullptr;
+	VirtualFileSystem::FileSyncCallback file_sync = nullptr;
+	VirtualFileSystem::FileTruncateCallback file_truncate = nullptr;
+	VirtualFileSystem::FileCloseCallback file_close = nullptr;
+	VirtualFileSystem::FileAbortCallback file_abort = nullptr;
+	detail::UserData user_data;
+};
+
+auto TableOf(duckdb_v2_vfs_info_handle info) -> VirtualFileSystemInfo & {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_vfs_info_get_user_data, info, &user_data);
+	return *static_cast<VirtualFileSystemInfo *>(user_data);
+}
+
+auto FileOf(void *file) -> VirtualFile & {
+	return *static_cast<VirtualFile *>(file);
+}
+
+auto InfoOf(duckdb_v2_vfs_info_handle info) -> VirtualFileSystem::Info {
+	return detail::Factory::Make<VirtualFileSystem::Info>(static_cast<void *>(info));
+}
+
+auto BorrowedMetadata(duckdb_v2_file_metadata_handle metadata) -> FileMetadata {
+	return detail::Factory::Make<FileMetadata>(static_cast<void *>(metadata), false);
+}
+
+auto BorrowedListing(duckdb_v2_file_listing_handle listing) -> FileListing {
+	return detail::Factory::Make<FileListing>(static_cast<void *>(listing), false);
+}
+
+} // namespace
+
+VirtualFileSystem::VirtualFileSystem(void *impl) : detail::Handle<VirtualFileSystem>(impl) {
+}
+
+VirtualFileSystem::~VirtualFileSystem() {
+	auto _h = handle();
+	duckdb_v2_vfs_destroy(&_h);
+}
+
+auto VirtualFileSystem::Create(const Connection &conn) -> VirtualFileSystem {
+	duckdb_v2_vfs_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_vfs_create_with_connection, conn.handle(), &_h);
+	return detail::Factory::Make<VirtualFileSystem>(_h);
+}
+
+auto VirtualFileSystem::Create(const Extension &extension) -> VirtualFileSystem {
+	duckdb_v2_vfs_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_vfs_create_with_extension, extension.handle(), &_h);
+	return detail::Factory::Make<VirtualFileSystem>(_h);
+}
+
+auto VirtualFileSystem::SetName(std::string_view name) & -> VirtualFileSystem & {
+	CheckedAPICall(duckdb_v2_vfs_set_name, handle(), ToStr(name));
+	return *this;
+}
+
+auto VirtualFileSystem::AddPrefix(std::string_view prefix) & -> VirtualFileSystem & {
+	CheckedAPICall(duckdb_v2_vfs_add_prefix, handle(), ToStr(prefix));
+	return *this;
+}
+
+auto VirtualFileSystem::SetUserDataInternal(void *data, void (*destructor)(void *)) -> void {
+	user_data = detail::UserData(data, destructor);
+}
+
+// Each C-side callback is one shared trampoline; the user's callback is looked up through the table riding the
+// user_data slot (set by Register). A null callback uninstalls the trampoline, so the bridge sees exactly what is set.
+
+auto VirtualFileSystem::SetClaimCallback(ClaimCallback callback) & -> VirtualFileSystem & {
+	static auto trampoline = [](duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_claim_info_handle, duckdb_v2_str path,
+	                            bool *claim, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			auto wrapped = InfoOf(info);
+			*claim = TableOf(info).claim(wrapped, FromStr(path));
+		});
+	};
+	CheckedAPICall(duckdb_v2_vfs_set_claim_callback, handle(), callback ? trampoline : nullptr);
+	claim = callback;
+	return *this;
+}
+
+auto VirtualFileSystem::SetStatCallback(StatCallback callback) & -> VirtualFileSystem & {
+	static auto trampoline = [](duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_stat_info_handle, duckdb_v2_str path,
+	                            duckdb_v2_file_metadata_handle metadata, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			auto wrapped = InfoOf(info);
+			auto wrapped_metadata = BorrowedMetadata(metadata);
+			TableOf(info).stat(wrapped, FromStr(path), wrapped_metadata);
+		});
+	};
+	CheckedAPICall(duckdb_v2_vfs_set_stat_callback, handle(), callback ? trampoline : nullptr);
+	stat = callback;
+	return *this;
+}
+
+auto VirtualFileSystem::SetListCallback(ListCallback callback) & -> VirtualFileSystem & {
+	static auto trampoline = [](duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_list_info_handle, duckdb_v2_str path,
+	                            duckdb_v2_file_listing_handle listing, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			auto wrapped = InfoOf(info);
+			auto wrapped_listing = BorrowedListing(listing);
+			TableOf(info).list(wrapped, FromStr(path), wrapped_listing);
+		});
+	};
+	CheckedAPICall(duckdb_v2_vfs_set_list_callback, handle(), callback ? trampoline : nullptr);
+	list = callback;
+	return *this;
+}
+
+auto VirtualFileSystem::SetGlobCallback(GlobCallback callback) & -> VirtualFileSystem & {
+	static auto trampoline = [](duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_glob_info_handle, duckdb_v2_str pattern,
+	                            duckdb_v2_file_listing_handle listing, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			auto wrapped = InfoOf(info);
+			auto wrapped_listing = BorrowedListing(listing);
+			TableOf(info).glob(wrapped, FromStr(pattern), wrapped_listing);
+		});
+	};
+	CheckedAPICall(duckdb_v2_vfs_set_glob_callback, handle(), callback ? trampoline : nullptr);
+	glob = callback;
+	return *this;
+}
+
+auto VirtualFileSystem::SetRemoveFileCallback(PathCallback callback) & -> VirtualFileSystem & {
+	static auto trampoline = [](duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_remove_file_info_handle,
+	                            duckdb_v2_str path, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			auto wrapped = InfoOf(info);
+			TableOf(info).remove_file(wrapped, FromStr(path));
+		});
+	};
+	CheckedAPICall(duckdb_v2_vfs_set_remove_file_callback, handle(), callback ? trampoline : nullptr);
+	remove_file = callback;
+	return *this;
+}
+
+auto VirtualFileSystem::SetCreateDirectoryCallback(PathCallback callback) & -> VirtualFileSystem & {
+	static auto trampoline = [](duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_create_directory_info_handle,
+	                            duckdb_v2_str path, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			auto wrapped = InfoOf(info);
+			TableOf(info).create_directory(wrapped, FromStr(path));
+		});
+	};
+	CheckedAPICall(duckdb_v2_vfs_set_create_directory_callback, handle(), callback ? trampoline : nullptr);
+	create_directory = callback;
+	return *this;
+}
+
+auto VirtualFileSystem::SetRemoveDirectoryCallback(PathCallback callback) & -> VirtualFileSystem & {
+	static auto trampoline = [](duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_remove_directory_info_handle,
+	                            duckdb_v2_str path, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			auto wrapped = InfoOf(info);
+			TableOf(info).remove_directory(wrapped, FromStr(path));
+		});
+	};
+	CheckedAPICall(duckdb_v2_vfs_set_remove_directory_callback, handle(), callback ? trampoline : nullptr);
+	remove_directory = callback;
+	return *this;
+}
+
+auto VirtualFileSystem::SetMoveCallback(MoveCallback callback) & -> VirtualFileSystem & {
+	static auto trampoline = [](duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_move_info_handle, duckdb_v2_str source,
+	                            duckdb_v2_str target, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			auto wrapped = InfoOf(info);
+			TableOf(info).move(wrapped, FromStr(source), FromStr(target));
+		});
+	};
+	CheckedAPICall(duckdb_v2_vfs_set_move_callback, handle(), callback ? trampoline : nullptr);
+	move = callback;
+	return *this;
+}
+
+auto VirtualFileSystem::SetFileOpenCallback(OpenCallback callback) & -> VirtualFileSystem & {
+	static auto trampoline = [](duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_open_info_handle open_info,
+	                            duckdb_v2_str path, const DUCKDB_V2_FILE_FLAG *flags, idx_t flag_count,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			std::vector<FileFlags> flag_list;
+			flag_list.reserve(flag_count);
+			for (idx_t i = 0; i < flag_count; i++) {
+				flag_list.push_back(static_cast<FileFlags>(flags[i]));
+			}
+			auto input = detail::Factory::Make<OpenInput>(static_cast<void *>(info), static_cast<void *>(open_info),
+			                                              FromStr(path), std::move(flag_list));
+			auto file = TableOf(info).open(input);
+			if (!file) {
+				throw InvalidInputException("the open callback returned no file");
+			}
+			duckdb_v2_opaque opaque {file.get(), detail::TypedDelete<VirtualFile>, nullptr};
+			CheckedAPICall(duckdb_v2_vfs_file_open_set_data, open_info, &opaque);
+			// The engine owns the file now.
+			file.release(); // NOLINT(bugprone-unused-return-value)
+		});
+	};
+	CheckedAPICall(duckdb_v2_vfs_set_file_open_callback, handle(), callback ? trampoline : nullptr);
+	open = callback;
+	return *this;
+}
+
+auto VirtualFileSystem::SetFileReadAtCallback(FileReadAtCallback callback) & -> VirtualFileSystem & {
+	static auto trampoline = [](duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_read_at_info_handle, void *file,
+	                            void *buffer, idx_t size, idx_t location, idx_t *bytes_read,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			auto wrapped = InfoOf(info);
+			*bytes_read = TableOf(info).file_read_at(wrapped, FileOf(file), buffer, size, location);
+		});
+	};
+	CheckedAPICall(duckdb_v2_vfs_set_file_read_at_callback, handle(), callback ? trampoline : nullptr);
+	file_read_at = callback;
+	return *this;
+}
+
+auto VirtualFileSystem::SetFileWriteAtCallback(FileWriteAtCallback callback) & -> VirtualFileSystem & {
+	static auto trampoline = [](duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_write_at_info_handle, void *file,
+	                            const void *buffer, idx_t size, idx_t location, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			auto wrapped = InfoOf(info);
+			TableOf(info).file_write_at(wrapped, FileOf(file), buffer, size, location);
+		});
+	};
+	CheckedAPICall(duckdb_v2_vfs_set_file_write_at_callback, handle(), callback ? trampoline : nullptr);
+	file_write_at = callback;
+	return *this;
+}
+
+auto VirtualFileSystem::SetFileReadCallback(FileReadCallback callback) & -> VirtualFileSystem & {
+	static auto trampoline = [](duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_read_info_handle, void *file,
+	                            void *buffer, idx_t size, idx_t *bytes_read, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			auto wrapped = InfoOf(info);
+			*bytes_read = TableOf(info).file_read(wrapped, FileOf(file), buffer, size);
+		});
+	};
+	CheckedAPICall(duckdb_v2_vfs_set_file_read_callback, handle(), callback ? trampoline : nullptr);
+	file_read = callback;
+	return *this;
+}
+
+auto VirtualFileSystem::SetFileWriteCallback(FileWriteCallback callback) & -> VirtualFileSystem & {
+	static auto trampoline = [](duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_write_info_handle, void *file,
+	                            const void *buffer, idx_t size, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			auto wrapped = InfoOf(info);
+			TableOf(info).file_write(wrapped, FileOf(file), buffer, size);
+		});
+	};
+	CheckedAPICall(duckdb_v2_vfs_set_file_write_callback, handle(), callback ? trampoline : nullptr);
+	file_write = callback;
+	return *this;
+}
+
+auto VirtualFileSystem::SetFileSeekCallback(FileSeekCallback callback) & -> VirtualFileSystem & {
+	static auto trampoline = [](duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_seek_info_handle, void *file,
+	                            idx_t position, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			auto wrapped = InfoOf(info);
+			TableOf(info).file_seek(wrapped, FileOf(file), position);
+		});
+	};
+	CheckedAPICall(duckdb_v2_vfs_set_file_seek_callback, handle(), callback ? trampoline : nullptr);
+	file_seek = callback;
+	return *this;
+}
+
+auto VirtualFileSystem::SetFileTellCallback(FileTellCallback callback) & -> VirtualFileSystem & {
+	static auto trampoline = [](duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_tell_info_handle, void *file,
+	                            idx_t *position, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			auto wrapped = InfoOf(info);
+			*position = TableOf(info).file_tell(wrapped, FileOf(file));
+		});
+	};
+	CheckedAPICall(duckdb_v2_vfs_set_file_tell_callback, handle(), callback ? trampoline : nullptr);
+	file_tell = callback;
+	return *this;
+}
+
+auto VirtualFileSystem::SetFileStatCallback(FileStatCallback callback) & -> VirtualFileSystem & {
+	static auto trampoline = [](duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_stat_info_handle, void *file,
+	                            duckdb_v2_file_metadata_handle metadata, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			auto wrapped = InfoOf(info);
+			auto wrapped_metadata = BorrowedMetadata(metadata);
+			TableOf(info).file_stat(wrapped, FileOf(file), wrapped_metadata);
+		});
+	};
+	CheckedAPICall(duckdb_v2_vfs_set_file_stat_callback, handle(), callback ? trampoline : nullptr);
+	file_stat = callback;
+	return *this;
+}
+
+auto VirtualFileSystem::SetFileSyncCallback(FileSyncCallback callback) & -> VirtualFileSystem & {
+	static auto trampoline = [](duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_sync_info_handle, void *file,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			auto wrapped = InfoOf(info);
+			TableOf(info).file_sync(wrapped, FileOf(file));
+		});
+	};
+	CheckedAPICall(duckdb_v2_vfs_set_file_sync_callback, handle(), callback ? trampoline : nullptr);
+	file_sync = callback;
+	return *this;
+}
+
+auto VirtualFileSystem::SetFileTruncateCallback(FileTruncateCallback callback) & -> VirtualFileSystem & {
+	static auto trampoline = [](duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_truncate_info_handle, void *file,
+	                            idx_t size, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			auto wrapped = InfoOf(info);
+			TableOf(info).file_truncate(wrapped, FileOf(file), size);
+		});
+	};
+	CheckedAPICall(duckdb_v2_vfs_set_file_truncate_callback, handle(), callback ? trampoline : nullptr);
+	file_truncate = callback;
+	return *this;
+}
+
+auto VirtualFileSystem::SetFileCloseCallback(FileCloseCallback callback) & -> VirtualFileSystem & {
+	static auto trampoline = [](duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_close_info_handle, void *file,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			auto wrapped = InfoOf(info);
+			TableOf(info).file_close(wrapped, FileOf(file));
+		});
+	};
+	CheckedAPICall(duckdb_v2_vfs_set_file_close_callback, handle(), callback ? trampoline : nullptr);
+	file_close = callback;
+	return *this;
+}
+
+auto VirtualFileSystem::SetFileAbortCallback(FileAbortCallback callback) & -> VirtualFileSystem & {
+	static auto trampoline = [](duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_abort_info_handle, void *file,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			auto wrapped = InfoOf(info);
+			TableOf(info).file_abort(wrapped, FileOf(file));
+		});
+	};
+	CheckedAPICall(duckdb_v2_vfs_set_file_abort_callback, handle(), callback ? trampoline : nullptr);
+	file_abort = callback;
+	return *this;
+}
+
+auto VirtualFileSystem::Register() -> void {
+	// The callback table rides the C user_data slot so the trampolines can find it; the user's own data (SetUserData,
+	// moved out here) rides inside it.
+	auto info = std::unique_ptr<VirtualFileSystemInfo>(new VirtualFileSystemInfo());
+	info->claim = claim;
+	info->open = open;
+	info->stat = stat;
+	info->list = list;
+	info->glob = glob;
+	info->remove_file = remove_file;
+	info->create_directory = create_directory;
+	info->remove_directory = remove_directory;
+	info->move = move;
+	info->file_read_at = file_read_at;
+	info->file_write_at = file_write_at;
+	info->file_read = file_read;
+	info->file_write = file_write;
+	info->file_seek = file_seek;
+	info->file_tell = file_tell;
+	info->file_stat = file_stat;
+	info->file_sync = file_sync;
+	info->file_truncate = file_truncate;
+	info->file_close = file_close;
+	info->file_abort = file_abort;
+	info->user_data = std::move(user_data);
+	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<VirtualFileSystemInfo>, nullptr};
+	CheckedAPICall(duckdb_v2_vfs_set_user_data, handle(), &opaque);
+	// The file system owns the table now.
+	info.release(); // NOLINT(bugprone-unused-return-value)
+
+	CheckedAPICall(duckdb_v2_vfs_register, handle());
+}
+
+void *VirtualFileSystem::Info::GetUserDataInternal() const {
+	auto ptr = TableOf(static_cast<duckdb_v2_vfs_info_handle>(info)).user_data.get();
+	if (!ptr) {
+		throw InvalidInputException("no user data was set; call VirtualFileSystem::SetUserData before Register");
+	}
+	return ptr;
+}
+
+auto VirtualFileSystem::Info::GetFileSystem() const -> FileSystem {
+	duckdb_v2_file_system_handle fs = nullptr;
+	CheckedAPICall(duckdb_v2_vfs_info_get_file_system, static_cast<duckdb_v2_vfs_info_handle>(info), &fs);
+	return detail::Factory::Make<FileSystem>(fs);
+}
+
+namespace {
+
+auto ContextHandleOf(void *info) -> void * {
+	duckdb_v2_context_handle context = nullptr;
+	CheckedAPICall(duckdb_v2_vfs_info_try_get_context, static_cast<duckdb_v2_vfs_info_handle>(info), &context);
+	return context;
+}
+
+} // namespace
+
+VirtualFileSystem::Info::Info(void *info) : info(info), context(detail::Factory::Make<Context>(ContextHandleOf(info))) {
+}
+
+auto VirtualFileSystem::Info::TryGetContext() -> Context * {
+	return context ? &context : nullptr;
+}
+
+auto VirtualFileSystem::OpenInput::GetPath() const -> std::string_view {
+	return path;
+}
+
+auto VirtualFileSystem::OpenInput::GetFlags() const -> const std::vector<FileFlags> & {
+	return flags;
+}
+
+auto VirtualFileSystem::OpenInput::HasFlag(FileFlags flag) const -> bool {
+	for (auto candidate : flags) {
+		if (candidate == flag) {
+			return true;
+		}
+	}
+	return false;
+}
+
+auto VirtualFileSystem::OpenInput::GetValue(std::string_view name) const -> std::optional<Value> {
+	duckdb_v2_value_handle value = nullptr;
+	CheckedAPICall(duckdb_v2_vfs_file_open_get_value, static_cast<duckdb_v2_vfs_file_open_info_handle>(open_info),
+	               ToStr(name), &value);
+	if (!value) {
+		return std::nullopt;
+	}
+	return detail::Factory::Make<Value>(value);
+}
+
+auto VirtualFileSystem::OpenInput::GetMetadata() const -> FileMetadata {
+	duckdb_v2_file_metadata_handle metadata = nullptr;
+	CheckedAPICall(duckdb_v2_vfs_file_open_get_metadata, static_cast<duckdb_v2_vfs_file_open_info_handle>(open_info),
+	               &metadata);
+	return BorrowedMetadata(metadata);
+}
+
+auto VirtualFileSystem::OpenInput::GetOptions() const -> FileOpenOptions {
+	duckdb_v2_file_open_options_handle options = nullptr;
+	CheckedAPICall(duckdb_v2_vfs_file_open_get_options, static_cast<duckdb_v2_vfs_file_open_info_handle>(open_info),
+	               &options);
+	return detail::Factory::Make<FileOpenOptions>(options);
+}
+
+auto VirtualFileSystem::OpenInput::SetSeekable(bool seekable) -> void {
+	CheckedAPICall(duckdb_v2_vfs_file_open_set_property, static_cast<duckdb_v2_vfs_file_open_info_handle>(open_info),
+	               DUCKDB_V2_FILE_PROPERTY_IS_SEEKABLE, seekable);
+}
+
+auto VirtualFileSystem::OpenInput::SetOnDisk(bool on_disk) -> void {
+	CheckedAPICall(duckdb_v2_vfs_file_open_set_property, static_cast<duckdb_v2_vfs_file_open_info_handle>(open_info),
+	               DUCKDB_V2_FILE_PROPERTY_IS_ON_DISK, on_disk);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
