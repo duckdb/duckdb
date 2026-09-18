@@ -1,0 +1,76 @@
+# name: test/sql/storage/commit_fail_optimistic_leak.test
+# description: Test that reverting an optimistic append during commit failure does not leak blocks
+# group: [storage]
+
+require skip_reload
+
+load {TEST_DIR}/commit_fail_optimistic_leak.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+SET wal_autocheckpoint='1TB';
+
+statement ok
+SET write_buffer_row_group_count=1;
+
+statement ok
+SET GLOBAL debug_verify_blocks=true;
+
+statement ok
+CREATE TABLE t(i INTEGER);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+SET debug_force_commit_failure=true;
+
+statement error
+INSERT INTO t SELECT * FROM range(245760);
+----
+<REGEX>:.*debug_force_commit_failure.*
+
+statement ok
+SET debug_force_commit_failure=false;
+
+statement ok
+INSERT INTO t VALUES (1);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT count(*) FROM t;
+----
+1
+
+# Test with index present on table
+statement ok
+CREATE TABLE t_idx(i INTEGER PRIMARY KEY);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+SET debug_force_commit_failure=true;
+
+statement error
+INSERT INTO t_idx SELECT * FROM range(245760);
+----
+<REGEX>:.*debug_force_commit_failure.*
+
+statement ok
+SET debug_force_commit_failure=false;
+
+statement ok
+INSERT INTO t_idx VALUES (1);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT count(*) FROM t_idx;
+----
+1

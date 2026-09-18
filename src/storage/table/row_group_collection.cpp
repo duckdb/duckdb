@@ -800,12 +800,14 @@ void RowGroupCollection::RevertAppendInternal(idx_t new_end_idx) {
 	auto reverted_row_groups = make_shared_ptr<RowGroupSegmentTree>(*this, row_groups->GetBaseRowId());
 	auto rlock = reverted_row_groups->Lock();
 	idx_t new_total_rows = 0;
+	CommitDropState drop_state(&GetBlockManager());
 	for (auto &entry : row_groups->SegmentNodes(l)) {
 		idx_t row_start = entry.GetRowStart();
 		idx_t row_end = row_start + entry.GetCount();
 		if (row_start >= new_end_idx) {
 			// this row group does not belong to the new row group set
-			break;
+			entry.GetNode().CommitDrop(drop_state);
+			continue;
 		}
 		// this row group - at least partially - belongs to the new set
 		if (row_end > new_end_idx) {
@@ -815,6 +817,7 @@ void RowGroupCollection::RevertAppendInternal(idx_t new_end_idx) {
 		new_total_rows += entry.GetNode().count;
 		reverted_row_groups->AppendSegment(rlock, entry.ReferenceNode(), row_start);
 	}
+	drop_state.FinalizeCommit();
 	SetRowGroups(std::move(reverted_row_groups));
 	total_rows = new_total_rows;
 	next_row_id = new_end_idx - row_groups->GetBaseRowId();
