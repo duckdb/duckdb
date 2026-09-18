@@ -763,3 +763,33 @@ TEST_CASE("Test Scalar Functions - Local State", "[capi]") {
 	REQUIRE_FAIL(result);
 	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "upper limit cannot be greater than 100"));
 }
+
+void ReportErrorFunction(duckdb_function_info info, duckdb_data_chunk, duckdb_vector) {
+	duckdb_scalar_function_set_error(info, "Error report test");
+}
+
+static void CAPIRegisterReportError(duckdb_connection connection, const char *name) {
+	duckdb_state status;
+	auto function = duckdb_create_scalar_function();
+	duckdb_scalar_function_set_name(function, name);
+	auto varchar_type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	duckdb_scalar_function_set_return_type(function, varchar_type);
+	duckdb_destroy_logical_type(&varchar_type);
+	duckdb_scalar_function_set_function(function, ReportErrorFunction);
+	status = duckdb_register_scalar_function(connection, function);
+	REQUIRE(status == DuckDBSuccess);
+	duckdb_destroy_scalar_function(&function);
+}
+
+TEST_CASE("Test Scalar Functions - Error Reporting", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+	CAPIRegisterReportError(tester.connection, "my_report_error");
+
+	result = tester.Query("SELECT my_report_error()");
+	REQUIRE_FAIL(result);
+	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "Error report test"));
+	REQUIRE(!StringUtil::Contains(result->ErrorMessage(), "INTERNAL Error:"));
+}

@@ -272,6 +272,9 @@ static unique_ptr<FunctionData> ReadSingleJSONFileCombineSchema(ClientContext &c
 	}
 	// the date/timestamp formats that were settled on while detecting the structure are carried over
 	result->date_format_map = make_uniq<DateFormatMap>(*first_file->date_format_map);
+	// the merged structure describes the schema of the scan by itself
+	return_types.clear();
+	names.clear();
 	JSONScan::StructureToColumns(context, result->options, merged, result->feature_columns, return_types, names);
 
 	// the JSON reader looks columns up by their exact key, so the keys are kept before the column names that are
@@ -327,7 +330,8 @@ TableFunction JSONFunctions::GetJSONTableFunction(Identifier name, shared_ptr<JS
 	TableFunctionMultiFileSettings settings;
 	settings.glob_input = FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "json");
 	settings.reader_type = "JSON";
-	// the schema is determined by combining the schemas of up to 32 files
+	// the schema is determined by combining the schemas of up to 32 files - the keys of the files are unified, so a
+	// file does not need to have every column of the combined schema
 	settings.maximum_sample_files = 32;
 	return TableFunctionMultiFileWrapper::CreateFunction(std::move(single_file_function), std::move(name),
 	                                                     std::move(settings));

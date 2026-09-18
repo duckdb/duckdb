@@ -422,14 +422,17 @@ unique_ptr<BaseStatistics> ArraySlicePropagateStats(ClientContext &context, Func
 } // namespace
 ScalarFunctionSet ListSliceFun::GetFunctions() {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun({LogicalType::ANY, LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, ArraySliceFunction,
-	                   ArraySliceBind);
+	ScalarFunction fun({}, LogicalType::ANY, ArraySliceFunction, ArraySliceBind);
+	fun.GetSignature()
+	    .AddParameter("list", LogicalType::ANY)
+	    .AddParameter("begin", LogicalType::ANY)
+	    .AddParameter("end", LogicalType::ANY);
 	fun.SetStatisticsCallback(ArraySlicePropagateStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetFallible();
 	ScalarFunctionSet set;
 	set.AddFunction(fun);
-	fun.GetSignature().AddParameter(LogicalType::BIGINT);
+	fun.GetSignature().AddParameter("step", LogicalType::BIGINT);
 	set.AddFunction(fun);
 	return set;
 }

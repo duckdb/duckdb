@@ -2,7 +2,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/main/query_result.hpp"
 #include "duckdb/common/helper.hpp"
 
 namespace duckdb {
@@ -27,6 +27,12 @@ idx_t SimpleBufferedData::PeakBufferedBytes() {
 bool SimpleBufferedData::HasBlockedSink() {
 	annotated_lock_guard<annotated_mutex> lock(glock);
 	return !blocked_sinks.empty();
+}
+
+bool SimpleBufferedData::HasObservableChunk() {
+	annotated_lock_guard<annotated_mutex> lock(glock);
+	// Readiness is the chunk queue, never the byte count: chunks with rows but zero data bytes exist
+	return !unread_chunks.empty();
 }
 
 void SimpleBufferedData::CollectRestartableSinks(annotated_lock_guard<annotated_mutex> &lock,

@@ -59,28 +59,14 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBindDumb(ClientContext &co
 unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &context, TableFunctionBindInput &input,
                                                            vector<LogicalType> &return_types,
                                                            vector<Identifier> &names) {
-	if (input.inputs[0].IsNull() || input.inputs[1].IsNull() || input.inputs[2].IsNull()) {
-		throw BinderException("arrow_scan: pointers cannot be null");
+	if (!input.ref.bind_info) {
+		throw BinderException("arrow_scan requires an ArrowScanFactory bind input");
 	}
-	auto &ref = input.ref;
-
-	shared_ptr<DependencyItem> dependency;
-	if (ref.external_dependency) {
-		// This was created during the replacement scan for Python (see python_replacement_scan.cpp)
-		// this object is the owning reference to 'stream_factory_ptr' and has to be kept alive.
-		dependency = ref.external_dependency->GetDependency("replacement_cache");
-		D_ASSERT(dependency);
-	}
-
-	auto stream_factory_ptr = input.inputs[0].GetPointer();
-	auto stream_factory_produce = (stream_factory_produce_t)input.inputs[1].GetPointer();       // NOLINT
-	auto stream_factory_get_schema = (stream_factory_get_schema_t)input.inputs[2].GetPointer(); // NOLINT
-
-	auto res = make_uniq<ArrowScanFunctionData>(stream_factory_produce, stream_factory_ptr, std::move(dependency));
-
-	auto &data = *res;
-	stream_factory_get_schema(reinterpret_cast<ArrowArrayStream *>(stream_factory_ptr), data.schema_root.arrow_schema);
-	PopulateArrowTableSchema(context, res->arrow_table, data.schema_root.arrow_schema);
+	DynamicCastCheck<ArrowScanFactory>(input.ref.bind_info.get());
+	auto factory = shared_ptr_cast<TableFunctionInfo, ArrowScanFactory>(input.ref.bind_info);
+	auto res = make_uniq<ArrowScanFunctionData>(std::move(factory));
+	res->factory->GetSchema(res->schema_root.arrow_schema);
+	PopulateArrowTableSchema(context, res->arrow_table, res->schema_root.arrow_schema);
 	names = StringsToIdentifiers(res->arrow_table.GetNames());
 	return_types = res->arrow_table.GetTypes();
 	res->all_types = return_types;
@@ -107,7 +93,7 @@ unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(const ArrowScanFunctionData
 		}
 	}
 	parameters.filters = filters;
-	return function.scanner_producer(function.stream_factory_ptr, parameters);
+	return function.factory->ProduceStream(parameters);
 }
 
 idx_t ArrowTableFunction::ArrowScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
@@ -335,8 +321,7 @@ bool ArrowTableFunction::ArrowPushdownType(const FunctionData &bind_data, idx_t 
 }
 
 void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction arrow("arrow_scan", {LogicalType::POINTER, LogicalType::POINTER, LogicalType::POINTER},
-	                    ArrowScanFunction, ArrowScanBind, ArrowScanInitGlobal, ArrowScanInitLocal);
+	TableFunction arrow("arrow_scan", {}, ArrowScanFunction, ArrowScanBind, ArrowScanInitGlobal, ArrowScanInitLocal);
 	arrow.cardinality = ArrowScanCardinality;
 	arrow.get_partition_data = ArrowGetPartitionData;
 	arrow.projection_pushdown = true;
@@ -346,8 +331,8 @@ void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	arrow.parallelism = TableFunctionParallelism::SEQUENTIAL;
 	set.AddFunction(arrow);
 
-	TableFunction arrow_dumb("arrow_scan_dumb", {LogicalType::POINTER, LogicalType::POINTER, LogicalType::POINTER},
-	                         ArrowScanFunction, ArrowScanBindDumb, ArrowScanInitGlobal, ArrowScanInitLocal);
+	TableFunction arrow_dumb("arrow_scan_dumb", {}, ArrowScanFunction, ArrowScanBindDumb, ArrowScanInitGlobal,
+	                         ArrowScanInitLocal);
 	arrow_dumb.cardinality = ArrowScanCardinality;
 	arrow_dumb.get_partition_data = ArrowGetPartitionData;
 	arrow_dumb.projection_pushdown = false;

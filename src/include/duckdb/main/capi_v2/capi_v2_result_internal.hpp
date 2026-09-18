@@ -23,16 +23,17 @@ struct ResultWrapperV2 {
 	~ResultWrapperV2() {
 		// Finalize() (engine cleanup) runs in duckdb_v2_result_destroy, not here:
 		// a destructor must not drive locked engine state behind a catch-all.
-		pending.reset();
-		result.reset();
+		stream.reset();
+		handle.reset();
 		ReleaseBusySlot();
 	}
 
 	State state = State::PENDING;
-	//! Live while state == PENDING.
-	unique_ptr<PendingQueryResult> pending;
-	//! Live while state == STREAMING.
-	unique_ptr<QueryResult> result;
+	//! The handle of the running query. Live while state == PENDING, and afterwards for a result
+	//! that is retained rather than streamed.
+	unique_ptr<QueryResult> handle;
+	//! Live while state == STREAMING, for a statement whose result can be streamed.
+	unique_ptr<QueryResultStream> stream;
 
 	//! Keeps the ClientContext alive for starting subsequent fragments and
 	//! preserves the guarantee that an undrained result survives disconnect:
@@ -92,7 +93,7 @@ struct ResultWrapperV2 {
 		if (context->transaction.HasActiveTransaction()) {
 			// Mirrors Connection::Rollback (Query("ROLLBACK") + throw on error),
 			// driven through the retained context so it works after disconnect.
-			auto result = context->Query("ROLLBACK", QueryResultOutputType::FORCE_MATERIALIZED);
+			auto result = context->Query("ROLLBACK", QueryParameters());
 			if (result->HasError()) {
 				result->ThrowError();
 			}
@@ -104,10 +105,10 @@ struct ResultWrapperV2 {
 	//! then roll back an injected group transaction. May throw; the terminal
 	//! states leave pending/result null, so this is then a no-op.
 	void Finalize() {
-		if (pending) {
-			pending->Close();
-		} else if (result && result->GetResultType() == QueryResultType::STREAM_RESULT) {
-			result->Cast<StreamQueryResult>().Close();
+		if (stream) {
+			stream->Close();
+		} else if (handle) {
+			handle->Close();
 		}
 		RollbackIncompleteGroup();
 	}
@@ -127,10 +128,10 @@ struct ResultWrapperV2 {
 	// them throw DuckDB exceptions on failure (callers wrap in
 	// WithErrorHandler) and record sticky errors before throwing.
 
-	//! Adopts an already-produced pending query into the state machine: the single
-	//! seam both the stateless (fragment) and prepared paths reach. When is_principal,
-	//! captures its metadata and surfaces its chunks. Throws on a pending prepare error.
-	void BeginPending(unique_ptr<PendingQueryResult> pending, bool is_principal);
+	//! Adopts an already-submitted query into the state machine: the single seam both the
+	//! stateless (fragment) and prepared paths reach. When is_principal, captures its metadata and
+	//! surfaces its chunks. Throws on a submission error.
+	void BeginPending(unique_ptr<QueryResult> handle, bool is_principal);
 	//! Starts the pending query for the next fragment, selecting it as
 	//! principal per the engine-mirrored rule and adopting it via BeginPending.
 	//! Throws on prepare errors.

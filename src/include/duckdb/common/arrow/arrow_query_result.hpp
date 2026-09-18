@@ -34,6 +34,7 @@ public:
 public:
 	//! Converts the QueryResult to a string
 	DUCKDB_API string ToString() override;
+	DUCKDB_API string ToBox(BoxRendererContext &context, const BoxRendererConfig &config) override;
 
 public:
 	vector<unique_ptr<ArrowArrayWrapper>> ConsumeArrays();
