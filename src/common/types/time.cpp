@@ -20,7 +20,8 @@ static_assert(sizeof(dtime_t) == sizeof(int64_t), "dtime_t was padded");
 
 bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict,
                               optional_ptr<int32_t> nanos) {
-	int32_t hour = -1, min = -1, sec = -1, micros = -1;
+	int64_t hour = -1;
+	int32_t min = -1, sec = -1, micros = -1;
 	pos = 0;
 
 	if (len == 0) {
@@ -42,14 +43,21 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 		return false;
 	}
 
-	// Allow up to 9 digit hours to support intervals
+	// Allow up to 10 digit hours to support intervals (Interval::ToString can
+	// emit the full int64-micros range, whose hour component is up to 10 digits).
+	// Still reject hours that do not fit in int64 micros (max representable
+	// interval is 2562047788 hours + 54m 54.775807s), mirroring the old int32
+	// rejection for values that would overflow.
 	hour = 0;
-	for (int32_t digits = 9; pos < len && StringUtil::CharacterIsDigit(buf[pos]); ++pos) {
+	for (int32_t digits = 10; pos < len && StringUtil::CharacterIsDigit(buf[pos]); ++pos) {
 		if (digits-- > 0) {
 			hour = hour * 10 + (buf[pos] - '0');
 		} else {
 			return false;
 		}
+	}
+	if (hour > NumericLimits<int64_t>::Maximum() / Interval::MICROS_PER_HOUR) {
+		return false;
 	}
 
 	if (pos >= len) {
@@ -285,7 +293,7 @@ string Time::ToUTCOffset(int hour_offset, int minute_offset) {
 	return string(buffer, length);
 }
 
-dtime_t Time::FromTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds) {
+dtime_t Time::FromTime(int64_t hour, int32_t minute, int32_t second, int32_t microseconds) {
 	int64_t result;
 	result = hour;                                             // hours
 	result = result * Interval::MINS_PER_HOUR + minute;        // hours -> minutes
