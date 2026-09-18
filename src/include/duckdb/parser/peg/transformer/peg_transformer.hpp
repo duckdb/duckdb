@@ -850,6 +850,13 @@ public:
 	static void InitializeCommentStatementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeCommentStatementTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
+	static void InitializeCommentTargetTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeCommentTargetTrampoline(PEGTransformer &transformer,
+	                                                                        GeneratedTransformProcess &process);
+	static void InitializeCommentStringLiteralIdentifierTrampoline(PEGTransformer &transformer,
+	                                                               GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue>
+	FinalizeCommentStringLiteralIdentifierTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static void InitializeCommentOnTypeTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeCommentOnTypeTrampoline(PEGTransformer &transformer,
 	                                                                        GeneratedTransformProcess &process);
@@ -3648,6 +3655,9 @@ public:
 	static void InitializeUsingClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeUsingClauseTrampoline(PEGTransformer &transformer,
 	                                                                      GeneratedTransformProcess &process);
+	static void InitializeUsingColumnNameTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeUsingColumnNameTrampoline(PEGTransformer &transformer,
+	                                                                          GeneratedTransformProcess &process);
 	static void InitializeJoinTypeTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeJoinTypeTrampoline(PEGTransformer &transformer,
 	                                                                   GeneratedTransformProcess &process);
@@ -4150,8 +4160,10 @@ public:
 	static bool TransformCheckpointForce(PEGTransformer &transformer);
 	static unique_ptr<SQLStatement> TransformCommentStatement(PEGTransformer &transformer,
 	                                                          const CatalogType &comment_on_type,
-	                                                          const vector<string> &dotted_identifier,
+	                                                          const vector<string> &comment_target,
 	                                                          const Value &comment_value);
+	static vector<string> TransformCommentStringLiteralIdentifier(PEGTransformer &transformer,
+	                                                              const Identifier &string_literal_identifier);
 	static CatalogType TransformCommentTable(PEGTransformer &transformer);
 	static CatalogType TransformCommentSequence(PEGTransformer &transformer);
 	static CatalogType TransformCommentFunction(PEGTransformer &transformer);
@@ -5393,7 +5405,7 @@ public:
 	                                                        optional<unique_ptr<SelectNode>> select_clause);
 	static pair<Identifier, unique_ptr<CommonTableExpressionInfo>>
 	TransformWithStatement(PEGTransformer &transformer, const Identifier &col_id_or_string,
-	                       const optional<vector<string>> &insert_column_list,
+	                       const optional<vector<string>> &column_aliases,
 	                       optional<vector<unique_ptr<ParsedExpression>>> using_key, const optional<bool> &materialized,
 	                       unique_ptr<TableRef> cte_body);
 	static unique_ptr<TableRef> TransformCTESelectBody(PEGTransformer &transformer,

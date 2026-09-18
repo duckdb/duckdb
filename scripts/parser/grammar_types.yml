@@ -715,6 +715,8 @@ StringList:
     - ColumnList
     - NameList
     - DottedIdentifier
+    - CommentTarget
+    - CommentStringLiteralIdentifier
     - ColumnAliases
     - TriggerColumnList
     - RepositoryPublicKey
@@ -1696,6 +1698,7 @@ IdentifierType:
     - AnalyzeKeyword
     - ColId
     - ColIdOrString
+    - UsingColumnName
     - ColLabelOrString
     - ColLabelIdentifier
     - StringLiteralIdentifier
