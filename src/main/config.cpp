@@ -70,7 +70,6 @@ DebugVerificationMode DBConfigOptions::global_verification_mode = DebugVerificat
 
 static const ConfigurationOption internal_options[] = {
 
-    DUCKDB_GLOBAL(DeltaOnlyVariantEncodingEnabledSetting),
     DUCKDB_GLOBAL(AccessModeSetting),
     DUCKDB_LOCAL(ActiveGrammarExtensionsSetting),
     DUCKDB_SETTING_CALLBACK(AllocatorBackgroundThreadsSetting),
@@ -109,6 +108,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(DebugAsofIejoinSetting),
     DUCKDB_SETTING_CALLBACK(DebugCheckpointAbortSetting),
     DUCKDB_SETTING(DebugCheckpointSleepMsSetting),
+    DUCKDB_GLOBAL(DebugDeltaOnlyVariantEncodingEnabledSetting),
     DUCKDB_SETTING(DebugDisableOptimizerSetting),
     DUCKDB_SETTING(EnableCachingOperatorsSetting),
     DUCKDB_SETTING(DebugEvictionQueueSleepMicroSecondsSetting),
@@ -258,6 +258,7 @@ static const ConfigurationOption internal_options[] = {
     FINAL_SETTING};
 
 static const ConfigurationAlias setting_aliases[] = {
+    DUCKDB_SETTING_ALIAS("__delta_only_variant_encoding_enabled", DebugDeltaOnlyVariantEncodingEnabledSetting),
     DUCKDB_SETTING_ALIAS("enable_caching_operators", EnableCachingOperatorsSetting),
     DUCKDB_SETTING_ALIAS("force_bitpacking_mode", ForceBitpackingModeSetting),
     DUCKDB_SETTING_ALIAS("force_mbedtls_unsafe", ForceMbedtlsUnsafeSetting),
