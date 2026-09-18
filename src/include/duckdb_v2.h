@@ -12015,11 +12015,11 @@ typedef enum DUCKDB_V2_FILE_PROPERTY {
  * Callbacks come in two groups. File system callbacks (`claim`, `stat`, `list`, `glob`, `remove_file`,
  * `create_directory`, `remove_directory`, `move`) operate on a path. File callbacks (`open`, `close`, `abort`,
  * `read_at`, `write_at`, `read`, `write`, `seek`, `tell`, `stat`, `sync`, `truncate`) operate on one file: "open"
- * produces it from a path, the others act on what it produced. Every callback receives a borrowed request handle for
- * the file system operation as its first argument. `claim`, `open` and the path callbacks receive the path as a plain
- * argument next to it, `open` its flags after that, and the other file callbacks the per-file state. The file system's
- * user data is reachable from the request; a file callback finds what it needs in the per-file state the "open"
- * callback attached.
+ * produces it from a path, the others act on what it produced. Every callback receives the shared info handle as its
+ * first argument and the handle of its own operation as its second. `claim`, `open` and the path callbacks receive the
+ * path as a plain argument next to it, `open` its flags after that, and the other file callbacks the per-file state.
+ * The file system's user data is reachable from the shared info; a file callback finds what it needs in the per-file
+ * state the "open" callback attached.
  *
  * A missing path is reported differently depending on the kind of operation. File system queries report it through
  * their result, so the file system `stat` leaves the metadata untouched, and `list` and `glob` add no entries. `open`
@@ -12032,8 +12032,8 @@ typedef enum DUCKDB_V2_FILE_PROPERTY {
  * on the same file. Similarly, the individual file's "data" destructor will run after either `close` or `abort` have
  * been called.
  *
- * A file system can delegate to other file systems. The file system operation info handle has a `get_file_system`
- * function that returns the engine's file system, which is also reachable through a context, and
+ * A file system can delegate to other file systems. The shared info handle has a `get_file_system` function that
+ * returns the engine's file system, which is also reachable through a context, and
  * `duckdb_v2_vfs_file_open_get_options()` turns an open request into options for `duckdb_v2_file_system_open()`. This
  * is how an overlay (caching, encryption, logging, ...) file system can open the underlying file with exactly the flags
  * and values it was given. An overlay should claim paths of its own, typically its own URI scheme, and map them onto
@@ -12048,17 +12048,118 @@ typedef struct _duckdb_v2_vfs {
 } * duckdb_v2_vfs_handle;
 
 /*!
- * A borrowed opaque handle to one file system operation, passed to every callback: to "claim" and the path callbacks
- * next to the path, to "open" next to the path and the flags, and to the other file callbacks next to the per-file
- * state. It provides access to the file system's user data, to the engine's file system for delegation, and to the
- * context of the query performing the operation when there is one. In the "open" callback it also carries the open
- * request, read and answered through the `vfs_file_open` functions, which fail on the handle of any other callback.
- * Anything a file callback needs about its file -- the path, the flags -- the "open" callback stashes in the per-file
- * state.
+ * A borrowed opaque handle to what every file system operation has in common, passed first to every callback, followed
+ * by the handle of the operation itself. It provides access to the file system's user data, to the engine's file system
+ * for delegation, and to the context of the query performing the operation when there is one. Anything a file callback
+ * needs about its file -- the path, the flags -- the "open" callback stashes in the per-file state.
  */
 typedef struct _duckdb_v2_vfs_info {
 	void *internal_ptr;
 } * duckdb_v2_vfs_info_handle;
+
+//! A borrowed opaque handle to one claim operation.
+typedef struct _duckdb_v2_vfs_claim_info {
+	void *internal_ptr;
+} * duckdb_v2_vfs_claim_info_handle;
+
+//! A borrowed opaque handle to one stat operation.
+typedef struct _duckdb_v2_vfs_stat_info {
+	void *internal_ptr;
+} * duckdb_v2_vfs_stat_info_handle;
+
+//! A borrowed opaque handle to one list operation.
+typedef struct _duckdb_v2_vfs_list_info {
+	void *internal_ptr;
+} * duckdb_v2_vfs_list_info_handle;
+
+//! A borrowed opaque handle to one glob operation.
+typedef struct _duckdb_v2_vfs_glob_info {
+	void *internal_ptr;
+} * duckdb_v2_vfs_glob_info_handle;
+
+//! A borrowed opaque handle to one remove file operation.
+typedef struct _duckdb_v2_vfs_remove_file_info {
+	void *internal_ptr;
+} * duckdb_v2_vfs_remove_file_info_handle;
+
+//! A borrowed opaque handle to one create directory operation.
+typedef struct _duckdb_v2_vfs_create_directory_info {
+	void *internal_ptr;
+} * duckdb_v2_vfs_create_directory_info_handle;
+
+//! A borrowed opaque handle to one remove directory operation.
+typedef struct _duckdb_v2_vfs_remove_directory_info {
+	void *internal_ptr;
+} * duckdb_v2_vfs_remove_directory_info_handle;
+
+//! A borrowed opaque handle to one move operation.
+typedef struct _duckdb_v2_vfs_move_info {
+	void *internal_ptr;
+} * duckdb_v2_vfs_move_info_handle;
+
+/*!
+ * A borrowed opaque handle to one file open operation. It carries the open request: the values the caller attached,
+ * what a listing knew about the file, and the options to forward the request with, and it is where the callback
+ * attaches the per-file state and reports the file's properties.
+ */
+typedef struct _duckdb_v2_vfs_file_open_info {
+	void *internal_ptr;
+} * duckdb_v2_vfs_file_open_info_handle;
+
+//! A borrowed opaque handle to one file close operation.
+typedef struct _duckdb_v2_vfs_file_close_info {
+	void *internal_ptr;
+} * duckdb_v2_vfs_file_close_info_handle;
+
+//! A borrowed opaque handle to one file abort operation.
+typedef struct _duckdb_v2_vfs_file_abort_info {
+	void *internal_ptr;
+} * duckdb_v2_vfs_file_abort_info_handle;
+
+//! A borrowed opaque handle to one file read at operation.
+typedef struct _duckdb_v2_vfs_file_read_at_info {
+	void *internal_ptr;
+} * duckdb_v2_vfs_file_read_at_info_handle;
+
+//! A borrowed opaque handle to one file write at operation.
+typedef struct _duckdb_v2_vfs_file_write_at_info {
+	void *internal_ptr;
+} * duckdb_v2_vfs_file_write_at_info_handle;
+
+//! A borrowed opaque handle to one file read operation.
+typedef struct _duckdb_v2_vfs_file_read_info {
+	void *internal_ptr;
+} * duckdb_v2_vfs_file_read_info_handle;
+
+//! A borrowed opaque handle to one file write operation.
+typedef struct _duckdb_v2_vfs_file_write_info {
+	void *internal_ptr;
+} * duckdb_v2_vfs_file_write_info_handle;
+
+//! A borrowed opaque handle to one file seek operation.
+typedef struct _duckdb_v2_vfs_file_seek_info {
+	void *internal_ptr;
+} * duckdb_v2_vfs_file_seek_info_handle;
+
+//! A borrowed opaque handle to one file tell operation.
+typedef struct _duckdb_v2_vfs_file_tell_info {
+	void *internal_ptr;
+} * duckdb_v2_vfs_file_tell_info_handle;
+
+//! A borrowed opaque handle to one file stat operation.
+typedef struct _duckdb_v2_vfs_file_stat_info {
+	void *internal_ptr;
+} * duckdb_v2_vfs_file_stat_info_handle;
+
+//! A borrowed opaque handle to one file sync operation.
+typedef struct _duckdb_v2_vfs_file_sync_info {
+	void *internal_ptr;
+} * duckdb_v2_vfs_file_sync_info_handle;
+
+//! A borrowed opaque handle to one file truncate operation.
+typedef struct _duckdb_v2_vfs_file_truncate_info {
+	void *internal_ptr;
+} * duckdb_v2_vfs_file_truncate_info_handle;
 
 /* --- Constants for virtual file system --- */
 
@@ -12071,23 +12172,24 @@ typedef struct _duckdb_v2_vfs_info {
  * When set, the engine calls it for every path it touches that no prefix claimed, from any thread, before any other
  * callback. Reporting `false` lets other file systems, and finally the local one, claim the path instead.
  */
-typedef void (*duckdb_v2_vfs_claim_callback_fn)(duckdb_v2_vfs_info_handle info, duckdb_v2_str path, bool *claim,
-                                                duckdb_v2_error_info_handle *err);
+typedef void (*duckdb_v2_vfs_claim_callback_fn)(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_claim_info_handle op_info,
+                                                duckdb_v2_str path, bool *claim, duckdb_v2_error_info_handle *err);
 
 /*!
  * Opens a file.
  *
- * The flags come as a complete list, and the values the caller attached to the open, what a listing knew about the
- * file, and the context of the query opening it are read from `info` with the `vfs_file_open` functions, which are
- * valid only here. On success the callback attaches per-file state via `duckdb_v2_vfs_file_open_set_data()`, which
- * every other file callback then receives, and reports any property of the file via
- * `duckdb_v2_vfs_file_open_set_property()`. A file opened with `FILE_FLAG_APPEND` starts with its cursor at the end.
+ * The flags come as a complete list; the values the caller attached to the open and what a listing knew about the file
+ * are read from `op_info`, and the context of the query opening it from `info`. On success the callback attaches
+ * per-file state via `duckdb_v2_vfs_file_open_set_data()`, which every other file callback then receives, and reports
+ * any property of the file via `duckdb_v2_vfs_file_open_set_property()`. A file opened with `FILE_FLAG_APPEND` starts
+ * with its cursor at the end.
  *
  * A failed open reports the reason through `err`. State attached before the failure is destroyed. Report a missing file
  * as `ERROR_IO_FILE_NOT_FOUND`, which lets the engine give a precise error message, and lets callers that asked for it
  * receive a null file instead of an error.
  */
-typedef void (*duckdb_v2_vfs_file_open_callback_fn)(duckdb_v2_vfs_info_handle info, duckdb_v2_str path,
+typedef void (*duckdb_v2_vfs_file_open_callback_fn)(duckdb_v2_vfs_info_handle info,
+                                                    duckdb_v2_vfs_file_open_info_handle op_info, duckdb_v2_str path,
                                                     const DUCKDB_V2_FILE_FLAG *flags, idx_t flag_count,
                                                     duckdb_v2_error_info_handle *err);
 
@@ -12103,7 +12205,8 @@ typedef void (*duckdb_v2_vfs_file_open_callback_fn)(duckdb_v2_vfs_info_handle in
  * instead if it was opened for writing and an "abort" callback is set. Otherwise it is closed here, and any error
  * reported is dropped, since there is nothing left to raise it to.
  */
-typedef void (*duckdb_v2_vfs_file_close_callback_fn)(duckdb_v2_vfs_info_handle info, void *file,
+typedef void (*duckdb_v2_vfs_file_close_callback_fn)(duckdb_v2_vfs_info_handle info,
+                                                     duckdb_v2_vfs_file_close_info_handle op_info, void *file,
                                                      duckdb_v2_error_info_handle *err);
 
 /*!
@@ -12114,7 +12217,8 @@ typedef void (*duckdb_v2_vfs_file_close_callback_fn)(duckdb_v2_vfs_info_handle i
  * without being closed. An object store would abandon its upload here. The file data's destructor still runs
  * afterwards. Without this callback the engine closes the file as usual, and a partial file may be left behind.
  */
-typedef void (*duckdb_v2_vfs_file_abort_callback_fn)(duckdb_v2_vfs_info_handle info, void *file,
+typedef void (*duckdb_v2_vfs_file_abort_callback_fn)(duckdb_v2_vfs_info_handle info,
+                                                     duckdb_v2_vfs_file_abort_info_handle op_info, void *file,
                                                      duckdb_v2_error_info_handle *err);
 
 /*!
@@ -12126,9 +12230,10 @@ typedef void (*duckdb_v2_vfs_file_abort_callback_fn)(duckdb_v2_vfs_info_handle i
  * moves the cursor, like `pread`. It may be called from several threads at once on a file opened with
  * `FILE_FLAG_PARALLEL_ACCESS`.
  */
-typedef void (*duckdb_v2_vfs_file_read_at_callback_fn)(duckdb_v2_vfs_info_handle info, void *file, void *buffer,
-                                                       idx_t buffer_size, idx_t location, idx_t *bytes_read,
-                                                       duckdb_v2_error_info_handle *err);
+typedef void (*duckdb_v2_vfs_file_read_at_callback_fn)(duckdb_v2_vfs_info_handle info,
+                                                       duckdb_v2_vfs_file_read_at_info_handle op_info, void *file,
+                                                       void *buffer, idx_t buffer_size, idx_t location,
+                                                       idx_t *bytes_read, duckdb_v2_error_info_handle *err);
 
 /*!
  * Writes at a fixed offset.
@@ -12138,8 +12243,9 @@ typedef void (*duckdb_v2_vfs_file_read_at_callback_fn)(duckdb_v2_vfs_info_handle
  * `location` even on a file opened with `FILE_FLAG_APPEND`. It may be called from several threads at once on a file
  * opened with `FILE_FLAG_PARALLEL_ACCESS`, always for disjoint ranges.
  */
-typedef void (*duckdb_v2_vfs_file_write_at_callback_fn)(duckdb_v2_vfs_info_handle info, void *file, const void *buffer,
-                                                        idx_t buffer_size, idx_t location,
+typedef void (*duckdb_v2_vfs_file_write_at_callback_fn)(duckdb_v2_vfs_info_handle info,
+                                                        duckdb_v2_vfs_file_write_at_info_handle op_info, void *file,
+                                                        const void *buffer, idx_t buffer_size, idx_t location,
                                                         duckdb_v2_error_info_handle *err);
 
 /*!
@@ -12149,8 +12255,9 @@ typedef void (*duckdb_v2_vfs_file_write_at_callback_fn)(duckdb_v2_vfs_info_handl
  * asked for is normal at the end of the file, and zero means there is nothing left. It is never called concurrently on
  * the same file, although positional reads may run alongside it on a file opened with `FILE_FLAG_PARALLEL_ACCESS`.
  */
-typedef void (*duckdb_v2_vfs_file_read_callback_fn)(duckdb_v2_vfs_info_handle info, void *file, void *buffer,
-                                                    idx_t buffer_size, idx_t *bytes_read,
+typedef void (*duckdb_v2_vfs_file_read_callback_fn)(duckdb_v2_vfs_info_handle info,
+                                                    duckdb_v2_vfs_file_read_info_handle op_info, void *file,
+                                                    void *buffer, idx_t buffer_size, idx_t *bytes_read,
                                                     duckdb_v2_error_info_handle *err);
 
 /*!
@@ -12159,8 +12266,10 @@ typedef void (*duckdb_v2_vfs_file_read_callback_fn)(duckdb_v2_vfs_info_handle in
  * Writes all `buffer_size` bytes at the cursor, advancing it past them. A partial write is an error and must be
  * reported as one. It is never called concurrently on the same file.
  */
-typedef void (*duckdb_v2_vfs_file_write_callback_fn)(duckdb_v2_vfs_info_handle info, void *file, const void *buffer,
-                                                     idx_t buffer_size, duckdb_v2_error_info_handle *err);
+typedef void (*duckdb_v2_vfs_file_write_callback_fn)(duckdb_v2_vfs_info_handle info,
+                                                     duckdb_v2_vfs_file_write_info_handle op_info, void *file,
+                                                     const void *buffer, idx_t buffer_size,
+                                                     duckdb_v2_error_info_handle *err);
 
 /*!
  * Moves the cursor.
@@ -12168,12 +12277,14 @@ typedef void (*duckdb_v2_vfs_file_write_callback_fn)(duckdb_v2_vfs_info_handle i
  * Sets the position the next cursor read or write starts from, as an absolute byte offset. Seeking past the end is
  * allowed. It is never called on a file that reported `FILE_PROPERTY_IS_SEEKABLE` as false.
  */
-typedef void (*duckdb_v2_vfs_file_seek_callback_fn)(duckdb_v2_vfs_info_handle info, void *file, idx_t position,
-                                                    duckdb_v2_error_info_handle *err);
+typedef void (*duckdb_v2_vfs_file_seek_callback_fn)(duckdb_v2_vfs_info_handle info,
+                                                    duckdb_v2_vfs_file_seek_info_handle op_info, void *file,
+                                                    idx_t position, duckdb_v2_error_info_handle *err);
 
 //! Reports the cursor's position, as an absolute byte offset from the start of the file.
-typedef void (*duckdb_v2_vfs_file_tell_callback_fn)(duckdb_v2_vfs_info_handle info, void *file, idx_t *position,
-                                                    duckdb_v2_error_info_handle *err);
+typedef void (*duckdb_v2_vfs_file_tell_callback_fn)(duckdb_v2_vfs_info_handle info,
+                                                    duckdb_v2_vfs_file_tell_info_handle op_info, void *file,
+                                                    idx_t *position, duckdb_v2_error_info_handle *err);
 
 /*!
  * Reports what is known about an open file.
@@ -12185,7 +12296,8 @@ typedef void (*duckdb_v2_vfs_file_tell_callback_fn)(duckdb_v2_vfs_info_handle in
  * any other type means a regular file. The engine calls this whenever it needs the size, so it should be cheap. For a
  * file opened for reading, return what was learned at open time.
  */
-typedef void (*duckdb_v2_vfs_file_stat_callback_fn)(duckdb_v2_vfs_info_handle info, void *file,
+typedef void (*duckdb_v2_vfs_file_stat_callback_fn)(duckdb_v2_vfs_info_handle info,
+                                                    duckdb_v2_vfs_file_stat_info_handle op_info, void *file,
                                                     duckdb_v2_file_metadata_handle metadata,
                                                     duckdb_v2_error_info_handle *err);
 
@@ -12195,7 +12307,8 @@ typedef void (*duckdb_v2_vfs_file_stat_callback_fn)(duckdb_v2_vfs_info_handle in
  * The engine calls it when it needs written data to be durable, and before it closes a written file. A file system that
  * leaves it unset is assumed to make every write durable immediately.
  */
-typedef void (*duckdb_v2_vfs_file_sync_callback_fn)(duckdb_v2_vfs_info_handle info, void *file,
+typedef void (*duckdb_v2_vfs_file_sync_callback_fn)(duckdb_v2_vfs_info_handle info,
+                                                    duckdb_v2_vfs_file_sync_info_handle op_info, void *file,
                                                     duckdb_v2_error_info_handle *err);
 
 /*!
@@ -12204,8 +12317,9 @@ typedef void (*duckdb_v2_vfs_file_sync_callback_fn)(duckdb_v2_vfs_info_handle in
  * Only database and write-ahead-log files are truncated, so a file system that only serves data files can leave this
  * unset.
  */
-typedef void (*duckdb_v2_vfs_file_truncate_callback_fn)(duckdb_v2_vfs_info_handle info, void *file, idx_t size,
-                                                        duckdb_v2_error_info_handle *err);
+typedef void (*duckdb_v2_vfs_file_truncate_callback_fn)(duckdb_v2_vfs_info_handle info,
+                                                        duckdb_v2_vfs_file_truncate_info_handle op_info, void *file,
+                                                        idx_t size, duckdb_v2_error_info_handle *err);
 
 /*!
  * Reports what is known about a path, without opening it.
@@ -12217,8 +12331,8 @@ typedef void (*duckdb_v2_vfs_file_truncate_callback_fn)(duckdb_v2_vfs_info_handl
  * and to learn a file's size without opening it. If this callback is unset, the engine opens the file to find out
  * instead.
  */
-typedef void (*duckdb_v2_vfs_stat_callback_fn)(duckdb_v2_vfs_info_handle info, duckdb_v2_str path,
-                                               duckdb_v2_file_metadata_handle metadata,
+typedef void (*duckdb_v2_vfs_stat_callback_fn)(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_stat_info_handle op_info,
+                                               duckdb_v2_str path, duckdb_v2_file_metadata_handle metadata,
                                                duckdb_v2_error_info_handle *err);
 
 /*!
@@ -12227,8 +12341,8 @@ typedef void (*duckdb_v2_vfs_stat_callback_fn)(duckdb_v2_vfs_info_handle info, d
  * Adds one entry per file and subdirectory directly inside the path with `duckdb_v2_file_listing_add_entry()`, by name
  * relative to the path, along with whatever metadata is already known about each.
  */
-typedef void (*duckdb_v2_vfs_list_callback_fn)(duckdb_v2_vfs_info_handle info, duckdb_v2_str path,
-                                               duckdb_v2_file_listing_handle list_info,
+typedef void (*duckdb_v2_vfs_list_callback_fn)(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_list_info_handle op_info,
+                                               duckdb_v2_str path, duckdb_v2_file_listing_handle list_info,
                                                duckdb_v2_error_info_handle *err);
 
 /*!
@@ -12242,8 +12356,8 @@ typedef void (*duckdb_v2_vfs_list_callback_fn)(duckdb_v2_vfs_info_handle info, d
  * matching file with `duckdb_v2_file_listing_add_entry()`. A pattern that matches nothing adds nothing, which is not an
  * error.
  */
-typedef void (*duckdb_v2_vfs_glob_callback_fn)(duckdb_v2_vfs_info_handle info, duckdb_v2_str pattern,
-                                               duckdb_v2_file_listing_handle list_info,
+typedef void (*duckdb_v2_vfs_glob_callback_fn)(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_glob_info_handle op_info,
+                                               duckdb_v2_str pattern, duckdb_v2_file_listing_handle list_info,
                                                duckdb_v2_error_info_handle *err);
 
 /*!
@@ -12253,7 +12367,8 @@ typedef void (*duckdb_v2_vfs_glob_callback_fn)(duckdb_v2_vfs_info_handle info, d
  * `ERROR_IO_FILE_NOT_FOUND`, and the engine then treats it as "nothing to remove" where that is fine, and as an error
  * where it is not.
  */
-typedef void (*duckdb_v2_vfs_remove_file_callback_fn)(duckdb_v2_vfs_info_handle info, duckdb_v2_str path,
+typedef void (*duckdb_v2_vfs_remove_file_callback_fn)(duckdb_v2_vfs_info_handle info,
+                                                      duckdb_v2_vfs_remove_file_info_handle op_info, duckdb_v2_str path,
                                                       duckdb_v2_error_info_handle *err);
 
 /*!
@@ -12262,12 +12377,14 @@ typedef void (*duckdb_v2_vfs_remove_file_callback_fn)(duckdb_v2_vfs_info_handle 
  * The engine calls it when it writes partitioned output or exports a database. An existing directory is not an error. A
  * backend without directories, such as an object store, can make this a no-op.
  */
-typedef void (*duckdb_v2_vfs_create_directory_callback_fn)(duckdb_v2_vfs_info_handle info, duckdb_v2_str path,
-                                                           duckdb_v2_error_info_handle *err);
+typedef void (*duckdb_v2_vfs_create_directory_callback_fn)(duckdb_v2_vfs_info_handle info,
+                                                           duckdb_v2_vfs_create_directory_info_handle op_info,
+                                                           duckdb_v2_str path, duckdb_v2_error_info_handle *err);
 
 //! Removes a directory and everything inside it. The engine calls it when it overwrites partitioned output.
-typedef void (*duckdb_v2_vfs_remove_directory_callback_fn)(duckdb_v2_vfs_info_handle info, duckdb_v2_str path,
-                                                           duckdb_v2_error_info_handle *err);
+typedef void (*duckdb_v2_vfs_remove_directory_callback_fn)(duckdb_v2_vfs_info_handle info,
+                                                           duckdb_v2_vfs_remove_directory_info_handle op_info,
+                                                           duckdb_v2_str path, duckdb_v2_error_info_handle *err);
 
 /*!
  * Moves a file, replacing any existing target.
@@ -12276,8 +12393,9 @@ typedef void (*duckdb_v2_vfs_remove_directory_callback_fn)(duckdb_v2_vfs_info_ha
  * reached. The engine calls it when it renames a file it wrote under a temporary name into its final place, so it
  * should be atomic where the backend allows it.
  */
-typedef void (*duckdb_v2_vfs_move_callback_fn)(duckdb_v2_vfs_info_handle info, duckdb_v2_str source,
-                                               duckdb_v2_str target, duckdb_v2_error_info_handle *err);
+typedef void (*duckdb_v2_vfs_move_callback_fn)(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_move_info_handle op_info,
+                                               duckdb_v2_str source, duckdb_v2_str target,
+                                               duckdb_v2_error_info_handle *err);
 
 /* --- Functions for virtual file system --- */
 
@@ -12779,13 +12897,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_set_move_callback(duckdb_v2_vfs_handl
  * `duckdb_v2_vfs_file_open_get_metadata()` instead. Names are case-sensitive. A name with no value is not an error, and
  * null is returned. The returned value is owned by the caller and must be destroyed via `duckdb_v2_value_destroy()`.
  *
- * Only valid in the file open callback: called with the info handle of any other callback it fails with
- * `ERROR_INPUT_INVALID`.
- *
  * history:
  * - stable: v2.0.0
  *
- * @param info The info handle of the file open callback.
+ * @param info The file open info handle.
  * @param name The name of the value. Borrowed for the call only.
  * @param value Receives the value, or null if none was attached under that name. Owned by the caller; destroy via
  * `duckdb_v2_value_destroy()`.
@@ -12793,8 +12908,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_set_move_callback(duckdb_v2_vfs_handl
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_get_value(duckdb_v2_vfs_info_handle info, duckdb_v2_str name,
-                                                               duckdb_v2_value_handle *value,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_get_value(duckdb_v2_vfs_file_open_info_handle info,
+                                                               duckdb_v2_str name, duckdb_v2_value_handle *value,
                                                                duckdb_v2_error_info_handle *err);
 
 /*!
@@ -12805,19 +12920,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_get_value(duckdb_v2_vfs_inf
  * `duckdb_v2_file_metadata_get_size()` and its siblings, each of which reports whether its field is known. Borrowed and
  * valid only for the duration of the callback, and must not be destroyed.
  *
- * Only valid in the file open callback: called with the info handle of any other callback it fails with
- * `ERROR_INPUT_INVALID`.
- *
  * history:
  * - stable: v2.0.0
  *
- * @param info The info handle of the file open callback.
+ * @param info The file open info handle.
  * @param metadata Receives the borrowed metadata info, empty when no listing reported anything.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_get_metadata(duckdb_v2_vfs_info_handle info,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_get_metadata(duckdb_v2_vfs_file_open_info_handle info,
                                                                   duckdb_v2_file_metadata_handle *metadata,
                                                                   duckdb_v2_error_info_handle *err);
 
@@ -12829,19 +12941,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_get_metadata(duckdb_v2_vfs_
  * adjusted with the usual setters first. They are owned by the caller and must be destroyed with
  * `duckdb_v2_file_open_options_destroy()`.
  *
- * Only valid in the file open callback: called with the info handle of any other callback it fails with
- * `ERROR_INPUT_INVALID`.
- *
  * history:
  * - stable: v2.0.0
  *
- * @param info The info handle of the file open callback.
+ * @param info The file open info handle.
  * @param options Receives the new options. Owned by the caller; destroy via `duckdb_v2_file_open_options_destroy()`.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_get_options(duckdb_v2_vfs_info_handle info,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_get_options(duckdb_v2_vfs_file_open_info_handle info,
                                                                  duckdb_v2_file_open_options_handle *options,
                                                                  duckdb_v2_error_info_handle *err);
 
@@ -12854,20 +12963,17 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_get_options(duckdb_v2_vfs_i
  * callback once the engine is done with the file, or right away if the open fails. Calling this again destroys the
  * previous state and replaces it.
  *
- * Only valid in the file open callback: called with the info handle of any other callback it fails with
- * `ERROR_INPUT_INVALID`.
- *
  * history:
  * - stable: v2.0.0
  *
- * @param info The info handle of the file open callback.
+ * @param info The file open info handle.
  * @param data Opaque handle bundling the per-file state pointer plus an optional destructor.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_set_data(duckdb_v2_vfs_info_handle info, duckdb_v2_opaque *data,
-                                                              duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_set_data(duckdb_v2_vfs_file_open_info_handle info,
+                                                              duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
 
 /*!
  * Reports a property of the file being opened.
@@ -12876,20 +12982,17 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_set_data(duckdb_v2_vfs_info
  * file system may serve different kinds of files, such as a seekable object next to a forward-only stream.
  * `FILE_PROPERTY_INVALID` is rejected, as is any value that is not a `DUCKDB_V2_FILE_PROPERTY`.
  *
- * Only valid in the file open callback: called with the info handle of any other callback it fails with
- * `ERROR_INPUT_INVALID`.
- *
  * history:
  * - stable: v2.0.0
  *
- * @param info The info handle of the file open callback.
+ * @param info The file open info handle.
  * @param property The property to report.
  * @param value The value of the property for this file.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_set_property(duckdb_v2_vfs_info_handle info,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_set_property(duckdb_v2_vfs_file_open_info_handle info,
                                                                   DUCKDB_V2_FILE_PROPERTY property, bool value,
                                                                   duckdb_v2_error_info_handle *err);
 
@@ -12899,7 +13002,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_set_property(duckdb_v2_vfs_
  * history:
  * - stable: v2.0.0
  *
- * @param info The file system info handle.
+ * @param info The shared info handle.
  * @param data Receives the user data pointer, or null if none was set.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
@@ -12920,7 +13023,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_info_get_user_data(duckdb_v2_vfs_info
  * history:
  * - stable: v2.0.0
  *
- * @param info The file system info handle.
+ * @param info The shared info handle.
  * @param file_system Receives the borrowed file system.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
@@ -12941,7 +13044,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_info_get_file_system(duckdb_v2_vfs_in
  * history:
  * - stable: v2.0.0
  *
- * @param info The file system info handle.
+ * @param info The shared info handle.
  * @param context Receives the borrowed context, or null if the operation happens outside a query or is a file callback.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.

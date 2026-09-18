@@ -1360,16 +1360,19 @@ typedef struct {
 	(duckdb_v2_extension_handle extension, duckdb_v2_vfs_handle *file_system, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_vfs_destroy)(duckdb_v2_vfs_handle *file_system);
 	DUCKDB_V2_ERROR(*duckdb_v2_vfs_file_open_get_metadata)
-	(duckdb_v2_vfs_info_handle info, duckdb_v2_file_metadata_handle *metadata, duckdb_v2_error_info_handle *err);
+	(duckdb_v2_vfs_file_open_info_handle info, duckdb_v2_file_metadata_handle *metadata,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vfs_file_open_get_options)
-	(duckdb_v2_vfs_info_handle info, duckdb_v2_file_open_options_handle *options, duckdb_v2_error_info_handle *err);
+	(duckdb_v2_vfs_file_open_info_handle info, duckdb_v2_file_open_options_handle *options,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vfs_file_open_get_value)
-	(duckdb_v2_vfs_info_handle info, duckdb_v2_str name, duckdb_v2_value_handle *value,
+	(duckdb_v2_vfs_file_open_info_handle info, duckdb_v2_str name, duckdb_v2_value_handle *value,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vfs_file_open_set_data)
-	(duckdb_v2_vfs_info_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
+	(duckdb_v2_vfs_file_open_info_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vfs_file_open_set_property)
-	(duckdb_v2_vfs_info_handle info, DUCKDB_V2_FILE_PROPERTY property, bool value, duckdb_v2_error_info_handle *err);
+	(duckdb_v2_vfs_file_open_info_handle info, DUCKDB_V2_FILE_PROPERTY property, bool value,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vfs_info_get_file_system)
 	(duckdb_v2_vfs_info_handle info, duckdb_v2_file_system_handle *file_system, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vfs_info_get_user_data)

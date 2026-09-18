@@ -77,10 +77,10 @@ handles:
       Callbacks come in two groups. File system callbacks (`claim`, `stat`, `list`, `glob`, `remove_file`,
       `create_directory`, `remove_directory`, `move`) operate on a path. File callbacks (`open`, `close`, `abort`,
       `read_at`, `write_at`, `read`, `write`, `seek`, `tell`, `stat`, `sync`, `truncate`) operate on one file: "open"
-      produces it from a path, the others act on what it produced. Every callback receives a borrowed request
-      handle for the file system operation as its first argument. `claim`, `open` and the path callbacks receive
+      produces it from a path, the others act on what it produced. Every callback receives the shared info handle as its
+      first argument and the handle of its own operation as its second. `claim`, `open` and the path callbacks receive
       the path as a plain argument next to it, `open` its flags after that, and the other file callbacks
-      the per-file state. The file system's user data is reachable from the request; a file callback finds what
+      the per-file state. The file system's user data is reachable from the shared info; a file callback finds what
       it needs in the per-file state the "open" callback attached.
 
       A missing path is reported differently depending on the kind of operation. File system queries report it through 
@@ -94,7 +94,7 @@ handles:
       ) on the same file. Similarly, the individual file's "data" destructor will run after either `close` or `abort` 
       have been called.
       
-      A file system can delegate to other file systems. The file system operation info handle has a
+      A file system can delegate to other file systems. The shared info handle has a
       `get_file_system` function that returns the engine's file system, which is also reachable through a
       context, and `[[vfs_file_open_get_options]]` turns an open request into options for 
       `[[file_system_open]]`. This is how an overlay (caching, encryption, logging, ...) file system can open the 
@@ -107,13 +107,93 @@ handles:
 
   vfs_info:
     description: |
-      A borrowed opaque handle to one file system operation, passed to every callback: to "claim" and the path
-      callbacks next to the path, to "open" next to the path and the flags, and to the other file callbacks next to
-      the per-file state. It provides access to the file system's user data, to the engine's file system for
-      delegation, and to the context of the query performing the operation when there is one. In the "open"
-      callback it also carries the open request, read and answered through the `vfs_file_open` functions, which
-      fail on the handle of any other callback. Anything a file callback needs about its file -- the path, the
-      flags -- the "open" callback stashes in the per-file state.
+      A borrowed opaque handle to what every file system operation has in common, passed first to every callback,
+      followed by the handle of the operation itself. It provides access to the file system's user data, to the
+      engine's file system for delegation, and to the context of the query performing the operation when there is
+      one. Anything a file callback needs about its file -- the path, the flags -- the "open" callback stashes in
+      the per-file state.
+
+  vfs_claim_info:
+    description: |
+      A borrowed opaque handle to one claim operation.
+
+  vfs_stat_info:
+    description: |
+      A borrowed opaque handle to one stat operation.
+
+  vfs_list_info:
+    description: |
+      A borrowed opaque handle to one list operation.
+
+  vfs_glob_info:
+    description: |
+      A borrowed opaque handle to one glob operation.
+
+  vfs_remove_file_info:
+    description: |
+      A borrowed opaque handle to one remove file operation.
+
+  vfs_create_directory_info:
+    description: |
+      A borrowed opaque handle to one create directory operation.
+
+  vfs_remove_directory_info:
+    description: |
+      A borrowed opaque handle to one remove directory operation.
+
+  vfs_move_info:
+    description: |
+      A borrowed opaque handle to one move operation.
+
+  vfs_file_open_info:
+    description: |
+      A borrowed opaque handle to one file open operation. It carries the open request: the values the caller
+      attached, what a listing knew about the file, and the options to forward the request with, and it is where
+      the callback attaches the per-file state and reports the file's properties.
+
+  vfs_file_close_info:
+    description: |
+      A borrowed opaque handle to one file close operation.
+
+  vfs_file_abort_info:
+    description: |
+      A borrowed opaque handle to one file abort operation.
+
+  vfs_file_read_at_info:
+    description: |
+      A borrowed opaque handle to one file read at operation.
+
+  vfs_file_write_at_info:
+    description: |
+      A borrowed opaque handle to one file write at operation.
+
+  vfs_file_read_info:
+    description: |
+      A borrowed opaque handle to one file read operation.
+
+  vfs_file_write_info:
+    description: |
+      A borrowed opaque handle to one file write operation.
+
+  vfs_file_seek_info:
+    description: |
+      A borrowed opaque handle to one file seek operation.
+
+  vfs_file_tell_info:
+    description: |
+      A borrowed opaque handle to one file tell operation.
+
+  vfs_file_stat_info:
+    description: |
+      A borrowed opaque handle to one file stat operation.
+
+  vfs_file_sync_info:
+    description: |
+      A borrowed opaque handle to one file sync operation.
+
+  vfs_file_truncate_info:
+    description: |
+      A borrowed opaque handle to one file truncate operation.
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Callbacks
@@ -130,7 +210,10 @@ callbacks:
     parameters:
       info:
         type: vfs_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
+        description: Borrowed opaque handle to the shared info of the operation. Valid only for the duration of the callback.
+      op_info:
+        type: vfs_claim_info
+        description: Borrowed opaque handle to this claim operation. Valid only for the duration of the callback.
       path:
         type: str
         description: The path to decide on. Borrowed for the duration of the callback.
@@ -149,9 +232,9 @@ callbacks:
     description: |
       Opens a file.
 
-      The flags come as a complete list, and the values the caller attached to the open, what a listing knew
-      about the file, and the context of the query opening it are read from `info` with the `vfs_file_open`
-      functions, which are valid only here. On success the callback attaches per-file state via
+      The flags come as a complete list; the values the caller attached to the open and what a listing knew
+      about the file are read from `op_info`, and the context of the query opening it from `info`. On success
+      the callback attaches per-file state via
       `[[vfs_file_open_set_data]]`, which every other file callback then receives, and reports any property of
       the file via `[[vfs_file_open_set_property]]`. A file opened with `FILE_FLAG_APPEND` starts with its cursor
       at the end.
@@ -162,7 +245,10 @@ callbacks:
     parameters:
       info:
         type: vfs_info
-        description: Borrowed opaque handle to the file system operation. Valid only for the duration of the callback.
+        description: Borrowed opaque handle to the shared info of the operation. Valid only for the duration of the callback.
+      op_info:
+        type: vfs_file_open_info
+        description: Borrowed opaque handle to this file open operation. Valid only for the duration of the callback.
       path:
         type: str
         description: The path of the file to open. Borrowed for the duration of the callback.
@@ -203,7 +289,10 @@ callbacks:
     parameters:
       info:
         type: vfs_info
-        description: Borrowed opaque handle to the file system operation. Valid only for the duration of the callback.
+        description: Borrowed opaque handle to the shared info of the operation. Valid only for the duration of the callback.
+      op_info:
+        type: vfs_file_close_info
+        description: Borrowed opaque handle to this file close operation. Valid only for the duration of the callback.
       file:
         type: void
         indirection: 1
@@ -226,7 +315,10 @@ callbacks:
     parameters:
       info:
         type: vfs_info
-        description: Borrowed opaque handle to the file system operation. Valid only for the duration of the callback.
+        description: Borrowed opaque handle to the shared info of the operation. Valid only for the duration of the callback.
+      op_info:
+        type: vfs_file_abort_info
+        description: Borrowed opaque handle to this file abort operation. Valid only for the duration of the callback.
       file:
         type: void
         indirection: 1
@@ -249,7 +341,10 @@ callbacks:
     parameters:
       info:
         type: vfs_info
-        description: Borrowed opaque handle to the file system operation. Valid only for the duration of the callback.
+        description: Borrowed opaque handle to the shared info of the operation. Valid only for the duration of the callback.
+      op_info:
+        type: vfs_file_read_at_info
+        description: Borrowed opaque handle to this file read at operation. Valid only for the duration of the callback.
       file:
         type: void
         indirection: 1
@@ -286,7 +381,10 @@ callbacks:
     parameters:
       info:
         type: vfs_info
-        description: Borrowed opaque handle to the file system operation. Valid only for the duration of the callback.
+        description: Borrowed opaque handle to the shared info of the operation. Valid only for the duration of the callback.
+      op_info:
+        type: vfs_file_write_at_info
+        description: Borrowed opaque handle to this file write at operation. Valid only for the duration of the callback.
       file:
         type: void
         indirection: 1
@@ -319,7 +417,10 @@ callbacks:
     parameters:
       info:
         type: vfs_info
-        description: Borrowed opaque handle to the file system operation. Valid only for the duration of the callback.
+        description: Borrowed opaque handle to the shared info of the operation. Valid only for the duration of the callback.
+      op_info:
+        type: vfs_file_read_info
+        description: Borrowed opaque handle to this file read operation. Valid only for the duration of the callback.
       file:
         type: void
         indirection: 1
@@ -351,7 +452,10 @@ callbacks:
     parameters:
       info:
         type: vfs_info
-        description: Borrowed opaque handle to the file system operation. Valid only for the duration of the callback.
+        description: Borrowed opaque handle to the shared info of the operation. Valid only for the duration of the callback.
+      op_info:
+        type: vfs_file_write_info
+        description: Borrowed opaque handle to this file write operation. Valid only for the duration of the callback.
       file:
         type: void
         indirection: 1
@@ -379,7 +483,10 @@ callbacks:
     parameters:
       info:
         type: vfs_info
-        description: Borrowed opaque handle to the file system operation. Valid only for the duration of the callback.
+        description: Borrowed opaque handle to the shared info of the operation. Valid only for the duration of the callback.
+      op_info:
+        type: vfs_file_seek_info
+        description: Borrowed opaque handle to this file seek operation. Valid only for the duration of the callback.
       file:
         type: void
         indirection: 1
@@ -398,7 +505,10 @@ callbacks:
     parameters:
       info:
         type: vfs_info
-        description: Borrowed opaque handle to the file system operation. Valid only for the duration of the callback.
+        description: Borrowed opaque handle to the shared info of the operation. Valid only for the duration of the callback.
+      op_info:
+        type: vfs_file_tell_info
+        description: Borrowed opaque handle to this file tell operation. Valid only for the duration of the callback.
       file:
         type: void
         indirection: 1
@@ -427,7 +537,10 @@ callbacks:
     parameters:
       info:
         type: vfs_info
-        description: Borrowed opaque handle to the file system operation. Valid only for the duration of the callback.
+        description: Borrowed opaque handle to the shared info of the operation. Valid only for the duration of the callback.
+      op_info:
+        type: vfs_file_stat_info
+        description: Borrowed opaque handle to this file stat operation. Valid only for the duration of the callback.
       file:
         type: void
         indirection: 1
@@ -450,7 +563,10 @@ callbacks:
     parameters:
       info:
         type: vfs_info
-        description: Borrowed opaque handle to the file system operation. Valid only for the duration of the callback.
+        description: Borrowed opaque handle to the shared info of the operation. Valid only for the duration of the callback.
+      op_info:
+        type: vfs_file_sync_info
+        description: Borrowed opaque handle to this file sync operation. Valid only for the duration of the callback.
       file:
         type: void
         indirection: 1
@@ -470,7 +586,10 @@ callbacks:
     parameters:
       info:
         type: vfs_info
-        description: Borrowed opaque handle to the file system operation. Valid only for the duration of the callback.
+        description: Borrowed opaque handle to the shared info of the operation. Valid only for the duration of the callback.
+      op_info:
+        type: vfs_file_truncate_info
+        description: Borrowed opaque handle to this file truncate operation. Valid only for the duration of the callback.
       file:
         type: void
         indirection: 1
@@ -497,7 +616,10 @@ callbacks:
     parameters:
       info:
         type: vfs_info
-        description: Borrowed opaque handle to the file system operation. Valid only for the duration of the callback.
+        description: Borrowed opaque handle to the shared info of the operation. Valid only for the duration of the callback.
+      op_info:
+        type: vfs_stat_info
+        description: Borrowed opaque handle to this stat operation. Valid only for the duration of the callback.
       path:
         type: str
         description: The path to report on. Borrowed for the duration of the callback.
@@ -519,7 +641,10 @@ callbacks:
     parameters:
       info:
         type: vfs_info
-        description: Borrowed opaque handle to the file system operation. Valid only for the duration of the callback.
+        description: Borrowed opaque handle to the shared info of the operation. Valid only for the duration of the callback.
+      op_info:
+        type: vfs_list_info
+        description: Borrowed opaque handle to this list operation. Valid only for the duration of the callback.
       path:
         type: str
         description: The directory to list. Borrowed for the duration of the callback.
@@ -546,7 +671,10 @@ callbacks:
     parameters:
       info:
         type: vfs_info
-        description: Borrowed opaque handle to the file system operation. Valid only for the duration of the callback.
+        description: Borrowed opaque handle to the shared info of the operation. Valid only for the duration of the callback.
+      op_info:
+        type: vfs_glob_info
+        description: Borrowed opaque handle to this glob operation. Valid only for the duration of the callback.
       pattern:
         type: str
         description: The pattern to expand. Borrowed for the duration of the callback.
@@ -569,7 +697,10 @@ callbacks:
     parameters:
       info:
         type: vfs_info
-        description: Borrowed opaque handle to the file system operation. Valid only for the duration of the callback.
+        description: Borrowed opaque handle to the shared info of the operation. Valid only for the duration of the callback.
+      op_info:
+        type: vfs_remove_file_info
+        description: Borrowed opaque handle to this remove file operation. Valid only for the duration of the callback.
       path:
         type: str
         description: The path of the file to remove. Borrowed for the duration of the callback.
@@ -588,7 +719,10 @@ callbacks:
     parameters:
       info:
         type: vfs_info
-        description: Borrowed opaque handle to the file system operation. Valid only for the duration of the callback.
+        description: Borrowed opaque handle to the shared info of the operation. Valid only for the duration of the callback.
+      op_info:
+        type: vfs_create_directory_info
+        description: Borrowed opaque handle to this create directory operation. Valid only for the duration of the callback.
       path:
         type: str
         description: The path of the directory to create. Borrowed for the duration of the callback.
@@ -603,7 +737,10 @@ callbacks:
     parameters:
       info:
         type: vfs_info
-        description: Borrowed opaque handle to the file system operation. Valid only for the duration of the callback.
+        description: Borrowed opaque handle to the shared info of the operation. Valid only for the duration of the callback.
+      op_info:
+        type: vfs_remove_directory_info
+        description: Borrowed opaque handle to this remove directory operation. Valid only for the duration of the callback.
       path:
         type: str
         description: The path of the directory to remove. Borrowed for the duration of the callback.
@@ -623,7 +760,10 @@ callbacks:
     parameters:
       info:
         type: vfs_info
-        description: Borrowed opaque handle to the file system operation. Valid only for the duration of the callback.
+        description: Borrowed opaque handle to the shared info of the operation. Valid only for the duration of the callback.
+      op_info:
+        type: vfs_move_info
+        description: Borrowed opaque handle to this move operation. Valid only for the duration of the callback.
       source:
         type: str
         description: The path of the file to move. Borrowed for the duration of the callback.
@@ -1222,13 +1362,10 @@ functions:
       `[[vfs_file_open_get_metadata]]` instead. Names are case-sensitive. A name with no value is not an
       error, and null is returned. The returned value is owned by the caller and must be destroyed via
       `[[value_destroy]]`.
-
-      Only valid in the file open callback: called with the info handle of any other callback it fails with
-      `ERROR_INPUT_INVALID`.
     parameters:
       info:
-        type: vfs_info
-        description: The info handle of the file open callback.
+        type: vfs_file_open_info
+        description: The file open info handle.
       name:
         type: str
         description: The name of the value. Borrowed for the call only.
@@ -1253,13 +1390,10 @@ functions:
       modification time, version tag) is returned here, so the backend does not need to fetch it again. Read it with
       `[[file_metadata_get_size]]` and its siblings, each of which reports whether its field is known. Borrowed and
       valid only for the duration of the callback, and must not be destroyed.
-
-      Only valid in the file open callback: called with the info handle of any other callback it fails with
-      `ERROR_INPUT_INVALID`.
     parameters:
       info:
-        type: vfs_info
-        description: The info handle of the file open callback.
+        type: vfs_file_open_info
+        description: The file open info handle.
       metadata:
         type: file_metadata
         indirection: 1
@@ -1281,13 +1415,10 @@ functions:
       can open the underlying file, typically under a rewritten path, exactly as it was asked to open this one. The
       options can be adjusted with the usual setters first. They are owned by the caller and must be destroyed with
       `[[file_open_options_destroy]]`.
-
-      Only valid in the file open callback: called with the info handle of any other callback it fails with
-      `ERROR_INPUT_INVALID`.
     parameters:
       info:
-        type: vfs_info
-        description: The info handle of the file open callback.
+        type: vfs_file_open_info
+        description: The file open info handle.
       options:
         type: file_open_options
         indirection: 1
@@ -1311,13 +1442,10 @@ functions:
       bundles the pointer with an optional destructor, invoked after the "close" or "abort" callback once the engine
       is done with the file, or right away if the open fails. Calling this again destroys the previous state and
       replaces it.
-
-      Only valid in the file open callback: called with the info handle of any other callback it fails with
-      `ERROR_INPUT_INVALID`.
     parameters:
       info:
-        type: vfs_info
-        description: The info handle of the file open callback.
+        type: vfs_file_open_info
+        description: The file open info handle.
       data:
         type: opaque
         indirection: 1
@@ -1337,13 +1465,10 @@ functions:
       See `[[FILE_PROPERTY]]` for the properties and their defaults. Properties are reported per open because one
       file system may serve different kinds of files, such as a seekable object next to a forward-only stream.
       `FILE_PROPERTY_INVALID` is rejected, as is any value that is not a `[[FILE_PROPERTY]]`.
-
-      Only valid in the file open callback: called with the info handle of any other callback it fails with
-      `ERROR_INPUT_INVALID`.
     parameters:
       info:
-        type: vfs_info
-        description: The info handle of the file open callback.
+        type: vfs_file_open_info
+        description: The file open info handle.
       property:
         type: FILE_PROPERTY
         description: The property to report.
@@ -1366,7 +1491,7 @@ functions:
     parameters:
       info:
         type: vfs_info
-        description: The file system info handle.
+        description: The shared info handle.
       data:
         type: void
         indirection: 2
@@ -1392,7 +1517,7 @@ functions:
     parameters:
       info:
         type: vfs_info
-        description: The file system info handle.
+        description: The shared info handle.
       file_system:
         type: file_system
         indirection: 1
@@ -1417,7 +1542,7 @@ functions:
     parameters:
       info:
         type: vfs_info
-        description: The file system info handle.
+        description: The shared info handle.
       context:
         type: context
         indirection: 1
