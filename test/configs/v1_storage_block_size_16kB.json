@@ -34,6 +34,12 @@
         "test/sql/optimizer/secure_view_pushdown.test",
         "test/sql/optimizer/secure_view_statistics.test"
       ]
+    },
+    {
+      "reason": "String min/max statistics use the legacy format below v2.0.0, so MIN/MAX over VARCHAR columns are not folded.",
+      "paths": [
+        "test/optimizer/aggregate_fold_bail_paths.test"
+      ]
     }
   ]
 }
