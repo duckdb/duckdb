@@ -1216,7 +1216,7 @@ public:
 	                                           vector<unique_ptr<Expression>> &filters) {
 		auto &data = bind_data_p->Cast<MultiFileBindData>();
 
-		MultiFilePushdownInfo info(get);
+		MultiFilePushdownInfo info(get.table_index, data.names, get.GetColumnIds(), get.extra_info);
 		auto new_list =
 		    data.multi_file_reader->ComplexFilterPushdown(context, *data.file_list, data.file_options, info, filters);
 
