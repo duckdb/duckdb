@@ -138,7 +138,7 @@ vector<string> ExtensionRepositoryManager::FetchPublicKeys(DatabaseInstance &db,
 
 	auto &fs = db.GetFileSystem();
 	// remote file systems are provided by extensions - autoload them if necessary
-	string required_extension;
+	Identifier required_extension;
 	if (context && fs.IsRemoteFile(metadata_path, required_extension) && !db.ExtensionIsLoaded(required_extension) &&
 	    Settings::Get<AutoloadKnownExtensionsSetting>(*context)) {
 		ExtensionHelper::AutoLoadExtension(*context, required_extension);

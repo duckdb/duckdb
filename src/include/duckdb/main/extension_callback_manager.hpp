@@ -50,9 +50,9 @@ public:
 	void Register(PlannerExtension extension);
 	void Register(OptimizerExtension extension);
 	void Register(shared_ptr<OperatorExtension> extension);
-	void Register(const string &name, shared_ptr<StorageExtension> extension);
+	void Register(const Identifier &name, shared_ptr<StorageExtension> extension);
 	void Register(shared_ptr<ExtensionCallback> extension);
-	void Register(const string &name, shared_ptr<ProfilerExtension> extension);
+	void Register(const Identifier &name, shared_ptr<ProfilerExtension> extension);
 
 	ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> OperatorExtensions() const;
 	ExtensionCallbackIteratorHelper<OptimizerExtension> OptimizerExtensions() const;
@@ -60,12 +60,12 @@ public:
 	ExtensionCallbackIteratorHelper<shared_ptr<DialectExtension>> DialectExtensions() const;
 	ExtensionCallbackIteratorHelper<PlannerExtension> PlannerExtensions() const;
 	ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> ExtensionCallbacks() const;
-	optional_ptr<StorageExtension> FindStorageExtension(const string &name) const;
-	optional_ptr<GrammarExtension> FindGrammarExtension(const string &name) const;
-	case_insensitive_map_t<shared_ptr<GrammarExtension>> GrammarExtensions() const;
-	optional_ptr<ProfilerExtension> FindProfilerExtension(const string &name) const;
+	optional_ptr<StorageExtension> FindStorageExtension(const Identifier &name) const;
+	optional_ptr<GrammarExtension> FindGrammarExtension(const Identifier &name) const;
+	identifier_map_t<shared_ptr<GrammarExtension>> GrammarExtensions() const;
+	optional_ptr<ProfilerExtension> FindProfilerExtension(const Identifier &name) const;
 	bool HasParserExtensions() const;
-	optional_ptr<DialectExtension> GetDialectExtension(const string &name) const;
+	optional_ptr<DialectExtension> GetDialectExtension(const Identifier &name) const;
 
 private:
 	mutex registry_lock;

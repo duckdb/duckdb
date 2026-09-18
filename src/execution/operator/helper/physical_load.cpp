@@ -76,7 +76,7 @@ SourceResultType PhysicalLoad::GetDataInternal(ExecutionContext &context, DataCh
 		// top-level layout, which a bare load resolves
 		if (info->load_after_install) {
 			ExtensionLoadOptions load_options;
-			load_options.extension_name = info->filename;
+			load_options.extension_name_or_path = info->filename;
 			load_options.repository = info->repo_is_alias ? info->repository : string();
 			ExtensionHelper::LoadExternalExtension(context.client, load_options);
 			ExtensionLoader::RefreshSearchPath(context.client);
@@ -84,7 +84,7 @@ SourceResultType PhysicalLoad::GetDataInternal(ExecutionContext &context, DataCh
 
 	} else {
 		ExtensionLoadOptions options;
-		options.extension_name = info->filename;
+		options.extension_name_or_path = info->filename;
 		options.alias = info->alias;
 		options.repository = info->repository;
 		ExtensionHelper::LoadExternalExtension(context.client, options);

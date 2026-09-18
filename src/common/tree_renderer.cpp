@@ -64,10 +64,9 @@ static const ProfilerPrintFormatEntry PRINT_FORMATS[] = {
 };
 
 //! Look up the registry entry for a format name, throwing InvalidInputException (listing valid names) when unknown.
-static const ProfilerPrintFormatEntry &LookupProfilerPrintFormat(const string &name) {
-	auto lower = StringUtil::Lower(name);
+static const ProfilerPrintFormatEntry &LookupProfilerPrintFormat(const Identifier &name) {
 	for (auto &entry : PRINT_FORMATS) {
-		if (lower == entry.name) {
+		if (name == entry.name) {
 			return entry;
 		}
 	}
@@ -75,19 +74,19 @@ static const ProfilerPrintFormatEntry &LookupProfilerPrintFormat(const string &n
 	for (auto &entry : PRINT_FORMATS) {
 		options.push_back(entry.name);
 	}
-	throw InvalidInputException("\"%s\" is not a valid FORMAT argument, valid options are: %s", name,
+	throw InvalidInputException("%s is not a valid FORMAT argument, valid options are: %s", name,
 	                            StringUtil::Join(options, ", "));
 }
 
-unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(const string &name) {
+unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(const Identifier &name) {
 	return LookupProfilerPrintFormat(name).create_renderer();
 }
 
 unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(const ProfilerPrintFormat &format) {
-	return CreateRenderer(format.ToString());
+	return CreateRenderer(format.ToIdentifier());
 }
 
-unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(ClientContext &context, const string &name) {
+unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(ClientContext &context, const Identifier &name) {
 	// registered renderers take precedence over the built-in formats
 	auto extension = ProfilerExtension::Find(context, name);
 	if (extension && extension->create_renderer) {
@@ -101,7 +100,7 @@ unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(ClientContext &context, co
 }
 
 unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(ClientContext &context, const ProfilerPrintFormat &format) {
-	return CreateRenderer(context, format.ToString());
+	return CreateRenderer(context, format.ToIdentifier());
 }
 
 } // namespace duckdb

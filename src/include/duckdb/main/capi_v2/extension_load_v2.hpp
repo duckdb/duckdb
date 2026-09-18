@@ -29,13 +29,13 @@ typedef void (*ext_init_c_api_v2_fun_t)(::duckdb_v2_extension_input *input);
 //! internal connection is opened for the duration of the call instead. `statically_linked` extensions resolve DuckDB's
 //! symbols at link time, so they get no get_api callback.
 typedef void (*invoke_ext_capi_v2_fun_t)(DatabaseInstance &db, const ExtensionInitResult &init_result,
-                                         const string &extension_name, ext_init_c_api_v2_fun_t init_fun,
+                                         const string &extension_name_or_path, ext_init_c_api_v2_fun_t init_fun,
                                          optional_ptr<ClientContext> context, bool statically_linked);
 
 //! The implementation behind DatabaseInstance::invoke_capi_v2. Call it through DatabaseInstance rather than directly:
 //! see the member for why.
-void InvokeCAPIV2Entrypoint(DatabaseInstance &db, const ExtensionInitResult &init_result, const string &extension_name,
-                            ext_init_c_api_v2_fun_t init_fun, optional_ptr<ClientContext> context,
-                            bool statically_linked);
+void InvokeCAPIV2Entrypoint(DatabaseInstance &db, const ExtensionInitResult &init_result,
+                            const string &extension_name_or_path, ext_init_c_api_v2_fun_t init_fun,
+                            optional_ptr<ClientContext> context, bool statically_linked);
 
 } // namespace duckdb

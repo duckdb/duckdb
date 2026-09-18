@@ -5,17 +5,17 @@
 statement error
 CREATE TABLE integers(i INTEGER) PARTITIONED BY (i);
 ----
-<REGEX>:.*PARTITIONED BY is not supported for tables in a duckdb catalog.*
+<REGEX>:.*PARTITIONED BY is not supported for tables in a "duckdb" catalog.*
 
 statement error
 CREATE TABLE integers(i INTEGER) SORTED BY (i);
 ----
-<REGEX>:.*SORTED BY is not supported for tables in a duckdb catalog.*
+<REGEX>:.*SORTED BY is not supported for tables in a "duckdb" catalog.*
 
 statement error
 CREATE TABLE integers(i INTEGER) PARTITIONED BY (i) SORTED BY (i);
 ----
-<REGEX>:.*PARTITIONED BY is not supported for tables in a duckdb catalog.*
+<REGEX>:.*PARTITIONED BY is not supported for tables in a "duckdb" catalog.*
 
 statement error
 CREATE TABLE iceberg_table (
@@ -28,7 +28,7 @@ WITH (
     'format'='parquet'
 );
 ----
-<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
+<REGEX>:.*WITH clause is not supported for tables in a "duckdb" catalog.*
 
 # with statement key is not quoted
 statement error
@@ -42,7 +42,7 @@ WITH (
     format = 'parquet'
 );
 ----
-<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
+<REGEX>:.*WITH clause is not supported for tables in a "duckdb" catalog.*
 
 statement error
 CREATE TABLE iceberg_table (
@@ -57,7 +57,7 @@ WITH (
   format='parquet'
 );
 ----
-<REGEX>:.*PARTITIONED BY is not supported for tables in a duckdb catalog.*
+<REGEX>:.*PARTITIONED BY is not supported for tables in a "duckdb" catalog.*
 
 statement error
 CREATE TABLE iceberg_table (
@@ -71,7 +71,7 @@ WITH (
   format='parquet'
 );
 ----
-<REGEX>:.*SORTED BY is not supported for tables in a duckdb catalog.*
+<REGEX>:.*SORTED BY is not supported for tables in a "duckdb" catalog.*
 
 statement error
 CREATE TABLE iceberg_table (
@@ -84,7 +84,7 @@ WITH (
   format='parquet'
 );
 ----
-<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
+<REGEX>:.*WITH clause is not supported for tables in a "duckdb" catalog.*
 
 
 # different orders
@@ -101,7 +101,7 @@ WITH (
   format='parquet'
 );
 ----
-<REGEX>:.*PARTITIONED BY is not supported for tables in a duckdb catalog.*
+<REGEX>:.*PARTITIONED BY is not supported for tables in a "duckdb" catalog.*
 
 # WITH must come after sorted and partition options
 statement error
@@ -130,7 +130,7 @@ CREATE TABLE iceberg_table (
   category string)
 Partitioned by (getvariable('location_var'));
 ----
-<REGEX>:.*PARTITIONED BY is not supported for tables in a duckdb catalog.*
+<REGEX>:.*PARTITIONED BY is not supported for tables in a "duckdb" catalog.*
 
 # Table options using a environment variable
 statement error
@@ -144,7 +144,7 @@ WITH (
   format='parquet'
 )
 ----
-<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
+<REGEX>:.*WITH clause is not supported for tables in a "duckdb" catalog.*
 
 # check when option keys are quoted
 statement error
@@ -158,7 +158,7 @@ WITH (
   'format'='parquet'
 )
 ----
-<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
+<REGEX>:.*WITH clause is not supported for tables in a "duckdb" catalog.*
 
 # single value options are also supported (default to True)
 statement error
@@ -172,7 +172,7 @@ WITH (
   'format'
 )
 ----
-<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
+<REGEX>:.*WITH clause is not supported for tables in a "duckdb" catalog.*
 
 # single value options are also supported (not quoted)
 statement error
@@ -186,4 +186,4 @@ WITH (
   format
 )
 ----
-<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
+<REGEX>:.*WITH clause is not supported for tables in a "duckdb" catalog.*

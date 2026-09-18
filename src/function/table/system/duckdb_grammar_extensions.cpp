@@ -7,7 +7,7 @@
 namespace duckdb {
 
 struct GrammarExtensionData {
-	string name;
+	Identifier name;
 	string description;
 };
 

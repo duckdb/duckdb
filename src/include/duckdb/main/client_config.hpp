@@ -35,7 +35,7 @@ struct ClientConfig {
 	bool enable_profiler = false;
 	//! The format to print query profiling information in (default: query_tree), if enabled.
 	//! This is the profiler format name passed to QueryProfiler::CreateProfiler.
-	string profiler_print_format = "query_tree";
+	Identifier profiler_print_format = "query_tree";
 	//! The file to save query profiling information to, instead of printing it to the console
 	//! (empty = print to console)
 	string profiler_save_location;
@@ -87,9 +87,9 @@ struct ClientConfig {
 	//! Function that is used to create the result collector for a materialized result.
 	get_result_collector_t get_result_collector = nullptr;
 
-	optional<string> current_dialect;
+	optional<Identifier> current_dialect;
 	//! The (ordered) list of grammar extensions currently used by the parser
-	case_insensitive_set_t active_grammar_extensions;
+	identifier_set_t active_grammar_extensions;
 	//! The compiled grammar active for the connection
 	shared_ptr<CompiledGrammar> cached_grammar;
 

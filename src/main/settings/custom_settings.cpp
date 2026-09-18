@@ -912,7 +912,7 @@ void DisabledLogTypes::ResetGlobal(DatabaseInstance *db_p, DBConfig &config) {
 // Enable Profiling
 //===----------------------------------------------------------------------===//
 void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto parameter = StringUtil::Lower(input.ToString());
+	auto parameter = input.GetValue<Identifier>();
 
 	auto &config = ClientConfig::GetConfig(context);
 
@@ -927,7 +927,7 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 		if (file_type != parameter && file_type != "txt") {
 			throw ParserException(
 			    "Profiler file type (%s) must either have the same file extension as the profiling output type (%s), "
-			    "or be a '.txt' file. Set 'profiling_output' to a '%s' file or run \"RESET profiling_output\" first.",
+			    "or be a '.txt' file. Set 'profiling_output' to a %s file or run \"RESET profiling_output\" first.",
 			    config.profiler_save_location, parameter, parameter);
 		}
 	}
@@ -1314,7 +1314,7 @@ void ProfilingOutputSetting::SetLocal(ClientContext &context, const Value &input
 		const auto file_type = file_system.ExtractExtension(parameter);
 		if (file_type != "txt") {
 			try {
-				QueryProfiler::Get(context).CreateProfiler(file_type);
+				QueryProfiler::Get(context).CreateProfiler(Identifier(file_type));
 			} catch (std::exception &e) {
 				throw ParserException("Invalid output file type: %s", file_type);
 			}
@@ -1810,11 +1810,11 @@ void CurrentDialectSetting::SetLocal(ClientContext &context, const Value &input)
 		client_config.current_dialect = std::nullopt;
 		return;
 	}
-	auto dialect_name = input.GetValue<string>();
+	auto dialect_name = input.GetValue<Identifier>();
 
 	auto dialect_extension_p = config.GetCallbackManager().GetDialectExtension(dialect_name);
 	if (!dialect_extension_p) {
-		throw InvalidInputException("Dialect \"%s\" is not installed", dialect_name);
+		throw InvalidInputException("Dialect %s is not installed", dialect_name);
 	}
 	auto &dialect_extension = *dialect_extension_p;
 	//! The grammar gets lazily compiled, load it if it wasn't compiled yet
@@ -1864,7 +1864,7 @@ void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Valu
 
 	auto &config = DatabaseInstance::GetDatabase(context).config;
 	auto &callback_manager = config.GetCallbackManager();
-	case_insensitive_set_t selected_extensions;
+	identifier_set_t selected_extensions;
 	if (input.type().id() != LogicalTypeId::LIST) {
 		throw InvalidInputException("'active_grammar_extensions' setting value should be of type VARCHAR[], not %s",
 		                            input.type().ToString());
@@ -1875,9 +1875,9 @@ void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Valu
 			throw InvalidInputException("'active_grammar_extensions' list values should be of type VARCHAR, not %s",
 			                            val.type().ToString());
 		}
-		auto val_str = val.GetValue<string>();
+		auto val_str = val.GetValue<Identifier>();
 		if (!selected_extensions.insert(val_str).second) {
-			throw InvalidInputException("'active_grammar_extensions' list contains duplicate value '%s'", val_str);
+			throw InvalidInputException("'active_grammar_extensions' list contains duplicate value %s", val_str);
 		}
 	}
 
@@ -1885,7 +1885,7 @@ void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Valu
 	for (auto &ext : selected_extensions) {
 		auto extension = callback_manager.FindGrammarExtension(ext);
 		if (!extension) {
-			missing.push_back(ext);
+			missing.push_back(ext.GetIdentifierName());
 		}
 	}
 	if (!missing.empty()) {

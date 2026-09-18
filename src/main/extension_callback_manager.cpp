@@ -20,7 +20,7 @@ struct ExtensionCallbackRegistry {
 	//! Extensions made to the parser
 	vector<ParserExtension> parser_extensions;
 	//! Extensions made to the grammar of the main (PEG) parser
-	case_insensitive_map_t<shared_ptr<GrammarExtension>> grammar_extensions;
+	identifier_map_t<shared_ptr<GrammarExtension>> grammar_extensions;
 	//! Extensions made to the planner
 	vector<PlannerExtension> planner_extensions;
 	//! Extensions made to the optimizer
@@ -28,11 +28,11 @@ struct ExtensionCallbackRegistry {
 	//! Extensions made to binder
 	vector<shared_ptr<OperatorExtension>> operator_extensions;
 	//! Extensions made to storage
-	case_insensitive_map_t<shared_ptr<StorageExtension>> storage_extensions;
+	identifier_map_t<shared_ptr<StorageExtension>> storage_extensions;
 	//! Set of callbacks that can be installed by extensions
 	vector<shared_ptr<ExtensionCallback>> extension_callbacks;
 	//! Pluggable profiler / EXPLAIN tree renderers, keyed by format name
-	case_insensitive_map_t<shared_ptr<ProfilerExtension>> profiler_extensions;
+	identifier_map_t<shared_ptr<ProfilerExtension>> profiler_extensions;
 };
 
 ExtensionCallbackManager &ExtensionCallbackManager::Get(ClientContext &context) {
@@ -77,8 +77,8 @@ void ExtensionCallbackManager::Register(shared_ptr<GrammarExtension> extension) 
 	auto res = new_registry->grammar_extensions.emplace(name, std::move(extension));
 	if (!res.second) {
 		//! FIXME: we'll want to namespace the GrammarExtension with the extension that added it
-		throw InvalidInputException(
-		    "Can't add GrammarExtension \"%s\", a GrammarExtension by that name already exists");
+		throw InvalidInputException("Can't add GrammarExtension %s, a GrammarExtension by that name already exists",
+		                            name);
 	}
 	callback_registry.atomic_store(new_registry);
 }
@@ -93,8 +93,8 @@ void ExtensionCallbackManager::Register(shared_ptr<DialectExtension> extension) 
 	lock_guard<mutex> guard(registry_lock);
 	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
 	for (auto &existing : new_registry->dialect_extensions) {
-		if (StringUtil::CIEquals(existing->Name(), extension->Name())) {
-			throw InvalidInputException("Dialect \"%s\" is already registered", extension->Name());
+		if (existing->Name() == extension->Name()) {
+			throw InvalidInputException("Dialect %s is already registered", extension->Name());
 		}
 	}
 	new_registry->dialect_extensions.push_back(std::move(extension));
@@ -122,7 +122,7 @@ void ExtensionCallbackManager::Register(shared_ptr<OperatorExtension> extension)
 	callback_registry.atomic_store(new_registry);
 }
 
-void ExtensionCallbackManager::Register(const string &name, shared_ptr<StorageExtension> extension) {
+void ExtensionCallbackManager::Register(const Identifier &name, shared_ptr<StorageExtension> extension) {
 	lock_guard<mutex> guard(registry_lock);
 	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
 	new_registry->storage_extensions[name] = std::move(extension);
@@ -136,7 +136,7 @@ void ExtensionCallbackManager::Register(shared_ptr<ExtensionCallback> extension)
 	callback_registry.atomic_store(new_registry);
 }
 
-void ExtensionCallbackManager::Register(const string &name, shared_ptr<ProfilerExtension> extension) {
+void ExtensionCallbackManager::Register(const Identifier &name, shared_ptr<ProfilerExtension> extension) {
 	lock_guard<mutex> guard(registry_lock);
 	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
 	new_registry->profiler_extensions[name] = std::move(extension);
@@ -159,7 +159,7 @@ ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> ExtensionCallback
 	return ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>>(operator_extensions, std::move(registry));
 }
 
-case_insensitive_map_t<shared_ptr<GrammarExtension>> ExtensionCallbackManager::GrammarExtensions() const {
+identifier_map_t<shared_ptr<GrammarExtension>> ExtensionCallbackManager::GrammarExtensions() const {
 	auto registry = callback_registry.atomic_load();
 	return registry->grammar_extensions;
 }
@@ -194,7 +194,7 @@ ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> ExtensionCallback
 	return ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>>(extension_callbacks, std::move(registry));
 }
 
-optional_ptr<GrammarExtension> ExtensionCallbackManager::FindGrammarExtension(const string &name) const {
+optional_ptr<GrammarExtension> ExtensionCallbackManager::FindGrammarExtension(const Identifier &name) const {
 	auto registry = callback_registry.atomic_load();
 	auto entry = registry->grammar_extensions.find(name);
 	if (entry == registry->grammar_extensions.end()) {
@@ -203,7 +203,7 @@ optional_ptr<GrammarExtension> ExtensionCallbackManager::FindGrammarExtension(co
 	return entry->second.get();
 }
 
-optional_ptr<StorageExtension> ExtensionCallbackManager::FindStorageExtension(const string &name) const {
+optional_ptr<StorageExtension> ExtensionCallbackManager::FindStorageExtension(const Identifier &name) const {
 	auto registry = callback_registry.atomic_load();
 	auto entry = registry->storage_extensions.find(name);
 	if (entry == registry->storage_extensions.end()) {
@@ -212,7 +212,7 @@ optional_ptr<StorageExtension> ExtensionCallbackManager::FindStorageExtension(co
 	return entry->second.get();
 }
 
-optional_ptr<ProfilerExtension> ExtensionCallbackManager::FindProfilerExtension(const string &name) const {
+optional_ptr<ProfilerExtension> ExtensionCallbackManager::FindProfilerExtension(const Identifier &name) const {
 	auto registry = callback_registry.atomic_load();
 	auto entry = registry->profiler_extensions.find(name);
 	if (entry == registry->profiler_extensions.end()) {
@@ -226,10 +226,10 @@ bool ExtensionCallbackManager::HasParserExtensions() const {
 	return !registry->parser_extensions.empty();
 }
 
-optional_ptr<DialectExtension> ExtensionCallbackManager::GetDialectExtension(const string &name) const {
+optional_ptr<DialectExtension> ExtensionCallbackManager::GetDialectExtension(const Identifier &name) const {
 	auto registry = callback_registry.atomic_load();
 	for (auto &dialect : registry->dialect_extensions) {
-		if (StringUtil::CIEquals(dialect->Name(), name)) {
+		if (dialect->Name() == name) {
 			return dialect.get();
 		}
 	}
@@ -260,7 +260,7 @@ void OperatorExtension::Register(DBConfig &config, shared_ptr<OperatorExtension>
 	config.GetCallbackManager().Register(std::move(extension));
 }
 
-optional_ptr<StorageExtension> StorageExtension::Find(const DBConfig &config, const string &extension_name) {
+optional_ptr<StorageExtension> StorageExtension::Find(const DBConfig &config, const Identifier &extension_name) {
 	return config.GetCallbackManager().FindStorageExtension(extension_name);
 }
 
@@ -268,16 +268,17 @@ void ExtensionCallback::Register(DBConfig &config, shared_ptr<ExtensionCallback>
 	config.GetCallbackManager().Register(std::move(extension));
 }
 
-void StorageExtension::Register(DBConfig &config, const string &extension_name,
+void StorageExtension::Register(DBConfig &config, const Identifier &extension_name,
                                 shared_ptr<StorageExtension> extension) {
 	config.GetCallbackManager().Register(extension_name, std::move(extension));
 }
 
-void ProfilerExtension::Register(DBConfig &config, const string &format_name, shared_ptr<ProfilerExtension> extension) {
+void ProfilerExtension::Register(DBConfig &config, const Identifier &format_name,
+                                 shared_ptr<ProfilerExtension> extension) {
 	config.GetCallbackManager().Register(format_name, std::move(extension));
 }
 
-optional_ptr<ProfilerExtension> ProfilerExtension::Find(const ClientContext &context, const string &format_name) {
+optional_ptr<ProfilerExtension> ProfilerExtension::Find(const ClientContext &context, const Identifier &format_name) {
 	return ExtensionCallbackManager::Get(context).FindProfilerExtension(format_name);
 }
 

@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-const string &DialectExtension::Name() const {
+const Identifier &DialectExtension::Name() const {
 	return name;
 }
 

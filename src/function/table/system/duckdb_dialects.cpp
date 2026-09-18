@@ -7,7 +7,7 @@
 namespace duckdb {
 
 struct DuckDBDialectsData : public GlobalTableFunctionState {
-	vector<string> dialects;
+	vector<Identifier> dialects;
 	idx_t offset = 0;
 };
 

@@ -1,0 +1,13 @@
+diff --git a/src/include/state.hpp b/src/include/state.hpp
+index d110cfe..f35b4e0 100644
+--- a/src/include/state.hpp
++++ b/src/include/state.hpp
+@@ -8,7 +8,7 @@
+ #include "utils/serialization_helpers.hpp"
+ 
+ namespace duckdb {
+-const static std::string STORAGE_EXTENSION_KEY = "test_utils_storage";
++constexpr const char *STORAGE_EXTENSION_KEY = "test_utils_storage";
+ 
+ class TUStorageExtensionInfo : public StorageExtensionInfo {
+ public:
