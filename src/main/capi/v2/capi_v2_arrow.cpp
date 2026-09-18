@@ -353,7 +353,9 @@ auto CV2ConvertArrowSlice(ClientContext &context, CV2ArrowImporter &importer, Ar
 		// A fresh scan state per slice, so nothing cached for one array leaks into the next. The cost is re-decoding a
 		// dictionary per chunk.
 		auto array_state = make_uniq<ArrowArrayScanState>(context);
-		array_state->owned_data = owner;
+		// The dictionary conversion requires a non-null owned_data to attach to its vectors. When
+		// there is no owner the chunk is materialized below, so an inert wrapper is enough.
+		array_state->owned_data = owner ? owner : duckdb::make_shared_ptr<duckdb::ArrowArrayWrapper>();
 		switch (arrow_type->GetPhysicalType()) {
 		case ArrowArrayPhysicalType::DICTIONARY_ENCODED:
 			if (!child_array->dictionary) {
