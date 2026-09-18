@@ -30,6 +30,15 @@ public:
 	}
 
 public:
+	unique_ptr<ResultUnit> Copy() const override {
+		vector<unique_ptr<DataChunk>> copies;
+		for (auto &chunk : chunks) {
+			copies.push_back(BufferedData::CopyForBuffering(*chunk));
+		}
+		return make_uniq<TestUnit>(std::move(copies), producer, row_count, byte_size);
+	}
+
+public:
 	//! The rows, one entry per chunk that was appended into this unit
 	vector<unique_ptr<DataChunk>> chunks;
 	//! The producer that built this unit

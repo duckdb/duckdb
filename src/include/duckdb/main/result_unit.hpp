@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/deque.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unique_ptr.hpp"
@@ -26,6 +25,9 @@ public:
 	DUCKDB_API virtual ~ResultUnit();
 
 public:
+	//! An independent unit holding the same rows, usable after this one and its collection are gone
+	virtual unique_ptr<ResultUnit> Copy() const = 0;
+
 	template <class TARGET>
 	TARGET &Cast() {
 		DynamicCastCheck<TARGET>(this);
@@ -55,6 +57,9 @@ public:
 	DUCKDB_API explicit ChunkUnit(unique_ptr<DataChunk> chunk);
 
 public:
+	DUCKDB_API unique_ptr<ResultUnit> Copy() const override;
+
+public:
 	unique_ptr<DataChunk> chunk;
 };
 
@@ -67,26 +72,20 @@ public:
 	DUCKDB_API ~ResultUnitCollection();
 
 public:
-	//! The rows the collection was built with. Fetching does not change it, the way scanning a
-	//! ColumnDataCollection does not change its Count
 	idx_t Count() const {
 		return total_rows;
 	}
-	//! The units the collection was built with, fetched or not
 	idx_t UnitCount() const {
-		return total_units;
+		return units.size();
 	}
-	//! Moves the next unit out, or null once every unit has been fetched
-	DUCKDB_API unique_ptr<ResultUnit> Fetch();
-	//! The units not yet fetched, in consumption order
-	const deque<unique_ptr<ResultUnit>> &Units() const {
+	//! The units, in consumption order
+	const vector<unique_ptr<ResultUnit>> &Units() const {
 		return units;
 	}
 
 private:
-	deque<unique_ptr<ResultUnit>> units;
+	vector<unique_ptr<ResultUnit>> units;
 	const idx_t total_rows = 0;
-	const idx_t total_units = 0;
 
 private:
 	ResultUnitCollection(const ResultUnitCollection &) = delete;

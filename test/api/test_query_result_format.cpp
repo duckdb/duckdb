@@ -215,34 +215,75 @@ TEST_CASE("A retained result in a format keeps its units in order", "[api][query
 	}
 }
 
-TEST_CASE("Fetching from a retained format collection leaves its totals alone", "[api][query_result_format]") {
+TEST_CASE("Fetching from a retained format collection copies units out of an unchanged store",
+          "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	SECTION("every unit") {
+		auto handle = SubmitFormatted(con, "SELECT i FROM range(10000) t(i)", 4096);
+		DrainWatchdog watchdog(con);
+		handle->Complete();
+
+		auto &collection = handle->Collection<TestFormat>();
+		const auto total_units = collection.UnitCount();
+		REQUIRE(total_units > 1);
+
+		vector<unique_ptr<TestUnit>> fetched;
+		while (auto unit = handle->Fetch<TestFormat>()) {
+			fetched.push_back(std::move(unit));
+		}
+		REQUIRE(fetched.size() == total_units);
+		// The end keeps repeating
+		REQUIRE(!handle->Fetch<TestFormat>());
+
+		// The store is what it was built with, unit for unit
+		REQUIRE(handle->RowCount() == 10000);
+		REQUIRE(collection.Count() == 10000);
+		REQUIRE(collection.Units().size() == total_units);
+		for (idx_t i = 0; i < total_units; i++) {
+			REQUIRE(UnitValues(*fetched[i], 0) == UnitValues(*collection.Units()[i], 0));
+		}
+
+		// A fetched unit is a copy, so it outlives the result
+		handle.reset();
+		idx_t rows = 0;
+		for (auto &unit : fetched) {
+			rows += UnitValues(*unit, 0).size();
+		}
+		REQUIRE(rows == 10000);
+	}
+	SECTION("an empty store") {
+		auto handle = SubmitFormatted(con, "SELECT i FROM range(0) t(i)", 4096);
+		DrainWatchdog watchdog(con);
+		handle->Complete();
+		REQUIRE(!handle->Fetch<TestFormat>());
+		REQUIRE(handle->Collection<TestFormat>().Units().empty());
+		REQUIRE(handle->RowCount() == 0);
+	}
+}
+
+TEST_CASE("TakeCollection hands over the whole format store, fetched units included", "[api][query_result_format]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	auto handle = SubmitFormatted(con, "SELECT i FROM range(10000) t(i)", 4096);
 	DrainWatchdog watchdog(con);
 	handle->Complete();
-
 	const auto total_units = handle->Collection<TestFormat>().UnitCount();
 	REQUIRE(total_units > 1);
-	REQUIRE(handle->RowCount() == 10000);
+	REQUIRE(handle->Fetch<TestFormat>());
 
-	auto first = handle->Fetch<TestFormat>();
-	REQUIRE(first);
-	REQUIRE(first->row_count == 4096);
-	// Count and UnitCount stay what the collection was built with; only Units() shrinks
-	REQUIRE(handle->RowCount() == 10000);
-	REQUIRE(handle->Collection<TestFormat>().Count() == 10000);
-	REQUIRE(handle->Collection<TestFormat>().UnitCount() == total_units);
-	REQUIRE(handle->Collection<TestFormat>().Units().size() == total_units - 1);
+	auto collection = handle->TakeCollection<TestFormat>();
+	REQUIRE(collection);
+	REQUIRE(collection->Count() == 10000);
+	REQUIRE(collection->Units().size() == total_units);
 
-	idx_t fetched = first->row_count;
-	while (auto unit = handle->Fetch<TestFormat>()) {
-		fetched += unit->row_count;
-	}
-	REQUIRE(fetched == 10000);
-	REQUIRE(handle->Collection<TestFormat>().Units().empty());
-	REQUIRE(handle->Collection<TestFormat>().Count() == 10000);
-	REQUIRE(handle->RowCount() == 10000);
+	REQUIRE_THROWS_AS(handle->TakeCollection<TestFormat>(), InvalidInputException);
+	REQUIRE_THROWS_AS(handle->Collection<TestFormat>(), InvalidInputException);
+	REQUIRE_THROWS_AS(handle->Fetch<TestFormat>(), InvalidInputException);
+	// The collection outlives the handle it came from
+	handle.reset();
+	REQUIRE(collection->Count() == 10000);
 }
 
 TEST_CASE("A format given at submission reaches every completed result", "[api][query_result_format]") {

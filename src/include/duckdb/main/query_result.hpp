@@ -199,8 +199,9 @@ public:
 
 	//! Returns the name of the column for the given index
 	DUCKDB_API const Identifier &ColumnName(idx_t index) const;
-	//! A cursor over the collection: for chunks the next chunk of normalized (flat) vectors, for any other
-	//! format the next unit, or null at the end. Will materialize the full result if it hadn't yet.
+	//! A cursor over the collection, which it leaves intact: for chunks a copy of the next chunk with normalized
+	//! (flat) vectors, for any other format a copy of the next unit, or null at the end. Will materialize the
+	//! full result if it hadn't yet.
 	//! Throws InvalidInputException when FORMAT is not the settled format
 	template <class FORMAT = ChunkFormat>
 	unique_ptr<typename FORMAT::Unit> Fetch() {
@@ -291,6 +292,7 @@ private:
 	//! Scan state for Fetch calls
 	ColumnDataScanState scan_state;
 	bool scan_initialized = false;
+	idx_t unit_scan_index = 0;
 
 private:
 	class QueryResultIterator;
@@ -396,10 +398,11 @@ struct ResultAccess {
 
 	static unique_ptr<typename FORMAT::Unit> Fetch(QueryResult &result) {
 		result.PrepareCollected(FORMAT::NAME);
-		auto unit = result.unit_collection->Fetch();
-		if (!unit) {
+		auto &units = result.unit_collection->Units();
+		if (result.unit_scan_index >= units.size()) {
 			return nullptr;
 		}
+		auto unit = units[result.unit_scan_index++]->Copy();
 		unit->Cast<typename FORMAT::Unit>();
 		return unique_ptr<typename FORMAT::Unit>(static_cast<typename FORMAT::Unit *>(unit.release()));
 	}
