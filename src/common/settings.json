@@ -329,7 +329,10 @@
         "type": "BOOLEAN",
         "scope": "global",
         "custom_implementation": true,
-        "is_debug": true
+        "is_debug": true,
+        "aliases": [
+            "__delta_only_variant_encoding_enabled"
+        ]
     },
     {
         "name": "debug_disable_optimizer",
