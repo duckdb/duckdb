@@ -647,3 +647,31 @@ SELECT s, t FROM q MATCH_RECOGNIZE(
 )
 ----
 2	2
+
+# A step starts from a row the match names - the current one, or the one a pattern variable denotes.
+# A step inside a step names no such row, and ISO/IEC 19075-5 5.6.4 only nests FIRST and LAST within
+# PREV or NEXT, never a step within a step. Trino refuses it too.
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(ORDER BY i MEASURES PREV(PREV(i)) AS s PATTERN (A+) DEFINE A as true)
+----
+<REGEX>:Binder Error:.*PREV\(\) steps from a row the match names.*cannot be nested.*
+
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(ORDER BY i MEASURES PREV(NEXT(A.i)) AS s PATTERN (A+) DEFINE A as true)
+----
+<REGEX>:Binder Error:.*PREV\(\) steps from a row the match names.*cannot be nested.*
+
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(
+    ORDER BY i MEASURES count(*) AS n PATTERN (A+) DEFINE A as NEXT(PREV(i)) > 0
+)
+----
+<REGEX>:Binder Error:.*NEXT\(\) steps from a row the match names.*cannot be nested.*
+
+# FIRST or LAST inside a step is the nesting the standard does define, so it stays accepted
+query I
+SELECT s FROM q MATCH_RECOGNIZE(
+    ORDER BY i MEASURES NEXT(LAST(A.i), 0) AS s PATTERN (A+) DEFINE A as true
+)
+----
+2

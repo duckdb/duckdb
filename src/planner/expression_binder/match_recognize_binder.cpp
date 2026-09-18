@@ -253,14 +253,10 @@ static bool BoundByLambda(optional_ptr<vector<DummyBinding>> lambda_bindings, co
 //===--------------------------------------------------------------------===//
 // Reading the rows of a pattern variable
 //===--------------------------------------------------------------------===//
-//! Whether a name is a pattern variable. The two clauses hold their symbols differently, so which
-//! names are theirs is the caller's to say.
-using MatchRecognizeSymbols = std::function<bool(const string &)>;
-
 //! A reference qualified by a pattern variable reads the rows that variable matched. The qualifier is
 //! this clause's name rather than the input's, so it is resolved here: it is dropped from the
 //! reference, and the variable it named is reported back through \p scope.
-static void ScopeToVariable(unique_ptr<ParsedExpression> &expr, const MatchRecognizeSymbols &symbols,
+static void ScopeToVariable(unique_ptr<ParsedExpression> &expr, const MatchRecognizeIsSymbol &symbols,
                             case_insensitive_set_t &scope, vector<identifier_set_t> &lambda_parameters) {
 	if (expr->GetExpressionClass() == ExpressionClass::LAMBDA) {
 		identifier_set_t parameters;
@@ -285,7 +281,7 @@ static void ScopeToVariable(unique_ptr<ParsedExpression> &expr, const MatchRecog
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { ScopeToVariable(child, symbols, scope, lambda_parameters); });
 }
 
-static void ScopeToVariable(unique_ptr<ParsedExpression> &expr, const MatchRecognizeSymbols &symbols,
+static void ScopeToVariable(unique_ptr<ParsedExpression> &expr, const MatchRecognizeIsSymbol &symbols,
                             case_insensitive_set_t &scope) {
 	vector<identifier_set_t> lambda_parameters;
 	ScopeToVariable(expr, symbols, scope, lambda_parameters);
@@ -331,11 +327,77 @@ static void RejectUniversalReference(const ParsedExpression &expr, const case_in
 	}
 }
 
-//! The pattern variable a navigation reads its row from. What the navigation reports is an expression
-//! of the clause's own, so a variable may appear anywhere within it rather than only in front of it -
-//! but it navigates to one row, so the expression cannot name two variables to read it from.
-static string NavigationVariable(unique_ptr<ParsedExpression> &inner, const MatchRecognizeSymbols &symbols,
-                                 const case_insensitive_map_t<string> &universal, const string &function_name) {
+unique_ptr<ParsedExpression> MatchRecognizeSteppedNavigation::Rebuild(const string &variable, const string &column) {
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(variable.empty() ? make_uniq<ColumnRefExpression>(Identifier(column))
+	                                    : make_uniq<ColumnRefExpression>(Identifier(column), Identifier(variable)));
+	if (offset) {
+		children.push_back(std::move(offset));
+	}
+	unique_ptr<ParsedExpression> result =
+	    make_uniq<FunctionExpression>(Identifier(last ? "last" : "first"), std::move(children));
+	if (marker) {
+		marker->Cast<FunctionExpression>().GetArgumentsMutable()[0].GetExpressionMutable() = std::move(result);
+		result = std::move(marker);
+	}
+	return result;
+}
+
+static bool ContainsStep(const ParsedExpression &expr) {
+	if (expr.GetExpressionType() == ExpressionType::FUNCTION) {
+		auto name = StringUtil::Upper(expr.Cast<FunctionExpression>().FunctionName().GetIdentifierName());
+		if (name == "PREV" || name == "NEXT") {
+			return true;
+		}
+	}
+	bool found = false;
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { found = found || ContainsStep(child); });
+	return found;
+}
+
+void MatchRecognizeRejectNestedStep(const ParsedExpression &inner, const string &function_name) {
+	if (ContainsStep(inner)) {
+		throw BinderException("%s() steps from a row the match names, and a step inside it names none, so the two "
+		                      "cannot be nested",
+		                      function_name);
+	}
+}
+
+MatchRecognizeSteppedNavigation MatchRecognizePeelStep(unique_ptr<ParsedExpression> &inner) {
+	MatchRecognizeSteppedNavigation result;
+	if (inner->GetExpressionType() == ExpressionType::FUNCTION) {
+		auto &marker = inner->Cast<FunctionExpression>();
+		const auto is_final = marker.FunctionName() == MATCH_RECOGNIZE_FINAL_MARKER;
+		if (is_final || marker.FunctionName() == MATCH_RECOGNIZE_RUNNING_MARKER) {
+			auto unwrapped = std::move(marker.GetArgumentsMutable()[0].GetExpressionMutable());
+			result.marker = std::move(inner);
+			result.final_semantics = is_final;
+			inner = std::move(unwrapped);
+		}
+	}
+	if (inner->GetExpressionType() == ExpressionType::FUNCTION) {
+		auto &navigation = inner->Cast<FunctionExpression>();
+		auto name = StringUtil::Upper(navigation.FunctionName().GetIdentifierName());
+		if ((name == "FIRST" || name == "LAST") && !navigation.GetArguments().empty() &&
+		    navigation.GetArguments().size() <= 2) {
+			result.navigated = true;
+			result.last = name == "LAST";
+			if (navigation.GetArguments().size() == 2) {
+				result.offset_value =
+				    MatchRecognizeNavigationOffset(name, navigation.GetArguments()[1].GetExpression());
+				result.offset = std::move(navigation.GetArgumentsMutable()[1].GetExpressionMutable());
+			}
+			// taken out before the navigation it sat in is dropped, which is what frees it
+			auto base = std::move(navigation.GetArgumentsMutable()[0].GetExpressionMutable());
+			inner = std::move(base);
+		}
+	}
+	return result;
+}
+
+string MatchRecognizeNavigationVariable(unique_ptr<ParsedExpression> &inner, const MatchRecognizeIsSymbol &symbols,
+                                        const case_insensitive_map_t<string> &universal, const string &function_name) {
 	case_insensitive_set_t scope;
 	ScopeToVariable(inner, symbols, scope);
 	if (scope.size() > 1) {
@@ -482,13 +544,35 @@ BindResult MatchRecognizeDefineBinder::BindNeighbour(FunctionExpression &functio
 	if (arguments.size() == 2) {
 		MatchRecognizeNavigationOffset(function_name, arguments[1].GetExpression());
 	}
+	MatchRecognizeRejectNestedStep(arguments[0].GetExpression(), function_name);
+	// A step names the row it starts from rather than the one it reaches: a pattern variable in front
+	// of it is the row that variable denotes (5.6.2), and FIRST or LAST within it says which of that
+	// variable's rows (5.6.4). Stepping and then reading the row reached is the same as reading the
+	// already-stepped column off the row it started from, so the step is computed below the matcher
+	// and a navigation reads it from there.
+	auto inner = std::move(arguments[0].GetExpressionMutable());
+	auto variable = MatchRecognizeNavigationVariable(
+	    inner, [&](const string &name) { return symbols.count(name) > 0; }, universal, function_name);
+	auto stepped = MatchRecognizePeelStep(inner);
 	auto neighbour = window_template.Copy();
 	auto &window = neighbour->Cast<WindowExpression>();
 	window.SetFunctionName(function_name == "PREV" ? "lag" : "lead");
-	window.GetArgumentsMutable() = std::move(arguments);
-	expr_ptr = std::move(neighbour);
-	// it is a window like any other from here on, so it is bound like one
-	return BindExpression(expr_ptr, depth, false);
+	window.GetArgumentsMutable().push_back(std::move(inner));
+	if (arguments.size() == 2) {
+		window.GetArgumentsMutable().push_back(std::move(arguments[1].GetExpressionMutable()));
+	}
+	if (variable.empty() && !stepped.navigated) {
+		// nothing said where to start from, so the step starts on the row the matcher is testing
+		expr_ptr = std::move(neighbour);
+		// it is a window like any other from here on, so it is bound like one
+		return BindExpression(expr_ptr, depth, false);
+	}
+	if (stepped.final_semantics) {
+		throw BinderException("FINAL reads the whole match, which a DEFINE condition is still assembling, so "
+		                      "only RUNNING is available there");
+	}
+	auto symbol = variable.empty() ? string() : MatchRecognizeDefineColumn(variable);
+	return BindNavigated(std::move(neighbour), std::move(symbol), stepped.last, stepped.offset_value, depth);
 }
 
 BindResult MatchRecognizeDefineBinder::BindNavigation(FunctionExpression &function, const string &function_name,
@@ -502,7 +586,7 @@ BindResult MatchRecognizeDefineBinder::BindNavigation(FunctionExpression &functi
 		offset = MatchRecognizeNavigationOffset(function_name, arguments[1].GetExpression());
 	}
 	auto inner = std::move(arguments[0].GetExpressionMutable());
-	auto variable = NavigationVariable(
+	auto variable = MatchRecognizeNavigationVariable(
 	    inner, [&](const string &name) { return symbols.count(name) > 0; }, universal, function_name);
 	// the qualifiers are gone, so what is left is read off the row this navigates to
 	auto symbol = variable.empty() ? string() : MatchRecognizeDefineColumn(variable);
@@ -614,7 +698,7 @@ BindResult MatchRecognizeMeasureBinder::BindAggregate(FunctionExpression &expr, 
 BindResult MatchRecognizeMeasureBinder::BindOverMatch(FunctionExpression &expr, idx_t depth) {
 	// naming a variable restricts the aggregate to the rows it matched
 	case_insensitive_set_t scope;
-	const MatchRecognizeSymbols is_symbol = [&](const string &name) {
+	const MatchRecognizeIsSymbol is_symbol = [&](const string &name) {
 		return symbols.find(name) != symbols.end();
 	};
 	for (auto &argument : expr.GetArgumentsMutable()) {
@@ -707,7 +791,7 @@ BindResult MatchRecognizeMeasureBinder::BindNavigation(FunctionExpression &funct
 		offset = MatchRecognizeNavigationOffset(function_name, function.GetArguments()[1].GetExpression());
 	}
 	auto inner = std::move(function.GetArgumentsMutable()[0].GetExpressionMutable());
-	auto variable = NavigationVariable(
+	auto variable = MatchRecognizeNavigationVariable(
 	    inner, [&](const string &name) { return symbols.find(name) != symbols.end(); }, universal, function_name);
 	vector<string> symbol;
 	if (!variable.empty()) {
