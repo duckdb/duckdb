@@ -1,0 +1,114 @@
+# name: test/sql/storage/external_file_cache/external_file_cache_spill.test_slow
+# description: Cache blocks of remote files spill to the temporary directory, local files are dropped
+# group: [external_file_cache]
+
+require parquet
+
+require skip_reload
+
+statement ok
+SET external_file_cache_spill=true;
+
+statement ok
+SET cache_local_files=true;
+
+statement ok
+SET external_file_cache_local_block_size=2097152;
+
+statement ok
+SET memory_limit='200MB';
+
+statement ok
+SET temp_directory='{TEST_DIR}/external_file_cache_spill';
+
+statement ok
+SET preserve_insertion_order=false;
+
+# roughly 290MB of incompressible data, well above the memory limit
+statement ok
+COPY (SELECT hash(i) a, hash(i * 2) b, hash(i * 3) c FROM range(12000000) t(i))
+TO '{TEST_DIR}/efc_spill.parquet' (FORMAT parquet);
+
+# local files can be re-read at the same cost as a spilled block, so even with spilling
+# enabled and large cache blocks, evicted local blocks are dropped, never spilled
+query I
+SELECT sum(a) - (SELECT sum(hash(i)) FROM range(12000000) t(i)) FROM read_parquet('{TEST_DIR}/efc_spill.parquet');
+----
+0
+
+query I
+SELECT count(*) > 0 FROM duckdb_external_file_cache() WHERE NOT loaded;
+----
+true
+
+query I
+SELECT count(*) FROM duckdb_external_file_cache() WHERE spilled;
+----
+0
+
+query I
+SELECT temporary_storage_bytes FROM duckdb_memory() WHERE tag = 'EXTERNAL_FILE_CACHE';
+----
+0
+
+# reads must still reassemble the same data through the dropped blocks
+query II
+SELECT sum(b) - (SELECT sum(hash(i * 2)) FROM range(12000000) t(i)),
+       sum(c) - (SELECT sum(hash(i * 3)) FROM range(12000000) t(i))
+FROM read_parquet('{TEST_DIR}/efc_spill.parquet');
+----
+0	0
+
+# reads reassemble the correct content after a cache block size change re-indexes the cache
+statement ok
+SET external_file_cache_local_block_size=16384;
+
+query I
+SELECT sum(a) - (SELECT sum(hash(i)) FROM range(12000000) t(i)) FROM read_parquet('{TEST_DIR}/efc_spill.parquet');
+----
+0
+
+# remote cache blocks above the block size are marked for spilling instead of dropping
+require httpfs
+
+query IRR
+SELECT count(*), min(temp), max(temp)
+FROM read_parquet('https://github.com/duckdb/duckdb-data/releases/download/v1.0/city_temperature.parquet') t(temp);
+----
+2905886	-99.0	110.0
+
+# shrinking the memory limit evicts the cache, remote blocks spill instead of being dropped
+statement ok
+SET memory_limit='1MB';
+
+query I
+SELECT count(*) > 0 FROM duckdb_external_file_cache() WHERE path LIKE '%city_temperature%' AND spilled;
+----
+true
+
+query I
+SELECT temporary_storage_bytes > 0 FROM duckdb_memory() WHERE tag = 'EXTERNAL_FILE_CACHE';
+----
+true
+
+statement ok
+SET memory_limit='200MB';
+
+# the spilled blocks reassemble the same remote content
+query IRR
+SELECT count(*), min(temp), max(temp)
+FROM read_parquet('https://github.com/duckdb/duckdb-data/releases/download/v1.0/city_temperature.parquet') t(temp);
+----
+2905886	-99.0	110.0
+
+# disabling the cache deletes all cache blocks, including spilled remote ones
+statement ok
+SET enable_external_file_cache=false;
+
+query I
+SELECT count(*) FROM duckdb_external_file_cache();
+----
+0
+
+statement ok
+SET enable_external_file_cache=true;

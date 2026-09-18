@@ -71,11 +71,11 @@ public:
 
 	//! Returns the typed_value stats of a shredded stats entry
 	DUCKDB_API static const BaseStatistics &GetTypedStats(const BaseStatistics &stats);
-	DUCKDB_API static const BaseStatistics &GetTypedStats(const BaseStatistics &&stats) = delete;
+	static const BaseStatistics &GetTypedStats(const BaseStatistics &&stats) = delete;
 
 	//! Returns the untyped_value_index stats of a shredded stats entry - if there is any
 	DUCKDB_API static optional_ptr<const BaseStatistics> GetUntypedStats(const BaseStatistics &stats);
-	DUCKDB_API static optional_ptr<const BaseStatistics> GetUntypedStats(const BaseStatistics &&stats) = delete;
+	static optional_ptr<const BaseStatistics> GetUntypedStats(const BaseStatistics &&stats) = delete;
 
 	DUCKDB_API static void SetUnshreddedStats(BaseStatistics &stats, unique_ptr<BaseStatistics> new_stats);
 	DUCKDB_API static void SetUnshreddedStats(BaseStatistics &stats, const BaseStatistics &new_stats);

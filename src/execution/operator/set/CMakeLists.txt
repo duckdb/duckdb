@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   physical_union.cpp
   physical_recursive_cte.cpp
+  physical_recursive_cte_delta.cpp
   physical_recursive_cte_runtime.cpp
   physical_recursive_cte_state.cpp
   physical_cte.cpp)

@@ -87,10 +87,18 @@ statement ok
 CREATE SEQUENCE seq;
 
 statement ok
-CREATE TABLE test (a INTEGER DEFAULT nextval('seq'), b INTEGER);
+CREATE TABLE test (
+	a INTEGER DEFAULT nextval('seq'),
+	b INTEGER
+);
 
 statement ok
-INSERT INTO test (b) VALUES (2), (4), (6), (2), (4);
+INSERT INTO test (b) VALUES
+	(2),
+	(4),
+	(6),
+	(2),
+	(4);
 
 query II
 SELECT * FROM test ORDER BY 1

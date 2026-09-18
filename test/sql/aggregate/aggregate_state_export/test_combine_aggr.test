@@ -135,6 +135,48 @@ FROM states;
 ----
 18	2
 
+# List-backed aggregate states honor per-state multiplicities
+query TRRR
+WITH states AS (
+    SELECT
+        k,
+        list(v) EXPORT_STATE AS list_s,
+        median(v) EXPORT_STATE AS median_s,
+        quantile_cont(v, 0.5) EXPORT_STATE AS quantile_s,
+        mad(v) EXPORT_STATE AS mad_s
+    FROM (VALUES (1, 1), (1, 1), (2, 42), (2, 42)) t(k, v)
+    GROUP BY k
+)
+SELECT
+    list_sort(finalize(combine_aggr(list_s, CASE k WHEN 1 THEN 3 ELSE 2 END))),
+    finalize(combine_aggr(median_s, CASE k WHEN 1 THEN 3 ELSE 2 END)),
+    finalize(combine_aggr(quantile_s, CASE k WHEN 1 THEN 3 ELSE 2 END)),
+    finalize(combine_aggr(mad_s, CASE k WHEN 1 THEN 3 ELSE 2 END))
+FROM states;
+----
+[1, 1, 1, 1, 1, 1, 42, 42, 42, 42]	1.0	1.0	0.0
+
+# Zero and NULL multiplicities are also no-ops for list-backed states
+query II
+WITH states AS (
+    SELECT list(v) EXPORT_STATE AS s
+    FROM (VALUES (1), (2)) t(v)
+)
+SELECT
+    (finalize(combine_aggr(s, 0)) IS NULL)::INTEGER,
+    (finalize(combine_aggr(s, NULL::BIGINT)) IS NULL)::INTEGER
+FROM states;
+----
+1	1
+
+statement error
+WITH states AS (
+    SELECT list(v) EXPORT_STATE AS s FROM (VALUES (1), (2)) t(v)
+)
+SELECT finalize(combine_aggr(s, -1)) FROM states;
+----
+<REGEX>:.*combine_aggr multiplicity must be non-negative.*
+
 statement error
 WITH states AS (
     SELECT sum(v) EXPORT_STATE AS s FROM (VALUES (1), (2)) t(v)

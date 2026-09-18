@@ -21,6 +21,8 @@
 #include "duckdb/execution/row_id_deduplicator.hpp"
 
 namespace duckdb {
+class SchemaCatalogEntry;
+class TableCatalogEntry;
 
 //===--------------------------------------------------------------------===//
 // Sink
@@ -34,6 +36,8 @@ public:
 	DuckTableEntry &table;
 	idx_t insert_count;
 	ColumnDataCollection return_collection;
+	//! Leftover thread-local collections (smaller than a row group) that are compacted and merged in Finalize.
+	vector<PhysicalIndex> unmerged_collections;
 };
 
 class InsertLocalState : public LocalSinkState {
@@ -126,6 +130,8 @@ public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
 	                                 OperatorSourceInput &input) const override;
+
+	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
 
 	bool IsSource() const override {
 		return true;

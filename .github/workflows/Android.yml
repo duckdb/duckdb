@@ -2,17 +2,17 @@ name: Android
 on:
   workflow_call:
     inputs:
-      override_git_describe:
+      duckdb_version:
         type: string
-      git_ref:
+      duckdb_commit:
         type: string
       skip_tests:
         type: string
   workflow_dispatch:
     inputs:
-      override_git_describe:
+      duckdb_version:
         type: string
-      git_ref:
+      duckdb_commit:
         type: string
       skip_tests:
         type: string
@@ -33,12 +33,13 @@ on:
 
 
 concurrency:
-  group: android-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
+  group: android-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.duckdb_version }}
   cancel-in-progress: true
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
+  DUCKDB_VERSION: ${{ inputs.duckdb_version }}
+  DUCKDB_COMMIT: ${{ inputs.duckdb_commit }}
 
 jobs:
   android:
@@ -64,7 +65,7 @@ jobs:
     - uses: actions/checkout@v6
       with:
         fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
+        ref: ${{ inputs.duckdb_commit }}
 
     - name: Install Ninja
       shell: bash
@@ -72,7 +73,7 @@ jobs:
 
     - name: Checkout (again)
       shell: bash
-      run: git checkout ${{ inputs.git_ref }}
+      run: git checkout "${DUCKDB_COMMIT:-${GITHUB_SHA}}"
 
     - name: Install Android NDK
       shell: bash
@@ -92,7 +93,12 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        zip -j libduckdb-android_${{matrix.arch}}.zip build/release/src/libduckdb*.* src/include/duckdb.h src/include/duckdb_extension.h
+        zip -j libduckdb-android_${{matrix.arch}}.zip \
+          build/release/src/libduckdb*.* \
+          src/include/duckdb.h \
+          src/include/duckdb_v2.h \
+          src/include/duckdb_extension.h \
+          src/include/duckdb_extension_v2.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-android_${{matrix.arch}}.zip
 
     - uses: actions/upload-artifact@v7

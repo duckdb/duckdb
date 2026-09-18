@@ -613,19 +613,34 @@ struct ICUTimeBucket : public ICUDateFunc {
 
 	static void AddTimeBucketFunction(ExtensionLoader &loader) {
 		ScalarFunctionSet set("time_bucket");
-		set.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP_TZ}, LogicalType::TIMESTAMP_TZ,
-		                               ICUTimeBucketFunction, Bind));
-		set.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
-		                               LogicalType::TIMESTAMP_TZ, ICUTimeBucketOffsetFunction, Bind));
-		set.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ},
-		                               LogicalType::TIMESTAMP_TZ, ICUTimeBucketOriginFunction, Bind));
-		set.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR},
-		                               LogicalType::TIMESTAMP_TZ, ICUTimeBucketTimeZoneFunction, Bind));
-		for (auto &func : set.functions) {
+		ScalarFunction base_fun({}, LogicalType::TIMESTAMP_TZ, ICUTimeBucketFunction, Bind);
+		base_fun.GetSignature()
+		    .AddParameter("bucket_width", LogicalType::INTERVAL)
+		    .AddParameter("timestamp", LogicalType::TIMESTAMP_TZ);
+		set.AddFunction(base_fun);
+		ScalarFunction offset_fun({}, LogicalType::TIMESTAMP_TZ, ICUTimeBucketOffsetFunction, Bind);
+		offset_fun.GetSignature()
+		    .AddParameter("bucket_width", LogicalType::INTERVAL)
+		    .AddParameter("timestamp", LogicalType::TIMESTAMP_TZ)
+		    .AddParameter("offset", LogicalType::INTERVAL);
+		set.AddFunction(offset_fun);
+		ScalarFunction origin_fun({}, LogicalType::TIMESTAMP_TZ, ICUTimeBucketOriginFunction, Bind);
+		origin_fun.GetSignature()
+		    .AddParameter("bucket_width", LogicalType::INTERVAL)
+		    .AddParameter("timestamp", LogicalType::TIMESTAMP_TZ)
+		    .AddParameter("origin", LogicalType::TIMESTAMP_TZ);
+		set.AddFunction(origin_fun);
+		ScalarFunction timezone_fun({}, LogicalType::TIMESTAMP_TZ, ICUTimeBucketTimeZoneFunction, Bind);
+		timezone_fun.GetSignature()
+		    .AddParameter("bucket_width", LogicalType::INTERVAL)
+		    .AddParameter("timestamp", LogicalType::TIMESTAMP_TZ)
+		    .AddParameter("timezone", LogicalType::VARCHAR);
+		set.AddFunction(timezone_fun);
+		set.ApplyToFunctions([](ScalarFunction &func) {
 			func.SetFallible();
 			func.SetInitStateCallback(InitCalendarCache);
 			func.SetArgProperties(1, ArgProperties().NonDecreasing());
-		}
+		});
 		loader.RegisterFunction(set);
 	}
 };

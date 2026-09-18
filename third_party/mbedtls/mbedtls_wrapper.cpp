@@ -57,6 +57,19 @@ std::string MbedTlsWrapper::ComputeSha256Hash(const std::string &file_content) {
 	return hash;
 }
 
+bool MbedTlsWrapper::IsValidRSA2048PublicKey(const std::string &pubkey) {
+	mbedtls_pk_context pk_context;
+	mbedtls_pk_init(&pk_context);
+
+	bool valid = mbedtls_pk_parse_public_key(&pk_context, reinterpret_cast<const unsigned char *>(pubkey.c_str()),
+	                                         pubkey.size() + 1) == 0;
+	// extension signatures are always 256 bytes, so only 2048 bit RSA keys can produce valid signatures
+	valid = valid && mbedtls_pk_can_do(&pk_context, MBEDTLS_PK_RSA) && mbedtls_pk_get_bitlen(&pk_context) == 2048;
+
+	mbedtls_pk_free(&pk_context);
+	return valid;
+}
+
 bool MbedTlsWrapper::IsValidSha256Signature(const std::string &pubkey, const std::string &signature,
                                             const std::string &sha256_hash) {
 

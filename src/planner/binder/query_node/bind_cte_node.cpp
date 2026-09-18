@@ -106,7 +106,7 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 
 CTEBindState::CTEBindState(Binder &parent_binder_p, QueryNode &cte_def_p, const vector<Identifier> &aliases_p)
     : parent_binder(parent_binder_p), cte_def(cte_def_p), aliases(aliases_p),
-      active_binder_count(parent_binder.GetActiveBinders().size()) {
+      active_binder_count(parent_binder.GetEnclosingScopes().size()) {
 }
 
 CTEBindState::~CTEBindState() {
@@ -124,13 +124,7 @@ void CTEBindState::Bind(CTEBinding &binding) {
 
 	// we clear any expression binders that were added in the mean-time, to ensure we are not binding to any newly added
 	// correlated columns
-	auto &active_binders = parent_binder.GetActiveBinders();
-	vector<reference<ExpressionBinder>> stored_binders;
-	for (idx_t i = active_binder_count; i < active_binders.size(); i++) {
-		stored_binders.push_back(active_binders[i]);
-	}
-	active_binders.erase(active_binders.begin() + UnsafeNumericCast<int64_t>(active_binder_count),
-	                     active_binders.end());
+	auto stored_binders = parent_binder.SaveScopesAfter(active_binder_count);
 
 	// add this CTE to the query binder on the RHS with "CANNOT_BE_REFERENCED" to detect recursive references to
 	// ourselves
@@ -141,9 +135,7 @@ void CTEBindState::Bind(CTEBinding &binding) {
 	query = query_binder->Bind(cte_def);
 
 	// after binding - we add the active binders we removed back so we can leave the binder in its original state
-	for (auto &stored_binder : stored_binders) {
-		active_binders.push_back(stored_binder);
-	}
+	parent_binder.RestoreScopes(stored_binders);
 
 	// the result types of the CTE are the types of the LHS
 	types = query.types;

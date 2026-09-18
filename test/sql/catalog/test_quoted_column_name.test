@@ -24,3 +24,21 @@ query TT
 SELECT "table ""."."col "".", "col ""." FROM "table "".";
 ----
 quote_escaped_quote_'	quote_escaped_quote_'
+
+# a double-quoted name containing single quotes is one identifier, not a string literal,
+# so it has to stay reachable after being created
+statement ok
+CREATE TABLE "'QuotedName'"(i INTEGER)
+
+statement ok
+INSERT INTO "'QuotedName'" VALUES (7)
+
+query I
+SELECT * FROM "'QuotedName'";
+----
+7
+
+query I
+SELECT count(*) FROM duckdb_tables WHERE table_name = '''QuotedName''';
+----
+1

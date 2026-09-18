@@ -5,31 +5,23 @@
 
 namespace duckdb {
 
-//! Fold `(k v, ...)` create params onto the statement. A bare flag binds to boolean true, mirroring
-//! ATTACH/CONNECT TO EXTERNAL RESOURCE option handling.
+//! Fold `(k v, ...)` create params onto the statement; they are resolved at bind time.
 static void ApplyOptions(const optional<vector<GenericCopyOption>> &options, ExternalResourceStatement &stmt) {
 	if (!options) {
 		return;
 	}
-	for (const auto &opt : *options) {
-		if (!opt.expression && opt.children.empty()) {
-			stmt.options[opt.name.GetIdentifierName()] = make_uniq<ConstantExpression>(Value(true));
-		} else {
-			stmt.options[opt.name.GetIdentifierName()] = opt.GetFirstChildOrExpression();
-		}
-	}
+	PEGTransformerFactory::CollectGenericOptions(*options, stmt.options, "EXTERNAL RESOURCE");
 }
 
-unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformCreateExternalResourceStmt(PEGTransformer &transformer, const string &string_literal,
-                                                           const optional<Identifier> &attach_alias,
-                                                           const optional<vector<GenericCopyOption>> &attach_options) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformCreateExternalResourceStmt(
+    PEGTransformer &transformer, const string &string_literal, const optional<Identifier> &attach_alias,
+    const optional<vector<GenericCopyOption>> &external_resource_creation_options) {
 	auto result = make_uniq<ExternalResourceStatement>(ExternalResourceOperation::CREATE);
 	result->type = string_literal;
 	if (attach_alias) {
 		result->name = Identifier(*attach_alias);
 	}
-	ApplyOptions(attach_options, *result);
+	ApplyOptions(external_resource_creation_options, *result);
 	return std::move(result);
 }
 

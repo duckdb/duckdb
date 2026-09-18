@@ -31,15 +31,16 @@ PhysicalUpdate::PhysicalUpdate(PhysicalPlan &physical_plan, vector<LogicalType> 
       return_chunk(return_chunk), capture_old_rows(capture_old_rows), old_row_columns(std::move(old_row_columns)),
       row_id_handling(row_id_handling), index_update(false) {
 	auto &indexes = table.GetDataTableInfo().get()->GetIndexes();
-	auto index_columns = indexes.GetRequiredColumns();
+	auto index_columns = indexes.GetIndexedColumns();
 
 	unordered_set<column_t> update_columns;
+	update_columns.reserve(this->columns.size());
 	for (const auto col : this->columns) {
 		update_columns.insert(col.index);
 	}
 
 	for (const auto &col : table.Columns()) {
-		if (index_columns.find(col.Logical().index) == index_columns.end()) {
+		if (index_columns.find(col.Physical().index) == index_columns.end()) {
 			continue;
 		}
 		if (update_columns.find(col.Physical().index) == update_columns.end()) {

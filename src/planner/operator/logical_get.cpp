@@ -305,6 +305,9 @@ void LogicalGet::SetPartitionsToScan(vector<idx_t> partition_indices) {
 }
 
 void LogicalGet::Serialize(Serializer &serializer) const {
+	if (bind_info) {
+		throw NotImplementedException("Cannot serialize a table function with process-local bind input");
+	}
 	LogicalOperator::Serialize(serializer);
 	serializer.WriteProperty(200, "table_index", table_index);
 	serializer.WriteProperty(201, "returned_types", returned_types);
@@ -405,10 +408,9 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 				auto &ret_type = result->returned_types[idx];
 				auto &col_name = result->names[idx];
 				if (bind_return_types[idx] != ret_type) {
-					throw SerializationException(
-					    "Table function deserialization failure in function \"%s\" - column with "
-					    "name %s was serialized with type %s, but now has type %s",
-					    function.name, col_name, ret_type, bind_return_types[idx]);
+					throw SerializationException("Table function deserialization failure in function %s - column with "
+					                             "name %s was serialized with type %s, but now has type %s",
+					                             function.name, col_name, ret_type, bind_return_types[idx]);
 				}
 			}
 		}

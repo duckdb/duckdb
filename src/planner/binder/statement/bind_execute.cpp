@@ -21,7 +21,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 
 	auto entry = client_data.prepared_statements.find(stmt.name);
 	if (entry == client_data.prepared_statements.end()) {
-		throw BinderException("Prepared statement \"%s\" does not exist", stmt.name);
+		throw BinderException("Prepared statement %s does not exist", stmt.name);
 	}
 
 	// check if we need to rebind the prepared statement
@@ -54,11 +54,11 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 			    StringType::GetCollation(constant.GetReturnType()).empty()) {
 				return_type = LogicalTypeId::STRING_LITERAL;
 			} else if (constant.GetReturnType().IsIntegral()) {
-				return_type = LogicalType::INTEGER_LITERAL(constant.GetValueMutable());
+				return_type = LogicalType::INTEGER_LITERAL(constant.GetValue());
 			} else {
-				return_type = constant.GetValueMutable().type();
+				return_type = constant.GetValue().type();
 			}
-			parameter_data = BoundParameterData(std::move(constant.GetValueMutable()), std::move(return_type));
+			parameter_data = BoundParameterData(constant.TakeValue(), std::move(return_type));
 		} else {
 			auto value = ExpressionExecutor::EvaluateScalar(context, *bound_expr, true);
 			auto value_type = value.type();

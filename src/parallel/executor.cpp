@@ -7,6 +7,7 @@
 #include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/main/buffered_data/buffered_data.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/settings.hpp"
@@ -83,6 +84,9 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 	D_ASSERT(events.empty());
 
 	auto schedule = BuildPipelineSchedule(event_data.meta_pipelines);
+	if (schedule->HasCycle()) {
+		throw InternalException("Cyclic dependency in pipeline schedule");
+	}
 	events.reserve(schedule->stages.size());
 	for (auto &stage : schedule->stages) {
 		events.push_back(CreatePipelineScheduleEvent(stage, event_data.initial_schedule));
@@ -241,6 +245,12 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 		PipelineBuildState state;
 		auto root_pipeline = make_shared_ptr<MetaPipeline>(*this, state, nullptr);
 		root_pipeline->Build(*physical_plan);
+
+		// Resolve graph-dependent input modes after every pipeline and dependency has been constructed.
+		vector<shared_ptr<MetaPipeline>> to_schedule;
+		root_pipeline->GetMetaPipelines(to_schedule, true, true);
+		state.ResolveExternalInputs(to_schedule);
+
 		profiler->Initialize(plan);
 		root_pipeline->Ready();
 
@@ -253,10 +263,6 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 		// set root pipelines, i.e., all pipelines that end in the final sink
 		root_pipeline->GetPipelines(root_pipelines, false);
 		root_pipeline_idx = 0;
-
-		// collect all meta-pipelines from the root pipeline
-		vector<shared_ptr<MetaPipeline>> to_schedule;
-		root_pipeline->GetMetaPipelines(to_schedule, true, true);
 
 		// number of 'PipelineCompleteEvent's is equal to the number of meta pipelines, so we have to set it here
 		total_pipelines = to_schedule.size();
@@ -272,6 +278,10 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 
 void Executor::CancelTasks() {
 	task.reset();
+	{
+		lock_guard<mutex> guard(result_buffer_lock);
+		result_buffer.reset();
+	}
 	reference_map_t<Task, shared_ptr<Task>> to_destroy;
 	{
 		lock_guard<mutex> elock(executor_lock);
@@ -283,9 +293,31 @@ void Executor::CancelTasks() {
 	to_destroy.clear();
 	// Drain all tasks first — they hold references to pipelines/events/states,
 	// so those must stay alive until all tasks have completed
+#ifndef DUCKDB_NO_THREADS
+	if (producer) {
+		auto &scheduler = TaskScheduler::GetScheduler(context);
+		shared_ptr<Task> task_from_producer;
+		while (true) {
+			{
+				annotated_unique_lock<annotated_mutex> lk(producer->producer_lock);
+				if (executor_tasks == 0) {
+					break;
+				}
+				if (!scheduler.GetTaskFromProducerLocked(*producer, task_from_producer)) {
+					// Nothing to execute on this thread: wait until a task completes or is enqueued
+					producer->producer_cv.wait(lk);
+					continue;
+				}
+			}
+			// Discard the dequeued task without executing it.
+			task_from_producer.reset();
+		}
+	}
+#else
 	while (executor_tasks > 0) {
 		WorkOnTasks();
 	}
+#endif
 	// Now safe to destroy pipelines, events and states — no tasks reference them
 	lock_guard<mutex> elock(executor_lock);
 	for (auto &rec_cte_ref : recursive_ctes) {
@@ -320,14 +352,16 @@ void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 
 void Executor::UnregisterTask() {
 #ifndef DUCKDB_NO_THREADS
+	lock_guard<mutex> l(executor_lock);
 	{
-		// Wake any thread blocked in `WaitForTask`.
-		// A finished task may have scheduled follow-up tasks or completed the query.
-		lock_guard<mutex> l(executor_lock);
-		task_reschedule.notify_all();
+		const annotated_lock_guard<annotated_mutex> producer_lock(producer->producer_lock);
+		executor_tasks--;
+		producer->producer_cv.notify_all();
 	}
-#endif
+	task_reschedule.notify_all();
+#else
 	executor_tasks--;
+#endif
 }
 
 void Executor::WaitForTask() {
@@ -343,20 +377,21 @@ void Executor::WaitForTask() {
 		return;
 	}
 	if (ResultCollectorIsBlocked()) {
-		// If the result collector is blocked, it won't get unblocked until the connection calls Fetch
+		// Only the consumer's decision or pop lets the query progress, so waiting here is pointless
 		blocked_thread_time += blocked_micros;
 		return;
 	}
-	auto &scheduler = TaskScheduler::GetScheduler(context);
-	if (scheduler.GetTaskCountForProducer(*producer) > 0) {
-		// A task is available for the calling thread, the next step will make progress without waiting
+	if (TaskScheduler::GetScheduler(context).GetTaskCountForProducer(*producer) > 0) {
+		// A new task is available for the calling thread, the next step will make progress without waiting
 		blocked_thread_time += blocked_micros;
 		return;
 	}
 	// Nothing to run on this thread, all remaining tasks are either running on other threads or descheduled.
 	// Wait (bounded), but wake up on task completion or reschedule.
-	blocked_thread_time += blocked_micros + WAIT_TIME_MS.count();
+	const auto wait_begin = TimePoint::Tick();
 	task_reschedule.wait_for(l, WAIT_TIME_MS);
+	const auto wait_micros = NumericCast<idx_t>(TimePoint::ElapsedMicros(wait_begin, TimePoint::Tick()));
+	blocked_thread_time += blocked_micros + wait_micros;
 #endif
 }
 
@@ -378,19 +413,6 @@ void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
 	}
 }
 
-bool Executor::ResultCollectorIsBlocked() {
-	if (!HasStreamingResultCollector()) {
-		return false;
-	}
-	for (auto &kv : to_be_rescheduled_tasks) {
-		auto &task = kv.second;
-		if (task->TaskBlockedOnResult()) {
-			return true;
-		}
-	}
-	return false;
-}
-
 void Executor::AddToBeRescheduled(shared_ptr<Task> &task_p) {
 	lock_guard<mutex> l(executor_lock);
 	if (cancelled) {
@@ -402,54 +424,36 @@ void Executor::AddToBeRescheduled(shared_ptr<Task> &task_p) {
 	// Save the reference before move — evaluation order of operator[] key and assignment value is unspecified pre-C++17
 	auto &task_ref = *task_p;
 	to_be_rescheduled_tasks[task_ref] = std::move(task_p);
+	// Only a result-sink park needs the consumer, so only a store that can park wakes it
+	if (ResultStoreCanPark()) {
+		task_reschedule.notify_all();
+	}
 }
 
 bool Executor::ExecutionIsFinished() {
 	return completed_pipelines >= total_pipelines || HasError();
 }
 
-PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
+QueryResultState Executor::ExecuteTask() {
 	// Only executor should return NO_TASKS_AVAILABLE
-	D_ASSERT(execution_result != PendingExecutionResult::NO_TASKS_AVAILABLE);
-	if (execution_result != PendingExecutionResult::RESULT_NOT_READY && ExecutionIsFinished()) {
+	D_ASSERT(execution_result != QueryResultState::NO_TASKS_AVAILABLE);
+	if (execution_result != QueryResultState::NOT_READY && ExecutionIsFinished()) {
 		return execution_result;
 	}
-	// check if there are any incomplete pipelines
-	auto &scheduler = TaskScheduler::GetScheduler(context);
 	if (completed_pipelines < total_pipelines) {
-		// there are! if we don't already have a task, fetch one
-		auto current_task = task.get();
-		if (dry_run) {
-			// Pretend we have no task, we don't want to execute anything
-			current_task = nullptr;
-		} else {
-			if (!task) {
-				scheduler.GetTaskFromProducer(*producer, task);
-			}
-			current_task = task.get();
+		if (!task) {
+			TaskScheduler::GetScheduler(context).GetTaskFromProducer(*producer, task);
 		}
-
-		if (!current_task && !HasError()) {
-			// there are no tasks to be scheduled and there are tasks blocked
-			lock_guard<mutex> l(executor_lock);
-			if (to_be_rescheduled_tasks.empty()) {
-				return PendingExecutionResult::NO_TASKS_AVAILABLE;
-			}
-			// At least one task is blocked
-			if (ResultCollectorIsBlocked()) {
-				return PendingExecutionResult::RESULT_READY;
-			}
-			return PendingExecutionResult::BLOCKED;
+		if (!task && !HasError()) {
+			return IdleState();
 		}
-
-		if (current_task) {
-			// if we have a task, partially process it
+		if (task) {
+			// partially process the task
 			auto result = task->Execute(TaskExecutionMode::PROCESS_PARTIAL);
 			if (result == TaskExecutionResult::TASK_BLOCKED) {
 				task->Deschedule();
 				task.reset();
 			} else if (result == TaskExecutionResult::TASK_FINISHED) {
-				// if the task is finished, clean it up
 				task.reset();
 			} else if (result == TaskExecutionResult::TASK_ERROR) {
 				if (!HasError()) {
@@ -467,26 +471,58 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 				TaskScheduler::GetScheduler(context).ScheduleTask(token, task);
 				task.reset();
 			}
-			return PendingExecutionResult::RESULT_NOT_READY;
+			return QueryResultState::NOT_READY;
 		}
-		execution_result = PendingExecutionResult::EXECUTION_ERROR;
-
-		// an exception has occurred executing one of the pipelines
-		// we need to cancel all tasks associated with this executor
-		CancelTasks();
-		ThrowException();
+		FailExecution();
 	}
-	D_ASSERT(!task);
+	return FinishExecution();
+}
 
+QueryResultState Executor::Poll() {
+	D_ASSERT(execution_result != QueryResultState::NO_TASKS_AVAILABLE);
+	if (execution_result != QueryResultState::NOT_READY && ExecutionIsFinished()) {
+		return execution_result;
+	}
+	if (completed_pipelines < total_pipelines) {
+		if (!HasError()) {
+			return IdleState();
+		}
+		FailExecution();
+	}
+	return FinishExecution();
+}
+
+QueryResultState Executor::IdleState() {
+	lock_guard<mutex> l(executor_lock);
+	if (to_be_rescheduled_tasks.empty()) {
+		return QueryResultState::NO_TASKS_AVAILABLE;
+	}
+	// At least one task is blocked
+	if (ResultCollectorIsBlocked()) {
+		return QueryResultState::READY;
+	}
+	return QueryResultState::BLOCKED;
+}
+
+void Executor::FailExecution() {
+	execution_result = QueryResultState::EXECUTION_ERROR;
+	// an exception has occurred executing one of the pipelines
+	// we need to cancel all tasks associated with this executor
+	CancelTasks();
+	ThrowException();
+}
+
+QueryResultState Executor::FinishExecution() {
+	D_ASSERT(!task);
 	lock_guard<mutex> elock(executor_lock);
 	pipelines.clear();
 	NextExecutor();
 	if (HasError()) { // LCOV_EXCL_START
 		// an exception has occurred executing one of the pipelines
-		execution_result = PendingExecutionResult::EXECUTION_ERROR;
+		execution_result = QueryResultState::EXECUTION_ERROR;
 		ThrowException();
 	} // LCOV_EXCL_STOP
-	execution_result = PendingExecutionResult::EXECUTION_FINISHED;
+	execution_result = QueryResultState::FINISHED;
 	return execution_result;
 }
 
@@ -503,7 +539,7 @@ void Executor::Reset() {
 	pipelines.clear();
 	events.clear();
 	to_be_rescheduled_tasks.clear();
-	execution_result = PendingExecutionResult::RESULT_NOT_READY;
+	execution_result = QueryResultState::NOT_READY;
 }
 
 shared_ptr<Pipeline> Executor::CreateChildPipeline(Pipeline &current, PhysicalOperator &op) {
@@ -590,6 +626,46 @@ bool Executor::HasStreamingResultCollector() {
 		return false;
 	}
 	auto &result_collector = physical_plan->Cast<PhysicalResultCollector>();
+	return result_collector.IsStreaming();
+}
+
+void Executor::SetResultBuffer(shared_ptr<BufferedData> result_buffer_p) {
+	lock_guard<mutex> guard(result_buffer_lock);
+	result_buffer = std::move(result_buffer_p);
+}
+
+shared_ptr<BufferedData> Executor::GetResultBuffer() {
+	lock_guard<mutex> guard(result_buffer_lock);
+	return result_buffer;
+}
+
+bool Executor::ResultStoreCanPark() {
+	if (!HasStreamingResultCollector()) {
+		return false;
+	}
+	auto buffer = GetResultBuffer();
+	// The store was settled on retained at submission: producers append and never park
+	return !buffer || buffer->Lifetime() != ResultLifetime::RETAINED;
+}
+
+bool Executor::ResultCollectorIsBlocked() {
+	// A store that cannot park never waits on the consumer, so the retained hot path skips the rest
+	if (!ResultStoreCanPark()) {
+		return false;
+	}
+	auto buffer = GetResultBuffer();
+	if (buffer) {
+		return buffer->WaitsOnConsumer();
+	}
+	auto &result_collector = physical_plan->Cast<PhysicalResultCollector>();
+	// The sink state is published by a pipeline initialize task on a worker, under the
+	// operator lock. Read it under the same lock, or readiness is reported before GetResult
+	// has a state to fetch from
+	lock_guard<mutex> guard(result_collector.lock);
+	if (!result_collector.sink_state) {
+		return false;
+	}
+	// A custom streaming collector has no parked-producer notion, and must never be waited on forever
 	return result_collector.IsStreaming();
 }
 

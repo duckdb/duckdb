@@ -43,6 +43,7 @@ static void WriteShreddedDecimal(UnifiedVariantVectorData &variant, Vector &resu
 	}
 }
 
+#ifdef D_ASSERT_IS_ENABLED
 static bool IsVariantStringType(VariantLogicalType type_id) {
 	switch (type_id) {
 	case VariantLogicalType::GEOMETRY:
@@ -55,6 +56,7 @@ static bool IsVariantStringType(VariantLogicalType type_id) {
 		return false;
 	}
 }
+#endif
 
 static void WriteShreddedString(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
                                 const SelectionVector &value_index_sel, const SelectionVector &result_sel,
@@ -356,13 +358,12 @@ void VariantShreddingState::SetShredded(uint32_t row, uint32_t values_index, uin
 	count++;
 }
 
-case_insensitive_string_set_t VariantShreddingState::ObjectFields() {
+unordered_set<string> VariantShreddingState::ObjectFields() const {
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
-	case_insensitive_string_set_t res;
+	unordered_set<string> res;
 	auto &child_types = StructType::GetChildTypes(type);
 	for (auto &entry : child_types) {
-		auto &type = entry.first;
-		res.emplace(type.c_str(), static_cast<uint32_t>(type.size()));
+		res.emplace(entry.first.GetIdentifierName());
 	}
 	return res;
 }

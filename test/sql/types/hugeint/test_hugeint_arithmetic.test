@@ -159,8 +159,13 @@ SELECT -100::HUGEINT // 20::HUGEINT, 100::HUGEINT // -20::HUGEINT, -100::HUGEINT
 -5	-5	5
 
 # division by zero
-query I
+statement error
 SELECT 100::HUGEINT // 0::HUGEINT
+----
+<REGEX>:.*Division by zero.*
+
+query I
+SELECT TRY(100::HUGEINT // 0::HUGEINT)
 ----
 NULL
 
@@ -188,8 +193,13 @@ SELECT -90::HUGEINT % 20::HUGEINT, 90::HUGEINT % -20::HUGEINT, -90::HUGEINT % -2
 -10	10	-10
 
 # modulo by zero
-query I
+statement error
 SELECT 100::HUGEINT % 0::HUGEINT
+----
+<REGEX>:.*Division by zero.*
+
+query I
+SELECT TRY(100::HUGEINT % 0::HUGEINT)
 ----
 NULL
 

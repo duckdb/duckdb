@@ -231,3 +231,52 @@ order by all
 8	NULL
 9	NULL
 
+# Preserve candidate indexes when applying an arbitrary predicate
+
+statement ok
+create or replace table tleft(c0 INTEGER, c2 BOOLEAN);
+
+statement ok
+create table tright(c0 INTEGER, c1 BOOLEAN);
+
+statement ok
+insert into tleft values (1, false), (0, true);
+
+statement ok
+insert into tright values (-1, false), (-1, false), (2, false);
+
+statement ok
+set disabled_optimizers = 'build_side_probe_side';
+
+statement ok
+set nested_loop_join_threshold = 0;
+
+query II
+explain
+select l.c2
+from tleft l
+left join tright r
+on l.c0 >= r.c0
+and l.c2 != r.c1
+and l.c2
+----
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*
+
+query I
+select l.c2
+from tleft l
+left join tright r
+on l.c0 >= r.c0
+and l.c2 != r.c1
+and l.c2
+order by 1
+----
+false
+true
+true
+
+statement ok
+reset disabled_optimizers;
+
+statement ok
+reset nested_loop_join_threshold;

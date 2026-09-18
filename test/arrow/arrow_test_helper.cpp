@@ -8,15 +8,15 @@
 #include "duckdb/main/relation/query_relation.hpp"
 
 duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper>
-ArrowStreamTestFactory::CreateStream(uintptr_t this_ptr, duckdb::ArrowStreamParameters &parameters) {
+ArrowStreamTestFactory::ProduceStream(duckdb::ArrowStreamParameters &parameters) {
 	auto stream_wrapper = duckdb::make_uniq<duckdb::ArrowArrayStreamWrapper>();
-	stream_wrapper->arrow_array_stream = *(ArrowArrayStream *)this_ptr;
+	stream_wrapper->arrow_array_stream = stream.get();
 
 	return stream_wrapper;
 }
 
-void ArrowStreamTestFactory::GetSchema(ArrowArrayStream *arrow_array_stream, ArrowSchema &schema) {
-	arrow_array_stream->get_schema(arrow_array_stream, &schema);
+void ArrowStreamTestFactory::GetSchema(ArrowSchema &schema) {
+	stream.get().get_schema(&stream.get(), &schema);
 }
 
 namespace duckdb {
@@ -30,8 +30,7 @@ int ArrowTestFactory::ArrowArrayStreamGetSchema(struct ArrowArrayStream *stream,
 	return 0;
 }
 
-static int NextFromMaterialized(MaterializedQueryResult &res, bool big, ClientProperties properties,
-                                struct ArrowArray *out) {
+static int NextFromMaterialized(QueryResult &res, bool big, ClientProperties properties, struct ArrowArray *out) {
 	auto &types = res.GetTypes();
 	unordered_map<idx_t, const duckdb::shared_ptr<ArrowTypeExtensionData>> extension_type_cast;
 	if (big) {
@@ -82,7 +81,7 @@ int ArrowTestFactory::ArrowArrayStreamGetNext(struct ArrowArrayStream *stream, s
 	}
 	auto &data = *((ArrowArrayStreamData *)stream->private_data);
 	if (data.factory.result->GetResultType() == QueryResultType::MATERIALIZED_RESULT) {
-		auto &materialized_result = data.factory.result->Cast<MaterializedQueryResult>();
+		auto &materialized_result = *data.factory.result;
 		return NextFromMaterialized(materialized_result, data.factory.big_result, data.options, out);
 	} else {
 		D_ASSERT(data.factory.result->GetResultType() == QueryResultType::ARROW_RESULT);
@@ -104,10 +103,8 @@ void ArrowTestFactory::ArrowArrayStreamRelease(struct ArrowArrayStream *stream) 
 	stream->release = nullptr;
 }
 
-duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> ArrowTestFactory::CreateStream(uintptr_t this_ptr,
-                                                                                   ArrowStreamParameters &parameters) {
-	//! Create a new batch reader
-	auto &factory = *reinterpret_cast<ArrowTestFactory *>(this_ptr); //! NOLINT
+duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> ArrowTestFactory::ProduceStream(ArrowStreamParameters &parameters) {
+	auto &factory = *this;
 	if (!factory.result) {
 		throw InternalException("Stream already consumed!");
 	}
@@ -123,18 +120,16 @@ duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> ArrowTestFactory::CreateStre
 	return stream_wrapper;
 }
 
-void ArrowTestFactory::GetSchema(ArrowArrayStream *factory_ptr, ArrowSchema &schema) {
-	//! Create a new batch reader
-	auto &factory = *reinterpret_cast<ArrowTestFactory *>(factory_ptr); //! NOLINT
-	factory.ToArrowSchema(&schema);
+void ArrowTestFactory::GetSchema(ArrowSchema &schema) {
+	ToArrowSchema(&schema);
 }
 
 void ArrowTestFactory::ToArrowSchema(struct ArrowSchema *out) {
 	ArrowConverter::ToArrowSchema(out, types, names, options);
 }
 
-unique_ptr<QueryResult> ArrowTestHelper::ScanArrowObject(Connection &con, vector<Value> &params) {
-	auto arrow_result = con.TableFunction("arrow_scan", params)->Execute();
+unique_ptr<QueryResult> ArrowTestHelper::ScanArrowObject(Connection &con, shared_ptr<ArrowScanFactory> factory) {
+	auto arrow_result = con.TableFunction("arrow_scan", {}, {}, std::move(factory))->Execute();
 	if (arrow_result->GetResultType() != QueryResultType::MATERIALIZED_RESULT) {
 		printf("Arrow Result must materialized");
 		return nullptr;
@@ -205,22 +200,27 @@ bool ArrowTestHelper::CompareResults(Connection &con, shared_ptr<Relation> arrow
 	return true;
 }
 
-vector<Value> ArrowTestHelper::ConstructArrowScan(ArrowTestFactory &factory) {
-	vector<Value> params;
-	auto arrow_object = (uintptr_t)(&factory);
-	params.push_back(Value::POINTER(arrow_object));
-	params.push_back(Value::POINTER((uintptr_t)&ArrowTestFactory::CreateStream));
-	params.push_back(Value::POINTER((uintptr_t)&ArrowTestFactory::GetSchema));
-	return params;
+class BorrowedArrowScanFactory : public ArrowScanFactory {
+public:
+	explicit BorrowedArrowScanFactory(ArrowScanFactory &factory_p) : factory(factory_p) {
+	}
+	void GetSchema(ArrowSchema &schema) override {
+		factory.get().GetSchema(schema);
+	}
+	unique_ptr<ArrowArrayStreamWrapper> ProduceStream(ArrowStreamParameters &parameters) override {
+		return factory.get().ProduceStream(parameters);
+	}
+
+private:
+	reference<ArrowScanFactory> factory;
+};
+
+shared_ptr<ArrowScanFactory> ArrowTestHelper::ConstructArrowScan(ArrowTestFactory &factory) {
+	return make_shared_ptr<BorrowedArrowScanFactory>(factory);
 }
 
-vector<Value> ArrowTestHelper::ConstructArrowScan(ArrowArrayStream &stream) {
-	vector<Value> params;
-	auto arrow_object = (uintptr_t)(&stream);
-	params.push_back(Value::POINTER(arrow_object));
-	params.push_back(Value::POINTER((uintptr_t)&ArrowStreamTestFactory::CreateStream));
-	params.push_back(Value::POINTER((uintptr_t)&ArrowStreamTestFactory::GetSchema));
-	return params;
+shared_ptr<ArrowScanFactory> ArrowTestHelper::ConstructArrowScan(ArrowArrayStream &stream) {
+	return make_shared_ptr<ArrowStreamTestFactory>(stream);
 }
 
 bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, bool big_result) {
@@ -244,7 +244,7 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 		    [](ClientConfig &config) { config.get_result_collector = nullptr; });
 
 		// run the query
-		initial_result = con.context->Query(query, false);
+		initial_result = con.context->Query(query, QueryParameters());
 		if (initial_result->HasError()) {
 			initial_result->Print();
 			printf("Query: %s\n", query.c_str());
@@ -261,7 +261,7 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 	// And construct a `arrow_scan` to read the created "arrow object"
 	auto params = ConstructArrowScan(factory);
 
-	auto arrow_scan = con.TableFunction("arrow_scan", params);
+	auto arrow_scan = con.TableFunction("arrow_scan", {}, {}, params);
 	return CompareResults(con, std::move(arrow_scan), query);
 }
 
@@ -272,7 +272,7 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, A
 	}
 	// construct the arrow scan
 	auto params = ConstructArrowScan(arrow_stream);
-	auto arrow_scan = con.TableFunction("arrow_scan", params);
+	auto arrow_scan = con.TableFunction("arrow_scan", {}, {}, params);
 
 	auto success = CompareResults(con, std::move(arrow_scan), query);
 	arrow_stream.release = nullptr;

@@ -74,7 +74,7 @@ static void ReplaceStatement(unique_ptr<SQLStatement> &statement, unique_ptr<SQL
 }
 
 void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQLStatement> &statement,
-                                          PendingQueryParameters query_parameters) {
+                                          QueryParameters query_parameters) {
 	auto verification = Settings::Get<DebugVerifyStatementSetting>(*this);
 	if (verification == DebugStatementVerification::COPY_STATEMENT) {
 		if (statement->type == StatementType::LOGICAL_PLAN_STATEMENT) {
@@ -87,7 +87,11 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 			// reparsing not supported for relation statements
 			return;
 		}
-		Parser parser(GetParserOptions());
+		auto parser_options = GetParserOptions();
+		// ToString() writes identifiers as they were folded when the statement was first parsed, so folding
+		// them a second time would corrupt any identifier that was quoted in the original statement
+		parser_options.identifier_case_mode = IdentifierCaseMode::PRESERVE_CASE;
+		Parser parser(parser_options);
 		ErrorData error;
 		parser.ParseQuery(statement->ToString());
 		// FIXME: these properties don't round-trip in ToString(), so we overwrite them manually
@@ -184,7 +188,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 			// not supported for statements that already take parameters
 			return;
 		}
-		if (query_parameters.parameters && !query_parameters.parameters->empty()) {
+		if (query_parameters.statement_args && !query_parameters.statement_args->empty()) {
 			// not supported for statements that already have parameters
 			return;
 		}
@@ -244,7 +248,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 			// not supported for statements that already take parameters
 			return;
 		}
-		if (query_parameters.parameters && !query_parameters.parameters->empty()) {
+		if (query_parameters.statement_args && !query_parameters.statement_args->empty()) {
 			// not supported for statements that already have parameters
 			return;
 		}

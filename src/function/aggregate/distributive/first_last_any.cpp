@@ -1,13 +1,65 @@
 #include "duckdb/common/clustered_aggregate.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/create_sort_key.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/optimizer/aggregate_rewrite.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
 namespace {
+
+template <bool LAST, bool SKIP_NULLS>
+unique_ptr<Expression> RewriteOrderedFirst(AggregateRewriteInput &input) {
+	if (!input.aggregate.GetOrderBys()) {
+		return nullptr;
+	}
+	auto aggregate = unique_ptr_cast<Expression, BoundAggregateExpression>(input.aggregate.Copy());
+
+	FunctionBinder binder(input.context);
+	vector<unique_ptr<Expression>> sort_children;
+	for (auto &order : aggregate->GetOrderBysMutable()->orders) {
+		sort_children.emplace_back(std::move(order.expression));
+		sort_children.emplace_back(make_uniq<BoundConstantExpression>(Value(order.GetOrderModifier())));
+	}
+	aggregate->GetOrderBysMutable().reset();
+
+	ErrorData error;
+	auto sort_key =
+	    binder.BindScalarFunction(Identifier::DefaultSchema(), "create_sort_key", std::move(sort_children), error);
+	if (!sort_key) {
+		error.Throw();
+	}
+
+	auto children = std::move(aggregate->GetChildrenMutable());
+	children.emplace_back(std::move(sort_key));
+	const char *function_name;
+	if (LAST) {
+		function_name = "arg_max_null";
+	} else if (SKIP_NULLS) {
+		function_name = "arg_min";
+	} else {
+		function_name = "arg_min_null";
+	}
+
+	auto &catalog = Catalog::GetSystemCatalog(input.context);
+	auto &entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
+	    input.context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), function_name));
+	vector<LogicalType> child_types;
+	for (auto &child : children) {
+		child_types.push_back(child->GetReturnType());
+	}
+	const auto &function = entry.functions.GetFunctionByArguments(input.context, child_types);
+	auto result = binder.BindAggregateFunction(function, std::move(children), std::move(aggregate->GetFilterMutable()),
+	                                           aggregate->GetAggregateType());
+	return unique_ptr_cast<BoundAggregateExpression, Expression>(std::move(result));
+}
 
 //! The aggregate state of first/last/any_value is nullable on two levels: the state itself is NULL when no row has
 //! been seen yet (is_set, the outer optional), and the recorded value can itself be NULL (value_is_valid, the inner
@@ -332,10 +384,10 @@ void FirstFunctionClusterUpdate(Vector inputs[], AggregateInputData &aggregate_i
 	inputs[0].ToUnifiedFormat(idata);
 	auto input_data = UnifiedVectorFormat::GetData<T>(idata);
 	AggregateUnaryInput unary_input(aggregate_input_data, idata.validity);
-	for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-		auto &state = *reinterpret_cast<FirstState<T> *>(clustered.group_runs[r].state);
-		const auto *run_sel = clustered.group_runs[r].sel;
-		const auto run_count = clustered.group_runs[r].count;
+	for (auto &run : clustered.runs()) {
+		auto &state = *reinterpret_cast<FirstState<T> *>(run.state);
+		const auto *run_sel = run.sel;
+		const auto run_count = run.count;
 		FirstFunction<LAST, SKIP_NULLS>::template ClusteredOp<T, FirstState<T>, FirstFunction<LAST, SKIP_NULLS>>(
 		    state, input_data, unary_input, run_sel, *idata.sel, idata.validity, 0, run_count);
 	}
@@ -435,6 +487,9 @@ unique_ptr<FunctionData> BindDecimalFirst(BindAggregateFunctionInput &input) {
 	function.ReplaceImplementation(GetFirstFunction<LAST, SKIP_NULLS>(decimal_type));
 	function.SetName(std::move(name));
 	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
+	function.SetDirectRewriteCallback(RewriteOrderedFirst<LAST, SKIP_NULLS>);
+	function.SetSingleValueIdentity(true);
+	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	function.SetReturnType(decimal_type);
 	return nullptr;
 }
@@ -457,17 +512,24 @@ unique_ptr<FunctionData> BindFirst(BindAggregateFunctionInput &input) {
 	function.ReplaceImplementation(GetFirstOperator<LAST, SKIP_NULLS>(input_type));
 	function.SetName(std::move(name));
 	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
+	function.SetDirectRewriteCallback(RewriteOrderedFirst<LAST, SKIP_NULLS>);
+	function.SetSingleValueIdentity(true);
+	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	return nullptr;
 }
 
 template <bool LAST, bool SKIP_NULLS>
 void AddFirstOperator(AggregateFunctionSet &set) {
-	set.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-	                                  BindDecimalFirst<LAST, SKIP_NULLS>));
-	set.AddFunction(AggregateFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                                  FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-	                                  BindFirst<LAST, SKIP_NULLS>));
+	AggregateFunction decimal_fun({}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                              FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+	                              BindDecimalFirst<LAST, SKIP_NULLS>);
+	decimal_fun.GetSignature().AddParameter("arg", LogicalTypeId::DECIMAL);
+	set.AddFunction(decimal_fun);
+
+	AggregateFunction any_fun({}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                          FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, BindFirst<LAST, SKIP_NULLS>);
+	any_fun.GetSignature().AddParameter("arg", LogicalTypeId::ANY);
+	set.AddFunction(any_fun);
 }
 
 } // namespace
@@ -475,12 +537,18 @@ void AddFirstOperator(AggregateFunctionSet &set) {
 AggregateFunction FirstFunctionGetter::GetFunction(const LogicalType &type) {
 	auto fun = GetFirstFunction<false, false>(type);
 	fun.SetName("first");
+	fun.SetDirectRewriteCallback(RewriteOrderedFirst<false, false>);
+	fun.SetSingleValueIdentity(true);
+	fun.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	return fun;
 }
 
 AggregateFunction LastFunctionGetter::GetFunction(const LogicalType &type) {
 	auto fun = GetFirstFunction<true, false>(type);
 	fun.SetName("last");
+	fun.SetDirectRewriteCallback(RewriteOrderedFirst<true, false>);
+	fun.SetSingleValueIdentity(true);
+	fun.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	return fun;
 }
 

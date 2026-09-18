@@ -5,12 +5,12 @@
 
 namespace duckdb {
 
-NodeHandle<Node256Leaf> Node256Leaf::New(ART &art, Node &node) {
-	node = Node::GetAllocator(art, NODE_256_LEAF).New();
+NodeHandle Node256Leaf::New(ART &art, NodePtr &node) {
+	node = NodePtr::GetAllocator(art, NODE_256_LEAF).New();
 	node.SetMetadata(static_cast<uint8_t>(NODE_256_LEAF));
 
-	NodeHandle<Node256Leaf> handle(art, node);
-	auto &n = handle.Get();
+	NodeHandle handle(art, node);
+	auto &n = handle.Get<Node256Leaf>();
 
 	n.count = 0;
 	ValidityMask mask(&n.mask[0], Node256::CAPACITY);
@@ -19,19 +19,19 @@ NodeHandle<Node256Leaf> Node256Leaf::New(ART &art, Node &node) {
 	return handle;
 }
 
-void Node256Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
-	NodeHandle<Node256Leaf> handle(art, node);
-	auto &n = handle.Get();
+void Node256Leaf::InsertByte(ART &art, NodePtr &node, const uint8_t byte) {
+	NodeHandle handle(art, node);
+	auto &n = handle.Get<Node256Leaf>();
 
 	n.count++;
 	ValidityMask mask(&n.mask[0], Node256::CAPACITY);
 	mask.SetValid(byte);
 }
 
-void Node256Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
+void Node256Leaf::DeleteByte(ART &art, NodePtr &node, const uint8_t byte) {
 	{
-		NodeHandle<Node256Leaf> handle(art, node);
-		auto &n = handle.Get();
+		NodeHandle handle(art, node);
+		auto &n = handle.Get<Node256Leaf>();
 
 		n.count--;
 		ValidityMask mask(&n.mask[0], Node256::CAPACITY);
@@ -46,9 +46,11 @@ void Node256Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
 	Node15Leaf::ShrinkNode256Leaf(art, node, node256);
 }
 
-bool Node256Leaf::HasByte(const uint8_t byte) {
-	ValidityMask v_mask(&mask[0], Node256::CAPACITY);
-	return v_mask.RowIsValid(byte);
+bool Node256Leaf::HasByte(const uint8_t byte) const {
+	idx_t entry_idx = 0;
+	idx_t idx_in_entry = 0;
+	ValidityMask::GetEntryIndex(byte, entry_idx, idx_in_entry);
+	return ValidityMask::RowIsValid(mask[entry_idx], idx_in_entry);
 }
 
 array_ptr<uint8_t> Node256Leaf::GetBytes(ArenaAllocator &arena) {
@@ -66,10 +68,12 @@ array_ptr<uint8_t> Node256Leaf::GetBytes(ArenaAllocator &arena) {
 	return bytes;
 }
 
-bool Node256Leaf::GetNextByte(uint8_t &byte) {
-	ValidityMask v_mask(&mask[0], Node256::CAPACITY);
+bool Node256Leaf::GetNextByte(uint8_t &byte) const {
 	for (uint16_t i = byte; i < CAPACITY; i++) {
-		if (v_mask.RowIsValid(i)) {
+		idx_t entry_idx = 0;
+		idx_t idx_in_entry = 0;
+		ValidityMask::GetEntryIndex(i, entry_idx, idx_in_entry);
+		if (ValidityMask::RowIsValid(mask[entry_idx], idx_in_entry)) {
 			byte = UnsafeNumericCast<uint8_t>(i);
 			return true;
 		}
@@ -78,13 +82,13 @@ bool Node256Leaf::GetNextByte(uint8_t &byte) {
 	return false;
 }
 
-void Node256Leaf::GrowNode15Leaf(ART &art, Node &node256_leaf, Node &node15_leaf) {
+void Node256Leaf::GrowNode15Leaf(ART &art, NodePtr &node256_leaf, NodePtr &node15_leaf) {
 	{
-		NodeHandle<Node15Leaf> n15_handle(art, node15_leaf);
-		auto &n15 = n15_handle.Get();
+		NodeHandle n15_handle(art, node15_leaf);
+		auto &n15 = n15_handle.Get<Node15Leaf>();
 
 		auto n256_handle = New(art, node256_leaf);
-		auto &n256 = n256_handle.Get();
+		auto &n256 = n256_handle.Get<Node256Leaf>();
 		node256_leaf.SetGateStatus(node15_leaf.GetGateStatus());
 
 		n256.count = n15.count;
@@ -93,7 +97,7 @@ void Node256Leaf::GrowNode15Leaf(ART &art, Node &node256_leaf, Node &node15_leaf
 			mask.SetValid(n15.key[i]);
 		}
 	}
-	Node::FreeNode(art, node15_leaf);
+	NodePtr::FreeNode(art, node15_leaf);
 }
 
 } // namespace duckdb

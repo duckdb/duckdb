@@ -1,9 +1,11 @@
 #include "duckdb/optimizer/filter_combiner.hpp"
 
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -391,6 +393,48 @@ void ReplaceWithBoundReference(unique_ptr<Expression> &root_expr) {
 	    });
 }
 
+static unique_ptr<ExpressionFilter> TryCreateMultiColumnExpressionFilter(LogicalGet &get, const Expression &expr,
+                                                                         const vector<ColumnBinding> &bindings) {
+	vector<ColumnBinding> distinct_bindings;
+	distinct_bindings.reserve(bindings.size());
+	// Maps column bindings to dense BoundReference indexes.
+	column_binding_map_t<idx_t> binding_indexes;
+	for (const auto &binding : bindings) {
+		const auto insert_result = binding_indexes.emplace(binding, distinct_bindings.size());
+		if (insert_result.second) {
+			distinct_bindings.push_back(binding);
+		}
+	}
+	if (distinct_bindings.size() <= 1) {
+		return nullptr;
+	}
+
+	vector<ProjectionIndex> column_indexes;
+	column_indexes.reserve(distinct_bindings.size());
+	for (const auto &binding : distinct_bindings) {
+		if (binding.table_index != get.table_index || binding.column_index >= get.GetColumnIds().size() ||
+		    get.GetColumnIds()[binding.column_index].IsVirtualColumn()) {
+			return nullptr;
+		}
+		column_indexes.emplace_back(binding.column_index);
+	}
+
+	auto filter_expr = expr.Copy();
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+	    filter_expr, [&](BoundColumnRefExpression &column_ref, unique_ptr<Expression> &child) {
+		    const auto entry = binding_indexes.find(column_ref.Binding());
+		    D_ASSERT(entry != binding_indexes.end());
+		    child =
+		        make_uniq<BoundReferenceExpression>(column_ref.GetAlias(), column_ref.GetReturnType(), entry->second);
+	    });
+	// Remove query-specific metadata so equivalent filters serialize identically for common-subplan matching.
+	ExpressionIterator::EnumerateExpression(filter_expr, [](Expression &expr) {
+		expr.ClearAlias();
+		expr.SetQueryLocation(optional_idx());
+	});
+	return make_uniq<ExpressionFilter>(std::move(filter_expr), std::move(column_indexes));
+}
+
 FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &get, Expression &expr) {
 	if (!get.function.pushdown_expression) {
 		// the scan does not support pushing down generic expressions
@@ -402,11 +446,23 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 	if (bindings.empty()) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	// we can only pushdown expressions that refer to exactly one column
-	for (idx_t i = 1; i < bindings.size(); i++) {
-		if (bindings[i] != bindings[0]) {
-			return FilterPushdownResult::NO_PUSHDOWN;
+	bool has_multiple_bindings = false;
+	for (idx_t binding_idx = 1; binding_idx < bindings.size(); ++binding_idx) {
+		if (bindings[binding_idx] != bindings[0]) {
+			has_multiple_bindings = true;
+			break;
 		}
+	}
+	if (has_multiple_bindings) {
+		auto table = get.GetTable();
+		if (table && table->IsDuckTable() && ExpressionFilter::CanPropagateExpressionStatistics(expr)) {
+			auto filter = TryCreateMultiColumnExpressionFilter(get, expr, bindings);
+			if (filter) {
+				get.table_filters.PushMultiColumnFilter(std::move(filter));
+				return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
+			}
+		}
+		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	if (!get.function.pushdown_expression(context, get, expr)) {
 		// the scan does not support pushing down THIS expression
@@ -893,7 +949,7 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	}
 
 	// evaluate the constant side
-	Value constant_value, casted_value;
+	Value constant_value;
 	string error_msg;
 	if (!ExpressionExecutor::TryEvaluateScalar(context, const_side, constant_value)) {
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -901,9 +957,11 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	if (constant_value.IsNull()) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	if (!constant_value.TryCastAs(context, source_type, casted_value, &error_msg)) {
+	auto cast_result = constant_value.TryCastAs(context, source_type, &error_msg);
+	if (!cast_result) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
+	auto cast_value = std::move(*cast_result);
 
 	auto push_optional = [&](ExpressionType filter_type, Value filter_val) {
 		auto filter_expr =
@@ -914,14 +972,14 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	// push relaxed filter(s) as OptionalFilter
 	auto comparison_type = invert ? FlipComparisonExpression(comp.GetExpressionType()) : comp.GetExpressionType();
 	if (IsGreaterThan(comparison_type) || comparison_type == ExpressionType::COMPARE_EQUAL) {
-		Value lower = casted_value;
+		Value lower = cast_value;
 		if (!AdjustTemporalValue(lower, -margin)) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
 		push_optional(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(lower));
 	}
 	if (IsLessThan(comparison_type) || comparison_type == ExpressionType::COMPARE_EQUAL) {
-		Value upper = casted_value;
+		Value upper = cast_value;
 		if (!AdjustTemporalValue(upper, margin)) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}

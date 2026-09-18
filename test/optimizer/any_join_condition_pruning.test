@@ -1,0 +1,59 @@
+# name: test/optimizer/any_join_condition_pruning.test
+# description: ANY join conditions that fold to a constant are pruned
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t(a FLOAT[3], b FLOAT[3]);
+
+statement ok
+INSERT INTO t VALUES ([1,2,3],[4,5,6]), ([0,1,0],[1,0,0]);
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
+
+# an inner ANY join whose condition is always true becomes a cross product
+query II
+EXPLAIN (FORMAT yaml) SELECT * FROM t t1 JOIN t t2 ON array_cosine_similarity(t1.a, t2.a) IS NOT NULL
+----
+logical_opt	<REGEX>:.*CROSS_PRODUCT.*
+
+query II
+EXPLAIN (FORMAT yaml) SELECT * FROM t t1 JOIN t t2 ON array_cosine_similarity(t1.a, t2.a) IS NOT NULL
+----
+logical_opt	<!REGEX>:.*ANY_JOIN.*
+
+query I
+SELECT count(*) FROM t t1 JOIN t t2 ON array_cosine_similarity(t1.a, t2.a) IS NOT NULL
+----
+4
+
+# ... and one that can never match is pruned entirely
+query II
+EXPLAIN (FORMAT yaml) SELECT * FROM t t1 JOIN t t2 ON array_cosine_similarity(t1.a, t2.a) IS NULL
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+query I
+SELECT count(*) FROM t t1 JOIN t t2 ON array_cosine_similarity(t1.a, t2.a) IS NULL
+----
+0
+
+# an always-true ANY join is not rewritten for join types that also emit non-matching rows
+statement ok
+CREATE TABLE l(x INTEGER);
+
+statement ok
+INSERT INTO l VALUES (1), (2);
+
+statement ok
+CREATE TABLE r(y INTEGER);
+
+query I
+SELECT count(*) FROM l ANTI JOIN r ON array_cosine_similarity([1.0,2.0,3.0]::FLOAT[3], [4.0,5.0,6.0]::FLOAT[3]) IS NOT NULL
+----
+2
+
+query I
+SELECT count(*) FROM l LEFT JOIN r ON array_cosine_similarity([1.0,2.0,3.0]::FLOAT[3], [4.0,5.0,6.0]::FLOAT[3]) IS NOT NULL
+----
+2

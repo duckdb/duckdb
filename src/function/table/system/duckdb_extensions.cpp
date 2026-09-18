@@ -24,6 +24,7 @@ struct ExtensionInformation {
 	string description;
 	vector<Value> aliases;
 	string extension_version;
+	string signature_key_fingerprint;
 };
 
 struct DuckDBExtensionsData : public GlobalTableFunctionState {
@@ -61,6 +62,9 @@ static unique_ptr<FunctionData> DuckDBExtensionsBind(ClientContext &context, Tab
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("installed_from");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("signature_key_fingerprint");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
@@ -116,6 +120,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 			auto extension_install_info = ExtensionInstallInfo::TryReadInfoFile(fs, info_file_path, info.name);
 			info.install_mode = extension_install_info->mode;
 			info.extension_version = extension_install_info->version;
+			info.signature_key_fingerprint = extension_install_info->signature_key_fingerprint;
 			if (extension_install_info->mode == ExtensionInstallMode::REPOSITORY) {
 				info.installed_from = ExtensionRepository::GetRepository(extension_install_info->repository_url);
 			} else {
@@ -132,6 +137,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 					entry->second.installed_from = info.installed_from;
 					entry->second.install_mode = info.install_mode;
 					entry->second.extension_version = info.extension_version;
+					entry->second.signature_key_fingerprint = info.signature_key_fingerprint;
 				}
 				entry->second.installed = true;
 			}
@@ -213,6 +219,8 @@ void DuckDBExtensionsFunction(ClientContext &context, TableFunctionInput &data_p
 	auto &install_mode = output.data[7];
 	// installed_from LogicalType::VARCHAR
 	auto &installed_from = output.data[8];
+	// signature_key_fingerprint LogicalType::VARCHAR
+	auto &signature_key_fingerprint = output.data[9];
 
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset];
@@ -226,6 +234,10 @@ void DuckDBExtensionsFunction(ClientContext &context, TableFunctionInput &data_p
 		extension_version.Append(Value(entry.extension_version));
 		install_mode.Append(EnumUtil::ToString(entry.install_mode));
 		installed_from.Append(Value(entry.installed_from));
+		// unsigned or built-in extensions have no signing key: report NULL rather than an empty string
+		signature_key_fingerprint.Append(entry.signature_key_fingerprint.empty()
+		                                     ? Value(LogicalType::VARCHAR)
+		                                     : Value(entry.signature_key_fingerprint));
 
 		data.offset++;
 		count++;

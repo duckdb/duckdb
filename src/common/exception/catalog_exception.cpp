@@ -58,7 +58,7 @@ CatalogException CatalogException::MissingEntry(const string &type, const Identi
 		extra_info["candidates"] = StringUtil::Join(suggestions, ", ");
 	}
 	return CatalogException(
-	    extra_info, StringUtil::Format("unrecognized %s \"%s\"\n%s", type, name,
+	    extra_info, StringUtil::Format("unrecognized %s %s\n%s", type, name,
 	                                   StringUtil::CandidatesErrorMessage(IdentifiersToStrings(suggestions),
 	                                                                      name.GetIdentifierName(), "Did you mean")));
 }

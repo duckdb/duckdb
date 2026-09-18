@@ -39,8 +39,10 @@ bool SimpleTrackingFileSystem::CanSeek() {
 	return true;
 }
 
-string SimpleTrackingFileSystem::GetVersionTag(FileHandle &handle) {
-	return StringUtil::Format("%lld:%lld", GetFileSize(handle), GetLastModifiedTime(handle).value);
+FileMetadata SimpleTrackingFileSystem::Stats(FileHandle &handle) {
+	auto metadata = LocalFileSystem::Stats(handle);
+	metadata.version_tag = StringUtil::Format("%lld:%lld", metadata.file_size, metadata.last_modification_time.value);
+	return metadata;
 }
 
 string NoValidationMetadataFileSystem::GetName() const {
@@ -55,12 +57,21 @@ bool NoValidationMetadataFileSystem::CanSeek() {
 	return true;
 }
 
-string NoValidationMetadataFileSystem::GetVersionTag(FileHandle &handle) {
-	return "";
+FileMetadata NoValidationMetadataFileSystem::Stats(FileHandle &handle) {
+	auto metadata = LocalFileSystem::Stats(handle);
+	metadata.last_modification_time = timestamp_t(0);
+	metadata.version_tag.clear();
+	return metadata;
 }
 
-timestamp_t NoValidationMetadataFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	return timestamp_t(0);
+string FreshnessOnlyFileSystem::GetName() const {
+	return "FreshnessOnlyFileSystem";
+}
+
+FileMetadata FreshnessOnlyFileSystem::Stats(FileHandle &handle) {
+	auto metadata = NoValidationMetadataFileSystem::Stats(handle);
+	metadata.cache_valid_until = timestamp_t(Timestamp::GetCurrentTimestamp().value + max_age_micros);
+	return metadata;
 }
 
 } // namespace duckdb

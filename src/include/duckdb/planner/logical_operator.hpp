@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/main/profiler/profiler_print_format.hpp"
@@ -23,9 +22,13 @@
 
 namespace duckdb {
 
+class LogicalPlanVerifier;
+
 //! LogicalOperator is the base class of the logical operators present in the
 //! logical query tree
 class LogicalOperator {
+	friend class LogicalPlanVerifier;
+
 public:
 	explicit LogicalOperator(LogicalOperatorType type);
 	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions);
