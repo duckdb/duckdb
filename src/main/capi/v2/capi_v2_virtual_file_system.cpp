@@ -98,6 +98,10 @@ public:
 	//! Reported by the open callback; see FILE_PROPERTY.
 	bool is_seekable = true;
 	bool is_on_disk = false;
+	//! What was known about the file when it was opened, which answers for a file system without a stat callback.
+	CV2FileMetadata metadata;
+	//! Whether the file was written or truncated since, which makes that metadata stale.
+	std::atomic<bool> written {false};
 	//! What the file callbacks receive. Without a per-call context from the engine it is fixed for the file's life.
 	CV2VirtualFileSystemInfo op_info;
 };
@@ -111,8 +115,16 @@ public:
 	CV2UserData data;
 	bool is_seekable = true;
 	bool is_on_disk = false;
-	//! What a listing reported about the file, decoded from the open options on first request.
-	unique_ptr<CV2FileMetadata> listed_metadata;
+	//! What a listing reported about the file, decoded from the open options on first request, and whatever the
+	//! open callback filled in on top of it.
+	unique_ptr<CV2FileMetadata> metadata;
+
+	CV2FileMetadata &Metadata() {
+		if (!metadata) {
+			metadata = make_uniq<CV2FileMetadata>(CV2FileMetadata::FromOptions(*file));
+		}
+		return *metadata;
+	}
 };
 
 static auto Convert(duckdb_v2_vfs_info_handle info) -> CV2VirtualFileSystemInfo * {
@@ -216,6 +228,16 @@ protected:
 				                              "since it is opened for parallel access",
 				                              config.name, file.path);
 			}
+			if (config.OwnsCursor() && !cb.write) {
+				throw NotImplementedException("File system \"%s\" owns the cursor but has no \"write\" callback, which "
+				                              "\"%s\" needs since it is opened for writing",
+				                              config.name, file.path);
+			}
+		}
+		if (flags.OpenForReading() && config.OwnsCursor() && !cb.read) {
+			throw NotImplementedException("File system \"%s\" owns the cursor but has no \"read\" callback, which "
+			                              "\"%s\" needs since it is opened for reading",
+			                              config.name, file.path);
 		}
 		if (flags.OpenForReading() && !config.CanRead()) {
 			throw PermissionException("File system \"%s\" is write-only: it has no \"read at\" callback, so \"%s\" "
@@ -257,12 +279,14 @@ protected:
 		handle->op_info = SystemInfo(nullptr);
 		handle->is_seekable = info.is_seekable;
 		handle->is_on_disk = info.is_on_disk;
+		handle->metadata = info.Metadata();
 		if (flags.OpenForAppending() && !config.OwnsCursor()) {
 			// The engine's cursor starts at the end; the file system's own cursor is its business.
 			handle->position = NumericCast<idx_t>(GetFileSize(*handle));
 		}
 		return std::move(handle);
 	}
+
 public:
 	static bool OpenedForWriting(const CV2VirtualFile &handle) {
 		return handle.flags.OpenForWriting() || handle.flags.OpenForAppending();
@@ -288,7 +312,11 @@ public:
 
 	void AbortFileWrite(FileHandle &handle_p) override {
 		auto &handle = handle_p.Cast<CV2VirtualFile>();
-		if (!CanAbort() || handle.closed) {
+		if (!CanAbort()) {
+			handle.Close();
+			return;
+		}
+		if (handle.closed) {
 			return;
 		}
 		// Abort takes the place of close, so the close callback never sees an aborted file.
@@ -323,10 +351,20 @@ public:
 		auto &handle = handle_p.Cast<CV2VirtualFile>();
 		auto &cb = config.callbacks;
 		RequireCallback(cb.write_at, "write at");
-		InvokeCallback([&](duckdb_v2_error_info_handle err) {
-			cb.write_at(Convert(&handle.op_info), EmptyOperationInfo<duckdb_v2_vfs_file_write_at_info_handle>(),
-			            handle.Data(), buffer, NumericCast<idx_t>(nr_bytes), location, &err);
-		});
+		handle.written = true;
+		auto total = NumericCast<idx_t>(nr_bytes);
+		auto *data = static_cast<const_data_ptr_t>(buffer);
+		// The callback may come up short; the engine's contract here is all or nothing.
+		idx_t done = 0;
+		while (done < total) {
+			idx_t written = 0;
+			InvokeCallback([&](duckdb_v2_error_info_handle err) {
+				cb.write_at(Convert(&handle.op_info), EmptyOperationInfo<duckdb_v2_vfs_file_write_at_info_handle>(),
+				            handle.Data(), data + done, total - done, location + done, &written, &err);
+			});
+			CheckWritten(handle, "write at", written, total, done);
+			done += written;
+		}
 	}
 
 	int64_t Read(FileHandle &handle_p, void *buffer, int64_t nr_bytes) override {
@@ -357,10 +395,20 @@ public:
 			return nr_bytes;
 		}
 		RequireCallback(cb.write, "write");
-		InvokeCallback([&](duckdb_v2_error_info_handle err) {
-			cb.write(Convert(&handle.op_info), EmptyOperationInfo<duckdb_v2_vfs_file_write_info_handle>(),
-			         handle.Data(), buffer, NumericCast<idx_t>(nr_bytes), &err);
-		});
+		handle.written = true;
+		auto total = NumericCast<idx_t>(nr_bytes);
+		auto *data = static_cast<const_data_ptr_t>(buffer);
+		// The callback may come up short; the engine's writers expect everything to be written.
+		idx_t done = 0;
+		while (done < total) {
+			idx_t written = 0;
+			InvokeCallback([&](duckdb_v2_error_info_handle err) {
+				cb.write(Convert(&handle.op_info), EmptyOperationInfo<duckdb_v2_vfs_file_write_info_handle>(),
+				         handle.Data(), data + done, total - done, &written, &err);
+			});
+			CheckWritten(handle, "write", written, total, done);
+			done += written;
+		}
 		return nr_bytes;
 	}
 
@@ -447,6 +495,7 @@ public:
 		auto &handle = handle_p.Cast<CV2VirtualFile>();
 		auto &cb = config.callbacks;
 		RequireCallback(cb.truncate, "truncate");
+		handle.written = true;
 		InvokeCallback([&](duckdb_v2_error_info_handle err) {
 			cb.truncate(Convert(&handle.op_info), EmptyOperationInfo<duckdb_v2_vfs_file_truncate_info_handle>(),
 			            handle.Data(), NumericCast<idx_t>(new_size), &err);
@@ -485,10 +534,23 @@ public:
 	}
 
 	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override {
+		if (!config.callbacks.stat_path) {
+			// Open it to find out; a file system that cannot read has no way to tell.
+			if (!config.CanRead()) {
+				return false;
+			}
+			auto stats = FileSystem::GetStatsIfExists(OpenFileInfo(filename), opener);
+			return stats && stats->file_type == FileType::FILE_TYPE_REGULAR;
+		}
 		return StatPath(filename, opener).type == DUCKDB_V2_FILE_TYPE_REGULAR;
 	}
 
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override {
+		if (!config.callbacks.stat_path) {
+			// A directory that can be listed exists.
+			CV2FileListing listing;
+			return config.callbacks.list && TryList(directory, opener, listing);
+		}
 		return StatPath(directory, opener).type == DUCKDB_V2_FILE_TYPE_DIRECTORY;
 	}
 
@@ -552,10 +614,17 @@ public:
 		auto &cb = config.callbacks;
 		RequireCallback(cb.remove_directory, "remove directory");
 		auto path = SystemInfo(opener);
-		InvokeCallback([&](duckdb_v2_error_info_handle err) {
+		auto err = TryInvokeCallback([&](duckdb_v2_error_info_handle err) {
 			cb.remove_directory(Convert(&path), EmptyOperationInfo<duckdb_v2_vfs_remove_directory_info_handle>(),
 			                    Convert(directory), &err);
 		});
+		if (err.HasError()) {
+			// A directory that is not there leaves nothing to remove.
+			if (err.code == DUCKDB_V2_ERROR_IO_FILE_NOT_FOUND) {
+				return false;
+			}
+			err.ThrowAsException();
+		}
 		return true;
 	}
 
@@ -581,7 +650,10 @@ protected:
 
 	bool ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
 	                       optional_ptr<FileOpener> opener) override {
-		auto listing = List(directory, opener);
+		CV2FileListing listing;
+		if (!TryList(directory, opener, listing)) {
+			return false;
+		}
 		for (auto &entry : listing.entries) {
 			auto info = ToOpenFileInfo(entry);
 			callback(info);
@@ -607,15 +679,10 @@ protected:
 			for (auto &entry : listing.entries) {
 				result.push_back(ToOpenFileInfo(entry));
 			}
-		} else if (!HasGlob(path)) {
-			// A plain path names one file. Without a stat callback there is no way to check, so let the open fail.
-			if (!cb.stat_path || FileExists(path, opener)) {
-				result.emplace_back(path);
-			}
-		} else {
-			throw NotImplementedException("File system \"%s\" has no glob callback, so the pattern \"%s\" cannot be "
-			                              "expanded",
-			                              config.name, path);
+		} else if (!cb.stat_path || FileExists(path, opener)) {
+			// Globbing is opt-in: without the callback every path names one file, whatever characters it holds.
+			// Without a stat callback there is no way to check that it exists, so let the open fail.
+			result.emplace_back(path);
 		}
 		return make_uniq<SimpleMultiFileList>(std::move(result));
 	}
@@ -652,6 +719,20 @@ private:
 		return info;
 	}
 
+	//! The engine's writers need every byte, so a write that stops making progress fails.
+	void CheckWritten(CV2VirtualFile &handle, const char *what, idx_t written, idx_t total, idx_t done) const {
+		if (written > total - done) {
+			throw IOException("The %s callback of file system \"%s\" reported %llu bytes written from a buffer of "
+			                  "%llu",
+			                  what, config.name, written, total - done);
+		}
+		if (written == 0) {
+			throw IOException("Could not write all bytes to file \"%s\": wanted %llu bytes, but only %llu could be "
+			                  "written",
+			                  handle.path, total, done);
+		}
+	}
+
 	idx_t ReadAt(CV2VirtualFile &handle, void *buffer, idx_t count, idx_t location) {
 		auto &cb = config.callbacks;
 		RequireCallback(cb.read_at, "read at");
@@ -670,7 +751,16 @@ private:
 
 	CV2FileMetadata Stat(CV2VirtualFile &handle) {
 		auto &cb = config.callbacks;
-		RequireCallback(cb.stat, "stat");
+		if (!cb.stat) {
+			auto info = handle.metadata;
+			if (handle.written) {
+				// Writes have moved the file on from what the open knew.
+				info.size.reset();
+				info.last_modified.reset();
+				info.version_tag.reset();
+			}
+			return info;
+		}
 		CV2FileMetadata info;
 		InvokeCallback([&](duckdb_v2_error_info_handle err) {
 			cb.stat(Convert(&handle.op_info), EmptyOperationInfo<duckdb_v2_vfs_file_stat_info_handle>(), handle.Data(),
@@ -688,19 +778,31 @@ private:
 			cb.stat_path(Convert(&path), EmptyOperationInfo<duckdb_v2_vfs_stat_info_handle>(), Convert(path_p),
 			             Convert(&info), &err);
 		});
+		if (info.type == DUCKDB_V2_FILE_TYPE_INVALID && (info.size || info.last_modified || info.version_tag)) {
+			// The type is what reports existence, so this would otherwise read as a missing path.
+			throw InvalidInputException("The stat callback of file system \"%s\" described \"%s\" without setting "
+			                            "its type",
+			                            config.name, path_p);
+		}
 		return info;
 	}
 
-	CV2FileListing List(const string &directory, optional_ptr<FileOpener> opener) {
+	//! Fills the listing, or reports false for a directory the file system says does not exist.
+	bool TryList(const string &directory, optional_ptr<FileOpener> opener, CV2FileListing &listing) {
 		auto &cb = config.callbacks;
 		RequireCallback(cb.list, "list");
 		auto path = SystemInfo(opener);
-		CV2FileListing listing;
-		InvokeCallback([&](duckdb_v2_error_info_handle err) {
+		auto err = TryInvokeCallback([&](duckdb_v2_error_info_handle err) {
 			cb.list(Convert(&path), EmptyOperationInfo<duckdb_v2_vfs_list_info_handle>(), Convert(directory),
 			        Convert(&listing), &err);
 		});
-		return listing;
+		if (!err.HasError()) {
+			return true;
+		}
+		if (err.code == DUCKDB_V2_ERROR_IO_FILE_NOT_FOUND) {
+			return false;
+		}
+		err.ThrowAsException();
 	}
 };
 
@@ -751,24 +853,10 @@ public:
 			    "Read at callback must be set for the file system, unless it is a write-only sink with a write "
 			    "or write at callback.");
 		}
-		if (!cb.stat) {
-			throw InvalidInputException("Stat callback for open files must be set for the file system.");
-		}
-		// Owning the cursor means saying where it is, and reading or writing it as far as the file system does
-		// either at all; seek is per-file business.
-		if (config.OwnsCursor()) {
-			if (!cb.tell) {
-				throw InvalidInputException("Tell callback must be set for a file system that owns the cursor by "
-				                            "setting any of the read, write, seek or tell callbacks.");
-			}
-			if (config.CanRead() && !cb.read) {
-				throw InvalidInputException(
-				    "Read callback must be set for a file system that owns the cursor and has a read at callback.");
-			}
-			if (cb.write_at && !cb.write) {
-				throw InvalidInputException(
-				    "Write callback must be set for a file system that owns the cursor and has a write at callback.");
-			}
+		// Owning the cursor means saying where it is; what else it takes depends on how a file is opened.
+		if (config.OwnsCursor() && !cb.tell) {
+			throw InvalidInputException("Tell callback must be set for a file system that owns the cursor by "
+			                            "setting any of the read, write, seek or tell callbacks.");
 		}
 		auto fs = make_uniq<CV2VirtualFileSystem>(config, db);
 		FileSystem::GetFileSystem(db).RegisterSubSystem(std::move(fs));
@@ -1082,11 +1170,7 @@ DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_get_metadata(duckdb_v2_vfs_file_open_inf
 	*metadata = nullptr;
 	return WithErrorHandler(err, [&]() {
 		auto &open_info = *Convert(info);
-		if (!open_info.listed_metadata) {
-			open_info.listed_metadata =
-			    duckdb::make_uniq<CV2FileMetadata>(CV2FileMetadata::FromOptions(*open_info.file));
-		}
-		*metadata = Convert(open_info.listed_metadata.get());
+		*metadata = Convert(&open_info.Metadata());
 	});
 }
 

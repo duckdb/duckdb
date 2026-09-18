@@ -408,6 +408,8 @@ class CV2File {
 public:
 	unique_ptr<FileHandle> handle;
 	QueryContext query;
+	//! The last size the file reported, so that only a positional read crossing it has to ask again
+	std::atomic<idx_t> known_size {0};
 
 	auto Handle() const -> FileHandle & {
 		return *handle;

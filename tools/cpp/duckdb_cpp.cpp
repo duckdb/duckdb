@@ -5487,6 +5487,14 @@ void FileHandle::Close() {
 	CheckedAPICall(duckdb_v2_file_close, handle());
 }
 
+void FileHandle::Abort() {
+	CheckedAPICall(duckdb_v2_file_abort, handle());
+}
+
+void FileHandle::Truncate(idx_t size) {
+	CheckedAPICall(duckdb_v2_file_truncate, handle(), size);
+}
+
 void FileHandle::Seek(idx_t position) {
 	CheckedAPICall(duckdb_v2_file_seek, handle(), position);
 }
@@ -5515,12 +5523,16 @@ auto FileHandle::Write(const void *buffer, idx_t size) -> idx_t {
 	return bytes_written;
 }
 
-void FileHandle::ReadAt(void *buffer, idx_t size, idx_t location) {
-	CheckedAPICall(duckdb_v2_file_read_at, handle(), buffer, size, location);
+auto FileHandle::ReadAt(void *buffer, idx_t size, idx_t location) -> idx_t {
+	idx_t bytes_read = 0;
+	CheckedAPICall(duckdb_v2_file_read_at, handle(), buffer, size, location, &bytes_read);
+	return bytes_read;
 }
 
-void FileHandle::WriteAt(const void *buffer, idx_t size, idx_t location) {
-	CheckedAPICall(duckdb_v2_file_write_at, handle(), buffer, size, location);
+auto FileHandle::WriteAt(const void *buffer, idx_t size, idx_t location) -> idx_t {
+	idx_t bytes_written = 0;
+	CheckedAPICall(duckdb_v2_file_write_at, handle(), buffer, size, location, &bytes_written);
+	return bytes_written;
 }
 
 auto FileHandle::Stat() const -> FileMetadata {
@@ -5839,10 +5851,11 @@ void ReadAtTrampoline(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_read_at
 }
 
 void WriteAtTrampoline(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_write_at_info_handle, void *file,
-                       const void *buffer, idx_t size, idx_t location, duckdb_v2_error_info_handle *err) {
+                       const void *buffer, idx_t size, idx_t location, idx_t *bytes_written,
+                       duckdb_v2_error_info_handle *err) {
 	WithExceptionGuard(err, [&]() {
 		auto wrapped = InfoOf(info);
-		TableOf(info).file_write_at(wrapped, FileOf(file), buffer, size, location);
+		*bytes_written = TableOf(info).file_write_at(wrapped, FileOf(file), buffer, size, location);
 	});
 }
 
@@ -5855,10 +5868,10 @@ void ReadTrampoline(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_read_info
 }
 
 void WriteTrampoline(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_file_write_info_handle, void *file,
-                     const void *buffer, idx_t size, duckdb_v2_error_info_handle *err) {
+                     const void *buffer, idx_t size, idx_t *bytes_written, duckdb_v2_error_info_handle *err) {
 	WithExceptionGuard(err, [&]() {
 		auto wrapped = InfoOf(info);
-		TableOf(info).file_write(wrapped, FileOf(file), buffer, size);
+		*bytes_written = TableOf(info).file_write(wrapped, FileOf(file), buffer, size);
 	});
 }
 

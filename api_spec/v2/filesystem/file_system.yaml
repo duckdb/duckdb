@@ -283,7 +283,8 @@ functions:
       without having set flags fails, since the flags are what say whether the file is being read or written.
 
       Failure to open -- a missing file without `FILE_FLAG_CREATE`, insufficient permissions, an existing file
-      under `FILE_FLAG_EXCLUSIVE_CREATE` -- is reported as an error.
+      under `FILE_FLAG_EXCLUSIVE_CREATE` -- is reported as an error. A missing file is reported as
+      `ERROR_IO_FILE_NOT_FOUND`.
 
       Flag combinations that contradict each other, such as naming neither read nor write or combining
       `FILE_FLAG_CREATE` with `FILE_FLAG_CREATE_NEW`, are a programming error rather than a supported input. An
@@ -387,10 +388,11 @@ functions:
     description: |
       Reads from a fixed offset, without moving the file's position.
 
-      Reads exactly `buffer_size` bytes starting at `location`. Unlike `[[file_read]]`, a short read is an error
-      rather than a result: reaching the end of the file before `buffer_size` bytes fails, so there is no count to
-      report back. The file's read/write position is untouched, which is what makes this safe to call from several
-      threads at once -- provided the file was opened with `FILE_FLAG_PARALLEL_ACCESS`.
+      Reads up to `buffer_size` bytes starting at `location`. Like `[[file_read]]`, fewer bytes than asked for means
+      the end of the file was reached, and zero means `location` is at or past it; neither is an error. Short of the
+      end of the file the buffer is always filled. The file's read/write position is untouched, which is what makes
+      this safe to call from several threads at once -- provided the file was opened with
+      `FILE_FLAG_PARALLEL_ACCESS`.
 
       The file must have been opened with `FILE_FLAG_READ`.
     parameters:
@@ -403,10 +405,15 @@ functions:
         description: A caller-owned buffer of at least `buffer_size` bytes, receiving what was read.
       buffer_size:
         type: idx
-        description: The number of bytes to read. All of them are read, or the call fails.
+        description: The maximum number of bytes to read.
       location:
         type: idx
         description: The absolute byte offset to read from, measured from the start of the file.
+      bytes_read:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives how many bytes were actually read, which is fewer than `buffer_size` only at the end of the file.
       err:
         type: error_info
         indirection: 1
@@ -419,9 +426,8 @@ functions:
     description: |
       Writes at a fixed offset, without moving the file's position.
 
-      Writes exactly `buffer_size` bytes starting at `location`, extending the file when the offset is past its end.
-      Unlike `[[file_write]]` there is no count to report back: all of the bytes are written, or the call fails. The
-      file's read/write position is untouched, which is what makes this safe to call from several threads at once --
+      Writes up to `buffer_size` bytes starting at `location`, extending the file when the offset is past its end,
+      and reports how many were written, like `[[file_write]]`. The file's read/write position is untouched, which is what makes this safe to call from several threads at once --
       provided the file was opened with `FILE_FLAG_PARALLEL_ACCESS`, and that the threads write disjoint ranges.
 
       The file must have been opened with `FILE_FLAG_WRITE`. Writes may be buffered; use `[[file_sync]]` to force
@@ -437,10 +443,15 @@ functions:
         description: A caller-owned buffer of at least `buffer_size` bytes, holding what to write.
       buffer_size:
         type: idx
-        description: The number of bytes to write. All of them are written, or the call fails.
+        description: The number of bytes to write.
       location:
         type: idx
         description: The absolute byte offset to write at, measured from the start of the file.
+      bytes_written:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives how many bytes were actually written.
       err:
         type: error_info
         indirection: 1
@@ -524,6 +535,50 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
+  file_truncate:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Truncates the file to a size no larger than its current one.
+
+      The file must have been opened with `FILE_FLAG_WRITE`. A file system that cannot truncate reports an error.
+    parameters:
+      file:
+        type: file
+        description: The file to truncate.
+      size:
+        type: idx
+        description: The size to truncate the file to, in bytes.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  file_abort:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-16" ]
+    description: |
+      Abandons a file being written, without publishing what was written.
+
+      Call it instead of `[[file_close]]` when a write fails part-way. A file system that publishes on close, such
+      as an object store completing an upload, abandons the write instead, and the local file system removes a file
+      it created under `FILE_FLAG_EXCLUSIVE_CREATE`. A file system with nothing to abandon closes the file as usual,
+      and a partial file may be left behind. The handle is closed afterwards: it stays valid and must still be
+      destroyed with `[[file_destroy]]`, but it can no longer read, write or seek.
+
+      `[[file_destroy]]` on a file that was neither closed nor aborted closes it, which publishes it. A virtual
+      file system that forwards to another file should therefore forward its "abort" callback here.
+    parameters:
+      file:
+        type: file
+        description: The file to abort.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   file_close:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-02" ]
@@ -581,7 +636,9 @@ functions:
       Lists the entries of a directory.
 
       Each entry is the name of a file or subdirectory relative to the directory, with whatever the file
-      system already knew about it. A directory that does not exist is an error.
+      system already knew about it. A directory the file system knows does not exist is reported as
+      `ERROR_IO_FILE_NOT_FOUND`. A file system without directories, such as an object store, cannot tell a missing
+      directory from an empty one and yields an empty listing.
     parameters:
       file_system:
         type: file_system
@@ -630,7 +687,7 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
-      Removes a file. A missing file is an error.
+      Removes a file. A missing file is reported as `ERROR_IO_FILE_NOT_FOUND`.
     parameters:
       file_system:
         type: file_system
@@ -648,7 +705,8 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
-      Creates a directory, including any missing parents. An existing directory is not an error.
+      Creates a directory, including any missing parents. Neither an existing directory nor a missing parent is an
+      error.
     parameters:
       file_system:
         type: file_system
@@ -666,7 +724,8 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-16" ]
     description: |
-      Removes a directory and everything inside it.
+      Removes a directory and everything inside it. A directory that does not exist is not an error, since there
+      is nothing left to remove.
     parameters:
       file_system:
         type: file_system
@@ -687,7 +746,8 @@ functions:
       Moves a file, replacing any existing target.
 
       Routed by the source: the target has to be on the same file system as the source, and a move across
-      file systems is an error.
+      file systems is an error. A missing source is an error, which a virtual file system reports as
+      `ERROR_IO_FILE_NOT_FOUND`.
     parameters:
       file_system:
         type: file_system
@@ -830,9 +890,10 @@ functions:
       Sets what the path refers to.
 
       From a virtual file system's path-level "stat" callback this is what reports existence: until it is called the
-      path is reported as not existing, and `FILE_TYPE_INVALID` says the same explicitly. From the "stat"
-      callback, `FILE_TYPE_PIPE` makes the engine treat the open file as a pipe and anything else as a regular
-      file. On a listing entry it replaces the type the entry was added with.
+      path is reported as not existing, and `FILE_TYPE_INVALID` says the same explicitly. Filling in a size,
+      modification time or version tag there without a type is an error. From the file-level "stat" callback the
+      file is open and so exists: `FILE_TYPE_PIPE` makes the engine treat it as a pipe, and anything else,
+      including no type at all, as a regular file. On a listing entry it replaces the type the entry was added with.
     parameters:
       metadata:
         type: file_metadata
@@ -931,9 +992,12 @@ functions:
     description: |
       Adds one entry to a listing being filled in by a virtual file system.
 
-      What the path means depends on which callback is filling the listing: from the "list" callback it is the
-      entry's name relative to the directory listed, from the "glob" callback the full path of a matching
-      file. The path is borrowed and copied. Entries are reported in the order they are added.
+      What the path means depends on which callback is filling the listing, and matches what
+      `[[file_system_list]]` and `[[file_system_glob]]` hand to their callers. From the "list" callback it is the
+      entry's name relative to the directory listed, which the caller joins onto that directory. From the "glob"
+      callback it is the full path of a matching file, which the engine opens as given, since the matches of one
+      pattern can lie in different directories. The path is borrowed and copied. Entries are reported in the order
+      they are added.
 
       The returned metadata is for filling in what the listing already knows about the entry, such as its size,
       modification time and version tag; the engine hands those back when it opens the entry, so the file
@@ -948,7 +1012,7 @@ functions:
         description: The name or path of the entry. Borrowed and copied.
       type:
         type: FILE_TYPE
-        description: What the entry is. Directories are descended into by globs and regular files matched by them; a pipe or anything else is listed but never matches a pattern.
+        description: What the entry is. From the "list" callback, whatever the entry is. From the "glob" callback every entry is a file the engine will open, so `FILE_TYPE_REGULAR`, or `FILE_TYPE_PIPE` for a stream.
       metadata:
         type: file_metadata
         indirection: 1

@@ -5303,7 +5303,9 @@ public:
 
 	~FileListing() override;
 
-	/// Adds an entry: a name relative to the listed directory for a listing, a full path for a glob.
+	/// Adds an entry: a name relative to the listed directory for a listing, which the caller joins onto it, and
+	/// a full path for a glob, which the engine opens as given. Every entry of a glob is a file to open, so its
+	/// type is `REGULAR`, or `PIPE` for a stream.
 	/// @return The entry's metadata, borrowed and valid as long as the listing is, to fill in what is already known
 	/// about the entry, such as its size. Its type is the one given here.
 	auto AddEntry(std::string_view path, FileType type) -> FileMetadata;
@@ -5345,6 +5347,15 @@ public:
 	/// to read, write or seek.
 	void Close();
 
+	/// Abandons a file being written, without publishing what was written. Use it instead of `Close` when a write
+	/// fails part-way; a file system with nothing to abandon closes the file as usual. The handle is closed
+	/// afterwards.
+	void Abort();
+
+	/// Truncates the file to a size no larger than its current one.
+	/// @throws Exception When the file system cannot truncate.
+	void Truncate(idx_t size);
+
 	/// Moves the read/write position to an absolute byte offset from the start of the file. Seeking past the end is
 	/// allowed; reading from there yields nothing.
 	void Seek(idx_t position);
@@ -5368,16 +5379,17 @@ public:
 	/// @return How many bytes were written.
 	auto Write(const void *buffer, idx_t size) -> idx_t;
 
-	/// Reads exactly `size` bytes from `location`, leaving the file's position alone. Unlike `Read`, a short read is
-	/// an error rather than a result, so there is no count to return. Safe to call from several threads at once when
-	/// the file was opened with `FileFlags::PARALLEL_ACCESS`.
-	/// @throws Exception When the file ends before `size` bytes have been read.
-	void ReadAt(void *buffer, idx_t size, idx_t location);
+	/// Reads up to `size` bytes from `location`, leaving the file's position alone. Safe to call from several
+	/// threads at once when the file was opened with `FileFlags::PARALLEL_ACCESS`.
+	/// @return How many bytes were read. Fewer than asked for means the end of the file was reached, and zero means
+	/// `location` is at or past it; neither is an error.
+	auto ReadAt(void *buffer, idx_t size, idx_t location) -> idx_t;
 
-	/// Writes exactly `size` bytes at `location`, leaving the file's position alone and extending the file when the
+	/// Writes up to `size` bytes at `location`, leaving the file's position alone and extending the file when the
 	/// offset is past its end. Safe to call from several threads at once when the file was opened with
 	/// `FileFlags::PARALLEL_ACCESS` and the threads write disjoint ranges.
-	void WriteAt(const void *buffer, idx_t size, idx_t location);
+	/// @return How many bytes were written.
+	auto WriteAt(const void *buffer, idx_t size, idx_t location) -> idx_t;
 
 private:
 	explicit FileHandle(void *impl);
@@ -5470,9 +5482,9 @@ private:
 // with `FileFlags::PARALLEL_ACCESS` happen from several threads at once. Cursor reads and writes (the "read" and
 // "write" callbacks) go through the file's cursor, which "seek" moves and "tell" reports, and never happen
 // concurrently on one file. A file system that sets any of the "read", "write", "seek" or "tell" callbacks owns the
-// cursor and must then set "tell", "read" if it reads, and "write" if it writes at all; one that sets none of them
-// leaves the cursor to the engine, which serves cursor reads and writes through "read at" and "write at" at the
-// position it keeps.
+// cursor, for every file and in both directions, and must then set "tell"; it needs "read" to open a file for
+// reading and "write" to open one for writing. One that sets none of them leaves the cursor to the engine, which
+// serves cursor reads and writes through "read at" and "write at" at the position it keeps.
 
 /// The per-file state of a virtual file system: whatever the open callback returns, handed to every file callback
 /// for that file and destroyed by the engine once it is done with the file, after the close or abort callback.
@@ -5507,43 +5519,59 @@ public:
 	class Info;
 	class OpenInput;
 
-	/// Decides whether this file system handles a path. Consulted only for paths no prefix matched.
+	/// Decides whether this file system handles a path. Consulted only for paths no prefix matched. Throwing fails
+	/// the operation the engine was routing, whichever file system would have handled the path, so a callback that
+	/// merely cannot decide returns false.
 	using ClaimCallback = bool (*)(Info &info, std::string_view path);
 	/// Opens a file, returning its per-file state. Required. Report a missing file by throwing an `Exception` with
 	/// the `IO_FILE_NOT_FOUND` code, which lets callers that asked for it receive no file instead of an error.
 	using OpenCallback = std::unique_ptr<VirtualFile> (*)(OpenInput &input);
 	/// Reports what a path refers to by filling `metadata` in. Leaving it untouched reports that the path does not
-	/// exist, which is not an error.
+	/// exist, which is not an error. The type is what reports existence, so filling in anything else without it is
+	/// an error.
 	using StatCallback = void (*)(Info &info, std::string_view path, FileMetadata &metadata);
-	/// Lists a directory: one entry per file and subdirectory directly inside it, by name relative to it.
+	/// Lists a directory: one entry per file and subdirectory directly inside it, by name relative to it. Report a
+	/// directory that does not exist by throwing an `Exception` with the `IO_FILE_NOT_FOUND` code; a backend
+	/// without directories cannot tell it from an empty one and adds no entries instead.
 	using ListCallback = void (*)(Info &info, std::string_view path, FileListing &listing);
-	/// Expands a glob pattern: the full path of every matching file. Every path the engine reads goes through here,
-	/// plain or not, so a plain path that exists is added as its own expansion. Without it, only paths without glob
-	/// characters can be read.
+	/// Resolves a path to the full path of every file it names. Globbing is opt-in: without this callback every
+	/// path names exactly one file, and with it every path the engine reads goes through here as written, so the
+	/// pattern syntax is the file system's own. A path naming one existing file is added as its own single match,
+	/// and a pattern or path matching nothing adds nothing.
 	using GlobCallback = void (*)(Info &info, std::string_view pattern, FileListing &listing);
-	/// Removes a file, or creates or removes a directory.
+	/// Removes a file, or creates or removes a directory. Removing a file that does not exist throws an `Exception`
+	/// with the `IO_FILE_NOT_FOUND` code. Removing a directory that does not exist, and creating one that does or
+	/// whose parents are missing, are not errors.
 	using PathCallback = void (*)(Info &info, std::string_view path);
-	/// Moves or renames a file, replacing the target if it exists.
+	/// Moves or renames a file, replacing the target if it exists. Report a missing source by throwing an
+	/// `Exception` with the `IO_FILE_NOT_FOUND` code.
 	using MoveCallback = void (*)(Info &info, std::string_view source, std::string_view target);
 
 	/// Fills the buffer with up to `size` bytes starting at `location` and returns how many. Fewer than asked for is
 	/// allowed, and zero means the offset is at or past the end of the file. Positional, with `pread` semantics:
 	/// never moves the cursor. Required for a file system that reads.
 	using FileReadAtCallback = idx_t (*)(Info &info, VirtualFile &file, void *buffer, idx_t size, idx_t location);
-	/// Writes all `size` bytes starting at `location`, extending the file when the offset is past its end.
+	/// Writes up to `size` bytes starting at `location`, extending the file when the offset is past its end, and
+	/// returns how many. Fewer than asked for is allowed, and the engine calls again for the rest; zero means
+	/// nothing could be written.
 	/// Positional, with `pwrite` semantics: never moves the cursor, and writes at `location` even on a file opened
 	/// with `FileFlags::APPEND`. Setting it makes the file system writable.
-	using FileWriteAtCallback = void (*)(Info &info, VirtualFile &file, const void *buffer, idx_t size, idx_t location);
+	using FileWriteAtCallback = idx_t (*)(Info &info, VirtualFile &file, const void *buffer, idx_t size,
+	                                      idx_t location);
 	/// Reads up to `size` bytes from the cursor, advancing it by however many were read, and returns how many; zero
 	/// means nothing is left.
 	using FileReadCallback = idx_t (*)(Info &info, VirtualFile &file, void *buffer, idx_t size);
-	/// Writes all `size` bytes at the cursor, advancing it past them.
-	using FileWriteCallback = void (*)(Info &info, VirtualFile &file, const void *buffer, idx_t size);
+	/// Writes up to `size` bytes at the cursor, advancing it by however many were written, and returns how many.
+	/// Fewer than asked for is allowed, and the engine calls again for the rest; zero means nothing could be
+	/// written.
+	using FileWriteCallback = idx_t (*)(Info &info, VirtualFile &file, const void *buffer, idx_t size);
 	/// Moves the cursor to an absolute byte offset. Seeking past the end is allowed.
 	using FileSeekCallback = void (*)(Info &info, VirtualFile &file, idx_t position);
 	/// Returns the cursor's position, as an absolute byte offset from the start of the file.
 	using FileTellCallback = idx_t (*)(Info &info, VirtualFile &file);
-	/// Reports the file's size, and when known its modification time and version tag. Required.
+	/// Reports the file's size, and when known its modification time and version tag. Optional: without it the
+	/// engine reports what the open callback left in `OpenInput::GetMetadata`, and no longer knows the size of a
+	/// file once it is written.
 	using FileStatCallback = void (*)(Info &info, VirtualFile &file, FileMetadata &metadata);
 	/// Flushes buffered writes to durable storage. A written file is always synced before it is closed.
 	using FileSyncCallback = void (*)(Info &info, VirtualFile &file);
@@ -5596,9 +5624,8 @@ public:
 	auto SetFileAbortCallback(FileAbortCallback callback) & -> VirtualFileSystem &;
 
 	/// Registers the file system on the connection's database, permanently. Validates the configuration: a name, a
-	/// prefix or claim callback, the open callback and the file stat callback are required, "read at" unless the
-	/// file system is a write-only sink, and a file system that owns the cursor must set "tell", "read" if it reads,
-	/// and "write" if it writes.
+	/// prefix or claim callback and the open callback are required, "read at" unless the file system is a
+	/// write-only sink, and a file system that owns the cursor must set "tell".
 	/// @throws InvalidInputException When the configuration is incomplete or inconsistent.
 	auto Register(const Connection &conn) -> void;
 	/// Registers the file system through the loading extension, permanently; see the connection overload.
@@ -5680,8 +5707,10 @@ public:
 		auto HasFlag(FileFlags flag) const -> bool;
 		/// A named value the caller attached to the open via `FileOpenOptions::SetValue`, if any.
 		auto GetValue(std::string_view name) const -> std::optional<Value>;
-		/// What a listing of this file system reported about the file being opened, so the backend need not fetch it
-		/// again. Empty when the file was not found through a listing. Borrowed.
+		/// What is known about the file being opened, to read and to fill in. It starts out holding what a listing of
+		/// this file system reported, so the backend need not fetch it again, and is empty when the file was not
+		/// found through a listing. What it holds when the open callback returns is what the engine reports about the
+		/// file when there is no file stat callback. Borrowed.
 		auto GetMetadata() const -> FileMetadata;
 		/// The open request as options for `FileSystem::OpenFile`: the same flags and values, for an overlay that
 		/// opens the file underneath as it was asked to. Owned.

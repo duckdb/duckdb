@@ -157,7 +157,7 @@ auto MemReadAt(Info &info, VirtualFile &file, void *buffer, idx_t size, idx_t lo
 	return count;
 }
 
-void MemWriteAt(Info &, VirtualFile &file, const void *buffer, idx_t size, idx_t location) {
+auto MemWriteAt(Info &, VirtualFile &file, const void *buffer, idx_t size, idx_t location) -> idx_t {
 	auto &mem = FileOf(file);
 	std::lock_guard<std::mutex> guard(mem.store.lock);
 	auto &data = mem.store.files[mem.path];
@@ -165,6 +165,7 @@ void MemWriteAt(Info &, VirtualFile &file, const void *buffer, idx_t size, idx_t
 		data.resize(location + size);
 	}
 	std::memcpy(&data[location], buffer, size);
+	return size;
 }
 
 void MemStat(Info &, VirtualFile &file, FileMetadata &metadata) {

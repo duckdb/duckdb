@@ -136,17 +136,19 @@ TEST_CASE("Stable C++API: positional file read and write", "[cpp_api]") {
 
 	// Positional access leaves the file's own position alone.
 	char buffer[4] = {0};
-	file.ReadAt(buffer, 4, 2);
+	REQUIRE(file.ReadAt(buffer, 4, 2) == 4);
 	REQUIRE(std::string(buffer, 4) == "cdef");
 	REQUIRE(file.Tell() == 10);
 
-	file.WriteAt("XY", 2, 4);
+	REQUIRE(file.WriteAt("XY", 2, 4) == 2);
 	REQUIRE(file.Tell() == 10);
-	file.ReadAt(buffer, 4, 2);
+	REQUIRE(file.ReadAt(buffer, 4, 2) == 4);
 	REQUIRE(std::string(buffer, 4) == "cdXY");
 
-	// A short positional read is an error, not a result.
-	REQUIRE_THROWS_AS(file.ReadAt(buffer, 4, 8), Exception);
+	// A positional read crossing the end comes up short, and one past it reads nothing.
+	REQUIRE(file.ReadAt(buffer, 4, 8) == 2);
+	REQUIRE(std::string(buffer, 2) == "ij");
+	REQUIRE(file.ReadAt(buffer, 4, 10) == 0);
 }
 
 TEST_CASE("Stable C++API: file open options", "[cpp_api]") {

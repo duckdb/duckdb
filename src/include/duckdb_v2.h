@@ -2636,7 +2636,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_open_options_destroy(duckdb_v2_file_
  * without having set flags fails, since the flags are what say whether the file is being read or written.
  *
  * Failure to open -- a missing file without `FILE_FLAG_CREATE`, insufficient permissions, an existing file under
- * `FILE_FLAG_EXCLUSIVE_CREATE` -- is reported as an error.
+ * `FILE_FLAG_EXCLUSIVE_CREATE` -- is reported as an error. A missing file is reported as `ERROR_IO_FILE_NOT_FOUND`.
  *
  * Flag combinations that contradict each other, such as naming neither read nor write or combining `FILE_FLAG_CREATE`
  * with `FILE_FLAG_CREATE_NEW`, are a programming error rather than a supported input. An assertion build catches them;
@@ -2710,10 +2710,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_write(duckdb_v2_file_handle file, co
 /*!
  * Reads from a fixed offset, without moving the file's position.
  *
- * Reads exactly `buffer_size` bytes starting at `location`. Unlike `duckdb_v2_file_read()`, a short read is an error
- * rather than a result: reaching the end of the file before `buffer_size` bytes fails, so there is no count to report
- * back. The file's read/write position is untouched, which is what makes this safe to call from several threads at once
- * -- provided the file was opened with `FILE_FLAG_PARALLEL_ACCESS`.
+ * Reads up to `buffer_size` bytes starting at `location`. Like `duckdb_v2_file_read()`, fewer bytes than asked for
+ * means the end of the file was reached, and zero means `location` is at or past it; neither is an error. Short of the
+ * end of the file the buffer is always filled. The file's read/write position is untouched, which is what makes this
+ * safe to call from several threads at once -- provided the file was opened with `FILE_FLAG_PARALLEL_ACCESS`.
  *
  * The file must have been opened with `FILE_FLAG_READ`.
  *
@@ -2722,22 +2722,25 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_write(duckdb_v2_file_handle file, co
  *
  * @param file The file to read from.
  * @param buffer A caller-owned buffer of at least `buffer_size` bytes, receiving what was read.
- * @param buffer_size The number of bytes to read. All of them are read, or the call fails.
+ * @param buffer_size The maximum number of bytes to read.
  * @param location The absolute byte offset to read from, measured from the start of the file.
+ * @param bytes_read Receives how many bytes were actually read, which is fewer than `buffer_size` only at the end of
+ * the file.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_read_at(duckdb_v2_file_handle file, void *buffer, idx_t buffer_size,
-                                                    idx_t location, duckdb_v2_error_info_handle *err);
+                                                    idx_t location, idx_t *bytes_read,
+                                                    duckdb_v2_error_info_handle *err);
 
 /*!
  * Writes at a fixed offset, without moving the file's position.
  *
- * Writes exactly `buffer_size` bytes starting at `location`, extending the file when the offset is past its end. Unlike
- * `duckdb_v2_file_write()` there is no count to report back: all of the bytes are written, or the call fails. The
- * file's read/write position is untouched, which is what makes this safe to call from several threads at once --
- * provided the file was opened with `FILE_FLAG_PARALLEL_ACCESS`, and that the threads write disjoint ranges.
+ * Writes up to `buffer_size` bytes starting at `location`, extending the file when the offset is past its end, and
+ * reports how many were written, like `duckdb_v2_file_write()`. The file's read/write position is untouched, which is
+ * what makes this safe to call from several threads at once -- provided the file was opened with
+ * `FILE_FLAG_PARALLEL_ACCESS`, and that the threads write disjoint ranges.
  *
  * The file must have been opened with `FILE_FLAG_WRITE`. Writes may be buffered; use `duckdb_v2_file_sync()` to force
  * them out.
@@ -2747,14 +2750,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_read_at(duckdb_v2_file_handle file, 
  *
  * @param file The file to write to.
  * @param buffer A caller-owned buffer of at least `buffer_size` bytes, holding what to write.
- * @param buffer_size The number of bytes to write. All of them are written, or the call fails.
+ * @param buffer_size The number of bytes to write.
  * @param location The absolute byte offset to write at, measured from the start of the file.
+ * @param bytes_written Receives how many bytes were actually written.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_write_at(duckdb_v2_file_handle file, const void *buffer, idx_t buffer_size,
-                                                     idx_t location, duckdb_v2_error_info_handle *err);
+                                                     idx_t location, idx_t *bytes_written,
+                                                     duckdb_v2_error_info_handle *err);
 
 /*!
  * Returns the file's current read/write position, as a byte offset from the start of the file.
@@ -2821,6 +2826,45 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_seek(duckdb_v2_file_handle file, idx
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_sync(duckdb_v2_file_handle file, duckdb_v2_error_info_handle *err);
 
 /*!
+ * Truncates the file to a size no larger than its current one.
+ *
+ * The file must have been opened with `FILE_FLAG_WRITE`. A file system that cannot truncate reports an error.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param file The file to truncate.
+ * @param size The size to truncate the file to, in bytes.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_truncate(duckdb_v2_file_handle file, idx_t size,
+                                                     duckdb_v2_error_info_handle *err);
+
+/*!
+ * Abandons a file being written, without publishing what was written.
+ *
+ * Call it instead of `duckdb_v2_file_close()` when a write fails part-way. A file system that publishes on close, such
+ * as an object store completing an upload, abandons the write instead, and the local file system removes a file it
+ * created under `FILE_FLAG_EXCLUSIVE_CREATE`. A file system with nothing to abandon closes the file as usual, and a
+ * partial file may be left behind. The handle is closed afterwards: it stays valid and must still be destroyed with
+ * `duckdb_v2_file_destroy()`, but it can no longer read, write or seek.
+ *
+ * `duckdb_v2_file_destroy()` on a file that was neither closed nor aborted closes it, which publishes it. A virtual
+ * file system that forwards to another file should therefore forward its "abort" callback here.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param file The file to abort.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_abort(duckdb_v2_file_handle file, duckdb_v2_error_info_handle *err);
+
+/*!
  * Closes the file without destroying the handle.
  *
  * Releases the operating-system resources behind the file, such as its descriptor. The handle itself stays valid and
@@ -2864,7 +2908,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_system_stat(duckdb_v2_file_system_ha
  * Lists the entries of a directory.
  *
  * Each entry is the name of a file or subdirectory relative to the directory, with whatever the file system already
- * knew about it. A directory that does not exist is an error.
+ * knew about it. A directory the file system knows does not exist is reported as `ERROR_IO_FILE_NOT_FOUND`. A file
+ * system without directories, such as an object store, cannot tell a missing directory from an empty one and yields an
+ * empty listing.
  *
  * history:
  * - stable: v2.0.0
@@ -2902,7 +2948,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_system_glob(duckdb_v2_file_system_ha
                                                         duckdb_v2_error_info_handle *err);
 
 /*!
- * Removes a file. A missing file is an error.
+ * Removes a file. A missing file is reported as `ERROR_IO_FILE_NOT_FOUND`.
  *
  * history:
  * - stable: v2.0.0
@@ -2917,7 +2963,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_system_remove_file(duckdb_v2_file_sy
                                                                duckdb_v2_str path, duckdb_v2_error_info_handle *err);
 
 /*!
- * Creates a directory, including any missing parents. An existing directory is not an error.
+ * Creates a directory, including any missing parents. Neither an existing directory nor a missing parent is an error.
  *
  * history:
  * - stable: v2.0.0
@@ -2933,7 +2979,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_system_create_directory(duckdb_v2_fi
                                                                     duckdb_v2_error_info_handle *err);
 
 /*!
- * Removes a directory and everything inside it.
+ * Removes a directory and everything inside it. A directory that does not exist is not an error, since there is nothing
+ * left to remove.
  *
  * history:
  * - stable: v2.0.0
@@ -2952,7 +2999,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_system_remove_directory(duckdb_v2_fi
  * Moves a file, replacing any existing target.
  *
  * Routed by the source: the target has to be on the same file system as the source, and a move across file systems is
- * an error.
+ * an error. A missing source is an error, which a virtual file system reports as `ERROR_IO_FILE_NOT_FOUND`.
  *
  * history:
  * - stable: v2.0.0
@@ -3055,9 +3102,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_metadata_get_version_tag(duckdb_v2_f
  * Sets what the path refers to.
  *
  * From a virtual file system's path-level "stat" callback this is what reports existence: until it is called the path
- * is reported as not existing, and `FILE_TYPE_INVALID` says the same explicitly. From the "stat" callback,
- * `FILE_TYPE_PIPE` makes the engine treat the open file as a pipe and anything else as a regular file. On a listing
- * entry it replaces the type the entry was added with.
+ * is reported as not existing, and `FILE_TYPE_INVALID` says the same explicitly. Filling in a size, modification time
+ * or version tag there without a type is an error. From the file-level "stat" callback the file is open and so exists:
+ * `FILE_TYPE_PIPE` makes the engine treat it as a pipe, and anything else, including no type at all, as a regular file.
+ * On a listing entry it replaces the type the entry was added with.
  *
  * history:
  * - stable: v2.0.0
@@ -3143,9 +3191,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_metadata_destroy(duckdb_v2_file_meta
 /*!
  * Adds one entry to a listing being filled in by a virtual file system.
  *
- * What the path means depends on which callback is filling the listing: from the "list" callback it is the entry's name
- * relative to the directory listed, from the "glob" callback the full path of a matching file. The path is borrowed and
- * copied. Entries are reported in the order they are added.
+ * What the path means depends on which callback is filling the listing, and matches what `duckdb_v2_file_system_list()`
+ * and `duckdb_v2_file_system_glob()` hand to their callers. From the "list" callback it is the entry's name relative to
+ * the directory listed, which the caller joins onto that directory. From the "glob" callback it is the full path of a
+ * matching file, which the engine opens as given, since the matches of one pattern can lie in different directories.
+ * The path is borrowed and copied. Entries are reported in the order they are added.
  *
  * The returned metadata is for filling in what the listing already knows about the entry, such as its size,
  * modification time and version tag; the engine hands those back when it opens the entry, so the file system need not
@@ -3156,8 +3206,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_metadata_destroy(duckdb_v2_file_meta
  *
  * @param listing The listing to add to.
  * @param path The name or path of the entry. Borrowed and copied.
- * @param type What the entry is. Directories are descended into by globs and regular files matched by them; a pipe or
- * anything else is listed but never matches a pattern.
+ * @param type What the entry is. From the "list" callback, whatever the entry is. From the "glob" callback every entry
+ * is a file the engine will open, so `FILE_TYPE_REGULAR`, or `FILE_TYPE_PIPE` for a stream.
  * @param metadata Optional. Receives the borrowed metadata of the new entry, to fill in what is known about it. Valid
  * until the callback returns.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
@@ -12004,13 +12054,13 @@ typedef enum DUCKDB_V2_FILE_PROPERTY {
  * like a POSIX file descriptor's offset. `seek` moves the cursor and `tell` reports where it is. Cursor operations
  * never run concurrently on the same file.
  *
- * The cursor-based callbacks are optional. A file system that sets none of `read`, `write`, `seek` and `tell` only
- * needs `read_at` and/or `write_at`, and DuckDB will then emulate a cursor per file itself and serve `read`, `write`,
- * `seek` and `tell` through the positional callbacks. However, a file system that sets any of these four is expected to
- * "own" the cursor instead, and must then also provide `tell`, `read` if it has `read_at`, and `write` if it has
- * `write_at`. `seek` is only needed for files that are seekable. A file that cannot seek, such as a stream, can not
- * have an emulated cursor and can therefore only be served by a file system that implements the cursor-based callbacks
- * itself.
+ * The cursor-based callbacks are optional. Set none of `read`, `write`, `seek` and `tell` and DuckDB keeps the cursor:
+ * it tracks a position per file and serves all four through `read_at` and `write_at`. Set any of them and the file
+ * system keeps the cursor, for every file and in both directions, so that reads and writes interleaved on one file move
+ * a single cursor. A file system that keeps the cursor must set `tell`. It needs `read` to open a file for reading,
+ * `write` to open one for writing, and `seek` for any file the engine seeks, and a missing one is reported as an error
+ * by the open or the seek that needs it. A file that cannot seek, such as a stream, has no position for DuckDB to track
+ * and can therefore only be served by a file system that keeps the cursor.
  *
  * Callbacks come in two groups. File system callbacks (`claim`, `stat`, `list`, `glob`, `remove_file`,
  * `create_directory`, `remove_directory`, `move`) operate on a path. File callbacks (`open`, `close`, `abort`,
@@ -12021,9 +12071,11 @@ typedef enum DUCKDB_V2_FILE_PROPERTY {
  * The file system's user data is reachable from the shared info; a file callback finds what it needs in the per-file
  * state the "open" callback attached.
  *
- * A missing path is reported differently depending on the kind of operation. File system queries report it through
- * their result, so the file system `stat` leaves the metadata untouched, and `list` and `glob` add no entries. `open`
- * and every mutating operation report it as `ERROR_IO_FILE_NOT_FOUND`.
+ * A callback reports a missing path the way the `file_system` function of the same name reports it to its caller, so
+ * that an overlay can pass the answer on as it received it. The file system `stat` leaves the metadata untouched and
+ * `glob` adds no entries, since a path that is not there is an ordinary answer to both. `open`, `list`, `remove_file`
+ * and `move` report it as `ERROR_IO_FILE_NOT_FOUND`. `remove_directory` has nothing to do for a directory that is not
+ * there and succeeds, and `create_directory` creates the parents that are missing. Each callback repeats its own rule.
  *
  * Open-file attempts, and other file-system level operations may run concurrently, and `claim` can be called from any
  * thread as soon as `register` returns.
@@ -12171,6 +12223,10 @@ typedef struct _duckdb_v2_vfs_file_truncate_info {
  * This callback is optional, since most file systems claim their paths by prefix with `duckdb_v2_vfs_add_prefix()`.
  * When set, the engine calls it for every path it touches that no prefix claimed, from any thread, before any other
  * callback. Reporting `false` lets other file systems, and finally the local one, claim the path instead.
+ *
+ * An error reported through `err` fails the operation the engine was routing, whichever file system would have handled
+ * the path, so it is for fatal conditions only. A callback that merely cannot decide should leave `claim` as `false`
+ * and report no error.
  */
 typedef void (*duckdb_v2_vfs_claim_callback_fn)(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_claim_info_handle op_info,
                                                 duckdb_v2_str path, bool *claim, duckdb_v2_error_info_handle *err);
@@ -12238,15 +12294,17 @@ typedef void (*duckdb_v2_vfs_file_read_at_callback_fn)(duckdb_v2_vfs_info_handle
 /*!
  * Writes at a fixed offset.
  *
- * Writes all `buffer_size` bytes starting at `location`, extending the file if the offset is past its end. A partial
- * write is an error and must be reported as one. The write never moves the cursor, like `pwrite`, and writes at
- * `location` even on a file opened with `FILE_FLAG_APPEND`. It may be called from several threads at once on a file
- * opened with `FILE_FLAG_PARALLEL_ACCESS`, always for disjoint ranges.
+ * Writes up to `buffer_size` bytes starting at `location`, extending the file if the offset is past its end, and
+ * reports how many were written. Writing fewer bytes than asked for is allowed, and the engine calls again for the
+ * rest. Zero means nothing could be written, like `pwrite`, and the engine then fails the write it needed the bytes
+ * for. The write never moves the cursor, like `pwrite`, and writes at `location` even on a file opened with
+ * `FILE_FLAG_APPEND`. It may be called from several threads at once on a file opened with `FILE_FLAG_PARALLEL_ACCESS`,
+ * always for disjoint ranges.
  */
 typedef void (*duckdb_v2_vfs_file_write_at_callback_fn)(duckdb_v2_vfs_info_handle info,
                                                         duckdb_v2_vfs_file_write_at_info_handle op_info, void *file,
                                                         const void *buffer, idx_t buffer_size, idx_t location,
-                                                        duckdb_v2_error_info_handle *err);
+                                                        idx_t *bytes_written, duckdb_v2_error_info_handle *err);
 
 /*!
  * Reads from the cursor.
@@ -12263,12 +12321,14 @@ typedef void (*duckdb_v2_vfs_file_read_callback_fn)(duckdb_v2_vfs_info_handle in
 /*!
  * Writes at the cursor.
  *
- * Writes all `buffer_size` bytes at the cursor, advancing it past them. A partial write is an error and must be
- * reported as one. It is never called concurrently on the same file.
+ * Writes up to `buffer_size` bytes at the cursor, advancing it by however many were written, and reports how many that
+ * was. Writing fewer bytes than asked for is allowed, and the engine calls again for the rest. Zero means nothing could
+ * be written, and the engine then fails the write it needed the bytes for. It is never called concurrently on the same
+ * file.
  */
 typedef void (*duckdb_v2_vfs_file_write_callback_fn)(duckdb_v2_vfs_info_handle info,
                                                      duckdb_v2_vfs_file_write_info_handle op_info, void *file,
-                                                     const void *buffer, idx_t buffer_size,
+                                                     const void *buffer, idx_t buffer_size, idx_t *bytes_written,
                                                      duckdb_v2_error_info_handle *err);
 
 /*!
@@ -12293,8 +12353,12 @@ typedef void (*duckdb_v2_vfs_file_tell_callback_fn)(duckdb_v2_vfs_info_handle in
  * engine cache the file's contents across queries and know when to invalidate them. A file whose size is unknown, such
  * as a forward-only stream, leaves the size unset. The engine then finds the end by reading, and readers that need the
  * size up front reject the file. Setting the type to `FILE_TYPE_PIPE` tells the engine to read the file as a pipe, and
- * any other type means a regular file. The engine calls this whenever it needs the size, so it should be cheap. For a
- * file opened for reading, return what was learned at open time.
+ * any other type means a regular file. The engine calls this whenever it needs the size, so it should be cheap.
+ *
+ * This callback is optional. Without it the engine reports what the "open" callback left in
+ * `duckdb_v2_vfs_file_open_get_metadata()`, which for a file that a listing described takes no code at all. Once such a
+ * file is written or truncated, its size, modification time and version tag are no longer known. Set this callback for
+ * a file system that writes files whose size the engine asks for, or whose files change while they are open.
  */
 typedef void (*duckdb_v2_vfs_file_stat_callback_fn)(duckdb_v2_vfs_info_handle info,
                                                     duckdb_v2_vfs_file_stat_info_handle op_info, void *file,
@@ -12326,10 +12390,11 @@ typedef void (*duckdb_v2_vfs_file_truncate_callback_fn)(duckdb_v2_vfs_info_handl
  *
  * Fills in `metadata` with the type of the path and, for a regular file, whatever else is known. Size, modification
  * time and version tag are all optional, and what is filled in is what `duckdb_v2_file_system_stat()` reports for the
- * path. Leaving `metadata` untouched means the path does not exist, which is not an error. The engine uses this to
- * check whether a file or directory exists before creating or overwriting it, whether it is about to write to a pipe,
- * and to learn a file's size without opening it. If this callback is unset, the engine opens the file to find out
- * instead.
+ * path. Leaving `metadata` untouched means the path does not exist, which is not an error. The type is what reports
+ * existence, so filling in anything else without it is an error. The engine uses this to check whether a file or
+ * directory exists before creating or overwriting it, whether it is about to write to a pipe, and to learn a file's
+ * size without opening it. If this callback is unset, the engine opens the file for reading to find out instead, and
+ * lists a directory to learn whether it exists.
  */
 typedef void (*duckdb_v2_vfs_stat_callback_fn)(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_stat_info_handle op_info,
                                                duckdb_v2_str path, duckdb_v2_file_metadata_handle metadata,
@@ -12339,22 +12404,25 @@ typedef void (*duckdb_v2_vfs_stat_callback_fn)(duckdb_v2_vfs_info_handle info, d
  * Lists the entries of a directory.
  *
  * Adds one entry per file and subdirectory directly inside the path with `duckdb_v2_file_listing_add_entry()`, by name
- * relative to the path, along with whatever metadata is already known about each.
+ * relative to the path, along with whatever metadata is already known about each. Report a directory that does not
+ * exist as `ERROR_IO_FILE_NOT_FOUND`, which is how the engine tells it from an empty one. A backend without
+ * directories, such as an object store, cannot tell the two apart and adds no entries instead.
  */
 typedef void (*duckdb_v2_vfs_list_callback_fn)(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_list_info_handle op_info,
                                                duckdb_v2_str path, duckdb_v2_file_listing_handle list_info,
                                                duckdb_v2_error_info_handle *err);
 
 /*!
- * Expands a glob pattern to the files matching it.
+ * Resolves a path the user wrote to the files it names.
  *
- * This callback is optional. Without it, a path containing glob characters is an error, and any other path names
- * exactly that file. With it, every path the engine reads goes through this callback, whether it contains glob
- * characters or not, so a plain path that exists must be added as its own single match. The engine passes patterns
- * through as written. The built-in file systems support `*`, `?` and `[...]` within a path component and `**` for any
- * number of directories, so a backend that does the same behaves consistently with them. Adds the full path of each
- * matching file with `duckdb_v2_file_listing_add_entry()`. A pattern that matches nothing adds nothing, which is not an
- * error.
+ * Globbing is opt-in. Without this callback every path names exactly one file, whatever characters it holds, and the
+ * engine never interprets it. With it, this file system owns the mapping from what the user wrote to files: every path
+ * the engine reads is passed through as written, and the pattern syntax, the path separators and the meaning of a path
+ * without any pattern in it are all this file system's own. A path that names one existing file is added as its own
+ * single match, and one that names nothing adds nothing. The built-in file systems support `*`, `?` and `[...]` within
+ * a path component and `**` for any number of directories, so a backend that does the same behaves consistently with
+ * them. Adds the full path of each matching file with `duckdb_v2_file_listing_add_entry()`. A pattern that matches
+ * nothing adds nothing, which is not an error.
  */
 typedef void (*duckdb_v2_vfs_glob_callback_fn)(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_glob_info_handle op_info,
                                                duckdb_v2_str pattern, duckdb_v2_file_listing_handle list_info,
@@ -12374,14 +12442,20 @@ typedef void (*duckdb_v2_vfs_remove_file_callback_fn)(duckdb_v2_vfs_info_handle 
 /*!
  * Creates a directory, including any missing parents.
  *
- * The engine calls it when it writes partitioned output or exports a database. An existing directory is not an error. A
- * backend without directories, such as an object store, can make this a no-op.
+ * The engine calls it when it writes partitioned output or exports a database. An existing directory is not an error,
+ * and neither is a missing parent, which is created along the way. A backend without directories, such as an object
+ * store, can make this a no-op.
  */
 typedef void (*duckdb_v2_vfs_create_directory_callback_fn)(duckdb_v2_vfs_info_handle info,
                                                            duckdb_v2_vfs_create_directory_info_handle op_info,
                                                            duckdb_v2_str path, duckdb_v2_error_info_handle *err);
 
-//! Removes a directory and everything inside it. The engine calls it when it overwrites partitioned output.
+/*!
+ * Removes a directory and everything inside it. The engine calls it when it overwrites partitioned output.
+ *
+ * A directory that does not exist is not an error, since there is nothing left to remove. `ERROR_IO_FILE_NOT_FOUND` is
+ * accepted and means the same.
+ */
 typedef void (*duckdb_v2_vfs_remove_directory_callback_fn)(duckdb_v2_vfs_info_handle info,
                                                            duckdb_v2_vfs_remove_directory_info_handle op_info,
                                                            duckdb_v2_str path, duckdb_v2_error_info_handle *err);
@@ -12389,9 +12463,10 @@ typedef void (*duckdb_v2_vfs_remove_directory_callback_fn)(duckdb_v2_vfs_info_ha
 /*!
  * Moves a file, replacing any existing target.
  *
- * Both paths belong to this file system, since a move to a path it does not claim is rejected before the callback is
- * reached. The engine calls it when it renames a file it wrote under a temporary name into its final place, so it
- * should be atomic where the backend allows it.
+ * Report a missing source as `ERROR_IO_FILE_NOT_FOUND`. A missing target is the normal case. Both paths belong to this
+ * file system, since a move to a path it does not claim is rejected before the callback is reached. The engine calls it
+ * when it renames a file it wrote under a temporary name into its final place, so it should be atomic where the backend
+ * allows it.
  */
 typedef void (*duckdb_v2_vfs_move_callback_fn)(duckdb_v2_vfs_info_handle info, duckdb_v2_vfs_move_info_handle op_info,
                                                duckdb_v2_str source, duckdb_v2_str target,
@@ -12624,10 +12699,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_set_file_write_at_callback(duckdb_v2_
 /*!
  * Sets the optional "read" callback of the virtual file system.
  *
- * The callback reads from the cursor. See `duckdb_v2_vfs_file_read_callback_fn`. Setting it makes the file system the
- * owner of the cursor, which then also requires "tell", "write" if it has "write at", and "seek" for any file that
- * reports `FILE_PROPERTY_IS_SEEKABLE` as true. Without it, and without any other cursor callback, the engine keeps the
- * cursor itself and serves cursor reads through "read at".
+ * The callback reads from the cursor. See `duckdb_v2_vfs_file_read_callback_fn`. Setting it makes the file system keep
+ * the cursor, which then also requires "tell". Without it, and without any other cursor callback, the engine keeps the
+ * cursor itself and serves cursor reads through "read at". A file system that keeps the cursor without it cannot open a
+ * file for reading.
  *
  * history:
  * - stable: v2.0.0
@@ -12646,10 +12721,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_set_file_read_callback(duckdb_v2_vfs_
  * Sets the optional "write" callback of the virtual file system.
  *
  * The callback writes at the cursor. See `duckdb_v2_vfs_file_write_callback_fn`. This is how `COPY` writes data files,
- * so a backend that can only append, such as an object store, implements this one. Setting it makes the file system the
- * owner of the cursor, which then also requires "tell", and "read" if it has "read at". A write-only sink needs
- * neither. Without it, cursor writes are served through "write at" if the engine keeps the cursor, and fail if the file
- * system owns it.
+ * so a backend that can only append, such as an object store, implements this one. Setting it makes the file system
+ * keep the cursor, which then also requires "tell". Without it, and without any other cursor callback, the engine keeps
+ * the cursor itself and serves cursor writes through "write at". A file system that keeps the cursor without it cannot
+ * open a file for writing.
  *
  * history:
  * - stable: v2.0.0
@@ -12704,10 +12779,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_set_file_tell_callback(duckdb_v2_vfs_
                                                                   duckdb_v2_error_info_handle *err);
 
 /*!
- * Sets the file "stat" callback of the virtual file system.
+ * Sets the optional file "stat" callback of the virtual file system.
  *
  * The callback reports the size of an open file and, when known, its modification time and version tag. See
- * `duckdb_v2_vfs_file_stat_callback_fn`. It must be set before registration.
+ * `duckdb_v2_vfs_file_stat_callback_fn`. Without it, the engine reports what the "open" callback filled in.
  *
  * history:
  * - stable: v2.0.0
@@ -12761,8 +12836,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_set_file_truncate_callback(duckdb_v2_
 /*!
  * Sets the optional file system "stat" callback of the virtual file system.
  *
- * The callback reports what is known about a path. See `duckdb_v2_vfs_stat_callback_fn`. Without it, the engine cannot
- * check whether a path exists, which it needs to do before writing, and has to open a file to learn its size.
+ * The callback reports what is known about a path. See `duckdb_v2_vfs_stat_callback_fn`. Without it, every check for a
+ * file costs an open for reading and every check for a directory a "list". A file system that cannot read, or cannot
+ * list, then reports every such path as absent, so nothing protects an existing file from being overwritten.
  *
  * history:
  * - stable: v2.0.0
@@ -12798,8 +12874,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_set_list_callback(duckdb_v2_vfs_handl
 /*!
  * Sets the optional "glob" callback of the virtual file system.
  *
- * The callback expands a glob pattern. See `duckdb_v2_vfs_glob_callback_fn`. Without it, only paths without glob
- * characters can be read.
+ * The callback resolves a path to the files it names. See `duckdb_v2_vfs_glob_callback_fn`. Globbing is opt-in: without
+ * it every path names exactly one file, and with it the pattern syntax is the file system's own to handle.
  *
  * history:
  * - stable: v2.0.0
@@ -12913,18 +12989,20 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_file_open_get_value(duckdb_v2_vfs_fil
                                                                duckdb_v2_error_info_handle *err);
 
 /*!
- * Retrieves what a listing of this file system reported about the file being opened.
+ * Retrieves what is known about the file being opened, for the "open" callback to read and to fill in.
  *
  * When the file was found through the "glob" callback, whatever that callback filled in about the entry (size,
- * modification time, version tag) is returned here, so the backend does not need to fetch it again. Read it with
- * `duckdb_v2_file_metadata_get_size()` and its siblings, each of which reports whether its field is known. Borrowed and
- * valid only for the duration of the callback, and must not be destroyed.
+ * modification time, version tag) is already here, so the backend does not need to fetch it again. Read it with
+ * `duckdb_v2_file_metadata_get_size()` and its siblings, each of which reports whether its field is known, and complete
+ * or correct it with `duckdb_v2_file_metadata_set_size()` and its siblings. What it holds when the callback returns is
+ * what the engine reports about the open file if the file system has no file "stat" callback. Borrowed and valid only
+ * for the duration of the callback, and must not be destroyed.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param info The file open info handle.
- * @param metadata Receives the borrowed metadata info, empty when no listing reported anything.
+ * @param metadata Receives the borrowed metadata, empty when no listing reported anything.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
@@ -13058,16 +13136,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vfs_info_try_get_context(duckdb_v2_vfs_in
  * Registers the virtual file system, making the paths it claims readable and writable by the engine.
  *
  * The file system is registered on the database given at creation, the connection's or the loading extension's.
- * Registration requires a name that is not already taken, at least one prefix or a "claim" callback, the "open" and
- * file "stat" callbacks, and "read at" unless the file system is a write-only sink with a "write" or "write at"
- * callback. A file system that owns the cursor by setting any of "read", "write", "seek" or "tell" must also set
- * "tell", "read" if it has "read at", and "write" if it has "write at". Every other callback is optional, and its
- * absence is only reported as an error when the engine needs it.
+ * Registration requires a name that is not already taken, at least one prefix or a "claim" callback, the "open"
+ * callback, and "read at" unless the file system is a write-only sink with a "write" or "write at" callback. A file
+ * system that keeps the cursor by setting any of "read", "write", "seek" or "tell" must set "tell". Every other
+ * callback is optional, and its absence is only reported as an error when the engine needs it.
  *
  * Registration copies the configuration, so destroying the handle afterwards or calling its setters again does not
- * affect the registered file system, and registering the same handle again registers a second, independent file system.
- * When several registered file systems claim a path, the most recently registered one handles it. Once registered, a
- * file system stays until the database closes.
+ * affect the registered file system. Registering the same handle again fails, since its name is now taken. After
+ * `duckdb_v2_vfs_set_name()` gives it another name it registers a second, independent file system, which shares the
+ * user data of the first. When several registered file systems claim a path, the most recently registered one handles
+ * it. Once registered, a file system stays until the database closes.
  *
  * history:
  * - stable: v2.0.0

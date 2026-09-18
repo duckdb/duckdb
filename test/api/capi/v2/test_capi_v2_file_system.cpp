@@ -301,21 +301,31 @@ TEST_CASE("V2 file system: positional read and write", "[capi_v2][file_system]")
 
 	// A positional read does not move the position.
 	char buffer[4] = {0};
-	REQUIRE(duckdb_v2_file_read_at(handle, buffer, 4, 2, nullptr) == DUCKDB_V2_ERROR_NONE);
+	idx_t bytes_read = 0;
+	REQUIRE(duckdb_v2_file_read_at(handle, buffer, 4, 2, &bytes_read, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(bytes_read == 4);
 	REQUIRE(std::string(buffer, 4) == "cdef");
 	REQUIRE(FsTell(handle) == 10);
 
 	// Neither does a positional write.
-	REQUIRE(duckdb_v2_file_write_at(handle, "XY", 2, 4, nullptr) == DUCKDB_V2_ERROR_NONE);
+	idx_t bytes_written = 0;
+	REQUIRE(duckdb_v2_file_write_at(handle, "XY", 2, 4, &bytes_written, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(bytes_written == 2);
 	REQUIRE(FsTell(handle) == 10);
-	REQUIRE(duckdb_v2_file_read_at(handle, buffer, 4, 2, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_file_read_at(handle, buffer, 4, 2, &bytes_read, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(bytes_read == 4);
 	REQUIRE(std::string(buffer, 4) == "cdXY");
 
-	// Reading past the end is an error rather than a short read, since there is no count to report.
-	REQUIRE(duckdb_v2_file_read_at(handle, buffer, 4, 8, nullptr) != DUCKDB_V2_ERROR_NONE);
+	// A read crossing the end comes up short, and one at or past it reads nothing.
+	REQUIRE(duckdb_v2_file_read_at(handle, buffer, 4, 8, &bytes_read, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(bytes_read == 2);
+	REQUIRE(std::string(buffer, 2) == "ij");
+	REQUIRE(duckdb_v2_file_read_at(handle, buffer, 4, 10, &bytes_read, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(bytes_read == 0);
 
 	// A positional write past the end extends the file.
-	REQUIRE(duckdb_v2_file_write_at(handle, "Z", 1, 15, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_file_write_at(handle, "Z", 1, 15, &bytes_written, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(bytes_written == 1);
 	REQUIRE(FsSize(handle) == 16);
 
 	duckdb_v2_file_destroy(&handle);
@@ -326,6 +336,31 @@ TEST_CASE("V2 file system: positional read and write", "[capi_v2][file_system]")
 	duckdb_v2_file_destroy(&reader);
 }
 
+TEST_CASE("V2 file system: truncate and abort", "[capi_v2][file_system]") {
+	EnvFixture fx;
+	auto fs = FsOf(fx.conn);
+
+	auto path = duckdb::TestCreatePath("v2_fs_truncate.bin");
+	auto handle = FsOpen(fs, path, {DUCKDB_V2_FILE_FLAG_WRITE, DUCKDB_V2_FILE_FLAG_CREATE_NEW});
+	FsWrite(handle, "abcdefghij");
+	REQUIRE(duckdb_v2_file_truncate(handle, 4, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(FsSize(handle) == 4);
+	REQUIRE(duckdb_v2_file_truncate(nullptr, 4, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	duckdb_v2_file_destroy(&handle);
+
+	// Aborting a file created exclusively removes it, and leaves the handle to be destroyed.
+	auto aborted_path = duckdb::TestCreatePath("v2_fs_abort.bin");
+	duckdb::FileSystem::CreateLocal()->TryRemoveFile(aborted_path);
+	auto aborted =
+	    FsOpen(fs, aborted_path,
+	           {DUCKDB_V2_FILE_FLAG_WRITE, DUCKDB_V2_FILE_FLAG_CREATE, DUCKDB_V2_FILE_FLAG_EXCLUSIVE_CREATE});
+	FsWrite(aborted, "partial");
+	REQUIRE(duckdb_v2_file_abort(aborted, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_file_abort(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	duckdb_v2_file_destroy(&aborted);
+	REQUIRE(!duckdb::FileSystem::CreateLocal()->FileExists(aborted_path));
+}
+
 TEST_CASE("V2 file system: positional read and write null arguments", "[capi_v2][file_system]") {
 	EnvFixture fx;
 	auto fs = FsOf(fx.conn);
@@ -333,10 +368,14 @@ TEST_CASE("V2 file system: positional read and write null arguments", "[capi_v2]
 	auto handle = FsOpen(fs, path, {DUCKDB_V2_FILE_FLAG_WRITE, DUCKDB_V2_FILE_FLAG_CREATE_NEW});
 	char buffer[4] = {0};
 
-	REQUIRE(duckdb_v2_file_read_at(nullptr, buffer, 4, 0, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_file_read_at(handle, nullptr, 4, 0, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_file_write_at(nullptr, buffer, 4, 0, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_file_write_at(handle, nullptr, 4, 0, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	idx_t bytes_read = 0;
+	REQUIRE(duckdb_v2_file_read_at(nullptr, buffer, 4, 0, &bytes_read, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_file_read_at(handle, nullptr, 4, 0, &bytes_read, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_file_read_at(handle, buffer, 4, 0, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	idx_t bytes_written = 0;
+	REQUIRE(duckdb_v2_file_write_at(nullptr, buffer, 4, 0, &bytes_written, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_file_write_at(handle, nullptr, 4, 0, &bytes_written, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_file_write_at(handle, buffer, 4, 0, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	duckdb_v2_file_destroy(&handle);
 }

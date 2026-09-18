@@ -177,9 +177,10 @@ DUCKDB_V2_ERROR duckdb_v2_file_system_open(duckdb_v2_file_system_handle file_sys
 		// No opener is passed: FileSystem::GetFileSystem hands back the context's own OpenerFileSystem, which
 		// pushes the opener itself -- which is how a remote file system reaches settings and secrets. Supplying one
 		// here is rejected outright ("the opener is pushed automatically").
-		auto handle = slot.fs->OpenFile(info, opts.flags);
+		// Asking for null on a missing file is what lets it be reported as one, whichever file system handles it.
+		auto handle = slot.fs->OpenFile(info, opts.flags | duckdb::FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
 		if (!handle) {
-			throw duckdb::IOException("Failed to open file: %s", info.path);
+			throw duckdb::FileNotFoundException("Cannot open file \"%s\": no such file", info.path);
 		}
 		auto file = duckdb::make_uniq<CV2File>();
 		file->handle = std::move(handle);
@@ -221,7 +222,7 @@ DUCKDB_V2_ERROR duckdb_v2_file_system_list(duckdb_v2_file_system_handle file_sys
 		auto result = duckdb::make_uniq<CV2FileListing>();
 		auto found = slot.fs->ListFiles(p, [&](duckdb::OpenFileInfo &info) { result->Add(info); });
 		if (!found) {
-			throw duckdb::IOException("Cannot list \"%s\": no such directory", p);
+			throw duckdb::FileNotFoundException("Cannot list \"%s\": no such directory", p);
 		}
 		*listing = Convert(result.release());
 	});
@@ -250,7 +251,10 @@ DUCKDB_V2_ERROR duckdb_v2_file_system_remove_file(duckdb_v2_file_system_handle f
 	DUCKDB_CHECK_ARG(path);
 	return WithErrorHandler(err, [&]() {
 		auto &slot = *Convert(file_system);
-		slot.fs->RemoveFile(duckdb::string(Convert(path)));
+		auto p = duckdb::string(Convert(path));
+		if (!slot.fs->TryRemoveFile(p)) {
+			throw duckdb::FileNotFoundException("Cannot remove \"%s\": no such file", p);
+		}
 	});
 }
 
@@ -314,24 +318,40 @@ DUCKDB_V2_ERROR duckdb_v2_file_write(duckdb_v2_file_handle file, const void *buf
 }
 
 DUCKDB_V2_ERROR duckdb_v2_file_read_at(duckdb_v2_file_handle file, void *buffer, idx_t buffer_size, idx_t location,
-                                       duckdb_v2_error_info_handle *err) {
+                                       idx_t *bytes_read, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file);
 	DUCKDB_CHECK_ARG(buffer);
+	DUCKDB_CHECK_ARG(bytes_read);
+	*bytes_read = 0;
 	return WithErrorHandler(err, [&]() {
-		// Reads all of buffer_size or throws, and leaves the file's position alone.
 		auto &f = *Convert(file);
-		f.Handle().Read(f.query, buffer, buffer_size, location);
+		// The engine's positional read is all or nothing, so a read crossing the end of the file is clamped to it.
+		auto count = buffer_size;
+		if (count > duckdb::NumericLimits<idx_t>::Maximum() - location || location + count > f.known_size) {
+			// The file may have grown since it last reported its size.
+			auto size = duckdb::NumericCast<idx_t>(f.Handle().GetFileSize());
+			f.known_size = size;
+			count = location >= size ? 0 : duckdb::MinValue<idx_t>(count, size - location);
+		}
+		if (count > 0) {
+			f.Handle().Read(f.query, buffer, count, location);
+		}
+		*bytes_read = count;
 	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_file_write_at(duckdb_v2_file_handle file, const void *buffer, idx_t buffer_size,
-                                        idx_t location, duckdb_v2_error_info_handle *err) {
+                                        idx_t location, idx_t *bytes_written, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file);
 	DUCKDB_CHECK_ARG(buffer);
+	DUCKDB_CHECK_ARG(bytes_written);
+	*bytes_written = 0;
 	return WithErrorHandler(err, [&]() {
 		auto *data = const_cast<void *>(buffer); // NOLINT: the engine's signature is not const-correct
 		auto &f = *Convert(file);
+		// The engine's positional write is all or nothing.
 		f.Handle().Write(f.query, data, buffer_size, location);
+		*bytes_written = buffer_size;
 	});
 }
 
@@ -367,6 +387,16 @@ DUCKDB_V2_ERROR duckdb_v2_file_seek(duckdb_v2_file_handle file, idx_t position, 
 DUCKDB_V2_ERROR duckdb_v2_file_sync(duckdb_v2_file_handle file, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file);
 	return WithErrorHandler(err, [&]() { Convert(file)->Handle().Sync(); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_truncate(duckdb_v2_file_handle file, idx_t size, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(file);
+	return WithErrorHandler(err, [&]() { Convert(file)->Handle().Truncate(duckdb::NumericCast<int64_t>(size)); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_file_abort(duckdb_v2_file_handle file, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(file);
+	return WithErrorHandler(err, [&]() { Convert(file)->Handle().AbortWrite(); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_file_close(duckdb_v2_file_handle file, duckdb_v2_error_info_handle *err) {
