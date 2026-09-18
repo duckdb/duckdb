@@ -736,7 +736,7 @@ QueryResultState ClientContext::ExecuteTaskInternal(ClientContextLock &lock, Bas
 	try {
 		// Surface a pending interrupt even when this thread runs no task that reaches InterruptCheck.
 		// IsInterrupted() rather than InterruptCheck(): we must not enforce query_deadline here.
-		// Not when the executor already has an error: ExecuteTask rethrows that with its original type.
+		// Skip when the executor already has an error: ExecuteTask rethrows that with its original type.
 		if (IsInterrupted() && !active_query->executor->HasError()) {
 			throw InterruptException();
 		}
