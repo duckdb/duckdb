@@ -391,7 +391,6 @@ TableFunctionMultiFileWrapper::InitializeBindData(MultiFileBindData &multi_file_
 	auto result = make_uniq<TableFunctionMultiFileData>();
 	// the options carry the expected schema when it is known upfront (COPY takes it from the target table)
 	result->options = std::move(options_p->Cast<TableFunctionFileReaderOptions>());
-	result->options.multi_file_scan = multi_file_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES;
 	return std::move(result);
 }
 
@@ -483,6 +482,9 @@ void TableFunctionMultiFileWrapper::ReleaseBindData(const vector<shared_ptr<Base
 void TableFunctionMultiFileWrapper::BindReader(ClientContext &context, vector<LogicalType> &return_types,
                                                vector<Identifier> &names, MultiFileBindData &bind_data) {
 	auto &data = bind_data.bind_data->Cast<TableFunctionMultiFileData>();
+	// whether the scan reads several files. The file list is only asked here, where it has been created and is
+	// about to be read anyway - a list that is built lazily is not ready to be expanded any earlier
+	data.options.multi_file_scan = bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES;
 	if (settings.bind_scan_schema && settings.bind_scan_schema(context, bind_data, data.options.named_parameters,
 	                                                           return_types, names)) {
 		// the options describe the schema of the scan - every file is mapped onto it, so no file determines it

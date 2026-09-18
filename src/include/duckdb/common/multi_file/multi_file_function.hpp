@@ -136,7 +136,9 @@ public:
 			return std::move(result);
 		}
 
-		if (result->file_list->IsEmpty() && !return_types.empty()) {
+		// NOTE: the types are checked first on purpose - asking a file list whether it is empty expands it, and a
+		// list that is built lazily (e.g. Iceberg's) is not ready to be expanded before its reader has bound
+		if (!return_types.empty() && result->file_list->IsEmpty()) {
 			// restoring a serialized plan whose files were all pruned away by filter pushdown - there is no file
 			// left to bind the readers on, but the schema is already known so we can use it as-is
 			result->types = return_types;
