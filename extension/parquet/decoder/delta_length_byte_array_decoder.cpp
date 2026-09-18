@@ -101,9 +101,9 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 			}
 			if (length_idx >= byte_array_count) {
 				throw IOException(
-					"DELTA_LENGTH_BYTE_ARRAY - length mismatch between values and byte array lengths (attempted "
-					"read of %d from %d entries) - corrupt file?",
-					length_idx, byte_array_count);
+				    "DELTA_LENGTH_BYTE_ARRAY - length mismatch between values and byte array lengths (attempted "
+				    "read of %d from %d entries) - corrupt file?",
+				    length_idx, byte_array_count);
 			}
 		}
 		const auto &str_len = length_data[length_idx++];
