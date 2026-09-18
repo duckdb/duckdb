@@ -324,6 +324,9 @@ private:
 	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
 	                           optional_ptr<ErrorData> previous_error);
 
+	//! Verify the foreign keys of all rows appended by the current statement
+	void VerifyDeferredForeignKeys();
+
 	//! Wait until a task is available to execute
 	void WaitForTask(ClientContextLock &lock, BaseQueryResult &result);
 	//! Run one partial task slice of the open result on the calling thread
