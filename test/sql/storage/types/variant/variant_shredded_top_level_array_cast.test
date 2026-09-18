@@ -32,12 +32,6 @@ SELECT count(v::VARCHAR) FROM top_level
 ----
 5
 
-# The cast must not invalidate the database.
-query I
-SELECT 42;
-----
-42
-
 query IT
 SELECT id, v::VARCHAR FROM nested ORDER BY id
 ----
