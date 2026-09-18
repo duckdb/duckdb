@@ -173,6 +173,45 @@ private:
 //! qualifier drops that one name and keeps the rest: X.c.f is field f of column c, not column f.
 unique_ptr<ParsedExpression> MatchRecognizeWithoutQualifier(const ColumnRefExpression &colref);
 
+//! What a step reads off the row it starts from: FIRST or LAST within it says which of a variable's
+//! rows that row is, and RUNNING or FINAL in front of that how much of the match is visible. The step
+//! itself is computed below the matcher, so this is peeled off the step's argument and put back around
+//! the column the step lands in.
+struct MatchRecognizeSteppedNavigation {
+	//! Whether the step wrote a navigation of its own rather than only naming a variable
+	bool navigated = false;
+	//! An ordinary reference is RUNNING LAST already, so that is what a step without one reads with
+	bool last = true;
+	//! Which of the variable's rows, as written and as the number it is
+	unique_ptr<ParsedExpression> offset;
+	idx_t offset_value = 0;
+	//! The RUNNING or FINAL written in front of the navigation
+	unique_ptr<ParsedExpression> marker;
+	//! Whether that keyword was FINAL, which reads rows a DEFINE condition has not mapped yet
+	bool final_semantics = false;
+
+	//! Read the column the step landed in the way the step asked for it
+	unique_ptr<ParsedExpression> Rebuild(const string &variable, const string &column);
+};
+
+//! Peel what the step reads with off its argument, leaving the expression the row it reaches supplies
+MatchRecognizeSteppedNavigation MatchRecognizePeelStep(unique_ptr<ParsedExpression> &inner);
+
+//! A step starts from a row the match names, and a step inside one names no row, so refuse the nesting
+void MatchRecognizeRejectNestedStep(const ParsedExpression &inner, const string &function_name);
+
+//! Whether a name is a pattern variable. The two clauses hold their symbols differently, so which
+//! names are theirs is the caller's to say.
+using MatchRecognizeIsSymbol = std::function<bool(const string &)>;
+
+//! The pattern variable a navigation reads its row from. What it reports is an expression of the
+//! clause's own, so a variable may appear anywhere within it rather than only in front of it - but it
+//! navigates to one row, so the expression cannot name two variables to read it from, nor one variable
+//! and the whole match. The qualifiers are dropped and the variable reported back, empty for the match
+//! as a whole.
+string MatchRecognizeNavigationVariable(unique_ptr<ParsedExpression> &inner, const MatchRecognizeIsSymbol &symbols,
+                                        const case_insensitive_map_t<string> &universal, const string &function_name);
+
 //! FIRST() and LAST() count from the end of the match they read from, by a constant the two clauses
 //! spell the same way.
 idx_t MatchRecognizeNavigationOffset(const string &function_name, const ParsedExpression &offset_expr);

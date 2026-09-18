@@ -205,6 +205,7 @@ static bool HasExclusion(const ParsedExpression &expr) {
 //! input row below the pattern window and read back from above it
 static void HoistMeasureNavigation(unique_ptr<ParsedExpression> &expr, const WindowExpression &pattern_window,
                                    const case_insensitive_map_t<vector<string>> &symbols,
+                                   const case_insensitive_map_t<string> &universal,
                                    vector<unique_ptr<ParsedExpression>> &hoisted, GeneratedNames &names) {
 	if (expr->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &function = expr->Cast<FunctionExpression>();
@@ -229,39 +230,50 @@ static void HoistMeasureNavigation(unique_ptr<ParsedExpression> &expr, const Win
 			if (arguments.empty() || arguments.size() > 2) {
 				throw BinderException("%s() takes an expression and an optional offset", function_name);
 			}
+			MatchRecognizeRejectNestedStep(arguments[0].GetExpression(), function_name);
 			for (auto &argument : arguments) {
-				HoistMeasureNavigation(argument.GetExpressionMutable(), pattern_window, symbols, hoisted, names);
+				HoistMeasureNavigation(argument.GetExpressionMutable(), pattern_window, symbols, universal, hoisted,
+				                       names);
 			}
 			// a step is a fixed distance through the partition, so the offset is a non-negative
 			// constant - a negative one would step the other way and a column a different way per row
 			if (arguments.size() == 2) {
 				MatchRecognizeNavigationOffset(function_name, arguments[1].GetExpression());
 			}
-			auto &inner = *arguments[0].GetExpressionMutable();
-			if (inner.GetExpressionType() == ExpressionType::COLUMN_REF) {
-				auto &names = inner.Cast<ColumnRefExpression>().ColumnNames();
-				if (names.size() >= 2 && symbols.find(names[0].GetIdentifierName()) != symbols.end()) {
-					throw NotImplementedException("%s() navigates the ordered partition rather than the match, so "
-					                              "naming a pattern variable inside it is not supported",
-					                              function_name);
-				}
-			}
+			auto inner = std::move(arguments[0].GetExpressionMutable());
+			auto variable = MatchRecognizeNavigationVariable(
+			    inner, [&](const string &name) { return symbols.find(name) != symbols.end(); }, universal,
+			    function_name);
+			// A step names the row it starts from rather than the one it reaches: a pattern variable in
+			// front of it is the row that variable denotes (5.6.2), and FIRST or LAST within it says
+			// which of that variable's rows (5.6.4). Stepping and then reading the row reached is the
+			// same as reading the already-stepped column off the row it started from, so the step
+			// becomes a column of the projection below and a navigation reads it from there.
+			auto stepped = MatchRecognizePeelStep(inner);
 			auto navigation = pattern_window.Copy();
 			auto &window = navigation->Cast<WindowExpression>();
 			window.SetFunctionName(function_name == "PREV" ? "lag" : "lead");
-			window.GetArgumentsMutable() = std::move(arguments);
+			window.GetArgumentsMutable().push_back(std::move(inner));
+			if (arguments.size() == 2) {
+				window.GetArgumentsMutable().push_back(std::move(arguments[1].GetExpressionMutable()));
+			}
 			auto column = names.Reserve("__mr_win");
 			window.SetAlias(Identifier(column));
 			hoisted.push_back(std::move(navigation));
 			// the navigation may be the whole measure, whose alias names the output column
 			auto alias = expr->GetAlias();
-			expr = make_uniq<ColumnRefExpression>(Identifier(column));
+			if (variable.empty() && !stepped.navigated) {
+				// nothing said where to start from, so the step starts where the measure is read
+				expr = make_uniq<ColumnRefExpression>(Identifier(column));
+			} else {
+				expr = stepped.Rebuild(variable, column);
+			}
 			expr->SetAlias(std::move(alias));
 			return;
 		}
 	}
 	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
-		HoistMeasureNavigation(child, pattern_window, symbols, hoisted, names);
+		HoistMeasureNavigation(child, pattern_window, symbols, universal, hoisted, names);
 	});
 }
 
@@ -953,7 +965,8 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	// PREV() and NEXT() in MEASURES walk the matcher's input, so they are computed down here too
 	vector<unique_ptr<ParsedExpression>> measure_navigation;
 	for (auto &expr : ref.config->measures_expression_list) {
-		HoistMeasureNavigation(expr, *window_template, measure_symbols, measure_navigation, names);
+		HoistMeasureNavigation(expr, *window_template, measure_symbols, input_refs.universal, measure_navigation,
+		                       names);
 	}
 	if (!measure_navigation.empty()) {
 		SelectBinder navigation_binder(*define_binder, context, define_node);

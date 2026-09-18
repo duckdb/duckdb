@@ -235,13 +235,63 @@ SELECT i, d FROM pnav MATCH_RECOGNIZE(
 4	10
 5	10
 
-# naming a pattern variable inside one asks about the match, which is not what it navigates
-statement error
-SELECT prev_v FROM pnav MATCH_RECOGNIZE(
-    ORDER BY i MEASURES PREV(A.v) AS prev_v PATTERN (A+) DEFINE A as true
+# A pattern variable in front of a step says which row to step from rather than which row is reached:
+# "PREV (A.Price, 2) is the value of Price in the row two rows prior to the row denoted by A with
+# running semantics" (ISO/IEC 19075-5 5.6.2). ONE ROW PER MATCH reads the match from its last row, so
+# the row A denotes is the last one mapped to A.
+query II
+SELECT prev_v, prev2_v FROM pnav MATCH_RECOGNIZE(
+    ORDER BY i MEASURES PREV(A.v) AS prev_v, PREV(A.v, 2) AS prev2_v PATTERN (A+) DEFINE A as true
 )
 ----
-<REGEX>:Not implemented Error:.*navigates the ordered partition rather than the match.*
+40	30
+
+# under ALL ROWS PER MATCH the row A denotes moves with the current row
+query III
+SELECT i, prev_v, next_v FROM pnav MATCH_RECOGNIZE(
+    ORDER BY i MEASURES PREV(A.v) AS prev_v, NEXT(A.v) AS next_v
+    ALL ROWS PER MATCH PATTERN (A+) DEFINE A as true
+) ORDER BY i
+----
+1	NULL	20
+2	10	30
+3	20	40
+4	30	50
+5	40	NULL
+
+# the row it steps from is the last row of another variable just as well
+query I
+SELECT s FROM pnav MATCH_RECOGNIZE(
+    ORDER BY i MEASURES PREV(B.v) AS s PATTERN (B+ C+) DEFINE B as v < 30, C as true
+)
+----
+10
+
+# "To obtain final semantics, use, e.g., PREV (FINAL LAST (A.Price))" (5.6.2), which is the same row
+# on every row of the match
+query II
+SELECT i, s FROM pnav MATCH_RECOGNIZE(
+    ORDER BY i MEASURES PREV(FINAL LAST(A.v)) AS s ALL ROWS PER MATCH PATTERN (A+) DEFINE A as true
+) ORDER BY i
+----
+1	40
+2	40
+3	40
+4	40
+5	40
+
+# FIRST or LAST inside a step names which of the variable's rows to step from, and the expression is
+# evaluated on the row the step reaches rather than on that one (5.6.4, tested against the standard's
+# own worked example in test_match_recognize_spec.test)
+
+# the offset of the navigation inside a step is the navigation's own, counted over the variable's rows
+query II
+SELECT s, t FROM pnav MATCH_RECOGNIZE(
+    ORDER BY i MEASURES PREV(FIRST(A.v), 0) AS s, PREV(FIRST(A.v, 1), 0) AS t
+    PATTERN (A+) DEFINE A as true
+)
+----
+10	20
 
 # FIRST and LAST count the match's own rows instead, so an offset on them steps in from the end it
 # names rather than over the partition
@@ -553,3 +603,62 @@ SELECT v FROM (VALUES (1, 10), (2, 20)) t(i, p) MATCH_RECOGNIZE (
 )
 ----
 <REGEX>:Binder Error:.*NEXT\(\) always reads the row it steps to.*
+
+# DEFINE steps from a variable's row the same way, with the one difference that a condition is settled
+# while the match is still being assembled: the rows mapped to a variable are the ones up to and
+# including the row being tested, and FINAL is not available (5.4).
+statement ok
+CREATE TABLE pstep(rn INTEGER, price INTEGER)
+
+statement ok
+INSERT INTO pstep VALUES (1,10),(2,20),(3,30),(4,40),(5,50)
+
+query II
+SELECT rn, c FROM pstep MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES CLASSIFIER() AS c ALL ROWS PER MATCH
+    PATTERN (B C+) DEFINE B as price = 10, C as PREV(B.price) IS NULL
+) ORDER BY rn
+----
+1	B
+2	C
+3	C
+4	C
+5	C
+
+query II
+SELECT rn, c FROM pstep MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES CLASSIFIER() AS c ALL ROWS PER MATCH
+    PATTERN (B{3} C) DEFINE B as true, C as PREV(LAST(B.price, 1), 1) = 10
+) ORDER BY rn
+----
+1	B
+2	B
+3	B
+4	C
+
+# the row a variable denotes while its own condition is being settled is the row being tested, so a
+# step naming it reads the same rows a step naming nothing does
+query II
+SELECT rn, c FROM pstep MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES CLASSIFIER() AS c ALL ROWS PER MATCH
+    PATTERN (A+) DEFINE A as PREV(A.price) > 20
+) ORDER BY rn
+----
+4	A
+5	A
+
+query II
+SELECT rn, c FROM pstep MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES CLASSIFIER() AS c ALL ROWS PER MATCH
+    PATTERN (A+) DEFINE A as PREV(price) > 20
+) ORDER BY rn
+----
+4	A
+5	A
+
+statement error
+SELECT rn FROM pstep MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES count(*) AS n PATTERN (A+) DEFINE A as PREV(FINAL LAST(A.price)) > 0
+)
+----
+<REGEX>:Binder Error:.*only RUNNING is available there.*
