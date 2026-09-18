@@ -32,12 +32,12 @@ public:
 	ArrowArrayWrapper array;
 };
 
-//! Per-query Arrow state. The schema and the extension type map are resolved once, on the thread
-//! that settles the format, because both read the catalog under the query's transaction
+//! Per-query Arrow state. The schema and the extension type map are resolved once, when the format
+//! is settled, and shared by every unit. Resolving them needs the client context the properties carry
 class ArrowFormatGlobalState : public ResultFormatGlobalState {
 public:
 	DUCKDB_API ArrowFormatGlobalState(vector<LogicalType> types, const vector<Identifier> &names,
-	                                  const ClientProperties &properties, idx_t batch_size);
+	                                  const ClientProperties &properties);
 	DUCKDB_API ~ArrowFormatGlobalState() override;
 
 public:
@@ -54,16 +54,12 @@ public:
 	const unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> &ExtensionTypes() const {
 		return extension_types;
 	}
-	idx_t BatchSize() const {
-		return batch_size;
-	}
 
 private:
 	vector<LogicalType> types;
 	ClientProperties properties;
 	unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> extension_types;
 	ArrowSchemaWrapper schema;
-	idx_t batch_size;
 };
 
 //! Turns chunks into Arrow record batches of at most batch_size rows, one appender per producer.

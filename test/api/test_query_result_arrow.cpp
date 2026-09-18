@@ -264,6 +264,91 @@ TEST_CASE("An Arrow unit reports the bytes its buffers hold", "[api][query_resul
 	REQUIRE(string_arrays[0]->byte_size > number_arrays[0]->byte_size);
 }
 
+TEST_CASE("Arrow units over NULL-heavy and nested columns keep their counts", "[api][query_result_arrow]") {
+	constexpr idx_t ROWS = 5000;
+	constexpr idx_t BATCH = 1024;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto handle = SubmitArrow(con,
+	                          "SELECT CASE WHEN i % 3 = 0 THEN NULL ELSE i END AS n, "
+	                          "CASE WHEN i % 5 = 0 THEN NULL ELSE [i, NULL, i + 1] END AS l, "
+	                          "{'a': i, 'b': CASE WHEN i % 2 = 0 THEN NULL ELSE 'x' || i END} AS s "
+	                          "FROM range(5000) t(i)",
+	                          BATCH);
+	DrainWatchdog watchdog(con);
+	FormattedResultStream<ArrowFormat> stream(std::move(handle));
+	auto arrays = DrainArrays(stream);
+	REQUIRE(TotalRows(arrays) == ROWS);
+	REQUIRE(arrays.size() == ROWS / BATCH + 1);
+	for (auto &unit : arrays) {
+		auto &array = unit->array.arrow_array;
+		REQUIRE(array.n_children == 3);
+		REQUIRE(NumericCast<idx_t>(array.children[0]->length) == unit->row_count);
+		REQUIRE(NumericCast<idx_t>(array.children[1]->length) == unit->row_count);
+		REQUIRE(NumericCast<idx_t>(array.children[2]->length) == unit->row_count);
+		REQUIRE(array.children[0]->null_count > 0);
+		REQUIRE(array.children[1]->null_count > 0);
+		// The struct itself has no NULLs; its second child does
+		REQUIRE(array.children[2]->null_count == 0);
+		REQUIRE(array.children[2]->children[1]->null_count > 0);
+		// Three columns of a few bytes a row, on top of the validity and offset buffers
+		REQUIRE(unit->byte_size >= unit->row_count * sizeof(int64_t));
+	}
+
+	auto scanned = ScanBack(con, stream, std::move(arrays));
+	REQUIRE(!scanned->HasError());
+	auto &collection = scanned->Collection();
+	REQUIRE(collection.Count() == ROWS);
+	auto rows = collection.GetRows();
+	REQUIRE(rows.GetValue(0, 0).IsNull());
+	REQUIRE(rows.GetValue(0, 1) == Value::BIGINT(1));
+	REQUIRE(rows.GetValue(1, 0).IsNull());
+	REQUIRE(rows.GetValue(1, 1) ==
+	        Value::LIST(LogicalType::BIGINT, {Value::BIGINT(1), Value(LogicalType::BIGINT), Value::BIGINT(2)}));
+	REQUIRE(rows.GetValue(2, 2) == Value::STRUCT({{"a", Value::BIGINT(2)}, {"b", Value(LogicalType::VARCHAR)}}));
+	REQUIRE(rows.GetValue(2, 3) == Value::STRUCT({{"a", Value::BIGINT(3)}, {"b", Value("x3")}}));
+	REQUIRE(rows.GetValue(0, ROWS - 1).IsNull() == ((ROWS - 1) % 3 == 0));
+}
+
+TEST_CASE("An empty result in the Arrow format has no units", "[api][query_result_arrow]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(10000)"));
+
+	SECTION("streamed from a source without rows") {
+		auto handle = SubmitArrow(con, "SELECT i FROM range(0) t(i)", 1024);
+		DrainWatchdog watchdog(con);
+		FormattedResultStream<ArrowFormat> stream(std::move(handle));
+		auto arrays = DrainArrays(stream);
+		REQUIRE(arrays.empty());
+		REQUIRE(stream.Poll() == QueryResultState::FINISHED);
+		REQUIRE(stream.FormatState().Schema().n_children == 1);
+	}
+	SECTION("streamed from a table whose rows are all filtered") {
+		auto handle = SubmitArrow(con, "SELECT i FROM t WHERE i < 0", 1024);
+		DrainWatchdog watchdog(con);
+		FormattedResultStream<ArrowFormat> stream(std::move(handle));
+		REQUIRE_NOTHROW(stream.GetBufferedData().Cast<BatchedBufferedData>());
+		auto arrays = DrainArrays(stream);
+		REQUIRE(arrays.empty());
+		REQUIRE(stream.Poll() == QueryResultState::FINISHED);
+	}
+	SECTION("retained") {
+		QueryParameters parameters;
+		parameters.format = make_shared_ptr<ArrowFormat>(1024);
+		auto result = con.context->Query("SELECT i FROM t WHERE i < 0", parameters);
+		REQUIRE_NO_FAIL(*result);
+		REQUIRE(result->RowCount() == 0);
+		auto &collection = result->Collection<ArrowFormat>();
+		REQUIRE(collection.Count() == 0);
+		REQUIRE(collection.UnitCount() == 0);
+		REQUIRE(collection.Units().empty());
+		REQUIRE(result->Fetch<ArrowFormat>() == nullptr);
+		REQUIRE(result->FormatState<ArrowFormat>().Schema().n_children == 1);
+	}
+}
+
 TEST_CASE("Query with an Arrow format returns the record batches and their schema", "[api][query_result_arrow]") {
 	constexpr idx_t ROWS = 20000;
 	DuckDB db(nullptr);

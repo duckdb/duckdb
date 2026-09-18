@@ -209,13 +209,18 @@ duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query,
 	auto wrapper = new ArrowResultWrapper();
 	try {
 		wrapper->result = conn->context->Query(query, ArrowParameters());
-		wrapper->rows_changed = ChangedRows(*wrapper->result);
-		*out_result = (duckdb_arrow)wrapper;
-		return !wrapper->result->HasError() ? DuckDBSuccess : DuckDBError;
 	} catch (...) {
 		delete wrapper;
 		return DuckDBError;
 	}
+	// Handed out before the row count is read: the caller destroys the result even when the call fails
+	*out_result = (duckdb_arrow)wrapper;
+	try {
+		wrapper->rows_changed = ChangedRows(*wrapper->result);
+	} catch (...) {
+		return DuckDBError;
+	}
+	return !wrapper->result->HasError() ? DuckDBSuccess : DuckDBError;
 }
 
 duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema *out_schema) {
@@ -361,13 +366,17 @@ duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_st
 	auto arrow_wrapper = new ArrowResultWrapper();
 	try {
 		arrow_wrapper->result = wrapper->statement->Execute(wrapper->values, ArrowParameters());
-		arrow_wrapper->rows_changed = ChangedRows(*arrow_wrapper->result);
-		*out_result = reinterpret_cast<duckdb_arrow>(arrow_wrapper);
-		return !arrow_wrapper->result->HasError() ? DuckDBSuccess : DuckDBError;
 	} catch (...) {
 		delete arrow_wrapper;
 		return DuckDBError;
 	}
+	*out_result = reinterpret_cast<duckdb_arrow>(arrow_wrapper);
+	try {
+		arrow_wrapper->rows_changed = ChangedRows(*arrow_wrapper->result);
+	} catch (...) {
+		return DuckDBError;
+	}
+	return !arrow_wrapper->result->HasError() ? DuckDBSuccess : DuckDBError;
 }
 
 namespace arrow_array_stream_wrapper {
