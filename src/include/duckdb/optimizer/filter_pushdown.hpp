@@ -15,6 +15,8 @@
 namespace duckdb {
 
 class LogicalGet;
+class LogicalCTERef;
+class CTEFilterPusher;
 class Optimizer;
 
 class FilterPushdown {
@@ -53,6 +55,12 @@ public:
 	};
 
 private:
+	friend class CTEFilterPusher;
+	static void CollectCTEJoinFilters(LogicalOperator &op, CTEFilterPusher &context);
+	static void PushCTEJoinFilter(LogicalOperator &op, const LogicalCTERef &source,
+	                              const vector<ColumnBinding> &source_keys, vector<ColumnBinding> target_keys,
+	                              const vector<ExpressionType> &comparisons, CTEFilterPusher &context);
+
 	Optimizer &optimizer;
 	FilterCombiner combiner;
 	bool convert_mark_joins;

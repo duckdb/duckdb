@@ -2536,6 +2536,46 @@ static bool SingleJoinRHSIsDeduplicated(LogicalComparisonJoin &join) {
 	return true;
 }
 
+static bool HasPartitionedRecursiveReferences(LogicalOperator &op, const LogicalRecursiveCTE &cte) {
+	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
+		auto &ref = op.Cast<LogicalCTERef>();
+		if (ref.cte_index == cte.table_index && ref.correlated_columns != cte.correlated_columns.size()) {
+			return false;
+		}
+	}
+	for (auto &child : op.children) {
+		if (!HasPartitionedRecursiveReferences(*child, cte)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool HasPartitionedRecursiveKeys(LogicalRecursiveCTE &cte) {
+	if (cte.key_targets.empty() && !cte.ref_recurring) {
+		return true;
+	}
+	if (cte.correlated_columns.empty() || cte.column_count < cte.correlated_columns.size()) {
+		return false;
+	}
+	// Decorrelation appends the correlation tuple to both recursive rows and USING KEY targets.
+	const auto offset = cte.column_count - cte.correlated_columns.size();
+	for (idx_t i = offset; i < cte.column_count; i++) {
+		bool found = false;
+		for (auto &key : cte.key_targets) {
+			if (key->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+			    key->Cast<BoundColumnRefExpression>().Binding() == ColumnBinding(cte.table_index, ProjectionIndex(i))) {
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			return false;
+		}
+	}
+	return HasPartitionedRecursiveReferences(*cte.children[1], cte);
+}
+
 // Decorrelation partitions the RHS by its domain. Only retain this fact for repeatable, locally owned inputs.
 static bool CanRestrictCorrelationDomain(LogicalOperator &op, unordered_set<TableIndex> &local_ctes) {
 	switch (op.type) {
@@ -2546,7 +2586,7 @@ static bool CanRestrictCorrelationDomain(LogicalOperator &op, unordered_set<Tabl
 		break;
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
 		auto &cte = op.Cast<LogicalRecursiveCTE>();
-		if (cte.ref_recurring || !cte.key_targets.empty()) {
+		if (!HasPartitionedRecursiveKeys(cte)) {
 			return false;
 		}
 		local_ctes.insert(cte.table_index);
