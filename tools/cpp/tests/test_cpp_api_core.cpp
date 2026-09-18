@@ -140,10 +140,10 @@ TEST_CASE("Stable C++API: Database::Attach with a name and options", "[cpp_api]"
 	db.Attach(":memory:", true);
 	db.Attach(path, "named", {{"BLOCK_SIZE", "16384"}});
 	auto conn = db.Connect();
-	conn.Execute("CREATE TABLE named.t(i INTEGER)").Drain();
+	conn.Execute("CREATE TABLE named.t(i INTEGER)").Complete();
 	{
 		auto result = conn.Execute("SELECT block_size FROM pragma_database_size() WHERE database_name = 'named'");
-		REQUIRE(result.FetchChunk().GetVector(0).GetValue(0).Get<int64_t>() == 16384);
+		REQUIRE(result.Fetch().GetVector(0).GetValue(0).Get<int64_t>() == 16384);
 	}
 	db.Detach("named");
 
@@ -151,7 +151,7 @@ TEST_CASE("Stable C++API: Database::Attach with a name and options", "[cpp_api]"
 	db.Attach(path, "named", {{"READ_ONLY", "true"}}, true);
 	auto later = db.Connect();
 	REQUIRE_THROWS_AS(later.Execute("INSERT INTO t VALUES (1)"), Exception);
-	later.Execute("SELECT * FROM t").Drain();
+	later.Execute("SELECT * FROM t").Complete();
 
 	// An option the engine rejects fails the attach, not the option.
 	REQUIRE_THROWS_AS(db.Attach(":memory:", "other", {{"no_such_attach_option", "1"}}), Exception);
@@ -171,8 +171,8 @@ TEST_CASE("Stable C++API: a startup option set before Open enforces read-only", 
 		// slot for the read-only reopen.
 		auto db = env.Open(path);
 		auto conn = db.Connect();
-		conn.Execute("CREATE TABLE t(i INTEGER)").Drain();
-		conn.Execute("INSERT INTO t VALUES (1), (2)").Drain();
+		conn.Execute("CREATE TABLE t(i INTEGER)").Complete();
+		conn.Execute("INSERT INTO t VALUES (1), (2)").Complete();
 	}
 
 	{
@@ -185,7 +185,7 @@ TEST_CASE("Stable C++API: a startup option set before Open enforces read-only", 
 		// before the write attempts below.
 		{
 			auto result = ro_conn.Execute("SELECT count(*) FROM t");
-			auto chunk = result.FetchChunk();
+			auto chunk = result.Fetch();
 			REQUIRE(chunk.GetVector(0).GetValue(0).Get<int64_t>() == 2);
 		}
 
@@ -195,7 +195,7 @@ TEST_CASE("Stable C++API: a startup option set before Open enforces read-only", 
 
 		// The data is unchanged after the rejected write attempts.
 		auto after = ro_conn.Execute("SELECT count(*) FROM t");
-		REQUIRE(after.FetchChunk().GetVector(0).GetValue(0).Get<int64_t>() == 2);
+		REQUIRE(after.Fetch().GetVector(0).GetValue(0).Get<int64_t>() == 2);
 	}
 
 	duckdb::DeleteDatabase(path);

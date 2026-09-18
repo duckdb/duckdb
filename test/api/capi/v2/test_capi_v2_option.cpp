@@ -359,7 +359,7 @@ TEST_CASE("V2 context option: read through a context inside a callback", "[capi_
 
 	duckdb_v2_result_handle result = nullptr;
 	REQUIRE(Query(fx.conn, "SELECT probe_option()", &result) == DUCKDB_V2_ERROR_NONE);
-	auto chunk = StepChunk(result);
+	auto chunk = FetchChunk(result);
 	REQUIRE(chunk != nullptr);
 	duckdb_v2_data_chunk_destroy(&chunk);
 	duckdb_v2_result_destroy(&result);

@@ -145,6 +145,8 @@ functions:
       Destroys a column data collection and all its chunks.
 
       Cleans up the collection and all resources associated with it, including all contained chunks. Sets the collection handle to NULL.
+
+      Only for a collection you own. The one result_get_collection lends out belongs to its result and is destroyed with it; result_take_collection is what hands ownership over.
     role: destructor
     parameters:
       collection:

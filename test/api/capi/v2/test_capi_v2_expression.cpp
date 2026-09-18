@@ -401,7 +401,7 @@ std::vector<std::string> Probe(duckdb_v2_connection_handle conn, const char *sql
 	expression_probe.Reset();
 	duckdb_v2_result_handle result = nullptr;
 	REQUIRE(Query(conn, sql, &result) == DUCKDB_V2_ERROR_NONE);
-	auto chunk = StepChunk(result);
+	auto chunk = FetchChunk(result);
 	REQUIRE(chunk != nullptr);
 	duckdb_v2_vector_handle vec = nullptr;
 	duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, nullptr);

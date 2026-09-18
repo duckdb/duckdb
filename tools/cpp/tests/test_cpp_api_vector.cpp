@@ -202,7 +202,7 @@ TEST_CASE("Stable C++API: VectorView NULL-aware read of a queried chunk", "[cpp_
 	auto conn = db.Connect();
 
 	auto result = conn.Execute("SELECT CASE WHEN i % 3 = 0 THEN NULL ELSE i END AS v FROM range(10) t(i)");
-	auto chunk = result.FetchChunk();
+	auto chunk = result.Fetch();
 	REQUIRE(chunk);
 
 	auto vec = chunk.GetVector(0);
@@ -348,7 +348,7 @@ TEST_CASE("Stable C++API: VectorView VARCHAR and BLOB reads via blob_t", "[cpp_a
 
 	const std::string long_str = "this string is comfortably longer than twelve bytes";
 	auto result = conn.Execute("SELECT v, v::BLOB AS b FROM (VALUES ('tiny'), ('" + long_str + "'), (NULL)) t(v)");
-	auto chunk = result.FetchChunk();
+	auto chunk = result.Fetch();
 	REQUIRE(chunk);
 
 	auto view = chunk.GetVector(0).GetView();

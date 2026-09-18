@@ -15,7 +15,7 @@ TEST_CASE("V2: chunk + view round-trip on SELECT 1", "[capi_v2][data_chunk]") {
 	duckdb_v2_result_handle r = nullptr;
 	REQUIRE(Query(fx.conn, "SELECT 42::INTEGER AS i", &r, nullptr) == DUCKDB_V2_ERROR_NONE);
 
-	duckdb_v2_data_chunk_handle chunk = StepChunk(r);
+	duckdb_v2_data_chunk_handle chunk = FetchChunk(r);
 	REQUIRE(chunk != nullptr);
 
 	idx_t size = 0;
@@ -64,7 +64,7 @@ TEST_CASE("V2: INTEGER vector with NULL — validity + identity sel", "[capi_v2]
 	REQUIRE(Query(fx.conn, "SELECT * FROM (VALUES (1), (NULL), (3)) t(i)", &r, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	chunk = StepChunk(r);
+	chunk = FetchChunk(r);
 
 	idx_t size = 0;
 	duckdb_v2_data_chunk_get_size(chunk, &size, nullptr);
@@ -120,7 +120,7 @@ TEST_CASE("V2: primitive view round-trips across many types", "[capi_v2][data_ch
 	              &r, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	chunk = StepChunk(r);
+	chunk = FetchChunk(r);
 
 	idx_t size = 0;
 	duckdb_v2_data_chunk_get_size(chunk, &size, nullptr);
@@ -190,7 +190,7 @@ TEST_CASE("V2: HUGEINT + INTERVAL via layout typedefs", "[capi_v2][data_chunk]")
 	              &r, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	chunk = StepChunk(r);
+	chunk = FetchChunk(r);
 
 	idx_t size = 0;
 	duckdb_v2_data_chunk_get_size(chunk, &size, nullptr);
@@ -236,7 +236,7 @@ TEST_CASE("V2: VARCHAR direct reads (inlined + pointer forms)", "[capi_v2][data_
 	        DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	chunk = StepChunk(r);
+	chunk = FetchChunk(r);
 
 	idx_t size = 0;
 	duckdb_v2_data_chunk_get_size(chunk, &size, nullptr);
@@ -277,7 +277,7 @@ TEST_CASE("V2: BLOB direct reads (inlined + pointer forms)", "[capi_v2][data_chu
 	              nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	chunk = StepChunk(r);
+	chunk = FetchChunk(r);
 
 	idx_t size = 0;
 	duckdb_v2_data_chunk_get_size(chunk, &size, nullptr);
@@ -325,7 +325,7 @@ TEST_CASE("V2: BIT via the transparent split", "[capi_v2][data_chunk]") {
 	REQUIRE(Query(fx.conn, "SELECT * FROM (VALUES ('11111111'::BIT), ('101'::BIT)) t(b)", &r, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 
-	duckdb_v2_data_chunk_handle chunk = StepChunk(r);
+	duckdb_v2_data_chunk_handle chunk = FetchChunk(r);
 
 	duckdb_v2_vector_handle vec = nullptr;
 	duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, nullptr);
@@ -374,7 +374,7 @@ TEST_CASE("V2: BIGNUM via bignum_decode (positive + negative)", "[capi_v2][data_
 	              &r, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	chunk = StepChunk(r);
+	chunk = FetchChunk(r);
 
 	idx_t size = 0;
 	duckdb_v2_data_chunk_get_size(chunk, &size, nullptr);
@@ -438,7 +438,7 @@ TEST_CASE("V2: LIST<INTEGER> via get_child + entries", "[capi_v2][data_chunk]") 
 	        DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	chunk = StepChunk(r);
+	chunk = FetchChunk(r);
 
 	idx_t size = 0;
 	duckdb_v2_data_chunk_get_size(chunk, &size, nullptr);
@@ -499,7 +499,7 @@ TEST_CASE("V2: STRUCT(INTEGER, VARCHAR) via get_child", "[capi_v2][data_chunk]")
 	              nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	chunk = StepChunk(r);
+	chunk = FetchChunk(r);
 
 	idx_t size = 0;
 	duckdb_v2_data_chunk_get_size(chunk, &size, nullptr);
@@ -559,7 +559,7 @@ TEST_CASE("V2: TUPLE(INTEGER, VARCHAR) via get_child", "[capi_v2][data_chunk]") 
 	        DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	chunk = StepChunk(r);
+	chunk = FetchChunk(r);
 
 	duckdb_v2_vector_handle tvec = nullptr;
 	duckdb_v2_data_chunk_get_vector(chunk, 0, &tvec, nullptr);
@@ -612,7 +612,7 @@ TEST_CASE("V2: ARRAY(INTEGER, 3) via get_child", "[capi_v2][data_chunk]") {
 	              nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	chunk = StepChunk(r);
+	chunk = FetchChunk(r);
 
 	idx_t size = 0;
 	duckdb_v2_data_chunk_get_size(chunk, &size, nullptr);
@@ -674,7 +674,7 @@ TEST_CASE("V2: MAP(VARCHAR, INTEGER) via get_child", "[capi_v2][data_chunk]") {
 	        DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	chunk = StepChunk(r);
+	chunk = FetchChunk(r);
 
 	idx_t size = 0;
 	duckdb_v2_data_chunk_get_size(chunk, &size, nullptr);
@@ -759,7 +759,7 @@ TEST_CASE("V2: UNION(INTEGER, VARCHAR) via get_child", "[capi_v2][data_chunk]") 
 	REQUIRE(Query(fx.conn, "SELECT u FROM u_t", &r, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	chunk = StepChunk(r);
+	chunk = FetchChunk(r);
 
 	idx_t size = 0;
 	duckdb_v2_data_chunk_get_size(chunk, &size, nullptr);
@@ -838,7 +838,7 @@ TEST_CASE("V2: DECIMAL read across internal widths", "[capi_v2][data_chunk]") {
 	              &r, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	chunk = StepChunk(r);
+	chunk = FetchChunk(r);
 	idx_t size = 0;
 	duckdb_v2_data_chunk_get_size(chunk, &size, nullptr);
 	REQUIRE(size == 1);
@@ -893,7 +893,7 @@ TEST_CASE("V2: generic accessors handle non-nested vectors", "[capi_v2][data_chu
 	duckdb_v2_result_handle r = nullptr;
 	Query(fx.conn, "SELECT 1::INTEGER", &r, nullptr);
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	chunk = StepChunk(r);
+	chunk = FetchChunk(r);
 	duckdb_v2_vector_handle vec = nullptr;
 	duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, nullptr);
 
@@ -1119,7 +1119,7 @@ TEST_CASE("V2: chunk null-arg + out-of-range rejection", "[capi_v2][data_chunk]"
 	duckdb_v2_result_handle r = nullptr;
 	Query(fx.conn, "SELECT 1", &r, nullptr);
 
-	duckdb_v2_data_chunk_handle chunk = StepChunk(r);
+	duckdb_v2_data_chunk_handle chunk = FetchChunk(r);
 	duckdb_v2_vector_handle vec = nullptr;
 	REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, 99, &vec, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(vec == nullptr);
@@ -1142,7 +1142,7 @@ TEST_CASE("V2: success leaves a pre-existing err untouched", "[capi_v2][data_chu
 	// Failing call: out-of-range vector index on a real chunk.
 	duckdb_v2_result_handle r1 = nullptr;
 	Query(fx.conn, "SELECT 1", &r1, nullptr);
-	duckdb_v2_data_chunk_handle chunk = StepChunk(r1);
+	duckdb_v2_data_chunk_handle chunk = FetchChunk(r1);
 	duckdb_v2_vector_handle oor_vec = nullptr;
 	REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, 99, &oor_vec, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(err != nullptr); // populated on failure
@@ -1189,7 +1189,7 @@ TEST_CASE("V2: data_chunk outlives result + connection + database", "[capi_v2][d
 
 		duckdb_v2_result_handle r = nullptr;
 		REQUIRE(Query(conn, "SELECT * FROM (VALUES (1), (2), (3)) t(i)", &r, nullptr) == DUCKDB_V2_ERROR_NONE);
-		chunk = StepChunk(r);
+		chunk = FetchChunk(r);
 
 		// Tear everything down except the chunk itself.
 		duckdb_v2_result_destroy(&r);

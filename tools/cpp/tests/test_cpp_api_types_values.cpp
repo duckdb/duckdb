@@ -289,7 +289,7 @@ TEST_CASE("Stable C++API: writing a VARIANT vector through the boxed value path"
 	// A boxed NULL fetched up front: the C++ surface has no NULL-value
 	// constructor, and results must not be consumed inside the scope below.
 	auto null_result = conn.Execute("SELECT NULL::VARIANT");
-	auto null_chunk = null_result.FetchChunk();
+	auto null_chunk = null_result.Fetch();
 	auto boxed_null = null_chunk.GetVector(0).GetValue(0);
 	REQUIRE(boxed_null.IsNull());
 
@@ -367,7 +367,7 @@ TEST_CASE("Stable C++API: typed Value leaf ctors/getters round trip", "[cpp_api]
 
 	// Date: the engine is the oracle for the days-since-epoch encoding.
 	// DATE - DATE yields a BIGINT day count, not an INTEGER.
-	auto date_chunk = conn.Execute("SELECT (DATE '2024-03-15' - DATE '1970-01-01')").FetchChunk();
+	auto date_chunk = conn.Execute("SELECT (DATE '2024-03-15' - DATE '1970-01-01')").Fetch();
 	auto date_days = static_cast<int32_t>(date_chunk.GetVector(0).GetValue(0).Get<int64_t>());
 	auto date_value = Value::Create(conn, date_t {date_days});
 	REQUIRE(date_value.ToText() == "2024-03-15");
@@ -375,7 +375,7 @@ TEST_CASE("Stable C++API: typed Value leaf ctors/getters round trip", "[cpp_api]
 
 	// Time: epoch_us() of a 1970-01-01 timestamp gives the time-of-day micros.
 	auto time_micros = conn.Execute("SELECT epoch_us(TIMESTAMP '1970-01-01 13:45:30.123456')")
-	                       .FetchChunk()
+	                       .Fetch()
 	                       .GetVector(0)
 	                       .GetValue(0)
 	                       .Get<int64_t>();
@@ -385,7 +385,7 @@ TEST_CASE("Stable C++API: typed Value leaf ctors/getters round trip", "[cpp_api]
 
 	// Timestamp: epoch_us() is the direct oracle.
 	auto ts_micros = conn.Execute("SELECT epoch_us(TIMESTAMP '2024-03-15 13:45:30.123456')")
-	                     .FetchChunk()
+	                     .Fetch()
 	                     .GetVector(0)
 	                     .GetValue(0)
 	                     .Get<int64_t>();

@@ -29,7 +29,7 @@ bool Contains(const std::string &haystack, const std::string &needle) {
 
 } // namespace
 
-TEST_CASE("Stable C++API: step loop drains a multi-chunk result", "[cpp_api]") {
+TEST_CASE("Stable C++API: the cursor reads a multi-chunk result to the end", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
 	Environment env;
@@ -40,46 +40,55 @@ TEST_CASE("Stable C++API: step loop drains a multi-chunk result", "[cpp_api]") {
 
 	idx_t total_rows = 0;
 	idx_t chunk_count = 0;
-	while (true) {
-		auto step = result.Step();
-		if (step.status == QueryResult::StepStatus::CHUNK) {
-			REQUIRE(step.chunk);
-			total_rows += step.chunk.GetRowCount();
-			chunk_count++;
-			continue;
-		}
-		REQUIRE(!step.chunk); // non-empty iff status is CHUNK
-		if (step.status == QueryResult::StepStatus::WAITING) {
-			result.Wait();
-			continue;
-		}
-		REQUIRE(step.status == QueryResult::StepStatus::FINISHED);
-		break;
+	while (auto chunk = result.Fetch()) {
+		total_rows += chunk.GetRowCount();
+		chunk_count++;
 	}
 	REQUIRE(total_rows == 100000);
 	REQUIRE(chunk_count > 1);
 
-	// FINISHED is sticky, and waiting on a terminal result is a no-op.
-	auto step = result.Step();
-	REQUIRE(step.status == QueryResult::StepStatus::FINISHED);
-	REQUIRE(!step.chunk);
+	REQUIRE(!result.Fetch());
+	REQUIRE(result.Poll() == ResultStatus::FINISHED);
 	result.Wait();
 }
-TEST_CASE("Stable C++API: Drain applies side effects and reports rows changed", "[cpp_api]") {
+TEST_CASE("Stable C++API: stepping drives a materialized result to completion", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
 
-	REQUIRE(conn.Execute("CREATE TABLE t (i INTEGER)").Drain() == 0);
-	REQUIRE(conn.Execute("INSERT INTO t VALUES (1), (2), (3)").Drain() == 3);
-	REQUIRE(conn.Execute("DELETE FROM t WHERE i = 1").Drain() == 1);
-	REQUIRE(conn.Execute("SELECT i FROM range(1000) t(i)").Drain() == 0); // rows drained and discarded
+	auto result = conn.Execute("SELECT i FROM range(100000) t(i)");
+	// Until the rows are settled, stepping reports READY and runs nothing.
+	REQUIRE(result.CanStream());
+	result.Materialize();
+	REQUIRE(!result.CanStream());
+
+	auto status = ResultStatus::NOT_READY;
+	for (int i = 0; i < 1000000 && status != ResultStatus::FINISHED; i++) {
+		status = result.Step();
+		if (status == ResultStatus::BLOCKED || status == ResultStatus::NO_TASKS_AVAILABLE) {
+			result.Wait();
+		}
+	}
+	REQUIRE(status == ResultStatus::FINISHED);
+	REQUIRE(result.GetCollection().GetRowCount() == 100000);
+}
+TEST_CASE("Stable C++API: Complete applies side effects and the changed-row count is the result's row", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+
+	REQUIRE(ChangedRows(conn.Execute("CREATE TABLE t (i INTEGER)")) == 0);
+	REQUIRE(ChangedRows(conn.Execute("INSERT INTO t VALUES (1), (2), (3)")) == 3);
+	REQUIRE(ChangedRows(conn.Execute("DELETE FROM t WHERE i = 1")) == 1);
+	REQUIRE(ChangedRows(conn.Execute("SELECT i FROM range(1000) t(i)")) == 0); // rows drained and discarded
 
 	auto result = conn.Execute("SELECT i FROM t");
 	idx_t rows = 0;
-	while (auto chunk = result.FetchChunk()) {
+	while (auto chunk = result.Fetch()) {
 		rows += chunk.GetRowCount();
 	}
 	REQUIRE(rows == 2);
@@ -96,10 +105,10 @@ TEST_CASE("Stable C++API: a busy connection refuses new work with RESOURCE_IN_US
 	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT 1"), Exception, HasErrorCode(DUCKDB_V2_ERROR_RESOURCE_IN_USE));
 
 	// Draining the live result frees the connection.
-	while (live.FetchChunk()) {
+	while (live.Fetch()) {
 	}
 	auto second = conn.Execute("SELECT 1");
-	REQUIRE(second.FetchChunk());
+	REQUIRE(second.Fetch());
 }
 TEST_CASE("Stable C++API: Interrupt cancels a running query", "[cpp_api]") {
 	using namespace duckdb::cxx;
@@ -109,20 +118,133 @@ TEST_CASE("Stable C++API: Interrupt cancels a running query", "[cpp_api]") {
 	auto conn = db.Connect();
 
 	auto result = conn.Execute("SELECT i FROM range(10000000) t(i)");
+	result.Materialize();
 	conn.Interrupt();
 
 	// Steps observe the cancellation as the sticky CANCELLED status.
-	auto status = QueryResult::StepStatus::WAITING;
-	for (int i = 0; i < 1000 && status != QueryResult::StepStatus::CANCELLED; i++) {
-		status = result.Step().status;
+	auto status = ResultStatus::NOT_READY;
+	for (int i = 0; i < 1000 && status != ResultStatus::CANCELLED; i++) {
+		status = result.Step();
 	}
-	REQUIRE(status == QueryResult::StepStatus::CANCELLED);
+	REQUIRE(status == ResultStatus::CANCELLED);
 
-	// FetchChunk reports the same event on the error channel.
-	REQUIRE_THROWS_MATCHES(result.FetchChunk(), Exception, HasErrorCode(DUCKDB_V2_ERROR_RUNTIME_INTERRUPT));
+	REQUIRE_THROWS_MATCHES(result.Fetch(), Exception, HasErrorCode(DUCKDB_V2_ERROR_RUNTIME_INTERRUPT));
 
 	// The cancelled result freed the connection.
-	REQUIRE(conn.Execute("SELECT 1").Drain() == 0);
+	REQUIRE(ChangedRows(conn.Execute("SELECT 1")) == 0);
+}
+TEST_CASE("Stable C++API: ResultStream consumes the result it is made from", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+
+	{
+		auto result = conn.Execute("SELECT i FROM range(100000) t(i)");
+		REQUIRE(result.CanStream());
+		ResultStream stream(std::move(result));
+		REQUIRE_FALSE(result); // consumed by the constructor
+
+		idx_t rows = 0;
+		while (auto chunk = stream.Fetch()) {
+			rows += chunk.GetRowCount();
+		}
+		REQUIRE(rows == 100000);
+		REQUIRE(!stream.Fetch());
+		REQUIRE(stream.GetStatementType() == StatementType::SELECT);
+		REQUIRE(stream.GetResultType() == ResultType::QUERY_RESULT);
+		REQUIRE(stream.GetSchema().GetFieldCount() == 1);
+	}
+
+	REQUIRE(conn.Execute("SELECT 1").Fetch());
+}
+TEST_CASE("Stable C++API: TryFetch drains a stream the consumer drives itself", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	conn.Execute("SET threads=1").Complete();
+
+	ResultStream stream(conn.Execute("SELECT i FROM range(100000) t(i)"));
+
+	idx_t rows = 0;
+	auto status = ResultStatus::NOT_READY;
+	for (int i = 0; i < 1000000 && status != ResultStatus::FINISHED; i++) {
+		DataChunk chunk;
+		status = stream.TryFetch(chunk);
+		if (chunk) {
+			rows += chunk.GetRowCount();
+			continue;
+		}
+		if (status == ResultStatus::FINISHED) {
+			break;
+		}
+		status = stream.Step();
+		if (status == ResultStatus::BLOCKED || status == ResultStatus::NO_TASKS_AVAILABLE) {
+			stream.Wait();
+		}
+		status = ResultStatus::NOT_READY;
+	}
+	REQUIRE(rows == 100000);
+}
+TEST_CASE("Stable C++API: a result whose rows are kept refuses to become a stream", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+
+	auto result = conn.Execute("SELECT i FROM range(1000) t(i)");
+	result.Materialize();
+	REQUIRE_FALSE(result.CanStream());
+	REQUIRE_THROWS_MATCHES(ResultStream(std::move(result)), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_FALSE(result);
+	REQUIRE(conn.Execute("SELECT 1").Fetch());
+}
+TEST_CASE("Stable C++API: ExecuteArgs carries parameters and eagerness across executions", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+
+	auto statement = conn.ParseSQL("SELECT $1::INTEGER + 1").Next();
+
+	ExecuteArgs args;
+	std::vector<Value> params;
+	params.push_back(Value::Create(conn, int32_t(41)));
+	args.SetParameters(params);
+	for (int i = 0; i < 2; i++) {
+		auto result = conn.Execute(statement, args);
+		auto chunk = result.Fetch();
+		REQUIRE(chunk);
+		REQUIRE(chunk.GetVector(0).GetView().Data<int32_t>()[0] == 42);
+	}
+
+	args.SetEagerness(ResultEagerness::FORCED);
+	auto eager = conn.Execute(statement, args);
+	REQUIRE_FALSE(eager.CanStream());
+	eager.Complete();
+	REQUIRE(eager.GetCollection().GetRowCount() == 1);
+}
+TEST_CASE("Stable C++API: GetCollection borrows and TakeCollection owns", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+
+	ColumnDataCollection taken = [&] {
+		auto result = conn.Execute("SELECT i FROM range(1000) t(i)");
+		result.Complete();
+		REQUIRE(result.GetCollection().GetRowCount() == 1000);
+		REQUIRE(result.GetCollection().GetRowCount() == 1000);
+		return result.TakeCollection();
+	}();
+
+	REQUIRE(taken.GetRowCount() == 1000);
 }
 TEST_CASE("Stable C++API: GetQueryProgress reports idle values when no query is active", "[cpp_api]") {
 	using namespace duckdb::cxx;
@@ -147,8 +269,8 @@ TEST_CASE("Stable C++API: ParseSQL iterates statements into Execute", "[cpp_api]
 	int statement_count = 0;
 	while (auto statement = statements.Next()) {
 		auto result = conn.Execute(statement);
-		REQUIRE(result.FetchChunk());
-		result.Drain();
+		REQUIRE(result.Fetch());
+		result.Complete();
 		statement_count++;
 	}
 	REQUIRE(statement_count == 3);
@@ -192,7 +314,7 @@ TEST_CASE("Stable C++API: Bind", "[cpp_api][statement_bind]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	conn.Execute("CREATE TABLE t(a INTEGER, b VARCHAR)").Drain();
+	conn.Execute("CREATE TABLE t(a INTEGER, b VARCHAR)").Complete();
 
 	auto iter = conn.ParseSQL("SELECT a, b FROM t WHERE a = $1");
 	auto stmt = iter.Next();
@@ -214,7 +336,7 @@ TEST_CASE("Stable C++API: Bind", "[cpp_api][statement_bind]") {
 	REQUIRE(sig2.output.GetFieldCount() == 2);
 
 	// Dynamic PIVOT is rejected with INVALID_INPUT.
-	conn.Execute("CREATE TABLE sales(product VARCHAR, quarter VARCHAR, amount INTEGER)").Drain();
+	conn.Execute("CREATE TABLE sales(product VARCHAR, quarter VARCHAR, amount INTEGER)").Complete();
 	auto piter = conn.ParseSQL("PIVOT sales ON quarter USING sum(amount)");
 	auto pstmt = piter.Next();
 	REQUIRE_THROWS_MATCHES(conn.Bind(pstmt), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
@@ -239,17 +361,17 @@ TEST_CASE("Stable C++API: QueryResult result and statement types", "[cpp_api][qu
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	conn.Execute("CREATE TABLE rt(i INTEGER)").Drain();
+	conn.Execute("CREATE TABLE rt(i INTEGER)").Complete();
 
 	// Consume-vs-drain decided purely from GetResultType, no SQL inspection.
 	auto run = [&](const char *sql) {
 		auto result = conn.Execute(sql);
 		auto types = std::make_pair(result.GetResultType(), result.GetStatementType());
 		if (types.first == QueryResult::ResultType::QUERY_RESULT) {
-			while (auto chunk = result.FetchChunk()) {
+			while (auto chunk = result.Fetch()) {
 			}
 		} else {
-			result.Drain();
+			result.Complete();
 		}
 		return types;
 	};
@@ -268,7 +390,7 @@ TEST_CASE("Stable C++API: QueryResult result and statement types", "[cpp_api][qu
 
 	// The drain path applied the INSERT's side effects.
 	auto verify = conn.Execute("SELECT count(*) FROM rt");
-	auto chunk = verify.FetchChunk();
+	auto chunk = verify.Fetch();
 	auto view = chunk.GetVector(0).GetView();
 	REQUIRE(view.Data<int64_t>()[view.SelAt(0)] == 2);
 }
@@ -278,8 +400,8 @@ TEST_CASE("Stable C++API: prepared statements", "[cpp_api][prepared_statement]")
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	conn.Execute("CREATE TABLE scores(id INTEGER, score INTEGER)").Drain();
-	conn.Execute("INSERT INTO scores VALUES (1, 40), (2, 55), (3, 70), (4, 90)").Drain();
+	conn.Execute("CREATE TABLE scores(id INTEGER, score INTEGER)").Complete();
+	conn.Execute("INSERT INTO scores VALUES (1, 40), (2, 55), (3, 70), (4, 90)").Complete();
 
 	// Value is move-only, so a parameter list is built by move, not brace-init.
 	auto Params = [&conn](std::initializer_list<int64_t> values) {
@@ -338,7 +460,7 @@ TEST_CASE("Stable C++API: prepared statements", "[cpp_api][prepared_statement]")
 	}
 
 	SECTION("a prepared DML statement reused to insert rows") {
-		conn.Execute("CREATE TABLE log(v INTEGER)").Drain();
+		conn.Execute("CREATE TABLE log(v INTEGER)").Complete();
 		auto iter = conn.ParseSQL("INSERT INTO log VALUES ($1)");
 		auto stmt = iter.Next();
 
@@ -347,9 +469,9 @@ TEST_CASE("Stable C++API: prepared statements", "[cpp_api][prepared_statement]")
 		REQUIRE(sig.output.GetFieldCount() == 1); // the changed-rows count column
 
 		// Each execution inserts one row and reports one changed row.
-		REQUIRE(conn.Execute(stmt, Params({10})).Drain() == 1);
-		REQUIRE(conn.Execute(stmt, Params({20})).Drain() == 1);
-		REQUIRE(conn.Execute(stmt, Params({30})).Drain() == 1);
+		REQUIRE(ChangedRows(conn.Execute(stmt, Params({10}))) == 1);
+		REQUIRE(ChangedRows(conn.Execute(stmt, Params({20}))) == 1);
+		REQUIRE(ChangedRows(conn.Execute(stmt, Params({30}))) == 1);
 
 		auto summary = Collect2<int64_t, int32_t>(conn.Execute("SELECT count(*) AS c, max(v) AS m FROM log"), 0, 1);
 		REQUIRE(summary.size() == 1);
@@ -465,42 +587,42 @@ TEST_CASE("Stable C++API: RenderBox custom null_value overrides the default NULL
 	REQUIRE_FALSE(Contains(custom, "NULL"));
 }
 
-TEST_CASE("Stable C++API: RenderBox consumes the result and frees the connection", "[cpp_api]") {
+TEST_CASE("Stable C++API: RenderBox leaves the result usable and renders the same text again", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
 
-	auto r = conn.Execute("SELECT i FROM range(5) t(i)");
-	auto text = r.RenderBox();
-	REQUIRE(Contains(text, kBoxVertical));
+	{
+		auto r = conn.Execute("SELECT i FROM range(5) t(i)");
+		auto text = r.RenderBox();
+		REQUIRE(Contains(text, kBoxVertical));
+		REQUIRE(r.RenderBox() == text);
+		REQUIRE(r.GetCollection().GetRowCount() == 5);
+	}
 
-	// The one-live-result slot was released: a new query runs on the same connection.
 	auto next = conn.Execute("SELECT 42 AS answer");
-	auto chunk = next.FetchChunk();
+	auto chunk = next.Fetch();
 	REQUIRE(chunk);
 	REQUIRE(chunk.GetRowCount() == 1);
 }
 
-TEST_CASE("Stable C++API: RenderBox on a partially consumed result renders the remainder", "[cpp_api]") {
+TEST_CASE("Stable C++API: RenderBox renders every row, however far the cursor has read", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
 
-	// More than one chunk so a single fetch leaves a remainder.
+	// More than one chunk, so the cursor is genuinely part-way through.
 	auto r = conn.Execute("SELECT i FROM range(5000) t(i)");
-	auto first = r.FetchChunk();
+	auto first = r.Fetch();
 	REQUIRE(first);
-	auto consumed = first.GetRowCount();
-	REQUIRE(consumed > 0);
-	REQUIRE(consumed < 5000);
+	REQUIRE(first.GetRowCount() < 5000);
 
-	auto text = r.RenderBox(); // renders only what remains
-	auto remainder = idx_t(5000) - consumed;
-	REQUIRE(Contains(text, std::to_string(remainder) + " rows"));
+	auto text = r.RenderBox();
+	REQUIRE(Contains(text, "5000 rows"));
 }
 
 TEST_CASE("Stable C++API: RenderBox handles zero-row and no-row-output results", "[cpp_api]") {
@@ -520,7 +642,7 @@ TEST_CASE("Stable C++API: RenderBox handles zero-row and no-row-output results",
 	auto ddl = conn.Execute("CREATE TABLE rb_ddl(x INTEGER)").RenderBox();
 	REQUIRE_FALSE(ddl.empty());
 	// Proof the CREATE took effect (the result was drained, not abandoned).
-	REQUIRE(conn.Execute("INSERT INTO rb_ddl VALUES (1)").Drain() == 1);
+	REQUIRE(ChangedRows(conn.Execute("INSERT INTO rb_ddl VALUES (1)")) == 1);
 }
 
 TEST_CASE("Stable C++API: RenderBox limit yields an approximate '? rows' footer", "[cpp_api]") {

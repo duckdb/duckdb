@@ -70,7 +70,7 @@ struct InlQueryRows {
 
 	InlQueryRows(duckdb_v2_connection_handle conn, const char *sql, idx_t expected_rows) {
 		REQUIRE(Query(conn, sql, &r, nullptr) == DUCKDB_V2_ERROR_NONE);
-		chunk = StepChunk(r);
+		chunk = FetchChunk(r);
 		duckdb_v2_data_chunk_get_size(chunk, &size, nullptr);
 		REQUIRE(size == expected_rows);
 		duckdb_v2_vector_handle vec = nullptr;

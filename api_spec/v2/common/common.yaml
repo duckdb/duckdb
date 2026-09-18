@@ -68,20 +68,21 @@ handles:
     cleanup_with: value_destroy
   result:
     description: |
-      An opaque, owned handle to the streaming result of a query. Carries the
-      schema (column names and logical types), the statement type, and the
-      result type from prepare time; row data is produced incrementally by
-      stepping (`[[result_step]]`) or draining (`[[result_fetch_chunk]]`). Single consumer:
-      step from one thread at a time.
+      An owned handle to a running query, returned before the query has
+      finished. It carries the schema (column names and types), the statement
+      type and the result type, and is read from one thread at a time.
 
-      A result is a cursor on the connection's execution, not a box of data.
-      While it is live — not finished, cancelled, errored, or destroyed — the
-      connection refuses new queries with ERROR_RESOURCE_IN_USE, and the
-      query's transaction stays open, deferring version cleanup and
-      checkpointing, so drain or destroy it promptly. Side-effecting statements
-      (PRAGMA, ALTER, ...) take effect only once the result is drained. Always
-      destroy via `[[result_destroy]]`, which is safe even on a partially consumed
-      stream.
+      The first call on it picks how the rows are read: `[[result_stream_create]]`
+      takes them one chunk at a time and forgets each one, while
+      `[[result_materialize]]`, `[[result_complete]]`, `[[result_fetch]]` and
+      `[[result_get_collection]]` keep every row for as long as the result lives.
+
+      While a result is live — not finished, cancelled, failed, or destroyed —
+      the connection refuses new queries with ERROR_RESOURCE_IN_USE and holds
+      the query's transaction open, so finish or destroy it promptly. A
+      statement that changes something (PRAGMA, ALTER, ...) has not changed it
+      until the result has run to the end. Always destroy via `[[result_destroy]]`,
+      which is safe at any point in its life.
     cleanup_with: result_destroy
   data_chunk:
     description: |

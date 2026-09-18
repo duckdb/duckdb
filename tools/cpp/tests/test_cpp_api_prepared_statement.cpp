@@ -19,7 +19,7 @@ using namespace duckdb::cxx;
 // this must not assume a single chunk.
 std::vector<int64_t> CollectPreparedBigints(QueryResult result) {
 	std::vector<int64_t> rows;
-	while (auto chunk = result.FetchChunk()) {
+	while (auto chunk = result.Fetch()) {
 		auto view = chunk.GetVector(0).GetView();
 		for (idx_t i = 0; i < chunk.GetRowCount(); i++) {
 			REQUIRE(view.IsValid(i));
@@ -35,8 +35,8 @@ TEST_CASE("Stable C++API: PreparedStatement executes repeatedly", "[cpp_api][pre
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	conn.Execute("CREATE TABLE t(x BIGINT)").Drain();
-	conn.Execute("INSERT INTO t VALUES (1), (2), (3), (4)").Drain();
+	conn.Execute("CREATE TABLE t(x BIGINT)").Complete();
+	conn.Execute("INSERT INTO t VALUES (1), (2), (3), (4)").Complete();
 
 	// Value is move-only, so a parameter list is built by move rather than brace-init.
 	auto Params = [&conn](std::initializer_list<int64_t> values) {
@@ -84,7 +84,7 @@ TEST_CASE("Stable C++API: PreparedStatement reports plan reuse", "[cpp_api][prep
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	conn.Execute("CREATE TABLE t(x BIGINT)").Drain();
+	conn.Execute("CREATE TABLE t(x BIGINT)").Complete();
 
 	auto Prepare = [&conn](const char *sql, bool require_cacheable = false) {
 		auto iter = conn.ParseSQL(sql);
@@ -110,8 +110,8 @@ TEST_CASE("Stable C++API: PreparedStatement lifetimes", "[cpp_api][prepared_stat
 
 	SECTION("a result outlives the statement that made it") {
 		auto conn = db.Connect();
-		conn.Execute("CREATE TABLE t(x BIGINT)").Drain();
-		conn.Execute("INSERT INTO t VALUES (1), (2), (3), (4)").Drain();
+		conn.Execute("CREATE TABLE t(x BIGINT)").Complete();
+		conn.Execute("INSERT INTO t VALUES (1), (2), (3), (4)").Complete();
 
 		QueryResult result = [&]() {
 			auto iter = conn.ParseSQL("SELECT x FROM t ORDER BY x");
@@ -124,8 +124,8 @@ TEST_CASE("Stable C++API: PreparedStatement lifetimes", "[cpp_api][prepared_stat
 
 	SECTION("the statement outlives its connection") {
 		auto reader = db.Connect();
-		reader.Execute("CREATE TABLE t(x BIGINT)").Drain();
-		reader.Execute("INSERT INTO t VALUES (1), (2), (3), (4)").Drain();
+		reader.Execute("CREATE TABLE t(x BIGINT)").Complete();
+		reader.Execute("INSERT INTO t VALUES (1), (2), (3), (4)").Complete();
 
 		PreparedStatement prepared = [&]() {
 			auto conn = db.Connect();

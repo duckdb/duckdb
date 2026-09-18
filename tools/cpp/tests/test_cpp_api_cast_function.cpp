@@ -19,7 +19,7 @@ using namespace duckdb::cxx;
 // Collect a single VARCHAR column, asserting every row valid.
 std::vector<std::string> CollectCastStrings(QueryResult result) {
 	std::vector<std::string> out;
-	while (auto chunk = result.FetchChunk()) {
+	while (auto chunk = result.Fetch()) {
 		auto view = chunk.GetVector(0).GetView();
 		for (idx_t i = 0; i < chunk.GetRowCount(); i++) {
 			REQUIRE(view.IsValid(i));
@@ -32,7 +32,7 @@ std::vector<std::string> CollectCastStrings(QueryResult result) {
 // Collect a single INTEGER column, reading a NULL row as nullopt.
 std::vector<std::optional<int32_t>> CollectMaybeInts(QueryResult result) {
 	std::vector<std::optional<int32_t>> out;
-	while (auto chunk = result.FetchChunk()) {
+	while (auto chunk = result.Fetch()) {
 		auto view = chunk.GetVector(0).GetView();
 		for (idx_t i = 0; i < chunk.GetRowCount(); i++) {
 			if (!view.IsValid(i)) {
@@ -234,7 +234,7 @@ TEST_CASE("Stable C++API: cast function normal and try modes", "[cpp_api]") {
 
 	// A normal cast: the callback's exception aborts the query.
 	last_mode = CastMode::TRY;
-	REQUIRE_THROWS_AS(conn.Execute("SELECT CAST('not-a-temp' AS TEMPERATURE_CELSIUS)").Drain(), Exception);
+	REQUIRE_THROWS_AS(conn.Execute("SELECT CAST('not-a-temp' AS TEMPERATURE_CELSIUS)").Complete(), Exception);
 	REQUIRE(last_mode == CastMode::NORMAL);
 
 	// A try cast: the exception is swallowed and the row the callback left NULL is kept.
@@ -265,7 +265,7 @@ TEST_CASE("Stable C++API: cast function implicit cast cost", "[cpp_api]") {
 
 		REQUIRE(CollectMaybeInts(conn.Execute("SELECT reading(CAST('30 degrees celsius' AS TEMPERATURE_CELSIUS))")) ==
 		        std::vector<std::optional<int32_t>> {30});
-		REQUIRE_THROWS_AS(conn.Execute(probe).Drain(), Exception);
+		REQUIRE_THROWS_AS(conn.Execute(probe).Complete(), Exception);
 	}
 
 	// A non-negative cost makes the same cast available to the binder.

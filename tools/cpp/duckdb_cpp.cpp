@@ -120,6 +120,14 @@ struct HandleTraits<QueryResult> {
 	using handle = duckdb_v2_result_handle;
 };
 template <>
+struct HandleTraits<ResultStream> {
+	using handle = duckdb_v2_result_stream_handle;
+};
+template <>
+struct HandleTraits<ExecuteArgs> {
+	using handle = duckdb_v2_execute_args_handle;
+};
+template <>
 struct HandleTraits<ArrowImporter> {
 	using handle = duckdb_v2_arrow_importer_handle;
 };
@@ -712,21 +720,36 @@ auto Connection::Tokenize(std::string_view sql) const -> TokenList {
 	return list;
 }
 
-auto Connection::Execute(const SqlStatement &statement, const Value *parameters, idx_t parameter_count) -> QueryResult {
-	// Borrowed, not consumed: pass the handle without releasing it, so the
-	// caller's SqlStatement keeps ownership and can be executed again.
+ExecuteArgs::ExecuteArgs() {
+	duckdb_v2_execute_args_handle args = nullptr;
+	CheckedAPICall(duckdb_v2_execute_args_create, &args);
+	impl = args;
+}
+
+ExecuteArgs::ExecuteArgs(void *impl) : detail::Handle<ExecuteArgs>(impl) {
+}
+
+ExecuteArgs::~ExecuteArgs() {
+	auto _h = handle();
+	duckdb_v2_execute_args_destroy(&_h);
+}
+
+auto ExecuteArgs::SetParameters(const Value *parameters, idx_t parameter_count) -> ExecuteArgs & {
 	std::vector<duckdb_v2_value_handle> values;
 	values.reserve(parameter_count);
 	for (idx_t i = 0; i < parameter_count; i++) {
 		values.push_back(parameters[i].handle());
 	}
-	duckdb_v2_result_handle result = nullptr;
-	CheckedAPICall(duckdb_v2_statement_execute, handle(), statement.handle(), nullptr,
-	               parameter_count ? values.data() : nullptr, parameter_count, &result);
-	return detail::Factory::Make<QueryResult>(result);
+	CheckedAPICall(duckdb_v2_execute_args_set_statement_params, handle(), nullptr,
+	               parameter_count ? values.data() : nullptr, parameter_count);
+	return *this;
 }
 
-auto Connection::Execute(const SqlStatement &statement, const std::vector<NamedParam> &parameters) -> QueryResult {
+auto ExecuteArgs::SetParameters(const std::vector<Value> &parameters) -> ExecuteArgs & {
+	return SetParameters(parameters.data(), parameters.size());
+}
+
+auto ExecuteArgs::SetParameters(const std::vector<NamedParam> &parameters) -> ExecuteArgs & {
 	// Split into the C API's parallel arrays; an empty name crosses as the positional
 	// {NULL, 0} view (mirrors Context::CreateType).
 	std::vector<duckdb_v2_identifier_t> names;
@@ -737,10 +760,39 @@ auto Connection::Execute(const SqlStatement &statement, const std::vector<NamedP
 		names.push_back(param.name.empty() ? duckdb_v2_identifier_t {nullptr, 0} : ToStr(param.name));
 		values.push_back(param.value.handle());
 	}
+	CheckedAPICall(duckdb_v2_execute_args_set_statement_params, handle(), names.empty() ? nullptr : names.data(),
+	               values.empty() ? nullptr : values.data(), static_cast<idx_t>(parameters.size()));
+	return *this;
+}
+
+// ResultEagerness mirrors DUCKDB_V2_RESULT_EAGERNESS numerically; every member is pinned.
+static_assert(static_cast<uint8_t>(ResultEagerness::AUTO) == DUCKDB_V2_RESULT_EAGERNESS_AUTO,
+              "ResultEagerness::AUTO must mirror DUCKDB_V2_RESULT_EAGERNESS_AUTO");
+static_assert(static_cast<uint8_t>(ResultEagerness::FORCED) == DUCKDB_V2_RESULT_EAGERNESS_FORCED,
+              "ResultEagerness::FORCED must mirror DUCKDB_V2_RESULT_EAGERNESS_FORCED");
+
+auto ExecuteArgs::SetEagerness(ResultEagerness eagerness) -> ExecuteArgs & {
+	CheckedAPICall(duckdb_v2_execute_args_set_eagerness, handle(), static_cast<DUCKDB_V2_RESULT_EAGERNESS>(eagerness));
+	return *this;
+}
+
+auto Connection::Execute(const SqlStatement &statement, const ExecuteArgs &args) -> QueryResult {
+	// Borrowed, not consumed: the caller's statement and args can be executed again.
 	duckdb_v2_result_handle result = nullptr;
-	CheckedAPICall(duckdb_v2_statement_execute, handle(), statement.handle(), names.empty() ? nullptr : names.data(),
-	               values.empty() ? nullptr : values.data(), static_cast<idx_t>(parameters.size()), &result);
+	CheckedAPICall(duckdb_v2_statement_execute, handle(), statement.handle(), args.handle(), &result);
 	return detail::Factory::Make<QueryResult>(result);
+}
+
+auto Connection::Execute(const SqlStatement &statement, const Value *parameters, idx_t parameter_count) -> QueryResult {
+	ExecuteArgs args;
+	args.SetParameters(parameters, parameter_count);
+	return Execute(statement, args);
+}
+
+auto Connection::Execute(const SqlStatement &statement, const std::vector<NamedParam> &parameters) -> QueryResult {
+	ExecuteArgs args;
+	args.SetParameters(parameters);
+	return Execute(statement, args);
 }
 
 auto Connection::Execute(const SqlStatement &statement) -> QueryResult {
@@ -776,33 +828,22 @@ auto Connection::Prepare(const SqlStatement &statement, bool require_cacheable) 
 	return detail::Factory::Make<PreparedStatement>(prepared);
 }
 
-auto PreparedStatement::Execute(const Value *parameters, idx_t parameter_count) -> QueryResult {
-	std::vector<duckdb_v2_value_handle> values;
-	values.reserve(parameter_count);
-	for (idx_t i = 0; i < parameter_count; i++) {
-		values.push_back(parameters[i].handle());
-	}
+auto PreparedStatement::Execute(const ExecuteArgs &args) -> QueryResult {
 	duckdb_v2_result_handle result = nullptr;
-	CheckedAPICall(duckdb_v2_prepared_statement_execute, handle(), nullptr, parameter_count ? values.data() : nullptr,
-	               parameter_count, &result);
+	CheckedAPICall(duckdb_v2_prepared_statement_execute, handle(), args.handle(), &result);
 	return detail::Factory::Make<QueryResult>(result);
 }
 
+auto PreparedStatement::Execute(const Value *parameters, idx_t parameter_count) -> QueryResult {
+	ExecuteArgs args;
+	args.SetParameters(parameters, parameter_count);
+	return Execute(args);
+}
+
 auto PreparedStatement::Execute(const std::vector<NamedParam> &parameters) -> QueryResult {
-	// Split into the C API's parallel arrays; an empty name crosses as the positional
-	// {NULL, 0} view (mirrors Connection::Execute).
-	std::vector<duckdb_v2_identifier_t> names;
-	std::vector<duckdb_v2_value_handle> values;
-	names.reserve(parameters.size());
-	values.reserve(parameters.size());
-	for (const auto &param : parameters) {
-		names.push_back(param.name.empty() ? duckdb_v2_identifier_t {nullptr, 0} : ToStr(param.name));
-		values.push_back(param.value.handle());
-	}
-	duckdb_v2_result_handle result = nullptr;
-	CheckedAPICall(duckdb_v2_prepared_statement_execute, handle(), names.empty() ? nullptr : names.data(),
-	               values.empty() ? nullptr : values.data(), static_cast<idx_t>(parameters.size()), &result);
-	return detail::Factory::Make<QueryResult>(result);
+	ExecuteArgs args;
+	args.SetParameters(parameters);
+	return Execute(args);
 }
 
 auto PreparedStatement::Execute() -> QueryResult {
@@ -2232,6 +2273,7 @@ ColumnDataCollection::ColumnDataCollection(const Connection &conn, const std::ve
 	CheckedAPICall(duckdb_v2_column_data_collection_create_with_connection, conn.handle(), type_pointers.data(),
 	               type_pointers.size(), &collection);
 	impl = collection;
+	owned = true;
 }
 
 ColumnDataCollection::ColumnDataCollection(const Context &ctx, const std::vector<LogicalType> &types) {
@@ -2240,14 +2282,18 @@ ColumnDataCollection::ColumnDataCollection(const Context &ctx, const std::vector
 	CheckedAPICall(duckdb_v2_column_data_collection_create_with_context, ctx.handle(), type_pointers.data(),
 	               type_pointers.size(), &collection);
 	impl = collection;
+	owned = true;
 }
 
-ColumnDataCollection::ColumnDataCollection(void *impl) : detail::Handle<ColumnDataCollection>(impl) {
+ColumnDataCollection::ColumnDataCollection(void *impl, bool owned)
+    : detail::Handle<ColumnDataCollection>(impl), owned(owned) {
 }
 
 ColumnDataCollection::~ColumnDataCollection() {
-	auto _h = handle();
-	duckdb_v2_column_data_collection_destroy(&_h);
+	if (owned) {
+		auto _h = handle();
+		duckdb_v2_column_data_collection_destroy(&_h);
+	}
 }
 
 auto ColumnDataCollection::GetRowCount() const -> idx_t {
@@ -2385,45 +2431,68 @@ auto QueryResult::GetStatementType() const -> StatementType {
 	return static_cast<StatementType>(type);
 }
 
-// StepStatus mirrors DUCKDB_V2_RESULT_STEP_STATUS numerically; trip here if
-// either side is renumbered.
-static_assert(static_cast<uint8_t>(QueryResult::StepStatus::WAITING) == DUCKDB_V2_RESULT_STEP_STATUS_WAITING,
-              "StepStatus must mirror DUCKDB_V2_RESULT_STEP_STATUS");
-static_assert(static_cast<uint8_t>(QueryResult::StepStatus::CHUNK) == DUCKDB_V2_RESULT_STEP_STATUS_CHUNK,
-              "StepStatus must mirror DUCKDB_V2_RESULT_STEP_STATUS");
-static_assert(static_cast<uint8_t>(QueryResult::StepStatus::FINISHED) == DUCKDB_V2_RESULT_STEP_STATUS_FINISHED,
-              "StepStatus must mirror DUCKDB_V2_RESULT_STEP_STATUS");
-static_assert(static_cast<uint8_t>(QueryResult::StepStatus::CANCELLED) == DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED,
-              "StepStatus must mirror DUCKDB_V2_RESULT_STEP_STATUS");
+// ResultStatus mirrors DUCKDB_V2_RESULT_STATUS numerically; trip here if either side is renumbered.
+#define DUCKDB_CPP_ASSERT_RESULT_STATUS(member)                                                                        \
+	static_assert(static_cast<uint8_t>(ResultStatus::member) == DUCKDB_V2_RESULT_STATUS_##member,                      \
+	              "ResultStatus::" #member " must mirror DUCKDB_V2_RESULT_STATUS_" #member)
+DUCKDB_CPP_ASSERT_RESULT_STATUS(NOT_READY);
+DUCKDB_CPP_ASSERT_RESULT_STATUS(READY);
+DUCKDB_CPP_ASSERT_RESULT_STATUS(BLOCKED);
+DUCKDB_CPP_ASSERT_RESULT_STATUS(NO_TASKS_AVAILABLE);
+DUCKDB_CPP_ASSERT_RESULT_STATUS(FINISHED);
+DUCKDB_CPP_ASSERT_RESULT_STATUS(CANCELLED);
+#undef DUCKDB_CPP_ASSERT_RESULT_STATUS
 
-auto QueryResult::Step() -> StepResult {
-	duckdb_v2_data_chunk_handle chunk = nullptr;
-	DUCKDB_V2_RESULT_STEP_STATUS status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
-	CheckedAPICall(duckdb_v2_result_step, handle(), &chunk, &status);
-	return StepResult {static_cast<StepStatus>(status), detail::Factory::Make<DataChunk>(chunk, chunk != nullptr)};
+auto QueryResult::Step() -> ResultStatus {
+	DUCKDB_V2_RESULT_STATUS status = DUCKDB_V2_RESULT_STATUS_NOT_READY;
+	CheckedAPICall(duckdb_v2_result_step, handle(), &status);
+	return static_cast<ResultStatus>(status);
+}
+
+auto QueryResult::Poll() -> ResultStatus {
+	DUCKDB_V2_RESULT_STATUS status = DUCKDB_V2_RESULT_STATUS_NOT_READY;
+	CheckedAPICall(duckdb_v2_result_poll, handle(), &status);
+	return static_cast<ResultStatus>(status);
 }
 
 auto QueryResult::Wait() -> void {
 	CheckedAPICall(duckdb_v2_result_wait, handle());
 }
 
-auto QueryResult::FetchChunk() -> DataChunk {
+auto QueryResult::Materialize() -> void {
+	CheckedAPICall(duckdb_v2_result_materialize, handle());
+}
+
+auto QueryResult::Complete() -> void {
+	CheckedAPICall(duckdb_v2_result_complete, handle());
+}
+
+auto QueryResult::Fetch() -> DataChunk {
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	CheckedAPICall(duckdb_v2_result_fetch_chunk, handle(), &chunk);
-	// An empty handle marks end-of-stream.
+	CheckedAPICall(duckdb_v2_result_fetch, handle(), &chunk);
 	return detail::Factory::Make<DataChunk>(chunk, chunk != nullptr);
 }
 
-auto QueryResult::Drain() -> idx_t {
-	idx_t rows_changed = 0;
-	CheckedAPICall(duckdb_v2_result_drain, handle(), &rows_changed);
-	return rows_changed;
+auto QueryResult::GetCollection() -> ColumnDataCollection {
+	duckdb_v2_column_data_collection_handle collection = nullptr;
+	CheckedAPICall(duckdb_v2_result_get_collection, handle(), &collection);
+	return detail::Factory::Make<ColumnDataCollection>(collection, false);
+}
+
+auto QueryResult::TakeCollection() -> ColumnDataCollection {
+	duckdb_v2_column_data_collection_handle collection = nullptr;
+	CheckedAPICall(duckdb_v2_result_take_collection, handle(), &collection);
+	return detail::Factory::Make<ColumnDataCollection>(collection, true);
+}
+
+auto QueryResult::CanStream() const -> bool {
+	bool can_stream = false;
+	CheckedAPICall(duckdb_v2_result_can_stream, handle(), &can_stream);
+	return can_stream;
 }
 
 auto QueryResult::RenderBox(idx_t max_rows, idx_t max_width, idx_t max_col_width, const std::string &null_value,
                             idx_t render_mode, idx_t limit) -> std::string {
-	auto raw = handle();
-	this->release();
 	std::string out;
 
 	auto sink = [](duckdb_v2_str text, void *user_data, duckdb_v2_error_info_handle *err) {
@@ -2434,7 +2503,7 @@ auto QueryResult::RenderBox(idx_t max_rows, idx_t max_width, idx_t max_col_width
 		});
 	};
 
-	CheckedAPICall(duckdb_v2_result_render_box, &raw, max_rows, max_width, max_col_width, ToStr(null_value),
+	CheckedAPICall(duckdb_v2_result_render_box, handle(), max_rows, max_width, max_col_width, ToStr(null_value),
 	               render_mode, limit, sink, &out);
 	return out;
 }
@@ -2454,6 +2523,70 @@ auto QueryResult::ToArrowStream(idx_t batch_size) -> ArrowStream {
 		throw;
 	}
 	return detail::Factory::Make<ArrowStream>(stream);
+}
+
+ResultStream::ResultStream(void *impl) : detail::Handle<ResultStream>(impl) {
+}
+
+ResultStream::ResultStream(QueryResult &&result) : detail::Handle<ResultStream>(nullptr) {
+	// The C call consumes the result on success and failure alike, so detach before it runs.
+	auto raw = static_cast<duckdb_v2_result_handle>(result.Detach());
+	duckdb_v2_result_stream_handle stream = nullptr;
+	CheckedAPICall(duckdb_v2_result_stream_create, &raw, &stream);
+	impl = stream;
+}
+
+ResultStream::~ResultStream() {
+	auto _h = handle();
+	duckdb_v2_result_stream_destroy(&_h);
+}
+
+auto ResultStream::GetSchema() const -> Schema {
+	duckdb_v2_schema_handle schema = nullptr;
+	CheckedAPICall(duckdb_v2_result_stream_get_schema, handle(), &schema);
+	return detail::Factory::Make<Schema>(schema);
+}
+
+auto ResultStream::GetResultType() const -> ResultType {
+	DUCKDB_V2_RESULT_TYPE type = DUCKDB_V2_RESULT_TYPE_QUERY_RESULT;
+	CheckedAPICall(duckdb_v2_result_stream_get_result_type, handle(), &type);
+	return static_cast<ResultType>(type);
+}
+
+auto ResultStream::GetStatementType() const -> StatementType {
+	DUCKDB_V2_STATEMENT_TYPE type = DUCKDB_V2_STATEMENT_TYPE_INVALID;
+	CheckedAPICall(duckdb_v2_result_stream_get_statement_type, handle(), &type);
+	return static_cast<StatementType>(type);
+}
+
+auto ResultStream::Step() -> ResultStatus {
+	DUCKDB_V2_RESULT_STATUS status = DUCKDB_V2_RESULT_STATUS_NOT_READY;
+	CheckedAPICall(duckdb_v2_result_stream_step, handle(), &status);
+	return static_cast<ResultStatus>(status);
+}
+
+auto ResultStream::Poll() -> ResultStatus {
+	DUCKDB_V2_RESULT_STATUS status = DUCKDB_V2_RESULT_STATUS_NOT_READY;
+	CheckedAPICall(duckdb_v2_result_stream_poll, handle(), &status);
+	return static_cast<ResultStatus>(status);
+}
+
+auto ResultStream::Wait() -> void {
+	CheckedAPICall(duckdb_v2_result_stream_wait, handle());
+}
+
+auto ResultStream::TryFetch(DataChunk &out_chunk) -> ResultStatus {
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	DUCKDB_V2_RESULT_STATUS status = DUCKDB_V2_RESULT_STATUS_NOT_READY;
+	CheckedAPICall(duckdb_v2_result_stream_try_fetch, handle(), &chunk, &status);
+	out_chunk = detail::Factory::Make<DataChunk>(chunk, chunk != nullptr);
+	return static_cast<ResultStatus>(status);
+}
+
+auto ResultStream::Fetch() -> DataChunk {
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	CheckedAPICall(duckdb_v2_result_stream_fetch, handle(), &chunk);
+	return detail::Factory::Make<DataChunk>(chunk, chunk != nullptr);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -5022,7 +5155,7 @@ auto CopyFunction::CopyToBatchInput::TakeBatch() -> ColumnDataCollection {
 	duckdb_v2_column_data_collection_handle collection = nullptr;
 	CheckedAPICall(duckdb_v2_copy_to_batch_take_input, static_cast<duckdb_v2_copy_to_batch_info_handle>(args),
 	               &collection);
-	return detail::Factory::Make<ColumnDataCollection>(collection);
+	return detail::Factory::Make<ColumnDataCollection>(collection, true);
 }
 
 auto CopyFunction::CopyToBatchInput::GetContext() const -> Context {
@@ -5981,7 +6114,7 @@ void Appender::Flush() {
 		return;
 	}
 	try {
-		connection->Execute(*statement).Drain();
+		connection->Execute(*statement).Complete();
 	} catch (const Exception &ex) {
 		// A busy connection or an interrupted run keeps the rows so the flush can be retried; any other failure drops
 		// them, so a retry does not re-run the same failing statement over the same rows.

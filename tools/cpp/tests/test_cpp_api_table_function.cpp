@@ -25,7 +25,7 @@ using namespace duckdb::cxx;
 // Collect a single BIGINT column, asserting every row valid.
 std::vector<int64_t> CollectBigints(QueryResult result) {
 	std::vector<int64_t> out;
-	while (auto chunk = result.FetchChunk()) {
+	while (auto chunk = result.Fetch()) {
 		auto view = chunk.GetVector(0).GetView();
 		for (idx_t i = 0; i < chunk.GetRowCount(); i++) {
 			REQUIRE(view.IsValid(i));
@@ -38,7 +38,7 @@ std::vector<int64_t> CollectBigints(QueryResult result) {
 // Collect a single VARCHAR column, asserting every row valid.
 std::vector<std::string> CollectStrings(QueryResult result) {
 	std::vector<std::string> out;
-	while (auto chunk = result.FetchChunk()) {
+	while (auto chunk = result.Fetch()) {
 		auto view = chunk.GetVector(0).GetView();
 		for (idx_t i = 0; i < chunk.GetRowCount(); i++) {
 			REQUIRE(view.IsValid(i));
@@ -482,7 +482,7 @@ TEST_CASE("Stable C++API: expression accessors refuse other node types and error
 
 	REQUIRE(CollectBigints(conn.Execute("SELECT count(*) FROM cpp_misuse(5) WHERE i < 3")) == std::vector<int64_t> {3});
 	REQUIRE(misuse_refused);
-	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT count(*) FROM cpp_throwing(5) WHERE i < 3").Drain(), Exception,
+	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT count(*) FROM cpp_throwing(5) WHERE i < 3").Complete(), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
 
@@ -581,9 +581,9 @@ TEST_CASE("Stable C++API: table function callbacks report failure by throwing", 
 	    .SetExecCallback(ThrowingExec);
 	bad_exec.Register();
 
-	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT * FROM cpp_bad_bind()").Drain(), Exception,
+	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT * FROM cpp_bad_bind()").Complete(), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
-	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT * FROM cpp_bad_exec()").Drain(), Exception,
+	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT * FROM cpp_bad_exec()").Complete(), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
 
@@ -629,7 +629,7 @@ namespace {
 // Collect one VARCHAR column by index; EXPLAIN puts the rendered plan in column 1.
 std::vector<std::string> CollectStringsAt(QueryResult result, idx_t column) {
 	std::vector<std::string> out;
-	while (auto chunk = result.FetchChunk()) {
+	while (auto chunk = result.Fetch()) {
 		auto view = chunk.GetVector(column).GetView();
 		for (idx_t i = 0; i < chunk.GetRowCount(); i++) {
 			REQUIRE(view.IsValid(i));
@@ -651,7 +651,7 @@ bool ExplainContains(Connection &conn, const std::string &sql, const std::string
 // The error a query fails with; asserts that it does fail.
 std::string QueryError(Connection &conn, const std::string &sql) {
 	try {
-		conn.Execute(sql).Drain();
+		conn.Execute(sql).Complete();
 	} catch (const Exception &ex) {
 		return ex.what();
 	}
@@ -1000,7 +1000,7 @@ TEST_CASE("Stable C++API: table function partition data restores batch order", "
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	conn.Execute("SET threads=2").Drain();
+	conn.Execute("SET threads=2").Complete();
 	RegisterBatchOrder(conn, "cpp_batch_order", true);
 	RegisterBatchOrder(conn, "cpp_batch_order_nopart", false);
 

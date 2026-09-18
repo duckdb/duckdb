@@ -18,7 +18,7 @@ using namespace duckdb::cxx;
 // Collect a single BIGINT column, asserting every row valid.
 std::vector<int64_t> CollectAppended(QueryResult result) {
 	std::vector<int64_t> out;
-	while (auto chunk = result.FetchChunk()) {
+	while (auto chunk = result.Fetch()) {
 		auto view = chunk.GetVector(0).GetView();
 		for (idx_t i = 0; i < chunk.GetRowCount(); i++) {
 			REQUIRE(view.IsValid(i));
@@ -46,7 +46,7 @@ TEST_CASE("Stable C++API: appender buffers and flushes into a table", "[cpp_api]
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	conn.Execute("CREATE TABLE t (v BIGINT)").Drain();
+	conn.Execute("CREATE TABLE t (v BIGINT)").Complete();
 
 	Appender appender(conn, "t");
 	REQUIRE(appender.ColumnTypes().size() == 1);
@@ -75,7 +75,7 @@ TEST_CASE("Stable C++API: appender buffers across several chunks before flushing
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	conn.Execute("CREATE TABLE t (v BIGINT)").Drain();
+	conn.Execute("CREATE TABLE t (v BIGINT)").Complete();
 
 	Appender appender(conn, "t");
 	for (int64_t i = 0; i < 5; i++) {
@@ -90,7 +90,7 @@ TEST_CASE("Stable C++API: appender Clear drops the buffer without writing", "[cp
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	conn.Execute("CREATE TABLE t (v BIGINT)").Drain();
+	conn.Execute("CREATE TABLE t (v BIGINT)").Complete();
 
 	Appender appender(conn, "t");
 	AppendValues(appender, {1, 2});
@@ -108,7 +108,7 @@ TEST_CASE("Stable C++API: appender destruction drops unflushed rows", "[cpp_api]
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	conn.Execute("CREATE TABLE t (v BIGINT)").Drain();
+	conn.Execute("CREATE TABLE t (v BIGINT)").Complete();
 
 	// Named explicitly, so the test can ask for the buffer by name after the appender is gone.
 	std::vector<LogicalType> types;
@@ -123,14 +123,14 @@ TEST_CASE("Stable C++API: appender destruction drops unflushed rows", "[cpp_api]
 
 	// The scan the appender left behind outlives it, but declines now that the buffer is gone -- rather than
 	// reading through a dangling pointer.
-	REQUIRE_THROWS_AS(conn.Execute("SELECT * FROM gone_rows").Drain(), Exception);
+	REQUIRE_THROWS_AS(conn.Execute("SELECT * FROM gone_rows").Complete(), Exception);
 }
 
 TEST_CASE("Stable C++API: appender with an explicit query", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	conn.Execute("CREATE TABLE t (v BIGINT, tag VARCHAR DEFAULT 'seen')").Drain();
+	conn.Execute("CREATE TABLE t (v BIGINT, tag VARCHAR DEFAULT 'seen')").Complete();
 
 	// A subset of columns, which is what the table constructor cannot express.
 	std::vector<LogicalType> types;
@@ -157,7 +157,7 @@ TEST_CASE("Stable C++API: appender is scoped to its connection", "[cpp_api]") {
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
 	auto other = db.Connect();
-	conn.Execute("CREATE TABLE t (v BIGINT)").Drain();
+	conn.Execute("CREATE TABLE t (v BIGINT)").Complete();
 
 	std::vector<LogicalType> types;
 	types.push_back(conn.ParseType("BIGINT"));
@@ -165,14 +165,14 @@ TEST_CASE("Stable C++API: appender is scoped to its connection", "[cpp_api]") {
 
 	// The buffer's name resolves on the appender's connection only.
 	REQUIRE(CollectAppended(conn.Execute("SELECT count(*)::BIGINT FROM scoped_rows")) == std::vector<int64_t> {0});
-	REQUIRE_THROWS_AS(other.Execute("SELECT * FROM scoped_rows").Drain(), Exception);
+	REQUIRE_THROWS_AS(other.Execute("SELECT * FROM scoped_rows").Complete(), Exception);
 }
 
 TEST_CASE("Stable C++API: appender refuses a mismatching chunk", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	conn.Execute("CREATE TABLE t (v BIGINT)").Drain();
+	conn.Execute("CREATE TABLE t (v BIGINT)").Complete();
 
 	Appender appender(conn, "t");
 

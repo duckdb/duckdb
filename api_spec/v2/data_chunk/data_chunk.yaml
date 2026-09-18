@@ -3,13 +3,13 @@ module: data_chunk
 # Construct and inspect data chunks.
 #
 # A chunk is a set of vectors of equal logical length plus a row-count
-# cardinality. It does not carry types: the column types of a streamed chunk
-# come from the producing result's schema (result_get_schema, in the
-# query_result module).
+# cardinality. It does not carry types: the column types of a chunk read from a
+# query come from that query's schema (result_get_schema or
+# result_stream_get_schema, in the query_result module).
 #
-# Chunks produced by a streaming result (result_step / result_fetch_chunk, in
-# the query_result module) are caller-owned and must be destroyed via
-# data_chunk_destroy. Vectors borrowed with data_chunk_get_vector stay valid
+# Chunks read from a query (result_fetch, result_stream_fetch and
+# result_stream_try_fetch, in the query_result module) are caller-owned and must
+# be destroyed via data_chunk_destroy. Vectors borrowed with data_chunk_get_vector stay valid
 # for the lifetime of the chunk and are read via vector_get_view. The row count
 # for top-level vectors is data_chunk_get_size; it lives on the chunk, not on
 # the view. Nested children take their row count from the parent's geometry

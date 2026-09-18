@@ -415,7 +415,7 @@ ArrowStreamStats DrainArrowStream(ArrowArrayStream &stream) {
 bool ArrowQueryBool(duckdb_v2_connection_handle conn, const char *sql) {
 	duckdb_v2_result_handle result = nullptr;
 	REQUIRE(Query(conn, sql, &result) == DUCKDB_V2_ERROR_NONE);
-	auto chunk = StepChunk(result);
+	auto chunk = FetchChunk(result);
 	REQUIRE(chunk != nullptr);
 	duckdb_v2_vector_handle vec = nullptr;
 	REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -974,7 +974,7 @@ TEST_CASE("V2 arrow: a stream over a partially consumed result covers the remain
 
 	duckdb_v2_result_handle result = nullptr;
 	REQUIRE(Query(fx.conn, "SELECT i FROM range(1000) t(i)", &result) == DUCKDB_V2_ERROR_NONE);
-	auto chunk = StepChunk(result);
+	auto chunk = FetchChunk(result);
 	REQUIRE(chunk != nullptr);
 	idx_t consumed = 0;
 	REQUIRE(duckdb_v2_data_chunk_get_size(chunk, &consumed, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -1002,6 +1002,75 @@ TEST_CASE("V2 arrow: an empty result gives a schema and no rows", "[capi_v2][arr
 	REQUIRE(stats.rows == 0);
 	REQUIRE(stats.arrays == 0);
 	stream.release(&stream);
+}
+
+TEST_CASE("V2 arrow: an expanding statement streams its row-producing statement", "[capi_v2][arrow]") {
+	EnvFixture fx;
+
+	ExecSQL(fx.conn, "CREATE TABLE sales (city VARCHAR, year INT, amount INT)");
+	ExecSQL(fx.conn,
+	        "INSERT INTO sales VALUES ('ams', 2023, 10), ('ams', 2024, 20), ('rtm', 2023, 30), ('rtm', 2024, 40)");
+
+	ArrowArrayStream stream {};
+	REQUIRE(ArrowStreamFor(fx.conn, "PIVOT sales ON year USING sum(amount)", 0, &stream) == DUCKDB_V2_ERROR_NONE);
+
+	ArrowSchema schema {};
+	REQUIRE(stream.get_schema(&stream, &schema) == 0);
+	REQUIRE(schema.n_children == 3);
+	REQUIRE(std::string(schema.children[0]->name) == "city");
+	schema.release(&schema);
+
+	auto stats = DrainArrowStream(stream);
+	REQUIRE(stats.rows == 2);
+	stream.release(&stream);
+}
+
+TEST_CASE("V2 arrow: an eager statement exports through the cursor", "[capi_v2][arrow]") {
+	EnvFixture fx;
+	ExecSQL(fx.conn, "CREATE TABLE t (i INTEGER)");
+
+	duckdb_v2_result_handle result = nullptr;
+	REQUIRE(Query(fx.conn, "INSERT INTO t VALUES (1), (2), (3) RETURNING i", &result) == DUCKDB_V2_ERROR_NONE);
+	bool can_stream = true;
+	REQUIRE(duckdb_v2_result_can_stream(result, &can_stream, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE_FALSE(can_stream);
+
+	ArrowArrayStream stream {};
+	REQUIRE(duckdb_v2_result_to_arrow_stream(&result, 0, &stream, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(result == nullptr);
+
+	ArrowSchema schema {};
+	REQUIRE(stream.get_schema(&stream, &schema) == 0);
+	REQUIRE(schema.n_children == 1);
+	REQUIRE(std::string(schema.children[0]->name) == "i");
+	schema.release(&schema);
+
+	auto stats = DrainArrowStream(stream);
+	REQUIRE(stats.rows == 3);
+	stream.release(&stream);
+}
+
+TEST_CASE("V2 arrow: a cancelled expanding statement surfaces from the export", "[capi_v2][arrow]") {
+	EnvFixture fx;
+	ExecSQL(fx.conn, "CREATE TABLE t (i INTEGER)");
+	ExecSQL(fx.conn, "INSERT INTO t SELECT * FROM range(1000)");
+
+	duckdb_v2_result_handle result = nullptr;
+	REQUIRE(Query(fx.conn, "ALTER TABLE t ADD COLUMN c DOUBLE DEFAULT random()", &result) == DUCKDB_V2_ERROR_NONE);
+	// The export steps the group to reach the row-producing statement, so the cancellation lands
+	// before there is any schema to cache.
+	REQUIRE(duckdb_v2_connection_interrupt(fx.conn, nullptr) == DUCKDB_V2_ERROR_NONE);
+
+	ArrowArrayStream stream {};
+	auto rc = duckdb_v2_result_to_arrow_stream(&result, 0, &stream, nullptr);
+	REQUIRE(rc == DUCKDB_V2_ERROR_RUNTIME_INTERRUPT);
+	REQUIRE(result == nullptr);
+	REQUIRE(stream.release == nullptr);
+
+	duckdb_v2_result_handle after = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT 1", &after) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(DrainRowCount(after) == 1);
+	duckdb_v2_result_destroy(&after);
 }
 
 TEST_CASE("V2 arrow: the stream owns the connection until released", "[capi_v2][arrow]") {

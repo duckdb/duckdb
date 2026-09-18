@@ -223,7 +223,7 @@ std::vector<int64_t> ReplQueryI64(duckdb_v2_connection_handle conn, const char *
 	duckdb_v2_result_handle result = nullptr;
 	REQUIRE(Query(conn, sql, &result) == DUCKDB_V2_ERROR_NONE);
 	std::vector<int64_t> out;
-	while (auto chunk = StepChunk(result)) {
+	while (auto chunk = FetchChunk(result)) {
 		idx_t size = 0;
 		duckdb_v2_data_chunk_get_size(chunk, &size, nullptr);
 		duckdb_v2_vector_handle vec = nullptr;
@@ -239,28 +239,12 @@ std::vector<int64_t> ReplQueryI64(duckdb_v2_connection_handle conn, const char *
 	return out;
 }
 
-// Runs a query to exhaustion, returning the code the failure surfaced with.
+// Runs a query to completion, returning the code the failure surfaced with.
 DUCKDB_V2_ERROR ReplQueryError(duckdb_v2_connection_handle conn, const char *sql) {
 	duckdb_v2_result_handle result = nullptr;
 	auto rc = Query(conn, sql, &result);
-	if (rc != DUCKDB_V2_ERROR_NONE) {
-		duckdb_v2_result_destroy(&result);
-		return rc;
-	}
-	auto status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
-	while (rc == DUCKDB_V2_ERROR_NONE) {
-		duckdb_v2_data_chunk_handle chunk = nullptr;
-		rc = duckdb_v2_result_step(result, &chunk, &status, nullptr);
-		if (chunk) {
-			duckdb_v2_data_chunk_destroy(&chunk);
-		}
-		if (rc != DUCKDB_V2_ERROR_NONE || status == DUCKDB_V2_RESULT_STEP_STATUS_FINISHED ||
-		    status == DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED) {
-			break;
-		}
-		if (status == DUCKDB_V2_RESULT_STEP_STATUS_WAITING) {
-			rc = duckdb_v2_result_wait(result, nullptr);
-		}
+	if (rc == DUCKDB_V2_ERROR_NONE) {
+		rc = duckdb_v2_result_complete(result, nullptr);
 	}
 	duckdb_v2_result_destroy(&result);
 	return rc;
@@ -672,7 +656,7 @@ TEST_CASE("V2 replacement scan: a prepared collection claim caches its borrow", 
 	REQUIRE(reuses);
 
 	duckdb_v2_result_handle r = nullptr;
-	REQUIRE(duckdb_v2_prepared_statement_execute(prepared, nullptr, nullptr, 0, &r, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(ExecutePreparedWithParams(prepared, nullptr, nullptr, 0, &r, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(DrainRowCount(r) == 2);
 	duckdb_v2_result_destroy(&r);
 

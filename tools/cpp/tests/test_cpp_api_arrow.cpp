@@ -84,7 +84,7 @@ TEST_CASE("Stable C++API: ArrowStream export", "[cpp_api][arrow]") {
 			REQUIRE_THROWS_MATCHES(conn.Execute("SELECT 1"), Exception, HasErrorCode(DUCKDB_V2_ERROR_RESOURCE_IN_USE));
 		}
 		// Destroying it releases the stream, which frees the connection even undrained.
-		REQUIRE(conn.Execute("SELECT 1").Drain() == 0);
+		REQUIRE(ChangedRows(conn.Execute("SELECT 1")) == 0);
 	}
 
 	SECTION("Detach hands the stream over") {
@@ -188,7 +188,7 @@ TEST_CASE("Stable C++API: ArrowExporter and ArrowImporter round-trip", "[cpp_api
 	function.GetSignature().AddParameter("x", integer).SetReturnType(integer);
 	function.Register();
 
-	conn.Execute("SELECT cpp_arrow_probe(1)").Drain();
+	conn.Execute("SELECT cpp_arrow_probe(1)").Complete();
 	REQUIRE(observed_count == 1);
 	REQUIRE(observed_names == "a");
 	REQUIRE(observed_first_type == "BIGINT");

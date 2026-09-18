@@ -52,24 +52,12 @@ int64_t RunCopy(duckdb_v2_connection_handle conn, const std::string &sql) {
 }
 
 // Runs a statement expected to fail, returning the code it fails with: either straight from the execute call, or
-// while stepping the result when the failure only surfaces during execution.
+// from running the result when the failure only surfaces during execution.
 DUCKDB_V2_ERROR RunFailingCopy(duckdb_v2_connection_handle conn, const std::string &sql) {
 	duckdb_v2_result_handle result = nullptr;
 	auto rc = Query(conn, sql.c_str(), &result);
-	if (rc != DUCKDB_V2_ERROR_NONE) {
-		duckdb_v2_result_destroy(&result);
-		return rc;
-	}
-	auto status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
-	for (int i = 0; i < 100000 && rc == DUCKDB_V2_ERROR_NONE && status != DUCKDB_V2_RESULT_STEP_STATUS_FINISHED; i++) {
-		duckdb_v2_data_chunk_handle chunk = nullptr;
-		rc = duckdb_v2_result_step(result, &chunk, &status, nullptr);
-		if (chunk) {
-			duckdb_v2_data_chunk_destroy(&chunk);
-		}
-		if (rc == DUCKDB_V2_ERROR_NONE && status == DUCKDB_V2_RESULT_STEP_STATUS_WAITING) {
-			rc = duckdb_v2_result_wait(result, nullptr);
-		}
+	if (rc == DUCKDB_V2_ERROR_NONE) {
+		rc = duckdb_v2_result_complete(result, nullptr);
 	}
 	duckdb_v2_result_destroy(&result);
 	return rc;
@@ -79,7 +67,7 @@ DUCKDB_V2_ERROR RunFailingCopy(duckdb_v2_connection_handle conn, const std::stri
 int64_t QueryI64(duckdb_v2_connection_handle conn, const std::string &sql) {
 	duckdb_v2_result_handle result = nullptr;
 	REQUIRE(Query(conn, sql.c_str(), &result) == DUCKDB_V2_ERROR_NONE);
-	auto chunk = StepChunk(result);
+	auto chunk = FetchChunk(result);
 	REQUIRE(chunk != nullptr);
 	duckdb_v2_vector_handle vec = nullptr;
 	duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, nullptr);
