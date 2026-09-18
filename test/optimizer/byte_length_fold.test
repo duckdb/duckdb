@@ -203,16 +203,27 @@ SELECT min(octet_length(b)) FROM t_bit
 ----
 1
 
-# length()/char_length() count code points, not bytes, and are deliberately not recognized
+# t is ASCII-only, so length() equals strlen and folds from the same length statistics
 query II
 EXPLAIN SELECT max(length(s)) FROM t
 ----
-physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
 
 query I
 SELECT max(length(s)) FROM t
 ----
 100
+
+# a shared length() is lifted by CSE; on ASCII data it still folds
+query II
+EXPLAIN SELECT max(length(s)), min(length(s)) FROM t
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT max(length(s)), min(length(s)) FROM t
+----
+100	1
 
 query II
 EXPLAIN SELECT max(bit_length(s)) FROM t

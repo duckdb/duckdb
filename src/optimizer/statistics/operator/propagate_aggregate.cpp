@@ -125,16 +125,20 @@ bool TryGetMinMaxColumnInfo(const Expression &expr, MinMaxColumnInfo &info) {
 	return true;
 }
 
-//! A recognized MIN/MAX over the byte length of a string column: MIN/MAX(strlen(VARCHAR)) or
-//! MIN/MAX(octet_length(BLOB))
-struct ByteLengthColumnInfo {
+enum class LengthFunctionKind : uint8_t { BYTE_LENGTH, CHARACTER_LENGTH };
+
+//! A recognized MIN/MAX over a length function of a string column.
+struct LengthColumnInfo {
 	ColumnBinding binding;
+	//! A copy of strlen/octet_length/length; the statistics callback maps string length fields
+	unique_ptr<Expression> function;
+	LengthFunctionKind kind;
 	bool is_min;
 	idx_t aggr_idx;
 };
 
-//! Column under strlen(VARCHAR) or octet_length(BLOB); not length()/char_length() or BIT.
-bool TryGetByteLengthColumnRef(const Expression &expr, ColumnBinding &binding) {
+//! Column under strlen(VARCHAR), octet_length(BLOB), or length/char_length(VARCHAR).
+bool TryGetLengthColumnRef(const Expression &expr, LengthColumnInfo &info) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return false;
 	}
@@ -145,12 +149,30 @@ bool TryGetByteLengthColumnRef(const Expression &expr, ColumnBinding &binding) {
 	}
 	const auto &fun_name = fun.Function().GetName();
 	const auto arg_type = fun.GetChildren()[0]->GetReturnType().id();
-	const bool is_byte_length = (fun_name == "strlen" && arg_type == LogicalTypeId::VARCHAR) ||
-	                            (fun_name == "octet_length" && arg_type == LogicalTypeId::BLOB);
-	if (!is_byte_length) {
+	LengthFunctionKind detected_kind;
+	if (fun_name == "strlen" && arg_type == LogicalTypeId::VARCHAR) {
+		detected_kind = LengthFunctionKind::BYTE_LENGTH;
+	} else if (fun_name == "octet_length") {
+		// octet_length(BIT) is GetSize()-1; string stats store GetSize()
+		if (arg_type != LogicalTypeId::BLOB) {
+			return false;
+		}
+		detected_kind = LengthFunctionKind::BYTE_LENGTH;
+	} else if (fun_name == "length" || fun_name == "len" || fun_name == "char_length" ||
+	           fun_name == "character_length") {
+		if (arg_type != LogicalTypeId::VARCHAR) {
+			return false;
+		}
+		detected_kind = LengthFunctionKind::CHARACTER_LENGTH;
+	} else {
 		return false;
 	}
-	binding = fun.GetChildren()[0]->Cast<BoundColumnRefExpression>().Binding();
+	if (!fun.Function().HasStatisticsCallback()) {
+		return false;
+	}
+	info.binding = fun.GetChildren()[0]->Cast<BoundColumnRefExpression>().Binding();
+	info.function = expr.Copy();
+	info.kind = detected_kind;
 	return true;
 }
 
@@ -367,12 +389,13 @@ struct CountStarFoldClient {
 	}
 };
 
-//! MIN/MAX over the byte length of a string column. A row group records the exact byte length of the
-//! shortest and of the longest string it holds, so both directions are answered by the same
-//! statistics.
-struct ByteLengthFoldClient {
-	ByteLengthFoldClient(StorageIndex storage_index_p, bool is_min_p, LogicalType result_type_p)
-	    : storage_index(std::move(storage_index_p)), is_min(is_min_p), result_type(std::move(result_type_p)) {
+//! MIN/MAX over a length function of a string column. Byte length and ASCII character length are
+//! attained values; unicode character length is only a code-point bound from LengthPropagateStats.
+struct LengthFoldClient {
+	LengthFoldClient(ClientContext &context_p, unique_ptr<Expression> function_p, StorageIndex storage_index_p,
+	                 bool is_min_p, LengthFunctionKind kind_p, LogicalType result_type_p)
+	    : context(context_p), function(std::move(function_p)), storage_index(std::move(storage_index_p)),
+	      is_min(is_min_p), kind(kind_p), result_type(std::move(result_type_p)) {
 	}
 
 	FoldPartitionState ClassifyPartition(const FoldPartition &partition, Value &value) const {
@@ -398,12 +421,16 @@ struct ByteLengthFoldClient {
 		if (!TryGetLengthValue(*column_stats, value)) {
 			return FoldPartitionState::NO_INFO;
 		}
-		if (partition.filter_result != FilterPropagateResult::FILTER_ALWAYS_TRUE) {
-			// filter cut: length is only a bound over survivors
+		const bool unicode = StringStats::CanContainUnicode(*column_stats);
+		const bool min_known = StringStats::MinStringLength(*column_stats).IsValid();
+		// byte length, or character length on ASCII-only data, names a real row; unicode
+		// character length is only a bound (codepoints <= bytes, >= ceil(bytes/4))
+		const bool attained = (kind == LengthFunctionKind::BYTE_LENGTH || !unicode) && (!is_min || min_known);
+		if (partition.filter_result != FilterPropagateResult::FILTER_ALWAYS_TRUE ||
+		    !stats.partition_row_group->MinMaxIsExact(storage_index) || !attained) {
 			return FoldPartitionState::BOUND;
 		}
-		return stats.partition_row_group->MinMaxIsExact(storage_index) ? FoldPartitionState::EXACT_VALUE
-		                                                               : FoldPartitionState::BOUND;
+		return FoldPartitionState::EXACT_VALUE;
 	}
 
 	void CombineCandidate(Value &candidate, Value &value) const {
@@ -424,24 +451,25 @@ struct ByteLengthFoldClient {
 
 private:
 	bool TryGetLengthValue(BaseStatistics &column_stats, Value &value) const {
-		if (is_min) {
-			auto min_length = StringStats::MinStringLength(column_stats);
-			if (!min_length.IsValid()) {
-				// the shortest length is unknown, so there is no lower bound to fold or vote with
-				return false;
-			}
-			value = Value::BIGINT(NumericCast<int64_t>(min_length.GetIndex()));
-			return true;
-		}
-		if (!StringStats::HasMaxStringLength(column_stats)) {
+		auto expr_copy = function->Copy();
+		auto &func = expr_copy->Cast<BoundFunctionExpression>();
+		vector<BaseStatistics> child_stats;
+		child_stats.push_back(column_stats.Copy());
+		FunctionStatisticsInput input(func, func.BindInfo().get(), child_stats, &expr_copy);
+		auto length_stats = func.Function().GetStatisticsCallback()(context, input);
+		if (!length_stats || length_stats->GetStatsType() != StatisticsType::NUMERIC_STATS ||
+		    !NumericStats::HasMinMax(*length_stats)) {
 			return false;
 		}
-		value = Value::BIGINT(NumericCast<int64_t>(StringStats::MaxStringLength(column_stats)));
+		value = is_min ? NumericStats::Min(*length_stats) : NumericStats::Max(*length_stats);
 		return true;
 	}
 
+	ClientContext &context;
+	unique_ptr<Expression> function;
 	StorageIndex storage_index;
 	bool is_min;
+	LengthFunctionKind kind;
 	LogicalType result_type;
 };
 
@@ -539,8 +567,8 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	vector<idx_t> count_star_idxs;
 	vector<MinMaxColumnInfo> min_max_columns;
 	vector<unique_ptr<ValueComparator>> comparators;
-	// MIN/MAX over a byte length, e.g. MAX(strlen(col))
-	vector<ByteLengthColumnInfo> byte_length_columns;
+	// MIN/MAX over a length function, e.g. MAX(strlen(col)) or MAX(length(col))
+	vector<LengthColumnInfo> length_columns;
 	// MIN/MAX over a monotone function of a column, e.g. MAX(year(ts))
 	vector<MonotoneColumnInfo> monotone_columns;
 
@@ -567,19 +595,21 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			}
 			MinMaxColumnInfo column_info;
 			if (!TryGetMinMaxColumnInfo(*aggr_expr.GetChildren()[0], column_info)) {
-				ColumnBinding length_binding;
-				if (TryGetByteLengthColumnRef(*aggr_expr.GetChildren()[0], length_binding)) {
-					byte_length_columns.push_back({length_binding, is_min, i});
+				LengthColumnInfo length_info;
+				if (TryGetLengthColumnRef(*aggr_expr.GetChildren()[0], length_info)) {
+					length_info.is_min = is_min;
+					length_info.aggr_idx = i;
+					length_columns.push_back(std::move(length_info));
 					continue;
 				}
 				MonotoneColumnInfo monotone_info;
-				if (!TryGetMonotoneColumnInfo(context, *aggr_expr.GetChildren()[0], monotone_info)) {
-					return;
+				if (TryGetMonotoneColumnInfo(context, *aggr_expr.GetChildren()[0], monotone_info)) {
+					monotone_info.is_min = is_min;
+					monotone_info.aggr_idx = i;
+					monotone_columns.push_back(std::move(monotone_info));
+					continue;
 				}
-				monotone_info.is_min = is_min;
-				monotone_info.aggr_idx = i;
-				monotone_columns.push_back(std::move(monotone_info));
-				continue;
+				return;
 			}
 			column_info.is_min = is_min;
 			column_info.aggr_idx = i;
@@ -602,14 +632,14 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	reference<LogicalOperator> child_ref = *aggr.children[0];
 	while (child_ref.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		auto &proj = child_ref.get().Cast<LogicalProjection>();
-		// chase colrefs; a projection may compute the byte length itself (CSE)
-		for (auto &column_info : byte_length_columns) {
+		// chase colrefs; a projection may compute the length function itself (CSE)
+		for (auto &column_info : length_columns) {
 			auto &expr = proj.GetExpression(column_info.binding);
 			if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 				column_info.binding = expr.Cast<BoundColumnRefExpression>().Binding();
 				continue;
 			}
-			if (!TryGetByteLengthColumnRef(expr, column_info.binding)) {
+			if (!TryGetLengthColumnRef(expr, column_info)) {
 				return;
 			}
 		}
@@ -621,8 +651,8 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			}
 			column_info.binding = expr.Cast<BoundColumnRefExpression>().Binding();
 		}
-		// walk backwards: an entry whose projection computes a byte length moves into
-		// byte_length_columns, so it is only resolved against the next projection level
+		// walk backwards: an entry whose projection computes a length function moves into
+		// length_columns, so it is only resolved against the next projection level
 		for (idx_t i = min_max_columns.size(); i > 0; i--) {
 			auto &column_info = min_max_columns[i - 1];
 			auto &expr = proj.GetExpression(column_info.binding);
@@ -635,17 +665,18 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 					// the aggregate casts the projected value - not a plain mapped aggregate
 					return;
 				}
-				ColumnBinding length_binding;
-				if (TryGetByteLengthColumnRef(expr, length_binding)) {
-					byte_length_columns.push_back({length_binding, column_info.is_min, column_info.aggr_idx});
-				} else {
-					MonotoneColumnInfo monotone_info;
-					if (!TryGetMonotoneColumnInfo(context, expr, monotone_info)) {
-						return;
-					}
+				LengthColumnInfo length_info;
+				MonotoneColumnInfo monotone_info;
+				if (TryGetLengthColumnRef(expr, length_info)) {
+					length_info.is_min = column_info.is_min;
+					length_info.aggr_idx = column_info.aggr_idx;
+					length_columns.push_back(std::move(length_info));
+				} else if (TryGetMonotoneColumnInfo(context, expr, monotone_info)) {
 					monotone_info.is_min = column_info.is_min;
 					monotone_info.aggr_idx = column_info.aggr_idx;
 					monotone_columns.push_back(std::move(monotone_info));
+				} else {
+					return;
 				}
 				min_max_columns.erase(min_max_columns.begin() + NumericCast<int64_t>(i - 1));
 				comparators.erase(comparators.begin() + NumericCast<int64_t>(i - 1));
@@ -693,11 +724,11 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		}
 	}
 
-	vector<StorageIndex> byte_length_storage_indexes(byte_length_columns.size());
-	for (idx_t i = 0; i < byte_length_columns.size(); i++) {
-		auto &binding = byte_length_columns[i].binding;
+	vector<StorageIndex> length_storage_indexes(length_columns.size());
+	for (idx_t i = 0; i < length_columns.size(); i++) {
+		auto &binding = length_columns[i].binding;
 		auto &column_index = get.GetColumnIndex(binding);
-		if (!get.TryGetStorageIndex(column_index, byte_length_storage_indexes[i])) {
+		if (!get.TryGetStorageIndex(column_index, length_storage_indexes[i])) {
 			return;
 		}
 	}
@@ -793,10 +824,11 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			return;
 		}
 	}
-	for (idx_t i = 0; i < byte_length_columns.size(); i++) {
-		const auto aggr_idx = byte_length_columns[i].aggr_idx;
-		ByteLengthFoldClient client(byte_length_storage_indexes[i], byte_length_columns[i].is_min,
-		                            aggr.expressions[aggr_idx]->GetReturnType());
+	for (idx_t i = 0; i < length_columns.size(); i++) {
+		const auto aggr_idx = length_columns[i].aggr_idx;
+		LengthFoldClient client(context, std::move(length_columns[i].function), length_storage_indexes[i],
+		                        length_columns[i].is_min, length_columns[i].kind,
+		                        aggr.expressions[aggr_idx]->GetReturnType());
 		if (!PartitionFold(partitions, client, results[aggr_idx])) {
 			return;
 		}
