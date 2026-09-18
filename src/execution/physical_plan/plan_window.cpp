@@ -1,10 +1,10 @@
 #include "duckdb/execution/operator/aggregate/physical_streaming_window.hpp"
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/window_function.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
@@ -14,7 +14,7 @@ namespace duckdb {
 
 namespace {
 
-bool HasDegenerateFrameCase1(BoundWindowExpression &wexpr) {
+bool HasDegenerateFrameCase1(ClientContext &client, BoundWindowExpression &wexpr) {
 	const auto start_boundary = wexpr.WindowStart();
 	const auto end_boundary = wexpr.WindowEnd();
 	if (start_boundary == WindowBoundary::CURRENT_ROW_ROWS && end_boundary == WindowBoundary::CURRENT_ROW_ROWS) {
@@ -25,18 +25,20 @@ bool HasDegenerateFrameCase1(BoundWindowExpression &wexpr) {
 		return false;
 	}
 
-	if (!wexpr.StartExpr() || !wexpr.StartExpr()->IsFoldable()) {
+	auto &start_expr = wexpr.StartExpr();
+	if (!start_expr || !start_expr->IsFoldable()) {
 		return false;
 	}
-	const Value &start_val = wexpr.StartExpr()->Cast<BoundConstantExpression>().GetValue();
+	const auto start_val = ExpressionExecutor::EvaluateScalar(client, *start_expr);
 	if (start_val.GetValue<int64_t>()) {
 		return false;
 	}
 
-	if (!wexpr.EndExpr() || !wexpr.EndExpr()->IsFoldable()) {
+	auto &end_expr = wexpr.EndExpr();
+	if (!end_expr || !end_expr->IsFoldable()) {
 		return false;
 	}
-	const Value &end_val = wexpr.EndExpr()->Cast<BoundConstantExpression>().GetValue();
+	const auto end_val = ExpressionExecutor::EvaluateScalar(client, *end_expr);
 	if (end_val.GetValue<int64_t>()) {
 		return false;
 	}
@@ -87,11 +89,11 @@ bool HasDegenerateFrameCase4(BoundWindowExpression &wexpr) {
 	return false;
 }
 
-bool HasDegenerateFrame(BoundWindowExpression &wexpr) {
+bool HasDegenerateFrame(ClientContext &client, BoundWindowExpression &wexpr) {
 	//	From https://www.vldb.org/pvldb/vol19/p3525-lindner.pdf §4 Frame Analysis
 	const bool case_iv = HasDegenerateFrameCase4(wexpr);
-	const bool case_i_iv =
-	    case_iv || HasDegenerateFrameCase1(wexpr) || HasDegenerateFrameCase2(wexpr) || HasDegenerateFrameCase3(wexpr);
+	const bool case_i_iv = case_iv || HasDegenerateFrameCase1(client, wexpr) || HasDegenerateFrameCase2(wexpr) ||
+	                       HasDegenerateFrameCase3(wexpr);
 	if (!case_i_iv) {
 		return false;
 	}
@@ -151,7 +153,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 	for (idx_t expr_idx = 0; expr_idx < op.expressions.size(); expr_idx++) {
 		auto &wexpr = op.expressions[expr_idx]->Cast<BoundWindowExpression>();
 		Columns partition_columns;
-		if (HasDegenerateFrame(wexpr)) {
+		if (HasDegenerateFrame(context, wexpr)) {
 			degenerate_frames.emplace_back(expr_idx);
 		} else if (enable_optimizer && PhysicalStreamingWindow::IsStreamingFunction(context, wexpr)) {
 			streaming_windows.push_back(expr_idx);
