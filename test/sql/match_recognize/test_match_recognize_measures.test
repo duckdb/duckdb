@@ -362,11 +362,21 @@ FROM (VALUES (10), (20), (30)) t(x) MATCH_RECOGNIZE (
 ----
 60
 
-# a variable named in a filter scopes the aggregate the way one named in an argument does
+# a variable named in a filter scopes the aggregate the way one named in an argument does - count(*)
+# names no column of its own, so the filter is the only thing saying which rows are counted
 query I
 FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
     ORDER BY x
-    MEASURES sum(x) FILTER (WHERE B.x > 15) AS s
+    MEASURES count(*) FILTER (WHERE B.x > 15) AS s
+    PATTERN (A B) DEFINE B AS x > 15
+)
+----
+1
+
+query I
+FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x
+    MEASURES sum(B.x) FILTER (WHERE B.x > 15) AS s
     PATTERN (A B) DEFINE B AS x > 15
 )
 ----

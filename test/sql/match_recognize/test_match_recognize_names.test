@@ -217,8 +217,8 @@ MATCH_RECOGNIZE (
     ALL ROWS PER MATCH PATTERN (A+)
 )
 ----
-1	2	3	4	5	4	NULL
-6	7	8	9	10	13	2
+1	4	NULL	2	3	4	5
+6	13	2	7	8	9	10
 
 # A reference is computed against the input rather than rewritten to a bare name, so a dot inside a
 # quoted identifier is not read as the boundary between two names.
@@ -343,11 +343,11 @@ FROM mr_passthrough MATCH_RECOGNIZE (ALL ROWS PER MATCH PATTERN (A))
 1	x
 2	y
 
-query ITI
+query IIT
 FROM mr_passthrough MATCH_RECOGNIZE (MEASURES 1 AS m ALL ROWS PER MATCH PATTERN (A))
 ----
-1	x	1
-2	y	1
+1	1	x
+1	2	y
 
 query I
 SELECT count(*) FROM mr_passthrough MATCH_RECOGNIZE (

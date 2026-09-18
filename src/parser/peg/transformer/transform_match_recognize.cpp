@@ -406,6 +406,14 @@ static idx_t QuantifierCount(const unique_ptr<ParsedExpression> &number_literal)
 	return NumericCast<idx_t>(value.GetValue<uint64_t>());
 }
 
+//! A quantifier that allows at most zero repetitions matches nothing at all, which the pattern
+//! algebra has the empty pattern () for: {n} takes n > 0, {n,m} takes 0 < m, {,m} takes m > 0
+static void CheckQuantifierUpperBound(optional_idx max_count) {
+	if (max_count.IsValid() && max_count.GetIndex() == 0) {
+		throw ParserException("A pattern quantifier's upper bound must be at least 1");
+	}
+}
+
 MatchRecognizeQuantifier PEGTransformerFactory::TransformQuantifierStar(PEGTransformer &transformer) {
 	MatchRecognizeQuantifier result;
 	result.min_count = 0;
@@ -449,6 +457,7 @@ PEGTransformerFactory::TransformQuantifierMinMax(PEGTransformer &transformer,
 	if (result.min_count.GetIndex() > result.max_count.GetIndex()) {
 		throw ParserException("Min count cannot be larger than max count");
 	}
+	CheckQuantifierUpperBound(result.max_count);
 	return result;
 }
 
@@ -463,6 +472,7 @@ MatchRecognizeQuantifier PEGTransformerFactory::TransformQuantifierMax(PEGTransf
                                                                        unique_ptr<ParsedExpression> number_literal) {
 	MatchRecognizeQuantifier result;
 	result.max_count = QuantifierCount(number_literal);
+	CheckQuantifierUpperBound(result.max_count);
 	return result;
 }
 
@@ -471,6 +481,7 @@ MatchRecognizeQuantifier PEGTransformerFactory::TransformQuantifierExact(PEGTran
 	MatchRecognizeQuantifier result;
 	result.min_count = QuantifierCount(number_literal);
 	result.max_count = result.min_count;
+	CheckQuantifierUpperBound(result.max_count);
 	return result;
 }
 

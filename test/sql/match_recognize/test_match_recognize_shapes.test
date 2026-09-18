@@ -295,3 +295,49 @@ SELECT day, var_name, seen FROM signal_log MATCH_RECOGNIZE(
 13	CLIMB	2
 17	CLIMB	3
 18	CLIMB	3
+
+# The row pattern output table reports the partitioning columns, then the ordering columns, then the
+# measures, then whatever of the input is left (ISO/IEC 19075-5 4.17.1). The order is what lines the
+# columns up when a query is toggled between ONE ROW PER MATCH and ALL ROWS PER MATCH, and it is only
+# visible through SELECT *. Trino and Oracle both report this order.
+
+statement ok
+CREATE TABLE out_order(price INTEGER, extra INTEGER, sym VARCHAR, day INTEGER)
+
+statement ok
+INSERT INTO out_order VALUES (10, 99, 'X', 1), (20, 98, 'X', 2)
+
+query IIIII
+SELECT * FROM out_order MATCH_RECOGNIZE(
+    PARTITION BY sym ORDER BY day MEASURES MATCH_NUMBER() AS mno
+    ALL ROWS PER MATCH PATTERN (A+) DEFINE A AS price > 0
+)
+----
+X	1	1	10	99
+X	2	1	20	98
+
+query II
+SELECT * FROM out_order MATCH_RECOGNIZE(
+    PARTITION BY sym ORDER BY day MEASURES MATCH_NUMBER() AS mno
+    ONE ROW PER MATCH PATTERN (A+) DEFINE A AS price > 0
+)
+----
+X	1
+
+# with nothing to partition or order by, the measures simply come first
+query IIIII
+SELECT * FROM out_order MATCH_RECOGNIZE(
+    MEASURES MATCH_NUMBER() AS mno ALL ROWS PER MATCH PATTERN (A) DEFINE A AS price = 10
+)
+----
+1	10	99	X	1
+
+# a column named by both PARTITION BY and ORDER BY is still reported once
+query IIIII
+SELECT * FROM out_order MATCH_RECOGNIZE(
+    PARTITION BY sym ORDER BY sym MEASURES MATCH_NUMBER() AS mno
+    ALL ROWS PER MATCH PATTERN (A+) DEFINE A AS price > 0
+)
+----
+X	1	10	99	1
+X	1	20	98	2

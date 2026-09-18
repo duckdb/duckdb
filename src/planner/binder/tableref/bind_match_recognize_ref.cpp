@@ -104,7 +104,9 @@ static unique_ptr<MatchRecognizePattern> BuildPattern(const ParsedExpression &ex
 //! of its own. Computing rather than rewriting is what keeps two tables' columns of the same name
 //! apart, and a struct field behind a qualifier from reading as a column.
 struct HoistedInputRefs {
-	explicit HoistedInputRefs(GeneratedNames &names_p) : names(names_p) {
+	HoistedInputRefs(GeneratedNames &names_p, const case_insensitive_set_t &input_columns_p,
+	                 const case_insensitive_set_t &input_tables_p)
+	    : names(names_p), input_columns(input_columns_p), input_tables(input_tables_p) {
 	}
 
 	//! The subquery column standing for this reference, allocated on first use
@@ -123,14 +125,24 @@ struct HoistedInputRefs {
 		}
 		auto hoisted = colref.Copy();
 		auto column = names.Reserve("__mr_ref_" + to_string(columns.size()));
+		// a reference the input itself answers reads the row pattern input, and so every row of the
+		// match; one it does not is the surrounding query's, and the same value on all of them
+		const auto &root = colref.ColumnNames()[0].GetIdentifierName();
+		if (input_columns.count(root) || input_tables.count(root)) {
+			universal.emplace(column, colref.ToString());
+		}
 		hoisted->SetAlias(Identifier(column));
 		select_list.push_back(std::move(hoisted));
 		return columns.emplace(std::move(key), std::move(column)).first->second;
 	}
 
 	GeneratedNames &names;
+	const case_insensitive_set_t &input_columns;
+	const case_insensitive_set_t &input_tables;
 	//! Keyed by what the reference spells, so that one written twice is computed once
 	case_insensitive_map_t<string> columns;
+	//! The generated names standing for a reference into the input, by what it was written as
+	case_insensitive_map_t<string> universal;
 	//! The expressions to add to the subquery the input is reached through
 	vector<unique_ptr<ParsedExpression>> select_list;
 };
@@ -197,6 +209,21 @@ static void HoistMeasureNavigation(unique_ptr<ParsedExpression> &expr, const Win
 	if (expr->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &function = expr->Cast<FunctionExpression>();
 		auto function_name = StringUtil::Upper(function.FunctionName().GetIdentifierName());
+		// A step always reads the row it steps to, so how much of the match is visible is not its to
+		// say: RUNNING and FINAL belong on the navigation it steps from, not on the step (5.6.2)
+		if (function.FunctionName() == MATCH_RECOGNIZE_RUNNING_MARKER ||
+		    function.FunctionName() == MATCH_RECOGNIZE_FINAL_MARKER) {
+			auto &wrapped = function.GetArguments()[0].GetExpression();
+			if (wrapped.GetExpressionType() == ExpressionType::FUNCTION) {
+				auto wrapped_name =
+				    StringUtil::Upper(wrapped.Cast<FunctionExpression>().FunctionName().GetIdentifierName());
+				if (wrapped_name == "PREV" || wrapped_name == "NEXT") {
+					throw BinderException("%s() always reads the row it steps to, so RUNNING and FINAL cannot be "
+					                      "written in front of it",
+					                      wrapped_name);
+				}
+			}
+		}
 		if (function_name == "PREV" || function_name == "NEXT") {
 			auto &arguments = function.GetArgumentsMutable();
 			if (arguments.empty() || arguments.size() > 2) {
@@ -204,6 +231,11 @@ static void HoistMeasureNavigation(unique_ptr<ParsedExpression> &expr, const Win
 			}
 			for (auto &argument : arguments) {
 				HoistMeasureNavigation(argument.GetExpressionMutable(), pattern_window, symbols, hoisted, names);
+			}
+			// a step is a fixed distance through the partition, so the offset is a non-negative
+			// constant - a negative one would step the other way and a column a different way per row
+			if (arguments.size() == 2) {
+				MatchRecognizeNavigationOffset(function_name, arguments[1].GetExpression());
 			}
 			auto &inner = *arguments[0].GetExpressionMutable();
 			if (inner.GetExpressionType() == ExpressionType::COLUMN_REF) {
@@ -340,9 +372,13 @@ static MatchRecognizeSymbols CollectSymbols(const MatchRecognizeConfig &config) 
 //! What the clause asks for that this implementation does not do, reported before anything is bound
 static void ValidateClauses(const MatchRecognizeConfig &config, const MatchRecognizeSymbols &symbols,
                             bool has_exclusion) {
-	// {- -} decides which of a match's rows reach the output, so it needs rows in the output
-	if (has_exclusion && !MatchRecognizeReportsRows(config.rows_per_match)) {
-		throw BinderException("Pattern exclusion syntax {- -} requires ALL ROWS PER MATCH");
+	// {- -} decides which of a match's rows reach the output. ONE ROW PER MATCH reports the match
+	// rather than its rows, so there it is permitted and simply has no effect. WITH UNMATCHED ROWS is
+	// there to report every row and {- -} is there to drop some: a row it dropped is one a match did
+	// cover, so reporting it as unmatched would say the opposite.
+	if (has_exclusion && config.rows_per_match == MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL_UNMATCHED) {
+		throw BinderException("Pattern exclusion syntax {- -} is not allowed with ALL ROWS PER MATCH WITH "
+		                      "UNMATCHED ROWS");
 	}
 	case_insensitive_set_t subset_names;
 	for (auto &subset : config.subsets) {
@@ -420,18 +456,28 @@ static case_insensitive_map_t<vector<string>> BuildMeasureSymbols(const case_ins
 	for (auto &symbol : pattern_symbols) {
 		measure_symbols[symbol] = {symbol};
 	}
+	// there are no unions of unions, so a name declared by an earlier SUBSET is not a member the next
+	// one may take - which the size of its expansion does not say, a union of one standing for a
+	// single symbol just as a pattern variable does
+	case_insensitive_set_t union_names;
 	for (auto &subset : subsets) {
 		if (measure_symbols.find(subset.name) != measure_symbols.end()) {
 			throw BinderException("SUBSET name \"%s\" is already a pattern variable", subset.name);
 		}
 		vector<string> members;
 		for (auto &member : subset.members) {
+			if (union_names.count(member)) {
+				throw BinderException("SUBSET \"%s\" is built out of \"%s\", which is itself a SUBSET - a union "
+				                      "row pattern variable is a union of pattern variables",
+				                      subset.name, member);
+			}
 			auto entry = measure_symbols.find(member);
 			if (entry == measure_symbols.end() || entry->second.size() != 1) {
 				throw BinderException("SUBSET \"%s\" refers to unknown pattern variable \"%s\"", subset.name, member);
 			}
 			members.push_back(entry->second[0]);
 		}
+		union_names.insert(subset.name);
 		measure_symbols[subset.name] = std::move(members);
 	}
 	return measure_symbols;
@@ -608,12 +654,23 @@ struct MatchRecognizeMeasureNames {
 static unique_ptr<SelectNode> BuildOutputNode(const MatchRecognizeConfig &config, unique_ptr<SelectNode> select_node,
                                               const MatchRecognizeMeasureNames &measures,
                                               const vector<Identifier> &partition_names,
+                                              const vector<Identifier> &leading_columns,
                                               const HoistedInputRefs &input_refs, const string &state_column,
                                               bool has_exclusion) {
 	auto measures_select = MakeSelectStatement(std::move(select_node));
 	auto output_node = MakeSelectNode(make_uniq<SubqueryRef>(std::move(measures_select)));
 	// a row in no match has no measures to report, only itself
 	const auto unmatched = config.rows_per_match == MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL_UNMATCHED;
+	// both shapes report the measures after the columns that identify the match
+	vector<unique_ptr<ParsedExpression>> measure_list;
+	for (idx_t i = 0; i < measures.columns.size(); i++) {
+		unique_ptr<ParsedExpression> measure = make_uniq<ColumnRefExpression>(Identifier(measures.columns[i]));
+		if (unmatched) {
+			measure = OnlyWhenMatchedRow(state_column, std::move(measure));
+		}
+		measure->SetAlias(measures.aliases[i]);
+		measure_list.push_back(std::move(measure));
+	}
 	if (MatchRecognizeReportsRows(config.rows_per_match)) {
 		// the matcher's state has served the measures and the filter, and stops here, as do the columns
 		// the projections below read the clause's own values by
@@ -624,6 +681,16 @@ static unique_ptr<SelectNode> BuildOutputNode(const MatchRecognizeConfig &config
 		}
 		for (auto &column : measures.columns) {
 			output_star->ExcludeListMutable().insert(QualifiedColumnName(Identifier(column)));
+		}
+		// ALL ROWS PER MATCH reports the partitioning columns, then the ordering columns, then the
+		// measures, then what is left of the input - the order that lines the columns up against the
+		// ONE ROW PER MATCH shape when a query is toggled between the two
+		for (auto &column : leading_columns) {
+			output_star->ExcludeListMutable().insert(QualifiedColumnName(column));
+			output_node->select_list.push_back(make_uniq<ColumnRefExpression>(column));
+		}
+		for (auto &measure : measure_list) {
+			output_node->select_list.push_back(std::move(measure));
 		}
 		output_node->select_list.push_back(std::move(output_star));
 	} else {
@@ -638,14 +705,9 @@ static unique_ptr<SelectNode> BuildOutputNode(const MatchRecognizeConfig &config
 			partition->SetAlias(partition_names[i]);
 			output_node->select_list.push_back(std::move(partition));
 		}
-	}
-	for (idx_t i = 0; i < measures.columns.size(); i++) {
-		unique_ptr<ParsedExpression> measure = make_uniq<ColumnRefExpression>(Identifier(measures.columns[i]));
-		if (unmatched) {
-			measure = OnlyWhenMatchedRow(state_column, std::move(measure));
+		for (auto &measure : measure_list) {
+			output_node->select_list.push_back(std::move(measure));
 		}
-		measure->SetAlias(measures.aliases[i]);
-		output_node->select_list.push_back(std::move(measure));
 	}
 	if (MatchRecognizeReportsRows(config.rows_per_match)) {
 		// an excluded row still belongs to the match, so it is dropped here rather than before the
@@ -761,7 +823,9 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	auto bound_input = input_binder->Bind(*ref.input);
 	// what the columns are called is what the bind context says, not what the table ref bind reports
 	case_insensitive_set_t input_names;
+	case_insensitive_set_t input_tables;
 	for (auto &binding : input_binder->bind_context.GetBindingsList()) {
+		input_tables.insert(binding->GetAlias().GetIdentifierName());
 		for (auto &name : binding->GetColumnNames()) {
 			input_names.insert(name.GetIdentifierName());
 		}
@@ -773,10 +837,13 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	// The matcher's state travels between the select nodes below in a column of its own. Every generated
 	// column is named apart from the input's and from each other, which is also what keeps two stacked
 	// clauses apart.
+	// the output shape below still needs to know which names the input brought, and the generated
+	// names take ownership of the set
+	const case_insensitive_set_t input_column_names = input_names;
 	GeneratedNames names(std::move(input_names));
 	const string state_column = names.Reserve("__pattern_window");
 	const string spans_column = names.Reserve(state_column + "_spans");
-	HoistedInputRefs input_refs(names);
+	HoistedInputRefs input_refs(names, input_column_names, input_tables);
 
 	const auto symbols = CollectSymbols(*ref.config);
 	// {- -} only decides which of a match's rows reach the output, so it is also read again below
@@ -788,6 +855,29 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	vector<Identifier> partition_names;
 	for (auto &expr : ref.config->partition_expressions) {
 		partition_names.push_back(expr->GetName());
+	}
+	// The columns ALL ROWS PER MATCH reports ahead of the rest of the input: what the clause
+	// partitioned by, then what it ordered by. Only a plain reference to a column of the input names
+	// one - an expression is not a column of the output to begin with - and a column named twice is
+	// still reported once.
+	vector<Identifier> leading_columns;
+	case_insensitive_set_t leading_seen;
+	const auto add_leading = [&](const ParsedExpression &expr) {
+		if (expr.GetExpressionType() != ExpressionType::COLUMN_REF) {
+			return;
+		}
+		auto &column = expr.Cast<ColumnRefExpression>().GetColumnName();
+		const auto &name = column.GetIdentifierName();
+		if (!input_column_names.count(name) || !leading_seen.insert(name).second) {
+			return;
+		}
+		leading_columns.push_back(column);
+	};
+	for (auto &expr : ref.config->partition_expressions) {
+		add_leading(*expr);
+	}
+	for (auto &order : ref.config->order_by_expressions) {
+		add_leading(*order.expression);
 	}
 	HoistClauseReferences(*ref.config, symbols, input_refs);
 
@@ -852,7 +942,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	                                      navigations};
 
 	MatchRecognizeDefineBinder condition_binder(*define_binder, context, define_node, inputs, *window_template,
-	                                            symbols.declared, match_number_ref);
+	                                            symbols.declared, input_refs.universal, match_number_ref);
 	case_insensitive_set_t pattern_symbols;
 	vector<string> define_symbols;
 	auto define_conditions =
@@ -975,7 +1065,8 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	MatchRecognizeMeasureNames measure_names;
 	{
 		MatchRecognizeMeasureBinder measure_expression_binder(*measures_binder, context, measures, state_column,
-		                                                      *ref.config, measure_symbols, all_rows);
+		                                                      *ref.config, measure_symbols, input_refs.universal,
+		                                                      all_rows);
 		for (auto &expr : ref.config->measures_expression_list) {
 			D_ASSERT(!expr->GetAlias().empty());
 			measure_names.aliases.push_back(expr->GetAlias());
@@ -1005,8 +1096,8 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	auto select_node = MakeSelectNode(make_uniq<BoundRefWrapper>(std::move(bound_measures), std::move(output_binder)));
 	select_node->select_list.push_back(make_uniq<StarExpression>());
 
-	select_node = BuildOutputNode(*ref.config, std::move(select_node), measure_names, partition_names, input_refs,
-	                              state_column, has_exclusion);
+	select_node = BuildOutputNode(*ref.config, std::move(select_node), measure_names, partition_names, leading_columns,
+	                              input_refs, state_column, has_exclusion);
 
 	auto child_binder = Binder::CreateBinder(context, this);
 	auto result = child_binder->Bind(*select_node);
