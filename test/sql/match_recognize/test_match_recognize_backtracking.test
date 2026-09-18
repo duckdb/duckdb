@@ -299,14 +299,15 @@ SELECT count(*), min(len), max(len) FROM rows_abab MATCH_RECOGNIZE(
 ----
 1	4	4
 
-# a quantifier that can only match nothing still matches - as an empty match at every row, covering
-# no rows at all, so the aggregate over the match sees nothing
+# A pattern that can only match nothing still matches - as an empty match at every row, covering no
+# rows at all, so the aggregate over the match sees nothing. The empty pattern () is how the pattern
+# algebra spells that; a quantifier may not, since its upper bound has to allow a repetition
+# (ISO/IEC 19075-5 4.14.1), and test_match_recognize_errors.test pins that refusal.
 query III
 SELECT count(*), min(len), max(len) FROM rows_aaa MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS len
     ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW
-    PATTERN (A{0,0})
-    DEFINE A AS A.c = 'a'
+    PATTERN (())
 )
 ----
 3	0	0

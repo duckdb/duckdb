@@ -86,7 +86,8 @@ class MatchRecognizeDefineBinder : public SelectBinder {
 public:
 	MatchRecognizeDefineBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,
 	                           MatchRecognizeConditionInputs &inputs, const WindowExpression &window_template,
-	                           const case_insensitive_set_t &symbols, const unique_ptr<Expression> &match_number);
+	                           const case_insensitive_set_t &symbols, const case_insensitive_map_t<string> &universal,
+	                           const unique_ptr<Expression> &match_number);
 
 	//! Bind the condition of this variable, which is decided on the row the matcher is testing
 	void BeginDefine(const string &name) {
@@ -119,6 +120,8 @@ private:
 	const WindowExpression &window_template;
 	//! Every pattern variable the clause declares
 	const case_insensitive_set_t &symbols;
+	//! The hoisted references that read the whole match, by the name each was written with
+	const case_insensitive_map_t<string> &universal;
 	//! What the matcher's own match number reads as until the plan is built
 	const unique_ptr<Expression> &match_number;
 	//! The variable whose condition is being bound
@@ -134,7 +137,8 @@ class MatchRecognizeMeasureBinder : public SelectBinder {
 public:
 	MatchRecognizeMeasureBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, string state,
 	                            const MatchRecognizeConfig &config,
-	                            const case_insensitive_map_t<vector<string>> &symbols, bool all_rows);
+	                            const case_insensitive_map_t<vector<string>> &symbols,
+	                            const case_insensitive_map_t<string> &universal, bool all_rows);
 
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
@@ -155,6 +159,8 @@ private:
 	const MatchRecognizeConfig &config;
 	//! Every pattern variable and SUBSET, mapped to the symbols it stands for
 	const case_insensitive_map_t<vector<string>> &symbols;
+	//! The hoisted references that read the whole match, by the name each was written with
+	const case_insensitive_map_t<string> &universal;
 	//! ONE ROW PER MATCH reports a finished match, so RUNNING and FINAL are the same thing there
 	bool one_row;
 	//! Whether the expression being bound sees the match up to the current row, or all of it

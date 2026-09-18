@@ -291,16 +291,59 @@ static void ScopeToVariable(unique_ptr<ParsedExpression> &expr, const MatchRecog
 	ScopeToVariable(expr, symbols, scope, lambda_parameters);
 }
 
+//! A reference the input itself answers is the universal row pattern variable's, and so is
+//! CLASSIFIER() with nothing in front of it: both read every row of the match. What reads one
+//! variable's rows reads a different set, so the two cannot be asked for at once - the name each was
+//! written with is reported back so the error can say which reference it was.
+static bool FindUniversalReference(const ParsedExpression &expr, const case_insensitive_map_t<string> &universal,
+                                   string &spelled) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
+		auto &names = expr.Cast<ColumnRefExpression>().ColumnNames();
+		auto entry = names.size() == 1 ? universal.find(names[0].GetIdentifierName()) : universal.end();
+		if (entry == universal.end()) {
+			return false;
+		}
+		spelled = "\"" + entry->second + "\"";
+		return true;
+	}
+	if (expr.GetExpressionType() == ExpressionType::FUNCTION) {
+		auto &function = expr.Cast<FunctionExpression>();
+		if (function.GetArguments().empty() &&
+		    StringUtil::CIEquals(function.FunctionName().GetIdentifierName(), "classifier")) {
+			spelled = "CLASSIFIER()";
+			return true;
+		}
+	}
+	bool found = false;
+	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
+		found = found || FindUniversalReference(child, universal, spelled);
+	});
+	return found;
+}
+
+//! What reads the rows of one pattern variable cannot also read the whole match
+static void RejectUniversalReference(const ParsedExpression &expr, const case_insensitive_map_t<string> &universal,
+                                     const string &function_name, const string &variable) {
+	string spelled;
+	if (FindUniversalReference(expr, universal, spelled)) {
+		throw BinderException("%s() reads the rows of \"%s\", so %s cannot also read the whole match", function_name,
+		                      variable, spelled);
+	}
+}
+
 //! The pattern variable a navigation reads its row from. What the navigation reports is an expression
 //! of the clause's own, so a variable may appear anywhere within it rather than only in front of it -
 //! but it navigates to one row, so the expression cannot name two variables to read it from.
 static string NavigationVariable(unique_ptr<ParsedExpression> &inner, const MatchRecognizeSymbols &symbols,
-                                 const string &function_name) {
+                                 const case_insensitive_map_t<string> &universal, const string &function_name) {
 	case_insensitive_set_t scope;
 	ScopeToVariable(inner, symbols, scope);
 	if (scope.size() > 1) {
 		throw BinderException("%s() reads one row of the match, so \"%s\" cannot also read a row of \"%s\"",
 		                      function_name, *scope.begin(), *std::next(scope.begin()));
+	}
+	if (!scope.empty()) {
+		RejectUniversalReference(*inner, universal, function_name, *scope.begin());
 	}
 	return scope.empty() ? string() : *scope.begin();
 }
@@ -341,9 +384,10 @@ MatchRecognizeDefineBinder::MatchRecognizeDefineBinder(Binder &binder, ClientCon
                                                        MatchRecognizeConditionInputs &inputs_p,
                                                        const WindowExpression &window_template_p,
                                                        const case_insensitive_set_t &symbols_p,
+                                                       const case_insensitive_map_t<string> &universal_p,
                                                        const unique_ptr<Expression> &match_number_p)
     : SelectBinder(binder, context, node), inputs(inputs_p), window_template(window_template_p), symbols(symbols_p),
-      match_number(match_number_p) {
+      universal(universal_p), match_number(match_number_p) {
 }
 
 BindResult MatchRecognizeDefineBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
@@ -352,6 +396,17 @@ BindResult MatchRecognizeDefineBinder::BindExpression(unique_ptr<ParsedExpressio
 	if (expr.GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &function = expr.Cast<FunctionExpression>();
 		auto function_name = StringUtil::Upper(function.FunctionName().GetIdentifierName());
+		// A condition is decided while the match is still being assembled, so running is the only
+		// semantics it has: RUNNING may be written for clarity, FINAL asks for a match that is not
+		// there yet
+		if (function.FunctionName() == MATCH_RECOGNIZE_RUNNING_MARKER) {
+			expr_ptr = std::move(function.GetArgumentsMutable()[0].GetExpressionMutable());
+			return BindExpression(expr_ptr, depth, root_expression);
+		}
+		if (function.FunctionName() == MATCH_RECOGNIZE_FINAL_MARKER) {
+			throw BinderException("FINAL reads the whole match, which a DEFINE condition is still assembling, so "
+			                      "only RUNNING is available there");
+		}
 		if (function_name == "CLASSIFIER" && function.GetArguments().empty()) {
 			OutsideMatch("CLASSIFIER()");
 			// the row being tested is the one this DEFINE decides on, so it classifies as this symbol
@@ -422,6 +477,11 @@ BindResult MatchRecognizeDefineBinder::BindNeighbour(FunctionExpression &functio
 	if (arguments.empty() || arguments.size() > 2) {
 		throw BinderException("%s() takes an expression and an optional offset", function_name);
 	}
+	// a step is a fixed distance through the partition, so the offset is a non-negative constant - a
+	// negative one would step the other way and a column a different way per row
+	if (arguments.size() == 2) {
+		MatchRecognizeNavigationOffset(function_name, arguments[1].GetExpression());
+	}
 	auto neighbour = window_template.Copy();
 	auto &window = neighbour->Cast<WindowExpression>();
 	window.SetFunctionName(function_name == "PREV" ? "lag" : "lead");
@@ -443,7 +503,7 @@ BindResult MatchRecognizeDefineBinder::BindNavigation(FunctionExpression &functi
 	}
 	auto inner = std::move(arguments[0].GetExpressionMutable());
 	auto variable = NavigationVariable(
-	    inner, [&](const string &name) { return symbols.count(name) > 0; }, function_name);
+	    inner, [&](const string &name) { return symbols.count(name) > 0; }, universal, function_name);
 	// the qualifiers are gone, so what is left is read off the row this navigates to
 	auto symbol = variable.empty() ? string() : MatchRecognizeDefineColumn(variable);
 	return BindNavigated(std::move(inner), std::move(symbol), function_name == "LAST", offset, depth);
@@ -475,9 +535,10 @@ BindResult MatchRecognizeDefineBinder::BindNavigated(unique_ptr<ParsedExpression
 MatchRecognizeMeasureBinder::MatchRecognizeMeasureBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,
                                                          string state_p, const MatchRecognizeConfig &config_p,
                                                          const case_insensitive_map_t<vector<string>> &symbols_p,
+                                                         const case_insensitive_map_t<string> &universal_p,
                                                          bool all_rows)
     : SelectBinder(binder, context, node), state(std::move(state_p)), config(config_p), symbols(symbols_p),
-      one_row(!all_rows), running(all_rows) {
+      universal(universal_p), one_row(!all_rows), running(all_rows) {
 }
 
 BindResult MatchRecognizeMeasureBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
@@ -574,6 +635,20 @@ BindResult MatchRecognizeMeasureBinder::BindOverMatch(FunctionExpression &expr, 
 		                      "cannot also read those of \"%s\"",
 		                      *scope.begin(), *std::next(scope.begin()));
 	}
+	if (!scope.empty()) {
+		const auto &name = expr.FunctionName().GetIdentifierName();
+		for (auto &argument : expr.GetArguments()) {
+			RejectUniversalReference(argument.GetExpression(), universal, name, *scope.begin());
+		}
+		if (expr.OrderByMutable()) {
+			for (auto &order : expr.OrderByMutable()->orders) {
+				RejectUniversalReference(*order.expression, universal, name, *scope.begin());
+			}
+		}
+		if (expr.FilterMutable()) {
+			RejectUniversalReference(*expr.FilterMutable(), universal, name, *scope.begin());
+		}
+	}
 
 	auto &qualified = expr.GetQualifiedName();
 	auto window =
@@ -633,7 +708,7 @@ BindResult MatchRecognizeMeasureBinder::BindNavigation(FunctionExpression &funct
 	}
 	auto inner = std::move(function.GetArgumentsMutable()[0].GetExpressionMutable());
 	auto variable = NavigationVariable(
-	    inner, [&](const string &name) { return symbols.find(name) != symbols.end(); }, function_name);
+	    inner, [&](const string &name) { return symbols.find(name) != symbols.end(); }, universal, function_name);
 	vector<string> symbol;
 	if (!variable.empty()) {
 		auto entry = symbols.find(variable);

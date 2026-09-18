@@ -528,3 +528,28 @@ FROM (VALUES (1, 7), (2, 8)) AS t(i, v) MATCH_RECOGNIZE(
 )
 ----
 7
+
+# A step always reads the row it steps to, so how much of the match is visible is not its to say:
+# RUNNING and FINAL belong on the navigation a step starts from, not on the step itself
+# (ISO/IEC 19075-5 5.6.2). Trino and Oracle refuse these too.
+
+statement error
+SELECT v FROM (VALUES (1, 10), (2, 20)) t(i, p) MATCH_RECOGNIZE (
+    ORDER BY i MEASURES FINAL PREV(p) AS v ALL ROWS PER MATCH PATTERN (A+) DEFINE A AS p > 0
+)
+----
+<REGEX>:Binder Error:.*PREV\(\) always reads the row it steps to.*
+
+statement error
+SELECT v FROM (VALUES (1, 10), (2, 20)) t(i, p) MATCH_RECOGNIZE (
+    ORDER BY i MEASURES RUNNING PREV(p) AS v ALL ROWS PER MATCH PATTERN (A+) DEFINE A AS p > 0
+)
+----
+<REGEX>:Binder Error:.*PREV\(\) always reads the row it steps to.*
+
+statement error
+SELECT v FROM (VALUES (1, 10), (2, 20)) t(i, p) MATCH_RECOGNIZE (
+    ORDER BY i MEASURES FINAL NEXT(p) AS v ALL ROWS PER MATCH PATTERN (A+) DEFINE A AS p > 0
+)
+----
+<REGEX>:Binder Error:.*NEXT\(\) always reads the row it steps to.*
