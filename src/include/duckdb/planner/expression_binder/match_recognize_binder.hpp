@@ -58,12 +58,9 @@ struct MatchRecognizeAggregate {
 //! cannot compute itself, plus the descriptors telling it what to do with them
 struct MatchRecognizeConditionInputs {
 	//! The projection the matcher reads from, built as the conditions are bound
-	TableIndex projection_index;
+	BoundSelectNode &projection;
 	//! The table a matcher-supplied field is a column of, which no operator produces
 	TableIndex match_number_index;
-	vector<unique_ptr<Expression>> &select_list;
-	vector<Identifier> &names;
-	vector<LogicalType> &types;
 	//! Names the output does not report, because they only exist for the matcher
 	vector<string> &hidden;
 	GeneratedNames &generated;

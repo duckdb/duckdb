@@ -349,13 +349,12 @@ static idx_t SkipTo(const MatchRecognizeFunctionData &config, idx_t skip_symbol,
 	case MatchRecognizeAfterMatch::MATCH_RECOGNIZE_AFTER_MATCH_FIRST_VAR:
 	case MatchRecognizeAfterMatch::MATCH_RECOGNIZE_AFTER_MATCH_LAST_VAR: {
 		const auto first = config.after_match == MatchRecognizeAfterMatch::MATCH_RECOGNIZE_AFTER_MATCH_FIRST_VAR;
+		// walked from the end the wanted row is nearer, so either way it is the first one found
 		optional_idx target;
-		for (idx_t row = match_start; row <= match_end; row++) {
-			if (classifiers[row] != skip_symbol) {
-				continue;
-			}
-			target = row;
-			if (first) {
+		for (idx_t step = 0; step <= match_end - match_start; step++) {
+			const auto row = first ? match_start + step : match_end - step;
+			if (classifiers[row] == skip_symbol) {
+				target = row;
 				break;
 			}
 		}

@@ -425,7 +425,7 @@ unique_ptr<Expression> MatchRecognizeConditionInputs::ProjectAs(unique_ptr<Expre
 	// of this projection nor a field only the matcher supplies is one, and the binder decides that
 	// where the expression is bound - this is the boundary that holds it to the decision.
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(*value, [&](const BoundColumnRefExpression &column) {
-		if (column.Binding().table_index == projection_index) {
+		if (column.Binding().table_index == projection.projection_index) {
 			throw InternalException("MATCH_RECOGNIZE projected \"%s\" from another column of the same projection",
 			                        name);
 		}
@@ -435,14 +435,14 @@ unique_ptr<Expression> MatchRecognizeConditionInputs::ProjectAs(unique_ptr<Expre
 		}
 	});
 	auto type = value->GetReturnType();
-	const auto index = select_list.size();
+	const auto index = projection.select_list.size();
 	value->SetAlias(Identifier(name));
-	select_list.push_back(std::move(value));
-	names.emplace_back(name);
-	types.push_back(type);
+	projection.select_list.push_back(std::move(value));
+	projection.names.emplace_back(name);
+	projection.types.push_back(type);
 	hidden.push_back(name);
 	return make_uniq<BoundColumnRefExpression>(Identifier(name), type,
-	                                           ColumnBinding(projection_index, ProjectionIndex(index)));
+	                                           ColumnBinding(projection.projection_index, ProjectionIndex(index)));
 }
 
 MatchRecognizeDefineBinder::MatchRecognizeDefineBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,
@@ -578,7 +578,7 @@ BindResult MatchRecognizeDefineBinder::BindAggregate(FunctionExpression &expr, A
 		}
 		const auto operand_type = operand.expression->GetReturnType();
 		inputs.Project(std::move(operand.expression), "__mr_agg");
-		column = inputs.select_list.size() - 1;
+		column = inputs.projection.select_list.size() - 1;
 		children.emplace_back(Identifier(), make_uniq<BoundReferenceExpression>(operand_type, 0U));
 	}
 	FunctionBinder function_binder(binder);
@@ -694,7 +694,7 @@ BindResult MatchRecognizeDefineBinder::BindNavigated(unique_ptr<ParsedExpression
 	}
 	auto column = inputs.Project(std::move(bound.expression), "__mr_nav");
 	inputs.navigations.push_back(
-	    MatchRecognizeNavigation {last, std::move(symbol), inputs.select_list.size() - 1, offset});
+	    MatchRecognizeNavigation {last, std::move(symbol), inputs.projection.select_list.size() - 1, offset});
 	return BindResult(std::move(column));
 }
 

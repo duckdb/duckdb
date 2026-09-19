@@ -380,20 +380,20 @@ static void RemapToProjection(unique_ptr<Expression> &expr, MatchRecognizeCondit
 	}
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		auto &colref = expr->Cast<BoundColumnRefExpression>();
-		if (colref.Binding().table_index == inputs.projection_index ||
+		if (colref.Binding().table_index == inputs.projection.projection_index ||
 		    colref.Binding().table_index == inputs.match_number_index) {
 			return;
 		}
 		auto entry = input_columns.find(colref.Binding());
 		if (entry == input_columns.end()) {
 			auto column = inputs.ProjectAs(expr->Copy(), inputs.generated.Reserve("__mr_read"));
-			input_columns[colref.Binding()] = inputs.select_list.size() - 1;
+			input_columns[colref.Binding()] = inputs.projection.select_list.size() - 1;
 			expr = std::move(column);
 			return;
 		}
 		expr =
 		    make_uniq<BoundColumnRefExpression>(colref.GetAlias(), colref.GetReturnType(),
-		                                        ColumnBinding(inputs.projection_index, ProjectionIndex(entry->second)));
+		                                        ColumnBinding(inputs.projection.projection_index, ProjectionIndex(entry->second)));
 		return;
 	}
 	ExpressionIterator::EnumerateChildren(
@@ -1080,15 +1080,8 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	unique_ptr<Expression> match_number_ref = make_uniq<BoundColumnRefExpression>(
 	    Identifier("match_number"), LogicalType::UBIGINT, ColumnBinding(match_number_index, ProjectionIndex(0)));
 
-	MatchRecognizeConditionInputs inputs {define_node.projection_index,
-	                                      match_number_index,
-	                                      define_node.select_list,
-	                                      define_node.names,
-	                                      define_node.types,
-	                                      hidden_columns,
-	                                      names,
-	                                      navigations,
-	                                      condition_aggregates};
+	MatchRecognizeConditionInputs inputs {define_node,   match_number_index, hidden_columns,
+	                                      names,         navigations,        condition_aggregates};
 
 	MatchRecognizeDefineBinder condition_binder(*define_binder, context, define_node, inputs, *window_template,
 	                                            symbols.declared, input_refs.universal, match_number_ref);
