@@ -316,7 +316,7 @@ optional<string> TestResultHelper::EvaluateStatementResult(SQLLogicTestLogger &l
 	}
 	case ExpectedResult::RESULT_UNKNOWN:
 	case ExpectedResult::RESULT_ERROR: {
-		const bool success_is_not_an_error = expected_result != ExpectedResult::RESULT_UNKNOWN;
+		const bool success_is_not_an_error = expected_result == ExpectedResult::RESULT_UNKNOWN;
 		if (!error) {
 			if (success_is_not_an_error) {
 				//! OK is not unexpected
