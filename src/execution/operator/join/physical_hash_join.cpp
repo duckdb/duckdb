@@ -564,6 +564,8 @@ public:
 			hash_table = op.InitializeHashTable(context.client, gstate.hash_table->GetRadixBits());
 			append_state_initialised = false;
 		}
+		// the global state resets before any local one, so the filter this picks up is always a fresh one
+		D_ASSERT(!gstate.hash_table->GetBloomFilter() || !gstate.hash_table->GetBloomFilter()->IsSealed());
 		hash_table->SetBloomFilter(gstate.hash_table->GetBloomFilter());
 		keep_hash_table = gstate.keep_local_hash_tables;
 		gstate.active_local_states++;
@@ -1544,12 +1546,12 @@ static unique_ptr<Expression> CreateRuntimeFilterExpression(ClientContext &conte
 	unique_ptr<Expression> filter_expr;
 	switch (deferred.type) {
 	case DeferredRuntimeFilterType::BLOOM_FILTER: {
-		auto bloom_filter = ht.GetBloomFilter();
-		D_ASSERT(bloom_filter && bloom_filter->IsInitialized() && bloom_filter->IsSealed());
+		D_ASSERT(ht.HasPublishableBloomFilter());
 		// a filter that is not sealed does not describe the complete build side - publishing it would drop rows
-		if (!bloom_filter || !bloom_filter->IsInitialized() || !bloom_filter->IsSealed()) {
+		if (!ht.HasPublishableBloomFilter()) {
 			return nullptr;
 		}
+		auto bloom_filter = ht.GetBloomFilter();
 		filter_expr = make_uniq<BoundFunctionExpression>(
 		    BoundScalarFunction(BloomFilterScalarFun::GetFunction(filter_input_type)), std::move(children),
 		    make_uniq<BloomFilterFunctionData>(std::move(bloom_filter), filters_null_values, key_name, key_type,
@@ -1864,8 +1866,8 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 					CreateDynamicMinMaxFilters(op, info, context, pushdown_column, filter_col_idx, cmp, min_val,
 					                           max_val, condition_type, reconstruct_filter_expression, false);
 				}
-				if (allow_bloom_filters && can_emit_runtime_filters && ht && gstate && ht->GetBloomFilter() &&
-				    CanUseBloomFilter(context, op, cmp, ht)) {
+				if (allow_bloom_filters && can_emit_runtime_filters && ht && gstate &&
+				    ht->HasPublishableBloomFilter() && CanUseBloomFilter(context, op, cmp, ht)) {
 					DeferRuntimeFilter(DeferredRuntimeFilterType::BLOOM_FILTER, op, info, pushdown_column,
 					                   filter_col_idx, *gstate);
 				}

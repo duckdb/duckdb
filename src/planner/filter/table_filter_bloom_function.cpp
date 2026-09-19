@@ -31,11 +31,6 @@ static constexpr idx_t SHIFT_MASK = 0x3F3F3F3F3F3F3F3F; // 6 bits for 64 positio
 static constexpr idx_t N_BITS = 4;                      // the number of bits to set per hash
 static constexpr idx_t BITS_PER_SECTOR = 1ULL << LOG_SECTOR_SIZE;
 
-//! Above this false positive rate the filter rejects too little to be worth publishing. It gets there when the
-//! build cardinality was underestimated and more keys arrived than it was sized for; folding cannot help, since
-//! it only raises the rate further.
-static constexpr double USELESS_FALSE_POSITIVE_RATE = 0.9;
-
 //! A sector is one entry of the bit array, so the two have to agree on how wide it is
 static_assert(BITS_PER_SECTOR == sizeof(uint64_t) * 8, "a bloom filter sector must be exactly one array entry");
 
@@ -118,7 +113,12 @@ void BloomFilter::Seal(ClientContext &context) {
 		}
 	}
 	sealed = true;
-	useful = std::pow(density, static_cast<double>(N_BITS)) < USELESS_FALSE_POSITIVE_RATE;
+	// a filter that accepts more than the scan-time policy tolerates gets paused on its first vectors anyway,
+	// so it is not worth the memory it holds or the hashing it costs
+	float selectivity_threshold;
+	idx_t n_vectors_to_check;
+	GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType::BF, selectivity_threshold, n_vectors_to_check);
+	useful = std::pow(density, static_cast<double>(N_BITS)) < static_cast<double>(selectivity_threshold);
 }
 
 idx_t BloomFilter::GetNumberOfSectors(idx_t number_of_rows) {

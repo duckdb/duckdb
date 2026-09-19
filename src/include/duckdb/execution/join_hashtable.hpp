@@ -586,15 +586,15 @@ public:
 	shared_ptr<BloomFilter> GetBloomFilter() {
 		return bloom_filter;
 	}
-	//! Seals the bloom filter, dropping it instead if it ended up too saturated to prune anything
+	//! Marks the bloom filter complete. The reference stays, because the thread-local tables hold it too
 	void SealBloomFilter() {
-		if (!bloom_filter) {
-			return;
+		if (bloom_filter) {
+			bloom_filter->Seal(context);
 		}
-		bloom_filter->Seal(context);
-		if (!bloom_filter->IsUseful()) {
-			bloom_filter.reset();
-		}
+	}
+	//! Whether the filter is complete and rejects enough for pushing it into a scan to pay off
+	bool HasPublishableBloomFilter() const {
+		return bloom_filter && bloom_filter->IsSealed() && bloom_filter->IsUseful();
 	}
 
 	void SetPrefixRangeFilter(unique_ptr<PrefixRangeFilter> filter) {
