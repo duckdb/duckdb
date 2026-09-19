@@ -171,6 +171,19 @@ SELECT rn, c FROM t MATCH_RECOGNIZE(
 5	D
 6	D
 
+# What a row was classified as differs between two ways of reaching the same state, so a walk that
+# reads it cannot reuse a dead end found the other way: here A takes the first row and C fails on
+# it, and the match is only found once B takes the first row instead. (One other engine keeps the
+# dead end and finds nothing; it retries when the same condition reads a column of B instead.)
+query IT
+SELECT rn, c FROM (VALUES (1, 1), (2, 2)) v(rn, x) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES CLASSIFIER() AS c ALL ROWS PER MATCH
+    PATTERN ((A | B) C) DEFINE A AS true, B AS true, C AS PREV(CLASSIFIER()) = 'B'
+) ORDER BY rn
+----
+1	B
+2	C
+
 # ---------------------------------------------------------------- what is refused
 
 # the variable in front of CLASSIFIER is used the way a column's qualifier is, so it cannot be

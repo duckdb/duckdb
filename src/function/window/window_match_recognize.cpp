@@ -1026,9 +1026,10 @@ private:
 //! answer the same way each time (see PatternMemo). The strongest reason any of them gives wins.
 static PatternMemo RequiredMemo(const MatchRecognizeFunctionData &config) {
 	// the match as a whole starts where the attempt does, but which rows were matched to a variable
-	// differs between two ways of reaching the same state
+	// differs between two ways of reaching the same state - and so does what any row of it was
+	// classified as, which a navigation over CLASSIFIER() reads whether or not it names a variable
 	for (auto &navigation : config.navigations) {
-		if (!navigation.symbol.empty()) {
+		if (!navigation.symbol.empty() || navigation.classifier) {
 			return PatternMemo::HISTORY;
 		}
 	}
