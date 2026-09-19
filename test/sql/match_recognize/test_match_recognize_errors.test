@@ -423,12 +423,14 @@ FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
 ----
 may not contain a subquery
 
-statement error
+# CLASSIFIER() navigated in a condition reads the classifier of the row navigated to; the last row
+# mapped so far is the one being tested, which is the variable being defined
+query I
 FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS LAST(CLASSIFIER()) = 'A'
 )
 ----
-CLASSIFIER() only means something while the matcher is assembling a match
+2
 
 statement error
 FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (

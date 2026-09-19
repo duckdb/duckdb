@@ -231,6 +231,10 @@ static void HoistMeasureNavigation(unique_ptr<ParsedExpression> &expr, const Win
 				throw BinderException("%s() takes an expression and an optional offset", function_name);
 			}
 			MatchRecognizeRejectNestedStep(arguments[0].GetExpression(), function_name);
+			if (MatchRecognizeContainsClassifier(arguments[0].GetExpression())) {
+				// no row is classified below the matcher, so this one is read off the finished match
+				return;
+			}
 			for (auto &argument : arguments) {
 				HoistMeasureNavigation(argument.GetExpressionMutable(), pattern_window, symbols, universal, hoisted,
 				                       names);
@@ -502,6 +506,10 @@ BuildMatcherInputs(BoundSelectNode &define_node, const vector<MatchRecognizeNavi
 	// handed is what the navigation descriptor names
 	unordered_set<idx_t> navigation_fields;
 	for (auto &navigation : navigations) {
+		if (navigation.classifier) {
+			// the matcher supplies the classifier itself, in a field placed once its own are counted
+			continue;
+		}
 		auto &projected = define_node.select_list[navigation.column];
 		unique_ptr<Expression> column = make_uniq<BoundColumnRefExpression>(
 		    projected->GetAlias(), projected->GetReturnType(),
@@ -536,10 +544,21 @@ BuildMatcherInputs(BoundSelectNode &define_node, const vector<MatchRecognizeNavi
 	match_data.match_number_field = children.size();
 	unordered_set<idx_t> aggregate_fields;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
-		const auto field = match_data.match_number_field + 1 + i;
+		const auto field = match_data.match_number_field + aggregates[i].slot;
 		match_data.aggregates.push_back(MatchRecognizeFunctionData::Aggregate {
 		    aggregates[i].symbol, aggregate_operands[i], field, std::move(aggregates[i].expression)});
 		aggregate_fields.insert(field);
+	}
+	for (auto &navigation : navigations) {
+		if (!navigation.classifier) {
+			continue;
+		}
+		MatchRecognizeFunctionData::Navigation supplied {
+		    navigation.last, navigation.symbol, match_data.match_number_field + navigation.slot, navigation.offset};
+		supplied.classifier = true;
+		supplied.step = navigation.step;
+		match_data.navigations.push_back(supplied);
+		navigation_fields.insert(supplied.field);
 	}
 	for (auto &condition : conditions) {
 		bool reads_match_number = false;

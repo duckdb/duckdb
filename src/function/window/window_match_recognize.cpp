@@ -204,6 +204,8 @@ void WindowMatchRecognizeExecutor::Serialize(Serializer &serializer, const optio
 			child.WriteProperty(101, "symbol", navigation.symbol);
 			child.WriteProperty(102, "field", navigation.field);
 			child.WriteProperty(103, "offset", navigation.offset);
+			child.WritePropertyWithDefault<bool>(104, "classifier", navigation.classifier);
+			child.WritePropertyWithDefault<int64_t>(105, "step", navigation.step);
 		});
 	});
 	serializer.WriteList(109, "subsets", config.subsets.size(), [&](Serializer::List &list, idx_t i) {
@@ -243,6 +245,8 @@ unique_ptr<FunctionData> WindowMatchRecognizeExecutor::Deserialize(Deserializer 
 			navigation.symbol = child.ReadProperty<string>(101, "symbol");
 			navigation.field = child.ReadProperty<idx_t>(102, "field");
 			navigation.offset = child.ReadProperty<idx_t>(103, "offset");
+			navigation.classifier = child.ReadPropertyWithDefault<bool>(104, "classifier");
+			navigation.step = child.ReadPropertyWithDefault<int64_t>(105, "step");
 			result->navigations.push_back(navigation);
 		});
 	});
@@ -514,6 +518,9 @@ public:
 		for (auto &navigation : config.navigations) {
 			navigation_runs.push_back(navigation.symbol.empty() ? DConstants::INVALID_INDEX
 			                                                    : runs.Track(lookup(navigation.symbol)));
+			if (navigation.classifier) {
+				runs.TrackClassifiers();
+			}
 		}
 		// an aggregate's rows are recorded from the first call on, so its run is built here rather than
 		// with the rest of what a condition needs
@@ -586,14 +593,28 @@ public:
 				target.SetValue(0, Value::UBIGINT(match_number));
 				break;
 			case FieldSource::NAVIGATION: {
-				const auto navigated = Navigate(config.navigations[plan.index], plan.index, row);
-				if (navigated.IsValid()) {
+				auto &navigation = config.navigations[plan.index];
+				auto navigated = Navigate(navigation, plan.index, row);
+				if (navigated.IsValid() && navigation.step != 0) {
+					// a step from the row navigated to walks the partition, and a condition only knows
+					// the rows of the match so far: before its start, or past the row being tested,
+					// there is nothing it can read (5.6.2, 5.9)
+					const auto stepped = NumericCast<int64_t>(navigated.GetIndex()) + navigation.step;
+					navigated = stepped >= NumericCast<int64_t>(match_start) && stepped <= NumericCast<int64_t>(row)
+					                ? optional_idx(NumericCast<idx_t>(stepped))
+					                : optional_idx();
+				}
+				if (!navigated.IsValid()) {
+					// the match has no such row, which is what the condition reads as NULL
+					target.Reference(*field_nulls[field]);
+				} else if (navigation.classifier) {
+					// the classifier of a row of the attempt under way, which the matcher knows itself
+					const auto symbol = runs.ClassifierOf(navigated.GetIndex());
+					target.Reference(symbol == DConstants::INVALID_INDEX ? *field_nulls[field] : *symbol_names[symbol]);
+				} else {
 					// a cursor of its own, because seeking the row being tested would move this one
 					auto &cursor = *navigation_cursors[plan.index];
 					target.Reference(field_rows[field]->Read(cursor, field, navigated.GetIndex()));
-				} else {
-					// the match has no such row, which is what the condition reads as NULL
-					target.Reference(*field_nulls[field]);
 				}
 				break;
 			}
@@ -640,9 +661,23 @@ private:
 		for (auto &aggregate : config.aggregates) {
 			supplied = MaxValue<idx_t>(supplied, aggregate.field + 1);
 		}
+		for (auto &navigation : config.navigations) {
+			if (navigation.classifier) {
+				supplied = MaxValue<idx_t>(supplied, navigation.field + 1);
+			}
+		}
 		types.resize(MaxValue<idx_t>(types.size(), supplied), LogicalType::UBIGINT);
 		for (auto &aggregate : config.aggregates) {
 			types[aggregate.field] = aggregate.expression->GetReturnType();
+		}
+		for (auto &navigation : config.navigations) {
+			if (navigation.classifier) {
+				types[navigation.field] = LogicalType::VARCHAR;
+			}
+		}
+		// what a navigation reading a classifier points its field at: one constant per symbol
+		for (auto &name : gstate.classifier_names) {
+			symbol_names.push_back(make_uniq<Vector>(Value(name), count_t(1)));
 		}
 		row_chunk.Initialize(context.client, types, 1);
 		// one expression is evaluated at a time here, so the result holds a single column
@@ -659,12 +694,16 @@ private:
 		// match reads a row that is not there, which is the one value it needs of its own
 		field_rows.resize(field_plan.size());
 		field_nulls.resize(field_plan.size());
-		for (idx_t field = 0; field < field_plan.size() && field < columns_idx.size(); field++) {
+		for (idx_t field = 0; field < field_plan.size(); field++) {
 			auto &plan = field_plan[field];
 			if (plan.source != FieldSource::CURRENT_ROW && plan.source != FieldSource::NAVIGATION) {
 				continue;
 			}
-			field_rows[field] = make_uniq<CursorRow>(types[field]);
+			// a classifier is supplied by the matcher rather than read off a collected column
+			const bool collected = field < columns_idx.size();
+			if (collected) {
+				field_rows[field] = make_uniq<CursorRow>(types[field]);
+			}
 			if (plan.source == FieldSource::NAVIGATION) {
 				field_nulls[field] = make_uniq<Vector>(types[field], 1U);
 				field_nulls[field]->SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -779,7 +818,16 @@ private:
 			return symbols.size() - 1;
 		}
 		bool Empty() const {
-			return symbols.empty();
+			return symbols.empty() && !classifying;
+		}
+		//! Remember what each row was classified as, for a navigation that reads a row's classifier
+		void TrackClassifiers() {
+			classifying = true;
+		}
+		//! The symbol `row` was classified as in the attempt under way, if it was
+		idx_t ClassifierOf(idx_t row) const {
+			const auto at = row - start;
+			return row >= start && at < classified.size() ? classified[at] : DConstants::INVALID_INDEX;
 		}
 		const vector<idx_t> &Rows(idx_t tracked) const {
 			return runs[tracked];
@@ -791,14 +839,16 @@ private:
 			return versions[tracked];
 		}
 
-		void BeginMatch(idx_t start) {
+		void BeginMatch(idx_t start_p) {
 			for (idx_t i = 0; i < runs.size(); i++) {
 				if (!runs[i].empty()) {
 					runs[i].clear();
 					++versions[i];
 				}
 			}
-			next_row = start;
+			classified.clear();
+			start = start_p;
+			next_row = start_p;
 		}
 
 		//! Record that `row` was classified as `symbol`
@@ -819,6 +869,10 @@ private:
 					runs[i].push_back(row);
 				}
 			}
+			if (classifying) {
+				classified.resize(row - start);
+				classified.push_back(symbol);
+			}
 			next_row = row + 1;
 		}
 
@@ -828,6 +882,10 @@ private:
 		vector<vector<idx_t>> runs;
 		//! Bumped for a run whenever it gives rows back
 		vector<idx_t> versions;
+		//! What each row from the match's start on was classified as, kept only when something reads it
+		bool classifying = false;
+		idx_t start = 0;
+		vector<idx_t> classified;
 		//! One past the last row a classification was recorded for
 		idx_t next_row = 0;
 	};
@@ -917,6 +975,8 @@ private:
 	//! One view per field that reads a collected row, and the NULL a navigation off the match reads
 	vector<unique_ptr<CursorRow>> field_rows;
 	vector<unique_ptr<Vector>> field_nulls;
+	//! The name of each symbol as a constant, for a navigation that reads a row's classifier
+	vector<unique_ptr<Vector>> symbol_names;
 	//! The fields each condition reads, so that deciding one copies no more than it needs
 	vector<vector<idx_t>> condition_fields;
 	//! Reads the row being tested. Owned by this thread, like the ones below.

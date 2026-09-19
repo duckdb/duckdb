@@ -78,28 +78,29 @@ b	1
 b	1
 
 # CLASSIFIER() reads as the symbol being defined because the row being tested is the one the
-# condition decides on. Naming another row's symbol is a different question, and not one the
-# matcher answers yet - it used to answer it with this row's symbol.
-statement error
+# condition decides on; stepped back a row, it reads what that row was mapped to in the attempt
+query I
 SELECT count(*) FROM ev MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS n PATTERN (A B) DEFINE A AS true, B AS PREV(CLASSIFIER()) = 'A'
 )
 ----
-<REGEX>:Binder Error:.*CLASSIFIER\(\) only means something while the matcher is assembling a match.*
+3
 
-statement error
+# stepped forward it reads a row the attempt has not mapped yet, which is NULL (5.9)
+query I
 SELECT count(*) FROM ev MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS n PATTERN (A B) DEFINE A AS true, B AS NEXT(CLASSIFIER()) = 'A'
 )
 ----
-<REGEX>:Binder Error:.*CLASSIFIER\(\) only means something while the matcher is assembling a match.*
+0
 
-statement error
+# the last row mapped so far is the one being tested, so this reads the variable being defined
+query I
 SELECT count(*) FROM ev MATCH_RECOGNIZE(
     ORDER BY i MEASURES count(*) AS n PATTERN (A B) DEFINE A AS true, B AS LAST(CLASSIFIER()) = 'A'
 )
 ----
-<REGEX>:Binder Error:.*CLASSIFIER\(\) only means something while the matcher is assembling a match.*
+0
 
 # on its own it still resolves
 query I

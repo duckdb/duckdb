@@ -23,6 +23,9 @@ constexpr const char *MATCH_RECOGNIZE_MATCH_NUMBER_COLUMN = "__mr_match_number";
 //! RUNNING and FINAL reach the binder as these markers, wrapping the measure they applied to
 constexpr const char *MATCH_RECOGNIZE_RUNNING_MARKER = "__mr_running";
 constexpr const char *MATCH_RECOGNIZE_FINAL_MARKER = "__mr_final";
+//! What CLASSIFIER(X) reads off a row: written as a column of X while a navigation or an aggregate
+//! is resolved, so that the variable it names scopes it the way it scopes a column (5.9)
+constexpr const char *MATCH_RECOGNIZE_CLASSIFIER_FIELD = "__mr_classifier";
 
 //! The plan column a pattern variable is qualified with
 inline string MatchRecognizeDefineColumn(const string &symbol) {
@@ -111,9 +114,16 @@ struct MatchRecognizeFunctionData : FunctionData {
 		string symbol;
 		idx_t field;
 		idx_t offset;
+		//! Whether what is read off the row reached is its classifier rather than a column, which
+		//! the matcher supplies itself
+		bool classifier = false;
+		//! Rows to step through the partition from the row navigated to, backwards when negative,
+		//! which is PREV or NEXT around the navigation (5.6.4, 5.9)
+		int64_t step = 0;
 
 		bool Equals(const Navigation &other) const {
-			return last == other.last && symbol == other.symbol && field == other.field && offset == other.offset;
+			return last == other.last && symbol == other.symbol && field == other.field && offset == other.offset &&
+			       classifier == other.classifier && step == other.step;
 		}
 	};
 	vector<Navigation> navigations;
