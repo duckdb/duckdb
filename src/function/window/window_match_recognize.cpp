@@ -655,13 +655,17 @@ private:
 			positions = runs.Rows(run.rows);
 		}
 		const idx_t needed = positions ? positions->size() : row - match_start + 1;
+		// a run that gave rows back holds different rows than the state folded, whatever it now
+		// counts; the match as a whole gives them back by covering fewer rows than before
+		const idx_t version = positions ? runs.Version(run.rows) : 0;
 
-		if (run.begin != match_start || needed < run.folded) {
+		if (run.begin != match_start || needed < run.folded || version != run.version) {
 			auto state = run.running.GetStatePtr(0);
 			AggregateStateInput state_input(run.aggr.function, run.aggr.GetFunctionData());
 			run.aggr.function.GetStateInitCallback()(state_input, &state, 1);
 			run.folded = 0;
 			run.begin = match_start;
+			run.version = version;
 		}
 		AggregateInputData input_data(run.aggr, run.running.allocator);
 		for (idx_t i = run.folded; i < needed; i++) {
@@ -714,6 +718,7 @@ private:
 			}
 			symbols.push_back(symbol);
 			runs.emplace_back();
+			versions.push_back(0);
 			return symbols.size() - 1;
 		}
 		bool Empty() const {
@@ -722,10 +727,19 @@ private:
 		const vector<idx_t> &Rows(idx_t tracked) const {
 			return runs[tracked];
 		}
+		//! Changes whenever rows are given back, which is the one thing that makes a run's rows
+		//! differ from the ones a reading of it already folded in - giving back two rows and taking
+		//! two more leaves the count alone, so the count cannot say it
+		idx_t Version(idx_t tracked) const {
+			return versions[tracked];
+		}
 
 		void BeginMatch(idx_t start) {
-			for (auto &run : runs) {
-				run.clear();
+			for (idx_t i = 0; i < runs.size(); i++) {
+				if (!runs[i].empty()) {
+					runs[i].clear();
+					++versions[i];
+				}
 			}
 			next_row = start;
 		}
@@ -734,10 +748,13 @@ private:
 		void Classify(idx_t symbol, idx_t row) {
 			D_ASSERT(row <= next_row);
 			if (row < next_row) {
-				for (auto &run : runs) {
+				for (idx_t i = 0; i < runs.size(); i++) {
+					auto &run = runs[i];
+					const auto had = run.size();
 					while (!run.empty() && run.back() >= row) {
 						run.pop_back();
 					}
+					versions[i] += (run.size() != had);
 				}
 			}
 			for (idx_t i = 0; i < symbols.size(); i++) {
@@ -752,6 +769,8 @@ private:
 		//! The symbols read, and the rows of the match classified as each
 		vector<idx_t> symbols;
 		vector<vector<idx_t>> runs;
+		//! Bumped for a run whenever it gives rows back
+		vector<idx_t> versions;
 		//! One past the last row a classification was recorded for
 		idx_t next_row = 0;
 	};
@@ -868,8 +887,10 @@ private:
 		WindowAggregateStates running;
 		//! one pointer per row folded, all of them the running state's
 		Vector statep {LogicalType::POINTER};
-		//! how many of the variable's rows the running state holds
+		//! how many of the variable's rows the running state holds, and which shape of the run they
+		//! were taken from
 		idx_t folded = 0;
+		idx_t version = 0;
 		//! the match the state belongs to, so that a new one is noticed
 		idx_t begin = DConstants::INVALID_INDEX;
 		//! Its own cursor, because two aggregates can be reading two different rows at once

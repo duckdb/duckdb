@@ -162,6 +162,89 @@ SELECT n FROM (VALUES (1,5),(2,7),(3,9),(4,2)) t(rn,v) MATCH_RECOGNIZE(
 2
 2
 
+# ---------------------------------------------------------------- read together
+
+# A navigation and an aggregate over the same variable read the same rows, and a match that gives
+# rows back has to give them back to both at once. Every answer below was checked against another
+# engine before it was written down.
+
+query T
+SELECT cls FROM (VALUES (1,2),(2,4),(3,6),(4,3),(5,20)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES CLASSIFIER() AS cls ALL ROWS PER MATCH
+    PATTERN (A+ B) DEFINE A AS v >= FIRST(A.v) AND sum(A.v) < 50, B AS v > 10
+) ORDER BY rn
+----
+A
+A
+A
+A
+B
+
+# two aggregates over one variable
+query I
+SELECT n FROM (VALUES (1,5),(2,3),(3,8),(4,1)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES count(*) AS n ONE ROW PER MATCH
+    PATTERN (A+) DEFINE A AS sum(A.v) < 20 AND max(A.v) < 9
+)
+----
+4
+
+# an aggregate and a navigation reading opposite ends of the same run
+query I
+SELECT n FROM (VALUES (1,9),(2,3),(3,7),(4,1)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES count(*) AS n ONE ROW PER MATCH
+    PATTERN (A+) DEFINE A AS min(A.v) <= LAST(A.v) AND count(A.v) <= 3
+) ORDER BY n
+----
+1
+3
+
+# an aggregate over one variable read from the condition of another, alongside a navigation of it
+query T
+SELECT cls FROM (VALUES (1,1),(2,2),(3,9),(4,10)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES CLASSIFIER() AS cls ALL ROWS PER MATCH
+    PATTERN (A+ B+) DEFINE A AS v < 5, B AS v > sum(A.v) AND v > FIRST(A.v)
+) ORDER BY rn
+----
+A
+A
+B
+B
+
+# a navigation over the whole match, which reads its ends rather than a variable's rows, beside an
+# aggregate that does read one variable's
+query I
+SELECT n FROM (VALUES (1,3),(2,4),(3,5),(4,1)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES count(*) AS n ONE ROW PER MATCH
+    PATTERN (A+) DEFINE A AS v >= FIRST(v) AND avg(A.v) >= 3
+)
+----
+3
+
+# Rows given back and the same number taken again leave the count of what a variable matched alone
+# while changing which rows they are, so a running state cannot carry on from what it holds. Here A
+# takes two rows, B is tried on the last row and fails, and A gives one back - which puts B on a row
+# it can match, reading only that row.
+query IT
+SELECT rn, cls FROM (VALUES (1,8),(2,11),(3,-2)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES CLASSIFIER() AS cls ALL ROWS PER MATCH
+    PATTERN (A{1,2} B+) DEFINE A AS true, B AS min(B.v) > 0
+) ORDER BY rn
+----
+1	A
+2	B
+
+# the same, giving back two rows over two attempts before the match is found
+query IT
+SELECT rn, cls FROM (VALUES (1,5),(2,5),(3,5),(4,-1),(5,9)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES CLASSIFIER() AS cls ALL ROWS PER MATCH
+    PATTERN (A{1,3} B{2}) DEFINE A AS true, B AS min(B.v) > 0
+) ORDER BY rn
+----
+1	A
+2	B
+3	B
+
 # ---------------------------------------------------------------- what is refused
 
 # The rows a variable matches have to be one run of the match for the aggregate to fold them as they
