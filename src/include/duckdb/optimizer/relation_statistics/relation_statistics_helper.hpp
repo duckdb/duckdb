@@ -30,6 +30,7 @@ class LogicalWindow;
 class RelationStatisticsHelper {
 public:
 	static constexpr double DEFAULT_SELECTIVITY = 0.2;
+	static constexpr idx_t DEFAULT_UNNEST_CARDINALITY = 10;
 
 public:
 	static idx_t InspectTableFilter(idx_t cardinality, const TableFilter &filter, BaseStatistics &base_stats);
@@ -51,6 +52,7 @@ public:
 	static optional<RelationStats> ProjectOutputStats(const RelationStats &stats, LogicalOperator &op);
 	static optional<RelationStats> RebindOutputStats(const RelationStats &stats, LogicalOperator &op);
 	static idx_t EstimateDistinctCardinality(const vector<DistinctCount> &distinct_counts, idx_t input_cardinality);
+	static idx_t EstimateUnnestCardinality(const LogicalGet &get);
 
 private:
 	static unique_ptr<BaseStatistics> GetColumnStatistics(LogicalGet &get, ClientContext &context,

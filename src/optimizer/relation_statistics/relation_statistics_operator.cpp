@@ -1,9 +1,91 @@
 #include "duckdb/optimizer/relation_statistics/relation_statistics_helper.hpp"
 
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_unnest_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
 namespace duckdb {
+
+static idx_t MultiplyCardinalities(idx_t left, idx_t right) {
+	idx_t result;
+	if (!TryMultiplyOperator::Operation(left, right, result)) {
+		return NumericLimits<idx_t>::Maximum();
+	}
+	return result;
+}
+
+static optional<idx_t> GetCollectionValueCardinality(const Value &value) {
+	if (value.IsNull()) {
+		return 0;
+	}
+	switch (value.type().id()) {
+	case LogicalTypeId::LIST:
+		return ListValue::GetChildren(value).size();
+	case LogicalTypeId::ARRAY:
+		return ArrayValue::GetChildren(value).size();
+	default:
+		return {};
+	}
+}
+
+static optional<idx_t> GetUnnestExpressionCardinality(const Expression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		return GetCollectionValueCardinality(expr.Cast<BoundConstantExpression>().GetValue());
+	}
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return {};
+	}
+	auto &function = expr.Cast<BoundFunctionExpression>();
+	if (function.Function().GetName() == "list_value") {
+		return function.GetChildren().size();
+	}
+	if (BoundCastExpression::IsCast(function)) {
+		auto &child = BoundCastExpression::Child(function);
+		if (child.GetReturnType().id() == LogicalTypeId::ARRAY) {
+			return ArrayType::GetSize(child.GetReturnType());
+		}
+		return GetUnnestExpressionCardinality(child);
+	}
+	return {};
+}
+
+static idx_t GetUnnestCardinality(const LogicalUnnest &unnest) {
+	idx_t cardinality = 0;
+	for (auto &expression : unnest.expressions) {
+		auto &child = expression->Cast<BoundUnnestExpression>().Child();
+		// Multiple UNNEST expressions are emitted side-by-side and padded to the longest collection.
+		cardinality = MaxValue(cardinality, GetUnnestExpressionCardinality(*child).value_or(
+		                                        RelationStatisticsHelper::DEFAULT_UNNEST_CARDINALITY));
+	}
+	return cardinality;
+}
+
+idx_t RelationStatisticsHelper::EstimateUnnestCardinality(const LogicalGet &get) {
+	if (get.parameters.size() == 1) {
+		auto cardinality = GetCollectionValueCardinality(get.parameters[0]);
+		if (cardinality) {
+			return *cardinality;
+		}
+	}
+	if (get.input_table_types.size() == 1 && get.input_table_types[0].id() == LogicalTypeId::ARRAY) {
+		return ArrayType::GetSize(get.input_table_types[0]);
+	}
+	return DEFAULT_UNNEST_CARDINALITY;
+}
+
+static void SetUnnestGetCardinality(LogicalGet &get, RelationStats &stats, idx_t input_cardinality) {
+	stats.cardinality =
+	    MultiplyCardinalities(input_cardinality, RelationStatisticsHelper::EstimateUnnestCardinality(get));
+	for (auto &column : stats.columns) {
+		if (column.binding.table_index == get.table_index &&
+		    column.distinct_count.source == DistinctCountSource::CARDINALITY) {
+			column.distinct_count = DistinctCount(stats.cardinality, DistinctCountSource::CARDINALITY);
+		}
+	}
+}
 
 static optional<RelationStats>
 ProjectChildStats(LogicalOperator &op, const vector<reference<const RelationStats>> &children, idx_t cardinality) {
@@ -46,7 +128,11 @@ static idx_t JoinCardinality(LogicalComparisonJoin &join, const RelationStats &l
 static optional<RelationStats> ExtractGetWithChildStats(LogicalGet &get, ClientContext &context,
                                                         const RelationStats &child_stats) {
 	auto result = RelationStatisticsHelper::ExtractGetStats(get, context);
-	result.cardinality = child_stats.cardinality;
+	if (ExpressionBinder::IsUnnestFunction(get.function.name)) {
+		SetUnnestGetCardinality(get, result, child_stats.cardinality);
+	} else {
+		result.cardinality = child_stats.cardinality;
+	}
 	for (auto &binding : get.GetColumnBindings()) {
 		if (binding.table_index == get.table_index) {
 			continue;
@@ -64,7 +150,7 @@ static optional<RelationStats> ExtractGetWithChildStats(LogicalGet &get, ClientC
 static optional<RelationStats> ExtractUnnestStats(LogicalOperator &op, const RelationStats &child_stats) {
 	auto &unnest = op.Cast<LogicalUnnest>();
 	RelationStats result;
-	result.cardinality = child_stats.cardinality;
+	result.cardinality = MultiplyCardinalities(child_stats.cardinality, GetUnnestCardinality(unnest));
 	result.stats_initialized = true;
 	result.table_name = Identifier(op.GetName());
 	for (auto &binding : op.GetColumnBindings()) {
@@ -118,11 +204,7 @@ static optional<RelationStats> ExtractCrossProductStats(LogicalOperator &op,
 	if (child_stats.size() != 2) {
 		return {};
 	}
-	idx_t cardinality;
-	if (!TryMultiplyOperator::Operation(child_stats[0].get().cardinality, child_stats[1].get().cardinality,
-	                                    cardinality)) {
-		cardinality = NumericLimits<idx_t>::Maximum();
-	}
+	auto cardinality = MultiplyCardinalities(child_stats[0].get().cardinality, child_stats[1].get().cardinality);
 	return ProjectChildStats(op, child_stats, cardinality);
 }
 
