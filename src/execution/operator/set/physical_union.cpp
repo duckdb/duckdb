@@ -35,6 +35,8 @@ static bool ContainsSink(PhysicalOperator &op) {
 void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	op_state.reset();
 	sink_state.reset();
+	const auto finalize_streaming_windows = current.ShouldFinalizeStreamingWindows();
+	current.DisableStreamingWindowFinalization();
 
 	// order matters if any of the downstream operators are order dependent,
 	// or if the sink preserves order, but does not support batch indices to do so
@@ -63,6 +65,9 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 	vector<reference<Pipeline>> union_pipelines;
 	for (idx_t i = 0; i + 1 < children.size(); i++) {
 		auto &union_pipeline = meta_pipeline.CreateUnionPipeline(current, order_matters);
+		if (i > 0 || !finalize_streaming_windows) {
+			union_pipeline.DisableStreamingWindowFinalization();
+		}
 		union_pipelines.push_back(union_pipeline);
 	}
 	// continue with the current pipeline
