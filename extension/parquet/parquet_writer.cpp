@@ -104,6 +104,10 @@ public:
 		return size;
 	}
 
+	idx_t AllocationSize() const override {
+		return stream->GetCapacity();
+	}
+
 private:
 	unique_ptr<MemoryStream> stream;
 	data_ptr_t data;
