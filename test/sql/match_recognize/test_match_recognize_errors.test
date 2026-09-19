@@ -30,7 +30,7 @@ SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x DEFINE A as true)
 
 # a variable with no condition matches any row, so DEFINE may be left out entirely
 query I
-SELECT count(*) FROM q MATCH_RECOGNIZE(MEASURES count(*) AS n ONE ROW PER MATCH PATTERN (A))
+SELECT count(*) FROM q MATCH_RECOGNIZE(MEASURES count(*) AS n ONE ROW PER MATCH PATTERN (A) DEFINE A AS true)
 ----
 2
 
@@ -42,7 +42,7 @@ SELECT count(*) FROM q MATCH_RECOGNIZE(ORDER BY i ALL ROWS PER MATCH PATTERN (A)
 
 # with neither, the pattern's shape alone decides the match
 query I
-SELECT count(*) FROM q MATCH_RECOGNIZE(ORDER BY i ALL ROWS PER MATCH PATTERN (A B))
+SELECT count(*) FROM q MATCH_RECOGNIZE(ORDER BY i ALL ROWS PER MATCH PATTERN (A B) DEFINE A AS true)
 ----
 2
 
@@ -443,14 +443,14 @@ Nested row pattern navigation is not supported
 statement error
 FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP TO FIRST Z PATTERN (A B)
-)
+ DEFINE A AS true)
 ----
 not a pattern variable
 
 query I
 FROM (VALUES (1), (2), (3), (4)) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP TO LAST B PATTERN (A B)
-)
+ DEFINE A AS true)
 ----
 2
 2

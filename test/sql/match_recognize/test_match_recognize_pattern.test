@@ -567,14 +567,14 @@ SELECT count(*), max(len) FROM abc MATCH_RECOGNIZE(
 query I
 SELECT count(*) FROM range(700) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES count(*) AS n PATTERN ((A{700}){700})
-)
+ DEFINE A AS true)
 ----
 0
 
 statement error
 FROM range(700) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES count(*) AS n PATTERN ((((A?){700}){700}){3})
-)
+ DEFINE A AS true)
 ----
 <REGEX>:Invalid Input Error:.*compiles to more than.*instructions.*
 
@@ -594,7 +594,7 @@ FROM (VALUES (1), (2), (3)) t(x) MATCH_RECOGNIZE (
 query I
 FROM range(6) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (A{2,3})
-)
+ DEFINE A AS true)
 ----
 3
 3
@@ -602,7 +602,7 @@ FROM range(6) t(x) MATCH_RECOGNIZE (
 query I
 FROM range(6) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (A{2,3}?)
-)
+ DEFINE A AS true)
 ----
 2
 2
@@ -611,7 +611,7 @@ FROM range(6) t(x) MATCH_RECOGNIZE (
 query I
 FROM range(4) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES count(*) AS n PATTERN (^ A+ $)
-)
+ DEFINE A AS true)
 ----
 4
 
@@ -620,7 +620,7 @@ FROM range(4) t(x) MATCH_RECOGNIZE (
 query I
 FROM range(4) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (Z Z)
-)
+ DEFINE Z AS true)
 ----
 2
 2
@@ -629,7 +629,7 @@ query II
 FROM range(4) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES CLASSIFIER() AS c ALL ROWS PER MATCH
     AFTER MATCH SKIP PAST LAST ROW PATTERN (Z Y Z)
-) ORDER BY x
+ DEFINE Z AS true) ORDER BY x
 ----
 0	Z
 1	Y
@@ -638,9 +638,9 @@ FROM range(4) t(x) MATCH_RECOGNIZE (
 # two patterns that differ only in their bounds are not the same pattern
 query II
 SELECT (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
-            ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (A{2})))) AS a,
+            ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (A{2}) DEFINE A AS true))) AS a,
        (SELECT sum(n) FROM (FROM range(6) t(x) MATCH_RECOGNIZE (
-            ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (A{3})))) AS b
+            ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP PAST LAST ROW PATTERN (A{3}) DEFINE A AS true))) AS b
 ----
 6	6
 
