@@ -99,6 +99,99 @@ static unique_ptr<MatchRecognizePattern> BuildPattern(const ParsedExpression &ex
 	}
 }
 
+//! Collect every pattern variable a subtree names, and how many times it names each
+static void CountSymbols(const ParsedExpression &expr, case_insensitive_map_t<idx_t> &counts) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
+		counts[expr.Cast<ColumnRefExpression>().GetColumnName().GetIdentifierName()]++;
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(expr,
+	                                            [&](const ParsedExpression &child) { CountSymbols(child, counts); });
+}
+
+//! The rows a variable matches form one unbroken run unless the pattern can come back to it: naming
+//! it twice does that, and so does a quantifier that repeats a group holding it alongside anything
+//! else. An aggregate over a run reads a range of the match rather than a set of rows scattered
+//! through it, which is the difference between folding rows as they arrive and tracking them all.
+static void CollectContiguousSymbols(const ParsedExpression &expr, bool under_repeat, case_insensitive_set_t &sparse) {
+	if (expr.GetExpressionType() == ExpressionType::CONCATENATION) {
+		// naming a variable twice keeps its rows in one run only while the two namings sit next to
+		// each other and nothing else can match between them: A+ A is a run, A B A is not
+		auto &children = expr.Cast<ConcatenationExpression>().children;
+		vector<case_insensitive_map_t<idx_t>> per_child(children.size());
+		case_insensitive_set_t named;
+		for (idx_t i = 0; i < children.size(); i++) {
+			CountSymbols(*children[i], per_child[i]);
+			for (auto &entry : per_child[i]) {
+				named.insert(entry.first);
+			}
+		}
+		for (auto &symbol : named) {
+			optional_idx first;
+			idx_t last = 0;
+			idx_t seen = 0;
+			for (idx_t i = 0; i < children.size(); i++) {
+				if (!per_child[i].count(symbol)) {
+					continue;
+				}
+				if (!first.IsValid()) {
+					first = i;
+				}
+				last = i;
+				seen++;
+			}
+			if (seen <= 1) {
+				continue;
+			}
+			// every step between the first and the last has to be this variable and nothing else
+			for (idx_t i = first.GetIndex(); i <= last; i++) {
+				if (per_child[i].size() != 1 || !per_child[i].count(symbol)) {
+					sparse.insert(symbol);
+					break;
+				}
+			}
+		}
+		for (auto &child : children) {
+			CollectContiguousSymbols(*child, under_repeat, sparse);
+		}
+		return;
+	}
+	if (expr.GetExpressionType() == ExpressionType::QUANTIFIER) {
+		auto &quantifier = expr.Cast<QuantifiedExpression>();
+		const bool repeats = !quantifier.max_count.IsValid() || quantifier.max_count.GetIndex() > 1;
+		case_insensitive_map_t<idx_t> inside;
+		CountSymbols(*quantifier.child, inside);
+		// a quantifier over one variable repeats that variable's own rows, which stay a run; over
+		// anything larger the repetitions interleave
+		const bool interleaves = repeats && inside.size() > 1;
+		CollectContiguousSymbols(*quantifier.child, under_repeat || interleaves, sparse);
+		return;
+	}
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
+		if (under_repeat) {
+			sparse.insert(expr.Cast<ColumnRefExpression>().GetColumnName().GetIdentifierName());
+		}
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { CollectContiguousSymbols(child, under_repeat, sparse); });
+}
+
+//! The variables an aggregate can fold over without tracking their rows one by one
+static case_insensitive_set_t ContiguousSymbols(const ParsedExpression &pattern) {
+	case_insensitive_map_t<idx_t> counts;
+	CountSymbols(pattern, counts);
+	case_insensitive_set_t sparse;
+	CollectContiguousSymbols(pattern, false, sparse);
+	case_insensitive_set_t contiguous;
+	for (auto &entry : counts) {
+		if (!sparse.count(entry.first)) {
+			contiguous.insert(entry.first);
+		}
+	}
+	return contiguous;
+}
+
 //! A reference into the input only resolves where the input still is one, and every clause here is
 //! evaluated above a subquery of it - so it is computed down there verbatim and read back under a name
 //! of its own. Computing rather than rewriting is what keeps two tables' columns of the same name
@@ -499,11 +592,10 @@ static case_insensitive_map_t<vector<string>> BuildMeasureSymbols(const case_ins
 //! the conditions rewritten to read them by position. Every condition that depends on the match being
 //! assembled is marked as such, so that the matcher settles it per candidate row rather than once per
 //! partition - which after every match would be quadratic.
-static vector<unique_ptr<Expression>> BuildMatcherInputs(BoundSelectNode &define_node,
-                                                         const vector<MatchRecognizeNavigation> &navigations,
-                                                         TableIndex match_number_index,
-                                                         vector<unique_ptr<Expression>> &conditions,
-                                                         MatchRecognizeFunctionData &match_data) {
+static vector<unique_ptr<Expression>>
+BuildMatcherInputs(BoundSelectNode &define_node, const vector<MatchRecognizeNavigation> &navigations,
+                   vector<MatchRecognizeAggregate> &aggregates, TableIndex match_number_index,
+                   vector<unique_ptr<Expression>> &conditions, MatchRecognizeFunctionData &match_data) {
 	vector<unique_ptr<Expression>> children;
 	expression_map_t<idx_t> child_index;
 
@@ -521,11 +613,35 @@ static vector<unique_ptr<Expression>> BuildMatcherInputs(BoundSelectNode &define
 		navigation_fields.insert(field);
 	}
 
+	// an aggregate reads its operand off the rows the matcher has mapped, so the operand is one of the
+	// columns it is handed, the same as a navigation's is
+	vector<optional_idx> aggregate_operands;
+	for (auto &aggregate : aggregates) {
+		if (!aggregate.column.IsValid()) {
+			// COUNT(*) reads no column: what it counts is the rows themselves
+			aggregate_operands.emplace_back();
+			continue;
+		}
+		auto &projected = define_node.select_list[aggregate.column.GetIndex()];
+		unique_ptr<Expression> column = make_uniq<BoundColumnRefExpression>(
+		    projected->GetAlias(), projected->GetReturnType(),
+		    ColumnBinding(define_node.projection_index, ProjectionIndex(aggregate.column.GetIndex())));
+		aggregate_operands.emplace_back(AddMatcherInput(column, children, child_index));
+	}
+
 	for (auto &condition : conditions) {
 		RebindToMatcherInputs(condition, children, child_index, match_number_index);
 	}
-	// the matcher's own field comes after the ones the plan supplies
+	// the matcher's own fields come after the ones the plan supplies: the match number first, then one
+	// per aggregate for the value it folds to
 	match_data.match_number_field = children.size();
+	unordered_set<idx_t> aggregate_fields;
+	for (idx_t i = 0; i < aggregates.size(); i++) {
+		const auto field = match_data.match_number_field + 1 + i;
+		match_data.aggregates.push_back(MatchRecognizeFunctionData::Aggregate {
+		    aggregates[i].symbol, aggregate_operands[i], field, std::move(aggregates[i].expression)});
+		aggregate_fields.insert(field);
+	}
 	for (auto &condition : conditions) {
 		bool reads_match_number = false;
 		bool reads_navigation = false;
@@ -534,13 +650,16 @@ static vector<unique_ptr<Expression>> BuildMatcherInputs(BoundSelectNode &define
 			    if (colref.Binding().table_index != match_number_index) {
 				    return;
 			    }
+			    // the match number is the first of them, an aggregate's value one of the rest
+			    const auto slot = colref.Binding().column_index;
 			    child = make_uniq<BoundReferenceExpression>(colref.GetAlias(), colref.GetReturnType(),
-			                                                match_data.match_number_field);
-			    reads_match_number = true;
+			                                                match_data.match_number_field + slot);
+			    reads_match_number = reads_match_number || slot == 0;
 		    });
 		ExpressionIterator::VisitExpression<BoundReferenceExpression>(
 		    *condition, [&](const BoundReferenceExpression &bound_ref) {
-			    reads_navigation = reads_navigation || navigation_fields.count(bound_ref.Index()) > 0;
+			    reads_navigation = reads_navigation || navigation_fields.count(bound_ref.Index()) > 0 ||
+			                       aggregate_fields.count(bound_ref.Index()) > 0;
 		    });
 		match_data.row_scoped.push_back(reads_navigation || reads_match_number);
 		match_data.depends_on_match_number = match_data.depends_on_match_number || reads_match_number;
@@ -937,6 +1056,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 
 	vector<string> hidden_columns;
 	vector<MatchRecognizeNavigation> navigations;
+	vector<MatchRecognizeAggregate> condition_aggregates;
 	// MATCH_NUMBER() is the one thing a condition reads that the plan does not supply. Until the field
 	// it lands in is known it is a column of a table no operator produces - a column rather than a
 	// reference, so that it is captured out of a lambda body the way any other value is.
@@ -951,10 +1071,13 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	                                      define_node.types,
 	                                      hidden_columns,
 	                                      names,
-	                                      navigations};
+	                                      navigations,
+	                                      condition_aggregates};
 
 	MatchRecognizeDefineBinder condition_binder(*define_binder, context, define_node, inputs, *window_template,
 	                                            symbols.declared, input_refs.universal, match_number_ref);
+	const auto contiguous = ContiguousSymbols(*ref.config->pattern);
+	condition_binder.contiguous_symbols = &contiguous;
 	case_insensitive_set_t pattern_symbols;
 	vector<string> define_symbols;
 	auto define_conditions =
@@ -1009,7 +1132,8 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 		RemapToProjection(order.expression, inputs, input_columns);
 	}
 
-	auto children = BuildMatcherInputs(define_node, navigations, match_number_index, define_conditions, *match_data);
+	auto children = BuildMatcherInputs(define_node, navigations, condition_aggregates, match_number_index,
+	                                   define_conditions, *match_data);
 
 	MoveCorrelatedExpressions(*define_binder);
 

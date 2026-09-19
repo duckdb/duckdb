@@ -1,5 +1,8 @@
 #include "duckdb/function/window/window_match_recognize.hpp"
 
+#include "duckdb/function/window/window_aggregate_states.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+
 #include "duckdb/function/match_recognize.hpp"
 #include "duckdb/function/window/match_recognize_functions.hpp"
 #include "duckdb/function/window/match_recognize_matcher.hpp"
@@ -408,8 +411,15 @@ public:
 			field_plan[config.navigations[i].field] = FieldPlan {FieldSource::NAVIGATION, i};
 		}
 		// the collected column holds the constant the matcher rewrites per match, not the number
-		field_plan.resize(MaxValue<idx_t>(field_plan.size(), config.match_number_field + 1));
+		idx_t fields = config.match_number_field + 1;
+		for (auto &aggregate : config.aggregates) {
+			fields = MaxValue<idx_t>(fields, aggregate.field + 1);
+		}
+		field_plan.resize(MaxValue<idx_t>(field_plan.size(), fields));
 		field_plan[config.match_number_field] = FieldPlan {FieldSource::MATCH_NUMBER, DConstants::INVALID_INDEX};
+		for (idx_t i = 0; i < config.aggregates.size(); i++) {
+			field_plan[config.aggregates[i].field] = FieldPlan {FieldSource::AGGREGATE, i};
+		}
 		for (auto &condition : config.conditions) {
 			unordered_set<idx_t> seen;
 			vector<idx_t> fields;
@@ -434,6 +444,28 @@ public:
 			navigation_symbols.push_back(lookup(navigation.symbol));
 		}
 		navigation_positions.resize(config.navigations.size());
+		// an aggregate's rows are recorded from the first call on, so its run is built here rather than
+		// with the rest of what a condition needs
+		for (auto &aggregate : config.aggregates) {
+			auto &bound = aggregate.expression->Cast<BoundAggregateExpression>();
+			const AggregateObject object(bound);
+			if (object.function.HasStateDestructorCallback()) {
+				// its state owns memory the matcher would have to hand back on every rewind
+				throw NotImplementedException(
+				    "An aggregate whose state holds its own memory is not supported in a DEFINE condition yet");
+			}
+			auto run = make_uniq<AggregateRun>(context.client, object, lookup(aggregate.symbol));
+			// the operand is read as the aggregate's own argument type, which binding may have widened
+			if (aggregate.operand.IsValid()) {
+				run->source = make_uniq<Vector>(collection.GetTypes()[columns_idx[aggregate.operand.GetIndex()]], 1U);
+				run->operand = make_uniq<DataChunk>();
+				run->operand->Initialize(context.client, {bound.GetChildren()[0]->GetReturnType()}, 1U);
+			}
+			if (!columns_idx.empty()) {
+				run->cursor = make_uniq<WindowCursor>(collection, columns_idx);
+			}
+			aggregate_runs.push_back(std::move(run));
+		}
 	}
 
 	void BeginMatch(idx_t start, idx_t number) {
@@ -441,6 +473,10 @@ public:
 		match_number = number;
 		for (auto &positions : navigation_positions) {
 			positions.clear();
+		}
+		for (auto &run : aggregate_runs) {
+			run->positions.clear();
+			run->begin = DConstants::INVALID_INDEX;
 		}
 		next_row = start;
 	}
@@ -453,7 +489,7 @@ public:
 		// The positions FIRST()/LAST() need are recorded as the match assembles rather than rescanned.
 		// Testing a row again discards what was recorded from there on, which belonged to an attempt
 		// the matcher has abandoned.
-		if (!navigation_positions.empty()) {
+		if (!navigation_positions.empty() || !aggregate_runs.empty()) {
 			D_ASSERT(row <= next_row);
 			if (row < next_row) {
 				for (auto &positions : navigation_positions) {
@@ -461,10 +497,20 @@ public:
 						positions.pop_back();
 					}
 				}
+				for (auto &run : aggregate_runs) {
+					while (!run->positions.empty() && run->positions.back() >= row) {
+						run->positions.pop_back();
+					}
+				}
 			}
 			for (idx_t i = 0; i < navigation_symbols.size(); i++) {
 				if (navigation_symbols[i] == index) {
 					navigation_positions[i].push_back(row);
+				}
+			}
+			for (auto &run : aggregate_runs) {
+				if (run->symbol == index) {
+					run->positions.push_back(row);
 				}
 			}
 			next_row = row + 1;
@@ -504,6 +550,9 @@ public:
 			case FieldSource::CURRENT_ROW:
 				CopyField(*row_cursor, field, row, target);
 				break;
+			case FieldSource::AGGREGATE:
+				FoldAggregate(plan.navigation_idx, row, target);
+				break;
 			}
 		}
 
@@ -520,7 +569,7 @@ public:
 
 private:
 	//! Where a field of the condition input takes its value from
-	enum class FieldSource : uint8_t { CURRENT_ROW, MATCH_NUMBER, NAVIGATION };
+	enum class FieldSource : uint8_t { CURRENT_ROW, MATCH_NUMBER, NAVIGATION, AGGREGATE };
 	struct FieldPlan {
 		FieldSource source = FieldSource::CURRENT_ROW;
 		idx_t navigation_idx = DConstants::INVALID_INDEX;
@@ -532,7 +581,15 @@ private:
 			types.push_back(collection.GetTypes()[column_idx]);
 		}
 		// the matcher supplies its own field, which sits after the ones the plan does
-		types.resize(MaxValue<idx_t>(types.size(), config.match_number_field + 1), LogicalType::UBIGINT);
+		// the matcher supplies the match number and one field per aggregate, past the plan's columns
+		idx_t supplied = config.match_number_field + 1;
+		for (auto &aggregate : config.aggregates) {
+			supplied = MaxValue<idx_t>(supplied, aggregate.field + 1);
+		}
+		types.resize(MaxValue<idx_t>(types.size(), supplied), LogicalType::UBIGINT);
+		for (auto &aggregate : config.aggregates) {
+			types[aggregate.field] = aggregate.expression->GetReturnType();
+		}
 		row_chunk.Initialize(context.client, types, 1);
 		// one expression is evaluated at a time here, so the result holds a single column
 		row_result.Initialize(context.client, vector<LogicalType> {LogicalType::BOOLEAN}, 1);
@@ -564,6 +621,62 @@ private:
 			field.SetVectorType(VectorType::FLAT_VECTOR);
 			FlatVector::ValidityMutable(field).SetInvalid(0);
 		}
+	}
+
+	//! Settle one aggregate for the row being tested. The rows it reads are the ones its variable has
+	//! matched so far, which only ever grow while a match is assembled - so a row is folded in once
+	//! and the state carries it from there. A rewind is the one thing that takes rows back, and the
+	//! state is rebuilt from the start when it does.
+	void FoldAggregate(idx_t index, idx_t row, Vector &target) {
+		auto &aggregate = config.aggregates[index];
+		auto &run = *aggregate_runs[index];
+		const bool whole_match = run.symbol == DConstants::INVALID_INDEX;
+		// the match as a whole covers every row up to this one; a variable covers the rows it matched
+		const idx_t needed = whole_match ? row - match_start + 1 : run.positions.size();
+
+		if (run.begin != match_start || needed < run.folded) {
+			auto state = run.running.GetStatePtr(0);
+			AggregateStateInput state_input(run.aggr.function, run.aggr.GetFunctionData());
+			run.aggr.function.GetStateInitCallback()(state_input, &state, 1);
+			run.folded = 0;
+			run.begin = match_start;
+		}
+		AggregateInputData input_data(run.aggr, run.running.allocator);
+		for (idx_t i = run.folded; i < needed; i++) {
+			if (!aggregate.operand.IsValid()) {
+				// nothing is read off the row: the row itself is what is counted
+				run.aggr.function.GetStateUpdateCallback()(nullptr, input_data, 0, run.statep, 1);
+				continue;
+			}
+			auto &operands = *run.operand;
+			const idx_t source = whole_match ? match_start + i : run.positions[i];
+			auto &raw = *run.source;
+			operands.Reset();
+			operands.SetCardinality(1);
+			CopyField(*run.cursor, aggregate.operand.GetIndex(), source, raw);
+			// the vector carries its own size, and one value read into it means saying so
+			FlatVector::SetSize(raw, 1);
+			if (raw.GetType() == operands.data[0].GetType()) {
+				operands.data[0].Reference(raw);
+			} else {
+				VectorOperations::Cast(context.client, raw, operands.data[0], 1);
+			}
+			run.aggr.function.GetStateUpdateCallback()(operands.data.data(), input_data, operands.ColumnCount(),
+			                                           run.statep, 1);
+		}
+		run.folded = needed;
+
+		// A condition reads the aggregate of the rows mapped so far, so this is settled once per
+		// candidate row rather than once per run - running semantics are the only ones DEFINE has
+		// (ISO/IEC 19075-5 5.4). Finalizing reads the state without consuming it, so the same state
+		// carries on growing.
+		AggregateFinalizeInputData finalize_input(run.aggr, run.running.allocator);
+		// a finalize marks its result null when the state holds nothing and otherwise leaves the mask
+		// alone, so the row this writes into has to start out valid rather than carrying the NULL that
+		// an unwritten field reads as
+		target.SetVectorType(VectorType::FLAT_VECTOR);
+		FlatVector::ValidityMutable(target).SetValid(0);
+		run.aggr.function.GetStateFinalizeCallback()(*run.running.statef, finalize_input, target, 1, 0);
 	}
 
 	//! Copy one field of one collected row: seeking can replace the cursor's chunk, so it is a copy
@@ -620,6 +733,40 @@ private:
 	unique_ptr<WindowCursor> row_cursor;
 	//! One per navigation, because two of them can be reading two different rows at once
 	vector<unique_ptr<WindowCursor>> navigation_cursors;
+
+	//! One aggregate's running state, and how much of its variable's run is already in it. Folding a
+	//! row in costs one update; what a condition needs per candidate row is the value, which comes
+	//! from combining the running state into a scratch one so that the running one survives.
+	struct AggregateRun {
+		AggregateRun(ClientContext &client, const AggregateObject &aggr_p, idx_t symbol_p)
+		    : aggr(aggr_p), symbol(symbol_p), running(client, aggr_p) {
+			running.Initialize(1);
+			statep.SetVectorType(VectorType::CONSTANT_VECTOR);
+			statep.Flatten();
+			auto pointers = FlatVector::GetDataMutable<data_ptr_t>(statep);
+			for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+				pointers[i] = running.GetStatePtr(0);
+			}
+		}
+		AggregateObject aggr;
+		//! The symbol whose rows it reads, invalid for the match as a whole
+		idx_t symbol;
+		WindowAggregateStates running;
+		//! one pointer per row folded, all of them the running state's
+		Vector statep {LogicalType::POINTER};
+		//! how many of the variable's rows the running state holds
+		idx_t folded = 0;
+		//! the match the state belongs to, so that a new one is noticed
+		idx_t begin = DConstants::INVALID_INDEX;
+		//! The rows so far classified as this aggregate's variable, in match order
+		vector<idx_t> positions;
+		//! Its own cursor, because two aggregates can be reading two different rows at once
+		unique_ptr<WindowCursor> cursor;
+		//! The operand as the collected column has it, and as the aggregate's own argument type
+		unique_ptr<Vector> source;
+		unique_ptr<DataChunk> operand;
+	};
+	vector<unique_ptr<AggregateRun>> aggregate_runs;
 	bool ready = false;
 };
 
@@ -641,6 +788,10 @@ static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobal
 		// the match as a whole starts where the attempt does, but which rows were matched to a variable
 		// differs between two ways of reaching the same state
 		memo = navigation.symbol.empty() ? memo : PatternMemo::HISTORY;
+	}
+	for (auto &aggregate : config.aggregates) {
+		// an aggregate over a variable reads the rows mapped to it, so the same reasoning holds
+		memo = aggregate.symbol.empty() ? memo : PatternMemo::HISTORY;
 	}
 
 	PatternProgram program;

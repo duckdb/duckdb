@@ -1,5 +1,8 @@
 #include "duckdb/planner/expression_binder/match_recognize_binder.hpp"
 
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
@@ -518,7 +521,84 @@ BindResult MatchRecognizeDefineBinder::BindExpression(unique_ptr<ParsedExpressio
 
 BindResult MatchRecognizeDefineBinder::BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function,
                                                      idx_t depth) {
-	return BindResult(BinderException(expr, UnsupportedAggregateMessage()));
+	const auto function_name = StringUtil::Upper(expr.FunctionName().GetIdentifierName());
+	if (scope != MatchRecognizeScope::CANDIDATE_ROW) {
+		return BindResult(BinderException(expr, "An aggregate reads the rows of the match, so it cannot be part of %s",
+		                                  ScopeName(scope)));
+	}
+	// what these mean over a set that grows as the match is assembled is not settled here yet
+	if (expr.Distinct() || expr.Filter() || (expr.OrderBy() && !expr.OrderBy()->orders.empty())) {
+		return BindResult(BinderException(
+		    expr, "DISTINCT, FILTER and ORDER BY are not supported on an aggregate in a DEFINE condition"));
+	}
+	auto &arguments = expr.GetArgumentsMutable();
+	if (arguments.size() > 1) {
+		return BindResult(BinderException(
+		    expr,
+		    "An aggregate in a DEFINE condition reads one expression of the match's rows, so %s() is not "
+		    "supported there yet",
+		    function_name));
+	}
+
+	// A condition is settled while the match is still being assembled, so the only semantics an
+	// aggregate has here is running: the rows mapped to the variable up to and including this one
+	// (ISO/IEC 19075-5 5.5). COUNT(*) reads no expression at all, and its star is the universal row
+	// pattern variable, so it counts the rows of the match rather than of any one variable.
+	string variable;
+	const MatchRecognizeIsSymbol is_symbol = [&](const string &name) {
+		return symbols.count(name) > 0;
+	};
+	unique_ptr<ParsedExpression> inner;
+	if (!arguments.empty()) {
+		inner = std::move(arguments[0].GetExpressionMutable());
+		variable = MatchRecognizeNavigationVariable(inner, is_symbol, universal, function_name);
+	}
+	if (!variable.empty() && contiguous_symbols && !contiguous_symbols->count(variable)) {
+		// the pattern can come back to the variable, so its rows are scattered through the match
+		// rather than one run of it, and folding them as they arrive is not enough
+		return BindResult(
+		    BinderException(expr,
+		                    "An aggregate over \"%s\" is not supported yet: the pattern can return to \"%s\" after "
+		                    "leaving it, so its rows are not one run of the match",
+		                    variable, variable));
+	}
+
+	// the matcher folds rows into the aggregate itself, so what is bound here is the function rather
+	// than a tree over the row: its one child says no more than what a folded value looks like
+	optional_idx column;
+	vector<pair<Identifier, unique_ptr<Expression>>> children;
+	if (inner) {
+		BindResult operand;
+		{
+			const ScopedScope navigated(scope, MatchRecognizeScope::NAVIGATED);
+			operand = BindExpression(inner, depth, false);
+		}
+		if (operand.HasError()) {
+			return operand;
+		}
+		const auto operand_type = operand.expression->GetReturnType();
+		inputs.Project(std::move(operand.expression), "__mr_agg");
+		column = inputs.select_list.size() - 1;
+		children.emplace_back(Identifier(), make_uniq<BoundReferenceExpression>(operand_type, 0U));
+	}
+	FunctionBinder function_binder(binder);
+	ErrorData error;
+	auto bound = function_binder.BindAggregateFunction(function, std::move(children), error);
+	if (!bound) {
+		error.AddQueryLocation(expr);
+		error.Throw();
+	}
+	const auto return_type = bound->GetReturnType();
+	const auto slot = inputs.aggregates.size();
+	unique_ptr<Expression> aggregate = std::move(bound);
+	// the matcher knows a variable by the name its condition is bound under, the same as a navigation
+	auto symbol = variable.empty() ? string() : MatchRecognizeDefineColumn(variable);
+	inputs.aggregates.push_back(MatchRecognizeAggregate {std::move(symbol), column, std::move(aggregate)});
+
+	// read back as a field the matcher supplies, which is where the match number already lives
+	auto &supplied = match_number->Cast<BoundColumnRefExpression>();
+	return BindResult(make_uniq<BoundColumnRefExpression>(
+	    Identifier("__mr_agg"), return_type, ColumnBinding(supplied.Binding().table_index, ProjectionIndex(1 + slot))));
 }
 
 string MatchRecognizeDefineBinder::UnsupportedAggregateMessage() {

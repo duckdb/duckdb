@@ -296,11 +296,12 @@ SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A) DEFINE A as FIRST(no
 ----
 <REGEX>:Binder Error.*nosuchcol.*
 
-# a navigation over something a condition may not contain reports that, not the navigation
+# A navigation reads one row of the match and an aggregate reads many, so one inside the other has no
+# reading. The message names the aggregate rather than the navigation, which is what went wrong.
 statement error
 SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A) DEFINE A as FIRST(sum(i)) > 0)
 ----
-<REGEX>:Binder Error.*cannot be an aggregate.*
+<REGEX>:Binder Error.*aggregate reads the rows of the match.*navigation.*
 
 # ONE ROW PER MATCH reports the match rather than its rows, so its columns are what the match was
 # partitioned by and what was measured. With neither there is nothing to return, which is worth
@@ -409,13 +410,14 @@ SELECT "match_recognize"(1) OVER ()
 ----
 <REGEX>:Binder Error:.*cannot be used directly.*
 
-# what a condition cannot be
+# what a condition cannot be: an aggregate over a variable the pattern can come back to, whose rows
+# are not one run of the match (the ones that are a run live in test_match_recognize_aggregates.test)
 statement error
-FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
-    ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS sum(x) > 0
+FROM (VALUES (10), (20), (30)) t(x) MATCH_RECOGNIZE (
+    ORDER BY x MEASURES count(*) AS n PATTERN (A B A) DEFINE A AS sum(A.x) > 0, B AS true
 )
 ----
-cannot be an aggregate
+<REGEX>:Binder Error:.*can return to "A" after leaving it.*
 
 statement error
 FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (

@@ -1,0 +1,214 @@
+# name: test/sql/match_recognize/test_match_recognize_aggregates.test
+# description: MATCH_RECOGNIZE - aggregates in a DEFINE condition
+# group: [match_recognize]
+
+# A condition is settled while the match is still being assembled, so the only semantics an aggregate
+# has here is running: the rows mapped to the variable up to and including the row being tested
+# (ISO/IEC 19075-5 5.5). Every answer below was checked against another engine before it was written
+# down.
+
+statement ok
+pragma threads=1;
+
+# 5.3's worked example, whose Table 12 the standard prints: prices 10, 16, 13 and 9, with A defined
+# as a price at or above the running average of the prices already mapped to A. The first three rows
+# hold (10 >= 10, 16 >= 13, 13 >= 13) and the fourth does not (9 >= 12 is false), which ends the
+# match; the fourth row then starts one of its own.
+statement ok
+create table ticks(rn integer, price integer);
+
+statement ok
+insert into ticks values (1,10),(2,16),(3,13),(4,9);
+
+query IIIR
+SELECT rn, mn, cls, ra FROM ticks MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES MATCH_NUMBER() AS mn, CLASSIFIER() AS cls, RUNNING avg(A.price) AS ra
+    ALL ROWS PER MATCH PATTERN (A+) DEFINE A AS A.price >= avg(A.price)
+) ORDER BY rn
+----
+1	1	A	10.0
+2	1	A	13.0
+3	1	A	13.0
+4	2	A	9.0
+
+# An unqualified reference inside an aggregate is the universal row pattern variable, so the rows it
+# reads are the whole match so far rather than one variable's (5.5).
+query I
+SELECT n FROM (VALUES (1,10),(2,20),(3,5)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES count(*) AS n ONE ROW PER MATCH PATTERN (A+) DEFINE A AS v >= avg(v)
+) ORDER BY n
+----
+1
+2
+
+# Naming a variable reads only the rows mapped to it. Here avg(A.v) is 1, so B needs a value above 3;
+# had the aggregate read the whole match the average would be 4 and nothing would match.
+query T
+SELECT cls FROM (VALUES (1,1),(2,1),(3,10)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES CLASSIFIER() AS cls ALL ROWS PER MATCH
+    PATTERN (A+ B) DEFINE A AS v < 5, B AS v > avg(A.v) * 3
+) ORDER BY rn
+----
+A
+A
+B
+
+# A variable named twice keeps its rows in one run as long as nothing else can match between the two
+# namings, so an aggregate over it is still a fold over a range of the match.
+query I
+SELECT n FROM (VALUES (1,1),(2,2),(3,3)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES count(*) AS n ONE ROW PER MATCH PATTERN (A+ A) DEFINE A AS sum(A.v) < 100
+)
+----
+3
+
+# Giving rows back has to give back what they contributed: A+ takes every row first, finds no row for
+# B, and hands one back - so the sum A reads must drop that row with it.
+query T
+SELECT cls FROM (VALUES (1,1),(2,2),(3,3),(4,10)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES CLASSIFIER() AS cls ALL ROWS PER MATCH
+    PATTERN (A+ B) DEFINE A AS sum(A.v) < 100, B AS v = 10
+) ORDER BY rn
+----
+A
+A
+A
+B
+
+# nulls are what the aggregate itself makes of them: sum and count skip them, count(*) does not
+query I
+SELECT n FROM (VALUES (1,10),(2,NULL),(3,20)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES count(*) AS n ONE ROW PER MATCH
+    PATTERN (A+) DEFINE A AS coalesce(sum(A.v), 0) < 25
+) ORDER BY n
+----
+1
+2
+
+query I
+SELECT n FROM (VALUES (1,NULL),(2,5),(3,NULL)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES count(*) AS n ONE ROW PER MATCH PATTERN (A+) DEFINE A AS count(A.v) <= 1
+)
+----
+3
+
+# a variable whose rows are all null aggregates to null, not to zero
+query I
+SELECT n FROM (VALUES (1,NULL),(2,NULL)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES count(*) AS n ONE ROW PER MATCH PATTERN (A+) DEFINE A AS sum(A.v) IS NULL
+)
+----
+2
+
+# "If SR is empty, then COUNT is 0 and any other expression involving RPV is null" (5.3). B matches
+# nothing here, so its count is zero and its sum is null.
+query I
+SELECT n FROM (VALUES (1,5),(2,7),(3,9)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES count(*) AS n ONE ROW PER MATCH
+    PATTERN (B* A+) DEFINE B AS v > 100, A AS count(B.v) = 0 AND sum(B.v) IS NULL
+)
+----
+3
+
+# the other aggregates read the same rows
+query I
+SELECT n FROM (VALUES (1,5),(2,3),(3,9)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES count(*) AS n ONE ROW PER MATCH PATTERN (A+) DEFINE A AS min(A.v) >= 3
+)
+----
+3
+
+query I
+SELECT n FROM (VALUES (1,5),(2,3),(3,9)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES count(*) AS n ONE ROW PER MATCH PATTERN (A+) DEFINE A AS max(A.v) < 9
+)
+----
+2
+
+# an average is not an integer, and the comparison is the one the types ask for
+query I
+SELECT n FROM (VALUES (1,1),(2,2),(3,3)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES count(*) AS n ONE ROW PER MATCH PATTERN (A+) DEFINE A AS avg(A.v) <= 2.0
+)
+----
+3
+
+# an aggregate and a navigation read the same match in one condition
+query T
+SELECT cls FROM (VALUES (1,4),(2,6),(3,2)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES CLASSIFIER() AS cls ALL ROWS PER MATCH
+    PATTERN (A+) DEFINE A AS v >= avg(A.v) AND v >= FIRST(A.v)
+) ORDER BY rn
+----
+A
+A
+A
+
+# the same aggregate in a condition and in a measure
+query I
+SELECT s FROM (VALUES (1,2),(2,4),(3,6)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES sum(A.v) AS s ONE ROW PER MATCH PATTERN (A+) DEFINE A AS sum(A.v) < 100
+)
+----
+12
+
+# COUNT(*) reads no expression: its star is the universal row pattern variable, so it counts the rows
+# of the match itself (5.5). Here it caps every match at two rows.
+query I
+SELECT n FROM (VALUES (1,5),(2,7),(3,9),(4,2)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES count(*) AS n ONE ROW PER MATCH PATTERN (A+) DEFINE A AS count(*) <= 2
+)
+----
+2
+2
+
+# ---------------------------------------------------------------- what is refused
+
+# The rows a variable matches have to be one run of the match for the aggregate to fold them as they
+# arrive. A pattern that can come back to the variable after leaving it scatters them instead.
+statement error
+SELECT 1 FROM (VALUES (1,1),(2,2),(3,3)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES count(*) AS n PATTERN (A B A) DEFINE A AS sum(A.v) > 0, B AS true
+)
+----
+<REGEX>:Binder Error:.*can return to "A" after leaving it.*
+
+statement error
+SELECT 1 FROM (VALUES (1,1),(2,2),(3,3)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES count(*) AS n PATTERN ((A B)+) DEFINE A AS sum(A.v) > 0, B AS true
+)
+----
+<REGEX>:Binder Error:.*can return to "A" after leaving it.*
+
+# FINAL reads rows the condition has not mapped yet (5.4)
+statement error
+SELECT 1 FROM (VALUES (1,1)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES count(*) AS n PATTERN (A+) DEFINE A AS FINAL sum(A.v) > 0
+)
+----
+<REGEX>:Binder Error:.*only RUNNING is available there.*
+
+# an aggregate reads many rows and a navigation reads one, so one inside the other has no reading
+statement error
+SELECT 1 FROM (VALUES (1,1)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES count(*) AS n PATTERN (A+) DEFINE A AS sum(sum(A.v)) > 0
+)
+----
+<REGEX>:Binder Error:.*aggregate reads the rows of the match.*
+
+# mixing a qualified reference with an unqualified one names two sets of rows (5.2), which holds for
+# an aggregate in a condition just as it does for one in a measure
+statement error
+SELECT 1 FROM (VALUES (1,5),(2,7)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES count(*) AS n PATTERN (A+ B) DEFINE A AS v < 9, B AS sum(A.v + v) > 0
+)
+----
+<REGEX>:Binder Error:.*cannot also read the whole match.*
+
+# what a growing set of rows would mean for these is not settled here
+statement error
+SELECT 1 FROM (VALUES (1,5),(2,7)) t(rn,v) MATCH_RECOGNIZE(
+    ORDER BY rn MEASURES count(*) AS n PATTERN (A+) DEFINE A AS sum(DISTINCT A.v) > 0
+)
+----
+<REGEX>:Binder Error:.*DISTINCT, FILTER and ORDER BY are not supported.*

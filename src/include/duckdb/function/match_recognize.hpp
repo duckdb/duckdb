@@ -117,7 +117,29 @@ struct MatchRecognizeFunctionData : FunctionData {
 		}
 	};
 	vector<Navigation> navigations;
-	//! Conditions that read a navigation field, and so have to be evaluated row by row
+	//! An aggregate in a DEFINE condition, over the rows a variable has matched so far. Running
+	//! semantics are the only ones a condition has (ISO/IEC 19075-5 5.5), so the set it reads is the
+	//! rows mapped up to and including the one being tested.
+	struct Aggregate {
+		//! The variable whose rows it reads, empty for the match as a whole
+		string symbol;
+		//! The collected column holding the operand, unset for COUNT(*)
+		optional_idx operand;
+		//! The field the matcher writes the result into, past the collected columns
+		idx_t field;
+		//! The aggregate itself; its function and bind data are what the matcher folds rows with
+		unique_ptr<Expression> expression;
+
+		bool Equals(const Aggregate &other) const {
+			return symbol == other.symbol && operand == other.operand && field == other.field &&
+			       Expression::Equals(expression, other.expression);
+		}
+		Aggregate Copy() const {
+			return Aggregate {symbol, operand, field, expression->Copy()};
+		}
+	};
+	vector<Aggregate> aggregates;
+	//! Conditions that read a navigation or an aggregate field, and so are evaluated row by row
 	vector<bool> row_scoped;
 	//! How to resume scanning after a match has been found
 	MatchRecognizeAfterMatch after_match = MatchRecognizeAfterMatch::MATCH_RECOGNIZE_AFTER_MATCH_DEFAULT;
@@ -135,6 +157,9 @@ struct MatchRecognizeFunctionData : FunctionData {
 		res->depends_on_match_number = depends_on_match_number;
 		res->match_number_field = match_number_field;
 		res->navigations = navigations;
+		for (auto &aggregate : aggregates) {
+			res->aggregates.push_back(aggregate.Copy());
+		}
 		res->row_scoped = row_scoped;
 		res->after_match = after_match;
 		res->after_match_variable = after_match_variable;
@@ -147,6 +172,14 @@ struct MatchRecognizeFunctionData : FunctionData {
 		}
 		for (idx_t i = 0; i < navigations.size(); i++) {
 			if (!navigations[i].Equals(other.navigations[i])) {
+				return false;
+			}
+		}
+		if (aggregates.size() != other.aggregates.size()) {
+			return false;
+		}
+		for (idx_t i = 0; i < aggregates.size(); i++) {
+			if (!aggregates[i].Equals(other.aggregates[i])) {
 				return false;
 			}
 		}

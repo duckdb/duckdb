@@ -44,6 +44,16 @@ struct MatchRecognizeNavigation {
 	idx_t offset;
 };
 
+//! An aggregate in a DEFINE condition, over the rows a variable has matched so far
+struct MatchRecognizeAggregate {
+	//! The pattern variable whose rows it reads, empty for the match as a whole
+	string symbol;
+	//! Where the operand sits in the projection below the matcher, unset for COUNT(*)
+	optional_idx column;
+	//! The aggregate itself, bound over one reference of the operand's type
+	unique_ptr<Expression> expression;
+};
+
 //! What a DEFINE condition needs from the plan below the matcher: one column per value the matcher
 //! cannot compute itself, plus the descriptors telling it what to do with them
 struct MatchRecognizeConditionInputs {
@@ -58,6 +68,7 @@ struct MatchRecognizeConditionInputs {
 	vector<string> &hidden;
 	GeneratedNames &generated;
 	vector<MatchRecognizeNavigation> &navigations;
+	vector<MatchRecognizeAggregate> &aggregates;
 
 	//! Compute this below the matcher and read it back as a column of its own
 	unique_ptr<Expression> Project(unique_ptr<Expression> value, const string &base);
@@ -104,6 +115,11 @@ protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
 	BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function, idx_t depth) override;
 	string UnsupportedAggregateMessage() override;
+
+public:
+	//! The variables whose rows form one unbroken run, which is what an aggregate can fold over
+	//! without tracking the rows one by one
+	const case_insensitive_set_t *contiguous_symbols = nullptr;
 
 private:
 	//! PREV()/NEXT() walk the ordered partition rather than the match, so they are ordinary windows
