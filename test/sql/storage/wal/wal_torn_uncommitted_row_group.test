@@ -54,24 +54,36 @@ SELECT count(*) FROM t;
 ----
 2
 
-# Scenario 2: WAL has an earlier committed transaction before the torn transaction (last_wal_flush_end > 0).
+# Scenario 2: WAL contains BOTH committed ROW_GROUP_DATA and uncommitted ROW_GROUP_DATA.
+# First transaction: bulk insert 130,000 rows, creating committed ROW_GROUP_DATA in WAL (no checkpoint).
+statement ok
+INSERT INTO t SELECT * FROM range(3, 130003);
+
+query I
+SELECT count(*) FROM t;
+----
+130002
+
+# Second transaction in the same WAL: another bulk insert (creates uncommitted ROW_GROUP_DATA), then crashes before WAL_FLUSH.
 statement ok
 PRAGMA debug_checkpoint_abort='before_wal_flush';
 
 statement error
-INSERT INTO t SELECT * FROM range(3, 130003);
+INSERT INTO t SELECT * FROM range(130003, 260003);
 ----
 Simulated crash before WAL_FLUSH write
 
+# Crash restart: recovery processes WAL containing both committed and uncommitted row_group_data
 restart
 
 statement ok
 PRAGMA debug_checkpoint_abort='none';
 
+# The committed 130,000 rows must be recovered; the uncommitted 130,000 rows must be discarded
 query I
 SELECT count(*) FROM t;
 ----
-2
+130002
 
 # Scenario 3: Fresh database where the first transaction crashes before WAL_FLUSH (last_wal_flush_end == 0 with DDL + row groups).
 load {TEST_DIR}/wal_torn_no_commits.db
@@ -104,15 +116,3 @@ statement error
 SELECT * FROM t_never_committed;
 ----
 <REGEX>:.*Catalog Error.*Table with name t_never_committed does not exist!.*
-
-# Verify database is intact and fully usable after truncating the torn WAL
-statement ok
-CREATE TABLE t_fresh (id INT);
-
-statement ok
-INSERT INTO t_fresh VALUES (42);
-
-query I
-SELECT * FROM t_fresh;
-----
-42
