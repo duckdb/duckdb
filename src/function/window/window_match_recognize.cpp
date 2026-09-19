@@ -30,13 +30,20 @@ using SpanStruct = VectorStructType<string_t, uint64_t, bool, bool, uint64_t, ui
 
 //! One membership of a row in a match: there is one per (row, match) pair, not one per row
 struct MatchRecognizeSpan {
+	//! A row of a match, classified as the variable it matched
+	static MatchRecognizeSpan Row(idx_t symbol, idx_t match_number, idx_t match_start, idx_t match_end, bool excluded) {
+		return MatchRecognizeSpan {symbol, match_number, match_start, match_end, excluded, false};
+	}
+	//! An empty match covers no rows at all, so this only marks the row where one happened
+	static MatchRecognizeSpan Empty(idx_t match_number, idx_t row) {
+		return MatchRecognizeSpan {0, match_number, row, row, false, true};
+	}
+
 	idx_t symbol;
 	idx_t match_number;
 	idx_t match_start;
 	idx_t match_end;
-	bool is_match_start;
 	bool excluded;
-	//! An empty match covers no rows at all; this span only marks where it happened
 	bool empty;
 };
 
@@ -282,12 +289,30 @@ public:
 		}
 	}
 
+	//! The columns the conditions read, in the order the window was handed them. They are referenced
+	//! rather than copied, so this is the same chunk pointed at a new sink chunk each time.
+	DataChunk &ConditionColumns(DataChunk &sink_chunk, const vector<column_t> &child_idx) {
+		if (columns.ColumnCount() != child_idx.size()) {
+			vector<LogicalType> column_types;
+			for (auto column_idx : child_idx) {
+				column_types.push_back(sink_chunk.data[column_idx].GetType());
+			}
+			columns.InitializeEmpty(column_types);
+		}
+		for (idx_t col = 0; col < child_idx.size(); col++) {
+			columns.data[col].Reference(sink_chunk.data[child_idx[col]]);
+		}
+		columns.SetCardinalityUnsafe(sink_chunk.size());
+		return columns;
+	}
+
 	vector<unique_ptr<Expression>> conditions;
 	//! The condition each of the above decides, since the ones settled per row are left out
 	vector<idx_t> condition_index;
 	vector<LogicalType> types;
 	unique_ptr<ExpressionExecutor> executor;
 	DataChunk result;
+	DataChunk columns;
 };
 
 unique_ptr<LocalSinkState> WindowMatchRecognizeExecutor::GetLocal(ExecutionContext &context,
@@ -303,21 +328,8 @@ void WindowMatchRecognizeExecutor::Sink(ExecutionContext &context, DataChunk &si
 		return;
 	}
 
-	// the conditions read the columns the window is handed, in the order it was handed them
-	const auto count = sink_chunk.size();
-	vector<LogicalType> column_types;
-	for (auto column_idx : gstate.executor.child_idx) {
-		column_types.push_back(sink_chunk.data[column_idx].GetType());
-	}
-	DataChunk slice;
-	slice.InitializeEmpty(column_types);
-	for (idx_t col = 0; col < gstate.executor.child_idx.size(); col++) {
-		slice.data[col].Reference(sink_chunk.data[gstate.executor.child_idx[col]]);
-	}
-	slice.SetCardinalityUnsafe(count);
-
 	lstate.result.Reset();
-	lstate.executor->Execute(slice, lstate.result);
+	lstate.executor->Execute(lstate.ConditionColumns(sink_chunk, gstate.executor.child_idx), lstate.result);
 	for (idx_t i = 0; i < lstate.conditions.size(); i++) {
 		auto &values = gstate.condition_values[lstate.condition_index[i]];
 		for (const auto &entry : lstate.result.data[i].Values<bool>()) {
@@ -396,8 +408,13 @@ public:
 	              const MatchRecognizeFunctionData &config, const WindowCollection &collection)
 	    : context(context), gstate(gstate), config(config), collection(collection),
 	      columns_idx(gstate.executor.aux_idx), executors(config.conditions.size()) {
-		for (auto &condition : config.conditions) {
-			conditions.push_back(condition->Copy());
+		D_ASSERT(config.row_scoped.size() == config.conditions.size());
+		// the conditions settled in Sink are decided by a lookup here, so only the rest are copied
+		conditions.resize(config.conditions.size());
+		for (idx_t i = 0; i < config.conditions.size(); i++) {
+			if (config.row_scoped[i]) {
+				conditions[i] = config.conditions[i]->Copy();
+			}
 		}
 		// resolving where each field's value comes from once is what lets a row be assembled by copying
 		// only the fields the condition being decided reads
@@ -441,10 +458,11 @@ public:
 			return entry == symbol_index.end() ? DConstants::INVALID_INDEX : entry->second;
 		};
 		skip_symbol = lookup(config.after_match_variable);
+		// a navigation over the match as a whole reads its ends, so only a named variable needs a run
 		for (auto &navigation : config.navigations) {
-			navigation_symbols.push_back(lookup(navigation.symbol));
+			navigation_runs.push_back(navigation.symbol.empty() ? DConstants::INVALID_INDEX
+			                                                    : runs.Track(lookup(navigation.symbol)));
 		}
-		navigation_positions.resize(config.navigations.size());
 		// an aggregate's rows are recorded from the first call on, so its run is built here rather than
 		// with the rest of what a condition needs
 		for (auto &aggregate : config.aggregates) {
@@ -455,7 +473,11 @@ public:
 				throw NotImplementedException(
 				    "An aggregate whose state holds its own memory is not supported in a DEFINE condition yet");
 			}
-			auto run = make_uniq<AggregateRun>(context.client, object, lookup(aggregate.symbol));
+			// an aggregate over the match as a whole folds every row up to the one being tested, so
+			// only one over a named variable needs its rows recorded
+			const auto rows =
+			    aggregate.symbol.empty() ? DConstants::INVALID_INDEX : runs.Track(lookup(aggregate.symbol));
+			auto run = make_uniq<AggregateRun>(context.client, object, rows);
 			// the operand is read as the aggregate's own argument type, which binding may have widened
 			if (aggregate.operand.IsValid()) {
 				auto &column = collection.GetTypes()[columns_idx[aggregate.operand.GetIndex()]];
@@ -476,14 +498,10 @@ public:
 	void BeginMatch(idx_t start, idx_t number) {
 		match_start = start;
 		match_number = number;
-		for (auto &positions : navigation_positions) {
-			positions.clear();
-		}
+		runs.BeginMatch(start);
 		for (auto &run : aggregate_runs) {
-			run->positions.clear();
 			run->begin = DConstants::INVALID_INDEX;
 		}
-		next_row = start;
 	}
 	idx_t SkipSymbol() const {
 		return skip_symbol;
@@ -491,36 +509,10 @@ public:
 
 	bool Matches(idx_t index, idx_t row) {
 		D_ASSERT(index < config.symbols.size());
-		// The positions FIRST()/LAST() need are recorded as the match assembles rather than rescanned.
-		// Testing a row again discards what was recorded from there on, which belonged to an attempt
-		// the matcher has abandoned.
-		if (!navigation_positions.empty() || !aggregate_runs.empty()) {
-			D_ASSERT(row <= next_row);
-			if (row < next_row) {
-				for (auto &positions : navigation_positions) {
-					while (!positions.empty() && positions.back() >= row) {
-						positions.pop_back();
-					}
-				}
-				for (auto &run : aggregate_runs) {
-					while (!run->positions.empty() && run->positions.back() >= row) {
-						run->positions.pop_back();
-					}
-				}
-			}
-			for (idx_t i = 0; i < navigation_symbols.size(); i++) {
-				if (navigation_symbols[i] == index) {
-					navigation_positions[i].push_back(row);
-				}
-			}
-			for (auto &run : aggregate_runs) {
-				if (run->symbol == index) {
-					run->positions.push_back(row);
-				}
-			}
-			next_row = row + 1;
+		if (!runs.Empty()) {
+			runs.Classify(index, row);
 		}
-		if (index >= config.row_scoped.size() || !config.row_scoped[index]) {
+		if (!config.row_scoped[index]) {
 			return gstate.condition_values[index][row] != 0;
 		}
 
@@ -657,9 +649,12 @@ private:
 	void FoldAggregate(idx_t index, idx_t row, Vector &target) {
 		auto &aggregate = config.aggregates[index];
 		auto &run = *aggregate_runs[index];
-		const bool whole_match = run.symbol == DConstants::INVALID_INDEX;
-		// the match as a whole covers every row up to this one; a variable covers the rows it matched
-		const idx_t needed = whole_match ? row - match_start + 1 : run.positions.size();
+		// a variable folds the rows it matched; the match as a whole folds every row up to this one
+		optional_ptr<const vector<idx_t>> positions;
+		if (run.rows != DConstants::INVALID_INDEX) {
+			positions = runs.Rows(run.rows);
+		}
+		const idx_t needed = positions ? positions->size() : row - match_start + 1;
 
 		if (run.begin != match_start || needed < run.folded) {
 			auto state = run.running.GetStatePtr(0);
@@ -675,7 +670,7 @@ private:
 				run.aggr.function.GetStateUpdateCallback()(nullptr, input_data, 0, run.statep, 1);
 				continue;
 			}
-			const idx_t source = whole_match ? match_start + i : run.positions[i];
+			const idx_t source = positions ? (*positions)[i] : match_start + i;
 			auto &value = run.row->Read(*run.cursor, aggregate.operand.GetIndex(), source);
 			auto input = &value;
 			if (run.operand) {
@@ -702,6 +697,64 @@ private:
 		FlatVector::ValidityMutable(target).SetValid(0);
 		run.aggr.function.GetStateFinalizeCallback()(*run.running.statef, finalize_input, target, 1, 0);
 	}
+
+	//! The rows of the match classified as each symbol that anything reads, in match order.
+	//! FIRST()/LAST() and an aggregate over a variable both read these, so they are recorded as the
+	//! match assembles rather than rescanned, and two readings of the same variable share one run.
+	//! Testing a row again gives back what was recorded from there on, which belonged to an attempt
+	//! the matcher has abandoned.
+	class SymbolRuns {
+	public:
+		//! Read this symbol's rows from here on, and report where they are kept
+		idx_t Track(idx_t symbol) {
+			for (idx_t i = 0; i < symbols.size(); i++) {
+				if (symbols[i] == symbol) {
+					return i;
+				}
+			}
+			symbols.push_back(symbol);
+			runs.emplace_back();
+			return symbols.size() - 1;
+		}
+		bool Empty() const {
+			return symbols.empty();
+		}
+		const vector<idx_t> &Rows(idx_t tracked) const {
+			return runs[tracked];
+		}
+
+		void BeginMatch(idx_t start) {
+			for (auto &run : runs) {
+				run.clear();
+			}
+			next_row = start;
+		}
+
+		//! Record that `row` was classified as `symbol`
+		void Classify(idx_t symbol, idx_t row) {
+			D_ASSERT(row <= next_row);
+			if (row < next_row) {
+				for (auto &run : runs) {
+					while (!run.empty() && run.back() >= row) {
+						run.pop_back();
+					}
+				}
+			}
+			for (idx_t i = 0; i < symbols.size(); i++) {
+				if (symbols[i] == symbol) {
+					runs[i].push_back(row);
+				}
+			}
+			next_row = row + 1;
+		}
+
+	private:
+		//! The symbols read, and the rows of the match classified as each
+		vector<idx_t> symbols;
+		vector<vector<idx_t>> runs;
+		//! One past the last row a classification was recorded for
+		idx_t next_row = 0;
+	};
 
 	//! One row of one column of a cursor, read where it lies rather than copied out. The row is a
 	//! dictionary over the chunk the cursor holds, so stepping to another row of that chunk writes a
@@ -757,7 +810,7 @@ private:
 			return navigation.last ? optional_idx(row - navigation.offset)
 			                       : optional_idx(match_start + navigation.offset);
 		}
-		auto &positions = navigation_positions[navigation_idx];
+		auto &positions = runs.Rows(navigation_runs[navigation_idx]);
 		if (positions.size() <= navigation.offset) {
 			return optional_idx();
 		}
@@ -772,11 +825,10 @@ private:
 	const vector<column_t> &columns_idx;
 	vector<unique_ptr<ExpressionExecutor>> executors;
 	vector<unique_ptr<Expression>> conditions;
-	vector<idx_t> navigation_symbols;
-	//! The rows so far classified as each navigation's variable, in match order
-	vector<vector<idx_t>> navigation_positions;
-	//! One past the last row a classification was recorded for
-	idx_t next_row = 0;
+	//! The rows of each symbol read by a navigation or an aggregate, in match order
+	SymbolRuns runs;
+	//! Where each navigation's variable keeps its rows, invalid for one over the match as a whole
+	vector<idx_t> navigation_runs;
 	idx_t skip_symbol = DConstants::INVALID_INDEX;
 	idx_t match_start = 0;
 	idx_t match_number = 1;
@@ -800,8 +852,8 @@ private:
 	//! row in costs one update; what a condition needs per candidate row is the value, which comes
 	//! from combining the running state into a scratch one so that the running one survives.
 	struct AggregateRun {
-		AggregateRun(ClientContext &client, const AggregateObject &aggr_p, idx_t symbol_p)
-		    : aggr(aggr_p), symbol(symbol_p), running(client, aggr_p) {
+		AggregateRun(ClientContext &client, const AggregateObject &aggr_p, idx_t rows_p)
+		    : aggr(aggr_p), rows(rows_p), running(client, aggr_p) {
 			running.Initialize(1);
 			statep.SetVectorType(VectorType::CONSTANT_VECTOR);
 			statep.Flatten();
@@ -811,8 +863,8 @@ private:
 			}
 		}
 		AggregateObject aggr;
-		//! The symbol whose rows it reads, invalid for the match as a whole
-		idx_t symbol;
+		//! Where its symbol's rows are kept, invalid when it reads the match as a whole
+		idx_t rows;
 		WindowAggregateStates running;
 		//! one pointer per row folded, all of them the running state's
 		Vector statep {LogicalType::POINTER};
@@ -820,8 +872,6 @@ private:
 		idx_t folded = 0;
 		//! the match the state belongs to, so that a new one is noticed
 		idx_t begin = DConstants::INVALID_INDEX;
-		//! The rows so far classified as this aggregate's variable, in match order
-		vector<idx_t> positions;
 		//! Its own cursor, because two aggregates can be reading two different rows at once
 		unique_ptr<WindowCursor> cursor;
 		//! The operand where it lies in the collection
@@ -833,6 +883,31 @@ private:
 	bool ready = false;
 };
 
+//! How long a walked state stays proof of a dead end, which is as long as the conditions reaching it
+//! answer the same way each time (see PatternMemo). The strongest reason any of them gives wins.
+static PatternMemo RequiredMemo(const MatchRecognizeFunctionData &config) {
+	// the match as a whole starts where the attempt does, but which rows were matched to a variable
+	// differs between two ways of reaching the same state
+	for (auto &navigation : config.navigations) {
+		if (!navigation.symbol.empty()) {
+			return PatternMemo::HISTORY;
+		}
+	}
+	// an aggregate over a variable reads the rows mapped to it, so the same reasoning holds
+	for (auto &aggregate : config.aggregates) {
+		if (!aggregate.symbol.empty()) {
+			return PatternMemo::HISTORY;
+		}
+	}
+	// what is left reads MATCH_NUMBER() or navigates the match as a whole, which an attempt fixes
+	for (auto scoped : config.row_scoped) {
+		if (scoped) {
+			return PatternMemo::ATTEMPT;
+		}
+	}
+	return PatternMemo::PARTITION;
+}
+
 static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobalState &gstate,
                            const MatchRecognizeFunctionData &config, const WindowCollection &collection) {
 	auto &classifiers = gstate.classifiers;
@@ -842,25 +917,11 @@ static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobal
 		return row_conditions.Matches(index, row);
 	};
 
-	// a condition that reads MATCH_NUMBER(), or navigates at all, depends on the attempt
-	auto memo = PatternMemo::PARTITION;
-	for (auto scoped : config.row_scoped) {
-		memo = scoped ? PatternMemo::ATTEMPT : memo;
-	}
-	for (auto &navigation : config.navigations) {
-		// the match as a whole starts where the attempt does, but which rows were matched to a variable
-		// differs between two ways of reaching the same state
-		memo = navigation.symbol.empty() ? memo : PatternMemo::HISTORY;
-	}
-	for (auto &aggregate : config.aggregates) {
-		// an aggregate over a variable reads the rows mapped to it, so the same reasoning holds
-		memo = aggregate.symbol.empty() ? memo : PatternMemo::HISTORY;
-	}
-
 	PatternProgram program;
 	program.Compile(*config.pattern, classifiers.size());
 	program.Finish();
-	PatternMatcher matcher(context.client, program, symbol_matches, classifiers, gstate.excluded_rows, memo);
+	PatternMatcher matcher(context.client, program, symbol_matches, classifiers, gstate.excluded_rows,
+	                       RequiredMemo(config));
 
 	// partitions are independent, so the threads reaching Finalize share them out
 	while (true) {
@@ -886,7 +947,7 @@ static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobal
 			// skipping, or it would never move
 			if (matcher.match_end <= row) {
 				match_number++;
-				writer.Append(gstate.row_spans[row], MatchRecognizeSpan {0, match_number, row, row, true, false, true});
+				writer.Append(gstate.row_spans[row], MatchRecognizeSpan::Empty(match_number, row));
 				row++;
 				continue;
 			}
@@ -896,8 +957,8 @@ static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobal
 
 			for (idx_t match_row = row; match_row <= match_end; match_row++) {
 				writer.Append(gstate.row_spans[match_row],
-				              MatchRecognizeSpan {classifiers[match_row], match_number, row, match_end,
-				                                  match_row == row, gstate.excluded_rows[match_row] != 0, false});
+				              MatchRecognizeSpan::Row(classifiers[match_row], match_number, row, match_end,
+				                                      gstate.excluded_rows[match_row] != 0));
 			}
 			row = SkipTo(config, row_conditions.SkipSymbol(), row, match_end, classifiers);
 		}
@@ -939,7 +1000,7 @@ void WindowMatchRecognizeExecutor::GetData(ExecutionContext &context, DataChunk 
 					classifier.WriteValue(string_t(gstate.classifier_names[span.symbol]));
 				}
 				match_number.WriteValue(span.match_number);
-				is_match_start.WriteValue(span.is_match_start);
+				is_match_start.WriteValue(row == span.match_start);
 				is_match_end.WriteValue(row == span.match_end);
 				match_start.WriteValue(span.match_start);
 				match_end.WriteValue(span.match_end);
