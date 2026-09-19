@@ -322,6 +322,13 @@
         "default_value": "NONE"
     },
     {
+        "name": "debug_checkpoint_scan_sleep_ms",
+        "description": "DEBUG SETTING: time to sleep after a checkpoint has written a table's row groups, before it installs them",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "0"
+    },
+    {
         "name": "debug_checkpoint_sleep_ms",
         "description": "DEBUG SETTING: time to sleep before a checkpoint",
         "type": "UBIGINT",
