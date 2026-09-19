@@ -9,6 +9,7 @@
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
@@ -457,9 +458,13 @@ public:
 			auto run = make_uniq<AggregateRun>(context.client, object, lookup(aggregate.symbol));
 			// the operand is read as the aggregate's own argument type, which binding may have widened
 			if (aggregate.operand.IsValid()) {
-				run->source = make_uniq<Vector>(collection.GetTypes()[columns_idx[aggregate.operand.GetIndex()]], 1U);
-				run->operand = make_uniq<DataChunk>();
-				run->operand->Initialize(context.client, {bound.GetChildren()[0]->GetReturnType()}, 1U);
+				auto &column = collection.GetTypes()[columns_idx[aggregate.operand.GetIndex()]];
+				auto &argument = bound.GetChildren()[0]->GetReturnType();
+				run->row = make_uniq<CursorRow>(column);
+				if (column != argument) {
+					run->operand = make_uniq<DataChunk>();
+					run->operand->Initialize(context.client, {argument}, 1U);
+				}
 			}
 			if (!columns_idx.empty()) {
 				run->cursor = make_uniq<WindowCursor>(collection, columns_idx);
@@ -540,15 +545,19 @@ public:
 				const auto navigated = Navigate(config.navigations[plan.navigation_idx], plan.navigation_idx, row);
 				if (navigated.IsValid()) {
 					// a cursor of its own, because seeking the row being tested would move this one
-					CopyField(*navigation_cursors[plan.navigation_idx], field, navigated.GetIndex(), target);
+					auto &cursor = *navigation_cursors[plan.navigation_idx];
+					target.Reference(field_rows[field]->Read(cursor, field, navigated.GetIndex()));
 				} else {
 					// the match has no such row, which is what the condition reads as NULL
-					FlatVector::ValidityMutable(target).SetInvalid(0);
+					target.Reference(*field_nulls[field]);
 				}
 				break;
 			}
 			case FieldSource::CURRENT_ROW:
-				CopyField(*row_cursor, field, row, target);
+				// a condition only reads fields that are columns of the collection, which are the
+				// fields a view was built for
+				D_ASSERT(field_rows[field]);
+				target.Reference(field_rows[field]->Read(*row_cursor, field, row));
 				break;
 			case FieldSource::AGGREGATE:
 				FoldAggregate(plan.navigation_idx, row, target);
@@ -593,12 +602,30 @@ private:
 		row_chunk.Initialize(context.client, types, 1);
 		// one expression is evaluated at a time here, so the result holds a single column
 		row_result.Initialize(context.client, vector<LogicalType> {LogicalType::BOOLEAN}, 1);
-		// only a field holding values outside the vector's own data can grow
-		for (auto &type : types) {
-			row_grows = row_grows || !TypeIsConstantSize(type.InternalType());
+		// a field read off the collection is pointed at rather than copied, so the only field that can
+		// grow is one an aggregate writes into
+		for (auto &aggregate : config.aggregates) {
+			row_grows = row_grows || !TypeIsConstantSize(types[aggregate.field].InternalType());
 		}
 		ResetRow();
 		field_plan.resize(MaxValue<idx_t>(field_plan.size(), types.size()));
+
+		// a field that reads a collected row does so in place; a navigation that lands outside the
+		// match reads a row that is not there, which is the one value it needs of its own
+		field_rows.resize(field_plan.size());
+		field_nulls.resize(field_plan.size());
+		for (idx_t field = 0; field < field_plan.size() && field < columns_idx.size(); field++) {
+			auto &plan = field_plan[field];
+			if (plan.source != FieldSource::CURRENT_ROW && plan.source != FieldSource::NAVIGATION) {
+				continue;
+			}
+			field_rows[field] = make_uniq<CursorRow>(types[field]);
+			if (plan.source == FieldSource::NAVIGATION) {
+				field_nulls[field] = make_uniq<Vector>(types[field], 1U);
+				field_nulls[field]->SetVectorType(VectorType::CONSTANT_VECTOR);
+				ConstantVector::SetNull(*field_nulls[field], true);
+			}
+		}
 
 		if (!columns_idx.empty()) {
 			row_cursor = make_uniq<WindowCursor>(collection, columns_idx);
@@ -648,21 +675,18 @@ private:
 				run.aggr.function.GetStateUpdateCallback()(nullptr, input_data, 0, run.statep, 1);
 				continue;
 			}
-			auto &operands = *run.operand;
 			const idx_t source = whole_match ? match_start + i : run.positions[i];
-			auto &raw = *run.source;
-			operands.Reset();
-			operands.SetCardinality(1);
-			CopyField(*run.cursor, aggregate.operand.GetIndex(), source, raw);
-			// the vector carries its own size, and one value read into it means saying so
-			FlatVector::SetSize(raw, 1);
-			if (raw.GetType() == operands.data[0].GetType()) {
-				operands.data[0].Reference(raw);
-			} else {
-				VectorOperations::Cast(context.client, raw, operands.data[0], 1);
+			auto &value = run.row->Read(*run.cursor, aggregate.operand.GetIndex(), source);
+			auto input = &value;
+			if (run.operand) {
+				// the aggregate takes an argument wider than the column, so the row is cast into one
+				auto &operands = *run.operand;
+				operands.Reset();
+				operands.SetCardinality(1);
+				VectorOperations::Cast(context.client, value, operands.data[0], 1);
+				input = operands.data.data();
 			}
-			run.aggr.function.GetStateUpdateCallback()(operands.data.data(), input_data, operands.ColumnCount(),
-			                                           run.statep, 1);
+			run.aggr.function.GetStateUpdateCallback()(input, input_data, 1, run.statep, 1);
 		}
 		run.folded = needed;
 
@@ -679,11 +703,46 @@ private:
 		run.aggr.function.GetStateFinalizeCallback()(*run.running.statef, finalize_input, target, 1, 0);
 	}
 
-	//! Copy one field of one collected row: seeking can replace the cursor's chunk, so it is a copy
-	static void CopyField(WindowCursor &cursor, idx_t field, idx_t row, Vector &target) {
-		const auto index = cursor.Seek(row);
-		VectorOperations::Copy(cursor.chunk.data[field], target, index + 1, index, 0);
-	}
+	//! One row of one column of a cursor, read where it lies rather than copied out. The row is a
+	//! dictionary over the chunk the cursor holds, so stepping to another row of that chunk writes a
+	//! single index; seeking can replace the chunk, and a view whose chunk has moved is built again.
+	struct CursorRow {
+		explicit CursorRow(const LogicalType &type) : view(type, 1U), flat(type, 1U) {
+			// the view is built over a chunk before it selects a row, so it starts on a row it has
+			one.set_index(0, 0);
+		}
+
+		Vector &Read(WindowCursor &cursor, idx_t field, idx_t row) {
+			const auto index = cursor.Seek(row);
+			if (base != cursor.state.current_row_index) {
+				auto &source = cursor.chunk.data[field];
+				// a dictionary selects rows of a flat vector, so anything else is laid out flat first
+				auto &dictionary =
+				    source.GetVectorType() == VectorType::FLAT_VECTOR ? source : Flatten(source);
+				view.Dictionary(dictionary, dictionary.size(), one, 1);
+				base = cursor.state.current_row_index;
+				sel = &DictionaryVector::SelVector(view);
+			}
+			sel->set_index(0, UnsafeNumericCast<sel_t>(index));
+			return view;
+		}
+
+		Vector &Flatten(Vector &source) {
+			flat.Reference(source);
+			flat.Flatten();
+			return flat;
+		}
+
+		//! The row itself, a one-entry dictionary over the cursor's chunk
+		Vector view;
+		//! Where a chunk the dictionary cannot select from is laid out
+		Vector flat;
+		//! The entry the view selects, which the view holds its own copy of once it is built
+		SelectionVector one {1};
+		optional_ptr<SelectionVector> sel;
+		//! The chunk the view was built over, so that a cursor moving off it is noticed
+		idx_t base = DConstants::INVALID_INDEX;
+	};
 
 	//! The row FIRST()/LAST() navigates to, or an invalid index when the match has no such row
 	optional_idx Navigate(const MatchRecognizeFunctionData::Navigation &navigation, idx_t navigation_idx,
@@ -727,6 +786,9 @@ private:
 	bool row_grows = false;
 	//! Where each field of row_chunk takes its value from
 	vector<FieldPlan> field_plan;
+	//! One view per field that reads a collected row, and the NULL a navigation off the match reads
+	vector<unique_ptr<CursorRow>> field_rows;
+	vector<unique_ptr<Vector>> field_nulls;
 	//! The fields each condition reads, so that deciding one copies no more than it needs
 	vector<vector<idx_t>> condition_fields;
 	//! Reads the row being tested. Owned by this thread, like the ones below.
@@ -762,8 +824,9 @@ private:
 		vector<idx_t> positions;
 		//! Its own cursor, because two aggregates can be reading two different rows at once
 		unique_ptr<WindowCursor> cursor;
-		//! The operand as the collected column has it, and as the aggregate's own argument type
-		unique_ptr<Vector> source;
+		//! The operand where it lies in the collection
+		unique_ptr<CursorRow> row;
+		//! Where it is cast when the aggregate's argument type is not the column's own
 		unique_ptr<DataChunk> operand;
 	};
 	vector<unique_ptr<AggregateRun>> aggregate_runs;
