@@ -1,0 +1,45 @@
+# name: test/sql/storage/wal/wal_torn_uncommitted_row_group.test
+# description: Test uncommitted optimistic rows must not survive crash recovery on torn WAL
+# group: [wal]
+
+load {TEST_DIR}/wal_torn_uncommitted_row_group.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+SET debug_abort_on_wal_failure=false;
+
+statement ok
+CREATE TABLE t (id INT);
+
+statement ok
+INSERT INTO t VALUES (1);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+PRAGMA debug_checkpoint_abort='before_wal_flush';
+
+# Bulk insert exceeding row group size (122,880 rows) writes optimistic blocks to .db
+# and logs ROW_GROUP_DATA to WAL, then crashes before writing WAL_FLUSH.
+statement error
+INSERT INTO t SELECT * FROM range(2, 130002);
+----
+Simulated crash before WAL_FLUSH write
+
+# Crash restart: triggers WAL recovery
+restart
+
+statement ok
+PRAGMA debug_checkpoint_abort='none';
+
+# ACID atomicity: the uncommitted transaction's rows must not survive
+query I
+SELECT count(*) FROM t;
+----
+1
