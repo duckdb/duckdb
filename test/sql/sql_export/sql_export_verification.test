@@ -5,6 +5,16 @@
 statement ok
 SET debug_verify_sql_export='off';
 
+query I
+SELECT count(*) FROM duckdb_settings() WHERE name='debug_verify_sql_export';
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_settings(debug := true) WHERE name='debug_verify_sql_export';
+----
+1
+
 statement error
 SET debug_verify_sql_export='invalid';
 ----

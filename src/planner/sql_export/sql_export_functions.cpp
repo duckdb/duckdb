@@ -276,10 +276,7 @@ BoundExpressionSQLExportState::ExportScalarFunction(const BoundFunctionExpressio
 	    !expression.GetReturnType().IsAggregateState() &&
 	    (definition->HasBindCallback() || definition->GetReturnType().id() == LogicalTypeId::SQLNULL) &&
 	    definition->GetReturnType() != expression.GetReturnType()) {
-		if (RequiresConstantConstructor(expression.GetReturnType())) {
-			return CastToConstructedType(expression.GetReturnType(), std::move(result), path);
-		}
-		result = SQLCast(expression.GetReturnType(), std::move(result));
+		return RestoreResultType(expression.GetReturnType(), std::move(result), path);
 	}
 	return BoundExpressionSQLExportResult::Success(std::move(result));
 }
@@ -385,10 +382,7 @@ BoundExpressionSQLExportState::ExportAggregate(const BoundAggregateExpression &e
 	if (expression.StateExportMode() == AggregateStateExportMode::NONE &&
 	    IsSQLRepresentableType(expression.GetReturnType()) && !expression.GetReturnType().IsAggregateState() &&
 	    definition->HasBindCallback() && definition->GetReturnType() != expression.GetReturnType()) {
-		if (RequiresConstantConstructor(expression.GetReturnType())) {
-			return CastToConstructedType(expression.GetReturnType(), std::move(result), path);
-		}
-		result = SQLCast(expression.GetReturnType(), std::move(result));
+		return RestoreResultType(expression.GetReturnType(), std::move(result), path);
 	}
 	return BoundExpressionSQLExportResult::Success(std::move(result));
 }

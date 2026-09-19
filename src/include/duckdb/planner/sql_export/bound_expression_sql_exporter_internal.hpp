@@ -114,6 +114,8 @@ private:
 	BoundExpressionSQLExportResult ExportWindowFunction(const BoundWindowExpression &expression,
 	                                                    const FUNCTION &function,
 	                                                    const LogicalPlanVerificationPath &path);
+	BoundExpressionSQLExportResult RestoreResultType(const LogicalType &type, unique_ptr<ParsedExpression> result,
+	                                                 const LogicalPlanVerificationPath &path);
 	static bool RequiresConstantConstructor(const LogicalType &type);
 	BoundExpressionSQLExportResult ExportNestedConstant(const LogicalType &type, optional_ptr<const Value> value,
 	                                                    const LogicalPlanVerificationPath &path);

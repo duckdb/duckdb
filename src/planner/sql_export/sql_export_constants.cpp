@@ -223,6 +223,15 @@ BoundExpressionSQLExportState::CastToConstructedType(const LogicalType &type, un
 	    BinarySystemFunction("cast_to_type", std::move(child), std::move(target.GetValue())));
 }
 
+BoundExpressionSQLExportResult
+BoundExpressionSQLExportState::RestoreResultType(const LogicalType &type, unique_ptr<ParsedExpression> result,
+                                                 const LogicalPlanVerificationPath &path) {
+	if (RequiresConstantConstructor(type)) {
+		return CastToConstructedType(type, std::move(result), path);
+	}
+	return BoundExpressionSQLExportResult::Success(SQLCast(type, std::move(result)));
+}
+
 BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportConstant(const BoundConstantExpression &expression,
                                                                              const LogicalPlanVerificationPath &path) {
 	D_ASSERT(expression.GetExpressionType() == ExpressionType::VALUE_CONSTANT);

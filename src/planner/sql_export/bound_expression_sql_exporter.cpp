@@ -348,9 +348,12 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportCast(const B
 	    !expression.GetChildren()[0] || !BoundCastExpression::HasValidBindData(expression) ||
 	    !ChildrenAreConsistentWithArguments(expression.GetChildren(), expression.Function().GetArguments()) ||
 	    expression.GetReturnType() != expression.Function().GetReturnType() ||
-	    !IsSQLRepresentableType(expression.GetReturnType()) ||
-	    !IsSQLRepresentableType(expression.GetChildren()[0]->GetReturnType())) {
+	    !IsSQLValueType(expression.GetReturnType()) || !IsSQLValueType(expression.GetChildren()[0]->GetReturnType())) {
 		return Failure(InternalExpressionInvariant(path, expression, "Bound cast has malformed type, data, or arity"));
+	}
+	if (!IsSQLRepresentableType(expression.GetReturnType()) ||
+	    !IsSQLRepresentableType(expression.GetChildren()[0]->GetReturnType())) {
+		return Failure(UnsupportedFeature(path, "cast_type", "The cast type has no SQL type representation"));
 	}
 	if (context.discard_optimizer_metadata && CMUtils::GetExpressionType(expression) == CMExpressionType::CAST) {
 		if (!BoundCastExpression::IsDefaultCast(expression)) {

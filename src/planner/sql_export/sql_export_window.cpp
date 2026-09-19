@@ -201,7 +201,7 @@ BoundExpressionSQLExportState::ExportWindowFunction(const BoundWindowExpression 
 	unique_ptr<ParsedExpression> result = std::move(window);
 	if (IsSQLRepresentableType(expression.GetReturnType()) && definition->HasBindCallback() &&
 	    definition->GetReturnType() != expression.GetReturnType()) {
-		result = SQLCast(expression.GetReturnType(), std::move(result));
+		return RestoreResultType(expression.GetReturnType(), std::move(result), path);
 	}
 	return BoundExpressionSQLExportResult::Success(std::move(result));
 }
