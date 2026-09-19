@@ -72,8 +72,7 @@ struct StatsWriter : public BaseStatsWriter {
 	}
 
 	void UpdateMinMax(T new_value) {
-		min = LessThan::Operation(new_value, min) ? new_value : min;
-		max = GreaterThan::Operation(new_value, max) ? new_value : max;
+		NumericStats::UpdateValue(new_value, min, max);
 	}
 
 	void Merge(BaseStatistics &target) const {
