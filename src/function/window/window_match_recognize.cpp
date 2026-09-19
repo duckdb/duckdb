@@ -776,7 +776,7 @@ private:
 				// the aggregate takes an argument wider than the column, so the row is cast into one
 				auto &operands = *run.operand;
 				operands.Reset();
-				operands.SetCardinality(1);
+				operands.SetChildCardinality(1);
 				VectorOperations::Cast(context.client, value, operands.data[0], 1);
 				input = operands.data.data();
 			}
