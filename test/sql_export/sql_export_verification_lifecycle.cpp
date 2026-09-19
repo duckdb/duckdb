@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/main/sql_export_verification.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -71,7 +72,7 @@ public:
 
 class SQLExportEvaluationState : public ClientContextState {
 public:
-	idx_t values = 0;
+	atomic<idx_t> values {0};
 };
 
 void SQLExportCounter(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -274,7 +275,8 @@ TEST_CASE("SQL export executes volatile read-only functions once", "[sql_export]
 	for (auto mode : {"off", "strict"}) {
 		SetSQLExportMode(con, *observer, mode);
 		counter->values = 0;
-		auto result = con.Query("SELECT x,x FROM (SELECT sql_export_counter() AS x FROM (VALUES (1),(2),(2)) t(i)) q");
+		auto result =
+		    con.Query("SELECT x,x FROM (SELECT sql_export_counter() AS x FROM (VALUES (1),(2),(2)) t(i)) q ORDER BY 1");
 		REQUIRE_NO_FAIL(*result);
 		REQUIRE(counter->values == 3);
 		REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));

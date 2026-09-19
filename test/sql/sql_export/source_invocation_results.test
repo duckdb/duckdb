@@ -122,6 +122,10 @@ reset label file_predicate_CSV4
 statement ok
 COPY (SELECT * FROM (VALUES (10,1),(10,1),(NULL,1),(20,2),(30,NULL)) t(i,p)) TO '__TEST_DIR__/retained_predicates_parquet' (FORMAT parquet,PARTITION_BY(p));
 
+# Retaining arguments across plan serialization requires the v2.0.0 format.
+statement ok
+SET storage_compatibility_version='v2.0.0';
+
 foreach serializer false true
 
 statement ok

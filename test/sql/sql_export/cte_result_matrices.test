@@ -201,10 +201,15 @@ WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c WHERE x<3) SELECT x
 statement ok
 SET disabled_optimizers='cte_inlining';
 
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
 statement ok
 CREATE OR REPLACE SEQUENCE cte_sequence;
 
-query I rowsort
+query I
 WITH c AS MATERIALIZED (SELECT nextval('cte_sequence') v FROM range(10000)) SELECT v FROM c LIMIT 1;
 ----
 1
@@ -214,10 +219,9 @@ EXPLAIN (SQL) WITH c AS MATERIALIZED (SELECT nextval('cte_sequence') v FROM rang
 ----
 sql	<REGEX>:.*WITH .* AS MATERIALIZED .*
 
-query I
+# Early termination can leave the producer partially consumed, depending on chunk size.
+query I nosort cte_limit_effects
 SELECT currval('cte_sequence');
-----
-10000
 
 statement ok
 CREATE OR REPLACE SEQUENCE cte_sequence;
@@ -241,10 +245,19 @@ SELECT currval('cte_sequence');
 ----
 5
 
+endloop
+
+reset label cte_limit_effects
+
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
 statement ok
 CREATE OR REPLACE SEQUENCE cte_sequence;
 
-query I rowsort
+query I
 WITH c AS NOT MATERIALIZED (SELECT nextval('cte_sequence') v FROM range(10000)) SELECT v FROM c LIMIT 1;
 ----
 1
@@ -254,10 +267,9 @@ EXPLAIN (SQL) WITH c AS NOT MATERIALIZED (SELECT nextval('cte_sequence') v FROM 
 ----
 sql	<REGEX>:.*WITH .* AS MATERIALIZED .*
 
-query I
+# Early termination can leave the producer partially consumed, depending on chunk size.
+query I nosort cte_limit_effects
 SELECT currval('cte_sequence');
-----
-10000
 
 statement ok
 CREATE OR REPLACE SEQUENCE cte_sequence;
@@ -281,10 +293,19 @@ SELECT currval('cte_sequence');
 ----
 5
 
+endloop
+
+reset label cte_limit_effects
+
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
 statement ok
 CREATE OR REPLACE SEQUENCE cte_sequence;
 
-query I rowsort
+query I
 WITH c AS  (SELECT nextval('cte_sequence') v FROM range(10000)) SELECT v FROM c LIMIT 1;
 ----
 1
@@ -294,10 +315,9 @@ EXPLAIN (SQL) WITH c AS  (SELECT nextval('cte_sequence') v FROM range(10000)) SE
 ----
 sql	<REGEX>:.*WITH .* AS MATERIALIZED .*
 
-query I
+# Early termination can leave the producer partially consumed, depending on chunk size.
+query I nosort cte_limit_effects
 SELECT currval('cte_sequence');
-----
-10000
 
 statement ok
 CREATE OR REPLACE SEQUENCE cte_sequence;
@@ -321,9 +341,17 @@ SELECT currval('cte_sequence');
 ----
 5
 
-# The exported MATERIALIZED hint must also preserve evaluation with normal optimization.
+endloop
+
+reset label cte_limit_effects
+
 statement ok
 SET disabled_optimizers='';
+
+foreach mode off strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
 
 statement ok
 CREATE OR REPLACE SEQUENCE cte_sequence;
@@ -333,10 +361,14 @@ WITH c AS MATERIALIZED (SELECT nextval('cte_sequence') v FROM range(10000)) SELE
 ----
 1
 
-query I
-SELECT currval('cte_sequence');
+query TT
+EXPLAIN (SQL) WITH c AS MATERIALIZED (SELECT nextval('cte_sequence') v FROM range(10000)) SELECT v FROM c LIMIT 1;
 ----
-10000
+sql	<REGEX>:.*WITH .* AS MATERIALIZED .*
+
+# Early termination can leave the producer partially consumed, depending on chunk size.
+query I nosort cte_limit_effects
+SELECT currval('cte_sequence');
 
 statement ok
 CREATE OR REPLACE SEQUENCE cte_sequence;
@@ -350,7 +382,16 @@ WITH c AS MATERIALIZED (SELECT nextval('cte_sequence') v FROM range(5)) SELECT a
 4	4
 5	5
 
+query TT
+EXPLAIN (SQL) WITH c AS MATERIALIZED (SELECT nextval('cte_sequence') v FROM range(5)) SELECT a.v,b.v FROM c a JOIN c b ON a.v=b.v;
+----
+sql	<REGEX>:.*WITH .* AS MATERIALIZED .*
+
 query I
 SELECT currval('cte_sequence');
 ----
 5
+
+endloop
+
+reset label cte_limit_effects

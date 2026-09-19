@@ -393,7 +393,9 @@ TEST_CASE("Owned chunk SQL export accounts for intrinsic SINGLE join errors",
 				CAPTURE(count, combined, error_on_multiple);
 				DuckDB db(nullptr);
 				Connection connection(db);
-				REQUIRE_NO_FAIL(connection.Query("SET threads=1; SET max_streaming_buffer_size='1b'"));
+				// Isolate source chunk boundaries from join-result coalescing.
+				REQUIRE_NO_FAIL(connection.Query(
+				    "SET threads=1; SET max_streaming_buffer_size='1b'; SET enable_caching_operators=false"));
 				REQUIRE_NO_FAIL(connection.Query(string("SET scalar_subquery_error_on_multiple_rows=") +
 				                                 (error_on_multiple ? "true" : "false")));
 				auto first = connection.Query(combined ? "SELECT 0::BIGINT FROM range(" + to_string(count) + ")"

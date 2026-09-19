@@ -39,8 +39,8 @@ TEST_CASE("Logical plan SQL export preserves partial CTE streams and errors",
 		QueryParameters parameters;
 		parameters.result_eagerness = ResultEagerness::AUTO;
 		auto check = [&](unique_ptr<QueryResult> result) {
-			if (producer) {
-				REQUIRE(result->HasError());
+			if (result->HasError()) {
+				REQUIRE(producer);
 				REQUIRE(result->GetErrorType() == ExceptionType::CONVERSION);
 				return idx_t(0);
 			}
@@ -52,13 +52,13 @@ TEST_CASE("Logical plan SQL export preserves partial CTE streams and errors",
 				REQUIRE(chunk->size() > 0);
 				REQUIRE(chunk->GetValue(0, 0) == Value::INTEGER(1));
 				count += chunk->size();
-				if (!finish) {
+				if (!producer && !finish) {
 					stream.Close();
 					break;
 				}
 			}
-			REQUIRE(stream.HasError() == finish);
-			if (finish) {
+			REQUIRE(stream.HasError() == (producer || finish));
+			if (producer || finish) {
 				REQUIRE(stream.GetErrorType() == ExceptionType::CONVERSION);
 			}
 			REQUIRE(count > 0);

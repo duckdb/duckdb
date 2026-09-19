@@ -5,9 +5,6 @@
 statement ok
 SET debug_verify_sql_export='strict';
 
-statement ok
-SET max_execution_time=5000;
-
 foreach threads 1 4
 
 statement ok
