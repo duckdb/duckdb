@@ -288,7 +288,8 @@ static bool IsRegexComparison(const string &expected) {
 	return StringUtil::StartsWith(expected, "<REGEX>:") || StringUtil::StartsWith(expected, "<!REGEX>:");
 }
 
-bool TestResultHelper::ErrorMatchesExpected(SQLLogicTestLogger &logger, const string &expected, const string &actual) const {
+bool TestResultHelper::ErrorMatchesExpected(SQLLogicTestLogger &logger, const string &expected,
+                                            const string &actual) const {
 	// We run both comparisons on purpose, we might move to only the second but might require some changes in tests
 	// This is due to some errors containing absolute paths, some relatives
 	if (StringUtil::Contains(actual, expected) || StringUtil::Contains(actual, runner.ReplaceKeywords(expected))) {
@@ -303,43 +304,40 @@ bool TestResultHelper::ErrorMatchesExpected(SQLLogicTestLogger &logger, const st
 	return MatchesRegex(logger, error_message, expected);
 }
 
-optional<string> TestResultHelper::EvaluateStatementResult(SQLLogicTestLogger &logger, const Statement &statement, ExecuteContext &context, QueryResult &result) const {
-	optional<string> error;
-	if (result.HasError()) {
-		error = result.GetError();
-	}
-
-	if (error && TestIsInternalError(runner.always_fail_error_messages, *error)) {
-		//! Encountered an internal exception, regardless of what statement type, this is unexpected
-		logger.InternalException(result);
-		return error;
-	}
-
+optional<string> TestResultHelper::EvaluateStatementResult(SQLLogicTestLogger &logger, const Statement &statement,
+                                                           ExecuteContext &context,
+                                                           const optional<string> &error) const {
 	//! Check to see if we are expecting success or failure
 	auto expected_result = statement.expected_result;
 	switch (expected_result) {
-		case ExpectedResult::RESULT_SUCCESS: {
-			//! If there's an error, it's always unexpected.
-			return error;
-		}
-		case ExpectedResult::RESULT_ERROR: {
-			if (!error) {
-				//! Expected an error, didn't get an error - always unexpected
-				//! NOTE: Signal unexpected result, without performing extra logging
-				return "";
-			}
-			const auto &expected = statement.expected_error;
-			const auto &actual = *error;
-			if (expected.empty() || ErrorMatchesExpected(logger, expected, actual)) {
-				//! Either no explicit expectation was set, or the error matches - not unexpected
+	case ExpectedResult::RESULT_SUCCESS: {
+		//! If there's an error, it's always unexpected.
+		return error;
+	}
+	case ExpectedResult::RESULT_UNKNOWN:
+	case ExpectedResult::RESULT_ERROR: {
+		const bool success_is_not_an_error = expected_result != ExpectedResult::RESULT_UNKNOWN;
+		if (!error) {
+			if (success_is_not_an_error) {
+				//! OK is not unexpected
 				return std::nullopt;
 			}
-			return error;
+			//! Expected an error, didn't get an error - always unexpected
+			//! NOTE: Signal unexpected result, without performing extra logging
+			return "";
 		}
-		default: {
-			//! The result is never unexpected, we accept all results (apart from the special cases handled above)
+		const auto &expected = statement.expected_error;
+		const auto &actual = *error;
+		if (expected.empty() || ErrorMatchesExpected(logger, expected, actual)) {
+			//! Either no explicit expectation was set, or the error matches - not unexpected
 			return std::nullopt;
 		}
+		return error;
+	}
+	default: {
+		//! The result is never unexpected, we accept all results (apart from the special cases handled above)
+		return std::nullopt;
+	}
 	}
 }
 
@@ -351,7 +349,18 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 		result.Print();
 	}
 
-	auto unexpected_result = EvaluateStatementResult(logger, statement, context, result);
+	optional<string> error;
+	if (result.HasError()) {
+		error = result.GetError();
+	}
+
+	if (error && TestIsInternalError(runner.always_fail_error_messages, *error)) {
+		//! Encountered an internal exception, regardless of what statement type, this is unexpected
+		logger.InternalException(result);
+		return false;
+	}
+
+	auto unexpected_result = EvaluateStatementResult(logger, statement, context, error);
 	if (!unexpected_result) {
 		TEST_ASSERTION();
 		return true;
@@ -359,42 +368,50 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 
 	//! Statement ended in an unexpected result, deal with it
 	auto expected_result = statement.expected_result;
+
 	switch (expected_result) {
-		case ExpectedResult::RESULT_SUCCESS: {
-			if (SkipErrorMessage(*unexpected_result)) {
-				//! File is skipped as a result of the encountered error message
-				runner.finished_processing_file = true;
-				return true;
-			}
-			runner.last_error_message = *unexpected_result;
-			if (!FailureSummary::SkipLoggingSameError(statement.file_name)) {
-				logger.UnexpectedStatement(true, result);
-			}
-			return false;
+	case ExpectedResult::RESULT_SUCCESS: {
+		if (SkipErrorMessage(*unexpected_result)) {
+			//! File is skipped as a result of the encountered error message
+			runner.finished_processing_file = true;
+			return true;
 		}
-		case ExpectedResult::RESULT_ERROR: {
-			auto &error_message = *unexpected_result;
-			if (!error_message.empty() && SkipErrorMessage(error_message)) {
-				//! File is skipped as a result of the encountered error message
-				runner.finished_processing_file = true;
-				return true;
-			}
-			if (!FailureSummary::SkipLoggingSameError(statement.file_name)) {
-				if (error_message.empty()) {
-					//! Expected an error but the statement succeeded!
-					logger.UnexpectedStatement(false, result);
-				} else {
-					//! Received an error but it didn't match
-					const auto &expected = statement.expected_error;
-					logger.ExpectedErrorMismatch(expected, result);
-				}
-			}
-			return false;
+		runner.last_error_message = *unexpected_result;
+		if (!FailureSummary::SkipLoggingSameError(statement.file_name)) {
+			logger.UnexpectedStatement(true, result);
 		}
-		default: {
-			//! Other types will never result in an unexpected result, because they accept anything
-			throw InternalException("Unexpected ExpectedResult encountered: %d", static_cast<uint8_t>(expected_result));
+		return false;
+	}
+	case ExpectedResult::RESULT_UNKNOWN:
+	case ExpectedResult::RESULT_ERROR: {
+		auto &error_message = *unexpected_result;
+		//! NOTE: We use the empty string to indicate the statement ended in success unexpectedly
+		const bool no_error_result = error_message.empty();
+		if (expected_result == ExpectedResult::RESULT_UNKNOWN && no_error_result) {
+			throw InternalException("OK (no error) is never unexpected for 'statement maybe'");
 		}
+		if (!no_error_result && SkipErrorMessage(error_message)) {
+			//! File is skipped as a result of the encountered error message
+			runner.finished_processing_file = true;
+			return true;
+		}
+		if (!FailureSummary::SkipLoggingSameError(statement.file_name)) {
+			if (no_error_result) {
+				//! Expected an error but the statement succeeded!
+				logger.UnexpectedStatement(false, result);
+			} else {
+				//! Received an error but it didn't match
+				const auto &expected = statement.expected_error;
+				logger.ExpectedErrorMismatch(expected, result);
+			}
+		}
+		return false;
+	}
+	default: {
+		//! Other types will never result in an unexpected result, because they accept anything
+		throw InternalException("Unexpected ExpectedResult type encountered: %d",
+		                        static_cast<uint8_t>(expected_result));
+	}
 	};
 }
 

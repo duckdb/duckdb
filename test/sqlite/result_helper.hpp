@@ -24,7 +24,8 @@ public:
 
 public:
 	bool CheckQueryResult(const Query &query, ExecuteContext &context, duckdb::unique_ptr<QueryResult> owned_result);
-	optional<string> EvaluateStatementResult(SQLLogicTestLogger &logger, const Statement &statement, ExecuteContext &context, QueryResult &result) const;
+	optional<string> EvaluateStatementResult(SQLLogicTestLogger &logger, const Statement &statement,
+	                                         ExecuteContext &context, const optional<string> &error) const;
 	bool ErrorMatchesExpected(SQLLogicTestLogger &logger, const string &expected, const string &actual) const;
 	bool CheckStatementResult(const Statement &statement, ExecuteContext &context,
 	                          duckdb::unique_ptr<QueryResult> owned_result);
