@@ -28,9 +28,9 @@ SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x DEFINE A as true)
 ----
 <REGEX>:Parser Error.*requires a PATTERN clause.*
 
-# a variable with no condition matches any row, so DEFINE may be left out entirely
+# a variable with no condition matches any row, but the DEFINE clause itself has to be there
 query I
-SELECT count(*) FROM q MATCH_RECOGNIZE(MEASURES count(*) AS n ONE ROW PER MATCH PATTERN (A))
+SELECT count(*) FROM q MATCH_RECOGNIZE(MEASURES count(*) AS n ONE ROW PER MATCH PATTERN (A) DEFINE A AS true)
 ----
 2
 
@@ -42,7 +42,7 @@ SELECT count(*) FROM q MATCH_RECOGNIZE(ORDER BY i ALL ROWS PER MATCH PATTERN (A)
 
 # with neither, the pattern's shape alone decides the match
 query I
-SELECT count(*) FROM q MATCH_RECOGNIZE(ORDER BY i ALL ROWS PER MATCH PATTERN (A B))
+SELECT count(*) FROM q MATCH_RECOGNIZE(ORDER BY i ALL ROWS PER MATCH PATTERN (A B) DEFINE A AS true)
 ----
 2
 
@@ -163,22 +163,28 @@ SELECT 1 FROM q MATCH_RECOGNIZE(
 ----
 <REGEX>:Binder Error:.*SUBSET name "A" is already a pattern variable.*
 
-# a union stands for a set of rows, which the matcher cannot navigate or skip to while matching
+# a measure is a column of the output, and a table does not have two columns of one name
 statement error
 SELECT 1 FROM q MATCH_RECOGNIZE(
-    ORDER BY i MEASURES count(*) AS n ONE ROW PER MATCH
-    PATTERN (A B+) SUBSET U = (A, B) DEFINE B AS LAST(U.j) > 0
+    ORDER BY i MEASURES count(*) AS n, sum(j) AS n ONE ROW PER MATCH PATTERN (A+) DEFINE A AS j > 0
 )
 ----
-<REGEX>:Not implemented Error:.*SUBSET variable cannot be referenced in DEFINE.*
+<REGEX>:Binder Error:.*MEASURES names "n" twice.*
+
+# an aggregate reads many rows and a navigation reads one, so one inside the other has no reading
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(
+    ORDER BY i MEASURES sum(PREV(A.j)) AS s ONE ROW PER MATCH PATTERN (A+) DEFINE A AS j > 0
+)
+----
+<REGEX>:Binder Error:.*SUM\(\) aggregates the rows of the match, so a row pattern navigation cannot be nested.*
 
 statement error
 SELECT 1 FROM q MATCH_RECOGNIZE(
-    ORDER BY i MEASURES count(*) AS n ONE ROW PER MATCH AFTER MATCH SKIP TO LAST U
-    PATTERN (A B+) SUBSET U = (A, B) DEFINE B AS B.j > 0
+    ORDER BY i MEASURES max(LAST(A.j)) AS s ONE ROW PER MATCH PATTERN (A+) DEFINE A AS j > 0
 )
 ----
-<REGEX>:Not implemented Error:.*AFTER MATCH SKIP TO a SUBSET variable.*
+<REGEX>:Binder Error:.*MAX\(\) aggregates the rows of the match, so a row pattern navigation cannot be nested.*
 
 # An exclusion decides which of a match's rows reach the output. ONE ROW PER MATCH reports the
 # match rather than its rows, so it is accepted there and simply has no effect - Trino and Oracle
@@ -296,11 +302,12 @@ SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A) DEFINE A as FIRST(no
 ----
 <REGEX>:Binder Error.*nosuchcol.*
 
-# a navigation over something a condition may not contain reports that, not the navigation
+# A navigation reads one row of the match and an aggregate reads many, so one inside the other has no
+# reading. The message names the aggregate rather than the navigation, which is what went wrong.
 statement error
 SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x PATTERN (A) DEFINE A as FIRST(sum(i)) > 0)
 ----
-<REGEX>:Binder Error.*cannot be an aggregate.*
+<REGEX>:Binder Error.*aggregate reads the rows of the match.*navigation.*
 
 # ONE ROW PER MATCH reports the match rather than its rows, so its columns are what the match was
 # partitioned by and what was measured. With neither there is nothing to return, which is worth
@@ -409,14 +416,6 @@ SELECT "match_recognize"(1) OVER ()
 ----
 <REGEX>:Binder Error:.*cannot be used directly.*
 
-# what a condition cannot be
-statement error
-FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
-    ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS sum(x) > 0
-)
-----
-cannot be an aggregate
-
 statement error
 FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS x > (SELECT 1)
@@ -424,12 +423,14 @@ FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
 ----
 may not contain a subquery
 
-statement error
+# CLASSIFIER() navigated in a condition reads the classifier of the row navigated to; the last row
+# mapped so far is the one being tested, which is the variable being defined
+query I
 FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES count(*) AS n PATTERN (A+) DEFINE A AS LAST(CLASSIFIER()) = 'A'
 )
 ----
-CLASSIFIER() only means something while the matcher is assembling a match
+2
 
 statement error
 FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
@@ -443,14 +444,14 @@ Nested row pattern navigation is not supported
 statement error
 FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP TO FIRST Z PATTERN (A B)
-)
+ DEFINE A AS true)
 ----
 not a pattern variable
 
 query I
 FROM (VALUES (1), (2), (3), (4)) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES count(*) AS n AFTER MATCH SKIP TO LAST B PATTERN (A B)
-)
+ DEFINE A AS true)
 ----
 2
 2

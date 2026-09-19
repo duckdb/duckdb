@@ -15,7 +15,7 @@ SET memory_limit='20MB';
 statement error
 FROM range(700) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES count(*) AS n PATTERN (((A?){700}){700})
-)
+ DEFINE A AS true)
 ----
 <REGEX>:Out of Memory Error:.*
 
@@ -53,7 +53,7 @@ statement error
 SELECT count(*) FROM range(1500) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES count(*) AS n
     AFTER MATCH SKIP TO NEXT ROW PATTERN (A+)
-);
+ DEFINE A AS true);
 ----
 Out of Memory Error
 
@@ -64,6 +64,6 @@ query I
 SELECT count(*) FROM range(1500) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES count(*) AS n
     AFTER MATCH SKIP TO NEXT ROW PATTERN (A+)
-);
+ DEFINE A AS true);
 ----
 1500

@@ -42,22 +42,41 @@ struct MatchRecognizeNavigation {
 	//! Where the navigated expression sits in the projection below the matcher
 	idx_t column;
 	idx_t offset;
+	//! Whether it reads the classifier of the row reached, which the matcher supplies in a field of
+	//! its own: `slot` says which, counted with the other fields the matcher supplies
+	bool classifier = false;
+	idx_t slot = 0;
+	//! Rows stepped through the partition from the row reached, backwards when negative
+	int64_t step = 0;
+};
+
+//! An aggregate in a DEFINE condition, over the rows a variable has matched so far
+struct MatchRecognizeAggregate {
+	//! The pattern variable whose rows it reads, empty for the match as a whole
+	string symbol;
+	//! Where the operand sits in the projection below the matcher, unset for COUNT(*)
+	optional_idx column;
+	//! The aggregate itself, bound over one reference of the operand's type
+	unique_ptr<Expression> expression;
+	//! Which of the fields the matcher supplies holds the value
+	idx_t slot;
 };
 
 //! What a DEFINE condition needs from the plan below the matcher: one column per value the matcher
 //! cannot compute itself, plus the descriptors telling it what to do with them
 struct MatchRecognizeConditionInputs {
 	//! The projection the matcher reads from, built as the conditions are bound
-	TableIndex projection_index;
+	BoundSelectNode &projection;
 	//! The table a matcher-supplied field is a column of, which no operator produces
 	TableIndex match_number_index;
-	vector<unique_ptr<Expression>> &select_list;
-	vector<Identifier> &names;
-	vector<LogicalType> &types;
 	//! Names the output does not report, because they only exist for the matcher
 	vector<string> &hidden;
 	GeneratedNames &generated;
 	vector<MatchRecognizeNavigation> &navigations;
+	vector<MatchRecognizeAggregate> &aggregates;
+	//! How many fields the matcher supplies so far: the match number is the first, and every
+	//! aggregate or classifier read takes the next
+	idx_t supplied = 1;
 
 	//! Compute this below the matcher and read it back as a column of its own
 	unique_ptr<Expression> Project(unique_ptr<Expression> value, const string &base);
@@ -105,6 +124,7 @@ protected:
 	BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function, idx_t depth) override;
 	string UnsupportedAggregateMessage() override;
 
+public:
 private:
 	//! PREV()/NEXT() walk the ordered partition rather than the match, so they are ordinary windows
 	BindResult BindNeighbour(FunctionExpression &function, const string &function_name,
@@ -112,7 +132,8 @@ private:
 	//! FIRST()/LAST() read a row of the match being assembled, so the plan supplies the expression and
 	//! the matcher reads it off the row it navigated to
 	BindResult BindNavigation(FunctionExpression &function, const string &function_name, idx_t depth);
-	BindResult BindNavigated(unique_ptr<ParsedExpression> inner, string symbol, bool last, idx_t offset, idx_t depth);
+	BindResult BindNavigated(unique_ptr<ParsedExpression> inner, string symbol, bool last, idx_t offset, idx_t depth,
+	                         int64_t step = 0);
 	//! Reject something that only means anything while the matcher is assembling a match
 	void OutsideMatch(const string &what) const;
 
@@ -153,6 +174,10 @@ private:
 	BindResult BindGenerated(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression);
 	BindResult BindNavigation(FunctionExpression &function, const string &function_name,
 	                          unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression);
+	//! PREV/NEXT around CLASSIFIER(): the classifier of a row a fixed distance from a row of the match,
+	//! read off the whole match once it is known
+	BindResult BindClassifierStep(FunctionExpression &function, const string &function_name,
+	                              unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression);
 
 	//! The column the matcher's state travels in
 	string state;
@@ -199,6 +224,9 @@ MatchRecognizeSteppedNavigation MatchRecognizePeelStep(unique_ptr<ParsedExpressi
 
 //! A step starts from a row the match names, and a step inside one names no row, so refuse the nesting
 void MatchRecognizeRejectNestedStep(const ParsedExpression &inner, const string &function_name);
+void MatchRecognizeRejectNavigationInAggregate(const ParsedExpression &argument, const string &function_name);
+//! CLASSIFIER(), with or without a variable in front of it, anywhere in the expression
+bool MatchRecognizeContainsClassifier(const ParsedExpression &expr);
 
 //! Whether a name is a pattern variable. The two clauses hold their symbols differently, so which
 //! names are theirs is the caller's to say.

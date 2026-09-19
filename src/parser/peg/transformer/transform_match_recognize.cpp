@@ -1,5 +1,7 @@
 #include "duckdb/function/match_recognize.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/pattern_expression.hpp"
@@ -154,9 +156,28 @@ PEGTransformerFactory::TransformMatchRecognizeBody(PEGTransformer &transformer,
 			break;
 		}
 	}
-	// only the pattern is required: a variable with no condition matches any row
 	if (!seen[static_cast<idx_t>(MatchRecognizeClauseKind::PATTERN)]) {
 		throw ParserException("MATCH_RECOGNIZE requires a PATTERN clause");
+	}
+	// "DEFINE is a mandatory clause" (ISO/IEC 19075-5 4.16), even though a variable within it needs no
+	// condition of its own: one without is a predicate that is always true, so a pattern that only
+	// counts rows still writes the clause and leaves its other variables out of it.
+	string first_symbol;
+	if (config->pattern) {
+		ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
+		    *config->pattern, [&](const ColumnRefExpression &colref) {
+			    if (first_symbol.empty()) {
+				    first_symbol = colref.GetColumnName().GetIdentifierName();
+			    }
+		    });
+	}
+	// a pattern that declares no variable at all - the empty pattern, or an anchor on its own - has
+	// nothing to define, and an empty DEFINE is not something the syntax can say
+	if (!first_symbol.empty() && !seen[static_cast<idx_t>(MatchRecognizeClauseKind::DEFINE)]) {
+		throw ParserException("MATCH_RECOGNIZE requires a DEFINE clause. A variable left out of it matches any "
+		                      "row, but the clause itself has to be there: a pattern that constrains nothing "
+		                      "writes DEFINE %s AS true",
+		                      first_symbol);
 	}
 
 	// the input table is attached by TransformTableRef

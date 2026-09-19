@@ -278,7 +278,7 @@ FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
     ORDER BY x
     MEASURES list(A.x) AS xs, count(A.x) AS n, sum(coalesce(A.x, 100)) AS s
     PATTERN (A B)
-)
+ DEFINE A AS true)
 ----
 [1]	1	1
 
@@ -286,7 +286,7 @@ FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
 statement error
 FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES sum(A.x + B.x) AS s PATTERN (A B)
-)
+ DEFINE A AS true)
 ----
 <REGEX>:Binder Error:.*aggregate in MEASURES reads the rows of one pattern variable.*
 
@@ -304,14 +304,14 @@ FROM (VALUES (1)) t(x) MATCH_RECOGNIZE (
 query I
 FROM (VALUES (1), (2), (3)) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES list(x ORDER BY x DESC) AS xs PATTERN (A+)
-)
+ DEFINE A AS true)
 ----
 [3, 2, 1]
 
 query I
 FROM (VALUES (1), (2), (3)) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES list(A.x ORDER BY A.x DESC) AS xs PATTERN (A+)
-)
+ DEFINE A AS true)
 ----
 [3, 2, 1]
 
@@ -340,7 +340,7 @@ FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
     ORDER BY x
     MEASURES sum(x) FILTER (WHERE CLASSIFIER()='A') AS s
     PATTERN (A B)
-)
+ DEFINE A AS true)
 ----
 10
 
@@ -349,7 +349,7 @@ FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
     ORDER BY x
     MEASURES sum(CASE WHEN CLASSIFIER()='A' THEN x END) AS s
     PATTERN (A B)
-)
+ DEFINE A AS true)
 ----
 10
 
@@ -358,7 +358,7 @@ FROM (VALUES (10), (20), (30)) t(x) MATCH_RECOGNIZE (
     ORDER BY x
     MEASURES sum(x) FILTER (WHERE MATCH_NUMBER() = 1) AS s
     PATTERN (A+)
-)
+ DEFINE A AS true)
 ----
 60
 
@@ -404,21 +404,21 @@ CREATE MACRO m_sum(v) AS sum(v);
 query I
 FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES (SELECT 42) AS s PATTERN (A+)
-)
+ DEFINE A AS true)
 ----
 42
 
 query I
 FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES (SELECT max(y) FROM (VALUES (5)) u(y) WHERE y > x) AS s PATTERN (A+)
-)
+ DEFINE A AS true)
 ----
 5
 
 query I
 FROM (VALUES ([1, 2])) t(x) MATCH_RECOGNIZE (
     MEASURES unnest(x) AS u PATTERN (A)
-)
+ DEFINE A AS true)
 ----
 1
 2
@@ -426,7 +426,7 @@ FROM (VALUES ([1, 2])) t(x) MATCH_RECOGNIZE (
 query II
 FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES row_number() OVER () AS r ALL ROWS PER MATCH PATTERN (A+)
-)
+ DEFINE A AS true)
 ----
 1	1
 2	2
@@ -436,21 +436,21 @@ FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
 query I
 FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES m_two(x) AS s PATTERN (A+)
-)
+ DEFINE A AS true)
 ----
 32
 
 query I
 FROM (VALUES (10), (20), (20)) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES m_sum(DISTINCT x) AS s PATTERN (A+)
-)
+ DEFINE A AS true)
 ----
 30
 
 query I
 FROM (VALUES (10), (20), (30)) t(x) MATCH_RECOGNIZE (
     ORDER BY x MEASURES list(x ORDER BY x DESC) AS s PATTERN (A+)
-)
+ DEFINE A AS true)
 ----
 [30, 20, 10]
 
