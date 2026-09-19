@@ -1,0 +1,31 @@
+# name: test/sql/index/art/create_drop/test_art_create_unique_if_not_exists_concurrent.test
+# description: Test concurrent creation of a unique index with IF NOT EXISTS
+# group: [create_drop]
+
+statement ok
+CREATE TABLE tbl(i INTEGER)
+
+statement ok con1
+BEGIN
+
+statement ok con1
+CREATE UNIQUE INDEX IF NOT EXISTS idx ON tbl(i)
+
+statement ok con2
+BEGIN
+
+statement error con2
+CREATE UNIQUE INDEX IF NOT EXISTS idx ON tbl(i)
+----
+<REGEX>:TransactionContext Error.*write-write.*
+
+statement ok con1
+ROLLBACK
+
+statement ok con2
+COMMIT
+
+query I
+SELECT count(*) FROM duckdb_indexes() WHERE index_name = 'idx'
+----
+0
