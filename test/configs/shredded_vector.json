@@ -4,12 +4,10 @@
 	"skip_compiled": "true",
 	"skip_tests": [
 		{
-			"reason": "Shredding fixes the object field order, so the textual/JSON representation of an object reorders its keys (values are unchanged) - these tests assert an exact key order",
+			"reason": "These tests need one shredded and one unshredded row group in the same table, which forcing every vector to be shredded takes away",
 			"paths": [
-				"test/sql/types/variant/json_cast.test",
-				"test/sql/types/variant/test_all_types.test",
-				"test/sql/types/variant/tpch_test_through_json.test",
-				"test/sql/function/variant/variant_typeof.test"
+				"test/sql/storage/types/variant/variant_object_key_order_shredded.test",
+				"test/sql/storage/types/variant/variant_object_key_order_shredded_json.test"
 			]
 		}
 	]
