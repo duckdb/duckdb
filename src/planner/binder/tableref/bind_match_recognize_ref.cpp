@@ -391,9 +391,9 @@ static void RemapToProjection(unique_ptr<Expression> &expr, MatchRecognizeCondit
 			expr = std::move(column);
 			return;
 		}
-		expr =
-		    make_uniq<BoundColumnRefExpression>(colref.GetAlias(), colref.GetReturnType(),
-		                                        ColumnBinding(inputs.projection.projection_index, ProjectionIndex(entry->second)));
+		expr = make_uniq<BoundColumnRefExpression>(
+		    colref.GetAlias(), colref.GetReturnType(),
+		    ColumnBinding(inputs.projection.projection_index, ProjectionIndex(entry->second)));
 		return;
 	}
 	ExpressionIterator::EnumerateChildren(
@@ -1080,8 +1080,8 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	unique_ptr<Expression> match_number_ref = make_uniq<BoundColumnRefExpression>(
 	    Identifier("match_number"), LogicalType::UBIGINT, ColumnBinding(match_number_index, ProjectionIndex(0)));
 
-	MatchRecognizeConditionInputs inputs {define_node,   match_number_index, hidden_columns,
-	                                      names,         navigations,        condition_aggregates};
+	MatchRecognizeConditionInputs inputs {define_node, match_number_index, hidden_columns,
+	                                      names,       navigations,        condition_aggregates};
 
 	MatchRecognizeDefineBinder condition_binder(*define_binder, context, define_node, inputs, *window_template,
 	                                            symbols.declared, input_refs.universal, match_number_ref);

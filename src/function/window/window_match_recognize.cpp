@@ -518,8 +518,8 @@ public:
 		if (!ready) {
 			Initialize();
 		}
-		// release the variable-size values of the previous evaluation: copying into a vector appends to
-		// its storage rather than replacing what is there
+		// release the variable-size values of the previous evaluation: an aggregate finalizing into a
+		// field appends to its storage rather than replacing what is there
 		if (row_grows) {
 			ResetRow();
 		}
@@ -533,10 +533,10 @@ public:
 				target.SetValue(0, Value::UBIGINT(match_number));
 				break;
 			case FieldSource::NAVIGATION: {
-				const auto navigated = Navigate(config.navigations[plan.navigation_idx], plan.navigation_idx, row);
+				const auto navigated = Navigate(config.navigations[plan.index], plan.index, row);
 				if (navigated.IsValid()) {
 					// a cursor of its own, because seeking the row being tested would move this one
-					auto &cursor = *navigation_cursors[plan.navigation_idx];
+					auto &cursor = *navigation_cursors[plan.index];
 					target.Reference(field_rows[field]->Read(cursor, field, navigated.GetIndex()));
 				} else {
 					// the match has no such row, which is what the condition reads as NULL
@@ -551,7 +551,7 @@ public:
 				target.Reference(field_rows[field]->Read(*row_cursor, field, row));
 				break;
 			case FieldSource::AGGREGATE:
-				FoldAggregate(plan.navigation_idx, row, target);
+				FoldAggregate(plan.index, row, target);
 				break;
 			}
 		}
@@ -572,7 +572,8 @@ private:
 	enum class FieldSource : uint8_t { CURRENT_ROW, MATCH_NUMBER, NAVIGATION, AGGREGATE };
 	struct FieldPlan {
 		FieldSource source = FieldSource::CURRENT_ROW;
-		idx_t navigation_idx = DConstants::INVALID_INDEX;
+		//! Which navigation or aggregate the value comes from, unused by the other sources
+		idx_t index = DConstants::INVALID_INDEX;
 	};
 
 	void Initialize() {
@@ -788,8 +789,7 @@ private:
 			if (base != cursor.state.current_row_index) {
 				auto &source = cursor.chunk.data[field];
 				// a dictionary selects rows of a flat vector, so anything else is laid out flat first
-				auto &dictionary =
-				    source.GetVectorType() == VectorType::FLAT_VECTOR ? source : Flatten(source);
+				auto &dictionary = source.GetVectorType() == VectorType::FLAT_VECTOR ? source : Flatten(source);
 				view.Dictionary(dictionary, dictionary.size(), one, 1);
 				base = cursor.state.current_row_index;
 				sel = &DictionaryVector::SelVector(view);
