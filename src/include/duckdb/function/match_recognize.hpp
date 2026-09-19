@@ -23,6 +23,9 @@ constexpr const char *MATCH_RECOGNIZE_MATCH_NUMBER_COLUMN = "__mr_match_number";
 //! RUNNING and FINAL reach the binder as these markers, wrapping the measure they applied to
 constexpr const char *MATCH_RECOGNIZE_RUNNING_MARKER = "__mr_running";
 constexpr const char *MATCH_RECOGNIZE_FINAL_MARKER = "__mr_final";
+//! What CLASSIFIER(X) reads off a row: written as a column of X while a navigation or an aggregate
+//! is resolved, so that the variable it names scopes it the way it scopes a column (5.9)
+constexpr const char *MATCH_RECOGNIZE_CLASSIFIER_FIELD = "__mr_classifier";
 
 //! The plan column a pattern variable is qualified with
 inline string MatchRecognizeDefineColumn(const string &symbol) {
@@ -111,18 +114,58 @@ struct MatchRecognizeFunctionData : FunctionData {
 		string symbol;
 		idx_t field;
 		idx_t offset;
+		//! Whether what is read off the row reached is its classifier rather than a column, which
+		//! the matcher supplies itself
+		bool classifier = false;
+		//! Rows to step through the partition from the row navigated to, backwards when negative,
+		//! which is PREV or NEXT around the navigation (5.6.4, 5.9)
+		int64_t step = 0;
 
 		bool Equals(const Navigation &other) const {
-			return last == other.last && symbol == other.symbol && field == other.field && offset == other.offset;
+			return last == other.last && symbol == other.symbol && field == other.field && offset == other.offset &&
+			       classifier == other.classifier && step == other.step;
 		}
 	};
 	vector<Navigation> navigations;
-	//! Conditions that read a navigation field, and so have to be evaluated row by row
+	//! An aggregate in a DEFINE condition, over the rows a variable has matched so far. Running
+	//! semantics are the only ones a condition has (ISO/IEC 19075-5 5.5), so the set it reads is the
+	//! rows mapped up to and including the one being tested.
+	struct Aggregate {
+		//! The variable whose rows it reads, empty for the match as a whole
+		string symbol;
+		//! The collected column holding the operand, unset for COUNT(*)
+		optional_idx operand;
+		//! The field the matcher writes the result into, past the collected columns
+		idx_t field;
+		//! The aggregate itself; its function and bind data are what the matcher folds rows with
+		unique_ptr<Expression> expression;
+
+		bool Equals(const Aggregate &other) const {
+			return symbol == other.symbol && operand == other.operand && field == other.field &&
+			       Expression::Equals(expression, other.expression);
+		}
+		Aggregate Copy() const {
+			return Aggregate {symbol, operand, field, expression->Copy()};
+		}
+	};
+	vector<Aggregate> aggregates;
+	//! Conditions that read a navigation or an aggregate field, and so are evaluated row by row
 	vector<bool> row_scoped;
 	//! How to resume scanning after a match has been found
 	MatchRecognizeAfterMatch after_match = MatchRecognizeAfterMatch::MATCH_RECOGNIZE_AFTER_MATCH_DEFAULT;
 	//! The target pattern variable for the SKIP TO FIRST/LAST forms
 	string after_match_variable;
+	//! A union row pattern variable, which stands for the rows of any of its members (ISO/IEC
+	//! 19075-5 4.15). A navigation, an aggregate or a SKIP TO naming one reads all of them.
+	struct Subset {
+		string name;
+		vector<string> members;
+
+		bool Equals(const Subset &other) const {
+			return name == other.name && members == other.members;
+		}
+	};
+	vector<Subset> subsets;
 
 	unique_ptr<FunctionData> Copy() const override {
 		auto res = make_uniq<MatchRecognizeFunctionData>();
@@ -135,9 +178,13 @@ struct MatchRecognizeFunctionData : FunctionData {
 		res->depends_on_match_number = depends_on_match_number;
 		res->match_number_field = match_number_field;
 		res->navigations = navigations;
+		for (auto &aggregate : aggregates) {
+			res->aggregates.push_back(aggregate.Copy());
+		}
 		res->row_scoped = row_scoped;
 		res->after_match = after_match;
 		res->after_match_variable = after_match_variable;
+		res->subsets = subsets;
 		return std::move(res);
 	}
 	bool Equals(const FunctionData &other_p) const override {
@@ -147,6 +194,22 @@ struct MatchRecognizeFunctionData : FunctionData {
 		}
 		for (idx_t i = 0; i < navigations.size(); i++) {
 			if (!navigations[i].Equals(other.navigations[i])) {
+				return false;
+			}
+		}
+		if (aggregates.size() != other.aggregates.size()) {
+			return false;
+		}
+		for (idx_t i = 0; i < aggregates.size(); i++) {
+			if (!aggregates[i].Equals(other.aggregates[i])) {
+				return false;
+			}
+		}
+		if (subsets.size() != other.subsets.size()) {
+			return false;
+		}
+		for (idx_t i = 0; i < subsets.size(); i++) {
+			if (!subsets[i].Equals(other.subsets[i])) {
 				return false;
 			}
 		}

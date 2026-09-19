@@ -108,42 +108,42 @@ Reading a row of the match only means something while the matcher is assembling 
 statement error
 FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
     ORDER BY MATCH_NUMBER() MEASURES count(*) AS n PATTERN (A+)
-)
+ DEFINE A AS true)
 ----
 cannot be part of ORDER BY
 
 statement error
 FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
     PARTITION BY MATCH_NUMBER() ORDER BY x MEASURES count(*) AS n PATTERN (A+)
-)
+ DEFINE A AS true)
 ----
 cannot be part of PARTITION BY
 
 statement error
 FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
     ORDER BY CLASSIFIER() MEASURES count(*) AS n PATTERN (A+)
-)
+ DEFINE A AS true)
 ----
 CLASSIFIER() only means something while the matcher is assembling a match
 
 statement error
 FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
     ORDER BY FIRST(x) MEASURES count(*) AS n PATTERN (A+)
-)
+ DEFINE A AS true)
 ----
 Reading a row of the match only means something while the matcher is assembling a match
 
 statement error
 FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
     ORDER BY PREV(x) MEASURES count(*) AS n PATTERN (A+)
-)
+ DEFINE A AS true)
 ----
 PREV() reads a neighbour in the order the matcher walks
 
 statement error
 FROM (VALUES (1), (2)) t(x) MATCH_RECOGNIZE (
     PARTITION BY NEXT(x) ORDER BY x MEASURES count(*) AS n PATTERN (A+)
-)
+ DEFINE A AS true)
 ----
 NEXT() reads a neighbour in the order the matcher walks
 
@@ -151,7 +151,7 @@ NEXT() reads a neighbour in the order the matcher walks
 query II
 SELECT * FROM (VALUES (1, 'a'), (2, 'a'), (3, 'b')) t(x, g) MATCH_RECOGNIZE (
     PARTITION BY upper(g) ORDER BY -x MEASURES count(*) AS n PATTERN (A+)
-) ORDER BY 1
+ DEFINE A AS true) ORDER BY 1
 ----
 A	2
 B	1

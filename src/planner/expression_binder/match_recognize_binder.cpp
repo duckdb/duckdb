@@ -1,8 +1,15 @@
 #include "duckdb/planner/expression_binder/match_recognize_binder.hpp"
 
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/parser/expression/between_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -256,6 +263,36 @@ static bool BoundByLambda(optional_ptr<vector<DummyBinding>> lambda_bindings, co
 //! A reference qualified by a pattern variable reads the rows that variable matched. The qualifier is
 //! this clause's name rather than the input's, so it is resolved here: it is dropped from the
 //! reference, and the variable it named is reported back through \p scope.
+//! CLASSIFIER(), with or without a variable in front of it
+static bool IsClassifier(const ParsedExpression &expr) {
+	return expr.GetExpressionType() == ExpressionType::FUNCTION &&
+	       StringUtil::CIEquals(expr.Cast<FunctionExpression>().FunctionName().GetIdentifierName(), "classifier") &&
+	       expr.Cast<FunctionExpression>().GetArguments().size() <= 1;
+}
+
+//! What CLASSIFIER(X) has become once its variable has scoped it: the classifier of the row reached
+static bool IsClassifierField(const ParsedExpression &expr) {
+	return expr.GetExpressionType() == ExpressionType::COLUMN_REF &&
+	       expr.Cast<ColumnRefExpression>().ColumnNames().size() == 1 &&
+	       expr.Cast<ColumnRefExpression>().GetColumnName().GetIdentifierName() == MATCH_RECOGNIZE_CLASSIFIER_FIELD;
+}
+
+//! The classifier read off a row, whether the variable in front of it has been lifted off or there
+//! never was one: CLASSIFIER() stays a call, which is what says it reads the whole match
+static bool IsClassifierRead(const ParsedExpression &expr) {
+	return IsClassifierField(expr) || (IsClassifier(expr) && expr.Cast<FunctionExpression>().GetArguments().empty());
+}
+
+bool MatchRecognizeContainsClassifier(const ParsedExpression &expr) {
+	if (IsClassifier(expr) || IsClassifierField(expr)) {
+		return true;
+	}
+	bool found = false;
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { found = found || MatchRecognizeContainsClassifier(child); });
+	return found;
+}
+
 static void ScopeToVariable(unique_ptr<ParsedExpression> &expr, const MatchRecognizeIsSymbol &symbols,
                             case_insensitive_set_t &scope, vector<identifier_set_t> &lambda_parameters) {
 	if (expr->GetExpressionClass() == ExpressionClass::LAMBDA) {
@@ -275,6 +312,19 @@ static void ScopeToVariable(unique_ptr<ParsedExpression> &expr, const MatchRecog
 			scope.insert(names[0].GetIdentifierName());
 			expr = MatchRecognizeWithoutQualifier(colref);
 		}
+		return;
+	}
+	if (IsClassifier(*expr) && !expr->Cast<FunctionExpression>().GetArguments().empty()) {
+		// CLASSIFIER(X) reads the rows of X the way X.c does (5.9): the variable scopes it and what is
+		// left is the classifier read off the row reached
+		auto &argument = expr->Cast<FunctionExpression>().GetArguments()[0].GetExpression();
+		if (argument.GetExpressionType() != ExpressionType::COLUMN_REF ||
+		    argument.Cast<ColumnRefExpression>().ColumnNames().size() != 1 ||
+		    !symbols(argument.Cast<ColumnRefExpression>().GetColumnName().GetIdentifierName())) {
+			throw BinderException("CLASSIFIER() takes a pattern variable, or nothing for the match as a whole");
+		}
+		scope.insert(argument.Cast<ColumnRefExpression>().GetColumnName().GetIdentifierName());
+		expr = make_uniq<ColumnRefExpression>(Identifier(MATCH_RECOGNIZE_CLASSIFIER_FIELD));
 		return;
 	}
 	ParsedExpressionIterator::EnumerateChildren(
@@ -356,6 +406,29 @@ static bool ContainsStep(const ParsedExpression &expr) {
 	return found;
 }
 
+static bool ContainsNavigation(const ParsedExpression &expr) {
+	if (expr.GetExpressionType() == ExpressionType::FUNCTION) {
+		auto name = StringUtil::Upper(expr.Cast<FunctionExpression>().FunctionName().GetIdentifierName());
+		if (name == "PREV" || name == "NEXT" || name == "FIRST" || name == "LAST") {
+			return true;
+		}
+	}
+	bool found = false;
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { found = found || ContainsNavigation(child); });
+	return found;
+}
+
+//! An aggregate reads the rows of the match and a navigation reads one of them, so one inside the
+//! other has no reading (ISO/IEC 19075-5 5.5, 5.6)
+void MatchRecognizeRejectNavigationInAggregate(const ParsedExpression &argument, const string &function_name) {
+	if (ContainsNavigation(argument)) {
+		throw BinderException("%s() aggregates the rows of the match, so a row pattern navigation cannot be nested "
+		                      "inside it",
+		                      StringUtil::Upper(function_name));
+	}
+}
+
 void MatchRecognizeRejectNestedStep(const ParsedExpression &inner, const string &function_name) {
 	if (ContainsStep(inner)) {
 		throw BinderException("%s() steps from a row the match names, and a step inside it names none, so the two "
@@ -422,7 +495,7 @@ unique_ptr<Expression> MatchRecognizeConditionInputs::ProjectAs(unique_ptr<Expre
 	// of this projection nor a field only the matcher supplies is one, and the binder decides that
 	// where the expression is bound - this is the boundary that holds it to the decision.
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(*value, [&](const BoundColumnRefExpression &column) {
-		if (column.Binding().table_index == projection_index) {
+		if (column.Binding().table_index == projection.projection_index) {
 			throw InternalException("MATCH_RECOGNIZE projected \"%s\" from another column of the same projection",
 			                        name);
 		}
@@ -432,14 +505,14 @@ unique_ptr<Expression> MatchRecognizeConditionInputs::ProjectAs(unique_ptr<Expre
 		}
 	});
 	auto type = value->GetReturnType();
-	const auto index = select_list.size();
+	const auto index = projection.select_list.size();
 	value->SetAlias(Identifier(name));
-	select_list.push_back(std::move(value));
-	names.emplace_back(name);
-	types.push_back(type);
+	projection.select_list.push_back(std::move(value));
+	projection.names.emplace_back(name);
+	projection.types.push_back(type);
 	hidden.push_back(name);
 	return make_uniq<BoundColumnRefExpression>(Identifier(name), type,
-	                                           ColumnBinding(projection_index, ProjectionIndex(index)));
+	                                           ColumnBinding(projection.projection_index, ProjectionIndex(index)));
 }
 
 MatchRecognizeDefineBinder::MatchRecognizeDefineBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,
@@ -475,6 +548,12 @@ BindResult MatchRecognizeDefineBinder::BindExpression(unique_ptr<ParsedExpressio
 			expr_ptr = ConstantExpression::String(define_name);
 			return SelectBinder::BindExpression(expr_ptr, depth, root_expression);
 		}
+		if (function_name == "CLASSIFIER" && function.GetArguments().size() == 1) {
+			// the classifier of the last row mapped to the variable so far, which is what LAST() reads
+			auto variable = MatchRecognizeNavigationVariable(
+			    expr_ptr, [&](const string &name) { return symbols.count(name) > 0; }, universal, "CLASSIFIER");
+			return BindNavigated(std::move(expr_ptr), MatchRecognizeDefineColumn(variable), true, 0, depth);
+		}
 		if (function_name == "MATCH_NUMBER" && function.GetArguments().empty()) {
 			OutsideMatch("MATCH_NUMBER()");
 			return BindResult(match_number->Copy());
@@ -495,6 +574,12 @@ BindResult MatchRecognizeDefineBinder::BindExpression(unique_ptr<ParsedExpressio
 		// a window's binding is the window operator's own output, which the projection over it can read
 		const ScopedScope window(scope, MatchRecognizeScope::WINDOW);
 		return SelectBinder::BindExpression(expr_ptr, depth, root_expression);
+	}
+	if (IsClassifierField(expr)) {
+		// CLASSIFIER(X) only reaches here inside something that scoped it, and only a navigation can
+		// read it off a row: an aggregate over it has no row to read it off
+		throw BinderException("CLASSIFIER() cannot be aggregated in a DEFINE condition, which is still assembling "
+		                      "the match");
 	}
 	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
@@ -518,7 +603,76 @@ BindResult MatchRecognizeDefineBinder::BindExpression(unique_ptr<ParsedExpressio
 
 BindResult MatchRecognizeDefineBinder::BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function,
                                                      idx_t depth) {
-	return BindResult(BinderException(expr, UnsupportedAggregateMessage()));
+	const auto function_name = StringUtil::Upper(expr.FunctionName().GetIdentifierName());
+	if (scope != MatchRecognizeScope::CANDIDATE_ROW) {
+		return BindResult(BinderException(expr, "An aggregate reads the rows of the match, so it cannot be part of %s",
+		                                  ScopeName(scope)));
+	}
+	// what these mean over a set that grows as the match is assembled is not settled here yet
+	if (expr.Distinct() || expr.Filter() || (expr.OrderBy() && !expr.OrderBy()->orders.empty())) {
+		return BindResult(BinderException(
+		    expr, "DISTINCT, FILTER and ORDER BY are not supported on an aggregate in a DEFINE condition"));
+	}
+	auto &arguments = expr.GetArgumentsMutable();
+	if (arguments.size() > 1) {
+		return BindResult(BinderException(
+		    expr,
+		    "An aggregate in a DEFINE condition reads one expression of the match's rows, so %s() is not "
+		    "supported there yet",
+		    function_name));
+	}
+
+	// A condition is settled while the match is still being assembled, so the only semantics an
+	// aggregate has here is running: the rows mapped to the variable up to and including this one
+	// (ISO/IEC 19075-5 5.5). COUNT(*) reads no expression at all, and its star is the universal row
+	// pattern variable, so it counts the rows of the match rather than of any one variable.
+	string variable;
+	const MatchRecognizeIsSymbol is_symbol = [&](const string &name) {
+		return symbols.count(name) > 0;
+	};
+	unique_ptr<ParsedExpression> inner;
+	if (!arguments.empty()) {
+		MatchRecognizeRejectNavigationInAggregate(arguments[0].GetExpression(), function_name);
+		inner = std::move(arguments[0].GetExpressionMutable());
+		variable = MatchRecognizeNavigationVariable(inner, is_symbol, universal, function_name);
+	}
+
+	// the matcher folds rows into the aggregate itself, so what is bound here is the function rather
+	// than a tree over the row: its one child says no more than what a folded value looks like
+	optional_idx column;
+	vector<pair<Identifier, unique_ptr<Expression>>> children;
+	if (inner) {
+		BindResult operand;
+		{
+			const ScopedScope navigated(scope, MatchRecognizeScope::NAVIGATED);
+			operand = BindExpression(inner, depth, false);
+		}
+		if (operand.HasError()) {
+			return operand;
+		}
+		const auto operand_type = operand.expression->GetReturnType();
+		inputs.Project(std::move(operand.expression), "__mr_agg");
+		column = inputs.projection.select_list.size() - 1;
+		children.emplace_back(Identifier(), make_uniq<BoundReferenceExpression>(operand_type, 0U));
+	}
+	FunctionBinder function_binder(binder);
+	ErrorData error;
+	auto bound = function_binder.BindAggregateFunction(function, std::move(children), error);
+	if (!bound) {
+		error.AddQueryLocation(expr);
+		error.Throw();
+	}
+	const auto return_type = bound->GetReturnType();
+	const auto slot = inputs.supplied++;
+	unique_ptr<Expression> aggregate = std::move(bound);
+	// the matcher knows a variable by the name its condition is bound under, the same as a navigation
+	auto symbol = variable.empty() ? string() : MatchRecognizeDefineColumn(variable);
+	inputs.aggregates.push_back(MatchRecognizeAggregate {std::move(symbol), column, std::move(aggregate), slot});
+
+	// read back as a field the matcher supplies, which is where the match number already lives
+	auto &supplied = match_number->Cast<BoundColumnRefExpression>();
+	return BindResult(make_uniq<BoundColumnRefExpression>(
+	    Identifier("__mr_agg"), return_type, ColumnBinding(supplied.Binding().table_index, ProjectionIndex(slot))));
 }
 
 string MatchRecognizeDefineBinder::UnsupportedAggregateMessage() {
@@ -557,6 +711,22 @@ BindResult MatchRecognizeDefineBinder::BindNeighbour(FunctionExpression &functio
 	if (stepped.final_semantics) {
 		throw BinderException("FINAL reads the whole match, which a DEFINE condition is still assembling, so "
 		                      "only RUNNING is available there");
+	}
+	if (MatchRecognizeContainsClassifier(*inner)) {
+		if (!IsClassifierRead(*inner)) {
+			throw BinderException("%s() over CLASSIFIER() reads the classifier of the row it steps to, and nothing "
+			                      "else of it",
+			                      function_name);
+		}
+		// the classifier of the row a fixed distance from the row navigated to, which the matcher
+		// reads off the attempt under way (5.9); a step naming no variable starts from the row tested
+		const auto distance =
+		    arguments.size() == 2
+		        ? NumericCast<int64_t>(MatchRecognizeNavigationOffset(function_name, arguments[1].GetExpression()))
+		        : int64_t(1);
+		auto symbol = variable.empty() ? string() : MatchRecognizeDefineColumn(variable);
+		return BindNavigated(std::move(inner), std::move(symbol), !stepped.navigated || stepped.last,
+		                     stepped.offset_value, depth, function_name == "PREV" ? -distance : distance);
 	}
 	auto neighbour = window_template.Copy();
 	auto &window = neighbour->Cast<WindowExpression>();
@@ -599,11 +769,28 @@ BindResult MatchRecognizeDefineBinder::BindNavigation(FunctionExpression &functi
 }
 
 BindResult MatchRecognizeDefineBinder::BindNavigated(unique_ptr<ParsedExpression> inner, string symbol, bool last,
-                                                     idx_t offset, idx_t depth) {
+                                                     idx_t offset, idx_t depth, int64_t step) {
 	if (scope == MatchRecognizeScope::NAVIGATED) {
 		throw BinderException("Nested row pattern navigation is not supported");
 	}
 	OutsideMatch("Reading a row of the match");
+	if (IsClassifierRead(*inner)) {
+		// nothing to compute below the matcher: the classifier is the matcher's own, supplied in a
+		// field of its own like an aggregate's value
+		const auto slot = inputs.supplied++;
+		MatchRecognizeNavigation navigation {last, std::move(symbol), DConstants::INVALID_INDEX, offset};
+		navigation.classifier = true;
+		navigation.slot = slot;
+		navigation.step = step;
+		inputs.navigations.push_back(std::move(navigation));
+		auto &supplied = match_number->Cast<BoundColumnRefExpression>();
+		return BindResult(
+		    make_uniq<BoundColumnRefExpression>(Identifier("__mr_classifier"), LogicalType::VARCHAR,
+		                                        ColumnBinding(supplied.Binding().table_index, ProjectionIndex(slot))));
+	}
+	if (step != 0) {
+		throw InternalException("MATCH_RECOGNIZE stepped a navigation that is not over CLASSIFIER()");
+	}
 	BindResult bound;
 	{
 		const ScopedScope navigated(scope, MatchRecognizeScope::NAVIGATED);
@@ -614,7 +801,7 @@ BindResult MatchRecognizeDefineBinder::BindNavigated(unique_ptr<ParsedExpression
 	}
 	auto column = inputs.Project(std::move(bound.expression), "__mr_nav");
 	inputs.navigations.push_back(
-	    MatchRecognizeNavigation {last, std::move(symbol), inputs.select_list.size() - 1, offset});
+	    MatchRecognizeNavigation {last, std::move(symbol), inputs.projection.select_list.size() - 1, offset});
 	return BindResult(std::move(column));
 }
 
@@ -651,9 +838,27 @@ BindResult MatchRecognizeMeasureBinder::BindExpression(unique_ptr<ParsedExpressi
 			expr_ptr = StateField("classifier");
 			return BindGenerated(expr_ptr, depth, root_expression);
 		}
+		if (function_name == "CLASSIFIER" && function.GetArguments().size() == 1) {
+			// the classifier of the last row mapped to the variable, which is what LAST() reads (5.9)
+			auto variable = MatchRecognizeNavigationVariable(
+			    expr_ptr, [&](const string &name) { return symbols.find(name) != symbols.end(); }, universal,
+			    "CLASSIFIER");
+			auto entry = symbols.find(variable);
+			D_ASSERT(entry != symbols.end());
+			expr_ptr = MatchScopedValue(
+			    context, state, config,
+			    ClassifiedValue(state, entry->second, PackValue(state, StateField("classifier"))), running);
+			return BindGenerated(expr_ptr, depth, root_expression);
+		}
 		if (function_name == "MATCH_NUMBER" && function.GetArguments().empty()) {
 			expr_ptr = StateField("match_number");
 			return BindGenerated(expr_ptr, depth, root_expression);
+		}
+		// a step over CLASSIFIER() is not computed below the matcher like one over a column, since no
+		// row is classified there yet: it is read off the finished match instead
+		if ((function_name == "PREV" || function_name == "NEXT") && !function.GetArguments().empty() &&
+		    MatchRecognizeContainsClassifier(function.GetArguments()[0].GetExpression())) {
+			return BindClassifierStep(function, function_name, expr_ptr, depth, root_expression);
 		}
 		// LAST(X.c) is what an unadorned X.c already means, so only the end they read from differs
 		if ((function_name == "FIRST" || function_name == "LAST") && !function.GetArguments().empty() &&
@@ -665,6 +870,11 @@ BindResult MatchRecognizeMeasureBinder::BindExpression(unique_ptr<ParsedExpressi
 		if (HasAggregateModifiers(function)) {
 			return BindOverMatch(function, depth);
 		}
+	}
+	if (IsClassifierField(expr)) {
+		// CLASSIFIER() once the variable in front of it, if any, has scoped the rows it reads
+		expr_ptr = StateField("classifier");
+		return BindGenerated(expr_ptr, depth, root_expression);
 	}
 	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF && !scoped &&
 	    !BoundByLambda(lambda_bindings, expr.Cast<ColumnRefExpression>().ColumnNames()[0])) {
@@ -707,6 +917,7 @@ BindResult MatchRecognizeMeasureBinder::BindOverMatch(FunctionExpression &expr, 
 		return symbols.find(name) != symbols.end();
 	};
 	for (auto &argument : expr.GetArgumentsMutable()) {
+		MatchRecognizeRejectNavigationInAggregate(argument.GetExpression(), expr.FunctionName().GetIdentifierName());
 		ScopeToVariable(argument.GetExpressionMutable(), is_symbol, scope);
 	}
 	if (expr.OrderByMutable()) {
@@ -773,6 +984,84 @@ BindResult MatchRecognizeMeasureBinder::BindOverMatch(FunctionExpression &expr, 
 	auto result = BindWindowExpression(*window, depth);
 	scoped = saved;
 	return result;
+}
+
+//! a + b or a - b over parsed expressions
+static unique_ptr<ParsedExpression> Arithmetic(const char *op, unique_ptr<ParsedExpression> left,
+                                               unique_ptr<ParsedExpression> right) {
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(std::move(left));
+	children.push_back(std::move(right));
+	return make_uniq<FunctionExpression>(Identifier(op), std::move(children));
+}
+
+BindResult MatchRecognizeMeasureBinder::BindClassifierStep(FunctionExpression &function, const string &function_name,
+                                                           unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
+                                                           bool root_expression) {
+	auto &arguments = function.GetArgumentsMutable();
+	if (arguments.size() > 2) {
+		throw BinderException("%s() takes an expression and an optional offset", function_name);
+	}
+	MatchRecognizeRejectNestedStep(arguments[0].GetExpression(), function_name);
+	int64_t distance = 1;
+	if (arguments.size() == 2) {
+		distance = NumericCast<int64_t>(MatchRecognizeNavigationOffset(function_name, arguments[1].GetExpression()));
+	}
+	auto inner = std::move(arguments[0].GetExpressionMutable());
+	auto variable = MatchRecognizeNavigationVariable(
+	    inner, [&](const string &name) { return symbols.find(name) != symbols.end(); }, universal, function_name);
+	auto stepped = MatchRecognizePeelStep(inner);
+	if (!IsClassifierRead(*inner)) {
+		throw BinderException("%s() over CLASSIFIER() reads the classifier of the row it steps to, and nothing else "
+		                      "of it",
+		                      function_name);
+	}
+	vector<string> symbol;
+	if (!variable.empty()) {
+		symbol = symbols.find(variable)->second;
+	}
+
+	// The row stepped from is a row of the match: the one the measure is read on, or the one a
+	// variable or a FIRST/LAST of it denotes. Its place in the partition is a field of the state, so
+	// it navigates the way a column does.
+	unique_ptr<ParsedExpression> from;
+	if (!variable.empty() || stepped.navigated) {
+		auto packed = PackValue(state, StateField("row_index"));
+		auto masked = symbol.empty() ? std::move(packed) : ClassifiedValue(state, symbol, std::move(packed));
+		const auto see = one_row ? false : (stepped.marker ? !stepped.final_semantics : running);
+		from = MatchScopedValue(context, state, config, std::move(masked), see, stepped.navigated && !stepped.last,
+		                        stepped.offset_value);
+	} else {
+		from = StateField("row_index");
+	}
+	auto as_signed = [](unique_ptr<ParsedExpression> value) {
+		return make_uniq_base<ParsedExpression, CastExpression>(LogicalType::BIGINT, std::move(value));
+	};
+	auto target = Arithmetic(function_name == "PREV" ? "-" : "+", as_signed(std::move(from)),
+	                         ConstantExpression::Integer(distance));
+
+	// The classifiers of the whole match, in match order, are what any row of it reads its own
+	// from: a step lands on a row of the match or on nothing, since a row outside it is not
+	// classified by it (5.9). The list is final by construction; the step is what running limits.
+	auto classifiers = make_uniq<WindowExpression>("", "", "list");
+	classifiers->GetArgumentsMutable().emplace_back(StateField("classifier"));
+	ScopeToMatch(context, state, *classifiers, config, false);
+	auto place = Arithmetic("+", Arithmetic("-", target->Copy(), as_signed(StateField("match_start"))),
+	                        ConstantExpression::Integer(1));
+	vector<unique_ptr<ParsedExpression>> extract_children;
+	extract_children.push_back(std::move(classifiers));
+	extract_children.push_back(std::move(place));
+	auto at = make_uniq<FunctionExpression>(Identifier("list_extract"), std::move(extract_children));
+	auto within = make_uniq<BetweenExpression>(std::move(target), as_signed(StateField("match_start")),
+	                                           as_signed(StateField("match_end")));
+	auto result = make_uniq<CaseExpression>();
+	CaseCheck check;
+	check.when_expr = std::move(within);
+	check.then_expr = std::move(at);
+	result->CaseChecksMutable().push_back(std::move(check));
+	result->ElseMutable() = ConstantExpression::Null();
+	expr_ptr = std::move(result);
+	return BindGenerated(expr_ptr, depth, root_expression);
 }
 
 unique_ptr<ParsedExpression> MatchRecognizeMeasureBinder::StateField(const string &field) {
