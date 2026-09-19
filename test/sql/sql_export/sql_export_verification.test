@@ -25,6 +25,18 @@ SET debug_verify_sql_export=NULL;
 ----
 cannot be NULL
 
+foreach mode off report strict
+
+statement ok
+SET debug_verify_sql_export='{mode}';
+
+query I
+SELECT current_setting('debug_verify_sql_export') = '{mode}';
+----
+true
+
+endloop
+
 statement ok
 SET debug_verify_sql_export='strict';
 

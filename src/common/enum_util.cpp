@@ -1747,7 +1747,7 @@ const StringUtil::EnumStringLiteral *GetDebugSQLExportVerificationValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(DebugSQLExportVerification::OFF), "OFF" },
 		{ static_cast<uint32_t>(DebugSQLExportVerification::REPORT), "REPORT" },
-		{ static_cast<uint32_t>(DebugSQLExportVerification::STRICT), "STRICT" }
+		{ static_cast<uint32_t>(DebugSQLExportVerification::VERIFY_STRICT), "STRICT" }
 	};
 	return values;
 }

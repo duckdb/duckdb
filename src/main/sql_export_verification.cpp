@@ -120,7 +120,7 @@ void SQLExportVerification::Publish(bool planning_succeeded) {
 		record.route = SQLExportExecutionRoute::NONE;
 		record.propagated_error = !record.strict_failure;
 		record.strict_failure |=
-		    record.mode == DebugSQLExportVerification::STRICT && record.eligible && verifier_exception;
+		    record.mode == DebugSQLExportVerification::VERIFY_STRICT && record.eligible && verifier_exception;
 	}
 	if (observer) {
 		if (!observer->retain_failure_sql) {
@@ -133,7 +133,7 @@ void SQLExportVerification::Publish(bool planning_succeeded) {
 void SQLExportVerification::Failure(SQLExportOutcome outcome, const string &code) {
 	record.outcome = outcome;
 	record.code = code;
-	if (record.mode == DebugSQLExportVerification::STRICT) {
+	if (record.mode == DebugSQLExportVerification::VERIFY_STRICT) {
 		record.strict_failure = true;
 		record.route = SQLExportExecutionRoute::NONE;
 		throw InvalidInputException("SQL export verification failed: %s (%s)", code, record.phase);

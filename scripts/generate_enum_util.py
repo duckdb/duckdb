@@ -89,6 +89,7 @@ overrides = {
         "TIMESTAMP_TZ_NS": "TIMESTAMPTZ_NS",
     },
     "JoinType": {"OUTER": "FULL"},
+    "DebugSQLExportVerification": {"VERIFY_STRICT": "STRICT"},
     "OrderType": {
         "ORDER_DEFAULT": ["ORDER_DEFAULT", "DEFAULT"],
         "DESCENDING": ["DESCENDING", "DESC"],
