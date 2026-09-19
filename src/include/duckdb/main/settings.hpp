@@ -1412,6 +1412,20 @@ struct ExperimentalMetadataReuseSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct ExplainFormatSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "explain_format";
+	static constexpr const char *Description =
+	    "Default format of EXPLAIN and EXPLAIN ANALYZE statements (default preserves the standard rendering behavior)";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "default";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct ExplainOutputSetting {
 	using RETURN_TYPE = ExplainOutputType;
 	static constexpr const char *Name = "explain_output";
