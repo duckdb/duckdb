@@ -640,7 +640,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 
 				// Commit any outstanding indexes.
 				for (auto &info : state.replay_index_infos) {
-					info.index_list.get().AddIndex(std::move(info.index));
+					info.index_list.get().AddIndex(std::move(info.index), info.index_oid);
 				}
 				state.replay_index_infos.clear();
 

@@ -82,10 +82,10 @@ TableIndexList::~TableIndexList() {
 	}
 }
 
-void TableIndexList::AddIndex(unique_ptr<Index> index) {
+void TableIndexList::AddIndex(unique_ptr<Index> index, optional_idx index_oid) {
 	D_ASSERT(index);
 	annotated_lock_guard lock(index_entries_lock);
-	auto index_entry = make_shared_ptr<IndexEntry>(std::move(index));
+	auto index_entry = make_shared_ptr<IndexEntry>(std::move(index), index_oid);
 	if (index_entry->GetBindState() != IndexBindState::BOUND) {
 		unbound_count++;
 	}
@@ -176,6 +176,28 @@ void TableIndexList::RemoveIndex(const Identifier &name) {
 		for (idx_t i = 0; i < index_entries.size(); i++) {
 			auto &entry = index_entries[i];
 			if (entry->GetName() != name) {
+				continue;
+			}
+			if (entry->GetBindState() != IndexBindState::BOUND) {
+				unbound_count--;
+			}
+			removed_entry = std::move(entry);
+			index_entries.erase_at(i);
+			break;
+		}
+	}
+	if (removed_entry) {
+		removed_entry->Retire();
+	}
+}
+
+void TableIndexList::RemoveIndex(idx_t index_oid) {
+	shared_ptr<IndexEntry> removed_entry;
+	{
+		annotated_lock_guard lock(index_entries_lock);
+		for (idx_t i = 0; i < index_entries.size(); i++) {
+			auto &entry = index_entries[i];
+			if (entry->GetIndexOid() != index_oid) {
 				continue;
 			}
 			if (entry->GetBindState() != IndexBindState::BOUND) {
@@ -529,6 +551,17 @@ IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, c
 	}
 
 	return result;
+}
+
+unique_ptr<IndexStorageInfo> TableIndexList::SerializeToWAL(idx_t index_oid,
+                                                            const case_insensitive_map_t<Value> &options) {
+	annotated_lock_guard lock(index_entries_lock);
+	for (const auto &entry : index_entries) {
+		if (entry->GetIndexOid() == index_oid) {
+			return make_uniq<IndexStorageInfo>(entry->SerializeToWAL(options));
+		}
+	}
+	return nullptr;
 }
 
 unique_ptr<IndexStorageInfo> TableIndexList::SerializeToWAL(const Identifier &name,

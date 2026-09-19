@@ -653,7 +653,7 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 	// Create an unbound index and add it to the table.
 	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), std::move(index_storage_info),
 	                                             TableIOManager::Get(data_table), data_table.db);
-	table_info->GetIndexes().AddIndex(std::move(unbound_index));
+	table_info->GetIndexes().AddIndex(std::move(unbound_index), index.oid);
 }
 
 //===--------------------------------------------------------------------===//
