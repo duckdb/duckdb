@@ -160,9 +160,10 @@ public:
 
 	unique_ptr<TableUpdateState> InitializeUpdate(TableCatalogEntry &table, ClientContext &context,
 	                                              const vector<unique_ptr<BoundConstraint>> &bound_constraints);
-	//! Update the entries with the specified row identifier from the table
+	//! Verify constraints using referenced columns, but write only updated columns
 	void Update(TableUpdateState &state, ClientContext &context, DuckTableEntry &table_entry, Vector &row_ids,
-	            const vector<PhysicalIndex> &column_ids, DataChunk &data);
+	            const vector<PhysicalIndex> &referenced_column_ids, const vector<PhysicalIndex> &updated_column_ids,
+	            DataChunk &data);
 	//! Update a single (sub-)column along a column path
 	//! The column_path vector is a *path* towards a column within the table
 	//! i.e. if we have a table with a single column S STRUCT(A INT, B INT)
@@ -301,9 +302,10 @@ private:
 	//! Verify the new added constraints against current persistent&local data
 	void VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);
 
-	//! Verify constraints with a chunk from the Update containing only the specified column_ids
+	//! Verify constraints using referenced columns and verify that updated columns are not indexed
 	void VerifyUpdateConstraints(ConstraintState &state, ClientContext &context, DataChunk &chunk,
-	                             const vector<PhysicalIndex> &column_ids);
+	                             const vector<PhysicalIndex> &referenced_column_ids,
+	                             const vector<PhysicalIndex> &updated_column_ids);
 	//! Verify constraints with a chunk from the Delete containing all columns of the table
 	void VerifyDeleteConstraints(optional_ptr<LocalTableStorage> storage, TableDeleteState &state,
 	                             ClientContext &context, DataChunk &chunk);
