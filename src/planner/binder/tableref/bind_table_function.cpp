@@ -314,8 +314,10 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 
 	auto get = make_uniq<LogicalGet>(bind_index, table_function, std::move(bind_data), return_types, return_names,
 	                                 virtual_columns);
+	get->bind_info = ref.bind_info;
 	get->parameters = parameters;
 	get->named_parameters = named_parameters;
+	get->source_ordinality = ref.with_ordinality;
 	get->input_table_types = input_table_types;
 	get->input_table_names = input_table_names;
 	if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY && !correlated_columns.empty()) {

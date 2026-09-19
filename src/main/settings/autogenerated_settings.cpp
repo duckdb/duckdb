@@ -210,6 +210,16 @@ void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 }
 
 //===----------------------------------------------------------------------===//
+// Fsync Mode
+//===----------------------------------------------------------------------===//
+void FsyncModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("fsync_mode setting cannot be NULL");
+	}
+	EnumUtil::FromString<FileSyncMode>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // H T T P Proxy
 //===----------------------------------------------------------------------===//
 Value HTTPProxySetting::GetSetting(const ClientContext &context) {

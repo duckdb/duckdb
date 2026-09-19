@@ -66,7 +66,7 @@ void DialectExtension::ApplyGrammarChanges(GrammarChangesInput &) {
 }
 
 unique_ptr<MatcherFactory> DialectExtension::CreateMatcherFactory(CreateMatcherFactoryInput &input) {
-	return make_uniq<MatcherFactory>(input.allocator, input.parsed_grammar, input.rules,
+	return make_uniq<MatcherFactory>(input.allocator, input.parsed_grammar, input.rules, input.keyword_helper,
 	                                 std::move(input.terminal_rules));
 }
 

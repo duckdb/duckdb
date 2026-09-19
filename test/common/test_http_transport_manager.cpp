@@ -342,6 +342,13 @@ public:
 };
 
 TEST_CASE("HTTP transport manager capacity and provider contracts", "[http_transport_manager]") {
+	SECTION("database configuration sets the initial capacity") {
+		DBConfig config;
+		config.SetOptionByName("http_client_pool_capacity", Value::BIGINT(2));
+		DuckDB db(nullptr, &config);
+		CHECK(db.instance->config.GetHTTPTransportManager().GetCapacity() == 2);
+	}
+
 	SECTION("capacity calculation is bounded and descriptor aware") {
 		CHECK(HTTPTransportManagerTestHelper::CalculateCapacity(0, optional_idx()) == 16);
 		CHECK(HTTPTransportManagerTestHelper::CalculateCapacity(1, optional_idx()) == 16);
@@ -399,6 +406,10 @@ TEST_CASE("HTTP transport manager capacity and provider contracts", "[http_trans
 		CHECK(pool.ReservedClients() == 2);
 		CHECK_FALSE(pool.HasAdmissionResource());
 		pool.Return(first.bucket, make_uniq<MockHTTPClient>(state, first_origin));
+		CHECK(pool.HasAdmissionResource());
+		pool.SetCapacity(1);
+		CHECK_FALSE(pool.HasAdmissionResource());
+		pool.SetCapacity(2);
 		CHECK(pool.HasAdmissionResource());
 
 		// Hash collisions must not reuse clients with a different origin or configuration.
@@ -508,6 +519,36 @@ static bool WaitForAdmissionWaiters(HTTPTransportManager &manager, idx_t count) 
 }
 
 TEST_CASE("HTTP transport manager synchronous session API", "[http_transport_manager]") {
+	SECTION("resizing wakes waiters and retires excess clients") {
+		auto provider = make_shared_ptr<MockHTTPUtil>(HTTPTransportReusePolicy::SHARED);
+		auto manager = HTTPTransportManagerTestHelper::Create(provider, 1);
+		auto session = manager->CreateSession(nullptr, nullptr);
+		auto params = make_uniq<HTTPParams>(session.Parameters());
+		BlockMockRequests(*provider->state);
+		auto first = std::async(std::launch::async, [&]() {
+			return RunManagedRequest(session, session.Parameters(), "https://example.com/");
+		});
+		REQUIRE(WaitForMockRequests(*provider->state, 1));
+		auto second = std::async(std::launch::async,
+		                         [&]() { return RunManagedRequest(session, *params, "https://example.com/"); });
+		REQUIRE(WaitForAdmissionWaiters(*manager, 1));
+		manager->SetCapacity(2);
+		REQUIRE(WaitForMockRequests(*provider->state, 2));
+		manager->SetCapacity(1);
+		AllowMockRequests(*provider->state, 1);
+		REQUIRE(first.get());
+		CHECK(provider->state->live == 1);
+		AllowMockRequests(*provider->state, NumericLimits<idx_t>::Maximum());
+		REQUIRE(second.get());
+		CHECK(HTTPTransportManagerTestHelper::IdleClients(*manager) == 1);
+		manager->SetCapacity(2);
+		REQUIRE(RunManagedRequest(session, session.Parameters(), "https://other.example.com/"));
+		CHECK(provider->state->live == 2);
+		manager->SetCapacity(1);
+		CHECK(provider->state->live == 1);
+		CHECK(HTTPTransportManagerTestHelper::OccupiedSlots(*manager) == 1);
+	}
+
 	SECTION("reuse policies have distinct capacity and lifetime behavior") {
 		for (auto policy : {HTTPTransportReusePolicy::CLIENT_FREE, HTTPTransportReusePolicy::EPHEMERAL,
 		                    HTTPTransportReusePolicy::SESSION_LOCAL, HTTPTransportReusePolicy::SHARED}) {
