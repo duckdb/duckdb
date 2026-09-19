@@ -660,6 +660,9 @@ private:
 		const idx_t version = positions ? runs.Version(run.rows) : 0;
 
 		if (run.begin != match_start || needed < run.folded || version != run.version) {
+			// what the state allocated while folding goes with it, or a pattern that keeps giving rows
+			// back keeps every rebuild's allocations for the whole query
+			run.running.allocator.Reset();
 			auto state = run.running.GetStatePtr(0);
 			AggregateStateInput state_input(run.aggr.function, run.aggr.GetFunctionData());
 			run.aggr.function.GetStateInitCallback()(state_input, &state, 1);
@@ -867,8 +870,9 @@ private:
 	vector<unique_ptr<WindowCursor>> navigation_cursors;
 
 	//! One aggregate's running state, and how much of its variable's run is already in it. Folding a
-	//! row in costs one update; what a condition needs per candidate row is the value, which comes
-	//! from combining the running state into a scratch one so that the running one survives.
+	//! row in costs one update, and the value a condition needs per candidate row is read by finalizing
+	//! the running state in place. That relies on finalize leaving the state as it found it, which
+	//! holds for every aggregate without a state destructor - the ones with one are refused above.
 	struct AggregateRun {
 		AggregateRun(ClientContext &client, const AggregateObject &aggr_p, idx_t rows_p)
 		    : aggr(aggr_p), rows(rows_p), running(client, aggr_p) {

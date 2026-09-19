@@ -175,7 +175,7 @@ PEGTransformerFactory::TransformMatchRecognizeBody(PEGTransformer &transformer,
 		throw ParserException("MATCH_RECOGNIZE requires a DEFINE clause. A variable left out of it matches any "
 		                      "row, but the clause itself has to be there: a pattern that constrains nothing "
 		                      "writes DEFINE %s AS true",
-		                      first_symbol.empty() ? "A" : first_symbol);
+		                      first_symbol);
 	}
 
 	// the input table is attached by TransformTableRef

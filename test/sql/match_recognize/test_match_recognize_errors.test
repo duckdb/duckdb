@@ -28,7 +28,7 @@ SELECT 1 FROM q MATCH_RECOGNIZE(MEASURES i AS x DEFINE A as true)
 ----
 <REGEX>:Parser Error.*requires a PATTERN clause.*
 
-# a variable with no condition matches any row, so DEFINE may be left out entirely
+# a variable with no condition matches any row, but the DEFINE clause itself has to be there
 query I
 SELECT count(*) FROM q MATCH_RECOGNIZE(MEASURES count(*) AS n ONE ROW PER MATCH PATTERN (A) DEFINE A AS true)
 ----
