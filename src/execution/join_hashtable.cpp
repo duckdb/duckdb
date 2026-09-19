@@ -986,7 +986,7 @@ static void InsertHashesLoop(unsafe_optional_ptr<atomic<ht_entry_t>> entries, Ve
 void JoinHashTable::InsertHashes(Vector &hashes_v, TupleDataChunkState &chunk_state, InsertState &insert_state,
                                  bool parallel) {
 	// Insert Hashes into the BF
-	if (bloom_filter.IsInitialized()) {
+	if (bloom_filter.IsInitialized() && !bloom_filter_built_from_sink) {
 		bloom_filter.InsertHashes(hashes_v);
 	}
 	auto atomic_entries = GetAtomicEntries();
@@ -1102,6 +1102,45 @@ void JoinHashTable::PrepareBloomFilterForFinalize() {
 	bloom_filter.Reset();
 	bloom_filter_init_count = actual_init_count;
 	bloom_filter.Initialize(context, bloom_filter_init_count);
+	bloom_filter_built_from_sink = false;
+}
+
+static idx_t ExtractRowHashes(TupleDataChunkIterator &iterator, idx_t pointer_offset, Vector &hashes) {
+	const auto row_locations = iterator.GetRowLocations();
+	const auto count = iterator.GetCurrentChunkCount();
+	auto hash_data = FlatVector::Writer<hash_t>(hashes, count_t(count));
+	for (idx_t i = 0; i < count; i++) {
+		hash_data.WriteValue(Load<hash_t>(row_locations[i] + pointer_offset));
+	}
+	return count;
+}
+
+void JoinHashTable::BuildBloomFilterFromSinkCollection() {
+	if (!should_build_bloom_filter) {
+		return;
+	}
+	const auto sink_count = sink_collection->Count();
+	if (sink_count == 0) {
+		return;
+	}
+
+	bloom_filter.Reset();
+	bloom_filter_init_count = MaxValue<idx_t>(sink_count, 1);
+	bloom_filter.Initialize(context, bloom_filter_init_count);
+
+	Vector hashes(LogicalType::HASH);
+	for (auto &partition : sink_collection->GetPartitions()) {
+		if (!partition || partition->Count() == 0) {
+			continue;
+		}
+		// Stream one partition at a time to bound memory when the build side has spilled to disk.
+		TupleDataChunkIterator iterator(*partition, TupleDataPinProperties::UNPIN_AFTER_DONE, false);
+		do {
+			ExtractRowHashes(iterator, pointer_offset, hashes);
+			bloom_filter.InsertHashes(hashes);
+		} while (iterator.Next());
+	}
+	bloom_filter_built_from_sink = true;
 }
 
 void JoinHashTable::InitializePointerTable(idx_t entry_idx_from, idx_t entry_idx_to) {
@@ -1120,15 +1159,10 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 
 	TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::KEEP_EVERYTHING_PINNED, chunk_idx_from,
 	                                chunk_idx_to, false);
-	const auto row_locations = iterator.GetRowLocations();
 
 	InsertState insert_state(*this);
 	do {
-		const auto count = iterator.GetCurrentChunkCount();
-		auto hash_data = FlatVector::Writer<hash_t>(hashes, count_t(count));
-		for (idx_t i = 0; i < count; i++) {
-			hash_data.WriteValue(Load<hash_t>(row_locations[i] + pointer_offset));
-		}
+		const auto count = ExtractRowHashes(iterator, pointer_offset, hashes);
 		TupleDataChunkState &chunk_state = iterator.GetChunkState();
 
 		InsertHashes(hashes, chunk_state, insert_state, parallel);
@@ -2583,6 +2617,7 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	should_build_bloom_filter = false;
 	bloom_filter.Reset();
 	bloom_filter_init_count = 0;
+	bloom_filter_built_from_sink = false;
 	prefix_range_filter.reset();
 	should_build_prefix_range_filter = false;
 	ResetMarkJoinInfo(*this);
