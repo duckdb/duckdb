@@ -804,7 +804,7 @@ void ExpectVariantScanError(Connection &con, ArrowArrayStream &stream, const str
 	bool refused = false;
 	string error_message;
 	try {
-		auto result = con.TableFunction("arrow_scan", params)->Execute();
+		auto result = con.TableFunction("arrow_scan", {}, {}, params)->Execute();
 		if (result->HasError()) {
 			refused = true;
 			error_message = result->GetError();
