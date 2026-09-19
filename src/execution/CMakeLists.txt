@@ -15,6 +15,7 @@ add_library_unity(
   column_binding_resolver.cpp
   expression_executor.cpp
   expression_executor_state.cpp
+  ie_join_union.cpp
   join_hashtable.cpp
   mark_join_row_comparison.cpp
   perfect_aggregate_hashtable.cpp
