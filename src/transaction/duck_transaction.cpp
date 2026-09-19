@@ -303,14 +303,6 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 		error_data = ErrorData(ex);
 	}
 
-	// If the database encounter unrecoverable error (i.e., either fatal error or data loss), we directly invalidate the
-	// database and without attempting to revert the commit.
-	if (Exception::InvalidatesDatabase(error_data.Type())) {
-		ValidChecker::Invalidate(db.GetDatabase(), error_data.RawMessage());
-		ValidChecker::Invalidate(db, error_data.RawMessage());
-		return error_data;
-	}
-
 	try {
 		undo_buffer.RevertCommit(iterator_state, GetTransactionId());
 		if (!db.IsSystem() && !db.IsTemporary() &&
