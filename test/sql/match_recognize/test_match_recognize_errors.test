@@ -163,22 +163,28 @@ SELECT 1 FROM q MATCH_RECOGNIZE(
 ----
 <REGEX>:Binder Error:.*SUBSET name "A" is already a pattern variable.*
 
-# a union stands for a set of rows, which the matcher cannot navigate or skip to while matching
+# a measure is a column of the output, and a table does not have two columns of one name
 statement error
 SELECT 1 FROM q MATCH_RECOGNIZE(
-    ORDER BY i MEASURES count(*) AS n ONE ROW PER MATCH
-    PATTERN (A B+) SUBSET U = (A, B) DEFINE B AS LAST(U.j) > 0
+    ORDER BY i MEASURES count(*) AS n, sum(j) AS n ONE ROW PER MATCH PATTERN (A+) DEFINE A AS j > 0
 )
 ----
-<REGEX>:Not implemented Error:.*SUBSET variable cannot be referenced in DEFINE.*
+<REGEX>:Binder Error:.*MEASURES names "n" twice.*
+
+# an aggregate reads many rows and a navigation reads one, so one inside the other has no reading
+statement error
+SELECT 1 FROM q MATCH_RECOGNIZE(
+    ORDER BY i MEASURES sum(PREV(A.j)) AS s ONE ROW PER MATCH PATTERN (A+) DEFINE A AS j > 0
+)
+----
+<REGEX>:Binder Error:.*SUM\(\) aggregates the rows of the match, so a row pattern navigation cannot be nested.*
 
 statement error
 SELECT 1 FROM q MATCH_RECOGNIZE(
-    ORDER BY i MEASURES count(*) AS n ONE ROW PER MATCH AFTER MATCH SKIP TO LAST U
-    PATTERN (A B+) SUBSET U = (A, B) DEFINE B AS B.j > 0
+    ORDER BY i MEASURES max(LAST(A.j)) AS s ONE ROW PER MATCH PATTERN (A+) DEFINE A AS j > 0
 )
 ----
-<REGEX>:Not implemented Error:.*AFTER MATCH SKIP TO a SUBSET variable.*
+<REGEX>:Binder Error:.*MAX\(\) aggregates the rows of the match, so a row pattern navigation cannot be nested.*
 
 # An exclusion decides which of a match's rows reach the output. ONE ROW PER MATCH reports the
 # match rather than its rows, so it is accepted there and simply has no effect - Trino and Oracle
@@ -409,15 +415,6 @@ statement error
 SELECT "match_recognize"(1) OVER ()
 ----
 <REGEX>:Binder Error:.*cannot be used directly.*
-
-# what a condition cannot be: an aggregate over a variable the pattern can come back to, whose rows
-# are not one run of the match (the ones that are a run live in test_match_recognize_aggregates.test)
-statement error
-FROM (VALUES (10), (20), (30)) t(x) MATCH_RECOGNIZE (
-    ORDER BY x MEASURES count(*) AS n PATTERN (A B A) DEFINE A AS sum(A.x) > 0, B AS true
-)
-----
-<REGEX>:Binder Error:.*can return to "A" after leaving it.*
 
 statement error
 FROM (VALUES (10), (20)) t(x) MATCH_RECOGNIZE (

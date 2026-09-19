@@ -114,10 +114,6 @@ protected:
 	string UnsupportedAggregateMessage() override;
 
 public:
-	//! The variables whose rows form one unbroken run, which is what an aggregate can fold over
-	//! without tracking the rows one by one
-	const case_insensitive_set_t *contiguous_symbols = nullptr;
-
 private:
 	//! PREV()/NEXT() walk the ordered partition rather than the match, so they are ordinary windows
 	BindResult BindNeighbour(FunctionExpression &function, const string &function_name,
@@ -212,6 +208,7 @@ MatchRecognizeSteppedNavigation MatchRecognizePeelStep(unique_ptr<ParsedExpressi
 
 //! A step starts from a row the match names, and a step inside one names no row, so refuse the nesting
 void MatchRecognizeRejectNestedStep(const ParsedExpression &inner, const string &function_name);
+void MatchRecognizeRejectNavigationInAggregate(const ParsedExpression &argument, const string &function_name);
 
 //! Whether a name is a pattern variable. The two clauses hold their symbols differently, so which
 //! names are theirs is the caller's to say.

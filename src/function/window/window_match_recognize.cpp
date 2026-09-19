@@ -206,6 +206,22 @@ void WindowMatchRecognizeExecutor::Serialize(Serializer &serializer, const optio
 			child.WriteProperty(103, "offset", navigation.offset);
 		});
 	});
+	serializer.WriteList(109, "subsets", config.subsets.size(), [&](Serializer::List &list, idx_t i) {
+		auto &subset = config.subsets[i];
+		list.WriteObject([&](Serializer &child) {
+			child.WriteProperty(100, "name", subset.name);
+			child.WriteProperty(101, "members", subset.members);
+		});
+	});
+	serializer.WriteList(110, "aggregates", config.aggregates.size(), [&](Serializer::List &list, idx_t i) {
+		auto &aggregate = config.aggregates[i];
+		list.WriteObject([&](Serializer &child) {
+			child.WriteProperty(100, "symbol", aggregate.symbol);
+			child.WritePropertyWithDefault<optional_idx>(101, "operand", aggregate.operand);
+			child.WriteProperty(102, "field", aggregate.field);
+			child.WriteProperty(103, "expression", aggregate.expression);
+		});
+	});
 }
 
 unique_ptr<FunctionData> WindowMatchRecognizeExecutor::Deserialize(Deserializer &deserializer,
@@ -228,6 +244,24 @@ unique_ptr<FunctionData> WindowMatchRecognizeExecutor::Deserialize(Deserializer 
 			navigation.field = child.ReadProperty<idx_t>(102, "field");
 			navigation.offset = child.ReadProperty<idx_t>(103, "offset");
 			result->navigations.push_back(navigation);
+		});
+	});
+	deserializer.ReadList(109, "subsets", [&](Deserializer::List &list, idx_t i) {
+		list.ReadObject([&](Deserializer &child) {
+			MatchRecognizeFunctionData::Subset subset;
+			subset.name = child.ReadProperty<string>(100, "name");
+			subset.members = child.ReadProperty<vector<string>>(101, "members");
+			result->subsets.push_back(std::move(subset));
+		});
+	});
+	deserializer.ReadList(110, "aggregates", [&](Deserializer::List &list, idx_t i) {
+		list.ReadObject([&](Deserializer &child) {
+			MatchRecognizeFunctionData::Aggregate aggregate;
+			aggregate.symbol = child.ReadProperty<string>(100, "symbol");
+			aggregate.operand = child.ReadPropertyWithDefault<optional_idx>(101, "operand");
+			aggregate.field = child.ReadProperty<idx_t>(102, "field");
+			aggregate.expression = child.ReadProperty<unique_ptr<Expression>>(103, "expression");
+			result->aggregates.push_back(std::move(aggregate));
 		});
 	});
 	function.SetReturnType(ResultType());
@@ -338,9 +372,14 @@ void WindowMatchRecognizeExecutor::Sink(ExecutionContext &context, DataChunk &si
 	}
 }
 
-//! Where to resume scanning after a match spanning [match_start, match_end]
-static idx_t SkipTo(const MatchRecognizeFunctionData &config, idx_t skip_symbol, idx_t match_start, idx_t match_end,
-                    const vector<idx_t> &classifiers) {
+static bool Contains(const vector<idx_t> &symbols, idx_t symbol) {
+	return std::find(symbols.begin(), symbols.end(), symbol) != symbols.end();
+}
+
+//! Where to resume scanning after a match spanning [match_start, match_end]. A union variable's
+//! rows are those of any of its members, so the target is a set of symbols.
+static idx_t SkipTo(const MatchRecognizeFunctionData &config, const vector<idx_t> &skip_symbols, idx_t match_start,
+                    idx_t match_end, const vector<idx_t> &classifiers) {
 	auto resume = match_end + 1;
 	switch (config.after_match) {
 	case MatchRecognizeAfterMatch::MATCH_RECOGNIZE_AFTER_MATCH_NEXT_ROW:
@@ -353,7 +392,7 @@ static idx_t SkipTo(const MatchRecognizeFunctionData &config, idx_t skip_symbol,
 		optional_idx target;
 		for (idx_t step = 0; step <= match_end - match_start; step++) {
 			const auto row = first ? match_start + step : match_end - step;
-			if (classifiers[row] == skip_symbol) {
+			if (Contains(skip_symbols, classifiers[row])) {
 				target = row;
 				break;
 			}
@@ -452,11 +491,25 @@ public:
 		for (idx_t i = 0; i < config.symbols.size(); i++) {
 			symbol_index[config.symbols[i]] = i;
 		}
+		// a name is a primary variable, which is one symbol, or a union of them, which is its members'
 		auto lookup = [&](const string &name) {
+			vector<idx_t> found;
 			auto entry = symbol_index.find(name);
-			return entry == symbol_index.end() ? DConstants::INVALID_INDEX : entry->second;
+			if (entry != symbol_index.end()) {
+				found.push_back(entry->second);
+				return found;
+			}
+			for (auto &subset : config.subsets) {
+				if (!StringUtil::CIEquals(subset.name, name)) {
+					continue;
+				}
+				for (auto &member : subset.members) {
+					found.push_back(symbol_index.at(member));
+				}
+			}
+			return found;
 		};
-		skip_symbol = lookup(config.after_match_variable);
+		skip_symbols = lookup(config.after_match_variable);
 		// a navigation over the match as a whole reads its ends, so only a named variable needs a run
 		for (auto &navigation : config.navigations) {
 			navigation_runs.push_back(navigation.symbol.empty() ? DConstants::INVALID_INDEX
@@ -502,8 +555,8 @@ public:
 			run->begin = DConstants::INVALID_INDEX;
 		}
 	}
-	idx_t SkipSymbol() const {
-		return skip_symbol;
+	const vector<idx_t> &SkipSymbols() const {
+		return skip_symbols;
 	}
 
 	bool Matches(idx_t index, idx_t row) {
@@ -712,14 +765,15 @@ private:
 	//! the matcher has abandoned.
 	class SymbolRuns {
 	public:
-		//! Read this symbol's rows from here on, and report where they are kept
-		idx_t Track(idx_t symbol) {
+		//! Read the rows of these symbols from here on, and report where they are kept. A union
+		//! variable is a set of them; a primary variable a set of one.
+		idx_t Track(vector<idx_t> symbols_p) {
 			for (idx_t i = 0; i < symbols.size(); i++) {
-				if (symbols[i] == symbol) {
+				if (symbols[i] == symbols_p) {
 					return i;
 				}
 			}
-			symbols.push_back(symbol);
+			symbols.push_back(std::move(symbols_p));
 			runs.emplace_back();
 			versions.push_back(0);
 			return symbols.size() - 1;
@@ -761,7 +815,7 @@ private:
 				}
 			}
 			for (idx_t i = 0; i < symbols.size(); i++) {
-				if (symbols[i] == symbol) {
+				if (Contains(symbols[i], symbol)) {
 					runs[i].push_back(row);
 				}
 			}
@@ -769,8 +823,8 @@ private:
 		}
 
 	private:
-		//! The symbols read, and the rows of the match classified as each
-		vector<idx_t> symbols;
+		//! The symbols each run reads, and the rows of the match classified as any of them
+		vector<vector<idx_t>> symbols;
 		vector<vector<idx_t>> runs;
 		//! Bumped for a run whenever it gives rows back
 		vector<idx_t> versions;
@@ -850,7 +904,8 @@ private:
 	SymbolRuns runs;
 	//! Where each navigation's variable keeps its rows, invalid for one over the match as a whole
 	vector<idx_t> navigation_runs;
-	idx_t skip_symbol = DConstants::INVALID_INDEX;
+	//! What AFTER MATCH SKIP TO resumes at, which for a union variable is any of its members
+	vector<idx_t> skip_symbols;
 	idx_t match_start = 0;
 	idx_t match_number = 1;
 	DataChunk row_chunk;
@@ -984,7 +1039,7 @@ static void ScanPartitions(ExecutionContext &context, WindowMatchRecognizeGlobal
 				              MatchRecognizeSpan::Row(classifiers[match_row], match_number, row, match_end,
 				                                      gstate.excluded_rows[match_row] != 0));
 			}
-			row = SkipTo(config, row_conditions.SkipSymbol(), row, match_end, classifiers);
+			row = SkipTo(config, row_conditions.SkipSymbols(), row, match_end, classifiers);
 		}
 	}
 }

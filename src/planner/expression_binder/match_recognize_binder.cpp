@@ -359,6 +359,29 @@ static bool ContainsStep(const ParsedExpression &expr) {
 	return found;
 }
 
+static bool ContainsNavigation(const ParsedExpression &expr) {
+	if (expr.GetExpressionType() == ExpressionType::FUNCTION) {
+		auto name = StringUtil::Upper(expr.Cast<FunctionExpression>().FunctionName().GetIdentifierName());
+		if (name == "PREV" || name == "NEXT" || name == "FIRST" || name == "LAST") {
+			return true;
+		}
+	}
+	bool found = false;
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { found = found || ContainsNavigation(child); });
+	return found;
+}
+
+//! An aggregate reads the rows of the match and a navigation reads one of them, so one inside the
+//! other has no reading (ISO/IEC 19075-5 5.5, 5.6)
+void MatchRecognizeRejectNavigationInAggregate(const ParsedExpression &argument, const string &function_name) {
+	if (ContainsNavigation(argument)) {
+		throw BinderException("%s() aggregates the rows of the match, so a row pattern navigation cannot be nested "
+		                      "inside it",
+		                      StringUtil::Upper(function_name));
+	}
+}
+
 void MatchRecognizeRejectNestedStep(const ParsedExpression &inner, const string &function_name) {
 	if (ContainsStep(inner)) {
 		throw BinderException("%s() steps from a row the match names, and a step inside it names none, so the two "
@@ -550,17 +573,9 @@ BindResult MatchRecognizeDefineBinder::BindAggregate(FunctionExpression &expr, A
 	};
 	unique_ptr<ParsedExpression> inner;
 	if (!arguments.empty()) {
+		MatchRecognizeRejectNavigationInAggregate(arguments[0].GetExpression(), function_name);
 		inner = std::move(arguments[0].GetExpressionMutable());
 		variable = MatchRecognizeNavigationVariable(inner, is_symbol, universal, function_name);
-	}
-	if (!variable.empty() && contiguous_symbols && !contiguous_symbols->count(variable)) {
-		// the pattern can come back to the variable, so its rows are scattered through the match
-		// rather than one run of it, and folding them as they arrive is not enough
-		return BindResult(
-		    BinderException(expr,
-		                    "An aggregate over \"%s\" is not supported yet: the pattern can return to \"%s\" after "
-		                    "leaving it, so its rows are not one run of the match",
-		                    variable, variable));
 	}
 
 	// the matcher folds rows into the aggregate itself, so what is bound here is the function rather
@@ -787,6 +802,7 @@ BindResult MatchRecognizeMeasureBinder::BindOverMatch(FunctionExpression &expr, 
 		return symbols.find(name) != symbols.end();
 	};
 	for (auto &argument : expr.GetArgumentsMutable()) {
+		MatchRecognizeRejectNavigationInAggregate(argument.GetExpression(), expr.FunctionName().GetIdentifierName());
 		ScopeToVariable(argument.GetExpressionMutable(), is_symbol, scope);
 	}
 	if (expr.OrderByMutable()) {

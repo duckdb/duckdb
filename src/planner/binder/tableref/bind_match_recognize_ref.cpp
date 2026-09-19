@@ -99,99 +99,6 @@ static unique_ptr<MatchRecognizePattern> BuildPattern(const ParsedExpression &ex
 	}
 }
 
-//! Collect every pattern variable a subtree names, and how many times it names each
-static void CountSymbols(const ParsedExpression &expr, case_insensitive_map_t<idx_t> &counts) {
-	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
-		counts[expr.Cast<ColumnRefExpression>().GetColumnName().GetIdentifierName()]++;
-		return;
-	}
-	ParsedExpressionIterator::EnumerateChildren(expr,
-	                                            [&](const ParsedExpression &child) { CountSymbols(child, counts); });
-}
-
-//! The rows a variable matches form one unbroken run unless the pattern can come back to it: naming
-//! it twice does that, and so does a quantifier that repeats a group holding it alongside anything
-//! else. An aggregate over a run reads a range of the match rather than a set of rows scattered
-//! through it, which is the difference between folding rows as they arrive and tracking them all.
-static void CollectContiguousSymbols(const ParsedExpression &expr, bool under_repeat, case_insensitive_set_t &sparse) {
-	if (expr.GetExpressionType() == ExpressionType::CONCATENATION) {
-		// naming a variable twice keeps its rows in one run only while the two namings sit next to
-		// each other and nothing else can match between them: A+ A is a run, A B A is not
-		auto &children = expr.Cast<ConcatenationExpression>().children;
-		vector<case_insensitive_map_t<idx_t>> per_child(children.size());
-		case_insensitive_set_t named;
-		for (idx_t i = 0; i < children.size(); i++) {
-			CountSymbols(*children[i], per_child[i]);
-			for (auto &entry : per_child[i]) {
-				named.insert(entry.first);
-			}
-		}
-		for (auto &symbol : named) {
-			optional_idx first;
-			idx_t last = 0;
-			idx_t seen = 0;
-			for (idx_t i = 0; i < children.size(); i++) {
-				if (!per_child[i].count(symbol)) {
-					continue;
-				}
-				if (!first.IsValid()) {
-					first = i;
-				}
-				last = i;
-				seen++;
-			}
-			if (seen <= 1) {
-				continue;
-			}
-			// every step between the first and the last has to be this variable and nothing else
-			for (idx_t i = first.GetIndex(); i <= last; i++) {
-				if (per_child[i].size() != 1 || !per_child[i].count(symbol)) {
-					sparse.insert(symbol);
-					break;
-				}
-			}
-		}
-		for (auto &child : children) {
-			CollectContiguousSymbols(*child, under_repeat, sparse);
-		}
-		return;
-	}
-	if (expr.GetExpressionType() == ExpressionType::QUANTIFIER) {
-		auto &quantifier = expr.Cast<QuantifiedExpression>();
-		const bool repeats = !quantifier.max_count.IsValid() || quantifier.max_count.GetIndex() > 1;
-		case_insensitive_map_t<idx_t> inside;
-		CountSymbols(*quantifier.child, inside);
-		// a quantifier over one variable repeats that variable's own rows, which stay a run; over
-		// anything larger the repetitions interleave
-		const bool interleaves = repeats && inside.size() > 1;
-		CollectContiguousSymbols(*quantifier.child, under_repeat || interleaves, sparse);
-		return;
-	}
-	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
-		if (under_repeat) {
-			sparse.insert(expr.Cast<ColumnRefExpression>().GetColumnName().GetIdentifierName());
-		}
-		return;
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { CollectContiguousSymbols(child, under_repeat, sparse); });
-}
-
-//! The variables an aggregate can fold over without tracking their rows one by one
-static case_insensitive_set_t ContiguousSymbols(const ParsedExpression &pattern) {
-	case_insensitive_map_t<idx_t> counts;
-	CountSymbols(pattern, counts);
-	case_insensitive_set_t sparse;
-	CollectContiguousSymbols(pattern, false, sparse);
-	case_insensitive_set_t contiguous;
-	for (auto &entry : counts) {
-		if (!sparse.count(entry.first)) {
-			contiguous.insert(entry.first);
-		}
-	}
-	return contiguous;
-}
-
 //! A reference into the input only resolves where the input still is one, and every clause here is
 //! evaluated above a subquery of it - so it is computed down there verbatim and read back under a name
 //! of its own. Computing rather than rewriting is what keeps two tables' columns of the same name
@@ -495,20 +402,12 @@ static void ValidateClauses(const MatchRecognizeConfig &config, const MatchRecog
 		throw BinderException("AFTER MATCH SKIP TO \"%s\", which is not a pattern variable of this MATCH_RECOGNIZE",
 		                      config.after_match_variable);
 	}
-	if (subset_names.empty()) {
-		return;
-	}
-	// a union stands for a set of rows only once the match is assembled, and the matcher works one
-	// symbol at a time
-	if (subset_names.count(config.after_match_variable)) {
-		throw NotImplementedException("AFTER MATCH SKIP TO a SUBSET variable is not supported yet");
-	}
-	for (auto &expr : config.defines_expression_list) {
-		ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(*expr, [&](const ColumnRefExpression &colref) {
-			if (colref.IsQualified() && subset_names.count(colref.ColumnNames()[0].GetIdentifierName())) {
-				throw NotImplementedException("A SUBSET variable cannot be referenced in DEFINE yet");
-			}
-		});
+	// a measure is a column of the output, and a table does not have two columns of one name
+	case_insensitive_set_t measure_names;
+	for (auto &expr : config.measures_expression_list) {
+		if (!measure_names.insert(expr->GetAlias().GetIdentifierName()).second) {
+			throw BinderException("MEASURES names \"%s\" twice", expr->GetAlias().GetIdentifierName());
+		}
 	}
 }
 
@@ -740,6 +639,14 @@ static void FinishMatchData(const MatchRecognizeConfig &config, vector<string> d
 	match_data.after_match = config.after_match;
 	if (!config.after_match_variable.empty()) {
 		match_data.after_match_variable = MatchRecognizeDefineColumn(config.after_match_variable);
+	}
+	for (auto &subset : config.subsets) {
+		MatchRecognizeFunctionData::Subset union_variable;
+		union_variable.name = MatchRecognizeDefineColumn(subset.name);
+		for (auto &member : subset.members) {
+			union_variable.members.push_back(MatchRecognizeDefineColumn(member));
+		}
+		match_data.subsets.push_back(std::move(union_variable));
 	}
 }
 
@@ -1084,9 +991,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	                                      names,       navigations,        condition_aggregates};
 
 	MatchRecognizeDefineBinder condition_binder(*define_binder, context, define_node, inputs, *window_template,
-	                                            symbols.declared, input_refs.universal, match_number_ref);
-	const auto contiguous = ContiguousSymbols(*ref.config->pattern);
-	condition_binder.contiguous_symbols = &contiguous;
+	                                            symbols.qualifying, input_refs.universal, match_number_ref);
 	case_insensitive_set_t pattern_symbols;
 	vector<string> define_symbols;
 	auto define_conditions =

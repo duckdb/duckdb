@@ -145,6 +145,17 @@ struct MatchRecognizeFunctionData : FunctionData {
 	MatchRecognizeAfterMatch after_match = MatchRecognizeAfterMatch::MATCH_RECOGNIZE_AFTER_MATCH_DEFAULT;
 	//! The target pattern variable for the SKIP TO FIRST/LAST forms
 	string after_match_variable;
+	//! A union row pattern variable, which stands for the rows of any of its members (ISO/IEC
+	//! 19075-5 4.15). A navigation, an aggregate or a SKIP TO naming one reads all of them.
+	struct Subset {
+		string name;
+		vector<string> members;
+
+		bool Equals(const Subset &other) const {
+			return name == other.name && members == other.members;
+		}
+	};
+	vector<Subset> subsets;
 
 	unique_ptr<FunctionData> Copy() const override {
 		auto res = make_uniq<MatchRecognizeFunctionData>();
@@ -163,6 +174,7 @@ struct MatchRecognizeFunctionData : FunctionData {
 		res->row_scoped = row_scoped;
 		res->after_match = after_match;
 		res->after_match_variable = after_match_variable;
+		res->subsets = subsets;
 		return std::move(res);
 	}
 	bool Equals(const FunctionData &other_p) const override {
@@ -180,6 +192,14 @@ struct MatchRecognizeFunctionData : FunctionData {
 		}
 		for (idx_t i = 0; i < aggregates.size(); i++) {
 			if (!aggregates[i].Equals(other.aggregates[i])) {
+				return false;
+			}
+		}
+		if (subsets.size() != other.subsets.size()) {
+			return false;
+		}
+		for (idx_t i = 0; i < subsets.size(); i++) {
+			if (!subsets[i].Equals(other.subsets[i])) {
 				return false;
 			}
 		}
