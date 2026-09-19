@@ -798,6 +798,7 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntryInternal(cons
 			    "corrupt, please remove the file, restart and try again. (error message: '%s')",
 			    secret_path, error.RawMessage());
 		case ExceptionType::IO:
+		case ExceptionType::FILE_NOT_FOUND:
 			throw IOException(
 			    "Failed to open the persistent secret file: '%s'. Some other process may have removed it, "
 			    "please restart and try again. (error message: '%s')",

@@ -380,6 +380,7 @@ duckdb_error_type ErrorTypeToC(const ExceptionType type) {
 	case ExceptionType::NULL_POINTER:
 		return DUCKDB_ERROR_NULL_POINTER;
 	case ExceptionType::IO:
+	case ExceptionType::FILE_NOT_FOUND:
 		return DUCKDB_ERROR_IO;
 	case ExceptionType::INTERRUPT:
 		return DUCKDB_ERROR_INTERRUPT;

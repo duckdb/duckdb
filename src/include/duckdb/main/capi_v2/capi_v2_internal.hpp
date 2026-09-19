@@ -27,6 +27,11 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/open_file_info.hpp"
+#include "duckdb/common/query_context.hpp"
+
+#include <deque>
 
 // DuckDB internals used by the option set/get bridge.
 #include "duckdb/main/setting_info.hpp"
@@ -423,6 +428,206 @@ inline auto Convert(duckdb_v2_schema_handle schema) -> CV2Schema * {
 }
 inline auto Convert(CV2Schema *schema) -> duckdb_v2_schema_handle {
 	return reinterpret_cast<duckdb_v2_schema_handle>(schema);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// File System Types (shared by the consumer side and the virtual file system bridge)
+//----------------------------------------------------------------------------------------------------------------------
+
+// The file system handle, borrowed. It carries the context it was taken from alongside the file system itself, so
+// that reads and writes can hand the engine a QueryContext and have their bytes attributed to the query. Kept on the
+// context's own state, so the handle stays borrowed -- one per context, alive exactly as long as the context is. A
+// virtual file system holds one without a context, for delegation from its callbacks; the engine's wrapper pushes
+// the database's opener for it.
+class CV2FileSystem : public ClientContextState {
+public:
+	optional_ptr<FileSystem> fs;
+	//! The context the file system was taken from, so reads and writes can be attributed to the query.
+	QueryContext query;
+};
+
+inline auto Convert(duckdb_v2_file_system_handle fs) -> CV2FileSystem * {
+	return reinterpret_cast<CV2FileSystem *>(fs);
+}
+inline auto Convert(CV2FileSystem *fs) -> duckdb_v2_file_system_handle {
+	return reinterpret_cast<duckdb_v2_file_system_handle>(fs);
+}
+
+// An open file, owned. Carries the context for the same reason the file system handle does.
+class CV2File {
+public:
+	unique_ptr<FileHandle> handle;
+	QueryContext query;
+	//! The last size the file reported, so that only a positional read crossing it has to ask again
+	std::atomic<idx_t> known_size {0};
+
+	auto Handle() const -> FileHandle & {
+		return *handle;
+	}
+};
+
+inline auto Convert(duckdb_v2_file_handle handle) -> CV2File * {
+	return reinterpret_cast<CV2File *>(handle);
+}
+inline auto Convert(CV2File *handle) -> duckdb_v2_file_handle {
+	return reinterpret_cast<duckdb_v2_file_handle>(handle);
+}
+
+// What is known about one file or directory: the engine's own metadata, whose extended info holds the named values.
+// Filled in by a virtual file system's callbacks, read by consumers.
+class CV2FileMetadata {
+public:
+	FileMetadata data;
+
+	CV2FileMetadata() = default;
+	explicit CV2FileMetadata(FileMetadata data_p) : data(std::move(data_p)) {
+	}
+
+	//! Whether a name belongs to one of the typed fields, which have setters of their own. The engine matches the
+	//! names of the options it knows without regard to case.
+	static bool IsReservedName(const string &name) {
+		for (auto reserved : {"type", "file_size", "last_modified", "etag"}) {
+			if (StringUtil::CIEquals(name, reserved)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool HasType() const {
+		return data.file_type != FileType::FILE_TYPE_INVALID;
+	}
+	bool HasSize() const {
+		return data.file_size >= 0;
+	}
+	bool HasLastModified() const {
+		return data.last_modification_time != timestamp_t::ninfinity() &&
+		       data.last_modification_time != timestamp_t::infinity();
+	}
+	bool HasVersionTag() const {
+		return !data.version_tag.empty();
+	}
+	bool IsEmpty() const {
+		return !HasType() && !HasSize() && !HasLastModified() && !HasVersionTag() && data.extended_file_info.empty();
+	}
+
+	//! The C type, where a type that was never set reads as a regular file.
+	DUCKDB_V2_FILE_TYPE Type() const {
+		switch (data.file_type) {
+		case FileType::FILE_TYPE_INVALID:
+		case FileType::FILE_TYPE_REGULAR:
+			return DUCKDB_V2_FILE_TYPE_REGULAR;
+		case FileType::FILE_TYPE_DIR:
+			return DUCKDB_V2_FILE_TYPE_DIRECTORY;
+		case FileType::FILE_TYPE_FIFO:
+			return DUCKDB_V2_FILE_TYPE_PIPE;
+		default:
+			return DUCKDB_V2_FILE_TYPE_OTHER;
+		}
+	}
+
+	//! The engine distinguishes more kinds than the C API cares about; a socket stands in for all the others.
+	static FileType ToEngineType(DUCKDB_V2_FILE_TYPE type) {
+		switch (type) {
+		case DUCKDB_V2_FILE_TYPE_REGULAR:
+			return FileType::FILE_TYPE_REGULAR;
+		case DUCKDB_V2_FILE_TYPE_DIRECTORY:
+			return FileType::FILE_TYPE_DIR;
+		case DUCKDB_V2_FILE_TYPE_PIPE:
+			return FileType::FILE_TYPE_FIFO;
+		case DUCKDB_V2_FILE_TYPE_OTHER:
+			return FileType::FILE_TYPE_SOCKET;
+		default:
+			return FileType::FILE_TYPE_INVALID;
+		}
+	}
+
+	//! The options the engine carries from a listing to the open of a listed file. The engine stores each under the
+	//! name and type it reads it back as.
+	void FillOptions(ExtendedOpenFileInfo &info) const {
+		if (HasType()) {
+			info.SetUserOption("type", Value(data.file_type == FileType::FILE_TYPE_DIR ? "directory" : "file"));
+		}
+		if (HasSize()) {
+			info.SetUserOption("file_size", Value::UBIGINT(NumericCast<uint64_t>(data.file_size)));
+		}
+		if (HasLastModified()) {
+			info.SetUserOption("last_modified", Value::TIMESTAMP(data.last_modification_time));
+		}
+		if (HasVersionTag()) {
+			info.SetUserOption("etag", Value(data.version_tag));
+		}
+		for (auto &entry : data.extended_file_info) {
+			info.SetUserOption(entry.first, entry.second);
+		}
+	}
+
+	//! The reverse of FillOptions: what an open request or a listing entry of the engine carries.
+	static CV2FileMetadata FromOptions(const OpenFileInfo &file) {
+		CV2FileMetadata result;
+		if (!file.extended_info) {
+			return result;
+		}
+		auto &info = *file.extended_info;
+		// The typed reads of the engine reject a NULL, which here only means that the field is not known.
+		auto is_known = [&](const char *name) {
+			auto entry = info.options.find(name);
+			return entry != info.options.end() && !entry->second.IsNull();
+		};
+		string type;
+		if (is_known("type") && info.TryGetOption("type", type)) {
+			result.data.file_type = type == "directory" ? FileType::FILE_TYPE_DIR : FileType::FILE_TYPE_REGULAR;
+		}
+		idx_t size;
+		if (is_known("file_size") && info.TryGetOption("file_size", size)) {
+			result.data.file_size = NumericCast<int64_t>(size);
+		}
+		// The engine has no typed read for a timestamp option.
+		if (is_known("last_modified")) {
+			result.data.last_modification_time =
+			    info.options.at("last_modified").DefaultCastAs(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
+		}
+		string version_tag;
+		if (is_known("etag") && info.TryGetOption("etag", version_tag)) {
+			result.data.version_tag = std::move(version_tag);
+		}
+		for (auto &entry : info.options) {
+			if (!IsReservedName(entry.first)) {
+				result.data.extended_file_info.emplace(entry.first, entry.second);
+			}
+		}
+		return result;
+	}
+};
+
+inline auto Convert(duckdb_v2_file_metadata_handle metadata) -> CV2FileMetadata * {
+	return reinterpret_cast<CV2FileMetadata *>(metadata);
+}
+inline auto Convert(CV2FileMetadata *metadata) -> duckdb_v2_file_metadata_handle {
+	return reinterpret_cast<duckdb_v2_file_metadata_handle>(metadata);
+}
+
+// The entries of one listing or glob. Filled in by a virtual file system's callbacks, read by consumers.
+class CV2FileListing {
+public:
+	struct Entry {
+		string path;
+		CV2FileMetadata metadata;
+	};
+	//! A deque, so the metadata handed out for an entry stays valid while more entries are added.
+	std::deque<Entry> entries;
+
+	//! Adds an entry the engine reported, decoding what its options carry.
+	void Add(const OpenFileInfo &info) {
+		entries.push_back({info.path, CV2FileMetadata::FromOptions(info)});
+	}
+};
+
+inline auto Convert(duckdb_v2_file_listing_handle listing) -> CV2FileListing * {
+	return reinterpret_cast<CV2FileListing *>(listing);
+}
+inline auto Convert(CV2FileListing *listing) -> duckdb_v2_file_listing_handle {
+	return reinterpret_cast<duckdb_v2_file_listing_handle>(listing);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

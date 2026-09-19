@@ -95,7 +95,10 @@ class TableDescription;
 class ColumnDescription;
 class FileSystem;
 class FileHandle;
-class FileOpenOptions;
+class FileMetadata;
+class FileListing;
+class VirtualFile;
+class VirtualFileSystem;
 
 //----------------------------------------------------------------------------------------------------------------------
 // Internal Implementation Details
@@ -310,6 +313,13 @@ public:
 class InterruptException : public Exception {
 public:
 	explicit InterruptException(const std::string &message, std::string raw_message = {});
+};
+
+/// A file that does not exist: thrown by file operations on a missing path, and what a virtual file system callback
+/// throws to report one, which lets callers that asked for it receive no file instead of an error.
+class FileNotFoundException : public Exception {
+public:
+	explicit FileNotFoundException(const std::string &message, std::string raw_message = {});
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -5267,6 +5277,113 @@ enum class FileFlags : uint8_t {
 	/// or `WriteAt` are used concurrently, so that a file system which would otherwise assume sequential access does
 	/// not.
 	PARALLEL_ACCESS = 7,
+	/// Hold a shared lock on the file for as long as it is open: other shared holders may open it too, an exclusive
+	/// holder may not. Advisory: a file system that cannot lock may still open the file. `EXCLUSIVE_LOCK` wins when
+	/// both are applied.
+	SHARED_LOCK = 8,
+	/// Hold an exclusive lock on the file for as long as it is open: no other holder, shared or exclusive, may open
+	/// it. Advisory, like `SHARED_LOCK`; a file system that cannot lock is trusted to be the only writer.
+	EXCLUSIVE_LOCK = 9,
+};
+
+/// What a path refers to, as a stat or a listing reports it.
+enum class FileType : uint8_t {
+	/// Not a type. The zero value, so that an uninitialized variable does not name one.
+	INVALID = 0,
+	/// A regular file, which can be opened.
+	REGULAR = 1,
+	/// A directory, which can be listed.
+	DIRECTORY = 2,
+	/// A pipe or other stream: readable from start to end, but with no size and no positions to seek to.
+	PIPE = 3,
+	/// Something that exists but is none of the above, such as a socket or a device.
+	OTHER = 4,
+};
+
+/// What is known about a file: what it is, and when known its size, modification time and version tag.
+/// Owned when obtained from `FileSystem::Stat` or `FileHandle::Stat`; borrowed when read from a listing or handed to a
+/// virtual file system callback to fill in, and then valid only as long as the listing or the callback is.
+class FileMetadata final : public detail::Handle<FileMetadata> {
+	friend detail::Factory;
+
+public:
+	FileMetadata(FileMetadata &&) noexcept = default;
+	FileMetadata &operator=(FileMetadata &&) noexcept = default;
+
+	~FileMetadata() override;
+
+	/// What the path refers to. A type that was never set reads as a regular file.
+	auto GetType() const -> FileType;
+	/// The size in bytes, when known.
+	auto GetSize() const -> std::optional<idx_t>;
+	/// When the file was last modified, when known.
+	auto GetLastModified() const -> std::optional<timestamp_t>;
+	/// The tag identifying this version of the file's contents, such as an ETag, when known.
+	auto GetVersionTag() const -> std::optional<std::string>;
+
+	/// Reports what the path refers to. From a virtual file system's path-level stat callback this is what reports
+	/// existence: until it is called the path is reported as not existing.
+	auto SetType(FileType type) -> FileMetadata &;
+	/// Reports the size in bytes.
+	auto SetSize(idx_t size) -> FileMetadata &;
+	/// Reports when the file was last modified.
+	auto SetLastModified(timestamp_t time) -> FileMetadata &;
+	/// Reports the tag identifying this version of the file's contents.
+	auto SetVersionTag(std::string_view tag) -> FileMetadata &;
+
+	/// Creates empty metadata, to fill in and pass to `FileSystem::OpenFile`. Owned.
+	static auto Create() -> FileMetadata;
+	/// A named value: what a file system reported or attached to a listing entry, or a hint set for an open.
+	auto GetValue(std::string_view name) const -> std::optional<Value>;
+	/// Attaches a named value, replacing any under the same name. What a name means is up to the file system that
+	/// handles the file.
+	/// @throws InvalidInputException When the name is one of the typed fields' (`type`, `file_size`,
+	/// `last_modified`, `etag`).
+	auto SetValue(std::string_view name, const Value &value) -> FileMetadata &;
+	/// Replaces everything this holds with a copy of what `source` holds, named values included.
+	auto CopyFrom(const FileMetadata &source) -> FileMetadata &;
+
+private:
+	FileMetadata(void *impl, bool owned);
+
+	bool owned;
+};
+
+/// The entries of a directory listing or a glob expansion, in the order they were added.
+/// Owned when obtained from `FileSystem::List` or `FileSystem::Glob`; borrowed when handed to a virtual file system
+/// callback to fill in, and then valid only for the duration of that callback.
+class FileListing final : public detail::Handle<FileListing> {
+	friend detail::Factory;
+
+public:
+	FileListing(FileListing &&) noexcept = default;
+	FileListing &operator=(FileListing &&) noexcept = default;
+
+	~FileListing() override;
+
+	/// Adds an entry: a name relative to the listed directory for a listing, which the caller joins onto it, and
+	/// a full path for a glob, which the engine opens as given. Every entry of a glob is a file to open, so its
+	/// type is `REGULAR`, or `PIPE` for a stream.
+	/// @return The entry's metadata, borrowed and valid as long as the listing is, to fill in what is already known
+	/// about the entry, such as its size. Its type is the one given here.
+	auto AddEntry(std::string_view path, FileType type) -> FileMetadata;
+
+	/// How many entries the listing holds.
+	auto GetEntryCount() const -> idx_t;
+	/// The path of an entry: a name relative to the listed directory for a listing, a full path for a glob.
+	/// @throws InvalidInputException When the index is out of range.
+	auto GetEntryPath(idx_t index) const -> std::string;
+	/// What an entry is.
+	/// @throws InvalidInputException When the index is out of range.
+	auto GetEntryType(idx_t index) const -> FileType;
+	/// What is known about an entry, borrowed and valid as long as the listing is.
+	/// @throws InvalidInputException When the index is out of range.
+	auto GetEntryMetadata(idx_t index) const -> FileMetadata;
+
+private:
+	FileListing(void *impl, bool owned);
+
+	bool owned;
 };
 
 /// An open file, obtained from `FileSystem::OpenFile`. Closes on destruction.
@@ -5281,12 +5398,21 @@ public:
 	~FileHandle() override;
 
 	/// Flushes buffered writes to persistent storage, which is what makes them durable across a crash. Closing or
-	/// destroying the handle flushes as well.
+	/// destroying the handle hands buffered writes to the file system but does not make them durable.
 	void Sync();
 
 	/// Closes the file, releasing its operating-system resources. The handle stays valid but can no longer be used
 	/// to read, write or seek.
 	void Close();
+
+	/// Abandons a file being written, without publishing what was written. Use it instead of `Close` when a write
+	/// fails part-way; a file system with nothing to abandon closes the file as usual. The handle is closed
+	/// afterwards.
+	void Abort();
+
+	/// Truncates the file to a size no larger than its current one.
+	/// @throws Exception When the file system cannot truncate.
+	void Truncate(idx_t size);
 
 	/// Moves the read/write position to an absolute byte offset from the start of the file. Seeking past the end is
 	/// allowed; reading from there yields nothing.
@@ -5298,6 +5424,10 @@ public:
 	/// The total size of the file in bytes.
 	auto Size() const -> idx_t;
 
+	/// What is known about the open file: its size, and when the file system knows them, its modification time and
+	/// version tag. Owned.
+	auto Stat() const -> FileMetadata;
+
 	/// Reads up to `size` bytes from the current position, advancing it by however many were read.
 	/// @return How many bytes were read. Fewer than asked for is normal at the end of the file, and zero means
 	/// there is nothing left; neither is an error.
@@ -5307,46 +5437,20 @@ public:
 	/// @return How many bytes were written.
 	auto Write(const void *buffer, idx_t size) -> idx_t;
 
-	/// Reads exactly `size` bytes from `location`, leaving the file's position alone. Unlike `Read`, a short read is
-	/// an error rather than a result, so there is no count to return. Safe to call from several threads at once when
-	/// the file was opened with `FileFlags::PARALLEL_ACCESS`.
-	/// @throws Exception When the file ends before `size` bytes have been read.
-	void ReadAt(void *buffer, idx_t size, idx_t location);
+	/// Reads up to `size` bytes from `location`, leaving the file's position alone. Safe to call from several
+	/// threads at once when the file was opened with `FileFlags::PARALLEL_ACCESS`.
+	/// @return How many bytes were read. Fewer than asked for means the end of the file was reached, and zero means
+	/// `location` is at or past it; neither is an error.
+	auto ReadAt(void *buffer, idx_t size, idx_t location) -> idx_t;
 
-	/// Writes exactly `size` bytes at `location`, leaving the file's position alone and extending the file when the
+	/// Writes up to `size` bytes at `location`, leaving the file's position alone and extending the file when the
 	/// offset is past its end. Safe to call from several threads at once when the file was opened with
 	/// `FileFlags::PARALLEL_ACCESS` and the threads write disjoint ranges.
-	void WriteAt(const void *buffer, idx_t size, idx_t location);
+	/// @return How many bytes were written.
+	auto WriteAt(const void *buffer, idx_t size, idx_t location) -> idx_t;
 
 private:
 	explicit FileHandle(void *impl);
-};
-
-/// How a file is opened: the flags, plus any values the file system handling the path cares about.
-/// Created from the `FileSystem` it will be used with, and reusable across any number of opens.
-class FileOpenOptions final : public detail::Handle<FileOpenOptions> {
-	friend detail::Factory;
-
-public:
-	FileOpenOptions(FileOpenOptions &&) noexcept = default;
-	FileOpenOptions &operator=(FileOpenOptions &&) noexcept = default;
-
-	~FileOpenOptions() override;
-
-	/// Creates an empty set of options for `fs`. Flags must be set before they can open anything.
-	static auto Create(const FileSystem &fs) -> FileOpenOptions;
-
-	/// Applies one flag. Additive, and applying the same flag twice is harmless; at least one flag is required
-	/// before the options can open anything. There is no way to take a flag back -- build a fresh set instead.
-	/// @throws InvalidInputException When the value is `FileFlags::INVALID` or not a flag at all.
-	auto SetFlag(FileFlags flag) & -> FileOpenOptions &;
-
-	/// Attaches a named value, a hint for whichever file system ends up handling the path. What a name means is that
-	/// file system's business, and one it does not recognize is ignored. Setting the same name again replaces it.
-	auto SetValue(std::string_view name, const Value &value) & -> FileOpenOptions &;
-
-private:
-	explicit FileOpenOptions(void *impl);
 };
 
 /// The file system DuckDB itself reads and writes through, so files open the way the engine would open them --
@@ -5364,18 +5468,278 @@ public:
 	/// Opens a file with nothing but flags, which is what most opens need.
 	/// @param path The path to open, routed the way the engine would route it.
 	/// @param flags How to open it, e.g. `{FileFlags::WRITE, FileFlags::FILE_CREATE}`; at least one is required.
+	/// @throws FileNotFoundException When the file does not exist.
 	/// @throws Exception When the file cannot be opened.
-	auto OpenFile(const std::string &path, std::initializer_list<FileFlags> flags) const -> FileHandle;
+	auto OpenFile(const std::string &path, const std::vector<FileFlags> &flags) const -> FileHandle;
 
-	/// Opens a file with a prepared set of options, for when the file system needs values as well as flags.
-	/// @throws Exception When the file cannot be opened, or the options carry no flags.
-	auto OpenFile(const std::string &path, const FileOpenOptions &options) const -> FileHandle;
+	/// Opens a file along with what is already known about it, such as the metadata of the listing entry the path
+	/// came from, and any hints set on it as named values for the file system that handles the path.
+	/// @throws FileNotFoundException When the file does not exist.
+	/// @throws Exception When the file cannot be opened.
+	auto OpenFile(const std::string &path, const std::vector<FileFlags> &flags, const FileMetadata &metadata) const
+	    -> FileHandle;
 
-	/// Creates an empty set of options for this file system, the same as `FileOpenOptions::Create(*this)`.
-	auto CreateOpenOptions() const -> FileOpenOptions;
+	/// What a path refers to, without opening it.
+	/// @return The metadata, or nothing when the path does not exist.
+	auto Stat(const std::string &path) const -> std::optional<FileMetadata>;
+	/// Lists the entries directly inside a directory, by name relative to it.
+	/// @throws Exception When the path is not a directory that can be listed.
+	auto List(const std::string &path) const -> FileListing;
+	/// Expands a glob pattern to the full paths of the files matching it. A pattern matching nothing yields an
+	/// empty listing; a path without glob characters yields itself when it exists.
+	auto Glob(const std::string &pattern) const -> FileListing;
+	/// Removes a file.
+	/// @throws Exception When the file does not exist or cannot be removed.
+	void RemoveFile(const std::string &path) const;
+	/// Creates a directory, including any missing parents. An existing directory is not an error.
+	void CreateDirectory(const std::string &path) const;
+	/// Removes a directory and everything inside it.
+	void RemoveDirectory(const std::string &path) const;
+	/// Moves or renames a file, replacing the target if it exists.
+	void Move(const std::string &source, const std::string &target) const;
 
 private:
 	explicit FileSystem(void *impl);
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Virtual File System
+//----------------------------------------------------------------------------------------------------------------------
+// A user-defined file system: once registered, every reader and writer in the engine -- read_parquet, read_csv,
+// COPY TO, ATTACH -- opens the paths it claims through it. A `VirtualFileSystem` is a builder configured with
+// callbacks and registered on a connection or an extension; the open callback returns the per-file state, an object
+// deriving from `VirtualFile`, which the file callbacks then receive.
+//
+// All I/O is positional: the "read at" and "write at" callbacks name an absolute offset in every call, with
+// `pread`/`pwrite` semantics, and on a file opened with `FileFlags::PARALLEL_ACCESS` happen from several threads at
+// once. A file system keeps no cursor. Where the engine reads or writes a file sequentially it keeps the position
+// itself and passes it along, and a file reported as not seekable is only ever read or written from where the
+// previous call ended.
+
+/// The per-file state of a virtual file system: whatever the open callback returns, handed to every file callback
+/// for that file and destroyed by the engine once it is done with the file, after the close or abort callback.
+/// Derive from it and keep in it what the file callbacks need -- the path, a descriptor, a buffer.
+class VirtualFile {
+public:
+	virtual ~VirtualFile() = default;
+
+	template <class T>
+	T &As() {
+		static_assert(std::is_base_of_v<VirtualFile, T>, "T must derive from VirtualFile");
+		return *static_cast<T *>(this);
+	}
+	template <class T>
+	const T &As() const {
+		static_assert(std::is_base_of_v<VirtualFile, T>, "T must derive from VirtualFile");
+		return *static_cast<T *>(this);
+	}
+};
+
+/// A user-defined file system: a configuration of callbacks, built up here and then registered on a connection or an
+/// extension with `Register`. Registration is permanent -- the file system lasts for the life of the database and its
+/// name stays taken -- and consumes the user data; the object itself is done with afterwards.
+///
+/// Which file system handles a path is decided by registration order: of all the registered file systems that claim
+/// it, built-in and extension ones included, the most recently registered wins. A file system claims a path by
+/// prefix (`AddPrefix`) or by callback (`SetClaimCallback`), and needs at least one of the two. Which callbacks are
+/// set is what decides its capabilities: whether it is writable, whether it can truncate, list or glob.
+class VirtualFileSystem {
+public:
+	class Info;
+	class OpenInput;
+
+	/// Decides whether this file system handles a path. Consulted only for paths no prefix matched. Throwing fails
+	/// the operation the engine was routing, whichever file system would have handled the path, so a callback that
+	/// merely cannot decide returns false.
+	using ClaimCallback = bool (*)(Info &info, std::string_view path);
+	/// Opens a file, returning its per-file state. Required. Report a missing file by throwing an `Exception` with
+	/// the `IO_FILE_NOT_FOUND` code, which lets callers that asked for it receive no file instead of an error.
+	using OpenCallback = std::unique_ptr<VirtualFile> (*)(OpenInput &input);
+	/// Reports whether a path exists, and what it refers to by filling `metadata` in. A path without a type is a
+	/// regular file. A path that does not exist is not an error, and filling `metadata` in for one is.
+	/// @return Whether the path exists.
+	using StatCallback = bool (*)(Info &info, std::string_view path, FileMetadata &metadata);
+	/// Lists a directory: one entry per file and subdirectory directly inside it, by name relative to it. Report a
+	/// directory that does not exist by throwing an `Exception` with the `IO_FILE_NOT_FOUND` code; a backend
+	/// without directories cannot tell it from an empty one and adds no entries instead.
+	using ListCallback = void (*)(Info &info, std::string_view path, FileListing &listing);
+	/// Resolves a path to the full path of every file it names. Globbing is opt-in: without this callback every
+	/// path names exactly one file, and with it every path the engine reads goes through here as written, so the
+	/// pattern syntax is the file system's own. A path naming one existing file is added as its own single match,
+	/// and a pattern or path matching nothing adds nothing.
+	using GlobCallback = void (*)(Info &info, std::string_view pattern, FileListing &listing);
+	/// Removes a file, or creates or removes a directory. Removing a file or directory that does not exist throws
+	/// an `Exception` with the `IO_FILE_NOT_FOUND` code; a backend without directories cannot tell a missing
+	/// directory from an empty one and succeeds instead. Creating a directory that exists, or whose parents are
+	/// missing, is not an error.
+	using PathCallback = void (*)(Info &info, std::string_view path);
+	/// Moves or renames a file, replacing the target if it exists. Report a missing source by throwing an
+	/// `Exception` with the `IO_FILE_NOT_FOUND` code.
+	using MoveCallback = void (*)(Info &info, std::string_view source, std::string_view target);
+
+	/// Fills the buffer with up to `size` bytes starting at `location` and returns how many. Fewer than asked for is
+	/// allowed, and zero means the offset is at or past the end of the file. Required for a file system that reads.
+	/// On a file reported as not seekable, `location` is always where the previous read ended.
+	using FileReadAtCallback = idx_t (*)(Info &info, VirtualFile &file, void *buffer, idx_t size, idx_t location);
+	/// Writes up to `size` bytes starting at `location`, extending the file when the offset is past its end, and
+	/// returns how many. Fewer than asked for is allowed, and the engine calls again for the rest; zero means
+	/// nothing could be written.
+	/// It writes at `location` even on a file opened with `FileFlags::APPEND`, for which the engine passes the end
+	/// of the file itself. Setting it makes the file system writable. On a file reported as not seekable,
+	/// `location` is always where the previous write ended, which makes this an append.
+	using FileWriteAtCallback = idx_t (*)(Info &info, VirtualFile &file, const void *buffer, idx_t size,
+	                                      idx_t location);
+	/// Reports the file's size, and when known its modification time and version tag. Optional: without it the
+	/// engine reports what the open callback left in `OpenInput::GetMetadata`, and no longer knows the size of a
+	/// file once it is written.
+	using FileStatCallback = void (*)(Info &info, VirtualFile &file, FileMetadata &metadata);
+	/// Flushes buffered writes to durable storage. The engine calls it where it needs durability, and not before
+	/// a close, which means publishing and nothing more.
+	using FileSyncCallback = void (*)(Info &info, VirtualFile &file);
+	/// Cuts the file down to `size` bytes, or extends it with zeros. Needed to attach a database on the file system.
+	using FileTruncateCallback = void (*)(Info &info, VirtualFile &file, idx_t size);
+	/// Closes the file, before its state is destroyed. Called once, never concurrently with other file callbacks.
+	using FileCloseCallback = void (*)(Info &info, VirtualFile &file);
+	/// Discards a written file instead of closing it, when the write that produced it failed. Called instead of the
+	/// close callback; without it, such a file is closed.
+	using FileAbortCallback = void (*)(Info &info, VirtualFile &file);
+
+	VirtualFileSystem() = default;
+	VirtualFileSystem(VirtualFileSystem &&) noexcept = default;
+	VirtualFileSystem &operator=(VirtualFileSystem &&) noexcept = default;
+
+	/// Names the file system; required, and unique among the registered ones.
+	auto SetName(std::string_view name) & -> VirtualFileSystem &;
+	/// Claims every path starting with the prefix, such as a URI scheme like `mem://`. May be called several times.
+	auto AddPrefix(std::string_view prefix) & -> VirtualFileSystem &;
+
+	/// Constructs user data of type `T`, carried by the registered file system and freed when the database closes;
+	/// read it from a callback via `Info::GetUserData<T>`. Consumed by `Register`.
+	template <class T, class... ARGS>
+	auto SetUserData(ARGS &&... args) & -> VirtualFileSystem & {
+		auto ptr = new T(std::forward<ARGS>(args)...);
+		user_data = detail::UserData(ptr, detail::TypedDelete<T>);
+		return *this;
+	}
+
+	auto SetClaimCallback(ClaimCallback callback) & -> VirtualFileSystem &;
+	auto SetStatCallback(StatCallback callback) & -> VirtualFileSystem &;
+	auto SetListCallback(ListCallback callback) & -> VirtualFileSystem &;
+	auto SetGlobCallback(GlobCallback callback) & -> VirtualFileSystem &;
+	auto SetRemoveFileCallback(PathCallback callback) & -> VirtualFileSystem &;
+	auto SetCreateDirectoryCallback(PathCallback callback) & -> VirtualFileSystem &;
+	auto SetRemoveDirectoryCallback(PathCallback callback) & -> VirtualFileSystem &;
+	auto SetMoveCallback(MoveCallback callback) & -> VirtualFileSystem &;
+
+	auto SetFileOpenCallback(OpenCallback callback) & -> VirtualFileSystem &;
+	auto SetFileReadAtCallback(FileReadAtCallback callback) & -> VirtualFileSystem &;
+	auto SetFileWriteAtCallback(FileWriteAtCallback callback) & -> VirtualFileSystem &;
+	auto SetFileStatCallback(FileStatCallback callback) & -> VirtualFileSystem &;
+	auto SetFileSyncCallback(FileSyncCallback callback) & -> VirtualFileSystem &;
+	auto SetFileTruncateCallback(FileTruncateCallback callback) & -> VirtualFileSystem &;
+	auto SetFileCloseCallback(FileCloseCallback callback) & -> VirtualFileSystem &;
+	auto SetFileAbortCallback(FileAbortCallback callback) & -> VirtualFileSystem &;
+
+	/// Registers the file system on the connection's database, permanently. Validates the configuration: a name, a
+	/// prefix or claim callback and the open callback are required, and "read at" unless the file system is a
+	/// write-only sink.
+	/// @throws InvalidInputException When the configuration is incomplete or inconsistent.
+	auto Register(const Connection &conn) -> void;
+	/// Registers the file system through the loading extension, permanently; see the connection overload.
+	auto Register(const Extension &extension) -> void;
+
+private:
+	auto RegisterInternal(void *vfs) -> void;
+
+	std::string name;
+	std::vector<std::string> prefixes;
+	ClaimCallback claim = nullptr;
+	OpenCallback open = nullptr;
+	StatCallback stat = nullptr;
+	ListCallback list = nullptr;
+	GlobCallback glob = nullptr;
+	PathCallback remove_file = nullptr;
+	PathCallback create_directory = nullptr;
+	PathCallback remove_directory = nullptr;
+	MoveCallback move = nullptr;
+	FileReadAtCallback file_read_at = nullptr;
+	FileWriteAtCallback file_write_at = nullptr;
+	FileStatCallback file_stat = nullptr;
+	FileSyncCallback file_sync = nullptr;
+	FileTruncateCallback file_truncate = nullptr;
+	FileCloseCallback file_close = nullptr;
+	FileAbortCallback file_abort = nullptr;
+	detail::UserData user_data;
+
+public:
+	/// What every callback shares about the operation it serves. Borrowed, valid only for the callback duration.
+	class Info {
+		friend detail::Factory;
+
+	public:
+		/// The user data set via `VirtualFileSystem::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// The file system of the database this file system is registered on, to delegate to whichever file system
+		/// claims another path. It carries the database's settings and secrets but no query state, so a callback
+		/// with a context available should prefer `Context::GetFileSystem`. Borrowed.
+		auto GetFileSystem() const -> FileSystem;
+
+		/// The context of the query performing the operation, or null if there is none. Operations that happen
+		/// outside a query, such as opening a database file that is being attached, have none, and so do the file
+		/// operations, which the engine does not yet pass a context to. Borrowed, valid only for the callback
+		/// duration.
+		auto TryGetContext() -> Context *;
+
+	protected:
+		explicit Info(void *info);
+
+		void *info;
+		Context context;
+
+	private:
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the open callback works with: the shared info plus the open request. Borrowed, valid only for the
+	/// callback duration, as is the path view it hands out.
+	class OpenInput : public Info {
+		friend detail::Factory;
+
+	public:
+		/// The path of the file to open.
+		auto GetPath() const -> std::string_view;
+		/// The flags the file is being opened with, in `FileFlags` order. The list is complete, so a file system can
+		/// refuse an open carrying a flag it does not know rather than silently ignoring it.
+		auto GetFlags() const -> const std::vector<FileFlags> &;
+		/// Whether the file is being opened with the given flag.
+		auto HasFlag(FileFlags flag) const -> bool;
+		/// What accompanies the open, to read and to fill in. It starts out holding what a listing of this file
+		/// system reported, so the backend need not fetch it again, and the hints the caller set as named values.
+		/// What it holds when the open callback returns is what the engine reports about the file when there is no
+		/// file stat callback. An overlay passes it on to `FileSystem::OpenFile` with the flags. Borrowed.
+		auto GetMetadata() const -> FileMetadata;
+		/// Reports whether the file can be read and written at arbitrary offsets; true unless reported otherwise.
+		/// A file that cannot, such as a stream or an upload to an object store, is only ever read or written from
+		/// where the previous call ended.
+		auto SetSeekable(bool seekable) -> void;
+		/// Reports whether the file lives on local disk; false unless reported otherwise.
+		auto SetOnDisk(bool on_disk) -> void;
+
+	private:
+		OpenInput(void *info, void *open_info, std::string_view path, std::vector<FileFlags> flags, void *metadata)
+		    : Info(info), open_info(open_info), path(path), flags(std::move(flags)), metadata(metadata) {
+		}
+
+		void *open_info;
+		void *metadata;
+		std::string_view path;
+		std::vector<FileFlags> flags;
+	};
 };
 
 //----------------------------------------------------------------------------------------------------------------------

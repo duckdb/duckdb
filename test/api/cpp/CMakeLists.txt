@@ -25,7 +25,8 @@ add_library(
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_table_function.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_tokenizer.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_types_values.cpp
-  ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_vector.cpp)
+  ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_vector.cpp
+  ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_virtual_file_system.cpp)
 
 set(UNITTEST_OBJECT_FILES
     ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_cpp_api>
