@@ -495,10 +495,9 @@ private:
 	//! An empty tuple that's a "dead end", can be used to stop chains early
 	unsafe_unique_array<data_t> dead_end;
 
-	//! Whether or not to use a bloom filter will be determined by the operator
-	BloomFilter bloom_filter;
-	bool should_build_bloom_filter = false;
-	idx_t bloom_filter_init_count = 0;
+	//! Bloom filter over the join keys, filled during Sink. Shared by every thread-local hash table of this
+	//! operator, and shared again with any scan it gets published to, so it outlives a reset of this table
+	shared_ptr<BloomFilter> bloom_filter;
 
 	unique_ptr<PrefixRangeFilter> prefix_range_filter;
 	bool should_build_prefix_range_filter = false;
@@ -580,13 +579,22 @@ public:
 		return PointerTableCapacity(count) * sizeof(data_ptr_t);
 	}
 
-	void SetBuildBloomFilter(const bool should_build) {
-		this->should_build_bloom_filter = should_build;
+	void SetBloomFilter(shared_ptr<BloomFilter> filter) {
+		bloom_filter = std::move(filter);
 	}
-	void PrepareBloomFilterForFinalize();
 
-	BloomFilter &GetBloomFilter() {
+	shared_ptr<BloomFilter> GetBloomFilter() {
 		return bloom_filter;
+	}
+	//! Seals the bloom filter, dropping it instead if it ended up too saturated to prune anything
+	void SealBloomFilter() {
+		if (!bloom_filter) {
+			return;
+		}
+		bloom_filter->Seal(context);
+		if (!bloom_filter->IsUseful()) {
+			bloom_filter.reset();
+		}
 	}
 
 	void SetPrefixRangeFilter(unique_ptr<PrefixRangeFilter> filter) {

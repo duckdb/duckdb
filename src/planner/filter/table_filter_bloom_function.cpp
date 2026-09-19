@@ -18,6 +18,9 @@
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
+#include <bitset>
+#include <cmath>
+
 namespace duckdb {
 
 static constexpr idx_t MAX_NUM_SECTORS = (1ULL << 26);
@@ -26,6 +29,15 @@ static constexpr idx_t MIN_NUM_BITS = 512;
 static constexpr idx_t LOG_SECTOR_SIZE = 6;             // a sector is 64 bits, log2(64) = 6
 static constexpr idx_t SHIFT_MASK = 0x3F3F3F3F3F3F3F3F; // 6 bits for 64 positions
 static constexpr idx_t N_BITS = 4;                      // the number of bits to set per hash
+static constexpr idx_t BITS_PER_SECTOR = 1ULL << LOG_SECTOR_SIZE;
+
+//! Above this false positive rate the filter rejects too little to be worth publishing. It gets there when the
+//! build cardinality was underestimated and more keys arrived than it was sized for; folding cannot help, since
+//! it only raises the rate further.
+static constexpr double USELESS_FALSE_POSITIVE_RATE = 0.9;
+
+//! A sector is one entry of the bit array, so the two have to agree on how wide it is
+static_assert(BITS_PER_SECTOR == sizeof(uint64_t) * 8, "a bloom filter sector must be exactly one array entry");
 
 void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
 	BufferManager &buffer_manager = BufferManager::GetBufferManager(context_p);
@@ -39,24 +51,74 @@ void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
 	std::fill_n(bf, num_sectors, 0);
 
 	initialized = true;
+	sealed = false;
 }
 
-void BloomFilter::Merge(const BloomFilter &other) {
+void BloomFilter::Fold(idx_t new_num_sectors) {
 	D_ASSERT(initialized);
-	D_ASSERT(other.initialized);
-	D_ASSERT(num_sectors == other.num_sectors);
-	D_ASSERT(bitmask == other.bitmask);
-	for (idx_t i = 0; i < num_sectors; i++) {
-		bf[i] |= other.bf[i];
+	D_ASSERT(!sealed);
+	D_ASSERT(IsPowerOfTwo(new_num_sectors));
+	D_ASSERT(new_num_sectors <= num_sectors);
+	const uint64_t new_bitmask = new_num_sectors - 1;
+	for (idx_t i = new_num_sectors; i < num_sectors; i++) {
+		bf[i & new_bitmask] |= bf[i];
 	}
+	num_sectors = new_num_sectors;
+	bitmask = new_bitmask;
 }
 
-void BloomFilter::Reset() {
-	buf_.Reset();
-	num_sectors = 0;
-	bitmask = 0;
-	initialized = false;
-	bf = nullptr;
+double BloomFilter::Density() const {
+	D_ASSERT(initialized);
+	idx_t bits_set = 0;
+	for (idx_t i = 0; i < num_sectors; i++) {
+		bits_set += static_cast<idx_t>(std::bitset<BITS_PER_SECTOR>(bf[i]).count());
+	}
+	return static_cast<double>(bits_set) / static_cast<double>(num_sectors * BITS_PER_SECTOR);
+}
+
+//! False positive rate the sizing in GetNumberOfSectors aims for. With m bits, n keys and k probes per key a
+//! given bit stays zero with probability (1 - 1/m)^(n*k) ~ e^(-k*n/m), so all k probed bits are set - a false
+//! positive - with probability (1 - e^(-k*n/m))^k. Here m/n is MIN_NUM_BITS_PER_KEY and k is N_BITS.
+static double TargetFalsePositiveRate() {
+	const double load = static_cast<double>(N_BITS) / static_cast<double>(MIN_NUM_BITS_PER_KEY);
+	return std::pow(1.0 - std::exp(-load), static_cast<double>(N_BITS));
+}
+
+void BloomFilter::Seal(ClientContext &context) {
+	if (!initialized || sealed) {
+		sealed = true;
+		return;
+	}
+	const idx_t min_sectors = MIN_NUM_BITS >> LOG_SECTOR_SIZE;
+	double density = Density();
+	// a density of exactly zero means no key was ever inserted, so there is nothing to fold down
+	if (density > 0.0) {
+		// each fold ORs two sectors together, so the expected density goes from p to 1 - (1 - p)^2
+		const double target = TargetFalsePositiveRate();
+		// target_sectors is only a candidate size - nothing is folded until the loop has settled on one
+		idx_t target_sectors = num_sectors;
+		while (target_sectors > min_sectors) {
+			const double folded_density = 1.0 - (1.0 - density) * (1.0 - density);
+			if (std::pow(folded_density, static_cast<double>(N_BITS)) > target) {
+				break;
+			}
+			density = folded_density;
+			target_sectors >>= 1;
+		}
+		if (target_sectors < num_sectors) {
+			Fold(target_sectors);
+			// the filter was sized from an estimate, so hand the memory folding freed up back to the allocator
+			auto &allocator = BufferManager::GetBufferManager(context).GetBufferAllocator();
+			auto compacted_buf = allocator.Allocate(64 + num_sectors * sizeof(uint64_t));
+			auto compacted_bf =
+			    reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(compacted_buf.get())) & ~63ULL);
+			std::copy_n(bf, num_sectors, compacted_bf);
+			buf_ = std::move(compacted_buf);
+			bf = compacted_bf;
+		}
+	}
+	sealed = true;
+	useful = std::pow(density, static_cast<double>(N_BITS)) < USELESS_FALSE_POSITIVE_RATE;
 }
 
 idx_t BloomFilter::GetNumberOfSectors(idx_t number_of_rows) {
@@ -78,9 +140,21 @@ inline uint64_t GetMask(const hash_t hash) {
 	return mask;
 }
 
-void BloomFilter::InsertHashes(const Vector &hashes_v) const {
-	for (auto hash : hashes_v.Values<uint64_t>()) {
-		InsertOne(hash.GetValue());
+void BloomFilter::InsertHashes(const Vector &hashes_v, const SelectionVector &sel, const idx_t count) {
+	D_ASSERT(hashes_v.GetType() == LogicalType::HASH);
+	if (count == 0) {
+		return;
+	}
+	// VectorOperations::Hash produces a constant vector for a constant input, and a flat one otherwise
+	if (hashes_v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		InsertOne(*ConstantVector::GetData<hash_t>(hashes_v));
+		return;
+	}
+	D_ASSERT(hashes_v.GetVectorType() == VectorType::FLAT_VECTOR);
+	const auto hashes = FlatVector::GetData<uint64_t>(hashes_v);
+	for (idx_t i = 0; i < count; i++) {
+		// sel can be the incremental selection vector, so this cannot use get_index_unsafe
+		InsertOne(hashes[sel.get_index(i)]);
 	}
 }
 
@@ -111,8 +185,9 @@ idx_t BloomFilter::LookupHashes(const Vector &hashes_v, const SelectionVector &s
 	return found_count;
 }
 
-inline void BloomFilter::InsertOne(const hash_t hash) const {
+inline void BloomFilter::InsertOne(const hash_t hash) {
 	D_ASSERT(initialized);
+	D_ASSERT(!sealed);
 	const uint64_t bf_offset = hash & bitmask;
 	const uint64_t mask = GetMask(hash);
 	atomic<uint64_t> &slot = *reinterpret_cast<atomic<uint64_t> *>(&bf[bf_offset]);
@@ -122,6 +197,7 @@ inline void BloomFilter::InsertOne(const hash_t hash) const {
 
 bool BloomFilter::LookupOne(const uint64_t hash) const {
 	D_ASSERT(initialized);
+	D_ASSERT(sealed);
 	const uint64_t bf_offset = hash & bitmask;
 	const uint64_t mask = GetMask(hash);
 	atomic<uint64_t> &slot = *reinterpret_cast<atomic<uint64_t> *>(&bf[bf_offset]);
@@ -130,10 +206,10 @@ bool BloomFilter::LookupOne(const uint64_t hash) const {
 	return (bf_entry & mask) == mask;
 }
 
-BloomFilterFunctionData::BloomFilterFunctionData(optional_ptr<BloomFilter> filter_p, bool filters_null_values_p,
+BloomFilterFunctionData::BloomFilterFunctionData(shared_ptr<const BloomFilter> filter_p, bool filters_null_values_p,
                                                  const string &key_column_name_p, const LogicalType &key_type_p,
                                                  float selectivity_threshold_p, idx_t n_vectors_to_check_p)
-    : filter(filter_p), filters_null_values(filters_null_values_p), key_column_name(key_column_name_p),
+    : filter(std::move(filter_p)), filters_null_values(filters_null_values_p), key_column_name(key_column_name_p),
       key_type(key_type_p), selectivity_threshold(selectivity_threshold_p), n_vectors_to_check(n_vectors_to_check_p) {
 }
 
