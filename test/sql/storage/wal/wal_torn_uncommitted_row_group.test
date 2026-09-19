@@ -25,6 +25,7 @@ CHECKPOINT;
 statement ok
 PRAGMA debug_checkpoint_abort='before_wal_flush';
 
+# Scenario 1: Table exists in checkpointed base, WAL has only an uncommitted transaction (last_wal_flush_end == 0).
 # Bulk insert exceeding row group size (122,880 rows) writes optimistic blocks to .db
 # and logs ROW_GROUP_DATA to WAL, then crashes before writing WAL_FLUSH.
 statement error
@@ -32,7 +33,7 @@ INSERT INTO t SELECT * FROM range(2, 130002);
 ----
 Simulated crash before WAL_FLUSH write
 
-# Crash restart: triggers WAL recovery
+# Crash restart: triggers WAL recovery with last_wal_flush_end == 0
 restart
 
 statement ok
@@ -43,3 +44,75 @@ query I
 SELECT count(*) FROM t;
 ----
 1
+
+# Verify we can continue writing after recovery (which truncates the torn WAL tail)
+statement ok
+INSERT INTO t VALUES (2);
+
+query I
+SELECT count(*) FROM t;
+----
+2
+
+# Scenario 2: WAL has an earlier committed transaction before the torn transaction (last_wal_flush_end > 0).
+statement ok
+PRAGMA debug_checkpoint_abort='before_wal_flush';
+
+statement error
+INSERT INTO t SELECT * FROM range(3, 130003);
+----
+Simulated crash before WAL_FLUSH write
+
+restart
+
+statement ok
+PRAGMA debug_checkpoint_abort='none';
+
+query I
+SELECT count(*) FROM t;
+----
+2
+
+# Scenario 3: Fresh database where the first transaction crashes before WAL_FLUSH (last_wal_flush_end == 0 with DDL + row groups).
+load {TEST_DIR}/wal_torn_no_commits.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+SET debug_abort_on_wal_failure=false;
+
+statement ok
+PRAGMA debug_checkpoint_abort='before_wal_flush';
+
+statement error
+CREATE TABLE t_never_committed AS SELECT * FROM range(130000);
+----
+Simulated crash before WAL_FLUSH write
+
+# Crash restart: triggers WAL recovery with last_wal_flush_end == 0 on a brand-new database
+restart
+
+statement ok
+PRAGMA debug_checkpoint_abort='none';
+
+# Table must not exist because the transaction never committed
+statement error
+SELECT * FROM t_never_committed;
+----
+<REGEX>:.*Catalog Error.*Table with name t_never_committed does not exist!.*
+
+# Verify database is intact and fully usable after truncating the torn WAL
+statement ok
+CREATE TABLE t_fresh (id INT);
+
+statement ok
+INSERT INTO t_fresh VALUES (42);
+
+query I
+SELECT * FROM t_fresh;
+----
+42
