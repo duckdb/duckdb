@@ -115,6 +115,10 @@ public:
 public:
 	static shared_ptr<ParquetEncryptionConfig> Create(ClientContext &context, const Value &arg);
 	const string &GetFooterKey() const;
+	const string &GetColumnKey(const string &column_name) const;
+	const string &GetColumnKeyName(const string &column_name) const;
+	bool HasColumnKey(const string &column_name) const;
+	void ValidateColumnNames(const vector<string> &column_names);
 
 public:
 	void Serialize(Serializer &serializer) const;
@@ -123,8 +127,10 @@ public:
 private:
 	//! The encryption key used for the footer
 	string footer_key;
-	//! Mapping from column name to key name
+	//! Mapping from normalized top-level column name to key bytes
 	unordered_map<string, string> column_keys;
+	//! Mapping from normalized top-level column name to key name
+	unordered_map<string, string> column_key_names;
 };
 
 class ParquetCrypto {
