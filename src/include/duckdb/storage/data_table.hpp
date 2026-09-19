@@ -227,8 +227,6 @@ public:
 	//! Sets statistics of a physical column within the table
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
-	//! Obtains a lock during a checkpoint operation that prevents other threads from reading this table
-	unique_ptr<StorageLockKey> GetCheckpointLock();
 	//! Checkpoint the table to the specified table data writer
 	void Checkpoint(TableDataWriter &writer, Serializer &serializer);
 	//! Accumulates the table's on-disk blocks for reclamation into the drop state.

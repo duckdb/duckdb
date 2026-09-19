@@ -54,6 +54,9 @@ ActiveCheckpointWrapper::ActiveCheckpointWrapper(optional_ptr<ClientContext> con
 
 ActiveCheckpointWrapper::~ActiveCheckpointWrapper() {
 	// This happens on failure before we commit the transaction.
+	if (active) {
+		transaction_manager.ResetActiveCheckpoint();
+	}
 	if (checkpoint_transaction) {
 		transaction_manager.RollbackTransaction(*checkpoint_transaction);
 		checkpoint_transaction = nullptr;
@@ -63,30 +66,33 @@ ActiveCheckpointWrapper::~ActiveCheckpointWrapper() {
 	}
 }
 
-void ActiveCheckpointWrapper::GetCheckpointTransaction(CheckpointOptions &options) {
-	checkpoint_context->transaction.BeginTransaction();
-	checkpoint_context->transaction.SetReadOnly();
-	auto &transaction = DuckTransaction::Get(*checkpoint_context, db);
-	transaction.SetIsCheckpointTransaction();
-	checkpoint_transaction = &transaction;
-	// the checkpoint sees every commit before it started
-	D_ASSERT(transaction.view.visibility_bound == VisibilityBound::Before(transaction.start_time));
+void ActiveCheckpointWrapper::Begin(CheckpointOptions &options) {
+	if (checkpoint_context) {
+		// the start time of the checkpoint transaction defines the visibility for checkpointing
+		checkpoint_context->transaction.BeginTransaction();
+		checkpoint_context->transaction.SetReadOnly();
+		auto &transaction = DuckTransaction::Get(*checkpoint_context, db);
+		transaction.SetIsCheckpointTransaction();
+		checkpoint_transaction = &transaction;
+		// the checkpoint sees every commit before it started
+		D_ASSERT(transaction.view.visibility_bound == VisibilityBound::Before(transaction.start_time));
+		options.visibility_bound = transaction.view.visibility_bound;
+	} else {
+		options.visibility_bound = VisibilityBound::Through(transaction_manager.GetLastCommit());
+	}
 	options.checkpoint_id = transaction_manager.NextCheckpointId();
-	options.visibility_bound = transaction.view.visibility_bound;
 	transaction_manager.SetActiveCheckpoint(options.checkpoint_id.GetIndex());
+	active = true;
 }
 
 void ActiveCheckpointWrapper::Commit() {
 	transaction_manager.ResetActiveCheckpoint();
+	active = false;
 	if (!checkpoint_transaction) {
 		return;
 	}
 	checkpoint_context->transaction.Commit();
 	checkpoint_transaction = nullptr;
-}
-
-bool ActiveCheckpointWrapper::HasCheckpointContext() const {
-	return checkpoint_context;
 }
 
 void ReorderTableEntries(catalog_entry_vector_t &tables);
@@ -705,7 +711,6 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 	// FIXME: If we do not have a context, however, the unbound indexes have to be serialized to disk.
 
 	// Write the table data
-	auto table_lock = table.GetStorage().GetCheckpointLock();
 	auto writer = GetTableDataWriter(table);
 	if (writer) {
 		writer->WriteTableData(serializer);
