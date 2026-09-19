@@ -514,7 +514,8 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 	} catch (std::exception &ex) { // LCOV_EXCL_START
 		ErrorData error(ex);
 		// ignore serialization exceptions - they signal a torn WAL
-		if (error.Type() != ExceptionType::SERIALIZATION) {
+		if (config.options.abort_on_wal_failure || error.Type() != ExceptionType::SERIALIZATION) {
+			con.Query("ROLLBACK");
 			error.Throw("Failure while replaying WAL file \"" + wal_path + "\": ");
 		}
 	} // LCOV_EXCL_STOP
