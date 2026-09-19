@@ -669,6 +669,56 @@ BuildMatcherInputs(BoundSelectNode &define_node, const vector<MatchRecognizeNavi
 }
 
 //! What the pattern window is built from, once the conditions have settled what the matcher reads
+//! The table indexes a bound select node needs before anything is bound against it
+static void ReserveNodeIndexes(Binder &binder, BoundSelectNode &node) {
+	node.projection_index = binder.GenerateTableIndex();
+	node.group_index = binder.GenerateTableIndex();
+	node.group_projection_index = binder.GenerateTableIndex();
+	node.aggregate_index = binder.GenerateTableIndex();
+	node.groupings_index = binder.GenerateTableIndex();
+	node.window_index = binder.GenerateTableIndex();
+	node.prune_index = binder.GenerateTableIndex();
+}
+
+//! The names the clause reports of its own, which the output node below reads
+struct MatchRecognizeReportedNames {
+	//! What the clause partitioned by, under the name it was spelled with
+	vector<Identifier> partitions;
+	//! The columns ALL ROWS PER MATCH reports ahead of the rest of the input: what the clause
+	//! partitioned by, then what it ordered by
+	vector<Identifier> leading;
+};
+
+//! Taken before hoisting rewrites where the partitioning is computed, so the names are the ones the
+//! query wrote. Only a plain reference to a column of the input names one - an expression is not a
+//! column of the output to begin with - and a column named twice is still reported once.
+static MatchRecognizeReportedNames CollectReportedNames(const MatchRecognizeConfig &config,
+                                                        const case_insensitive_set_t &input_column_names) {
+	MatchRecognizeReportedNames reported;
+	for (auto &expr : config.partition_expressions) {
+		reported.partitions.push_back(expr->GetName());
+	}
+	case_insensitive_set_t seen;
+	const auto add_leading = [&](const ParsedExpression &expr) {
+		if (expr.GetExpressionType() != ExpressionType::COLUMN_REF) {
+			return;
+		}
+		auto &column = expr.Cast<ColumnRefExpression>().GetColumnName();
+		const auto &name = column.GetIdentifierName();
+		if (!input_column_names.count(name) || !seen.insert(name).second) {
+			return;
+		}
+		reported.leading.push_back(column);
+	};
+	for (auto &expr : config.partition_expressions) {
+		add_leading(*expr);
+	}
+	for (auto &order : config.order_by_expressions) {
+		add_leading(*order.expression);
+	}
+	return reported;
+}
+
 struct MatchRecognizeWindowInputs {
 	unique_ptr<MatchRecognizeFunctionData> match_data;
 	vector<unique_ptr<Expression>> children;
@@ -981,35 +1031,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	const bool has_exclusion = HasExclusion(*ref.config->pattern);
 	ValidateClauses(*ref.config, symbols, has_exclusion);
 
-	// ONE ROW PER MATCH reports the partitioning under the name it was spelled with, which is taken
-	// before hoisting rewrites where it is computed
-	vector<Identifier> partition_names;
-	for (auto &expr : ref.config->partition_expressions) {
-		partition_names.push_back(expr->GetName());
-	}
-	// The columns ALL ROWS PER MATCH reports ahead of the rest of the input: what the clause
-	// partitioned by, then what it ordered by. Only a plain reference to a column of the input names
-	// one - an expression is not a column of the output to begin with - and a column named twice is
-	// still reported once.
-	vector<Identifier> leading_columns;
-	case_insensitive_set_t leading_seen;
-	const auto add_leading = [&](const ParsedExpression &expr) {
-		if (expr.GetExpressionType() != ExpressionType::COLUMN_REF) {
-			return;
-		}
-		auto &column = expr.Cast<ColumnRefExpression>().GetColumnName();
-		const auto &name = column.GetIdentifierName();
-		if (!input_column_names.count(name) || !leading_seen.insert(name).second) {
-			return;
-		}
-		leading_columns.push_back(column);
-	};
-	for (auto &expr : ref.config->partition_expressions) {
-		add_leading(*expr);
-	}
-	for (auto &order : ref.config->order_by_expressions) {
-		add_leading(*order.expression);
-	}
+	const auto reported = CollectReportedNames(*ref.config, input_column_names);
 	HoistClauseReferences(*ref.config, symbols, input_refs);
 
 	// The hoisted references sit in a projection of their own, so the navigation windows a DEFINE turns
@@ -1031,13 +1053,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 
 	BoundSelectNode define_node;
 	define_node.from_table = define_binder->Bind(*input_table);
-	define_node.projection_index = GenerateTableIndex();
-	define_node.group_index = GenerateTableIndex();
-	define_node.group_projection_index = GenerateTableIndex();
-	define_node.aggregate_index = GenerateTableIndex();
-	define_node.groupings_index = GenerateTableIndex();
-	define_node.window_index = GenerateTableIndex();
-	define_node.prune_index = GenerateTableIndex();
+	ReserveNodeIndexes(*this, define_node);
 
 	// the input's own columns pass through, because the output still reports them
 	column_binding_map_t<idx_t> input_columns;
@@ -1154,27 +1170,18 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	                      ref.config->rows_per_match == MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL_UNMATCHED);
 
 	// MEASURES are projected on top of the pattern window, where the match a row belongs to is known,
-	// by a binder of their own
+	// by a binder of their own. It stays here rather than in a stage of its own because binding a
+	// table ref and planning a node are the Binder's own to do.
 	const auto all_rows = MatchRecognizeReportsRows(ref.config->rows_per_match);
 	auto measures_binder = Binder::CreateBinder(context, this);
 	auto spans_ref = make_uniq<SubqueryRef>(MakeSelectStatement(std::move(spans_node)));
-	auto bound_spans = measures_binder->Bind(*spans_ref);
 
 	BoundSelectNode measures;
-	measures.from_table = std::move(bound_spans);
-	measures.projection_index = GenerateTableIndex();
-	measures.group_index = GenerateTableIndex();
-	measures.group_projection_index = GenerateTableIndex();
-	measures.aggregate_index = GenerateTableIndex();
-	measures.groupings_index = GenerateTableIndex();
-	measures.window_index = GenerateTableIndex();
-	measures.prune_index = GenerateTableIndex();
+	measures.from_table = measures_binder->Bind(*spans_ref);
+	ReserveNodeIndexes(*this, measures);
 
 	// the DEFINE columns are an implementation detail, so they do not reach the output
-	case_insensitive_set_t hidden;
-	for (auto &entry : hidden_columns) {
-		hidden.insert(entry);
-	}
+	const case_insensitive_set_t hidden(hidden_columns.begin(), hidden_columns.end());
 	for (auto &binding : measures_binder->bind_context.GetBindingsList()) {
 		auto &column_names = binding->GetColumnNames();
 		auto &column_types = binding->GetColumnTypes();
@@ -1233,8 +1240,8 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	auto select_node = MakeSelectNode(make_uniq<BoundRefWrapper>(std::move(bound_measures), std::move(output_binder)));
 	select_node->select_list.push_back(make_uniq<StarExpression>());
 
-	select_node = BuildOutputNode(*ref.config, std::move(select_node), measure_names, partition_names, leading_columns,
-	                              input_refs, state_column, has_exclusion);
+	select_node = BuildOutputNode(*ref.config, std::move(select_node), measure_names, reported.partitions,
+	                              reported.leading, input_refs, state_column, has_exclusion);
 
 	auto child_binder = Binder::CreateBinder(context, this);
 	auto result = child_binder->Bind(*select_node);
