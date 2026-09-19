@@ -1,6 +1,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/logging/logger.hpp"
@@ -687,8 +688,17 @@ void SingleFileStorageCommitState::FlushCommit() {
 		return;
 	}
 	// Move the blocks in this COMMIT into the WAL and mark them as "in use".
-	wal.Flush();
-	state = WALCommitState::FLUSHED;
+	try {
+		wal.Flush();
+		state = WALCommitState::FLUSHED;
+	} catch (FatalException &) {
+		if (Settings::Get<DebugCheckpointAbortSetting>(wal.GetDatabase().GetDatabase()) ==
+		    CheckpointAbort::DEBUG_ABORT_BEFORE_WAL_FLUSH) {
+			// Prevent `RevertCommit` from truncating the WAL so the torn records are kept for crash recovery
+			state = WALCommitState::FLUSHED;
+		}
+		throw;
+	}
 }
 
 void SingleFileStorageCommitState::AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,

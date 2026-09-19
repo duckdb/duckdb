@@ -12,6 +12,7 @@
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/common/encryption_key_manager.hpp"
+#include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
@@ -24,6 +25,8 @@
 #include "duckdb/storage/wal_entry.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
+#include "duckdb/main/valid_checker.hpp"
 
 namespace duckdb {
 
@@ -576,6 +579,15 @@ void WriteAheadLog::WriteAlter(CatalogEntry &entry, const AlterInfo &info) {
 void WriteAheadLog::Flush() {
 	if (!writer) {
 		return;
+	}
+
+	auto abort_mode = Settings::Get<DebugCheckpointAbortSetting>(storage_manager.GetDatabase());
+	if (abort_mode == CheckpointAbort::DEBUG_ABORT_BEFORE_WAL_FLUSH) {
+		writer->Sync();
+		storage_manager.SetWALSize(writer->GetFileSize());
+		ValidChecker::Invalidate(storage_manager.GetDatabase(), "Simulated crash before WAL_FLUSH write");
+		ValidChecker::Invalidate(storage_manager.GetAttached(), "Simulated crash before WAL_FLUSH write");
+		throw FatalException("Simulated crash before WAL_FLUSH write");
 	}
 
 	// write an empty entry

@@ -483,6 +483,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 	ReplayState checkpoint_state(database, *con.context, replay_state);
 	idx_t last_wal_flush_end = 0;
 	idx_t checkpoint_truncate_offset = 0;
+	idx_t last_wal_flush_row_group_blocks = 0;
 	try {
 		idx_t replay_entry_count = 0;
 		while (true) {
@@ -497,6 +498,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 			}
 			if (is_wal_flush) {
 				last_wal_flush_end = reader.CurrentOffset();
+				last_wal_flush_row_group_blocks = checkpoint_state.row_group_blocks.size();
 				// check if the file is exhausted
 				if (reader.Finished()) {
 					// we finished reading the file: break
@@ -512,10 +514,16 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 	} catch (std::exception &ex) { // LCOV_EXCL_START
 		ErrorData error(ex);
 		// ignore serialization exceptions - they signal a torn WAL
-		if (error.Type() != ExceptionType::SERIALIZATION) {
+		if (config.options.abort_on_wal_failure || error.Type() != ExceptionType::SERIALIZATION) {
+			con.Query("ROLLBACK");
 			error.Throw("Failure while replaying WAL file \"" + wal_path + "\": ");
 		}
 	} // LCOV_EXCL_STOP
+
+	// Discard row group blocks from uncommitted transactions.
+	// Notice, this must happen before apply any WAL entries to block manager.
+	checkpoint_state.row_group_blocks.resize(last_wal_flush_row_group_blocks);
+
 	unique_ptr<FileHandle> checkpoint_handle;
 	bool truncate_failed_checkpoint_marker = false;
 	// A serialization error can leave a partially deserialized checkpoint marker in the replay state. Only reconcile
@@ -619,6 +627,12 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 		block_manager.MarkBlockAsUsed(block_id);
 	}
 
+	// If there are no committed transactions in the WAL, rollback and truncate.
+	if (last_wal_flush_end == 0) {
+		con.Query("ROLLBACK");
+		return make_uniq<WriteAheadLog>(storage_manager, wal_path, 0, WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE);
+	}
+
 	// we need to recover from the WAL: actually set up the replay state
 	ReplayState state(database, *con.context, replay_state);
 
@@ -632,7 +646,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 	idx_t successful_offset = 0;
 	bool all_succeeded = false;
 	try {
-		while (true) {
+		while (wal_reader.CurrentOffset() < last_wal_flush_end) {
 			// read the current entry
 			auto deserializer = WriteAheadLogDeserializer::GetEntryDeserializer(state, wal_reader);
 			if (deserializer.ReplayEntry()) {
@@ -645,10 +659,10 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 				state.replay_index_infos.clear();
 
 				successful_offset = wal_reader.CurrentOffset();
-				// check if the file is exhausted
-				if (wal_reader.Finished()) {
+				// check if the file is exhausted or all committed entries were replayed
+				if (wal_reader.Finished() || wal_reader.CurrentOffset() >= last_wal_flush_end) {
 					// we finished reading the file: break
-					all_succeeded = true;
+					all_succeeded = wal_reader.Finished();
 					break;
 				}
 				con.BeginTransaction();
