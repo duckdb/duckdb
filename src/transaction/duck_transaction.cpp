@@ -227,20 +227,45 @@ ErrorData DuckTransaction::PreFlushOptimisticBlocks(AttachedDatabase &db) noexce
 	return error;
 }
 
-ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &db,
-                                      unique_ptr<StorageCommitState> &commit_state) noexcept {
+static void RevertCommitState(unique_ptr<StorageCommitState> &commit_state) noexcept {
+	try {
+		commit_state->RevertCommit();
+		commit_state.reset();
+	} catch (std::exception &) {
+		// Ignore this error. If we fail to RevertCommit(), just return the original exception
+	}
+}
+
+ErrorData DuckTransaction::AppendLocalStorage(ClientContext &context, AttachedDatabase &db,
+                                              unique_ptr<StorageCommitState> &commit_state) noexcept {
 	ErrorData error_data;
 	try {
-		D_ASSERT(ShouldWriteToWAL(db));
-		auto &storage_manager = db.GetStorageManager();
-		auto wal = storage_manager.GetWAL();
-		commit_state = storage_manager.GenStorageCommitState(*wal);
-
+		if (ShouldWriteToWAL(db)) {
+			auto &storage_manager = db.GetStorageManager();
+			commit_state = storage_manager.GenStorageCommitState(*storage_manager.GetWAL());
+		}
 		auto &profiler = *context.client_data->profiler;
 		auto commit_timer = profiler.StartTimer<MetricStorageCommitLocalStorageLatency>();
 		storage->Commit(commit_state.get());
 		commit_timer.EndTimer();
+	} catch (std::exception &ex) {
+		// Call RevertCommit() outside this try-catch as it itself may throw
+		error_data = ErrorData(ex);
+	}
+	if (commit_state && error_data.HasError()) {
+		RevertCommitState(commit_state);
+	}
+	return error_data;
+}
 
+ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &db,
+                                      unique_ptr<StorageCommitState> &commit_state) noexcept {
+	ErrorData error_data;
+	try {
+		// the append may have consumed the last local change: do not ask ShouldWriteToWAL again here
+		D_ASSERT(commit_state);
+		auto wal = db.GetStorageManager().GetWAL();
+		auto &profiler = *context.client_data->profiler;
 		auto wal_timer = profiler.StartTimer<MetricStorageWriteToWALLatency>();
 		undo_buffer.WriteToWAL(*wal, commit_state.get());
 		wal_timer.EndTimer();
@@ -248,21 +273,13 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 		// no FileSync is required here: any optimistically written blocks that the WAL references
 		// have already been synced by FlushBulkAppendBlocksAndSync, before the commit locks were taken
 		D_ASSERT(!commit_state->HasRowGroupData() || storage->SyncedFlushedBlocks());
-
 	} catch (std::exception &ex) {
 		// Call RevertCommit() outside this try-catch as it itself may throw
 		error_data = ErrorData(ex);
 	}
-
 	if (commit_state && error_data.HasError()) {
-		try {
-			commit_state->RevertCommit();
-			commit_state.reset();
-		} catch (std::exception &) {
-			// Ignore this error. If we fail to RevertCommit(), just return the original exception
-		}
+		RevertCommitState(commit_state);
 	}
-
 	return error_data;
 }
 

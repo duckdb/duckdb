@@ -379,16 +379,20 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	bool has_changes = !error.HasError() && transaction.ChangesMade() && db.HasStorageManager();
 	bool should_write_to_wal = has_changes && transaction.ShouldWriteToWAL(db);
 	if (has_changes) {
-		// writing the WAL can take long: other transactions run meanwhile
+		// appending the local storage and writing the WAL can take long: other transactions run meanwhile
+		// the appended rows stay invisible until the commit below
 		// note: if we are checkpointing, we have already made certain decisions (e.g. the CheckpointType)
 		t_lock.unlock();
 		// grab the commit lock and hold it until the entire commit is finished
 		held_commit_lock = db.GetStorageManager().GetCommitLock();
 
-		if (should_write_to_wal && !skip_wal_write_due_to_checkpoint) {
-			// Commit the changes to the WAL.
-			error = transaction.WriteToWAL(context, db, commit_state);
-			wal_written = true;
+		if (!skip_wal_write_due_to_checkpoint) {
+			error = transaction.AppendLocalStorage(context, db, commit_state);
+			if (!error.HasError() && should_write_to_wal) {
+				// Commit the changes to the WAL.
+				error = transaction.WriteToWAL(context, db, commit_state);
+				wal_written = true;
+			}
 		}
 
 		// after we finish writing we grab the transaction lock again
@@ -404,8 +408,11 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			D_ASSERT(held_commit_lock.owns_lock());
 			// unlock the transaction lock while we are writing to the WAL
 			t_lock.unlock();
-			error = transaction.WriteToWAL(context, db, commit_state);
-			wal_written = true;
+			error = transaction.AppendLocalStorage(context, db, commit_state);
+			if (!error.HasError()) {
+				error = transaction.WriteToWAL(context, db, commit_state);
+				wal_written = true;
+			}
 			t_lock.lock();
 			skip_wal_write_due_to_checkpoint = false;
 		}

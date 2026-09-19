@@ -72,6 +72,10 @@ public:
 
 	bool ShouldWriteToWAL(AttachedDatabase &db);
 	ErrorData PreFlushOptimisticBlocks(AttachedDatabase &db) noexcept;
+	//! Appends the local storage to the tables; with a WAL, the commit state records the optimistically written blocks
+	ErrorData AppendLocalStorage(ClientContext &context, AttachedDatabase &db,
+	                             unique_ptr<StorageCommitState> &commit_state) noexcept;
+	//! Writes the undo buffer to the WAL, with the commit state of AppendLocalStorage
 	ErrorData WriteToWAL(ClientContext &context, AttachedDatabase &db,
 	                     unique_ptr<StorageCommitState> &commit_state) noexcept;
 	//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction
