@@ -37,6 +37,9 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	case TableReferenceType::EMPTY_FROM:
 		result = EmptyTableRef::Deserialize(deserializer);
 		break;
+	case TableReferenceType::EXPLAIN:
+		result = ExplainRef::Deserialize(deserializer);
+		break;
 	case TableReferenceType::EXPRESSION_LIST:
 		result = ExpressionListRef::Deserialize(deserializer);
 		break;
@@ -126,6 +129,19 @@ void EmptyTableRef::Serialize(Serializer &serializer) const {
 
 unique_ptr<TableRef> EmptyTableRef::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<EmptyTableRef>(new EmptyTableRef());
+	return std::move(result);
+}
+
+void ExplainRef::Serialize(Serializer &serializer) const {
+	TableRef::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(200, "query", query);
+	serializer.WritePropertyWithDefault<string>(201, "format", format);
+}
+
+unique_ptr<TableRef> ExplainRef::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<ExplainRef>(new ExplainRef());
+	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(200, "query", result->query);
+	deserializer.ReadPropertyWithDefault<string>(201, "format", result->format);
 	return std::move(result);
 }
 

@@ -1042,6 +1042,12 @@
         "id": 203,
         "name": "logical_plan_opt",
         "type": "string"
+      },
+      {
+        "id": 204,
+        "name": "table_index",
+        "type": "TableIndex",
+        "default": "TableIndex(0)"
       }
     ],
     "constructor": [

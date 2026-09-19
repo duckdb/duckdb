@@ -555,6 +555,7 @@ void LogicalExplain::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(201, "physical_plan", physical_plan);
 	serializer.WritePropertyWithDefault<string>(202, "logical_plan_unopt", logical_plan_unopt);
 	serializer.WritePropertyWithDefault<string>(203, "logical_plan_opt", logical_plan_opt);
+	serializer.WritePropertyWithDefault<TableIndex>(204, "table_index", table_index, TableIndex(0));
 }
 
 unique_ptr<LogicalOperator> LogicalExplain::Deserialize(Deserializer &deserializer) {
@@ -563,6 +564,7 @@ unique_ptr<LogicalOperator> LogicalExplain::Deserialize(Deserializer &deserializ
 	deserializer.ReadPropertyWithDefault<string>(201, "physical_plan", result->physical_plan);
 	deserializer.ReadPropertyWithDefault<string>(202, "logical_plan_unopt", result->logical_plan_unopt);
 	deserializer.ReadPropertyWithDefault<string>(203, "logical_plan_opt", result->logical_plan_opt);
+	deserializer.ReadPropertyWithExplicitDefault<TableIndex>(204, "table_index", result->table_index, TableIndex(0));
 	return std::move(result);
 }
 

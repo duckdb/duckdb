@@ -153,6 +153,7 @@ bool RelationManager::TryNormalizeBinding(ColumnBinding binding, ColumnBinding &
 
 static bool OperatorNeedsRelation(LogicalOperatorType op_type) {
 	switch (op_type) {
+	case LogicalOperatorType::LOGICAL_EXPLAIN:
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 	case LogicalOperatorType::LOGICAL_CHUNK_GET:
@@ -451,6 +452,12 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	}
 
 	switch (op->type) {
+	case LogicalOperatorType::LOGICAL_EXPLAIN: {
+		auto child_optimizer = optimizer.CreateChildOptimizer();
+		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]));
+		auto stats = RelationStatisticsHelper::ExtractExplainStats(*op);
+		return AddRelation(input_op, parent, stats);
+	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		// optimize children
 		RelationStats child_stats;

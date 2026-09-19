@@ -1221,6 +1221,9 @@ static const TransformFrameOps EXPLAIN_OPTION_OPS = {"ExplainOption",
 static const TransformFrameOps EXPLAIN_OPTION_NAME_OPS = {"ExplainOptionName",
                                                           &PEGTransformerFactory::InitializeExplainOptionNameTrampoline,
                                                           &PEGTransformerFactory::FinalizeExplainOptionNameTrampoline};
+static const TransformFrameOps EXPLAIN_QUERY_STATEMENT_OPS = {
+    "ExplainQueryStatement", &PEGTransformerFactory::InitializeExplainQueryStatementTrampoline,
+    &PEGTransformerFactory::FinalizeExplainQueryStatementTrampoline};
 static const TransformFrameOps EXPLAIN_SELECT_STATEMENT_OPS = {
     "ExplainSelectStatement", &PEGTransformerFactory::InitializeExplainSelectStatementTrampoline,
     &PEGTransformerFactory::FinalizeExplainSelectStatementTrampoline};
@@ -3563,6 +3566,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"ExplainOptionList", &EXPLAIN_OPTION_LIST_OPS},
 	    {"ExplainOption", &EXPLAIN_OPTION_OPS},
 	    {"ExplainOptionName", &EXPLAIN_OPTION_NAME_OPS},
+	    {"ExplainQueryStatement", &EXPLAIN_QUERY_STATEMENT_OPS},
 	    {"ExplainSelectStatement", &EXPLAIN_SELECT_STATEMENT_OPS},
 	    {"ExplainableStatements", &EXPLAINABLE_STATEMENTS_OPS},
 	    {"ExportStatement", &EXPORT_STATEMENT_OPS},
@@ -12830,6 +12834,21 @@ PEGTransformerFactory::FinalizeExplainOptionNameTrampoline(PEGTransformer &trans
 		result = TransformExplainOptionName(transformer, choice_result);
 	}
 	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
+void PEGTransformerFactory::InitializeExplainQueryStatementTrampoline(PEGTransformer &transformer,
+                                                                      GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("ExplainStatement"), list_pr.GetChild(0)}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeExplainQueryStatementTrampoline(PEGTransformer &transformer,
+                                                               GeneratedTransformProcess &process) {
+	auto explain_statement = process.TakeResult<unique_ptr<SQLStatement>>(0);
+	auto result = TransformExplainQueryStatement(transformer, std::move(explain_statement));
+	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeExplainSelectStatementTrampoline(PEGTransformer &transformer,

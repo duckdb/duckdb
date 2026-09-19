@@ -4537,6 +4537,14 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExplainOptionNa
 }
 
 unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformExplainQueryStatementInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto explain_statement = transformer.Transform<unique_ptr<SQLStatement>>(list_pr.GetChild(0));
+	auto result = TransformExplainQueryStatement(transformer, std::move(explain_statement));
+	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformExplainSelectStatementInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto select_statement_internal = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.GetChild(0));
@@ -12036,6 +12044,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ExplainOptionList", &PEGTransformerFactory::TransformExplainOptionListInternal},
 	    {"ExplainOption", &PEGTransformerFactory::TransformExplainOptionInternal},
 	    {"ExplainOptionName", &PEGTransformerFactory::TransformExplainOptionNameInternal},
+	    {"ExplainQueryStatement", &PEGTransformerFactory::TransformExplainQueryStatementInternal},
 	    {"ExplainSelectStatement", &PEGTransformerFactory::TransformExplainSelectStatementInternal},
 	    {"ExplainableStatements", &PEGTransformerFactory::TransformExplainableStatementsInternal},
 	    {"ExportStatement", &PEGTransformerFactory::TransformExportStatementInternal},

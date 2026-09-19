@@ -56,6 +56,7 @@ class LogicalGet;
 class LogicalUpdate;
 class CopyQueryNode;
 class LogicalVacuum;
+class ExplainRef;
 
 class ColumnList;
 class ExternalDependency;
@@ -570,6 +571,7 @@ private:
 	BoundStatement Bind(ColumnDataRef &ref);
 	BoundStatement Bind(PivotRef &expr);
 	BoundStatement Bind(ShowRef &ref);
+	BoundStatement Bind(ExplainRef &ref);
 
 	unique_ptr<SelectNode> BindPivot(PivotRef &expr, vector<unique_ptr<ParsedExpression>> all_columns);
 	unique_ptr<SelectNode> BindUnpivot(Binder &child_binder, PivotRef &expr,

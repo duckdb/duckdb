@@ -20,6 +20,7 @@ BoundStatement Binder::Bind(ExplainStatement &stmt) {
 		}
 	}
 	auto explain = make_uniq<LogicalExplain>(std::move(plan.plan), stmt.explain_type, stmt.format);
+	explain->table_index = GenerateTableIndex();
 	explain->logical_plan_unopt = logical_plan_unopt;
 
 	result.plan = std::move(explain);

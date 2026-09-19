@@ -11,6 +11,7 @@ add_library_unity(
   bind_match_recognize_ref.cpp
   bind_pivot.cpp
   bind_showref.cpp
+  bind_explain_ref.cpp
   bind_subqueryref.cpp
   bind_table_function.cpp
   bind_named_parameters.cpp
