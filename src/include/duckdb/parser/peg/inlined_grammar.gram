@@ -1451,7 +1451,9 @@ InExpressionList <- Parens(List(Expression))
 InSelectStatement <- Parens(SelectStatementInternal)
 BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
 # LEVEL 8
-OtherOperatorExpression <- BitwiseExpression OtherOperatorTail*
+OtherOperatorExpression <- InfixOtherOperatorExpression / CustomPrefixExpression
+InfixOtherOperatorExpression <- BitwiseExpression OtherOperatorTail*
+CustomPrefixExpression <- OperatorLiteral OtherOperatorExpression
 OtherOperatorTail <- OtherOperator BitwiseExpression
 OtherOperator <-
     AnyAllParsedOperator / NamedOtherOperator
