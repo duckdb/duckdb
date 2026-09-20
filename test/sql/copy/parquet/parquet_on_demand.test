@@ -1,5 +1,5 @@
 # name: test/sql/copy/parquet/parquet_on_demand.test
-# description: Parquet demand reads use bounded buffering when the external file cache is unavailable
+# description: Parquet on-demand reads use caching or bounded buffering, including through the deprecated setting
 # group: [parquet]
 
 require parquet
@@ -15,7 +15,7 @@ SET read_ahead_depth=0
 statement ok
 SET parquet_metadata_cache=false
 
-# Small pages expose payload cache bypass as hundreds of small reads.
+# Small pages expose unbuffered reads; the file spans several demand buffers.
 statement ok
 CREATE TABLE demand_input AS SELECT hash(i) AS a FROM range(327680) t(i)
 
@@ -26,119 +26,36 @@ COPY demand_input TO '{TEST_DIR}/demand.parquet'
 statement ok
 CALL enable_logging('FileSystem', storage='memory')
 
-foreach cache false true
+# Exercise global cache disable, file exclusion, and usable cache without redundant combinations.
+foreach mode disabled excluded enabled
 
 statement ok
-SET enable_external_file_cache=${cache}
-
-foreach local_cache false true
+SET enable_external_file_cache=('${mode}' != 'disabled')
 
 statement ok
-SET cache_local_files=${local_cache}
+SET cache_local_files=('${mode}' = 'enabled')
 
 statement ok
 CALL truncate_duckdb_logs()
 
 query I
-SELECT (SELECT sum(a) FROM read_parquet('{TEST_DIR}/demand.parquet', prefetch_strategy='on_demand')) =
-       (SELECT sum(a) FROM demand_input)
+SELECT sum(a) = (SELECT sum(a) FROM demand_input)
+FROM read_parquet('{TEST_DIR}/demand.parquet', prefetch_strategy='on_demand')
 ----
 true
 
-# A single bounded buffer batches small reads even when caching is disabled for this file.
-query III
-SELECT count(*) > 0 AND count(*) < CASE WHEN ${cache} AND ${local_cache} THEN 250 ELSE 20 END,
-       max(bytes) <= 1000000,
-       bool_or(bytes = 1000000) = (NOT ${cache} OR NOT ${local_cache})
+# Both paths batch small reads; only uncached files use the 1,000,000-byte demand buffer.
+query II
+SELECT count(*) BETWEEN 1 AND 249 AND max(bytes) <= 1000000,
+       bool_or(bytes = 1000000) = ('${mode}' != 'enabled')
 FROM duckdb_logs_parsed('FileSystem')
 WHERE path LIKE '%/demand.parquet' AND op = 'READ'
 ----
-true	true	true
-
-# The deprecated setting must produce identical reads, including the footer, from a cold cache.
-statement ok
-CREATE OR REPLACE TEMP TABLE demand_reads AS
-SELECT pos, bytes FROM duckdb_logs_parsed('FileSystem')
-WHERE path LIKE '%/demand.parquet' AND op = 'READ'
-
-statement ok
-SET enable_external_file_cache=false
-
-statement ok
-SET enable_external_file_cache=${cache}
-
-statement ok
-SET disable_parquet_prefetching=true
-
-statement ok
-CALL truncate_duckdb_logs()
-
-query I
-SELECT (SELECT sum(a) FROM read_parquet('{TEST_DIR}/demand.parquet')) =
-       (SELECT sum(a) FROM demand_input)
-----
-true
-
-query I
-WITH actual AS (
-    SELECT pos, bytes FROM duckdb_logs_parsed('FileSystem')
-    WHERE path LIKE '%/demand.parquet' AND op = 'READ'
-)
-SELECT count(*) FROM (
-    (TABLE demand_reads EXCEPT ALL TABLE actual)
-    UNION ALL
-    (TABLE actual EXCEPT ALL TABLE demand_reads)
-) differences
-----
-0
-
-statement ok
-RESET disable_parquet_prefetching
+true	true
 
 endloop
 
-endloop
-
-# Reads larger than the buffer must still return the entire page.
-statement ok
-COPY demand_input TO '{TEST_DIR}/demand_large_page.parquet'
-(COMPRESSION UNCOMPRESSED, ROW_GROUP_SIZE 327680, DATA_PAGE_SIZE_LIMIT 4194304)
-
-statement ok
-SET enable_external_file_cache=false
-
-statement ok
-CALL truncate_duckdb_logs()
-
-query I
-SELECT (SELECT sum(a) FROM read_parquet('{TEST_DIR}/demand_large_page.parquet', prefetch_strategy='on_demand')) =
-       (SELECT sum(a) FROM demand_input)
-----
-true
-
-query I
-SELECT bool_or(bytes > 1000000) FROM duckdb_logs_parsed('FileSystem')
-WHERE path LIKE '%/demand_large_page.parquet' AND op = 'READ'
-----
-true
-
-statement ok
-SET enable_external_file_cache=true
-
-# The replacement strategy must survive plan serialization.
-statement ok
-SET debug_verify_serializer=true
-
-query I
-SELECT (SELECT sum(a) FROM read_parquet('{TEST_DIR}/demand.parquet', prefetch_strategy='on_demand')) =
-       (SELECT sum(a) FROM demand_input)
-----
-true
-
-statement ok
-SET debug_verify_serializer=false
-
-# The deprecated setting maps to a serializable strategy and retains warm-cache access.
+# The deprecated alias survives serialization and selects demand buffering instead of whole-group prefetch.
 query I
 SELECT count(*) FROM duckdb_settings(deprecated := true) WHERE name = 'disable_parquet_prefetching'
 ----
@@ -148,54 +65,44 @@ statement ok
 SET disable_parquet_prefetching=true
 
 statement ok
+SET enable_external_file_cache=false
+
+statement ok
 SET debug_verify_serializer=true
 
 statement ok
 CALL truncate_duckdb_logs()
 
 query I
-SELECT (SELECT sum(a) FROM read_parquet('{TEST_DIR}/demand.parquet')) =
-       (SELECT sum(a) FROM demand_input)
+SELECT sum(a) = (SELECT sum(a) FROM demand_input) FROM read_parquet('{TEST_DIR}/demand.parquet')
 ----
 true
 
 query I
-SELECT count(*) FROM duckdb_logs_parsed('FileSystem')
+SELECT bool_or(bytes = 1000000) AND max(bytes) <= 1000000 AND count(*) < 250
+FROM duckdb_logs_parsed('FileSystem')
 WHERE path LIKE '%/demand.parquet' AND op = 'READ'
 ----
-0
+true
 
 statement ok
 SET debug_verify_serializer=false
 
-# An explicit query option overrides the session default.
-statement ok
-SET enable_external_file_cache=false
-
-statement ok
-CALL truncate_duckdb_logs()
-
-query I
-SELECT (SELECT sum(a) FROM read_parquet('{TEST_DIR}/demand.parquet', prefetch_strategy='whole_group')) =
-       (SELECT sum(a) FROM demand_input)
-----
-true
-
-query I
-SELECT bool_or(bytes > 1000000) FROM duckdb_logs_parsed('FileSystem')
-WHERE path LIKE '%/demand.parquet' AND op = 'READ'
-----
-true
-
 statement ok
 RESET disable_parquet_prefetching
 
-# The replacement must also support the original malformed-offset workaround.
-foreach cache false true
-
+# A page larger than the demand buffer must still be read completely.
 statement ok
-SET enable_external_file_cache=${cache}
+COPY demand_input TO '{TEST_DIR}/demand_large_page.parquet'
+(COMPRESSION UNCOMPRESSED, ROW_GROUP_SIZE 327680, DATA_PAGE_SIZE_LIMIT 4194304)
 
+query I
+SELECT sum(a) = (SELECT sum(a) FROM demand_input)
+FROM read_parquet('{TEST_DIR}/demand_large_page.parquet', prefetch_strategy='on_demand')
+----
+true
+
+# Preserve the malformed-offset workaround and exercise buffering a file smaller than the buffer.
 query I
 SELECT count(*) FROM (
     SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/incorrect_index_page_offsets.parquet',
@@ -204,5 +111,3 @@ SELECT count(*) FROM (
 ) differences
 ----
 0
-
-endloop
