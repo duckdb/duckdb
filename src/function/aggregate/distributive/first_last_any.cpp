@@ -86,7 +86,8 @@ struct FirstStringStateBase {
 	bool value_is_valid;
 	//! Whether the state has been set (i.e. we have seen a row)
 	bool is_set;
-	//! The size of the arena allocation for a non-inlined string value - not part of the exported state
+	//! The size of the arena allocation for a non-inlined string value - not part of the exported state.
+	//! Must be wide enough for NextPowerOfTwo(MAX_STRING_SIZE), which does not fit in a uint32_t.
 	idx_t alloc_size;
 
 	void Assign(string_t input, AggregateInputData &input_data) {
@@ -94,7 +95,7 @@ struct FirstStringStateBase {
 			value = input;
 			alloc_size = 0;
 		} else {
-			auto len = UnsafeNumericCast<uint32_t>(input.GetSize());
+			auto len = input.GetSize();
 			char *ptr;
 			if (alloc_size >= len) {
 				ptr = value.GetDataWriteable();
@@ -103,7 +104,7 @@ struct FirstStringStateBase {
 				ptr = char_ptr_cast(input_data.allocator.Allocate(alloc_size));
 			}
 			memcpy(ptr, input.GetData(), len);
-			value = string_t(ptr, len);
+			value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
 		}
 	}
 };
