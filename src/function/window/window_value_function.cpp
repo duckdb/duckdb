@@ -653,10 +653,22 @@ void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_c
 			const auto own_row = glstate.row_tree->Rank(frame.start, frame.end, row_idx) - 1;
 			// (2) adjust the row number by adding or subtracting an offset
 			auto val_idx = NumericCast<int64_t>(own_row);
-			if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
+			const auto is_lead = (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD);
+			if (is_lead) {
 				val_idx = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
 			} else {
 				val_idx = SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
+			}
+			if (row_idx < frame.start || frame.end <= row_idx) {
+				//	An own row outside the frame ranks just before own_row instead of at it,
+				//	so a zero shift is the own row itself and a forward shift lands one row earlier.
+				if (!offset) {
+					cursor.CopyCell(0, row_idx, result, i);
+					continue;
+				}
+				if (is_lead == (offset > 0)) {
+					--val_idx;
+				}
 			}
 			const auto frame_width = NumericCast<int64_t>(frame.end - frame.start);
 			if (val_idx >= 0 && val_idx < frame_width) {
@@ -720,13 +732,21 @@ void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_c
 
 		idx_t delta = 0;
 		if (val_idx < (int64_t)row_idx) {
-			// Count backwards
+			// Count backwards, starting from the last row at or before the own row
 			delta = idx_t(row_idx - idx_t(val_idx));
-			val_idx = int64_t(WindowBoundariesState::FindPrevStart(*ignore_nulls, partition_begin[i], row_idx, delta));
+			const auto lo = partition_begin[i];
+			const auto hi = MinValue(row_idx, partition_end[i]);
+			if (lo < hi) {
+				val_idx = int64_t(WindowBoundariesState::FindPrevStart(*ignore_nulls, lo, hi, delta));
+			}
 		} else if (val_idx > (int64_t)row_idx) {
+			// Count forwards, starting from the first row at or after the own row
 			delta = idx_t(idx_t(val_idx) - row_idx);
-			val_idx =
-			    int64_t(WindowBoundariesState::FindNextStart(*ignore_nulls, row_idx + 1, partition_end[i], delta));
+			const auto lo = MaxValue(row_idx + 1, partition_begin[i]);
+			const auto hi = partition_end[i];
+			if (lo < hi) {
+				val_idx = int64_t(WindowBoundariesState::FindNextStart(*ignore_nulls, lo, hi, delta));
+			}
 		}
 		// else offset is zero, so don't move.
 
