@@ -56,7 +56,7 @@ int64_t PipeFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes
 }
 
 int64_t PipeFileSystem::GetFileSize(FileHandle &handle) {
-	return 0;
+	throw NotImplementedException("PipeFileSystem: GetFileSize is not implemented!");
 }
 
 timestamp_t PipeFileSystem::GetLastModifiedTime(FileHandle &handle) {
