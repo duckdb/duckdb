@@ -248,6 +248,8 @@ enum class FileLockType : uint8_t;
 
 enum class FileNameSegmentType : uint8_t;
 
+enum class FileSyncMode : uint8_t;
+
 enum class FileWriteMode : uint8_t;
 
 enum class FilterPropagateResult : uint8_t;
@@ -376,6 +378,8 @@ enum class OperatorFinalResultType : uint8_t;
 
 enum class OperatorFinalizeResultType : uint8_t;
 
+enum class OperatorMatcherMode : uint8_t;
+
 enum class OperatorResultType : uint8_t;
 
 enum class OptimizerType : uint32_t;
@@ -393,8 +397,6 @@ enum class OrderType : uint8_t;
 enum class OrdinalityType : uint8_t;
 
 enum class OutputStream : uint8_t;
-
-enum class PEGKeywordCategory : uint8_t;
 
 enum class ParseInfoType : uint8_t;
 
@@ -970,6 +972,9 @@ template<>
 const char* EnumUtil::ToChars<FileNameSegmentType>(FileNameSegmentType value);
 
 template<>
+const char* EnumUtil::ToChars<FileSyncMode>(FileSyncMode value);
+
+template<>
 const char* EnumUtil::ToChars<FileWriteMode>(FileWriteMode value);
 
 template<>
@@ -1162,6 +1167,9 @@ template<>
 const char* EnumUtil::ToChars<OperatorFinalizeResultType>(OperatorFinalizeResultType value);
 
 template<>
+const char* EnumUtil::ToChars<OperatorMatcherMode>(OperatorMatcherMode value);
+
+template<>
 const char* EnumUtil::ToChars<OperatorResultType>(OperatorResultType value);
 
 template<>
@@ -1187,9 +1195,6 @@ const char* EnumUtil::ToChars<OrdinalityType>(OrdinalityType value);
 
 template<>
 const char* EnumUtil::ToChars<OutputStream>(OutputStream value);
-
-template<>
-const char* EnumUtil::ToChars<PEGKeywordCategory>(PEGKeywordCategory value);
 
 template<>
 const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value);
@@ -1889,6 +1894,9 @@ template<>
 FileNameSegmentType EnumUtil::FromString<FileNameSegmentType>(const char *value);
 
 template<>
+FileSyncMode EnumUtil::FromString<FileSyncMode>(const char *value);
+
+template<>
 FileWriteMode EnumUtil::FromString<FileWriteMode>(const char *value);
 
 template<>
@@ -2081,6 +2089,9 @@ template<>
 OperatorFinalizeResultType EnumUtil::FromString<OperatorFinalizeResultType>(const char *value);
 
 template<>
+OperatorMatcherMode EnumUtil::FromString<OperatorMatcherMode>(const char *value);
+
+template<>
 OperatorResultType EnumUtil::FromString<OperatorResultType>(const char *value);
 
 template<>
@@ -2106,9 +2117,6 @@ OrdinalityType EnumUtil::FromString<OrdinalityType>(const char *value);
 
 template<>
 OutputStream EnumUtil::FromString<OutputStream>(const char *value);
-
-template<>
-PEGKeywordCategory EnumUtil::FromString<PEGKeywordCategory>(const char *value);
 
 template<>
 ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value);

@@ -483,6 +483,12 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
   set(SUN TRUE)
 endif()
 
+include(CheckCXXSymbolExists)
+check_cxx_symbol_exists(fdatasync "unistd.h" DUCKDB_HAVE_FDATASYNC)
+if(DUCKDB_HAVE_FDATASYNC)
+  add_definitions(-DDUCKDB_HAVE_FDATASYNC=1)
+endif()
+
 if(NOT DUCKDB_EXPLICIT_VERSION
    AND DEFINED ENV{DUCKDB_VERSION}
    AND NOT "$ENV{DUCKDB_VERSION}" STREQUAL "")

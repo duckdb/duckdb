@@ -37,15 +37,15 @@ auto Convert(QueryProgressWrapperV2 *progress) -> duckdb_v2_query_progress_handl
 
 using namespace duckdb::capiv2;
 
-DUCKDB_V2_ERROR duckdb_v2_connection_create(duckdb_v2_database_handle db, duckdb_v2_connection_handle *out_conn,
+DUCKDB_V2_ERROR duckdb_v2_connection_create(duckdb_v2_instance_handle instance, duckdb_v2_connection_handle *out_conn,
                                             duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(db);
+	DUCKDB_CHECK_ARG(instance);
 	DUCKDB_CHECK_ARG(out_conn);
 	*out_conn = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto &db_wrapper = *Convert(db);
-		duckdb::lock_guard<duckdb::mutex> guard(db_wrapper.lock);
-		auto connection = duckdb::make_uniq<duckdb::Connection>(db_wrapper.GetDatabase());
+		auto &instance_wrapper = *Convert(instance);
+		duckdb::lock_guard<duckdb::mutex> guard(instance_wrapper.lock);
+		auto connection = duckdb::make_uniq<duckdb::Connection>(instance_wrapper.GetDatabase());
 		*out_conn = Convert(connection.release());
 	});
 }

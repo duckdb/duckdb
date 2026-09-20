@@ -12,8 +12,8 @@ public:
 
 public:
 	IdentifierMatcher(SuggestionState suggestion_type, const PEGKeywordHelper &keyword_helper_p)
-	    : AtomicMatcher(TYPE), suggestion_type(suggestion_type), keyword_helper(keyword_helper_p),
-	      literal_table(keyword_helper_p.GetLiteralTable()) {
+	    : AtomicMatcher(TYPE), suggestion_type(suggestion_type), literal_table(keyword_helper_p.GetLiteralTable()),
+	      identifier_mask(keyword_helper_p.GetIdentifierMask(suggestion_type)) {
 	}
 
 	bool IsQuoted(const string &text) const {
@@ -111,18 +111,6 @@ public:
 		}
 	}
 
-	PEGKeywordCategory GetAllowedCategory() const {
-		switch (suggestion_type) {
-		case SuggestionState::SUGGEST_TYPE_NAME:
-			return PEGKeywordCategory::KEYWORD_TYPE_NAME;
-		case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
-		case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
-			return PEGKeywordCategory::KEYWORD_TYPE_FUNC;
-		default:
-			return PEGKeywordCategory::KEYWORD_COL_NAME;
-		}
-	}
-
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		state.AddSuggestion(MatcherSuggestion(suggestion_type));
 		return SuggestionType::MANDATORY;
@@ -160,19 +148,9 @@ public:
 	}
 
 private:
-	bool IsAllowedKeyword(TokenIterator &tokens, const string &token_text) const {
-		if (literal_table) {
-			auto literal_info = tokens.CurrentLiteralInfo(*literal_table);
-			return !literal_info.IsKeyword() || literal_info.HasCategory(PEGKeywordCategory::KEYWORD_UNRESERVED) ||
-			       literal_info.HasCategory(GetAllowedCategory());
-		}
-		if (!keyword_helper.IsKeyword(token_text)) {
-			return true;
-		}
-		if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED)) {
-			return true;
-		}
-		return keyword_helper.KeywordCategoryType(token_text, GetAllowedCategory());
+	bool IsAllowedKeyword(TokenIterator &tokens) const {
+		auto info = tokens.CurrentLiteralInfo(literal_table);
+		return !info.IsKeyword() || info.HasAnyFlags(identifier_mask);
 	}
 
 	bool MatchIdentifier(MatchState &state) const {
@@ -181,7 +159,7 @@ private:
 			return false;
 		}
 		auto &token_text = token->text;
-		if (!IsAllowedKeyword(state.token_iterator, token_text) || !IsIdentifier(token_text)) {
+		if (!IsAllowedKeyword(state.token_iterator) || !IsIdentifier(token_text)) {
 			return false;
 		}
 		state.token_iterator.Advance();
@@ -190,8 +168,8 @@ private:
 	}
 
 	SuggestionState suggestion_type;
-	const PEGKeywordHelper &keyword_helper;
-	optional_ptr<const GrammarLiteralTable> literal_table;
+	const GrammarLiteralTable &literal_table;
+	const keyword_categories_t identifier_mask;
 };
 
 class ReservedIdentifierMatcher : public IdentifierMatcher {

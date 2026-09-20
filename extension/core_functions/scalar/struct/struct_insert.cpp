@@ -7,6 +7,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 
 namespace duckdb {
 
@@ -89,6 +90,27 @@ static unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, Func
 	return new_stats.ToUnique();
 }
 
+static unique_ptr<ParsedExpression> StructInsertUnbind(FunctionUnbindInput &input) {
+	auto &function = input.expression.Function();
+	auto &types = function.GetLogicalArguments();
+	auto &return_type = function.GetLogicalReturnType();
+	if (types.empty() || types[0].id() != LogicalTypeId::STRUCT || return_type.id() != LogicalTypeId::STRUCT ||
+	    input.children.size() != types.size()) {
+		return nullptr;
+	}
+	auto existing_count = StructType::GetChildCount(types[0]);
+	auto &return_children = StructType::GetChildTypes(return_type);
+	if (return_children.size() != existing_count + types.size() - 1) {
+		return nullptr;
+	}
+	vector<FunctionArgument> arguments;
+	arguments.emplace_back(std::move(input.children[0]));
+	for (idx_t i = 1; i < input.children.size(); i++) {
+		arguments.emplace_back(return_children[existing_count + i - 1].first, std::move(input.children[i]));
+	}
+	return make_uniq<FunctionExpression>(function.GetDefinition()->GetQualifiedName(), std::move(arguments));
+}
+
 ScalarFunction StructInsertFun::GetFunction() {
 	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructInsertFunction, StructInsertBind, StructInsertStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
@@ -96,6 +118,7 @@ ScalarFunction StructInsertFun::GetFunction() {
 	fun.GetProperties().SetRequiresExpressionNames(true);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
+	fun.SetUnbindCallback(StructInsertUnbind);
 	return fun;
 }
 

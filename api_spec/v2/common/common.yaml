@@ -3,20 +3,20 @@ handles:
   environment:
     description: |
       An opaque, owned handle to the V2 environment: the required root through
-      which database handles are created. All databases under one environment
+      which instance handles are created. All instances under one environment
       share an instance cache, so file-level conflicts — the same database
       file opened twice — are detected across them. Destroying the
-      environment refuses with ERROR_RESOURCE_IN_USE while any database
+      environment refuses with ERROR_RESOURCE_IN_USE while any instance
       created through it is still alive; destroy those first.
     cleanup_with: environment_destroy
-  database:
+  instance:
     description: |
       An opaque, owned handle to a DuckDB database instance: a buffer pool, a
       scheduler, a set of GLOBAL settings, and the databases attached to it.
-      Created empty by `[[database_create]]`; databases are attached with
-      `[[database_attach]]`, made the default with `[[database_set_default]]`, and detached with
-      `[[database_detach]]`. Always destroy via `[[database_destroy]]`.
-    cleanup_with: database_destroy
+      Created empty by `[[instance_create]]`; databases are attached with
+      `[[instance_attach]]`, made the default with `[[instance_set_default]]`, and detached with
+      `[[instance_detach]]`. Always destroy via `[[instance_destroy]]`.
+    cleanup_with: instance_destroy
   connection:
     description: |
       An opaque, owned handle to a DuckDB connection: a session on a database
@@ -26,7 +26,7 @@ handles:
   option:
     description: |
       An opaque, owned, read-only descriptor of a single config option as seen
-      from a database, connection, or context: its canonical name, current
+      from an instance, connection, or context: its canonical name, current
       setting, default setting, description, target scope, and aliases.
       Returned by the *_get_option and *_get_option_by_index functions; the
       caller always destroys it via `[[option_destroy]]`. Options are written with
@@ -110,7 +110,7 @@ handles:
       valid only for the duration of that scope; the caller never destroys it.
       A context is the scope for reading (settings, the file system) and for
       constructing values and types, not for registration: catalog entries and
-      database-level hooks are installed through an extension or a connection.
+      instance-level hooks are installed through an extension or a connection.
       A transaction is always active while a context is handed out, which is
       what the context-scoped constructors assume.
 structs:

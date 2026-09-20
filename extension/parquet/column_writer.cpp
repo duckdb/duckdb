@@ -94,6 +94,10 @@ bool ColumnWriterStatistics::HasNaN() {
 	return false;
 }
 
+idx_t ColumnWriterStatistics::GetNaNCount() {
+	return 0;
+}
+
 bool ColumnWriterStatistics::MinIsExact() {
 	return true;
 }
@@ -123,6 +127,25 @@ ColumnWriter::ColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_s
 	can_have_nulls = column_schema.repetition_type == duckdb_parquet::FieldRepetitionType::OPTIONAL;
 }
 ColumnWriter::~ColumnWriter() {
+}
+
+void ColumnWriter::MarkRepetitionRequired() {
+	if (column_schema.repetition_type == duckdb_parquet::FieldRepetitionType::REQUIRED) {
+		return;
+	}
+	D_ASSERT(column_schema.repetition_type == duckdb_parquet::FieldRepetitionType::OPTIONAL);
+	D_ASSERT(can_have_nulls);
+	column_schema.repetition_type = duckdb_parquet::FieldRepetitionType::REQUIRED;
+	can_have_nulls = false;
+	DecrementMaxDefineRecursive();
+}
+
+void ColumnWriter::DecrementMaxDefineRecursive() {
+	D_ASSERT(column_schema.max_define > 0);
+	column_schema.max_define--;
+	for (auto &child : child_writers) {
+		child->DecrementMaxDefineRecursive();
+	}
 }
 
 bool ColumnWriter::TryExportPreparedShreddingType(ShreddingType &result) const {

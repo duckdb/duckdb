@@ -364,7 +364,7 @@ TEST_CASE("V2 tokenizer: the iterator outlives the connection and the database",
 	REQUIRE(duckdb_v2_tokenize_sql(fx.conn, Convert("SELECT 1; 'x"), &it, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	REQUIRE(duckdb_v2_connection_destroy(&fx.conn) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_database_destroy(&fx.db) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_instance_destroy(&fx.instance) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_environment_destroy(&fx.env) == DUCKDB_V2_ERROR_NONE);
 
 	REQUIRE(TokDrain(it, 12) == Toks {{KEYWORD, 0, 6}, {NUMBER, 7, 1}, {TERMINATOR, 8, 1}, {STRING, 10, 2}});
@@ -374,7 +374,7 @@ TEST_CASE("V2 tokenizer: the iterator outlives the connection and the database",
 
 TEST_CASE("V2 tokenizer: the keyword set is the connection's grammar", "[capi_v2][tokenizer]") {
 	EnvFixture fx;
-	auto &instance = *duckdb::capiv2::Convert(fx.db)->GetDatabase().instance;
+	auto &instance = *duckdb::capiv2::Convert(fx.instance)->GetDatabase().instance;
 	duckdb::GrammarExtension::Register(instance, duckdb::make_shared_ptr<TokenizerTestKeywordExtension>());
 
 	// Base grammar: ANSWER is a plain identifier.
@@ -385,7 +385,7 @@ TEST_CASE("V2 tokenizer: the keyword set is the connection's grammar", "[capi_v2
 	REQUIRE(TokenizeAll(fx.conn, "ANSWER") == Complete({{KEYWORD, 0, 6}}));
 
 	duckdb_v2_connection_handle other = nullptr;
-	REQUIRE(duckdb_v2_connection_create(fx.db, &other, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create(fx.instance, &other, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(TokenizeAll(other, "ANSWER") == Complete({{IDENTIFIER, 0, 6}}));
 	duckdb_v2_connection_destroy(&other);
 
