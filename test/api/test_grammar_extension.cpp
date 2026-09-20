@@ -81,7 +81,8 @@ static LiteralChoiceTestResult MatchLiteralChoiceTest(const Matcher &matcher, co
 	TokenIterator iterator(tokens);
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator allocator;
-	ParserPackratCache packrat;
+	ArenaAllocator packrat_allocator(Allocator::DefaultAllocator());
+	ParserPackratCache packrat(packrat_allocator);
 	idx_t max_position = 0;
 	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
 	MatchContext context(suggestions, allocator, process_allocator, max_position, mode,
@@ -994,7 +995,8 @@ TEST_CASE("Packrat results outlive reset process arenas", "[api][grammar_extensi
 	TokenIterator iterator(tokens);
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_results;
-	ParserPackratCache cache;
+	ArenaAllocator packrat_allocator(Allocator::DefaultAllocator());
+	ParserPackratCache cache(packrat_allocator);
 	idx_t max_token_index = 0;
 	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
 	MatchContext context(suggestions, parse_results, process_allocator, max_token_index);
