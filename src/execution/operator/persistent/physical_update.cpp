@@ -256,7 +256,6 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	}
 
 	auto &delete_state = l_state.GetDeleteState(table, tableref, context.client);
-	table.Delete(delete_state, context.client, tableref, del_row_ids, update_count);
 
 	// Arrange the columns in the standard table order, then validate + set the cardinality from the referenced
 	// columns. The del+insert path projects every table column (it re-inserts the full row), so all are referenced.
@@ -264,6 +263,8 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 		mock_chunk.data[columns[i].index].Reference(update_chunk.data[i]);
 	}
 	mock_chunk.CheckCardinality(update_count);
+
+	table.Delete(delete_state, context.client, tableref, del_row_ids, update_count, &mock_chunk);
 
 	table.LocalAppend(tableref, context.client, mock_chunk, bound_constraints, del_row_ids, delete_chunk);
 	if (return_chunk) {

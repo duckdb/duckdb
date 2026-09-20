@@ -1,0 +1,61 @@
+# name: test/sql/constraints/foreignkey/fk_update_unchanged_key.test
+# description: Updating a referenced table is valid if the referenced key columns do not change
+# group: [foreignkey]
+
+# Updating an indexed column or a LIST column rewrites the update into a DELETE + INSERT (#20246).
+statement ok
+CREATE TABLE parent (name VARCHAR, id INTEGER PRIMARY KEY, payload VARCHAR[]);
+
+statement ok
+CREATE INDEX idx_parent_name ON parent(name);
+
+statement ok
+CREATE TABLE child (id INTEGER REFERENCES parent(id));
+
+statement ok
+INSERT INTO parent VALUES ('name', 1, ['a']), ('name', 2, ['b']);
+
+statement ok
+INSERT INTO child VALUES (1), (2);
+
+statement ok
+UPDATE parent SET name = 'new' WHERE id = 1;
+
+statement ok
+UPDATE parent SET payload = ['c'] WHERE id = 2;
+
+# Updating the referenced key to the same value is valid (also for RETURNING and multi-row updates)
+statement ok
+UPDATE parent SET id = id WHERE true RETURNING id;
+
+query II
+SELECT id, name FROM parent ORDER BY id;
+----
+1	new
+2	name
+
+# Upserts and MERGE that include the referenced key in the SET list are valid
+statement ok
+INSERT INTO parent VALUES ('upsert', 1, ['a'])
+    ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id, name = EXCLUDED.name;
+
+statement ok
+CREATE TABLE merge_source (name VARCHAR, id INTEGER, payload VARCHAR[]);
+
+statement ok
+INSERT INTO merge_source VALUES ('merged', 1, ['a']);
+
+statement ok
+MERGE INTO parent USING merge_source ON parent.id = merge_source.id WHEN MATCHED THEN UPDATE SET *;
+
+query II
+SELECT id, name FROM parent ORDER BY id;
+----
+1	merged
+2	name
+
+# Changing a referenced key that is still referenced is invalid
+statement error
+UPDATE parent SET id = 3 WHERE id = 1;
+----
+<REGEX>:Constraint Error.*still referenced.*
