@@ -102,10 +102,9 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 				FlatVector::GetDataMutable<string_t>(file_name_vector)[out_idx] = file_name_string;
 			} break;
 			case ReadFileBindData::FILE_CONTENT_COLUMN: {
-				const bool is_pipe = file_handle->IsPipe();
-				const auto file_size = is_pipe ? 0 : file_handle->GetFileSize();
+				const auto file_size = file_handle->GetFileSize();
 				AssertMaxFileSize(file.path, file_size);
-				const bool read_until_eof = is_pipe || file_size == 0;
+				const bool read_until_eof = file_size == 0;
 
 				// Initialize write stream if not yet done
 				if (!state.stream) {
