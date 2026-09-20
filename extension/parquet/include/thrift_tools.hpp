@@ -187,9 +187,11 @@ public:
 			}
 			memcpy(buf, prefetch_buffer->buffer_ptr + location - prefetch_buffer->location, len);
 		} else if (cache_reads && location < size && len <= size - location) {
+			// Batch small demand reads when caching is disabled or unavailable for this file.
 			if (buffer_reads && len < DEMAND_BUFFER_SIZE && !file_handle.CanCacheRead()) {
 				if (!demand_buffer || location < demand_buffer->location ||
 				    location - demand_buffer->location + len > demand_buffer->size) {
+					// Release the previous range before allocating its replacement to keep memory bounded.
 					demand_buffer.reset();
 					demand_buffer =
 					    make_uniq<ReadHead>(location, MinValue<uint64_t>(DEMAND_BUFFER_SIZE, size - location));
@@ -197,6 +199,7 @@ public:
 				}
 				memcpy(buf, demand_buffer->buffer_ptr + location - demand_buffer->location, len);
 			} else {
+				// Let the cache buffer reads when available; large reads need no extra read-ahead.
 				auto handles = file_handle.Read(len, location);
 				handles.CopyTo(buf, len);
 			}
@@ -281,7 +284,7 @@ private:
 
 	bool cache_reads;
 	bool buffer_reads;
-	//! A single bounded read-ahead range for demand reads when the external cache is unavailable.
+	//! A single bounded read-ahead range for demand reads when caching is disabled or unavailable for this file.
 	unique_ptr<ReadHead> demand_buffer;
 };
 
