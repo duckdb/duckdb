@@ -1,0 +1,89 @@
+# name: test/sql/copy/parquet/parquet_demand_buffer.test
+# description: Parquet demand reads retain bounded buffering with and without the external file cache
+# group: [parquet]
+
+require parquet
+
+require no_alternative_verify
+
+statement ok
+SET threads=1
+
+statement ok
+SET read_ahead_depth=0
+
+# Multiple small pages in one large column exercise buffer reuse and window replacement.
+statement ok
+CREATE TABLE demand_input AS SELECT hash(i) AS a FROM range(327680) t(i)
+
+statement ok
+COPY demand_input TO '{TEST_DIR}/demand.parquet'
+(COMPRESSION UNCOMPRESSED, ROW_GROUP_SIZE 327680, DATA_PAGE_SIZE_LIMIT 4096)
+
+statement ok
+CALL enable_logging('FileSystem', storage='memory')
+
+foreach cache false true
+
+statement ok
+SET enable_external_file_cache=${cache}
+
+statement ok
+CALL truncate_duckdb_logs()
+
+query I
+SELECT (SELECT sum(a) FROM read_parquet('{TEST_DIR}/demand.parquet', prefetch_strategy='on_demand')) =
+       (SELECT sum(a) FROM demand_input)
+----
+true
+
+# Without buffering, the page headers alone require hundreds of tiny reads.
+query I
+SELECT count(*) > 0 AND count(*) < 250
+FROM duckdb_logs_parsed('FileSystem')
+WHERE path LIKE '%/demand.parquet' AND op = 'READ'
+----
+true
+
+endloop
+
+# The replacement strategy must survive plan serialization.
+statement ok
+SET debug_verify_serializer=true
+
+query I
+SELECT (SELECT sum(a) FROM read_parquet('{TEST_DIR}/demand.parquet', prefetch_strategy='on_demand')) =
+       (SELECT sum(a) FROM demand_input)
+----
+true
+
+statement ok
+SET debug_verify_serializer=false
+
+# Keep the deprecated switch's legacy behavior, including when a strategy is supplied.
+query I
+SELECT count(*) FROM duckdb_settings(deprecated := true) WHERE name = 'disable_parquet_prefetching'
+----
+1
+
+statement ok
+SET disable_parquet_prefetching=true
+
+query I
+SELECT (SELECT sum(a) FROM read_parquet('{TEST_DIR}/demand.parquet', prefetch_strategy='on_demand')) =
+       (SELECT sum(a) FROM demand_input)
+----
+true
+
+statement ok
+RESET disable_parquet_prefetching
+
+# The replacement must also support the original malformed-offset workaround.
+query I
+SELECT count(*) FROM (
+    SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/incorrect_index_page_offsets.parquet',
+                              prefetch_strategy='on_demand')
+    EXCEPT ALL SELECT * FROM '{DATA_DIR}/parquet-testing/incorrect_index_page_offsets.parquet'
+) differences
+----
+0

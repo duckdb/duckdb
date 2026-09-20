@@ -96,7 +96,10 @@ ParquetPrefetchStrategyOption ParquetPrefetchStrategyOptionFromString(const stri
 	if (lower == "whole_group") {
 		return ParquetPrefetchStrategyOption::WHOLE_GROUP;
 	}
-	throw BinderException("Unrecognized prefetch_strategy '%s' (supported: 'auto', 'whole_group')", value);
+	if (lower == "on_demand") {
+		return ParquetPrefetchStrategyOption::ON_DEMAND;
+	}
+	throw BinderException("Unrecognized prefetch_strategy '%s' (supported: 'auto', 'whole_group', 'on_demand')", value);
 }
 
 static idx_t ParquetColumnChunkFileOffset(const duckdb_parquet::ColumnChunk &chunk) {
@@ -203,10 +206,10 @@ using duckdb_parquet::Statistics;
 using duckdb_parquet::Type;
 
 static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
-CreateThriftFileProtocol(QueryContext context, CachingFileHandle &file_handle, bool prefetch_mode,
+CreateThriftFileProtocol(QueryContext context, CachingFileHandle &file_handle, bool buffered_reads,
                          uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP) {
 	auto transport =
-	    duckdb_base_std::make_shared<ThriftFileTransport>(context, file_handle, prefetch_mode, accepted_column_gap);
+	    duckdb_base_std::make_shared<ThriftFileTransport>(context, file_handle, buffered_reads, accepted_column_gap);
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
@@ -2009,13 +2012,15 @@ void ParquetReader::PrepareReadAhead(ClientContext &context, GlobalTableFunction
 }
 
 void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanState &state, idx_t group_to_read) const {
+	const bool buffered_reads = ShouldAndCanPrefetch(context, *file_handle);
 	state.resuming_payload = false;
 	state.offset_in_group = 0;
 	state.filter_count = 0;
 	state.group_index = group_to_read;
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
 	if (!state.file_handle || state.file_handle->GetPath() != file_handle->GetPath()) {
-		state.prefetch_mode = ShouldAndCanPrefetch(context, *file_handle);
+		state.prefetch_mode =
+		    buffered_reads && parquet_options.prefetch_strategy != ParquetPrefetchStrategyOption::ON_DEMAND;
 		// all scan states share one handle (opened with parallel access), so open handles and
 		// connections scale with the number of readers instead of the number of row-group jobs
 		lock_guard<mutex> guard(prewarm_lock);
@@ -2040,7 +2045,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		state.filter_eliminated_all_rows.assign(state.scan_filters.size(), false);
 	}
 
-	state.thrift_file_proto = CreateThriftFileProtocol(context, *state.file_handle, state.prefetch_mode,
+	state.thrift_file_proto = CreateThriftFileProtocol(context, *state.file_handle, buffered_reads,
 	                                                   DetermineAcceptedColumnGap(context, state));
 
 	state.column_readers.resize(column_indexes.size());
@@ -2325,7 +2330,7 @@ ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &cont
 				throw IOException(
 				    "The parquet file '%s' seems to have incorrectly set page offsets. This interferes with DuckDB's "
 				    "prefetching optimization. DuckDB may still be able to scan this file by manually disabling the "
-				    "prefetching mechanism using: 'SET disable_parquet_prefetching=true'.",
+				    "prefetching mechanism using read_parquet(..., prefetch_strategy='on_demand').",
 				    GetFileName());
 			}
 			// broken page offsets cannot be prefetched, local files fall back to synchronous reads
