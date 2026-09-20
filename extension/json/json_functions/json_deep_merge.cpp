@@ -22,7 +22,7 @@ static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig_root,
 		yyjson_mut_val *patch_node;
 		yyjson_mut_val *builder;
 	};
-	auto stack = std::vector<stack_item>();
+	auto stack = vector<stack_item>();
 	stack.emplace_back(stack_item {nullptr, orig_root, patch_root, root_builder});
 
 	// loop over each level of nesting

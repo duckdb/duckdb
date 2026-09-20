@@ -87,7 +87,27 @@ static GenericCopyOption BuildGenericCopyOption(const Identifier &generic_copy_o
                                                 optional<GenericCopyOptionValue> generic_copy_option_value) {
 	GenericCopyOption copy_option;
 	copy_option.name = Identifier(StringUtil::Lower(generic_copy_option_name.GetIdentifierName()));
-	if (!generic_copy_option_value || !generic_copy_option_value->has_value) {
+	const bool has_value = generic_copy_option_value && generic_copy_option_value->has_value;
+	if (!has_value && copy_option.name == "PARTITION_PATH") {
+		throw ParserException("PARTITION_PATH expects an expression");
+	}
+	if (!has_value) {
+		return copy_option;
+	}
+
+	if (copy_option.name == "PARTITION_PATH") {
+		// kept as-is, as it is bound against the partition columns
+		if (!generic_copy_option_value->is_order_list) {
+			copy_option.expression = std::move(generic_copy_option_value->expression);
+			return copy_option;
+		}
+		// an expression wrapped in () will trigger this case
+		auto &orders = generic_copy_option_value->order_list;
+		if (orders.size() != 1 || orders[0].type != OrderType::ORDER_DEFAULT ||
+		    orders[0].null_order != OrderByNullType::ORDER_DEFAULT) {
+			throw ParserException("PARTITION_PATH expects a single expression");
+		}
+		copy_option.expression = std::move(orders[0].expression);
 		return copy_option;
 	}
 
@@ -173,6 +193,30 @@ void PEGTransformerFactory::SplitGenericOptions(const vector<GenericCopyOption> 
 				                      option.name);
 			}
 			options[option.name.GetIdentifierName()] = option.children[0];
+		} else {
+			throw ParserException("Option %s can only have one argument", option.name);
+		}
+	}
+}
+
+void PEGTransformerFactory::CollectGenericOptions(const vector<GenericCopyOption> &options_in,
+                                                  case_insensitive_map_t<unique_ptr<ParsedExpression>> &options,
+                                                  const char *statement_name) {
+	for (const auto &option : options_in) {
+		auto name = option.name.GetIdentifierName();
+		if (option.expression) {
+			options[name] = option.expression->Copy();
+			continue;
+		}
+		if (option.children.empty()) {
+			// Bare flag (e.g. `(SPOT)`) binds to boolean true, as in SplitGenericOptions.
+			options[name] = ConstantExpression::Boolean(true);
+		} else if (option.children.size() == 1) {
+			if (option.children[0].IsNull()) {
+				throw BinderException("NULL is not supported as a valid option for %s option %s", statement_name,
+				                      option.name);
+			}
+			options[name] = ConstantExpression::FromValue(option.children[0]);
 		} else {
 			throw ParserException("Option %s can only have one argument", option.name);
 		}

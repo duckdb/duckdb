@@ -1,4 +1,5 @@
 #include "duckdb/common/multi_file/multi_file_column_mapper.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -318,9 +319,12 @@ static ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColu
 		default_expressions.push_back(std::move(child_map.default_value));
 
 		// auto default_type = LogicalType::STRUCT(std::move(default_type_list));
-		result.default_value = StructPackFun::GetFunction().Bind(context, std::move(default_expressions));
+		result.default_value = BindBuiltinScalarFunction(context, StructPackFun::Name, std::move(default_expressions));
 	}
 	result.column_index = make_uniq<ColumnIndex>(local_id.GetIndex(), std::move(child_indexes));
+	if (global_index.HasType()) {
+		result.column_index->SetType(global_column.type);
+	}
 	result.mapping = std::move(mapping);
 	return result;
 }
@@ -439,12 +443,15 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 	}
 	if (!default_expressions.empty()) {
 		// we have default values at a previous level wrap it in a "list"
-		result.default_value = StructPackFun::GetFunction().Bind(context, std::move(default_expressions));
+		result.default_value = BindBuiltinScalarFunction(context, StructPackFun::Name, std::move(default_expressions));
 	}
 	vector<ColumnIndex> map_indexes;
 	map_indexes.emplace_back(0, std::move(child_indexes));
 
 	result.column_index = make_uniq<ColumnIndex>(local_id.GetIndex(), std::move(map_indexes));
+	if (global_index.HasType()) {
+		result.column_index->SetType(global_column.type);
+	}
 	result.mapping = std::move(mapping);
 	return result;
 }
@@ -544,7 +551,7 @@ static ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileCo
 	}
 
 	if (!default_expressions.empty()) {
-		result.default_value = StructPackFun::GetFunction().Bind(context, std::move(default_expressions));
+		result.default_value = BindBuiltinScalarFunction(context, StructPackFun::Name, std::move(default_expressions));
 	}
 	result.column_index = make_uniq<ColumnIndex>(local_id.GetIndex(), std::move(child_indexes));
 	if (global_index.HasType()) {
@@ -570,8 +577,8 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 	auto &local_column = local_columns[local_idx];
 	auto mapping_idx = is_root ? top_level_index : local_idx;
 	auto mapping = make_uniq<MultiFileIndexMapping>(mapping_idx);
-	if (global_column.children.empty()) {
-		// not a struct - map the column directly
+	if (global_column.children.empty() || !local_column.type.IsNested()) {
+		// Map directly when no child remapping is needed or the source requires a scalar cast.
 		result.column_map = Value(local_column.name);
 		result.column_index = make_uniq<ColumnIndex>(global_index.RemapRootIndex(local_idx.GetIndex()));
 		result.mapping = std::move(mapping);
@@ -581,6 +588,11 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 
 	// nested type - check if the field identifiers match and if we need to remap
 	D_ASSERT(global_column.type.IsNested());
+	if (global_column.type.id() != local_column.type.id()) {
+		throw BinderException("Failed to map file-column of type '%s' to result-column of type '%s'", local_column.type,
+		                      global_column.type);
+	}
+
 	switch (global_column.type.id()) {
 	case LogicalTypeId::STRUCT:
 		return MapColumnStruct(context, global_column, global_index, local_column, local_idx, mapper,
@@ -625,7 +637,7 @@ static unique_ptr<Expression> ConstructMapExpression(ClientContext &context, Mul
 	} else {
 		children.push_back(std::move(mapping.default_value));
 	}
-	return RemapStructFun::GetFunction().Bind(context, std::move(children));
+	return BindBuiltinScalarFunction(context, RemapStructFun::Name, std::move(children));
 }
 
 ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const ColumnMapper &mapper) {

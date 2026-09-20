@@ -234,6 +234,16 @@ void TableBindingReplacer::VisitOperator(LogicalOperator &op) {
 		}
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_SECURE_VIEW: {
+		auto &view = op.Cast<LogicalSecureView>();
+		for (auto &binding : view.output_bindings) {
+			auto entry = table_idx_replacements.find(binding.table_index);
+			if (entry != table_idx_replacements.end()) {
+				binding.table_index = entry->second;
+			}
+		}
+		break;
+	}
 	default:
 		break;
 	}

@@ -10,7 +10,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, CSV
                          const MultiFileOptions &file_options, const vector<Identifier> &names,
                          const vector<LogicalType> &types, CSVSchema &file_schema, bool per_file_single_threaded,
                          shared_ptr<CSVBufferManager> buffer_manager_p, bool fixed_schema)
-    : BaseFileReader(file_p), buffer_manager(std::move(buffer_manager_p)),
+    : file(file_p), buffer_manager(std::move(buffer_manager_p)),
       error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
       options(std::move(options_p)) {
 	// Initialize Buffer Manager
@@ -51,7 +51,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, CSV
 
 CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, const CSVReaderOptions &options_p,
                          const MultiFileOptions &file_options)
-    : BaseFileReader(file_p), error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
+    : file(file_p), error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
       options(options_p) {
 	buffer_manager = CSVBufferManager::Open(context, options, file);
 	// Initialize On Disk and Size of file
@@ -76,9 +76,6 @@ CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, con
 	state_machine = make_shared_ptr<CSVStateMachine>(
 	    state_machine_cache.Get(options.dialect_options.state_machine_options), options);
 	SetStart();
-}
-
-CSVUnionData::~CSVUnionData() {
 }
 
 void CSVFileScan::SetStart() {
@@ -157,6 +154,25 @@ void CSVFileScan::InitializeProjection() {
 
 void CSVFileScan::Finish() {
 	buffer_manager.reset();
+}
+
+double CSVFileScan::GetProgressInFile(ClientContext &context) {
+	auto manager = buffer_manager;
+	if (!manager) {
+		// We are done with this file, so it's 100%
+		return 100.0;
+	}
+	double total_bytes_read;
+	if (manager->file_handle->compression_type == FileCompressionType::GZIP ||
+	    manager->file_handle->compression_type == FileCompressionType::ZSTD) {
+		// compressed file: we care about the progress made in the *underlying* file handle
+		// the bytes read from the uncompressed file are skewed
+		total_bytes_read = manager->file_handle->GetProgress();
+	} else {
+		total_bytes_read = static_cast<double>(bytes_read);
+	}
+	double file_progress = total_bytes_read / static_cast<double>(file_size);
+	return file_progress * 100.0;
 }
 
 } // namespace duckdb

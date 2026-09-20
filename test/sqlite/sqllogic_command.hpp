@@ -64,8 +64,8 @@ public:
 public:
 	Connection &CommandConnection(ExecuteContext &context) const;
 
-	duckdb::unique_ptr<MaterializedQueryResult> ExecuteQuery(ExecuteContext &context, reference<Connection> connection,
-	                                                         string file_name, idx_t query_line) const;
+	duckdb::unique_ptr<QueryResult> ExecuteQuery(ExecuteContext &context, reference<Connection> connection,
+	                                             string file_name, idx_t query_line) const;
 
 	virtual void ExecuteInternal(ExecuteContext &context) const = 0;
 	void Execute(ExecuteContext &context) const;

@@ -1,3 +1,4 @@
+#include "duckdb/common/multi_file/table_function_multi_file.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/function/table/read_duckdb.hpp"
@@ -31,7 +32,7 @@
 #include <limits>
 #include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_schema_discovery.hpp"
 
 namespace duckdb {
 
@@ -59,6 +60,12 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["sep"] = LogicalType::VARCHAR;
 	table_function.named_parameters["delim"] = LogicalType::VARCHAR;
+	// aliases that the CSV options accept - COPY has always taken these, so the table function takes them too
+	table_function.named_parameters["separator"] = LogicalType::VARCHAR;
+	table_function.named_parameters["delimiter"] = LogicalType::VARCHAR;
+	table_function.named_parameters["null"] = LogicalType::ANY;
+	table_function.named_parameters["date_format"] = LogicalType::VARCHAR;
+	table_function.named_parameters["timestamp_format"] = LogicalType::VARCHAR;
 	table_function.named_parameters["quote"] = LogicalType::VARCHAR;
 	table_function.named_parameters["new_line"] = LogicalType::VARCHAR;
 	table_function.named_parameters["escape"] = LogicalType::VARCHAR;
@@ -168,13 +175,30 @@ static bool PushdownProjectionExpression(ClientContext &context, const TableFunc
 	return true;
 }
 
+//! The same, for the multi-file wrapper around read_single_csv_file - every file is bound against the schema of the
+//! scan, so the pushed-down type has to be applied there too. That way the CSV reader converts to it itself, and
+//! "ignore_errors" applies to the conversions that fail
+static bool PushdownProjectionExpressionMultiFile(ClientContext &context,
+                                                  const TableFunctionProjectionExpressionInput &input) {
+	if (!PushdownProjectionExpression(context, input)) {
+		return false;
+	}
+	auto &bind_data = input.get.bind_data->Cast<MultiFileBindData>();
+	auto &data = bind_data.bind_data->Cast<TableFunctionMultiFileData>();
+	const idx_t idx = input.get.GetColumnIds()[input.column_index].GetPrimaryIndex();
+	if (idx < data.options.expected_types.size()) {
+		data.options.expected_types[idx] = input.expr.Cast<BoundFunctionExpression>().GetReturnType();
+	}
+	return true;
+}
+
 TableFunction ReadCSVTableFunction::GetFunction() {
-	MultiFileFunction<CSVMultiFileInfo> read_csv("read_csv");
+	// the multi-file CSV reader is the single-file CSV reader wrapped into a multi-file function
+	auto read_csv = ReadCSVTableFunction::GetMultiFileFunction("read_csv");
 	read_csv.serialize = CSVReaderSerialize;
 	read_csv.deserialize = CSVReaderDeserialize;
-	read_csv.projection_expression_pushdown = PushdownProjectionExpression;
-	ReadCSVAddNamedParameters(read_csv);
-	return static_cast<TableFunction>(read_csv);
+	read_csv.projection_expression_pushdown = PushdownProjectionExpressionMultiFile;
+	return read_csv;
 }
 
 TableFunction ReadCSVTableFunction::GetAutoFunction() {
@@ -186,6 +210,10 @@ TableFunction ReadCSVTableFunction::GetAutoFunction() {
 void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(MultiFileReader::CreateFunctionSet(ReadCSVTableFunction::GetFunction()));
 	set.AddFunction(MultiFileReader::CreateFunctionSet(ReadCSVTableFunction::GetAutoFunction()));
+	// the single-file CSV reader that read_csv is built on
+	TableFunctionSet single_file_set("read_single_csv_file");
+	single_file_set.AddFunction(ReadCSVTableFunction::GetSingleFileFunction());
+	set.AddFunction(std::move(single_file_set));
 }
 
 unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, ReplacementScanInput &input,

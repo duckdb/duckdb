@@ -133,11 +133,8 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 			}
 			if (validity.RowIsValid(vector_index)) {
 				page_info.estimated_page_size += GetRowSize(vector, vector_index, state);
-				if (page_info.estimated_page_size >= page_size_limit) {
-					if (!vector_can_span_multiple_pages && i != 0) {
-						// Vector is not allowed to span multiple pages, and we already started writing it
-						continue;
-					}
+				// a vector that cannot span multiple pages stays on the page it started on
+				if (page_info.estimated_page_size >= page_size_limit && (vector_can_span_multiple_pages || i == 0)) {
 					PageInformation new_info;
 					new_info.offset = page_info.offset + page_info.row_count;
 					state.page_info.push_back(new_info);
@@ -382,6 +379,11 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 	column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(null_count);
 	column_chunk.meta_data.statistics.__isset.null_count = true;
 	column_chunk.meta_data.__isset.statistics = true;
+	if (column_chunk.meta_data.type == duckdb_parquet::Type::FLOAT ||
+	    column_chunk.meta_data.type == duckdb_parquet::Type::DOUBLE) {
+		column_chunk.meta_data.statistics.nan_count = NumericCast<int64_t>(state.stats_state->GetNaNCount());
+		column_chunk.meta_data.statistics.__isset.nan_count = true;
+	}
 
 	// if we have NaN values - don't write the min/max here
 	if (!state.stats_state->HasNaN()) {

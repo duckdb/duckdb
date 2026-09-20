@@ -3,28 +3,40 @@
 
 namespace duckdb {
 
-//! Recursively remove all object keys with null values
+//! Remove all object keys with null values
 static void StripNulls(yyjson_mut_val *val) {
-	if (!val) {
-		return;
-	}
-	if (yyjson_mut_is_obj(val)) {
-		yyjson_mut_obj_iter iter;
-		yyjson_mut_obj_iter_init(val, &iter);
-		yyjson_mut_val *key;
-		while ((key = yyjson_mut_obj_iter_next(&iter)) != nullptr) {
-			auto child = yyjson_mut_obj_iter_get_val(key);
-			if (unsafe_yyjson_is_null(child)) {
-				yyjson_mut_obj_iter_remove(&iter);
-			} else {
-				StripNulls(child);
-			}
+	struct stack_item {
+		yyjson_mut_val *val;
+	};
+
+	auto stack = vector<stack_item>();
+	stack.emplace_back(stack_item {val});
+
+	while (!stack.empty()) {
+		auto curr_val = stack.back().val;
+		stack.pop_back();
+
+		if (!curr_val) {
+			return;
 		}
-	} else if (yyjson_mut_is_arr(val)) {
-		idx_t idx, max;
-		yyjson_mut_val *elem;
-		yyjson_mut_arr_foreach(val, idx, max, elem) {
-			StripNulls(elem);
+		if (yyjson_mut_is_obj(curr_val)) {
+			yyjson_mut_obj_iter iter;
+			yyjson_mut_obj_iter_init(curr_val, &iter);
+			yyjson_mut_val *key;
+			while ((key = yyjson_mut_obj_iter_next(&iter)) != nullptr) {
+				auto child = yyjson_mut_obj_iter_get_val(key);
+				if (unsafe_yyjson_is_null(child)) {
+					yyjson_mut_obj_iter_remove(&iter);
+				} else {
+					stack.emplace_back(stack_item {child});
+				}
+			}
+		} else if (yyjson_mut_is_arr(curr_val)) {
+			idx_t idx, max;
+			yyjson_mut_val *elem;
+			yyjson_mut_arr_foreach(curr_val, idx, max, elem) {
+				stack.emplace_back(stack_item {elem});
+			}
 		}
 	}
 }
