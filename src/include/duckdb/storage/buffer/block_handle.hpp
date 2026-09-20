@@ -29,12 +29,7 @@ class BlockHandle;
 
 using BlockLock = unique_lock<mutex>;
 
-enum class CanUnloadResult : uint8_t {
-	CAN_UNLOAD,
-	ALREADY_UNLOADED,
-	PINNED,
-	NO_TEMP_DIRECTORY
-};
+enum class CanUnloadResult : uint8_t { CAN_UNLOAD, ALREADY_UNLOADED, PINNED, NO_TEMP_DIRECTORY };
 
 class BlockMemory : public enable_shared_from_this<BlockMemory> {
 public:
