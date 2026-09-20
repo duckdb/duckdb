@@ -9,6 +9,8 @@
 #include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/main/client_config.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/common/adbc/options.h"
 #include "duckdb/common/adbc/single_batch_array_stream.hpp"
@@ -127,6 +129,17 @@ struct DuckDBAdbcStatementWrapper {
 	IngestionMode ingestion_mode = IngestionMode::CREATE;
 	bool temporary_table = false;
 	uint64_t plan_length;
+	//! The number of this statement's last execution on its connection, 0 until it first executes. Read by the
+	//! progress options from any thread.
+	duckdb::atomic<uint64_t> execution {0};
+	//! Whether that execution ran to completion. Only meaningful once it is no longer the running one.
+	duckdb::atomic<bool> completed {false};
+	//! The highest progress seen, packed with the execution it was measured for, so that a reading taken just before
+	//! a new execution started cannot raise the floor of that new execution. See PackProgress().
+	duckdb::atomic<uint64_t> progress_floor {0};
+	//! Set when the connection is released while this statement still exists: `connection` and `conn_wrapper` dangle
+	//! from then on, and the progress options must not follow them.
+	duckdb::atomic<bool> connection_released {false};
 };
 
 struct MaterializedData {
@@ -142,6 +155,11 @@ struct DuckDBAdbcStreamWrapper {
 	AdbcError adbc_error;
 	MaterializedData *materialized;
 	duckdb::DuckDBAdbcConnectionWrapper *conn_wrapper;
+	//! The execution that produced this stream, and the statement that ran it. Its query runs until the stream is
+	//! exhausted, fails, is released or is materialized, and then that execution ends. The statement is only reached
+	//! through the connection's registry, because a stream can outlive its statement.
+	uint64_t execution;
+	DuckDBAdbcStatementWrapper *statement;
 };
 
 class DuckDBAdbcStreamWrapperGuard {
@@ -174,6 +192,46 @@ public:
 
 private:
 	DuckDBAdbcStreamWrapper *ptr;
+};
+
+//! Takes the connection's query progress for one execution. The execution ends when the guard goes out of scope,
+//! unless its result is handed out as a stream, which then ends it when the stream is exhausted, fails, is released
+//! or is materialized. An execution that is not marked completed is reported as having ended without completing.
+class ExecutionProgressGuard {
+public:
+	ExecutionProgressGuard(duckdb::DuckDBAdbcConnectionWrapper *conn_wrapper_p, DuckDBAdbcStatementWrapper *statement_p)
+	    : conn_wrapper(conn_wrapper_p), statement(statement_p) {
+		if (conn_wrapper) {
+			execution = conn_wrapper->BeginExecution();
+		}
+	}
+	ExecutionProgressGuard(const ExecutionProgressGuard &) = delete;
+	ExecutionProgressGuard &operator=(const ExecutionProgressGuard &) = delete;
+
+	~ExecutionProgressGuard() {
+		if (conn_wrapper) {
+			conn_wrapper->FinishExecution(statement, execution, completed);
+		}
+	}
+
+	uint64_t Execution() const {
+		return execution;
+	}
+
+	//! The work of this execution is done; without this it is reported as having ended without completing.
+	void Completed() {
+		completed = true;
+	}
+
+	void HandOver() {
+		conn_wrapper = nullptr;
+	}
+
+private:
+	duckdb::DuckDBAdbcConnectionWrapper *conn_wrapper;
+	DuckDBAdbcStatementWrapper *statement;
+	uint64_t execution = 0;
+	bool completed = false;
 };
 
 static bool IsInterruptError(const char *message) {
@@ -799,11 +857,19 @@ AdbcStatusCode ConnectionCommit(struct AdbcConnection *connection, struct AdbcEr
 		return ADBC_STATUS_INVALID_STATE;
 	}
 
+	// These run queries on the connection like any statement does, so they buffer open results first and take the
+	// connection's query progress for the duration, which keeps the execution numbering complete.
+	conn_wrapper->MaterializeStreams();
+	ExecutionProgressGuard progress_guard(conn_wrapper, nullptr);
 	AdbcStatusCode status = ExecuteQuery(conn, "COMMIT", error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
-	return ExecuteQuery(conn, "START TRANSACTION", error);
+	status = ExecuteQuery(conn, "START TRANSACTION", error);
+	if (status == ADBC_STATUS_OK) {
+		progress_guard.Completed();
+	}
+	return status;
 }
 
 AdbcStatusCode ConnectionRollback(struct AdbcConnection *connection, struct AdbcError *error) {
@@ -818,11 +884,17 @@ AdbcStatusCode ConnectionRollback(struct AdbcConnection *connection, struct Adbc
 		return ADBC_STATUS_INVALID_STATE;
 	}
 
+	conn_wrapper->MaterializeStreams();
+	ExecutionProgressGuard progress_guard(conn_wrapper, nullptr);
 	AdbcStatusCode status = ExecuteQuery(conn, "ROLLBACK", error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
-	return ExecuteQuery(conn, "START TRANSACTION", error);
+	status = ExecuteQuery(conn, "START TRANSACTION", error);
+	if (status == ADBC_STATUS_OK) {
+		progress_guard.Completed();
+	}
+	return status;
 }
 
 AdbcStatusCode ConnectionCancel(struct AdbcConnection *connection, struct AdbcError *error) {
@@ -1380,8 +1452,15 @@ AdbcStatusCode ConnectionInit(struct AdbcConnection *connection, struct AdbcData
 	if (adbc_status != ADBC_STATUS_OK) {
 		return adbc_status;
 	}
-	// We might have options to set
 	auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
+	// ADBC_STATEMENT_OPTION_PROGRESS reads the connection's query progress, which DuckDB only tracks while the
+	// progress bar is enabled. Enable tracking without printing: a driver never draws a progress bar.
+	auto &client_config = duckdb::ClientConfig::GetConfig(*conn->context);
+	if (!client_config.system_progress_bar_disable_reason) {
+		client_config.enable_progress_bar = true;
+		client_config.print_progress_bar = false;
+	}
+	// We might have options to set
 	return InternalSetOption(*conn, conn_wrapper->options, error);
 }
 
@@ -1390,8 +1469,9 @@ AdbcStatusCode ConnectionRelease(struct AdbcConnection *connection, struct AdbcE
 		auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
 		// Materialize active streams before disconnecting so they remain readable
 		conn_wrapper->MaterializeStreams();
-		// Detach active streams before deleting conn_wrapper to avoid dangling pointers
+		// Detach active streams and statements before deleting conn_wrapper to avoid dangling pointers
 		conn_wrapper->DetachAndClearStreams();
+		conn_wrapper->DetachAndClearStatements();
 		auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
 		duckdb_disconnect(reinterpret_cast<duckdb_connection *>(&conn));
 		delete conn_wrapper;
@@ -1462,6 +1542,11 @@ static int get_next(struct ArrowArrayStream *stream, struct ArrowArray *out) {
 	if (!duckdb_chunk) {
 		// End of stream or error; distinguish by checking the result error message.
 		auto err = duckdb_result_error(&result_wrapper->result);
+		// Either way the query has ended, and it only completed if it ended without an error.
+		if (result_wrapper->conn_wrapper) {
+			result_wrapper->conn_wrapper->FinishExecution(result_wrapper->statement, result_wrapper->execution,
+			                                              !(err && err[0] != '\0'));
+		}
 		if (err && err[0] != '\0') {
 			if (result_wrapper->last_error) {
 				free(result_wrapper->last_error);
@@ -1533,6 +1618,9 @@ void release(struct ArrowArrayStream *stream) {
 		// Unregister from connection's active streams
 		if (result_wrapper->conn_wrapper) {
 			result_wrapper->conn_wrapper->UnregisterStream(result_wrapper);
+			// Ends this stream's execution if it has not ended already: a result released before it was read out did
+			// not complete. A later execution of the same statement keeps its progress.
+			result_wrapper->conn_wrapper->FinishExecution(result_wrapper->statement, result_wrapper->execution, false);
 		}
 		// Clean up materialized data if present
 		if (result_wrapper->materialized) {
@@ -1861,7 +1949,7 @@ AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatem
 
 	statement->private_data = nullptr;
 
-	auto statement_wrapper = static_cast<DuckDBAdbcStatementWrapper *>(malloc(sizeof(DuckDBAdbcStatementWrapper)));
+	auto statement_wrapper = new (std::nothrow) DuckDBAdbcStatementWrapper();
 	if (!statement_wrapper) {
 		SetError(error, "Allocation error");
 		return ADBC_STATUS_INVALID_ARGUMENT;
@@ -1880,6 +1968,7 @@ AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatem
 	statement_wrapper->temporary_table = false;
 
 	statement_wrapper->ingestion_mode = IngestionMode::CREATE;
+	conn_wrapper->RegisterStatement(statement_wrapper);
 	return ADBC_STATUS_OK;
 }
 
@@ -1908,7 +1997,10 @@ AdbcStatusCode StatementRelease(struct AdbcStatement *statement, struct AdbcErro
 		free(wrapper->db_schema);
 		wrapper->db_schema = nullptr;
 	}
-	free(statement->private_data);
+	if (wrapper->conn_wrapper && !wrapper->connection_released) {
+		wrapper->conn_wrapper->UnregisterStatement(wrapper);
+	}
+	delete wrapper;
 	statement->private_data = nullptr;
 	return ADBC_STATUS_OK;
 }
@@ -2086,6 +2178,13 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		wrapper->conn_wrapper->MaterializeStreams();
 	}
 
+	// From here this statement's query is the one running on the connection, which is what its progress options read.
+	// Take the connection's progress before publishing the execution number: a reader in between would otherwise see
+	// a statement whose execution is not the running one, and report it ended.
+	ExecutionProgressGuard progress_guard(wrapper->conn_wrapper, wrapper);
+	wrapper->execution = progress_guard.Execution();
+	wrapper->completed = false;
+
 	// TODO: Set affected rows, careful with early return
 	if (rows_affected) {
 		*rows_affected = 0;
@@ -2095,7 +2194,13 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 	const auto to_table = wrapper->ingestion_table_name != nullptr;
 
 	if (has_stream && to_table) {
-		return IngestToTableFromBoundStream(wrapper, rows_affected, error);
+		// Ingestion is several queries and an appender rather than one query, so its execution runs until this
+		// returns: DuckDB's progress says nothing about it, and it completes only if the ingest succeeded.
+		auto ingest_status = IngestToTableFromBoundStream(wrapper, rows_affected, error);
+		if (ingest_status == ADBC_STATUS_OK) {
+			progress_guard.Completed();
+		}
+		return ingest_status;
 	}
 
 	if (!wrapper->statement) {
@@ -2110,6 +2215,7 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		if (rows_affected) {
 			*rows_affected = 0;
 		}
+		progress_guard.Completed();
 		return ADBC_STATUS_OK;
 	}
 
@@ -2122,6 +2228,8 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 	raw_stream_wrapper->status_code = ADBC_STATUS_OK;
 	raw_stream_wrapper->materialized = nullptr;
 	raw_stream_wrapper->conn_wrapper = wrapper->conn_wrapper;
+	raw_stream_wrapper->execution = progress_guard.Execution();
+	raw_stream_wrapper->statement = wrapper;
 	std::memset(&raw_stream_wrapper->adbc_error, 0, sizeof(raw_stream_wrapper->adbc_error));
 	std::memset(&raw_stream_wrapper->result, 0, sizeof(raw_stream_wrapper->result));
 	DuckDBAdbcStreamWrapperGuard stream_wrapper(raw_stream_wrapper);
@@ -2240,6 +2348,16 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		if (wrapper->conn_wrapper) {
 			wrapper->conn_wrapper->RegisterStream(released);
 		}
+		// A streaming result's query keeps running as the stream is consumed, and the stream ends the execution when
+		// it is exhausted, fails or is released. A result DuckDB could not stream was computed in full before it was
+		// returned, so its execution is already complete.
+		if (duckdb_result_is_streaming(released->result)) {
+			progress_guard.HandOver();
+		} else {
+			progress_guard.Completed();
+		}
+	} else {
+		progress_guard.Completed();
 	}
 
 	return ADBC_STATUS_OK;
@@ -2559,11 +2677,103 @@ AdbcStatusCode StatementGetOptionBytes(struct AdbcStatement *statement, const ch
 	return ADBC_STATUS_NOT_FOUND;
 }
 
+//! The maximum of ADBC_STATEMENT_OPTION_PROGRESS: progress is DuckDB's estimate of the query's completion, as a
+//! fraction. ADBC leaves the scale to the driver, but the Flight SQL driver reports a fraction of 1.0 and Flight's own
+//! PollInfo.progress is defined over [0.0, 1.0], so a client that reads progress without dividing by the maximum still
+//! gets a sensible number.
+static constexpr double STATEMENT_MAX_PROGRESS = 1.0;
+
+//! Progress is kept as a fixed-point fraction packed with the execution it was measured for, so that a reading taken
+//! just before a new execution started cannot raise the floor of that new execution.
+static constexpr uint64_t PROGRESS_BITS = 20;
+static constexpr uint64_t PROGRESS_SCALE = 1000000;
+
+static uint64_t PackProgress(uint64_t execution, double fraction) {
+	auto fixed = static_cast<uint64_t>(fraction * static_cast<double>(PROGRESS_SCALE));
+	if (fixed > PROGRESS_SCALE) {
+		fixed = PROGRESS_SCALE;
+	}
+	return (execution << PROGRESS_BITS) | fixed;
+}
+
+//! The fraction stored for `execution`, or 0 if what is stored belongs to another execution.
+static double UnpackProgress(uint64_t packed, uint64_t execution) {
+	if ((packed >> PROGRESS_BITS) != execution) {
+		return 0;
+	}
+	return static_cast<double>(packed & ((1ULL << PROGRESS_BITS) - 1)) / static_cast<double>(PROGRESS_SCALE);
+}
+
+//! A statement's execution progress, and whether its maximum is known, for ADBC_STATEMENT_OPTION_PROGRESS and
+//! ADBC_STATEMENT_OPTION_MAX_PROGRESS. Reads atomics and the connection's query progress, which takes no lock, so it
+//! is safe to call while another thread executes the statement or consumes its result.
+static double GetStatementProgress(DuckDBAdbcStatementWrapper &wrapper, bool &maximum_known) {
+	maximum_known = true;
+	// The connection's progress belongs to whatever it is running, so a sample of it counts only if this statement
+	// still owns that execution both before and after the sample: otherwise the sample was somebody else's.
+	for (idx_t attempt = 0; attempt < 4; attempt++) {
+		auto execution = wrapper.execution.load();
+		if (execution == 0) {
+			return 0;
+		}
+		auto *conn_wrapper = wrapper.connection_released ? nullptr : wrapper.conn_wrapper;
+		if (!conn_wrapper || !conn_wrapper->IsRunning(execution)) {
+			if (wrapper.completed) {
+				return STATEMENT_MAX_PROGRESS;
+			}
+			// It ended without completing: it failed, it was cancelled, its result was released before it was read
+			// out, or the connection is gone. It never reached the maximum, and ADBC reads a nonpositive maximum as
+			// "not known", which is the honest answer for a query whose progress stopped where it stopped.
+			maximum_known = false;
+			return UnpackProgress(wrapper.progress_floor.load(), execution);
+		}
+		double fraction = duckdb_query_progress(wrapper.connection).percentage / 100;
+		if (wrapper.execution.load() != execution || !conn_wrapper->IsRunning(execution)) {
+			continue;
+		}
+		if (fraction < 0) {
+			// DuckDB reports -1 before the executor starts and again once the query has ended, which for a streamed
+			// result is while the client still has rows to read. Report the highest estimate seen for this execution.
+			return UnpackProgress(wrapper.progress_floor.load(), execution);
+		}
+		// Lock-free "store the maximum", tagged with the execution it belongs to.
+		auto packed = PackProgress(execution, fraction);
+		auto floor = wrapper.progress_floor.load();
+		while (true) {
+			auto stored = UnpackProgress(floor, execution);
+			if (fraction <= stored) {
+				return std::min(stored, STATEMENT_MAX_PROGRESS);
+			}
+			if (wrapper.progress_floor.compare_exchange_weak(floor, packed)) {
+				return std::min(fraction, STATEMENT_MAX_PROGRESS);
+			}
+		}
+	}
+	// The statement kept being re-executed underneath the reader; it has no reading to report.
+	maximum_known = false;
+	return 0;
+}
+
 AdbcStatusCode StatementGetOptionDouble(struct AdbcStatement *statement, const char *key, double *value,
                                         struct AdbcError *error) {
 	if (!statement || !statement->private_data) {
 		SetError(error, "Invalid statement object");
 		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	if (key &&
+	    (strcmp(key, ADBC_STATEMENT_OPTION_PROGRESS) == 0 || strcmp(key, ADBC_STATEMENT_OPTION_MAX_PROGRESS) == 0)) {
+		if (!value) {
+			SetError(error, "Missing value");
+			return ADBC_STATUS_INVALID_ARGUMENT;
+		}
+		auto &wrapper = *static_cast<DuckDBAdbcStatementWrapper *>(statement->private_data);
+		bool maximum_known = true;
+		auto progress = GetStatementProgress(wrapper, maximum_known);
+		// A nonpositive maximum tells the client that the maximum is not known, which is how an execution that ended
+		// without completing is reported.
+		*value =
+		    strcmp(key, ADBC_STATEMENT_OPTION_PROGRESS) == 0 ? progress : (maximum_known ? STATEMENT_MAX_PROGRESS : 0);
+		return ADBC_STATUS_OK;
 	}
 	auto error_message = std::string("Option not found: ") + (key ? key : "(null)");
 	SetError(error, error_message);
@@ -3567,6 +3777,8 @@ void duckdb::DuckDBAdbcConnectionWrapper::MaterializeStreams() {
 			batches.push_back(array);
 		}
 		duckdb_destroy_arrow_options(&arrow_options);
+		// The query has run to its end, and completed unless materializing hit an error.
+		FinishExecution(result_wrapper->statement, result_wrapper->execution, result_wrapper->last_error == nullptr);
 
 		// Store materialized data
 		auto mat = static_cast<duckdb_adbc::MaterializedData *>(malloc(sizeof(duckdb_adbc::MaterializedData)));
@@ -3600,6 +3812,49 @@ void duckdb::DuckDBAdbcConnectionWrapper::MaterializeStreams() {
 			mat->batches = nullptr;
 		}
 		result_wrapper->materialized = mat;
+	}
+}
+
+void duckdb::DuckDBAdbcConnectionWrapper::RegisterStatement(duckdb_adbc::DuckDBAdbcStatementWrapper *statement) {
+	const duckdb::lock_guard<duckdb::mutex> guard(statement_mutex);
+	statements.push_back(statement);
+}
+
+void duckdb::DuckDBAdbcConnectionWrapper::UnregisterStatement(duckdb_adbc::DuckDBAdbcStatementWrapper *statement) {
+	const duckdb::lock_guard<duckdb::mutex> guard(statement_mutex);
+	auto it = std::find(statements.begin(), statements.end(), statement);
+	if (it != statements.end()) {
+		statements.erase(it);
+	}
+}
+
+void duckdb::DuckDBAdbcConnectionWrapper::DetachAndClearStatements() {
+	const duckdb::lock_guard<duckdb::mutex> guard(statement_mutex);
+	for (auto *statement : statements) {
+		if (statement) {
+			statement->connection_released = true;
+		}
+	}
+	statements.clear();
+}
+
+void duckdb::DuckDBAdbcConnectionWrapper::FinishExecution(duckdb_adbc::DuckDBAdbcStatementWrapper *statement,
+                                                          uint64_t execution, bool completed) {
+	uint64_t running = execution;
+	if (!running_execution.compare_exchange_strong(running, 0)) {
+		// It has already ended, or a later execution owns the connection's progress now: the first ending wins.
+		return;
+	}
+	if (!statement) {
+		return;
+	}
+	const duckdb::lock_guard<duckdb::mutex> guard(statement_mutex);
+	if (std::find(statements.begin(), statements.end(), statement) == statements.end()) {
+		// The statement was released while its result was still open.
+		return;
+	}
+	if (statement->execution.load() == execution) {
+		statement->completed = completed;
 	}
 }
 
