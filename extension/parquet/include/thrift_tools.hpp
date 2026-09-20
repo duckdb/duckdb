@@ -155,10 +155,14 @@ struct ReadAheadBuffer {
 
 class ThriftFileTransport : public duckdb_apache::thrift::transport::TVirtualTransport<ThriftFileTransport> {
 public:
+	static constexpr uint64_t DEMAND_BUFFER_SIZE = 1000000;
+
 	ThriftFileTransport(QueryContext context_p, CachingFileHandle &file_handle_p, bool cache_reads_p,
-	                    uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP)
+	                    uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP,
+	                    bool buffer_reads_p = false)
 	    : context(context_p), file_handle(file_handle_p), location(0), size(file_handle.GetFileSize()),
-	      ra_buffer(ReadAheadBuffer(file_handle, accepted_column_gap)), cache_reads(cache_reads_p) {
+	      ra_buffer(ReadAheadBuffer(file_handle, accepted_column_gap)), cache_reads(cache_reads_p),
+	      buffer_reads(buffer_reads_p) {
 	}
 
 	void SetAcceptedColumnGap(uint64_t accepted_column_gap) {
@@ -183,8 +187,19 @@ public:
 			}
 			memcpy(buf, prefetch_buffer->buffer_ptr + location - prefetch_buffer->location, len);
 		} else if (cache_reads && location < size && len <= size - location) {
-			auto handles = file_handle.Read(len, location);
-			handles.CopyTo(buf, len);
+			if (buffer_reads && len < DEMAND_BUFFER_SIZE && !file_handle.CanCacheRead()) {
+				if (!demand_buffer || location < demand_buffer->location ||
+				    location - demand_buffer->location + len > demand_buffer->size) {
+					demand_buffer.reset();
+					demand_buffer =
+					    make_uniq<ReadHead>(location, MinValue<uint64_t>(DEMAND_BUFFER_SIZE, size - location));
+					demand_buffer->Fetch(file_handle);
+				}
+				memcpy(buf, demand_buffer->buffer_ptr + location - demand_buffer->location, len);
+			} else {
+				auto handles = file_handle.Read(len, location);
+				handles.CopyTo(buf, len);
+			}
 		} else {
 			// No prefetch, do a regular (non-caching) read
 			file_handle.GetFileHandle()->Read(context, buf, len, location);
@@ -219,6 +234,7 @@ public:
 	void ClearPrefetch() {
 		ra_buffer.read_heads.clear();
 		ra_buffer.merge_set.clear();
+		demand_buffer.reset();
 	}
 
 	void Skip(idx_t skip_count) {
@@ -226,7 +242,7 @@ public:
 	}
 
 	bool HasPrefetch() const {
-		return !ra_buffer.read_heads.empty() || !ra_buffer.merge_set.empty();
+		return demand_buffer || !ra_buffer.read_heads.empty() || !ra_buffer.merge_set.empty();
 	}
 
 	void SetLocation(idx_t location_p) {
@@ -263,8 +279,10 @@ private:
 	// Multi-buffer prefetch
 	ReadAheadBuffer ra_buffer;
 
-	//! Demand reads use the external file cache without a separate read-ahead buffer.
 	bool cache_reads;
+	bool buffer_reads;
+	//! A single bounded read-ahead range for demand reads when the external cache is unavailable.
+	unique_ptr<ReadHead> demand_buffer;
 };
 
 } // namespace duckdb

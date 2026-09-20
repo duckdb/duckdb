@@ -207,9 +207,10 @@ using duckdb_parquet::Type;
 
 static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
 CreateThriftFileProtocol(QueryContext context, CachingFileHandle &file_handle, bool cache_reads,
-                         uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP) {
-	auto transport =
-	    duckdb_base_std::make_shared<ThriftFileTransport>(context, file_handle, cache_reads, accepted_column_gap);
+                         uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP,
+                         bool buffer_reads = false) {
+	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(context, file_handle, cache_reads,
+	                                                                   accepted_column_gap, buffer_reads);
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
@@ -2046,7 +2047,8 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	}
 
 	state.thrift_file_proto =
-	    CreateThriftFileProtocol(context, *state.file_handle, cache_reads, DetermineAcceptedColumnGap(context, state));
+	    CreateThriftFileProtocol(context, *state.file_handle, cache_reads, DetermineAcceptedColumnGap(context, state),
+	                             parquet_options.prefetch_strategy == ParquetPrefetchStrategyOption::ON_DEMAND);
 
 	state.column_readers.resize(column_indexes.size());
 	for (idx_t i = 0; i < column_indexes.size(); i++) {

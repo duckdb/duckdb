@@ -1,5 +1,5 @@
 # name: test/sql/copy/parquet/parquet_on_demand.test
-# description: Parquet demand reads use the external file cache without separate read-ahead buffering
+# description: Parquet demand reads use bounded buffering when the external file cache is unavailable
 # group: [parquet]
 
 require parquet
@@ -28,6 +28,11 @@ foreach cache false true
 statement ok
 SET enable_external_file_cache=${cache}
 
+foreach local_cache false true
+
+statement ok
+SET cache_local_files=${local_cache}
+
 statement ok
 CALL truncate_duckdb_logs()
 
@@ -37,15 +42,45 @@ SELECT (SELECT sum(a) FROM read_parquet('{TEST_DIR}/demand.parquet', prefetch_st
 ----
 true
 
-# Only the external file cache batches demand reads; cache-off still issues small requests.
-query I
-SELECT count(*) > 0 AND ((count(*) < 250) = ${cache})
+# A single bounded buffer batches small reads even when caching is disabled for this file.
+query III
+SELECT count(*) > 0 AND count(*) < CASE WHEN ${cache} AND ${local_cache} THEN 250 ELSE 20 END,
+       max(bytes) <= 1000000,
+       bool_or(bytes = 1000000) = (NOT ${cache} OR NOT ${local_cache})
 FROM duckdb_logs_parsed('FileSystem')
 WHERE path LIKE '%/demand.parquet' AND op = 'READ'
 ----
-true
+true	true	true
 
 endloop
+
+endloop
+
+# Reads larger than the buffer must still return the entire page.
+statement ok
+COPY demand_input TO '{TEST_DIR}/demand_large_page.parquet'
+(COMPRESSION UNCOMPRESSED, ROW_GROUP_SIZE 327680, DATA_PAGE_SIZE_LIMIT 4194304)
+
+statement ok
+SET enable_external_file_cache=false
+
+statement ok
+CALL truncate_duckdb_logs()
+
+query I
+SELECT (SELECT sum(a) FROM read_parquet('{TEST_DIR}/demand_large_page.parquet', prefetch_strategy='on_demand')) =
+       (SELECT sum(a) FROM demand_input)
+----
+true
+
+query I
+SELECT bool_or(bytes > 1000000) FROM duckdb_logs_parsed('FileSystem')
+WHERE path LIKE '%/demand_large_page.parquet' AND op = 'READ'
+----
+true
+
+statement ok
+SET enable_external_file_cache=true
 
 # The replacement strategy must survive plan serialization.
 statement ok
@@ -89,6 +124,11 @@ statement ok
 RESET disable_parquet_prefetching
 
 # The replacement must also support the original malformed-offset workaround.
+foreach cache false true
+
+statement ok
+SET enable_external_file_cache=${cache}
+
 query I
 SELECT count(*) FROM (
     SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/incorrect_index_page_offsets.parquet',
@@ -97,3 +137,5 @@ SELECT count(*) FROM (
 ) differences
 ----
 0
+
+endloop
