@@ -64,6 +64,13 @@ void NumericStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 		return;
 	}
 	D_ASSERT(stats.GetType() == other.GetType());
+	// If the min and max of the stats are not valid, we need to merge the min and max of the other stats.
+	if (NumericStats::HasMin(stats) && NumericStats::HasMax(stats) &&
+	    NumericStats::Min(stats) > NumericStats::Max(stats)) {
+		NumericStats::SetMin(stats, NumericStats::HasMin(other) ? NumericStats::Min(other) : Value());
+		NumericStats::SetMax(stats, NumericStats::HasMax(other) ? NumericStats::Max(other) : Value());
+		return;
+	}
 	if (NumericStats::HasMin(other) && NumericStats::HasMin(stats)) {
 		auto other_min = NumericStats::Min(other);
 		if (other_min < NumericStats::Min(stats)) {

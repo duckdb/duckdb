@@ -2,6 +2,8 @@
 # description: Test min statistics when column contains NaN values
 # group: [storage]
 
+require exact_vector_size 2048
+
 load {TEST_DIR}/test_nan_min_stats.db
 
 foreach type FLOAT DOUBLE
