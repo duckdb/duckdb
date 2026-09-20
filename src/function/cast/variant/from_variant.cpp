@@ -12,6 +12,7 @@
 #include "duckdb/common/serializer/varint.hpp"
 #include "yyjson.hpp"
 
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 
@@ -434,6 +435,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 			auto row_index = row.IsValid() ? row.GetIndex() : nested_index.GetIndex();
 			auto object_keys =
 			    VariantUtils::GetObjectKeys(conversion_data.variant, row_index, child_data[nested_index.GetIndex()]);
+			std::sort(object_keys.begin(), object_keys.end());
 			conversion_data.error = StringUtil::Format("VARIANT(OBJECT(%s)) is missing key '%s'",
 			                                           StringUtil::Join(object_keys, ","), component.key);
 			return false;

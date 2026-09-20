@@ -49,3 +49,13 @@ query I
 SELECT (SELECT v FROM t WHERE id = 1) = (SELECT v FROM t WHERE id = 100000);
 ----
 true
+
+statement error
+SELECT CAST(v AS STRUCT(zz INTEGER)) FROM t WHERE id = 1;
+----
+VARIANT(OBJECT(l,o)) is missing key 'zz'
+
+statement error
+SELECT CAST(v AS STRUCT(zz INTEGER)) FROM t WHERE id = 100000;
+----
+VARIANT(OBJECT(l,o)) is missing key 'zz'

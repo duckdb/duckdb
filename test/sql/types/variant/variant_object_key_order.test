@@ -19,6 +19,11 @@ OBJECT(x, y)	{'l': [42], 'o': {'x': 2, 'y': 1}}
 
 query III
 SELECT variant_typeof(v), CAST(v AS VARCHAR), CAST(variant_keys(v) AS VARCHAR)
-FROM (SELECT {'B': 1, 'a': 2}::VARIANT AS v);
+FROM (SELECT {'a': [2], 'B': 1}::VARIANT AS v);
 ----
-OBJECT(B, a)	{'B': 1, 'a': 2}	[B, a]
+OBJECT(B, a)	{'B': 1, 'a': [2]}	[B, a]
+
+statement error
+SELECT CAST({'o': {'x': 42}, 'l': [42]}::VARIANT AS STRUCT(zz INTEGER));
+----
+VARIANT(OBJECT(l,o)) is missing key 'zz'
