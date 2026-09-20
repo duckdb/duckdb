@@ -3,6 +3,7 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/main/connection.hpp"
 #include "duckdb/planner/planner_extension.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -61,6 +62,13 @@ unique_ptr<TableRef> ShellScanLastResult(ClientContext &context, ReplacementScan
 // would have fired)
 void ShellPostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 	auto &state = duckdb_shell::ShellState::Get();
+	// last_result backs the shell's `_` replacement scan and `.last`; it belongs to the interactive
+	// shell connection alone. Only release it for that connection: another connection on the same
+	// database (e.g. a background thread in serve mode) resetting the process-global last_result races
+	// the shell thread's own non-atomic access to it, and the release is meaningless for it anyway.
+	if (!state.conn || &input.context != state.conn->context.get()) {
+		return;
+	}
 	if (state.last_result_referenced) {
 		return;
 	}
