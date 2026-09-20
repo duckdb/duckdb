@@ -57,3 +57,35 @@ query III
 SELECT first(s), last(s), any_value(s) FROM (VALUES (NULL), ('a')) t(s);
 ----
 NULL	a	a
+
+# min/max and mode keep an identical string state, with the same allocation-reuse branch
+
+query II
+SELECT length(min(s)), length(max(s)) FROM (SELECT repeat(chr(CAST(97 + i % 26 AS INTEGER)), 1000 + i) AS s FROM range(60) t(i));
+----
+1000	1051
+
+query I
+SELECT length(max(s)) FROM (SELECT repeat('y', CASE WHEN i % 2 = 0 THEN 50000 ELSE 10 END) AS s FROM range(41) t(i));
+----
+50000
+
+query II
+SELECT min(s), max(s) FROM (VALUES ('abc'), ('de'), ('zz')) t(s);
+----
+abc	zz
+
+query I
+SELECT length(mode(s)) FROM (SELECT repeat('q', CASE WHEN i < 20 THEN 50000 ELSE 10 END) AS s FROM range(30) t(i));
+----
+50000
+
+query I
+SELECT mode(s) FROM (VALUES ('a'), ('b'), ('b')) t(s);
+----
+b
+
+query I
+SELECT mode(i) FROM (VALUES (1), (2), (2)) t(i);
+----
+2
