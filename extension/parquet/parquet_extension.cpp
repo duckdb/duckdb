@@ -1084,11 +1084,10 @@ static void LoadInternal(ExtensionLoader &loader) {
 	config.replacement_scans.emplace_back(ParquetScanReplacement);
 	config.AddExtensionOption("binary_as_string", "In Parquet files, interpret binary data as a string.",
 	                          LogicalType::BOOLEAN, Value(false));
-	config.AddExtensionOption(
-	    "disable_parquet_prefetching",
-	    "Deprecated: disables Parquet scan prefetch and bypasses the payload cache. "
-	    "Reset this setting and use read_parquet(..., prefetch_strategy='on_demand') to retain cache access.",
-	    LogicalType::BOOLEAN, Value(false), nullptr, SetScope::SESSION, false, true);
+	config.AddExtensionOption("disable_parquet_prefetching",
+	                          "Deprecated: sets the default Parquet prefetch strategy to 'on_demand'. "
+	                          "Use read_parquet(..., prefetch_strategy='on_demand') instead.",
+	                          LogicalType::BOOLEAN, Value(false), nullptr, SetScope::SESSION, false, true);
 	config.AddExtensionOption("prefetch_all_parquet_files",
 	                          "(deprecated) Parquet files are now always prefetched, this setting has no effect",
 	                          LogicalType::BOOLEAN, Value(false));

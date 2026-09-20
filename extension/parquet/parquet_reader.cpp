@@ -214,13 +214,6 @@ CreateThriftFileProtocol(QueryContext context, CachingFileHandle &file_handle, b
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
-static bool ShouldAndCanPrefetch(ClientContext &context, CachingFileHandle &file_handle) {
-	Value disable_prefetch = false;
-	context.TryGetCurrentSetting("disable_parquet_prefetching", disable_prefetch);
-	// local files also prefetch by default, the async I/O overlaps with decoding
-	return file_handle.CanSeek() && !disable_prefetch.GetValue<bool>();
-}
-
 //! Coalescing gap for the scan's prefetch I/O, either pinned through a setting or chosen by the cost model
 static uint64_t DetermineAcceptedColumnGap(ClientContext &context, ParquetReaderScanState &state) {
 	uint64_t gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP;
@@ -290,7 +283,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		static constexpr idx_t MIN_PREFETCH_SIZE = 16384;     // Prefetch at least this many bytes
 		static constexpr idx_t MAX_PREFETCH_SIZE = 262144;    // Prefetch at most this many bytes
 		idx_t prefetch_size = 8;
-		if (ShouldAndCanPrefetch(context, file_handle)) {
+		if (file_handle.CanSeek()) {
 			prefetch_size = ClampValue(file_size / ESTIMATED_FOOTER_RATIO, MIN_PREFETCH_SIZE, MAX_PREFETCH_SIZE);
 			prefetch_size = MinValue(NextPowerOfTwo(prefetch_size), file_size);
 		}
@@ -1245,6 +1238,9 @@ void ParquetReader::AddVirtualColumn(column_t virtual_column_id) {
 
 ParquetOptions::ParquetOptions(ClientContext &context) {
 	Value lookup_value;
+	if (context.TryGetCurrentSetting("disable_parquet_prefetching", lookup_value) && lookup_value.GetValue<bool>()) {
+		prefetch_strategy = ParquetPrefetchStrategyOption::ON_DEMAND;
+	}
 	if (context.TryGetCurrentSetting("binary_as_string", lookup_value)) {
 		binary_as_string = lookup_value.GetValue<bool>();
 	}
@@ -1996,7 +1992,7 @@ ParquetScanFilter::~ParquetScanFilter() {
 
 unique_ptr<CachingFileHandle> ParquetReader::OpenScanHandle(ClientContext &context) const {
 	auto flags = FileFlags::FILE_FLAGS_READ;
-	if (ShouldAndCanPrefetch(context, *file_handle)) {
+	if (file_handle->CanSeek()) {
 		flags |= FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
 		if (file_handle->IsRemoteFile()) {
 			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
@@ -2013,7 +2009,7 @@ void ParquetReader::PrepareReadAhead(ClientContext &context, GlobalTableFunction
 }
 
 void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanState &state, idx_t group_to_read) const {
-	const bool cache_reads = ShouldAndCanPrefetch(context, *file_handle);
+	const bool cache_reads = file_handle->CanSeek();
 	state.resuming_payload = false;
 	state.offset_in_group = 0;
 	state.filter_count = 0;

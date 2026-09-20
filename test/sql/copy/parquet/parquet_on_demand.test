@@ -12,6 +12,9 @@ SET threads=1
 statement ok
 SET read_ahead_depth=0
 
+statement ok
+SET parquet_metadata_cache=false
+
 # Small pages expose payload cache bypass as hundreds of small reads.
 statement ok
 CREATE TABLE demand_input AS SELECT hash(i) AS a FROM range(327680) t(i)
@@ -51,6 +54,46 @@ FROM duckdb_logs_parsed('FileSystem')
 WHERE path LIKE '%/demand.parquet' AND op = 'READ'
 ----
 true	true	true
+
+# The deprecated setting must produce identical reads, including the footer, from a cold cache.
+statement ok
+CREATE OR REPLACE TEMP TABLE demand_reads AS
+SELECT pos, bytes FROM duckdb_logs_parsed('FileSystem')
+WHERE path LIKE '%/demand.parquet' AND op = 'READ'
+
+statement ok
+SET enable_external_file_cache=false
+
+statement ok
+SET enable_external_file_cache=${cache}
+
+statement ok
+SET disable_parquet_prefetching=true
+
+statement ok
+CALL truncate_duckdb_logs()
+
+query I
+SELECT (SELECT sum(a) FROM read_parquet('{TEST_DIR}/demand.parquet')) =
+       (SELECT sum(a) FROM demand_input)
+----
+true
+
+query I
+WITH actual AS (
+    SELECT pos, bytes FROM duckdb_logs_parsed('FileSystem')
+    WHERE path LIKE '%/demand.parquet' AND op = 'READ'
+)
+SELECT count(*) FROM (
+    (TABLE demand_reads EXCEPT ALL TABLE actual)
+    UNION ALL
+    (TABLE actual EXCEPT ALL TABLE demand_reads)
+) differences
+----
+0
+
+statement ok
+RESET disable_parquet_prefetching
 
 endloop
 
@@ -95,7 +138,7 @@ true
 statement ok
 SET debug_verify_serializer=false
 
-# Keep the deprecated switch's legacy behavior, including when a strategy is supplied.
+# The deprecated setting maps to a serializable strategy and retains warm-cache access.
 query I
 SELECT count(*) FROM duckdb_settings(deprecated := true) WHERE name = 'disable_parquet_prefetching'
 ----
@@ -105,17 +148,41 @@ statement ok
 SET disable_parquet_prefetching=true
 
 statement ok
+SET debug_verify_serializer=true
+
+statement ok
 CALL truncate_duckdb_logs()
 
 query I
-SELECT (SELECT sum(a) FROM read_parquet('{TEST_DIR}/demand.parquet', prefetch_strategy='on_demand')) =
+SELECT (SELECT sum(a) FROM read_parquet('{TEST_DIR}/demand.parquet')) =
        (SELECT sum(a) FROM demand_input)
 ----
 true
 
-# The legacy switch still bypasses payload caching, even with a warm cache.
 query I
-SELECT count(*) > 250 FROM duckdb_logs_parsed('FileSystem')
+SELECT count(*) FROM duckdb_logs_parsed('FileSystem')
+WHERE path LIKE '%/demand.parquet' AND op = 'READ'
+----
+0
+
+statement ok
+SET debug_verify_serializer=false
+
+# An explicit query option overrides the session default.
+statement ok
+SET enable_external_file_cache=false
+
+statement ok
+CALL truncate_duckdb_logs()
+
+query I
+SELECT (SELECT sum(a) FROM read_parquet('{TEST_DIR}/demand.parquet', prefetch_strategy='whole_group')) =
+       (SELECT sum(a) FROM demand_input)
+----
+true
+
+query I
+SELECT bool_or(bytes > 1000000) FROM duckdb_logs_parsed('FileSystem')
 WHERE path LIKE '%/demand.parquet' AND op = 'READ'
 ----
 true
