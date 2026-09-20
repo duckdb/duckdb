@@ -206,10 +206,10 @@ using duckdb_parquet::Statistics;
 using duckdb_parquet::Type;
 
 static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
-CreateThriftFileProtocol(QueryContext context, CachingFileHandle &file_handle, bool buffered_reads,
+CreateThriftFileProtocol(QueryContext context, CachingFileHandle &file_handle, bool cache_reads,
                          uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP) {
 	auto transport =
-	    duckdb_base_std::make_shared<ThriftFileTransport>(context, file_handle, buffered_reads, accepted_column_gap);
+	    duckdb_base_std::make_shared<ThriftFileTransport>(context, file_handle, cache_reads, accepted_column_gap);
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
@@ -2012,7 +2012,7 @@ void ParquetReader::PrepareReadAhead(ClientContext &context, GlobalTableFunction
 }
 
 void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanState &state, idx_t group_to_read) const {
-	const bool buffered_reads = ShouldAndCanPrefetch(context, *file_handle);
+	const bool cache_reads = ShouldAndCanPrefetch(context, *file_handle);
 	state.resuming_payload = false;
 	state.offset_in_group = 0;
 	state.filter_count = 0;
@@ -2020,7 +2020,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
 	if (!state.file_handle || state.file_handle->GetPath() != file_handle->GetPath()) {
 		state.prefetch_mode =
-		    buffered_reads && parquet_options.prefetch_strategy != ParquetPrefetchStrategyOption::ON_DEMAND;
+		    cache_reads && parquet_options.prefetch_strategy != ParquetPrefetchStrategyOption::ON_DEMAND;
 		// all scan states share one handle (opened with parallel access), so open handles and
 		// connections scale with the number of readers instead of the number of row-group jobs
 		lock_guard<mutex> guard(prewarm_lock);
@@ -2045,8 +2045,8 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		state.filter_eliminated_all_rows.assign(state.scan_filters.size(), false);
 	}
 
-	state.thrift_file_proto = CreateThriftFileProtocol(context, *state.file_handle, buffered_reads,
-	                                                   DetermineAcceptedColumnGap(context, state));
+	state.thrift_file_proto =
+	    CreateThriftFileProtocol(context, *state.file_handle, cache_reads, DetermineAcceptedColumnGap(context, state));
 
 	state.column_readers.resize(column_indexes.size());
 	for (idx_t i = 0; i < column_indexes.size(); i++) {

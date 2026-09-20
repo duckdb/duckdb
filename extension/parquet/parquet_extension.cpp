@@ -1086,9 +1086,8 @@ static void LoadInternal(ExtensionLoader &loader) {
 	                          LogicalType::BOOLEAN, Value(false));
 	config.AddExtensionOption(
 	    "disable_parquet_prefetching",
-	    "Deprecated legacy Parquet scan path: disables scan prefetch and buffering, and bypasses the payload cache. "
-	    "Reset this setting and use read_parquet(..., prefetch_strategy='on_demand') for buffered demand reads "
-	    "instead.",
+	    "Deprecated: disables Parquet scan prefetch and bypasses the payload cache. "
+	    "Reset this setting and use read_parquet(..., prefetch_strategy='on_demand') to retain cache access.",
 	    LogicalType::BOOLEAN, Value(false), nullptr, SetScope::SESSION, false, true);
 	config.AddExtensionOption("prefetch_all_parquet_files",
 	                          "(deprecated) Parquet files are now always prefetched, this setting has no effect",

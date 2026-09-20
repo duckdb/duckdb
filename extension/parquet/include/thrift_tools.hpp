@@ -155,12 +155,10 @@ struct ReadAheadBuffer {
 
 class ThriftFileTransport : public duckdb_apache::thrift::transport::TVirtualTransport<ThriftFileTransport> {
 public:
-	static constexpr uint64_t DEMAND_BUFFER_SIZE = 1000000;
-
-	ThriftFileTransport(QueryContext context_p, CachingFileHandle &file_handle_p, bool buffered_reads_p,
+	ThriftFileTransport(QueryContext context_p, CachingFileHandle &file_handle_p, bool cache_reads_p,
 	                    uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP)
 	    : context(context_p), file_handle(file_handle_p), location(0), size(file_handle.GetFileSize()),
-	      ra_buffer(ReadAheadBuffer(file_handle, accepted_column_gap)), buffered_reads(buffered_reads_p) {
+	      ra_buffer(ReadAheadBuffer(file_handle, accepted_column_gap)), cache_reads(cache_reads_p) {
 	}
 
 	void SetAcceptedColumnGap(uint64_t accepted_column_gap) {
@@ -184,8 +182,9 @@ public:
 				prefetch_buffer->Fetch(file_handle);
 			}
 			memcpy(buf, prefetch_buffer->buffer_ptr + location - prefetch_buffer->location, len);
-		} else if (buffered_reads && location < size && len <= size - location) {
-			ReadBuffered(buf, len);
+		} else if (cache_reads && location < size && len <= size - location) {
+			auto handles = file_handle.Read(len, location);
+			handles.CopyTo(buf, len);
 		} else {
 			// No prefetch, do a regular (non-caching) read
 			file_handle.GetFileHandle()->Read(context, buf, len, location);
@@ -220,7 +219,6 @@ public:
 	void ClearPrefetch() {
 		ra_buffer.read_heads.clear();
 		ra_buffer.merge_set.clear();
-		demand_buffer.reset();
 	}
 
 	void Skip(idx_t skip_count) {
@@ -229,10 +227,6 @@ public:
 
 	bool HasPrefetch() const {
 		return !ra_buffer.read_heads.empty() || !ra_buffer.merge_set.empty();
-	}
-
-	bool UsesBufferedReads() const {
-		return buffered_reads;
 	}
 
 	void SetLocation(idx_t location_p) {
@@ -260,25 +254,6 @@ public:
 	}
 
 private:
-	void ReadBuffered(data_ptr_t buf, idx_t len) {
-		if (demand_buffer && location >= demand_buffer->location && location < demand_buffer->GetEnd() &&
-		    len <= demand_buffer->GetEnd() - location) {
-			memcpy(buf, demand_buffer->buffer_ptr + location - demand_buffer->location, len);
-			return;
-		}
-		// Release the previous window before allocating its replacement.
-		demand_buffer.reset();
-		if (len >= DEMAND_BUFFER_SIZE) {
-			auto handles = file_handle.Read(len, location);
-			handles.CopyTo(buf, len);
-			return;
-		}
-		demand_buffer = make_uniq<ReadHead>(location, MinValue<uint64_t>(DEMAND_BUFFER_SIZE, size - location));
-		demand_buffer->Fetch(file_handle);
-		memcpy(buf, demand_buffer->buffer_ptr, len);
-	}
-
-private:
 	QueryContext context;
 
 	CachingFileHandle &file_handle;
@@ -288,9 +263,8 @@ private:
 	// Multi-buffer prefetch
 	ReadAheadBuffer ra_buffer;
 
-	// Demand buffering is independent of registered column-chunk prefetch ranges.
-	bool buffered_reads;
-	unique_ptr<ReadHead> demand_buffer;
+	//! Demand reads use the external file cache without a separate read-ahead buffer.
+	bool cache_reads;
 };
 
 } // namespace duckdb

@@ -1,5 +1,5 @@
-# name: test/sql/copy/parquet/parquet_demand_buffer.test
-# description: Parquet demand reads retain bounded buffering with and without the external file cache
+# name: test/sql/copy/parquet/parquet_on_demand.test
+# description: Parquet demand reads use the external file cache without separate read-ahead buffering
 # group: [parquet]
 
 require parquet
@@ -12,7 +12,7 @@ SET threads=1
 statement ok
 SET read_ahead_depth=0
 
-# Multiple small pages in one large column exercise buffer reuse and window replacement.
+# Small pages expose payload cache bypass as hundreds of small reads.
 statement ok
 CREATE TABLE demand_input AS SELECT hash(i) AS a FROM range(327680) t(i)
 
@@ -37,9 +37,9 @@ SELECT (SELECT sum(a) FROM read_parquet('{TEST_DIR}/demand.parquet', prefetch_st
 ----
 true
 
-# Without buffering, the page headers alone require hundreds of tiny reads.
+# Only the external file cache batches demand reads; cache-off still issues small requests.
 query I
-SELECT count(*) > 0 AND count(*) < 250
+SELECT count(*) > 0 AND ((count(*) < 250) = ${cache})
 FROM duckdb_logs_parsed('FileSystem')
 WHERE path LIKE '%/demand.parquet' AND op = 'READ'
 ----
@@ -69,9 +69,19 @@ SELECT count(*) FROM duckdb_settings(deprecated := true) WHERE name = 'disable_p
 statement ok
 SET disable_parquet_prefetching=true
 
+statement ok
+CALL truncate_duckdb_logs()
+
 query I
 SELECT (SELECT sum(a) FROM read_parquet('{TEST_DIR}/demand.parquet', prefetch_strategy='on_demand')) =
        (SELECT sum(a) FROM demand_input)
+----
+true
+
+# The legacy switch still bypasses payload caching, even with a warm cache.
+query I
+SELECT count(*) > 250 FROM duckdb_logs_parsed('FileSystem')
+WHERE path LIKE '%/demand.parquet' AND op = 'READ'
 ----
 true
 

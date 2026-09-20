@@ -29,7 +29,7 @@ select count(*), sum(i) from '{TEST_DIR}/prefetch_tracked_big.parquet';
 ----
 16000000	127999992000000
 
-# Buffered demand reads also fit without retaining the whole row group.
+# On-demand reads also fit without retaining the whole row group.
 statement ok
 RESET disable_parquet_prefetching;
 
