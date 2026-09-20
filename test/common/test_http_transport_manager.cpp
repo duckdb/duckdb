@@ -1193,7 +1193,8 @@ TEST_CASE("Core extension downloads use managed HTTP transports", "[http_transpo
 
 		provider->state->response_mode = MockResponseMode::NULL_RESPONSE;
 		auto null_error = CaptureExceptionMessage([&]() {
-			ExtensionHelper::InstallExtension(*connection.context, "http://mock.test/null.duckdb_extension", options);
+			ExtensionHelper::InstallExtension(*connection.context, string("http://mock.test/null.duckdb_extension"),
+			                                  options);
 		});
 		CHECK(StringUtil::Contains(null_error, "HTTP provider returned no response"));
 		CHECK(StringUtil::Contains(null_error, "null.duckdb_extension"));
@@ -1202,8 +1203,8 @@ TEST_CASE("Core extension downloads use managed HTTP transports", "[http_transpo
 
 		provider->state->response_mode = MockResponseMode::REQUEST_ERROR;
 		auto request_error = CaptureExceptionMessage([&]() {
-			ExtensionHelper::InstallExtension(*connection.context, "http://mock.test/request_error.duckdb_extension",
-			                                  options);
+			ExtensionHelper::InstallExtension(*connection.context,
+			                                  string("http://mock.test/request_error.duckdb_extension"), options);
 		});
 		CHECK(StringUtil::Contains(request_error, "\"exception_type\":\"IO\""));
 		CHECK(StringUtil::Contains(request_error, "request_error.duckdb_extension"));
@@ -1212,15 +1213,16 @@ TEST_CASE("Core extension downloads use managed HTTP transports", "[http_transpo
 
 		provider->state->response_mode = MockResponseMode::THROW;
 		auto throw_error = CaptureExceptionMessage([&]() {
-			ExtensionHelper::InstallExtension(*connection.context, "http://mock.test/throw.duckdb_extension", options);
+			ExtensionHelper::InstallExtension(*connection.context, string("http://mock.test/throw.duckdb_extension"),
+			                                  options);
 		});
 		CHECK(StringUtil::Contains(throw_error, "mock send failure"));
 		CHECK(provider->state->live == 0);
 
 		provider->state->response_mode = MockResponseMode::HTTP_ERROR;
 		auto http_error = CaptureExceptionMessage([&]() {
-			ExtensionHelper::InstallExtension(*connection.context, "http://mock.test/not_found.duckdb_extension",
-			                                  options);
+			ExtensionHelper::InstallExtension(*connection.context,
+			                                  string("http://mock.test/not_found.duckdb_extension"), options);
 		});
 		CHECK(StringUtil::Contains(http_error, "\"exception_type\":\"HTTP\""));
 		CHECK(StringUtil::Contains(http_error, "not_found.duckdb_extension"));

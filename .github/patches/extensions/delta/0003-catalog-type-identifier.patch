@@ -1,0 +1,12 @@
+diff --git a/src/include/storage/delta_catalog.hpp b/src/include/storage/delta_catalog.hpp
+--- a/src/include/storage/delta_catalog.hpp
++++ b/src/include/storage/delta_catalog.hpp
+@@ -56,7 +56,7 @@
+ 	}
+ 
+ 	void Initialize(bool load_builtin) override;
+-	string GetCatalogType() override {
++	Identifier GetCatalogType() override {
+ 		return "delta";
+ 	}
+ 

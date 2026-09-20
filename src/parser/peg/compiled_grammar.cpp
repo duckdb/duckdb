@@ -25,7 +25,7 @@ shared_ptr<CompiledGrammar> CompiledGrammar::Get(ClientContext &context) {
 	if (client_config.current_dialect) {
 		auto dialect_extension = callback_manager.GetDialectExtension(*client_config.current_dialect);
 		if (!dialect_extension) {
-			throw InternalException("Dialect extension set to '%s' but couldn't be located in the registry",
+			throw InternalException("Dialect extension set to %s but couldn't be located in the registry",
 			                        *client_config.current_dialect);
 		}
 		return dialect_extension->GetCompiledGrammar(context);
@@ -134,7 +134,7 @@ terminal_rule_overrides_t ParsedGrammar::BuildTerminalRuleOverrides(const PEGKey
 }
 
 shared_ptr<CompiledGrammar>
-CompiledGrammar::Create(const case_insensitive_map_t<reference<GrammarExtension>> &grammar_extensions) {
+CompiledGrammar::Create(const identifier_map_t<reference<GrammarExtension>> &grammar_extensions) {
 	auto grammar = ParsedGrammar::CreateDefault();
 	for (auto &[_, extension] : grammar_extensions) {
 		auto changes = extension.get().GetChanges();
@@ -175,8 +175,8 @@ shared_ptr<CompiledGrammar> CompiledGrammar::Create() {
 }
 
 shared_ptr<CompiledGrammar> CompiledGrammar::Create(const ClientContext &context,
-                                                    const case_insensitive_set_t &active_extensions) {
-	case_insensitive_map_t<reference<GrammarExtension>> selected_extensions;
+                                                    const identifier_set_t &active_extensions) {
+	identifier_map_t<reference<GrammarExtension>> selected_extensions;
 	auto &callback_manager = ExtensionCallbackManager::Get(context);
 	for (auto &name : active_extensions) {
 		auto grammar_extension = callback_manager.FindGrammarExtension(name);
