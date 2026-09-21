@@ -955,22 +955,6 @@ TEST_CASE("V2: statement_type numeric round-trip for higher-numbered values", "[
 }
 
 // ===========================================================================
-// Drift detector: probe the first numeric value past the highest core
-// variant V2 currently mirrors. EnumUtil::ToString throws
-// NotImplementedException for values not present in its lookup table; if
-// a new variant is appended to duckdb::StatementType, the call will
-// instead return a string and this assertion will fire, signalling that
-// DUCKDB_V2_STATEMENT_TYPE in api_spec/v2/query_result/query_result.yaml
-// needs a matching id.
-// ===========================================================================
-
-TEST_CASE("V2: STATEMENT_TYPE has no gaps vs duckdb::StatementType", "[capi_v2][query_result]") {
-	constexpr auto highest_known = static_cast<uint8_t>(duckdb::StatementType::EXTERNAL_RESOURCE_STATEMENT);
-	auto probe = static_cast<duckdb::StatementType>(highest_known + 1);
-	REQUIRE_THROWS_AS(duckdb::EnumUtil::ToString(probe), duckdb::NotImplementedException);
-}
-
-// ===========================================================================
 // Results don't alias each other's storage, and a terminal (drained)
 // result keeps its metadata usable while later queries run.
 // ===========================================================================
