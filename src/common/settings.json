@@ -529,6 +529,22 @@
         "is_debug": true
     },
     {
+        "name": "debug_verify_progress",
+        "description": "Verify that operators report well-formed, monotonic and complete progress during execution (NONE, LOG or ERROR).",
+        "type": "ENUM<DebugProgressVerification>",
+        "default_scope": "local",
+        "default_value": "NONE",
+        "is_debug": true
+    },
+    {
+        "name": "debug_verify_progress_ignore",
+        "description": "Comma-separated list of progress violations to ignore, as INVARIANT or INVARIANT:OPERATOR (e.g. UNSUPPORTED_SOURCE:WINDOW).",
+        "type": "VARCHAR",
+        "default_scope": "local",
+        "default_value": "",
+        "is_debug": true
+    },
+    {
         "name": "debug_verify_serializer",
         "description": "Verify the logical plan serializer.",
         "type": "BOOLEAN",

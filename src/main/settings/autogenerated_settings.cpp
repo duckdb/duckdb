@@ -127,6 +127,16 @@ void DebugPhysicalTableScanExecutionStrategySetting::OnSet(SettingCallbackInfo &
 }
 
 //===----------------------------------------------------------------------===//
+// Debug Verify Progress
+//===----------------------------------------------------------------------===//
+void DebugVerifyProgressSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("debug_verify_progress setting cannot be NULL");
+	}
+	EnumUtil::FromString<DebugProgressVerification>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Debug Verify Statement
 //===----------------------------------------------------------------------===//
 void DebugVerifyStatementSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

@@ -903,6 +903,33 @@ struct DebugVerifyColumnBindingsSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugVerifyProgressSetting {
+	using RETURN_TYPE = DebugProgressVerification;
+	static constexpr const char *Name = "debug_verify_progress";
+	static constexpr const char *Description = "Verify that operators report well-formed, monotonic and complete "
+	                                           "progress during execution (NONE, LOG or ERROR).";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr bool IsDebug = true;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "NONE";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct DebugVerifyProgressIgnoreSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "debug_verify_progress_ignore";
+	static constexpr const char *Description = "Comma-separated list of progress violations to ignore, as INVARIANT or "
+	                                           "INVARIANT:OPERATOR (e.g. UNSUPPORTED_SOURCE:WINDOW).";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr bool IsDebug = true;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugVerifySerializerSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_verify_serializer";

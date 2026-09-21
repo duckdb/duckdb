@@ -131,6 +131,8 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(DebugVerifyAggregateStateExportSetting),
     DUCKDB_SETTING(DebugVerifyBlocksSetting),
     DUCKDB_SETTING(DebugVerifyColumnBindingsSetting),
+    DUCKDB_SETTING_CALLBACK(DebugVerifyProgressSetting),
+    DUCKDB_SETTING(DebugVerifyProgressIgnoreSetting),
     DUCKDB_SETTING(DebugVerifySerializerSetting),
     DUCKDB_SETTING_CALLBACK(DebugVerifyStatementSetting),
     DUCKDB_SETTING(DebugVerifyStatsSetting),
