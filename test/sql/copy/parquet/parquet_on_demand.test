@@ -44,10 +44,10 @@ FROM read_parquet('{TEST_DIR}/demand.parquet', prefetch_strategy='on_demand')
 ----
 true
 
-# Uncached sequential reads grow the buffer from 1 MiB; cached reads use cache blocks.
+# Uncached reads use fixed-size demand buffers; cached reads use cache blocks.
 query II
-SELECT count(*) BETWEEN 1 AND 599 AND max(bytes) <= 33554432,
-       (bool_or(bytes = 1048576) AND bool_or(bytes = 2097152)) = ('{mode}' != 'enabled')
+SELECT count(*) BETWEEN 1 AND 599 AND max(bytes) <= 1000000,
+       bool_or(bytes = 1000000) = ('{mode}' != 'enabled')
 FROM duckdb_logs_parsed('FileSystem')
 WHERE path LIKE '%/demand.parquet' AND op = 'READ'
 ----
@@ -58,7 +58,7 @@ query I
 SELECT count(*) FROM (
     SELECT pos, lag(pos + bytes) OVER (ORDER BY pos) AS previous_end
     FROM duckdb_logs_parsed('FileSystem')
-    WHERE path LIKE '%/demand.parquet' AND op = 'READ' AND bytes >= 1048576
+    WHERE path LIKE '%/demand.parquet' AND op = 'READ' AND bytes = 1000000
 ) reads WHERE pos != previous_end
 ----
 0
@@ -89,7 +89,7 @@ SELECT sum(a) = (SELECT sum(a) FROM demand_input) FROM read_parquet('{TEST_DIR}/
 true
 
 query I
-SELECT bool_or(bytes = 1048576) AND bool_or(bytes = 2097152) AND max(bytes) <= 33554432 AND count(*) < 50
+SELECT bool_or(bytes = 1000000) AND max(bytes) <= 1000000 AND count(*) < 50
 FROM duckdb_logs_parsed('FileSystem')
 WHERE path LIKE '%/demand.parquet' AND op = 'READ'
 ----

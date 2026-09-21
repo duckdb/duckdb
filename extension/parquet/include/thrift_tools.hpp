@@ -155,8 +155,7 @@ struct ReadAheadBuffer {
 
 class ThriftFileTransport : public duckdb_apache::thrift::transport::TVirtualTransport<ThriftFileTransport> {
 public:
-	static constexpr idx_t INITIAL_DEMAND_BUFFER_SIZE = 1ULL << 20;
-	static constexpr idx_t MAX_DEMAND_BUFFER_SIZE = 32ULL << 20;
+	static constexpr idx_t DEMAND_BUFFER_SIZE = 1000000;
 
 	ThriftFileTransport(QueryContext context_p, CachingFileHandle &file_handle_p, bool cache_reads_p,
 	                    uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP,
@@ -232,7 +231,6 @@ public:
 		ra_buffer.merge_set.clear();
 		demand_buffer.Reset();
 		demand_buffer_start = demand_buffer_end = 0;
-		last_demand_read_end.SetInvalid();
 	}
 
 	void Skip(idx_t skip_count) {
@@ -283,28 +281,19 @@ private:
 			return;
 		}
 
-		auto capacity = demand_buffer.GetSize() ? demand_buffer.GetSize() : INITIAL_DEMAND_BUFFER_SIZE;
 		// Large reads go straight into the caller's buffer without an intermediate allocation.
-		if (len > capacity) {
+		if (len > DEMAND_BUFFER_SIZE) {
 			file_handle.ReadAndRecord(context, buf, len, read_location);
-			last_demand_read_end = read_location + len;
 			return;
 		}
 
-		// Double the buffer on sequential refills, up to the maximum size.
-		if (last_demand_read_end.IsValid() && last_demand_read_end.GetIndex() == read_location &&
-		    capacity < MAX_DEMAND_BUFFER_SIZE) {
-			capacity *= 2;
+		if (!demand_buffer.IsSet()) {
+			demand_buffer = file_handle.GetBufferAllocator().Allocate(DEMAND_BUFFER_SIZE);
 		}
-		if (demand_buffer.GetSize() != capacity) {
-			demand_buffer.Reset();
-			demand_buffer = file_handle.GetBufferAllocator().Allocate(capacity);
-		}
-		auto read_size = MinValue<idx_t>(capacity, size - read_location);
+		auto read_size = MinValue<idx_t>(DEMAND_BUFFER_SIZE, size - read_location);
 		file_handle.ReadAndRecord(context, demand_buffer.get(), read_size, read_location);
 		demand_buffer_start = read_location;
 		demand_buffer_end = read_location + read_size;
-		last_demand_read_end = demand_buffer_end;
 		memcpy(buf, demand_buffer.get(), len);
 	}
 
@@ -324,7 +313,6 @@ private:
 	AllocatedData demand_buffer;
 	idx_t demand_buffer_start = 0;
 	idx_t demand_buffer_end = 0;
-	optional_idx last_demand_read_end;
 };
 
 } // namespace duckdb
