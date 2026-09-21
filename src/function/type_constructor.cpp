@@ -66,6 +66,9 @@ string ConstructorToString(const Identifier &type_name, const TypeConstructor &c
 	const auto &sig = constructor.GetSignature();
 	vector<string> parts;
 	for (auto &param : sig.GetParameters()) {
+		if (param.IsVariadic()) {
+			continue;
+		}
 		string part = param.GetName().GetIdentifierName() + " " + param.GetType().ToString();
 		if (param.HasDefaultValue()) {
 			part += " := " + param.GetDefaultValue()->ToString();
@@ -133,7 +136,7 @@ Value CastArgument(const Identifier &type_name, const string &arg_name, const Va
 vector<TypeArgument> NormalizeArguments(const Identifier &type_name, const TypeConstructor &constructor,
                                         const vector<TypeArgument> &arguments, QueryLocation type_location) {
 	const auto &sig = constructor.GetSignature();
-	const auto param_count = sig.GetParameterCount();
+	const auto param_count = sig.GetPositionalParameterCount();
 
 	vector<TypeArgument> result;
 	vector<optional_ptr<const TypeArgument>> slots(param_count);

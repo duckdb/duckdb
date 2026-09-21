@@ -153,7 +153,9 @@ struct ScalarFunctionExtractor {
 	static vector<Value> GetParameters(ScalarFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		for (auto &param : entry.functions.GetFunctionByOffset(offset)->GetSignature().GetParameters()) {
-			results.emplace_back(param.GetName());
+			if (!param.IsVariadic()) {
+				results.emplace_back(param.GetName());
+			}
 		}
 		return results;
 	}
@@ -162,7 +164,9 @@ struct ScalarFunctionExtractor {
 		vector<Value> results;
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
 		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
-			results.emplace_back(fun.GetSignature().GetParameter(i).GetType().ToString());
+			if (!fun.GetSignature().GetParameter(i).IsVariadic()) {
+				results.emplace_back(fun.GetSignature().GetParameter(i).GetType().ToString());
+			}
 		}
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
@@ -171,7 +175,9 @@ struct ScalarFunctionExtractor {
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
 		vector<LogicalType> results;
 		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
-			results.emplace_back(fun.GetSignature().GetParameter(i).GetType());
+			if (!fun.GetSignature().GetParameter(i).IsVariadic()) {
+				results.emplace_back(fun.GetSignature().GetParameter(i).GetType());
+			}
 		}
 		return results;
 	}
@@ -211,7 +217,9 @@ struct WindowFunctionExtractor {
 	static vector<Value> GetParameters(WindowFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		for (auto &param : entry.functions.GetFunctionByOffset(offset)->GetSignature().GetParameters()) {
-			results.emplace_back(param.GetName());
+			if (!param.IsVariadic()) {
+				results.emplace_back(param.GetName());
+			}
 		}
 		return results;
 	}
@@ -220,7 +228,9 @@ struct WindowFunctionExtractor {
 		vector<Value> results;
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
 		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
-			results.emplace_back(fun.GetSignature().GetParameter(i).GetType().ToString());
+			if (!fun.GetSignature().GetParameter(i).IsVariadic()) {
+				results.emplace_back(fun.GetSignature().GetParameter(i).GetType().ToString());
+			}
 		}
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
@@ -229,7 +239,9 @@ struct WindowFunctionExtractor {
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
 		vector<LogicalType> results;
 		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
-			results.emplace_back(fun.GetSignature().GetParameter(i).GetType());
+			if (!fun.GetSignature().GetParameter(i).IsVariadic()) {
+				results.emplace_back(fun.GetSignature().GetParameter(i).GetType());
+			}
 		}
 		return results;
 	}
@@ -267,7 +279,9 @@ struct AggregateFunctionExtractor {
 	static vector<Value> GetParameters(AggregateFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		for (auto &param : entry.functions.GetFunctionByOffset(offset)->GetSignature().GetParameters()) {
-			results.emplace_back(param.GetName());
+			if (!param.IsVariadic()) {
+				results.emplace_back(param.GetName());
+			}
 		}
 		return results;
 	}
@@ -276,7 +290,9 @@ struct AggregateFunctionExtractor {
 		vector<Value> results;
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
 		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
-			results.emplace_back(fun.GetSignature().GetParameter(i).GetType().ToString());
+			if (!fun.GetSignature().GetParameter(i).IsVariadic()) {
+				results.emplace_back(fun.GetSignature().GetParameter(i).GetType().ToString());
+			}
 		}
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
@@ -285,7 +301,9 @@ struct AggregateFunctionExtractor {
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
 		vector<LogicalType> results;
 		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
-			results.emplace_back(fun.GetSignature().GetParameter(i).GetType());
+			if (!fun.GetSignature().GetParameter(i).IsVariadic()) {
+				results.emplace_back(fun.GetSignature().GetParameter(i).GetType());
+			}
 		}
 		return results;
 	}

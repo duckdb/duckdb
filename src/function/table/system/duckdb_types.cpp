@@ -240,6 +240,9 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		vector<Value> parameter_names;
 		vector<Value> parameter_type_names;
 		for (auto &param : signature.GetParameters()) {
+			if (param.IsVariadic()) {
+				continue;
+			}
 			parameter_names.emplace_back(param.GetName());
 			parameter_type_names.emplace_back(param.GetType().ToString());
 		}
