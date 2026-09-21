@@ -6,6 +6,10 @@ require quack
 
 require httpfs
 
+# the Quack log type is registered by the extension, so it has to be loaded before enabling it
+statement ok
+LOAD quack;
+
 # the Quack log records every request before it is parsed; server-side entries have no 'server' URL
 statement ok
 CALL enable_logging('Quack');
