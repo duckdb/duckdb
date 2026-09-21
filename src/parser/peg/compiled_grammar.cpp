@@ -1,4 +1,6 @@
 #include "duckdb/parser/peg/compiled_grammar.hpp"
+
+#include "duckdb/parser/peg/passthrough_dialect.hpp"
 #include "duckdb/parser/peg/matcher_factory.hpp"
 #include "duckdb/parser/peg/keyword_helper/parsed_grammar_keyword_helper.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -22,6 +24,10 @@ CompiledGrammar::CompiledGrammar(MatcherAllocator &&allocator_p, unique_ptr<PEGK
 shared_ptr<CompiledGrammar> CompiledGrammar::Get(ClientContext &context) {
 	auto &client_config = ClientConfig::GetConfig(context);
 	auto &callback_manager = ExtensionCallbackManager::Get(context);
+	if (client_config.connected_grammar) {
+		// while CONNECT-ed, the database being talked to decides how its statements are parsed
+		return client_config.connected_grammar;
+	}
 	if (client_config.current_dialect) {
 		auto dialect_extension = callback_manager.GetDialectExtension(*client_config.current_dialect);
 		if (!dialect_extension) {
@@ -184,6 +190,21 @@ shared_ptr<CompiledGrammar> CompiledGrammar::Create(const ClientContext &context
 		}
 	}
 	return Create(selected_extensions);
+}
+
+ParserCache::ParserCache() {
+}
+
+ParserCache::~ParserCache() {
+}
+
+shared_ptr<CompiledGrammar> ParserCache::GetPassthroughMatcher(const ClientContext &context) {
+	std::unique_lock<std::mutex> lock(passthrough_mutex);
+	if (!passthrough_dialect) {
+		passthrough_dialect = make_uniq<PassthroughDialect>();
+	}
+	// the dialect caches the compiled grammar itself
+	return passthrough_dialect->GetCompiledGrammar(context);
 }
 
 shared_ptr<CompiledGrammar> ParserCache::GetMatcher() {

@@ -2,8 +2,7 @@
 
 namespace duckdb {
 
-PassthroughStatement::PassthroughStatement(string query_p) : SQLStatement(StatementType::PASSTHROUGH_STATEMENT) {
-	query = std::move(query_p);
+PassthroughStatement::PassthroughStatement() : SQLStatement(StatementType::PASSTHROUGH_STATEMENT) {
 }
 
 unique_ptr<SQLStatement> PassthroughStatement::Copy() const {

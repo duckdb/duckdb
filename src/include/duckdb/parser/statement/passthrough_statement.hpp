@@ -18,7 +18,7 @@ public:
 	static constexpr const StatementType TYPE = StatementType::PASSTHROUGH_STATEMENT;
 
 public:
-	explicit PassthroughStatement(string query_p);
+	PassthroughStatement();
 
 protected:
 	PassthroughStatement(const PassthroughStatement &other) = default;
