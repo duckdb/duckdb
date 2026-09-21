@@ -1,0 +1,13 @@
+diff --git a/src/hnsw/hnsw_index_physical_create.cpp b/src/hnsw/hnsw_index_physical_create.cpp
+index 71d7a7b..ca629b2 100644
+--- a/src/hnsw/hnsw_index_physical_create.cpp
++++ b/src/hnsw/hnsw_index_physical_create.cpp
+@@ -283,7 +283,7 @@ public:
+ 		duck_index.initial_index_size = gstate.global_index->Cast<BoundIndex>().GetInMemorySize();
+ 
+ 		// Finally add it to storage
+-		storage.AddIndex(std::move(gstate.global_index));
++		storage.AddIndex(std::move(gstate.global_index), duck_index.oid);
+ 	}
+ };
+ 
