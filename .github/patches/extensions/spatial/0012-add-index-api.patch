@@ -1,9 +1,3 @@
-commit 52b5e0385d5e39df6580d6a28249ecd5c8d47464
-Author: dentinyhao <dentinyhao@gmail.com>
-Date:   Thu Sep 17 21:30:02 2026 -0700
-
-    update AddIndex invocation
-
 diff --git a/src/spatial/index/rtree/rtree_index_create_physical.cpp b/src/spatial/index/rtree/rtree_index_create_physical.cpp
 index 08abd6f..e42559b 100644
 --- a/src/spatial/index/rtree/rtree_index_create_physical.cpp

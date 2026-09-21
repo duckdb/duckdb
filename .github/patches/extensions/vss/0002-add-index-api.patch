@@ -1,9 +1,3 @@
-commit dc0041c125f2e6f4eefe38c074c2353c8fd56e6c
-Author: dentinyhao <dentinyhao@gmail.com>
-Date:   Thu Sep 17 21:31:22 2026 -0700
-
-    update AddIndex invocation
-
 diff --git a/src/hnsw/hnsw_index_physical_create.cpp b/src/hnsw/hnsw_index_physical_create.cpp
 index 71d7a7b..ca629b2 100644
 --- a/src/hnsw/hnsw_index_physical_create.cpp
