@@ -187,47 +187,58 @@ SELECT count(*) FROM (SELECT row_number() OVER () FROM range(100000) t(i))
 ----
 100000
 
-# scans of the recurring table of a recursive CTE with USING KEY report progress
-statement ok
-SET debug_verify_progress_ignore='UNSUPPORTED_SOURCE:REC_CTE'
+# recursive CTEs report an estimated progress
+query I
+WITH RECURSIVE t(i) AS (SELECT * FROM range(100000) UNION ALL SELECT i + 100000 FROM t WHERE i < 400000) SELECT sum(i) FROM t
+----
+124999750000
 
+query I
+WITH RECURSIVE t(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM t WHERE i < 20000) SELECT count(*) FROM t
+----
+20000
+
+# shrinking iterations
+query I
+WITH RECURSIVE t(i) AS (SELECT * FROM range(100000) UNION ALL SELECT i // 2 FROM t WHERE i > 1 AND i % 2 = 0) SELECT count(*) FROM t
+----
+199989
+
+# recursive CTEs with USING KEY and scans of their recurring table report progress
 query II
 WITH RECURSIVE t(k, v) USING KEY (k) AS (SELECT i, 0 FROM range(10000) t(i) UNION (SELECT r.k, r.v + 1 FROM recurring.t r WHERE r.v < 3 AND EXISTS (SELECT 1 FROM t LIMIT 1))) SELECT count(*), sum(v) FROM t
 ----
 10000	30000
 
-statement ok
-SET debug_verify_progress_ignore=''
-
-# recursive CTEs do not report progress - this fails the query in error mode
+# the unnest table function does not report progress - this fails the query in error mode
 statement error
-WITH RECURSIVE t(i) AS (SELECT * FROM range(100000) UNION ALL SELECT i + 100000 FROM t WHERE i < 400000) SELECT sum(i) FROM t
+SELECT sum(i) FROM unnest(range(500000)) t(i)
 ----
-<REGEX>:Invalid Input Error: Progress verification failed:.*UNSUPPORTED_SOURCE \[REC_CTE\] in pipeline REC_CTE -> UNGROUPED_AGGREGATE.*debug_verify_progress_ignore='UNSUPPORTED_SOURCE:REC_CTE'.*
+<REGEX>:Invalid Input Error: Progress verification failed:.*UNSUPPORTED_SOURCE \[UNNEST\] in pipeline UNNEST -> UNGROUPED_AGGREGATE.*debug_verify_progress_ignore='UNSUPPORTED_SOURCE:UNNEST'.*
 
 # violations can be ignored per invariant and operator, per operator, or per invariant
-foreach ignore UNSUPPORTED_SOURCE:REC_CTE unsupported_source:rec_cte *:REC_CTE UNSUPPORTED_SOURCE STALLED,UNSUPPORTED_SOURCE:REC_CTE
+foreach ignore UNSUPPORTED_SOURCE:UNNEST unsupported_source:unnest *:UNNEST UNSUPPORTED_SOURCE STALLED,UNSUPPORTED_SOURCE:UNNEST
 
 statement ok
 SET debug_verify_progress_ignore='{ignore}'
 
 query I
-WITH RECURSIVE t(i) AS (SELECT * FROM range(100000) UNION ALL SELECT i + 100000 FROM t WHERE i < 400000) SELECT sum(i) FROM t
+SELECT sum(i) FROM unnest(range(500000)) t(i)
 ----
 124999750000
 
 endloop
 
 # other invariants or operators are not ignored
-foreach ignore UNSUPPORTED_SINK:REC_CTE UNSUPPORTED_SOURCE:SEQ_SCAN STALLED
+foreach ignore UNSUPPORTED_SINK:UNNEST UNSUPPORTED_SOURCE:SEQ_SCAN STALLED
 
 statement ok
 SET debug_verify_progress_ignore='{ignore}'
 
 statement error
-WITH RECURSIVE t(i) AS (SELECT * FROM range(100000) UNION ALL SELECT i + 100000 FROM t WHERE i < 400000) SELECT sum(i) FROM t
+SELECT sum(i) FROM unnest(range(500000)) t(i)
 ----
-<REGEX>:.*UNSUPPORTED_SOURCE \[REC_CTE\].*
+<REGEX>:.*UNSUPPORTED_SOURCE \[UNNEST\].*
 
 endloop
 
@@ -254,14 +265,14 @@ statement ok
 CALL enable_logging('ProgressVerification')
 
 query I
-WITH RECURSIVE t(i) AS (SELECT * FROM range(100000) UNION ALL SELECT i + 100000 FROM t WHERE i < 400000) SELECT sum(i) FROM t
+SELECT sum(i) FROM unnest(range(500000)) t(i)
 ----
 124999750000
 
 query III
 SELECT invariant, operator, pipeline FROM duckdb_logs_parsed('ProgressVerification')
 ----
-UNSUPPORTED_SOURCE	REC_CTE	REC_CTE -> UNGROUPED_AGGREGATE
+UNSUPPORTED_SOURCE	UNNEST	UNNEST -> UNGROUPED_AGGREGATE
 
 statement ok
 SET debug_verify_progress='none'
@@ -270,7 +281,7 @@ statement ok
 CALL truncate_duckdb_logs()
 
 query I
-WITH RECURSIVE t(i) AS (SELECT * FROM range(100000) UNION ALL SELECT i + 100000 FROM t WHERE i < 400000) SELECT sum(i) FROM t
+SELECT sum(i) FROM unnest(range(500000)) t(i)
 ----
 124999750000
 

@@ -8,7 +8,7 @@
     },
     {
       "name": "debug_verify_progress_ignore",
-      "value": "UNSUPPORTED_SOURCE:REC_CTE"
+      "value": ""
     }
   ]
 }

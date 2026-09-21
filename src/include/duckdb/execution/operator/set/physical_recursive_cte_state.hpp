@@ -277,6 +277,9 @@ public:
 	void FinalizeAggregateRows(RowOperationsState &row_state, Vector &addresses, DataChunk &aggregates, idx_t count);
 	void AssembleStateRows(DataChunk &keys, DataChunk &aggregates, DataChunk &result) const;
 
+	//! Progress of the source - an estimate, as the number of recursive iterations is not known up front
+	ProgressData GetProgress() const;
+
 	const PhysicalRecursiveCTE &GetOperator() const {
 		return op;
 	}
@@ -372,6 +375,29 @@ private:
 	idx_t local_preaggregate_candidate_count = 0;
 	RecursiveCTESourcePhase source_phase = RecursiveCTESourcePhase::INITIAL;
 	bool output_is_working = false;
+	//! Source statistics used to estimate the progress
+	struct SourceProgressState {
+		bool finished = false;
+		//! Rows emitted by the source
+		idx_t emitted_rows = 0;
+		//! Rows emitted before the current iteration started
+		idx_t iteration_start_rows = 0;
+		//! Rows of the first, the current and the previous iteration
+		idx_t anchor_rows = 0;
+		idx_t iteration_rows = 0;
+		idx_t previous_iteration_rows = 0;
+		idx_t iterations = 0;
+		//! Whether the final state of a USING KEY recursion is being emitted (its size is then known)
+		bool draining = false;
+		//! The highest progress fraction reported so far
+		double max_fraction = 0;
+	};
+	mutable mutex progress_lock;
+	mutable SourceProgressState progress_state;
+	void StartOutputIteration(idx_t row_count);
+	void StartFinalDrain(idx_t row_count);
+	void AddEmittedRows(idx_t row_count);
+	void SetSourceFinished();
 	//! Cached chunk for distinct key extraction in the using_key Sink path
 	DataChunk distinct_rows;
 	//! Cached chunks for source-side hash table scans and recurring table copy paths
