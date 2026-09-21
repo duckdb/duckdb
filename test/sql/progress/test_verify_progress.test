@@ -70,6 +70,26 @@ SELECT count(*) > 0 FROM test_vector_types(NULL::INT, NULL::VARCHAR, NULL::INT[]
 ----
 true
 
+# limit and top-n report progress
+statement ok
+CREATE TABLE small_integers AS SELECT i FROM range(30000) t(i)
+
+statement ok
+SET threads=4
+
+query I
+SELECT sum(i) FROM (SELECT i FROM small_integers WHERE i % 2 = 0 LIMIT 5000 OFFSET 10)
+----
+25095000
+
+statement ok
+SET threads=1
+
+query I
+SELECT sum(i) FROM (SELECT i FROM range(1000000) t(i) ORDER BY i DESC LIMIT 5000 OFFSET 10)
+----
+4987447500
+
 # recursive CTEs do not report progress - this fails the query in error mode
 statement error
 WITH RECURSIVE t(i) AS (SELECT * FROM range(100000) UNION ALL SELECT i + 100000 FROM t WHERE i < 400000) SELECT sum(i) FROM t
