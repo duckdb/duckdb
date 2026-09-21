@@ -737,15 +737,15 @@ AlterTableOptions <- AddColumn / DropConstraint / DropColumn / AlterColumn / Add
         RenameColumn / RenameAlter / SetPartitionedBy / ResetPartitionedBy / SetSortedBy / ResetSortedBy / SetOptions / ResetOptions
 
 AddConstraint <- 'ADD' TopLevelConstraint
-DropConstraint <- 'DROP' 'CONSTRAINT' IfExists? Identifier DropBehavior?
+DropConstraint <- 'DROP' 'CONSTRAINT' IfExists? ConstraintName DropBehavior?
 AddColumn <- 'ADD' 'COLUMN'? IfNotExists? AddColumnEntry
 AddColumnEntry <- DottedIdentifier Type? GeneratedColumn? ColumnConstraint*
 DropColumn <- 'DROP' 'COLUMN'? IfExists? NestedColumnName DropBehavior?
 AlterColumn <- 'ALTER' 'COLUMN'? NestedColumnName AlterColumnEntry
-RenameColumn <- 'RENAME' 'COLUMN'? NestedColumnName 'TO' Identifier
+RenameColumn <- 'RENAME' 'COLUMN'? NestedColumnName 'TO' ColIdOrString
 NestedColumnName <- IdentifierDot* ColumnName
 IdentifierDot <- Identifier '.'
-RenameAlter <- 'RENAME' 'TO' Identifier
+RenameAlter <- 'RENAME' 'TO' ColIdOrString
 SetPartitionedBy <- 'SET' 'PARTITIONED' 'BY' Parens(List(Expression))
 ResetPartitionedBy <- 'RESET' 'PARTITIONED' 'BY'
 SetSortedBy <- 'SET' 'SORTED' 'BY' Parens(OrderByExpressions)
@@ -796,7 +796,10 @@ CallStatement <- 'CALL' QualifiedTableFunction TableFunctionArguments
 CheckpointStatement <- CheckpointForce? 'CHECKPOINT' CatalogName?
 CheckpointForce <- 'FORCE'
 
-CommentStatement <- 'COMMENT' 'ON' CommentOnType DottedIdentifier 'IS' CommentValue
+CommentStatement <- 'COMMENT' 'ON' CommentOnType CommentTarget 'IS' CommentValue
+
+CommentTarget <- DottedIdentifier / CommentStringLiteralIdentifier
+CommentStringLiteralIdentifier <- StringLiteralIdentifier
 
 CommentOnType <-    CommentTable / CommentSequence / CommentFunction / CommentMacroTable / CommentMacro /
                     CommentView / CommentDatabase / CommentIndex / CommentSchema / CommentType / CommentColumn
@@ -1021,7 +1024,7 @@ SetDefaultKeyAction <- 'SET' 'DEFAULT'
 
 TopLevelConstraint <- ConstraintNameClause? TopLevelConstraintList
 TopLevelConstraintList <- TopPrimaryKeyConstraint / TopCheckConstraint / TopUniqueConstraint / TopForeignKeyConstraint
-ConstraintNameClause <- 'CONSTRAINT' Identifier
+ConstraintNameClause <- 'CONSTRAINT' ConstraintName
 TopCheckConstraint <- CheckConstraint
 TopPrimaryKeyConstraint <- 'PRIMARY' 'KEY' ColumnIdList
 TopUniqueConstraint <- 'UNIQUE' ColumnIdList
@@ -1093,7 +1096,7 @@ CreateViewStmt <- CreateSecure? CreateRecursive? 'VIEW' IfNotExists? QualifiedNa
 CreateRecursive <- 'RECURSIVE'
 CreateSecure <- 'SECURE'
 
-DeallocateStatement <- 'DEALLOCATE' DeallocatePrepare? Identifier
+DeallocateStatement <- 'DEALLOCATE' DeallocatePrepare? ColIdOrString
 DeallocatePrepare <- 'PREPARE'
 
 DeleteStatement <- WithClause? 'DELETE' 'FROM' TargetOptAlias DeleteUsingClause? WhereClause? ReturningClause?
@@ -1187,7 +1190,8 @@ IfExists <- 'IF' 'EXISTS'
 
 DropSecretStorage <- 'FROM' Identifier
 
-ExecuteStatement <- 'EXECUTE' Identifier TableFunctionArguments?
+ExecuteStatement <- 'EXECUTE' ColIdOrString TableFunctionArguments?
+
 ExplainStatement <- 'EXPLAIN' AnalyzeKeyword? ExplainOptionList? ExplainableStatements
 ExplainOptionList <- Parens(List(ExplainOption))
 ExplainOption <- ExplainOptionName Expression?
@@ -1704,7 +1708,7 @@ PragmaAssign <- SettingName '=' VariableList
 PragmaFunction <- PragmaName PragmaParameters?
 PragmaParameters <- Parens(List(Expression))
 
-PrepareStatement <- 'PREPARE' Identifier TypeList? 'AS' Statement
+PrepareStatement <- 'PREPARE' ColIdOrString TypeList? 'AS' Statement
 
 TypeList <- Parens(List(Type))
 
@@ -1740,7 +1744,7 @@ SimpleSelect <- SelectFrom WhereClause? GroupByClause? HavingClause? WindowClaus
 SelectFrom <- SelectFromClause / FromSelectClause
 SelectFromClause <- SelectClause FromClause?
 FromSelectClause <- FromClause SelectClause?
-WithStatement <- ColIdOrString InsertColumnList? UsingKey? 'AS' Materialized? CTEBody
+WithStatement <- ColIdOrString ColumnAliases? UsingKey? 'AS' Materialized? CTEBody
 CTEBody <- CTESelectBody / CTEDMLBody
 CTESelectBody <- Parens(SelectStatementInternal)
 CTEDMLBody <- Parens(Statement)
@@ -1838,7 +1842,8 @@ Asof <- 'ASOF'
 JoinWithoutOnClause <- JoinPrefix 'JOIN' InnerTableRef
 JoinQualifier <- OnClause / UsingClause
 OnClause <- 'ON' Expression
-UsingClause <- 'USING' Parens(List(ColumnName))
+UsingClause <- 'USING' Parens(List(UsingColumnName))
+UsingColumnName <- ColumnName / StringLiteralIdentifier
 
 JoinType <- FullJoin / LeftJoin / RightJoin / SemiJoin / AntiJoin / InnerJoin
 JoinPrefix <- CrossJoinPrefix / NaturalJoinPrefix / PositionalJoinPrefix
@@ -2001,5 +2006,5 @@ OptFull <- 'FULL'
 OptFreeze <- 'FREEZE'
 OptVerbose <- 'VERBOSE'
 
-NameList <- Parens(List(ColId))
+NameList <- Parens(List(ColIdOrString))
 
