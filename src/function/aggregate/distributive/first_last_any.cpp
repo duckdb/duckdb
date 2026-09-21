@@ -86,24 +86,25 @@ struct FirstStringStateBase {
 	bool value_is_valid;
 	//! Whether the state has been set (i.e. we have seen a row)
 	bool is_set;
-	//! The size of the arena allocation for a non-inlined string value - not part of the exported state
-	uint32_t alloc_size;
+	//! The size of the arena allocation for a non-inlined string value - not part of the exported state.
+	//! Must be wide enough for NextPowerOfTwo(MAX_STRING_SIZE), which does not fit in a uint32_t.
+	idx_t alloc_size;
 
 	void Assign(string_t input, AggregateInputData &input_data) {
 		if (input.IsInlined()) {
 			value = input;
 			alloc_size = 0;
 		} else {
-			auto len = UnsafeNumericCast<uint32_t>(input.GetSize());
+			auto len = input.GetSize();
 			char *ptr;
 			if (alloc_size >= len) {
 				ptr = value.GetDataWriteable();
 			} else {
-				alloc_size = UnsafeNumericCast<uint32_t>(NextPowerOfTwo(len));
+				alloc_size = NextPowerOfTwo(len);
 				ptr = char_ptr_cast(input_data.allocator.Allocate(alloc_size));
 			}
 			memcpy(ptr, input.GetData(), len);
-			value = string_t(ptr, len);
+			value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
 		}
 	}
 };
@@ -384,10 +385,10 @@ void FirstFunctionClusterUpdate(Vector inputs[], AggregateInputData &aggregate_i
 	inputs[0].ToUnifiedFormat(idata);
 	auto input_data = UnifiedVectorFormat::GetData<T>(idata);
 	AggregateUnaryInput unary_input(aggregate_input_data, idata.validity);
-	for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-		auto &state = *reinterpret_cast<FirstState<T> *>(clustered.group_runs[r].state);
-		const auto *run_sel = clustered.group_runs[r].sel;
-		const auto run_count = clustered.group_runs[r].count;
+	for (auto &run : clustered.runs()) {
+		auto &state = *reinterpret_cast<FirstState<T> *>(run.state);
+		const auto *run_sel = run.sel;
+		const auto run_count = run.count;
 		FirstFunction<LAST, SKIP_NULLS>::template ClusteredOp<T, FirstState<T>, FirstFunction<LAST, SKIP_NULLS>>(
 		    state, input_data, unary_input, run_sel, *idata.sel, idata.validity, 0, run_count);
 	}

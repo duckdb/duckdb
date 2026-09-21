@@ -108,7 +108,11 @@ public:
 
 public:
 	static ScalarFunction GetTransformFunction();
+	//! 'variant_to_bytes': encode a VARIANT as a binary Variant value (metadata followed by value)
 	static ScalarFunction GetToBytesFunction();
+	//! 'variant_bytes_to_variant': decode a binary Variant value (metadata followed by value)
+	//! into a VARIANT. The inverse of 'variant_to_parquet_variant'.
+	static ScalarFunction GetBytesToVariantFunction();
 	static LogicalType TransformTypedValueRecursive(const LogicalType &type);
 
 private:

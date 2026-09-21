@@ -32,6 +32,7 @@ std::string SlotBytes(const duckdb_v2_bytes &s) {
 }
 
 } // namespace
+
 TEST_CASE("Stable C++API: Vector AssignString", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
@@ -631,3 +632,136 @@ TEST_CASE("Stable C++API: ValidityMask SetAllValid born-valid and reset", "[cpp_
 		REQUIRE(reset_view.RowIsValid(i));
 	}
 }
+
+TEST_CASE("Stable C++API: checked and unsafe UTF-8 string construction", "[cpp_api]") {
+	using namespace duckdb::cxx;
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	std::vector<LogicalType> types;
+	types.push_back(conn.ParseType("VARCHAR"));
+	DataChunk chunk(types);
+	auto vec = chunk.GetVector(0);
+	vec.SetSize(3);
+	auto heap = vec.GetHeap();
+	auto slots = vec.GetDataMutable<varchar_t>();
+
+	const std::string valid[] = {"", "ASCII", "é🦆", std::string("a\0b", 3), "🦆🦆🦆🦆"};
+	for (const auto &text : valid) {
+		REQUIRE_NOTHROW(ValidateUTF8(text));
+		vec.AssignString(0, text);
+		vec.SetString(1, heap.AddString(text));
+		vec.SetString(2, heap.AddStringUnsafe(text));
+		for (idx_t i = 0; i < 3; i++) {
+			REQUIRE(slots[i].view() == text);
+		}
+	}
+
+	const std::string malformed[] = {"\xFF", std::string("a\0\xFF", 3), std::string(40, '\xFF')};
+	for (const auto &text : malformed) {
+		REQUIRE_THROWS_MATCHES(ValidateUTF8(text), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_MATCHES(heap.AddString(text), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+
+		vec.AssignString(0, "🦆");
+		REQUIRE_THROWS_MATCHES(vec.AssignString(0, text), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE(slots[0].view() == "🦆");
+		vec.AssignStringUnsafe(1, text);
+		vec.SetString(2, heap.AddStringUnsafe(text));
+		REQUIRE(slots[1].view() == text);
+		REQUIRE(slots[2].view() == text);
+	}
+}
+
+TEST_CASE("Stable C++API: AssignString preserves binary bytes", "[cpp_api]") {
+	using namespace duckdb::cxx;
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	const auto bignum = bignum_t::Encode({{0xFF}, false});
+	const std::pair<const char *, std::string> values[] = {
+	    {"BLOB", "\xFF"}, {"BIT", std::string("\0\xFF", 2)}, {"BIGNUM", std::string(bignum.begin(), bignum.end())}};
+	for (const auto &value : values) {
+		std::vector<LogicalType> types;
+		types.push_back(conn.ParseType(value.first));
+		DataChunk chunk(types);
+		auto vec = chunk.GetVector(0);
+		vec.SetSize(1);
+		vec.AssignString(0, value.second);
+		REQUIRE(vec.GetDataMutable<blob_t>()[0].view() == value.second);
+	}
+}
+
+#if (STANDARD_VECTOR_SIZE > 3)
+TEST_CASE("Stable C++API: Vector Reference aliases the source without copying", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+
+	std::vector<LogicalType> types;
+	types.push_back(conn.ParseType("BIGINT"));
+	types.push_back(conn.ParseType("VARCHAR[]"));
+	types.push_back(conn.ParseType("VARCHAR"));
+	DataChunk source(types);
+	DataChunk target(types);
+
+	auto src = source.GetVector(0);
+	src.SetSize(4);
+	auto *src_data = src.GetDataMutable<int64_t>();
+	for (idx_t i = 0; i < 4; i++) {
+		src_data[i] = static_cast<int64_t>(i * 10);
+	}
+	src.SetNull(2);
+
+	auto dst = target.GetVector(0);
+	dst.SetSize(1);
+	dst.Reference(src);
+
+	// Same buffer, same size, same validity: no copy happened.
+	auto view = dst.GetView();
+	REQUIRE(dst.GetSize() == 4);
+	REQUIRE(view.count == 4);
+	REQUIRE(view.Data<int64_t>() == src_data);
+	REQUIRE(view.Data<int64_t>()[3] == 30);
+	REQUIRE_FALSE(view.RowIsValid(2));
+
+	// A write through the source shows up in the referencing vector.
+	src_data[0] = -1;
+	REQUIRE(dst.GetValue(0).Get<int64_t>() == -1);
+
+	// A CONSTANT source is referenced as a CONSTANT, not materialized.
+	auto csrc = source.GetVector(2);
+	csrc.MakeConstant(Value::Create(conn, varchar_t("c")), 3);
+	auto cdst = target.GetVector(2);
+	cdst.Reference(csrc);
+	REQUIRE(cdst.GetVectorType() == VectorType::CONSTANT);
+	REQUIRE(cdst.GetSize() == 3);
+	REQUIRE(cdst.GetValue(2).Get<varchar_t>().view() == "c");
+
+	// Nested: the list entries and the child vector come along.
+	auto lsrc = source.GetVector(1);
+	lsrc.SetSize(2);
+	std::vector<Value> first;
+	first.push_back(Value::Create(conn, varchar_t("a")));
+	first.push_back(Value::Create(conn, varchar_t("b")));
+	std::vector<Value> second;
+	second.push_back(Value::Create(conn, varchar_t("z")));
+	lsrc.SetValue(0, Value::CreateList(conn, first));
+	lsrc.SetValue(1, Value::CreateList(conn, second));
+	auto ldst = target.GetVector(1);
+	ldst.Reference(lsrc);
+	REQUIRE(ldst.GetSize() == 2);
+	REQUIRE(ldst.GetValue(0).GetChildCount() == 2);
+	REQUIRE(ldst.GetValue(0).GetChild(1).Get<varchar_t>().view() == "b");
+	REQUIRE(ldst.GetValue(1).GetChildCount() == 1);
+	REQUIRE(ldst.GetChild(0).GetValue(2).Get<varchar_t>().view() == "z");
+
+	// The types must match.
+	REQUIRE_THROWS_MATCHES(dst.Reference(csrc), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(ldst.Reference(src), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	// The failed call left the vector untouched.
+	REQUIRE(dst.GetSize() == 4);
+	REQUIRE(dst.GetValue(3).Get<int64_t>() == 30);
+}
+#endif

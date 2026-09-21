@@ -78,7 +78,7 @@
 #include "duckdb/storage/storage_info.hpp"
 #include "parquet_field_id.hpp"
 #include "parquet_types.h"
-#include "reader/variant/parquet_variant_iterator.hpp"
+#include "duckdb/common/types/variant/parquet_variant_iterator.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -1039,7 +1039,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	// Parquet VARIANT encoding and decoding
 	loader.RegisterFunction(VariantColumnWriter::GetTransformFunction());
 	loader.RegisterFunction(VariantColumnWriter::GetToBytesFunction());
-	loader.RegisterFunction(ParquetVariantConversion::GetBytesToVariantFunction());
+	loader.RegisterFunction(VariantColumnWriter::GetBytesToVariantFunction());
 
 	CopyFunction function("parquet");
 	function.copy_to_select = ParquetWriteSelect;
@@ -1114,11 +1114,9 @@ std::string ParquetExtension::Version() const {
 
 } // namespace duckdb
 
-#ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
 extern "C" {
 
 DUCKDB_CPP_EXTENSION_ENTRY(parquet, loader) { // NOLINT
 	duckdb::LoadInternal(loader);
 }
 }
-#endif

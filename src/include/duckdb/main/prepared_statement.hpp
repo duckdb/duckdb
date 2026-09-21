@@ -12,8 +12,8 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/winapi.hpp"
-#include "duckdb/main/materialized_query_result.hpp"
-#include "duckdb/main/pending_query_result.hpp"
+#include "duckdb/main/query_parameters.hpp"
+#include "duckdb/main/query_result.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -89,28 +89,27 @@ public:
 	//! Returns the map of parameter index to the expected type of parameter
 	DUCKDB_API case_insensitive_map_t<LogicalType> GetExpectedParameterTypes() const;
 
-	//! Create a pending query result of the prepared statement with the given set of arguments
+	//! Non-blocking. Submits the prepared statement with the given arguments and returns its handle
 	template <typename... ARGS>
-	unique_ptr<PendingQueryResult> PendingQuery(ARGS... args) {
+	unique_ptr<QueryResult> Submit(ARGS... args) {
 		vector<Value> values;
-		return PendingQueryRecursive(values, args...);
+		return SubmitRecursive(values, args...);
 	}
 
-	//! Create a pending query result of the prepared statement with the given set of arguments
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(vector<Value> &values, bool allow_stream_result = true);
+	//! Non-blocking. Submits the prepared statement with the given values and returns its handle
+	DUCKDB_API unique_ptr<QueryResult> Submit(vector<Value> &values, const QueryParameters &query_parameters = {});
 
-	//! Create a pending query result of the prepared statement with the given set named arguments
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(identifier_map_t<BoundParameterData> &named_values,
-	                                                       bool allow_stream_result = true);
+	//! Non-blocking. Submits the prepared statement with the given named values and returns its handle
+	DUCKDB_API unique_ptr<QueryResult> Submit(identifier_map_t<BoundParameterData> &named_values,
+	                                          const QueryParameters &query_parameters = {});
 
-	//! Execute the prepared statement with the given set of values
-	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &values, bool allow_stream_result = true);
+	//! Blocking. Runs the prepared statement with the given values to completion
+	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &values);
 
-	//! Execute the prepared statement with the given set of named+unnamed values
-	DUCKDB_API unique_ptr<QueryResult> Execute(identifier_map_t<BoundParameterData> &named_values,
-	                                           bool allow_stream_result = true);
+	//! Blocking. Runs the prepared statement with the given named and unnamed values to completion
+	DUCKDB_API unique_ptr<QueryResult> Execute(identifier_map_t<BoundParameterData> &named_values);
 
-	//! Execute the prepared statement with the given set of arguments
+	//! Blocking. Runs the prepared statement with the given arguments to completion
 	template <typename... ARGS>
 	unique_ptr<QueryResult> Execute(ARGS... args) {
 		vector<Value> values;
@@ -211,14 +210,14 @@ private:
 	//! Create the `EXECUTE <name>(...)` statement that runs this prepared statement with the given values
 	unique_ptr<SQLStatement> CreateExecuteStatement(const identifier_map_t<BoundParameterData> &named_values) const;
 
-	unique_ptr<PendingQueryResult> PendingQueryRecursive(vector<Value> &values) {
-		return PendingQuery(values);
+	unique_ptr<QueryResult> SubmitRecursive(vector<Value> &values) {
+		return Submit(values);
 	}
 
 	template <typename T, typename... ARGS>
-	unique_ptr<PendingQueryResult> PendingQueryRecursive(vector<Value> &values, T value, ARGS... args) {
+	unique_ptr<QueryResult> SubmitRecursive(vector<Value> &values, T value, ARGS... args) {
 		values.push_back(Value::CreateValue<T>(value));
-		return PendingQueryRecursive(values, args...);
+		return SubmitRecursive(values, args...);
 	}
 
 	unique_ptr<QueryResult> ExecuteRecursive(vector<Value> &values) {

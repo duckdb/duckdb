@@ -120,6 +120,8 @@ terminal_rule_overrides_t ParsedGrammar::BuildTerminalRuleOverrides(const PEGKey
 	AddTerminalRuleOverride(overrides, "NumberLiteral", make_uniq<NumberLiteralMatcher>());
 	AddTerminalRuleOverride(overrides, "StringLiteral", make_uniq<StringLiteralMatcher>());
 	AddTerminalRuleOverride(overrides, "OperatorLiteral", make_uniq<OperatorMatcher>());
+	AddTerminalRuleOverride(overrides, "AnyOperatorLiteral",
+	                        make_uniq<OperatorMatcher>(OperatorMatcherMode::ALL_OPERATORS));
 	//===--------------------------------------------------------------------===//
 	// END GENERATED RULE OVERRIDES
 	//===--------------------------------------------------------------------===//
@@ -131,10 +133,9 @@ terminal_rule_overrides_t ParsedGrammar::BuildTerminalRuleOverrides(const PEGKey
 	return overrides;
 }
 
-shared_ptr<CompiledGrammar>
-CompiledGrammar::Create(const case_insensitive_map_t<reference<GrammarExtension>> &grammar_extensions) {
+shared_ptr<CompiledGrammar> CompiledGrammar::Create(const vector<reference<GrammarExtension>> &grammar_extensions) {
 	auto grammar = ParsedGrammar::CreateDefault();
-	for (auto &[_, extension] : grammar_extensions) {
+	for (auto &extension : grammar_extensions) {
 		auto changes = extension.get().GetChanges();
 		for (auto &change : changes) {
 			change.Apply(grammar);
@@ -157,7 +158,7 @@ CompiledGrammar::Create(const case_insensitive_map_t<reference<GrammarExtension>
 
 	MatcherAllocator allocator;
 	auto terminal_rule_overrides = grammar.BuildTerminalRuleOverrides(*keyword_helper);
-	MatcherFactory factory(allocator, grammar, rules, std::move(terminal_rule_overrides));
+	MatcherFactory factory(allocator, grammar, rules, *keyword_helper, std::move(terminal_rule_overrides));
 
 	auto &program_matcher = factory.CreateRootMatcher("Program");
 	auto &top_level_statement_matcher = factory.GetMatcher("TopLevelStatement");
@@ -173,13 +174,13 @@ shared_ptr<CompiledGrammar> CompiledGrammar::Create() {
 }
 
 shared_ptr<CompiledGrammar> CompiledGrammar::Create(const ClientContext &context,
-                                                    const case_insensitive_set_t &active_extensions) {
-	case_insensitive_map_t<reference<GrammarExtension>> selected_extensions;
+                                                    const vector<string> &active_extensions) {
+	vector<reference<GrammarExtension>> selected_extensions;
 	auto &callback_manager = ExtensionCallbackManager::Get(context);
 	for (auto &name : active_extensions) {
 		auto grammar_extension = callback_manager.FindGrammarExtension(name);
 		if (grammar_extension) {
-			selected_extensions.emplace(name, *grammar_extension);
+			selected_extensions.emplace_back(*grammar_extension);
 		}
 	}
 	return Create(selected_extensions);

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/common/enums/ordinality_request_type.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/common/extra_operator_info.hpp"
@@ -35,6 +36,8 @@ public:
 	TableFunction function;
 	//! The bind data of the function
 	unique_ptr<FunctionData> bind_data;
+	//! Process-local input that cannot be reconstructed from SQL parameters
+	shared_ptr<TableFunctionInfo> bind_info;
 	//! The types of ALL columns that can be returned by the table function
 	vector<LogicalType> returned_types;
 	//! The names of ALL columns that can be returned by the table function
@@ -49,6 +52,8 @@ public:
 	vector<Value> parameters;
 	//! The set of named input parameters for the table function
 	named_parameter_map_t named_parameters;
+	//! Whether the source invocation requested an ordinality column
+	OrdinalityType source_ordinality = OrdinalityType::WITHOUT_ORDINALITY;
 	//! The set of named input table types for the table-in table-out function
 	vector<LogicalType> input_table_types;
 	//! The set of named input table names for the table-in table-out function

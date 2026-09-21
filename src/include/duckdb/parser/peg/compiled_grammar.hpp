@@ -17,8 +17,7 @@ public:
 	CompiledGrammar(MatcherAllocator &&allocator, unique_ptr<PEGKeywordHelper> &&keyword_helper,
 	                unique_ptr<Tokenizer> &&tokenizer, compiled_rules_map_t &&rules, const Matcher &program_matcher,
 	                const Matcher &top_level_statement_matcher);
-	static shared_ptr<CompiledGrammar>
-	Create(const case_insensitive_map_t<reference<GrammarExtension>> &grammar_extensions);
+	static shared_ptr<CompiledGrammar> Create(const vector<reference<GrammarExtension>> &grammar_extensions);
 
 public:
 	const Matcher &ProgramMatcher() const {
@@ -40,8 +39,7 @@ public:
 	//! Compile the base DuckDB grammar.
 	static shared_ptr<CompiledGrammar> Create();
 	//! Compile a grammar for the selected extensions without changing the client configuration.
-	static shared_ptr<CompiledGrammar> Create(const ClientContext &context,
-	                                          const case_insensitive_set_t &active_extensions);
+	static shared_ptr<CompiledGrammar> Create(const ClientContext &context, const vector<string> &active_extensions);
 
 private:
 	MatcherAllocator allocator;

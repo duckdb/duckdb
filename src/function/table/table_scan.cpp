@@ -576,10 +576,10 @@ public:
 		auto &l_state = input.local_state->Cast<TableScanLocalState>();
 		// with read-ahead the assignment being decoded lives in the claimed job's scan state
 		auto &scan_state = l_state.job ? *l_state.job->scan_state : l_state.scan_state;
-		if (scan_state.table_state.row_group) {
+		if (scan_state.table_state.GetRowGroup()) {
 			return OperatorPartitionData(scan_state.table_state.batch_index);
 		}
-		if (scan_state.local_state.row_group) {
+		if (scan_state.local_state.GetRowGroup()) {
 			return OperatorPartitionData(scan_state.table_state.batch_index + scan_state.local_state.batch_index);
 		}
 		return OperatorPartitionData(0);
@@ -956,6 +956,11 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 
 	// Only scan specific partitions
 	if (bind_data.partitions_to_scan) {
+		return DuckTableScanInitGlobal(context, input, storage, bind_data);
+	}
+
+	// The index scan does not apply the sample.
+	if (input.sample_options) {
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
 
