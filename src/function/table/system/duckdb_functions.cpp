@@ -1,4 +1,5 @@
 #include "duckdb/function/table/system_functions.hpp"
+#include "duckdb/common/atomic.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
@@ -26,7 +27,7 @@ struct DuckDBFunctionsData : public GlobalTableFunctionState {
 	}
 
 	vector<reference<CatalogEntry>> entries;
-	idx_t offset;
+	atomic<idx_t> offset;
 	idx_t offset_in_entry;
 };
 
@@ -782,9 +783,19 @@ void DuckDBFunctionsFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 }
 
+static double DuckDBFunctionsProgress(ClientContext &context, const FunctionData *bind_data,
+                                      const GlobalTableFunctionState *global_state) {
+	auto &data = global_state->Cast<DuckDBFunctionsData>();
+	if (data.entries.empty()) {
+		return 100.0;
+	}
+	return 100.0 * static_cast<double>(data.offset) / static_cast<double>(data.entries.size());
+}
+
 void DuckDBFunctionsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    TableFunction("duckdb_functions", {}, DuckDBFunctionsFunction, DuckDBFunctionsBind, DuckDBFunctionsInit));
+	TableFunction functions("duckdb_functions", {}, DuckDBFunctionsFunction, DuckDBFunctionsBind, DuckDBFunctionsInit);
+	functions.table_scan_progress = DuckDBFunctionsProgress;
+	set.AddFunction(functions);
 }
 
 } // namespace duckdb
