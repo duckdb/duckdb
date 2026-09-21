@@ -28,22 +28,22 @@ UPDATE parent SET payload = ['c'] WHERE id = 2;
 statement ok
 UPDATE parent SET id = id WHERE true RETURNING id;
 
-query II
-SELECT id, name FROM parent ORDER BY id;
+query TIT
+SELECT * FROM parent ORDER BY id;
 ----
-1	new
-2	name
+new	1	[a]
+name	2	[c]
 
 # Upserts and MERGE that include the referenced key in the SET list are valid
 statement ok
 INSERT INTO parent VALUES ('upsert', 1, ['a'])
     ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id, name = EXCLUDED.name;
 
-query II
-SELECT id, name FROM parent ORDER BY id;
+query TIT
+SELECT * FROM parent ORDER BY id;
 ----
-1	upsert
-2	name
+upsert	1	[a]
+name	2	[c]
 
 statement ok
 CREATE TABLE merge_source (name VARCHAR, id INTEGER, payload VARCHAR[]);
@@ -54,11 +54,11 @@ INSERT INTO merge_source VALUES ('merged', 1, ['a']);
 statement ok
 MERGE INTO parent USING merge_source ON parent.id = merge_source.id WHEN MATCHED THEN UPDATE SET *;
 
-query II
-SELECT id, name FROM parent ORDER BY id;
+query TIT
+SELECT * FROM parent ORDER BY id;
 ----
-1	merged
-2	name
+merged	1	[a]
+name	2	[c]
 
 # Changing a referenced key that is still referenced is invalid
 statement error
