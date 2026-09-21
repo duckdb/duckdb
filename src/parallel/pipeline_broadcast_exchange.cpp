@@ -778,6 +778,7 @@ void PipelineBroadcastExchange::ResetConsumerReadStateLocked(ConsumerState &cons
 
 void PipelineBroadcastExchange::ResetConsumerRegistrationLocked(ConsumerState &consumer) {
 	consumer.rows_read = 0;
+	consumer.max_scan_progress = 0;
 	consumer.lifecycle = ConsumerLifecycle::ACTIVE;
 	consumer.mode = PipelineBroadcastExchangeConsumerMode::UNRESOLVED;
 	consumer.scan_mode = PipelineBroadcastExchangeScanMode::CHUNK;
@@ -787,6 +788,7 @@ void PipelineBroadcastExchange::ResetConsumerRegistrationLocked(ConsumerState &c
 
 void PipelineBroadcastExchange::ResetConsumerExecutionLocked(ConsumerState &consumer) {
 	consumer.rows_read = 0;
+	consumer.max_scan_progress = 0;
 	D_ASSERT(consumer.mode != PipelineBroadcastExchangeConsumerMode::UNRESOLVED);
 	consumer.lifecycle = consumer.mode == PipelineBroadcastExchangeConsumerMode::BUFFERED ? ConsumerLifecycle::ACTIVE
 	                                                                                      : ConsumerLifecycle::INACTIVE;
@@ -1758,7 +1760,11 @@ ProgressData PipelineBroadcastExchange::ScanProgress(idx_t consumer_idx, idx_t e
 		}
 	}
 	total = MaxValue<idx_t>(total, 1);
-	progress.done = MinValue<double>(double(consumers[consumer_idx].rows_read), double(total));
+	auto &consumer = consumers[consumer_idx];
+	// the total grows while the producer outruns the estimate - never report less than before
+	auto fraction = MinValue<double>(double(consumer.rows_read) / double(total), 1.0);
+	consumer.max_scan_progress = MaxValue<double>(consumer.max_scan_progress, fraction);
+	progress.done = consumer.max_scan_progress * double(total);
 	progress.total = double(total);
 	return progress;
 }

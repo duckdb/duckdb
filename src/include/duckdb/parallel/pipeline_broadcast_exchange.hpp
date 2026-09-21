@@ -199,6 +199,8 @@ private:
 		//! Lower bound for idle scan tasks after earlier ranges have all been claimed
 		idx_t batch_index_floor = DConstants::INVALID_INDEX;
 		idx_t rows_read = 0;
+		//! The highest scan progress fraction reported to this consumer, keeps the progress monotonic
+		mutable double max_scan_progress = 0;
 		PipelineBroadcastExchangeConsumerMode mode = PipelineBroadcastExchangeConsumerMode::UNRESOLVED;
 		PipelineBroadcastExchangeScanMode scan_mode = PipelineBroadcastExchangeScanMode::CHUNK;
 		ConsumerLifecycle lifecycle = ConsumerLifecycle::ACTIVE;
