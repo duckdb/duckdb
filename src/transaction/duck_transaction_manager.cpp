@@ -111,6 +111,7 @@ Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 }
 
 void DuckTransactionManager::SetActiveCheckpoint(idx_t checkpoint_id) {
+	// called under the commit lock: a commit's flush and its commit or revert are entirely before or after this
 	active_checkpoint = checkpoint_id;
 }
 
@@ -356,6 +357,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	unique_ptr<StorageLockKey> lock;
 	auto undo_properties = transaction.GetUndoProperties();
 	auto checkpoint_decision = CanCheckpoint(transaction, lock, undo_properties);
+	// orders this commit's append and commit or revert against checkpoints; read-only transactions commit without it
 	unique_lock<mutex> held_commit_lock;
 	unique_ptr<StorageCommitState> commit_state;
 	optional_ptr<WriteAheadLog> commit_wal;
@@ -374,27 +376,22 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			skip_wal_write_due_to_checkpoint = true;
 		}
 	}
-	bool should_write_to_wal = !error.HasError() && transaction.ShouldWriteToWAL(db);
-	if (should_write_to_wal) {
-		auto &storage_manager = db.GetStorageManager().Cast<SingleFileStorageManager>();
-		// if we are committing changes and we are not doing a "checkpoint instead of WAL write"
-		// we need to write to the WAL to make the changes durable
-		// since WAL writes can take a long time - we grab the commit lock here and unlock the transaction lock
-		// read-only transactions can bypass this branch and start/commit while the WAL write is happening
-		// unlock the transaction lock while we write to the WAL
-		// note: we can only drop the transaction lock if we are NOT checkpointing
-		// if we are checkpointing, we have already made certain decisions (e.g. the CheckpointType)
+	bool has_changes = !error.HasError() && transaction.ChangesMade() && db.HasStorageManager();
+	bool should_write_to_wal = has_changes && transaction.ShouldWriteToWAL(db);
+	if (has_changes) {
+		// writing the WAL can take long: other transactions run meanwhile
+		// note: if we are checkpointing, we have already made certain decisions (e.g. the CheckpointType)
 		t_lock.unlock();
 		// grab the commit lock and hold it until the entire commit is finished
-		held_commit_lock = storage_manager.GetCommitLock();
+		held_commit_lock = db.GetStorageManager().GetCommitLock();
 
-		// Commit the changes to the WAL.
-		if (!skip_wal_write_due_to_checkpoint) {
+		if (should_write_to_wal && !skip_wal_write_due_to_checkpoint) {
+			// Commit the changes to the WAL.
 			error = transaction.WriteToWAL(context, db, commit_state);
 			wal_written = true;
 		}
 
-		// after we finish writing to the WAL we grab the transaction lock again
+		// after we finish writing we grab the transaction lock again
 		t_lock.lock();
 	}
 	if (!error.HasError() && checkpoint_decision.can_checkpoint) {

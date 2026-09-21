@@ -174,7 +174,7 @@ protected:
 	string wal_path;
 	//! The WriteAheadLog of the storage manager
 	unique_ptr<WriteAheadLog> wal;
-	//! Held by a commit with a WAL from its append to its commit or revert, and by a checkpoint at its start and end
+	//! Held by every commit with changes from its append to its commit or revert, and by a checkpoint at start and end
 	mutex commit_lock;
 	//! Whether or not the database is opened in read-only mode
 	bool read_only;
