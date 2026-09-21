@@ -23,13 +23,12 @@ BaseTableFunction::BaseTableFunction(table_function_t function_, table_function_
     : bind(bind), bind_replace(nullptr), bind_operator(nullptr), init_global(init_global), init_local(init_local),
       function(function_), in_out_function(nullptr), in_out_function_final(nullptr), statistics(nullptr),
       statistics_extended(nullptr), dependency(nullptr), cardinality(nullptr), get_metrics(nullptr),
-      pushdown_complex_filter(nullptr), pushdown_expression(nullptr), combine_schema(nullptr), get_file_columns(nullptr), claim_batch(nullptr),
-      finish_batch(nullptr), supports_read_ahead(nullptr), schedule_io(nullptr), prepare_read_ahead(nullptr), to_string(nullptr),
+      pushdown_complex_filter(nullptr), pushdown_expression(nullptr), to_string(nullptr),
       table_scan_progress(nullptr), get_partition_data(nullptr), get_bind_info(nullptr),
       projection_expression_pushdown(nullptr), get_multi_file_reader(nullptr), supports_pushdown_type(nullptr),
       supports_pushdown_extract(nullptr), is_repeatable(nullptr), get_partition_info(nullptr),
       get_partition_stats(nullptr), get_virtual_columns(nullptr), get_row_id_columns(nullptr), set_scan_order(nullptr),
-      serialize(nullptr), deserialize(nullptr), projection_pushdown(false), reuses_local_state(false), supports_cast_map(false),
+      serialize(nullptr), deserialize(nullptr), projection_pushdown(false),
       filter_pushdown(false), filter_prune(false), sampling_pushdown(false), late_materialization(false),
       return_type(TableFunctionReturnType::TABLE_RETURNING_FUNCTION) {
 }
@@ -96,13 +95,6 @@ BoundTableFunction::BoundTableFunction(shared_ptr<const TableFunction> function_
 	get_metrics = function.get_metrics;
 	pushdown_complex_filter = function.pushdown_complex_filter;
 	pushdown_expression = function.pushdown_expression;
-	combine_schema = function.combine_schema;
-	get_file_columns = function.get_file_columns;
-	claim_batch = function.claim_batch;
-	finish_batch = function.finish_batch;
-	supports_read_ahead = function.supports_read_ahead;
-	schedule_io = function.schedule_io;
-	prepare_read_ahead = function.prepare_read_ahead;
 	to_string = function.to_string;
 	to_sql = function.to_sql;
 	table_scan_progress = function.table_scan_progress;
@@ -123,8 +115,6 @@ BoundTableFunction::BoundTableFunction(shared_ptr<const TableFunction> function_
 	deserialize = function.deserialize;
 	verify_serialization = function.verify_serialization;
 	projection_pushdown = function.projection_pushdown;
-	reuses_local_state = function.reuses_local_state;
-	supports_cast_map = function.supports_cast_map;
 	filter_pushdown = function.filter_pushdown;
 	filter_prune = function.filter_prune;
 	sampling_pushdown = function.sampling_pushdown;

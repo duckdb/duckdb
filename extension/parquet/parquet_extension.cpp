@@ -1021,9 +1021,6 @@ static void LoadInternal(ExtensionLoader &loader) {
 	TableFunctionSet single_file_set("read_single_parquet_file");
 	single_file_set.AddFunction(ParquetScanFunction::GetSingleFileFunction());
 	loader.RegisterFunction(std::move(single_file_set));
-	// TEMPORARY: the multi-file reader built by wrapping it, for comparing behaviour during the migration
-	loader.RegisterFunction(
-	    MultiFileReader::CreateFunctionSet(ParquetScanFunction::GetMultiFileFunction("read_parquet_new")));
 
 	// parquet_metadata
 	ParquetMetaDataFunction meta_fun;
