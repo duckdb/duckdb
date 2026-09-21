@@ -947,7 +947,7 @@ void WindowLastValueExecutor::StreamData(ExecutionContext &context, DataChunk &i
 			Vector copy(wexpr.GetChildren()[0]->GetReturnType());
 			VectorOperations::Copy(arg, copy, count, 0, 0);
 			//	Overwrite the previous non-NULL value if the first one is NULL
-			if (!validity.RowIsValidUnsafe(0)) {
+			if (!validity.RowIsValidUnsafe(unified.sel->get_index(0))) {
 				VectorOperations::Copy(prev, copy, 1, 0, 0);
 			}
 			//	Select appropriate the non-NULL values to copy over
