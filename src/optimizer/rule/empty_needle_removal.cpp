@@ -23,7 +23,7 @@ static unique_ptr<Expression> TryRemoveEmptyStringConcat(ClientContext &context,
 		if (value.IsNull() || value.type().id() != LogicalTypeId::VARCHAR || !StringValue::Get(value).empty()) {
 			continue;
 		}
-		return std::move(children[1 - child_idx]);
+		return Expression::PreserveReturnType(root.GetReturnType(), std::move(children[1 - child_idx]));
 	}
 	return nullptr;
 }
@@ -71,7 +71,8 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 	// PREFIX(NULL, '') is NULL
 	// so rewrite PREFIX(x, '') to TRUE_OR_NULL(x)
 	if (needle_string.empty()) {
-		return ExpressionRewriter::ConstantOrNull(std::move(root.GetChildrenMutable()[0]), Value::BOOLEAN(true));
+		return ExpressionRewriter::ConstantOrNull(GetContext(), std::move(root.GetChildrenMutable()[0]),
+		                                          Value::BOOLEAN(true));
 	}
 	return nullptr;
 }
@@ -109,7 +110,7 @@ unique_ptr<Expression> NoopReplaceRemovalRule::Apply(LogicalOperator &op, vector
 	if (StringValue::Get(needle) != StringValue::Get(replacement)) {
 		return nullptr;
 	}
-	return std::move(root.GetChildrenMutable()[0]);
+	return Expression::PreserveReturnType(root.GetReturnType(), std::move(root.GetChildrenMutable()[0]));
 }
 
 } // namespace duckdb

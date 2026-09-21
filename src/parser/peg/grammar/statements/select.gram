@@ -60,7 +60,7 @@ JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
 
 TablePivotClause <- 'PIVOT' Parens(TablePivotClauseBody) TableAlias?
 TablePivotClauseBody <- TargetList 'FOR' PivotValueList+ PivotGroupByList?
-PivotGroupByList <- 'GROUP' 'BY' List(ColIdOrString)
+PivotGroupByList <- 'GROUP' 'BY' OptionalParensNameList
 TableUnpivotClause <- 'UNPIVOT' IncludeOrExcludeNulls? Parens(TableUnpivotClauseBody) TableAlias?
 TableUnpivotClauseBody <- UnpivotHeader 'FOR' UnpivotValueList+
 

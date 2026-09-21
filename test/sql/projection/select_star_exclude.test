@@ -111,6 +111,22 @@ SELECT * EXCLUDE (INTEGERS.i, integers.J) FROM integers
 ----
 3
 
+# dots in quoted identifiers are not qualification separators
+query I
+SELECT * EXCLUDE ("a.b") FROM (SELECT 1 AS "a.b", 2 AS c)
+----
+2
+
+query I
+SELECT * EXCLUDE ("table.with.dot"."column.with.dot") FROM (SELECT 1 AS "column.with.dot", 2 AS c) AS "table.with.dot"
+----
+2
+
+statement error
+SELECT * EXCLUDE (a.b.c.d.e) FROM (SELECT 1 AS e)
+----
+<REGEX>:Parser Error: Expected at most 4 entries.*
+
 statement error
 SELECT * EXCLUDE (integers.i, integers.j, integers2.i) FROM integers
 ----

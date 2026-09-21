@@ -3,7 +3,7 @@
 set -euo pipefail
 
 usage() {
-	echo "Usage: $0 <cli|shared-libs> <artifact-suffix> <input> [...]" >&2
+	echo "Usage: $0 <cli|shared-libs|static-libs> <artifact-suffix> <input> [...]" >&2
 	exit 1
 }
 
@@ -29,6 +29,9 @@ cli)
 	;;
 shared-libs)
 	artifact_name="duckdb-shared-libs-${artifact_suffix}.tar.gz"
+	;;
+static-libs)
+	artifact_name="duckdb-static-libs-${artifact_suffix}.tar.gz"
 	;;
 *)
 	usage

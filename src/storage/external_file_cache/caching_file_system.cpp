@@ -164,13 +164,13 @@ CachingFileSystem CachingFileSystem::Get(ClientContext &context) {
 	return CachingFileSystem(FileSystem::GetFileSystem(context), *context.db);
 }
 
-unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
+unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &path, const FileOpenFlags &flags,
                                                           optional_ptr<FileOpener> opener) {
 	return make_uniq<CachingFileHandle>(QueryContext(), *this, path, flags, opener);
 }
 
 unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(QueryContext context, const OpenFileInfo &path,
-                                                          FileOpenFlags flags, optional_ptr<FileOpener> opener) {
+                                                          const FileOpenFlags &flags, optional_ptr<FileOpener> opener) {
 	return make_uniq<CachingFileHandle>(context, *this, path, flags, opener);
 }
 
@@ -185,8 +185,8 @@ bool CachingFileHandle::StripForceFullDownloadIfPresent() {
 	}
 
 	auto &extended_info = *extended_info_p;
-	const bool contains_force_full_download = extended_info.options.count("force_full_download");
-	if (!contains_force_full_download) {
+	bool force_full_download;
+	if (!extended_info.TryGetOption("force_full_download", force_full_download)) {
 		return false;
 	}
 
@@ -198,7 +198,7 @@ bool CachingFileHandle::StripForceFullDownloadIfPresent() {
 		new_extended_info->options["file_size"] = Value::UBIGINT(GetFileSize());
 	}
 	path.extended_info = new_extended_info;
-	return true;
+	return force_full_download;
 }
 
 shared_ptr<CachingFileHandle::CachedFile> CachingFileHandle::EnsureCachedFileCurrent() {

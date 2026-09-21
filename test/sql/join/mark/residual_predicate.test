@@ -1,0 +1,143 @@
+# name: test/sql/join/mark/residual_predicate.test
+# description: MARK comparisons retain residual predicate truth and evaluation
+# group: [mark]
+
+# Exercise the nested-loop residual evaluator across chunk boundaries.
+statement ok
+SET nested_loop_join_threshold=10000;
+
+foreach disable false true
+
+statement ok
+SET debug_disable_optimizer={disable};
+
+statement ok
+CREATE OR REPLACE TABLE residual_probe(a INTEGER);
+
+statement ok
+INSERT INTO residual_probe VALUES (NULL),(0),(1),(3);
+
+statement ok
+CREATE OR REPLACE TABLE residual_build(b INTEGER);
+
+statement ok
+INSERT INTO residual_build VALUES (2);
+
+query II rowsort
+SELECT a,__mark_join_marker FROM residual_probe JOIN BY (TYPE MARK) residual_build ON a<2 AND a+b=2;
+----
+0	true
+1	false
+3	false
+NULL	NULL
+
+query II rowsort
+SELECT a,__mark_join_marker FROM residual_probe JOIN BY (TYPE MARK) residual_build ON a<2 AND a+b IS NOT NULL;
+----
+0	true
+1	true
+3	false
+NULL	false
+
+query II rowsort
+SELECT a,__mark_join_marker FROM residual_probe JOIN BY (TYPE MARK) residual_build ON a<2 AND CASE WHEN a+b=2 THEN NULL ELSE a+b=3 END;
+----
+0	NULL
+1	true
+3	false
+NULL	NULL
+
+query II rowsort
+SELECT a,__mark_join_marker FROM residual_probe JOIN BY (TYPE MARK) residual_build ON a<2 AND a>=0 AND a+b=2;
+----
+0	true
+1	false
+3	false
+NULL	NULL
+
+# Protect the existing hash result for this equality-backed residual.
+query II rowsort
+SELECT a,__mark_join_marker FROM residual_probe JOIN BY (TYPE MARK) residual_build ON a=1 AND a+b=2;
+----
+0	false
+1	false
+3	false
+NULL	NULL
+
+statement ok
+INSERT INTO residual_build VALUES (NULL),(2);
+
+query II rowsort
+SELECT a,__mark_join_marker FROM residual_probe JOIN BY (TYPE MARK) residual_build ON a<2 AND a+b=2;
+----
+0	true
+1	NULL
+3	false
+NULL	NULL
+
+query I rowsort
+SELECT a FROM residual_probe JOIN BY (TYPE SEMI) residual_build ON a<b AND a+b=2;
+----
+0
+
+query I rowsort
+SELECT a FROM residual_probe JOIN BY (TYPE ANTI) residual_build ON a<b AND a+b=2;
+----
+1
+3
+NULL
+
+query II
+EXPLAIN SELECT count(*) FROM (SELECT __mark_join_marker m FROM range(2050) l(a) JOIN BY (TYPE MARK) range(2050) r(b) ON a>=2049 AND b>=2049 AND a+b=4098) WHERE m;
+----
+physical_plan	<REGEX>:.*Nested Loop Join.*Join Type: MARK.*
+
+query I
+SELECT count(*) FROM (SELECT __mark_join_marker m FROM range(2050) l(a) JOIN BY (TYPE MARK) range(2050) r(b) ON a>=2049 AND b>=2049 AND a+b=4098) WHERE m;
+----
+1
+
+# Nested-loop implementation protection: evaluate residuals only for comparison candidates.
+# This does not require other join algorithms to use the same evaluation schedule.
+statement ok
+CREATE OR REPLACE SEQUENCE residual_seq;
+
+query II rowsort
+SELECT a,__mark_join_marker FROM (VALUES (1),(3)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a+b+nextval('residual_seq')>0;
+----
+1	true
+3	false
+
+query I
+SELECT currval('residual_seq');
+----
+1
+
+query I
+SELECT __mark_join_marker FROM (VALUES (3)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND CASE WHEN a+b>0 THEN error('residual evaluated') ELSE true END;
+----
+false
+
+statement error
+SELECT __mark_join_marker FROM (VALUES (1)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND CASE WHEN a+b>0 THEN error('residual evaluated') ELSE true END;
+----
+residual evaluated
+
+statement ok
+DELETE FROM residual_build;
+
+query II rowsort
+SELECT a,__mark_join_marker FROM residual_probe JOIN BY (TYPE MARK) residual_build ON a<2 AND CASE WHEN a+b>0 THEN error('empty residual') ELSE true END;
+----
+0	false
+1	false
+3	false
+NULL	false
+
+endloop
+
+statement ok
+SET debug_disable_optimizer=false;
+
+statement ok
+RESET nested_loop_join_threshold;

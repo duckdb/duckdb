@@ -155,9 +155,6 @@ endif
 ifneq (${EXTENSION_STATIC_BUILD}, )
 	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_STATIC_BUILD=${EXTENSION_STATIC_BUILD}
 endif
-ifeq (${DISABLE_GCC_FUNCTION_SECTIONS}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_GCC_FUNCTION_SECTIONS=1
-endif
 ifeq (${DISABLE_BUILTIN_EXTENSIONS}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_BUILTIN_EXTENSIONS=1
 endif
@@ -226,6 +223,9 @@ endif
 ifneq ($(TIDY_BINARY),)
 	TIDY_BINARY_PARAMETER := -clang-tidy-binary ${TIDY_BINARY}
 endif
+TIDY_SHARD_COUNT ?= 1
+TIDY_SHARD_INDEX ?= 0
+TIDY_SHARD_PARAMETERS := --shard-count ${TIDY_SHARD_COUNT} --shard-index ${TIDY_SHARD_INDEX}
 CLANGD_TIDY_VERSION := 1.1.1
 CLANGD_TIDY_VENV ?= $(abspath build/clangd-tidy-venv)
 ifeq ($(CLANGD_TIDY_BINARY),)
@@ -543,8 +543,7 @@ TEST_CONFIGS_QUERY_VERIFICATION := \
 	test/configs/verify_statement_serialization.json \
 	test/configs/disable_optimizer.json \
 	test/configs/verification_projection.json \
-	test/configs/verify_column_bindings.json \
-	test/configs/heap_based_parser.json
+	test/configs/verify_column_bindings.json
 
 TEST_CONFIGS_EXECUTION := \
 	test/configs/internal_vector_serialization.json \
@@ -678,6 +677,11 @@ cli-release-artifact:
 shared-libs-release-artifact:
 	bash scripts/package_release_artifact.sh shared-libs "$(ARTIFACT_SUFFIX)" $(SHARED_LIBRARIES)
 
+.PHONY: static-libs-release-artifact
+
+static-libs-release-artifact:
+	bash scripts/package_release_artifact.sh static-libs "$(ARTIFACT_SUFFIX)" $(STATIC_LIBRARIES)
+
 .PHONY: symbol-checks symbol-leakage-check banned-symbol-check
 
 symbol-checks: symbol-leakage-check banned-symbol-check
@@ -804,7 +808,7 @@ tidy-check:
 	mkdir -p ./build/tidy && \
 	cd build/tidy && \
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_SHELL=0 ../.. && \
-	$(PYTHON) ../../scripts/run-clang-tidy.py -quiet -j $(CI_CPU_COUNT) ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS}
+	$(PYTHON) ../../scripts/run-clang-tidy.py -quiet -j $(CI_CPU_COUNT) ${TIDY_BINARY_PARAMETER} ${TIDY_SHARD_PARAMETERS} ${TIDY_PERFORM_CHECKS}
 
 install-clangd-tidy:
 	mkdir -p $(dir $(CLANGD_TIDY_VENV)) && \
@@ -845,8 +849,8 @@ format-fix: $(FORMAT_SETUP_DEPS)
 
 format-parser-grammar: $(FORMAT_SETUP_DEPS)
 	$(FORMAT_PYTHON) scripts/format.py src/include/duckdb/parser/peg/transformer/peg_transformer.hpp --fix --noconfirm
-	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/transformer/transform_generated.cpp --fix --noconfirm
 	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/transformer/transform_generated_trampoline.cpp --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/compiled_grammar.cpp --fix --noconfirm
 	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/matcher_factory.cpp --fix --noconfirm
 	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/matcher.cpp --fix --noconfirm
 
@@ -982,9 +986,14 @@ gather-libs:
 	cp extension/$(GATHER_LIBS_PREFIX)duckdb_generated_extension_loader.$(GATHER_LIBS_EXTENSION) libs/. && \
 	cp extension/*/$(GATHER_LIBS_PREFIX)*_extension.$(GATHER_LIBS_EXTENSION) libs/.
 
-#### Setup VCPKG to correct version 2025.12.12 tag is 84bab45d415d22042bd0b9081aea57f362da3f35
+#### Setup VCPKG to correct version 2026.06.24 tag is cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3
 vcpkg/scripts/buildsystems/vcpkg.cmake:
-	git -C vcpkg fetch || git clone --branch 2025.12.12 https://github.com/microsoft/vcpkg
+	if [ -d vcpkg/.git ]; then \
+		git -C vcpkg fetch --tags && \
+		git -C vcpkg checkout --detach 2026.06.24; \
+	else \
+		git clone --branch 2026.06.24 https://github.com/microsoft/vcpkg; \
+	fi
 	cd vcpkg && ./bootstrap-vcpkg.sh
 
 setup-vcpkg: vcpkg/scripts/buildsystems/vcpkg.cmake

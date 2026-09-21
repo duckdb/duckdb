@@ -17,6 +17,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
 class CatalogEntry;
@@ -62,6 +63,7 @@ enum class FunctionCollationHandling : uint8_t {
 };
 
 struct FunctionData {
+public:
 	DUCKDB_API virtual ~FunctionData();
 
 	DUCKDB_API virtual unique_ptr<FunctionData> Copy() const = 0;
@@ -303,20 +305,34 @@ public:
 		name = std::move(name_p);
 	}
 	auto SetSchemaName(Identifier schema_name_p) -> void {
-		schema_name = std::move(schema_name_p);
+		qualified_name = QualifiedName(GetCatalogName(), std::move(schema_name_p), name);
 	}
 	auto SetCatalogName(Identifier catalog_name_p) -> void {
-		catalog_name = std::move(catalog_name_p);
+		auto path = qualified_name.Path();
+		if (path.size() < 3) {
+			qualified_name = QualifiedName(std::move(catalog_name_p), GetSchemaName(), name);
+		} else {
+			path.pop_back();
+			path[0] = std::move(catalog_name_p);
+			qualified_name = QualifiedName(std::move(path), name);
+		}
+	}
+	void SetQualifiedName(QualifiedName name_p) {
+		name = name_p.Name();
+		qualified_name = std::move(name_p);
+	}
+	QualifiedName GetQualifiedName() const {
+		return qualified_name.WithName(name);
 	}
 
 	const Identifier &GetName() const {
 		return name;
 	}
 	const Identifier &GetSchemaName() const {
-		return schema_name;
+		return qualified_name.Schema();
 	}
 	const Identifier &GetCatalogName() const {
-		return catalog_name;
+		return qualified_name.Catalog();
 	}
 
 	//! Returns the formatted string name(arg1, arg2, ...)
@@ -334,10 +350,7 @@ public:
 	                                      const named_parameter_type_map_t &named_parameters);
 
 private:
-	//! Optional catalog name of the function
-	Identifier catalog_name;
-	//! Optional schema name of the function
-	Identifier schema_name;
+	QualifiedName qualified_name;
 };
 
 class SimpleFunction : public Function {
@@ -458,6 +471,12 @@ public:
 	auto SetCaptureArgumentAliases(bool value) -> void {
 		capture_argument_aliases = value;
 	}
+	auto RequiresExpressionNames() const -> bool {
+		return requires_expression_names;
+	}
+	auto SetRequiresExpressionNames(bool value) -> void {
+		requires_expression_names = value;
+	}
 
 	auto RequiresOrderedExecution() const -> bool {
 		return requires_ordered_execution;
@@ -489,15 +508,15 @@ public:
 	//! function. This preserves the legacy behavior of functions such as struct_pack/row, which derived their
 	//! (struct field) names from argument aliases and therefore allowed positional arguments after named ones.
 	bool capture_argument_aliases = false;
+	//! Whether results depend on argument expression names or the call's result alias
+	bool requires_expression_names = false;
 	//! Whether calls to this function must follow input order
 	bool requires_ordered_execution = false;
 };
 
 class BoundSimpleFunction {
 protected:
-	Identifier name;
-	Identifier schema_name;
-	Identifier catalog_name;
+	QualifiedName qualified_name;
 	string extra_info;
 
 	//! The set of arguments of the function
@@ -507,17 +526,24 @@ protected:
 
 public:
 	void SetName(Identifier name_p) {
-		name = std::move(name_p);
+		qualified_name = qualified_name.WithName(std::move(name_p));
 	}
 
 	const Identifier &GetName() const {
-		return name;
+		return qualified_name.Name();
 	}
 	const Identifier &GetSchemaName() const {
-		return schema_name;
+		return qualified_name.Schema();
 	}
 	const Identifier &GetCatalogName() const {
-		return catalog_name;
+		return qualified_name.Catalog();
+	}
+
+	const QualifiedName &GetQualifiedName() const {
+		return qualified_name;
+	}
+	void SetQualifiedName(QualifiedName name_p) {
+		qualified_name = std::move(name_p);
 	}
 
 	const string &GetExtraInfo() const {

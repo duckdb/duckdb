@@ -78,7 +78,7 @@ string_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len
 		auto new_str = Utf8Proc::RemoveInvalid(str_data, str_len);
 		auto target = StringVector::EmptyString(*current_plain_result, new_str.size());
 		auto output = target.GetDataWriteable();
-		memcpy(output, new_str.data(), new_str.size());
+		memcpy(output, new_str.data(), new_str.size()); // NOLINT(bugprone-not-null-terminated-result)
 		target.Finalize();
 		return target;
 	}

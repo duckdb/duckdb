@@ -1,5 +1,6 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -83,16 +84,18 @@ static void MarkJoinNested(const Vector &left, const Vector &right, idx_t lcount
 			count = VectorOperations::NotEquals(left_reference, right, nullptr, rcount, nullptr, nullptr, &null_mask);
 			break;
 		case ExpressionType::COMPARE_LESSTHAN:
-			count = VectorOperations::LessThan(left_reference, right, nullptr, rcount, nullptr, nullptr);
+			count = VectorOperations::LessThan(left_reference, right, nullptr, rcount, nullptr, nullptr, &null_mask);
 			break;
 		case ExpressionType::COMPARE_GREATERTHAN:
-			count = VectorOperations::GreaterThan(left_reference, right, nullptr, rcount, nullptr, nullptr);
+			count = VectorOperations::GreaterThan(left_reference, right, nullptr, rcount, nullptr, nullptr, &null_mask);
 			break;
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			count = VectorOperations::LessThanEquals(left_reference, right, nullptr, rcount, nullptr, nullptr);
+			count =
+			    VectorOperations::LessThanEquals(left_reference, right, nullptr, rcount, nullptr, nullptr, &null_mask);
 			break;
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			count = VectorOperations::GreaterThanEquals(left_reference, right, nullptr, rcount, nullptr, nullptr);
+			count = VectorOperations::GreaterThanEquals(left_reference, right, nullptr, rcount, nullptr, nullptr,
+			                                            &null_mask);
 			break;
 		case ExpressionType::COMPARE_DISTINCT_FROM:
 			count = VectorOperations::DistinctFrom(left_reference, right, nullptr, rcount, nullptr, nullptr);
@@ -189,10 +192,13 @@ void NestedLoopJoinMark::Perform(DataChunk &left, ColumnDataCollection &right, b
 	right.InitializeScanChunk(scan_chunk);
 
 	while (right.Scan(scan_state, scan_chunk)) {
-		for (idx_t i = 0; i < conditions.size(); i++) {
-			MarkJoinComparisonSwitch(left.data[i], scan_chunk.data[i], left.size(), scan_chunk.size(), found_match,
-			                         conditions[i].GetComparisonType(), found_unknown);
+		if (conditions.size() > 1) {
+			MarkJoinRowComparison::Perform(left, scan_chunk, found_match, conditions, found_unknown);
+			continue;
 		}
+		D_ASSERT(conditions.size() == 1);
+		MarkJoinComparisonSwitch(left.data[0], scan_chunk.data[0], left.size(), scan_chunk.size(), found_match,
+		                         conditions[0].GetComparisonType(), found_unknown);
 	}
 }
 

@@ -90,6 +90,16 @@ void DebugCheckpointAbortSetting::OnSet(SettingCallbackInfo &info, Value &parame
 }
 
 //===----------------------------------------------------------------------===//
+// Force Bitpacking Mode
+//===----------------------------------------------------------------------===//
+void ForceBitpackingModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("debug_force_bitpacking_mode setting cannot be NULL");
+	}
+	EnumUtil::FromString<BitpackingMode>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Debug Order Verification
 //===----------------------------------------------------------------------===//
 void DebugOrderVerificationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -200,13 +210,13 @@ void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 }
 
 //===----------------------------------------------------------------------===//
-// Force Bitpacking Mode
+// Fsync Mode
 //===----------------------------------------------------------------------===//
-void ForceBitpackingModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+void FsyncModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 	if (parameter.IsNull()) {
-		throw InvalidInputException("force_bitpacking_mode setting cannot be NULL");
+		throw InvalidInputException("fsync_mode setting cannot be NULL");
 	}
-	EnumUtil::FromString<BitpackingMode>(StringValue::Get(parameter));
+	EnumUtil::FromString<FileSyncMode>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//

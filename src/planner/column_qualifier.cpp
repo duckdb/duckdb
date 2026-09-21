@@ -81,7 +81,7 @@ unique_ptr<ParsedExpression> ColumnQualifier::CreateStructExtract(unique_ptr<Par
                                                                   const Identifier &field_name) {
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(base));
-	children.push_back(make_uniq_base<ParsedExpression, ConstantExpression>(Value(field_name)));
+	children.push_back(ConstantExpression::String(field_name.GetIdentifierName()));
 	auto extract_fun = make_uniq<OperatorExpression>(ExpressionType::STRUCT_EXTRACT, std::move(children));
 	return std::move(extract_fun);
 }
@@ -302,6 +302,7 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	if (!new_colref) {
 		new_colref = std::move(colref);
 	}
+	new_colref->ClearAlias();
 	// we can! transform this into a function call on the column
 	// i.e. "x.lower()" becomes "lower(x)"
 	function.GetArgumentsMutable().insert(function.GetArgumentsMutable().begin(), std::move(new_colref));

@@ -25,7 +25,7 @@ public:
 			return;
 		}
 
-		const auto json_value = VariantCasts::ConvertVariantToJSON(holder.GetDocument(), *node, false);
+		const auto json_value = VariantCasts::ConvertVariantToJSON(holder.GetDocument(), *node);
 		if (!json_value) {
 			throw SerializationException("Failed to convert VARIANT value to JSON object");
 		}

@@ -833,12 +833,13 @@ CopyTo <- 'TO'
 
 CopySelect <- Parens(SelectStatementInternal) 'TO' CopyFileName CopyOptions?
 
-CopyFileName <- CopyFileNameExpression / CopyFileNameStringLiteral / CopyFileNameIdentifier / CopyFileNameIdentifierColId
+CopyFileName <- CopyFileNameExpression / CopyFileNameStringLiteral / CopyFileNameIdentifierColId / CopyFileNameIdentifier
 CopyFileNameExpression <- Parameter / ParensExpression
 CopyFileNameStringLiteral <- StringLiteral
 CopyFileNameIdentifier <- Identifier
 CopyFileNameIdentifierColId <- IdentifierColId
-IdentifierColId <- Identifier '.' ColId
+IdentifierColId <- Identifier CopyFileNameSuffix+
+CopyFileNameSuffix <- '.' ColId
 CopyOptions <- 'WITH'? CopyOptionList
 CopyOptionList <- CopyGenericOptionList / SpecializedOptionList
 SpecializedOptionList <- SpecializedOption SpecializedOptionTail*
@@ -1456,19 +1457,15 @@ OtherOperator <-
     AnyAllParsedOperator / NamedOtherOperator
 AnyAllParsedOperator <- AnyAllOperator
 NamedOtherOperator <-
-    QualifiedOperator / InetOperator / JsonOperator / ListOperator / StringOperator / OperatorLiteral
+    QualifiedOperator / OperatorLiteral
 OperatorLiteral <- Identifier
-AnyAllOperator <- AnyOp AnyOrAll
+AnyOperatorLiteral <- Identifier
+AnyAllOperator <- AnyOperatorLiteral AnyOrAll
 AnyOrAll <- SubqueryAny / SubqueryAll
 SubqueryAny <- 'ANY'
 SubqueryAll <- 'ALL'
-InetOperator <- '>>=' / '<<='
-JsonOperator <- '->>'
-ListOperator <- '&&' / '@>' / '<@'
-StringOperator <- '^@' / '||'
 QualifiedOperator <- 'OPERATOR' Parens(QualifiedOperatorContents)
-QualifiedOperatorContents <- ColIdDot* AnyOp
-AnyOp <- '!~~*' / '>>=' / '<<=' / '->>' / '!~~' / '!~*' / '~~*' / '~~~' / '~*' / '!~' / '^@' / '||' / '&&' / '@>' / '<@' / '<=' / '>=' / '<>' / '!=' / '==' / '<<' / '>>' / '//' / '**' / '->' / '~~' / '+' / '-' / '*' / '/' / '%' / '^' / '<' / '>' / '=' / '&' / '|' / '~' / '!'
+QualifiedOperatorContents <- ColIdDot* AnyOperatorLiteral
 # LEVEL 9
 BitwiseExpression <- AdditiveExpression BitwiseExpressionTail*
 BitwiseExpressionTail <- BitOperator AdditiveExpression
@@ -1564,17 +1561,33 @@ ExtractDatePart <-
     MillisecondKeyword / MicrosecondKeyword / WeekKeyword / QuarterKeyword / DecadeKeyword /
     CenturyKeyword / MillenniumKeyword
 
-ExternalResourceStatement <- CreateExternalResourceStmt / RegisterExternalResourceStmt / DestroyExternalResourceStmt / ShowExternalResourcesStmt
+# Every statement about external resources, so the top-level Statement choice carries one entry
+# rather than one per form.
+ExternalResourceStatement <- CreateExternalResourceStmt / RegisterExternalResourceStmt / DestroyExternalResourceStmt / ShowExternalResourcesStmt / AttachToExternalResource / ConnectToExternalResource
 
-CreateExternalResourceStmt <- 'CREATE' 'EXTERNAL' 'RESOURCE' StringLiteral AttachAlias? ExternalResourceCreationOptions?
-RegisterExternalResourceStmt <- 'REGISTER' 'EXTERNAL' 'RESOURCE' StringLiteral AttachAlias? 'FROM' Expression
-DestroyExternalResourceStmt <- 'DESTROY' 'EXTERNAL' 'RESOURCE' ColId
+CreateExternalResourceStmt <- 'CREATE' ExternalResourceKeyword StringLiteral AttachAlias? ExternalResourceCreationOptions?
+RegisterExternalResourceStmt <- 'REGISTER' ExternalResourceKeyword StringLiteral AttachAlias? 'FROM' Expression
+DestroyExternalResourceStmt <- 'DESTROY' ExternalResourceKeyword ColId
 ShowExternalResourcesStmt <- 'SHOW' ShowAllModifier? 'EXTERNAL' 'RESOURCES'
 ShowAllModifier <- 'ALL'
+
+# Syntax only: the keyword pair every singular form repeats. The plural in SHOW cannot share it.
+ExternalResourceKeyword <- 'EXTERNAL' 'RESOURCE'
 
 # The recipe's create params. Its own rule rather than AttachOptions: the two option bags are
 # distinct, and a statement can carry both.
 ExternalResourceCreationOptions <- GenericCopyOptionList
+
+# The attach alias is mandatory: it separates the recipe's create params, which precede it, from the
+# attachment's own options, which follow. Without it a single option list would be ambiguous.
+# CONNECT has no such separator. Borrowing a registered resource has no create params to be confused
+# with, so a list there is the connection's; provisioning does, and the transformer rejects the second
+# list rather than let position decide.
+AttachToExternalResource <- 'ATTACH' 'TO' ExternalResourceSource AttachAlias AttachOptions?
+ConnectToExternalResource <- 'CONNECT' 'TO' ExternalResourceSource AttachOptions?
+ExternalResourceSource <- ExternalResourceCreateClause / ExternalResourceReferenceClause
+ExternalResourceCreateClause <- 'NEW' 'TEMPORARY' ExternalResourceKeyword StringLiteral ExternalResourceCreationOptions?
+ExternalResourceReferenceClause <- ExternalResourceKeyword ColId
 
 InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?
 
@@ -1669,9 +1682,13 @@ UnpivotKeyword <- 'UNPIVOT' / 'PIVOT_LONGER'
 
 UnpivotStatement <- UnpivotKeyword TableRef 'ON' TargetList IntoNameValues?
 
-IntoNameValues <- 'INTO' 'NAME' ColIdOrString ValueOrValues List(Identifier)
+IntoNameValues <- 'INTO' 'NAME' ColIdOrString ValueOrValues OptionalParensNameList
 
 ValueOrValues <- 'VALUE' / 'VALUES'
+
+OptionalParensNameList <- ParenthesizedNameList / BareNameList
+ParenthesizedNameList <- Parens(List(ColIdOrString))
+BareNameList <- List(ColIdOrString)
 
 IncludeOrExcludeNulls <- IncludeNulls / ExcludeNulls
 IncludeNulls <- 'INCLUDE' 'NULLS'
@@ -1753,7 +1770,7 @@ JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
 
 TablePivotClause <- 'PIVOT' Parens(TablePivotClauseBody) TableAlias?
 TablePivotClauseBody <- TargetList 'FOR' PivotValueList+ PivotGroupByList?
-PivotGroupByList <- 'GROUP' 'BY' List(ColIdOrString)
+PivotGroupByList <- 'GROUP' 'BY' OptionalParensNameList
 TableUnpivotClause <- 'UNPIVOT' IncludeOrExcludeNulls? Parens(TableUnpivotClauseBody) TableAlias?
 TableUnpivotClauseBody <- UnpivotHeader 'FOR' UnpivotValueList+
 

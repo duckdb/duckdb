@@ -65,6 +65,7 @@ class ExtensionCallback;
 class SecretManager;
 class CompressionInfo;
 class EncryptionUtil;
+class HTTPTransportManager;
 class HTTPUtil;
 class DatabaseFilePathManager;
 class ExtensionCallbackManager;
@@ -99,6 +100,8 @@ struct DBConfigOptions {
 	idx_t maximum_threads = DConstants::INVALID_INDEX;
 	//! The maximum amount of async threads used by the database system. Default: all available.
 	idx_t async_threads = DConstants::INVALID_INDEX;
+	//! HTTP client limit derived from thread counts unless configured
+	idx_t http_client_pool_capacity = DConstants::INVALID_INDEX;
 	//! Whether or not to create and use a temporary directory to store intermediates that do not fit in memory
 	bool use_temporary_directory = true;
 	//! Directory to store temporary structures that do not fit in memory
@@ -223,7 +226,8 @@ public:
 
 	DUCKDB_API void AddExtensionOption(const Identifier &name, string description, LogicalType parameter,
 	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr,
-	                                   SetScope default_scope = SetScope::SESSION);
+	                                   SetScope default_scope = SetScope::SESSION, bool is_debug = false,
+	                                   bool is_deprecated = false);
 	DUCKDB_API bool HasExtensionOption(const Identifier &name) const;
 	DUCKDB_API identifier_map_t<ExtensionOption> GetExtensionSettings() const;
 	DUCKDB_API bool TryGetExtensionOption(const Identifier &name, ExtensionOption &result) const;
@@ -313,15 +317,24 @@ public:
 	void AddAllowedConfig(const Identifier &config_name);
 	void AddAllowedDirectory(const string &path);
 	void AddAllowedPath(const string &path);
+	//! Allows a database file and its WAL files, so a database can be opened while external access is disabled.
+	//! Only possible through API calls, not SQL calls.
+	void AddAllowedDatabasePath(const string &database_path);
+	vector<string> GetAllowedDirectories() const;
+	vector<string> GetAllowedPaths() const;
 	string SanitizeAllowedPath(const string &path) const;
 	ExtensionCallbackManager &GetCallbackManager();
 	const ExtensionCallbackManager &GetCallbackManager() const;
 
 	void SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util);
 	HTTPUtil &GetHTTPUtil() const;
+	DUCKDB_API HTTPTransportManager &GetHTTPTransportManager();
+	DUCKDB_API const HTTPTransportManager &GetHTTPTransportManager() const;
 
 private:
 	mutable mutex config_lock;
+	//! Guards allowed_paths and allowed_directories, which a running instance can extend while files are being opened
+	mutable mutex allowed_paths_lock;
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<EncodingFunctionSet> encoding_functions;
 	unique_ptr<ArrowTypeExtensionSet> arrow_extensions;
@@ -330,10 +343,8 @@ private:
 	unique_ptr<IndexTypeSet> index_types;
 	unique_ptr<ExtensionCallbackManager> callback_manager;
 	bool is_user_config = true;
-	//! HTTP Request utility functions
-	shared_ptr<HTTPUtil> http_util;
-	vector<shared_ptr<HTTPUtil>> old_http_utils;
-	mutex http_util_lock;
+	//! HTTP provider publication and bounded client ownership
+	unique_ptr<HTTPTransportManager> http_transport_manager;
 };
 
 } // namespace duckdb
