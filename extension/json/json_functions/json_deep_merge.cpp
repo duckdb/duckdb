@@ -144,7 +144,7 @@ ScalarFunctionSet JSONFunctions::GetDeepMergeFunction() {
 	ScalarFunction fun("json_deep_merge", {}, LogicalType::JSON(), DeepMergeFunction, nullptr, nullptr,
 	                   JSONFunctionLocalState::Init);
 	fun.GetSignature().AddParameter("json1", LogicalType::JSON()).AddParameter("json2", LogicalType::JSON());
-	fun.SetVarArgs(LogicalType::JSON());
+	fun.GetSignature().AddArgsParameter("args", LogicalType::JSON());
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetFallible();
 

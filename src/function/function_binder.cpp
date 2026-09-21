@@ -392,11 +392,20 @@ optional_idx FunctionBinder::BindFunctionFromArguments(const Identifier &name, c
 	vector<LogicalType> positional;
 	vector<pair<Identifier, LogicalType>> named;
 
-	if (TrySplitArgumentTypes(arguments, positional, named)) {
-		return BindFunctionFromArguments(name, functions, positional, named, error);
+	// Does this call have a valid positional -> named argument shape?
+	const auto is_valid_call = TrySplitArgumentTypes(arguments, positional, named);
+	if (is_valid_call) {
+		// Yes. Let's try to bind
+		const auto result = BindFunctionFromArguments(name, functions, positional, named, error);
+
+		// We failed binding - does any other overload support implicit argument names?
+		// If not, this is a hard failure.
+		if (result.IsValid() || !AnyOverloadSupportsImplicitArgumentNames(functions)) {
+			return result;
+		}
 	}
 
-	// The split failed because a positional argument follows a named one.
+	// Either a positional argument follows a named one, or no overload takes the positional arguments.
 	// Check if there is any overload that supports implicit argument names.
 	if (AnyOverloadSupportsImplicitArgumentNames(functions)) {
 		// If so, we can attempt to salvage the call by implicitly naming the positional arguments and retrying again
@@ -410,8 +419,17 @@ optional_idx FunctionBinder::BindFunctionFromArguments(const Identifier &name, c
 		named.clear();
 
 		if (TrySplitArgumentTypes(arguments, positional, named)) {
-			return BindFunctionFromArguments(name, functions, positional, named, error);
+			ErrorData retry_error;
+			auto result = BindFunctionFromArguments(name, functions, positional, named, retry_error);
+			if (result.IsValid() || !is_valid_call) {
+				error = std::move(retry_error);
+				return result;
+			}
 		}
+	}
+	if (is_valid_call) {
+		// the call only failed to match an overload, which is reported in the error
+		return optional_idx();
 	}
 
 	// No overload could rescue the positional-after-named call, give a clear error.

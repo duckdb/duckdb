@@ -119,7 +119,7 @@ public:
 				                             "to a storage version older than v2.0.0",
 				                             function.GetName());
 			}
-			// the "**kwargs" arguments are matched to "*args" instead
+			// the "**kwargs" arguments are matched to "*args" instead, or named after their alias
 			return;
 		}
 		serializer.WriteProperty(508, "positional_arguments", function.GetPositionalArgumentCount());
@@ -225,6 +225,34 @@ public:
 		}
 	}
 
+	//! Plans written before the argument names were serialized hold the names of the named arguments in the aliases
+	//! of the trailing arguments. Only the arguments behind the standard parameters can have been named.
+	template <class FUNCTION_SET>
+	static void RestoreNamesFromAliases(const FUNCTION_SET &functions, const vector<unique_ptr<Expression>> &children,
+	                                    idx_t &positional_count, vector<Identifier> &named_arguments) {
+		bool takes_named = false;
+		idx_t standard_count = 0;
+		for (auto &function : functions.functions) {
+			auto &signature = function->GetSignature();
+			if (!signature.GetKwargsParameter() && !function->GetProperties().GetCaptureArgumentAliases()) {
+				continue;
+			}
+			takes_named = true;
+			standard_count = MaxValue(standard_count, signature.GetPositionalParameterCount());
+		}
+		if (!takes_named || children.size() != positional_count) {
+			return;
+		}
+		idx_t named_offset = children.size();
+		while (named_offset > standard_count && !children[named_offset - 1]->GetAlias().empty()) {
+			named_offset--;
+		}
+		for (idx_t i = named_offset; i < children.size(); i++) {
+			named_arguments.push_back(children[i]->GetAlias());
+		}
+		positional_count = named_offset;
+	}
+
 	template <class FUNC, class CATALOG_ENTRY>
 	static pair<FUNC, unique_ptr<FunctionData>> Deserialize(Deserializer &deserializer, CatalogType catalog_type,
 	                                                        vector<unique_ptr<Expression>> &children,
@@ -259,9 +287,12 @@ public:
 			                        qualified_name.Name().GetIdentifierName());
 		}
 
+		auto &functions = func_catalog.Cast<CATALOG_ENTRY>().functions;
+
 		// If there are no argument names serialized, treat all arguments as positional
 		if (named_arguments.empty()) {
 			positional_count = arguments.size();
+			RestoreNamesFromAliases(functions, children, positional_count, named_arguments);
 		}
 
 		// Sanity check: The named arguments are the last arguments, so the number of arguments has to add up
@@ -286,8 +317,6 @@ public:
 		}
 
 		// Lookup the function (and the correct overload)
-		auto &functions = func_catalog.Cast<CATALOG_ENTRY>().functions;
-
 		FunctionBinder binder(context);
 		ErrorData error;
 		const auto func_idx =

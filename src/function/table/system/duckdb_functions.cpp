@@ -137,6 +137,15 @@ Value FunctionStabilityToValue(FunctionStability stability) {
 	}
 }
 
+//! The legacy "varargs" column cannot tell "*args" and "**kwargs" apart - report whichever the function has
+Value VariadicTypeValue(const FunctionSignature &signature) {
+	auto variadic = signature.GetArgsParameter();
+	if (!variadic) {
+		variadic = signature.GetKwargsParameter();
+	}
+	return variadic ? Value(variadic->GetType().ToString()) : Value();
+}
+
 struct ScalarFunctionExtractor {
 	static idx_t FunctionCount(ScalarFunctionCatalogEntry &entry) {
 		return entry.functions.Size();
@@ -183,8 +192,7 @@ struct ScalarFunctionExtractor {
 	}
 
 	static Value GetVarArgs(ScalarFunctionCatalogEntry &entry, idx_t offset) {
-		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
-		return !fun.HasVarArgs() ? Value() : Value(fun.GetVarArgs().ToString());
+		return VariadicTypeValue(entry.functions.GetFunctionByOffset(offset)->GetSignature());
 	}
 
 	static Value GetMacroDefinition(ScalarFunctionCatalogEntry &entry, idx_t offset) {
@@ -309,8 +317,7 @@ struct AggregateFunctionExtractor {
 	}
 
 	static Value GetVarArgs(AggregateFunctionCatalogEntry &entry, idx_t offset) {
-		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
-		return !fun.HasVarArgs() ? Value() : Value(fun.GetVarArgs().ToString());
+		return VariadicTypeValue(entry.functions.GetFunctionByOffset(offset)->GetSignature());
 	}
 
 	static Value GetMacroDefinition(AggregateFunctionCatalogEntry &entry, idx_t offset) {
