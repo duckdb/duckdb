@@ -1164,6 +1164,9 @@ public:
 	mutex lock;
 	AggregateHTScanState scan_state;
 	bool initialized = false;
+	//! The number of groups in the hash table and the number of groups scanned (for progress)
+	atomic<idx_t> total_groups {0};
+	atomic<idx_t> scanned_groups {0};
 };
 
 class RecursiveCTEStateScanLocalState : public LocalSourceState {
@@ -1233,11 +1236,13 @@ SourceResultType PhysicalRecursiveCTEStateScan::GetDataFromState(DataChunk &chun
 			lock_guard<mutex> guard(gstate.lock);
 			if (!gstate.initialized) {
 				recursive_state.GetHashTable().InitializeScan(gstate.scan_state);
+				gstate.total_groups = recursive_state.GetHashTable().Count();
 				gstate.initialized = true;
 			}
 			if (!recursive_state.GetHashTable().ScanGroups(gstate.scan_state, lstate.distinct_rows)) {
 				return SourceResultType::FINISHED;
 			}
+			gstate.scanned_groups += lstate.distinct_rows.size();
 		}
 		if (lstate.distinct_rows.size() == 0) {
 			continue;
@@ -1256,6 +1261,15 @@ SourceResultType PhysicalRecursiveCTEStateScan::GetDataFromState(DataChunk &chun
 		}
 		return SourceResultType::HAVE_MORE_OUTPUT;
 	}
+}
+
+ProgressData PhysicalRecursiveCTEStateScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
+	auto &gstate = gstate_p.Cast<RecursiveCTEStateScanGlobalState>();
+	idx_t total_groups = gstate.total_groups;
+	ProgressData progress;
+	progress.total = static_cast<double>(MaxValue<idx_t>(total_groups, 1));
+	progress.done = static_cast<double>(MinValue<idx_t>(gstate.scanned_groups, total_groups));
+	return progress;
 }
 
 InsertionOrderPreservingMap<string> PhysicalRecursiveCTEStateScan::ParamsToString() const {

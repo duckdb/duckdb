@@ -187,6 +187,18 @@ SELECT count(*) FROM (SELECT row_number() OVER () FROM range(100000) t(i))
 ----
 100000
 
+# scans of the recurring table of a recursive CTE with USING KEY report progress
+statement ok
+SET debug_verify_progress_ignore='UNSUPPORTED_SOURCE:REC_CTE'
+
+query II
+WITH RECURSIVE t(k, v) USING KEY (k) AS (SELECT i, 0 FROM range(10000) t(i) UNION (SELECT r.k, r.v + 1 FROM recurring.t r WHERE r.v < 3 AND EXISTS (SELECT 1 FROM t LIMIT 1))) SELECT count(*), sum(v) FROM t
+----
+10000	30000
+
+statement ok
+SET debug_verify_progress_ignore=''
+
 # recursive CTEs do not report progress - this fails the query in error mode
 statement error
 WITH RECURSIVE t(i) AS (SELECT * FROM range(100000) UNION ALL SELECT i + 100000 FROM t WHERE i < 400000) SELECT sum(i) FROM t
