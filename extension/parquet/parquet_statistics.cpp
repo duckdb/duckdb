@@ -111,6 +111,13 @@ static unique_ptr<BaseStatistics> CreateFloatingPointStats(const LogicalType &ty
 	return stats.ToUnique();
 }
 
+bool ParquetStatisticsUtils::CanHaveNaN(const duckdb_parquet::Statistics &parquet_stats, bool can_have_nan) {
+	if (parquet_stats.__isset.nan_count) {
+		return parquet_stats.nan_count != 0;
+	}
+	return can_have_nan;
+}
+
 Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const ParquetColumnSchema &schema_ele,
                                            const std::string &stats) {
 	string error;
@@ -506,14 +513,12 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 		return CreateNumericStats(type, schema, parquet_stats);
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
-		if (can_have_nan) {
-			// Since parquet doesn't tell us if the column has NaN values, if the user has explicitly declared that it
-			// does, we create stats without an upper max value, as NaN compares larger than anything else.
+		if (CanHaveNaN(parquet_stats, can_have_nan)) {
+			// The column can contain NaN values - create stats without an upper max value, as NaN compares larger than
+			// anything else and is not included in the Parquet min/max
 			return CreateFloatingPointStats(type, schema, parquet_stats);
 		} else {
-			// Otherwise we use the numeric stats as usual, which might lead to "wrong" pruning if the column contains
-			// NaN values. The parquet spec is not clear on how to handle NaN values in statistics, and so this is
-			// probably the best we can do for now.
+			// Otherwise we use the numeric stats as usual
 			return CreateNumericStats(type, schema, parquet_stats);
 		}
 		break;

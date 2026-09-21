@@ -251,7 +251,7 @@ unique_ptr<TableRef> SubqueryRef::Deserialize(Deserializer &deserializer) {
 
 void TableFunctionRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "function", function);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "function", SerializableFunction());
 	serializer.WritePropertyWithDefault<vector<Identifier>>(201, "column_name_alias", column_name_alias);
 	serializer.WritePropertyWithDefault<OrdinalityType>(202, "with_ordinality", with_ordinality, OrdinalityType::WITHOUT_ORDINALITY);
 }

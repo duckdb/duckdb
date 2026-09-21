@@ -34,6 +34,12 @@ public:
 	DUCKDB_API idx_t EndOffset() const;
 
 	DUCKDB_API optional_ptr<const MatcherToken> Current() const;
+	LiteralInfo CurrentLiteralInfo(const GrammarLiteralTable &table) {
+		if (position >= tokens.size()) {
+			return LiteralInfo();
+		}
+		return tokens[position].GetLiteralInfo(table);
+	}
 	DUCKDB_API const MatcherToken &Previous() const;
 	DUCKDB_API const MatcherToken &GetToken(idx_t index) const;
 

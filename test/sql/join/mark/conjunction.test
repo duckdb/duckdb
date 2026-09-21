@@ -1,0 +1,172 @@
+# name: test/sql/join/mark/conjunction.test
+# description: Nested-loop MARK conditions form a conjunction for each pair
+# group: [mark]
+
+# Exercise nested-loop conjunctions even when both inputs exceed the range-join threshold.
+statement ok
+SET nested_loop_join_threshold=10000;
+
+foreach disable false true
+
+statement ok
+SET debug_disable_optimizer={disable};
+
+statement ok
+CREATE OR REPLACE TABLE conjunction_probe(a INTEGER);
+
+statement ok
+INSERT INTO conjunction_probe VALUES (NULL),(1),(2),(2),(3);
+
+statement ok
+CREATE OR REPLACE TABLE conjunction_build(b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO conjunction_build VALUES (0,0),(4,4),(NULL,NULL);
+
+# Contradictory terms must not be combined by OR.
+query II rowsort
+SELECT a,__mark_join_marker FROM conjunction_probe JOIN BY (TYPE MARK) conjunction_build ON a<2 AND a>2;
+----
+1	false
+2	false
+2	false
+3	false
+NULL	NULL
+
+# Each term matches some build row, but never the same row.
+query II
+EXPLAIN SELECT a,__mark_join_marker FROM conjunction_probe JOIN BY (TYPE MARK) conjunction_build ON a>b AND a<c;
+----
+physical_plan	<REGEX>:.*Nested Loop Join.*Join Type: MARK.*
+
+query II rowsort
+SELECT a,__mark_join_marker FROM conjunction_probe JOIN BY (TYPE MARK) conjunction_build ON a>b AND a<c;
+----
+1	NULL
+2	NULL
+2	NULL
+3	NULL
+NULL	NULL
+
+statement ok
+DELETE FROM conjunction_build WHERE b IS NULL;
+
+query II rowsort
+SELECT a,__mark_join_marker FROM conjunction_probe JOIN BY (TYPE MARK) conjunction_build ON a>b AND a<c;
+----
+1	false
+2	false
+2	false
+3	false
+NULL	NULL
+
+# A false term dominates an unknown term for the same pair.
+query II rowsort
+SELECT a,__mark_join_marker FROM conjunction_probe JOIN BY (TYPE MARK) conjunction_build ON a>2 AND b<NULL::INTEGER;
+----
+1	false
+2	false
+2	false
+3	NULL
+NULL	NULL
+
+query II rowsort
+SELECT a,__mark_join_marker FROM conjunction_probe JOIN BY (TYPE MARK) conjunction_build ON b<NULL::INTEGER AND a>2;
+----
+1	false
+2	false
+2	false
+3	NULL
+NULL	NULL
+
+# A matching pair takes precedence over another pair's unknown result.
+statement ok
+INSERT INTO conjunction_build VALUES (NULL,NULL),(0,4),(0,4);
+
+query II rowsort
+SELECT a,__mark_join_marker FROM conjunction_probe JOIN BY (TYPE MARK) conjunction_build ON a>b AND a<c;
+----
+1	true
+2	true
+2	true
+3	true
+NULL	NULL
+
+query II rowsort
+SELECT a,__mark_join_marker FROM conjunction_probe JOIN BY (TYPE MARK) conjunction_build ON a IS DISTINCT FROM NULL::INTEGER AND b IS DISTINCT FROM NULL::INTEGER;
+----
+1	true
+2	true
+2	true
+3	true
+NULL	false
+
+query I
+SELECT __mark_join_marker FROM (VALUES ([1])) l(a) JOIN BY (TYPE MARK) (VALUES ([0],[0]),([2],[2])) r(b,c) ON a>b AND a<c;
+----
+false
+
+query I
+SELECT __mark_join_marker FROM (VALUES ((1,NULL))) l(a) JOIN BY (TYPE MARK) (VALUES ((2,NULL),2)) r(b,c) ON a<>b AND c>1;
+----
+true
+
+query I
+SELECT __mark_join_marker FROM (VALUES ((1,NULL))) l(a) JOIN BY (TYPE MARK) (VALUES ((1,2),2)) r(b,c) ON a<>b AND c>1;
+----
+NULL
+
+query I
+SELECT __mark_join_marker FROM (VALUES ((1,NULL))) l(a) JOIN BY (TYPE MARK) (VALUES ((1,2),0)) r(b,c) ON a<>b AND c>1;
+----
+false
+
+# A true tuple comparison must not override another false condition.
+query I
+SELECT __mark_join_marker FROM (VALUES ((1,NULL),(1,1))) l(a,c) JOIN BY (TYPE MARK) (VALUES ((1,1),(1,1))) r(b,d) ON a<>b AND c<>d;
+----
+false
+
+query I
+SELECT __mark_join_marker FROM (VALUES ((1,NULL),(1,1))) l(a,c) JOIN BY (TYPE MARK) (VALUES ((1,1),(1,1))) r(b,d) ON c<>d AND a<>b;
+----
+false
+
+# Both inputs cross chunk boundaries; the only match is in the last build row.
+query II
+EXPLAIN SELECT count(*) FROM (SELECT __mark_join_marker m FROM range(2050) l(a) JOIN BY (TYPE MARK) range(2050) r(b) ON a>=b AND a<b+1 AND b>=2049) WHERE m;
+----
+physical_plan	<REGEX>:.*Nested Loop Join.*Join Type: MARK.*
+
+query I
+SELECT count(*) FROM (SELECT __mark_join_marker m FROM range(2050) l(a) JOIN BY (TYPE MARK) range(2050) r(b) ON a>=b AND a<b+1 AND b>=2049) WHERE m;
+----
+1
+
+statement ok
+DELETE FROM conjunction_build;
+
+query II rowsort
+SELECT a,__mark_join_marker FROM conjunction_probe JOIN BY (TYPE MARK) conjunction_build ON a<2 AND a>2;
+----
+1	false
+2	false
+2	false
+3	false
+NULL	false
+
+statement ok
+DELETE FROM conjunction_probe;
+
+query I
+SELECT count(*) FROM (SELECT __mark_join_marker FROM conjunction_probe JOIN BY (TYPE MARK) conjunction_build ON a<2 AND a>2);
+----
+0
+
+endloop
+
+statement ok
+SET debug_disable_optimizer=false;
+
+statement ok
+RESET nested_loop_join_threshold;

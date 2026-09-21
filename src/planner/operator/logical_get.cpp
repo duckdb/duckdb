@@ -9,7 +9,6 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 
 namespace duckdb {
@@ -305,6 +304,9 @@ void LogicalGet::SetPartitionsToScan(vector<idx_t> partition_indices) {
 }
 
 void LogicalGet::Serialize(Serializer &serializer) const {
+	if (bind_info) {
+		throw NotImplementedException("Cannot serialize a table function with process-local bind input");
+	}
 	LogicalOperator::Serialize(serializer);
 	serializer.WriteProperty(200, "table_index", table_index);
 	serializer.WriteProperty(201, "returned_types", returned_types);
@@ -313,9 +315,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(204, "projection_ids", projection_ids);
 	serializer.WriteProperty(205, "table_filters", table_filters);
 	FunctionSerializer::Serialize(serializer, function, bind_data.get());
-	if (!function.serialize) {
-		D_ASSERT(!function.serialize);
-		// no serialize method: serialize input values and named_parameters for rebinding purposes
+	if (!function.serialize || serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WriteProperty(206, "parameters", parameters);
 		serializer.WriteProperty(207, "named_parameters", named_parameters);
 		serializer.WriteProperty(208, "input_table_types", input_table_types);
@@ -328,6 +328,8 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<RowGroupOrderOptions>>(214, "row_group_order_options",
 	                                                                      row_group_order_options);
 	serializer.WritePropertyWithDefault(215, "scan_partition_indices", scan_partition_indices, vector<idx_t>());
+	serializer.WritePropertyWithDefault(216, "source_ordinality", source_ordinality,
+	                                    OrdinalityType::WITHOUT_ORDINALITY);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -346,14 +348,13 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	auto &function = result->function;
 	auto has_serialize = entry.second;
 	unique_ptr<FunctionData> bind_data;
-	if (!has_serialize) {
-		deserializer.ReadProperty(206, "parameters", result->parameters);
-		deserializer.ReadProperty(207, "named_parameters", result->named_parameters);
-		deserializer.ReadProperty(208, "input_table_types", result->input_table_types);
-		deserializer.ReadProperty(209, "input_table_names", result->input_table_names);
-	} else {
+	if (has_serialize) {
 		bind_data = FunctionSerializer::FunctionDeserialize(deserializer, function);
 	}
+	deserializer.ReadPropertyWithDefault(206, "parameters", result->parameters);
+	deserializer.ReadPropertyWithDefault(207, "named_parameters", result->named_parameters);
+	deserializer.ReadPropertyWithDefault(208, "input_table_types", result->input_table_types);
+	deserializer.ReadPropertyWithDefault(209, "input_table_names", result->input_table_names);
 	deserializer.ReadProperty(210, "projected_input", result->projected_input);
 	deserializer.ReadPropertyWithDefault(211, "column_indexes", result->column_ids);
 	result->extra_info = deserializer.ReadPropertyWithExplicitDefault<ExtraOperatorInfo>(212, "extra_info", {});
@@ -362,6 +363,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	    deserializer.ReadPropertyWithDefault<unique_ptr<RowGroupOrderOptions>>(214, "row_group_order_options");
 	auto scan_partition_indices =
 	    deserializer.ReadPropertyWithExplicitDefault<vector<idx_t>>(215, "scan_partition_indices", vector<idx_t>());
+	result->source_ordinality = deserializer.ReadPropertyWithExplicitDefault<OrdinalityType>(
+	    216, "source_ordinality", OrdinalityType::WITHOUT_ORDINALITY);
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
 			throw SerializationException(

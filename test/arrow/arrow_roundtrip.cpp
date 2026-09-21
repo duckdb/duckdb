@@ -4,6 +4,78 @@
 
 using namespace duckdb;
 
+namespace {
+
+class RepeatableArrowViewFactory : public ArrowScanFactory {
+public:
+	explicit RepeatableArrowViewFactory(Connection &source_p) : source(source_p) {
+	}
+
+	void GetSchema(ArrowSchema &schema) override {
+		auto properties = source.context->GetClientProperties();
+		ArrowConverter::ToArrowSchema(&schema, {LogicalType::INTEGER}, {"i"}, properties);
+	}
+
+	unique_ptr<ArrowArrayStreamWrapper> ProduceStream(ArrowStreamParameters &parameters) override {
+		// Each scan gets its own result, including scans introduced by CTE inlining.
+		auto result = source.Query("SELECT 42::INTEGER AS i FROM range(2)");
+		REQUIRE_NO_FAIL(*result);
+		auto factory =
+		    make_uniq<ArrowTestFactory>(result->GetTypes(), IdentifiersToStrings(result->GetNames()), std::move(result),
+		                                false, source.context->GetClientProperties(), *source.context);
+		auto stream = factory->ProduceStream(parameters);
+		factories.push_back(std::move(factory));
+		return stream;
+	}
+
+private:
+	Connection &source;
+	vector<unique_ptr<ArrowTestFactory>> factories;
+};
+
+} // namespace
+
+TEST_CASE("Arrow scan view supports repeated CTE references", "[arrow]") {
+	DuckDB db;
+	Connection source(db);
+	Connection con(db);
+	auto factory = make_shared_ptr<RepeatableArrowViewFactory>(source);
+	con.TableFunction("arrow_scan", {}, {}, factory)->CreateView("v", true, true);
+
+	auto result = con.Query("WITH t AS (SELECT * FROM v) SELECT i FROM t UNION ALL SELECT i FROM t LIMIT 3");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->RowCount() == 3);
+	for (idx_t row = 0; row < result->RowCount(); row++) {
+		REQUIRE(result->GetValue(0, row) == Value::INTEGER(42));
+	}
+}
+
+TEST_CASE("Arrow scan view supports serializer verification", "[arrow]") {
+	DuckDB db;
+	Connection source(db);
+	Connection con(db);
+	auto factory = make_shared_ptr<RepeatableArrowViewFactory>(source);
+	con.TableFunction("arrow_scan", {}, {}, factory)->CreateView("v", true, true);
+	REQUIRE_NO_FAIL(con.Query("SET debug_verify_serializer = true"));
+
+	string query;
+	idx_t expected_count;
+	SECTION("Direct scan") {
+		query = "SELECT i FROM v";
+		expected_count = 2;
+	}
+	SECTION("Repeated CTE references") {
+		query = "WITH t AS (SELECT * FROM v) SELECT i FROM t UNION ALL SELECT i FROM t LIMIT 3";
+		expected_count = 3;
+	}
+	auto result = con.Query(query);
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->RowCount() == expected_count);
+	for (idx_t row = 0; row < result->RowCount(); row++) {
+		REQUIRE(result->GetValue(0, row) == Value::INTEGER(42));
+	}
+}
+
 static void TestArrowRoundtrip(const string &query, bool export_large_buffer = false,
                                bool lossless_conversion = false) {
 	DuckDB db;

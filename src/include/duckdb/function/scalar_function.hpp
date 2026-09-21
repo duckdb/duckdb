@@ -56,6 +56,7 @@ struct BindLambdaContext {
 class Binder;
 class BoundFunctionExpression;
 class BoundScalarFunction;
+class ParsedExpression;
 class ScalarFunctionCatalogEntry;
 
 struct StatementProperties;
@@ -112,6 +113,14 @@ struct FunctionBindExpressionInput {
 	vector<unique_ptr<Expression>> &children;
 };
 
+struct FunctionUnbindInput {
+	FunctionUnbindInput(const BoundFunctionExpression &expression_p, vector<unique_ptr<ParsedExpression>> children_p);
+	~FunctionUnbindInput();
+
+	const BoundFunctionExpression &expression;
+	vector<unique_ptr<ParsedExpression>> children;
+};
+
 struct FunctionToStringInput {
 	FunctionToStringInput(const BoundScalarFunction &bound_function, optional_ptr<FunctionData> bind_data_p,
 	                      const vector<unique_ptr<Expression>> &children_p)
@@ -165,6 +174,9 @@ typedef unique_ptr<Expression> (*function_bind_expression_t)(FunctionBindExpress
 //! Convert a scalar function to string
 typedef string (*function_to_string_t)(FunctionToStringInput &input);
 
+//! Reconstruct an invocation from children exported in the current binding scope
+typedef unique_ptr<ParsedExpression> (*scalar_function_unbind_t)(FunctionUnbindInput &input);
+
 //! Get the expression type of a function
 typedef ExpressionType (*function_get_expression_type_t)(FunctionToStringInput &input);
 
@@ -191,6 +203,8 @@ public:
 	get_modified_databases_t get_modified_databases = nullptr;
 	//! Convert a scalar function to string
 	function_to_string_t to_string = nullptr;
+	//! Reconstruct the bound SQL invocation
+	scalar_function_unbind_t unbind = nullptr;
 	//! Get the expression type
 	function_get_expression_type_t get_expression_type = nullptr;
 
@@ -299,6 +313,10 @@ public: // Callbacks
 	auto SetToStringCallback(function_to_string_t callback) -> void { callbacks.to_string = callback; }
 	auto FunctionToString(FunctionToStringInput &input) const -> string { return callbacks.to_string(input); }
 
+	auto HasUnbindCallback() const -> bool { return callbacks.unbind != nullptr; }
+	auto SetUnbindCallback(scalar_function_unbind_t callback) -> void { callbacks.unbind = callback; }
+	auto GetUnbindCallback() const -> scalar_function_unbind_t { return callbacks.unbind; }
+
 	auto HasLegacySerializeCallback() const -> bool { return callbacks.legacy_serialize != nullptr; }
 	auto SetLegacySerializeCallback(function_legacy_serialize_t callback) -> void { callbacks.legacy_serialize = callback; }
 	auto GetLegacySerializeCallback() const -> function_legacy_serialize_t { return callbacks.legacy_serialize; }
@@ -365,7 +383,11 @@ private:
 
 protected:
 	FunctionProperties properties;
+
+private:
 	ScalarFunctionCallbacks callbacks;
+
+protected:
 	shared_ptr<ScalarFunctionInfo> function_info;
 
 	//! Per-argument declarative properties (monotonicity). Empty = no claims made.
@@ -581,8 +603,7 @@ public:
 	void SetDefinition(shared_ptr<const ScalarFunction> definition_p) {
 		definition = std::move(definition_p);
 		if (definition) {
-			schema_name = definition->GetSchemaName();
-			catalog_name = definition->GetCatalogName();
+			qualified_name = definition->GetQualifiedName().WithName(GetName());
 		}
 	}
 	const vector<LogicalType> &GetLogicalArguments() const {
