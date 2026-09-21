@@ -538,9 +538,6 @@ public:
 			if (!WindowLeadLagStreamingState::ComputeOffset(client, wexpr, offset)) {
 				return false;
 			}
-			if (offset < 0 && !ArgumentIsStreamable(wexpr)) {
-				return false;
-			}
 
 			return offset >= 0 && UnsafeNumericCast<idx_t>(offset) < max_delta;
 		}
