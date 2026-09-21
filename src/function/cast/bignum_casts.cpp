@@ -64,9 +64,7 @@ bignum_t HugeintCastToBignum::Operation(uhugeint_t int_value, StringHeap &heap) 
 		// If we have at least one byte on the upper side, the bottom side is complete
 		data_byte_size += 8;
 	} else {
-		if (int_value.lower == 0) {
-			// data_byte_size += 0
-		} else {
+		if (int_value.lower != 0) {
 			const uint32_t bits_needed = 64 - static_cast<uint32_t>(CountZeros<uint64_t>::Leading(int_value.lower));
 			data_byte_size += (bits_needed + 7) / 8;
 		}
@@ -129,9 +127,7 @@ bignum_t HugeintCastToBignum::Operation(hugeint_t int_value, StringHeap &heap) {
 		// If we have at least one byte on the upper side, the bottom side is complete
 		data_byte_size += 8;
 	} else {
-		if (int_value.lower == 0) {
-			// data_byte_size += 0
-		} else {
+		if (int_value.lower != 0) {
 			const uint32_t bits_needed = 64 - static_cast<uint32_t>(CountZeros<uint64_t>::Leading(int_value.lower));
 			data_byte_size += (bits_needed + 7) / 8;
 		}
