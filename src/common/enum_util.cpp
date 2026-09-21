@@ -6029,6 +6029,7 @@ const StringUtil::EnumStringLiteral *GetStatementTypeValues() {
 		{ static_cast<uint32_t>(StatementType::CONNECT_STATEMENT), "CONNECT_STATEMENT" },
 		{ static_cast<uint32_t>(StatementType::DISCONNECT_STATEMENT), "DISCONNECT_STATEMENT" },
 		{ static_cast<uint32_t>(StatementType::EXTERNAL_RESOURCE_STATEMENT), "EXTERNAL_RESOURCE_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::PASSTHROUGH_STATEMENT), "PASSTHROUGH_STATEMENT" },
 		{ static_cast<uint32_t>(StatementType::ENUM_SIZE), "ENUM_SIZE" }
 	};
 	return values;
