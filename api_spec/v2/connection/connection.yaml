@@ -12,21 +12,21 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Opens a connection to a database, starting its instance if it has not
+      Opens a connection to an instance, starting it if it has not
       started yet.
 
       Each connection carries its own client context and session-scoped (LOCAL)
-      settings. Connections to the same database share its catalog, buffer
+      settings. Connections to the same instance share its catalog, buffer
       pool, and transaction manager. A connection may be created before any
-      database is attached to the handle; until one is, only the system
+      database is attached to the instance; until one is, only the system
       catalog and the connection's temporary catalog are visible. The caller
       destroys it via `[[connection_destroy]]`.
     role: constructor
     belongs_to: connection
     parameters:
-      db:
-        type: database
-        description: "The database to connect to."
+      instance:
+        type: instance
+        description: "The instance to connect to."
       out_conn:
         type: connection
         indirection: 1
@@ -65,7 +65,7 @@ functions:
       `scope` chooses the destination, mirroring SQL:
         - AUTOMATIC resolves it from the option's target scope, like a bare
           `SET name = setting`.
-        - GLOBAL writes through to the database, visible to all connections,
+        - GLOBAL writes through to the instance, visible to all connections,
           like `SET GLOBAL`.
         - LOCAL writes to this connection's session only, like `SET LOCAL` /
           `SET SESSION`.
@@ -73,7 +73,7 @@ functions:
       LOCAL_ONLY option, LOCAL against a GLOBAL_ONLY one, and the legacy
       analogues. An unknown name is rejected unless an extension that
       defines it can be autoloaded; to stage a setting for an extension
-      before startup, use `[[database_set_option]]`.
+      before startup, use `[[instance_set_option]]`.
     role: setter
     belongs_to: connection
     parameters:
@@ -104,7 +104,7 @@ functions:
       Returns the option's effective setting at the connection's scope: the
       LOCAL override if this connection set one, otherwise the GLOBAL value,
       otherwise the static default. The remaining fields are populated exactly
-      as by `[[database_get_option_by_name]]`. Aliases resolve transparently, and an unknown
+      as by `[[instance_get_option_by_name]]`. Aliases resolve transparently, and an unknown
       name returns ERROR_INPUT_INVALID. The caller destroys the returned
       option.
     role: getter
@@ -133,8 +133,8 @@ functions:
     description: |
       Returns the number of config options visible to this connection.
 
-      The same count `[[database_get_option_count]]` reports for the underlying
-      database: core plus extension options, aliases excluded.
+      The same count `[[instance_get_option_count]]` reports for the underlying
+      instance: core plus extension options, aliases excluded.
     role: getter
     belongs_to: connection
     parameters:
@@ -159,7 +159,7 @@ functions:
       Reads the config option at the given index visible to this connection.
 
       Index space: [0, core_count) addresses core options, [core_count, total)
-      the extension options visible from this connection's database. An
+      the extension options visible from this connection's instance. An
       out-of-range index returns ERROR_INPUT_INVALID. The caller destroys the
       returned option.
     role: getter

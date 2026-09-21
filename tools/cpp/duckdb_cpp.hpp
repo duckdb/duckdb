@@ -24,7 +24,7 @@
 /// Failures that are part of a function's contract are documented with `\@throws`; any other failure surfaces as a
 /// plain `Exception`.
 ///
-/// The usual path through the API: an `Environment` opens a `Database`, a `Database` hands out `Connection`s, and a
+/// The usual path through the API: an `Environment` opens an `Instance`, an `Instance` hands out `Connection`s, and a
 /// `Connection` parses and executes SQL into a streaming `QueryResult` that yields `DataChunk`s of `Vector`s.
 
 #include <utility>
@@ -59,9 +59,9 @@ namespace cxx {
 typedef uint64_t idx_t;
 
 class Exception;
-class DatabaseOption;
+class InstanceOption;
 class Environment;
-class Database;
+class Instance;
 class Connection;
 class SqlStatement;
 class StatementIterator;
@@ -313,11 +313,11 @@ public:
 };
 
 //----------------------------------------------------------------------------------------------------------------------
-// Database Option
+// Instance Option
 //----------------------------------------------------------------------------------------------------------------------
-// Configuration settings. Write one with `Database::SetOption` or `Connection::SetOption`, which take the name and
-// value directly; read one back as a `DatabaseOption` to inspect its current value, default value, description,
-// target scope or aliases. Settings that can only be chosen at startup are written on a `Database` before its first
+// Configuration settings. Write one with `Instance::SetOption` or `Connection::SetOption`, which take the name and
+// value directly; read one back as a `InstanceOption` to inspect its current value, default value, description,
+// target scope or aliases. Settings that can only be chosen at startup are written on an `Instance` before its first
 // `Attach` or `Connect`.
 
 /// At which scope a setting may be written.
@@ -347,12 +347,12 @@ enum class SettingScope : uint8_t {
 /// A single configuration setting as read from a database or connection: its current value there, plus the
 /// metadata DuckDB declares for it. Read-only.
 /// The string accessors return views borrowed from this option, valid until it is destroyed.
-class DatabaseOption final : public detail::Handle<DatabaseOption> {
+class InstanceOption final : public detail::Handle<InstanceOption> {
 	friend detail::Factory;
 
 public:
-	DatabaseOption(DatabaseOption &&) noexcept = default;
-	DatabaseOption &operator=(DatabaseOption &&) noexcept = default;
+	InstanceOption(InstanceOption &&) noexcept = default;
+	InstanceOption &operator=(InstanceOption &&) noexcept = default;
 
 	/// The setting's name.
 	auto GetName() const -> std::string_view;
@@ -376,10 +376,10 @@ public:
 	/// @param index Alias index in [0, GetAliasCount()).
 	auto GetAliasByIndex(size_t index) const -> std::string_view;
 
-	~DatabaseOption() override;
+	~InstanceOption() override;
 
 private:
-	explicit DatabaseOption(void *impl);
+	explicit InstanceOption(void *impl);
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -639,13 +639,13 @@ private:
 //----------------------------------------------------------------------------------------------------------------------
 // Connection
 //----------------------------------------------------------------------------------------------------------------------
-// A session on a `Database`: the handle that parses, binds and executes SQL, creates types and values outside of a
+// A session on an `Instance`: the handle that parses, binds and executes SQL, creates types and values outside of a
 // callback, and carries session-scoped settings. A connection is not thread-safe -- give each thread its own, via
-// `Database::Connect` -- with the deliberate exception of `Interrupt` and `GetQueryProgress`, which exist to be called
+// `Instance::Connect` -- with the deliberate exception of `Interrupt` and `GetQueryProgress`, which exist to be called
 // while another thread runs a query.
 
 /// A connection to a database.
-/// It must not outlive the `Database` it was opened on, and only one result may be live on it at a time.
+/// It must not outlive the `Instance` it was opened on, and only one result may be live on it at a time.
 class Connection final : public detail::Handle<Connection> {
 	friend detail::Factory;
 
@@ -679,13 +679,13 @@ public:
 
 	/// One setting with its current value on this connection.
 	/// @param index Setting index in [0, GetOptionCount()).
-	auto GetOptionByIndex(size_t index) const -> DatabaseOption;
+	auto GetOptionByIndex(size_t index) const -> InstanceOption;
 
 	/// One setting with its current value on this connection.
 	/// @param name The setting's name or one of its aliases.
 	/// @return The setting.
 	/// @throws InvalidInputException When no setting goes by that name.
-	auto GetOption(std::string_view name) const -> DatabaseOption;
+	auto GetOption(std::string_view name) const -> InstanceOption;
 
 	/// Writes a setting at the scope it declares for itself, like SQL `SET name = value`.
 	/// @param name The setting to write, either its canonical name or one of its aliases.
@@ -823,18 +823,18 @@ private:
 };
 
 //----------------------------------------------------------------------------------------------------------------------
-// Database
+// Instance
 //----------------------------------------------------------------------------------------------------------------------
 // An open database: the catalog, the storage behind it, and the settings shared by every session on it. Databases are
 // opened through an `Environment` and worked with through the `Connection`s they hand out.
 
-class Database final : public detail::Handle<Database> {
+class Instance final : public detail::Handle<Instance> {
 	friend detail::Factory;
 
 public:
-	~Database() override;
-	Database(Database &&) noexcept = default;
-	Database &operator=(Database &&) noexcept = default;
+	~Instance() override;
+	Instance(Instance &&) noexcept = default;
+	Instance &operator=(Instance &&) noexcept = default;
 
 	/// Attaches a database to this instance, like SQL `ATTACH 'path'`, starting the instance if this is its first
 	/// use.
@@ -873,13 +873,13 @@ public:
 
 	/// One setting with its current global value.
 	/// @param index Setting index in [0, GetOptionCount()).
-	auto GetOptionByIndex(size_t index) const -> DatabaseOption;
+	auto GetOptionByIndex(size_t index) const -> InstanceOption;
 
 	/// One setting with its current global value.
 	/// @param name The setting's name or one of its aliases; an alias resolves to the canonical setting.
 	/// @return The setting.
 	/// @throws InvalidInputException When no setting goes by that name.
-	auto GetOption(std::string_view name) const -> DatabaseOption;
+	auto GetOption(std::string_view name) const -> InstanceOption;
 
 	/// Writes a setting globally, for this database and every session on it. Before the first `Attach` or `Connect`
 	/// the setting goes into the startup configuration, which is how settings that can only be chosen at startup,
@@ -894,7 +894,7 @@ public:
 	auto Connect() -> Connection;
 
 private:
-	explicit Database(void *impl);
+	explicit Instance(void *impl);
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -902,7 +902,7 @@ private:
 //----------------------------------------------------------------------------------------------------------------------
 // Loading an extension is how catalog entries (functions, types, casts) and database-level hooks get installed under
 // the extension's identity, so DuckDB can attribute them to the extension that provided them. Outside a load, the same
-// objects are registered on a `Connection` or a `Database` instead.
+// objects are registered on a `Connection` or an `Instance` instead.
 
 /// The extension being loaded, handed to its load entry point.
 /// Borrowed for the duration of the load: never store or outlive one.
@@ -928,11 +928,11 @@ auto RunExtensionEntry(void (*body)(Extension &, Context &), void *extension, vo
 //----------------------------------------------------------------------------------------------------------------------
 // Environment
 //----------------------------------------------------------------------------------------------------------------------
-// The entry point to the API: an `Environment` creates databases and tracks the ones it has created. Create one,
-// keep it for as long as any database is alive, and create databases through it.
+// The entry point to the API: an `Environment` creates instances and tracks the ones it has created. Create one,
+// keep it for as long as any instance is alive, and create instances through it.
 
-/// The environment databases are created in. It must outlive every `Database` created through it; destroying it
-/// while databases are still alive leaks them.
+/// The environment instances are created in. It must outlive every `Instance` created through it; destroying it
+/// while instances are still alive leaks them.
 class Environment final : public detail::Handle<Environment> {
 	friend detail::Factory;
 
@@ -943,15 +943,15 @@ public:
 	Environment &operator=(Environment &&) noexcept = default;
 
 	/// How many databases are currently alive in this environment.
-	auto GetDatabaseCount() const -> size_t;
+	auto GetInstanceCount() const -> size_t;
 
-	/// Creates a database instance with nothing attached. Write startup settings with `Database::SetOption`, then
-	/// attach a database with `Database::Attach` and make it the default with `Database::SetDefault`.
-	auto CreateDatabase() -> Database;
+	/// Creates a database instance with nothing attached. Write startup settings with `Instance::SetOption`, then
+	/// attach a database with `Instance::Attach` and make it the default with `Instance::SetDefault`.
+	auto CreateInstance() -> Instance;
 
 	/// Creates a database instance with default settings, attaches `path`, and makes it the default database.
 	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
-	auto Open(const std::string &path) -> Database;
+	auto Open(const std::string &path) -> Instance;
 };
 
 /// The version of the DuckDB library this program is linked against, e.g. "v1.5.0", with a suffix such as
@@ -2233,6 +2233,14 @@ public:
 	/// Rewrites the vector as a FLAT one, materializing one element per row. Pointers and views taken from it
 	/// beforehand do not survive this.
 	auto Flatten() const -> void;
+
+	/// Repoints the vector at another vector's data, without copying: the two then alias the same buffers, in the
+	/// source's layout, until one of them is reset or re-referenced. Works for any type, including nested ones, and
+	/// is the way to hand an already-materialized vector to an output vector without a per-row copy. Pointers and
+	/// views taken from this vector beforehand do not survive this.
+	/// @param source The vector to reference. Its data must outlive every read of this vector.
+	/// @throws InvalidInputException When the source's type does not match the vector's.
+	auto Reference(const Vector &source) -> void;
 
 	/// How many rows the vector holds.
 	auto GetSize() const -> idx_t;
@@ -5499,7 +5507,7 @@ private:
 //----------------------------------------------------------------------------------------------------------------------
 
 /// A user-defined replacement scan, built up with the setters and made live with `Register`.
-/// Create one against the `Connection`, `Database` or `Extension` it will be registered on, set its callback and
+/// Create one against the `Connection`, `Instance` or `Extension` it will be registered on, set its callback and
 /// user data, then call `Register`. The scan object may be destroyed after registration; the registered scan lives
 /// on until its scope ends.
 ///
@@ -5510,8 +5518,8 @@ private:
 /// error is raised. A callback reports failure by throwing; the exception surfaces as the query's error.
 ///
 /// Scope follows the constructor. A scan created against a `Connection` is visible only to that connection, is
-/// released when it closes, and is consulted before every database-wide scan, including the built-in file scans. A
-/// scan created against a `Database` or `Extension` is visible to every connection to that database and lives until
+/// released when it closes, and is consulted before every instance-wide scan, including the built-in file scans. A
+/// scan created against an `Instance` or `Extension` is visible to every connection to that instance and lives until
 /// it closes; registering one is not thread-safe against queries binding on other connections, so do it during
 /// extension load or before issuing queries. A registered scan cannot be unregistered.
 class ReplacementScan final : public detail::Handle<ReplacementScan> {
@@ -5531,7 +5539,7 @@ public:
 	/// Creates a scan that `Register` adds to the connection, visible only there.
 	static auto Create(const Connection &conn) -> ReplacementScan;
 	/// Creates a scan that `Register` adds to the database, visible to every connection.
-	static auto Create(const Database &db) -> ReplacementScan;
+	static auto Create(const Instance &instance) -> ReplacementScan;
 	/// Creates a scan that `Register` adds through the loading extension, visible to every connection.
 	static auto Create(const Extension &extension) -> ReplacementScan;
 

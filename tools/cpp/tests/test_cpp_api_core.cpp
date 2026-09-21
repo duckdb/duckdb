@@ -16,21 +16,22 @@
 // exceptions, replacement scans.
 // ---------------------------------------------------------------------------
 
-TEST_CASE("Stable C++API: Database GetOption by name and option target scope", "[cpp_api]") {
+TEST_CASE("Stable C++API: Instance GetOption by name and option target scope", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
 	Environment env;
-	auto db = env.Open(":memory:");
+	auto instance = env.Open(":memory:");
 
-	// Database-resolved options carry their declared scope.
-	auto option = db.GetOption("allow_community_extensions");
+	// Instance-resolved options carry their declared scope.
+	auto option = instance.GetOption("allow_community_extensions");
 	REQUIRE(option.GetName() == "allow_community_extensions");
 	REQUIRE(option.GetTargetScope() == OptionTargetScope::GLOBAL_ONLY);
 
 	// An alias resolves to its canonical option.
-	REQUIRE(db.GetOption("memory_limit").GetName() == "max_memory");
+	REQUIRE(instance.GetOption("memory_limit").GetName() == "max_memory");
 
-	REQUIRE_THROWS_MATCHES(db.GetOption("no_such_option"), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(instance.GetOption("no_such_option"), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
 TEST_CASE("Stable C++API: RenderQuotedIdentifier quotes only when required", "[cpp_api]") {
 	using duckdb::cxx::RenderQuotedIdentifier;
@@ -55,8 +56,8 @@ TEST_CASE("Stable C++API: Exception carries the code and message body", "[cpp_ap
 	using namespace duckdb::cxx;
 
 	Environment env;
-	auto db = env.Open(":memory:");
-	auto conn = db.Connect();
+	auto instance = env.Open(":memory:");
+	auto conn = instance.Connect();
 
 	// Binder error: GetCode() is the identity, GetRawMessage() the unprefixed body.
 	try {
@@ -88,9 +89,9 @@ TEST_CASE("Stable C++API: Connection::SetOption scope split is visible correctly
 	using namespace duckdb::cxx;
 
 	Environment env;
-	auto db = env.Open(":memory:");
-	auto conn_a = db.Connect();
-	auto conn_b = db.Connect();
+	auto instance = env.Open(":memory:");
+	auto conn_a = instance.Connect();
+	auto conn_b = instance.Connect();
 
 	// max_execution_time is LOCAL_DEFAULT: a LOCAL write on conn_a stays
 	// invisible to conn_b.
@@ -116,8 +117,8 @@ TEST_CASE("Stable C++API: Connection::GetOption by name and the scopeless SetOpt
 	using namespace duckdb::cxx;
 
 	Environment env;
-	auto db = env.Open(":memory:");
-	auto conn = db.Connect();
+	auto instance = env.Open(":memory:");
+	auto conn = instance.Connect();
 
 	auto option = conn.GetOption("allow_community_extensions");
 	REQUIRE(option.GetName() == "allow_community_extensions");
@@ -129,32 +130,32 @@ TEST_CASE("Stable C++API: Connection::GetOption by name and the scopeless SetOpt
 	REQUIRE_THROWS_MATCHES(conn.GetOption("no_such_option_xyz"), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
-TEST_CASE("Stable C++API: Database::Attach with a name and options", "[cpp_api]") {
+TEST_CASE("Stable C++API: Instance::Attach with a name and options", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
 	auto path = duckdb::TestCreatePath("cpp_api_attach_options.duckdb");
 	duckdb::DeleteDatabase(path);
 
 	Environment env;
-	auto db = env.CreateDatabase();
-	db.Attach(":memory:", true);
-	db.Attach(path, "named", {{"BLOCK_SIZE", "16384"}});
-	auto conn = db.Connect();
+	auto instance = env.CreateInstance();
+	instance.Attach(":memory:", true);
+	instance.Attach(path, "named", {{"BLOCK_SIZE", "16384"}});
+	auto conn = instance.Connect();
 	conn.Execute("CREATE TABLE named.t(i INTEGER)").Drain();
 	{
 		auto result = conn.Execute("SELECT block_size FROM pragma_database_size() WHERE database_name = 'named'");
 		REQUIRE(result.FetchChunk().GetVector(0).GetValue(0).Get<int64_t>() == 16384);
 	}
-	db.Detach("named");
+	instance.Detach("named");
 
 	// Re-attaching read-only, and as the default for later sessions.
-	db.Attach(path, "named", {{"READ_ONLY", "true"}}, true);
-	auto later = db.Connect();
+	instance.Attach(path, "named", {{"READ_ONLY", "true"}}, true);
+	auto later = instance.Connect();
 	REQUIRE_THROWS_AS(later.Execute("INSERT INTO t VALUES (1)"), Exception);
 	later.Execute("SELECT * FROM t").Drain();
 
 	// An option the engine rejects fails the attach, not the option.
-	REQUIRE_THROWS_AS(db.Attach(":memory:", "other", {{"no_such_attach_option", "1"}}), Exception);
+	REQUIRE_THROWS_AS(instance.Attach(":memory:", "other", {{"no_such_attach_option", "1"}}), Exception);
 
 	duckdb::DeleteDatabase(path);
 }
@@ -169,17 +170,17 @@ TEST_CASE("Stable C++API: a startup option set before Open enforces read-only", 
 	{
 		// Seed the database, then close (scope exit) to free the exclusive-open
 		// slot for the read-only reopen.
-		auto db = env.Open(path);
-		auto conn = db.Connect();
+		auto instance = env.Open(path);
+		auto conn = instance.Connect();
 		conn.Execute("CREATE TABLE t(i INTEGER)").Drain();
 		conn.Execute("INSERT INTO t VALUES (1), (2)").Drain();
 	}
 
 	{
-		auto ro_db = env.CreateDatabase();
-		ro_db.SetOption("access_mode", "READ_ONLY");
-		ro_db.Attach(path, true);
-		auto ro_conn = ro_db.Connect();
+		auto ro_instance = env.CreateInstance();
+		ro_instance.SetOption("access_mode", "READ_ONLY");
+		ro_instance.Attach(path, true);
+		auto ro_conn = ro_instance.Connect();
 
 		// Reads see the seeded data. Scoped so the live result is released
 		// before the write attempts below.
@@ -221,8 +222,8 @@ TEST_CASE("Stable C++API: typed exceptions carry their error code", "[cpp_api]")
 
 	// A thrown-and-caught engine error classifies back correctly end to end.
 	Environment env;
-	auto db = env.Open(":memory:");
-	auto conn = db.Connect();
+	auto instance = env.Open(":memory:");
+	auto conn = instance.Connect();
 	try {
 		conn.Execute("SELECT * FROM no_such_table_xyz");
 		FAIL("expected a Catalog error");

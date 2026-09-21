@@ -302,12 +302,11 @@ def build_package(
                 f'extern "C" void {ext}_init_c_api_v2(struct duckdb_v2_extension_input *);\n'
                 "#endif\n"
             )
-            ext_loader_body += (
+            ext_register_body += (
                 f"#if {ext_linked_define}\n"
-                f"    if (extension==\"{ext}\") {{\n"
+                f"    config.linked_extensions.push_back({{\"{ext}\", [](DuckDB &db) {{\n"
                 f"        db.LoadStaticCAPIExtensionV2(\"{ext}\", {ext}_init_c_api_v2);\n"
-                "        return ExtensionLoadResult::LOADED_EXTENSION;\n"
-                "    }\n"
+                "    }});\n"
                 "#endif\n"
             )
         else:

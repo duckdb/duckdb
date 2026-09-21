@@ -179,58 +179,59 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 
 bool OptionIsExcludedFromTest(const string &name) {
 	static unordered_set<string> excluded_options = {
-	    "__delta_only_variant_encoding_enabled",
 	    "access_mode",
 	    "active_grammar_extensions",
+	    "allow_community_extensions",   // cant change this while db is running
+	    "allow_extension_repositories", // can only be tightened at runtime, cannot be freely reset
+	    "allow_unredacted_secrets",     // cant change this while db is running
+	    "allow_unsigned_extensions",    // cant change this while db is running
 	    "allowed_configs",
 	    "allowed_directories",
 	    "allowed_paths",
-	    "schema",
+	    "block_allocator_memory", // cant reduce
 	    "current_dialect",
-	    "search_path",
-	    "debug_window_mode",
-	    "experimental_parallel_csv",
-	    "lock_configuration",             // cant change this while db is running
-	    "disabled_filesystems",           // cant change this while db is running
-	    "enable_external_access",         // cant change this while db is running
-	    "allow_unsigned_extensions",      // cant change this while db is running
-	    "allow_community_extensions",     // cant change this while db is running
-	    "allow_extension_repositories",   // can only be tightened at runtime, cannot be freely reset
-	    "extension_repository_directory", // trust anchor, cant change while db is running (unless unsigned allowed)
-	    "allow_unredacted_secrets",       // cant change this while db is running
-	    "disable_database_invalidation",  // cant change this while db is running
-	    "vacuum_rebuild_indexes",         // cant change this while db is running
-	    "temp_file_encryption",
-	    "enable_object_cache",
-	    "force_variant_shredding",
-	    "max_streaming_buffer_size",
-	    "streaming_buffer_size", // alias of max_streaming_buffer_size
-	    "log_query_path",
-	    "password",
-	    "username",
-	    "user",
-	    "max_execution_time",
-	    "external_threads", // tested in test_threads.cpp
-	    "profiling_output", // just an alias
-	    "duckdb_api",
 	    "custom_user_agent",
+	    "debug_delta_only_variant_encoding_enabled",
+	    "debug_verification_mode",
+	    "debug_window_mode",
 	    "default_block_size",
-	    "index_scan_percentage",
-	    "scheduler_process_partial",
+	    "disable_database_invalidation", // cant change this while db is running
+	    "disabled_filesystems",          // cant change this while db is running
+	    "duckdb_api",
+	    "enable_external_access", // cant change this while db is running
+	    "enable_object_cache",
 	    "enable_profiling",
 	    "enable_progress_bar",
 	    "enable_progress_bar_print",
+	    "experimental_parallel_csv",
 	    "extension_directories",
-	    "progress_bar_time",
+	    "extension_repository_directory", // trust anchor, cant change while db is running (unless unsigned allowed)
+	    "external_threads",               // tested in test_threads.cpp
+	    "force_variant_shredding",
 	    "index_scan_max_count",
+	    "index_scan_percentage",
+	    "lock_configuration", // cant change this while db is running
+	    "log_query_path",
+	    "max_execution_time",
+	    "max_streaming_buffer_size",
+	    "password",
 	    "profiling_mode",
+	    "profiling_output", // just an alias
 	    "profiling_renderer_settings",
-	    "worker_threads",
-	    "tracked_metrics",
-	    "debug_verification_mode",
+	    "progress_bar_time",
+	    "scheduler_process_partial",
+	    "schema",
+	    "search_path",
 	    "standard_vector_size",
-	    "warnings_as_errors",      // requires logging to be enabled
-	    "block_allocator_memory"}; // cant reduce
+	    "streaming_buffer_size", // alias of max_streaming_buffer_size
+	    "temp_file_encryption",
+	    "tracked_metrics",
+	    "user",
+	    "username",
+	    "vacuum_rebuild_indexes", // cant change this while db is running
+	    "warnings_as_errors",     // requires logging to be enabled
+	    "worker_threads",
+	};
 	return excluded_options.count(name) == 1;
 }
 

@@ -2700,6 +2700,9 @@ public:
 	static void InitializeOperatorLiteralTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeOperatorLiteralTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
+	static void InitializeAnyOperatorLiteralTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeAnyOperatorLiteralTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
 	static void InitializeAnyAllOperatorTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeAnyAllOperatorTrampoline(PEGTransformer &transformer,
 	                                                                         GeneratedTransformProcess &process);
@@ -2712,18 +2715,6 @@ public:
 	static void InitializeSubqueryAllTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeSubqueryAllTrampoline(PEGTransformer &transformer,
 	                                                                      GeneratedTransformProcess &process);
-	static void InitializeInetOperatorTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
-	static unique_ptr<TransformResultValue> FinalizeInetOperatorTrampoline(PEGTransformer &transformer,
-	                                                                       GeneratedTransformProcess &process);
-	static void InitializeJsonOperatorTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
-	static unique_ptr<TransformResultValue> FinalizeJsonOperatorTrampoline(PEGTransformer &transformer,
-	                                                                       GeneratedTransformProcess &process);
-	static void InitializeListOperatorTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
-	static unique_ptr<TransformResultValue> FinalizeListOperatorTrampoline(PEGTransformer &transformer,
-	                                                                       GeneratedTransformProcess &process);
-	static void InitializeStringOperatorTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
-	static unique_ptr<TransformResultValue> FinalizeStringOperatorTrampoline(PEGTransformer &transformer,
-	                                                                         GeneratedTransformProcess &process);
 	static void InitializeQualifiedOperatorTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeQualifiedOperatorTrampoline(PEGTransformer &transformer,
 	                                                                            GeneratedTransformProcess &process);
@@ -2731,9 +2722,6 @@ public:
 	                                                          GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue>
 	FinalizeQualifiedOperatorContentsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
-	static void InitializeAnyOpTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
-	static unique_ptr<TransformResultValue> FinalizeAnyOpTrampoline(PEGTransformer &transformer,
-	                                                                GeneratedTransformProcess &process);
 	static void InitializeBitwiseExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeBitwiseExpressionTrampoline(PEGTransformer &transformer,
 	                                                                            GeneratedTransformProcess &process);
@@ -5040,13 +5028,14 @@ public:
 	static ParsedOperator TransformAnyAllParsedOperator(PEGTransformer &transformer,
 	                                                    const pair<string, bool> &any_all_operator);
 	static ParsedOperator TransformNamedOtherOperator(PEGTransformer &transformer, const string &child);
-	static pair<string, bool> TransformAnyAllOperator(PEGTransformer &transformer, const string &any_op,
+	static pair<string, bool> TransformAnyAllOperator(PEGTransformer &transformer, const string &any_operator_literal,
 	                                                  const bool &any_or_all);
 	static bool TransformSubqueryAny(PEGTransformer &transformer);
 	static bool TransformSubqueryAll(PEGTransformer &transformer);
 	static string TransformQualifiedOperator(PEGTransformer &transformer, const string &qualified_operator_contents);
 	static string TransformQualifiedOperatorContents(PEGTransformer &transformer,
-	                                                 const optional<vector<string>> &col_id_dot, const string &any_op);
+	                                                 const optional<vector<string>> &col_id_dot,
+	                                                 const string &any_operator_literal);
 	static unique_ptr<ParsedExpression>
 	TransformBitwiseExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> additive_expression,
 	                           optional<vector<BinaryExpressionTail>> bitwise_expression_tail);

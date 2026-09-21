@@ -1,10 +1,32 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/expression_barrier.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_secure_view.hpp"
 
 namespace duckdb {
+
+static bool RetainSecureViewFilter(unique_ptr<Expression> &expression, const LogicalSecureView &view) {
+	if (expression->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		auto &column = expression->Cast<BoundColumnRefExpression>();
+		if (column.Depth() != 0 || view.output_bindings.size() != view.output_expressions.size()) {
+			return false;
+		}
+		for (idx_t i = 0; i < view.output_bindings.size(); i++) {
+			if (column.Binding() == view.output_bindings[i]) {
+				expression = view.output_expressions[i]->Copy();
+				return true;
+			}
+		}
+		return false;
+	}
+	bool valid = true;
+	ExpressionIterator::EnumerateChildren(
+	    *expression, [&](unique_ptr<Expression> &child) { valid = RetainSecureViewFilter(child, view) && valid; });
+	return valid;
+}
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSecureView(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_SECURE_VIEW);
@@ -23,6 +45,13 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSecureView(unique_ptr<Logica
 	FilterPushdown child_pushdown(optimizer, convert_mark_joins, projection_mode);
 	for (auto &f : filters) {
 		auto expr = std::move(f->filter);
+		if (secure_view.has_source) {
+			auto source_filter = expr->Copy();
+			if (!RetainSecureViewFilter(source_filter, secure_view)) {
+				source_filter.reset();
+			}
+			secure_view.source_filters.push_back(std::move(source_filter));
+		}
 		// the operators inside the view are never shown - report the filter as part of the boundary node instead
 		secure_view.pushed_filters.push_back(expr->ToString());
 		if (ExpressionBarrier::Required(*expr) && !ExpressionBarrier::Contains(*expr)) {

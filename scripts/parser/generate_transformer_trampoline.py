@@ -1468,7 +1468,7 @@ class UseGramPreviewEmitter:
             return f"TransformStringLiteral(transformer, {parse_expr})"
         if matcher == "number_literal":
             return f"TransformNumberLiteral(transformer, {parse_expr})"
-        if matcher == "operator":
+        if matcher in ("operator", "all_operators"):
             return f"{parse_expr}.Cast<OperatorParseResult>().operator_token"
         if matcher in ("identifier", "identifier_string"):
             return f"{parse_expr}.Cast<IdentifierParseResult>().identifier.GetIdentifierName()"
@@ -1490,6 +1490,8 @@ def matcher_override_expr(rule_name, override):
         return "make_uniq<StringLiteralMatcher>()"
     if matcher == "operator":
         return "make_uniq<OperatorMatcher>()"
+    if matcher == "all_operators":
+        return "make_uniq<OperatorMatcher>(OperatorMatcherMode::ALL_OPERATORS)"
     raise RuntimeError(f"Unsupported matcher_rule_overrides entry for {rule_name}: {override}")
 
 
