@@ -76,6 +76,8 @@ void LogicalCopyToFile::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(223, "batches_per_file", batches_per_file, optional_idx());
 	serializer.WritePropertyWithDefault(224, "order_columns", order_columns);
 	serializer.WritePropertyWithDefault(225, "table_index", table_index, TableIndex(0));
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(226, "partition_path_expression",
+	                                                            partition_path_expression);
 }
 
 unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deserializer) {
@@ -130,6 +132,9 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	auto batches_per_file = deserializer.ReadPropertyWithExplicitDefault(223, "batches_per_file", optional_idx());
 	auto order_columns = deserializer.ReadPropertyWithExplicitDefault(224, "order_columns", vector<BoundOrderByNode>());
 	auto table_index = deserializer.ReadPropertyWithExplicitDefault(225, "table_index", TableIndex(0));
+	unique_ptr<Expression> partition_path_expression;
+	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(226, "partition_path_expression",
+	                                                             partition_path_expression);
 
 	if (!has_serialize) {
 		// If not serialized, re-bind with the copy info
@@ -165,6 +170,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	result->batch_size_bytes = batch_size_bytes;
 	result->batches_per_file = batches_per_file;
 	result->order_columns = std::move(order_columns);
+	result->partition_path_expression = std::move(partition_path_expression);
 
 	return std::move(result);
 }

@@ -114,6 +114,10 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<Express
 }
 
 BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry &func, idx_t depth) {
+	auto count_star = binder.TryRewriteQualifiedCountStar(aggr);
+	if (count_star) {
+		return BindAggregate(count_star->Cast<FunctionExpression>(), func, depth);
+	}
 	if (inside_try) {
 		throw BinderException("aggregates are not allowed inside the TRY expression");
 	}
@@ -174,7 +178,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		for (auto &order : aggr.OrderByMutable()->orders) {
 			if (order.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				auto &const_expr = order.expression->Cast<ConstantExpression>();
-				if (!const_expr.GetValue().type().IsIntegral()) {
+				if (const_expr.GetLiteral().kind != LiteralKind::INTEGER) {
 					auto order_by_non_integer_literal = Settings::Get<OrderByNonIntegerLiteralSetting>(context);
 					if (!order_by_non_integer_literal) {
 						throw BinderException(

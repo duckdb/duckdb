@@ -1,5 +1,6 @@
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/common/enums/trigger_type.hpp"
 #include "duckdb/common/query_location.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -19,19 +20,6 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransformer &transformer,
-                                                                   ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.GetResult());
-	if (!transformer.named_parameter_map.empty()) {
-		// Avoid overriding a previous move with nothing
-		result->named_param_map = transformer.named_parameter_map;
-	}
-	result->has_anonymous_parameters = transformer.has_anonymous_parameters;
-	return result;
-}
-
 static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &transformer,
                                                              const TokenIterator &token_iterator, ParseResult &stmt_pr,
                                                              optional_idx terminator_offset) {
@@ -42,6 +30,8 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 	}
 	if (!transformer.pivot_entries.empty()) {
 		stmt = transformer.CreatePivotStatement(std::move(stmt));
+		// Unpacking discards the wrapper, so the parts keep their map; the wrapper carries it for introspection.
+		stmt->named_param_map = transformer.named_parameter_map;
 	}
 	transformer.Clear();
 
@@ -67,8 +57,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	idx_t max_token_index = token_iterator.Position();
 	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
 	MatchContext match_context(suggestions, parse_result_allocator, process_allocator, max_token_index,
-	                           MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode, options.heap_based_parser,
-	                           &packrat_cache);
+	                           MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode, &packrat_cache);
 	MatchState state(token_iterator, match_context);
 	auto match_result = grammar.TopLevelStatementMatcher().MatchParseResult(state);
 	process_allocator.FreeAll();
@@ -120,64 +109,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	return ExtractAndTransformStatement(transformer, token_iterator, stmt_opt.GetResult(), terminator_offset);
 }
 
-#define REGISTER_TRANSFORM(FUNCTION) Register(string(#FUNCTION).substr(9), &FUNCTION)
-
-void PEGTransformerFactory::RegisterCommon() {
-	// common.gram
-	REGISTER_TRANSFORM(TransformNumberLiteral);
-	REGISTER_TRANSFORM(TransformStringLiteral);
-	REGISTER_TRANSFORM(TransformIntervalToIntervalAsType);
-}
-
-void PEGTransformerFactory::RegisterCreateTable() {
-	// create_table.gram
-	REGISTER_TRANSFORM(TransformIdentifier);
-}
-
-void PEGTransformerFactory::RegisterExpression() {
-	// expression.gram
-	REGISTER_TRANSFORM(TransformPrefixExpression);
-	REGISTER_TRANSFORM(TransformOverClause);
-}
-
-void PEGTransformerFactory::RegisterPivot() {
-	// PivotStatement and UnpivotStatement measure parameter usage while transforming
-	// the source table, so their top-level wrappers remain manual.
-	REGISTER_TRANSFORM(TransformPivotStatement);
-	REGISTER_TRANSFORM(TransformUnpivotStatement);
-}
-
-void PEGTransformerFactory::RegisterSelect() {
-	// select.gram rules that remain manual after generated wrappers are registered.
-	Register("SelectStatementInternal", &TransformSelectStatementInternalRule);
-	REGISTER_TRANSFORM(TransformSimpleSelect);
-	REGISTER_TRANSFORM(TransformTableRef);
-	REGISTER_TRANSFORM(TransformWithClause);
-	REGISTER_TRANSFORM(TransformWindowDefinition);
-}
-
-void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
-	Register("PragmaName", &TransformIdentifierOrKeyword);
-	Register("TypeName", &TransformIdentifierOrKeyword);
-	Register("PlainIdentifier", &TransformIdentifierOrKeyword);
-	Register("QuotedIdentifier", &TransformIdentifierOrKeyword);
-	Register("ReservedKeyword", &TransformIdentifierOrKeyword);
-	Register("UnreservedKeyword", &TransformIdentifierOrKeyword);
-	Register("ColumnNameKeyword", &TransformIdentifierOrKeyword);
-	Register("FuncNameKeyword", &TransformIdentifierOrKeyword);
-	Register("TypeNameKeyword", &TransformIdentifierOrKeyword);
-	Register("SettingName", &TransformIdentifierOrKeyword);
-}
-
 PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar(grammar_p) {
-	RegisterGenerated();
-	REGISTER_TRANSFORM(TransformStatement);
-	RegisterCommon();
-	RegisterCreateTable();
-	RegisterExpression();
-	RegisterPivot();
-	RegisterSelect();
-	RegisterKeywordsAndIdentifiers();
 	for (auto &entry : GeneratedTransformFrameOps()) {
 		auto process_info = entry.second;
 		grammar.SetTransformProcess(
@@ -219,10 +151,19 @@ bool PEGTransformerFactory::ExpressionIsEmptyStar(const ParsedExpression &expr) 
 		return false;
 	}
 	auto &star = expr.Cast<StarExpression>();
-	if (!star.IsColumns() && star.ExcludeList().empty() && star.ReplaceList().empty()) {
-		return true;
+	if (star.IsColumns()) {
+		return false;
 	}
-	return false;
+	if (!star.ExcludeList().empty()) {
+		return false;
+	}
+	if (!star.ReplaceList().empty()) {
+		return false;
+	}
+	if (!star.RenameList().empty()) {
+		return false;
+	}
+	return true;
 }
 
 QualifiedName PEGTransformerFactory::StringToQualifiedName(vector<string> input) {
@@ -287,99 +228,6 @@ LogicalType PEGTransformerFactory::GetIntervalTargetType(DatePartSpecifier date_
 		return LogicalType::DOUBLE;
 	default:
 		throw InternalException("Unsupported interval post-fix");
-	}
-}
-
-bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpression &expr, Value &value) {
-	// We have to construct it like this because we don't have the ClientContext for binding/executing the expr here
-	switch (expr.GetExpressionType()) {
-	case ExpressionType::FUNCTION: {
-		auto &function = expr.Cast<FunctionExpression>();
-		if (function.FunctionName() == "struct_pack") {
-			identifier_set_t unique_names;
-			child_list_t<Value> values;
-			values.reserve(function.GetArguments().size());
-			for (const auto &child : function.GetArguments()) {
-				if (!unique_names.insert(child.GetExpression().GetAlias()).second) {
-					throw BinderException("Duplicate struct entry name %s", child.GetExpression().GetAlias());
-				}
-				Value child_value;
-				if (!ConstructConstantFromExpression(child.GetExpression(), child_value)) {
-					return false;
-				}
-				values.emplace_back(child.GetExpression().GetAlias(), std::move(child_value));
-			}
-			value = Value::STRUCT(std::move(values));
-			return true;
-		} else if (function.FunctionName() == "list_value") {
-			vector<Value> values;
-			values.reserve(function.GetArguments().size());
-			for (const auto &child : function.GetArguments()) {
-				Value child_value;
-				if (!ConstructConstantFromExpression(child.GetExpression(), child_value)) {
-					return false;
-				}
-				values.emplace_back(std::move(child_value));
-			}
-
-			// figure out child type
-			LogicalType child_type(LogicalTypeId::SQLNULL);
-			for (auto &child_value : values) {
-				child_type = LogicalType::DefaultForceMaxLogicalType(child_type, child_value.type());
-			}
-
-			// finally create the list
-			value = Value::LIST(child_type, values);
-			return true;
-		} else if (function.FunctionName() == "map") {
-			Value keys;
-			if (!ConstructConstantFromExpression(function.GetArguments()[0].GetExpression(), keys)) {
-				return false;
-			}
-
-			Value values;
-			if (!ConstructConstantFromExpression(function.GetArguments()[1].GetExpression(), values)) {
-				return false;
-			}
-
-			vector<Value> keys_unpacked = ListValue::GetChildren(keys);
-			vector<Value> values_unpacked = ListValue::GetChildren(values);
-
-			value = Value::MAP(ListType::GetChildType(keys.type()), ListType::GetChildType(values.type()),
-			                   keys_unpacked, values_unpacked);
-			return true;
-		} else {
-			return false;
-		}
-	}
-	case ExpressionType::VALUE_CONSTANT: {
-		auto &constant = expr.Cast<ConstantExpression>();
-		value = constant.GetValue();
-		return true;
-	}
-	case ExpressionType::OPERATOR_CAST: {
-		auto &cast = expr.Cast<CastExpression>();
-		Value dummy_value;
-		if (!ConstructConstantFromExpression(cast.Child(), dummy_value)) {
-			return false;
-		}
-
-		auto cast_type = UnboundType::TryDefaultBind(cast.TargetType());
-		if (cast_type.id() == LogicalTypeId::INVALID || cast_type.id() == LogicalTypeId::UNBOUND) {
-			return false;
-		}
-
-		string error_message;
-		auto cast_value = dummy_value.DefaultTryCastAs(cast_type, &error_message);
-		if (!cast_value) {
-			throw ConversionException("Unable to cast %s to %s", dummy_value.ToString(),
-			                          EnumUtil::ToString(cast_type.id()));
-		}
-		value = std::move(*cast_value);
-		return true;
-	}
-	default:
-		return false;
 	}
 }
 

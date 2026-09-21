@@ -65,6 +65,14 @@ void Binding::SetColumnType(idx_t col_idx, LogicalType type_p) {
 	types[col_idx] = std::move(type_p);
 }
 
+void Binding::SetNullExtended() {
+	null_extended = true;
+}
+
+bool Binding::IsNullExtended() const {
+	return null_extended;
+}
+
 const Identifier &Binding::GetAlias() const {
 	return alias.GetAlias();
 }

@@ -2,11 +2,8 @@
 #include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
 
 namespace duckdb {
-void DuckDBKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
-	if (initialized) {
-		return;
-	};
-	initialized = true;
+DefaultKeywordMaps DuckDBKeywordHelper::InitializeKeywordMaps() {
+	DefaultKeywordMaps keyword_maps;
 
 	auto &reserved_keyword_map = keyword_maps.reserved_keyword_map;
 	auto &unreserved_keyword_map = keyword_maps.unreserved_keyword_map;
@@ -560,5 +557,6 @@ void DuckDBKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	typename_keyword_map.insert("try_cast");
 	typename_keyword_map.insert("unpack");
 	typename_keyword_map.insert("verbose");
+	return keyword_maps;
 }
 } // namespace duckdb

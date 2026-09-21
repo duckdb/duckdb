@@ -258,7 +258,7 @@ void BindBitString(AggregateFunctionSet &bitstring_agg, const LogicalTypeId &typ
 	    BitstringPropagateStats); // stores min and max from column stats in BitstringAggBindData
 	function.GetSignature().GetParameter(0).SetName("arg");
 	bitstring_agg.AddFunction(function); // uses the BitstringAggBindData to access statistics for creating bitstring
-	function.GetSignature() = FunctionSignature({{"arg", type}, {"min", type}, {"max", type}}, LogicalType::BIT);
+	function.GetSignature().AddParameter("min", type).AddParameter("max", type);
 	function.SetStatisticsCallback(nullptr); // min and max are provided as arguments
 	// note that the bind folds min and max into the bind data - they stay part of the expression tree, and the
 	// update callback simply does not read them

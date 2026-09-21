@@ -151,7 +151,7 @@ Value ExpressionExecutor::EvaluateScalar(ClientContext &context, const Expressio
 	D_ASSERT(allow_unfoldable || result.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	auto result_value = result.GetValue(0);
 	D_ASSERT(result_value.type().InternalType() == expr.GetReturnType().InternalType());
-	return result_value;
+	return result_value.WithType(expr.GetReturnType());
 }
 
 bool ExpressionExecutor::TryEvaluateScalar(ClientContext &context, const Expression &expr, Value &result) {
