@@ -1,6 +1,7 @@
 #include "duckdb/function/table/range.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
@@ -22,10 +23,11 @@ static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, TableFu
 }
 
 struct GlobFunctionState : public GlobalTableFunctionState {
-	GlobFunctionState() {
+	GlobFunctionState() : files_returned(0) {
 	}
 
 	MultiFileListScanData file_list_scan;
+	atomic<idx_t> files_returned;
 };
 
 static unique_ptr<GlobalTableFunctionState> GlobFunctionInit(ClientContext &context, TableFunctionInitInput &input) {
@@ -51,12 +53,25 @@ static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		}
 		file_column.Append(Value(file.path));
 		count++;
+		state.files_returned++;
 		state.file_list_scan.scan_type = MultiFileListScanType::FETCH_IF_AVAILABLE;
 	}
 }
 
+static double GlobFunctionProgress(ClientContext &context, const FunctionData *bind_data_p,
+                                   const GlobalTableFunctionState *global_state) {
+	auto &bind_data = bind_data_p->Cast<GlobFunctionBindData>();
+	auto &state = global_state->Cast<GlobFunctionState>();
+	auto total_count = bind_data.file_list->GetTotalFileCount();
+	if (total_count == 0) {
+		return 100.0;
+	}
+	return 100.0 * static_cast<double>(state.files_returned) / static_cast<double>(total_count);
+}
+
 void GlobTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction glob_function("glob", {LogicalType::VARCHAR}, GlobFunction, GlobFunctionBind, GlobFunctionInit);
+	glob_function.table_scan_progress = GlobFunctionProgress;
 	set.AddFunction(MultiFileReader::CreateFunctionSet(glob_function));
 }
 
