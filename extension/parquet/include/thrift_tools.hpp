@@ -155,7 +155,8 @@ struct ReadAheadBuffer {
 
 class ThriftFileTransport : public duckdb_apache::thrift::transport::TVirtualTransport<ThriftFileTransport> {
 public:
-	static constexpr uint64_t DEMAND_BUFFER_SIZE = 1000000;
+	static constexpr idx_t INITIAL_DEMAND_BUFFER_SIZE = 1ULL << 20;
+	static constexpr idx_t MAX_DEMAND_BUFFER_SIZE = 32ULL << 20;
 
 	ThriftFileTransport(QueryContext context_p, CachingFileHandle &file_handle_p, bool cache_reads_p,
 	                    uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP,
@@ -187,21 +188,13 @@ public:
 			}
 			memcpy(buf, prefetch_buffer->buffer_ptr + location - prefetch_buffer->location, len);
 		} else if (cache_reads && location < size && len <= size - location) {
-			// Batch small demand reads when caching is disabled or unavailable for this file.
-			if (buffer_reads && len < DEMAND_BUFFER_SIZE && !file_handle.CanCacheRead()) {
-				if (!demand_buffer || location < demand_buffer->location ||
-				    location - demand_buffer->location + len > demand_buffer->size) {
-					// Release the previous range before allocating its replacement to keep memory bounded.
-					demand_buffer.reset();
-					demand_buffer =
-					    make_uniq<ReadHead>(location, MinValue<uint64_t>(DEMAND_BUFFER_SIZE, size - location));
-					demand_buffer->Fetch(file_handle);
-				}
-				memcpy(buf, demand_buffer->buffer_ptr + location - demand_buffer->location, len);
-			} else {
-				// Let the cache buffer reads when available; large reads need no extra read-ahead.
+			if (file_handle.CanCacheRead()) {
 				auto handles = file_handle.Read(len, location);
 				handles.CopyTo(buf, len);
+			} else if (buffer_reads) {
+				ReadDemand(buf, len);
+			} else {
+				file_handle.ReadAndRecord(context, buf, len, location);
 			}
 		} else {
 			// No prefetch, do a regular (non-caching) read
@@ -237,15 +230,18 @@ public:
 	void ClearPrefetch() {
 		ra_buffer.read_heads.clear();
 		ra_buffer.merge_set.clear();
-		demand_buffer.reset();
+		demand_buffer.Reset();
+		demand_buffer_start = demand_buffer_end = 0;
+		last_demand_read_end.SetInvalid();
 	}
 
 	void Skip(idx_t skip_count) {
 		location += skip_count;
 	}
 
-	bool HasPrefetch() const {
-		return demand_buffer || !ra_buffer.read_heads.empty() || !ra_buffer.merge_set.empty();
+	bool HasReadBuffer() const {
+		return !ra_buffer.read_heads.empty() || !ra_buffer.merge_set.empty() ||
+		       (cache_reads && buffer_reads && !file_handle.CanCacheRead());
 	}
 
 	void SetLocation(idx_t location_p) {
@@ -273,6 +269,46 @@ public:
 	}
 
 private:
+	void ReadDemand(data_ptr_t buf, idx_t len) {
+		auto read_location = location;
+		// Consume any buffered prefix before deciding how to read the remainder.
+		if (read_location >= demand_buffer_start && read_location < demand_buffer_end) {
+			auto buffered = MinValue<idx_t>(len, demand_buffer_end - read_location);
+			memcpy(buf, demand_buffer.get() + read_location - demand_buffer_start, buffered);
+			buf += buffered;
+			len -= buffered;
+			read_location += buffered;
+		}
+		if (len == 0) {
+			return;
+		}
+
+		auto capacity = demand_buffer.GetSize() ? demand_buffer.GetSize() : INITIAL_DEMAND_BUFFER_SIZE;
+		// Large reads go straight into the caller's buffer without an intermediate allocation.
+		if (len > capacity) {
+			file_handle.ReadAndRecord(context, buf, len, read_location);
+			last_demand_read_end = read_location + len;
+			return;
+		}
+
+		// Double the buffer on sequential refills, up to the maximum size.
+		if (last_demand_read_end.IsValid() && last_demand_read_end.GetIndex() == read_location &&
+		    capacity < MAX_DEMAND_BUFFER_SIZE) {
+			capacity *= 2;
+		}
+		if (demand_buffer.GetSize() != capacity) {
+			demand_buffer.Reset();
+			demand_buffer = file_handle.GetBufferAllocator().Allocate(capacity);
+		}
+		auto read_size = MinValue<idx_t>(capacity, size - read_location);
+		file_handle.ReadAndRecord(context, demand_buffer.get(), read_size, read_location);
+		demand_buffer_start = read_location;
+		demand_buffer_end = read_location + read_size;
+		last_demand_read_end = demand_buffer_end;
+		memcpy(buf, demand_buffer.get(), len);
+	}
+
+private:
 	QueryContext context;
 
 	CachingFileHandle &file_handle;
@@ -284,8 +320,11 @@ private:
 
 	bool cache_reads;
 	bool buffer_reads;
-	//! A single bounded read-ahead range for demand reads when caching is disabled or unavailable for this file.
-	unique_ptr<ReadHead> demand_buffer;
+	//! Demand read-ahead when caching is disabled or unavailable for this file.
+	AllocatedData demand_buffer;
+	idx_t demand_buffer_start = 0;
+	idx_t demand_buffer_end = 0;
+	optional_idx last_demand_read_end;
 };
 
 } // namespace duckdb

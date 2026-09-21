@@ -17,11 +17,11 @@ SET parquet_metadata_cache=false
 
 # Small pages expose unbuffered reads; the file spans several demand buffers.
 statement ok
-CREATE TABLE demand_input AS SELECT hash(i) AS a FROM range(327680) t(i)
+CREATE TABLE demand_input AS SELECT hash(i) AS a FROM range(1048576) t(i)
 
 statement ok
 COPY demand_input TO '{TEST_DIR}/demand.parquet'
-(COMPRESSION UNCOMPRESSED, ROW_GROUP_SIZE 327680, DATA_PAGE_SIZE_LIMIT 4096)
+(COMPRESSION UNCOMPRESSED, ROW_GROUP_SIZE 1048576, DATA_PAGE_SIZE_LIMIT 4096)
 
 statement ok
 CALL enable_logging('FileSystem', storage='memory')
@@ -30,10 +30,10 @@ CALL enable_logging('FileSystem', storage='memory')
 foreach mode disabled excluded enabled
 
 statement ok
-SET enable_external_file_cache=('${mode}' != 'disabled')
+SET enable_external_file_cache=('{mode}' != 'disabled')
 
 statement ok
-SET cache_local_files=('${mode}' = 'enabled')
+SET cache_local_files=('{mode}' = 'enabled')
 
 statement ok
 CALL truncate_duckdb_logs()
@@ -44,14 +44,24 @@ FROM read_parquet('{TEST_DIR}/demand.parquet', prefetch_strategy='on_demand')
 ----
 true
 
-# Both paths batch small reads; only uncached files use the 1,000,000-byte demand buffer.
+# Uncached sequential reads grow the buffer from 1 MiB; cached reads use cache blocks.
 query II
-SELECT count(*) BETWEEN 1 AND 249 AND max(bytes) <= 1000000,
-       bool_or(bytes = 1000000) = ('${mode}' != 'enabled')
+SELECT count(*) BETWEEN 1 AND 599 AND max(bytes) <= 33554432,
+       (bool_or(bytes = 1048576) AND bool_or(bytes = 2097152)) = ('{mode}' != 'enabled')
 FROM duckdb_logs_parsed('FileSystem')
 WHERE path LIKE '%/demand.parquet' AND op = 'READ'
 ----
 true	true
+
+# A refill starts at the previous buffer's end, even when a page crosses that boundary.
+query I
+SELECT count(*) FROM (
+    SELECT pos, lag(pos + bytes) OVER (ORDER BY pos) AS previous_end
+    FROM duckdb_logs_parsed('FileSystem')
+    WHERE path LIKE '%/demand.parquet' AND op = 'READ' AND bytes >= 1048576
+) reads WHERE pos != previous_end
+----
+0
 
 endloop
 
@@ -79,7 +89,7 @@ SELECT sum(a) = (SELECT sum(a) FROM demand_input) FROM read_parquet('{TEST_DIR}/
 true
 
 query I
-SELECT bool_or(bytes = 1000000) AND max(bytes) <= 1000000 AND count(*) < 250
+SELECT bool_or(bytes = 1048576) AND bool_or(bytes = 2097152) AND max(bytes) <= 33554432 AND count(*) < 50
 FROM duckdb_logs_parsed('FileSystem')
 WHERE path LIKE '%/demand.parquet' AND op = 'READ'
 ----
@@ -94,7 +104,7 @@ RESET disable_parquet_prefetching
 # A page larger than the demand buffer must still be read completely.
 statement ok
 COPY demand_input TO '{TEST_DIR}/demand_large_page.parquet'
-(COMPRESSION UNCOMPRESSED, ROW_GROUP_SIZE 327680, DATA_PAGE_SIZE_LIMIT 4194304)
+(COMPRESSION UNCOMPRESSED, ROW_GROUP_SIZE 1048576, DATA_PAGE_SIZE_LIMIT 4194304)
 
 query I
 SELECT sum(a) = (SELECT sum(a) FROM demand_input)
