@@ -68,7 +68,7 @@ private:
 	//! In-memory for a sink the plan retained
 	const ChunkFormat &ChunkFormatOf(ResultSinkGlobalState &gstate) const;
 	ResultFormatLocalState &LocalFormatState(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
-	//! Null until the unit reaches the format's target
+	//! Null until the unit reaches the format's cap
 	unique_ptr<ResultUnit> AppendToUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
 	                                    DataChunk &chunk) const;
 	unique_ptr<ResultUnit> FinishUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,

@@ -79,7 +79,7 @@ public:
 	                                                       ResultOrdering ordering) = 0;
 	virtual unique_ptr<ResultFormatLocalState> InitLocal(ResultFormatGlobalState &gstate) = 0;
 	virtual void Append(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate, DataChunk &chunk) = 0;
-	//! flush_partial hands over the unit under construction short of its target, so no unit spans two batch indexes
+	//! flush_partial hands over the unit under construction short of its cap, so no unit spans two batch indexes
 	virtual unique_ptr<ResultUnit> Finish(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate,
 	                                      bool flush_partial) = 0;
 

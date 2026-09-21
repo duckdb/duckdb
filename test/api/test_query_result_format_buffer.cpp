@@ -97,7 +97,7 @@ TEST_CASE("Several producers build units while the others park holding theirs", 
 	// A cap of roughly one unit, so a producer that finishes a second unit has to park holding it
 	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='128KB'"));
 
-	// A row target that no whole number of row groups is a multiple of, so every producer ends partial
+	// A row cap that no whole number of row groups is a multiple of, so every producer ends partial
 	auto handle = SubmitFormatted(con, "SELECT i FROM t", 14336);
 	DrainWatchdog watchdog(con);
 	FormattedResultStream<TestFormat> stream(std::move(handle));
@@ -123,7 +123,7 @@ TEST_CASE("A producer parked at Combine is deposited on the consumer's pop", "[a
 	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='128KB'"));
 
 	// The simple store runs no NextBatch, so Combine finishes and hands over every producer's partial unit
-	// No whole number of row groups is a multiple of the row target, so every producer ends partial
+	// No whole number of row groups is a multiple of the row cap, so every producer ends partial
 	auto handle = SubmitFormatted(con, "SELECT i FROM t", 14336);
 	DrainWatchdog watchdog(con);
 	FormattedResultStream<TestFormat> stream(std::move(handle));
