@@ -3,7 +3,7 @@
 # extensions. Each extension archive carries a describe function, duckdb_extension_<name>_describe; the generated
 # function passes every one of them to duckdb_register_static_extension, which also pulls the extensions out of
 # their archives. A named extension whose archive is missing fails the link. Call the function before opening a
-# database, or compile extension/loader/static_extension_autoload.cpp next to it to have it called before main.
+# database, or compile extension/loader/static_extension_autoregister.cpp next to it to have it called before main.
 #
 #   LINK_EXTENSIONS="parquet;json" make static_extension_loader     (or: python3 scripts/generate_static_extension_loader.py -o static_extension_loader.c parquet json)
 #   cc -I duckdb/include main.c static_extension_loader.c libparquet_extension.a libjson_extension.a libduckdb_static.a -lstdc++

@@ -351,7 +351,7 @@ def build_package(
     f.close()
 
     # the checked-in static initializer calls the loader before main
-    source_list += [loader_name, os.path.join('extension', 'loader', 'static_extension_autoload.cpp')]
+    source_list += [loader_name, os.path.join('extension', 'loader', 'static_extension_autoregister.cpp')]
 
     for src in source_list:
         copy_file(src, target_dir)

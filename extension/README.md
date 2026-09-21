@@ -225,7 +225,7 @@ Each extension archive carries a describe function, `duckdb_extension_<name>_des
 `duckdb_extension_descriptor` (see `duckdb_static_extension.h`). The loader is plain C: it defines
 `duckdb_register_static_extensions()`, which passes every describe function to `duckdb_register_static_extension`, and that also
 pulls the extensions out of their archives. Call it before opening a database, from any language that can call C. A
-C++ program that wants this to happen before main compiles `extension/loader/static_extension_autoload.cpp` next to
+C++ program that wants this to happen before main compiles `extension/loader/static_extension_autoregister.cpp` next to
 the loader, into the program itself rather than into an archive, or the linker drops it. Without `LINK_EXTENSIONS`
 the loader registers every extension archive in the build. A program can also skip the loader and call
 `duckdb_register_static_extension` on the describe functions it declares itself. An archive whose describe function is

@@ -4,7 +4,7 @@
 // Static extension loader: duckdb_register_static_extensions registers each extension with the engine through its
 // describe function, which
 // also pulls the extensions out of their archives. Call it before opening a database, or compile
-// extension/loader/static_extension_autoload.cpp next to this file to have it called before main.
+// extension/loader/static_extension_autoregister.cpp next to this file to have it called before main.
 // Compile it into the program and put the extension archives before libduckdb_static.a.
 
 #include "duckdb_static_extension.h"

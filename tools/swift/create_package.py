@@ -45,10 +45,11 @@ include_list = [x for x in include_list if not x.startswith("duckdb/third_party/
 # write Package.swift
 os.chdir(base_dir)
 
-# copy umbrella header to path SPM expects (auto .modulemap)
-header_file_src = os.path.join(src_dir, 'src', 'include', 'duckdb.h')
+# umbrella header at the path SPM expects (auto .modulemap): a wrapper around the one copy of duckdb.h in the
+# sources, so that engine code reaching duckdb.h through either path sees the same file and #pragma once holds
 header_file_dest = os.path.join(includes_dir, 'duckdb.h')
-shutil.copyfile(header_file_src, header_file_dest)
+with open(header_file_dest, 'w') as header_file:
+    header_file.write('#pragma once\n#include "../duckdb/src/include/duckdb.h"\n')
 
 source_list_strs = ['"' + x + '",' for x in source_list]
 include_list_strs = ['.headerSearchPath("' + x + '"),' for x in include_list]

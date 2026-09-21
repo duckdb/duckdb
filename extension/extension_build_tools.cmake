@@ -39,7 +39,7 @@ endfunction()
 
 # Links the named extensions into TARGET, in the given order, which is also their load order: their archives, plus a
 # generated <TARGET>_static_extension_loader.c defining duckdb_register_static_extensions and, unless EXPLICIT is
-# given, extension/loader/static_extension_autoload.cpp calling it before main. Extensions this build does not build
+# given, extension/loader/static_extension_autoregister.cpp calling it before main. Extensions this build does not build
 # are skipped and reported. Each target picks its own set, so a shell and a test binary in the same build can link
 # different extensions.
 function(duckdb_link_extensions TARGET)
@@ -77,7 +77,7 @@ function(duckdb_link_extensions TARGET)
     duckdb_write_static_extension_loader(${HELPER} ${LINKED})
     target_sources(${TARGET} PRIVATE ${HELPER})
     if(AUTOLOAD)
-        target_sources(${TARGET} PRIVATE ${DUCKDB_MODULE_BASE_DIR}/extension/loader/static_extension_autoload.cpp)
+        target_sources(${TARGET} PRIVATE ${DUCKDB_MODULE_BASE_DIR}/extension/loader/static_extension_autoregister.cpp)
     endif()
 endfunction()
 
