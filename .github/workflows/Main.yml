@@ -749,14 +749,6 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
         assets=()
-        if [[ "${{ matrix.config.publish_source }}" == "true" ]]; then
-          zip -j libduckdb-src.zip \
-            src/include/duckdb.h \
-            src/include/duckdb_v2.h \
-            src/include/duckdb_extension.h \
-            src/include/duckdb_extension_v2.h
-          assets+=(libduckdb-src.zip)
-        fi
         if [[ "${{ matrix.config.publish_static }}" == "true" ]]; then
           make gather-libs
           make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/libs/*"
