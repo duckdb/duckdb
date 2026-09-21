@@ -148,6 +148,29 @@ CREATE INDEX integers_index ON integers(i)
 statement ok
 DROP INDEX integers_index
 
+# order by reports progress while sinking and scanning
+query I
+SELECT count(*) FROM (SELECT * FROM range(1000000) t(i) ORDER BY i DESC)
+----
+1000000
+
+# no rows reach the sort
+query I
+SELECT count(*) FROM (SELECT * FROM range(1000000) t(i) WHERE i < 0 ORDER BY i DESC)
+----
+0
+
+statement ok
+SET debug_force_external=true
+
+query I
+SELECT count(*) FROM (SELECT * FROM range(1000000) t(i) ORDER BY i DESC)
+----
+1000000
+
+statement ok
+RESET debug_force_external
+
 # recursive CTEs do not report progress - this fails the query in error mode
 statement error
 WITH RECURSIVE t(i) AS (SELECT * FROM range(100000) UNION ALL SELECT i + 100000 FROM t WHERE i < 400000) SELECT sum(i) FROM t
