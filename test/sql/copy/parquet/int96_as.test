@@ -92,20 +92,47 @@ SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/int96_nanoseconds.parquet
 ----
 <REGEX>:Binder Error.*Unrecognized int96_as.*
 
-# values outside of the TIMESTAMP_NS range raise a conversion error
+# int96_as='blob' also works for dictionary-encoded INT96 columns
+query II
+SELECT octet_length(ts::BLOB), hex(ts::BLOB)
+FROM read_parquet('{DATA_DIR}/parquet-testing/int96_nanoseconds_dictionary.parquet', int96_as='blob')
+ORDER BY hex(ts::BLOB)
+----
+12	01000000000000008C3D2500
+12	15994850DC210000748E2500
+12	15994850DC210000748E2500
+12	15994850DC210000748E2500
+NULL	NULL
+
+# values outside of the TIMESTAMP_NS range raise a conversion error.
+# 9999-12-31 and 0001-01-01 are valid full-range TIMESTAMP values but are outside of the TIMESTAMP_NS range.
 statement ok
-COPY (SELECT TIMESTAMP '9999-12-31 23:59:59.999999' AS ts) TO '{TEST_DIR}/int96_out_of_range.parquet'
+CREATE TABLE int96_full_range(lo TIMESTAMP, hi TIMESTAMP)
+
+statement ok
+INSERT INTO int96_full_range VALUES (TIMESTAMP '0001-01-01 00:00:00', TIMESTAMP '9999-12-31 23:59:59.999999')
+
+statement ok
+COPY int96_full_range TO '{TEST_DIR}/int96_full_range.parquet'
     (FORMAT parquet, write_timestamp_as_int96 true)
 
+# the default reads these files fine (at microsecond precision)
 query I
-SELECT ts::VARCHAR FROM read_parquet('{TEST_DIR}/int96_out_of_range.parquet')
+SELECT lo::VARCHAR || '|' || hi::VARCHAR FROM read_parquet('{TEST_DIR}/int96_full_range.parquet')
 ----
-9999-12-31 23:59:59.999999
+0001-01-01 00:00:00|9999-12-31 23:59:59.999999
 
+# timestamp_ns cannot represent them - the read fails with a conversion error
 statement error
-SELECT ts::VARCHAR FROM read_parquet('{TEST_DIR}/int96_out_of_range.parquet', int96_as='timestamp_ns')
+SELECT * FROM read_parquet('{TEST_DIR}/int96_full_range.parquet', int96_as='timestamp_ns')
 ----
-<REGEX>:Conversion Error.*out of range.*
+<REGEX>:Conversion Error.*out of range.*int96_as='timestamp_ns'.*
+
+# int96_as='blob' is the only mode that reads the full 0001-9999 range intact
+query II
+SELECT hex(lo), hex(hi) FROM read_parquet('{TEST_DIR}/int96_full_range.parquet', int96_as='blob')
+----
+000000000000000052441A00	18FC4E91944E00002CFE5100
 
 # the option has no effect on non-INT96 (INT64) timestamp columns
 statement ok
