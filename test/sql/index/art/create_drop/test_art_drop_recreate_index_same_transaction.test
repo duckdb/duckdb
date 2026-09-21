@@ -32,3 +32,35 @@ statement error
 INSERT INTO t VALUES (1), (1)
 ----
 <REGEX>:Constraint Error:.*
+
+# Reusing the name on another table must not hide an earlier index on t.
+statement ok
+CREATE TABLE other(i INTEGER)
+
+statement ok
+BEGIN
+
+statement ok
+DROP INDEX idx
+
+statement ok
+CREATE INDEX idx ON other(i)
+
+statement ok
+DROP INDEX idx
+
+statement ok
+CREATE UNIQUE INDEX IF NOT EXISTS idx ON t(i)
+
+statement ok
+COMMIT
+
+query T
+SELECT table_name FROM duckdb_indexes() WHERE index_name = 'idx'
+----
+t
+
+statement error
+INSERT INTO t VALUES (1), (1)
+----
+<REGEX>:Constraint Error:.*
