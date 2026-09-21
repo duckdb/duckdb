@@ -305,12 +305,12 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 	D_ASSERT(sel_count <= vector_count);
 
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
+	auto strings = layout.ValidateRange(start, vector_count);
 
 	for (idx_t i = 0; i < sel_count; i++) {
 		auto selection_index = sel.get_index(i);
 		D_ASSERT(selection_index < vector_count);
-		idx_t index = start + selection_index;
-		auto entry = layout.ValidateAndGetEntry(index);
+		auto entry = strings.GetEntry(selection_index);
 		result_data[i] = FetchStringFromEntry(state.context, segment, result, entry);
 	}
 }
