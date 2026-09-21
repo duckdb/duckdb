@@ -79,8 +79,9 @@ typedef struct {
 	(duckdb_v2_connection_handle conn, idx_t *out_count, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_interrupt)
 	(duckdb_v2_connection_handle conn, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_connection_query_progress)
-	(duckdb_v2_connection_handle conn, duckdb_v2_query_progress_handle *out_progress, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_progress_get)
+	(duckdb_v2_connection_handle conn, double *out_percentage, uint64_t *out_rows_processed,
+	 uint64_t *out_total_rows_to_process, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_set_option)
 	(duckdb_v2_connection_handle conn, duckdb_v2_identifier_t name, duckdb_v2_str setting,
 	 DUCKDB_V2_SETTING_SCOPE scope, duckdb_v2_error_info_handle *err);
@@ -188,13 +189,6 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_parse_sql)
 	(duckdb_v2_connection_handle conn, const char *sql, duckdb_v2_statement_iterator_handle *out_iterator,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR (*duckdb_v2_query_progress_destroy)(duckdb_v2_query_progress_handle *progress);
-	DUCKDB_V2_ERROR(*duckdb_v2_query_progress_get_percentage)
-	(duckdb_v2_query_progress_handle progress, double *out_percentage, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_query_progress_get_rows_processed)
-	(duckdb_v2_query_progress_handle progress, uint64_t *out_rows_processed, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_query_progress_get_total_rows_to_process)
-	(duckdb_v2_query_progress_handle progress, uint64_t *out_total_rows_to_process, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_result_destroy)(duckdb_v2_result_handle *result);
 	DUCKDB_V2_ERROR(*duckdb_v2_result_drain)
 	(duckdb_v2_result_handle result, idx_t *out_rows_changed, duckdb_v2_error_info_handle *err);
@@ -1361,7 +1355,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_connection_get_option_by_name = duckdb_v2_connection_get_option_by_name;
 	result.duckdb_v2_connection_get_option_count = duckdb_v2_connection_get_option_count;
 	result.duckdb_v2_connection_interrupt = duckdb_v2_connection_interrupt;
-	result.duckdb_v2_connection_query_progress = duckdb_v2_connection_query_progress;
+	result.duckdb_v2_connection_progress_get = duckdb_v2_connection_progress_get;
 	result.duckdb_v2_connection_set_option = duckdb_v2_connection_set_option;
 	result.duckdb_v2_context_create_type_from_id = duckdb_v2_context_create_type_from_id;
 	result.duckdb_v2_context_create_type_from_name = duckdb_v2_context_create_type_from_name;
@@ -1411,10 +1405,6 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_option_get_setting = duckdb_v2_option_get_setting;
 	result.duckdb_v2_option_get_target_scope = duckdb_v2_option_get_target_scope;
 	result.duckdb_v2_parse_sql = duckdb_v2_parse_sql;
-	result.duckdb_v2_query_progress_destroy = duckdb_v2_query_progress_destroy;
-	result.duckdb_v2_query_progress_get_percentage = duckdb_v2_query_progress_get_percentage;
-	result.duckdb_v2_query_progress_get_rows_processed = duckdb_v2_query_progress_get_rows_processed;
-	result.duckdb_v2_query_progress_get_total_rows_to_process = duckdb_v2_query_progress_get_total_rows_to_process;
 	result.duckdb_v2_result_destroy = duckdb_v2_result_destroy;
 	result.duckdb_v2_result_drain = duckdb_v2_result_drain;
 	result.duckdb_v2_result_fetch_chunk = duckdb_v2_result_fetch_chunk;
