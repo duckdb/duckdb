@@ -1092,6 +1092,10 @@ public:
 	//! For synchronizing tasks
 	atomic<idx_t> task_idx;
 	atomic<idx_t> task_done;
+	//! Scan progress summed over all partitions, in units of 1 / SCAN_PROGRESS_UNITS partition
+	atomic<idx_t> scan_progress;
+
+	static constexpr idx_t SCAN_PROGRESS_UNITS = 1000000;
 };
 
 enum class RadixHTScanStatus : uint8_t { INIT, IN_PROGRESS, DONE };
@@ -1121,6 +1125,10 @@ public:
 	unique_ptr<GroupedAggregateHashTable> ht;
 	//! Current status of a Scan
 	RadixHTScanStatus scan_status;
+	//! Rows in the partition that is being scanned, rows scanned, and the progress units reported for it
+	idx_t scan_total_rows;
+	idx_t scan_rows;
+	idx_t scan_progress;
 
 private:
 	//! Allocator and layout for finalizing state
@@ -1146,10 +1154,11 @@ void RadixPartitionedHashTable::ResetGlobalSourceState(ClientContext &context, G
 	gstate.finished = false;
 	gstate.task_idx = 0;
 	gstate.task_done = 0;
+	gstate.scan_progress = 0;
 }
 
 RadixHTGlobalSourceState::RadixHTGlobalSourceState(ClientContext &context_p, const RadixPartitionedHashTable &radix_ht)
-    : context(context_p), finished(false), task_idx(0), task_done(0) {
+    : context(context_p), finished(false), task_idx(0), task_done(0), scan_progress(0) {
 	for (column_t column_id = 0; column_id < radix_ht.group_types.size(); column_id++) {
 		column_ids.push_back(column_id);
 	}
@@ -1202,6 +1211,9 @@ void RadixHTLocalSourceState::ResetForReuse() {
 	task_idx = DConstants::INVALID_INDEX;
 	ht.reset();
 	scan_status = RadixHTScanStatus::DONE;
+	scan_total_rows = 0;
+	scan_rows = 0;
+	scan_progress = 0;
 	aggregate_allocator.Reset();
 	row_state.addresses.reset();
 	scan_state.Reset();
@@ -1317,6 +1329,9 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 	if (scan_status == RadixHTScanStatus::INIT) {
 		data_collection.InitializeScan(scan_state, gstate.column_ids, sink.scan_pin_properties);
 		scan_status = RadixHTScanStatus::IN_PROGRESS;
+		scan_total_rows = data_collection.Count();
+		scan_rows = 0;
+		scan_progress = 0;
 	}
 
 	if (!data_collection.Scan(scan_state, scan_chunk)) {
@@ -1326,11 +1341,25 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 			partition.import_allocator.reset();
 		}
 		scan_status = RadixHTScanStatus::DONE;
+		gstate.scan_progress += RadixHTGlobalSourceState::SCAN_PROGRESS_UNITS - scan_progress;
+		scan_progress = RadixHTGlobalSourceState::SCAN_PROGRESS_UNITS;
 		const annotated_lock_guard<annotated_mutex> guard {sink.lock};
 		if (++gstate.task_done == sink.partitions.size()) {
 			gstate.finished = true;
 		}
 		return;
+	}
+
+	scan_rows += scan_chunk.size();
+	if (scan_total_rows > 0) {
+		auto new_progress =
+		    MinValue<idx_t>(static_cast<idx_t>(static_cast<double>(RadixHTGlobalSourceState::SCAN_PROGRESS_UNITS) *
+		                                       static_cast<double>(scan_rows) / static_cast<double>(scan_total_rows)),
+		                    RadixHTGlobalSourceState::SCAN_PROGRESS_UNITS);
+		if (new_progress > scan_progress) {
+			gstate.scan_progress += new_progress - scan_progress;
+			scan_progress = new_progress;
+		}
 	}
 
 	const auto group_cols = layout.ColumnCount() - 1;
@@ -1455,7 +1484,7 @@ ProgressData RadixPartitionedHashTable::GetProgress(ClientContext &, GlobalSinkS
 	}
 
 	// Get scan progress, weigh it 1x
-	progress.done += 1.0 * double(gstate.task_done);
+	progress.done += 1.0 * double(gstate.scan_progress) / double(RadixHTGlobalSourceState::SCAN_PROGRESS_UNITS);
 
 	// Divide by 3x for the weights, and the number of partitions to get a value between 0 and 1 again
 	progress.total += 3.0 * double(sink.partitions.size());

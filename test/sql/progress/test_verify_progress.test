@@ -130,6 +130,12 @@ SELECT count(*) FROM (SELECT * FROM range(300000) t(i) USING SAMPLE 10 PERCENT (
 ----
 30000
 
+# hash aggregates report progress while scanning a partition
+query I
+SELECT count(*) FROM (SELECT i, count(*) FROM range(500000) t(i) GROUP BY i)
+----
+500000
+
 # recursive CTEs do not report progress - this fails the query in error mode
 statement error
 WITH RECURSIVE t(i) AS (SELECT * FROM range(100000) UNION ALL SELECT i + 100000 FROM t WHERE i < 400000) SELECT sum(i) FROM t
