@@ -341,17 +341,17 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 	// truncate the WAL
 	if (has_wal) {
-		unique_lock<mutex> owned_wal_lock;
-		optional_ptr<unique_lock<mutex>> wal_lock;
-		if (!options.wal_lock) {
-			// not holding the WAL lock yet - grab it
-			owned_wal_lock = storage_manager.GetWALLock();
-			wal_lock = owned_wal_lock;
+		unique_lock<mutex> owned_commit_lock;
+		optional_ptr<unique_lock<mutex>> commit_lock;
+		if (!options.commit_lock) {
+			// not holding the commit lock yet - grab it
+			owned_commit_lock = storage_manager.GetCommitLock();
+			commit_lock = owned_commit_lock;
 		} else {
-			// we already have the WAL lock - just refer to it
-			wal_lock = options.wal_lock;
+			// we already have the commit lock - just refer to it
+			commit_lock = options.commit_lock;
 		}
-		storage_manager.WALFinishCheckpoint(*wal_lock);
+		storage_manager.WALFinishCheckpoint(*commit_lock);
 	}
 
 	// for any indexes that were appended to while checkpointing, merge the delta back into the main index
