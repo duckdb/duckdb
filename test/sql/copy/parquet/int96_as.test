@@ -104,7 +104,7 @@ ORDER BY hex(ts::BLOB)
 12	15994850DC210000748E2500
 NULL	NULL
 
-# values outside of the TIMESTAMP_NS range raise a conversion error.
+# values outside of the TIMESTAMP_NS range saturate to -infinity/+infinity.
 # 9999-12-31 and 0001-01-01 are valid full-range TIMESTAMP values but are outside of the TIMESTAMP_NS range.
 statement ok
 CREATE TABLE int96_full_range(lo TIMESTAMP, hi TIMESTAMP)
@@ -122,11 +122,11 @@ SELECT lo::VARCHAR || '|' || hi::VARCHAR FROM read_parquet('{TEST_DIR}/int96_ful
 ----
 0001-01-01 00:00:00|9999-12-31 23:59:59.999999
 
-# timestamp_ns cannot represent them - the read fails with a conversion error
-statement error
-SELECT * FROM read_parquet('{TEST_DIR}/int96_full_range.parquet', int96_as='timestamp_ns')
+# timestamp_ns saturates out-of-range values to -infinity / +infinity
+query II
+SELECT lo::VARCHAR, hi::VARCHAR FROM read_parquet('{TEST_DIR}/int96_full_range.parquet', int96_as='timestamp_ns')
 ----
-<REGEX>:Conversion Error.*out of range.*int96_as='timestamp_ns'.*
+-infinity	infinity
 
 # int96_as='blob' is the only mode that reads the full 0001-9999 range intact
 query II
