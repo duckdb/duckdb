@@ -23,8 +23,17 @@ static UpdateSegment::fetch_rows_function_t GetFetchRowsFunction(PhysicalType ty
 static UpdateSegment::get_effective_updates_t GetEffectiveUpdatesFunction(PhysicalType type);
 
 UpdateSegment::UpdateSegment(ColumnData &column_data)
-    : column_data(column_data), stats(column_data.type), heap(BufferAllocator::Get(column_data.GetDatabase())) {
-	auto physical_type = column_data.type.InternalType();
+    : type(column_data.type), buffer_manager(column_data.block_manager.buffer_manager), stats(column_data.type),
+      heap(BufferAllocator::Get(column_data.GetDatabase())) {
+	auto physical_type = type.InternalType();
+
+	// the WAL writer describes the updated column through the segment
+	reference<const ColumnData> current_column = column_data;
+	while (current_column.get().HasParent()) {
+		nested_column_path.push_back(current_column.get().column_index);
+		current_column = current_column.get().Parent();
+	}
+	std::reverse(nested_column_path.begin(), nested_column_path.end());
 
 	this->type_size = GetTypeIdSize(physical_type);
 
@@ -46,7 +55,7 @@ UpdateSegment::~UpdateSegment() {
 // Update Info Helpers
 //===--------------------------------------------------------------------===//
 Value UpdateInfo::GetValue(idx_t index) {
-	auto &type = segment->column_data.type;
+	auto &type = segment->GetType();
 
 	auto tuple_data = GetValues();
 	switch (type.id()) {
@@ -64,7 +73,7 @@ void UpdateInfo::Print() {
 }
 
 string UpdateInfo::ToString() {
-	auto &type = segment->column_data.type;
+	auto &type = segment->GetType();
 	string result = "Update Info [" + type.ToString() + ", Count: " + to_string(N) +
 	                ", Transaction Id: " + to_string(version_number.load()) + "]\n";
 	auto tuples = GetTuples();
@@ -412,19 +421,17 @@ static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFun
 
 void UpdateSegment::FetchCommittedRange(const SnapshotView &view, idx_t start_row, idx_t count, Vector &result) {
 	D_ASSERT(count > 0);
+	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
+	auto lock_handle = lock.GetSharedLock();
 	if (!root) {
 		return;
 	}
-	D_ASSERT(start_row <= column_data.count);
-	D_ASSERT(start_row + count <= column_data.count);
-	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 
 	idx_t end_row = start_row + count;
 	idx_t start_vector = start_row / STANDARD_VECTOR_SIZE;
 	idx_t end_vector = (end_row - 1) / STANDARD_VECTOR_SIZE;
 	D_ASSERT(start_vector <= end_vector);
 
-	auto lock_handle = lock.GetSharedLock();
 	for (idx_t vector_idx = start_vector; vector_idx <= end_vector; vector_idx++) {
 		auto entry = GetUpdateNode(*lock_handle, vector_idx);
 		if (!entry.IsSet()) {
@@ -535,24 +542,21 @@ static UpdateSegment::fetch_rows_function_t GetFetchRowsFunction(PhysicalType ty
 
 void UpdateSegment::FetchRows(TransactionData transaction, const idx_t *offsets, const SelectionVector &sel,
                               idx_t fetch_count, Vector &result, idx_t result_offset) {
-	if (fetch_count == 0 || !root) {
+	if (fetch_count == 0) {
 		return;
 	}
 
 	auto lock_handle = lock.GetSharedLock();
+	if (!root) {
+		return;
+	}
 	for (idx_t idx = 0; idx < fetch_count;) {
 		const idx_t offset = offsets[sel.get_index(idx)];
-		if (offset > column_data.count) {
-			throw InternalException("UpdateSegment::FetchRows out of range");
-		}
 		const idx_t vector_index = offset / STANDARD_VECTOR_SIZE;
 		const idx_t vector_offset = vector_index * STANDARD_VECTOR_SIZE;
 		idx_t vector_count = 1;
 		while (idx + vector_count < fetch_count) {
 			const idx_t next_offset = offsets[sel.get_index(idx + vector_count)];
-			if (next_offset > column_data.count) {
-				throw InternalException("UpdateSegment::FetchRows out of range");
-			}
 			if (next_offset / STANDARD_VECTOR_SIZE != vector_index) {
 				break;
 			}
@@ -1344,7 +1348,7 @@ UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, DuckTableEntry &t
 void UpdateSegment::InitializeUpdateInfo(idx_t vector_idx) {
 	// create the versions for this segment, if there are none yet
 	if (!root) {
-		root = make_uniq<UpdateNode>(column_data.block_manager.buffer_manager);
+		root = make_uniq<UpdateNode>(buffer_manager);
 	}
 	if (vector_idx < root->info.size()) {
 		return;
@@ -1541,6 +1545,7 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 }
 
 bool UpdateSegment::HasUpdates() const {
+	auto read_lock = lock.GetSharedLock();
 	return root.get() != nullptr;
 }
 

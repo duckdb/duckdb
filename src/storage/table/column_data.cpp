@@ -92,11 +92,17 @@ bool ColumnData::HasUpdates() const {
 	return updates.get();
 }
 
+optional_ptr<UpdateSegment> ColumnData::GetUpdates() const {
+	lock_guard<mutex> update_guard(update_lock);
+	return updates.get();
+}
+
 bool ColumnData::HasChanges(idx_t start_row, idx_t end_row) const {
-	if (!updates) {
+	auto updates_ref = GetUpdates();
+	if (!updates_ref) {
 		return false;
 	}
-	if (updates->HasUpdates(start_row, end_row)) {
+	if (updates_ref->HasUpdates(start_row, end_row)) {
 		return true;
 	}
 	return false;
@@ -293,30 +299,30 @@ void ColumnData::FilterVector(ColumnScanState &state, Vector &result, idx_t targ
 }
 
 unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
-	lock_guard<mutex> update_guard(update_lock);
-	return updates ? updates->GetStatistics() : nullptr;
+	auto updates_ref = GetUpdates();
+	return updates_ref ? updates_ref->GetStatistics() : nullptr;
 }
 
 void ColumnData::FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
                               UpdateScanType update_type) {
-	lock_guard<mutex> update_guard(update_lock);
-	if (!updates) {
+	auto updates_ref = GetUpdates();
+	if (!updates_ref) {
 		return;
 	}
-	if (update_type == UpdateScanType::DISALLOW_UPDATES && updates->HasUncommittedUpdates(vector_index)) {
+	if (update_type == UpdateScanType::DISALLOW_UPDATES && updates_ref->HasUncommittedUpdates(vector_index)) {
 		throw TransactionException("Cannot create index with outstanding updates");
 	}
 	result.Flatten();
-	updates->FetchUpdates(transaction, vector_index, result);
+	updates_ref->FetchUpdates(transaction, vector_index, result);
 }
 
 void ColumnData::FetchUpdateRow(TransactionData transaction, row_t row_id, Vector &result, idx_t result_idx) {
-	lock_guard<mutex> update_guard(update_lock);
-	if (!updates) {
+	auto updates_ref = GetUpdates();
+	if (!updates_ref) {
 		return;
 	}
 	const idx_t offset = NumericCast<idx_t>(row_id);
-	updates->FetchRows(transaction, &offset, *FlatVector::IncrementalSelectionVector(), 1, result, result_idx);
+	updates_ref->FetchRows(transaction, &offset, *FlatVector::IncrementalSelectionVector(), 1, result, result_idx);
 }
 
 void ColumnData::UpdateInternal(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
@@ -365,13 +371,13 @@ void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_g
                                     VisibilityBound visibility_bound) {
 	ColumnScanState child_state(nullptr);
 	InitializeScanWithOffset(child_state, offset_in_row_group);
-	bool has_updates = HasUpdates();
+	auto updates_ref = GetUpdates();
 	ScanVector(child_state, result, s_count, ScanVectorType::SCAN_FLAT_VECTOR);
-	if (has_updates) {
+	if (updates_ref) {
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 		result.Flatten();
-		updates->FetchCommittedRange(SnapshotView::CommittedBefore(visibility_bound), offset_in_row_group, s_count,
-		                             result);
+		updates_ref->FetchCommittedRange(SnapshotView::CommittedBefore(visibility_bound), offset_in_row_group, s_count,
+		                                 result);
 	}
 }
 
@@ -757,11 +763,9 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 		const idx_t index_in_segment = offset - segment_start;
 		current_segment->GetNode().FetchRow(state, NumericCast<row_t>(index_in_segment), result, result_offset + idx);
 	}
-	{
-		const lock_guard<mutex> update_guard(update_lock);
-		if (updates) {
-			updates->FetchRows(transaction, offsets, sel, fetch_count, result, result_offset);
-		}
+	auto updates_ref = GetUpdates();
+	if (updates_ref) {
+		updates_ref->FetchRows(transaction, offsets, sel, fetch_count, result, result_offset);
 	}
 }
 
@@ -880,10 +884,11 @@ void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, 
 		segment.Scan(state, count, scan_vector, 0, ScanVectorType::SCAN_FLAT_VECTOR);
 	}
 
-	if (updates) {
+	auto updates_ref = GetUpdates();
+	if (updates_ref) {
 		D_ASSERT(scan_vector.GetVectorType() == VectorType::FLAT_VECTOR);
-		updates->FetchCommittedRange(SnapshotView::CommittedBefore(visibility_bound), state.offset_in_column, count,
-		                             scan_vector);
+		updates_ref->FetchCommittedRange(SnapshotView::CommittedBefore(visibility_bound), state.offset_in_column, count,
+		                                 scan_vector);
 	}
 }
 
