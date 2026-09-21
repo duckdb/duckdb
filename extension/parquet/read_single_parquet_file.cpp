@@ -31,10 +31,21 @@ struct ReadSingleParquetFileData : public TableFunctionData {
 		lock_guard<mutex> guard(bind_reader_lock);
 		bind_reader = std::move(reader);
 	}
+	//! A reader over the metadata of the file, created on first use. The row groups it describes refer to the schema
+	//! it holds, so it is kept for as long as this bind data is
+	ParquetReader &GetMetadataReader(ClientContext &context) const {
+		lock_guard<mutex> guard(bind_reader_lock);
+		if (!metadata_reader) {
+			metadata_reader = ParquetReader::CreateMetadataReader(context, options, metadata);
+		}
+		return *metadata_reader;
+	}
 
 private:
+	//! Guards the readers below
 	mutable mutex bind_reader_lock;
 	mutable shared_ptr<ParquetReader> bind_reader;
+	mutable shared_ptr<ParquetReader> metadata_reader;
 };
 
 struct ReadSingleParquetFileGlobalState : public GlobalTableFunctionState {
@@ -341,7 +352,11 @@ static virtual_column_map_t ReadSingleParquetFileVirtualColumns(ClientContext &c
 static unique_ptr<BaseStatistics>
 ReadSingleParquetFileStatistics(ClientContext &context, const FunctionData *bind_data_p, column_t column_index) {
 	auto &parquet_data = bind_data_p->Cast<ReadSingleParquetFileData>();
-	if (IsVirtualColumn(column_index) || column_index >= parquet_data.parquet_names.size()) {
+	if (IsVirtualColumn(column_index)) {
+		return ParquetReader::ReadVirtualColumnStatistics(context, parquet_data.options, parquet_data.metadata,
+		                                                  column_index);
+	}
+	if (column_index >= parquet_data.parquet_names.size()) {
 		return nullptr;
 	}
 	return ParquetReader::ReadStatistics(context, parquet_data.options, parquet_data.metadata,
@@ -377,8 +392,8 @@ static vector<PartitionStatistics> ReadSingleParquetFilePartitionStats(ClientCon
 	if (!parquet_data.metadata) {
 		return result;
 	}
-	auto options = parquet_data.options;
-	ParquetReader::GetPartitionStats(*parquet_data.metadata->metadata, result, nullptr, options);
+	// the row groups carry the statistics of their columns, which lets e.g. min/max be answered from the metadata
+	parquet_data.GetMetadataReader(context).GetPartitionStats(result);
 	return result;
 }
 

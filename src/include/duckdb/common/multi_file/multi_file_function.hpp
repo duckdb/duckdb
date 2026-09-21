@@ -162,6 +162,16 @@ public:
 			interface.BindReader(context, result->types, result->names, *result);
 		}
 		interface.FinalizeBindData(*result);
+		if (result->file_options.file_row_number) {
+			// the column is read from the row number virtual column, which not every reader provides
+			virtual_column_map_t virtual_columns;
+			interface.GetVirtualColumns(context, *result, virtual_columns);
+			auto entry = virtual_columns.find(MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER);
+			if (entry == virtual_columns.end()) {
+				throw BinderException("The file_row_number option is not supported by this reader");
+			}
+			result->virtual_columns.insert(*entry);
+		}
 
 		if (return_types.empty()) {
 			// no expected types - just copy the types
@@ -281,6 +291,9 @@ public:
 		file_options.auto_detect_hive_partitioning = false;
 
 		for (auto &[option_name, option_values] : input.info.options) {
+			if (multi_file_reader->ParseCopyOption(option_name, option_values, file_options)) {
+				continue;
+			}
 			if (interface->ParseCopyOption(context, option_name, option_values, *options, expected_names,
 			                               expected_types)) {
 				continue;
@@ -1098,6 +1111,15 @@ public:
 
 		auto primary_index = column_index.GetPrimaryIndex();
 		const auto &col_name = bind_data.names[primary_index];
+		auto &file_row_number_idx = bind_data.reader_bind.file_row_number_idx;
+		if (file_row_number_idx.IsValid() && file_row_number_idx.GetIndex() == primary_index) {
+			// the column is read from the row number virtual column of the reader
+			if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
+				return nullptr;
+			}
+			return bind_data.initial_reader->GetVirtualColumnStatistics(
+			    context, MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER);
+		}
 
 		// a hive partitioning column overrides any file column of the same name - the statistics stored in the
 		// file describe the overridden column and can even have a different type, so they cannot be used here

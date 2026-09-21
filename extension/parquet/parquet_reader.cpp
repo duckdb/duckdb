@@ -671,6 +671,23 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ClientContext &context,
 	return reader.ReadStatistics(name);
 }
 
+unique_ptr<BaseStatistics>
+ParquetReader::ReadVirtualColumnStatistics(ClientContext &context, const ParquetOptions &parquet_options,
+                                           const shared_ptr<ParquetFileMetadataCache> &metadata,
+                                           column_t virtual_column_id) {
+	if (virtual_column_id != MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER || !metadata ||
+	    !CanUseParquetMetadataStatistics(context, metadata, parquet_options)) {
+		return nullptr;
+	}
+	// the row numbers of every row group follow on from those of the row groups before it
+	return ReadColumnStatistics(*metadata->metadata, ParquetColumnSchema::FileRowNumber(), parquet_options);
+}
+
+unique_ptr<BaseStatistics> ParquetReader::GetVirtualColumnStatistics(ClientContext &context,
+                                                                     column_t virtual_column_id) {
+	return ReadVirtualColumnStatistics(context, parquet_options, metadata, virtual_column_id);
+}
+
 unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ClientContext &context, const ParquetUnionData &union_data,
                                                          const Identifier &name) {
 	if (!CanUseParquetMetadataStatistics(context, union_data.metadata, union_data.options)) {
@@ -1164,17 +1181,6 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema(ClientContext &contex
 		throw InvalidInputException("Failed to read Parquet file \"%s\": row group does not have enough columns",
 		                            file.path);
 	}
-	if (parquet_options.file_row_number) {
-		for (auto &column : root.children) {
-			auto &name = column.name;
-			if (StringUtil::CIEquals(name, "file_row_number")) {
-				throw BinderException("Failed to read Parquet file \"%s\": Using file_row_number option on file with "
-				                      "column named file_row_number is not supported",
-				                      file.path);
-			}
-		}
-		root.children.push_back(FileRowNumberSchema());
-	}
 	return make_uniq<ParquetColumnSchema>(root);
 }
 
@@ -1247,187 +1253,6 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	if (context.TryGetCurrentSetting("__delta_only_variant_encoding_enabled", lookup_value)) {
 		variant_legacy_encoding = lookup_value.GetValue<bool>();
 	}
-}
-
-static void VerifyParquetSchemaDefinitionType(const LogicalType &definition_type, bool is_root) {
-	if (definition_type.id() != LogicalTypeId::STRUCT) {
-		if (is_root) {
-			throw InvalidInputException("'schema' expects a STRUCT as the value type of the map");
-		}
-		throw BinderException("Parquet schema 'children' expects a STRUCT as the value type of the map, not %s",
-		                      definition_type.ToString());
-	}
-	auto &fields = StructType::GetChildTypes(definition_type);
-	if (fields.size() != 3 && fields.size() != 4) {
-		throw InvalidInputException(
-		    "'schema' expects the STRUCT to have 3 or 4 fields, 'name', 'type', 'default_value' and optionally "
-		    "'children', not %d",
-		    fields.size());
-	}
-	if (fields[0].first != "name") {
-		throw InvalidInputException("'schema' expects the first field of the struct to be called 'name'");
-	}
-	if (fields[0].second.id() != LogicalTypeId::VARCHAR) {
-		throw InvalidInputException("'schema' expects the 'name' field to be of type VARCHAR, not %s",
-		                            LogicalTypeIdToString(fields[0].second.id()));
-	}
-	if (fields[1].first != "type") {
-		throw InvalidInputException("'schema' expects the second field of the struct to be called 'type'");
-	}
-	if (fields[1].second.id() != LogicalTypeId::VARCHAR) {
-		throw InvalidInputException("'schema' expects the 'type' field to be of type VARCHAR, not %s",
-		                            LogicalTypeIdToString(fields[1].second.id()));
-	}
-	if (fields[2].first != "default_value") {
-		throw InvalidInputException("'schema' expects the third field of the struct to be called 'default_value'");
-	}
-	if (fields.size() == 4 && fields[3].first != "children") {
-		throw InvalidInputException("'schema' expects the fourth field of the struct to be called 'children'");
-	}
-}
-
-static void VerifyParquetSchemaChildType(const ParquetColumnDefinition &column, const ParquetColumnDefinition &child,
-                                         const string &expected_name, const LogicalType &expected_type) {
-	auto &column_name = column.name;
-
-	const bool name_equivalent = child.name == expected_name;
-	const bool type_equivalent = child.type == expected_type;
-	if (name_equivalent && type_equivalent) {
-		return;
-	}
-	string error;
-	if (!name_equivalent) {
-		error = StringUtil::Format("name \"%s\" (got \"%s\")", expected_name, child.name);
-	}
-	if (!type_equivalent) {
-		const bool name_mentioned = !error.empty();
-		if (name_mentioned) {
-			error += " and ";
-		} else {
-			error += StringUtil::Format("name \"%s\" to have ", expected_name);
-		}
-		error += StringUtil::Format("type \"%s\" (got \"%s\")", expected_type.ToString(), child.type.ToString());
-	}
-
-	throw BinderException("Parquet schema column \"%s\" expects a child with %s", column_name, error);
-}
-
-static void VerifyParquetSchemaChildren(const ParquetColumnDefinition &column) {
-	idx_t expected_count;
-	switch (column.type.id()) {
-	case LogicalTypeId::STRUCT:
-		expected_count = StructType::GetChildCount(column.type);
-		break;
-	case LogicalTypeId::LIST:
-		expected_count = 1;
-		break;
-	case LogicalTypeId::MAP:
-		expected_count = 2;
-		break;
-	default:
-		throw BinderException("Parquet schema column \"%s\" of type %s cannot define nested children", column.name,
-		                      column.type.ToString());
-	}
-	if (column.children.size() != expected_count) {
-		throw BinderException("Parquet schema column \"%s\" of type %s expects %d child definitions, not %d",
-		                      column.name, column.type.ToString(), expected_count, column.children.size());
-	}
-
-	switch (column.type.id()) {
-	case LogicalTypeId::STRUCT: {
-		auto &expected_children = StructType::GetChildTypes(column.type);
-		for (idx_t i = 0; i < expected_children.size(); i++) {
-			VerifyParquetSchemaChildType(column, column.children[i], expected_children[i].first.GetIdentifierName(),
-			                             expected_children[i].second);
-		}
-		break;
-	}
-	case LogicalTypeId::LIST:
-		VerifyParquetSchemaChildType(column, column.children[0], "element", ListType::GetChildType(column.type));
-		break;
-	case LogicalTypeId::MAP:
-		VerifyParquetSchemaChildType(column, column.children[0], "key", MapType::KeyType(column.type));
-		VerifyParquetSchemaChildType(column, column.children[1], "value", MapType::ValueType(column.type));
-		break;
-	default:
-		throw InternalException("Unexpected Parquet schema type with children");
-	}
-}
-
-static vector<ParquetColumnDefinition> ParseParquetSchemaMap(ClientContext &context, const Value &schema_value,
-                                                             const LogicalType &root_key_type, bool is_root);
-
-static ParquetColumnDefinition ParseParquetSchemaDefinition(ClientContext &context, const Value &column_value,
-                                                            const LogicalType &root_key_type) {
-	ParquetColumnDefinition result;
-	auto &map_entry = StructValue::GetChildren(column_value);
-	result.identifier = map_entry[0];
-
-	const auto &column_def = map_entry[1];
-	if (column_def.IsNull()) {
-		throw BinderException("Parquet schema definition cannot be NULL");
-	}
-	VerifyParquetSchemaDefinitionType(column_def.type(), false);
-
-	const auto children = StructValue::GetChildren(column_def);
-	result.name = StringValue::Get(children[0]);
-	result.type = TransformStringToLogicalType(StringValue::Get(children[1]), context);
-	string error_message;
-	auto default_value = children[2].TryCastAs(context, result.type, &error_message);
-	if (!default_value) {
-		throw BinderException("Unable to cast Parquet schema default_value \"%s\" to %s", children[2].ToString(),
-		                      result.type.ToString());
-	}
-	result.default_value = std::move(*default_value);
-	if (children.size() > 3 && !children[3].IsNull()) {
-		result.children = ParseParquetSchemaMap(context, children[3], root_key_type, false);
-		VerifyParquetSchemaChildren(result);
-	}
-
-	return result;
-}
-
-static vector<ParquetColumnDefinition> ParseParquetSchemaMap(ClientContext &context, const Value &schema_value,
-                                                             const LogicalType &root_key_type, bool is_root) {
-	if (schema_value.type().id() != LogicalTypeId::MAP) {
-		if (is_root) {
-			throw InvalidInputException("'schema' expects a value of type MAP, not %s",
-			                            LogicalTypeIdToString(schema_value.type().id()));
-		}
-		throw BinderException("Parquet schema 'children' expects a value of type MAP, not %s",
-		                      LogicalTypeIdToString(schema_value.type().id()));
-	}
-	auto &map_type = schema_value.type();
-	auto &key_type = MapType::KeyType(map_type);
-	auto &value_type = MapType::ValueType(map_type);
-	VerifyParquetSchemaDefinitionType(value_type, is_root);
-	if (is_root) {
-		if (key_type.id() != LogicalTypeId::INTEGER && key_type.id() != LogicalTypeId::VARCHAR) {
-			throw InvalidInputException(
-			    "'schema' expects the value type of the map to be either INTEGER or VARCHAR, not %s",
-			    LogicalTypeIdToString(key_type.id()));
-		}
-	} else if (key_type != root_key_type) {
-		throw BinderException("Parquet schema 'children' key type must match the root schema key type %s, not %s",
-		                      root_key_type.ToString(), key_type.ToString());
-	}
-
-	auto &entries = ListValue::GetChildren(schema_value);
-	vector<ParquetColumnDefinition> result;
-	result.reserve(entries.size());
-	for (auto &entry : entries) {
-		result.emplace_back(ParseParquetSchemaDefinition(context, entry, root_key_type));
-	}
-	return result;
-}
-
-vector<ParquetColumnDefinition> ParquetColumnDefinition::FromSchemaMap(ClientContext &context,
-                                                                       const Value &schema_value) {
-	if (schema_value.type().id() != LogicalTypeId::MAP) {
-		throw InvalidInputException("'schema' expects a value of type MAP, not %s",
-		                            LogicalTypeIdToString(schema_value.type().id()));
-	}
-	return ParseParquetSchemaMap(context, schema_value, MapType::KeyType(schema_value.type()), true);
 }
 
 MultiFileColumnDefinition ParquetColumnDefinition::ToMultiFileColumnDefinition() const {
@@ -2081,6 +1906,11 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
+}
+
+shared_ptr<ParquetReader> ParquetReader::CreateMetadataReader(ClientContext &context, ParquetOptions parquet_options,
+                                                              shared_ptr<ParquetFileMetadataCache> metadata) {
+	return shared_ptr<ParquetReader>(new ParquetReader(context, std::move(parquet_options), std::move(metadata)));
 }
 
 void ParquetReader::GetPartitionStats(vector<PartitionStatistics> &result) {

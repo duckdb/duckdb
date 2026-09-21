@@ -60,12 +60,6 @@ struct TableFunctionMultiFileSettings {
 	//! Whether the schemas of the sampled files are combined into a union of their columns - files are then allowed
 	//! to be missing columns of the combined schema
 	bool sampled_schema_is_union = true;
-	//! (Optional) Binds the schema of the scan from its options rather than from its files - a format whose options
-	//! can describe the schema (e.g. parquet's "schema") uses this. Returns false when they do not, which binds the
-	//! schema from the files as usual
-	bool (*bind_scan_schema)(ClientContext &context, MultiFileBindData &bind_data,
-	                         const named_parameter_map_t &named_parameters, vector<LogicalType> &return_types,
-	                         vector<Identifier> &names) = nullptr;
 };
 
 //! The function info of a multi-file wrapper - holds the single-file function that is wrapped
@@ -106,6 +100,7 @@ public:
 	bool UseCastMap() const override;
 	shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx) override;
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name) override;
+	unique_ptr<BaseStatistics> GetVirtualColumnStatistics(ClientContext &context, column_t virtual_column_id) override;
 	void AddVirtualColumn(column_t virtual_column_id) override;
 	void PrepareReader(ClientContext &context, GlobalTableFunctionState &gstate) override;
 	void PrepareReadAhead(ClientContext &context, GlobalTableFunctionState &gstate) override;
@@ -192,13 +187,19 @@ public:
 	TableFunctionMultiFileWrapper(TableFunction function, TableFunctionMultiFileSettings settings);
 
 public:
-	//! Wrap a single-file table function into a multi-file table function
+	//! Wrap a single-file table function into a multi-file table function.
+	//! The wrapped function and the settings are kept in the result's "function_info", where the default bind reads
+	//! them. A format whose function is bound through a TableFunction other than this one - because a caller copies
+	//! it and puts info of its own in that slot, as DuckLake, Iceberg and Delta do with the parquet scan - passes a
+	//! "bind" of its own here instead, built on MultiFileBindWith. No info is then stored, leaving the slot free.
 	static TableFunction CreateFunction(TableFunction single_file_function, Identifier name,
-	                                    TableFunctionMultiFileSettings settings = TableFunctionMultiFileSettings());
+	                                    TableFunctionMultiFileSettings settings = TableFunctionMultiFileSettings(),
+	                                    table_function_bind_t bind = nullptr);
 	//! Wrap a single-file table function into a multi-file table function set (VARCHAR and LIST(VARCHAR) variants)
 	static TableFunctionSet
 	CreateFunctionSet(TableFunction single_file_function, Identifier name,
-	                  TableFunctionMultiFileSettings settings = TableFunctionMultiFileSettings());
+	                  TableFunctionMultiFileSettings settings = TableFunctionMultiFileSettings(),
+	                  table_function_bind_t bind = nullptr);
 
 	//! Bind a multi-file scan over the given single-file function. Use this to build a "bind" of your own when the
 	//! function may be bound through a TableFunction that is not the one this wrapper created - the wrapped

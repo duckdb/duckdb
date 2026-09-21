@@ -655,10 +655,6 @@ public:
 	StatementReturnType call_return_type = StatementReturnType::QUERY_RESULT;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
-	//! (Optional) For a multi-file function that wraps a single-file one: the wrapped function and how it is
-	//! exposed. This is kept apart from "function_info" above, which callers of a multi-file function replace with
-	//! info of their own (e.g. DuckLake scanning parquet files it manages)
-	shared_ptr<TableFunctionInfo> multi_file_info;
 	//! The order preservation type of the table function
 	OrderPreservationType order_preservation_type = OrderPreservationType::INSERTION_ORDER;
 

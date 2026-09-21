@@ -139,6 +139,14 @@ unique_ptr<BaseStatistics> TableFunctionFileReader::GetStatistics(ClientContext 
 	return nullptr;
 }
 
+unique_ptr<BaseStatistics> TableFunctionFileReader::GetVirtualColumnStatistics(ClientContext &context,
+                                                                               column_t virtual_column_id) {
+	if (!function.statistics || !bind_data) {
+		return nullptr;
+	}
+	return function.statistics(context, bind_data.get(), virtual_column_id);
+}
+
 void TableFunctionFileReader::AddVirtualColumn(column_t virtual_column_id) {
 	if (!function.get_virtual_columns) {
 		throw NotImplementedException("Table function %s does not support reading virtual columns", function.name);
@@ -470,6 +478,12 @@ void TableFunctionMultiFileWrapper::GetVirtualColumns(ClientContext &context, Mu
 }
 
 void TableFunctionMultiFileWrapper::FinalizeBindData(MultiFileBindData &multi_file_data) {
+	if (!multi_file_data.file_options.schema.empty()) {
+		// the schema was given up front, so BindReader never ran to find out whether the scan reads several files
+		auto &data = multi_file_data.bind_data->Cast<TableFunctionMultiFileData>();
+		data.options.multi_file_scan = multi_file_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES;
+		return;
+	}
 	if (!schema_combined || !combined_bind_data) {
 		// either the schema comes from a single file, or the schemas were combined by type. In the latter case every
 		// file is bound on its own and the column mapper reconciles it with the combined schema - only a schema the
@@ -503,11 +517,6 @@ void TableFunctionMultiFileWrapper::BindReader(ClientContext &context, vector<Lo
 	// whether the scan reads several files. The file list is only asked here, where it has been created and is
 	// about to be read anyway - a list that is built lazily is not ready to be expanded any earlier
 	data.options.multi_file_scan = bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES;
-	if (settings.bind_scan_schema &&
-	    settings.bind_scan_schema(context, bind_data, data.options.named_parameters, return_types, names)) {
-		// the options describe the schema of the scan - every file is mapped onto it, so no file determines it
-		return;
-	}
 	if (data.HasExpectedSchema()) {
 		// the schema is already known (COPY) - there is no need to sample any files to determine it
 		bind_data.file_options.maximum_sample_files = 1;
@@ -630,7 +639,7 @@ unique_ptr<FunctionData> TableFunctionMultiFileWrapper::MultiFileBindWith(
 static unique_ptr<FunctionData> TableFunctionMultiFileBind(ClientContext &context, TableFunctionBindInput &input,
                                                            vector<LogicalType> &return_types,
                                                            vector<Identifier> &names) {
-	auto &info = input.table_function.multi_file_info->Cast<TableFunctionMultiFileInfo>();
+	auto &info = input.table_function.function_info->Cast<TableFunctionMultiFileInfo>();
 	return TableFunctionMultiFileWrapper::MultiFileBindWith(context, input, return_types, names, info.function,
 	                                                        info.settings);
 }
@@ -639,7 +648,7 @@ unique_ptr<FunctionData> TableFunctionMultiFileWrapper::MultiFileBindCopy(Client
                                                                           CopyFromFunctionBindInput &input,
                                                                           vector<Identifier> &expected_names,
                                                                           vector<LogicalType> &expected_types) {
-	auto &info = input.tf.multi_file_info->Cast<TableFunctionMultiFileInfo>();
+	auto &info = input.tf.function_info->Cast<TableFunctionMultiFileInfo>();
 	return TableFunctionMultiFileFunction::MultiFileBindCopyInterface(
 	    context, input, expected_names, expected_types,
 	    make_uniq<TableFunctionMultiFileWrapper>(info.function, info.settings));
@@ -706,7 +715,8 @@ static vector<PartitionStatistics> TableFunctionMultiFileGetPartitionStats(Clien
 }
 
 TableFunction TableFunctionMultiFileWrapper::CreateFunction(TableFunction single_file_function, Identifier name,
-                                                            TableFunctionMultiFileSettings settings) {
+                                                            TableFunctionMultiFileSettings settings,
+                                                            table_function_bind_t bind) {
 	if (single_file_function.GetArguments().size() != 1 ||
 	    single_file_function.GetArguments()[0] != LogicalType::VARCHAR) {
 		throw InternalException("Only table functions taking a single VARCHAR file path can be wrapped in a multi "
@@ -717,7 +727,7 @@ TableFunction TableFunctionMultiFileWrapper::CreateFunction(TableFunction single
 		settings.reader_type = name.GetIdentifierName();
 	}
 	TableFunctionMultiFileFunction result(std::move(name));
-	result.bind = TableFunctionMultiFileBind;
+	result.bind = bind ? bind : TableFunctionMultiFileBind;
 	// forward the named parameters and the pushdown capabilities of the wrapped function
 	for (auto &named_parameter : single_file_function.named_parameters) {
 		result.named_parameters[named_parameter.first] = named_parameter.second;
@@ -742,15 +752,20 @@ TableFunction TableFunctionMultiFileWrapper::CreateFunction(TableFunction single
 	// NOTE: callbacks that take bind data are NOT forwarded - through the wrapper they are handed the bind data of
 	// the multi-file scan, not the bind data the wrapped function produced for a file. A format that wants one sets
 	// it on the function this returns
-	result.multi_file_info =
-	    make_shared_ptr<TableFunctionMultiFileInfo>(std::move(single_file_function), std::move(settings));
+	if (!bind) {
+		// the bind below reads the wrapped function from here - a function that brought its own bind does not need
+		// this, and leaves the slot to whoever binds it
+		result.function_info =
+		    make_shared_ptr<TableFunctionMultiFileInfo>(std::move(single_file_function), std::move(settings));
+	}
 	return std::move(result);
 }
 
 TableFunctionSet TableFunctionMultiFileWrapper::CreateFunctionSet(TableFunction single_file_function, Identifier name,
-                                                                  TableFunctionMultiFileSettings settings) {
+                                                                  TableFunctionMultiFileSettings settings,
+                                                                  table_function_bind_t bind) {
 	return MultiFileReader::CreateFunctionSet(
-	    CreateFunction(std::move(single_file_function), std::move(name), std::move(settings)));
+	    CreateFunction(std::move(single_file_function), std::move(name), std::move(settings), bind));
 }
 
 } // namespace duckdb

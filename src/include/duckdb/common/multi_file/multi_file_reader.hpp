@@ -116,6 +116,10 @@ public:
 
 	//! Add the parameters for multi-file readers (e.g. union_by_name, filename) to a table function
 	DUCKDB_API static void AddParameters(TableFunction &table_function);
+	//! Parse the value of the "schema" option - a MAP from field id (INTEGER) or name (VARCHAR) to a STRUCT(name,
+	//! type, default_value[, children]) describing a column
+	DUCKDB_API static vector<MultiFileColumnDefinition> ParseSchemaOption(ClientContext &context,
+	                                                                      const Value &schema_value);
 	//! Creates a table function set from a single reader function (including e.g. list parameters, etc)
 	DUCKDB_API static TableFunctionSet CreateFunctionSet(TableFunction table_function);
 
@@ -139,6 +143,9 @@ public:
 	               const FileGlobInput &glob_input = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! Parse the named parameters of a multi-file reader
+	//! Parse an option of a COPY ... FROM that the multi-file reader handles itself
+	DUCKDB_API virtual bool ParseCopyOption(const Identifier &key, const vector<Value> &values,
+	                                        MultiFileOptions &options);
 	DUCKDB_API virtual bool ParseOption(const Identifier &key, const Value &val, MultiFileOptions &options,
 	                                    ClientContext &context);
 	//! Perform filter pushdown into the MultiFileList. Returns a new MultiFileList if filters were pushed down
@@ -150,7 +157,7 @@ public:
 	                                                                   MultiFileDynamicPushdownInfo &pushdown_info);
 	//! Try to use the MultiFileReader for binding. Returns true if a bind could be made, returns false if the
 	//! MultiFileReader can not perform the bind and binding should be performed on 1 or more files in the MultiFileList
-	//! directly.
+	//! directly. The default MultiFileReader binds when the "schema" option was given.
 	DUCKDB_API virtual bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
 	                             vector<Identifier> &names, MultiFileReaderBindData &bind_data);
 	//! Bind the options of the multi-file reader, potentially emitting any extra columns that are required

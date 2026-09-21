@@ -92,6 +92,8 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["hive_types"] = LogicalType::ANY;
 	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["allow_empty"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["schema"] = LogicalTypeId::ANY;
+	table_function.named_parameters["file_row_number"] = LogicalType::BOOLEAN;
 }
 
 OpenFileInfo MultiFileReader::ParseFileEntry(const Value &input) {
@@ -196,6 +198,202 @@ shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 	return CreateFileList(context, ParseFileList(input), glob_input);
 }
 
+static void VerifySchemaDefinitionType(const LogicalType &definition_type, bool is_root) {
+	if (definition_type.id() != LogicalTypeId::STRUCT) {
+		if (is_root) {
+			throw InvalidInputException("'schema' expects a STRUCT as the value type of the map");
+		}
+		throw BinderException("'schema' 'children' expects a STRUCT as the value type of the map, not %s",
+		                      definition_type.ToString());
+	}
+	auto &fields = StructType::GetChildTypes(definition_type);
+	if (fields.size() != 3 && fields.size() != 4) {
+		throw InvalidInputException(
+		    "'schema' expects the STRUCT to have 3 or 4 fields, 'name', 'type', 'default_value' and optionally "
+		    "'children', not %d",
+		    fields.size());
+	}
+	if (fields[0].first != "name") {
+		throw InvalidInputException("'schema' expects the first field of the struct to be called 'name'");
+	}
+	if (fields[0].second.id() != LogicalTypeId::VARCHAR) {
+		throw InvalidInputException("'schema' expects the 'name' field to be of type VARCHAR, not %s",
+		                            LogicalTypeIdToString(fields[0].second.id()));
+	}
+	if (fields[1].first != "type") {
+		throw InvalidInputException("'schema' expects the second field of the struct to be called 'type'");
+	}
+	if (fields[1].second.id() != LogicalTypeId::VARCHAR) {
+		throw InvalidInputException("'schema' expects the 'type' field to be of type VARCHAR, not %s",
+		                            LogicalTypeIdToString(fields[1].second.id()));
+	}
+	if (fields[2].first != "default_value") {
+		throw InvalidInputException("'schema' expects the third field of the struct to be called 'default_value'");
+	}
+	if (fields.size() == 4 && fields[3].first != "children") {
+		throw InvalidInputException("'schema' expects the fourth field of the struct to be called 'children'");
+	}
+}
+
+static void VerifySchemaChildType(const MultiFileColumnDefinition &column, const MultiFileColumnDefinition &child,
+                                  const string &expected_name, const LogicalType &expected_type) {
+	auto child_name = child.name.GetIdentifierName();
+	const bool name_equivalent = child_name == expected_name;
+	const bool type_equivalent = child.type == expected_type;
+	if (name_equivalent && type_equivalent) {
+		return;
+	}
+	string error;
+	if (!name_equivalent) {
+		error = StringUtil::Format("name \"%s\" (got \"%s\")", expected_name, child_name);
+	}
+	if (!type_equivalent) {
+		const bool name_mentioned = !error.empty();
+		if (name_mentioned) {
+			error += " and ";
+		} else {
+			error += StringUtil::Format("name \"%s\" to have ", expected_name);
+		}
+		error += StringUtil::Format("type \"%s\" (got \"%s\")", expected_type.ToString(), child.type.ToString());
+	}
+	throw BinderException("'schema' column \"%s\" expects a child with %s", column.name.GetIdentifierName(), error);
+}
+
+static void VerifySchemaChildren(const MultiFileColumnDefinition &column) {
+	auto column_name = column.name.GetIdentifierName();
+	idx_t expected_count;
+	switch (column.type.id()) {
+	case LogicalTypeId::STRUCT:
+		expected_count = StructType::GetChildCount(column.type);
+		break;
+	case LogicalTypeId::LIST:
+		expected_count = 1;
+		break;
+	case LogicalTypeId::MAP:
+		expected_count = 2;
+		break;
+	default:
+		throw BinderException("'schema' column \"%s\" of type %s cannot define nested children", column_name,
+		                      column.type.ToString());
+	}
+	if (column.children.size() != expected_count) {
+		throw BinderException("'schema' column \"%s\" of type %s expects %d child definitions, not %d", column_name,
+		                      column.type.ToString(), expected_count, column.children.size());
+	}
+
+	switch (column.type.id()) {
+	case LogicalTypeId::STRUCT: {
+		auto &expected_children = StructType::GetChildTypes(column.type);
+		for (idx_t i = 0; i < expected_children.size(); i++) {
+			VerifySchemaChildType(column, column.children[i], expected_children[i].first.GetIdentifierName(),
+			                      expected_children[i].second);
+		}
+		break;
+	}
+	case LogicalTypeId::LIST:
+		VerifySchemaChildType(column, column.children[0], "element", ListType::GetChildType(column.type));
+		break;
+	case LogicalTypeId::MAP:
+		VerifySchemaChildType(column, column.children[0], "key", MapType::KeyType(column.type));
+		VerifySchemaChildType(column, column.children[1], "value", MapType::ValueType(column.type));
+		break;
+	default:
+		throw InternalException("Unexpected schema type with children");
+	}
+}
+
+static vector<MultiFileColumnDefinition> ParseSchemaMap(ClientContext &context, const Value &schema_value,
+                                                        const LogicalType &root_key_type, bool is_root);
+
+static MultiFileColumnDefinition ParseSchemaDefinition(ClientContext &context, const Value &column_value,
+                                                       const LogicalType &root_key_type) {
+	auto &map_entry = StructValue::GetChildren(column_value);
+	const auto &column_def = map_entry[1];
+	if (column_def.IsNull()) {
+		throw BinderException("'schema' definition cannot be NULL");
+	}
+	VerifySchemaDefinitionType(column_def.type(), false);
+
+	const auto &children = StructValue::GetChildren(column_def);
+	auto type = TransformStringToLogicalType(StringValue::Get(children[1]), context);
+	MultiFileColumnDefinition result(StringValue::Get(children[0]), type);
+	result.identifier = map_entry[0];
+	string error_message;
+	auto default_value = children[2].TryCastAs(context, result.type, &error_message);
+	if (!default_value) {
+		throw BinderException("Unable to cast 'schema' default_value \"%s\" to %s", children[2].ToString(),
+		                      result.type.ToString());
+	}
+	result.default_expression = ConstantExpression::FromValue(*default_value);
+	if (children.size() > 3 && !children[3].IsNull()) {
+		result.children = ParseSchemaMap(context, children[3], root_key_type, false);
+		VerifySchemaChildren(result);
+	}
+	return result;
+}
+
+static vector<MultiFileColumnDefinition> ParseSchemaMap(ClientContext &context, const Value &schema_value,
+                                                        const LogicalType &root_key_type, bool is_root) {
+	if (schema_value.type().id() != LogicalTypeId::MAP) {
+		if (is_root) {
+			throw InvalidInputException("'schema' expects a value of type MAP, not %s",
+			                            LogicalTypeIdToString(schema_value.type().id()));
+		}
+		throw BinderException("'schema' 'children' expects a value of type MAP, not %s",
+		                      LogicalTypeIdToString(schema_value.type().id()));
+	}
+	auto &map_type = schema_value.type();
+	auto &key_type = MapType::KeyType(map_type);
+	auto &value_type = MapType::ValueType(map_type);
+	VerifySchemaDefinitionType(value_type, is_root);
+	if (is_root) {
+		if (key_type.id() != LogicalTypeId::INTEGER && key_type.id() != LogicalTypeId::VARCHAR) {
+			throw InvalidInputException(
+			    "'schema' expects the value type of the map to be either INTEGER or VARCHAR, not %s",
+			    LogicalTypeIdToString(key_type.id()));
+		}
+	} else if (key_type != root_key_type) {
+		throw BinderException("'schema' 'children' key type must match the root schema key type %s, not %s",
+		                      root_key_type.ToString(), key_type.ToString());
+	}
+
+	auto &entries = ListValue::GetChildren(schema_value);
+	vector<MultiFileColumnDefinition> result;
+	result.reserve(entries.size());
+	for (auto &entry : entries) {
+		result.push_back(ParseSchemaDefinition(context, entry, root_key_type));
+	}
+	return result;
+}
+
+vector<MultiFileColumnDefinition> MultiFileReader::ParseSchemaOption(ClientContext &context,
+                                                                     const Value &schema_value) {
+	if (schema_value.type().id() != LogicalTypeId::MAP) {
+		throw InvalidInputException("'schema' expects a value of type MAP, not %s",
+		                            LogicalTypeIdToString(schema_value.type().id()));
+	}
+	return ParseSchemaMap(context, schema_value, MapType::KeyType(schema_value.type()), true);
+}
+
+bool MultiFileReader::ParseCopyOption(const Identifier &key, const vector<Value> &values, MultiFileOptions &options) {
+	if (key != "file_row_number") {
+		return false;
+	}
+	// a boolean COPY option that is given without a value is set
+	if (values.empty()) {
+		options.file_row_number = true;
+		return true;
+	}
+	string error_message;
+	auto value = values[0].DefaultTryCastAs(LogicalType::BOOLEAN, &error_message);
+	if (!value) {
+		throw InvalidInputException("Unable to cast \"%s\" to BOOLEAN for boolean option \"%s\"", values[0].ToString(),
+		                            key);
+	}
+	options.file_row_number = BooleanValue::Get(*value);
+	return true;
+}
+
 bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, MultiFileOptions &options,
                                   ClientContext &context) {
 	if (key == "filename") {
@@ -260,6 +458,17 @@ bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, Multi
 			options.hive_types_schema[name] = transformed_type;
 		}
 		D_ASSERT(!options.hive_types_schema.empty());
+	} else if (key == "schema") {
+		options.schema = ParseSchemaOption(context, val);
+		if (options.schema.empty()) {
+			throw BinderException("'schema' cannot be empty");
+		}
+		options.auto_detect_hive_partitioning = false;
+	} else if (key == "file_row_number") {
+		if (val.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
+		}
+		options.file_row_number = BooleanValue::Get(val);
 	} else {
 		return false;
 	}
@@ -292,12 +501,37 @@ unique_ptr<MultiFileList> MultiFileReader::DynamicFilterPushdown(const MultiFile
 
 bool MultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
                            vector<Identifier> &names, MultiFileReaderBindData &bind_data) {
-	// The Default MultiFileReader can not perform any binding as it uses MultiFileLists with no schema information.
-	return false;
+	if (options.schema.empty()) {
+		// the default MultiFileReader has no schema information of its own - the files have to be bound
+		return false;
+	}
+	if (options.union_by_name || options.hive_partitioning) {
+		throw BinderException("'schema' cannot be combined with union_by_name=true or hive_partitioning=true");
+	}
+	// the files are mapped onto the schema by field id when its columns are identified by INTEGER, by name otherwise
+	const bool by_field_id = options.schema[0].identifier.type().id() == LogicalTypeId::INTEGER;
+	for (auto &column : options.schema) {
+		names.push_back(column.name);
+		return_types.push_back(column.type);
+		bind_data.schema.push_back(column);
+	}
+	bind_data.mapping = by_field_id ? MultiFileColumnMappingMode::BY_FIELD_ID : MultiFileColumnMappingMode::BY_NAME;
+	return true;
 }
 
 void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
                                   vector<Identifier> &names, MultiFileReaderBindData &bind_data) {
+	// Add the file_row_number column - it is read from the row number virtual column of the reader
+	if (options.file_row_number) {
+		if (StringUtil::CIFind(names, "file_row_number") != DConstants::INVALID_INDEX) {
+			throw BinderException("Option file_row_number adds column \"file_row_number\", but a column with this "
+			                      "name is also in the file");
+		}
+		bind_data.file_row_number_idx = names.size();
+		return_types.emplace_back(LogicalType::BIGINT);
+		names.emplace_back("file_row_number");
+	}
+
 	// Add generated constant column for filename
 	if (options.filename) {
 		if (std::find(names.begin(), names.end(), options.filename_column) != names.end()) {
@@ -420,7 +654,10 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
 	auto &local_columns = reader_data.reader->GetColumns();
 	auto &filename = reader_data.reader->GetFileName();
 	case_insensitive_map_t<idx_t> name_map;
-	if (file_options.SchemaIsUnion()) {
+	// a column a file lacks is read as NULL when the schema is a union of the files - a schema given up front instead
+	// says what such a column is read as, which the column mapper takes care of
+	const bool missing_columns_are_null = file_options.SchemaIsUnion() && file_options.schema.empty();
+	if (missing_columns_are_null) {
 		for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
 			auto &column = local_columns[col_idx];
 			name_map[column.name.GetIdentifierName()] = col_idx;
@@ -442,7 +679,7 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
 		if (IsVirtualColumn(column_id)) {
 			continue;
 		}
-		if (file_options.SchemaIsUnion()) {
+		if (missing_columns_are_null) {
 			auto &column = global_columns[column_id];
 			auto &name = column.name;
 			auto &type = column.type;
@@ -740,9 +977,19 @@ ReaderInitializeType MultiFileReader::InitializeReader(MultiFileReaderData &read
                                                        const vector<ColumnIndex> &global_column_ids,
                                                        optional_ptr<TableFilterSet> table_filters,
                                                        ClientContext &context, MultiFileGlobalState &gstate) {
-	FinalizeBind(reader_data, bind_data.file_options, bind_data.reader_bind, global_columns, global_column_ids, context,
+	// the file_row_number column is not a column of the file - it is read from the row number virtual column
+	auto column_ids = global_column_ids;
+	auto &file_row_number_idx = bind_data.reader_bind.file_row_number_idx;
+	if (file_row_number_idx.IsValid()) {
+		for (auto &column_id : column_ids) {
+			if (column_id.GetPrimaryIndex() == file_row_number_idx.GetIndex()) {
+				column_id = ColumnIndex(COLUMN_IDENTIFIER_FILE_ROW_NUMBER);
+			}
+		}
+	}
+	FinalizeBind(reader_data, bind_data.file_options, bind_data.reader_bind, global_columns, column_ids, context,
 	             gstate.multi_file_reader_state.get());
-	return CreateMapping(context, reader_data, global_columns, global_column_ids, table_filters, gstate.file_list,
+	return CreateMapping(context, reader_data, global_columns, column_ids, table_filters, gstate.file_list,
 	                     bind_data.reader_bind, bind_data.virtual_columns);
 }
 
@@ -842,6 +1089,7 @@ void MultiFileOptions::AddBatchInfo(BindInfo &bind_info) const {
 	bind_info.InsertOption("union_by_name", Value::BOOLEAN(union_by_name));
 	bind_info.InsertOption("hive_types_autocast", Value::BOOLEAN(hive_types_autocast));
 	bind_info.InsertOption("allow_empty", Value::BOOLEAN(allow_empty));
+	bind_info.InsertOption("file_row_number", Value::BOOLEAN(file_row_number));
 }
 
 void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vector<LogicalType> &sql_types,
@@ -1001,7 +1249,7 @@ bool MultiFileOptions::TrySetMaximumSampleFiles(const Value &val) {
 }
 
 bool MultiFileOptions::AnySet() const {
-	return filename || hive_partitioning || union_by_name;
+	return filename || hive_partitioning || union_by_name || !schema.empty();
 }
 
 Value MultiFileOptions::GetHivePartitionValue(const string &value, const string &key, ClientContext &context) const {

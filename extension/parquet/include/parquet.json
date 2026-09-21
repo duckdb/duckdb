@@ -94,7 +94,7 @@
         "id": 101,
         "name": "file_row_number",
         "type": "bool",
-        "property": "parquet_options.file_row_number"
+        "property": "legacy_file_row_number"
       },
       {
         "id": 102,
@@ -105,7 +105,7 @@
         "id": 103,
         "name": "schema",
         "type": "vector<ParquetColumnDefinition>",
-        "property": "parquet_options.schema"
+        "property": "legacy_schema"
       },
       {
         "id": 104,

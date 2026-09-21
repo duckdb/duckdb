@@ -66,6 +66,17 @@ SELECT stats(id) FROM read_single_parquet_file('{TEST_DIR}/single_rg.parquet') L
 ----
 {'has_no_null': true, 'has_null': false, 'max': 199999, 'min': 0}
 
+# count/min/max are answered from the metadata of the file, without scanning it
+query III
+SELECT count(*), min(id), max(id) FROM read_single_parquet_file('{TEST_DIR}/single_rg.parquet')
+----
+200000	0	199999
+
+query II
+EXPLAIN SELECT count(*), min(id), max(id) FROM read_single_parquet_file('{TEST_DIR}/single_rg.parquet')
+----
+physical_plan	<REGEX>:.*Column Data Scan.*
+
 # virtual columns are produced as columns of their own, appended after the ones the file has
 query I
 SELECT max(file_row_number) FROM read_single_parquet_file('{TEST_DIR}/single_rg.parquet')
@@ -119,6 +130,17 @@ query I
 SELECT stats(id) FROM read_parquet('{TEST_DIR}/single_rg.parquet') LIMIT 1
 ----
 {'has_no_null': true, 'has_null': false, 'max': 199999, 'min': 0}
+
+# as is count/min/max through the multi file reader
+query III
+SELECT count(*), min(id), max(id) FROM read_parquet('{TEST_DIR}/single_rg.parquet')
+----
+200000	0	199999
+
+query II
+EXPLAIN SELECT count(*), min(id), max(id) FROM read_parquet('{TEST_DIR}/single_rg.parquet')
+----
+physical_plan	<REGEX>:.*Column Data Scan.*
 
 # filters and ordering through the multi file reader
 query I
