@@ -20,18 +20,19 @@ extern "C" {
 
 typedef struct duckdb_extension_descriptor duckdb_extension_descriptor;
 
-//! Describes a statically linked extension. DuckDB allocates and zero-fills it, the extension's root fills it in.
+//! Describes a statically linked extension. DuckDB allocates and zero-fills it, the extension's describe function fills
+//! it in.
 struct duckdb_extension_descriptor {
-	//! In: the layout DuckDB offers. Out: the layout the root filled, never higher than the offer.
+	//! In: the layout DuckDB offers. Out: the layout the describe function filled, never higher than the offer.
 	uint32_t version;
 
 	// Layout 1, set by DuckDB
-	//! Reports why the root refused. DuckDB copies the message.
+	//! Reports why the describe function refused. DuckDB copies the message.
 	void (*set_error)(duckdb_extension_descriptor *descriptor, const char *message);
 	//! DuckDB's state for set_error, opaque to the extension.
 	void *internal;
 
-	// Layout 1, set by the extension; DuckDB copies the strings before the root's caller returns
+	// Layout 1, set by the extension; DuckDB copies the strings before the describe function's caller returns
 	const char *name;
 	const char *extension_version;
 	//! void (duckdb::ExtensionLoader &)
@@ -42,13 +43,14 @@ struct duckdb_extension_descriptor {
 	void (*entry_capi_v2)(void);
 };
 
-//! Every statically linkable extension provides duckdb_extension_<name>_root with this signature. Returns 0 on success.
-typedef int32_t (*duckdb_extension_root)(duckdb_extension_descriptor *descriptor);
+//! Every statically linkable extension provides duckdb_extension_<name>_describe with this signature. Returns 0 on
+//! success.
+typedef int32_t (*duckdb_extension_describe_t)(duckdb_extension_descriptor *descriptor);
 
-//! Calls root and registers the extension it describes for every database opened afterwards.
-//! Registering the same root again is a no-op; a different root under a registered name is an error.
+//! Calls describe and registers the extension it describes for every database opened afterwards.
+//! Registering the same describe function again is a no-op; a different one under a registered name is an error.
 //! A failed registration also makes opening a database fail with the reason.
-DUCKDB_C_API duckdb_state duckdb_register_static_extension(duckdb_extension_root root);
+DUCKDB_C_API duckdb_state duckdb_register_static_extension(duckdb_extension_describe_t describe);
 
 #ifdef __cplusplus
 }

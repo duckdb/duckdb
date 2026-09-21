@@ -153,9 +153,9 @@ struct ExtensionAccess {
 //===--------------------------------------------------------------------===//
 // Static C API Extension Loading
 //===--------------------------------------------------------------------===//
-void DuckDB::LoadStaticExtension(duckdb_extension_root root) {
+void DuckDB::LoadStaticExtension(duckdb_extension_describe_t describe) {
 	StaticExtensionDescription description;
-	auto error = LinkedExtensionRegistry::Describe(root, description);
+	auto error = LinkedExtensionRegistry::Describe(describe, description);
 	if (!error.empty()) {
 		throw InvalidInputException("Failed to load statically linked extension: %s", error);
 	}

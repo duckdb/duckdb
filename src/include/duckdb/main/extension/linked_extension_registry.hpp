@@ -24,7 +24,7 @@ struct LinkedExtension {
 	std::function<void(DuckDB &)> load;
 };
 
-//! What a root described, once validated.
+//! What a describe function described, once validated.
 struct StaticExtensionDescription {
 	string name;
 	string version;
@@ -34,8 +34,8 @@ struct StaticExtensionDescription {
 //! The extensions linked into this binary, registered through duckdb_register_static_extension.
 class LinkedExtensionRegistry {
 public:
-	//! Calls root and validates the descriptor it fills. Returns the reason on failure, otherwise an empty string.
-	DUCKDB_API static string Describe(duckdb_extension_root root, StaticExtensionDescription &result);
+	//! Calls describe and validates the descriptor it fills. Returns the reason on failure, otherwise an empty string.
+	DUCKDB_API static string Describe(duckdb_extension_describe_t describe, StaticExtensionDescription &result);
 	//! A copy, in registration order. Throws if a registration failed.
 	DUCKDB_API static vector<LinkedExtension> Get();
 };

@@ -11,15 +11,15 @@ namespace duckdb {
 
 namespace {
 
-struct RegisteredRoot {
+struct RegisteredExtension {
 	string name;
-	duckdb_extension_root root;
+	duckdb_extension_describe_t describe;
 };
 
 struct RegistryState {
 	std::mutex lock;
 	vector<LinkedExtension> extensions;
-	vector<RegisteredRoot> roots;
+	vector<RegisteredExtension> registered;
 	vector<string> errors;
 };
 
@@ -35,35 +35,35 @@ void SetDescriptorError(duckdb_extension_descriptor *descriptor, const char *mes
 }
 
 //! Returns an empty string on success, otherwise the reason the registration failed.
-string RegisterRoot(duckdb_extension_root root) {
+string Register(duckdb_extension_describe_t describe) {
 	StaticExtensionDescription description;
-	auto error = LinkedExtensionRegistry::Describe(root, description);
+	auto error = LinkedExtensionRegistry::Describe(describe, description);
 	if (!error.empty()) {
 		return error;
 	}
 	auto &state = GetRegistryState();
 	std::lock_guard<std::mutex> guard(state.lock);
-	for (auto &registered : state.roots) {
-		if (!StringUtil::CIEquals(registered.name, description.name)) {
+	for (auto &entry : state.registered) {
+		if (!StringUtil::CIEquals(entry.name, description.name)) {
 			continue;
 		}
-		if (registered.root == root) {
+		if (entry.describe == describe) {
 			return string();
 		}
-		return "extension '" + description.name + "' is registered by two different roots";
+		return "extension '" + description.name + "' is registered by two different describe functions";
 	}
-	state.roots.push_back({description.name, root});
-	state.extensions.push_back({description.name, [root](DuckDB &db) {
-		                            db.LoadStaticExtension(root);
+	state.registered.push_back({description.name, describe});
+	state.extensions.push_back({description.name, [describe](DuckDB &db) {
+		                            db.LoadStaticExtension(describe);
 	                            }});
 	return string();
 }
 
 } // namespace
 
-string LinkedExtensionRegistry::Describe(duckdb_extension_root root, StaticExtensionDescription &result) {
-	if (!root) {
-		return "no root function was given";
+string LinkedExtensionRegistry::Describe(duckdb_extension_describe_t describe, StaticExtensionDescription &result) {
+	if (!describe) {
+		return "no describe function was given";
 	}
 	string error;
 	auto &descriptor = result.descriptor;
@@ -72,7 +72,7 @@ string LinkedExtensionRegistry::Describe(duckdb_extension_root root, StaticExten
 	descriptor.set_error = SetDescriptorError;
 	descriptor.internal = &error;
 
-	auto status = root(&descriptor);
+	auto status = describe(&descriptor);
 	descriptor.internal = nullptr;
 	result.name = descriptor.name ? descriptor.name : "";
 	result.version = descriptor.extension_version ? descriptor.extension_version : "";
@@ -88,7 +88,7 @@ string LinkedExtensionRegistry::Describe(duckdb_extension_root root, StaticExten
 		                          descriptor.version, DUCKDB_EXTENSION_DESCRIPTOR_VERSION);
 	}
 	if (result.name.empty()) {
-		return "an extension root did not set a name";
+		return "an extension describe function did not set a name";
 	}
 	if (!descriptor.entry_cpp && !descriptor.entry_capi_v1 && !descriptor.entry_capi_v2) {
 		return subject + " did not set an entry point";
@@ -108,9 +108,9 @@ vector<LinkedExtension> LinkedExtensionRegistry::Get() {
 
 } // namespace duckdb
 
-duckdb_state duckdb_register_static_extension(duckdb_extension_root root) {
+duckdb_state duckdb_register_static_extension(duckdb_extension_describe_t describe) {
 	try {
-		auto error = duckdb::RegisterRoot(root);
+		auto error = duckdb::Register(describe);
 		if (error.empty()) {
 			return DuckDBSuccess;
 		}

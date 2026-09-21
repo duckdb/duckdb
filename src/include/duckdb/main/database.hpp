@@ -135,14 +135,15 @@ private:
 	invoke_ext_capi_v2_fun_t invoke_capi_v2;
 };
 
-//! A root for an extension class, so that loading it by class goes through the same path as linked extensions.
+//! A describe function for an extension class, so that loading it by class goes through the same path as linked
+//! extensions.
 template <class T>
-struct StaticExtensionRoot {
+struct StaticExtensionDescriber {
 	static void Entry(ExtensionLoader &loader) {
 		T extension;
 		extension.Load(loader);
 	}
-	static int32_t Root(duckdb_extension_descriptor *descriptor) {
+	static int32_t Describe(duckdb_extension_descriptor *descriptor) {
 		static const std::string name = T().Name();
 		static const std::string version = T().Version();
 		descriptor->version = 1;
@@ -172,13 +173,13 @@ public:
 	shared_ptr<DatabaseInstance> instance;
 
 public:
-	// Load a statically linked extension by its class, through a root generated for it
+	// Load a statically linked extension by its class, through a describe function generated for it
 	template <class T>
 	void LoadStaticExtension() {
-		LoadStaticExtension(&StaticExtensionRoot<T>::Root);
+		LoadStaticExtension(&StaticExtensionDescriber<T>::Describe);
 	}
-	// Load the statically linked extension a root describes into this database
-	DUCKDB_API void LoadStaticExtension(duckdb_extension_root root);
+	// Load the statically linked extension a describe function describes into this database
+	DUCKDB_API void LoadStaticExtension(duckdb_extension_describe_t describe);
 
 	// Function pointer type for the C++ extension entrypoint, <name>_duckdb_cpp_init
 	typedef void (*ext_init_cpp_fun_t)(ExtensionLoader &loader);

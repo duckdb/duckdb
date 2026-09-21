@@ -218,15 +218,18 @@ and finally link both extensions into DuckDB.
 Outside of CMake, a program links one archive per extension it wants, compiles a generated static extension loader,
 and puts the engine archive last:
 ```shell
-LINK_EXTENSIONS="parquet;json" make static_extension_loader     # writes build/release/static_extension_loader.cpp
-c++ -I src/include main.cpp build/release/static_extension_loader.cpp libparquet_extension.a libjson_extension.a libduckdb_static.a
+LINK_EXTENSIONS="parquet;json" make static_extension_loader     # writes build/release/static_extension_loader.c
+cc -I src/include main.c build/release/static_extension_loader.c libparquet_extension.a libjson_extension.a libduckdb_static.a -lstdc++
 ```
-Each extension archive carries a root, `duckdb_extension_<name>_root`, that describes the extension in a
-`duckdb_extension_descriptor` (see `duckdb_static_extension.h`). The loader passes every root to
-`duckdb_register_static_extension` before main, which also pulls the extensions out of their archives. Without
-`LINK_EXTENSIONS` it registers every extension archive in the build. A program can instead call
-`duckdb_register_static_extension` itself before opening a database. An archive whose root is not registered contributes
-nothing, and a registered root whose archive is missing fails the link. CMake targets get all of this from
+Each extension archive carries a describe function, `duckdb_extension_<name>_describe`, that fills in a
+`duckdb_extension_descriptor` (see `duckdb_static_extension.h`). The loader is plain C: it defines
+`duckdb_register_static_extensions()`, which passes every describe function to `duckdb_register_static_extension`, and that also
+pulls the extensions out of their archives. Call it before opening a database, from any language that can call C. A
+C++ program that wants this to happen before main compiles `extension/loader/static_extension_autoload.cpp` next to
+the loader, into the program itself rather than into an archive, or the linker drops it. Without `LINK_EXTENSIONS`
+the loader registers every extension archive in the build. A program can also skip the loader and call
+`duckdb_register_static_extension` on the describe functions it declares itself. An archive whose describe function is
+not registered contributes nothing, and a registered one whose archive is missing fails the link. CMake targets get all of this from
 `link_extension_libraries`.
 
 A loadable extension is the same archive linked as a shared library with its entry point exported, next to the
@@ -234,4 +237,4 @@ engine archive when it is built to carry its own copy of DuckDB:
 ```shell
 c++ -shared -o parquet.duckdb_extension libparquet_extension.a libduckdb_static.a -Wl,-exported_symbol,_parquet_duckdb_cpp_init
 ```
-The root is never taken there, since nothing registers it.
+The describe function is never taken there, since nothing registers it.

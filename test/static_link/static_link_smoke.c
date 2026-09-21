@@ -1,14 +1,25 @@
-// Links the parquet archive and names only its root: the root member has to register parquet with the engine. Exits
-// non-zero if parquet is not loaded.
+// Links the parquet archive and names only its describe function: that member has to register parquet with the engine.
+// Exits non-zero if parquet is not loaded. With STATIC_LINK_EXPLICIT the program registers the extensions itself
+// instead of having the static initializer do it.
 #include "duckdb.h"
 
 #include <stdio.h>
 #include <string.h>
 
+#ifdef STATIC_LINK_EXPLICIT
+duckdb_state duckdb_register_static_extensions(void);
+#endif
+
 int main(void) {
 	duckdb_database db;
 	duckdb_connection con;
 	duckdb_result res;
+#ifdef STATIC_LINK_EXPLICIT
+	if (duckdb_register_static_extensions() != DuckDBSuccess) {
+		fprintf(stderr, "duckdb_register_static_extensions failed\n");
+		return 1;
+	}
+#endif
 	if (duckdb_open(NULL, &db) != DuckDBSuccess || duckdb_connect(db, &con) != DuckDBSuccess) {
 		fprintf(stderr, "could not open an in-memory database\n");
 		return 1;
@@ -31,7 +42,7 @@ int main(void) {
 	duckdb_disconnect(&con);
 	duckdb_close(&db);
 	if (!found) {
-		fprintf(stderr, "parquet was on the link line but is not loaded: its root member did not register it\n");
+		fprintf(stderr, "parquet was on the link line but is not loaded: its describe member did not register it\n");
 		return 1;
 	}
 	return 0;

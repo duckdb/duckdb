@@ -11,11 +11,20 @@ set(UNITTEST_OBJECT_FILES)
 
 if(TARGET parquet_extension)
   # A static link of parquet through its generated static extension loader: the
-  # root member it names has to register the extension.
+  # describe member it names has to register the extension. Once registered
+  # before main, once by the program calling duckdb_register_static_extensions
+  # itself.
   add_executable(static_link_smoke static_link/static_link_smoke.c)
   target_link_libraries(static_link_smoke duckdb_static)
   duckdb_link_extensions(static_link_smoke parquet)
   add_test(NAME static_link_smoke COMMAND static_link_smoke)
+
+  add_executable(static_link_explicit_smoke static_link/static_link_smoke.c)
+  target_compile_definitions(static_link_explicit_smoke
+                             PRIVATE STATIC_LINK_EXPLICIT)
+  target_link_libraries(static_link_explicit_smoke duckdb_static)
+  duckdb_link_extensions(static_link_explicit_smoke EXPLICIT parquet)
+  add_test(NAME static_link_explicit_smoke COMMAND static_link_explicit_smoke)
 endif()
 
 if(${ENABLE_UNITTEST_CPP_TESTS})

@@ -677,11 +677,13 @@ cli-release-artifact:
 shared-libs-release-artifact:
 	bash scripts/package_release_artifact.sh shared-libs "$(ARTIFACT_SUFFIX)" $(SHARED_LIBRARIES)
 
-# Writes a C source that links statically built extensions into a program: compile it next to your own sources and put
-# the extension archives before libduckdb_static.a. LINK_EXTENSIONS picks the extensions (space or semicolon
-# separated); without it, every extension archive in STATIC_EXTENSION_LOADER_BUILD_DIR is used.
+# Writes a C source defining duckdb_register_static_extensions(), which links statically built extensions into a
+# program: compile it next to your own sources, put the extension archives before libduckdb_static.a, and call the
+# function before opening a database (or compile extension/loader/static_extension_autoload.cpp too to have it called
+# before main). LINK_EXTENSIONS picks the extensions (space or semicolon separated); without it, every extension
+# archive in STATIC_EXTENSION_LOADER_BUILD_DIR is used.
 STATIC_EXTENSION_LOADER_BUILD_DIR ?= build/release
-STATIC_EXTENSION_LOADER_FILE ?= $(STATIC_EXTENSION_LOADER_BUILD_DIR)/static_extension_loader.cpp
+STATIC_EXTENSION_LOADER_FILE ?= $(STATIC_EXTENSION_LOADER_BUILD_DIR)/static_extension_loader.c
 
 .PHONY: static_extension_loader
 static_extension_loader:
