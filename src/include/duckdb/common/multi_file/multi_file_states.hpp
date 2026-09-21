@@ -258,6 +258,8 @@ public:
 	ExpressionExecutor executor;
 	//! Number of rows scanned by this thread (for profiling)
 	idx_t rows_scanned = 0;
+	//! FinalizeScan may have no job, here's a special batch index for it
+	optional_idx finalize_batch_index;
 };
 
 } // namespace duckdb
