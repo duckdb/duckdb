@@ -235,8 +235,17 @@ ParallelCollectionScanState::GetNextRowGroup(RowGroupSegmentTree &row_groups, Se
 }
 
 CollectionScanState::CollectionScanState(TableScanState &parent_p)
-    : row_group(nullptr), vector_index(0), max_row_group_row(0), row_groups(nullptr), max_row(0), batch_index(0),
-      valid_sel(STANDARD_VECTOR_SIZE), random(-1), parent(parent_p) {
+    : vector_index(0), max_row_group_row(0), row_groups(nullptr), max_row(0), batch_index(0),
+      valid_sel(STANDARD_VECTOR_SIZE), random(-1), row_group(nullptr), parent(parent_p) {
+}
+
+optional_ptr<SegmentNode<RowGroup>> CollectionScanState::GetRowGroup() const {
+	return row_group;
+}
+
+void CollectionScanState::SetRowGroup(optional_ptr<SegmentNode<RowGroup>> row_group_p) {
+	row_group = row_group_p;
+	pinned_row_group = row_group ? row_group->ReferenceNode() : nullptr;
 }
 
 optional_ptr<SegmentNode<RowGroup>> CollectionScanState::GetNextRowGroup(SegmentNode<RowGroup> &row_group) const {
@@ -265,23 +274,23 @@ bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) 
 
 bool CollectionScanState::Scan(ScanOptions options, DataChunk &result, optional_ptr<SegmentLock> l) {
 	while (row_group) {
-		row_group->GetNode().Scan(options, *this, result);
+		pinned_row_group->Scan(options, *this, result);
 		if (result.size() > 0) {
 			return true;
 		}
-		if (max_row <= row_group->GetRowStart() + row_group->GetNode().count) {
-			row_group = nullptr;
+		if (max_row <= row_group->GetRowStart() + pinned_row_group->count) {
+			SetRowGroup(nullptr);
 			return false;
 		}
 		do {
 			if (l) {
-				row_group = GetNextRowGroup(*l, *row_group).get();
+				SetRowGroup(GetNextRowGroup(*l, *row_group));
 			} else {
-				row_group = GetNextRowGroup(*row_group).get();
+				SetRowGroup(GetNextRowGroup(*row_group));
 			}
 			if (row_group) {
 				if (row_group->GetRowStart() >= max_row) {
-					row_group = nullptr;
+					SetRowGroup(nullptr);
 					break;
 				}
 				bool scan_row_group = row_group->GetNode().InitializeScan(*this, *row_group);
@@ -297,15 +306,15 @@ bool CollectionScanState::Scan(ScanOptions options, DataChunk &result, optional_
 
 bool CollectionScanState::Scan(DataChunk &result, TableScanType type, optional_ptr<SegmentLock> l) {
 	while (row_group) {
-		row_group->GetNode().Scan(*this, result, type);
+		pinned_row_group->Scan(*this, result, type);
 		if (result.size() > 0) {
 			return true;
 		}
 		// move to the next row group
 		if (l) {
-			row_group = GetNextRowGroup(*l, *row_group).get();
+			SetRowGroup(GetNextRowGroup(*l, *row_group));
 		} else {
-			row_group = GetNextRowGroup(*row_group).get();
+			SetRowGroup(GetNextRowGroup(*row_group));
 		}
 		if (row_group) {
 			row_group->GetNode().InitializeScan(*this, *row_group);
@@ -319,12 +328,12 @@ bool CollectionScanState::PrepareScanIO(DuckTransaction &transaction, vector<uni
 	if (!row_group) {
 		return false;
 	}
-	auto &current_row_group = row_group->GetNode();
+	auto &current_row_group = *pinned_row_group;
 	ScanOptions options {TransactionData(transaction)};
 	if (!current_row_group.PrepareScan(options, *this)) {
 		// the assignment is exhausted
 		D_ASSERT(max_row <= row_group->GetRowStart() + current_row_group.count);
-		row_group = nullptr;
+		SetRowGroup(nullptr);
 		return false;
 	}
 	if (prepared_vector.prepare_state == VectorPrepareState::IO_REGISTERED) {
@@ -345,13 +354,13 @@ vector<unique_ptr<AsyncTask>> CollectionScanState::RegisterAssignmentIO() {
 	D_ASSERT(row_group);
 	D_ASSERT(!assignment_io_registered);
 	assignment_io_registered = true;
-	auto &current_row_group = row_group->GetNode();
+	auto &current_row_group = *pinned_row_group;
 	return current_row_group.CollectScanIOTasks(*this, current_row_group.PrefetchRowCount(*this));
 }
 
 void CollectionScanState::InitializeColumnScans() {
 	if (column_scans_pending) {
-		row_group->GetNode().InitializeColumnScans(*this);
+		pinned_row_group->InitializeColumnScans(*this);
 	}
 }
 
@@ -369,7 +378,7 @@ void CollectionScanState::ProcessPreparedScan(DuckTransaction &transaction, Data
 	D_ASSERT(row_group);
 	D_ASSERT(prepared_vector.prepare_state == VectorPrepareState::IO_REGISTERED);
 	ScanOptions options {TransactionData(transaction)};
-	row_group->GetNode().ProcessPreparedScan(options, *this, result);
+	pinned_row_group->ProcessPreparedScan(options, *this, result);
 }
 
 PreparedScanVector::PreparedScanVector() : sample_sel(STANDARD_VECTOR_SIZE) {

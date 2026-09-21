@@ -3,23 +3,34 @@ handles:
   environment:
     description: |
       An opaque, owned handle to the V2 environment: the required root through
-      which databases are opened. All databases under one environment share a
-      cache, so file-level conflicts — the same database file opened twice —
-      are detected across them. Destroying the environment refuses with
-      ERROR_RESOURCE_IN_USE while any database opened through it is still
-      alive; close those first.
-    cleanup_with: destroy_environment
-  database:
-    description: An opaque, owned handle to a DuckDB database instance.
+      which instance handles are created. All instances under one environment
+      share an instance cache, so file-level conflicts — the same database
+      file opened twice — are detected across them. Destroying the
+      environment refuses with ERROR_RESOURCE_IN_USE while any instance
+      created through it is still alive; destroy those first.
+    cleanup_with: environment_destroy
+  instance:
+    description: |
+      An opaque, owned handle to a DuckDB database instance: a buffer pool, a
+      scheduler, a set of GLOBAL settings, and the databases attached to it.
+      Created empty by `[[instance_create]]`; databases are attached with
+      `[[instance_attach]]`, made the default with `[[instance_set_default]]`, and detached with
+      `[[instance_detach]]`. Always destroy via `[[instance_destroy]]`.
+    cleanup_with: instance_destroy
   connection:
-    description: An opaque, owned handle to a DuckDB connection.
+    description: |
+      An opaque, owned handle to a DuckDB connection: a session on a database
+      instance with its own LOCAL settings and transaction state. Always
+      destroy via `[[connection_destroy]]`.
+    cleanup_with: connection_destroy
   option:
     description: |
-      An opaque, owned handle to a single config option: a name and a setting,
-      plus optional metadata (description, default setting, target scope,
-      aliases). You can create an with option_create and pass it when opening a database or connection, or you can
-      retrieve one with metadata already filled in using option_get. The
-      caller always destroys it via option_destroy,
+      An opaque, owned, read-only descriptor of a single config option as seen
+      from an instance, connection, or context: its canonical name, current
+      setting, default setting, description, target scope, and aliases.
+      Returned by the *_get_option and *_get_option_by_index functions; the
+      caller always destroys it via `[[option_destroy]]`. Options are written with
+      the *_set_option functions, which take a name and a setting directly.
     cleanup_with: option_destroy
   # Error reporting. Every fallible function takes a trailing
   # `error_info *err` out-parameter.
@@ -35,7 +46,7 @@ handles:
   #     info before writing. To keep an info across calls, detach it first:
   #     `saved = *err; *err = nullptr;`.
   error_info:
-    description: Opaque detail for a failed call; destroy with error_info_destroy.
+    description: Opaque detail for a failed call; destroy with `[[error_info_destroy]]`.
     cleanup_with: error_info_destroy
   logical_type:
     description: |
@@ -43,16 +54,16 @@ handles:
       kind-specific metadata: decimal width and scale, enum dictionary, list /
       array / struct / map / union child types, alias. A type is read-only once
       constructed; instances arrive from a query result schema, or from one of
-      the create_type_* constructors. Always destroy via logical_type_destroy.
+      the create_type_* constructors. Always destroy via `[[logical_type_destroy]]`.
       Borrowed strings returned by the getters are valid only until then.
     cleanup_with: logical_type_destroy
   value:
     description: |
       An opaque, owned handle to a single SQL value: a logical type plus a
-      typed payload. Always destroy via value_destroy. The string returned by
-      value_get_varchar / value_get_blob is borrowed and valid only until then.
+      typed payload. Always destroy via `[[value_destroy]]`. The string returned by
+      `[[value_get_varchar]]` / `[[value_get_blob]]` is borrowed and valid only until then.
       That holds for BIGNUM too, where what is borrowed is the opaque storage
-      form; bignum_decode translates it into a magnitude and a sign flag,
+      form; `[[bignum_decode]]` translates it into a magnitude and a sign flag,
       writing into a buffer the caller supplies.
     cleanup_with: value_destroy
   result:
@@ -60,7 +71,7 @@ handles:
       An opaque, owned handle to the streaming result of a query. Carries the
       schema (column names and logical types), the statement type, and the
       result type from prepare time; row data is produced incrementally by
-      stepping (result_step) or draining (result_fetch_chunk). Single consumer:
+      stepping (`[[result_step]]`) or draining (`[[result_fetch_chunk]]`). Single consumer:
       step from one thread at a time.
 
       A result is a cursor on the connection's execution, not a box of data.
@@ -69,7 +80,7 @@ handles:
       query's transaction stays open, deferring version cleanup and
       checkpointing, so drain or destroy it promptly. Side-effecting statements
       (PRAGMA, ALTER, ...) take effect only once the result is drained. Always
-      destroy via result_destroy, which is safe even on a partially consumed
+      destroy via `[[result_destroy]]`, which is safe even on a partially consumed
       stream.
     cleanup_with: result_destroy
   data_chunk:
@@ -88,8 +99,8 @@ handles:
     description: |
       A borrowed handle to a "arena allocator". 
       
-      Bytes handed out by arena_allocate share the same lifetime as the arena itself.
-      vector_get_arena yields the arena backing the out-of-line bytes of non-inlined VARCHAR / BLOB / BIT / BIGNUM 
+      Bytes handed out by `[[arena_allocate]]` share the same lifetime as the arena itself.
+      `[[vector_get_arena]]` yields the arena backing the out-of-line bytes of non-inlined VARCHAR / BLOB / BIT / BIGNUM 
       values, valid until the owning vector is flattened, reallocated, or destroyed.
   context:
     description: |
@@ -99,7 +110,7 @@ handles:
       valid only for the duration of that scope; the caller never destroys it.
       A context is the scope for reading (settings, the file system) and for
       constructing values and types, not for registration: catalog entries and
-      database-level hooks are installed through an extension or a connection.
+      instance-level hooks are installed through an extension or a connection.
       A transaction is always active while a context is handed out, which is
       what the context-scoped constructors assume.
 structs:
@@ -114,6 +125,11 @@ structs:
       and `ptr` must not be dereferenced when `len` is 0. Not to be confused
       with `bytes`, the transparent 16-byte *storage* format for a
       variable-size value in a vector.
+
+      Text inputs, such as VARCHAR values and names, must contain valid UTF-8.
+      The caller is responsible for ensuring this; API functions do not
+      necessarily validate the input.
+      Binary inputs, such as BLOB values, do not require valid UTF-8.
     fields:
       - {name: ptr, type: char, pointer: 1, const: true}
       - {name: len, type: idx}
@@ -126,7 +142,7 @@ structs:
       4. The union is transparent, so read the fields directly. VARCHAR and
       BLOB carry no further encoding; BIT and BIGNUM do. For BIT, byte 0 is the
       padding-bit count and bytes 1.. are the data; BIGNUM is decoded via
-      bignum_decode.
+      `[[bignum_decode]]`.
     fields:
       - name: value
         union:
@@ -159,7 +175,7 @@ callbacks:
       need before returning, and do not retain `text.ptr`. The bytes are NOT guaranteed to be null-terminated.
 
       `err` is a live error slot, never NULL. Populate it with
-      error_info_set_code / error_info_set_text to signal failure to DuckDB. Do not destroy it yourself.
+      `[[error_info_set_code]]` / `[[error_info_set_text]]` to signal failure to DuckDB. Do not destroy it yourself.
 
       The sink runs inside DuckDB's call frame: it must not throw or unwind across the boundary, and it must not 
       re-enter the API on the handle being operated on.
@@ -225,7 +241,9 @@ aliases:
       "sparse" view of the vector's data.
   varchar:
     underlying: bytes
-    description: VARCHAR storage. Read the transparent bytes fields directly.
+    description: |
+      VARCHAR storage. The bytes must contain valid UTF-8.
+      Read the transparent bytes fields directly.
   blob:
     underlying: bytes
     description: BLOB storage. Read the transparent bytes fields directly.
@@ -234,7 +252,7 @@ aliases:
     description: BIT storage. Byte 0 is the padding-bit count, bytes 1.. the data.
   bignum:
     underlying: bytes
-    description: BIGNUM storage. Decode via bignum_decode.
+    description: BIGNUM storage. Decode via `[[bignum_decode]]`.
   identifier:
     underlying: str
     description: |

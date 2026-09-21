@@ -70,7 +70,6 @@ DebugVerificationMode DBConfigOptions::global_verification_mode = DebugVerificat
 
 static const ConfigurationOption internal_options[] = {
 
-    DUCKDB_GLOBAL(DeltaOnlyVariantEncodingEnabledSetting),
     DUCKDB_GLOBAL(AccessModeSetting),
     DUCKDB_LOCAL(ActiveGrammarExtensionsSetting),
     DUCKDB_SETTING_CALLBACK(AllocatorBackgroundThreadsSetting),
@@ -109,6 +108,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(DebugAsofIejoinSetting),
     DUCKDB_SETTING_CALLBACK(DebugCheckpointAbortSetting),
     DUCKDB_SETTING(DebugCheckpointSleepMsSetting),
+    DUCKDB_GLOBAL(DebugDeltaOnlyVariantEncodingEnabledSetting),
     DUCKDB_SETTING(DebugDisableOptimizerSetting),
     DUCKDB_SETTING(EnableCachingOperatorsSetting),
     DUCKDB_SETTING(DebugEvictionQueueSleepMicroSecondsSetting),
@@ -125,7 +125,6 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(DebugOrderVerificationSetting),
     DUCKDB_SETTING_CALLBACK(DebugPhysicalTableScanExecutionStrategySetting),
     DUCKDB_SETTING(DebugSkipCheckpointOnCommitSetting),
-    DUCKDB_SETTING(DebugTransformerTrampolineStyleSetting),
     DUCKDB_GLOBAL(DebugVerificationModeSetting),
     DUCKDB_SETTING(DebugVerificationProjectionSetting),
     DUCKDB_SETTING(DebugVerifyAggregateStateExportSetting),
@@ -166,6 +165,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(EnableProgressBarPrintSetting),
     DUCKDB_SETTING(EnableViewDependenciesSetting),
     DUCKDB_GLOBAL(EnabledLogTypes),
+    DUCKDB_SETTING_CALLBACK(ErrorOnDivisionByZeroSetting),
     DUCKDB_SETTING(ErrorsAsJSONSetting),
     DUCKDB_SETTING_CALLBACK(ExperimentalMetadataReuseSetting),
     DUCKDB_SETTING_CALLBACK(ExplainOutputSetting),
@@ -179,9 +179,10 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(FileSearchPathSetting),
     DUCKDB_SETTING_CALLBACK(ForceColumnMetadataReuseSetting),
     DUCKDB_SETTING_CALLBACK(ForceCompressionSetting),
+    DUCKDB_SETTING_CALLBACK(FsyncModeSetting),
     DUCKDB_SETTING(GeometryMinimumShreddingSize),
-    DUCKDB_SETTING(HeapBasedParserSetting),
     DUCKDB_SETTING_CALLBACK(HomeDirectorySetting),
+    DUCKDB_GLOBAL(HTTPClientPoolCapacitySetting),
     DUCKDB_GLOBAL(HTTPProxySetting),
     DUCKDB_SETTING(HTTPProxyPasswordSetting),
     DUCKDB_SETTING(HTTPProxyUsernameSetting),
@@ -209,7 +210,6 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(MaxVacuumTasksSetting),
     DUCKDB_SETTING(MergeJoinThresholdSetting),
     DUCKDB_SETTING(NestedLoopJoinThresholdSetting),
-    DUCKDB_SETTING_CALLBACK(NullOnDivisionByZeroSetting),
     DUCKDB_SETTING_CALLBACK(OldImplicitCastingSetting),
     DUCKDB_LOCAL(OperatorMemoryLimitSetting),
     DUCKDB_SETTING(OrderByNonIntegerLiteralSetting),
@@ -258,6 +258,7 @@ static const ConfigurationOption internal_options[] = {
     FINAL_SETTING};
 
 static const ConfigurationAlias setting_aliases[] = {
+    DUCKDB_SETTING_ALIAS("__delta_only_variant_encoding_enabled", DebugDeltaOnlyVariantEncodingEnabledSetting),
     DUCKDB_SETTING_ALIAS("enable_caching_operators", EnableCachingOperatorsSetting),
     DUCKDB_SETTING_ALIAS("force_bitpacking_mode", ForceBitpackingModeSetting),
     DUCKDB_SETTING_ALIAS("force_mbedtls_unsafe", ForceMbedtlsUnsafeSetting),
@@ -930,12 +931,31 @@ void DBConfig::AddAllowedDirectory(const string &path) {
 	if (!StringUtil::EndsWith(allowed_directory, "/")) {
 		allowed_directory += "/";
 	}
+	lock_guard<mutex> guard(allowed_paths_lock);
 	options.allowed_directories.insert(allowed_directory);
 }
 
 void DBConfig::AddAllowedPath(const string &path) {
 	auto allowed_path = SanitizeAllowedPath(path);
+	lock_guard<mutex> guard(allowed_paths_lock);
 	options.allowed_paths.insert(allowed_path);
+}
+
+void DBConfig::AddAllowedDatabasePath(const string &database_path) {
+	AddAllowedPath(database_path);
+	AddAllowedPath(database_path + ".wal");
+	AddAllowedPath(database_path + ".wal.checkpoint");
+	AddAllowedPath(database_path + ".wal.recovery");
+}
+
+vector<string> DBConfig::GetAllowedDirectories() const {
+	lock_guard<mutex> guard(allowed_paths_lock);
+	return vector<string>(options.allowed_directories.begin(), options.allowed_directories.end());
+}
+
+vector<string> DBConfig::GetAllowedPaths() const {
+	lock_guard<mutex> guard(allowed_paths_lock);
+	return vector<string>(options.allowed_paths.begin(), options.allowed_paths.end());
 }
 
 bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
@@ -945,6 +965,7 @@ bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
 	}
 	string path = SanitizeAllowedPath(input_path);
 
+	lock_guard<mutex> guard(allowed_paths_lock);
 	if (options.allowed_paths.count(path) > 0) {
 		// path is explicitly allowed
 		return true;
@@ -990,6 +1011,10 @@ HTTPUtil &DBConfig::GetHTTPUtil() const {
 }
 
 HTTPTransportManager &DBConfig::GetHTTPTransportManager() {
+	return *http_transport_manager;
+}
+
+const HTTPTransportManager &DBConfig::GetHTTPTransportManager() const {
 	return *http_transport_manager;
 }
 

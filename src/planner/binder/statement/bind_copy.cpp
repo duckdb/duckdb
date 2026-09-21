@@ -11,6 +11,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
@@ -21,6 +22,7 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -130,6 +132,7 @@ struct CopyToParsedOptions {
 	optional<bool> hive_file_pattern;
 	optional<PreserveOrderType> preserve_order;
 	optional<CopyFunctionReturnType> return_type;
+	unique_ptr<ParsedExpression> partition_path;
 
 	bool UserSetUseTmpFile() const {
 		return use_tmp_file.has_value();
@@ -209,6 +212,8 @@ struct CopyToResolvedOptions {
 	bool hive_file_pattern = true;
 	PreserveOrderType preserve_order = PreserveOrderType::AUTOMATIC;
 	CopyFunctionReturnType return_type = CopyFunctionReturnType::CHANGED_ROWS;
+	//! Unbound, as it is bound against the partition columns
+	unique_ptr<ParsedExpression> partition_path;
 
 	bool Rotate() const {
 		return file_size_bytes.IsValid() || batches_per_file.IsValid();
@@ -265,6 +270,7 @@ static CopyToResolvedOptions ResolveCopyToOptions(ClientContext &context, const 
 	result.hive_file_pattern = options.HiveFilePattern();
 	result.preserve_order = options.PreserveOrder();
 	result.return_type = options.ReturnType();
+	result.partition_path = std::move(options.partition_path);
 	return result;
 }
 
@@ -306,6 +312,14 @@ static void ValidateCopyToOptionCombinations(const CopyToParsedOptions &options,
 			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with ORDER BY");
 		}
 	}
+	if (options.partition_path) {
+		if (!options.Partitioned()) {
+			throw BinderException("PARTITION_PATH requires PARTITION_BY");
+		}
+		if (options.hive_file_pattern.has_value()) {
+			throw BinderException("Can't combine HIVE_FILE_PATTERN and PARTITION_PATH for COPY");
+		}
+	}
 	if (options.ReturnType() == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS &&
 	    !function.copy_to_get_written_statistics) {
 		throw NotImplementedException("RETURN_STATS is not supported for the \"%s\" copy format", format);
@@ -319,10 +333,70 @@ static void ValidateCopyToOutputColumns(const CopyToResolvedOptions &options, id
 	}
 }
 
+//! Binds the PARTITION_PATH expression, which may only reference partition columns. Partition column i (in PARTITION_BY
+//! order) is bound as reference i.
+class PartitionPathBinder : public ExpressionBinder {
+public:
+	PartitionPathBinder(Binder &binder, ClientContext &context, const vector<Identifier> &names,
+	                    const vector<LogicalType> &types, const vector<idx_t> &partition_columns)
+	    : ExpressionBinder(binder, context), names(names), types(types), partition_columns(partition_columns) {
+		target_type = LogicalType::VARCHAR;
+	}
+
+protected:
+	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override {
+		auto &expr = *expr_ptr;
+		switch (expr.GetExpressionClass()) {
+		case ExpressionClass::WINDOW:
+			return BindResult(BinderException::Unsupported(expr, "window functions are not allowed in PARTITION_PATH"));
+		case ExpressionClass::SUBQUERY:
+			return BindResult(BinderException::Unsupported(expr, "cannot use subquery in PARTITION_PATH"));
+		case ExpressionClass::COLUMN_REF:
+			return BindColumnReference(expr.Cast<ColumnRefExpression>());
+		default:
+			return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
+		}
+	}
+
+	BindResult BindLambdaFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function,
+	                              idx_t depth) override {
+		return BindResult(BinderException::Unsupported(expr, "lambda functions are not allowed in PARTITION_PATH"));
+	}
+
+	string UnsupportedAggregateMessage() override {
+		return "aggregate functions are not allowed in PARTITION_PATH";
+	}
+
+private:
+	BindResult BindColumnReference(ColumnRefExpression &col_ref) {
+		if (col_ref.ColumnNames().size() == 1) {
+			auto &column_name = col_ref.GetColumnName();
+			for (idx_t i = 0; i < partition_columns.size(); i++) {
+				auto column_idx = partition_columns[i];
+				if (names[column_idx] == column_name) {
+					return BindResult(make_uniq<BoundReferenceExpression>(types[column_idx], i));
+				}
+			}
+		}
+		throw BinderException(col_ref, "Column \"%s\" referenced in PARTITION_PATH is not a PARTITION_BY column",
+		                      col_ref.ToString());
+	}
+
+private:
+	const vector<Identifier> &names;
+	const vector<LogicalType> &types;
+	const vector<idx_t> &partition_columns;
+};
+
 BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &function, CopyToType copy_to_type) {
 	if (function.plan) {
 		// plan rewrite COPY TO
-		return function.plan(*this, stmt);
+		auto result = function.plan(*this, stmt);
+		// a rewrite that re-binds the COPY consumes PARTITION_PATH
+		if (stmt.info && stmt.info->parsed_options.find("partition_path") != stmt.info->parsed_options.end()) {
+			throw NotImplementedException("PARTITION_PATH is not supported for FORMAT \"%s\"", stmt.info->format);
+		}
+		return result;
 	}
 
 	auto &copy_info = *stmt.info;
@@ -337,6 +411,11 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	}
 
 	CopyToParsedOptions parsed_options;
+	auto partition_path_entry = stmt.info->parsed_options.find("partition_path");
+	if (partition_path_entry != stmt.info->parsed_options.end()) {
+		parsed_options.partition_path = std::move(partition_path_entry->second);
+		stmt.info->parsed_options.erase(partition_path_entry);
+	}
 	CopyFunctionBindInput bind_input(*stmt.info, function.function_info);
 
 	bind_input.file_extension = function.extension;
@@ -480,6 +559,16 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	    select_node.types, resolved_options.partition_cols, resolved_options.write_partition_columns);
 	auto function_data = function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
 
+	unique_ptr<Expression> partition_path_expression;
+	if (resolved_options.partition_path) {
+		PartitionPathBinder partition_path_binder(*this, context, select_node.names, select_node.types,
+		                                          resolved_options.partition_cols);
+		partition_path_expression = partition_path_binder.Bind(resolved_options.partition_path);
+		if (partition_path_expression->HasParameter()) {
+			throw ParameterNotResolvedException();
+		}
+	}
+
 	// now create the copy information
 	auto copy =
 	    make_uniq<LogicalCopyToFile>(function, std::move(function_data), std::move(stmt.info), GenerateTableIndex());
@@ -502,6 +591,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	copy->preserve_order = resolved_options.preserve_order;
 	copy->hive_file_pattern = resolved_options.hive_file_pattern;
 	copy->order_columns = std::move(resolved_options.order_columns);
+	copy->partition_path_expression = std::move(partition_path_expression);
 
 	copy->names = unique_column_names;
 	copy->expected_types = select_node.types;
@@ -687,7 +777,16 @@ void Binder::BindCopyOptions(CopyInfo &info) {
 		info.file_path = inputs[0].ToString();
 		info.file_path_expression.reset();
 	}
+	unique_ptr<ParsedExpression> partition_path;
 	for (auto &[option_name, option_expr] : info.parsed_options) {
+		if (option_name == "partition_path") {
+			// bound later against the partition columns
+			if (!option_expr) {
+				throw BinderException("PARTITION_PATH expects an expression");
+			}
+			partition_path = std::move(option_expr);
+			continue;
+		}
 		auto inputs = BindCopyOption(context, option_binder, option_name, option_expr);
 		if (option_name == "format") {
 			// format specifier: interpret this option
@@ -704,11 +803,17 @@ void Binder::BindCopyOptions(CopyInfo &info) {
 		info.format = ExtractFormat(info.file_path);
 	}
 	info.parsed_options.clear();
+	if (partition_path) {
+		info.parsed_options["partition_path"] = std::move(partition_path);
+	}
 }
 
 BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 	// bind the copy options
 	BindCopyOptions(*stmt.info);
+	if (stmt.info->is_from && stmt.info->parsed_options.find("partition_path") != stmt.info->parsed_options.end()) {
+		throw InvalidInputException("Option partition_path is not supported for reading - only for writing");
+	}
 
 	if (!stmt.info->is_from && !stmt.info->select_statement) {
 		// copy table into file without a query
@@ -825,7 +930,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 	}
 
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	if (stmt.info->is_from) {
 		return BindCopyFrom(stmt, function);

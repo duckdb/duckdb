@@ -76,6 +76,10 @@ public:
 	vector<LogicalType> GetJoinTypes() const;
 
 private:
+	vector<idx_t> mark_projection_map;
+	bool track_unknown;
+
+private:
 	// resolve joins that output max N elements (SEMI, ANTI, MARK)
 	void ResolveSimpleJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const;
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)

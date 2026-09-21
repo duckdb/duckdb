@@ -94,7 +94,15 @@ public:
 	                                                    AttachOptions &options);
 
 private:
+	//! Initializes the instance and attaches the main database at `path` (in-memory when null).
 	void Initialize(const char *path, DBConfig *config);
+	//! Initializes the instance without attaching a database: the system catalog is the only catalog until one is
+	//! attached (ATTACH, or DatabaseManager::AttachDatabase).
+	void InitializeEmpty(DBConfig *config);
+	//! The part of initialization shared by both, up to the main database.
+	void InitializeInstance(const char *path, DBConfig *config);
+	//! Launches the scheduler threads; last, since storage init races on the catalog otherwise.
+	void StartScheduler();
 	void LoadExtensionSettings();
 	void CreateMainDatabase();
 
@@ -135,6 +143,11 @@ public:
 	DUCKDB_API explicit DuckDB(DatabaseInstance &instance);
 
 	DUCKDB_API ~DuckDB();
+
+	//! Creates an instance with no database attached. Databases are attached to it later (ATTACH, or
+	//! DatabaseManager::AttachDatabase); until then only the system catalog and each connection's temporary catalog
+	//! exist, and statements that need a default database fail.
+	DUCKDB_API static shared_ptr<DuckDB> CreateEmpty(DBConfig *config = nullptr);
 
 	//! Reference to the actual database instance
 	shared_ptr<DatabaseInstance> instance;

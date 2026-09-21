@@ -6,14 +6,6 @@
 namespace duckdb {
 namespace capiv2 {
 
-static auto Convert(ColumnDataCollection *cdc) -> duckdb_v2_column_data_collection_handle {
-	return reinterpret_cast<duckdb_v2_column_data_collection_handle>(cdc);
-}
-
-static auto Convert(duckdb_v2_column_data_collection_handle cdc) -> ColumnDataCollection * {
-	return reinterpret_cast<ColumnDataCollection *>(cdc);
-}
-
 static auto Convert(ColumnDataAppendState *state) -> duckdb_v2_column_data_collection_append_state_handle {
 	return reinterpret_cast<duckdb_v2_column_data_collection_append_state_handle>(state);
 }
