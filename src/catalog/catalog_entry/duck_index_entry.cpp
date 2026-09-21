@@ -7,8 +7,7 @@
 
 namespace duckdb {
 
-IndexDataTableInfo::IndexDataTableInfo(shared_ptr<DataTableInfo> info_p, const Identifier &index_name_p)
-    : info(std::move(info_p)), index_name(index_name_p) {
+IndexDataTableInfo::IndexDataTableInfo(shared_ptr<DataTableInfo> info_p) : info(std::move(info_p)) {
 }
 
 void DuckIndexEntry::Rollback(CatalogEntry &) {
@@ -26,7 +25,7 @@ DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, Cre
     : IndexCatalogEntry(catalog, schema, create_info), initial_index_size(0) {
 	auto &table = table_p.Cast<DuckTableEntry>();
 	auto &storage = table.GetStorage();
-	info = make_shared_ptr<IndexDataTableInfo>(storage.GetDataTableInfo(), name);
+	info = make_shared_ptr<IndexDataTableInfo>(storage.GetDataTableInfo());
 }
 
 DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &create_info,
