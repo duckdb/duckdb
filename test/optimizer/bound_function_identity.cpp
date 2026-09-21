@@ -28,7 +28,7 @@ struct BoundFunctionInfo {
 };
 
 unique_ptr<LogicalOperator> OptimizeIdentityQuery(Connection &con, const string &query) {
-	Parser parser(con.context->GetParserOptions());
+	Parser parser(*con.context);
 	parser.ParseQuery(query);
 	REQUIRE(parser.statements.size() == 1);
 	Planner planner(*con.context);

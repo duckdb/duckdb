@@ -348,7 +348,7 @@ DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_subquery(duckdb_v2_replacement_sc
 
 		// Parsed here rather than when the claim is materialized, so a bad query fails this call instead of
 		// surfacing later as an opaque binding error.
-		duckdb::Parser parser(args.in_context->GetParserOptions());
+		duckdb::Parser parser(*args.in_context);
 		parser.ParseQuery(duckdb::string(Convert(sql)));
 		if (parser.statements.size() != 1) {
 			throw duckdb::InvalidInputException("The replacement subquery must be exactly one SELECT statement.");

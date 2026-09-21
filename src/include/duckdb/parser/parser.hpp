@@ -23,6 +23,7 @@ struct CompiledGrammar;
 struct MatcherToken;
 class TokenIterator;
 class GroupByNode;
+class ClientContext;
 struct UnicodeSpace {
 	UnicodeSpace(idx_t pos, idx_t bytes) : pos(pos), bytes(bytes) {
 	}
@@ -36,6 +37,7 @@ struct UnicodeSpace {
 //! plan and executed.
 class Parser {
 public:
+	explicit Parser(ClientContext &context);
 	explicit Parser(const ParserOptions &options);
 	~Parser();
 
