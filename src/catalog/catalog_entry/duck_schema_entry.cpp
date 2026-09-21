@@ -303,13 +303,20 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(CatalogTransaction trans
 		// Keep the entry's version chain stable while inspecting it.
 		lock_guard<mutex> write_lock(indexes.GetCatalog().GetWriteLock());
 		auto entry = indexes.GetHeadEntry(info.GetIndexName());
-		if (entry && entry->deleted && !IsCommitted(entry->timestamp) && entry->HasChild()) {
-			// An uncommitted drop can leave the old physical index in storage.
+		// Uncommitted drops can leave multiple versions of a same-name index in storage.
+		while (entry) {
+			if (entry->type == CatalogType::INDEX_ENTRY &&
+			    RefersToSameObject(entry->Cast<DuckIndexEntry>().GetDataTableInfo(),
+			                       *table.GetStorage().GetDataTableInfo())) {
+				break;
+			}
+			// Do not search past the first committed version.
+			if (IsCommitted(entry->timestamp) || !entry->HasChild()) {
+				return nullptr;
+			}
 			entry = entry->Child();
 		}
-		if (!entry || entry->type != CatalogType::INDEX_ENTRY ||
-		    !RefersToSameObject(entry->Cast<DuckIndexEntry>().GetDataTableInfo(),
-		                        *table.GetStorage().GetDataTableInfo())) {
+		if (!entry) {
 			return nullptr;
 		}
 	}
