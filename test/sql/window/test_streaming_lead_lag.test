@@ -35,7 +35,7 @@ EXPLAIN
 SELECT i, LAG(i, -1) OVER() AS i1
 FROM range(10) tbl(i);
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
 query TT
 SELECT i, LAG(i, -1) OVER() AS i1
@@ -79,7 +79,7 @@ EXPLAIN
 SELECT i, LEAD(i, 1) OVER() AS i1
 FROM range(10) tbl(i);
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
 query TT
 SELECT i, LEAD(i, 1) OVER() AS i1
@@ -141,7 +141,7 @@ EXPLAIN
 SELECT i, LEAD(i, 1, 50) OVER() AS i1
 FROM range(10) tbl(i);
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
 query II
 SELECT i, LEAD(i, 1, 50) OVER() AS i1
@@ -165,7 +165,7 @@ SELECT i, LEAD(i, 2) OVER() AS i1
 FROM range(3000) tbl(i)
 WHERE i % 2048 = 0
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
 query TT
 SELECT i, LEAD(i, 2) OVER() AS i1
@@ -181,7 +181,7 @@ SELECT i, LEAD(i, 2) OVER() AS i1
 FROM range(5000) tbl(i)
 WHERE i % 2048 = 0
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
 query TT
 SELECT i, LEAD(i, 2) OVER() AS i1

@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/aggregate/physical_streaming_window.hpp"
 
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -22,6 +23,7 @@ class StreamingWindowGlobalState : public GlobalOperatorState {
 public:
 	explicit StreamingWindowGlobalState(ClientContext &client);
 
+	mutex state_lock;
 	//! The single local state
 	unique_ptr<OperatorState> local_state;
 };
@@ -397,6 +399,7 @@ void PhysicalStreamingWindow::ExecuteDelayed(ExecutionContext &context, DataChun
 OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, DataChunk &input, DataChunk &output,
                                                     GlobalOperatorState &gstate_p, OperatorState &) const {
 	auto &gstate = gstate_p.Cast<StreamingWindowGlobalState>();
+	lock_guard<mutex> guard(gstate.state_lock);
 	auto &state = gstate.local_state->Cast<StreamingWindowState>();
 	if (!state.initialized) {
 		state.Initialize(context.client, input, select_list);
@@ -447,6 +450,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 OperatorFinalizeResultType PhysicalStreamingWindow::FinalExecute(ExecutionContext &context, DataChunk &output,
                                                                  GlobalOperatorState &gstate_p, OperatorState &) const {
 	auto &gstate = gstate_p.Cast<StreamingWindowGlobalState>();
+	lock_guard<mutex> guard(gstate.state_lock);
 	auto &state = gstate.local_state->Cast<StreamingWindowState>();
 
 	if (state.initialized && state.lead_count) {

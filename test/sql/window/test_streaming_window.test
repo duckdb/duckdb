@@ -138,7 +138,7 @@ EXPLAIN
 SELECT i, LAG(i, -1) OVER() AS i1
 FROM range(10) tbl(i);
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
 query TT
 SELECT i, LAG(i, -1) OVER() AS i1
@@ -182,7 +182,7 @@ EXPLAIN
 SELECT i, LEAD(i, 1) OVER() AS i1
 FROM range(10) tbl(i);
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
 query TT
 SELECT i, LEAD(i, 1) OVER() AS i1
@@ -573,6 +573,43 @@ FROM vertices_view;
 13	3
 21	4
 22	5
+
+# LEAD and LAG must see one input stream across all UNION ALL pipelines.
+query III
+SELECT count(*), count(next_i), count(previous_i)
+FROM (
+	SELECT
+		lead(i, 1) OVER () AS next_i,
+		lag(i, 1) OVER () AS previous_i
+	FROM (
+		SELECT range AS i FROM range(3)
+		UNION ALL
+		SELECT range AS i FROM range(3)
+	)
+);
+----
+6	5	5
+
+# Concurrent pipelines must not update the shared streaming state at the same time.
+statement ok
+SET threads = 8
+
+statement ok
+SET preserve_insertion_order = false
+
+query II
+SELECT count(*), count(DISTINCT row_idx)
+FROM (
+	SELECT row_number() OVER () AS row_idx, i
+	FROM (
+		SELECT range AS i FROM range(1500000)
+		UNION ALL
+		SELECT range AS i FROM range(1500000)
+	)
+) numbered
+JOIN range(50) buckets(bucket_idx) ON numbered.i % 50 = buckets.bucket_idx;
+----
+3000000	3000000
 
 # Recursive CTE
 query II

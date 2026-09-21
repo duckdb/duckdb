@@ -542,7 +542,7 @@ public:
 				return false;
 			}
 
-			return UnsafeNumericCast<idx_t>(std::abs(offset)) < max_delta;
+			return offset >= 0 && UnsafeNumericCast<idx_t>(offset) < max_delta;
 		}
 		return false;
 	}
