@@ -959,6 +959,11 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
 
+	// The index scan does not apply the sample.
+	if (input.sample_options) {
+		return DuckTableScanInitGlobal(context, input, storage, bind_data);
+	}
+
 	auto &filter_set = *input.filters;
 
 	// FIXME: We currently only support scanning one ART with one filter.
