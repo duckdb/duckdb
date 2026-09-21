@@ -31,6 +31,10 @@ public:
 	//! Scan the HT starting from the scan_position
 	void Scan(idx_t &scan_position, DataChunk &result);
 
+	idx_t TotalGroups() const {
+		return total_groups;
+	}
+
 protected:
 	Vector addresses;
 	//! The required bits per group

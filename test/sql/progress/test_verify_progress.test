@@ -90,6 +90,21 @@ SELECT sum(i) FROM (SELECT i FROM range(1000000) t(i) ORDER BY i DESC LIMIT 5000
 ----
 4987447500
 
+# perfect hash aggregates report progress
+statement ok
+SET perfect_ht_threshold=16
+
+statement ok
+CREATE TABLE groups AS SELECT (i % 10000)::SMALLINT g FROM range(100000) t(i)
+
+query II
+SELECT count(*), sum(c) FROM (SELECT g, count(*) c FROM groups GROUP BY g)
+----
+10000	100000
+
+statement ok
+RESET perfect_ht_threshold
+
 # recursive CTEs do not report progress - this fails the query in error mode
 statement error
 WITH RECURSIVE t(i) AS (SELECT * FROM range(100000) UNION ALL SELECT i + 100000 FROM t WHERE i < 400000) SELECT sum(i) FROM t
