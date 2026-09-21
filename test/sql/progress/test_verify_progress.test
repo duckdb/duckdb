@@ -60,11 +60,11 @@ endloop
 statement ok
 SET debug_verify_progress_ignore=''
 
-# small pipelines are not checked
+# single-chunk pipelines are not checked
 query I
-SELECT sum(i) FROM range(1000) t(i)
+SELECT sum(i) FROM range(2) t(i)
 ----
-499500
+1
 
 # pipelines that stop early (e.g. because of a LIMIT) are not required to complete
 query I
