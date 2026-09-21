@@ -47,6 +47,8 @@ def run_script(unittest_binary, tmp_path, script, value=None, source="environmen
         ("require-env", "!nessie", "!nessie", True),
         ("require-env", "not", "not", True),
         ("require-env", "fixture,nessie", "fixture,nessie", True),
+        ("require-env-not", "", "fixture", False),
+        ("require-env-not", "", "", False),
         ("require-env-not", "nessie", "fixture", True),
         ("require-env-not", "nessie", "nessie", False),
         ("require-env-not", "nessie polaris", "fixture", True),
@@ -88,7 +90,7 @@ def test_require_env_unset(unittest_binary, tmp_path, source, directive, values)
     [
         ("require-env", "require-env requires"),
         ("require-env-not", "require-env-not requires"),
-        (f"require-env-not {ENV_NAME}", "require-env-not requires"),
+        (f"loop i 0 1\n\nrequire-env-not {ENV_NAME}", "require-env-not cannot be called in a loop"),
         (f"loop i 0 1\n\nrequire-env {ENV_NAME} fixture", "require-env cannot be called in a loop"),
         (f"loop i 0 1\n\nrequire-env-not {ENV_NAME} nessie", "require-env-not cannot be called in a loop"),
     ],
@@ -97,6 +99,19 @@ def test_require_env_invalid(unittest_binary, tmp_path, header, error):
     result, end = run_script(unittest_binary, tmp_path, f"{header}\n\n", "fixture")
     assert result.returncode != 0
     assert error in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("source", ["environment", "config"])
+def test_require_env_not_absent(unittest_binary, tmp_path, source):
+    # Repeated absence checks must neither define the variable nor add a presence tag.
+    header = f"require-env-not {ENV_NAME}\n\n"
+    script = header * 2 + "query I\nSELECT 42\n----\n42\n"
+    result, end = run_script(
+        unittest_binary, tmp_path, script, source=source, extra_args=["--skip-tag", f"env[{ENV_NAME}]"]
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert end["status"] == "ok"
+    assert end["passes"] == 1
 
 
 @pytest.mark.parametrize("directive,values", [("require-env", "nessie fixture"), ("require-env-not", "nessie polaris")])
