@@ -23,6 +23,7 @@
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/catalog/default/default_views.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
@@ -43,6 +44,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
 #include "duckdb/parser/parsed_data/create_window_function_info.hpp"
 
 namespace duckdb {
@@ -292,17 +294,22 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(CatalogTransaction trans
 	// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
 	info.dependencies.AddDependency(table, DependencyDependentFlags());
 
-	// currently, we can not alter PK/FK/UNIQUE constraints
-	// concurrency-safe name checks against other INDEX catalog entries happens in the catalog
-	// constraint indexes only exist in table storage, so they need a separate conflict check
+	// Constraint indexes have no catalog entry, so their names need a separate check.
 	if (!table.GetStorage().IndexNameIsUnique(info.GetIndexName().GetIdentifierName())) {
 		if (info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
 			throw CatalogException("An index with the name %s already exists!",
 			                       info.GetIndexName().GetIdentifierName());
 		}
-		auto &indexes = GetCatalogSet(CatalogType::INDEX_ENTRY);
+		// Keep the entry's version chain stable while inspecting it.
+		lock_guard<mutex> write_lock(indexes.GetCatalog().GetWriteLock());
 		auto entry = indexes.GetHeadEntry(info.GetIndexName());
-		if (!entry) {
+		if (entry && entry->deleted && !IsCommitted(entry->timestamp) && entry->HasChild()) {
+			// An uncommitted drop can leave the old physical index in storage.
+			entry = entry->Child();
+		}
+		if (!entry || entry->type != CatalogType::INDEX_ENTRY ||
+		    !RefersToSameObject(entry->Cast<DuckIndexEntry>().GetDataTableInfo(),
+		                        *table.GetStorage().GetDataTableInfo())) {
 			return nullptr;
 		}
 	}

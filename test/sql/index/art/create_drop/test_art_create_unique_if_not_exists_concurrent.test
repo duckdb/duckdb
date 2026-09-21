@@ -29,3 +29,32 @@ query I
 SELECT count(*) FROM duckdb_indexes() WHERE index_name = 'idx'
 ----
 0
+
+# An uncommitted drop must not turn a write-write conflict into a successful no-op.
+statement ok con1
+BEGIN
+
+statement ok con1
+CREATE UNIQUE INDEX idx ON tbl(i)
+
+statement ok con1
+DROP INDEX idx
+
+statement ok con2
+BEGIN
+
+statement error con2
+CREATE UNIQUE INDEX IF NOT EXISTS idx ON tbl(i)
+----
+<REGEX>:TransactionContext Error.*write-write.*
+
+statement ok con1
+ROLLBACK
+
+statement ok con2
+COMMIT
+
+query I
+SELECT count(*) FROM duckdb_indexes() WHERE index_name = 'idx'
+----
+0
