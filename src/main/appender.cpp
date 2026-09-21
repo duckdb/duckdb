@@ -470,7 +470,7 @@ CommonTableExpressionMap &GetCTEMap(SQLStatement &statement) {
 unique_ptr<SQLStatement> BaseAppender::ParseStatement(unique_ptr<TableRef> table_ref, const string &query,
                                                       const string &table_name) {
 	// Parse the query.
-	Parser parser;
+	auto parser = Parser::GetBuiltinParser();
 	parser.ParseQuery(query);
 
 	// Must be a single statement.

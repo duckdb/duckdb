@@ -21,11 +21,15 @@
 #include "duckdb/parser/tableref/emptytableref.hpp"
 
 #include <stdexcept>
+#include <type_traits>
 #ifndef DUCKDB_NO_THREADS
 #include <thread>
 #endif
 
 using namespace duckdb;
+
+static_assert(!std::is_default_constructible<Parser>::value,
+              "Parser construction must select parser options explicitly");
 
 #ifndef DUCKDB_NO_THREADS
 TEST_CASE("Standalone parsers share the base grammar across threads", "[api][grammar_extension][parser_cache]") {
@@ -44,7 +48,7 @@ TEST_CASE("Standalone parsers share the base grammar across threads", "[api][gra
 			try {
 				grammars[thread_idx] = CompiledGrammar::GetDefault();
 				for (idx_t i = 0; i < 32; i++) {
-					Parser parser;
+					auto parser = Parser::GetBuiltinParser();
 					const auto query = "SELECT " + to_string(thread_idx * 32 + i);
 					parser.ParseQuery(query);
 					if (parser.statements.size() != 1 || parser.statements[0]->ToString() != query) {
@@ -52,7 +56,7 @@ TEST_CASE("Standalone parsers share the base grammar across threads", "[api][gra
 					}
 					bool rejected_invalid_sql = false;
 					try {
-						Parser invalid;
+						auto invalid = Parser::GetBuiltinParser();
 						invalid.ParseQuery("SELECT AND");
 					} catch (ParserException &) {
 						rejected_invalid_sql = true;
@@ -60,7 +64,7 @@ TEST_CASE("Standalone parsers share the base grammar across threads", "[api][gra
 					if (!rejected_invalid_sql) {
 						throw std::runtime_error("Concurrent parser accepted invalid SQL");
 					}
-					Parser next;
+					auto next = Parser::GetBuiltinParser();
 					next.ParseQuery(query);
 					if (next.statements.size() != 1 || next.statements[0]->ToString() != query) {
 						throw std::runtime_error("Concurrent parser state leaked after a syntax error");
@@ -86,15 +90,15 @@ TEST_CASE("Standalone parsers share the base grammar across threads", "[api][gra
 }
 #endif
 
-TEST_CASE("Default parsers retain the shared grammar but not parser state", "[api][grammar_extension][parser_cache]") {
+TEST_CASE("Built-in parsers retain the shared grammar but not parser state", "[api][grammar_extension][parser_cache]") {
 	auto grammar = CompiledGrammar::GetDefault();
 	const auto initial_references = grammar.use_count();
 	{
-		Parser first;
+		auto first = Parser::GetBuiltinParser();
 		REQUIRE(grammar.use_count() == initial_references);
 		first.ParseQuery("SELECT 1");
 		REQUIRE(grammar.use_count() == initial_references + 1);
-		Parser second;
+		auto second = Parser::GetBuiltinParser();
 		second.ParseQuery("SELECT 2; SELECT 3");
 		REQUIRE(grammar.use_count() == initial_references + 2);
 		REQUIRE(first.statements.size() == 1);
@@ -1231,12 +1235,12 @@ TEST_CASE("Parser options retain their compiled grammar", "[api][grammar_extensi
 	REQUIRE(parser.statements.size() == 1);
 	REQUIRE(parser.statements[0]->ToString() == "SELECT 42");
 
-	Parser default_syntax;
+	auto default_syntax = Parser::GetBuiltinParser();
 	REQUIRE_NOTHROW(default_syntax.ParseQuery("ANSWER"));
 	REQUIRE(default_syntax.statements.size() == 1);
 	REQUIRE(default_syntax.statements[0]->ToString() == "SELECT * FROM ANSWER");
 
-	Parser base_parser;
+	auto base_parser = Parser::GetBuiltinParser();
 	REQUIRE_NOTHROW(base_parser.ParseQuery("SELECT 42"));
 	REQUIRE(base_parser.statements.size() == 1);
 }

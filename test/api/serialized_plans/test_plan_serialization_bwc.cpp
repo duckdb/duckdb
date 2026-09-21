@@ -54,7 +54,7 @@ TEST_CASE("Generate serialized plans file", "[.][serialization]") {
 	string query;
 	while (std::getline(queries, query)) {
 		con.BeginTransaction();
-		Parser p;
+		auto p = Parser::GetBuiltinParser();
 		p.ParseQuery(query);
 
 		Planner planner(*con.context);
@@ -116,7 +116,7 @@ TEST_CASE("Generate specific serialized plans", "[.][serialization]") {
 			REQUIRE_NO_FAIL(con.Query(statements[i]));
 		}
 
-		Parser p;
+		auto p = Parser::GetBuiltinParser();
 		p.ParseQuery(statements.back());
 		Planner planner(*con.context);
 		planner.CreatePlan(std::move(p.statements[0]));
@@ -193,7 +193,7 @@ TEST_CASE("Test specific serialized plans", "[.][serialization]") {
 		REQUIRE_NO_FAIL(*deserialized_results);
 
 		// Now execute the original statement as well and compare results
-		Parser p;
+		auto p = Parser::GetBuiltinParser();
 		p.ParseQuery(target_stmt);
 		Planner planner(*con.context);
 		planner.CreatePlan(std::move(p.statements[0]));
@@ -261,7 +261,7 @@ void test_deserialization(const string &file_location) {
 		auto deserialized_results = con.Query(make_uniq<LogicalPlanStatement>(std::move(deserialized_plan)));
 		REQUIRE_NO_FAIL(*deserialized_results);
 
-		Parser p;
+		auto p = Parser::GetBuiltinParser();
 		p.ParseQuery(query);
 		Planner planner(*con.context);
 		planner.CreatePlan(std::move(p.statements[0]));

@@ -26,6 +26,10 @@ Parser::Parser(const ParserOptions &options_p) : options(options_p) {
 
 Parser::~Parser() = default;
 
+Parser Parser::GetBuiltinParser() {
+	return Parser(ParserOptions());
+}
+
 CompiledGrammar &Parser::GetGrammar() {
 	if (!compiled_grammar) {
 		if (options.compiled_grammar) {

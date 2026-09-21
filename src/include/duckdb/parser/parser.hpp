@@ -36,8 +36,11 @@ struct UnicodeSpace {
 //! plan and executed.
 class Parser {
 public:
-	explicit Parser(const ParserOptions &options = ParserOptions());
+	explicit Parser(const ParserOptions &options);
 	~Parser();
+
+	//! Create a parser with built-in settings and grammar.
+	static Parser GetBuiltinParser();
 
 	//! The parsed SQL statements from an invocation to ParseQuery.
 	vector<unique_ptr<SQLStatement>> statements;

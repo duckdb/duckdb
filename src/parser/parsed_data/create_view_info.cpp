@@ -51,7 +51,7 @@ unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
 }
 
 unique_ptr<SelectStatement> CreateViewInfo::ParseSelect(const string &sql) {
-	Parser parser;
+	auto parser = Parser::GetBuiltinParser();
 	parser.ParseQuery(sql);
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
 		throw BinderException(
@@ -77,7 +77,7 @@ unique_ptr<CreateViewInfo> CreateViewInfo::FromCreateView(ClientContext &context
 	D_ASSERT(!sql.empty());
 
 	// parse the SQL statement
-	Parser parser;
+	auto parser = Parser::GetBuiltinParser();
 	parser.ParseQuery(sql);
 
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::CREATE_STATEMENT) {
