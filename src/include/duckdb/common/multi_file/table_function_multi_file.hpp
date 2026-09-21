@@ -14,6 +14,118 @@
 
 namespace duckdb {
 
+//===--------------------------------------------------------------------===//
+// How a single-file table function takes part in a multi-file scan
+//===--------------------------------------------------------------------===//
+//! What the multi-file scan tells the bind of the single-file function that reads one of its files - see
+//! TableFunctionBindInput::multi_file_input
+struct TableFunctionFileBindInput {
+	//! (Optional) The schema this bind is expected to produce, when the schema of the scan was already determined -
+	//! the bind should read the file using this schema instead of determining a schema of its own
+	optional_ptr<const vector<Identifier>> expected_names;
+	optional_ptr<const vector<LogicalType>> expected_types;
+	//! (Optional) The bind data that determined the schema above, when it came from another bind of this same
+	//! function. This lets the bind read the file exactly the way the schema was determined, rather than deriving
+	//! that from the names and types alone
+	optional_ptr<const FunctionData> expected_bind_data;
+	//! The options of the scan. They tell the bind how its file is combined with the other files of the scan - e.g.
+	//! whether their columns are unified by name, in which case a type that could not be determined should be
+	//! reported as SQLNULL so the other files can determine it
+	optional_ptr<const MultiFileOptions> multi_file_options;
+	//! Whether the scan reads several files. Options that describe the schema then describe the scan rather than
+	//! this one file, so the bind should not hold this file to them exactly
+	bool multi_file_scan = false;
+	//! Whether the file is only bound to determine the schema of the scan - it is not read with the resulting bind
+	//! data, so the bind should not keep resources around for scanning it
+	bool schema_only = false;
+	//! (Optional) The bind data an earlier bind of this same file produced, when it was bound before to determine
+	//! the schema of the scan. The bind can take whatever it read from the file from there again
+	optional_ptr<const FunctionData> file_bind_data;
+
+	bool HasExpectedSchema() const {
+		return expected_names && expected_types;
+	}
+	//! The multi-file input of a bind - an empty one when the function is not bound as part of a multi-file scan
+	static const TableFunctionFileBindInput &Get(const TableFunctionBindInput &input) {
+		static const TableFunctionFileBindInput EMPTY;
+		return input.multi_file_input ? *input.multi_file_input : EMPTY;
+	}
+};
+
+//! What the multi-file scan tells the initialization of the single-file function that reads one of its files - see
+//! TableFunctionInitInput::multi_file_input
+struct TableFunctionFileInitInput {
+	//! (Optional) The types the columns must be produced as, when they differ from the types the function bound to.
+	//! Only set for functions that declare "supports_cast_map" - the function converts to these types while reading,
+	//! rather than having the conversion applied to its output
+	optional_ptr<const unordered_map<column_t, LogicalType>> cast_map;
+	//! (Optional) The index each of the filters has in the scan - a function that keeps state per filter across the
+	//! files of a scan (like an adaptive filter order) identifies them by these
+	optional_ptr<const vector<MultiFileGlobalIndex>> filter_global_indices;
+	//! (Optional) Expressions the function must evaluate on the columns of its file before the filters are applied -
+	//! used when a filter could not be expressed in the types the file stores
+	optional_ptr<const unordered_map<ProjectionIndex, BaseFileReaderExpression>> expression_map;
+	//! (Optional) The rows that were deleted from this file, which the function must not produce. The scan keeps
+	//! ownership of the filter - it outlives the scan the function initializes
+	optional_ptr<DeleteFilter> deletion_filter;
+	//! (Optional) The virtual columns among the column indexes, as a map of the index they are projected in to the
+	//! virtual column id wanted there. A virtual column gets an index of its own, past the columns the function bound
+	optional_ptr<const unordered_map<column_t, column_t>> virtual_columns;
+	//! The index of the file this function reads within the scan, and the number of files the scan reads in total.
+	//! TableFunctionInitInput::op is the operator all those files are read for
+	optional_idx file_index;
+	idx_t file_count = 1;
+
+	//! The multi-file input of an initialization - an empty one when the function is not read as part of a
+	//! multi-file scan
+	static const TableFunctionFileInitInput &Get(const TableFunctionInitInput &input) {
+		static const TableFunctionFileInitInput EMPTY;
+		return input.multi_file_input ? *input.multi_file_input : EMPTY;
+	}
+};
+
+//! Input for combining the schemas of several files that were bound individually into one schema
+struct TableFunctionCombineSchemaInput {
+	TableFunctionCombineSchemaInput(const vector<reference<const FunctionData>> &bind_data_p, bool union_by_name_p)
+	    : bind_data(bind_data_p), union_by_name(union_by_name_p) {
+	}
+
+	//! The bind data of each of the files whose schemas are being combined - in file order
+	const vector<reference<const FunctionData>> &bind_data;
+	//! Whether the schemas are combined because of union_by_name - the files are then expected to have different
+	//! columns, which are unified by name. Otherwise the files are expected to have the same columns, and the
+	//! schemas are combined to determine the schema of the scan more accurately
+	bool union_by_name;
+};
+
+//! Claims the next batch for the given local state - returns false when there is nothing left to scan.
+//! A function that implements this is scanned one batch at a time, rather than being run until it returns an empty
+//! chunk. This lets the scan tell the batches apart, so that batches scanned in parallel can be put back in order
+typedef bool (*table_function_claim_batch_t)(ClientContext &context, TableFunctionInput &input);
+//! Called when a local state will not scan any more batches - lets the function release the resources of the batch
+//! it scanned last. The counterpart of table_function_claim_batch_t
+typedef void (*table_function_finish_batch_t)(ClientContext &context, TableFunctionInput &input);
+//! Whether the scan of this function can be driven by read-ahead - batches are then claimed and have their I/O
+//! scheduled ahead of being scanned. Only meaningful together with table_function_claim_batch_t
+typedef bool (*table_function_supports_read_ahead_t)(const FunctionData &bind_data);
+//! Schedules the I/O needed by the batch a local state has claimed, so it can be loaded before it is scanned
+typedef AsyncResult (*table_function_schedule_io_t)(ClientContext &context, TableFunctionInput &input);
+//! Called on the read-ahead pool once the scan of this function has been initialized, before any batch is claimed.
+//! Lets the function pre-open the resources its scan needs, so that claiming a batch does no I/O
+typedef void (*table_function_prepare_read_ahead_t)(ClientContext &context, TableFunctionInput &input);
+//! Combines the schemas of several individually bound files into one. The names and types are pre-filled with the
+//! schemas of the files combined by name - the function can replace or adjust them. Returns the bind data describing
+//! the combined schema, which is then handed to the bind of every file that is read - or nullptr when the files must
+//! be bound individually and reconciled with the combined schema
+typedef unique_ptr<FunctionData> (*table_function_combine_schema_t)(ClientContext &context,
+                                                                    TableFunctionCombineSchemaInput &input,
+                                                                    vector<LogicalType> &return_types,
+                                                                    vector<Identifier> &names);
+//! The columns of the file a function reads, with their nested structure and identifiers. The files of a scan are
+//! mapped onto one another with these, so reporting only names and types is not enough
+typedef vector<MultiFileColumnDefinition> (*table_function_get_file_columns_t)(ClientContext &context,
+                                                                               const FunctionData &bind_data);
+
 //! The options of a wrapped single-file table function - the named parameters that are forwarded to it as-is
 class TableFunctionFileReaderOptions : public BaseFileReaderOptions {
 public:
@@ -60,6 +172,23 @@ struct TableFunctionMultiFileSettings {
 	//! Whether the schemas of the sampled files are combined into a union of their columns - files are then allowed
 	//! to be missing columns of the combined schema
 	bool sampled_schema_is_union = true;
+
+	//! How the wrapped function takes part in the scan - all optional, see the typedefs above
+	table_function_claim_batch_t claim_batch = nullptr;
+	table_function_finish_batch_t finish_batch = nullptr;
+	table_function_supports_read_ahead_t supports_read_ahead = nullptr;
+	table_function_schedule_io_t schedule_io = nullptr;
+	table_function_prepare_read_ahead_t prepare_read_ahead = nullptr;
+	table_function_combine_schema_t combine_schema = nullptr;
+	table_function_get_file_columns_t get_file_columns = nullptr;
+	//! Whether one local state may be used to scan several files in turn - the scan then keeps the state it created
+	//! rather than making a new one per file, so that what the function learns while reading a file (like the order
+	//! its filters are best applied in) carries over to the next
+	bool reuses_local_state = false;
+	//! Whether the function can produce columns as a different type than it bound them - see
+	//! TableFunctionFileInitInput::cast_map. The function then reports the schema of its own file, and still
+	//! produces the types of the scan
+	bool supports_cast_map = false;
 };
 
 //! The function info of a multi-file wrapper - holds the single-file function that is wrapped
@@ -92,7 +221,7 @@ public:
 class TableFunctionFileReader : public BaseFileReader {
 public:
 	TableFunctionFileReader(TableFunction function, OpenFileInfo file, named_parameter_map_t named_parameters,
-	                        string reader_type);
+	                        TableFunctionMultiFileSettings settings);
 	~TableFunctionFileReader() override;
 
 public:
@@ -159,15 +288,16 @@ public:
 private:
 	//! Take the operator and file count of the scan this file is read for from its state
 	void SetScanState(GlobalTableFunctionState &gstate);
-	TableFunctionInitInput GetInitInput() const;
+	//! The input the wrapped function is initialized with - "file_input" receives what the scan adds to it
+	TableFunctionInitInput GetInitInput(TableFunctionFileInitInput &file_input) const;
 	//! Initialize the global state of the wrapped function (if it has not been initialized yet)
 	void InitializeFunctionState(ClientContext &context);
 
 private:
 	//! The named parameters that are passed on to the wrapped function
 	named_parameter_map_t named_parameters;
-	//! How the files are referred to in error messages
-	string reader_type;
+	//! How the wrapped function takes part in the scan
+	TableFunctionMultiFileSettings settings;
 	//! Guards the initialization of the global state below
 	mutex lock;
 	//! The global state of the wrapped function - shared by all threads scanning this file

@@ -77,6 +77,7 @@ struct ReadSingleParquetFileLocalState : public LocalTableFunctionState {
 static unique_ptr<FunctionData> ReadSingleParquetFileBind(ClientContext &context, TableFunctionBindInput &input,
                                                           vector<LogicalType> &return_types,
                                                           vector<Identifier> &names) {
+	auto &file_input = TableFunctionFileBindInput::Get(input);
 	auto result = make_uniq<ReadSingleParquetFileData>();
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("read_single_parquet_file requires a non-NULL file name");
@@ -86,8 +87,8 @@ static unique_ptr<FunctionData> ReadSingleParquetFileBind(ClientContext &context
 	// the named parameters of this function are those of the multi-file parquet reader
 	ParquetMultiFileInfo interface;
 	MultiFileOptions file_options;
-	if (input.multi_file_options) {
-		file_options = *input.multi_file_options;
+	if (file_input.multi_file_options) {
+		file_options = *file_input.multi_file_options;
 	}
 	ParquetFileReaderOptions options(context);
 	for (auto &kv : input.named_parameters) {
@@ -98,8 +99,8 @@ static unique_ptr<FunctionData> ReadSingleParquetFileBind(ClientContext &context
 	// read the metadata of the file to determine its schema - when this file was bound before, to determine the
 	// schema of the scan it is part of, its metadata is taken from that bind instead of being read again
 	shared_ptr<ParquetFileMetadataCache> known_metadata;
-	if (input.file_bind_data) {
-		auto &previous = input.file_bind_data->Cast<ReadSingleParquetFileData>();
+	if (file_input.file_bind_data) {
+		auto &previous = file_input.file_bind_data->Cast<ReadSingleParquetFileData>();
 		if (previous.file.path == result->file.path) {
 			known_metadata = previous.metadata;
 		}
@@ -114,7 +115,7 @@ static unique_ptr<FunctionData> ReadSingleParquetFileBind(ClientContext &context
 	result->cardinality = reader->NumRows();
 	result->parquet_names = names;
 	result->parquet_types = return_types;
-	if (!input.schema_only) {
+	if (!file_input.schema_only) {
 		// this file is read with this bind data - keep the reader so the scan does not open the file a second time
 		result->SetBindReader(std::move(reader));
 	}
@@ -133,6 +134,7 @@ static vector<MultiFileColumnDefinition> ReadSingleParquetFileColumns(ClientCont
 
 static unique_ptr<GlobalTableFunctionState> ReadSingleParquetFileInitGlobal(ClientContext &context,
                                                                             TableFunctionInitInput &input) {
+	auto &file_input = TableFunctionFileInitInput::Get(input);
 	auto &parquet_data = input.bind_data->Cast<ReadSingleParquetFileData>();
 	auto result = make_uniq<ReadSingleParquetFileGlobalState>(input.op);
 
@@ -150,9 +152,9 @@ static unique_ptr<GlobalTableFunctionState> ReadSingleParquetFileInitGlobal(Clie
 		// a virtual column is either projected under its own id, or - when our caller reads several files - under
 		// an index of its own past the columns of this file
 		auto virtual_id = col_id;
-		if (input.virtual_columns) {
-			auto entry = input.virtual_columns->find(col_id);
-			if (entry != input.virtual_columns->end()) {
+		if (file_input.virtual_columns) {
+			auto entry = file_input.virtual_columns->find(col_id);
+			if (entry != file_input.virtual_columns->end()) {
 				virtual_id = entry->second;
 			}
 		}
@@ -177,13 +179,13 @@ static unique_ptr<GlobalTableFunctionState> ReadSingleParquetFileInitGlobal(Clie
 		// the filters are evaluated by the reader itself, so that row groups can be pruned on them
 		reader.filters = input.filters->Copy();
 	}
-	if (input.filter_global_indices) {
-		reader.filter_global_indices = *input.filter_global_indices;
+	if (file_input.filter_global_indices) {
+		reader.filter_global_indices = *file_input.filter_global_indices;
 	}
-	if (input.expression_map) {
+	if (file_input.expression_map) {
 		// our caller could not express some of its filters in the types this file stores its columns as - the
 		// reader evaluates these expressions on them first, and applies the filters to the result
-		for (auto &entry : *input.expression_map) {
+		for (auto &entry : *file_input.expression_map) {
 			vector<ColumnIndex> expression_column_indexes = entry.second.column_indexes;
 			reader.expression_map.emplace(entry.first, BaseFileReaderExpression(entry.second.expression->Copy(),
 			                                                                    std::move(expression_column_indexes)));
@@ -191,10 +193,10 @@ static unique_ptr<GlobalTableFunctionState> ReadSingleParquetFileInitGlobal(Clie
 	}
 	// NOTE: the parquet reader does not read columns as a type other than the one they have in the file, so
 	// "supports_cast_map" is not set and our caller casts the columns it needs converted itself
-	if (input.deletion_filter) {
+	if (file_input.deletion_filter) {
 		// our caller has deleted rows from this file - the reader skips them while scanning. The filter stays owned
 		// by the caller, which outlives this scan
-		reader.deletion_filter = make_uniq<BorrowedDeleteFilter>(*input.deletion_filter);
+		reader.deletion_filter = make_uniq<BorrowedDeleteFilter>(*file_input.deletion_filter);
 	}
 	result->max_threads = MaxValue<idx_t>(reader.NumRowGroups(), 1);
 	return std::move(result);
@@ -401,26 +403,33 @@ TableFunction ParquetScanFunction::GetSingleFileFunction() {
 	TableFunction read_parquet("read_single_parquet_file", {LogicalType::VARCHAR}, ReadSingleParquetFileFunction,
 	                           ReadSingleParquetFileBind, ReadSingleParquetFileInitGlobal,
 	                           ReadSingleParquetFileInitLocal);
-	read_parquet.claim_batch = ReadSingleParquetFileClaimBatch;
-	read_parquet.finish_batch = ReadSingleParquetFileFinishBatch;
-	read_parquet.supports_read_ahead = ReadSingleParquetFileSupportsReadAhead;
-	read_parquet.schedule_io = ReadSingleParquetFileScheduleIO;
-	read_parquet.prepare_read_ahead = ReadSingleParquetFilePrepareReadAhead;
 	read_parquet.table_scan_progress = ReadSingleParquetFileProgress;
 	read_parquet.cardinality = ReadSingleParquetFileCardinality;
 	read_parquet.statistics = ReadSingleParquetFileStatistics;
 	read_parquet.get_virtual_columns = ReadSingleParquetFileVirtualColumns;
-	read_parquet.get_file_columns = ReadSingleParquetFileColumns;
 	read_parquet.get_partition_stats = ReadSingleParquetFilePartitionStats;
 	read_parquet.get_metrics = ReadSingleParquetFileGetMetrics;
 	read_parquet.projection_pushdown = true;
 	read_parquet.late_materialization = true;
-	// the order the filters are best applied in is learned while reading, and carries over to the next file
-	read_parquet.reuses_local_state = true;
 	read_parquet.filter_pushdown = true;
 	read_parquet.filter_prune = true;
 	ParquetScanFunction::AddNamedParameters(read_parquet);
 	return read_parquet;
+}
+
+TableFunctionMultiFileSettings ParquetScanFunction::GetMultiFileSettings() {
+	TableFunctionMultiFileSettings settings;
+	settings.glob_input = FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "parquet");
+	settings.reader_type = "Parquet";
+	settings.claim_batch = ReadSingleParquetFileClaimBatch;
+	settings.finish_batch = ReadSingleParquetFileFinishBatch;
+	settings.supports_read_ahead = ReadSingleParquetFileSupportsReadAhead;
+	settings.schedule_io = ReadSingleParquetFileScheduleIO;
+	settings.prepare_read_ahead = ReadSingleParquetFilePrepareReadAhead;
+	settings.get_file_columns = ReadSingleParquetFileColumns;
+	// the order the filters are best applied in is learned while reading, and carries over to the next file
+	settings.reuses_local_state = true;
+	return settings;
 }
 
 } // namespace duckdb

@@ -32,6 +32,7 @@
 #include "duckdb/storage/statistics/node_statistics.hpp"
 
 namespace duckdb {
+struct TableFunctionMultiFileSettings;
 class ClientContext;
 class ExecutionContext;
 enum class FileExpandResult : uint8_t;
@@ -113,6 +114,8 @@ public:
 	static TableFunctionSet GetFunctionSet();
 	//! The single-file parquet reader that the multi-file reader is built on
 	static TableFunction GetSingleFileFunction();
+	//! How the single-file parquet reader is wrapped into the multi-file reader
+	static TableFunctionMultiFileSettings GetMultiFileSettings();
 	//! The named parameters that both of the above accept
 	static void AddNamedParameters(TableFunction &table_function);
 	//! The multi-file parquet reader, built by wrapping the single-file reader above

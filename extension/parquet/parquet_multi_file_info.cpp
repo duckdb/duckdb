@@ -430,26 +430,20 @@ void ParquetScanFunction::AddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["utf8_validation"] = LogicalType::VARCHAR;
 }
 
-static TableFunctionMultiFileSettings ParquetMultiFileSettings() {
-	TableFunctionMultiFileSettings settings;
-	settings.glob_input = FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "parquet");
-	settings.reader_type = "Parquet";
-	return settings;
-}
-
 //! Bind a parquet scan. The wrapped single-file function is resolved here rather than taken from the function that
 //! is being bound - callers that manage parquet files themselves (e.g. DuckLake) bind this through a TableFunction
 //! they construct, which carries none of our info
 static unique_ptr<FunctionData> ParquetMultiFileBind(ClientContext &context, TableFunctionBindInput &input,
                                                      vector<LogicalType> &return_types, vector<Identifier> &names) {
-	return TableFunctionMultiFileWrapper::MultiFileBindWith(
-	    context, input, return_types, names, ParquetScanFunction::GetSingleFileFunction(), ParquetMultiFileSettings());
+	return TableFunctionMultiFileWrapper::MultiFileBindWith(context, input, return_types, names,
+	                                                        ParquetScanFunction::GetSingleFileFunction(),
+	                                                        ParquetScanFunction::GetMultiFileSettings());
 }
 
 TableFunction ParquetScanFunction::GetMultiFileFunction(Identifier name) {
 	// the multi-file parquet reader is the single-file parquet reader wrapped into a multi-file function
 	auto result = TableFunctionMultiFileWrapper::CreateFunction(GetSingleFileFunction(), std::move(name),
-	                                                            ParquetMultiFileSettings(), ParquetMultiFileBind);
+	                                                            GetMultiFileSettings(), ParquetMultiFileBind);
 	// the callbacks below describe the scan rather than one of its files, so they are set on the wrapper
 	result.get_row_id_columns = ParquetGetRowIdColumns;
 	result.supports_pushdown_extract = ParquetScanSupportPushdownExtract;
