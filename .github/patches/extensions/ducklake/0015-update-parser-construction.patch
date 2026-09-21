@@ -7,7 +7,7 @@ index cd279684..e05d7ede 100644
  			macro_function = make_uniq<ScalarMacroFunction>(std::move(sql_expr[0]));
  		} else if (impl.type == "table") {
 -			Parser parser;
-+			Parser parser(context);
++			auto parser = Parser::GetBuiltinParser();
  			parser.ParseQuery(impl.sql);
  			if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
  				throw InternalException("Expected a single select statement");
