@@ -2285,8 +2285,12 @@ void JoinHashTable::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 	// now set the remaining entries to either true or false based on whether a match was found
 	for (idx_t i = 0; i < probe_data.size(); i++) {
 		bool_result[i] = found_match && found_match.get()[i];
-		if (!bool_result[i] && found_unknown && found_unknown.get()[i]) {
-			mask.SetInvalid(i);
+	}
+	if (found_unknown) {
+		for (idx_t i = 0; i < probe_data.size(); i++) {
+			if (!bool_result[i] && found_unknown.get()[i]) {
+				mask.SetInvalid(i);
+			}
 		}
 	}
 
@@ -2306,7 +2310,8 @@ void JoinHashTable::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 }
 
 void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result) {
-	ht.ConstructMarkJoinResult(join_keys, probe_data, result, found_match.get(), found_unknown.get());
+	ht.ConstructMarkJoinResult(join_keys, probe_data, result, found_match.get(),
+	                           null_free_mark ? nullptr : found_unknown.get());
 }
 
 void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
