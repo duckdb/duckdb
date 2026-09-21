@@ -84,6 +84,8 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto &info = func_expr.BindInfo()->Cast<JsonSerializeBindData>();
+	auto &context = state.GetContext();
+	auto parser_options = context.GetParserOptions();
 
 	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<string_t, string_t>(inputs, result, [&](string_t input) {
@@ -92,7 +94,7 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 		yyjson_mut_doc_set_root(doc, result_obj);
 
 		try {
-			auto parser = Parser::GetBuiltinParser();
+			Parser parser(parser_options);
 			parser.ParseQuery(input.GetString());
 
 			auto statements_arr = yyjson_mut_arr(doc);
@@ -104,7 +106,7 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 				auto &select = statement->Cast<SelectStatement>();
 
 				auto options = make_uniq<SerializationOptions>();
-				options->storage_compatibility = state.GetContext().db->config.options.storage_compatibility;
+				options->storage_compatibility = context.db->config.options.storage_compatibility;
 				auto json = JsonSerializer::Serialize(select, doc, info.skip_if_null, info.skip_if_empty,
 				                                      info.skip_if_default, *options);
 

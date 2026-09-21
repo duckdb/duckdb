@@ -115,6 +115,7 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 		throw InvalidInputException("json_serialize_plan: No client context available");
 	}
 	auto &context = state.GetContext();
+	auto parser_options = context.GetParserOptions();
 
 	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<string_t, string_t>(inputs, result, [&](string_t input) {
@@ -123,7 +124,7 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 		yyjson_mut_doc_set_root(doc, result_obj);
 
 		try {
-			auto parser = Parser::GetBuiltinParser();
+			Parser parser(parser_options);
 			parser.ParseQuery(input.GetString());
 			auto plans_arr = yyjson_mut_arr(doc);
 

@@ -37,13 +37,13 @@ SET integer_division = true;
 statement ok
 SET preserve_identifier_case = 'lowercase';
 
-# Grammar reuse must not change the serializers' default parsing semantics.
+# The serializers must use the current connection's parser semantics.
 query II
 SELECT count(*) FILTER (WHERE json_serialize_sql(sql) IS DISTINCT FROM serialized_sql),
        count(*) FILTER (WHERE json_serialize_plan(sql) IS DISTINCT FROM serialized_plan)
 FROM serialize_inputs JOIN serialized_defaults USING (i);
 ----
-0	0
+1666	1666
 
 statement ok
 RESET integer_division;
