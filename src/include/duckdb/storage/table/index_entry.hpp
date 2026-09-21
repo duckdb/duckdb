@@ -111,7 +111,7 @@ private:
 //! The IndexEntry provides a stable logical identity which refers to an interchangeable snapshot of an index.
 class IndexEntry : public enable_shared_from_this<IndexEntry> {
 public:
-	explicit IndexEntry(unique_ptr<Index> index, optional_idx index_oid = optional_idx());
+	explicit IndexEntry(unique_ptr<Index> index, optional_idx index_oid);
 	//! Append a chunk to the physical index, buffering it while the index is unbound.
 	void Append(DataChunk &chunk, Vector &row_ids);
 	//! Appends a chunk using delete and checkpoint indexes where required.
