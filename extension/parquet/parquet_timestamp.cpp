@@ -1,6 +1,5 @@
 #include "parquet_timestamp.hpp"
 
-#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/date.hpp"
@@ -35,11 +34,13 @@ static int64_t ImpalaTimestampToNanoseconds(const Int96 &impala_timestamp) {
 	auto nanoseconds = Load<int64_t>(const_data_ptr_cast(impala_timestamp.value));
 	int64_t day_nanoseconds;
 	if (!TryMultiplyOperator::Operation(days_since_epoch, NANOSECONDS_PER_DAY, day_nanoseconds)) {
-		throw ConversionException("INT96 timestamp is out of range for TIMESTAMP_NS (int96_as='timestamp_ns')");
+		// out of range for TIMESTAMP_NS - saturate to +/- infinity
+		return days_since_epoch < 0 ? timestamp_ns_t::ninfinity().value : timestamp_ns_t::infinity().value;
 	}
 	int64_t result;
 	if (!TryAddOperator::Operation(day_nanoseconds, nanoseconds, result)) {
-		throw ConversionException("INT96 timestamp is out of range for TIMESTAMP_NS (int96_as='timestamp_ns')");
+		// out of range for TIMESTAMP_NS - saturate to +/- infinity
+		return day_nanoseconds < 0 ? timestamp_ns_t::ninfinity().value : timestamp_ns_t::infinity().value;
 	}
 	return result;
 }
