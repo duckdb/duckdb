@@ -1389,6 +1389,11 @@
         "id": 103,
         "name": "sample_options",
         "type": "unique_ptr<SampleOptions>"
+      },
+      {
+        "id": 104,
+        "name": "file_filter_expressions",
+        "type": "optional<vector<unique_ptr<Expression>>>"
       }
     ],
     "pointer_type": "none"

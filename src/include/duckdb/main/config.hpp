@@ -100,6 +100,8 @@ struct DBConfigOptions {
 	idx_t maximum_threads = DConstants::INVALID_INDEX;
 	//! The maximum amount of async threads used by the database system. Default: all available.
 	idx_t async_threads = DConstants::INVALID_INDEX;
+	//! HTTP client limit derived from thread counts unless configured
+	idx_t http_client_pool_capacity = DConstants::INVALID_INDEX;
 	//! Whether or not to create and use a temporary directory to store intermediates that do not fit in memory
 	bool use_temporary_directory = true;
 	//! Directory to store temporary structures that do not fit in memory
@@ -315,7 +317,8 @@ public:
 	void AddAllowedConfig(const Identifier &config_name);
 	void AddAllowedDirectory(const string &path);
 	void AddAllowedPath(const string &path);
-	//! Allows a database file and its WAL files, so a database can be opened while external access is disabled
+	//! Allows a database file and its WAL files, so a database can be opened while external access is disabled.
+	//! Only possible through API calls, not SQL calls.
 	void AddAllowedDatabasePath(const string &database_path);
 	vector<string> GetAllowedDirectories() const;
 	vector<string> GetAllowedPaths() const;
@@ -326,6 +329,7 @@ public:
 	void SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util);
 	HTTPUtil &GetHTTPUtil() const;
 	DUCKDB_API HTTPTransportManager &GetHTTPTransportManager();
+	DUCKDB_API const HTTPTransportManager &GetHTTPTransportManager() const;
 
 private:
 	mutable mutex config_lock;

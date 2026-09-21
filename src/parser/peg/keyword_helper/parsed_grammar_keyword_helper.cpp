@@ -63,15 +63,11 @@ static DefaultKeywordMaps BuildKeywordMaps(const ParsedGrammar &grammar) {
 }
 
 ParsedGrammarKeywordHelper::ParsedGrammarKeywordHelper(const ParsedGrammar &grammar)
-    : keyword_maps(BuildKeywordMaps(grammar)), literal_table(grammar, keyword_maps) {
+    : keyword_maps(BuildKeywordMaps(grammar)), literal_table(grammar, keyword_maps.ToLiteralMap()) {
 }
 
-bool ParsedGrammarKeywordHelper::KeywordCategoryType(const string &text, PEGKeywordCategory category) const {
-	return literal_table.Lookup(text).HasCategory(category);
-}
-
-bool ParsedGrammarKeywordHelper::IsKeyword(const string &text) const {
-	return literal_table.Lookup(text).IsKeyword();
+keyword_categories_t ParsedGrammarKeywordHelper::GetIdentifierMask(SuggestionState type) const {
+	return DefaultKeywordMaps::GetIdentifierMask(type);
 }
 
 vector<ParserKeyword> ParsedGrammarKeywordHelper::KeywordList() const {

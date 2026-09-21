@@ -670,32 +670,41 @@ enum class DeprecatedHighlightColors {
 template <DeprecatedHighlightColors T>
 MetadataResult SetHighlightingColor(ShellState &state, const vector<string> &args) {
 	string literal;
+	string hint;
 	switch (T) {
 	case DeprecatedHighlightColors::COMMENT:
 		literal = "comment";
+		hint = literal;
 		break;
 	case DeprecatedHighlightColors::CONSTANT:
-		literal = "constant";
-		break;
+		state.PrintF(PrintOutput::STDERR,
+		             ".constant has been split into numeric_constant and string_constant, use .highlight_colors "
+		             "numeric_constant %s and .highlight_colors string_constant %s instead\n",
+		             args[1].c_str(), args[1].c_str());
+		return MetadataResult::FAIL;
 	case DeprecatedHighlightColors::KEYWORD:
 		literal = "keyword";
+		hint = literal;
 		break;
 	case DeprecatedHighlightColors::ERROR:
 		literal = "error";
+		hint = literal;
 		break;
 	case DeprecatedHighlightColors::CONT:
 		literal = "cont";
+		hint = "continuation";
 		break;
 	case DeprecatedHighlightColors::CONT_SEL:
 		literal = "cont_sel";
+		hint = "continuation_selected";
 		break;
 	default:
 		throw std::runtime_error("eek");
 	}
 	state.PrintF(PrintOutput::STDERR,
-	             "WARNING: .%s [COLOR] will be removed in a future release, use .render_color %s %s instead\n",
-	             literal.c_str(), literal.c_str(), args[1].c_str());
-	return TrySetHighlightColor(state, literal, args[1]);
+	             "WARNING: .%s [COLOR] will be removed in a future release, use .highlight_colors %s %s instead\n",
+	             literal.c_str(), hint.c_str(), args[1].c_str());
+	return TrySetHighlightColor(state, hint, args[1]);
 }
 
 #endif

@@ -1306,6 +1306,8 @@ FunctionBinder::ResolveFunction(shared_ptr<const WindowFunction> function_p, vec
 	}
 
 	ResolveTemplateTypes(bound_function, children);
+	auto logical_arguments = CaptureLogicalArguments(bound_function, children);
+	auto argument_types = bound_function.GetArguments();
 
 	unique_ptr<FunctionData> bind_info;
 
@@ -1317,6 +1319,13 @@ FunctionBinder::ResolveFunction(shared_ptr<const WindowFunction> function_p, vec
 	}
 
 	CheckTemplateTypesResolved(bound_function);
+	for (idx_t i = 0; i < argument_types.size() && i < bound_function.GetArguments().size(); i++) {
+		if (!argument_types[i].IsComplete() && bound_function.GetArguments()[i].IsComplete()) {
+			logical_arguments[i] = bound_function.GetArguments()[i];
+		}
+	}
+	bound_function.SetLogicalArguments(std::move(logical_arguments));
+	bound_function.SetLogicalReturnType(bound_function.GetReturnType());
 
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, children);

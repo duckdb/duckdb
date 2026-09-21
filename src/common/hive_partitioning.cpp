@@ -192,6 +192,10 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<Ope
 		return;
 	}
 
+	if (!info.extra_info.total_files.IsValid()) {
+		info.extra_info.file_filter_expressions = vector<unique_ptr<Expression>>();
+	}
+
 	for (idx_t i = 0; i < files.size(); i++) {
 		auto &file = files[i];
 		bool should_prune_file = false;
@@ -228,6 +232,34 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<Ope
 	}
 
 	D_ASSERT(filters.size() >= pruned_filters.size());
+
+	for (idx_t i = 0; i < filters.size() && info.extra_info.file_filter_expressions; i++) {
+		if (have_preserved_filter[i]) {
+			continue;
+		}
+		auto retained = filters[i]->Copy();
+		bool representable = true;
+		ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+		    retained, [&](auto &column, unique_ptr<Expression> &) {
+			    auto binding = column.Binding();
+			    if (column.Depth() != 0 || binding.table_index != table_index ||
+			        binding.column_index.GetIndex() >= info.column_indexes.size()) {
+				    representable = false;
+				    return;
+			    }
+			    auto &index = info.column_indexes[binding.column_index.GetIndex()];
+			    if (index.IsVirtualColumn() || index.IsPushdownExtract() || index.HasType()) {
+				    representable = false;
+				    return;
+			    }
+			    column.BindingMutable() = ColumnBinding(TableIndex(0), ProjectionIndex(index.GetPrimaryIndex()));
+		    });
+		if (!representable) {
+			info.extra_info.file_filter_expressions.reset();
+			break;
+		}
+		info.extra_info.file_filter_expressions->push_back(std::move(retained));
+	}
 
 	info.extra_info.total_files = files.size();
 	info.extra_info.filtered_files = pruned_files.size();

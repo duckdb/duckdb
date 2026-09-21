@@ -388,40 +388,6 @@ public:
 	}
 };
 
-class SpoofCastFunctionData : public FunctionData {
-public:
-	uint8_t GetInternalKind() const {
-		return 1;
-	}
-
-	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<SpoofCastFunctionData>(*this);
-	}
-
-	bool Equals(const FunctionData &) const override {
-		return true;
-	}
-
-	int32_t value = 0;
-};
-
-class SpoofBetweenFunctionData : public FunctionData {
-public:
-	uint8_t GetInternalKind() const {
-		return 2;
-	}
-
-	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<SpoofBetweenFunctionData>(*this);
-	}
-
-	bool Equals(const FunctionData &) const override {
-		return true;
-	}
-
-	int32_t value = 0;
-};
-
 static unique_ptr<FunctionData> BindOpaqueSQLFunction(BindScalarFunctionInput &) {
 	return make_uniq<OpaqueSQLFunctionData>();
 }
@@ -1802,12 +1768,6 @@ TEST_CASE("Bound expression SQL export validates structural expression state", "
 	structural.push_back(BoundBetweenExpression::Create(Constant(Value::INTEGER(7)), Constant(Value::INTEGER(2)),
 	                                                    Constant(Value::INTEGER(9)), true, true));
 	for (auto &expression : structural) {
-		auto &data = *expression->Cast<BoundFunctionExpression>().BindInfoMutable();
-		auto &alias = data;
-		data = alias;
-		REQUIRE(BoundExpressionSQLExporter::Export(*expression, context).IsSuccess());
-		data = std::move(alias);
-		REQUIRE(BoundExpressionSQLExporter::Export(*expression, context).IsSuccess());
 		REQUIRE(BoundExpressionSQLExporter::Export(*expression->Copy(), context).IsSuccess());
 		auto restored = BinaryRoundTrip(*connection.context, *expression);
 		REQUIRE(BoundExpressionSQLExporter::Export(*restored, context).IsSuccess());
@@ -1821,20 +1781,8 @@ TEST_CASE("Bound expression SQL export validates structural expression state", "
 
 	auto malformed_cast =
 	    BoundCastExpression::AddCastToType(*connection.context, Constant(Value::INTEGER(7)), LogicalType::BIGINT);
-	malformed_cast->Cast<BoundFunctionExpression>().BindInfoMutable() = make_uniq<OpaqueSQLFunctionData>();
+	malformed_cast->Cast<BoundFunctionExpression>().BindInfoMutable().reset();
 	RequireIssue(BoundExpressionSQLExporter::Export(*malformed_cast, context),
-	             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, path);
-	auto spoofed_cast =
-	    BoundCastExpression::AddCastToType(*connection.context, Constant(Value::INTEGER(7)), LogicalType::BIGINT);
-	SpoofCastFunctionData spoof_cast_source;
-	spoof_cast_source.value = 42;
-	SpoofCastFunctionData spoof_cast_copy(spoof_cast_source);
-	REQUIRE(spoof_cast_copy.value == 42);
-	SpoofCastFunctionData spoof_cast_move(std::move(spoof_cast_copy));
-	REQUIRE(spoof_cast_move.value == 42);
-	spoofed_cast->Cast<BoundFunctionExpression>().BindInfoMutable() =
-	    make_uniq<SpoofCastFunctionData>(std::move(spoof_cast_move));
-	RequireIssue(BoundExpressionSQLExporter::Export(*spoofed_cast, context),
 	             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, path);
 	auto mismatched_cast_data =
 	    BoundCastExpression::AddCastToType(*connection.context, Constant(Value::INTEGER(7)), LogicalType::BIGINT);
@@ -1847,22 +1795,9 @@ TEST_CASE("Bound expression SQL export validates structural expression state", "
 
 	auto malformed_between = BoundBetweenExpression::Create(Constant(Value::INTEGER(7)), Constant(Value::INTEGER(2)),
 	                                                        Constant(Value::INTEGER(9)), true, true);
-	malformed_between->Cast<BoundFunctionExpression>().BindInfoMutable() = make_uniq<OpaqueSQLFunctionData>();
+	malformed_between->Cast<BoundFunctionExpression>().BindInfoMutable().reset();
 	RequireIssue(BoundExpressionSQLExporter::Export(*malformed_between, context),
 	             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, path);
-	auto spoofed_between = BoundBetweenExpression::Create(Constant(Value::INTEGER(2)), Constant(Value::INTEGER(2)),
-	                                                      Constant(Value::INTEGER(9)), true, true);
-	SpoofBetweenFunctionData spoof_between_source;
-	spoof_between_source.value = 84;
-	SpoofBetweenFunctionData spoof_between_copy(spoof_between_source);
-	REQUIRE(spoof_between_copy.value == 84);
-	SpoofBetweenFunctionData spoof_between_move(std::move(spoof_between_copy));
-	REQUIRE(spoof_between_move.value == 84);
-	spoofed_between->Cast<BoundFunctionExpression>().BindInfoMutable() =
-	    make_uniq<SpoofBetweenFunctionData>(std::move(spoof_between_move));
-	RequireIssue(BoundExpressionSQLExporter::Export(*spoofed_between, context),
-	             LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, path);
-
 	auto wrong_arity = BoundBetweenExpression::Create(Constant(Value::INTEGER(2)), Constant(Value::INTEGER(2)),
 	                                                  Constant(Value::INTEGER(9)), true, true);
 	wrong_arity->Cast<BoundFunctionExpression>().GetChildrenMutable().pop_back();

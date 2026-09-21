@@ -437,6 +437,13 @@ unique_ptr<FunctionData> ListAggregatesBindFunction(ClientContext &context, Boun
 		child = make_uniq<BoundConstantExpression>(ExpressionExecutor::EvaluateScalar(context, *child));
 	}
 
+	// Preserve folded SQL arguments without evaluating them again.
+	if (aggr_children.size() + 1 == bound_function.GetLogicalArguments().size()) {
+		for (idx_t child_idx = 1; child_idx < aggr_children.size(); child_idx++) {
+			arguments.push_back(aggr_children[child_idx]->Copy());
+		}
+	}
+
 	return make_uniq<ListAggregatesBindData>(bound_function.GetReturnType(), std::move(bound_aggr_function));
 }
 

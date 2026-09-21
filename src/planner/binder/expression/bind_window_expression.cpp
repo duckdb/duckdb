@@ -8,6 +8,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -86,6 +87,10 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		auto macro = make_uniq<FunctionExpression>(window.GetQualifiedName(), std::move(window.GetArgumentsMutable()),
 		                                           std::move(window.FilterMutable()), nullptr, window.Distinct());
 		return BindMacro(*macro, entry->Cast<ScalarMacroCatalogEntry>(), depth, macro_expr);
+	}
+	auto count_star = binder.TryRewriteQualifiedCountStar(window);
+	if (count_star) {
+		return BindWindowExpression(count_star->Cast<WindowExpression>(), depth);
 	}
 
 	auto name = window.GetAlias();
@@ -289,6 +294,15 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	}
 	result->IgnoreNullsMutable() = window.IgnoreNulls();
 	result->DistinctMutable() = window.Distinct();
+
+	const bool range_start = window.WindowStart() == WindowBoundary::EXPR_PRECEDING_RANGE ||
+	                         window.WindowStart() == WindowBoundary::EXPR_FOLLOWING_RANGE;
+	const bool range_end = window.WindowEnd() == WindowBoundary::EXPR_PRECEDING_RANGE ||
+	                       window.WindowEnd() == WindowBoundary::EXPR_FOLLOWING_RANGE;
+	if ((range_start || range_end) && bound_orders.size() == 1) {
+		result->RetainSQLRange(range_start ? bound_start.get() : nullptr, range_end ? bound_end.get() : nullptr,
+		                       bound_orders[0]->GetReturnType());
+	}
 
 	// Convert RANGE boundary expressions to ORDER +/- expressions.
 	// Note that PRECEDING and FOLLOWING refer to the sequential order in the frame,

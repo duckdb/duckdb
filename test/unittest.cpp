@@ -235,7 +235,9 @@ static bool SetThreadStackSize(size_t requested_stack_size, string &error) {
 
 static bool ConfigureThreadStackSize(int argc, char *argv[], string &error) {
 	bool stack_size_specified = false;
+#ifdef DUCKDB_UNITTEST_HAS_DEFAULT_PTHREAD_ATTRIBUTES
 	size_t requested_stack_size = 0;
+#endif
 	for (int i = 1; i < argc; i++) {
 		if (string(argv[i]) != "--thread-stack-size") {
 			continue;
@@ -253,7 +255,9 @@ static bool ConfigureThreadStackSize(int argc, char *argv[], string &error) {
 			error = "--thread-stack-size expected a positive integer size in bytes";
 			return false;
 		}
+#ifdef DUCKDB_UNITTEST_HAS_DEFAULT_PTHREAD_ATTRIBUTES
 		requested_stack_size = parsed_stack_size;
+#endif
 		stack_size_specified = true;
 	}
 	if (!stack_size_specified) {
@@ -370,7 +374,7 @@ int main(int argc_in, char *argv[]) {
 			try {
 				if (!test_config.ParseArgument(argument, argc, argv, i)) {
 					if ((argument == "-f" || argument == "--input-file") && i + 1 < argc) {
-						input_files.push_back(argv[i + 1]);
+						input_files.push_back(TestMakeAbsolute(argv[i + 1], TestGetCurrentDirectory()));
 						input_file_arg_indices.insert(new_argc);
 						input_file_arg_indices.insert(new_argc + 1);
 					}
@@ -392,6 +396,13 @@ int main(int argc_in, char *argv[]) {
 		return 1;
 	}
 
+	// Keep input filenames anchored to the invocation directory, including Catch's filter fallback.
+	idx_t input_file_index = 0;
+	for (int i = 0; i < new_argc; i++) {
+		if (input_file_arg_indices.find(i) != input_file_arg_indices.end()) {
+			new_argv[++i] = &input_files[input_file_index++][0];
+		}
+	}
 	test_config.ChangeWorkingDirectory(test_directory);
 
 	vector<string> exact_sqllogic_tests;
