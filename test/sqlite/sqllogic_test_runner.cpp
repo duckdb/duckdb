@@ -457,6 +457,14 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 #endif
 	}
 
+	if (param == "linux") {
+#ifndef __linux__
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
 	if (param == "longdouble") {
 #if LDBL_MANT_DIG < 54
 		return RequireResult::MISSING;
