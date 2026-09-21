@@ -197,7 +197,7 @@ void TableIndexList::RemoveIndex(idx_t index_oid) {
 		annotated_lock_guard lock(index_entries_lock);
 		for (idx_t i = 0; i < index_entries.size(); i++) {
 			auto &entry = index_entries[i];
-			if (entry->GetIndexOid() != index_oid) {
+			if (entry->GetCatalogIndexOid() != index_oid) {
 				continue;
 			}
 			if (entry->GetBindState() != IndexBindState::BOUND) {
@@ -557,7 +557,7 @@ unique_ptr<IndexStorageInfo> TableIndexList::SerializeToWAL(idx_t index_oid,
                                                             const case_insensitive_map_t<Value> &options) {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
-		if (entry->GetIndexOid() == index_oid) {
+		if (entry->GetCatalogIndexOid() == index_oid) {
 			return make_uniq<IndexStorageInfo>(entry->SerializeToWAL(options));
 		}
 	}

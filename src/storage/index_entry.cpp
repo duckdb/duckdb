@@ -18,8 +18,8 @@
 
 namespace duckdb {
 
-IndexEntry::IndexEntry(unique_ptr<Index> index_p, optional_idx index_oid_p)
-    : index_oid(index_oid_p), owned_index(std::move(index_p)) {
+IndexEntry::IndexEntry(unique_ptr<Index> index_p, optional_idx catalog_index_oid_p)
+    : catalog_index_oid(catalog_index_oid_p), owned_index(std::move(index_p)) {
 	if (owned_index->IsBound()) {
 		bind_state = IndexBindState::BOUND;
 	} else {
