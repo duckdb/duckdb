@@ -403,8 +403,8 @@ static void ValidateDictionaryEntry(const int32_t current_offset, const int32_t 
 
 StringSegmentLayout StringSegmentLayout::Read(const BufferHandle &handle, const ColumnSegment &segment) {
 	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "uncompressed string segment");
-	// Only the dictionary end is read here. Appends update the dictionary size in the same header while
-	// scans run, so reading it from a scan is a data race. The end is fixed at the segment size.
+	// Appends change the dictionary size, so reading it during a scan would race.
+	// The dictionary end does not change during appends, so use that instead.
 	auto dictionary_end = NumericCast<idx_t>(reader.Get<uint32_t>(sizeof(uint32_t)));
 	if (dictionary_end > reader.Size()) {
 		ThrowInvalidStringDictionary();
@@ -414,7 +414,8 @@ StringSegmentLayout StringSegmentLayout::Read(const BufferHandle &handle, const 
 	    offset_count > (dictionary_end - UncompressedStringStorage::DICTIONARY_HEADER_SIZE) / sizeof(int32_t)) {
 		ThrowStringOffsetTableOutOfBounds();
 	}
-	// The dictionary grows backwards from its end, down to the last byte of the offsets table.
+	// Dictionary bytes do not overlap the offsets table, so use the end of the table
+	// as the lower bound instead of reading the dictionary size.
 	auto dictionary_start = UncompressedStringStorage::DICTIONARY_HEADER_SIZE + offset_count * sizeof(int32_t);
 	auto dictionary_data = reader.GetBytes(dictionary_start, dictionary_end - dictionary_start);
 	auto offsets = reader.GetArray<int32_t>(UncompressedStringStorage::DICTIONARY_HEADER_SIZE, offset_count);
