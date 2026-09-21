@@ -105,6 +105,20 @@ SELECT count(*), sum(c) FROM (SELECT g, count(*) c FROM groups GROUP BY g)
 statement ok
 RESET perfect_ht_threshold
 
+# update and delete with returning report progress
+statement ok
+CREATE TABLE modified AS SELECT i FROM range(10000) t(i)
+
+query I
+WITH u AS (UPDATE modified SET i = i + 1 RETURNING i) SELECT count(*) FROM u
+----
+10000
+
+query II
+WITH d AS (DELETE FROM modified RETURNING i) SELECT count(*), sum(i) FROM d
+----
+10000	50005000
+
 # recursive CTEs do not report progress - this fails the query in error mode
 statement error
 WITH RECURSIVE t(i) AS (SELECT * FROM range(100000) UNION ALL SELECT i + 100000 FROM t WHERE i < 400000) SELECT sum(i) FROM t
