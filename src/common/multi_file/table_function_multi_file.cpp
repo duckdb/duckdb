@@ -698,11 +698,11 @@ static vector<PartitionStatistics> TableFunctionMultiFileGetPartitionStats(Clien
 	}
 	auto &reader = bind_data.initial_reader->Cast<TableFunctionFileReader>();
 	auto &function = reader.GetFunction();
-	if (!function.get_file_partition_stats || !reader.bind_data) {
+	if (!function.get_partition_stats || !reader.bind_data) {
 		return result;
 	}
-	function.get_file_partition_stats(context, *reader.bind_data, result);
-	return result;
+	GetPartitionStatsInput file_input(function, reader.bind_data.get());
+	return function.get_partition_stats(context, file_input);
 }
 
 TableFunction TableFunctionMultiFileWrapper::CreateFunction(TableFunction single_file_function, Identifier name,
@@ -727,7 +727,7 @@ TableFunction TableFunctionMultiFileWrapper::CreateFunction(TableFunction single
 	result.filter_prune = single_file_function.filter_prune;
 	result.supports_pushdown_type = single_file_function.supports_pushdown_type;
 	result.late_materialization = single_file_function.late_materialization;
-	if (single_file_function.get_file_partition_stats) {
+	if (single_file_function.get_partition_stats) {
 		// the row groups of the scan are those of its files
 		result.get_partition_stats = TableFunctionMultiFileGetPartitionStats;
 	}

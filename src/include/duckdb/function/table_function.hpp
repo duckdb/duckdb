@@ -470,11 +470,6 @@ typedef virtual_column_map_t (*table_function_get_virtual_columns_t)(ClientConte
 typedef vector<column_t> (*table_function_get_row_id_columns)(ClientContext &context,
                                                               optional_ptr<FunctionData> bind_data);
 
-//! The row groups of the file a function reads. A multi-file caller reports these for the scan, which lets a
-//! count(*) over it be answered without reading the files at all
-typedef void (*table_function_get_file_partition_stats_t)(ClientContext &context, const FunctionData &bind_data,
-                                                          vector<PartitionStatistics> &result);
-
 //! The columns of the file a function reads, with their nested structure and identifiers. A multi-file caller maps
 //! the files of a scan onto one another with these, so reporting only names and types is not enough
 typedef vector<MultiFileColumnDefinition> (*table_function_get_file_columns_t)(ClientContext &context,
@@ -585,8 +580,6 @@ public:
 	table_function_combine_schema_t combine_schema;
 	//! (Optional) the columns of the file this function reads - see table_function_get_file_columns_t
 	table_function_get_file_columns_t get_file_columns;
-	//! (Optional) the row groups of the file this function reads - see table_function_get_file_partition_stats_t
-	table_function_get_file_partition_stats_t get_file_partition_stats;
 	//! (Optional) claims the next batch for a local state - see table_function_claim_batch_t
 	table_function_claim_batch_t claim_batch;
 	//! (Optional) called when a local state will not scan any more batches - see table_function_finish_batch_t
