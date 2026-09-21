@@ -18,6 +18,7 @@ class ClientContext;
 class ColumnDataCollection;
 class Connection;
 class DuckDB;
+class Parser;
 class SQLStatement;
 class TableCatalogEntry;
 
@@ -37,7 +38,7 @@ public:
 	static unique_ptr<TableRef> GetColumnDataTableRef(ColumnDataCollection &collection, const Identifier &table_name,
 	                                                  const vector<Identifier> &expected_names);
 	//! Parses the statement to append data.
-	static unique_ptr<SQLStatement> ParseStatement(unique_ptr<TableRef> table_ref, const string &query,
+	static unique_ptr<SQLStatement> ParseStatement(Parser &parser, unique_ptr<TableRef> table_ref, const string &query,
 	                                               const string &table_name);
 
 protected:
