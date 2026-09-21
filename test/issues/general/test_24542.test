@@ -25,7 +25,7 @@ WHERE s.b <= 20;
 ----
 
 statement ok
-SET disabled_optimizers = 'top_n'
+SET disabled_optimizers = 'outer_join_simplification'
 
 query III
 SELECT * FROM (
