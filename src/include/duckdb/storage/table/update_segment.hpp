@@ -117,8 +117,8 @@ public:
 	                                      const SelectionVector &sel, idx_t fetch_offset, idx_t count,
 	                                      idx_t vector_offset, Vector &result, idx_t result_offset);
 	typedef void (*rollback_update_function_t)(UpdateInfo &base_info, UpdateInfo &rollback_info);
-	typedef idx_t (*statistics_update_function_t)(UpdateSegment *segment, SegmentStatistics &stats,
-	                                              UnifiedVectorFormat &update, idx_t count, SelectionVector &sel);
+	typedef void (*statistics_update_function_t)(UpdateSegment *segment, SegmentStatistics &stats,
+	                                             UnifiedVectorFormat &update, idx_t count);
 	typedef idx_t (*get_effective_updates_t)(UnifiedVectorFormat &update_format, row_t *ids, idx_t count,
 	                                         SelectionVector &sel, Vector &base_data, idx_t id_offset);
 
