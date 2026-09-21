@@ -223,6 +223,7 @@
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/logical_operator_repeatability.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
 #include "duckdb/storage/caching_mode.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
@@ -1115,6 +1116,26 @@ const char* EnumUtil::ToChars<CachingMode>(CachingMode value) {
 template<>
 CachingMode EnumUtil::FromString<CachingMode>(const char *value) {
 	return static_cast<CachingMode>(StringUtil::StringToEnum(GetCachingModeValues(), 3, "CachingMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetCanUnloadResultValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CanUnloadResult::CAN_UNLOAD), "CAN_UNLOAD" },
+		{ static_cast<uint32_t>(CanUnloadResult::ALREADY_UNLOADED), "ALREADY_UNLOADED" },
+		{ static_cast<uint32_t>(CanUnloadResult::PINNED), "PINNED" },
+		{ static_cast<uint32_t>(CanUnloadResult::NO_TEMP_DIRECTORY), "NO_TEMP_DIRECTORY" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CanUnloadResult>(CanUnloadResult value) {
+	return StringUtil::EnumToString(GetCanUnloadResultValues(), 4, "CanUnloadResult", static_cast<uint32_t>(value));
+}
+
+template<>
+CanUnloadResult EnumUtil::FromString<CanUnloadResult>(const char *value) {
+	return static_cast<CanUnloadResult>(StringUtil::StringToEnum(GetCanUnloadResultValues(), 4, "CanUnloadResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCatalogLookupBehaviorValues() {
