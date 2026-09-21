@@ -289,22 +289,22 @@ unique_ptr<ListMatcher> MatcherFactory::CreateList() const {
 }
 
 unique_ptr<ChoiceMatcher> MatcherFactory::CreateChoice(vector<reference<Matcher>> &&matchers) const {
-	auto table = keyword_helper.GetLiteralTable();
-	if (table && matchers.size() > 1) {
+	auto &table = keyword_helper.GetLiteralTable();
+	if (matchers.size() > 1) {
 		unordered_map<uint32_t, idx_t> literal_children;
 		for (idx_t i = 0; i < matchers.size(); i++) {
 			auto &matcher = matchers[i].get();
 			if (matcher.Type() != MatcherType::KEYWORD) {
 				return make_uniq<ChoiceMatcher>(std::move(matchers));
 			}
-			auto literal = matcher.Cast<KeywordMatcher>().GetDispatchLiteral(*table);
+			auto literal = matcher.Cast<KeywordMatcher>().GetDispatchLiteral(table);
 			if (!literal.IsValid()) {
 				return make_uniq<ChoiceMatcher>(std::move(matchers));
 			}
 			// Preserve the first alternative when spellings share an ID.
 			literal_children.emplace(static_cast<uint32_t>(literal.GetIndex()), i);
 		}
-		return make_uniq<LiteralChoiceMatcher>(std::move(matchers), *table, std::move(literal_children));
+		return make_uniq<LiteralChoiceMatcher>(std::move(matchers), table, std::move(literal_children));
 	}
 	return make_uniq<ChoiceMatcher>(std::move(matchers));
 }

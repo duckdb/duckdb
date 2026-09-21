@@ -79,12 +79,11 @@ foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
       set(EXT_CAPI_DECLARATIONS
           "${EXT_CAPI_DECLARATIONS}extern \"C\" void ${EXT_NAME}_init_c_api_v2(struct duckdb_v2_extension_input *);\n"
       )
-      set(EXT_LOADER_BODY
-          "${EXT_LOADER_BODY}\
-    if (extension==\"${EXT_NAME}\") {
+      set(EXT_REGISTER_BODY
+          "${EXT_REGISTER_BODY}\
+    config.linked_extensions.push_back({\"${EXT_NAME}\", [](DuckDB &db) {
         db.LoadStaticCAPIExtensionV2(\"${EXT_NAME}\", ${EXT_NAME}_init_c_api_v2);
-        return ExtensionLoadResult::LOADED_EXTENSION;
-    }
+    }});
 ")
     else()
       set(EXT_REGISTER_BODY

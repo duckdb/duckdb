@@ -418,7 +418,7 @@ TEST_CASE("V2 replacement scan: not consulted for names the catalog resolves", "
 TEST_CASE("V2 replacement scan: connection scope and precedence", "[capi_v2][replacement_scan]") {
 	EnvFixture fx;
 	duckdb_v2_connection_handle other = nullptr;
-	REQUIRE(duckdb_v2_connection_create(fx.db, &other, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create(fx.instance, &other, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	ReplReset();
 	ReplRegisterOnConnection(fx.conn, ReplClaimRange);
@@ -427,16 +427,17 @@ TEST_CASE("V2 replacement scan: connection scope and precedence", "[capi_v2][rep
 	REQUIRE(ReplQueryI64(fx.conn, "SELECT * FROM anything") == std::vector<int64_t> {0, 1});
 	REQUIRE(ReplQueryError(other, "SELECT * FROM anything") != DUCKDB_V2_ERROR_NONE);
 
-	// A database-scoped scan reaches every connection, including ones opened afterwards.
-	duckdb_v2_replacement_scan_handle db_scan = nullptr;
-	REQUIRE(duckdb_v2_replacement_scan_create_with_database(fx.db, &db_scan, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_replacement_scan_set_callback(db_scan, ReplClaimRange, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_replacement_scan_register(db_scan, nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_replacement_scan_destroy(&db_scan);
+	// An instance-scoped scan reaches every connection, including ones opened afterwards.
+	duckdb_v2_replacement_scan_handle instance_scan = nullptr;
+	REQUIRE(duckdb_v2_replacement_scan_create_with_instance(fx.instance, &instance_scan, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_replacement_scan_set_callback(instance_scan, ReplClaimRange, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_replacement_scan_register(instance_scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_replacement_scan_destroy(&instance_scan);
 
 	REQUIRE(ReplQueryI64(other, "SELECT * FROM anything") == std::vector<int64_t> {0, 1});
 	duckdb_v2_connection_handle later = nullptr;
-	REQUIRE(duckdb_v2_connection_create(fx.db, &later, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create(fx.instance, &later, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(ReplQueryI64(later, "SELECT * FROM anything") == std::vector<int64_t> {0, 1});
 	duckdb_v2_connection_destroy(&later);
 
@@ -446,7 +447,7 @@ TEST_CASE("V2 replacement scan: connection scope and precedence", "[capi_v2][rep
 TEST_CASE("V2 replacement scan: outranks the built-in file scans", "[capi_v2][replacement_scan]") {
 	EnvFixture fx;
 	duckdb_v2_connection_handle other = nullptr;
-	REQUIRE(duckdb_v2_connection_create(fx.db, &other, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create(fx.instance, &other, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	ReplReset();
 	ReplRegisterOnConnection(fx.conn, ReplClaimCsv);
@@ -566,7 +567,7 @@ TEST_CASE("V2 replacement scan: null arguments and destroy null-safety", "[capi_
 	REQUIRE(scan == nullptr);
 	REQUIRE(duckdb_v2_replacement_scan_create_with_connection(fx.conn, nullptr, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_replacement_scan_create_with_database(nullptr, &scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_replacement_scan_create_with_instance(nullptr, &scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_replacement_scan_create_with_extension(nullptr, &scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	REQUIRE(duckdb_v2_replacement_scan_create_with_connection(fx.conn, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);

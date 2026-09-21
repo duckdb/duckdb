@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
+#include "duckdb/planner/operator/logical_secure_view.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 
 namespace duckdb {
@@ -142,6 +143,16 @@ void ColumnBindingReplacer::VisitOperator(LogicalOperator &op) {
 }
 
 void ColumnBindingReplacer::VisitOperatorBindings(LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_SECURE_VIEW) {
+		auto &view = op.Cast<LogicalSecureView>();
+		for (auto &binding : view.output_bindings) {
+			for (auto &replacement : replacement_bindings) {
+				if (binding == replacement.old_binding) {
+					binding = replacement.new_binding;
+				}
+			}
+		}
+	}
 	VisitOperatorExpressions(op);
 }
 

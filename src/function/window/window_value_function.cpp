@@ -149,8 +149,15 @@ public:
 
 	WindowValueStreamingState(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr)
 	    : wexpr(wexpr), vec(GetFirstValue(client, input, wexpr), count_t(STANDARD_VECTOR_SIZE)),
-	      sel(STANDARD_VECTOR_SIZE), eval(client), arg(wexpr.GetChildren()[0]->GetReturnType()) {
+	      sel(STANDARD_VECTOR_SIZE), eval(client) {
 		eval.AddExpression(*wexpr.GetChildren()[0]);
+		arg_chunk.Initialize(client, {wexpr.GetChildren()[0]->GetReturnType()});
+	}
+
+	Vector &EvalArg(DataChunk &input) {
+		arg_chunk.Reset();
+		eval.Execute(input, arg_chunk);
+		return arg_chunk.data[0];
 	}
 
 	const BoundWindowExpression &wexpr;
@@ -160,8 +167,8 @@ public:
 	SelectionVector sel;
 	//! An executor for computing the argument
 	ExpressionExecutor eval;
-	//! A reusable argument vector
-	Vector arg;
+	//! A reusable argument chunk
+	DataChunk arg_chunk;
 };
 
 //===--------------------------------------------------------------------===//
@@ -809,9 +816,7 @@ void WindowFirstValueExecutor::StreamData(ExecutionContext &context, DataChunk &
 	// then look for a non-NULL value and update it
 	if (wexpr.IgnoreNulls() && ConstantVector::IsNull(sstate.vec)) {
 		//	Find the first non-NULL value
-		auto &executor = sstate.eval;
-		auto &arg = sstate.arg;
-		executor.ExecuteExpression(input, arg);
+		auto &arg = sstate.EvalArg(input);
 		UnifiedVectorFormat unified;
 		arg.ToUnifiedFormat(unified);
 		const auto &validity = unified.validity;
@@ -931,8 +936,7 @@ void WindowLastValueExecutor::StreamData(ExecutionContext &context, DataChunk &i
 	auto &executor = sstate.eval;
 	if (wexpr.IgnoreNulls()) {
 		auto &prev = sstate.vec;
-		auto &arg = sstate.arg;
-		executor.ExecuteExpression(input, arg);
+		auto &arg = sstate.EvalArg(input);
 		UnifiedVectorFormat unified;
 		arg.ToUnifiedFormat(unified);
 		const auto &validity = unified.validity;
@@ -943,7 +947,7 @@ void WindowLastValueExecutor::StreamData(ExecutionContext &context, DataChunk &i
 			Vector copy(wexpr.GetChildren()[0]->GetReturnType());
 			VectorOperations::Copy(arg, copy, count, 0, 0);
 			//	Overwrite the previous non-NULL value if the first one is NULL
-			if (!validity.RowIsValidUnsafe(0)) {
+			if (!validity.RowIsValidUnsafe(unified.sel->get_index(0))) {
 				VectorOperations::Copy(prev, copy, 1, 0, 0);
 			}
 			//	Select appropriate the non-NULL values to copy over
@@ -1112,7 +1116,7 @@ void WindowNthValueStreamingState::StreamData(ExecutionContext &context, DataChu
 		return;
 	}
 
-	eval.ExecuteExpression(input, arg);
+	auto &arg = EvalArg(input);
 
 	UnifiedVectorFormat unified;
 	arg.ToUnifiedFormat(unified);
