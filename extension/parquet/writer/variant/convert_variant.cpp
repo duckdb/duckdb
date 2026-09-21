@@ -42,6 +42,8 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/unified_vector_format.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
+#include "duckdb/common/vector/vector_writer.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -1036,6 +1038,35 @@ ScalarFunction VariantColumnWriter::GetTransformFunction() {
 	// throws for values that are out of range for the parquet variant encoding
 	transform.SetFallible();
 	return transform;
+}
+
+static void VariantToBytesFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	Vector parquet_variant(GetParquetVariantType(), count_t(input.size()));
+	ToParquetVariant(input, state, parquet_variant);
+	auto &children = StructVector::GetEntries(parquet_variant);
+	auto metadata = children[0].Values<string_t>();
+	auto values = children[1].Values<string_t>();
+	auto validity = input.data[0].Validity();
+	auto writer = FlatVector::Writer<string_t>(result, input.size());
+	for (idx_t i = 0; i < input.size(); i++) {
+		if (!validity.IsValid(i)) {
+			writer.WriteNull();
+			continue;
+		}
+		auto metadata_bytes = metadata[i].GetValue();
+		auto value_bytes = values[i].GetValue();
+		auto &blob = writer.WriteEmptyString(metadata_bytes.GetSize() + value_bytes.GetSize());
+		memcpy(blob.GetDataWriteable(), metadata_bytes.GetData(), metadata_bytes.GetSize());
+		memcpy(blob.GetDataWriteable() + metadata_bytes.GetSize(), value_bytes.GetData(), value_bytes.GetSize());
+		blob.Finalize();
+	}
+}
+
+ScalarFunction VariantColumnWriter::GetToBytesFunction() {
+	ScalarFunction function("variant_to_bytes", {}, LogicalType::BLOB, VariantToBytesFunction);
+	function.GetSignature().AddParameter("variant", LogicalType::VARIANT());
+	function.SetFallible();
+	return function;
 }
 
 } // namespace duckdb

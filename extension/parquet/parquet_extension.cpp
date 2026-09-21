@@ -1036,10 +1036,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 	ParquetFullMetadataFunction full_meta_fun;
 	loader.RegisterFunction(MultiFileReader::CreateFunctionSet(full_meta_fun));
 
-	// variant_to_parquet_variant
+	// Parquet VARIANT encoding and decoding
 	loader.RegisterFunction(VariantColumnWriter::GetTransformFunction());
-
-	// bytes_to_variant
+	loader.RegisterFunction(VariantColumnWriter::GetToBytesFunction());
 	loader.RegisterFunction(ParquetVariantConversion::GetBytesToVariantFunction());
 
 	CopyFunction function("parquet");

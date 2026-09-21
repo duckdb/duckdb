@@ -1,0 +1,58 @@
+# name: test/parquet/variant/variant_to_bytes.test
+# description: SQL encoding of Parquet Variant bytes preserves values, types, and NULLs
+# group: [variant]
+
+require parquet
+
+statement ok
+CREATE TABLE variants(id INTEGER, v VARIANT);
+
+statement ok
+INSERT INTO variants VALUES
+    (1, 127::TINYINT),
+    (2, 1.5::FLOAT),
+    (3, '\x00\xff'::BLOB),
+    (4, {'numbers': [1::TINYINT, 2::TINYINT], 'text': 'it''s ' || chr(0) || '🦆'}),
+    (5, NULL);
+
+query III rowsort original_values
+SELECT id, v, variant_typeof(v) FROM variants;
+----
+
+query III rowsort original_values
+SELECT id, variant_bytes_to_variant(variant_to_bytes(v)), variant_typeof(variant_bytes_to_variant(variant_to_bytes(v))) FROM variants;
+----
+
+query I
+SELECT bool_and(variant_to_bytes(v) = p.metadata || p.value)
+FROM (SELECT v, variant_to_parquet_variant(v)::STRUCT(metadata BLOB, value BLOB) AS p FROM variants WHERE v IS NOT NULL);
+----
+true
+
+query II
+SELECT variant_to_bytes(NULL::VARIANT), hex(variant_to_bytes(127::TINYINT::VARIANT));
+----
+NULL	0100000C7F
+
+# The byte encoder propagates SQL NULL; the struct encoder still produces metadata.
+query II
+SELECT variant_to_bytes(NULL::VARIANT) IS NULL, variant_to_parquet_variant(NULL::VARIANT) IS NULL;
+----
+true	false
+
+query II
+SELECT variant_typeof(v.numbers[1]), v.text = 'it''s ' || chr(0) || '🦆'
+FROM (SELECT variant_bytes_to_variant(variant_to_bytes(v)) AS v FROM variants WHERE id = 4);
+----
+INT8	true
+
+query II
+SELECT count(*), count(*) FILTER (WHERE restored IS NULL)
+FROM (SELECT variant_bytes_to_variant(variant_to_bytes(CASE WHEN i % 3 = 0 THEN NULL ELSE i::VARIANT END)) AS restored FROM range(5000) t(i));
+----
+5000	1667
+
+query I
+SELECT len(list_transform(list_transform(range(4097), lambda i: variant_to_bytes(i::VARIANT)), lambda b: variant_bytes_to_variant(b)));
+----
+4097

@@ -108,6 +108,7 @@ public:
 
 public:
 	static ScalarFunction GetTransformFunction();
+	static ScalarFunction GetToBytesFunction();
 	static LogicalType TransformTypedValueRecursive(const LogicalType &type);
 
 private:
