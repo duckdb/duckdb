@@ -37,20 +37,48 @@ struct StringDictionaryEntry {
 	bool is_overflow;
 };
 
+struct ValidatedStringRange {
+public:
+	StringDictionaryEntry GetEntry(idx_t index) const {
+		D_ASSERT(index < offsets.size());
+		const auto current_offset = offsets[index];
+		const auto dictionary_offset = UnsafeNumericCast<uint32_t>(AbsValue<int32_t>(current_offset));
+		const auto previous_offset = index > 0 ? UnsafeNumericCast<uint32_t>(AbsValue<int32_t>(offsets[index - 1]))
+		                                       : preceding_dictionary_offset;
+		const auto string_length = dictionary_offset - previous_offset;
+		return {dictionary_data.SubArray(dictionary_data.size() - dictionary_offset, string_length),
+		        current_offset < 0 && string_length > 0};
+	}
+
+private:
+	friend struct StringSegmentLayout;
+	ValidatedStringRange(unsafe_array_ptr<const uint8_t> dictionary_data_p, unsafe_array_ptr<const int32_t> offsets_p,
+	                     uint32_t preceding_dictionary_offset_p)
+	    : dictionary_data(dictionary_data_p), offsets(offsets_p),
+	      preceding_dictionary_offset(preceding_dictionary_offset_p) {
+	}
+
+	unsafe_array_ptr<const uint8_t> dictionary_data;
+	unsafe_array_ptr<const int32_t> offsets;
+	uint32_t preceding_dictionary_offset;
+};
+
 struct StringSegmentLayout {
+public:
+	static StringSegmentLayout Read(const BufferHandle &handle, const ColumnSegment &segment);
+	StringDictionaryEntry ValidateAndGetEntry(idx_t row_index) const;
+	ValidatedStringRange ValidateRange(idx_t start, idx_t count) const;
+
+private:
+	StringSegmentLayout(const unsafe_array_ptr<const uint8_t> dictionary_data_p,
+	                    const unsafe_array_ptr<const int32_t> offsets_p)
+	    : dictionary_data(dictionary_data_p), offsets(offsets_p) {
+	}
+
 	//! Dictionary bytes [DICTIONARY_HEADER_SIZE + segment.count * sizeof(int32_t), dictionary end)
 	unsafe_array_ptr<const uint8_t> dictionary_data;
 	//! Dictionary offsets read from the segment after validating the array's byte range.
 	unsafe_array_ptr<const int32_t> offsets;
-
-	static StringSegmentLayout Read(const BufferHandle &handle, const ColumnSegment &segment);
-	StringDictionaryEntry GetDictionaryEntry(idx_t row_index) const;
-
-private:
-	friend struct UncompressedStringStorage;
-	uint32_t ValidateAndGetDictionaryOffset(int32_t encoded_offset) const;
-	StringDictionaryEntry CreateDictionaryEntry(int32_t current_offset, int32_t previous_offset,
-	                                            uint32_t previous_dictionary_offset) const;
 };
 
 struct StringScanState : public SegmentScanState {
