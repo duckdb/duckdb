@@ -171,6 +171,22 @@ SELECT count(*) FROM (SELECT * FROM range(1000000) t(i) ORDER BY i DESC)
 statement ok
 RESET debug_force_external
 
+# window functions report progress
+query I
+SELECT count(*) FROM (SELECT sum(i) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) FROM range(100000) t(i))
+----
+100000
+
+query I
+SELECT count(*) FROM (SELECT sum(i) OVER (PARTITION BY i % 7 ORDER BY i) FROM range(100000) t(i))
+----
+100000
+
+query I
+SELECT count(*) FROM (SELECT row_number() OVER () FROM range(100000) t(i))
+----
+100000
+
 # recursive CTEs do not report progress - this fails the query in error mode
 statement error
 WITH RECURSIVE t(i) AS (SELECT * FROM range(100000) UNION ALL SELECT i + 100000 FROM t WHERE i < 400000) SELECT sum(i) FROM t

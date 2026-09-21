@@ -50,31 +50,20 @@ public:
 
 	// Threading
 	atomic<idx_t> count;
+	//! Highest sink progress fraction reported so far
+	mutable atomic<double> max_progress;
 };
 
 FullSortGlobalSinkState::FullSortGlobalSinkState(ClientContext &client, const FullSort &full_sort)
-    : client(client), full_sort(full_sort), count(0) {
+    : client(client), full_sort(full_sort), count(0), max_progress(0) {
 	//	Sort early into a dedicated hash group if we only sort.
 	hash_group = make_uniq<FullSortGroup>(client, *full_sort.sort);
 }
 
 ProgressData FullSortGlobalSinkState::GetSinkProgress(ClientContext &client, const ProgressData source) const {
-	ProgressData result;
-	result.done = source.done / 2;
-	result.total = source.total;
-	result.invalid = source.invalid;
-
-	// Sort::GetSinkProgress assumes that there is only 1 sort.
-	// So we just use it to figure out how many rows have been sorted.
-	const ProgressData zero_progress;
 	lock_guard<mutex> guard(lock);
-	const auto &sort = full_sort.sort;
-
-	const auto group_progress = sort->GetSinkProgress(client, *hash_group->sort_global, zero_progress);
-	result.done += group_progress.done;
-	result.invalid = result.invalid || group_progress.invalid;
-
-	return result;
+	const auto sorted_count = hash_group ? full_sort.sort->GetSortedCount(*hash_group->sort_global) : 0;
+	return Sort::GetSinkProgress(source, sorted_count, count, max_progress);
 }
 
 SinkFinalizeType FullSort::Finalize(ClientContext &client, OperatorSinkFinalizeInput &finalize) const {
