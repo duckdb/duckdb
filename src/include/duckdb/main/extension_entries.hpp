@@ -492,6 +492,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"now", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"odbc_begin_transaction", "odbc_scanner", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"odbc_bind_params", "odbc_scanner", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"odbc_cancel_query", "odbc_scanner", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"odbc_close", "odbc_scanner", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"odbc_commit", "odbc_scanner", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"odbc_connect", "odbc_scanner", CatalogType::SCALAR_FUNCTION_ENTRY},
