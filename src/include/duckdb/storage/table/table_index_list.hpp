@@ -76,6 +76,8 @@ public:
 	bool Contains(const Identifier &name) const;
 	//! Returns shared ownership of the stable logical index entry matching the name.
 	shared_ptr<IndexEntry> FindEntry(const Identifier &name) const;
+	//! Matches the catalog OID, or the name when both entries have no catalog OID.
+	shared_ptr<IndexEntry> FindEntry(const IndexEntry &index) const;
 	//! Binds unbound indexes possibly present after loading an extension.
 	void Bind(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type = {});
 	//! Returns true, if there are no index entries.

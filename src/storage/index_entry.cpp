@@ -115,8 +115,8 @@ void IndexEntry::InitializeLocalIndexes(TableIndexList &delete_indexes, TableInd
 	}
 
 	auto constraint_type = bound_index.GetConstraintType();
-	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), /*index_oid=*/optional_idx());
-	append_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), /*index_oid=*/optional_idx());
+	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), catalog_index_oid);
+	append_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), catalog_index_oid);
 }
 
 void IndexEntry::AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids) {

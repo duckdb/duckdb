@@ -35,3 +35,40 @@ SELECT * FROM t ORDER BY a;
 ----
 2	20
 3	10
+
+# Check conflict handling alongside an implicit primary-key index without a catalog OID.
+statement ok
+CREATE TABLE t_conflict(a INTEGER PRIMARY KEY, b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO t_conflict VALUES (1, 10, 100), (2, 20, 200);
+
+statement ok
+CREATE UNIQUE INDEX idx_conflict ON t_conflict(b);
+
+statement ok
+BEGIN;
+
+statement ok
+DROP INDEX idx_conflict;
+
+statement ok
+CREATE UNIQUE INDEX IF NOT EXISTS idx_conflict ON t_conflict(c);
+
+statement ok
+DELETE FROM t_conflict WHERE a = 1;
+
+statement ok
+INSERT INTO t_conflict VALUES (1, 30, 100) ON CONFLICT(c) DO NOTHING;
+
+statement ok
+INSERT INTO t_conflict VALUES (3, 40, 200) ON CONFLICT(c) DO NOTHING;
+
+statement ok
+COMMIT;
+
+query III
+SELECT * FROM t_conflict ORDER BY a;
+----
+1	30	100
+2	20	200
