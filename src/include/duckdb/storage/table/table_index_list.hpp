@@ -94,6 +94,8 @@ public:
 		annotated_lock_guard lock(index_entries_lock);
 		return unbound_count != 0;
 	}
+	//! Returns true if an unbound index has buffered WAL operations.
+	bool HasBufferedReplays() const;
 	//! Returns true, if there are unique indexes.
 	bool HasUniqueIndexes() const;
 	//! Verifies all unique ART indexes, optionally recording conflicts.

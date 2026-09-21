@@ -316,6 +316,14 @@ string IndexEntry::GetIndexType() const {
 	return owned_index->GetIndexType();
 }
 
+bool IndexEntry::HasBufferedReplays() const {
+	auto entry_lock = lock.GetSharedLock();
+	if (!owned_index || owned_index->IsBound()) {
+		return false;
+	}
+	return owned_index->Cast<UnboundIndex>().HasBufferedReplays();
+}
+
 void IndexEntry::Retire() {
 	auto entry_lock = lock.GetExclusiveLock();
 	deltas.Reset();

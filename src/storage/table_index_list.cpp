@@ -338,6 +338,16 @@ bool TableIndexList::AllIndexesBoundOfType(const string &index_type) const {
 	return true;
 }
 
+bool TableIndexList::HasBufferedReplays() const {
+	annotated_lock_guard lock(index_entries_lock);
+	for (const auto &entry : index_entries) {
+		if (entry->HasBufferedReplays()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 bool TableIndexList::NameIsUnique(const string &name) const {
 	annotated_lock_guard lock(index_entries_lock);
 	// Only covers PK, FK, and UNIQUE indexes.

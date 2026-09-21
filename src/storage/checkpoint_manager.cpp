@@ -198,6 +198,25 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<SchemaCatalogEn
 	return entries;
 }
 
+static bool HasBufferedIndexReplays(AttachedDatabase &db) {
+	bool has_buffered_replays = false;
+	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
+	catalog.ScanSchemas([&](SchemaCatalogEntry &schema) {
+		if (has_buffered_replays) {
+			return;
+		}
+		schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (has_buffered_replays || entry.type != CatalogType::TABLE_ENTRY) {
+				return;
+			}
+			auto &table = entry.Cast<DuckTableEntry>();
+			auto &indexes = table.GetStorage().GetDataTableInfo()->GetIndexes();
+			has_buffered_replays = indexes.HasBufferedReplays();
+		});
+	});
+	return has_buffered_replays;
+}
+
 void SingleFileCheckpointWriter::CreateCheckpoint() {
 	auto &storage_manager = db.GetStorageManager().Cast<SingleFileStorageManager>();
 	if (storage_manager.InMemory()) {
@@ -205,6 +224,10 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	}
 	if (ValidChecker::IsInvalidated(db.GetDatabase())) {
 		// don't checkpoint invalidated databases
+		return;
+	}
+	// A context-free checkpoint cannot persist buffered operations on an unbound index. Keep the WAL instead.
+	if (!context && HasBufferedIndexReplays(db)) {
 		return;
 	}
 	// assert that the checkpoint manager hasn't been used before
