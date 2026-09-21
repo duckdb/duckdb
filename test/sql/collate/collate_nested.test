@@ -123,6 +123,21 @@ SELECT {'x': {'y': 'b' COLLATE NOCASE}} = {'x': {'y': 'B'}}
 ----
 true
 
+query I
+SELECT {'x': {'y': {'z': 'HELLO' COLLATE NOCASE}}} = {'x': {'y': {'z': 'hello'}}}
+----
+true
+
+query I
+SELECT {'x': ['HELLO' COLLATE NOCASE]} = {'x': ['hello']}
+----
+true
+
+query I
+SELECT [{'x': 'HELLO' COLLATE NOCASE}] = [{'x': 'hello'}]
+----
+true
+
 statement ok
 CREATE TABLE t(id INTEGER, s VARCHAR COLLATE NOCASE)
 
