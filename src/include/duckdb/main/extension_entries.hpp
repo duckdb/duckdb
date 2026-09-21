@@ -1297,7 +1297,6 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"binary_as_string", "parquet"},
     {"ca_cert_file", "httpfs"},
     {"calendar", "icu"},
-    {"disable_parquet_prefetching", "parquet"},
     {"ducklake_default_data_inlining_row_limit", "ducklake"},
     {"ducklake_default_version", "ducklake"},
     {"ducklake_max_retry_count", "ducklake"},
