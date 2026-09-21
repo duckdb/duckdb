@@ -396,4 +396,69 @@ TEST_CASE("A handle destroyed without collecting releases the query", "[api][que
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));
 }
 
+TEST_CASE("A failed query under a delegating collector reports its own error", "[api][query_result]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto setting = UseArrowCollector(ClientConfig::GetConfig(*con.context));
+
+	// fails inside a task, not at bind: the cast depends on the range column
+	auto result = con.Submit("SELECT (CASE WHEN i = 5 THEN 'x' ELSE i::VARCHAR END)::INT FROM range(10) t(i)");
+	REQUIRE(result->HasError());
+	REQUIRE(result->GetErrorType() == ExceptionType::CONVERSION);
+
+	// the connection must still be usable
+	REQUIRE_NO_FAIL(con.Query("SELECT 42"));
+}
+
+TEST_CASE("A failed query under a delegating collector fails the same way from every entry point",
+          "[api][query_result]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &config = ClientConfig::GetConfig(*con.context);
+	const string failing = "SELECT (CASE WHEN i = 5 THEN 'x' ELSE i::VARCHAR END)::INT FROM range(10) t(i)";
+
+	auto check_failed = [&](QueryResult &result, ExceptionType type) {
+		REQUIRE(result.HasError());
+		REQUIRE(result.GetErrorType() == type);
+		// the failed query ended exactly once: the transaction it ran in is gone
+		REQUIRE(!con.context->transaction.HasActiveTransaction());
+	};
+
+	SECTION("the blocking Query, the entry point a wire server uses") {
+		auto setting = UseArrowCollector(config);
+		unique_ptr<QueryResult> result;
+		REQUIRE_NOTHROW(result = con.Query(failing));
+		check_failed(*result, ExceptionType::CONVERSION);
+	}
+	SECTION("a relation") {
+		auto setting = UseArrowCollector(config);
+		auto result = con.RelationFromQuery(failing)->Execute();
+		check_failed(*result, ExceptionType::CONVERSION);
+	}
+	SECTION("a collector that keeps the query open") {
+		auto setting = UseTestStreamingCollector(config);
+		auto result = con.Submit(failing);
+		check_failed(*result, ExceptionType::CONVERSION);
+	}
+	SECTION("a failure before execution still ends the query") {
+		auto setting = UseArrowCollector(config);
+		auto result = con.Submit("SELECT i FROM no_such_table");
+		check_failed(*result, ExceptionType::CATALOG);
+	}
+	SECTION("inside an explicit transaction the failure invalidates it") {
+		REQUIRE_NO_FAIL(con.Query("BEGIN"));
+		auto setting = UseArrowCollector(config);
+		auto result = con.Submit(failing);
+		REQUIRE(result->HasError());
+		REQUIRE(result->GetErrorType() == ExceptionType::CONVERSION);
+		REQUIRE(con.context->transaction.HasActiveTransaction());
+		auto next = con.Query("SELECT 42");
+		REQUIRE(next->HasError());
+		REQUIRE(next->GetErrorType() == ExceptionType::TRANSACTION);
+		REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+	}
+	auto next = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(next, 0, {42}));
+}
+
 #endif

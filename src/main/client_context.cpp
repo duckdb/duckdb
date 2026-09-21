@@ -1120,13 +1120,14 @@ unique_ptr<QueryResult> ClientContext::SubmitStatement(ClientContextLock &lock, 
 		// other types of exceptions do invalidate the current transaction
 		result = ErrorResult<QueryResult>(std::move(error), query);
 	}
+	// A collector that builds its own result object finishes the query inside the submission, so on
+	// either outcome the query it belonged to may already be gone
 	if (result->HasError()) {
-		// query failed: abort now
-		EndQueryInternal(lock, false, invalidate_query, result->GetErrorObject());
+		if (active_query) {
+			EndQueryInternal(lock, false, invalidate_query, result->GetErrorObject());
+		}
 		return result;
 	}
-	// A collector that builds its own result object finishes the query inside the submission, so
-	// the query it belonged to may already be gone
 	D_ASSERT(!active_query || active_query->IsOpenResult(*result));
 	return result;
 }
