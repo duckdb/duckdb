@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/helper/physical_reservoir_sample.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 
@@ -78,9 +79,24 @@ SinkFinalizeType PhysicalReservoirSample::Finalize(Pipeline &pipeline, Event &ev
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
+class SampleGlobalSourceState : public GlobalSourceState {
+public:
+	SampleGlobalSourceState() : total_rows(0), returned_rows(0) {
+	}
+
+	//! The total number of sample rows - known once the first chunk has been fetched
+	atomic<idx_t> total_rows;
+	atomic<idx_t> returned_rows;
+};
+
+unique_ptr<GlobalSourceState> PhysicalReservoirSample::GetGlobalSourceState(ClientContext &context) const {
+	return make_uniq<SampleGlobalSourceState>();
+}
+
 SourceResultType PhysicalReservoirSample::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                           OperatorSourceInput &input) const {
 	auto &sink = this->sink_state->Cast<SampleGlobalSinkState>();
+	auto &state = input.global_state.Cast<SampleGlobalSourceState>();
 	lock_guard<mutex> glock(sink.lock);
 	if (!sink.sample) {
 		return SourceResultType::FINISHED;
@@ -90,9 +106,22 @@ SourceResultType PhysicalReservoirSample::GetDataInternal(ExecutionContext &cont
 	if (!sample_chunk) {
 		return SourceResultType::FINISHED;
 	}
+	if (state.total_rows == 0) {
+		state.total_rows = sample_chunk->size() + sink.sample->RemainingSampleCount();
+	}
+	state.returned_rows += sample_chunk->size();
 	chunk.Move(*sample_chunk);
 
 	return SourceResultType::HAVE_MORE_OUTPUT;
+}
+
+ProgressData PhysicalReservoirSample::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
+	auto &state = gstate.Cast<SampleGlobalSourceState>();
+	idx_t total_rows = state.total_rows;
+	ProgressData progress;
+	progress.total = static_cast<double>(MaxValue<idx_t>(total_rows, 1));
+	progress.done = static_cast<double>(MinValue<idx_t>(state.returned_rows, total_rows));
+	return progress;
 }
 
 InsertionOrderPreservingMap<string> PhysicalReservoirSample::ParamsToString() const {

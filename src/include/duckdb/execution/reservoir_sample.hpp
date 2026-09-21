@@ -122,6 +122,8 @@ public:
 	//! Fetches a chunk from the sample. destroy = true should only be used when
 	//! querying from a sample defined in a query and not a duckdb_table_sample.
 	virtual unique_ptr<DataChunk> GetChunk() = 0;
+	//! The number of sample rows that can still be fetched using GetChunk
+	virtual idx_t RemainingSampleCount() const = 0;
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
@@ -232,6 +234,7 @@ public:
 	//! sample is completely built.
 	// unique_ptr<DataChunk> GetChunkAndDestroy() override;
 	unique_ptr<DataChunk> GetChunk() override;
+	idx_t RemainingSampleCount() const override;
 	void Destroy() override;
 	void Finalize() override;
 	void Verify();
@@ -298,6 +301,7 @@ public:
 
 	//! Fetches a chunk from the sample. If destroy = true this method is descructive
 	unique_ptr<DataChunk> GetChunk() override;
+	idx_t RemainingSampleCount() const override;
 	void Finalize() override;
 
 	void Serialize(Serializer &serializer) const override;
