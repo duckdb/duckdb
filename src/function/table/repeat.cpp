@@ -1,5 +1,6 @@
 #include "duckdb/function/table/range.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 
@@ -14,7 +15,7 @@ struct RepeatFunctionData : public TableFunctionData {
 struct RepeatOperatorData : public GlobalTableFunctionState {
 	RepeatOperatorData() : current_count(0) {
 	}
-	idx_t current_count;
+	atomic<idx_t> current_count;
 };
 
 static unique_ptr<FunctionData> RepeatBind(ClientContext &context, TableFunctionBindInput &input,
@@ -47,6 +48,16 @@ static void RepeatFunction(ClientContext &context, TableFunctionInput &data_p, D
 	state.current_count += remaining;
 }
 
+static double RepeatProgress(ClientContext &context, const FunctionData *bind_data_p,
+                             const GlobalTableFunctionState *global_state) {
+	auto &bind_data = bind_data_p->Cast<RepeatFunctionData>();
+	auto &state = global_state->Cast<RepeatOperatorData>();
+	if (bind_data.target_count == 0) {
+		return 100.0;
+	}
+	return 100.0 * static_cast<double>(state.current_count) / static_cast<double>(bind_data.target_count);
+}
+
 static unique_ptr<NodeStatistics> RepeatCardinality(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<RepeatFunctionData>();
 	return make_uniq<NodeStatistics>(bind_data.target_count, bind_data.target_count);
@@ -55,6 +66,7 @@ static unique_ptr<NodeStatistics> RepeatCardinality(ClientContext &context, cons
 void RepeatTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction repeat("repeat", {LogicalType::ANY, LogicalType::BIGINT}, RepeatFunction, RepeatBind, RepeatInit);
 	repeat.cardinality = RepeatCardinality;
+	repeat.table_scan_progress = RepeatProgress;
 	set.AddFunction(repeat);
 }
 

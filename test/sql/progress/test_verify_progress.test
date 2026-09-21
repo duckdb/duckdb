@@ -36,6 +36,17 @@ SELECT count(*) FROM generate_series(TIMESTAMP '2000-01-01', TIMESTAMP '2001-01-
 ----
 527041
 
+# repeat and repeat_row report progress
+query I
+SELECT count(*) FROM repeat(42, 100000)
+----
+100000
+
+query I
+SELECT count(*) FROM repeat_row(1, 'hello', num_rows=100000)
+----
+100000
+
 # recursive CTEs do not report progress - this fails the query in error mode
 statement error
 WITH RECURSIVE t(i) AS (SELECT * FROM range(100000) UNION ALL SELECT i + 100000 FROM t WHERE i < 400000) SELECT sum(i) FROM t
