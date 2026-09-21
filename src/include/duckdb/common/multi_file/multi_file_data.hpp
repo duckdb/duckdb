@@ -118,6 +118,9 @@ public:
 		return identifier.GetValue<int32_t>();
 	}
 
+	DUCKDB_API void Serialize(Serializer &serializer) const;
+	DUCKDB_API static MultiFileColumnDefinition Deserialize(Deserializer &deserializer);
+
 	string GetIdentifierName() const {
 		if (identifier.IsNull()) {
 			// No identifier was provided, assume the name as the identifier

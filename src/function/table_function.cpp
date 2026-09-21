@@ -130,7 +130,6 @@ BoundTableFunction::BoundTableFunction(shared_ptr<const TableFunction> function_
 	sampling_pushdown = function.sampling_pushdown;
 	late_materialization = function.late_materialization;
 	function_info = function.function_info;
-	multi_file_info = function.multi_file_info;
 	BaseTableFunction::return_type = function.return_type;
 	call_return_type = function.call_return_type;
 	order_preservation_type = function.order_preservation_type;
