@@ -335,6 +335,11 @@ struct RemapEntry {
 		RemapEntry remap;
 		remap.index = entry->second.index;
 		remap.target_type = target_entry->second.type;
+		if (source_type.id() == LogicalTypeId::SQLNULL && struct_val.IsNull()) {
+			// NULL can be cast directly to a nested type without remapping its children.
+			result.emplace(remap_target, std::move(remap));
+			return;
+		}
 		if (source_is_nested || target_is_nested || !struct_val.IsNull()) {
 			if (source_type.id() != target_type.id()) {
 				throw BinderException("Can't change source type (%s) to target type (%s), type conversion not allowed",
@@ -609,12 +614,12 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 } // namespace
 
 ScalarFunction RemapStructFun::GetFunction() {
-	ScalarFunction remap("remap_struct",
-	                     {{"input", LogicalTypeId::ANY},
-	                      {"target_type", LogicalTypeId::ANY},
-	                      {"mapping", LogicalTypeId::ANY},
-	                      {"defaults", LogicalTypeId::ANY}},
-	                     LogicalTypeId::ANY, RemapStructFunction, RemapStructBind);
+	ScalarFunction remap("remap_struct", {}, LogicalTypeId::ANY, RemapStructFunction, RemapStructBind);
+	remap.GetSignature()
+	    .AddParameter("input", LogicalTypeId::ANY)
+	    .AddParameter("target_type", LogicalTypeId::ANY)
+	    .AddParameter("mapping", LogicalTypeId::ANY)
+	    .AddParameter("defaults", LogicalTypeId::ANY);
 	remap.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return remap;
 }

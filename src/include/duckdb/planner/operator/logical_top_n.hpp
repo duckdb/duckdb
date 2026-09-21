@@ -28,6 +28,8 @@ public:
 	idx_t limit;
 	//! The offset from the start to begin emitting elements
 	idx_t offset;
+	//! SQL offset before row group pruning removed rows from the scan.
+	optional_idx unpruned_offset;
 	//! Dynamic table filter (if any)
 	shared_ptr<DynamicFilterData> dynamic_filter;
 

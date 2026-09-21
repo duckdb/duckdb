@@ -236,6 +236,9 @@ public:
 	DUCKDB_API virtual FileType GetFileType(FileHandle &handle);
 	//! Returns the file stats of the attached handle.
 	DUCKDB_API virtual FileMetadata Stats(FileHandle &handle);
+	//! Returns the stats of a file, or nullopt if the file does not exist.
+	DUCKDB_API virtual optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file,
+	                                                           optional_ptr<FileOpener> opener = nullptr);
 	//! Truncate a file to a maximum size of new_size, new_size should be smaller than or equal to the current size of
 	//! the file
 	DUCKDB_API virtual void Truncate(FileHandle &handle, int64_t new_size);

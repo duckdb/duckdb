@@ -545,7 +545,7 @@ bool ConstantExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	auto &other_p = other.Cast<ConstantExpression>();
-	if (value.type() != other_p.value.type() || ValueOperations::DistinctFrom(value, other_p.value)) {
+	if (literal != other_p.literal) {
 		return false;
 	}
 	return true;
@@ -553,13 +553,13 @@ bool ConstantExpression::Equals(const ParsedExpression &other) const {
 
 hash_t ConstantExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, value.Hash());
+	hash = CombineHash(hash, literal.Hash());
 	return hash;
 }
 
 unique_ptr<ParsedExpression> ConstantExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<ConstantExpression>(new ConstantExpression());
-	copy->value = value;
+	copy->literal = literal;
 	copy->CopyBase(*this);
 	return std::move(copy);
 }

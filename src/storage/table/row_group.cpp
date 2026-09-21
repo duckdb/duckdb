@@ -393,7 +393,7 @@ bool RowGroup::InitializeScanInternal(CollectionScanState &state, SegmentNode<Ro
 	D_ASSERT(state.prepared_vector.prepare_state == VectorPrepareState::NONE);
 	state.prepared_vector.Reset();
 	state.assignment_io_registered = false;
-	state.row_group = node;
+	state.SetRowGroup(node);
 	state.vector_index = vector_offset;
 	auto row_start = node.GetRowStart();
 	state.max_row_group_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
@@ -747,7 +747,12 @@ bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo 
 					supported = false;
 					break;
 				}
-				input_stats.push_back(GetStatistics(storage_index)->Copy());
+				auto column_stats = GetStatistics(storage_index);
+				if (!column_stats) {
+					supported = false;
+					break;
+				}
+				input_stats.push_back(column_stats->Copy());
 			}
 			if (!supported) {
 				continue;
@@ -919,7 +924,7 @@ bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
 					continue;
 				}
 				if (rate < 1) {
-					auto row_group_start = state.row_group->GetRowStart();
+					auto row_group_start = state.GetRowGroup()->GetRowStart();
 					sample_count =
 					    SystemRowsSelection(sampling_info, row_group_start + current_row, max_count, sample_sel);
 					if (sample_count == 0) {
@@ -941,10 +946,8 @@ bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
 		if (!CheckZonemapSegments(state)) {
 			continue;
 		}
-		auto &current_row_group = state.row_group->GetNode();
-
 		// second, scan the version chunk manager to figure out which tuples to load for this transaction
-		idx_t count = current_row_group.GetSelVector(options, state.vector_index, state.valid_sel, max_count);
+		idx_t count = GetSelVector(options, state.vector_index, state.valid_sel, max_count);
 		if (count == 0) {
 			// nothing to scan for this vector, skip the entire vector
 			NextVector(state);
@@ -1521,11 +1524,17 @@ idx_t RowGroup::GetCommittedRowCount() {
 }
 
 idx_t RowGroup::GetVisibleRowCount(TransactionData transaction) {
+	return GetVisibleRowCount(transaction, 0, count);
+}
+
+idx_t RowGroup::GetVisibleRowCount(TransactionData transaction, idx_t start_vector, idx_t scan_count) {
+	D_ASSERT(start_vector * STANDARD_VECTOR_SIZE <= count);
+	D_ASSERT(scan_count <= count - start_vector * STANDARD_VECTOR_SIZE);
 	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
-		return count;
+		return scan_count;
 	}
-	return vinfo->GetRowCount(transaction, count);
+	return vinfo->GetRowCount(transaction, start_vector, scan_count);
 }
 
 bool RowGroup::HasUnloadedDeletes() const {

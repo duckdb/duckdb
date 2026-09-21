@@ -21,6 +21,7 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_trigger_info.hpp"
@@ -63,6 +64,10 @@ public:
 	optional_idx checkpoint_end_position;
 	optional_idx expected_checkpoint_id;
 	WALReplayState replay_state;
+	//! Blocks referenced by ROW_GROUP_DATA entries, collected during the deserialize-only scan. They are marked as used
+	//! only once we have decided to replay the WAL, so if log replay is not needed, these blocks won't be
+	//! double-referenced.
+	vector<block_id_t> row_group_blocks;
 
 	struct ReplayIndexInfo {
 		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, idx_t table_oid, optional_idx index_oid)
@@ -441,6 +446,8 @@ void WriteAheadLogReplayer::MergeIntoRecoveryWAL(Connection &con, const ReplaySt
 	// move over the recovery WAL over the main WAL
 	recovery_handle->Sync();
 	recovery_handle.reset();
+	// the main WAL is the target of the move - Windows refuses to replace a file that is still open
+	main_wal_reader.handle.reset();
 
 	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_MOVING_RECOVERY) {
 		throw FatalException("Checkpoint aborted before moving recovery file because of PRAGMA checkpoint_abort flag");
@@ -555,7 +562,10 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 				}
 				// if this is not a read-only connection we need to finish the checkpoint
 				// overwrite the current WAL with the checkpoint WAL
+				// both files must be closed - Windows refuses to move a file that is still open, and refuses to
+				// replace a target that is still open
 				checkpoint_handle.reset();
+				reader.handle.reset();
 
 				fs.MoveFile(checkpoint_wal, wal_path);
 
@@ -600,6 +610,15 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 		auto main_handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ);
 		truncated_wal_reader = make_uniq<BufferedFileReader>(fs, std::move(main_handle));
 	}
+
+	// Now we have decided to replay this WAL, mark the blocks referenced by ROW_GROUP_DATA entries as used.
+	// Notice, this must happen before replay, because replaying earlier entries can allocate blocks; without the marks,
+	// those allocations could hand out blocks that later entries reference.
+	auto &block_manager = storage_manager.GetBlockManager();
+	for (auto &block_id : checkpoint_state.row_group_blocks) {
+		block_manager.MarkBlockAsUsed(block_id);
+	}
+
 	// we need to recover from the WAL: actually set up the replay state
 	ReplayState state(database, *con.context, replay_state);
 
@@ -1319,11 +1338,8 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 	deserializer.Unset<const CompressionInfo>();
 	deserializer.Unset<DatabaseInstance>();
 	if (DeserializeOnly()) {
-		// label blocks in data as used - they will be used after the WAL replay is finished
-		// we need to do this during the deserialization phase to ensure the blocks will not be overwritten
-		// by previous deserialization steps
 		for (auto &block_id : data.GetBlockIds()) {
-			block_manager.MarkBlockAsUsed(block_id);
+			state.row_group_blocks.push_back(block_id);
 		}
 		return;
 	}

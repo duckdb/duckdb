@@ -1,4 +1,5 @@
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 namespace duckdb {
@@ -47,7 +48,8 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateIndexStmt(
 			if (option_entry.second->GetExpressionClass() != ExpressionClass::CONSTANT) {
 				throw InvalidInputException("Create index option must be a constant value");
 			}
-			index_info->options[option_entry.first] = option_entry.second->Cast<ConstantExpression>().GetValue();
+			index_info->options[option_entry.first] =
+			    option_entry.second->Cast<ConstantExpression>().GetLiteral().ToValue();
 		}
 	}
 	result->info = std::move(index_info);
@@ -115,7 +117,7 @@ pair<Identifier, unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformRelOption(PEGTransformer &transformer, const Identifier &rel_option_name,
                                           optional<unique_ptr<ParsedExpression>> rel_option_argument_opt) {
 	if (!rel_option_argument_opt) {
-		return {rel_option_name, make_uniq<ConstantExpression>(Value())};
+		return {rel_option_name, ConstantExpression::Null()};
 	}
 	return {rel_option_name, std::move(*rel_option_argument_opt)};
 }
@@ -130,24 +132,24 @@ PEGTransformerFactory::TransformRelOptionArgumentOpt(PEGTransformer &transformer
 // DefArgNull <- NullLiteral
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDefArgNull(PEGTransformer &transformer,
                                                                         const Value &null_literal) {
-	return make_uniq<ConstantExpression>(Value());
+	return ConstantExpression::Null();
 }
 
 // DefArgKeyword <- ReservedKeyword
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDefArgKeyword(PEGTransformer &transformer,
                                                                            const string &reserved_keyword) {
-	return make_uniq<ConstantExpression>(Value(reserved_keyword));
+	return ConstantExpression::String(reserved_keyword);
 }
 
 // DefArgStringLiteral <- StringLiteral
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDefArgStringLiteral(PEGTransformer &transformer,
                                                                                  const string &string_literal) {
-	return make_uniq<ConstantExpression>(Value(string_literal));
+	return ConstantExpression::String(string_literal);
 }
 
 // NoneLiteral <- 'NONE'
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNoneLiteral(PEGTransformer &transformer) {
-	return make_uniq<ConstantExpression>(Value());
+	return ConstantExpression::Null();
 }
 
 } // namespace duckdb

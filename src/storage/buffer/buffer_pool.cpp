@@ -357,7 +357,10 @@ BufferPool::EvictionResult BufferPool::EvictObjectCacheEntries(MemoryTag tag, id
 
 	bool success = false;
 	while (!object_cache->IsEmpty()) {
-		const idx_t freed_mem = object_cache->EvictToReduceMemory(extra_memory);
+		const idx_t used = memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH);
+		const idx_t overshoot = used > memory_limit ? (used - memory_limit) : 0;
+		const idx_t target = MaxValue(extra_memory, overshoot);
+		const idx_t freed_mem = object_cache->EvictToReduceMemory(target);
 		// Break if all entries cannot be evicted.
 		if (freed_mem == 0) {
 			break;
@@ -500,13 +503,32 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 		// This node is the block's live queue entry, and we just dequeued it: the block no longer
 		// has an entry in the queue. Live entries are never counted as dead, so no decrement.
 		handle->SetHasLiveQueueEntry(lock, false);
-		if (!handle->CanUnload()) {
+		switch (handle->CanUnload()) {
+		case CanUnloadResult::CAN_UNLOAD:
+			break;
+		case CanUnloadResult::NO_TEMP_DIRECTORY:
+			// Unpinned temporary block that cannot be offloaded yet: re-enqueue until temp directory is set.
+			handle->SetHasLiveQueueEntry(lock, true);
+			q.enqueue(std::move(node));
+			return;
+		case CanUnloadResult::PINNED:
+		case CanUnloadResult::ALREADY_UNLOADED:
 			// The block cannot be unloaded right now (e.g. it is pinned). It gets a new queue
 			// entry when it is unpinned again.
 			continue;
 		}
 
-		if (!fn(node, handle, lock)) {
+		bool continue_iteration;
+		try {
+			continue_iteration = fn(node, handle, lock);
+		} catch (...) {
+			// The unload failed (e.g. the temporary directory is full) and the block is still loaded.
+			// Give it its queue entry back, or it stays un-evictable until the next unpin.
+			handle->SetHasLiveQueueEntry(lock, true);
+			q.enqueue(std::move(node));
+			throw;
+		}
+		if (!continue_iteration) {
 			break;
 		}
 	}

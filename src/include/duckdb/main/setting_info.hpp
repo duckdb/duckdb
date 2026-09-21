@@ -112,9 +112,10 @@ struct ExtensionOption {
 	}
 	// NOLINTNEXTLINE: work around bug in clang-tidy
 	ExtensionOption(string description_p, LogicalType type_p, set_option_callback_t set_function_p,
-	                Value default_value_p, SetScope default_scope_p)
+	                Value default_value_p, SetScope default_scope_p, bool is_debug_p, bool is_deprecated_p)
 	    : description(std::move(description_p)), type(std::move(type_p)), set_function(set_function_p),
-	      default_value(std::move(default_value_p)), default_scope(default_scope_p) {
+	      default_value(std::move(default_value_p)), default_scope(default_scope_p), is_debug(is_debug_p),
+	      is_deprecated(is_deprecated_p) {
 	}
 
 	string description;
@@ -123,6 +124,8 @@ struct ExtensionOption {
 	Value default_value;
 	SetScope default_scope;
 	optional_idx setting_index;
+	bool is_debug = false;
+	bool is_deprecated = false;
 };
 
 } // namespace duckdb

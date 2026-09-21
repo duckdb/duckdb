@@ -1,4 +1,5 @@
 #include "duckdb/common/exception/http_exception.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/main/http/http_transport_manager.hpp"
 #include "duckdb/main/http/http_util.hpp"

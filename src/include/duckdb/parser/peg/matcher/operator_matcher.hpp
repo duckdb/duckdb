@@ -6,12 +6,15 @@
 
 namespace duckdb {
 
+enum class OperatorMatcherMode : uint8_t { GENERIC_PRECEDENCE, ALL_OPERATORS };
+
 class OperatorMatcher : public AtomicMatcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::OPERATOR;
 
 public:
-	explicit OperatorMatcher() : AtomicMatcher(TYPE) {
+	explicit OperatorMatcher(OperatorMatcherMode mode_p = OperatorMatcherMode::GENERIC_PRECEDENCE)
+	    : AtomicMatcher(TYPE), mode(mode_p) {
 	}
 
 	MatcherResult MatchAtomic(MatchState &state) const override {
@@ -43,26 +46,11 @@ private:
 			return false;
 		}
 		auto &token_text = token->text;
-		// Exclude the lambda arrow and JSON arrow — these have dedicated grammar roles
-		if (token_text == "->" || token_text == "->>") {
-			return false;
-		}
-		// Single-character operators are handled at specific precedence levels (comparison, additive, etc.)
-		if (token_text.size() == 1) {
-			return false;
-		}
-		// Exclude known comparison operators — handled by ComparisonExpression, not as function calls
-		if (token_text == "<=" || token_text == ">=" || token_text == "!=" || token_text == "==" ||
-		    token_text == "<>") {
-			return false;
-		}
-		// Exclude LIKE/SIMILAR operators — handled by LikeVariations at a higher precedence level
-		if (token_text == "~~" || token_text == "~~*" || token_text == "~~~" || token_text == "~*" ||
-		    token_text == "!~~" || token_text == "!~~*" || token_text == "!~" || token_text == "!~*") {
+		if (mode == OperatorMatcherMode::GENERIC_PRECEDENCE && HasSpecialPrecedence(token_text)) {
 			return false;
 		}
 		for (auto &c : token_text) {
-			if (!IsOperatorChar(c)) {
+			if (!Tokenizer::CharacterIsOperator(c)) {
 				return false;
 			}
 		}
@@ -71,28 +59,10 @@ private:
 		return true;
 	}
 
-protected:
-	bool IsOperatorChar(char c) const {
-		switch (c) {
-		case '+':
-		case '-':
-		case '*':
-		case '/':
-		case '%':
-		case '^':
-		case '<':
-		case '>':
-		case '=':
-		case '~':
-		case '!':
-		case '@':
-		case '&':
-		case '|':
-			return true;
-		default:
-			return false;
-		}
-	}
+private:
+	static bool HasSpecialPrecedence(const string &operator_name);
+
+	OperatorMatcherMode mode;
 };
 
 } // namespace duckdb

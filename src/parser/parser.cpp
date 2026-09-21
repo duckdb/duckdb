@@ -369,6 +369,9 @@ vector<SimplifiedToken> Parser::Tokenize(const string &query) {
 	vector<SimplifiedToken> result;
 	result.reserve(tokens.size());
 	for (auto &token : tokens) {
+		if (token.type == TokenType::END_OF_INPUT || token.type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+			continue;
+		}
 		SimplifiedToken simplified;
 		simplified.start = token.offset;
 		switch (token.type) {
@@ -540,21 +543,7 @@ vector<SimplifiedToken> Parser::TokenizeError(const string &error_msg) {
 }
 
 KeywordCategory Parser::ToKeywordCategory(const string &text) {
-	auto &helper = DuckDBKeywordHelper::Instance();
-
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_RESERVED)) {
-		return KeywordCategory::KEYWORD_RESERVED;
-	}
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_UNRESERVED)) {
-		return KeywordCategory::KEYWORD_UNRESERVED;
-	}
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_TYPE_FUNC)) {
-		return KeywordCategory::KEYWORD_TYPE_FUNC;
-	}
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_COL_NAME)) {
-		return KeywordCategory::KEYWORD_COL_NAME;
-	}
-	return KeywordCategory::KEYWORD_NONE;
+	return DuckDBKeywordHelper::Instance().GetKeywordCategory(text);
 }
 
 KeywordCategory Parser::IsKeyword(const string &text) {

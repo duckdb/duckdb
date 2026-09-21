@@ -6,6 +6,7 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/optimizer/aggregate_rewrite_helper.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -191,9 +192,10 @@ bool GroupingSetsOptimizer::TryExpandGroupingSets(unique_ptr<LogicalOperator> &o
 	}
 
 	auto cte_name = Identifier(StringUtil::Format("__grouping_sets_input_cte_%llu", cte_index.index));
-	result = make_uniq<LogicalMaterializedCTE>(std::move(cte_name), cte_index, input_types.size(),
-	                                           std::move(op->children[0]), std::move(result),
-	                                           CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	auto input =
+	    AggregateRewriteHelper::PinColumnOrder(optimizer, std::move(op->children[0]), input_types, input_bindings);
+	result = make_uniq<LogicalMaterializedCTE>(std::move(cte_name), cte_index, input_types.size(), std::move(input),
+	                                           std::move(result), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	if (aggr.has_estimated_cardinality) {
 		result->SetEstimatedCardinality(aggr.estimated_cardinality);
 	}
@@ -258,7 +260,6 @@ bool GroupingSetsOptimizer::TryRewriteGroupingSets(unique_ptr<LogicalOperator> &
 	const idx_t aggregate_count = aggr.expressions.size();
 
 	// build the per-level aggregates
-	auto combine_function = CombineAggrFun::GetFunction();
 	FunctionBinder function_binder(optimizer.context);
 	vector<LogicalType> state_types;
 	for (idx_t level_idx = 0; level_idx < levels.size(); level_idx++) {
@@ -301,7 +302,10 @@ bool GroupingSetsOptimizer::TryRewriteGroupingSets(unique_ptr<LogicalOperator> &
 				vector<unique_ptr<Expression>> arguments;
 				arguments.push_back(make_uniq<BoundColumnRefExpression>(
 				    state_types[aggr_idx], ColumnBinding(cte_ref_index, ProjectionIndex(state_pos))));
-				auto combine_aggregate = function_binder.BindAggregateFunction(combine_function, std::move(arguments));
+				auto combine_function =
+				    GetBuiltinAggregateFunction(optimizer.context, CombineAggrFun::Name, {state_types[aggr_idx]});
+				auto combine_aggregate =
+				    function_binder.BindAggregateFunction(std::move(combine_function), std::move(arguments));
 				if (combine_aggregate->GetReturnType() != state_types[aggr_idx]) {
 					return false;
 				}

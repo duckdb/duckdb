@@ -775,11 +775,11 @@ TEST_CASE("V2: destroying a half-consumed result is clean", "[capi_v2][query_res
 #if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: a fetched chunk outlives result, connection, and database", "[capi_v2][query_result]") {
 	duckdb_v2_environment_handle env = nullptr;
-	duckdb_v2_database_handle db = nullptr;
+	duckdb_v2_instance_handle instance = nullptr;
 	duckdb_v2_connection_handle conn = nullptr;
-	REQUIRE(duckdb_v2_create_environment(&env, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_open(env, duckdb_v2_str {nullptr, 0}, nullptr, 0, &db, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connect(db, &conn, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_environment_create(&env, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(OpenInstance(env, duckdb_v2_str {nullptr, 0}, &instance, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create(instance, &conn, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_result_handle r = nullptr;
 	REQUIRE(Query(conn, "SELECT i, 'row-' || i AS s FROM range(100) t(i)", &r, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -787,9 +787,9 @@ TEST_CASE("V2: a fetched chunk outlives result, connection, and database", "[cap
 	REQUIRE(chunk != nullptr);
 
 	duckdb_v2_result_destroy(&r);
-	duckdb_v2_disconnect(&conn);
-	duckdb_v2_close(&db);
-	duckdb_v2_destroy_environment(&env);
+	duckdb_v2_connection_destroy(&conn);
+	duckdb_v2_instance_destroy(&instance);
+	duckdb_v2_environment_destroy(&env);
 
 	// The chunk owns its data; producers are all gone.
 	idx_t size = 0;
@@ -1101,7 +1101,7 @@ TEST_CASE("V2: a busy connection does not affect a second connection", "[capi_v2
 	EnvFixture fx;
 
 	duckdb_v2_connection_handle conn2 = nullptr;
-	REQUIRE(duckdb_v2_connect(fx.db, &conn2, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create(fx.instance, &conn2, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_result_handle live = nullptr;
 	REQUIRE(Query(fx.conn, "SELECT i FROM range(100000) t(i)", &live, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -1112,7 +1112,7 @@ TEST_CASE("V2: a busy connection does not affect a second connection", "[capi_v2
 	duckdb_v2_result_destroy(&other);
 
 	duckdb_v2_result_destroy(&live);
-	duckdb_v2_disconnect(&conn2);
+	duckdb_v2_connection_destroy(&conn2);
 }
 #endif
 // ===========================================================================
@@ -1270,11 +1270,11 @@ TEST_CASE("V2: result_fetch_chunk drains a CHANGED_ROWS result", "[capi_v2][quer
 #if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: an undrained result survives disconnect and close", "[capi_v2][query_result]") {
 	duckdb_v2_environment_handle env = nullptr;
-	duckdb_v2_database_handle db = nullptr;
+	duckdb_v2_instance_handle instance = nullptr;
 	duckdb_v2_connection_handle conn = nullptr;
-	REQUIRE(duckdb_v2_create_environment(&env, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_open(env, duckdb_v2_str {nullptr, 0}, nullptr, 0, &db, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_connect(db, &conn, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_environment_create(&env, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(OpenInstance(env, duckdb_v2_str {nullptr, 0}, &instance, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create(instance, &conn, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_result_handle r = nullptr;
 	REQUIRE(Query(conn, "SELECT i FROM range(100000) t(i)", &r, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -1282,8 +1282,8 @@ TEST_CASE("V2: an undrained result survives disconnect and close", "[capi_v2][qu
 	REQUIRE(chunk != nullptr);
 	duckdb_v2_data_chunk_destroy(&chunk);
 
-	duckdb_v2_disconnect(&conn);
-	duckdb_v2_close(&db);
+	duckdb_v2_connection_destroy(&conn);
+	duckdb_v2_instance_destroy(&instance);
 
 	// Metadata still reads off the wrapper.
 	REQUIRE(ColumnCount(r) == 1);
@@ -1311,7 +1311,7 @@ TEST_CASE("V2: an undrained result survives disconnect and close", "[capi_v2][qu
 	(void)drained;
 	REQUIRE(duckdb_v2_result_destroy(&r) == DUCKDB_V2_ERROR_NONE);
 
-	duckdb_v2_destroy_environment(&env);
+	duckdb_v2_environment_destroy(&env);
 }
 #endif
 

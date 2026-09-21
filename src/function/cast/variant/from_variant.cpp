@@ -12,6 +12,7 @@
 #include "duckdb/common/serializer/varint.hpp"
 #include "yyjson.hpp"
 
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 
@@ -294,6 +295,9 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 
 		FindValues(conversion_data.variant, row_index, new_sel, child_data_entry);
 		if (!CastVariant(conversion_data, child, new_sel, entry.offset, child_data_entry.child_count, row_index)) {
+			// a TRY_CAST reports the failure by returning false rather than throwing, so the writer has to be
+			// told it is deliberately short of count before it goes out of scope
+			result_data.Truncate();
 			return false;
 		}
 	}
@@ -431,6 +435,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 			auto row_index = row.IsValid() ? row.GetIndex() : nested_index.GetIndex();
 			auto object_keys =
 			    VariantUtils::GetObjectKeys(conversion_data.variant, row_index, child_data[nested_index.GetIndex()]);
+			std::sort(object_keys.begin(), object_keys.end());
 			conversion_data.error = StringUtil::Format("VARIANT(OBJECT(%s)) is missing key '%s'",
 			                                           StringUtil::Join(object_keys, ","), component.key);
 			return false;
@@ -514,18 +519,29 @@ static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector
 
 	ConvertedJSONHolder holder(Allocator::DefaultAllocator());
 
+	auto &variant = conversion_data.variant;
 	auto result_data = FlatVector::Writer<string_t>(result, count, offset);
 	for (idx_t i = 0; i < count; i++) {
 		const auto row_index = row.IsValid() ? row.GetIndex() : i;
+		if (!variant.RowIsValid(row_index)) {
+			// a SQL NULL row stays a SQL NULL - rendering it as the JSON token `null` would make it
+			// indistinguishable from a JSON null actually stored in the variant
+			result_data.WriteNull();
+			continue;
+		}
 		const auto json_val =
 		    VariantCasts::ConvertVariantToJSON(holder.GetDocument(), conversion_data.variant, row_index, sel[i]);
 		if (!json_val) {
 			error = StringUtil::Format("Failed to convert to JSON object");
+			// same as the list path: a TRY_CAST returns false instead of throwing, so the writer must be
+			// told it is deliberately short of count
+			result_data.Truncate();
 			return false;
 		}
 
 		const auto serialized = holder.Serialize(json_val, error);
 		if (!serialized) {
+			result_data.Truncate();
 			return false;
 		}
 
@@ -777,9 +793,10 @@ static bool TryFromShreddedCast(Vector &variant_vec, Vector &result) {
 	if (ShreddedVector::IsFullyShredded(variant_vec) && shredded_vec.GetType().id() == LogicalTypeId::STRUCT) {
 		// it is! check if the type of the typed_value entry matches
 		auto &shredded_entries = StructVector::GetEntries(shredded_vec);
-		if (shredded_entries[1].GetType() == result.GetType()) {
+		auto &typed_value = shredded_entries[VariantStats::TYPED_VALUE_INDEX];
+		if (typed_value.GetType() == result.GetType()) {
 			// the typed_value matches - directly reference it
-			result.Reference(shredded_entries[1]);
+			result.Reference(typed_value);
 			return true;
 		}
 	}
