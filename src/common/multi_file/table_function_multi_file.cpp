@@ -86,6 +86,7 @@ void TableFunctionFileReader::BindFunction(ClientContext &context, const TableFu
 	TableFunctionBindInput bind_input(inputs, parameters, input_table_types, input_table_names,
 	                                  function.function_info.get(), nullptr, function, empty_ref);
 	TableFunctionFileBindInput file_input;
+	file_input.file = file;
 	file_input.multi_file_options = file_options;
 	file_input.multi_file_scan = options.multi_file_scan;
 	file_input.schema_only = schema_only;
@@ -117,12 +118,25 @@ void TableFunctionFileReader::BindFunction(ClientContext &context, const TableFu
 	}
 }
 
+unique_ptr<BaseStatistics> TableFunctionUnionData::GetStatistics(ClientContext &context, const Identifier &name) {
+	if (!statistics || !bind_data) {
+		return nullptr;
+	}
+	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
+		if (Identifier(names[col_idx]) == name) {
+			return statistics(context, bind_data.get(), col_idx);
+		}
+	}
+	return nullptr;
+}
+
 shared_ptr<BaseUnionData> TableFunctionFileReader::GetUnionData(idx_t file_idx) {
 	auto result = make_shared_ptr<TableFunctionUnionData>(file);
 	result->names = IdentifiersToStrings(names);
 	result->types = types;
 	result->cardinality = cardinality;
 	result->bind_data = bind_data;
+	result->statistics = function.statistics;
 	if (file_idx == 0) {
 		// keep the first reader around so we don't need to bind it again
 		result->reader = shared_from_this();

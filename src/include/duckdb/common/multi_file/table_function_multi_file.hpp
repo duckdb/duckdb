@@ -20,6 +20,9 @@ namespace duckdb {
 //! What the multi-file scan tells the bind of the single-file function that reads one of its files - see
 //! TableFunctionBindInput::multi_file_input
 struct TableFunctionFileBindInput {
+	//! The file to read, with the options it is opened with (e.g. its size or encryption key) - the path the bind
+	//! receives as its input does not carry those
+	optional_ptr<const OpenFileInfo> file;
 	//! (Optional) The schema this bind is expected to produce, when the schema of the scan was already determined -
 	//! the bind should read the file using this schema instead of determining a schema of its own
 	optional_ptr<const vector<Identifier>> expected_names;
@@ -50,6 +53,15 @@ struct TableFunctionFileBindInput {
 		static const TableFunctionFileBindInput EMPTY;
 		return input.multi_file_input ? *input.multi_file_input : EMPTY;
 	}
+	//! The file a single-file function reads - the file of the multi-file scan when it is part of one, the path it
+	//! was given otherwise
+	static OpenFileInfo GetFile(const TableFunctionBindInput &input) {
+		auto &file_input = Get(input);
+		if (file_input.file) {
+			return *file_input.file;
+		}
+		return OpenFileInfo(StringValue::Get(input.inputs[0]));
+	}
 };
 
 //! What the multi-file scan tells the initialization of the single-file function that reads one of its files - see
@@ -66,8 +78,9 @@ struct TableFunctionFileInitInput {
 	//! used when a filter could not be expressed in the types the file stores
 	optional_ptr<const unordered_map<ProjectionIndex, BaseFileReaderExpression>> expression_map;
 	//! (Optional) The rows that were deleted from this file, which the function must not produce. The scan keeps
-	//! ownership of the filter - it outlives the scan the function initializes
-	optional_ptr<DeleteFilter> deletion_filter;
+	//! ownership of the filter - it outlives the scan the function initializes. It is used (and updated) while the
+	//! file is read, so it is not part of what makes this input const
+	mutable optional_ptr<DeleteFilter> deletion_filter;
 	//! (Optional) The virtual columns among the column indexes, as a map of the index they are projected in to the
 	//! virtual column id wanted there. A virtual column gets an index of its own, past the columns the function bound
 	optional_ptr<const unordered_map<column_t, column_t>> virtual_columns;
@@ -211,10 +224,13 @@ public:
 	//! The bind data of the wrapped function for this file. It is used to combine the schemas of several files, and
 	//! kept afterwards so that the bind that reads the file can reuse what this one read from it
 	shared_ptr<FunctionData> bind_data;
+	//! The statistics callback of the wrapped function, which reads the statistics of this file from its bind data
+	table_statistics_t statistics = nullptr;
 
 	optional_idx TryGetCardinalityEstimate() const override {
 		return cardinality;
 	}
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name) override;
 };
 
 //! Reads a single file by binding and executing the wrapped table function over that file

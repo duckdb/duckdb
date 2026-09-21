@@ -105,7 +105,7 @@ static unique_ptr<FunctionData> ReadSingleJSONFileBind(ClientContext &context, T
 		// the schema of the scan was already determined - read this file exactly the way it was determined, so that
 		// every file of the scan produces the same columns from the same JSON keys
 		auto &source = file_input.expected_bind_data->Cast<ReadSingleJSONFileData>();
-		result->file = OpenFileInfo(StringValue::Get(input.inputs[0]));
+		result->file = TableFunctionFileBindInput::GetFile(input);
 		result->options.record_type = source.options.record_type;
 		result->options.geojson = source.options.geojson;
 		result->options.auto_detect = false;
@@ -126,7 +126,7 @@ static unique_ptr<FunctionData> ReadSingleJSONFileBind(ClientContext &context, T
 		options.name_list = *file_input.expected_names;
 		options.sql_type_list = *file_input.expected_types;
 	}
-	result->file = OpenFileInfo(StringValue::Get(input.inputs[0]));
+	result->file = TableFunctionFileBindInput::GetFile(input);
 
 	// keep the detected structure around - it is used to combine the schema of this file with that of other files
 	// when this function is wrapped into a multi-file function. This is only needed when the columns are not known

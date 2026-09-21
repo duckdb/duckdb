@@ -54,7 +54,8 @@ struct HivePartitioningIndex {
 
 struct MultiFileColumnDefinition {
 public:
-	MultiFileColumnDefinition(const Identifier &name, const LogicalType &type) : name(name), type(type) {
+	MultiFileColumnDefinition(Identifier name_p, LogicalType type_p)
+	    : name(std::move(name_p)), type(std::move(type_p)) {
 	}
 	MultiFileColumnDefinition(const char *name, const LogicalType &type) : name(name), type(type) {
 	}
