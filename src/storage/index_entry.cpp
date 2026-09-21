@@ -317,10 +317,9 @@ string IndexEntry::GetIndexType() const {
 
 bool IndexEntry::HasBufferedReplays() const {
 	auto entry_lock = lock.GetSharedLock();
-	if (bind_state != IndexBindState::UNBOUND) {
+	if (!owned_index || owned_index->IsBound()) {
 		return false;
 	}
-	D_ASSERT(owned_index);
 	return owned_index->Cast<UnboundIndex>().HasBufferedReplays();
 }
 
