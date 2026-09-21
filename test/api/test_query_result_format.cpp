@@ -82,7 +82,7 @@ TEST_CASE("No unit spans two batch indexes", "[api][query_result_format]") {
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(500000)"));
 
-	// A row target well past one row group makes the batch boundary, not the target, finish most units
+	// A row cap well past one row group makes the batch boundary, not the cap, finish most units
 	auto handle = SubmitFormatted(con, "SELECT i FROM t", 400000);
 	DrainWatchdog watchdog(con);
 	FormattedResultStream<TestFormat> stream(std::move(handle));
@@ -105,7 +105,7 @@ TEST_CASE("No unit spans two batch indexes", "[api][query_result_format]") {
 	}
 	REQUIRE(!stream.HasError());
 	REQUIRE(row_count == 500000);
-	// One unit per row group: the row target is never reached, so only the boundary finishes a unit
+	// One unit per row group: the row cap is never reached, so only the boundary finishes a unit
 	const idx_t groups = (500000 + DEFAULT_ROW_GROUP_SIZE - 1) / DEFAULT_ROW_GROUP_SIZE;
 	REQUIRE(groups > 1);
 	REQUIRE(units == groups);
@@ -117,7 +117,7 @@ TEST_CASE("Combine finishes the partial unit of every producer", "[api][query_re
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	SECTION("a row target no producer reaches") {
+	SECTION("a row cap no producer reaches") {
 		// The simple store runs no NextBatch, so Combine is the only thing that can finish the unit
 		auto handle = SubmitFormatted(con, "SELECT i FROM range(1000) t(i)", 1000000);
 		DrainWatchdog watchdog(con);

@@ -55,7 +55,7 @@ public:
 	ResultOrdering ordering;
 	//! How many worker threads built a unit for this query
 	atomic<idx_t> local_states {0};
-	//! Units finished short of the row target: one per batch boundary and one per producer at its end
+	//! Units finished short of the row cap: one per batch boundary and one per producer at its end
 	atomic<idx_t> partial_units {0};
 };
 
@@ -74,7 +74,7 @@ public:
 	static constexpr const char *NAME = "test";
 
 public:
-	explicit TestFormat(idx_t unit_rows_p) : unit_rows(unit_rows_p) {
+	explicit TestFormat(idx_t max_unit_rows_p) : max_unit_rows(max_unit_rows_p) {
 	}
 
 public:
@@ -110,14 +110,14 @@ public:
 	unique_ptr<ResultUnit> Finish(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate_p,
 	                              bool flush_partial) override {
 		auto &lstate = lstate_p.Cast<TestFormatLocalState>();
-		if (lstate.chunks.empty() || (lstate.rows < unit_rows && !flush_partial)) {
+		if (lstate.chunks.empty() || (lstate.rows < max_unit_rows && !flush_partial)) {
 			return nullptr;
 		}
 		if (throw_in_finish) {
 			throw InvalidInputException("TestFormat::Finish");
 		}
 		auto unit = make_uniq<TestUnit>(std::move(lstate.chunks), lstate.producer, lstate.rows, lstate.bytes);
-		if (lstate.rows < unit_rows) {
+		if (lstate.rows < max_unit_rows) {
 			gstate.Cast<TestFormatGlobalState>().partial_units++;
 		}
 		lstate.chunks.clear();
@@ -127,7 +127,7 @@ public:
 	}
 
 public:
-	idx_t unit_rows;
+	idx_t max_unit_rows;
 	atomic<bool> throw_in_append {false};
 	atomic<bool> throw_in_finish {false};
 };
@@ -173,10 +173,10 @@ inline vector<Value> UnitValues(const ResultUnit &unit, idx_t column) {
 	return values;
 }
 
-inline unique_ptr<QueryResult> SubmitFormatted(Connection &con, const string &query, idx_t unit_rows) {
+inline unique_ptr<QueryResult> SubmitFormatted(Connection &con, const string &query, idx_t max_unit_rows) {
 	auto handle = con.Submit(query);
 	REQUIRE(!handle->HasError());
-	handle->SetFormat(make_shared_ptr<TestFormat>(unit_rows));
+	handle->SetFormat(make_shared_ptr<TestFormat>(max_unit_rows));
 	return handle;
 }
 
