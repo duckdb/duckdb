@@ -108,16 +108,16 @@ vector<LinkedExtension> LinkedExtensionRegistry::Get() {
 
 } // namespace duckdb
 
-duckdb_state duckdb_register_static_extension(duckdb_extension_describe_t describe) {
+int32_t duckdb_register_static_extension(duckdb_extension_describe_t describe) {
 	try {
 		auto error = duckdb::Register(describe);
 		if (error.empty()) {
-			return DuckDBSuccess;
+			return 0;
 		}
 		auto &state = duckdb::GetRegistryState();
 		std::lock_guard<std::mutex> guard(state.lock);
 		state.errors.push_back(std::move(error));
 	} catch (...) { // NOLINT: never throw across the C API
 	}
-	return DuckDBError;
+	return 1;
 }

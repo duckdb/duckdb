@@ -9,7 +9,25 @@
 
 #pragma once
 
-#include "duckdb.h"
+#include <stdint.h>
+
+#ifndef DUCKDB_C_API
+#ifdef _WIN32
+#ifdef DUCKDB_STATIC_BUILD
+#define DUCKDB_C_API
+#elif defined(DUCKDB_BUILD_LIBRARY) && !defined(DUCKDB_BUILD_LOADABLE_EXTENSION)
+#define DUCKDB_C_API __declspec(dllexport)
+#else
+#define DUCKDB_C_API __declspec(dllimport)
+#endif
+#else
+#if defined(__GNUC__) || defined(__clang__)
+#define DUCKDB_C_API __attribute__((visibility("default")))
+#else
+#define DUCKDB_C_API
+#endif
+#endif
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,10 +65,10 @@ struct duckdb_extension_descriptor {
 //! success.
 typedef int32_t (*duckdb_extension_describe_t)(duckdb_extension_descriptor *descriptor);
 
-//! Calls describe and registers the extension it describes for every database opened afterwards.
-//! Registering the same describe function again is a no-op; a different one under a registered name is an error.
-//! A failed registration also makes opening a database fail with the reason.
-DUCKDB_C_API duckdb_state duckdb_register_static_extension(duckdb_extension_describe_t describe);
+//! Calls describe and registers the extension it describes for every database opened afterwards. Returns 0 on
+//! success. Registering the same describe function again is a no-op; a different one under a registered name is an
+//! error. A failed registration also makes opening a database fail with the reason.
+DUCKDB_C_API int32_t duckdb_register_static_extension(duckdb_extension_describe_t describe);
 
 #ifdef __cplusplus
 }

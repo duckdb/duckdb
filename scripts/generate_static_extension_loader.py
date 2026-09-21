@@ -40,7 +40,7 @@ def generate(names):
             f'int32_t {describe}(duckdb_extension_descriptor *descriptor);' for describe in describers
         ),
         'DESCRIBE_REGISTRATIONS': '\n'.join(
-            f'\tif (duckdb_register_static_extension({describe}) != DuckDBSuccess) {{\n\t\tresult = DuckDBError;\n\t}}'
+            f'\tif (duckdb_register_static_extension({describe}) != 0) {{\n\t\tresult = 1;\n\t}}'
             for describe in describers
         ),
     }

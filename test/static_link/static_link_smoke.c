@@ -7,7 +7,7 @@
 #include <string.h>
 
 #ifdef STATIC_LINK_EXPLICIT
-duckdb_state duckdb_register_static_extensions(void);
+int32_t duckdb_register_static_extensions(void);
 #endif
 
 int main(void) {
@@ -15,7 +15,7 @@ int main(void) {
 	duckdb_connection con;
 	duckdb_result res;
 #ifdef STATIC_LINK_EXPLICIT
-	if (duckdb_register_static_extensions() != DuckDBSuccess) {
+	if (duckdb_register_static_extensions() != 0) {
 		fprintf(stderr, "duckdb_register_static_extensions failed\n");
 		return 1;
 	}

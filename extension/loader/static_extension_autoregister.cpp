@@ -2,9 +2,9 @@
 // extensions registered without calling duckdb_register_static_extensions itself. Compile it into the program, not into
 // an archive, or the linker drops it.
 
-#include "duckdb.h"
+#include <stdint.h>
 
-extern "C" duckdb_state duckdb_register_static_extensions(void);
+extern "C" int32_t duckdb_register_static_extensions(void);
 
 namespace {
 struct DuckDBStaticExtensionLoader {

@@ -23,8 +23,8 @@ extern "C" {
 
 @DESCRIBE_DECLARATIONS@
 
-DUCKDB_STATIC_EXTENSION_LOADER_API duckdb_state duckdb_register_static_extensions(void) {
-	duckdb_state result = DuckDBSuccess;
+DUCKDB_STATIC_EXTENSION_LOADER_API int32_t duckdb_register_static_extensions(void) {
+	int32_t result = 0;
 @DESCRIBE_REGISTRATIONS@
 	return result;
 }

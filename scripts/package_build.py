@@ -318,8 +318,8 @@ def build_package(
         )
         ext_registrations += (
             f"#if {ext_linked_define}\n"
-            f"\tif (duckdb_register_static_extension(duckdb_extension_{ext}_describe) != DuckDBSuccess) {{\n"
-            "\t\tresult = DuckDBError;\n"
+            f"\tif (duckdb_register_static_extension(duckdb_extension_{ext}_describe) != 0) {{\n"
+            "\t\tresult = 1;\n"
             "\t}\n"
             "#endif\n"
         )
@@ -338,8 +338,8 @@ def build_package(
         + "#define DUCKDB_STATIC_EXTENSION_LOADER_API\n"
         + "#endif\n"
         + "#endif\n\n"
-        + 'extern "C" DUCKDB_STATIC_EXTENSION_LOADER_API duckdb_state duckdb_register_static_extensions(void) {\n'
-        + "\tduckdb_state result = DuckDBSuccess;\n"
+        + 'extern "C" DUCKDB_STATIC_EXTENSION_LOADER_API int32_t duckdb_register_static_extensions(void) {\n'
+        + "\tint32_t result = 0;\n"
         + ext_registrations
         + "\treturn result;\n"
         + "}\n"
