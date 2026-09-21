@@ -122,7 +122,7 @@ static unique_ptr<FunctionData> ReadSingleCSVFileBind(ClientContext &context, Ta
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("read_single_csv_file requires a non-NULL file name");
 	}
-	result->file = OpenFileInfo(StringValue::Get(input.inputs[0]));
+	result->file = TableFunctionFileBindInput::GetFile(input);
 
 	// the options of the scan this file is part of steer the sniffer - the file list is this single file
 	MultiFileOptions file_options;

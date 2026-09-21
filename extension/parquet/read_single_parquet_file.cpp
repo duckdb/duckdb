@@ -82,7 +82,7 @@ static unique_ptr<FunctionData> ReadSingleParquetFileBind(ClientContext &context
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("read_single_parquet_file requires a non-NULL file name");
 	}
-	result->file = OpenFileInfo(StringValue::Get(input.inputs[0]));
+	result->file = TableFunctionFileBindInput::GetFile(input);
 
 	// the named parameters of this function are those of the multi-file parquet reader
 	ParquetMultiFileInfo interface;
