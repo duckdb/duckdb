@@ -9,6 +9,9 @@
 
 namespace duckdb {
 
+//===--------------------------------------------------------------------===//
+// Error Helpers
+//===--------------------------------------------------------------------===//
 [[noreturn]] static void ThrowInvalidStringDictionary() {
 	throw DataCorruptionException("Corrupted uncompressed string segment: dictionary is outside the segment");
 }
@@ -44,149 +47,6 @@ namespace duckdb {
 
 [[noreturn]] static void ThrowOverflowStringOffsetOutOfBounds() {
 	throw DataCorruptionException("Corrupted uncompressed string segment: overflow string offset is outside its block");
-}
-
-//! Returns the absolute offset without validating it.
-static inline uint32_t GetDictionaryOffset(const int32_t encoded_offset) {
-	// Widen first so taking the absolute value of INT32_MIN does not overflow.
-	return UnsafeNumericCast<uint32_t>(AbsValue<int64_t>(encoded_offset));
-}
-
-static uint32_t ValidateAndGetDictionaryOffset(const int32_t encoded_offset, const uint32_t dictionary_size) {
-	if (encoded_offset == NumericLimits<int32_t>::Minimum()) {
-		ThrowDictionaryOffsetMinimumValue();
-	}
-
-	const auto dictionary_offset = GetDictionaryOffset(encoded_offset);
-	if (dictionary_offset > dictionary_size) {
-		ThrowDictionaryOffsetOutOfBounds(dictionary_offset, dictionary_size);
-	}
-	return dictionary_offset;
-}
-
-//! SIMD friendly version of ValidateDictionaryEntry that avoids early exits.
-//! Returns 1 if ValidateDictionaryEntry would accept the offsets, otherwise 0.
-static uint32_t ValidateDictionaryEntryFast(const int32_t current_offset, const int32_t previous_offset,
-                                            const uint32_t dictionary_size) {
-	const auto current_dictionary_offset = GetDictionaryOffset(current_offset);
-	const auto previous_dictionary_offset = GetDictionaryOffset(previous_offset);
-	// Offsets store the cumulative number of dictionary bytes used.
-	const auto string_length = current_dictionary_offset - previous_dictionary_offset;
-	uint32_t invalid = current_offset == NumericLimits<int32_t>::Minimum();
-	invalid |= current_dictionary_offset > dictionary_size;
-	// Dictionary offsets must not decrease.
-	invalid |= current_dictionary_offset < previous_dictionary_offset;
-
-	// If the offset is negative, the entry is either NULL or an overflow string.
-	const uint32_t is_negative = current_offset < 0;
-	const uint32_t has_zero_length = string_length == 0;
-	const uint32_t has_bytes = string_length != 0;
-	const uint32_t offset_changed = current_offset != previous_offset;
-	const uint32_t wrong_marker_size = string_length != UncompressedStringStorage::BIG_STRING_MARKER_SIZE;
-
-	// If it is NULL, the current offset must be inherited unchanged from the previous entry.
-	const auto invalid_null = has_zero_length & offset_changed;
-	// If it is an overflow string, the entry's length must match the marker's length.
-	const auto invalid_overflow = has_bytes & wrong_marker_size;
-	invalid |= is_negative & (invalid_null | invalid_overflow);
-
-	return invalid == 0;
-}
-
-//! Validates both offsets and their entry, throwing on invalid data.
-static void ValidateDictionaryEntry(const int32_t current_offset, const int32_t previous_offset,
-                                    const uint32_t dictionary_size) {
-	const auto previous_dictionary_offset = ValidateAndGetDictionaryOffset(previous_offset, dictionary_size);
-	const auto current_dictionary_offset = ValidateAndGetDictionaryOffset(current_offset, dictionary_size);
-
-	// Dictionary offsets must not decrease.
-	if (current_dictionary_offset < previous_dictionary_offset) {
-		D_ASSERT(!ValidateDictionaryEntryFast(current_offset, previous_offset, dictionary_size));
-		ThrowDecreasingDictionaryOffset(current_dictionary_offset, previous_dictionary_offset);
-	}
-
-	// Offsets store the cumulative number of dictionary bytes used.
-	const auto string_length = current_dictionary_offset - previous_dictionary_offset;
-
-	// If the offset is negative, the entry is either NULL or an overflow string.
-	if (current_offset < 0) {
-		// If it is NULL, the current offset must be inherited unchanged from the previous entry.
-		if (string_length == 0 && current_offset != previous_offset) {
-			D_ASSERT(!ValidateDictionaryEntryFast(current_offset, previous_offset, dictionary_size));
-			ThrowInvalidDictionaryEntryMarker();
-		}
-
-		// If it is an overflow string, the entry's length must match the marker's length.
-		if (string_length > 0 && string_length != UncompressedStringStorage::BIG_STRING_MARKER_SIZE) {
-			D_ASSERT(!ValidateDictionaryEntryFast(current_offset, previous_offset, dictionary_size));
-			ThrowInvalidDictionaryEntryMarker();
-		}
-	}
-
-	D_ASSERT(ValidateDictionaryEntryFast(current_offset, previous_offset, dictionary_size));
-}
-
-ValidatedStringRange StringSegmentLayout::ValidateRange(const idx_t start, const idx_t count) const {
-	D_ASSERT(start <= offsets.size());
-	D_ASSERT(count <= offsets.size() - start);
-	auto range_offsets = offsets.SubArray(start, count);
-	const auto previous_offset = start > 0 ? offsets[start - 1] : 0;
-	const auto dictionary_size = NumericCast<uint32_t>(dictionary_data.size());
-	const auto preceding_dictionary_offset = ValidateAndGetDictionaryOffset(previous_offset, dictionary_size);
-	if (DUCKDB_UNLIKELY(count == 0)) {
-		return ValidatedStringRange(dictionary_data, range_offsets, preceding_dictionary_offset);
-	}
-
-	uint32_t valid = ValidateDictionaryEntryFast(range_offsets[0], previous_offset, dictionary_size);
-	// Hot path assumes no errors, so accumulate and later deal with them.
-	for (idx_t i = 1; i < count; i++) {
-		valid &= ValidateDictionaryEntryFast(range_offsets[i], range_offsets[i - 1], dictionary_size);
-	}
-
-	// If we have an error, find it and report it.
-	if (DUCKDB_UNLIKELY(!valid)) {
-		for (idx_t i = 0; i < count; i++) {
-			ValidateDictionaryEntry(range_offsets[i], i > 0 ? range_offsets[i - 1] : previous_offset, dictionary_size);
-		}
-		throw InternalException("ValidateDictionaryEntryFast and ValidateDictionaryEntry disagree");
-	}
-
-	return ValidatedStringRange(dictionary_data, range_offsets, preceding_dictionary_offset);
-}
-
-StringDictionaryEntry StringSegmentLayout::ValidateAndGetEntry(const idx_t row_index) const {
-	D_ASSERT(row_index < offsets.size());
-	const auto current_offset = offsets[row_index];
-	const auto previous_offset = row_index > 0 ? offsets[row_index - 1] : 0;
-	ValidateDictionaryEntry(current_offset, previous_offset, NumericCast<uint32_t>(dictionary_data.size()));
-	const auto previous_dictionary_offset = GetDictionaryOffset(previous_offset);
-	const auto current_dictionary_offset = GetDictionaryOffset(current_offset);
-	const auto string_length = current_dictionary_offset - previous_dictionary_offset;
-	const auto is_overflow = current_offset < 0 && string_length > 0;
-	return {dictionary_data.SubArray(dictionary_data.size() - current_dictionary_offset, string_length), is_overflow};
-}
-
-StringSegmentLayout StringSegmentLayout::Read(const BufferHandle &handle, const ColumnSegment &segment) {
-	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "uncompressed string segment");
-	// Only the dictionary end is read here. Appends update the dictionary size in the same header while
-	// scans run, so reading it from a scan is a data race. The end is fixed at the segment size.
-	auto dictionary_end = NumericCast<idx_t>(reader.Get<uint32_t>(sizeof(uint32_t)));
-	if (dictionary_end > reader.Size()) {
-		ThrowInvalidStringDictionary();
-	}
-	auto offset_count = segment.count.load();
-	if (dictionary_end < UncompressedStringStorage::DICTIONARY_HEADER_SIZE ||
-	    offset_count > (dictionary_end - UncompressedStringStorage::DICTIONARY_HEADER_SIZE) / sizeof(int32_t)) {
-		ThrowStringOffsetTableOutOfBounds();
-	}
-	// The dictionary grows backwards from its end, down to the last byte of the offsets table.
-	auto dictionary_start = UncompressedStringStorage::DICTIONARY_HEADER_SIZE + offset_count * sizeof(int32_t);
-	auto dictionary_data = reader.GetBytes(dictionary_start, dictionary_end - dictionary_start);
-	auto offsets = reader.GetArray<int32_t>(UncompressedStringStorage::DICTIONARY_HEADER_SIZE, offset_count);
-	return {dictionary_data, offsets};
-}
-
-StringScanState::StringScanState(BufferHandle handle_p) : handle(std::move(handle_p)) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -245,6 +105,9 @@ idx_t UncompressedStringStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
+StringScanState::StringScanState(BufferHandle handle_p) : handle(std::move(handle_p)) {
+}
+
 void UncompressedStringInitPrefetch(ColumnSegment &segment, PrefetchState &prefetch_state) {
 	prefetch_state.AddBlock(segment.GetBlockHandle());
 	auto segment_state = segment.GetSegmentState();
@@ -453,6 +316,149 @@ CompressionFunction StringUncompressed::GetFunction(PhysicalType data_type) {
 	                           UncompressedStringStorage::SerializeState, UncompressedStringStorage::DeserializeState,
 	                           UncompressedStringStorage::VisitBlockIds, UncompressedStringInitPrefetch,
 	                           UncompressedStringStorage::Select);
+}
+
+//===--------------------------------------------------------------------===//
+// Dictionary Validation
+//===--------------------------------------------------------------------===//
+//! Returns the absolute offset without validating it.
+static inline uint32_t GetDictionaryOffset(const int32_t encoded_offset) {
+	// Widen first so taking the absolute value of INT32_MIN does not overflow.
+	return UnsafeNumericCast<uint32_t>(AbsValue<int64_t>(encoded_offset));
+}
+
+static uint32_t ValidateAndGetDictionaryOffset(const int32_t encoded_offset, const uint32_t dictionary_size) {
+	if (encoded_offset == NumericLimits<int32_t>::Minimum()) {
+		ThrowDictionaryOffsetMinimumValue();
+	}
+
+	const auto dictionary_offset = GetDictionaryOffset(encoded_offset);
+	if (dictionary_offset > dictionary_size) {
+		ThrowDictionaryOffsetOutOfBounds(dictionary_offset, dictionary_size);
+	}
+	return dictionary_offset;
+}
+
+//! SIMD friendly version of ValidateDictionaryEntry that avoids early exits.
+//! Returns 1 if ValidateDictionaryEntry would accept the offsets, otherwise 0.
+static uint32_t ValidateDictionaryEntryFast(const int32_t current_offset, const int32_t previous_offset,
+                                            const uint32_t dictionary_size) {
+	const auto current_dictionary_offset = GetDictionaryOffset(current_offset);
+	const auto previous_dictionary_offset = GetDictionaryOffset(previous_offset);
+	// Offsets store the cumulative number of dictionary bytes used.
+	const auto string_length = current_dictionary_offset - previous_dictionary_offset;
+	uint32_t invalid = current_offset == NumericLimits<int32_t>::Minimum();
+	invalid |= current_dictionary_offset > dictionary_size;
+	// Dictionary offsets must not decrease.
+	invalid |= current_dictionary_offset < previous_dictionary_offset;
+
+	// If the offset is negative, the entry is either NULL or an overflow string.
+	const uint32_t is_negative = current_offset < 0;
+	const uint32_t has_zero_length = string_length == 0;
+	const uint32_t has_bytes = string_length != 0;
+	const uint32_t offset_changed = current_offset != previous_offset;
+	const uint32_t wrong_marker_size = string_length != UncompressedStringStorage::BIG_STRING_MARKER_SIZE;
+
+	// If it is NULL, the current offset must be inherited unchanged from the previous entry.
+	const auto invalid_null = has_zero_length & offset_changed;
+	// If it is an overflow string, the entry's length must match the marker's length.
+	const auto invalid_overflow = has_bytes & wrong_marker_size;
+	invalid |= is_negative & (invalid_null | invalid_overflow);
+
+	return invalid == 0;
+}
+
+//! Validates both offsets and their entry, throwing on invalid data.
+static void ValidateDictionaryEntry(const int32_t current_offset, const int32_t previous_offset,
+                                    const uint32_t dictionary_size) {
+	const auto previous_dictionary_offset = ValidateAndGetDictionaryOffset(previous_offset, dictionary_size);
+	const auto current_dictionary_offset = ValidateAndGetDictionaryOffset(current_offset, dictionary_size);
+
+	// Dictionary offsets must not decrease.
+	if (current_dictionary_offset < previous_dictionary_offset) {
+		D_ASSERT(!ValidateDictionaryEntryFast(current_offset, previous_offset, dictionary_size));
+		ThrowDecreasingDictionaryOffset(current_dictionary_offset, previous_dictionary_offset);
+	}
+
+	// Offsets store the cumulative number of dictionary bytes used.
+	const auto string_length = current_dictionary_offset - previous_dictionary_offset;
+
+	// If the offset is negative, the entry is either NULL or an overflow string.
+	if (current_offset < 0) {
+		// If it is NULL, the current offset must be inherited unchanged from the previous entry.
+		if (string_length == 0 && current_offset != previous_offset) {
+			D_ASSERT(!ValidateDictionaryEntryFast(current_offset, previous_offset, dictionary_size));
+			ThrowInvalidDictionaryEntryMarker();
+		}
+
+		// If it is an overflow string, the entry's length must match the marker's length.
+		if (string_length > 0 && string_length != UncompressedStringStorage::BIG_STRING_MARKER_SIZE) {
+			D_ASSERT(!ValidateDictionaryEntryFast(current_offset, previous_offset, dictionary_size));
+			ThrowInvalidDictionaryEntryMarker();
+		}
+	}
+
+	D_ASSERT(ValidateDictionaryEntryFast(current_offset, previous_offset, dictionary_size));
+}
+
+StringSegmentLayout StringSegmentLayout::Read(const BufferHandle &handle, const ColumnSegment &segment) {
+	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "uncompressed string segment");
+	// Only the dictionary end is read here. Appends update the dictionary size in the same header while
+	// scans run, so reading it from a scan is a data race. The end is fixed at the segment size.
+	auto dictionary_end = NumericCast<idx_t>(reader.Get<uint32_t>(sizeof(uint32_t)));
+	if (dictionary_end > reader.Size()) {
+		ThrowInvalidStringDictionary();
+	}
+	auto offset_count = segment.count.load();
+	if (dictionary_end < UncompressedStringStorage::DICTIONARY_HEADER_SIZE ||
+	    offset_count > (dictionary_end - UncompressedStringStorage::DICTIONARY_HEADER_SIZE) / sizeof(int32_t)) {
+		ThrowStringOffsetTableOutOfBounds();
+	}
+	// The dictionary grows backwards from its end, down to the last byte of the offsets table.
+	auto dictionary_start = UncompressedStringStorage::DICTIONARY_HEADER_SIZE + offset_count * sizeof(int32_t);
+	auto dictionary_data = reader.GetBytes(dictionary_start, dictionary_end - dictionary_start);
+	auto offsets = reader.GetArray<int32_t>(UncompressedStringStorage::DICTIONARY_HEADER_SIZE, offset_count);
+	return {dictionary_data, offsets};
+}
+
+ValidatedStringRange StringSegmentLayout::ValidateRange(const idx_t start, const idx_t count) const {
+	D_ASSERT(start <= offsets.size());
+	D_ASSERT(count <= offsets.size() - start);
+	auto range_offsets = offsets.SubArray(start, count);
+	const auto previous_offset = start > 0 ? offsets[start - 1] : 0;
+	const auto dictionary_size = NumericCast<uint32_t>(dictionary_data.size());
+	const auto preceding_dictionary_offset = ValidateAndGetDictionaryOffset(previous_offset, dictionary_size);
+	if (DUCKDB_UNLIKELY(count == 0)) {
+		return ValidatedStringRange(dictionary_data, range_offsets, preceding_dictionary_offset);
+	}
+
+	uint32_t valid = ValidateDictionaryEntryFast(range_offsets[0], previous_offset, dictionary_size);
+	// Hot path assumes no errors, so accumulate and later deal with them.
+	for (idx_t i = 1; i < count; i++) {
+		valid &= ValidateDictionaryEntryFast(range_offsets[i], range_offsets[i - 1], dictionary_size);
+	}
+
+	// If we have an error, find it and report it.
+	if (DUCKDB_UNLIKELY(!valid)) {
+		for (idx_t i = 0; i < count; i++) {
+			ValidateDictionaryEntry(range_offsets[i], i > 0 ? range_offsets[i - 1] : previous_offset, dictionary_size);
+		}
+		throw InternalException("ValidateDictionaryEntryFast and ValidateDictionaryEntry disagree");
+	}
+
+	return ValidatedStringRange(dictionary_data, range_offsets, preceding_dictionary_offset);
+}
+
+StringDictionaryEntry StringSegmentLayout::ValidateAndGetEntry(const idx_t row_index) const {
+	D_ASSERT(row_index < offsets.size());
+	const auto current_offset = offsets[row_index];
+	const auto previous_offset = row_index > 0 ? offsets[row_index - 1] : 0;
+	ValidateDictionaryEntry(current_offset, previous_offset, NumericCast<uint32_t>(dictionary_data.size()));
+	const auto previous_dictionary_offset = GetDictionaryOffset(previous_offset);
+	const auto current_dictionary_offset = GetDictionaryOffset(current_offset);
+	const auto string_length = current_dictionary_offset - previous_dictionary_offset;
+	const auto is_overflow = current_offset < 0 && string_length > 0;
+	return {dictionary_data.SubArray(dictionary_data.size() - current_dictionary_offset, string_length), is_overflow};
 }
 
 //===--------------------------------------------------------------------===//
