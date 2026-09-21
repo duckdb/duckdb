@@ -240,11 +240,13 @@ void ClientContext::ConnectToCatalog(const shared_ptr<AttachedDatabase> &target)
 	}
 	connected_to_database = target;
 	is_connected = true;
+	ClientConfig::GetConfig(*this).connected_grammar = target->GetConnectedGrammar(*this);
 }
 
 void ClientContext::DisconnectFromCatalog() {
 	connected_to_database.reset();
 	is_connected = false;
+	ClientConfig::GetConfig(*this).connected_grammar.reset();
 }
 
 shared_ptr<AttachedDatabase> ClientContext::TryGetConnectedCatalog() const {
