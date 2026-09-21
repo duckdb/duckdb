@@ -1,0 +1,45 @@
+# name: test/sql/index/art/storage/test_art_if_not_exists_constraint_name_tombstone.test
+# description: A dropped index on another table must not bypass a hidden constraint index name collision
+# group: [storage]
+
+statement ok
+CREATE TABLE t(i INTEGER PRIMARY KEY);
+
+statement ok
+CREATE TABLE other(i INTEGER);
+
+statement ok
+CREATE INDEX PRIMARY_t_0 ON other(i);
+
+statement ok
+BEGIN;
+
+statement ok
+DROP INDEX PRIMARY_t_0;
+
+# The catalog deletion marker belongs to other, not to t's primary-key index.
+statement ok
+CREATE INDEX IF NOT EXISTS PRIMARY_t_0 ON t(i);
+
+statement ok
+COMMIT;
+
+# Creation must be skipped, leaving no explicit index with this name.
+query TT
+SELECT table_name, index_name FROM duckdb_indexes();
+----
+
+statement error
+DROP INDEX PRIMARY_t_0;
+----
+<REGEX>:Catalog Error.*Index with name PRIMARY_t_0 does not exist.*
+
+# The hidden primary-key index must still enforce uniqueness.
+statement error
+INSERT INTO t VALUES (1), (1);
+----
+<REGEX>:Constraint Error:.*
+
+query I
+SELECT * FROM t;
+----
