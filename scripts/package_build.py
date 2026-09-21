@@ -288,12 +288,12 @@ def build_package(
         # the same describe function duckdb_add_extension_describe generates in extension/extension_build_tools.cmake
         if ext_kind == 'CAPI':
             entry_name, entry_field = f'{ext}_init_c_api', 'entry_capi_v1'
-            entry_declaration = (
-                f'extern "C" bool {entry_name}(duckdb_extension_info info, struct duckdb_extension_access *access);'
-            )
+            # takes a duckdb_extension_info and a duckdb_extension_access pointer, returns bool
+            entry_declaration = f'extern "C" int {entry_name}(void *info, void *access);'
         elif ext_kind == 'CAPI_V2':
             entry_name, entry_field = f'{ext}_init_c_api_v2', 'entry_capi_v2'
-            entry_declaration = f'extern "C" void {entry_name}(struct duckdb_v2_extension_input *input);'
+            # takes a duckdb_v2_extension_input pointer
+            entry_declaration = f'extern "C" void {entry_name}(void *input);'
         else:
             entry_name, entry_field = f'{ext}_duckdb_cpp_init', 'entry_cpp'
             entry_declaration = f'extern "C" void {entry_name}(duckdb::ExtensionLoader &loader);'
