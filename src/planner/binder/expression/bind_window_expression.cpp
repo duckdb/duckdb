@@ -5,6 +5,8 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
@@ -75,8 +77,38 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	return bound->GetReturnType();
 }
 
+//! COUNT(*) FILTER (WHERE p) counts the rows where p holds, which is what COUNT(v) counts for a v
+//! that is null exactly where p does not. Spelled that way the frame is answered by a segment tree;
+//! COUNT(*) has no argument for one to be built over, so it counts the rows a filter leaves in one at
+//! a time - a pass over the partition per row, where the frame grows a row at a time.
+static void RewriteFilteredCountStar(WindowExpression &window) {
+	if (!window.FilterMutable() || !window.GetArguments().empty() || window.Distinct() || !window.ArgOrders().empty()) {
+		return;
+	}
+	auto &qualified = window.GetQualifiedName();
+	// COUNT(*) reaches here as COUNT with no argument; the star is what the parser drops
+	const auto &spelled = qualified.Name().GetIdentifierName();
+	if (!qualified.Catalog().empty() || !qualified.Schema().empty() ||
+	    (!StringUtil::CIEquals(spelled, CountFun::Name) && !StringUtil::CIEquals(spelled, CountStarFun::Name))) {
+		return;
+	}
+
+	auto kept = make_uniq<CaseExpression>();
+	CaseCheck check;
+	check.when_expr = std::move(window.FilterMutable());
+	check.then_expr = ConstantExpression::FromValue(Value::BOOLEAN(true));
+	kept->CaseChecksMutable().push_back(std::move(check));
+	kept->ElseMutable() = ConstantExpression::FromValue(Value(LogicalType::BOOLEAN));
+
+	window.GetArgumentsMutable().emplace_back(std::move(kept));
+	window.FilterMutable() = nullptr;
+	window.SetFunctionName(CountFun::Name);
+}
+
 BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_t depth) {
 	QueryErrorContext error_context(window.GetQueryLocation());
+
+	RewriteFilteredCountStar(window);
 
 	//	Check for macros pretending to be aggregates
 	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, window.GetQualifiedName(), error_context);
@@ -132,11 +164,18 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	}
 	vector<unique_ptr<Expression>> bound_partitions;
 	for (auto &child : window.PartitionsMutable()) {
-		bound_partitions.push_back(BindChild(child, depth, error));
+		auto bound_partition = BindChild(child, depth, error);
+		if (!error.HasError() && bound_partition->IsVolatile()) {
+			throw BinderException(error_context, "PARTITION BY window expressions cannot be volatile");
+		}
+		bound_partitions.push_back(std::move(bound_partition));
 	}
 	vector<unique_ptr<Expression>> bound_orders;
 	for (auto &order : window.OrderByMutable()) {
 		auto bound_order = BindChild(order.expression, depth, error);
+		if (!error.HasError() && bound_order->IsVolatile()) {
+			throw BinderException(error_context, "ORDER BY window expressions cannot be volatile");
+		}
 
 		//	If the frame is a RANGE frame and the type is a time,
 		//	then we have to convert the time to a timestamp to avoid wrapping.
@@ -147,7 +186,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		const auto type_id = bound_order->GetReturnType().id();
 		if (type_id == LogicalTypeId::TIME || type_id == LogicalTypeId::TIME_TZ) {
 			//	Convert to time + epoch and rebind
-			unique_ptr<ParsedExpression> epoch = make_uniq<ConstantExpression>(Value::DATE(date_t::epoch()));
+			unique_ptr<ParsedExpression> epoch = ConstantExpression::FromValue(Value::DATE(date_t::epoch()));
 			auto bound_epoch = BindChild(epoch, depth, error);
 			BindRangeExpression(context, "+", bound_order, bound_epoch);
 		}

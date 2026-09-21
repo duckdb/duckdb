@@ -1,5 +1,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 
+#include "duckdb/function/match_recognize.hpp"
+
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -74,6 +76,13 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 			// special case, not in catalog
 			return BindUnnest(function, depth, root_expression);
 		}
+		if (function.FunctionName() == MATCH_RECOGNIZE_RUNNING_MARKER ||
+		    function.FunctionName() == MATCH_RECOGNIZE_FINAL_MARKER) {
+			// RUNNING and FINAL say how much of a match the call below them reads, and only the
+			// MEASURES binder knows what a match is
+			return BindResult(BinderException::Unsupported(
+			    function, "RUNNING and FINAL are only meaningful in the MEASURES of a MATCH_RECOGNIZE"));
+		}
 		// binding a function expression requires an extra parameter for macros
 		return BindExpression(function, depth, expr);
 	}
@@ -81,6 +90,11 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		const vector<LogicalType> function_child_types;
 		return BindExpression(expr_ref.Cast<LambdaExpression>(), depth, function_child_types, nullptr, nullptr);
 	}
+	case ExpressionClass::PATTERN:
+		// a row pattern is matched by MATCH_RECOGNIZE rather than evaluated, so it is not an expression
+		// anywhere an expression is expected
+		return BindResult(BinderException::Unsupported(expr_ref, "A row pattern is only meaningful in the PATTERN "
+		                                                         "clause of MATCH_RECOGNIZE"));
 	case ExpressionClass::OPERATOR:
 		return BindExpression(expr_ref.Cast<OperatorExpression>(), depth);
 	case ExpressionClass::SUBQUERY:
@@ -113,13 +127,11 @@ BindResult ExpressionBinder::DispatchToScope(idx_t scope, unique_ptr<ParsedExpre
 BindResult ExpressionBinder::BindInEnclosingScope(ColumnRefExpression &col_ref, idx_t depth,
                                                   unique_ptr<ParsedExpression> &expr_ptr, ErrorData local_error) {
 	auto bind_error = std::move(local_error);
-#ifdef DEBUG
 	// the index of a scope is a depth, so a scope pushed or popped while the search is running would
 	// shift every index underneath it
 	const auto initial_scope_count = ScopeCount();
-#endif
 	idx_t scope = 1;
-	while (scope < ScopeCount()) {
+	while (scope < initial_scope_count) {
 		D_ASSERT(ScopeCount() == initial_scope_count);
 		auto resolution = ResolveColumn(col_ref, scope);
 		if (!resolution.found) {

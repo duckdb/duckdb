@@ -51,6 +51,16 @@ endif()
 
 add_executable(unittest unittest.cpp ${UNITTEST_OBJECT_FILES})
 
+# Enable best-effort stack traces for fatal signals in the test runner without
+# enabling stack traces for every DuckDB exception.
+if((CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT MUSL_ENABLED) OR APPLE)
+  target_compile_definitions(unittest PRIVATE DUCKDB_UNITTEST_CRASH_STACKTRACE)
+endif()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT MUSL_ENABLED)
+  set_target_properties(unittest PROPERTIES ENABLE_EXPORTS ON)
+endif()
+
 set(RUN_WRAPPER_UNITTEST_NAME "unittest")
 if(WIN32)
   set(RUN_WRAPPER_UNITTEST_NAME "unittest.exe")

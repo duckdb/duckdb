@@ -512,11 +512,9 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 }
 
 unique_ptr<FunctionData> ListAggregateBind(BindScalarFunctionInput &input) {
-	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
 	// the list column and the name of the aggregate function
-	D_ASSERT(bound_function.GetArguments().size() >= 2);
-	D_ASSERT(arguments.size() >= 2);
+	D_ASSERT(input.GetBoundFunction().GetArguments().size() >= 2);
+	D_ASSERT(input.GetArguments().size() >= 2);
 
 	return ListAggregatesBind<true>(input);
 }
@@ -524,8 +522,11 @@ unique_ptr<FunctionData> ListAggregateBind(BindScalarFunctionInput &input) {
 } // namespace
 
 ScalarFunction ListAggregateFun::GetFunction() {
-	auto result = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
-	                             ListAggregateFunction, ListAggregateBind, nullptr, ListAggregatesInitLocalState);
+	auto result = ScalarFunction({}, LogicalType::ANY, ListAggregateFunction, ListAggregateBind, nullptr,
+	                             ListAggregatesInitLocalState);
+	result.GetSignature()
+	    .AddParameter("list", LogicalType::LIST(LogicalType::ANY))
+	    .AddParameter("function_name", LogicalType::VARCHAR);
 	result.SetFallible();
 	result.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	result.SetVarArgs(LogicalType::ANY);
@@ -535,14 +536,17 @@ ScalarFunction ListAggregateFun::GetFunction() {
 }
 
 ScalarFunction ListDistinctFun::GetFunction() {
-	return ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T"))},
-	                      LogicalType::LIST(LogicalType::TEMPLATE("T")), ListDistinctFunction,
-	                      ListAggregatesBind<false>, nullptr, ListAggregatesInitLocalState);
+	ScalarFunction fun({}, LogicalType::LIST(LogicalType::TEMPLATE("T")), ListDistinctFunction,
+	                   ListAggregatesBind<false>, nullptr, ListAggregatesInitLocalState);
+	fun.GetSignature().AddParameter("list", LogicalType::LIST(LogicalType::TEMPLATE("T")));
+	return fun;
 }
 
 ScalarFunction ListUniqueFun::GetFunction() {
-	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::UBIGINT, ListUniqueFunction,
-	                      ListAggregatesBind<false>, nullptr, ListAggregatesInitLocalState);
+	ScalarFunction fun({}, LogicalType::UBIGINT, ListUniqueFunction, ListAggregatesBind<false>, nullptr,
+	                   ListAggregatesInitLocalState);
+	fun.GetSignature().AddParameter("list", LogicalType::LIST(LogicalType::ANY));
+	return fun;
 }
 
 } // namespace duckdb

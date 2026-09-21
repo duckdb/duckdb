@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
@@ -27,7 +28,7 @@ namespace duckdb {
 constexpr const char *TableCatalogEntry::Name;
 
 TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info)
-    : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.GetTableName()), columns(std::move(info.columns)),
+    : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.GetTableName()),
       constraints(std::move(info.constraints)) {
 	this->temporary = info.temporary;
 	this->dependencies = info.dependencies;
@@ -36,6 +37,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
 }
 
 bool TableCatalogEntry::HasGeneratedColumns() const {
+	auto &columns = GetColumns();
 	return columns.LogicalColumnCount() != columns.PhysicalColumnCount();
 }
 
@@ -57,6 +59,7 @@ StorageIndex TableCatalogEntry::GetStorageIndex(const ColumnIndex &column_id) co
 }
 
 LogicalIndex TableCatalogEntry::GetColumnIndex(Identifier &column_name, bool if_exists) const {
+	auto &columns = GetColumns();
 	auto entry = columns.GetColumnIndex(column_name);
 	if (!entry.IsValid()) {
 		if (if_exists) {
@@ -78,16 +81,16 @@ unique_ptr<BlockingSample> TableCatalogEntry::GetSample() {
 }
 
 bool TableCatalogEntry::ColumnExists(const Identifier &name) const {
-	return columns.ColumnExists(name);
+	return GetColumns().ColumnExists(name);
 }
 
 const ColumnDefinition &TableCatalogEntry::GetColumn(const Identifier &name) const {
-	return columns.GetColumn(name);
+	return GetColumns().GetColumn(name);
 }
 
 vector<LogicalType> TableCatalogEntry::GetTypes() const {
 	vector<LogicalType> types;
-	for (auto &col : columns.Physical()) {
+	for (auto &col : GetColumns().Physical()) {
 		types.push_back(col.Type());
 	}
 	return types;
@@ -97,7 +100,7 @@ unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateTableInfo>();
 	// carry the full (possibly nested) schema path: [catalog, schema_path..., name]
 	result->SetQualifiedName(schema.GetQualifiedName(name));
-	result->columns = columns.Copy();
+	result->columns = GetColumns().Copy();
 	result->constraints.reserve(constraints.size());
 	result->dependencies = dependencies;
 	std::for_each(constraints.begin(), constraints.end(),
@@ -116,8 +119,8 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 
 	// find all columns that have NOT NULL specified, but are NOT primary key columns
 	logical_index_set_t not_null_columns;
-	logical_index_set_t unique_columns;
-	logical_index_set_t pk_columns;
+	logical_index_map_t<vector<ConstraintTiming>> unique_columns;
+	logical_index_map_t<vector<ConstraintTiming>> pk_columns;
 	identifier_set_t multi_key_pks;
 	vector<string> extra_constraints;
 	for (auto &constraint : constraints) {
@@ -129,9 +132,9 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 			if (pk.HasIndex()) {
 				// no columns specified: single column constraint
 				if (pk.IsPrimaryKey()) {
-					pk_columns.insert(pk.GetIndex());
+					pk_columns[pk.GetIndex()].push_back(pk.timing);
 				} else {
-					unique_columns.insert(pk.GetIndex());
+					unique_columns[pk.GetIndex()].push_back(pk.timing);
 				}
 			} else {
 				// multi-column constraint, this constraint needs to go at the end after all columns
@@ -169,11 +172,21 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 		}
 		if (is_single_key_pk) {
 			// single column pk: insert constraint here
-			ss << " PRIMARY KEY";
+			for (auto timing : pk_columns.at(column.Logical())) {
+				ss << " PRIMARY KEY";
+				if (timing != ConstraintTiming::DEFAULT) {
+					ss << " " << EnumUtil::ToString(timing);
+				}
+			}
 		}
 		if (is_unique) {
 			// single column unique: insert constraint here
-			ss << " UNIQUE";
+			for (auto timing : unique_columns.at(column.Logical())) {
+				ss << " UNIQUE";
+				if (timing != ConstraintTiming::DEFAULT) {
+					ss << " " << EnumUtil::ToString(timing);
+				}
+			}
 		}
 	}
 	// print any extra constraints that still need to be printed
@@ -215,12 +228,8 @@ TableFunction TableCatalogEntry::GetScanFunction(ClientContext &context, unique_
 	return GetScanFunction(context, bind_data);
 }
 
-const ColumnList &TableCatalogEntry::GetColumns() const {
-	return columns;
-}
-
 const ColumnDefinition &TableCatalogEntry::GetColumn(LogicalIndex idx) const {
-	return columns.GetColumn(idx);
+	return GetColumns().GetColumn(idx);
 }
 
 const vector<unique_ptr<Constraint>> &TableCatalogEntry::GetConstraints() const {
@@ -288,7 +297,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 	// suppose we have a constraint CHECK(i + j < 10); now we need both i and j to check the constraint
 	// if we are only updating one of the two columns we add the other one to the UPDATE set
 	// with a "useless" update (i.e. i=i) so we can verify that the CHECK constraint is not violated
-	auto bound_constraints = binder.BindConstraints(constraints, name, columns);
+	auto bound_constraints = binder.BindConstraints(constraints, name, GetColumns());
 	for (auto &constraint : bound_constraints) {
 		if (constraint->type == ConstraintType::CHECK) {
 			auto &check = constraint->Cast<BoundCheckConstraint>();
@@ -393,6 +402,10 @@ void TableCatalogEntry::ScanTriggers(CatalogTransaction transaction,
 optional_ptr<CatalogEntry> TableCatalogEntry::GetTrigger(CatalogTransaction transaction, const Identifier &name) const {
 	// Default: no triggers (non-DuckDB tables do not support triggers)
 	return nullptr;
+}
+
+bool TableCatalogEntry::DropTrigger(CatalogTransaction transaction, const Identifier &name, bool cascade) {
+	throw NotImplementedException("Triggers are not supported for this table type");
 }
 
 vector<const_reference<TriggerCatalogEntry>> TableCatalogEntry::GetTriggersForEvent(CatalogTransaction transaction,

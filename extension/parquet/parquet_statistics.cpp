@@ -755,7 +755,7 @@ GetBloomFilterInExpression(const Expression &expr, ParquetBloomFilterHashStrateg
 			return nullptr;
 		}
 		auto &constant = children[child_idx]->Cast<BoundConstantExpression>().GetValue();
-		if (constant.IsNull() || column.GetReturnType() != constant.type()) {
+		if (!constant.IsNull() && column.GetReturnType() != constant.type()) {
 			return nullptr;
 		}
 	}
@@ -1026,6 +1026,9 @@ static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_f
 		// An IN filter is excluded only when every candidate is absent.
 		for (idx_t child_idx = 1; child_idx < children.size(); ++child_idx) {
 			auto &constant = children[child_idx]->Cast<BoundConstantExpression>().GetValue();
+			if (constant.IsNull()) {
+				continue;
+			}
 			if (!BloomFilterExcludes(constant, bloom_filter, schema, hash_strategy)) {
 				return false;
 			}

@@ -90,6 +90,16 @@ void DebugCheckpointAbortSetting::OnSet(SettingCallbackInfo &info, Value &parame
 }
 
 //===----------------------------------------------------------------------===//
+// Force Bitpacking Mode
+//===----------------------------------------------------------------------===//
+void ForceBitpackingModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("debug_force_bitpacking_mode setting cannot be NULL");
+	}
+	EnumUtil::FromString<BitpackingMode>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Debug Order Verification
 //===----------------------------------------------------------------------===//
 void DebugOrderVerificationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -147,16 +157,6 @@ void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) 
 }
 
 //===----------------------------------------------------------------------===//
-// Default Io Mode
-//===----------------------------------------------------------------------===//
-void DefaultIoModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
-	if (parameter.IsNull()) {
-		throw InvalidInputException("default_io_mode setting cannot be NULL");
-	}
-	EnumUtil::FromString<FileIOMode>(StringValue::Get(parameter));
-}
-
-//===----------------------------------------------------------------------===//
 // Default Transaction Invalidation Policy
 //===----------------------------------------------------------------------===//
 void DefaultTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
@@ -210,16 +210,6 @@ void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 }
 
 //===----------------------------------------------------------------------===//
-// Force Bitpacking Mode
-//===----------------------------------------------------------------------===//
-void ForceBitpackingModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
-	if (parameter.IsNull()) {
-		throw InvalidInputException("force_bitpacking_mode setting cannot be NULL");
-	}
-	EnumUtil::FromString<BitpackingMode>(StringValue::Get(parameter));
-}
-
-//===----------------------------------------------------------------------===//
 // H T T P Proxy
 //===----------------------------------------------------------------------===//
 Value HTTPProxySetting::GetSetting(const ClientContext &context) {
@@ -248,16 +238,6 @@ void PinThreadsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 }
 
 //===----------------------------------------------------------------------===//
-// Regex Match Operator Semantics
-//===----------------------------------------------------------------------===//
-void RegexMatchOperatorSemanticsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
-	if (parameter.IsNull()) {
-		throw InvalidInputException("regex_match_operator_semantics setting cannot be NULL");
-	}
-	EnumUtil::FromString<RegexMatchOperatorSemantics>(StringValue::Get(parameter));
-}
-
-//===----------------------------------------------------------------------===//
 // Show Behavior
 //===----------------------------------------------------------------------===//
 void ShowBehaviorSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
@@ -275,16 +255,6 @@ void StorageBlockPrefetchSetting::OnSet(SettingCallbackInfo &info, Value &parame
 		throw InvalidInputException("storage_block_prefetch setting cannot be NULL");
 	}
 	EnumUtil::FromString<StorageBlockPrefetch>(StringValue::Get(parameter));
-}
-
-//===----------------------------------------------------------------------===//
-// Table Function Identifier Conversion
-//===----------------------------------------------------------------------===//
-void TableFunctionIdentifierConversionSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
-	if (parameter.IsNull()) {
-		throw InvalidInputException("table_function_identifier_conversion setting cannot be NULL");
-	}
-	EnumUtil::FromString<TableFunctionIdentifierConversion>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//

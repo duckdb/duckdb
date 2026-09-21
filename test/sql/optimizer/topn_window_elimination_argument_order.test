@@ -1,0 +1,36 @@
+# name: test/sql/optimizer/topn_window_elimination_argument_order.test
+# description: Top-N window elimination must preserve ROW_NUMBER argument ordering
+# group: [optimizer]
+
+statement ok
+CREATE TABLE row_number_order (id INTEGER, g INTEGER, p INTEGER);
+
+statement ok
+INSERT INTO row_number_order VALUES (1, 1, 1), (2, 1, 2), (3, 1, 3), (4, 2, 1), (5, 2, 2);
+
+# Argument ordering ranks all rows in the full partition by id, independently of the window ordering.
+query III
+SELECT id, g, p
+FROM row_number_order
+QUALIFY ROW_NUMBER(ORDER BY id DESC) OVER (
+	PARTITION BY g
+	ORDER BY p ASC
+	ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+) <= 1
+ORDER BY g, id;
+----
+3	1	3
+5	2	2
+
+# With the default growing frame, each row is first when it enters the frame.
+query III
+SELECT id, g, p
+FROM row_number_order
+QUALIFY ROW_NUMBER(ORDER BY id DESC) OVER (PARTITION BY g ORDER BY p ASC) = 1
+ORDER BY g, id;
+----
+1	1	1
+2	1	2
+3	1	3
+4	2	1
+5	2	2

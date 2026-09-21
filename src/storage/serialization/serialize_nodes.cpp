@@ -17,6 +17,7 @@
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/common/queue.hpp"
+#include "duckdb/parser/tableref/match_recognize_ref.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/planner/tableref/bound_pivotref.hpp"
 #include "duckdb/parser/column_definition.hpp"
@@ -32,6 +33,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
+#include "duckdb/parser/literal.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
@@ -405,6 +407,58 @@ JoinCondition JoinCondition::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
+void Literal::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<LiteralKind>(100, "kind", kind);
+	serializer.WritePropertyWithDefault<string>(101, "text", text);
+}
+
+Literal Literal::Deserialize(Deserializer &deserializer) {
+	Literal result;
+	deserializer.ReadProperty<LiteralKind>(100, "kind", result.kind);
+	deserializer.ReadPropertyWithDefault<string>(101, "text", result.text);
+	return result;
+}
+
+void MatchRecognizeConfig::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(100, "partition_expressions", partition_expressions);
+	serializer.WritePropertyWithDefault<vector<OrderByNode>>(101, "order_by_expressions", order_by_expressions);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(102, "measures_expression_list", measures_expression_list);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "defines_expression_list", defines_expression_list);
+	serializer.WriteProperty<MatchRecognizeRows>(104, "rows_per_match", rows_per_match);
+	serializer.WriteProperty<MatchRecognizeAfterMatch>(105, "after_match", after_match);
+	serializer.WritePropertyWithDefault<string>(106, "after_match_variable", after_match_variable);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(107, "pattern", pattern);
+	serializer.WritePropertyWithDefault<vector<MatchRecognizeSubset>>(108, "subsets", subsets);
+	serializer.WritePropertyWithDefault<bool>(109, "define_auto", define_auto);
+}
+
+unique_ptr<MatchRecognizeConfig> MatchRecognizeConfig::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<MatchRecognizeConfig>(new MatchRecognizeConfig());
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(100, "partition_expressions", result->partition_expressions);
+	deserializer.ReadPropertyWithDefault<vector<OrderByNode>>(101, "order_by_expressions", result->order_by_expressions);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(102, "measures_expression_list", result->measures_expression_list);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "defines_expression_list", result->defines_expression_list);
+	deserializer.ReadProperty<MatchRecognizeRows>(104, "rows_per_match", result->rows_per_match);
+	deserializer.ReadProperty<MatchRecognizeAfterMatch>(105, "after_match", result->after_match);
+	deserializer.ReadPropertyWithDefault<string>(106, "after_match_variable", result->after_match_variable);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(107, "pattern", result->pattern);
+	deserializer.ReadPropertyWithDefault<vector<MatchRecognizeSubset>>(108, "subsets", result->subsets);
+	deserializer.ReadPropertyWithDefault<bool>(109, "define_auto", result->define_auto);
+	return result;
+}
+
+void MatchRecognizeSubset::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(100, "name", name);
+	serializer.WritePropertyWithDefault<vector<string>>(101, "members", members);
+}
+
+MatchRecognizeSubset MatchRecognizeSubset::Deserialize(Deserializer &deserializer) {
+	MatchRecognizeSubset result;
+	deserializer.ReadPropertyWithDefault<string>(100, "name", result.name);
+	deserializer.ReadPropertyWithDefault<vector<string>>(101, "members", result.members);
+	return result;
+}
+
 void MultiFileOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(100, "filename", filename);
 	serializer.WritePropertyWithDefault<bool>(101, "hive_partitioning", hive_partitioning);
@@ -414,6 +468,7 @@ void MultiFileOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<LogicalType>>(105, "hive_types_schema", hive_types_schema);
 	serializer.WritePropertyWithDefault<string>(106, "filename_column", filename_column, MultiFileOptions::DEFAULT_FILENAME_COLUMN);
 	serializer.WritePropertyWithDefault<bool>(107, "allow_empty", allow_empty);
+	serializer.WritePropertyWithDefault<idx_t>(108, "maximum_sample_files", maximum_sample_files, 1);
 }
 
 MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
@@ -426,6 +481,7 @@ MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<LogicalType>>(105, "hive_types_schema", result.hive_types_schema);
 	deserializer.ReadPropertyWithExplicitDefault<string>(106, "filename_column", result.filename_column, MultiFileOptions::DEFAULT_FILENAME_COLUMN);
 	deserializer.ReadPropertyWithDefault<bool>(107, "allow_empty", result.allow_empty);
+	deserializer.ReadPropertyWithExplicitDefault<idx_t>(108, "maximum_sample_files", result.maximum_sample_files, 1);
 	return result;
 }
 

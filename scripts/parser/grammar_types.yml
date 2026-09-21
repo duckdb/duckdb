@@ -34,6 +34,9 @@
 # transformer generator should treat only `identifier` and `reserved_identifier`
 # entries as direct IdentifierParseResult-producing rules.
 #
+# additional_transform_result_types: result types used by transformer infrastructure
+# rather than as the declared return type of a grammar rule.
+#
 # packrat_memoized_rules: named grammar rules that should use packrat
 # memoization in MatchParseResult. Keep this selective because cache lookup and
 # parse-result sharing are only worthwhile for rules with repeated backtracking.
@@ -41,6 +44,10 @@
 # ---------------------------------------------------------------------------
 # unique_ptr<T> categories
 # ---------------------------------------------------------------------------
+
+additional_transform_result_types:
+  - "unique_ptr<TransformResultValue>"
+  - "vector<Identifier>"
 
 SQLStatementList:
   type: "vector<unique_ptr<SQLStatement>>"
@@ -217,6 +224,7 @@ AlterTableInfo:
   rules:
     - AlterTableOptions
     - AddColumn
+    - DropConstraint
     - DropColumn
     - SetPartitionedBy
     - ResetPartitionedBy
@@ -536,6 +544,23 @@ Expression:
     - IndexElement
     - RelOptionArgumentOpt
     - ExpressionAlias
+    - MeasuresElement
+    - PatternClause
+    - RowPattern
+    - RowPatternAlternative
+    - RowPatternTerm
+    - RowPatternFactor
+    - RowPatternPrimary
+    - RowPatternPermute
+    - RowPatternAnchor
+    - PatternStart
+    - PatternEnd
+    - RowPatternGroup
+    - RowPatternEmpty
+    - RowPatternExclusion
+    - RowPatternLabel
+    - MeasureSemanticsExpression
+    - DefineElement
 
 ColumnRefExpression:
   type: "unique_ptr<ColumnRefExpression>"
@@ -587,6 +612,8 @@ TableRef:
     - CTEBody
     - CTESelectBody
     - CTEDMLBody
+    - TableMatchRecognizeClause
+    - MatchRecognizeBody
 
 BaseTableRef:
   type: "unique_ptr<BaseTableRef>"
@@ -639,6 +666,8 @@ ExpressionList:
     - SetAssignment
     - VariableList
     - UsingKey
+    - MeasuresClause
+    - DefineClause
 
 FunctionArgumentList:
   type: "vector<FunctionArgument>"
@@ -714,6 +743,9 @@ StringList:
     - UnpivotHeader
     - UnpivotHeaderSingle
     - UnpivotHeaderList
+    - OptionalParensNameList
+    - ParenthesizedNameList
+    - BareNameList
 
 GenericCopyOptionList:
   type: "vector<GenericCopyOption>"
@@ -1098,6 +1130,14 @@ String:
     - BooleanType
     - DoubleType
     - UpdateSetColumnTarget
+
+ConstraintTiming:
+  type: "ConstraintTiming"
+  by_value: false
+  rules:
+    - ConstraintTiming
+    - ImmediateConstraint
+    - DeferredConstraint
 
 Bool:
   type: "bool"
@@ -1861,3 +1901,70 @@ excluded_rules:
   # expression.gram rules kept manual during incremental transformer generation migration
   - OverClause
   - PrefixExpression
+
+MatchRecognizeClauseEntry:
+  type: "MatchRecognizeClause"
+  by_value: true
+  rules:
+    - MatchRecognizeClause
+    - MRPartition
+    - MROrderBy
+    - MRMeasures
+    - MRRows
+    - MRSkip
+    - MRPattern
+    - MRSubset
+    - MRDefineAuto
+    - MRDefine
+MatchRecognizeSubset:
+  type: "MatchRecognizeSubset"
+  by_value: true
+  rules:
+    - SubsetElement
+MatchRecognizeSubsetList:
+  type: "vector<MatchRecognizeSubset>"
+  by_value: true
+  rules:
+    - SubsetClause
+MeasureSemantics:
+  type: "bool"
+  rules:
+    - MeasureSemantics
+    - RunningSemantics
+    - FinalSemantics
+    - QuantifierReluctant
+MatchRecognizeRows:
+  type: "MatchRecognizeRows"
+  rules:
+    - RowsPerMatch
+    - OneRowPerMatch
+    - AllRowsPerMatch
+    - AllRowsEmptyMatches
+    - ShowEmptyMatches
+    - OmitEmptyMatches
+    - WithUnmatchedRows
+MatchRecognizeAfterMatchClause:
+  type: "MatchRecognizeAfterMatchClause"
+  by_value: true
+  rules:
+    - AfterMatchSkip
+    - AfterMatchSkipTarget
+    - SkipToNextRow
+    - SkipPastLastRow
+    - SkipToFirstVar
+    - SkipToLastVar
+    - SkipToVar
+MatchRecognizeQuantifier:
+  type: "MatchRecognizeQuantifier"
+  rules:
+    - RowPatternQuantifier
+    - RowPatternQuantifierKind
+    - QuantifierStar
+    - QuantifierPlus
+    - QuantifierOptional
+    - QuantifierRange
+    - QuantifierBounds
+    - QuantifierMinMax
+    - QuantifierMin
+    - QuantifierMax
+    - QuantifierExact

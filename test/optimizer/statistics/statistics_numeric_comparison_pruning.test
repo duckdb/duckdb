@@ -1,5 +1,5 @@
 # name: test/optimizer/statistics/statistics_numeric_comparison_pruning.test
-# description: Row-group pruning for numeric, temporal, boolean, uuid, and enum inequality comparisons
+# description: Row-group pruning for numeric, temporal, boolean, string, uuid, and enum inequality comparisons
 # group: [statistics]
 
 statement ok
@@ -64,6 +64,73 @@ analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
 
 query I
 SELECT count(*) FROM db.boolean_values WHERE a != b;
+----
+2048
+
+# VARCHAR comparisons use string min/max statistics
+statement ok
+CREATE TABLE db.string_values AS
+SELECT CASE range // 2048 WHEN 0 THEN 'a' WHEN 1 THEN 'a' ELSE 'b' END AS a,
+       CASE range // 2048 WHEN 0 THEN 'a' WHEN 1 THEN 'b' ELSE 'b' END AS b
+FROM range(6144);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM db.string_values WHERE a != b;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM db.string_values WHERE a != b;
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM db.string_values WHERE a = b;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 3.*
+
+query I
+SELECT count(*) FROM db.string_values WHERE a = b;
+----
+4096
+
+# Disjoint truncated prefixes are sufficient to prune string comparisons
+statement ok
+CREATE TABLE db.string_different_prefix AS
+SELECT CASE range // 2048 WHEN 0 THEN repeat('a', 20) WHEN 1 THEN repeat('c', 20) ELSE repeat('e', 20) END AS a,
+       CASE range // 2048 WHEN 0 THEN repeat('b', 20) WHEN 1 THEN repeat('c', 20) ELSE repeat('f', 20) END AS b
+FROM range(6144);
+
+statement ok
+CHECKPOINT;
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM db.string_different_prefix WHERE a = b;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM db.string_different_prefix WHERE a = b;
+----
+2048
+
+# Equal truncated prefixes cannot prove that the full string ranges are disjoint
+statement ok
+CREATE TABLE db.string_same_prefix AS
+SELECT repeat('x', 20) || CASE range // 2048 WHEN 0 THEN 'a' WHEN 1 THEN 'b' ELSE 'c' END AS a,
+       repeat('x', 20) || CASE range // 2048 WHEN 0 THEN 'd' WHEN 1 THEN 'b' ELSE 'e' END AS b
+FROM range(6144);
+
+statement ok
+CHECKPOINT;
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM db.string_same_prefix WHERE a = b;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+query I
+SELECT count(*) FROM db.string_same_prefix WHERE a = b;
 ----
 2048
 

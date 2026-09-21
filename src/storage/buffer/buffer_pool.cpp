@@ -246,6 +246,9 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 	// Re-enqueue alive nodes via producer token — goes into a dedicated sub-queue
 	// that the consumer token has already passed
 	if (alive_count > 0) {
+		if (!purge_producer_token.valid()) {
+			throw OutOfMemoryException("Failed to allocate eviction queue producer");
+		}
 		q.enqueue_bulk(purge_producer_token, purge_nodes.begin(), alive_count);
 	}
 }

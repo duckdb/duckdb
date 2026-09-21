@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
 #include "duckdb/execution/index/fixed_size_buffer.hpp"
 

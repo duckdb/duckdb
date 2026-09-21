@@ -13,6 +13,13 @@
   "inherit_skip_tests": "test/configs/force_storage.json",
   "skip_tests": [
     {
+      "reason": "Explicit constraint timing requires storage version v2.0.0 or higher.",
+      "paths": [
+        "test/sql/constraints/deferred/test_alter_constraint_timing.test",
+        "test/sql/constraints/deferred/test_deferred_syntax.test"
+      ]
+    },
+    {
       "reason": "TODO",
       "paths": [
         "test/sql/json/test_json_serialize_sql.test",

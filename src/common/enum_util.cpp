@@ -66,6 +66,7 @@
 #include "duckdb/common/enums/quantile_enum.hpp"
 #include "duckdb/common/enums/regex_match_operator_semantics.hpp"
 #include "duckdb/common/enums/relation_type.hpp"
+#include "duckdb/common/enums/result_lifetime.hpp"
 #include "duckdb/common/enums/row_group_append_mode.hpp"
 #include "duckdb/common/enums/row_id_handling.hpp"
 #include "duckdb/common/enums/set_operation_type.hpp"
@@ -93,7 +94,6 @@
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/filename_pattern.hpp"
-#include "duckdb/common/http_util.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
@@ -128,6 +128,7 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
+#include "duckdb/execution/operator/helper/physical_result_sink.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte_state.hpp"
@@ -142,6 +143,7 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/macro_function.hpp"
+#include "duckdb/function/match_recognize.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
@@ -150,6 +152,7 @@
 #include "duckdb/function/table/arrow/enum/arrow_type_info_type.hpp"
 #include "duckdb/function/table/arrow/enum/arrow_variable_size_type.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/function/window/match_recognize_matcher.hpp"
 #include "duckdb/function/window/window_merge_sort_tree.hpp"
 #include "duckdb/logging/log_storage.hpp"
 #include "duckdb/logging/logging.hpp"
@@ -161,6 +164,7 @@
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/http/http_util.hpp"
 #include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
@@ -182,10 +186,13 @@
 #include "duckdb/parallel/scan_read_ahead.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/parser/grammar_change.hpp"
+#include "duckdb/parser/literal.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
@@ -201,7 +208,6 @@
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
-#include "duckdb/parser/peg/matcher_stack.hpp"
 #include "duckdb/parser/peg/sql_formatter.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
@@ -213,6 +219,7 @@
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/external_resource_statement.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/tableref/match_recognize_ref.hpp"
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
@@ -277,22 +284,40 @@ ARTScanNodeResult EnumUtil::FromString<ARTScanNodeResult>(const char *value) {
 	return static_cast<ARTScanNodeResult>(StringUtil::StringToEnum(GetARTScanNodeResultValues(), 2, "ARTScanNodeResult", value));
 }
 
-const StringUtil::EnumStringLiteral *GetARTScanResultValues() {
+const StringUtil::EnumStringLiteral *GetARTScanProgressValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ARTScanResult::COMPLETED), "COMPLETED" },
-		{ static_cast<uint32_t>(ARTScanResult::PAUSED), "PAUSED" }
+		{ static_cast<uint32_t>(ARTScanProgress::COMPLETED), "COMPLETED" },
+		{ static_cast<uint32_t>(ARTScanProgress::PAUSED), "PAUSED" }
 	};
 	return values;
 }
 
 template<>
-const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value) {
-	return StringUtil::EnumToString(GetARTScanResultValues(), 2, "ARTScanResult", static_cast<uint32_t>(value));
+const char* EnumUtil::ToChars<ARTScanProgress>(ARTScanProgress value) {
+	return StringUtil::EnumToString(GetARTScanProgressValues(), 2, "ARTScanProgress", static_cast<uint32_t>(value));
 }
 
 template<>
-ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value) {
-	return static_cast<ARTScanResult>(StringUtil::StringToEnum(GetARTScanResultValues(), 2, "ARTScanResult", value));
+ARTScanProgress EnumUtil::FromString<ARTScanProgress>(const char *value) {
+	return static_cast<ARTScanProgress>(StringUtil::StringToEnum(GetARTScanProgressValues(), 2, "ARTScanProgress", value));
+}
+
+const StringUtil::EnumStringLiteral *GetARTSearchResultValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ARTSearchResult::COMPLETED), "COMPLETED" },
+		{ static_cast<uint32_t>(ARTSearchResult::CAPACITY_EXCEEDED), "CAPACITY_EXCEEDED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ARTSearchResult>(ARTSearchResult value) {
+	return StringUtil::EnumToString(GetARTSearchResultValues(), 2, "ARTSearchResult", static_cast<uint32_t>(value));
+}
+
+template<>
+ARTSearchResult EnumUtil::FromString<ARTSearchResult>(const char *value) {
+	return static_cast<ARTSearchResult>(StringUtil::StringToEnum(GetARTSearchResultValues(), 2, "ARTSearchResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAccessModeValues() {
@@ -1438,6 +1463,25 @@ ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value)
 	return static_cast<ConflictManagerMode>(StringUtil::StringToEnum(GetConflictManagerModeValues(), 2, "ConflictManagerMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetConstraintTimingValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ConstraintTiming::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(ConstraintTiming::IMMEDIATE), "IMMEDIATE" },
+		{ static_cast<uint32_t>(ConstraintTiming::DEFERRED), "DEFERRED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ConstraintTiming>(ConstraintTiming value) {
+	return StringUtil::EnumToString(GetConstraintTimingValues(), 3, "ConstraintTiming", static_cast<uint32_t>(value));
+}
+
+template<>
+ConstraintTiming EnumUtil::FromString<ConstraintTiming>(const char *value) {
+	return static_cast<ConstraintTiming>(StringUtil::StringToEnum(GetConstraintTimingValues(), 3, "ConstraintTiming", value));
+}
+
 const StringUtil::EnumStringLiteral *GetConstraintTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ConstraintType::INVALID), "INVALID" },
@@ -2132,6 +2176,7 @@ const StringUtil::EnumStringLiteral *GetExpressionClassValues() {
 		{ static_cast<uint32_t>(ExpressionClass::BETWEEN), "BETWEEN" },
 		{ static_cast<uint32_t>(ExpressionClass::LAMBDA_REF), "LAMBDA_REF" },
 		{ static_cast<uint32_t>(ExpressionClass::TYPE), "TYPE" },
+		{ static_cast<uint32_t>(ExpressionClass::PATTERN), "PATTERN" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_AGGREGATE), "BOUND_AGGREGATE" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_CASE), "BOUND_CASE" },
 		{ static_cast<uint32_t>(ExpressionClass::LEGACY_BOUND_CAST), "LEGACY_BOUND_CAST" },
@@ -2157,12 +2202,12 @@ const StringUtil::EnumStringLiteral *GetExpressionClassValues() {
 
 template<>
 const char* EnumUtil::ToChars<ExpressionClass>(ExpressionClass value) {
-	return StringUtil::EnumToString(GetExpressionClassValues(), 40, "ExpressionClass", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetExpressionClassValues(), 41, "ExpressionClass", static_cast<uint32_t>(value));
 }
 
 template<>
 ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value) {
-	return static_cast<ExpressionClass>(StringUtil::StringToEnum(GetExpressionClassValues(), 40, "ExpressionClass", value));
+	return static_cast<ExpressionClass>(StringUtil::StringToEnum(GetExpressionClassValues(), 41, "ExpressionClass", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExpressionTypeValues() {
@@ -2225,6 +2270,10 @@ const StringUtil::EnumStringLiteral *GetExpressionTypeValues() {
 		{ static_cast<uint32_t>(ExpressionType::OPERATOR_TRY), "OPERATOR_TRY" },
 		{ static_cast<uint32_t>(ExpressionType::SUBQUERY), "SUBQUERY" },
 		{ static_cast<uint32_t>(ExpressionType::STAR), "STAR" },
+		{ static_cast<uint32_t>(ExpressionType::QUANTIFIER), "QUANTIFIER" },
+		{ static_cast<uint32_t>(ExpressionType::CONCATENATION), "CONCATENATION" },
+		{ static_cast<uint32_t>(ExpressionType::ALTERNATION), "ALTERNATION" },
+		{ static_cast<uint32_t>(ExpressionType::ANCHOR), "ANCHOR" },
 		{ static_cast<uint32_t>(ExpressionType::TABLE_STAR), "TABLE_STAR" },
 		{ static_cast<uint32_t>(ExpressionType::PLACEHOLDER), "PLACEHOLDER" },
 		{ static_cast<uint32_t>(ExpressionType::COLUMN_REF), "COLUMN_REF" },
@@ -2247,12 +2296,12 @@ const StringUtil::EnumStringLiteral *GetExpressionTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value) {
-	return StringUtil::EnumToString(GetExpressionTypeValues(), 74, "ExpressionType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetExpressionTypeValues(), 78, "ExpressionType", static_cast<uint32_t>(value));
 }
 
 template<>
 ExpressionType EnumUtil::FromString<ExpressionType>(const char *value) {
-	return static_cast<ExpressionType>(StringUtil::StringToEnum(GetExpressionTypeValues(), 74, "ExpressionType", value));
+	return static_cast<ExpressionType>(StringUtil::StringToEnum(GetExpressionTypeValues(), 78, "ExpressionType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExtensionABITypeValues() {
@@ -2798,6 +2847,30 @@ GeometryType EnumUtil::FromString<GeometryType>(const char *value) {
 	return static_cast<GeometryType>(StringUtil::StringToEnum(GetGeometryTypeValues(), 8, "GeometryType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetGrammarChangeTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(GrammarChangeType::ADD_RULE), "ADD_RULE" },
+		{ static_cast<uint32_t>(GrammarChangeType::ADD_CHOICE), "ADD_CHOICE" },
+		{ static_cast<uint32_t>(GrammarChangeType::PREPEND_CHOICE), "PREPEND_CHOICE" },
+		{ static_cast<uint32_t>(GrammarChangeType::REMOVE_CHOICE), "REMOVE_CHOICE" },
+		{ static_cast<uint32_t>(GrammarChangeType::REPLACE_CHOICE), "REPLACE_CHOICE" },
+		{ static_cast<uint32_t>(GrammarChangeType::REPLACE_RULE), "REPLACE_RULE" },
+		{ static_cast<uint32_t>(GrammarChangeType::SET_TRANSFORM), "SET_TRANSFORM" },
+		{ static_cast<uint32_t>(GrammarChangeType::ADD_TERMINAL_RULE_OVERRIDE), "ADD_TERMINAL_RULE_OVERRIDE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<GrammarChangeType>(GrammarChangeType value) {
+	return StringUtil::EnumToString(GetGrammarChangeTypeValues(), 8, "GrammarChangeType", static_cast<uint32_t>(value));
+}
+
+template<>
+GrammarChangeType EnumUtil::FromString<GrammarChangeType>(const char *value) {
+	return static_cast<GrammarChangeType>(StringUtil::StringToEnum(GetGrammarChangeTypeValues(), 8, "GrammarChangeType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetGroupByExpressionInfoTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(GroupByExpressionInfoType::EXPRESSION), "EXPRESSION" },
@@ -2933,6 +3006,26 @@ const char* EnumUtil::ToChars<HTTPStatusCode>(HTTPStatusCode value) {
 template<>
 HTTPStatusCode EnumUtil::FromString<HTTPStatusCode>(const char *value) {
 	return static_cast<HTTPStatusCode>(StringUtil::StringToEnum(GetHTTPStatusCodeValues(), 64, "HTTPStatusCode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetHTTPTransportReusePolicyValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(HTTPTransportReusePolicy::CLIENT_FREE), "CLIENT_FREE" },
+		{ static_cast<uint32_t>(HTTPTransportReusePolicy::EPHEMERAL), "EPHEMERAL" },
+		{ static_cast<uint32_t>(HTTPTransportReusePolicy::SESSION_LOCAL), "SESSION_LOCAL" },
+		{ static_cast<uint32_t>(HTTPTransportReusePolicy::SHARED), "SHARED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<HTTPTransportReusePolicy>(HTTPTransportReusePolicy value) {
+	return StringUtil::EnumToString(GetHTTPTransportReusePolicyValues(), 4, "HTTPTransportReusePolicy", static_cast<uint32_t>(value));
+}
+
+template<>
+HTTPTransportReusePolicy EnumUtil::FromString<HTTPTransportReusePolicy>(const char *value) {
+	return static_cast<HTTPTransportReusePolicy>(StringUtil::StringToEnum(GetHTTPTransportReusePolicyValues(), 4, "HTTPTransportReusePolicy", value));
 }
 
 const StringUtil::EnumStringLiteral *GetIdentifierCaseModeValues() {
@@ -3275,6 +3368,31 @@ LimitValueType EnumUtil::FromString<LimitValueType>(const char *value) {
 	return static_cast<LimitValueType>(StringUtil::StringToEnum(GetLimitValueTypeValues(), 2, "LimitValueType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetLiteralKindValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LiteralKind::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(LiteralKind::NULL_LITERAL), "NULL_LITERAL" },
+		{ static_cast<uint32_t>(LiteralKind::BOOLEAN), "BOOLEAN" },
+		{ static_cast<uint32_t>(LiteralKind::INTEGER), "INTEGER" },
+		{ static_cast<uint32_t>(LiteralKind::NUMERIC), "NUMERIC" },
+		{ static_cast<uint32_t>(LiteralKind::STRING), "STRING" },
+		{ static_cast<uint32_t>(LiteralKind::HEX), "HEX" },
+		{ static_cast<uint32_t>(LiteralKind::BIT), "BIT" },
+		{ static_cast<uint32_t>(LiteralKind::POINTER), "POINTER" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LiteralKind>(LiteralKind value) {
+	return StringUtil::EnumToString(GetLiteralKindValues(), 9, "LiteralKind", static_cast<uint32_t>(value));
+}
+
+template<>
+LiteralKind EnumUtil::FromString<LiteralKind>(const char *value) {
+	return static_cast<LiteralKind>(StringUtil::StringToEnum(GetLiteralKindValues(), 9, "LiteralKind", value));
+}
+
 const StringUtil::EnumStringLiteral *GetLoadTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(LoadType::LOAD), "LOAD" },
@@ -3608,24 +3726,6 @@ MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value) {
 	return static_cast<MapInvalidReason>(StringUtil::StringToEnum(GetMapInvalidReasonValues(), 5, "MapInvalidReason", value));
 }
 
-const StringUtil::EnumStringLiteral *GetMatchFrameStateValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(MatchFrameState::INITIALIZE), "INITIALIZE" },
-		{ static_cast<uint32_t>(MatchFrameState::EXECUTE), "EXECUTE" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<MatchFrameState>(MatchFrameState value) {
-	return StringUtil::EnumToString(GetMatchFrameStateValues(), 2, "MatchFrameState", static_cast<uint32_t>(value));
-}
-
-template<>
-MatchFrameState EnumUtil::FromString<MatchFrameState>(const char *value) {
-	return static_cast<MatchFrameState>(StringUtil::StringToEnum(GetMatchFrameStateValues(), 2, "MatchFrameState", value));
-}
-
 const StringUtil::EnumStringLiteral *GetMatchModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(MatchMode::BUILD_PARSE_RESULT), "BUILD_PARSE_RESULT" },
@@ -3644,23 +3744,91 @@ MatchMode EnumUtil::FromString<MatchMode>(const char *value) {
 	return static_cast<MatchMode>(StringUtil::StringToEnum(GetMatchModeValues(), 2, "MatchMode", value));
 }
 
-const StringUtil::EnumStringLiteral *GetMatchResultStateValues() {
+const StringUtil::EnumStringLiteral *GetMatchRecognizeAfterMatchValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(MatchResultState::NONE), "NONE" },
-		{ static_cast<uint32_t>(MatchResultState::FAILURE), "FAILURE" },
-		{ static_cast<uint32_t>(MatchResultState::SUCCESS), "SUCCESS" }
+		{ static_cast<uint32_t>(MatchRecognizeAfterMatch::MATCH_RECOGNIZE_AFTER_MATCH_DEFAULT), "MATCH_RECOGNIZE_AFTER_MATCH_DEFAULT" },
+		{ static_cast<uint32_t>(MatchRecognizeAfterMatch::MATCH_RECOGNIZE_AFTER_MATCH_NEXT_ROW), "MATCH_RECOGNIZE_AFTER_MATCH_NEXT_ROW" },
+		{ static_cast<uint32_t>(MatchRecognizeAfterMatch::MATCH_RECOGNIZE_AFTER_MATCH_LAST_ROW), "MATCH_RECOGNIZE_AFTER_MATCH_LAST_ROW" },
+		{ static_cast<uint32_t>(MatchRecognizeAfterMatch::MATCH_RECOGNIZE_AFTER_MATCH_FIRST_VAR), "MATCH_RECOGNIZE_AFTER_MATCH_FIRST_VAR" },
+		{ static_cast<uint32_t>(MatchRecognizeAfterMatch::MATCH_RECOGNIZE_AFTER_MATCH_LAST_VAR), "MATCH_RECOGNIZE_AFTER_MATCH_LAST_VAR" }
 	};
 	return values;
 }
 
 template<>
-const char* EnumUtil::ToChars<MatchResultState>(MatchResultState value) {
-	return StringUtil::EnumToString(GetMatchResultStateValues(), 3, "MatchResultState", static_cast<uint32_t>(value));
+const char* EnumUtil::ToChars<MatchRecognizeAfterMatch>(MatchRecognizeAfterMatch value) {
+	return StringUtil::EnumToString(GetMatchRecognizeAfterMatchValues(), 5, "MatchRecognizeAfterMatch", static_cast<uint32_t>(value));
 }
 
 template<>
-MatchResultState EnumUtil::FromString<MatchResultState>(const char *value) {
-	return static_cast<MatchResultState>(StringUtil::StringToEnum(GetMatchResultStateValues(), 3, "MatchResultState", value));
+MatchRecognizeAfterMatch EnumUtil::FromString<MatchRecognizeAfterMatch>(const char *value) {
+	return static_cast<MatchRecognizeAfterMatch>(StringUtil::StringToEnum(GetMatchRecognizeAfterMatchValues(), 5, "MatchRecognizeAfterMatch", value));
+}
+
+const StringUtil::EnumStringLiteral *GetMatchRecognizeClauseKindValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(MatchRecognizeClauseKind::PARTITION), "PARTITION" },
+		{ static_cast<uint32_t>(MatchRecognizeClauseKind::ORDER_BY), "ORDER_BY" },
+		{ static_cast<uint32_t>(MatchRecognizeClauseKind::MEASURES), "MEASURES" },
+		{ static_cast<uint32_t>(MatchRecognizeClauseKind::ROWS), "ROWS" },
+		{ static_cast<uint32_t>(MatchRecognizeClauseKind::SKIP), "SKIP" },
+		{ static_cast<uint32_t>(MatchRecognizeClauseKind::PATTERN), "PATTERN" },
+		{ static_cast<uint32_t>(MatchRecognizeClauseKind::SUBSET), "SUBSET" },
+		{ static_cast<uint32_t>(MatchRecognizeClauseKind::DEFINE), "DEFINE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<MatchRecognizeClauseKind>(MatchRecognizeClauseKind value) {
+	return StringUtil::EnumToString(GetMatchRecognizeClauseKindValues(), 8, "MatchRecognizeClauseKind", static_cast<uint32_t>(value));
+}
+
+template<>
+MatchRecognizeClauseKind EnumUtil::FromString<MatchRecognizeClauseKind>(const char *value) {
+	return static_cast<MatchRecognizeClauseKind>(StringUtil::StringToEnum(GetMatchRecognizeClauseKindValues(), 8, "MatchRecognizeClauseKind", value));
+}
+
+const StringUtil::EnumStringLiteral *GetMatchRecognizePatternTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(MatchRecognizePatternType::SYMBOL), "SYMBOL" },
+		{ static_cast<uint32_t>(MatchRecognizePatternType::ANCHOR), "ANCHOR" },
+		{ static_cast<uint32_t>(MatchRecognizePatternType::ALTERNATION), "ALTERNATION" },
+		{ static_cast<uint32_t>(MatchRecognizePatternType::CONCATENATION), "CONCATENATION" },
+		{ static_cast<uint32_t>(MatchRecognizePatternType::QUANTIFIER), "QUANTIFIER" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<MatchRecognizePatternType>(MatchRecognizePatternType value) {
+	return StringUtil::EnumToString(GetMatchRecognizePatternTypeValues(), 5, "MatchRecognizePatternType", static_cast<uint32_t>(value));
+}
+
+template<>
+MatchRecognizePatternType EnumUtil::FromString<MatchRecognizePatternType>(const char *value) {
+	return static_cast<MatchRecognizePatternType>(StringUtil::StringToEnum(GetMatchRecognizePatternTypeValues(), 5, "MatchRecognizePatternType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetMatchRecognizeRowsValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_DEFAULT), "MATCH_RECOGNIZE_ROWS_DEFAULT" },
+		{ static_cast<uint32_t>(MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ONE), "MATCH_RECOGNIZE_ROWS_ONE" },
+		{ static_cast<uint32_t>(MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL), "MATCH_RECOGNIZE_ROWS_ALL" },
+		{ static_cast<uint32_t>(MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL_OMIT_EMPTY), "MATCH_RECOGNIZE_ROWS_ALL_OMIT_EMPTY" },
+		{ static_cast<uint32_t>(MatchRecognizeRows::MATCH_RECOGNIZE_ROWS_ALL_UNMATCHED), "MATCH_RECOGNIZE_ROWS_ALL_UNMATCHED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<MatchRecognizeRows>(MatchRecognizeRows value) {
+	return StringUtil::EnumToString(GetMatchRecognizeRowsValues(), 5, "MatchRecognizeRows", static_cast<uint32_t>(value));
+}
+
+template<>
+MatchRecognizeRows EnumUtil::FromString<MatchRecognizeRows>(const char *value) {
+	return static_cast<MatchRecognizeRows>(StringUtil::StringToEnum(GetMatchRecognizeRowsValues(), 5, "MatchRecognizeRows", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMemoryTagValues() {
@@ -3774,6 +3942,25 @@ const char* EnumUtil::ToChars<Monotonicity>(Monotonicity value) {
 template<>
 Monotonicity EnumUtil::FromString<Monotonicity>(const char *value) {
 	return static_cast<Monotonicity>(StringUtil::StringToEnum(GetMonotonicityValues(), 6, "Monotonicity", value));
+}
+
+const StringUtil::EnumStringLiteral *GetMultiFileClaimResultValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(MultiFileClaimResult::CLAIMED), "CLAIMED" },
+		{ static_cast<uint32_t>(MultiFileClaimResult::EXHAUSTED), "EXHAUSTED" },
+		{ static_cast<uint32_t>(MultiFileClaimResult::WAIT_OPEN), "WAIT_OPEN" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<MultiFileClaimResult>(MultiFileClaimResult value) {
+	return StringUtil::EnumToString(GetMultiFileClaimResultValues(), 3, "MultiFileClaimResult", static_cast<uint32_t>(value));
+}
+
+template<>
+MultiFileClaimResult EnumUtil::FromString<MultiFileClaimResult>(const char *value) {
+	return static_cast<MultiFileClaimResult>(StringUtil::StringToEnum(GetMultiFileClaimResultValues(), 3, "MultiFileClaimResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMultiFileColumnMappingModeValues() {
@@ -4080,19 +4267,20 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::TYPE_PUSHDOWN), "TYPE_PUSHDOWN" },
 		{ static_cast<uint32_t>(OptimizerType::SCALAR_FN_PUSHDOWN), "SCALAR_FN_PUSHDOWN" },
 		{ static_cast<uint32_t>(OptimizerType::DISTINCT_AGGREGATE_REWRITE), "DISTINCT_AGGREGATE_REWRITE" },
-		{ static_cast<uint32_t>(OptimizerType::AGGREGATE_REUSE), "AGGREGATE_REUSE" }
+		{ static_cast<uint32_t>(OptimizerType::AGGREGATE_REUSE), "AGGREGATE_REUSE" },
+		{ static_cast<uint32_t>(OptimizerType::PROJECTION_PLACEMENT), "PROJECTION_PLACEMENT" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
-	return StringUtil::EnumToString(GetOptimizerTypeValues(), 45, "OptimizerType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetOptimizerTypeValues(), 46, "OptimizerType", static_cast<uint32_t>(value));
 }
 
 template<>
 OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
-	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 45, "OptimizerType", value));
+	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 46, "OptimizerType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOrderByColumnTypeValues() {
@@ -4393,6 +4581,46 @@ PatternMatchType EnumUtil::FromString<PatternMatchType>(const char *value) {
 	return static_cast<PatternMatchType>(StringUtil::StringToEnum(GetPatternMatchTypeValues(), 2, "PatternMatchType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetPatternMemoValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PatternMemo::PARTITION), "PARTITION" },
+		{ static_cast<uint32_t>(PatternMemo::ATTEMPT), "ATTEMPT" },
+		{ static_cast<uint32_t>(PatternMemo::HISTORY), "HISTORY" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PatternMemo>(PatternMemo value) {
+	return StringUtil::EnumToString(GetPatternMemoValues(), 3, "PatternMemo", static_cast<uint32_t>(value));
+}
+
+template<>
+PatternMemo EnumUtil::FromString<PatternMemo>(const char *value) {
+	return static_cast<PatternMemo>(StringUtil::StringToEnum(GetPatternMemoValues(), 3, "PatternMemo", value));
+}
+
+const StringUtil::EnumStringLiteral *GetPatternOpValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PatternOp::SYMBOL), "SYMBOL" },
+		{ static_cast<uint32_t>(PatternOp::SPLIT), "SPLIT" },
+		{ static_cast<uint32_t>(PatternOp::JUMP), "JUMP" },
+		{ static_cast<uint32_t>(PatternOp::ANCHOR), "ANCHOR" },
+		{ static_cast<uint32_t>(PatternOp::MATCH), "MATCH" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PatternOp>(PatternOp value) {
+	return StringUtil::EnumToString(GetPatternOpValues(), 5, "PatternOp", static_cast<uint32_t>(value));
+}
+
+template<>
+PatternOp EnumUtil::FromString<PatternOp>(const char *value) {
+	return static_cast<PatternOp>(StringUtil::StringToEnum(GetPatternOpValues(), 5, "PatternOp", value));
+}
+
 const StringUtil::EnumStringLiteral *GetPendingExecutionResultValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(PendingExecutionResult::RESULT_READY), "RESULT_READY" },
@@ -4505,19 +4733,20 @@ const StringUtil::EnumStringLiteral *GetPhysicalOperatorTypeValues() {
 		{ static_cast<uint32_t>(PhysicalOperatorType::EXTERNAL_RESOURCE), "EXTERNAL_RESOURCE" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::CREATE_SECRET), "CREATE_SECRET" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::RECURSIVE_KEY_JOIN), "RECURSIVE_KEY_JOIN" },
-		{ static_cast<uint32_t>(PhysicalOperatorType::SECURE_VIEW), "SECURE_VIEW" }
+		{ static_cast<uint32_t>(PhysicalOperatorType::SECURE_VIEW), "SECURE_VIEW" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::MERGE_ACTION_SOURCE), "MERGE_ACTION_SOURCE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) {
-	return StringUtil::EnumToString(GetPhysicalOperatorTypeValues(), 89, "PhysicalOperatorType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetPhysicalOperatorTypeValues(), 90, "PhysicalOperatorType", static_cast<uint32_t>(value));
 }
 
 template<>
 PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *value) {
-	return static_cast<PhysicalOperatorType>(StringUtil::StringToEnum(GetPhysicalOperatorTypeValues(), 89, "PhysicalOperatorType", value));
+	return static_cast<PhysicalOperatorType>(StringUtil::StringToEnum(GetPhysicalOperatorTypeValues(), 90, "PhysicalOperatorType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPhysicalTableScanExecutionStrategyValues() {
@@ -5164,6 +5393,25 @@ RequestType EnumUtil::FromString<RequestType>(const char *value) {
 	return static_cast<RequestType>(StringUtil::StringToEnum(GetRequestTypeValues(), 6, "RequestType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetResultLifetimeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ResultLifetime::UNDECIDED), "UNDECIDED" },
+		{ static_cast<uint32_t>(ResultLifetime::DRAINING), "DRAINING" },
+		{ static_cast<uint32_t>(ResultLifetime::RETAINED), "RETAINED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ResultLifetime>(ResultLifetime value) {
+	return StringUtil::EnumToString(GetResultLifetimeValues(), 3, "ResultLifetime", static_cast<uint32_t>(value));
+}
+
+template<>
+ResultLifetime EnumUtil::FromString<ResultLifetime>(const char *value) {
+	return static_cast<ResultLifetime>(StringUtil::StringToEnum(GetResultLifetimeValues(), 3, "ResultLifetime", value));
+}
+
 const StringUtil::EnumStringLiteral *GetResultModifierTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ResultModifierType::LIMIT_MODIFIER), "LIMIT_MODIFIER" },
@@ -5182,6 +5430,25 @@ const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value) {
 template<>
 ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value) {
 	return static_cast<ResultModifierType>(StringUtil::StringToEnum(GetResultModifierTypeValues(), 4, "ResultModifierType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetResultOrderingValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ResultOrdering::UNORDERED), "UNORDERED" },
+		{ static_cast<uint32_t>(ResultOrdering::SOURCE_ORDERED), "SOURCE_ORDERED" },
+		{ static_cast<uint32_t>(ResultOrdering::BATCH_INDEX_ORDERED), "BATCH_INDEX_ORDERED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ResultOrdering>(ResultOrdering value) {
+	return StringUtil::EnumToString(GetResultOrderingValues(), 3, "ResultOrdering", static_cast<uint32_t>(value));
+}
+
+template<>
+ResultOrdering EnumUtil::FromString<ResultOrdering>(const char *value) {
+	return static_cast<ResultOrdering>(StringUtil::StringToEnum(GetResultOrderingValues(), 3, "ResultOrdering", value));
 }
 
 const StringUtil::EnumStringLiteral *GetRowGroupAppendModeValues() {
@@ -5461,6 +5728,7 @@ const StringUtil::EnumStringLiteral *GetSerializationVersionDeprecatedValues() {
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_5_3), "V1_5_3" },
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_5_4), "V1_5_4" },
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_5_5), "V1_5_5" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_5_6), "V1_5_6" },
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::V2_0_0), "V2_0_0" },
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::LATEST), "LATEST" },
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::INVALID), "INVALID" }
@@ -5470,12 +5738,12 @@ const StringUtil::EnumStringLiteral *GetSerializationVersionDeprecatedValues() {
 
 template<>
 const char* EnumUtil::ToChars<SerializationVersionDeprecated>(SerializationVersionDeprecated value) {
-	return StringUtil::EnumToString(GetSerializationVersionDeprecatedValues(), 30, "SerializationVersionDeprecated", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetSerializationVersionDeprecatedValues(), 31, "SerializationVersionDeprecated", static_cast<uint32_t>(value));
 }
 
 template<>
 SerializationVersionDeprecated EnumUtil::FromString<SerializationVersionDeprecated>(const char *value) {
-	return static_cast<SerializationVersionDeprecated>(StringUtil::StringToEnum(GetSerializationVersionDeprecatedValues(), 30, "SerializationVersionDeprecated", value));
+	return static_cast<SerializationVersionDeprecated>(StringUtil::StringToEnum(GetSerializationVersionDeprecatedValues(), 31, "SerializationVersionDeprecated", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSetOperationTypeValues() {
@@ -6036,6 +6304,7 @@ const StringUtil::EnumStringLiteral *GetStorageVersionValues() {
 		{ static_cast<uint32_t>(StorageVersion::V1_5_3), "V1_5_3" },
 		{ static_cast<uint32_t>(StorageVersion::V1_5_4), "V1_5_4" },
 		{ static_cast<uint32_t>(StorageVersion::V1_5_5), "V1_5_5" },
+		{ static_cast<uint32_t>(StorageVersion::V1_5_6), "V1_5_6" },
 		{ static_cast<uint32_t>(StorageVersion::V2_0_0), "V2_0_0" },
 		{ static_cast<uint32_t>(StorageVersion::LATEST), "LATEST" },
 		{ static_cast<uint32_t>(StorageVersion::DEPRECATED), "DEPRECATED" },
@@ -6046,12 +6315,12 @@ const StringUtil::EnumStringLiteral *GetStorageVersionValues() {
 
 template<>
 const char* EnumUtil::ToChars<StorageVersion>(StorageVersion value) {
-	return StringUtil::EnumToString(GetStorageVersionValues(), 70, "StorageVersion", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetStorageVersionValues(), 71, "StorageVersion", static_cast<uint32_t>(value));
 }
 
 template<>
 StorageVersion EnumUtil::FromString<StorageVersion>(const char *value) {
-	return static_cast<StorageVersion>(StringUtil::StringToEnum(GetStorageVersionValues(), 70, "StorageVersion", value));
+	return static_cast<StorageVersion>(StringUtil::StringToEnum(GetStorageVersionValues(), 71, "StorageVersion", value));
 }
 
 const StringUtil::EnumStringLiteral *GetStrTimeSpecifierValues() {
@@ -6298,19 +6567,20 @@ const StringUtil::EnumStringLiteral *GetTableReferenceTypeValues() {
 		{ static_cast<uint32_t>(TableReferenceType::SHOW_REF), "SHOW_REF" },
 		{ static_cast<uint32_t>(TableReferenceType::COLUMN_DATA), "COLUMN_DATA" },
 		{ static_cast<uint32_t>(TableReferenceType::DELIM_GET), "DELIM_GET" },
-		{ static_cast<uint32_t>(TableReferenceType::BOUND_TABLE_REF), "BOUND_TABLE_REF" }
+		{ static_cast<uint32_t>(TableReferenceType::BOUND_TABLE_REF), "BOUND_TABLE_REF" },
+		{ static_cast<uint32_t>(TableReferenceType::MATCH_RECOGNIZE), "MATCH_RECOGNIZE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<TableReferenceType>(TableReferenceType value) {
-	return StringUtil::EnumToString(GetTableReferenceTypeValues(), 13, "TableReferenceType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetTableReferenceTypeValues(), 14, "TableReferenceType", static_cast<uint32_t>(value));
 }
 
 template<>
 TableReferenceType EnumUtil::FromString<TableReferenceType>(const char *value) {
-	return static_cast<TableReferenceType>(StringUtil::StringToEnum(GetTableReferenceTypeValues(), 13, "TableReferenceType", value));
+	return static_cast<TableReferenceType>(StringUtil::StringToEnum(GetTableReferenceTypeValues(), 14, "TableReferenceType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTaskExecutionModeValues() {
@@ -6514,24 +6784,6 @@ const char* EnumUtil::ToChars<TransactionType>(TransactionType value) {
 template<>
 TransactionType EnumUtil::FromString<TransactionType>(const char *value) {
 	return static_cast<TransactionType>(StringUtil::StringToEnum(GetTransactionTypeValues(), 4, "TransactionType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetTransformFrameStateValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(TransformFrameState::INITIALIZE), "INITIALIZE" },
-		{ static_cast<uint32_t>(TransformFrameState::WAITING), "WAITING" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<TransformFrameState>(TransformFrameState value) {
-	return StringUtil::EnumToString(GetTransformFrameStateValues(), 2, "TransformFrameState", static_cast<uint32_t>(value));
-}
-
-template<>
-TransformFrameState EnumUtil::FromString<TransformFrameState>(const char *value) {
-	return static_cast<TransformFrameState>(StringUtil::StringToEnum(GetTransformFrameStateValues(), 2, "TransformFrameState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTriggerEventTypeValues() {

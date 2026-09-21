@@ -87,10 +87,24 @@ struct MetricSystemPeakBufferMemory {
 	static constexpr const char *Unit = "bytes";
 	static constexpr const char *TypeStr = "uint64";
 };
+struct MetricSystemPeakStreamingBufferSize {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "system.peak_streaming_buffer_size";
+	static constexpr const char *Description = "Peak number of bytes buffered by a streaming query result";
+	static constexpr const char *Unit = "bytes";
+	static constexpr const char *TypeStr = "uint64";
+};
 struct MetricSystemPeakTempDirSize {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "system.peak_temp_dir_size";
 	static constexpr const char *Description = "Peak size of the temporary directory";
+	static constexpr const char *Unit = "bytes";
+	static constexpr const char *TypeStr = "uint64";
+};
+struct MetricSystemTotalBytesSpilled {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "system.total_bytes_spilled";
+	static constexpr const char *Description = "Cumulative bytes written to the temporary (spill) directory";
 	static constexpr const char *Unit = "bytes";
 	static constexpr const char *TypeStr = "uint64";
 };
@@ -116,6 +130,34 @@ struct MetricIOTotalBytesWritten {
 	static constexpr const char *Description = "The total amount of bytes written to storage";
 	static constexpr const char *Unit = "bytes";
 	static constexpr const char *TypeStr = "uint64";
+};
+struct MetricIOTotalReadOperations {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "io.total_read_operations";
+	static constexpr const char *Description = "The total number of read operations issued to storage";
+	static constexpr const char *Unit = "operations";
+	static constexpr const char *TypeStr = "uint64";
+};
+struct MetricIOTotalReadTime {
+	using METRIC_TYPE = double;
+	static constexpr const char *Name = "io.total_read_time";
+	static constexpr const char *Description = "The total time spent reading from storage";
+	static constexpr const char *Unit = "seconds";
+	static constexpr const char *TypeStr = "double";
+};
+struct MetricIOTotalWriteOperations {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "io.total_write_operations";
+	static constexpr const char *Description = "The total number of write operations issued to storage";
+	static constexpr const char *Unit = "operations";
+	static constexpr const char *TypeStr = "uint64";
+};
+struct MetricIOTotalWriteTime {
+	using METRIC_TYPE = double;
+	static constexpr const char *Name = "io.total_write_time";
+	static constexpr const char *Description = "The total time spent writing to storage";
+	static constexpr const char *Unit = "seconds";
+	static constexpr const char *TypeStr = "double";
 };
 
 // Storage metrics

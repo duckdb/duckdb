@@ -18,6 +18,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/tableref/match_recognize_ref.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/tableref/delimgetref.hpp"
@@ -267,6 +268,7 @@ public:
 	                                           const ColumnList &columns);
 	unique_ptr<BoundConstraint> BindUniqueConstraint(const Constraint &constraint, const Identifier &table,
 	                                                 const ColumnList &columns);
+	static void VerifyConstraintTimingStorageVersion(const Constraint &constraint, Catalog &catalog, bool temporary);
 
 	BoundStatement BindAlterAddIndex(BoundStatement &result, CatalogEntry &entry, unique_ptr<AlterInfo> alter_info);
 
@@ -360,6 +362,8 @@ public:
 	static void BindSchemaOrCatalog(ClientContext &context, QualifiedName &qualified_name);
 
 	void BindLogicalType(LogicalType &type);
+	//! Resolve a type expression into a concrete type
+	LogicalType BindLogicalType(const ParsedExpression &type_expr);
 
 	optional_ptr<Binding> GetMatchingBinding(const Identifier &table_name, const Identifier &column_name,
 	                                         ErrorData &error);
@@ -555,6 +559,7 @@ private:
 	BoundStatement Bind(BaseTableRef &ref);
 	BoundStatement Bind(BoundRefWrapper &ref);
 	BoundStatement Bind(JoinRef &ref);
+	BoundStatement Bind(MatchRecognizeRef &ref);
 	//! Rewrites a NEAREST BY join into a lateral join over a top-k subquery and binds the result
 	BoundStatement BindNearestJoin(JoinRef &ref);
 	BoundStatement Bind(SubqueryRef &ref);
@@ -645,8 +650,6 @@ private:
 
 	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const Identifier &schema_name,
 	                                         bool default_schema_precedence = false);
-
-	LogicalType BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &type_expr);
 
 	BoundStatement BindSelectNode(SelectNode &statement, BoundStatement from_table);
 

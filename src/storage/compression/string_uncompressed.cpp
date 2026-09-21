@@ -82,7 +82,7 @@ unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(const Que
                                                                        ColumnSegment &segment) {
 	auto result = make_uniq<StringScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-	result->handle = buffer_manager.Pin(segment.GetBlockHandle());
+	result->handle = buffer_manager.Pin(context, segment.GetBlockHandle());
 	return std::move(result);
 }
 
@@ -107,7 +107,7 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 		auto current_offset = base_data[start + i];
 		auto string_length = UnsafeNumericCast<uint32_t>(std::abs(current_offset) - std::abs(previous_offset));
 		result_data[result_offset + i] =
-		    FetchStringFromDict(segment, dict_end, result, baseptr, current_offset, string_length);
+		    FetchStringFromDict(state.context, segment, dict_end, result, baseptr, current_offset, string_length);
 		previous_offset = base_data[start + i];
 	}
 }
@@ -136,7 +136,8 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 		auto current_offset = base_data[index];
 		auto prev_offset = index > 0 ? base_data[index - 1] : 0;
 		auto string_length = UnsafeNumericCast<uint32_t>(std::abs(current_offset) - std::abs(prev_offset));
-		result_data[i] = FetchStringFromDict(segment, dict_end, result, baseptr, current_offset, string_length);
+		result_data[i] =
+		    FetchStringFromDict(state.context, segment, dict_end, result, baseptr, current_offset, string_length);
 	}
 }
 
@@ -150,7 +151,7 @@ BufferHandle &ColumnFetchState::GetOrInsertHandle(ColumnSegment &segment) {
 	if (entry == handles.end()) {
 		// not pinned yet: pin it
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-		auto handle = buffer_manager.Pin(segment.GetBlockHandle());
+		auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
 		auto pinned_entry = handles.insert(make_pair(primary_id, std::move(handle)));
 		return pinned_entry.first->second;
 	} else {
@@ -178,7 +179,8 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 	} else {
 		string_length = NumericCast<uint32_t>(std::abs(dict_offset) - std::abs(base_data[row_id - 1]));
 	}
-	result_data[result_idx] = FetchStringFromDict(segment, dict_end, result, baseptr, dict_offset, string_length);
+	result_data[result_idx] =
+	    FetchStringFromDict(state.context, segment, dict_end, result, baseptr, dict_offset, string_length);
 }
 
 //===--------------------------------------------------------------------===//
@@ -367,8 +369,8 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 	state.head->offset += total_length;
 }
 
-string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, Vector &result, block_id_t block,
-                                                       int32_t offset) {
+string_t UncompressedStringStorage::ReadOverflowString(const QueryContext &context, ColumnSegment &segment,
+                                                       Vector &result, block_id_t block, int32_t offset) {
 	auto &buffer_manager = segment.GetBlockHandle()->GetMemory().GetBufferManager();
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
 
@@ -379,7 +381,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		// read the overflow string from disk
 		// pin the initial handle and read the length
 		auto block_handle = state.GetHandle(segment.GetBlockHandle()->GetBlockManager(), block);
-		auto handle = buffer_manager.Pin(block_handle);
+		auto handle = buffer_manager.Pin(context, block_handle);
 
 		// read header
 		uint32_t length = Load<uint32_t>(handle.GetDataMutable() + offset);
@@ -412,7 +414,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 				// read the next block
 				block_id_t next_block = Load<block_id_t>(handle.GetDataMutable() + offset);
 				block_handle = state.GetHandle(segment.GetBlockHandle()->GetBlockManager(), next_block);
-				handle = buffer_manager.Pin(block_handle);
+				handle = buffer_manager.Pin(context, block_handle);
 				offset = 0;
 			}
 		}
@@ -429,7 +431,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 	// read the overflow string from memory
 	// first pin the handle, if it is not pinned yet
 	auto string_block = state.FindOverflowBlock(block);
-	auto handle = buffer_manager.Pin(string_block.get().block);
+	auto handle = buffer_manager.Pin(context, string_block.get().block);
 	auto final_buffer = handle.GetDataMutable();
 	StringVector::AddHandle(result, std::move(handle));
 	return ReadStringWithLength(final_buffer, offset);

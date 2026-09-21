@@ -1,6 +1,7 @@
 #include "duckdb/common/json_document.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
 #include "yyjson.hpp"
 
 using namespace duckdb_yyjson; // NOLINT

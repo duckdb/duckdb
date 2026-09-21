@@ -23,7 +23,10 @@
 #include "duckdb/main/parse_iterator.hpp"
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/main/table_description.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 
@@ -103,6 +106,50 @@ inline auto Convert(duckdb_v2_interval_t value) -> interval_t {
 	out.days = value.days;
 	out.micros = value.micros;
 	return out;
+}
+
+// The V2 enum surfaces core's StatementType under the same numeric values; every spec member is pinned. Core has no
+// count sentinel, so a member appended in core is caught by the test over the values past the last spec member.
+#define DUCKDB_V2_ASSERT_STATEMENT_TYPE(member)                                                                        \
+	static_assert(static_cast<uint8_t>(StatementType::member##_STATEMENT) == DUCKDB_V2_STATEMENT_TYPE_##member,        \
+	              "StatementType::" #member "_STATEMENT must mirror DUCKDB_V2_STATEMENT_TYPE_" #member)
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(INVALID);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(SELECT);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(INSERT);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(UPDATE);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(CREATE);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(DELETE);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(PREPARE);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(EXECUTE);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(ALTER);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(TRANSACTION);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(COPY);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(ANALYZE);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(VARIABLE_SET);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(CREATE_FUNC);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(EXPLAIN);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(DROP);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(EXPORT);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(PRAGMA);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(VACUUM);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(CALL);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(SET);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(LOAD);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(RELATION);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(EXTENSION);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(LOGICAL_PLAN);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(ATTACH);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(DETACH);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(MULTI);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(COPY_DATABASE);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(UPDATE_EXTENSIONS);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(MERGE_INTO);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(CONNECT);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(DISCONNECT);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(EXTERNAL_RESOURCE);
+#undef DUCKDB_V2_ASSERT_STATEMENT_TYPE
+inline auto Convert(StatementType type) -> DUCKDB_V2_STATEMENT_TYPE {
+	return static_cast<DUCKDB_V2_STATEMENT_TYPE>(type);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -223,6 +270,33 @@ inline auto Convert(CV2LogicalType *opt) -> duckdb_v2_logical_type_handle {
 	return reinterpret_cast<duckdb_v2_logical_type_handle>(opt);
 }
 
+using CV2QualifiedName = duckdb::QualifiedName;
+
+inline auto Convert(duckdb_v2_qname_handle name) -> CV2QualifiedName * {
+	return reinterpret_cast<CV2QualifiedName *>(name);
+}
+inline auto Convert(CV2QualifiedName *name) -> duckdb_v2_qname_handle {
+	return reinterpret_cast<duckdb_v2_qname_handle>(name);
+}
+
+using CV2TableDescription = duckdb::TableDescription;
+
+inline auto Convert(duckdb_v2_table_description_handle desc) -> CV2TableDescription * {
+	return reinterpret_cast<CV2TableDescription *>(desc);
+}
+inline auto Convert(CV2TableDescription *desc) -> duckdb_v2_table_description_handle {
+	return reinterpret_cast<duckdb_v2_table_description_handle>(desc);
+}
+
+using CV2ColumnDescription = duckdb::ColumnDefinition;
+
+inline auto Convert(duckdb_v2_column_description_handle column) -> CV2ColumnDescription * {
+	return reinterpret_cast<CV2ColumnDescription *>(column);
+}
+inline auto Convert(CV2ColumnDescription *column) -> duckdb_v2_column_description_handle {
+	return reinterpret_cast<duckdb_v2_column_description_handle>(column);
+}
+
 using CV2Value = duckdb::Value;
 
 inline auto Convert(duckdb_v2_value_handle val) -> CV2Value * {
@@ -231,6 +305,16 @@ inline auto Convert(duckdb_v2_value_handle val) -> CV2Value * {
 
 inline auto Convert(CV2Value *val) -> duckdb_v2_value_handle {
 	return reinterpret_cast<duckdb_v2_value_handle>(val);
+}
+
+using CV2Expression = duckdb::Expression;
+
+inline auto Convert(duckdb_v2_expression_handle expression) -> CV2Expression * {
+	return reinterpret_cast<CV2Expression *>(expression);
+}
+
+inline auto Convert(CV2Expression *expression) -> duckdb_v2_expression_handle {
+	return reinterpret_cast<duckdb_v2_expression_handle>(expression);
 }
 
 using CV2DataChunk = duckdb::DataChunk;
