@@ -243,7 +243,7 @@ public:
 
 	//! Format a string using printf semantics
 	template <typename... ARGS>
-	static string Format(const string fmt_str, ARGS... params) {
+	static string Format(const string &fmt_str, const ARGS &...params) {
 		return Exception::ConstructMessage(fmt_str, params...);
 	}
 

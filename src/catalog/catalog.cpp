@@ -77,8 +77,9 @@ Catalog &Catalog::GetSystemCatalog(ClientContext &context) {
 	return Catalog::GetSystemCatalog(*context.db);
 }
 
+//! The default catalog for lookups; empty when no database is attached, in which case the lookup finds nothing there.
 Identifier GetDefaultCatalog(CatalogEntryRetriever &retriever) {
-	return DatabaseManager::GetDefaultDatabase(retriever.GetContext());
+	return DatabaseManager::TryGetDefaultDatabase(retriever.GetContext());
 }
 
 optional_ptr<Catalog> Catalog::GetCatalogEntry(CatalogEntryRetriever &retriever, const Identifier &catalog_name) {
@@ -590,8 +591,9 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 			auto &default_entry = search_path.GetDefault();
 			if (!IsInvalidCatalog(default_entry.GetCatalog())) {
 				entries.emplace_back(default_entry.GetCatalog(), schema);
-			} else {
-				entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema);
+			} else if (auto default_database = DatabaseManager::TryGetDefaultDatabase(context);
+			           !IsInvalidCatalog(default_database)) {
+				entries.emplace_back(std::move(default_database), schema);
 			}
 		}
 	} else if (IsInvalidSchema(schema)) {
@@ -998,12 +1000,16 @@ CatalogEntryLookup Catalog::TryLookupEntryAcrossCatalogs(CatalogEntryRetriever &
 	lookups.reserve(entries.size());
 	for (auto &entry : entries) {
 		optional_ptr<Catalog> catalog_entry;
-		if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		if (if_not_found == OnEntryNotFound::RETURN_NULL || IsInvalidCatalog(entry.GetCatalog())) {
 			catalog_entry = Catalog::GetCatalogEntry(retriever, entry.GetCatalog());
 		} else {
 			catalog_entry = &Catalog::GetCatalog(retriever, entry.GetCatalog());
 		}
 		if (!catalog_entry) {
+			if (IsInvalidCatalog(entry.GetCatalog())) {
+				// the search path's default-database entry, with no database attached: nothing to search there
+				continue;
+			}
 			return {nullptr, nullptr, ErrorData()};
 		}
 		D_ASSERT(catalog_entry);
@@ -1396,12 +1402,19 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(CatalogEntryRetriever 
 
 		auto &search_path = retriever.GetSearchPath();
 		for (auto &entry : search_path.Get()) {
-			auto &catalog = Catalog::GetCatalog(retriever, entry.GetCatalog());
-			if (inserted_catalogs.find(catalog) != inserted_catalogs.end()) {
+			auto catalog = Catalog::GetCatalogEntry(retriever, entry.GetCatalog());
+			if (!catalog) {
+				if (IsInvalidCatalog(entry.GetCatalog())) {
+					// the search path's default-database entry, with no database attached
+					continue;
+				}
+				throw BinderException("Catalog %s does not exist!", entry.GetCatalog());
+			}
+			if (inserted_catalogs.find(*catalog) != inserted_catalogs.end()) {
 				continue;
 			}
-			inserted_catalogs.insert(catalog);
-			catalogs.push_back(catalog);
+			inserted_catalogs.insert(*catalog);
+			catalogs.push_back(*catalog);
 		}
 	} else {
 		catalogs.push_back(Catalog::GetCatalog(retriever, Identifier(catalog_name)));

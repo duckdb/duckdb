@@ -1115,11 +1115,9 @@ std::string ParquetExtension::Version() const {
 
 } // namespace duckdb
 
-#ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
 extern "C" {
 
 DUCKDB_CPP_EXTENSION_ENTRY(parquet, loader) { // NOLINT
 	duckdb::LoadInternal(loader);
 }
 }
-#endif

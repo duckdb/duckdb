@@ -1,0 +1,19 @@
+# name: test/sql/join/mark/residual_routing.test
+# description: MARK residuals preserve the existing hash strategy
+# group: [mark]
+
+statement ok
+CREATE TABLE routing_probe AS SELECT i k, i x FROM range(20000) t(i);
+
+statement ok
+CREATE TABLE routing_build AS SELECT * FROM routing_probe;
+
+query II
+EXPLAIN SELECT __mark_join_marker FROM routing_probe p JOIN BY(TYPE MARK) routing_build b ON p.k=b.k AND p.x+b.x>10;
+----
+physical_plan	<REGEX>:.*Hash Join.*Join Type: MARK.*
+
+query I
+SELECT count(*) FROM (SELECT __mark_join_marker m FROM routing_probe p JOIN BY(TYPE MARK) routing_build b ON p.k=b.k AND p.x+b.x>10) WHERE m;
+----
+19994

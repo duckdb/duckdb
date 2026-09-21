@@ -161,17 +161,17 @@ private:
 	Connection &connection;
 };
 
-class CV2DatabaseReplacementScan : public CV2ReplacementScan {
+class CV2InstanceReplacementScan : public CV2ReplacementScan {
 public:
-	explicit CV2DatabaseReplacementScan(DatabaseInstance &db) : db(db) {
+	explicit CV2InstanceReplacementScan(DatabaseInstance &instance) : instance(instance) {
 	}
 
 	void RegisterScan(ReplacementScan scan) override {
-		DBConfig::GetConfig(db).replacement_scans.push_back(std::move(scan));
+		DBConfig::GetConfig(instance).replacement_scans.push_back(std::move(scan));
 	}
 
 private:
-	DatabaseInstance &db;
+	DatabaseInstance &instance;
 };
 
 static auto Convert(duckdb_v2_replacement_scan_handle scan) -> CV2ReplacementScan * {
@@ -202,15 +202,17 @@ DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create_with_connection(duckdb_v2_conn
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create_with_database(duckdb_v2_database_handle database,
+DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create_with_instance(duckdb_v2_instance_handle instance,
                                                                 duckdb_v2_replacement_scan_handle *out_scan,
                                                                 duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(database);
+	DUCKDB_CHECK_ARG(instance);
 	DUCKDB_CHECK_ARG(out_scan);
 	*out_scan = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto &db = *Convert(database)->database->instance;
-		auto scan = duckdb::make_uniq<CV2DatabaseReplacementScan>(db);
+		auto &instance_wrapper = *Convert(instance);
+		duckdb::lock_guard<duckdb::mutex> guard(instance_wrapper.lock);
+		auto &db = *instance_wrapper.GetDatabase().instance;
+		auto scan = duckdb::make_uniq<CV2InstanceReplacementScan>(db);
 		*out_scan = Convert(scan.release());
 	});
 }
@@ -223,7 +225,7 @@ DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create_with_extension(duckdb_v2_exten
 	*out_scan = nullptr;
 	return WithErrorHandler(err, [&]() {
 		auto &db = GetExtensionLoader(extension).GetDatabaseInstance();
-		auto scan = duckdb::make_uniq<CV2DatabaseReplacementScan>(db);
+		auto scan = duckdb::make_uniq<CV2InstanceReplacementScan>(db);
 		*out_scan = Convert(scan.release());
 	});
 }

@@ -666,11 +666,13 @@ void WindowHashGroup::AllocateMasks() {
 	//	Allocate masks inside the lock
 	partition_mask.Initialize(count);
 
+	// All masks refer to the shared sort's partition columns, including duplicate expressions.
+	const auto &sort_expr = gsink.op.select_list[gsink.op.order_idx]->Cast<BoundWindowExpression>();
+	const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : sort_expr.Partitions().size();
 	const auto &executors = gsink.executors;
 	for (auto &wexec : executors) {
 		auto &wexpr = wexec->wexpr;
 
-		const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : wexpr.Partitions().size();
 		auto &order_mask = order_masks[order_begin + wexpr.OrderBy().size()];
 		if (order_mask.IsMaskSet()) {
 			continue;
@@ -905,9 +907,10 @@ WindowHashGroup::ExecutorGlobalStates &WindowHashGroup::GetGlobalStates(ClientCo
 	}
 
 	// These can be large so we defer building them until we are ready.
+	const auto &sort_expr = gsink.op.select_list[gsink.op.order_idx]->Cast<BoundWindowExpression>();
+	const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : sort_expr.Partitions().size();
 	for (auto &wexec : executors) {
 		auto &wexpr = wexec->wexpr;
-		const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : wexpr.Partitions().size();
 		auto &order_mask = order_masks[order_begin + wexpr.OrderBy().size()];
 		gestates.emplace_back(wexec->GetGlobalState(client, count, partition_mask, order_mask));
 	}

@@ -1,6 +1,12 @@
 #include "test_capi_v2.hpp"
 
+#include "duckdb/parallel/pipeline.hpp"
+
+#include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cstring>
+#include <thread>
 
 // ---------------------------------------------------------------------------
 // V2 table function tests: build a function on a connection, configure its
@@ -52,6 +58,12 @@ int64_t QueryI64(duckdb_v2_connection_handle conn, const char *sql) {
 	REQUIRE(chunk != nullptr);
 	duckdb_v2_vector_handle vec = nullptr;
 	duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, nullptr);
+	duckdb_v2_logical_type_handle type = nullptr;
+	REQUIRE(duckdb_v2_vector_get_logical_type(vec, &type, nullptr) == DUCKDB_V2_ERROR_NONE);
+	DUCKDB_V2_LOGICAL_TYPE_ID type_id = DUCKDB_V2_LOGICAL_TYPE_ID_INVALID;
+	REQUIRE(duckdb_v2_logical_type_get_id(type, &type_id, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_logical_type_destroy(&type);
+	REQUIRE(type_id == DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
 	duckdb_v2_vector_view view {};
 	duckdb_v2_vector_get_view(vec, &view, nullptr);
 	auto out = static_cast<const int64_t *>(view.data)[SelAt(view.sel, 0)];
@@ -197,8 +209,10 @@ void RangeExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_conte
 	duckdb_v2_vector_set_size(vec, static_cast<idx_t>(produced), err);
 }
 
-// Registers my_range on the connection.
-void RegisterRange(duckdb_v2_connection_handle conn, const char *name = "my_range") {
+// Registers my_range on the connection, optionally with partition callbacks.
+void RegisterRange(duckdb_v2_connection_handle conn, const char *name = "my_range",
+                   duckdb_v2_table_function_partitioning_callback_fn info_cb = nullptr,
+                   duckdb_v2_table_function_partition_data_callback_fn data_cb = nullptr) {
 	auto bigint = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
 	auto function = MakeTable(conn, name);
 	TableSigParam(SigOf(function), "n", bigint);
@@ -206,6 +220,13 @@ void RegisterRange(duckdb_v2_connection_handle conn, const char *name = "my_rang
 	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, RangeInitGlobalCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, RangeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	if (info_cb) {
+		REQUIRE(duckdb_v2_table_function_set_partitioning_callback(function, info_cb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	}
+	if (data_cb) {
+		REQUIRE(duckdb_v2_table_function_set_partition_data_callback(function, data_cb, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+	}
 	REQUIRE(duckdb_v2_table_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_table_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&bigint);
@@ -562,7 +583,7 @@ TEST_CASE("V2 table: register on connection and scan", "[capi_v2][table_function
 	RegisterRange(fx.conn);
 
 	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM my_range(10)") == 10);
-	REQUIRE(QueryI64(fx.conn, "SELECT sum(i) FROM my_range(10)") == 45);
+	REQUIRE(QueryI64(fx.conn, "SELECT sum(i)::BIGINT FROM my_range(10)") == 45);
 	// A scan spanning several batches, and one producing nothing at all.
 	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM my_range(5000)") == 5000);
 	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM my_range(0)") == 0);
@@ -600,7 +621,7 @@ TEST_CASE("V2 table: multiple result columns share the batch row count", "[capi_
 
 	// Both columns carry all four rows: the count set on "a" reached "b".
 	REQUIRE(QueryI64(fx.conn, "SELECT count(b) FROM my_pairs(4)") == 4);
-	REQUIRE(QueryI64(fx.conn, "SELECT sum(a) FROM my_pairs(4)") == 6);
+	REQUIRE(QueryI64(fx.conn, "SELECT sum(a)::BIGINT FROM my_pairs(4)") == 6);
 
 	duckdb_v2_result_handle text = nullptr;
 	REQUIRE(Query(fx.conn, "SELECT string_agg(b, ',' ORDER BY a) FROM my_pairs(3)", &text) == DUCKDB_V2_ERROR_NONE);
@@ -685,7 +706,7 @@ TEST_CASE("V2 table: user data, global state and local state reach exec", "[capi
 	duckdb_v2_table_function_destroy(&function);
 
 	// The bind data seeded the global counter with 3 rows, each carrying the local state's tag.
-	REQUIRE(QueryI64(fx.conn, "SELECT sum(v) FROM my_state()") == 126);
+	REQUIRE(QueryI64(fx.conn, "SELECT sum(v)::BIGINT FROM my_state()") == 126);
 	REQUIRE(state_probe.init_global_calls == 1);
 	REQUIRE(state_probe.init_local_calls >= 1);
 	REQUIRE(state_probe.local_saw_global);
@@ -1013,11 +1034,11 @@ void RegisterProj(duckdb_v2_connection_handle conn, const char *name, bool proje
 	duckdb_v2_table_function_destroy(&function);
 }
 
-// Runs a query and collects its BIGINT columns row-major.
-std::vector<int64_t> QueryCells(duckdb_v2_connection_handle conn, const char *sql) {
+// Runs a query and calls fn(view, row) for every cell, row-major.
+template <class FN>
+void ForEachCell(duckdb_v2_connection_handle conn, const char *sql, FN fn) {
 	duckdb_v2_result_handle result = nullptr;
 	REQUIRE(Query(conn, sql, &result) == DUCKDB_V2_ERROR_NONE);
-	std::vector<int64_t> cells;
 	while (auto chunk = StepChunk(result)) {
 		idx_t columns = 0;
 		idx_t rows = 0;
@@ -1029,12 +1050,20 @@ std::vector<int64_t> QueryCells(duckdb_v2_connection_handle conn, const char *sq
 				duckdb_v2_data_chunk_get_vector(chunk, col, &vec, nullptr);
 				duckdb_v2_vector_view view {};
 				duckdb_v2_vector_get_view(vec, &view, nullptr);
-				cells.push_back(static_cast<const int64_t *>(view.data)[SelAt(view.sel, row)]);
+				fn(view, SelAt(view.sel, row));
 			}
 		}
 		duckdb_v2_data_chunk_destroy(&chunk);
 	}
 	duckdb_v2_result_destroy(&result);
+}
+
+// Runs a query and collects its BIGINT columns row-major.
+std::vector<int64_t> QueryCells(duckdb_v2_connection_handle conn, const char *sql) {
+	std::vector<int64_t> cells;
+	ForEachCell(conn, sql, [&](const duckdb_v2_vector_view &view, idx_t row) {
+		cells.push_back(static_cast<const int64_t *>(view.data)[row]);
+	});
 	return cells;
 }
 
@@ -1290,6 +1319,777 @@ TEST_CASE("V2 table: pushdown null arguments", "[capi_v2][table_function]") {
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_table_function_filter_pushdown_get_bind_data(nullptr, &data, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
+}
+
+// ===========================================================================
+// partition_data / partitioning.
+// ===========================================================================
+
+namespace {
+
+// Runs sql (an EXPLAIN statement) and reports whether any VARCHAR cell of the output contains needle.
+bool ExplainContains(duckdb_v2_connection_handle conn, const char *sql, const char *needle) {
+	bool found = false;
+	ForEachCell(conn, sql, [&](const duckdb_v2_vector_view &view, idx_t row) {
+		auto bytes = static_cast<const duckdb_v2_bytes *>(view.data)[row];
+		if (Convert(Convert(bytes)).find(needle) != std::string::npos) {
+			found = true;
+		}
+	});
+	return found;
+}
+
+// ---------------------------------------------------------------------------
+// batch_order_probe(): one BIGINT column "b" over two batches raced so that batch 1 reaches the sink first;
+// only partition_data lets the BATCH_INDEX_ORDERED result sink restore insertion order.
+// ---------------------------------------------------------------------------
+
+struct BatchOrderGlobal {
+	std::atomic<int32_t> claimed {0};
+	std::atomic<int32_t> started {0};
+};
+struct BatchOrderLocal {
+	int32_t id = 0;
+	bool done = false;
+};
+
+void DeleteBatchOrderGlobal(void *ptr) {
+	delete static_cast<BatchOrderGlobal *>(ptr);
+}
+void DeleteBatchOrderLocal(void *ptr) {
+	delete static_cast<BatchOrderLocal *>(ptr);
+}
+
+void BatchOrderBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_context_handle context,
+                      duckdb_v2_error_info_handle *err) {
+	auto bigint = MakeTypeInCallback(context, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT, err);
+	if (!bigint) {
+		return;
+	}
+	duckdb_v2_table_function_bind_add_result_column(info, TableIdent("b"), bigint, err);
+	duckdb_v2_logical_type_destroy(&bigint);
+}
+
+void BatchOrderInitGlobalCb(duckdb_v2_table_function_init_global_info_handle info, duckdb_v2_context_handle,
+                            duckdb_v2_error_info_handle *err) {
+	duckdb_v2_opaque state = {new BatchOrderGlobal {}, DeleteBatchOrderGlobal, nullptr};
+	if (duckdb_v2_table_function_init_global_set_global_state(info, &state, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	duckdb_v2_table_function_init_global_set_max_threads(info, 2, err);
+}
+
+void BatchOrderInitLocalCb(duckdb_v2_table_function_init_local_info_handle info, duckdb_v2_context_handle,
+                           duckdb_v2_error_info_handle *err) {
+	void *global_ptr = nullptr;
+	if (duckdb_v2_table_function_init_local_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto &global = *static_cast<BatchOrderGlobal *>(global_ptr);
+	auto id = global.claimed.fetch_add(1);
+	global.started.fetch_add(1);
+	// Bounded barrier: both local states must exist before either races ahead in exec, or the completion order
+	// below would not be deterministic. Bounded so a scheduler that never launches the second task cannot hang.
+	auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+	while (global.started.load() < 2 && std::chrono::steady_clock::now() < deadline) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+
+	duckdb_v2_opaque state = {new BatchOrderLocal {id, false}, DeleteBatchOrderLocal, nullptr};
+	duckdb_v2_table_function_init_local_set_local_state(info, &state, err);
+}
+
+void BatchOrderExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_context_handle,
+                      duckdb_v2_error_info_handle *err) {
+	void *local_ptr = nullptr;
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	if (duckdb_v2_table_function_exec_get_local_state(info, &local_ptr, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_table_function_exec_get_output_chunk(info, &chunk, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto &local = *static_cast<BatchOrderLocal *>(local_ptr);
+	duckdb_v2_vector_handle vec = nullptr;
+	void *raw = nullptr;
+	if (duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_vector_get_data_mutable(vec, &raw, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	if (local.done) {
+		duckdb_v2_vector_set_size(vec, 0, err);
+		return;
+	}
+	// Batch 0 finishes later than batch 1 despite being claimed first: only batch-index ordering restores order.
+	if (local.id == 0) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	}
+	static_cast<int64_t *>(raw)[0] = local.id;
+	local.done = true;
+	duckdb_v2_vector_set_size(vec, 1, err);
+}
+
+// Set when any call observed requires_batch_index() true, so the ordered-result test can tell a real exercise of
+// the callback apart from a vacuous pass on a scheduler that ran everything on one thread.
+std::atomic<bool> batch_order_requires_batch_index_seen {false};
+
+void BatchOrderGetPartitionDataCb(duckdb_v2_table_function_partition_data_info_handle info, duckdb_v2_context_handle,
+                                  duckdb_v2_error_info_handle *err) {
+	bool requires_batch_index = false;
+	if (duckdb_v2_table_function_partition_data_requires_batch_index(info, &requires_batch_index, err) !=
+	    DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	if (requires_batch_index) {
+		batch_order_requires_batch_index_seen = true;
+	}
+	void *local_ptr = nullptr;
+	if (duckdb_v2_table_function_partition_data_get_local_state(info, &local_ptr, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto &local = *static_cast<BatchOrderLocal *>(local_ptr);
+	duckdb_v2_table_function_partition_data_set_batch_index(info, static_cast<idx_t>(local.id), err);
+}
+
+void RegisterBatchOrder(duckdb_v2_connection_handle conn, const char *name, bool with_partition_data) {
+	auto function = MakeTable(conn, name);
+	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, BatchOrderBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, BatchOrderInitGlobalCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_init_local_callback(function, BatchOrderInitLocalCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, BatchOrderExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	if (with_partition_data) {
+		REQUIRE(duckdb_v2_table_function_set_partition_data_callback(function, BatchOrderGetPartitionDataCb, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+	}
+	REQUIRE(duckdb_v2_table_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_table_function_destroy(&function);
+}
+
+// ---------------------------------------------------------------------------
+// part_probe(n): BIGINT "part_col" and "val", n groups of 3 rows with one group per exec call, partitioned by
+// "part_col" alone; its callbacks also probe the out-of-range setter paths along the way.
+// ---------------------------------------------------------------------------
+
+constexpr int64_t PART_PROBE_ROWS_PER_GROUP = 3;
+constexpr idx_t PART_PROBE_PART_COL_INDEX = 0;
+
+struct PartProbeBind {
+	int64_t groups = 0;
+};
+struct PartProbeGlobal {
+	int64_t position = 0;
+	int64_t last_group = -1;
+};
+
+void DeletePartProbeBind(void *ptr) {
+	delete static_cast<PartProbeBind *>(ptr);
+}
+void DeletePartProbeGlobal(void *ptr) {
+	delete static_cast<PartProbeGlobal *>(ptr);
+}
+
+// Latched by the last call to each callback, for the out-of-range/type assertions.
+std::atomic<DUCKDB_V2_ERROR> part_probe_oob_set_partition_value_rc {DUCKDB_V2_ERROR_NONE};
+std::atomic<DUCKDB_V2_ERROR> part_probe_oob_set_partition_info_rc {DUCKDB_V2_ERROR_NONE};
+std::atomic<DUCKDB_V2_ERROR> part_probe_oob_set_batch_index_rc {DUCKDB_V2_ERROR_NONE};
+std::atomic<DUCKDB_V2_ERROR> part_probe_wrong_type_partition_value_rc {DUCKDB_V2_ERROR_NONE};
+
+void PartProbeBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_context_handle context,
+                     duckdb_v2_error_info_handle *err) {
+	duckdb_v2_value_handle value = nullptr;
+	if (duckdb_v2_table_function_bind_get_arg_value(info, 0, &value, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	int64_t groups = 0;
+	auto rc = duckdb_v2_value_get_bigint(value, &groups, err);
+	duckdb_v2_value_destroy(&value);
+	if (rc != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto bigint = MakeTypeInCallback(context, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT, err);
+	if (!bigint) {
+		return;
+	}
+	rc = duckdb_v2_table_function_bind_add_result_column(info, TableIdent("part_col"), bigint, err);
+	if (rc == DUCKDB_V2_ERROR_NONE) {
+		rc = duckdb_v2_table_function_bind_add_result_column(info, TableIdent("val"), bigint, err);
+	}
+	duckdb_v2_logical_type_destroy(&bigint);
+	if (rc != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	duckdb_v2_opaque bind_data = {new PartProbeBind {groups}, DeletePartProbeBind, nullptr};
+	duckdb_v2_table_function_bind_set_bind_data(info, &bind_data, err);
+}
+
+void PartProbeInitGlobalCb(duckdb_v2_table_function_init_global_info_handle info, duckdb_v2_context_handle,
+                           duckdb_v2_error_info_handle *err) {
+	duckdb_v2_opaque state = {new PartProbeGlobal {}, DeletePartProbeGlobal, nullptr};
+	duckdb_v2_table_function_init_global_set_global_state(info, &state, err);
+}
+
+void PartProbeExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_context_handle,
+                     duckdb_v2_error_info_handle *err) {
+	void *bind_ptr = nullptr;
+	void *global_ptr = nullptr;
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	if (duckdb_v2_table_function_exec_get_bind_data(info, &bind_ptr, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_table_function_exec_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_table_function_exec_get_output_chunk(info, &chunk, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto &bind = *static_cast<PartProbeBind *>(bind_ptr);
+	auto &global = *static_cast<PartProbeGlobal *>(global_ptr);
+
+	duckdb_v2_vector_handle part_vec = nullptr;
+	duckdb_v2_vector_handle val_vec = nullptr;
+	void *part_raw = nullptr;
+	void *val_raw = nullptr;
+	if (duckdb_v2_data_chunk_get_vector(chunk, 0, &part_vec, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_data_chunk_get_vector(chunk, 1, &val_vec, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_vector_get_data_mutable(part_vec, &part_raw, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_vector_get_data_mutable(val_vec, &val_raw, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+
+	if (global.position >= bind.groups * PART_PROBE_ROWS_PER_GROUP) {
+		duckdb_v2_vector_set_size(part_vec, 0, err);
+		return;
+	}
+	// A group spans several chunks when the vector size is smaller than a group.
+	auto group = global.position / PART_PROBE_ROWS_PER_GROUP;
+	auto offset = global.position % PART_PROBE_ROWS_PER_GROUP;
+	auto rows = std::min<int64_t>(PART_PROBE_ROWS_PER_GROUP - offset, STANDARD_VECTOR_SIZE);
+	global.last_group = group;
+	for (int64_t i = 0; i < rows; i++) {
+		static_cast<int64_t *>(part_raw)[i] = group;
+		static_cast<int64_t *>(val_raw)[i] = group * 10 + offset + i;
+	}
+	global.position += rows;
+	duckdb_v2_vector_set_size(part_vec, static_cast<idx_t>(rows), err);
+}
+
+void PartProbeGetPartitionDataCb(duckdb_v2_table_function_partition_data_info_handle info,
+                                 duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+	void *global_ptr = nullptr;
+	if (duckdb_v2_table_function_partition_data_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto &global = *static_cast<PartProbeGlobal *>(global_ptr);
+
+	// Out of range: duckdb::PipelineBuildState::BATCH_INCREMENT - 2 is the first value the engine rejects. Latched,
+	// not asserted here: a REQUIRE inside a callback would throw through the C callback boundary.
+	part_probe_oob_set_batch_index_rc = duckdb_v2_table_function_partition_data_set_batch_index(
+	    info, duckdb::PipelineBuildState::BATCH_INCREMENT - 2, nullptr);
+
+	// A constant batch index would silently fold every group into the first partition: NextBatch no-ops otherwise.
+	if (duckdb_v2_table_function_partition_data_set_batch_index(info, static_cast<idx_t>(global.last_group), err) !=
+	    DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	bool needs_columns = false;
+	if (duckdb_v2_table_function_partition_data_requires_partition_columns(info, &needs_columns, err) !=
+	    DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	if (!needs_columns) {
+		return;
+	}
+	idx_t column = 0;
+	if (duckdb_v2_table_function_partition_data_get_partition_column_index(info, 0, &column, err) !=
+	    DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	if (column != PART_PROBE_PART_COL_INDEX) {
+		return;
+	}
+
+	duckdb_v2_value_handle wrong_type = nullptr;
+	if (duckdb_v2_value_create_int_with_context(context, static_cast<int32_t>(global.last_group), &wrong_type,
+	                                            nullptr) == DUCKDB_V2_ERROR_NONE) {
+		part_probe_wrong_type_partition_value_rc =
+		    duckdb_v2_table_function_partition_data_set_partition_value(info, 0, wrong_type, nullptr);
+		duckdb_v2_value_destroy(&wrong_type);
+	}
+
+	duckdb_v2_value_handle value = nullptr;
+	if (duckdb_v2_value_create_bigint_with_context(context, global.last_group, &value, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	// Exactly one column is ever requested, so index 1 is always out of range.
+	part_probe_oob_set_partition_value_rc =
+	    duckdb_v2_table_function_partition_data_set_partition_value(info, 1, value, nullptr);
+	duckdb_v2_table_function_partition_data_set_partition_value(info, 0, value, err);
+	duckdb_v2_value_destroy(&value);
+}
+
+void PartProbeGetPartitionInfoCb(duckdb_v2_table_function_partitioning_info_handle info, duckdb_v2_context_handle,
+                                 duckdb_v2_error_info_handle *err) {
+	// DUCKDB_V2_TABLE_PARTITION_INFO only declares values 0-3.
+	part_probe_oob_set_partition_info_rc = duckdb_v2_table_function_partitioning_set_partition_info(
+	    info, static_cast<DUCKDB_V2_TABLE_PARTITION_INFO>(99), nullptr);
+
+	idx_t count = 0;
+	if (duckdb_v2_table_function_partitioning_get_partition_column_count(info, &count, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	if (count != 1) {
+		return;
+	}
+	idx_t column = 0;
+	if (duckdb_v2_table_function_partitioning_get_partition_column_index(info, 0, &column, err) !=
+	    DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	if (column != PART_PROBE_PART_COL_INDEX) {
+		return;
+	}
+	duckdb_v2_table_function_partitioning_set_partition_info(
+	    info, DUCKDB_V2_TABLE_PARTITION_INFO_SINGLE_VALUE_PARTITIONS, err);
+}
+
+// Registers part_probe's bind/init_global/exec with the given partition callbacks.
+void RegisterPartProbeVariant(duckdb_v2_connection_handle conn, const char *name,
+                              duckdb_v2_table_function_partitioning_callback_fn info_cb,
+                              duckdb_v2_table_function_partition_data_callback_fn data_cb) {
+	auto bigint = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto function = MakeTable(conn, name);
+	TableSigParam(SigOf(function), "n", bigint);
+	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, PartProbeBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, PartProbeInitGlobalCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, PartProbeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_partition_data_callback(function, data_cb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_partitioning_callback(function, info_cb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_table_function_destroy(&function);
+	duckdb_v2_logical_type_destroy(&bigint);
+}
+
+void RegisterPartProbe(duckdb_v2_connection_handle conn, const char *name) {
+	RegisterPartProbeVariant(conn, name, PartProbeGetPartitionInfoCb, PartProbeGetPartitionDataCb);
+}
+
+// Reports batch index 0, 1, 0: decreasing on the third group, to trip the "batch index must not decrease" guard.
+void DecreasingBatchIndexDataCb(duckdb_v2_table_function_partition_data_info_handle info,
+                                duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+	void *global_ptr = nullptr;
+	if (duckdb_v2_table_function_partition_data_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto &global = *static_cast<PartProbeGlobal *>(global_ptr);
+	idx_t reported_batch = global.last_group == 2 ? 0 : static_cast<idx_t>(global.last_group);
+	if (duckdb_v2_table_function_partition_data_set_batch_index(info, reported_batch, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	bool needs_columns = false;
+	if (duckdb_v2_table_function_partition_data_requires_partition_columns(info, &needs_columns, err) !=
+	        DUCKDB_V2_ERROR_NONE ||
+	    !needs_columns) {
+		return;
+	}
+	duckdb_v2_value_handle value = nullptr;
+	if (duckdb_v2_value_create_bigint_with_context(context, global.last_group, &value, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	duckdb_v2_table_function_partition_data_set_partition_value(info, 0, value, err);
+	duckdb_v2_value_destroy(&value);
+}
+
+// Reports batch index 0 for every group, while the partition value legitimately changes per group: trips the
+// "value changed without the batch index changing" guard.
+void ConstantBatchIndexDataCb(duckdb_v2_table_function_partition_data_info_handle info,
+                              duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+	void *global_ptr = nullptr;
+	if (duckdb_v2_table_function_partition_data_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto &global = *static_cast<PartProbeGlobal *>(global_ptr);
+	if (duckdb_v2_table_function_partition_data_set_batch_index(info, 0, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	bool needs_columns = false;
+	if (duckdb_v2_table_function_partition_data_requires_partition_columns(info, &needs_columns, err) !=
+	        DUCKDB_V2_ERROR_NONE ||
+	    !needs_columns) {
+		return;
+	}
+	duckdb_v2_value_handle value = nullptr;
+	if (duckdb_v2_value_create_bigint_with_context(context, global.last_group, &value, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	duckdb_v2_table_function_partition_data_set_partition_value(info, 0, value, err);
+	duckdb_v2_value_destroy(&value);
+}
+
+// ---------------------------------------------------------------------------
+// Completeness and error-propagation failures on my_range, forced into a partitioned aggregate.
+// ---------------------------------------------------------------------------
+
+void AlwaysPartitionedInfoCb(duckdb_v2_table_function_partitioning_info_handle info, duckdb_v2_context_handle,
+                             duckdb_v2_error_info_handle *err) {
+	duckdb_v2_table_function_partitioning_set_partition_info(
+	    info, DUCKDB_V2_TABLE_PARTITION_INFO_SINGLE_VALUE_PARTITIONS, err);
+}
+
+// Never reports a batch index: exercises the "batch index required, even when unrequested" completeness check.
+void NoBatchIndexDataCb(duckdb_v2_table_function_partition_data_info_handle, duckdb_v2_context_handle,
+                        duckdb_v2_error_info_handle *) {
+}
+
+// Reports the batch index but never the requested partitioning column value.
+void NoPartitionValueDataCb(duckdb_v2_table_function_partition_data_info_handle info, duckdb_v2_context_handle,
+                            duckdb_v2_error_info_handle *err) {
+	duckdb_v2_table_function_partition_data_set_batch_index(info, 0, err);
+}
+
+void FailingGetPartitionDataCb(duckdb_v2_table_function_partition_data_info_handle, duckdb_v2_context_handle,
+                               duckdb_v2_error_info_handle *err) {
+	SetErrorInfo(err, DUCKDB_V2_ERROR_INPUT_INVALID, "partition data refused");
+}
+
+void FailingGetPartitionInfoCb(duckdb_v2_table_function_partitioning_info_handle, duckdb_v2_context_handle,
+                               duckdb_v2_error_info_handle *err) {
+	SetErrorInfo(err, DUCKDB_V2_ERROR_INPUT_INVALID, "partition info refused");
+}
+
+// ---------------------------------------------------------------------------
+// proj_part_probe(n): part_probe's groups behind projection pushdown, with an INTEGER "pad" declared first so
+// "part_col" (declared index 1) sits at scan position 0 whenever "pad" is pruned.
+// ---------------------------------------------------------------------------
+
+constexpr idx_t PROJ_PART_PROBE_PART_COL_INDEX = 1;
+
+// Latched by partition_data: the declared column it was asked to report.
+std::atomic<idx_t> proj_part_probe_reported_column {0};
+
+void ProjPartProbeBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_context_handle context,
+                         duckdb_v2_error_info_handle *err) {
+	duckdb_v2_value_handle value = nullptr;
+	if (duckdb_v2_table_function_bind_get_arg_value(info, 0, &value, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	int64_t groups = 0;
+	auto rc = duckdb_v2_value_get_bigint(value, &groups, err);
+	duckdb_v2_value_destroy(&value);
+	if (rc != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto integer = MakeTypeInCallback(context, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, err);
+	if (!integer) {
+		return;
+	}
+	auto bigint = MakeTypeInCallback(context, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT, err);
+	if (!bigint) {
+		duckdb_v2_logical_type_destroy(&integer);
+		return;
+	}
+	rc = duckdb_v2_table_function_bind_add_result_column(info, TableIdent("pad"), integer, err);
+	if (rc == DUCKDB_V2_ERROR_NONE) {
+		rc = duckdb_v2_table_function_bind_add_result_column(info, TableIdent("part_col"), bigint, err);
+	}
+	if (rc == DUCKDB_V2_ERROR_NONE) {
+		rc = duckdb_v2_table_function_bind_add_result_column(info, TableIdent("val"), bigint, err);
+	}
+	duckdb_v2_logical_type_destroy(&integer);
+	duckdb_v2_logical_type_destroy(&bigint);
+	if (rc != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	duckdb_v2_opaque bind_data = {new PartProbeBind {groups}, DeletePartProbeBind, nullptr};
+	duckdb_v2_table_function_bind_set_bind_data(info, &bind_data, err);
+}
+
+void ProjPartProbeExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_context_handle,
+                         duckdb_v2_error_info_handle *err) {
+	void *bind_ptr = nullptr;
+	void *global_ptr = nullptr;
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	idx_t count = 0;
+	if (duckdb_v2_table_function_exec_get_bind_data(info, &bind_ptr, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_table_function_exec_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_table_function_exec_get_output_chunk(info, &chunk, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_table_function_exec_get_column_count(info, &count, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto &bind = *static_cast<PartProbeBind *>(bind_ptr);
+	auto &global = *static_cast<PartProbeGlobal *>(global_ptr);
+
+	int64_t rows = 0;
+	auto group = global.position / PART_PROBE_ROWS_PER_GROUP;
+	auto offset = global.position % PART_PROBE_ROWS_PER_GROUP;
+	if (global.position < bind.groups * PART_PROBE_ROWS_PER_GROUP) {
+		rows = std::min<int64_t>(PART_PROBE_ROWS_PER_GROUP - offset, STANDARD_VECTOR_SIZE);
+		global.last_group = group;
+		global.position += rows;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		idx_t column = 0;
+		duckdb_v2_vector_handle vec = nullptr;
+		void *raw = nullptr;
+		if (duckdb_v2_table_function_exec_get_column_index(info, i, &column, err) != DUCKDB_V2_ERROR_NONE ||
+		    duckdb_v2_data_chunk_get_vector(chunk, i, &vec, err) != DUCKDB_V2_ERROR_NONE ||
+		    duckdb_v2_vector_get_data_mutable(vec, &raw, err) != DUCKDB_V2_ERROR_NONE) {
+			return;
+		}
+		for (int64_t row = 0; row < rows; row++) {
+			if (column == 0) {
+				static_cast<int32_t *>(raw)[row] = -1;
+			} else if (column == PROJ_PART_PROBE_PART_COL_INDEX) {
+				static_cast<int64_t *>(raw)[row] = group;
+			} else {
+				static_cast<int64_t *>(raw)[row] = group * 10 + offset + row;
+			}
+		}
+		if (i == 0) {
+			duckdb_v2_vector_set_size(vec, static_cast<idx_t>(rows), err);
+		}
+	}
+}
+
+void ProjPartProbeGetPartitionDataCb(duckdb_v2_table_function_partition_data_info_handle info,
+                                     duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+	void *global_ptr = nullptr;
+	if (duckdb_v2_table_function_partition_data_get_global_state(info, &global_ptr, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto &global = *static_cast<PartProbeGlobal *>(global_ptr);
+	if (duckdb_v2_table_function_partition_data_set_batch_index(info, static_cast<idx_t>(global.last_group), err) !=
+	    DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	bool needs_columns = false;
+	if (duckdb_v2_table_function_partition_data_requires_partition_columns(info, &needs_columns, err) !=
+	        DUCKDB_V2_ERROR_NONE ||
+	    !needs_columns) {
+		return;
+	}
+	idx_t column = 0;
+	if (duckdb_v2_table_function_partition_data_get_partition_column_index(info, 0, &column, err) !=
+	    DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	proj_part_probe_reported_column = column;
+	duckdb_v2_value_handle value = nullptr;
+	if (duckdb_v2_value_create_bigint_with_context(context, global.last_group, &value, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	duckdb_v2_table_function_partition_data_set_partition_value(info, 0, value, err);
+	duckdb_v2_value_destroy(&value);
+}
+
+void ProjPartProbeGetPartitionInfoCb(duckdb_v2_table_function_partitioning_info_handle info, duckdb_v2_context_handle,
+                                     duckdb_v2_error_info_handle *err) {
+	idx_t count = 0;
+	idx_t column = 0;
+	if (duckdb_v2_table_function_partitioning_get_partition_column_count(info, &count, err) != DUCKDB_V2_ERROR_NONE ||
+	    count != 1 ||
+	    duckdb_v2_table_function_partitioning_get_partition_column_index(info, 0, &column, err) !=
+	        DUCKDB_V2_ERROR_NONE ||
+	    column != PROJ_PART_PROBE_PART_COL_INDEX) {
+		return;
+	}
+	duckdb_v2_table_function_partitioning_set_partition_info(
+	    info, DUCKDB_V2_TABLE_PARTITION_INFO_SINGLE_VALUE_PARTITIONS, err);
+}
+
+void RegisterProjPartProbe(duckdb_v2_connection_handle conn, const char *name) {
+	auto bigint = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto function = MakeTable(conn, name);
+	TableSigParam(SigOf(function), "n", bigint);
+	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, ProjPartProbeBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, PartProbeInitGlobalCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, ProjPartProbeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_projection_pushdown(function, true, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_partition_data_callback(function, ProjPartProbeGetPartitionDataCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_partitioning_callback(function, ProjPartProbeGetPartitionInfoCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_table_function_destroy(&function);
+	duckdb_v2_logical_type_destroy(&bigint);
+}
+
+} // namespace
+
+TEST_CASE("V2 table: partition_data reports declared columns under projection pushdown", "[capi_v2][table_function]") {
+	EnvFixture fx;
+	RegisterProjPartProbe(fx.conn, "proj_part_probe");
+
+	// Only "part_col" is scanned, so declared index 1 is scan position 0; reporting 0 would name the INTEGER "pad"
+	// and the BIGINT partition value would be refused.
+	REQUIRE(ExplainContains(fx.conn, "EXPLAIN SELECT part_col, count(*) FROM proj_part_probe(3) GROUP BY part_col",
+	                        "Partitioned Aggregate"));
+	auto cells =
+	    QueryCells(fx.conn, "SELECT part_col, count(*) FROM proj_part_probe(3) GROUP BY part_col ORDER BY part_col");
+	REQUIRE(cells == std::vector<int64_t> {0, 3, 1, 3, 2, 3});
+	REQUIRE(proj_part_probe_reported_column.load() == PROJ_PART_PROBE_PART_COL_INDEX);
+
+	// Two columns scanned, "part_col" still first among them.
+	proj_part_probe_reported_column = 0;
+	cells =
+	    QueryCells(fx.conn, "SELECT part_col, max(val) FROM proj_part_probe(3) GROUP BY part_col ORDER BY part_col");
+	REQUIRE(cells == std::vector<int64_t> {0, 2, 1, 12, 2, 22});
+	REQUIRE(proj_part_probe_reported_column.load() == PROJ_PART_PROBE_PART_COL_INDEX);
+
+	// Grouping by "val" is not a partitioning the probe claims, so the plain path still works under pushdown.
+	REQUIRE_FALSE(ExplainContains(fx.conn, "EXPLAIN SELECT val, count(*) FROM proj_part_probe(3) GROUP BY val",
+	                              "Partitioned Aggregate"));
+	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM (SELECT val FROM proj_part_probe(3) GROUP BY val)") == 9);
+}
+
+TEST_CASE("V2 table: partitioning requires partition_data", "[capi_v2][table_function]") {
+	EnvFixture fx;
+	auto bigint = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto function = MakeTable(fx.conn, "info_only_probe");
+	TableSigParam(SigOf(function), "n", bigint);
+	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, RangeBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, RangeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_set_partitioning_callback(function, AlwaysPartitionedInfoCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+
+	REQUIRE(duckdb_v2_table_function_set_partition_data_callback(function, NoBatchIndexDataCb, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_table_function_destroy(&function);
+	duckdb_v2_logical_type_destroy(&bigint);
+}
+
+TEST_CASE("V2 table: partition_data restores batch order", "[capi_v2][table_function]") {
+	EnvFixture fx;
+	ExecSQL(fx.conn, "SET threads=2");
+	RegisterBatchOrder(fx.conn, "batch_order_probe", true);
+	RegisterBatchOrder(fx.conn, "batch_order_probe_nopart", false);
+
+	batch_order_requires_batch_index_seen = false;
+	REQUIRE(QueryCells(fx.conn, "SELECT * FROM batch_order_probe()") == std::vector<int64_t> {0, 1});
+	// Otherwise the scheduler ran everything on one thread and never actually asked for a batch index, which would
+	// make the ordering assertion above a vacuous pass rather than a real exercise of the callback.
+	REQUIRE(batch_order_requires_batch_index_seen.load());
+
+	// Without the callback the scan cannot support batch ordering, so the sink falls back to SOURCE_ORDERED; the
+	// query still succeeds and produces the same rows, with no order guaranteed.
+	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM batch_order_probe_nopart()") == 2);
+	REQUIRE(QueryI64(fx.conn, "SELECT sum(b)::BIGINT FROM batch_order_probe_nopart()") == 1);
+}
+
+TEST_CASE("V2 table: partition_data and partitioning feed a partitioned aggregate", "[capi_v2][table_function]") {
+	EnvFixture fx;
+	RegisterPartProbe(fx.conn, "part_probe");
+
+	// partitioning claims the requested column set only for "part_col": GROUP BY part_col unlocks the
+	// partitioned aggregate, GROUP BY val does not.
+	REQUIRE(ExplainContains(fx.conn, "EXPLAIN SELECT part_col, count(*) FROM part_probe(3) GROUP BY part_col",
+	                        "Partitioned Aggregate"));
+	REQUIRE_FALSE(ExplainContains(fx.conn, "EXPLAIN SELECT val, count(*) FROM part_probe(3) GROUP BY val",
+	                              "Partitioned Aggregate"));
+
+	auto cells =
+	    QueryCells(fx.conn, "SELECT part_col, count(*) FROM part_probe(3) GROUP BY part_col ORDER BY part_col");
+	REQUIRE(cells == std::vector<int64_t> {0, 3, 1, 3, 2, 3});
+
+	// The out-of-range/wrong-type setter calls made along the way returned INPUT_INVALID synchronously, and did
+	// not stop the correct calls right after them from keeping the query working.
+	REQUIRE(part_probe_oob_set_partition_value_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(part_probe_oob_set_partition_info_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(part_probe_oob_set_batch_index_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(part_probe_wrong_type_partition_value_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+}
+
+TEST_CASE("V2 table: partition_data batch index must not decrease on the same thread", "[capi_v2][table_function]") {
+	EnvFixture fx;
+	RegisterPartProbeVariant(fx.conn, "decreasing_batch_probe", AlwaysPartitionedInfoCb, DecreasingBatchIndexDataCb);
+
+	auto message = QueryError(fx.conn, "SELECT part_col, count(*) FROM decreasing_batch_probe(3) GROUP BY part_col");
+	REQUIRE(message.find("decreasing_batch_probe") != std::string::npos);
+
+	// The connection stays usable: the guard reports a clear, function-named error instead of the engine-internal
+	// one PipelineExecutor::NextBatch would otherwise raise for the same decreasing index.
+	REQUIRE(QueryI64(fx.conn, "SELECT 1::BIGINT") == 1);
+}
+
+TEST_CASE("V2 table: partition_data partition value must not change without the batch index",
+          "[capi_v2][table_function]") {
+	EnvFixture fx;
+	RegisterPartProbeVariant(fx.conn, "constant_batch_probe", AlwaysPartitionedInfoCb, ConstantBatchIndexDataCb);
+
+	auto message = QueryError(fx.conn, "SELECT part_col, count(*) FROM constant_batch_probe(3) GROUP BY part_col");
+	REQUIRE(message.find("constant_batch_probe") != std::string::npos);
+}
+
+TEST_CASE("V2 table: partition_data completeness and error failures", "[capi_v2][table_function]") {
+	EnvFixture fx;
+	RegisterRange(fx.conn, "no_batch_index_probe", AlwaysPartitionedInfoCb, NoBatchIndexDataCb);
+	RegisterRange(fx.conn, "no_partition_value_probe", AlwaysPartitionedInfoCb, NoPartitionValueDataCb);
+	RegisterRange(fx.conn, "failing_partition_data_probe", AlwaysPartitionedInfoCb, FailingGetPartitionDataCb);
+
+	auto missing_batch = QueryError(fx.conn, "SELECT i, count(*) FROM no_batch_index_probe(3) GROUP BY i");
+	REQUIRE(missing_batch.find("no_batch_index_probe") != std::string::npos);
+	REQUIRE(missing_batch.find("batch index") != std::string::npos);
+
+	auto missing_value = QueryError(fx.conn, "SELECT i, count(*) FROM no_partition_value_probe(3) GROUP BY i");
+	REQUIRE(missing_value.find("index 0") != std::string::npos);
+
+	auto failed = QueryError(fx.conn, "SELECT i, count(*) FROM failing_partition_data_probe(3) GROUP BY i");
+	REQUIRE(failed.find("partition data refused") != std::string::npos);
+}
+
+TEST_CASE("V2 table: partitioning failures only surface for a partitioned aggregate", "[capi_v2][table_function]") {
+	EnvFixture fx;
+	RegisterRange(fx.conn, "failing_partition_info_probe", FailingGetPartitionInfoCb, NoBatchIndexDataCb);
+
+	// The callback only runs while the optimizer is considering a partitioned aggregate for this scan; a plain
+	// scan never reaches it.
+	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM failing_partition_info_probe(3)") == 3);
+
+	auto message = QueryError(fx.conn, "SELECT i, count(*) FROM failing_partition_info_probe(3) GROUP BY i");
+	REQUIRE(message.find("partition info refused") != std::string::npos);
+}
+
+TEST_CASE("V2 table: partition_data and partitioning null arguments", "[capi_v2][table_function]") {
+	idx_t count = 0;
+	idx_t index = 0;
+	void *data = nullptr;
+	bool flag = false;
+
+	REQUIRE(duckdb_v2_table_function_set_partition_data_callback(nullptr, PartProbeGetPartitionDataCb, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_set_partitioning_callback(nullptr, PartProbeGetPartitionInfoCb, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+
+	REQUIRE(duckdb_v2_table_function_partition_data_get_user_data(nullptr, &data, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_partition_data_get_bind_data(nullptr, &data, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_partition_data_get_global_state(nullptr, &data, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_partition_data_get_local_state(nullptr, &data, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_partition_data_requires_batch_index(nullptr, &flag, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_partition_data_requires_partition_columns(nullptr, &flag, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_partition_data_get_partition_column_count(nullptr, &count, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_partition_data_get_partition_column_index(nullptr, 0, &index, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_partition_data_set_batch_index(nullptr, 0, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_partition_data_set_partition_value(nullptr, 0, nullptr, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+
+	REQUIRE(duckdb_v2_table_function_partitioning_get_user_data(nullptr, &data, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_partitioning_get_bind_data(nullptr, &data, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_partitioning_get_partition_column_count(nullptr, &count, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_partitioning_get_partition_column_index(nullptr, 0, &index, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_function_partitioning_set_partition_info(
+	            nullptr, DUCKDB_V2_TABLE_PARTITION_INFO_NOT_PARTITIONED, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 }
 
 } // namespace test_capi_v2

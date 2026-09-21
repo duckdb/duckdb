@@ -26,9 +26,7 @@ BoundWindowFunction::BoundWindowFunction(const WindowFunction &base)
 BoundWindowFunction::BoundWindowFunction(shared_ptr<const WindowFunction> base_p)
     : window_enum(base_p->window_enum), definition(std::move(base_p)) {
 	auto &base = *definition;
-	name = base.name;
-	schema_name = base.GetSchemaName();
-	catalog_name = base.GetCatalogName();
+	qualified_name = base.GetQualifiedName();
 	extra_info = base.extra_info;
 	return_type = base.GetReturnType();
 	callbacks = base.GetCallbacks();
@@ -40,6 +38,8 @@ BoundWindowFunction::BoundWindowFunction(shared_ptr<const WindowFunction> base_p
 	for (auto &param : base.GetSignature().GetParameters()) {
 		arguments.push_back(param.GetType());
 	}
+	logical_arguments = arguments;
+	logical_return_type = return_type;
 }
 
 bool BoundWindowFunction::operator==(const BoundWindowFunction &rhs) const {

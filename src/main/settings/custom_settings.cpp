@@ -26,6 +26,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/http/http_transport_manager.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
@@ -143,15 +144,16 @@ Value AllocatorBulkDeallocationFlushThresholdSetting::GetSetting(const ClientCon
 //===----------------------------------------------------------------------===//
 // Delta Only Variant Legacy Encoding
 //===----------------------------------------------------------------------===//
-void DeltaOnlyVariantEncodingEnabledSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void DebugDeltaOnlyVariantEncodingEnabledSetting::SetGlobal(DatabaseInstance *db, DBConfig &config,
+                                                            const Value &input) {
 	throw InvalidInputException("This setting is not adjustable by a user");
 }
 
-void DeltaOnlyVariantEncodingEnabledSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void DebugDeltaOnlyVariantEncodingEnabledSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	throw InvalidInputException("This setting is not adjustable by a user");
 }
 
-Value DeltaOnlyVariantEncodingEnabledSetting::GetSetting(const ClientContext &context) {
+Value DebugDeltaOnlyVariantEncodingEnabledSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.variant_legacy_encoding);
 }
@@ -316,7 +318,7 @@ void AllowedDirectoriesSetting::ResetGlobal(DatabaseInstance *db, DBConfig &conf
 Value AllowedDirectoriesSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	vector<Value> allowed_directories;
-	for (auto &dir : config.options.allowed_directories) {
+	for (auto &dir : config.GetAllowedDirectories()) {
 		allowed_directories.emplace_back(dir);
 	}
 	return Value::LIST(LogicalType::VARCHAR, std::move(allowed_directories));
@@ -350,7 +352,7 @@ void AllowedPathsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 Value AllowedPathsSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	vector<Value> allowed_paths;
-	for (auto &dir : config.options.allowed_paths) {
+	for (auto &dir : config.GetAllowedPaths()) {
 		allowed_paths.emplace_back(dir);
 	}
 	return Value::LIST(LogicalType::VARCHAR, std::move(allowed_paths));
@@ -1150,18 +1152,23 @@ void LogQueryPathSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 //===----------------------------------------------------------------------===//
 void MaxMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	// a percentage is relative to the system memory, since resolving it against maximum_memory would be circular
-	config.options.maximum_memory =
+	auto maximum_memory =
 	    ParseMemoryLimitOrPercentage(input.ToString(), [&]() { return GetAvailableSystemMemory(config); });
 	if (db) {
-		BufferManager::GetBufferManager(*db).SetMemoryLimit(config.options.maximum_memory);
+		BufferManager::GetBufferManager(*db).SetMemoryLimit(maximum_memory);
 	}
+	config.options.maximum_memory = maximum_memory;
 }
 
 void MaxMemorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	auto old_memory = config.options.maximum_memory;
 	config.SetDefaultMaxMemory();
+	auto new_memory = config.options.maximum_memory;
+	config.options.maximum_memory = old_memory;
 	if (db) {
-		BufferManager::GetBufferManager(*db).SetMemoryLimit(config.options.maximum_memory);
+		BufferManager::GetBufferManager(*db).SetMemoryLimit(new_memory);
 	}
+	config.options.maximum_memory = new_memory;
 }
 
 Value MaxMemorySetting::GetSetting(const ClientContext &context) {
@@ -1676,6 +1683,13 @@ Value ThreadsSetting::GetSetting(const ClientContext &context) {
 	return Value::BIGINT(NumericCast<int64_t>(config.options.maximum_threads));
 }
 
+static void ResizeAutomaticHTTPClientPool(optional_ptr<DatabaseInstance> db, DBConfig &config) {
+	if (!db || config.options.http_client_pool_capacity != DConstants::INVALID_INDEX) {
+		return;
+	}
+	config.GetHTTPTransportManager().SetCapacity(HTTPTransportManager::AutomaticCapacity(config));
+}
+
 //===----------------------------------------------------------------------===//
 // Async Threads
 //===----------------------------------------------------------------------===//
@@ -1692,6 +1706,7 @@ void AsyncThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 		TaskScheduler::GetScheduler(*db).SetAsyncThreads(new_async_threads);
 	}
 	config.options.async_threads = new_async_threads;
+	ResizeAutomaticHTTPClientPool(db, config);
 }
 
 void AsyncThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -1700,11 +1715,40 @@ void AsyncThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 		TaskScheduler::GetScheduler(*db).SetAsyncThreads(new_async_threads);
 	}
 	config.options.async_threads = new_async_threads;
+	ResizeAutomaticHTTPClientPool(db, config);
 }
 
 Value AsyncThreadsSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BIGINT(NumericCast<int64_t>(config.options.async_threads));
+}
+
+void HTTPClientPoolCapacitySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("http_client_pool_capacity must be a positive integer");
+	}
+	auto new_val = input.GetValue<int64_t>();
+	if (new_val <= 0) {
+		throw InvalidInputException(
+		    "http_client_pool_capacity must be a positive integer, RESET it to return to the automatic value");
+	}
+	auto new_capacity = NumericCast<idx_t>(new_val);
+	if (db) {
+		config.GetHTTPTransportManager().SetCapacity(new_capacity);
+	}
+	config.options.http_client_pool_capacity = new_capacity;
+}
+
+void HTTPClientPoolCapacitySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (db) {
+		config.GetHTTPTransportManager().SetCapacity(HTTPTransportManager::AutomaticCapacity(config));
+	}
+	config.options.http_client_pool_capacity = DConstants::INVALID_INDEX;
+}
+
+Value HTTPClientPoolCapacitySetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BIGINT(NumericCast<int64_t>(config.GetHTTPTransportManager().GetCapacity()));
 }
 
 //===----------------------------------------------------------------------===//
@@ -1912,6 +1956,10 @@ void EnableObjectCacheSetting::OnSet(SettingCallbackInfo &info, Value &) {
 	WarnDeprecatedSetting(info, EnableObjectCacheSetting::Name);
 }
 
+void ErrorOnDivisionByZeroSetting::OnSet(SettingCallbackInfo &info, Value &) {
+	WarnDeprecatedSetting(info, ErrorOnDivisionByZeroSetting::Name);
+}
+
 void ExperimentalMetadataReuseSetting::OnSet(SettingCallbackInfo &info, Value &) {
 	WarnDeprecatedSetting(info, ExperimentalMetadataReuseSetting::Name);
 }
@@ -1926,10 +1974,6 @@ void LegacyDisableNullTypeSetting::OnSet(SettingCallbackInfo &info, Value &) {
 
 void LegacyMetricsFormatSetting::OnSet(SettingCallbackInfo &info, Value &) {
 	WarnDeprecatedSetting(info, LegacyMetricsFormatSetting::Name);
-}
-
-void NullOnDivisionByZeroSetting::OnSet(SettingCallbackInfo &info, Value &) {
-	WarnDeprecatedSetting(info, NullOnDivisionByZeroSetting::Name);
 }
 
 void ProduceArrowStringViewSetting::OnSet(SettingCallbackInfo &info, Value &) {

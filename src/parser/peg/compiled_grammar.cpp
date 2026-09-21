@@ -120,6 +120,8 @@ terminal_rule_overrides_t ParsedGrammar::BuildTerminalRuleOverrides(const PEGKey
 	AddTerminalRuleOverride(overrides, "NumberLiteral", make_uniq<NumberLiteralMatcher>());
 	AddTerminalRuleOverride(overrides, "StringLiteral", make_uniq<StringLiteralMatcher>());
 	AddTerminalRuleOverride(overrides, "OperatorLiteral", make_uniq<OperatorMatcher>());
+	AddTerminalRuleOverride(overrides, "AnyOperatorLiteral",
+	                        make_uniq<OperatorMatcher>(OperatorMatcherMode::ALL_OPERATORS));
 	//===--------------------------------------------------------------------===//
 	// END GENERATED RULE OVERRIDES
 	//===--------------------------------------------------------------------===//
@@ -157,7 +159,7 @@ CompiledGrammar::Create(const case_insensitive_map_t<reference<GrammarExtension>
 
 	MatcherAllocator allocator;
 	auto terminal_rule_overrides = grammar.BuildTerminalRuleOverrides(*keyword_helper);
-	MatcherFactory factory(allocator, grammar, rules, std::move(terminal_rule_overrides));
+	MatcherFactory factory(allocator, grammar, rules, *keyword_helper, std::move(terminal_rule_overrides));
 
 	auto &program_matcher = factory.CreateRootMatcher("Program");
 	auto &top_level_statement_matcher = factory.GetMatcher("TopLevelStatement");

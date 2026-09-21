@@ -162,6 +162,9 @@ public:
 	bool TryRunPendingTask();
 	//! Throw the first error recorded on the async executor, if there is one
 	void ThrowIfError();
+	//! Cancel the tasks that have not started yet and wait for the ones that are running. The scheduled closures
+	//! reference the scan they were scheduled for, so they must not outlive it
+	void CancelAndDrain();
 
 private:
 	//! Settles the reservation taken by TryReserveSlot

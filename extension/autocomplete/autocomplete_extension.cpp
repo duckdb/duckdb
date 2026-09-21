@@ -376,7 +376,6 @@ private:
 
 static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(ClientContext &context, const string &sql,
                                                                            AutoCompleteParameters &parameters) {
-	parameters.use_heap_based_parser = context.GetParserOptions().heap_based_parser;
 	ClientContextCatalogProvider provider(context);
 	auto result = GenerateAutoCompleteSuggestions(provider, sql, parameters);
 	return make_uniq<SQLAutoCompleteFunctionData>(std::move(result));
@@ -471,8 +470,7 @@ static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context
 	auto parser_options = context.GetParserOptions();
 	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
 	MatchContext match_context(suggestions, parse_allocator, process_allocator, max_token_index,
-	                           MatchMode::RECOGNIZE_ONLY, parser_options.identifier_case_mode,
-	                           parser_options.heap_based_parser);
+	                           MatchMode::RECOGNIZE_ONLY, parser_options.identifier_case_mode);
 	MatchState state(token_iterator, match_context);
 
 	compiled_grammar->ProgramMatcher().MatchParseResult(state);
@@ -566,8 +564,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	auto parser_options = context.GetParserOptions();
 	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
 	MatchContext match_context(suggestions, parse_allocator, process_allocator, max_token_index,
-	                           MatchMode::RECOGNIZE_ONLY, parser_options.identifier_case_mode,
-	                           parser_options.heap_based_parser);
+	                           MatchMode::RECOGNIZE_ONLY, parser_options.identifier_case_mode);
 	MatchState state(token_iterator, match_context);
 
 	auto match_result = compiled_grammar->ProgramMatcher().MatchParseResult(state);

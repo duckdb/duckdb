@@ -864,7 +864,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		// Create the VariantColumnReader with the column index, so we can perform the extract at Read
 		auto column_reader = make_uniq<VariantColumnReader>(context, *this, schema, std::move(children), column_id);
 
-		auto scan_type = column_id.GetScanType();
+		const auto &scan_type = column_id.GetScanType();
 		if (scan_type.id() == LogicalTypeId::VARIANT) {
 			return std::move(column_reader);
 		}
@@ -1244,7 +1244,7 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	if (context.TryGetCurrentSetting("binary_as_string", lookup_value)) {
 		binary_as_string = lookup_value.GetValue<bool>();
 	}
-	if (context.TryGetCurrentSetting("__delta_only_variant_encoding_enabled", lookup_value)) {
+	if (context.TryGetCurrentSetting("debug_delta_only_variant_encoding_enabled", lookup_value)) {
 		variant_legacy_encoding = lookup_value.GetValue<bool>();
 	}
 }
@@ -1909,7 +1909,8 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 				if (!is_expression && !is_generated_column && has_min_max &&
 				    (column_reader.Type().id() == LogicalTypeId::FLOAT ||
 				     column_reader.Type().id() == LogicalTypeId::DOUBLE) &&
-				    parquet_options.can_have_nan) {
+				    ParquetStatisticsUtils::CanHaveNaN(group.columns[schema_column_index].meta_data.statistics,
+				                                       parquet_options.can_have_nan)) {
 					// floating point columns can have NaN values in addition to the min/max bounds defined in the file
 					// in order to do optimal pruning - we prune based on the [min, max] of the file followed by pruning
 					// based on nan
@@ -2105,8 +2106,10 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 
 	unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) override {
 		const idx_t primary_index = storage_index.GetPrimaryIndex();
+		if (primary_index >= root_schema->children.size()) {
+			return nullptr;
+		}
 		D_ASSERT(metadata.row_groups.size() > row_group_idx);
-		D_ASSERT(root_schema->children.size() > primary_index);
 
 		const auto &row_group = metadata.row_groups[row_group_idx];
 		const auto &column_schema = root_schema->children[primary_index];
@@ -2119,8 +2122,10 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 
 	bool MinMaxIsExact(const StorageIndex &storage_index) override {
 		const idx_t primary_index = storage_index.GetPrimaryIndex();
+		if (primary_index >= root_schema->children.size()) {
+			return false;
+		}
 		D_ASSERT(metadata.row_groups.size() > row_group_idx);
-		D_ASSERT(root_schema->children.size() > primary_index);
 
 		// Special handle generated columns.
 		const auto &column_schema = root_schema->children[primary_index];

@@ -31,7 +31,7 @@ private:
 
 public:
 	MatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar_p, const compiled_rules_map_t &rules,
-	               terminal_rule_overrides_t terminal_rule_overrides_p);
+	               const PEGKeywordHelper &keyword_helper, terminal_rule_overrides_t terminal_rule_overrides_p);
 	virtual ~MatcherFactory() = default;
 
 public:
@@ -70,6 +70,7 @@ private:
 	MatcherAllocator &allocator;
 	const ParsedGrammar &grammar;
 	const compiled_rules_map_t &rules;
+	const PEGKeywordHelper &keyword_helper;
 	//! Keeps terminal rule names alive while the matcher graph is constructed.
 	terminal_rule_overrides_t terminal_rule_overrides;
 	string_map_t<reference<Matcher>> matchers;
