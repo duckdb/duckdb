@@ -23,7 +23,7 @@ BaseTableFunction::BaseTableFunction(table_function_t function_, table_function_
     : bind(bind), bind_replace(nullptr), bind_operator(nullptr), init_global(init_global), init_local(init_local),
       function(function_), in_out_function(nullptr), in_out_function_final(nullptr), statistics(nullptr),
       statistics_extended(nullptr), dependency(nullptr), cardinality(nullptr), get_metrics(nullptr),
-      pushdown_complex_filter(nullptr), pushdown_expression(nullptr), combine_schema(nullptr), get_file_columns(nullptr), get_file_partition_stats(nullptr), claim_batch(nullptr),
+      pushdown_complex_filter(nullptr), pushdown_expression(nullptr), combine_schema(nullptr), get_file_columns(nullptr), claim_batch(nullptr),
       finish_batch(nullptr), supports_read_ahead(nullptr), schedule_io(nullptr), prepare_read_ahead(nullptr), to_string(nullptr),
       table_scan_progress(nullptr), get_partition_data(nullptr), get_bind_info(nullptr),
       projection_expression_pushdown(nullptr), get_multi_file_reader(nullptr), supports_pushdown_type(nullptr),
@@ -98,7 +98,6 @@ BoundTableFunction::BoundTableFunction(shared_ptr<const TableFunction> function_
 	pushdown_expression = function.pushdown_expression;
 	combine_schema = function.combine_schema;
 	get_file_columns = function.get_file_columns;
-	get_file_partition_stats = function.get_file_partition_stats;
 	claim_batch = function.claim_batch;
 	finish_batch = function.finish_batch;
 	supports_read_ahead = function.supports_read_ahead;
