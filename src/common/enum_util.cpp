@@ -31,6 +31,7 @@
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
 #include "duckdb/common/enums/debug_order_verification.hpp"
+#include "duckdb/common/enums/debug_progress_verification.hpp"
 #include "duckdb/common/enums/debug_statement_verification.hpp"
 #include "duckdb/common/enums/debug_vector_verification.hpp"
 #include "duckdb/common/enums/debug_verification_mode.hpp"
@@ -182,6 +183,7 @@
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/pipeline_broadcast_exchange.hpp"
 #include "duckdb/parallel/pipeline_schedule.hpp"
+#include "duckdb/parallel/progress_verifier.hpp"
 #include "duckdb/parallel/scan_read_ahead.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
@@ -1717,6 +1719,25 @@ const char* EnumUtil::ToChars<DebugOrderVerification>(DebugOrderVerification val
 template<>
 DebugOrderVerification EnumUtil::FromString<DebugOrderVerification>(const char *value) {
 	return static_cast<DebugOrderVerification>(StringUtil::StringToEnum(GetDebugOrderVerificationValues(), 3, "DebugOrderVerification", value));
+}
+
+const StringUtil::EnumStringLiteral *GetDebugProgressVerificationValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DebugProgressVerification::NONE), "NONE" },
+		{ static_cast<uint32_t>(DebugProgressVerification::LOG), "LOG" },
+		{ static_cast<uint32_t>(DebugProgressVerification::ERROR), "ERROR" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DebugProgressVerification>(DebugProgressVerification value) {
+	return StringUtil::EnumToString(GetDebugProgressVerificationValues(), 3, "DebugProgressVerification", static_cast<uint32_t>(value));
+}
+
+template<>
+DebugProgressVerification EnumUtil::FromString<DebugProgressVerification>(const char *value) {
+	return static_cast<DebugProgressVerification>(StringUtil::StringToEnum(GetDebugProgressVerificationValues(), 3, "DebugProgressVerification", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDebugStatementVerificationValues() {
@@ -4875,6 +4896,30 @@ const char* EnumUtil::ToChars<ProfilingParameterNames>(ProfilingParameterNames v
 template<>
 ProfilingParameterNames EnumUtil::FromString<ProfilingParameterNames>(const char *value) {
 	return static_cast<ProfilingParameterNames>(StringUtil::StringToEnum(GetProfilingParameterNamesValues(), 5, "ProfilingParameterNames", value));
+}
+
+const StringUtil::EnumStringLiteral *GetProgressInvariantValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ProgressInvariant::UNSUPPORTED_SOURCE), "UNSUPPORTED_SOURCE" },
+		{ static_cast<uint32_t>(ProgressInvariant::UNSUPPORTED_SINK), "UNSUPPORTED_SINK" },
+		{ static_cast<uint32_t>(ProgressInvariant::MALFORMED_SOURCE), "MALFORMED_SOURCE" },
+		{ static_cast<uint32_t>(ProgressInvariant::MALFORMED_SINK), "MALFORMED_SINK" },
+		{ static_cast<uint32_t>(ProgressInvariant::NON_MONOTONIC), "NON_MONOTONIC" },
+		{ static_cast<uint32_t>(ProgressInvariant::INCOMPLETE), "INCOMPLETE" },
+		{ static_cast<uint32_t>(ProgressInvariant::STALLED), "STALLED" },
+		{ static_cast<uint32_t>(ProgressInvariant::INACCURATE), "INACCURATE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ProgressInvariant>(ProgressInvariant value) {
+	return StringUtil::EnumToString(GetProgressInvariantValues(), 8, "ProgressInvariant", static_cast<uint32_t>(value));
+}
+
+template<>
+ProgressInvariant EnumUtil::FromString<ProgressInvariant>(const char *value) {
+	return static_cast<ProgressInvariant>(StringUtil::StringToEnum(GetProgressInvariantValues(), 8, "ProgressInvariant", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPushdownExtractSupportValues() {

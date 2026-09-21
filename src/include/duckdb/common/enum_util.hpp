@@ -176,6 +176,8 @@ enum class DebugInitialize : uint8_t;
 
 enum class DebugOrderVerification : uint8_t;
 
+enum class DebugProgressVerification : uint8_t;
+
 enum class DebugStatementVerification : uint8_t;
 
 enum class DebugVectorVerification : uint8_t;
@@ -441,6 +443,8 @@ enum class PreserveOrderType : uint8_t;
 enum class ProfilingCoverage : uint8_t;
 
 enum class ProfilingParameterNames : uint8_t;
+
+enum class ProgressInvariant : uint8_t;
 
 enum class PushdownExtractSupport : uint8_t;
 
@@ -866,6 +870,9 @@ template<>
 const char* EnumUtil::ToChars<DebugOrderVerification>(DebugOrderVerification value);
 
 template<>
+const char* EnumUtil::ToChars<DebugProgressVerification>(DebugProgressVerification value);
+
+template<>
 const char* EnumUtil::ToChars<DebugStatementVerification>(DebugStatementVerification value);
 
 template<>
@@ -1263,6 +1270,9 @@ const char* EnumUtil::ToChars<ProfilingCoverage>(ProfilingCoverage value);
 
 template<>
 const char* EnumUtil::ToChars<ProfilingParameterNames>(ProfilingParameterNames value);
+
+template<>
+const char* EnumUtil::ToChars<ProgressInvariant>(ProgressInvariant value);
 
 template<>
 const char* EnumUtil::ToChars<PushdownExtractSupport>(PushdownExtractSupport value);
@@ -1791,6 +1801,9 @@ template<>
 DebugOrderVerification EnumUtil::FromString<DebugOrderVerification>(const char *value);
 
 template<>
+DebugProgressVerification EnumUtil::FromString<DebugProgressVerification>(const char *value);
+
+template<>
 DebugStatementVerification EnumUtil::FromString<DebugStatementVerification>(const char *value);
 
 template<>
@@ -2188,6 +2201,9 @@ ProfilingCoverage EnumUtil::FromString<ProfilingCoverage>(const char *value);
 
 template<>
 ProfilingParameterNames EnumUtil::FromString<ProfilingParameterNames>(const char *value);
+
+template<>
+ProgressInvariant EnumUtil::FromString<ProgressInvariant>(const char *value);
 
 template<>
 PushdownExtractSupport EnumUtil::FromString<PushdownExtractSupport>(const char *value);
