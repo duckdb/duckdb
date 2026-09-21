@@ -25,35 +25,46 @@ SELECT sum(i) FROM integers
 ----
 124999750000
 
-# range does not report progress (yet) - this fails the query in error mode
-statement error
+# range and generate_series report progress
+query I
 SELECT sum(i) FROM range(500000) t(i)
 ----
-<REGEX>:Invalid Input Error: Progress verification failed:.*UNSUPPORTED_SOURCE \[RANGE\] in pipeline RANGE -> UNGROUPED_AGGREGATE.*debug_verify_progress_ignore='UNSUPPORTED_SOURCE:RANGE'.*
+124999750000
+
+query I
+SELECT count(*) FROM generate_series(TIMESTAMP '2000-01-01', TIMESTAMP '2001-01-01', INTERVAL 1 MINUTE)
+----
+527041
+
+# recursive CTEs do not report progress - this fails the query in error mode
+statement error
+WITH RECURSIVE t(i) AS (SELECT * FROM range(100000) UNION ALL SELECT i + 100000 FROM t WHERE i < 400000) SELECT sum(i) FROM t
+----
+<REGEX>:Invalid Input Error: Progress verification failed:.*UNSUPPORTED_SOURCE \[REC_CTE\] in pipeline REC_CTE -> UNGROUPED_AGGREGATE.*debug_verify_progress_ignore='UNSUPPORTED_SOURCE:REC_CTE'.*
 
 # violations can be ignored per invariant and operator, per operator, or per invariant
-foreach ignore UNSUPPORTED_SOURCE:RANGE unsupported_source:range *:RANGE UNSUPPORTED_SOURCE STALLED,UNSUPPORTED_SOURCE:RANGE
+foreach ignore UNSUPPORTED_SOURCE:REC_CTE unsupported_source:rec_cte *:REC_CTE UNSUPPORTED_SOURCE STALLED,UNSUPPORTED_SOURCE:REC_CTE
 
 statement ok
 SET debug_verify_progress_ignore='{ignore}'
 
 query I
-SELECT sum(i) FROM range(500000) t(i)
+WITH RECURSIVE t(i) AS (SELECT * FROM range(100000) UNION ALL SELECT i + 100000 FROM t WHERE i < 400000) SELECT sum(i) FROM t
 ----
 124999750000
 
 endloop
 
 # other invariants or operators are not ignored
-foreach ignore UNSUPPORTED_SINK:RANGE UNSUPPORTED_SOURCE:SEQ_SCAN STALLED
+foreach ignore UNSUPPORTED_SINK:REC_CTE UNSUPPORTED_SOURCE:SEQ_SCAN STALLED
 
 statement ok
 SET debug_verify_progress_ignore='{ignore}'
 
 statement error
-SELECT sum(i) FROM range(500000) t(i)
+WITH RECURSIVE t(i) AS (SELECT * FROM range(100000) UNION ALL SELECT i + 100000 FROM t WHERE i < 400000) SELECT sum(i) FROM t
 ----
-<REGEX>:.*UNSUPPORTED_SOURCE \[RANGE\].*
+<REGEX>:.*UNSUPPORTED_SOURCE \[REC_CTE\].*
 
 endloop
 
@@ -80,14 +91,14 @@ statement ok
 CALL enable_logging('ProgressVerification')
 
 query I
-SELECT sum(i) FROM range(500000) t(i)
+WITH RECURSIVE t(i) AS (SELECT * FROM range(100000) UNION ALL SELECT i + 100000 FROM t WHERE i < 400000) SELECT sum(i) FROM t
 ----
 124999750000
 
 query III
 SELECT invariant, operator, pipeline FROM duckdb_logs_parsed('ProgressVerification')
 ----
-UNSUPPORTED_SOURCE	RANGE	RANGE -> UNGROUPED_AGGREGATE
+UNSUPPORTED_SOURCE	REC_CTE	REC_CTE -> UNGROUPED_AGGREGATE
 
 statement ok
 SET debug_verify_progress='none'
@@ -96,7 +107,7 @@ statement ok
 CALL truncate_duckdb_logs()
 
 query I
-SELECT sum(i) FROM range(500000) t(i)
+WITH RECURSIVE t(i) AS (SELECT * FROM range(100000) UNION ALL SELECT i + 100000 FROM t WHERE i < 400000) SELECT sum(i) FROM t
 ----
 124999750000
 

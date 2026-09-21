@@ -1,3 +1,4 @@
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/interval.hpp"
@@ -69,9 +70,17 @@ struct ICUTableRange {
 		idx_t cardinality;
 	};
 
+	struct ICURangeGlobalState : public GlobalTableFunctionState {
+		//! Progress in percent - when used as a source there is a single input row
+		atomic<double> progress {0};
+	};
+
 	struct ICURangeLocalState : public LocalTableFunctionState {
-		ICURangeLocalState() {
+		explicit ICURangeLocalState(optional_ptr<GlobalTableFunctionState> global_state)
+		    : global_state(global_state ? &global_state->Cast<ICURangeGlobalState>() : nullptr) {
 		}
+
+		optional_ptr<ICURangeGlobalState> global_state;
 
 		bool initialized_row = false;
 		idx_t current_input_row = 0;
@@ -84,6 +93,19 @@ struct ICUTableRange {
 		bool greater_than_check;
 
 		bool empty_range = false;
+
+		void UpdateProgress(idx_t input_count) {
+			if (!global_state || input_count == 0) {
+				return;
+			}
+			auto range = static_cast<double>(end.value) - static_cast<double>(start.value);
+			auto row_fraction =
+			    range == 0 ? 1.0
+			               : (static_cast<double>(current_state.value) - static_cast<double>(start.value)) / range;
+			row_fraction = MaxValue<double>(MinValue<double>(row_fraction, 1.0), 0.0);
+			global_state->progress =
+			    100.0 * (static_cast<double>(current_input_row) + row_fraction) / static_cast<double>(input_count);
+		}
 
 		bool Finished(timestamp_tz_t current_value) const {
 			if (greater_than_check) {
@@ -163,7 +185,17 @@ struct ICUTableRange {
 	static unique_ptr<LocalTableFunctionState> RangeDateTimeLocalInit(ExecutionContext &context,
 	                                                                  TableFunctionInitInput &input,
 	                                                                  GlobalTableFunctionState *global_state) {
-		return make_uniq<ICURangeLocalState>();
+		return make_uniq<ICURangeLocalState>(global_state);
+	}
+
+	static unique_ptr<GlobalTableFunctionState> RangeDateTimeGlobalInit(ClientContext &context,
+	                                                                    TableFunctionInitInput &input) {
+		return make_uniq<ICURangeGlobalState>();
+	}
+
+	static double Progress(ClientContext &context, const FunctionData *bind_data,
+	                       const GlobalTableFunctionState *global_state) {
+		return global_state->Cast<ICURangeGlobalState>().progress;
 	}
 
 	static unique_ptr<NodeStatistics> Cardinality(ClientContext &context, const FunctionData *bind_data_p) {
@@ -219,6 +251,7 @@ struct ICUTableRange {
 				continue;
 			}
 			output.SetChildCardinality(size);
+			state.UpdateProgress(input.size());
 			return OperatorResultType::HAVE_MORE_OUTPUT;
 		}
 	}
@@ -226,8 +259,9 @@ struct ICUTableRange {
 	static void AddICUTableRangeFunction(ExtensionLoader &loader) {
 		TableFunctionSet range("range");
 		TableFunction range_function({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
-		                             nullptr, Bind<false>, nullptr, RangeDateTimeLocalInit);
+		                             nullptr, Bind<false>, RangeDateTimeGlobalInit, RangeDateTimeLocalInit);
 		range_function.in_out_function = ICUTableRangeFunction<false>;
+		range_function.table_scan_progress = Progress;
 		range_function.cardinality = Cardinality;
 		range_function.return_type = TableFunctionReturnType::SET_RETURNING_FUNCTION;
 		range.AddFunction(range_function);
@@ -237,9 +271,10 @@ struct ICUTableRange {
 		// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
 		TableFunctionSet generate_series("generate_series");
 		TableFunction generate_series_function(
-		    {LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL}, nullptr, Bind<true>, nullptr,
-		    RangeDateTimeLocalInit);
+		    {LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL}, nullptr, Bind<true>,
+		    RangeDateTimeGlobalInit, RangeDateTimeLocalInit);
 		generate_series_function.in_out_function = ICUTableRangeFunction<true>;
+		generate_series_function.table_scan_progress = Progress;
 		generate_series_function.cardinality = Cardinality;
 		generate_series_function.return_type = TableFunctionReturnType::SET_RETURNING_FUNCTION;
 		generate_series.AddFunction(generate_series_function);
