@@ -162,6 +162,10 @@ double CSVFileScan::GetProgressInFile(ClientContext &context) {
 		// We are done with this file, so it's 100%
 		return 100.0;
 	}
+	if (file_size == 0) {
+		// empty file
+		return 100.0;
+	}
 	double total_bytes_read;
 	if (manager->file_handle->compression_type == FileCompressionType::GZIP ||
 	    manager->file_handle->compression_type == FileCompressionType::ZSTD) {
