@@ -101,9 +101,9 @@ extern "C" {
 #endif
 
 //! Set to 1 to compile the unstable surface, 0 to omit it. Defaults from the
-//! older DUCKDB_API_ALLOW_UNSTABLE macro when that is what the consumer defines.
+//! older DUCKDB_EXTENSION_API_VERSION_UNSTABLE macro when that is what the consumer defines.
 #if !defined(DUCKDB_V2_API_ALLOW_UNSTABLE)
-#ifdef DUCKDB_API_ALLOW_UNSTABLE
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 #define DUCKDB_V2_API_ALLOW_UNSTABLE 1
 #else
 #define DUCKDB_V2_API_ALLOW_UNSTABLE 0

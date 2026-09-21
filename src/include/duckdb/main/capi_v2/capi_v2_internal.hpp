@@ -370,6 +370,15 @@ inline auto Convert(CV2ColumnDescription *column) -> duckdb_v2_column_descriptio
 	return reinterpret_cast<duckdb_v2_column_description_handle>(column);
 }
 
+using CV2ColumnDataCollection = duckdb::ColumnDataCollection;
+
+inline auto Convert(duckdb_v2_column_data_collection_handle cdc) -> CV2ColumnDataCollection * {
+	return reinterpret_cast<CV2ColumnDataCollection *>(cdc);
+}
+inline auto Convert(CV2ColumnDataCollection *cdc) -> duckdb_v2_column_data_collection_handle {
+	return reinterpret_cast<duckdb_v2_column_data_collection_handle>(cdc);
+}
+
 using CV2Value = duckdb::Value;
 
 inline auto Convert(duckdb_v2_value_handle val) -> CV2Value * {
