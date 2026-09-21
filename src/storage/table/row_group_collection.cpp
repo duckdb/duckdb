@@ -2,6 +2,7 @@
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/thread.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -1585,6 +1586,11 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	// all tasks have been successfully scheduled - execute tasks until we are done
 	checkpoint_state.executor->WorkOnTasks();
 
+	auto scan_sleep_ms = Settings::Get<DebugCheckpointScanSleepMsSetting>(writer.GetDatabase());
+	if (scan_sleep_ms > 0) {
+		ThreadUtil::SleepMs(scan_sleep_ms);
+	}
+
 	// no errors - finalize the row groups
 	// if the table already exists on disk - check if all row groups have stayed the same
 	if (Settings::Get<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && metadata_pointer.IsValid()) {
@@ -1613,8 +1619,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				         RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA);
 				vector<MetaBlockPointer> extra_metadata_block_pointers = row_group.GetExtraMetadataBlockPointers();
 				metadata_manager.ClearModifiedBlocks(extra_metadata_block_pointers);
-				auto row_group_writer = checkpoint_state.writer.GetRowGroupWriter(row_group);
-				row_group.CheckpointDeletes(*row_group_writer);
+				metadata_manager.ClearModifiedBlocks(row_group.GetPersistedDeletePointers());
 			}
 			writer.WriteUnchangedTable(metadata_pointer, metadata_pointers, total_rows.load());
 			// copy over existing stats into the global stats
