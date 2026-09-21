@@ -317,17 +317,16 @@ bool TableIndexList::AllIndexesBoundOfType(const string &index_type) const {
 	return true;
 }
 
-bool TableIndexList::NameIsUnique(const string &name) const {
+bool TableIndexList::HasUniqueOrForeignIndexNamed(const string &name) const {
 	annotated_lock_guard lock(index_entries_lock);
-	// Only covers PK, FK, and UNIQUE indexes.
-	// is_unique also covers primary-key indexes.
+	// is_unique includes primary-key indexes and user-created unique indexes.
 	for (const auto &entry : index_entries) {
 		auto index_info = entry->GetStorageInfo();
 		if ((index_info.is_unique || index_info.is_foreign) && entry->GetName() == name) {
-			return false;
+			return true;
 		}
 	}
-	return true;
+	return false;
 }
 
 bool TableIndexList::Contains(const Identifier &name) const {

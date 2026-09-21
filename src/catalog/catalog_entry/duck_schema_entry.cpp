@@ -295,7 +295,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(CatalogTransaction trans
 	info.dependencies.AddDependency(table, DependencyDependentFlags());
 
 	// Constraint indexes have no catalog entry, so their names need a separate check.
-	if (!table.GetStorage().IndexNameIsUnique(info.GetIndexName().GetIdentifierName())) {
+	if (table.GetStorage().HasUniqueOrForeignIndexNamed(info.GetIndexName().GetIdentifierName())) {
 		if (info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
 			throw CatalogException("An index with the name %s already exists!",
 			                       info.GetIndexName().GetIdentifierName());
