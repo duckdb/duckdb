@@ -872,7 +872,6 @@ TEST_CASE("Test buffer managed query result", "[api]") {
 	close_database();
 	REQUIRE_THROWS(result->ToString());
 
-	// The same without order preservation
 	reopen_database();
 	REQUIRE_NO_FAIL(con->Query("SET preserve_insertion_order=false;"));
 	result = con->context->Query("SELECT 42;", parameters);
@@ -880,7 +879,6 @@ TEST_CASE("Test buffer managed query result", "[api]") {
 	close_database();
 	REQUIRE_THROWS(result->ToString());
 
-	// The same for a batch-ordered result
 	reopen_database();
 	REQUIRE_NO_FAIL(con->Query("CREATE TABLE integers AS SELECT range AS i FROM range(10000);"));
 	result = con->context->Query("SELECT * FROM integers;", parameters);
@@ -888,7 +886,6 @@ TEST_CASE("Test buffer managed query result", "[api]") {
 	close_database();
 	REQUIRE_THROWS(result->ToString());
 
-	// Chosen on the handle after submission
 	reopen_database();
 	result = con->Submit("SELECT 42;");
 	result->SetFormat(ChunkFormat::BufferManaged());

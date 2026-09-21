@@ -24,7 +24,6 @@ struct QueryParameters {
 	//! FORCED by Query and Execute. AUTO defers to the statement: a statement whose eagerness is
 	//! FORCED is still settled at submission
 	ResultEagerness result_eagerness = ResultEagerness::AUTO;
-	//! The format the result is produced in. Null means chunks
 	shared_ptr<ResultFormat> format;
 };
 

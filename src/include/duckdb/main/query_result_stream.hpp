@@ -17,10 +17,7 @@
 
 namespace duckdb {
 
-//! What every stream shares: the handle of the submitted query, the participation calls, and the pop
-//! of a type-erased unit. Opening a stream settles the query's retention on draining and its format,
-//! and consumes the handle: units flow through a bounded buffer and are released as the consumer
-//! takes them, so there is no retained side and no random access
+//! Opening a stream settles retention on draining and the format, and consumes the handle: no random access
 class ResultStreamBase {
 public:
 	//! Opens a stream on a submitted query. Throws InvalidInputException when the handle carries an
@@ -67,12 +64,8 @@ public:
 	}
 
 protected:
-	//! Runs tasks on the calling thread until a unit is buffered or the stream ends. Returns null at
-	//! the end of the stream, and on an execution error, which is recorded on the stream
 	DUCKDB_API unique_ptr<ResultUnit> FetchUnit();
-	//! Pops a unit when one is observable, else reports where execution stands. Runs no task
 	DUCKDB_API QueryResultState TryFetchUnit(unique_ptr<ResultUnit> &out_unit);
-	//! The settled format's per-query state
 	DUCKDB_API const ResultFormatGlobalState &FormatStateInternal() const;
 
 private:
@@ -87,7 +80,6 @@ private:
 	unique_ptr<QueryResult> handle;
 };
 
-//! A stream of chunks, opened from the handle of a submitted query. Requires the chunk format
 class QueryResultStream : public ResultStreamBase {
 public:
 	DUCKDB_API explicit QueryResultStream(unique_ptr<QueryResult> result);
@@ -103,8 +95,6 @@ public:
 	DUCKDB_API unique_ptr<DataChunk> Fetch();
 };
 
-//! A stream of the units a format produces, opened from the handle of a submitted query. Requires
-//! the result's format to be a FORMAT
 template <class FORMAT>
 class FormattedResultStream : public ResultStreamBase {
 	static_assert(std::is_base_of<ResultUnit, typename FORMAT::Unit>::value,

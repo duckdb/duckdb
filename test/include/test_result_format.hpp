@@ -39,9 +39,7 @@ public:
 	}
 
 public:
-	//! The rows, one entry per chunk that was appended into this unit
 	vector<unique_ptr<DataChunk>> chunks;
-	//! The producer that built this unit
 	std::thread::id producer;
 };
 
@@ -63,7 +61,6 @@ public:
 
 class TestFormatLocalState : public ResultFormatLocalState {
 public:
-	//! The unit under construction: empty when there is none
 	vector<unique_ptr<DataChunk>> chunks;
 	std::thread::id producer;
 	idx_t rows = 0;
@@ -130,14 +127,12 @@ public:
 	}
 
 public:
-	//! The row target of a unit
 	idx_t unit_rows;
 	atomic<bool> throw_in_append {false};
 	atomic<bool> throw_in_finish {false};
 };
 
-//! A second format declaring the same unit type, so the mismatch only the name check refuses can
-//! be tested. It never produces a unit
+//! Declares the same unit type as TestFormat, so only the name check can refuse the mismatch
 class OtherTestFormat : public ResultFormat {
 public:
 	using Unit = TestUnit;
@@ -168,7 +163,6 @@ public:
 	}
 };
 
-//! The rows a unit holds, column by column, in order
 inline vector<Value> UnitValues(const ResultUnit &unit, idx_t column) {
 	vector<Value> values;
 	for (auto &chunk : unit.Cast<TestUnit>().chunks) {
@@ -179,7 +173,6 @@ inline vector<Value> UnitValues(const ResultUnit &unit, idx_t column) {
 	return values;
 }
 
-//! A submitted handle in the test format, ready for a stream or a retained-side call
 inline unique_ptr<QueryResult> SubmitFormatted(Connection &con, const string &query, idx_t unit_rows) {
 	auto handle = con.Submit(query);
 	REQUIRE(!handle->HasError());

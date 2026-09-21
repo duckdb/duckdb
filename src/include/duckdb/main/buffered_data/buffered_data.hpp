@@ -55,15 +55,14 @@ public:
 	ResultLifetime Lifetime() const {
 		return lifetime;
 	}
-	//! Settle the retention and the format, build the format's global state, and wake the producers
-	//! parked on the decision. The first decision stands; a null format means chunks
+	//! The first decision stands, and a null format means chunks
 	ResultLifetime Decide(ResultLifetime decision, shared_ptr<ResultFormat> format = nullptr);
-	//! The settled format. Only valid once the retention is settled
+	//! Only valid once the retention is settled
 	ResultFormat &Format() const {
 		D_ASSERT(format);
 		return *format;
 	}
-	//! The settled format's per-query state. Only valid once the retention is settled
+	//! Only valid once the retention is settled
 	ResultFormatGlobalState &FormatState() const {
 		D_ASSERT(format_state);
 		return *format_state;
@@ -96,8 +95,7 @@ public:
 	}
 	//! The highest number of bytes the buffer ever queued. This is what the cap governs
 	virtual idx_t PeakBufferedBytes() = 0;
-	//! The highest number of bytes the query ever held: queued plus the units parked producers hold.
-	//! This is what system.peak_streaming_buffer_size reports
+	//! Queued bytes plus the units parked producers hold, as system.peak_streaming_buffer_size reports
 	virtual idx_t PeakStreamingBytes() = 0;
 	//! Whether a producer is parked for space.
 	virtual bool HasBlockedSink() = 0;
@@ -158,7 +156,6 @@ protected:
 	atomic<ResultLifetime> lifetime;
 	//! Producers parked with their first chunk unconsumed, until the retention is decided
 	vector<InterruptState> undecided_sinks DUCKDB_GUARDED_BY(glock);
-	//! What InitGlobal is given, captured on the client thread at submission
 	const ResultFormatContext format_context;
 	//! Written before the lifetime is published, so a producer that sees a settled lifetime sees these
 	shared_ptr<ResultFormat> format;

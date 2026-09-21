@@ -143,8 +143,7 @@ public:
 	//! about performance
 	DUCKDB_API ColumnDataRowCollection GetRows() const;
 
-	//! The value at [column, index]. Materializes every row on each call, so a caller that reads more
-	//! than a handful of values should hold the ColumnDataRowCollection from GetRows instead
+	//! Materializes every row on each call, so read many values through GetRows instead
 	DUCKDB_API Value GetValue(idx_t column, idx_t index) const;
 
 	//! Compare two column data collections to another. If they are equal according to result equality rules,

@@ -29,8 +29,7 @@ class ClientContextLock;
 class PreparedStatementData;
 class QueryResult;
 
-//! The retained store of a format: the ColumnDataCollection for chunks, the ordered units for every other
-//! format. A format declares its unit, never its store
+//! A format declares its unit, never its store, so the store is derived here
 template <class FORMAT>
 struct ResultCollectionOf {
 	using type = ResultUnitCollection;
@@ -40,8 +39,6 @@ struct ResultCollectionOf<ChunkFormat> {
 	using type = ColumnDataCollection;
 };
 
-//! How an accessor reaches the representation a format declares. The generic form serves every
-//! format whose store is its ordered units; ChunkFormat specializes it onto the CDC
 template <class FORMAT>
 struct ResultAccess;
 
@@ -98,6 +95,7 @@ private:
 //! A query result. Calling Materialize, Collection, TakeCollection, Fetch or RowCount will materialize the
 //! result's data into the settled format's collection. If instead the caller wants a streaming interface, it can be
 //! moved into a QueryResultStream or a FormattedResultStream.
+//! An accessor taking FORMAT throws InvalidInputException when FORMAT is not the settled format
 class QueryResult : public BaseQueryResult {
 	friend class BufferedData;
 	friend class ClientContext;
@@ -113,7 +111,6 @@ public:
 	//! Creates a detached result over an existing collection
 	DUCKDB_API QueryResult(StatementType statement_type, StatementProperties properties, vector<Identifier> names,
 	                       unique_ptr<ColumnDataCollection> collection, ClientProperties client_properties);
-	//! Creates a detached result over the units a non-chunk format produced, and that format's state
 	DUCKDB_API QueryResult(StatementType statement_type, StatementProperties properties, vector<LogicalType> types,
 	                       vector<Identifier> names, unique_ptr<ResultUnitCollection> units,
 	                       shared_ptr<ResultFormat> format, shared_ptr<ResultFormatGlobalState> format_state,
@@ -163,18 +160,14 @@ public:
 	DUCKDB_API QueryResultState ExecuteTask();
 	//! Blocks until a task is runnable or the engine is waiting on the caller. Runs no task.
 	DUCKDB_API void WaitForTask();
-	//! Sets the format this result is produced in. Only allowed while the result is undecided: nothing
-	//! fetched, no stream opened, not born materialized. Throws InvalidInputException afterwards
+	//! Only allowed while nothing was fetched, no stream was opened and the result was not born materialized
 	DUCKDB_API void SetFormat(shared_ptr<ResultFormat> format);
-	//! The format this result is produced in. The chunk format unless SetFormat or the submission chose another
 	DUCKDB_API const ResultFormat &Format() const;
 	//! Non-blocking. Tells the engine to fully materialize the result. Call Collection(), Fetch[Raw](), or
 	//! ExecuteTask() to execute tasks, or (if multithreaded) Poll until the result is complete.
 	DUCKDB_API void Materialize();
 	//! Blocking. Tells the engine to fully materialize the result. Participates in execution of the query.
 	DUCKDB_API void Complete();
-	//! Blocking. Same as Complete(), but will return a reference to the settled format's collection when done.
-	//! Throws InvalidInputException when FORMAT is not the settled format
 	template <class FORMAT = ChunkFormat>
 	typename ResultCollectionOf<FORMAT>::type &Collection() {
 		return ResultAccess<FORMAT>::Collection(*this);
@@ -184,8 +177,7 @@ public:
 	unique_ptr<typename ResultCollectionOf<FORMAT>::type> TakeCollection() {
 		return ResultAccess<FORMAT>::TakeCollection(*this);
 	}
-	//! The settled format's per-query state. Throws InvalidInputException before the format is settled,
-	//! and when FORMAT is not the settled format
+	//! Throws before the format is settled
 	template <class FORMAT>
 	const typename FORMAT::GlobalState &FormatState() const {
 		return CheckedFormatState(FORMAT::NAME).template Cast<typename FORMAT::GlobalState>();
@@ -199,10 +191,7 @@ public:
 
 	//! Returns the name of the column for the given index
 	DUCKDB_API const Identifier &ColumnName(idx_t index) const;
-	//! A cursor over the collection, which it leaves intact: for chunks a copy of the next chunk with normalized
-	//! (flat) vectors, for any other format a copy of the next unit, or null at the end. Will materialize the
-	//! full result if it hadn't yet.
-	//! Throws InvalidInputException when FORMAT is not the settled format
+	//! Copies the next unit, leaving the collection intact, and materializes the result first if needed
 	template <class FORMAT = ChunkFormat>
 	unique_ptr<typename FORMAT::Unit> Fetch() {
 		return ResultAccess<FORMAT>::Fetch(*this);
@@ -258,21 +247,15 @@ private:
 	//! Ends the query and records a commit failure on this result without throwing
 	void EndQuery(ClientContextLock &lock, bool invalidate_transaction = false);
 	[[noreturn]] void ThrowNoCollection() const;
-	//! Whether the result already holds its rows
 	bool IsCollected() const {
 		return collection != nullptr || unit_collection != nullptr;
 	}
-	//! Copy the format the buffer settled onto this result, so the format outlives the query
+	//! Copies the buffer's settled format so it outlives the query
 	void AdoptSettledFormat();
-	//! Move a produced result's rows and format state onto this result
 	void AdoptCollected(QueryResult &produced);
-	//! Materialize, then throw unless the result succeeded, the settled format is the named one, and
-	//! the rows are still here
 	void PrepareCollected(const char *expected);
-	//! Throws unless the format is settled and is the named one
 	const ResultFormatGlobalState &CheckedFormatState(const char *expected) const;
 	[[noreturn]] void ThrowFormatMismatch(const char *expected) const;
-	//! Whether the settled format is the identity
 	bool IsChunkFormat() const;
 
 private:
@@ -281,9 +264,9 @@ private:
 	//! The buffer created for this query at submission. It carries the retention decision and, for
 	//! a stream, the units (null for a detached or an error result)
 	shared_ptr<BufferedData> buffer;
-	//! The format this result is produced in. Never null
+	//! Never null
 	shared_ptr<ResultFormat> format;
-	//! The format's per-query state. Null until the format is settled
+	//! Null until the format is settled
 	shared_ptr<ResultFormatGlobalState> format_state;
 	//! The retained storage of a chunk-format result (may be null)
 	unique_ptr<ColumnDataCollection> collection;

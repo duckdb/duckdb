@@ -25,7 +25,7 @@ public:
 	DUCKDB_API virtual ~ResultUnit();
 
 public:
-	//! An independent unit holding the same rows, usable after this one and its collection are gone
+	//! Deep: the copy outlives this unit and its collection
 	virtual unique_ptr<ResultUnit> Copy() const = 0;
 
 	template <class TARGET>
@@ -63,7 +63,6 @@ public:
 	unique_ptr<DataChunk> chunk;
 };
 
-//! The retained storage of a result in a format other than chunks: its units, in consumption order.
 //! Format-specific per-query data lives in the format's global state, never here
 class ResultUnitCollection {
 public:
@@ -78,7 +77,7 @@ public:
 	idx_t UnitCount() const {
 		return units.size();
 	}
-	//! The units, in consumption order
+	//! In consumption order
 	const vector<unique_ptr<ResultUnit>> &Units() const {
 		return units;
 	}

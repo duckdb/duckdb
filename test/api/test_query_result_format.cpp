@@ -15,7 +15,6 @@ using namespace duckdb;
 
 namespace {
 
-//! Every row of every unit, in the order the stream delivered them
 vector<int64_t> DrainRows(FormattedResultStream<TestFormat> &stream, idx_t *unit_count = nullptr) {
 	vector<int64_t> rows;
 	while (auto unit = stream.Fetch()) {
@@ -167,7 +166,6 @@ TEST_CASE("A throw from the format surfaces as the stream's error", "[api][query
 	SECTION("a throw in Finish") {
 		drain_with(false);
 	}
-	// The connection is usable afterwards
 	auto next = con.Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));
 }
@@ -234,10 +232,8 @@ TEST_CASE("Fetching from a retained format collection copies units out of an unc
 			fetched.push_back(std::move(unit));
 		}
 		REQUIRE(fetched.size() == total_units);
-		// The end keeps repeating
 		REQUIRE(!handle->Fetch<TestFormat>());
 
-		// The store is what it was built with, unit for unit
 		REQUIRE(handle->RowCount() == 10000);
 		REQUIRE(collection.Count() == 10000);
 		REQUIRE(collection.Units().size() == total_units);
@@ -281,7 +277,6 @@ TEST_CASE("TakeCollection hands over the whole format store, fetched units inclu
 	REQUIRE_THROWS_AS(handle->TakeCollection<TestFormat>(), InvalidInputException);
 	REQUIRE_THROWS_AS(handle->Collection<TestFormat>(), InvalidInputException);
 	REQUIRE_THROWS_AS(handle->Fetch<TestFormat>(), InvalidInputException);
-	// The collection outlives the handle it came from
 	handle.reset();
 	REQUIRE(collection->Count() == 10000);
 }
@@ -380,7 +375,6 @@ TEST_CASE("A stream and an accessor refuse a format that is not the settled one"
 		REQUIRE_THROWS_AS(handle->Collection<OtherTestFormat>(), InvalidInputException);
 		REQUIRE_THROWS_AS(handle->FormatState<OtherTestFormat>(), InvalidInputException);
 	}
-	// A refused stream released the query it consumed
 	auto next = con.Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));
 }

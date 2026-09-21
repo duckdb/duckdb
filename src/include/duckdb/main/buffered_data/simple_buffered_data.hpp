@@ -66,9 +66,8 @@ private:
 	queue<unique_ptr<ResultUnit>> unread_units DUCKDB_GUARDED_BY(glock);
 	//! The bytes currently buffered
 	atomic<idx_t> buffered_count;
-	//! The bytes the parked producers hold. Counted by the streaming peak, never against the cap
+	//! Counted by the streaming peak, never against the cap
 	idx_t parked_bytes DUCKDB_GUARDED_BY(glock) = 0;
-	//! The highest queued-plus-parked total ever seen
 	idx_t peak_streaming_bytes DUCKDB_GUARDED_BY(glock) = 0;
 	//! The byte cap of the buffer
 	const idx_t buffer_size;

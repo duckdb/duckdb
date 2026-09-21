@@ -60,24 +60,20 @@ private:
 	//! The retention in effect: the consumer's decision for a deferred sink, the plan's otherwise
 	ResultLifetime CurrentLifetime(ResultSinkGlobalState &gstate) const;
 	bool DrainsByBatchIndex(ResultSinkGlobalState &gstate) const;
-	//! Whether the settled format is the identity. True for a sink the plan retained, which has no buffer
+	//! True for a sink the plan retained, which has no buffer to settle a format
 	bool UsesChunkFormat(ResultSinkGlobalState &gstate) const;
-	//! The chunk format in effect, which owns the retained store. In-memory for a sink the plan retained
+	//! In-memory for a sink the plan retained
 	const ChunkFormat &ChunkFormatOf(ResultSinkGlobalState &gstate) const;
-	//! The producer's format state, created at its first Append
 	ResultFormatLocalState &LocalFormatState(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
-	//! Append the chunk, and finish the unit when it reached the format's target. Null otherwise
+	//! Null until the unit reaches the format's target
 	unique_ptr<ResultUnit> AppendToUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
 	                                    DataChunk &chunk) const;
-	//! Finish the unit that reached the format's target, or with flush_partial the one under
-	//! construction. Null when there is none
 	unique_ptr<ResultUnit> FinishUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
 	                                  bool flush_partial) const;
-	//! Give a finished unit to the buffer. True when the producer parked holding it
+	//! True when the producer parked holding the unit
 	bool HandOver(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, unique_ptr<ResultUnit> unit,
 	              const InterruptState &interrupt) const;
-	//! Finish the unit under construction, so no unit spans two batch indexes: hand it to the buffer
-	//! when draining, list it for Combine when retained. True when the producer parked holding it
+	//! Keeps a unit from spanning two batch indexes. True when the producer parked holding it
 	bool FlushPartialUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
 	                      const InterruptState &interrupt) const;
 	SinkResultType SinkDraining(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, DataChunk &chunk,
