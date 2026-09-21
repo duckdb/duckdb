@@ -365,7 +365,6 @@ TEST_CASE("A custom collector hands out its own result object", "[api][query_res
 		REQUIRE(!result->HasError());
 		REQUIRE(result->RowCount() == 3000);
 	}
-	// The connection is usable once the collector is gone
 	auto next = con.Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));
 }
@@ -385,7 +384,6 @@ TEST_CASE("A custom collector refuses a submission that asks for a format", "[ap
 		REQUIRE(refused->GetErrorType() == ExceptionType::INVALID_INPUT);
 		REQUIRE(StringUtil::Contains(refused->GetError(), "cannot be combined with a custom result collector"));
 	}
-	// The connection is usable once the collector is gone
 	auto next = con.Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));
 }
@@ -411,7 +409,6 @@ TEST_CASE("A custom collector refuses a submission that asks for a buffer-manage
 		REQUIRE(!accepted->HasError());
 		REQUIRE(accepted->RowCount() == 1000);
 	}
-	// The connection is usable once the collector is gone
 	auto next = con.Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));
 }

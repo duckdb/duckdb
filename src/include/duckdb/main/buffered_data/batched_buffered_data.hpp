@@ -96,7 +96,7 @@ protected:
 	idx_t read_queue_byte_count DUCKDB_GUARDED_BY(glock);
 
 	map<idx_t, BlockedSink> blocked_sinks DUCKDB_GUARDED_BY(glock);
-	//! The bytes the parked producers hold. Counted by the streaming peak, never against the cap
+	//! Counted by the streaming peak, never against the cap
 	idx_t parked_bytes DUCKDB_GUARDED_BY(glock) = 0;
 
 	idx_t min_batch DUCKDB_GUARDED_BY(glock);
@@ -104,7 +104,6 @@ protected:
 	idx_t lowest_moved_batch DUCKDB_GUARDED_BY(glock) = 0;
 	//! The highest number of bytes ever buffered
 	idx_t peak_buffered_bytes DUCKDB_GUARDED_BY(glock) = 0;
-	//! The highest queued-plus-parked total ever seen
 	idx_t peak_streaming_bytes DUCKDB_GUARDED_BY(glock) = 0;
 	//! The largest single unit seen so far
 	idx_t max_seen_unit_bytes DUCKDB_GUARDED_BY(glock) = 0;

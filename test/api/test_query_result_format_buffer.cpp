@@ -15,7 +15,6 @@ using namespace duckdb;
 
 namespace {
 
-//! Drains the stream, tracking the largest unit and whether a producer was ever seen parked for space
 struct DrainReport {
 	idx_t row_count = 0;
 	idx_t unit_count = 0;
@@ -123,9 +122,8 @@ TEST_CASE("A producer parked at Combine is deposited on the consumer's pop", "[a
 	REQUIRE_NO_FAIL(con.Query("SET threads=4"));
 	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='128KB'"));
 
-	// The simple store runs no NextBatch, so the partial unit every producer ends on is finished and
-	// handed over from Combine, into a buffer the consumer has not drained. No whole number of row
-	// groups is a multiple of the row target, so every producer really does end partial
+	// The simple store runs no NextBatch, so Combine finishes and hands over every producer's partial unit
+	// No whole number of row groups is a multiple of the row target, so every producer ends partial
 	auto handle = SubmitFormatted(con, "SELECT i FROM t", 14336);
 	DrainWatchdog watchdog(con);
 	FormattedResultStream<TestFormat> stream(std::move(handle));
@@ -138,7 +136,6 @@ TEST_CASE("A producer parked at Combine is deposited on the consumer's pop", "[a
 		REQUIRE(report.rows[i] == NumericCast<int64_t>(i));
 	}
 	REQUIRE(report.saw_blocked_sink);
-	// One partial unit per producer, all of them finished in Combine
 	REQUIRE(stream.FormatState().partial_units == stream.FormatState().local_states);
 	stream.GetBufferedData().AssertNoBlockedSinks();
 }
@@ -188,7 +185,6 @@ TEST_CASE("An interrupt while a producer holds a unit ends the stream", "[api][q
 	}
 	REQUIRE(stream.HasError());
 	REQUIRE(stream.GetErrorType() == ExceptionType::INTERRUPT);
-	// The connection is usable afterwards
 	auto next = con.Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));
 }

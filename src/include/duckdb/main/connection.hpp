@@ -77,7 +77,6 @@ public:
 	//! Blocking. Runs the query to completion and returns its handle. The result is retained: it can be read
 	//! repeatedly and at random.
 	DUCKDB_API unique_ptr<QueryResult> Query(const string &query);
-	//! As above, producing the result in the given format. Null means chunks
 	DUCKDB_API unique_ptr<QueryResult> Query(unique_ptr<SQLStatement> statement,
 	                                         shared_ptr<ResultFormat> format = nullptr);
 	// prepared statements

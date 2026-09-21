@@ -41,7 +41,6 @@ public:
 	unique_ptr<ColumnDataCollection> collection DUCKDB_GUARDED_BY(glock);
 	//! CDC to materialize a result in batch order
 	unique_ptr<BatchedDataCollection> batch_data DUCKDB_GUARDED_BY(glock);
-	//! The finished units of a retained result in any other format, merged from the producers
 	vector<RetainedUnit> units DUCKDB_GUARDED_BY(glock);
 };
 
@@ -57,10 +56,9 @@ public:
 	ColumnDataAppendState append_state;
 	//! Local CDC (batch order) that will be merged later, in Combine
 	unique_ptr<BatchedDataCollection> batch_data;
-	//! The format's per-producer state. Created at the first Append, because the retention (and with
-	//! it the format) is not settled when the local sink state is
+	//! Created at the first Append, because the format is not settled yet when the local sink state is
 	unique_ptr<ResultFormatLocalState> format_state;
-	//! Finished units of a retained result in a non-chunk format, merged into the global state in Combine
+	//! Never go through the buffer: Combine merges them into the global state
 	vector<RetainedUnit> units;
 };
 
@@ -216,6 +214,7 @@ SinkResultType PhysicalResultSink::SinkDraining(ResultSinkGlobalState &gstate, R
 
 bool PhysicalResultSink::FlushPartialUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
                                           const InterruptState &interrupt) const {
+	// A re-invocation after BLOCKED finds no unit under construction: the first call moved it out
 	auto unit = FinishUnit(gstate, lstate, true);
 	if (!unit) {
 		return false;
@@ -230,7 +229,6 @@ bool PhysicalResultSink::FlushPartialUnit(ResultSinkGlobalState &gstate, ResultS
 SinkCombineResultType PhysicalResultSink::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<ResultSinkGlobalState>();
 	auto &lstate = input.local_state.Cast<ResultSinkLocalState>();
-	// A re-invocation finds no unit under construction: the first call moved it out with Finish
 	if (FlushPartialUnit(gstate, lstate, input.interrupt_state)) {
 		return SinkCombineResultType::BLOCKED;
 	}
@@ -289,8 +287,7 @@ SinkCombineResultType PhysicalResultSink::CombineRetained(ResultSinkGlobalState 
 SinkNextBatchType PhysicalResultSink::NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const {
 	auto &gstate = input.global_state.Cast<ResultSinkGlobalState>();
 	auto &lstate = input.local_state.Cast<ResultSinkLocalState>();
-	// Finished before the producer moves on, so a unit never spans two batch indexes. A re-invocation
-	// finds no unit under construction: the first call moved it out with Finish
+	// Flushed at the batch boundary, so no unit spans two batch indexes
 	if (FlushPartialUnit(gstate, lstate, input.interrupt_state)) {
 		return SinkNextBatchType::BLOCKED;
 	}
