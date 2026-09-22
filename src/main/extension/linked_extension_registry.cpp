@@ -79,6 +79,7 @@ string LinkedExtensionRegistry::Describe(duckdb_extension_describe_t describe, S
 	descriptor.internal = nullptr;
 	result.name = descriptor.name ? descriptor.name : "";
 	result.version = descriptor.extension_version ? descriptor.extension_version : "";
+	result.api_version = descriptor.api_version ? descriptor.api_version : "";
 	const string subject = result.name.empty() ? string("an extension") : "extension '" + result.name + "'";
 	if (status != 0) {
 		return subject + " refused to register: " + (error.empty() ? string("no reason given") : error);

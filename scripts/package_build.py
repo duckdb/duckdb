@@ -185,6 +185,26 @@ def git_dev_version():
     return 'v{}.0-dev{}'.format(release_version(), git_commit_count())
 
 
+def capi_version():
+    """The C API version this source tree offers, as vMAJOR.MINOR.PATCH"""
+    header = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'src', 'include', 'duckdb_extension.h')
+    with open_utf8(header, 'r') as f:
+        text = f.read()
+    parts = []
+    for part in ['MAJOR', 'MINOR', 'PATCH']:
+        match = re.search('#define DUCKDB_EXTENSION_API_VERSION_{} ([0-9]+)'.format(part), text)
+        if not match:
+            raise ValueError('could not find DUCKDB_EXTENSION_API_VERSION_{} in {}'.format(part, header))
+        parts.append(match.group(1))
+    return 'v{}.{}.{}'.format(*parts)
+
+
+def normalized_duckdb_version():
+    """What a build of this tree stamps as the DuckDB version, as DUCKDB_NORMALIZED_VERSION does"""
+    version = git_dev_version()
+    return git_commit_hash() if re.search('-dev[0-9]+$', version) else version
+
+
 def include_package(pkg_name, pkg_dir, include_files, include_list, source_list):
     import amalgamation
 
@@ -299,6 +319,8 @@ def build_package(
             entry_name, entry_field = f'{ext}_duckdb_cpp_init', 'entry_cpp'
             entry_declaration = f'extern "C" void {entry_name}(duckdb::ExtensionLoader &loader);'
         version_define = f'EXT_VERSION_{ext.upper()}'
+        # what the entrypoint was built against, as extension_build_tools.cmake stamps it
+        api_version = capi_version() if ext_kind in ('CAPI', 'CAPI_V2') else normalized_duckdb_version()
         describe = describe_template
         for key, value in {
             'NAME': ext,
@@ -306,6 +328,7 @@ def build_package(
             'ENTRY_NAME': entry_name,
             'ENTRY_FIELD': entry_field,
             'EXTENSION_VERSION': version_define,
+            'API_VERSION': '"{}"'.format(api_version),
         }.items():
             describe = describe.replace(f'@{key}@', value)
 

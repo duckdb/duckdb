@@ -28,6 +28,8 @@ struct LinkedExtension {
 struct StaticExtensionDescription {
 	string name;
 	string version;
+	//! the DuckDB version a C++ entry point was built against, or the C API version a C entry point targets
+	string api_version;
 	duckdb_extension_descriptor descriptor;
 };
 

@@ -17,6 +17,7 @@ int32_t duckdb_extension_@NAME@_describe(duckdb_extension_descriptor *descriptor
 	descriptor->version = 1;
 	descriptor->name = "@NAME@";
 	descriptor->extension_version = @EXTENSION_VERSION@;
+	descriptor->api_version = @API_VERSION@;
 	descriptor->@ENTRY_FIELD@ = (void (*)(void))@ENTRY_NAME@;
 	return 0;
 }

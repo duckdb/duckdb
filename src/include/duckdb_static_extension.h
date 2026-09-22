@@ -53,6 +53,10 @@ struct duckdb_extension_descriptor {
 	// Layout 1, set by the extension; DuckDB copies the strings before the describe function's caller returns
 	const char *name;
 	const char *extension_version;
+	//! What the entry point was built against: the DuckDB version for entry_cpp, the C API version the extension
+	//! targets for entry_capi_v1 and entry_capi_v2. The same values the loadable extension metadata carries. DuckDB
+	//! records it and reports it; it does not refuse a mismatch on it yet.
+	const char *api_version;
 	//! void (duckdb::ExtensionLoader &)
 	void (*entry_cpp)(void);
 	//! bool (duckdb_extension_info, struct duckdb_extension_access *)
