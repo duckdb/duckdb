@@ -120,6 +120,10 @@ private:
 	//! How many instructions the walk takes between two checks for a cancelled query
 	static constexpr idx_t INTERRUPT_INTERVAL = 4096;
 
+	//! How many states one match may explore, which is the setting, and never less than what a search
+	//! that never explores a state twice would take over `rows` rows
+	idx_t StateLimit(idx_t rows) const;
+
 	ClientContext &context;
 	const PatternProgram &program;
 	const SymbolMatcher &symbol_matches;
@@ -128,6 +132,9 @@ private:
 	PatternMemo memo;
 	idx_t row_count;
 	idx_t steps = 0;
+	//! The states this match explored, and how many of them it may (0 = as many as it takes)
+	idx_t states = 0;
+	idx_t max_states = 0;
 	//! One record per (instruction, row): the epoch in which that state was walked
 	AllocatedData explored;
 	idx_t explored_size = 0;

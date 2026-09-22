@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -138,7 +139,8 @@ PatternMatcher::PatternMatcher(ClientContext &context_p, const PatternProgram &p
                                const SymbolMatcher &symbol_matches_p, vector<idx_t> &classifiers_p,
                                vector<uint8_t> &excluded_rows_p, PatternMemo memo_p)
     : context(context_p), program(program_p), symbol_matches(symbol_matches_p), classifiers(classifiers_p),
-      excluded_rows(excluded_rows_p), memo(memo_p), row_count(classifiers_p.size()) {
+      excluded_rows(excluded_rows_p), memo(memo_p), row_count(classifiers_p.size()),
+      max_states(Settings::Get<MatchRecognizeMaxStatesSetting>(context_p)) {
 	if (memo == PatternMemo::HISTORY) {
 		// no row is matched within a scope, so one mark per instruction is enough
 		history_marks.assign(program.code.size(), 0);
@@ -156,6 +158,20 @@ PatternMatcher::PatternMatcher(ClientContext &context_p, const PatternProgram &p
 	ClearExplored();
 }
 
+//! A walk that never explores a state twice takes at most one step per instruction per row, and one more
+//! for every alternative it resumes only to find exhausted. Refusing a match below that would refuse it
+//! for the work matching the pattern takes rather than for the backtracking the limit is there to stop.
+idx_t PatternMatcher::StateLimit(idx_t rows) const {
+	if (!max_states) {
+		return 0;
+	}
+	const auto states_per_instruction = 2 * (rows + 1);
+	if (program.code.size() > NumericLimits<idx_t>::Maximum() / states_per_instruction) {
+		return 0;
+	}
+	return MaxValue(max_states, program.code.size() * states_per_instruction);
+}
+
 void PatternMatcher::BeginPartition() {
 	if (memo == PatternMemo::HISTORY) {
 		// every attempt opens a scope of its own below, and a mark only outlives the walk that took it
@@ -170,6 +186,8 @@ bool PatternMatcher::Match(idx_t start, idx_t partition_start, idx_t input_size)
 	}
 	attempt_marks.clear();
 	pending.clear();
+	states = 0;
+	const auto state_limit = StateLimit(input_size - partition_start);
 	// the marks of the attempt before this one belong to walks that are over
 	UnwindHistory(0);
 	pending.push_back(PendingState {0, start, NextScope(), 0});
@@ -186,6 +204,15 @@ bool PatternMatcher::Match(idx_t start, idx_t partition_start, idx_t input_size)
 			if (++steps >= INTERRUPT_INTERVAL) {
 				steps = 0;
 				context.InterruptCheck();
+			}
+			if (state_limit && ++states > state_limit) {
+				throw InvalidInputException(
+				    "MATCH_RECOGNIZE gave up on a match after exploring %llu states. A DEFINE condition here reads "
+				    "the match itself and not only the row it tests, so the matcher has to keep the different ways "
+				    "of matching the same row apart, and their number grows quickly with the size of the partition. "
+				    "Narrow the PATTERN or the DEFINE conditions so that fewer ways reach the same row, or raise "
+				    "match_recognize_max_states.",
+				    state_limit);
 			}
 			if (!Visit(pc, offset, walk)) {
 				break;

@@ -1115,6 +1115,13 @@
         "custom_implementation": true
     },
     {
+        "name": "match_recognize_max_states",
+        "description": "The maximum number of pattern states MATCH_RECOGNIZE explores for a single match, before it refuses the pattern (0 = no limit). A match is never refused below what matching the pattern without backtracking would take.",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "1000000"
+    },
+    {
         "name": "max_execution_time",
         "description": "The maximum execution time per query in milliseconds (0 = no limit)",
         "type": "BIGINT",
