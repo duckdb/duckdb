@@ -58,59 +58,59 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 }
 
 void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_function) {
-	table_function.named_parameters["sep"] = LogicalType::VARCHAR;
-	table_function.named_parameters["delim"] = LogicalType::VARCHAR;
+	table_function.GetSignature().AddSeparator().AddParameter("sep", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("delim", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
 	// aliases that the CSV options accept - COPY has always taken these, so the table function takes them too
-	table_function.named_parameters["separator"] = LogicalType::VARCHAR;
-	table_function.named_parameters["delimiter"] = LogicalType::VARCHAR;
-	table_function.named_parameters["null"] = LogicalType::ANY;
-	table_function.named_parameters["date_format"] = LogicalType::VARCHAR;
-	table_function.named_parameters["timestamp_format"] = LogicalType::VARCHAR;
-	table_function.named_parameters["quote"] = LogicalType::VARCHAR;
-	table_function.named_parameters["new_line"] = LogicalType::VARCHAR;
-	table_function.named_parameters["escape"] = LogicalType::VARCHAR;
-	table_function.named_parameters["nullstr"] = LogicalType::ANY;
-	table_function.named_parameters["columns"] = LogicalType::ANY;
-	table_function.named_parameters["auto_type_candidates"] = LogicalType::ANY;
-	table_function.named_parameters["header"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["sample_size"] = LogicalType::BIGINT;
-	table_function.named_parameters["all_varchar"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["dateformat"] = LogicalType::VARCHAR;
-	table_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;
-	table_function.named_parameters["normalize_names"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["compression"] = LogicalType::VARCHAR;
-	table_function.named_parameters["skip"] = LogicalType::BIGINT;
-	table_function.named_parameters["max_line_size"] = LogicalType::VARCHAR;
-	table_function.named_parameters["maximum_line_size"] = LogicalType::VARCHAR;
-	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["store_rejects"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["rejects_table"] = LogicalType::VARCHAR;
-	table_function.named_parameters["rejects_scan"] = LogicalType::VARCHAR;
-	table_function.named_parameters["rejects_limit"] = LogicalType::BIGINT;
-	table_function.named_parameters["rejects_line_size_limit"] = LogicalType::BIGINT;
-	table_function.named_parameters["force_not_null"] = LogicalType::LIST(LogicalType::VARCHAR);
-	table_function.named_parameters["buffer_size"] = LogicalType::UBIGINT;
-	table_function.named_parameters["decimal_separator"] = LogicalType::VARCHAR;
-	table_function.named_parameters["parallel"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["null_padding"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["allow_quoted_nulls"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["column_types"] = LogicalType::ANY;
-	table_function.named_parameters["dtypes"] = LogicalType::ANY;
-	table_function.named_parameters["types"] = LogicalType::ANY;
-	table_function.named_parameters["names"] = LogicalType::LIST(LogicalType::VARCHAR);
-	table_function.named_parameters["column_names"] = LogicalType::LIST(LogicalType::VARCHAR);
-	table_function.named_parameters["comment"] = LogicalType::VARCHAR;
-	table_function.named_parameters["encoding"] = LogicalType::VARCHAR;
-	table_function.named_parameters["strict_mode"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["thousands"] = LogicalType::VARCHAR;
-	table_function.named_parameters["files_to_sniff"] = LogicalType::BIGINT;
+	table_function.GetSignature().AddSeparator().AddParameter("separator", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("delimiter", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("null", LogicalType::ANY, Value(LogicalType::ANY));
+	table_function.GetSignature().AddSeparator().AddParameter("date_format", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("timestamp_format", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("quote", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("new_line", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("escape", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("nullstr", LogicalType::ANY, Value(LogicalType::ANY));
+	table_function.GetSignature().AddSeparator().AddParameter("columns", LogicalType::ANY, Value(LogicalType::ANY));
+	table_function.GetSignature().AddSeparator().AddParameter("auto_type_candidates", LogicalType::ANY, Value(LogicalType::ANY));
+	table_function.GetSignature().AddSeparator().AddParameter("header", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	table_function.GetSignature().AddSeparator().AddParameter("auto_detect", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	table_function.GetSignature().AddSeparator().AddParameter("sample_size", LogicalType::BIGINT, Value(LogicalType::BIGINT));
+	table_function.GetSignature().AddSeparator().AddParameter("all_varchar", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	table_function.GetSignature().AddSeparator().AddParameter("dateformat", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("timestampformat", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("normalize_names", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	table_function.GetSignature().AddSeparator().AddParameter("compression", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("skip", LogicalType::BIGINT, Value(LogicalType::BIGINT));
+	table_function.GetSignature().AddSeparator().AddParameter("max_line_size", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("maximum_line_size", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("ignore_errors", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	table_function.GetSignature().AddSeparator().AddParameter("store_rejects", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	table_function.GetSignature().AddSeparator().AddParameter("rejects_table", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("rejects_scan", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("rejects_limit", LogicalType::BIGINT, Value(LogicalType::BIGINT));
+	table_function.GetSignature().AddSeparator().AddParameter("rejects_line_size_limit", LogicalType::BIGINT, Value(LogicalType::BIGINT));
+	table_function.GetSignature().AddSeparator().AddParameter("force_not_null", LogicalType::LIST(LogicalType::VARCHAR), Value(LogicalType::LIST(LogicalType::VARCHAR)));
+	table_function.GetSignature().AddSeparator().AddParameter("buffer_size", LogicalType::UBIGINT, Value(LogicalType::UBIGINT));
+	table_function.GetSignature().AddSeparator().AddParameter("decimal_separator", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("parallel", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	table_function.GetSignature().AddSeparator().AddParameter("null_padding", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	table_function.GetSignature().AddSeparator().AddParameter("allow_quoted_nulls", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	table_function.GetSignature().AddSeparator().AddParameter("column_types", LogicalType::ANY, Value(LogicalType::ANY));
+	table_function.GetSignature().AddSeparator().AddParameter("dtypes", LogicalType::ANY, Value(LogicalType::ANY));
+	table_function.GetSignature().AddSeparator().AddParameter("types", LogicalType::ANY, Value(LogicalType::ANY));
+	table_function.GetSignature().AddSeparator().AddParameter("names", LogicalType::LIST(LogicalType::VARCHAR), Value(LogicalType::LIST(LogicalType::VARCHAR)));
+	table_function.GetSignature().AddSeparator().AddParameter("column_names", LogicalType::LIST(LogicalType::VARCHAR), Value(LogicalType::LIST(LogicalType::VARCHAR)));
+	table_function.GetSignature().AddSeparator().AddParameter("comment", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("encoding", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("strict_mode", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	table_function.GetSignature().AddSeparator().AddParameter("thousands", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("files_to_sniff", LogicalType::BIGINT, Value(LogicalType::BIGINT));
 
 	MultiFileReader::AddParameters(table_function);
 }
 
 static void CSVReaderSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                               const TableFunction &function) {
+                               const BoundTableFunction &function) {
 	throw NotImplementedException("CSVReaderSerialize not implemented");
 	// auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 	// auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
@@ -127,7 +127,7 @@ static void CSVReaderSerialize(Serializer &serializer, const optional_ptr<Functi
 	// serializer.WriteProperty(101, "csv_data", serialized_data);
 }
 
-static unique_ptr<FunctionData> CSVReaderDeserialize(Deserializer &deserializer, TableFunction &function) {
+static unique_ptr<FunctionData> CSVReaderDeserialize(Deserializer &deserializer, BoundTableFunction &function) {
 	throw NotImplementedException("CSVReaderDeserialize not implemented");
 	// auto &context = deserializer.Get<ClientContext &>();
 	// SerializedReadCSVData serialized_data;

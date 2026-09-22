@@ -211,7 +211,7 @@ static void ExternalResourcesFunction(ClientContext &context, TableFunctionInput
 void DuckDBExternalResourcesFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction fn("duckdb_external_resources", {}, ExternalResourcesFunction, ExternalResourcesBind,
 	                 ExternalResourcesInit);
-	fn.named_parameters["discover"] = LogicalType::BOOLEAN;
+	fn.GetSignature().AddSeparator().AddParameter("discover", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
 	set.AddFunction(fn);
 }
 
@@ -289,9 +289,9 @@ void RegisterExternalResourceFun::RegisterFunction(BuiltinFunctions &set) {
 	    "register_external_resource",
 	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
 	    RegisterExternalResourceFunction, RegisterExternalResourceBind, RegisterExternalResourceInit);
-	fn.named_parameters["uri"] = LogicalType::VARCHAR;
-	fn.named_parameters["attached_db_type"] = LogicalType::VARCHAR;
-	fn.named_parameters["deleter_function"] = LogicalType::VARCHAR;
+	fn.GetSignature().AddSeparator().AddParameter("uri", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	fn.GetSignature().AddSeparator().AddParameter("attached_db_type", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	fn.GetSignature().AddSeparator().AddParameter("deleter_function", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
 	set.AddFunction(fn);
 }
 

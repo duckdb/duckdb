@@ -24,6 +24,19 @@ namespace duckdb {
 
 enum class TableFunctionBindType { STANDARD_TABLE_FUNCTION, TABLE_IN_OUT_FUNCTION, TABLE_PARAMETER_FUNCTION };
 
+//! The parameters a call can fill by name: every optional parameter, whether it is keyword-only or could also have
+//! been passed by position. This reproduces what the named_parameter_type_map_t of a table function used to hold, and
+//! goes away once table functions place their arguments through the function binder like every other function kind
+static named_parameter_type_map_t ToNamedParameterTypes(const FunctionSignature &signature) {
+	named_parameter_type_map_t result;
+	for (auto &param : signature.GetParameters()) {
+		if (!param.IsVariadic() && param.HasDefaultValue()) {
+			result[param.GetName()] = param.GetType();
+		}
+	}
+	return result;
+}
+
 static TableFunctionBindType GetTableFunctionBindType(TableFunctionCatalogEntry &table_function,
                                                       vector<unique_ptr<ParsedExpression>> &expressions) {
 	// first check if all expressions are scalar
@@ -45,8 +58,8 @@ static TableFunctionBindType GetTableFunctionBindType(TableFunctionCatalogEntry 
 	bool has_table_parameter = false;
 	for (idx_t function_idx = 0; function_idx < table_function.functions.Size(); function_idx++) {
 		const auto &function = *table_function.functions.GetFunctionByOffset(function_idx);
-		for (auto &arg : function.GetArguments()) {
-			if (arg.id() == LogicalTypeId::TABLE) {
+		for (auto &param : function.GetSignature().GetParameters()) {
+			if (param.GetType().id() == LogicalTypeId::TABLE) {
 				has_table_parameter = true;
 			}
 		}
@@ -121,7 +134,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		    child->GetExpressionType() == ExpressionType::SUBQUERY) {
 			D_ASSERT(table_function.functions.Size() == 1);
 			const auto &fun = *table_function.functions.GetFunctionByOffset(0);
-			if (table_function.functions.Size() != 1 || fun.GetArguments().empty()) {
+			if (table_function.functions.Size() != 1 || fun.GetSignature().GetPositionalParameterCount() == 0) {
 				throw BinderException(
 				    "Only table-in-out functions can have subquery parameters - %s only accepts constant parameters",
 				    fun.GetName());
@@ -181,7 +194,7 @@ static string GetAlias(const TableFunctionRef &ref) {
 //! Postgres names the single column of a set-returning function after the alias of the function
 //! (e.g. "SELECT t FROM generate_series(1, 2) t" returns the values, not a struct)
 //! returns the original column name, which is kept available as a column alias
-static Identifier ApplyPostgresSetofAliasCompatibility(const TableFunction &table_function, const TableFunctionRef &ref,
+static Identifier ApplyPostgresSetofAliasCompatibility(const BaseTableFunction &table_function, const TableFunctionRef &ref,
                                                        vector<Identifier> &return_names) {
 	if (table_function.return_type != TableFunctionReturnType::SET_RETURNING_FUNCTION || ref.alias.empty() ||
 	    !ref.column_name_alias.empty() || return_names.size() != 1) {
@@ -202,7 +215,7 @@ static void AddPostgresSetofColumnAlias(BindContext &bind_context, TableIndex bi
 	bind_context.AddColumnAlias(bind_index, original_name, 0);
 }
 
-BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
+BoundStatement Binder::BindTableFunctionInternal(BoundTableFunction &table_function, const TableFunctionRef &ref,
                                                  vector<Value> parameters, named_parameter_map_t named_parameters,
                                                  vector<LogicalType> input_table_types,
                                                  vector<Identifier> input_table_names,
@@ -226,13 +239,13 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 				new_plan->ResolveOperatorTypes();
 				if (new_plan->types.size() != return_names.size()) {
 					throw InternalException("Failed to bind \"%s\": return_types/names must have same size",
-					                        table_function.name);
+					                        table_function.GetName());
 				}
 				for (auto &binding : new_plan->GetColumnBindings()) {
 					if (binding.table_index != bind_index) {
 						throw InternalException(
 						    "Failed to bind \"%s\": root bind index must be the passed in bind index",
-						    table_function.name);
+						    table_function.GetName());
 					}
 				}
 				auto setof_column_name = ApplyPostgresSetofAliasCompatibility(table_function, ref, return_names);
@@ -259,7 +272,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		}
 		if (!table_function.bind) {
 			throw BinderException("Failed to bind \"%s\": nullptr returned from bind_replace without bind function",
-			                      table_function.name);
+			                      table_function.GetName());
 		}
 		bind_data = table_function.bind(context, bind_input, return_types, return_names);
 		if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY) {
@@ -285,17 +298,17 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		}
 	} else {
 		throw InvalidInputException("Cannot call function \"%s\" directly - it has no bind function",
-		                            table_function.name);
+		                            table_function.GetName());
 	}
 	if (bind_data && !bind_data->SupportStatementCache()) {
 		SetAlwaysRequireRebind();
 	}
 	if (return_types.size() != return_names.size()) {
-		throw InternalException("Failed to bind \"%s\": return_types/names must have same size", table_function.name);
+		throw InternalException("Failed to bind \"%s\": return_types/names must have same size", table_function.GetName());
 	}
 	if (return_types.empty()) {
 		throw InternalException("Failed to bind \"%s\": Table function must return at least one column",
-		                        table_function.name);
+		                        table_function.GetName());
 	}
 	auto setof_column_name = ApplyPostgresSetofAliasCompatibility(table_function, ref, return_names);
 	// overwrite the names with any supplied aliases
@@ -379,7 +392,8 @@ BoundStatement Binder::BindTableFunction(TableFunction &function, vector<Value> 
 	TableFunctionRef ref;
 	ref.alias = function.name;
 	D_ASSERT(!ref.alias.empty());
-	return BindTableFunctionInternal(function, ref, std::move(parameters), std::move(named_parameters),
+	BoundTableFunction bound_function(function);
+	return BindTableFunctionInternal(bound_function, ref, std::move(parameters), std::move(named_parameters),
 	                                 std::move(input_table_types), std::move(input_table_names), nullptr);
 }
 
@@ -452,11 +466,13 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		error.AddQueryLocation(ref);
 		error.Throw();
 	}
-	// copied out of the set: BindTableFunctionInternal fills in the bound arguments/return types
-	auto table_function = *function.functions.GetFunctionByOffset(best_function_idx.GetIndex());
+	// copied out of the set: BindTableFunctionInternal fills in the bound return types
+	const auto &selected_function = *function.functions.GetFunctionByOffset(best_function_idx.GetIndex());
+	BoundTableFunction table_function(selected_function);
 
 	// now check the named parameters
-	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);
+	auto declared_options = ToNamedParameterTypes(selected_function.GetSignature());
+	BindNamedParameters(declared_options, named_parameters, error_context, table_function.GetName());
 
 	vector<LogicalType> input_table_types;
 	vector<Identifier> input_table_names;
@@ -473,8 +489,9 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	if (!parameters.empty()) {
 		// cast the parameters to the type of the function
 		for (idx_t i = 0; i < arguments.size(); i++) {
-			auto target_type = i < table_function.GetArguments().size() ? table_function.GetArguments()[i]
-			                                                            : table_function.GetVarArgs();
+			const auto &signature = table_function.GetSignature();
+			auto target_type = i < signature.GetPositionalParameterCount() ? signature.GetParameter(i).GetType()
+			                                                               : signature.GetVarArgs();
 
 			if (target_type != LogicalType::ANY && target_type != LogicalType::POINTER &&
 			    target_type.id() != LogicalTypeId::LIST && target_type != LogicalType::TABLE) {
@@ -483,8 +500,9 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		}
 	} else if (subquery.plan) {
 		for (idx_t i = 0; i < arguments.size(); i++) {
-			auto target_type = i < table_function.GetArguments().size() ? table_function.GetArguments()[i]
-			                                                            : table_function.GetVarArgs();
+			const auto &signature = table_function.GetSignature();
+			auto target_type = i < signature.GetPositionalParameterCount() ? signature.GetParameter(i).GetType()
+			                                                               : signature.GetVarArgs();
 
 			if (target_type != LogicalType::ANY && target_type != LogicalType::POINTER &&
 			    target_type.id() != LogicalTypeId::LIST) {

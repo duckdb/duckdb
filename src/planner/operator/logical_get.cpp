@@ -68,7 +68,7 @@ static void MapLegacyTableFilterKeys(LogicalGet &get) {
 LogicalGet::LogicalGet() : LogicalOperator(LogicalOperatorType::LOGICAL_GET) {
 }
 
-LogicalGet::LogicalGet(TableIndex table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
+LogicalGet::LogicalGet(TableIndex table_index, BoundTableFunction function, unique_ptr<FunctionData> bind_data,
                        vector<LogicalType> returned_types, vector<Identifier> returned_names,
                        virtual_column_map_t virtual_columns_p)
     : LogicalOperator(LogicalOperatorType::LOGICAL_GET), table_index(table_index), function(std::move(function)),
@@ -374,7 +374,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault(203, "column_ids", legacy_column_ids);
 	deserializer.ReadProperty(204, "projection_ids", result->projection_ids);
 	deserializer.ReadProperty(205, "table_filters", result->table_filters);
-	auto entry = FunctionSerializer::DeserializeBase<TableFunction, TableFunctionCatalogEntry>(
+	auto entry = FunctionSerializer::DeserializeBase<BoundTableFunction, TableFunctionCatalogEntry>(
 	    deserializer, CatalogType::TABLE_FUNCTION_ENTRY);
 	result->function = entry.first;
 	auto &function = result->function;
@@ -422,7 +422,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		vector<LogicalType> bind_return_types;
 		vector<Identifier> bind_names;
 		if (!function.bind) {
-			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.name);
+			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.GetName());
 		}
 		bind_data = function.bind(context, input, bind_return_types, bind_names);
 		if (result->ordinality_idx.IsValid()) {
@@ -447,7 +447,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 				if (bind_return_types[idx] != ret_type) {
 					throw SerializationException("Table function deserialization failure in function %s - column with "
 					                             "name %s was serialized with type %s, but now has type %s",
-					                             function.name, col_name, ret_type, bind_return_types[idx]);
+					                             function.GetName(), col_name, ret_type, bind_return_types[idx]);
 				}
 			}
 		}
@@ -477,7 +477,7 @@ string LogicalGet::GetName() const {
 		return StringUtil::Upper(function.name.GetIdentifierName()) + StringUtil::Format(" #%llu", table_index.index);
 	}
 #endif
-	return StringUtil::Upper(function.name.GetIdentifierName());
+	return StringUtil::Upper(function.GetName().GetIdentifierName());
 }
 
 } // namespace duckdb

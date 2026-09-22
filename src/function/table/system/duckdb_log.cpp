@@ -119,7 +119,7 @@ void DuckDBLogFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction logs_fun("duckdb_logs", {}, DuckDBLogFunction, DuckDBLogBind, DuckDBLogInit);
 	logs_fun.bind_replace = DuckDBLogBindReplace;
 	logs_fun.table_scan_progress = DuckDBLogProgress;
-	logs_fun.named_parameters["denormalized_table"] = LogicalType::BOOLEAN;
+	logs_fun.GetSignature().AddSeparator().AddParameter("denormalized_table", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
 	set.AddFunction(logs_fun);
 }
 

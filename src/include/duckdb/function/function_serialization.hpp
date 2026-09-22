@@ -144,7 +144,8 @@ public:
 			                        qualified_name.Name().GetIdentifierName());
 		}
 		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
-		return *functions.functions.GetFunctionByArguments(context, arguments);
+		// the catalog holds the declaration; the caller binds it to the argument types the plan recorded
+		return FUNC(*functions.functions.GetFunctionByArguments(context, arguments));
 	}
 
 	template <class FUNC, class CATALOG_ENTRY>

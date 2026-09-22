@@ -111,19 +111,20 @@ void JSONScanLocalState::AddTransformError(idx_t object_index, const string &err
 	scan_state.current_reader->AddTransformError(scan_state, object_index, error_message);
 }
 
-void JSONScan::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p, const TableFunction &) {
+void JSONScan::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+                         const BoundTableFunction &) {
 	throw NotImplementedException("JSONScan Serialize not implemented");
 }
 
-unique_ptr<FunctionData> JSONScan::Deserialize(Deserializer &deserializer, TableFunction &) {
+unique_ptr<FunctionData> JSONScan::Deserialize(Deserializer &deserializer, BoundTableFunction &) {
 	throw NotImplementedException("JSONScan Deserialize not implemented");
 }
 
 void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
-	table_function.named_parameters["maximum_object_size"] = LogicalType::UINTEGER;
-	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["format"] = LogicalType::VARCHAR;
-	table_function.named_parameters["compression"] = LogicalType::VARCHAR;
+	table_function.GetSignature().AddSeparator().AddParameter("maximum_object_size", LogicalType::UINTEGER, Value(LogicalType::UINTEGER));
+	table_function.GetSignature().AddSeparator().AddParameter("ignore_errors", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	table_function.GetSignature().AddSeparator().AddParameter("format", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("compression", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
 
 	table_function.serialize = Serialize;
 	table_function.deserialize = Deserialize;
@@ -134,24 +135,24 @@ void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 }
 
 void JSONScan::AddReadJSONParameters(TableFunction &table_function) {
-	table_function.named_parameters["columns"] = LogicalType::ANY;
-	table_function.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["geojson"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["sample_size"] = LogicalType::BIGINT;
-	table_function.named_parameters["dateformat"] = LogicalType::VARCHAR;
-	table_function.named_parameters["date_format"] = LogicalType::VARCHAR;
-	table_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;
-	table_function.named_parameters["timestamp_format"] = LogicalType::VARCHAR;
-	table_function.named_parameters["records"] = LogicalType::VARCHAR;
-	table_function.named_parameters["array"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["maximum_sample_files"] = LogicalType::BIGINT;
+	table_function.GetSignature().AddSeparator().AddParameter("columns", LogicalType::ANY, Value(LogicalType::ANY));
+	table_function.GetSignature().AddSeparator().AddParameter("auto_detect", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	table_function.GetSignature().AddSeparator().AddParameter("geojson", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	table_function.GetSignature().AddSeparator().AddParameter("sample_size", LogicalType::BIGINT, Value(LogicalType::BIGINT));
+	table_function.GetSignature().AddSeparator().AddParameter("dateformat", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("date_format", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("timestampformat", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("timestamp_format", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("records", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature().AddSeparator().AddParameter("array", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	table_function.GetSignature().AddSeparator().AddParameter("maximum_sample_files", LogicalType::BIGINT, Value(LogicalType::BIGINT));
 }
 
 void JSONScan::AddAutoDetectParameters(TableFunction &table_function) {
-	table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
-	table_function.named_parameters["field_appearance_threshold"] = LogicalType::DOUBLE;
-	table_function.named_parameters["convert_strings_to_integers"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["map_inference_threshold"] = LogicalType::BIGINT;
+	table_function.GetSignature().AddSeparator().AddParameter("maximum_depth", LogicalType::BIGINT, Value(LogicalType::BIGINT));
+	table_function.GetSignature().AddSeparator().AddParameter("field_appearance_threshold", LogicalType::DOUBLE, Value(LogicalType::DOUBLE));
+	table_function.GetSignature().AddSeparator().AddParameter("convert_strings_to_integers", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	table_function.GetSignature().AddSeparator().AddParameter("map_inference_threshold", LogicalType::BIGINT, Value(LogicalType::BIGINT));
 }
 
 bool JSONScan::ParseOption(ClientContext &context, const Identifier &key, const Value &value,

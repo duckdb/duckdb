@@ -247,13 +247,13 @@ static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &
 
 static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction dbgen_func("dbgen", {}, DbgenFunction, DbgenBind, DbgenInit);
-	dbgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
-	dbgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
-	dbgen_func.named_parameters["catalog"] = LogicalType::VARCHAR;
-	dbgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
-	dbgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
-	dbgen_func.named_parameters["children"] = LogicalType::UINTEGER;
-	dbgen_func.named_parameters["step"] = LogicalType::UINTEGER;
+	dbgen_func.GetSignature().AddSeparator().AddParameter("sf", LogicalType::DOUBLE, Value(LogicalType::DOUBLE));
+	dbgen_func.GetSignature().AddSeparator().AddParameter("overwrite", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	dbgen_func.GetSignature().AddSeparator().AddParameter("catalog", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	dbgen_func.GetSignature().AddSeparator().AddParameter("schema", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	dbgen_func.GetSignature().AddSeparator().AddParameter("suffix", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	dbgen_func.GetSignature().AddSeparator().AddParameter("children", LogicalType::UINTEGER, Value(LogicalType::UINTEGER));
+	dbgen_func.GetSignature().AddSeparator().AddParameter("step", LogicalType::UINTEGER, Value(LogicalType::UINTEGER));
 	dbgen_func.call_return_type = StatementReturnType::NOTHING;
 	dbgen_func.table_scan_progress = DbgenProgress;
 	loader.RegisterFunction(dbgen_func);

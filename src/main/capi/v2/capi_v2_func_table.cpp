@@ -359,7 +359,7 @@ static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, 
 
 	if (args.out_column_types.empty()) {
 		throw InvalidInputException("The bind callback of table function \"%s\" did not declare any result columns.",
-		                            input.table_function.name);
+		                            input.table_function.GetName());
 	}
 
 	result->column_types = args.out_column_types;
@@ -658,20 +658,9 @@ public:
 
 		signature.Verify();
 
-		// Route the signature onto the two ways SQL passes arguments to a table function: a parameter without a
-		// default value is a required positional argument, a parameter with one is an optional named argument.
-		vector<LogicalType> positional;
-		for (idx_t i = 0; i < signature.GetParameterCount(); i++) {
-			const auto &param = signature.GetParameter(i);
-			if (!param.IsVariadic() && !param.HasDefaultValue()) {
-				positional.push_back(param.GetType());
-			}
-		}
-
-		TableFunction function(name, positional, CV2TableExec, CV2TableBind, CV2TableInitGlobal, CV2TableInitLocal);
-		if (signature.HasVarArgs()) {
-			function.SetVarArgs(signature.GetVarArgs());
-		}
+		// A table function holds a signature of its own, so the declared one is handed over as-is
+		TableFunction function(name, {}, CV2TableExec, CV2TableBind, CV2TableInitGlobal, CV2TableInitLocal);
+		function.GetSignature() = signature;
 
 		// Always wired: it serves the estimate a bind callback may set, which is not known at registration. It
 		// reports no estimate when the bind callback sets none.
@@ -692,18 +681,20 @@ public:
 
 		info.name = name;
 		auto function_info = make_shared_ptr<CV2TableFunctionInfo>(std::move(info));
+		idx_t positional_count = 0;
 		for (idx_t i = 0; i < signature.GetParameterCount(); i++) {
 			const auto &param = signature.GetParameter(i);
 			if (param.IsVariadic()) {
 				continue;
 			}
 			if (param.HasDefaultValue()) {
-				function.named_parameters[param.GetName()] = param.GetType();
 				function_info->named_parameter_defaults[param.GetName()] = *param.GetDefaultValue();
+			} else {
+				positional_count++;
 			}
 			function_info->parameter_names.push_back(param.GetName());
 		}
-		function_info->positional_count = positional.size();
+		function_info->positional_count = positional_count;
 		function.function_info = std::move(function_info);
 
 		// Call the implementation to register

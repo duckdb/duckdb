@@ -445,8 +445,8 @@ static void TestAllTypesFunction(ClientContext &context, TableFunctionInput &dat
 
 void TestAllTypesFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction test_all_types("test_all_types", {}, TestAllTypesFunction, TestAllTypesBind, TestAllTypesInit);
-	test_all_types.named_parameters["use_large_enum"] = LogicalType::BOOLEAN;
-	test_all_types.named_parameters["use_large_bignum"] = LogicalType::BOOLEAN;
+	test_all_types.GetSignature().AddSeparator().AddParameter("use_large_enum", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	test_all_types.GetSignature().AddSeparator().AddParameter("use_large_bignum", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
 	set.AddFunction(test_all_types);
 }
 

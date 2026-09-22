@@ -184,66 +184,6 @@ optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const 
 	return cost;
 }
 
-static optional_idx BindVarArgsFunctionCost(optional_ptr<ClientContext> context,
-                                            const SimpleNamedParameterFunction &func,
-                                            const vector<LogicalType> &arguments) {
-	if (arguments.size() < func.GetArguments().size()) {
-		// not enough arguments to fulfill the non-vararg part of the function
-		return optional_idx();
-	}
-	idx_t cost = 0;
-	for (idx_t i = 0; i < arguments.size(); i++) {
-		LogicalType arg_type = i < func.GetArguments().size() ? func.GetArguments()[i] : func.GetVarArgs();
-		if (arguments[i] == arg_type) {
-			// arguments match: do nothing
-			continue;
-		}
-		int64_t cast_cost = ImplicitCastCost(context, arguments[i], arg_type);
-		if (cast_cost >= 0) {
-			// we can implicitly cast, add the cost to the total cost
-			cost += idx_t(cast_cost);
-		} else {
-			// we can't implicitly cast: throw an error
-			return optional_idx();
-		}
-	}
-	return cost;
-}
-
-optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const SimpleNamedParameterFunction &func,
-                                     const vector<LogicalType> &arguments,
-                                     const vector<pair<Identifier, LogicalType>> &) {
-	if (func.HasVarArgs()) {
-		// special case varargs function
-		return BindVarArgsFunctionCost(context, func, arguments);
-	}
-	if (func.GetArguments().size() != arguments.size()) {
-		// invalid argument count: check the next function
-		return optional_idx();
-	}
-	idx_t cost = 0;
-	bool has_parameter = false;
-	for (idx_t i = 0; i < arguments.size(); i++) {
-		if (arguments[i].id() == LogicalTypeId::UNKNOWN) {
-			has_parameter = true;
-			continue;
-		}
-		int64_t cast_cost = ImplicitCastCost(context, arguments[i], func.GetArguments()[i]);
-		if (cast_cost >= 0) {
-			// we can implicitly cast, add the cost to the total cost
-			cost += idx_t(cast_cost);
-		} else {
-			// we can't implicitly cast: throw an error
-			return optional_idx();
-		}
-	}
-	if (has_parameter) {
-		// all arguments are implicitly castable and there is a parameter - return 0 as cost
-		return 0;
-	}
-	return cost;
-}
-
 template <class T>
 vector<idx_t> FunctionOverloads::Candidates(optional_ptr<ClientContext> context, const Identifier &name,
                                             const FunctionSet<T> &functions, const vector<LogicalType> &arguments,

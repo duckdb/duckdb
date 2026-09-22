@@ -34,14 +34,14 @@ MultiFileReaderGlobalState::~MultiFileReaderGlobalState() {
 MultiFileReader::~MultiFileReader() {
 }
 
-unique_ptr<MultiFileReader> MultiFileReader::Create(const TableFunction &table_function) {
+unique_ptr<MultiFileReader> MultiFileReader::Create(const BoundTableFunction &table_function) {
 	unique_ptr<MultiFileReader> res;
 	if (table_function.get_multi_file_reader) {
 		res = table_function.get_multi_file_reader(table_function);
-		res->function_name = table_function.name;
+		res->function_name = table_function.GetName();
 	} else {
 		res = make_uniq<MultiFileReader>();
-		res->function_name = table_function.name;
+		res->function_name = table_function.GetName();
 	}
 	return res;
 }
@@ -85,13 +85,25 @@ Value MultiFileReader::CreateValueFromFileList(const vector<string> &file_list) 
 	return Value::LIST(LogicalType::VARCHAR, std::move(files));
 }
 
-void MultiFileReader::AddParameters(TableFunction &table_function) {
-	table_function.named_parameters["filename"] = LogicalType::ANY;
-	table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["hive_types"] = LogicalType::ANY;
-	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["allow_empty"] = LogicalType::BOOLEAN;
+void MultiFileReader::AddParameters(TableFunction &table_function, MultiFileParameters which) {
+	auto &signature = table_function.GetSignature();
+	signature.AddSeparator();
+	// a function may already declare some of these - e.g. one built on MultiFileFunction, whose constructor declares
+	// them, and which then runs a helper that declares them for the plain table functions that share it
+	auto add = [&](const char *name, const LogicalType &type) {
+		if (signature.GetParameterIndexByName(name).IsValid()) {
+			return;
+		}
+		signature.AddParameter(name, type, Value(type));
+	};
+	if (which == MultiFileParameters::ALL) {
+		add("filename", LogicalType::ANY);
+		add("hive_partitioning", LogicalType::BOOLEAN);
+		add("union_by_name", LogicalType::BOOLEAN);
+		add("hive_types", LogicalType::ANY);
+		add("hive_types_autocast", LogicalType::BOOLEAN);
+	}
+	add("allow_empty", LogicalType::BOOLEAN);
 }
 
 OpenFileInfo MultiFileReader::ParseFileEntry(const Value &input) {
@@ -611,11 +623,11 @@ TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function
 	// the list variant takes ANY as its child type: a file is either a path (VARCHAR) or a STRUCT/VARIANT
 	// holding the path together with the options to open the file with
 	auto list_function = table_function;
-	list_function.GetArguments()[0] = LogicalType::LIST(LogicalType::ANY);
+	list_function.GetSignature().GetParameter(0).SetType(LogicalType::LIST(LogicalType::ANY));
 	function_set.AddFunction(std::move(list_function));
 	// a single file can also be passed as a VARIANT - without this overload it would implicitly cast to VARCHAR
 	// and the stringified variant would be read as a path
-	table_function.GetArguments()[0] = LogicalType::VARIANT();
+	table_function.GetSignature().GetParameter(0).SetType(LogicalType::VARIANT());
 	function_set.AddFunction(std::move(table_function));
 	return function_set;
 }

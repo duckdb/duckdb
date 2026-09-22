@@ -654,8 +654,8 @@ unique_ptr<FunctionData> CCopyFromBind(ClientContext &context, CopyFromFunctionB
 
 	// Turn all options into named parameters
 	for (auto opt : info.info.options) {
-		auto param_it = info.tf.named_parameters.find(Identifier(opt.first));
-		if (param_it == info.tf.named_parameters.end()) {
+		auto param_idx = info.tf.GetSignature().GetParameterIndexByName(Identifier(opt.first));
+		if (!param_idx.IsValid()) {
 			// Option not found in the table function's named parameters
 			throw BinderException("'%s' is not a supported option for copy function '%s'", opt.first.c_str(),
 			                      info.tf.name.c_str());
@@ -724,13 +724,12 @@ void duckdb_copy_function_set_copy_from_function(duckdb_copy_function copy_funct
 	if (!tf_info.bind || !tf_info.init || !tf_info.function) {
 		return;
 	}
-	for (auto it = tf.named_parameters.begin(); it != tf.named_parameters.end(); it++) {
-		if (duckdb::TypeVisitor::Contains(it->second, duckdb::LogicalTypeId::INVALID)) {
-			return;
+	for (auto &param : tf.GetSignature().GetParameters()) {
+		// the bare "*" that closes the positional parameters carries no type of its own
+		if (param.IsVariadic()) {
+			continue;
 		}
-	}
-	for (const auto &argument : tf.GetArguments()) {
-		if (duckdb::TypeVisitor::Contains(argument, duckdb::LogicalTypeId::INVALID)) {
+		if (duckdb::TypeVisitor::Contains(param.GetType(), duckdb::LogicalTypeId::INVALID)) {
 			return;
 		}
 	}

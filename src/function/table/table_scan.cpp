@@ -1155,7 +1155,7 @@ InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput
 }
 
 static void TableScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                               const TableFunction &function) {
+                               const BoundTableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	// the catalog/schema/name are only the innermost qualification - "qualified_name" carries the full (possibly
 	// nested) schema path
@@ -1169,7 +1169,7 @@ static void TableScanSerialize(Serializer &serializer, const optional_ptr<Functi
 	    106, "qualified_name", bind_data.table.schema.GetQualifiedName(bind_data.table.name), QualifiedName());
 }
 
-static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer, TableFunction &function) {
+static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer, BoundTableFunction &function) {
 	auto catalog = deserializer.ReadProperty<Identifier>(100, "catalog");
 	auto schema = deserializer.ReadProperty<Identifier>(101, "schema");
 	auto table = deserializer.ReadProperty<Identifier>(102, "table");

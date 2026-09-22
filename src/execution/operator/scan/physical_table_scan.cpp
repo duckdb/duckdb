@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-PhysicalTableScan::PhysicalTableScan(PhysicalPlan &physical_plan, vector<LogicalType> types, TableFunction function_p,
+PhysicalTableScan::PhysicalTableScan(PhysicalPlan &physical_plan, vector<LogicalType> types, BoundTableFunction function_p,
                                      unique_ptr<FunctionData> bind_data_p, vector<LogicalType> returned_types_p,
                                      vector<ColumnIndex> column_ids_p, vector<idx_t> projection_ids_p,
                                      vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
@@ -267,7 +267,9 @@ OperatorPartitionData PhysicalTableScan::GetPartitionData(ExecutionContext &cont
 }
 
 string PhysicalTableScan::GetName() const {
-	return StringUtil::Upper(function.name + (function.extra_info.empty() ? "" : " " + function.extra_info));
+	auto &extra_info = function.GetExtraInfo();
+	return StringUtil::Upper(function.GetName().GetIdentifierName() +
+	                         (extra_info.empty() ? "" : " " + extra_info));
 }
 
 void AddProjectionNames(const ColumnIndex &index, const string &name, const LogicalType &type, string &result) {
@@ -340,7 +342,7 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 			result[it.first] = it.second;
 		}
 	} else {
-		result["Function"] = StringUtil::Upper(function.name.GetIdentifierName());
+		result["Function"] = StringUtil::Upper(function.GetName().GetIdentifierName());
 	}
 	if (function.projection_pushdown) {
 		string projections;

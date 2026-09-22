@@ -273,6 +273,16 @@ public:
 		return AddParameter(Identifier(name), std::move(type));
 	}
 
+	//! Adds a parameter that can be passed by position, placing it after the parameters that already can be. Lets a
+	//! caller declare positional and keyword-only parameters in any order
+	auto AddPositionalParameter(LogicalType type) -> FunctionSignature & {
+		auto position = GetPositionalParameterCount();
+		auto name = Identifier(StringUtil::Format("col%d", position));
+		parameters.insert(parameters.begin() + NumericCast<int64_t>(position),
+		                  FunctionParameter(std::move(name), std::move(type), FunctionParameterKind::STANDARD));
+		return *this;
+	}
+
 	//! Adds a "*args" parameter, receiving all remaining positional arguments
 	auto AddArgsParameter(Identifier name, LogicalType type) -> FunctionSignature & {
 		parameters.emplace_back(std::move(name), std::move(type), FunctionParameterKind::VAR_POSITIONAL);
@@ -285,10 +295,15 @@ public:
 		return *this;
 	}
 
-	//! Adds a bare "*" separator, so that every parameter added after it is keyword-only. Lets a signature declare
-	//! keyword-only parameters without also accepting a "*args" pack. It is a "*args" that receives nothing, so it
-	//! has no type of its own
+	//! Closes the positional parameters with a bare "*" separator, so that every parameter added after it is
+	//! keyword-only. Lets a signature declare keyword-only parameters without also accepting a "*args" pack - it is a
+	//! "*args" that receives nothing, so it has no type of its own.
+	//! Does nothing when the positional parameters are already closed, by a "*args" or by an earlier separator, so
+	//! that several helpers can each declare options on the same function
 	auto AddSeparator() -> FunctionSignature & {
+		if (GetParameterByKind(FunctionParameterKind::VAR_POSITIONAL)) {
+			return *this;
+		}
 		parameters.emplace_back("*", LogicalType(LogicalTypeId::INVALID), FunctionParameterKind::VAR_POSITIONAL);
 		return *this;
 	}
@@ -457,47 +472,6 @@ public:
 	}
 	const LogicalType &GetReturnType() const {
 		return signature.GetReturnType();
-	}
-};
-
-class SimpleNamedParameterFunction : public Function {
-public:
-	DUCKDB_API SimpleNamedParameterFunction(Identifier name, vector<LogicalType> arguments,
-	                                        LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
-	DUCKDB_API ~SimpleNamedParameterFunction() override;
-
-	//! The set of arguments of the function
-	vector<LogicalType> arguments;
-	//! The type of varargs to support, or LogicalTypeId::INVALID if the function does not accept variable length
-	//! arguments
-	LogicalType varargs;
-
-	//! The named parameters of the function
-	named_parameter_type_map_t named_parameters;
-
-public:
-	DUCKDB_API virtual string ToString() const;
-	DUCKDB_API bool HasNamedParameters() const;
-
-	vector<LogicalType> &GetArguments() {
-		return arguments;
-	}
-	const vector<LogicalType> &GetArguments() const {
-		return arguments;
-	}
-
-	const LogicalType &GetVarArgs() const {
-		return varargs;
-	}
-	LogicalType &GetVarArgs() {
-		return varargs;
-	}
-	// TODO: Dont expose mutable accessor
-	void SetVarArgs(LogicalType varargs_p) {
-		varargs = std::move(varargs_p);
-	}
-	bool HasVarArgs() const {
-		return varargs.id() != LogicalTypeId::INVALID;
 	}
 };
 

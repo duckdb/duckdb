@@ -36,9 +36,6 @@ struct FunctionOverloads {
 	DUCKDB_API static optional_idx Cost(optional_ptr<ClientContext> context, const SimpleFunction &func,
 	                                    const vector<LogicalType> &arguments,
 	                                    const vector<pair<Identifier, LogicalType>> &named_arguments);
-	DUCKDB_API static optional_idx Cost(optional_ptr<ClientContext> context, const SimpleNamedParameterFunction &func,
-	                                    const vector<LogicalType> &arguments,
-	                                    const vector<pair<Identifier, LogicalType>> &);
 
 	//! All overloads that match at the lowest cost. Empty (and error set) if none match.
 	template <class T>

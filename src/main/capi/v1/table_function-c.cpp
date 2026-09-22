@@ -205,7 +205,7 @@ void duckdb_table_function_add_parameter(duckdb_table_function function, duckdb_
 	}
 	auto &tf = GetCTableFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	tf.GetArguments().push_back(*logical_type);
+	tf.GetSignature().AddPositionalParameter(*logical_type);
 }
 
 void duckdb_table_function_add_named_parameter(duckdb_table_function function, const char *name,
@@ -215,7 +215,7 @@ void duckdb_table_function_add_named_parameter(duckdb_table_function function, c
 	}
 	auto &tf = GetCTableFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	tf.named_parameters.insert({name, *logical_type});
+	tf.GetSignature().AddSeparator().AddParameter(name, *logical_type, duckdb::Value(*logical_type));
 }
 
 void duckdb_table_function_set_extra_info(duckdb_table_function function, void *extra_info,
@@ -284,13 +284,12 @@ duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb
 	if (tf.name.empty() || !info.bind || !info.init || !info.function) {
 		return DuckDBError;
 	}
-	for (auto it = tf.named_parameters.begin(); it != tf.named_parameters.end(); it++) {
-		if (duckdb::TypeVisitor::Contains(it->second, duckdb::LogicalTypeId::INVALID)) {
-			return DuckDBError;
+	for (auto &param : tf.GetSignature().GetParameters()) {
+		// the bare "*" that closes the positional parameters carries no type of its own
+		if (param.IsVariadic()) {
+			continue;
 		}
-	}
-	for (const auto &argument : tf.GetArguments()) {
-		if (duckdb::TypeVisitor::Contains(argument, duckdb::LogicalTypeId::INVALID)) {
+		if (duckdb::TypeVisitor::Contains(param.GetType(), duckdb::LogicalTypeId::INVALID)) {
 			return DuckDBError;
 		}
 	}

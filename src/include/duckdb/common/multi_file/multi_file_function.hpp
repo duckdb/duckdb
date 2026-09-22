@@ -91,7 +91,8 @@ struct MultiFileReaderInterface {
 template <class OP>
 class MultiFileFunction : public TableFunction {
 public:
-	explicit MultiFileFunction(Identifier name_p)
+	explicit MultiFileFunction(Identifier name_p,
+	                           MultiFileReader::MultiFileParameters parameters = MultiFileReader::MultiFileParameters::ALL)
 	    : TableFunction(std::move(name_p), {LogicalType::VARCHAR}, MultiFileScan, MultiFileBind, MultiFileInitGlobal,
 	                    MultiFileInitLocal) {
 		cardinality = MultiFileCardinality;
@@ -103,7 +104,7 @@ public:
 		get_partition_info = MultiFileGetPartitionInfo;
 		get_virtual_columns = MultiFileGetVirtualColumns;
 		get_metrics = MultiFileGetMetrics;
-		MultiFileReader::AddParameters(*this);
+		MultiFileReader::AddParameters(*this, parameters);
 	}
 
 	static bool IsEmptyResult(const MultiFileBindData &bind_data) {

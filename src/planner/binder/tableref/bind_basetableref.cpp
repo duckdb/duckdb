@@ -283,8 +283,8 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 			virtual_columns = table.GetVirtualColumns();
 		}
 		auto logical_get =
-		    make_uniq<LogicalGet>(table_index, scan_function, std::move(bind_data), std::move(return_types),
-		                          std::move(return_names), std::move(virtual_columns));
+		    make_uniq<LogicalGet>(table_index, BoundTableFunction(scan_function), std::move(bind_data),
+		                          std::move(return_types), std::move(return_names), std::move(virtual_columns));
 		auto table_entry = logical_get->GetTable();
 		auto &col_ids = logical_get->GetMutableColumnIds();
 		if (!table_entry) {

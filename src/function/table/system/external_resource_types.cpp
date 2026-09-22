@@ -155,12 +155,12 @@ static void ExternalResourceTypesFunction(ClientContext &context, TableFunctionI
 void RegisterExternalResourceTypeFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction fn("register_external_resource_type", {LogicalType::VARCHAR}, RegisterExternalResourceTypeFunction,
 	                 RegisterExternalResourceTypeBind, RegisterExternalResourceTypeInit);
-	fn.named_parameters["kind"] = LogicalType::VARCHAR;
-	fn.named_parameters["create_function"] = LogicalType::VARCHAR;
-	fn.named_parameters["status_function"] = LogicalType::VARCHAR;
-	fn.named_parameters["destroy_function"] = LogicalType::VARCHAR;
-	fn.named_parameters["resolve_function"] = LogicalType::VARCHAR;
-	fn.named_parameters["list_function"] = LogicalType::VARCHAR;
+	fn.GetSignature().AddSeparator().AddParameter("kind", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	fn.GetSignature().AddSeparator().AddParameter("create_function", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	fn.GetSignature().AddSeparator().AddParameter("status_function", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	fn.GetSignature().AddSeparator().AddParameter("destroy_function", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	fn.GetSignature().AddSeparator().AddParameter("resolve_function", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	fn.GetSignature().AddSeparator().AddParameter("list_function", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
 	set.AddFunction(fn);
 }
 

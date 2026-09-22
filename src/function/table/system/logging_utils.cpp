@@ -175,16 +175,17 @@ void EnableLoggingFun::RegisterFunction(BuiltinFunctions &set) {
 	auto enable_fun = TableFunction("enable_logging", {}, EnableLogging, BindEnableLogging, nullptr, nullptr);
 
 	// Base config
-	enable_fun.named_parameters.emplace("level", LogicalType::VARCHAR);
-	enable_fun.named_parameters.emplace("storage", LogicalType::VARCHAR);
-	enable_fun.named_parameters.emplace("storage_config", LogicalType::ANY);
+	// a positional list, so it declares "*args" and no "**kwargs" - an argument named after no parameter is an error
+	enable_fun.GetSignature().AddArgsParameter("args", LogicalType::ANY);
+	enable_fun.GetSignature().AddSeparator().AddParameter("level", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	enable_fun.GetSignature().AddSeparator().AddParameter("storage", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	enable_fun.GetSignature().AddSeparator().AddParameter("storage_config", LogicalType::ANY, Value(LogicalType::ANY));
 
 	// Config that is forwarded to the storage_config struct as syntactic sugar
-	enable_fun.named_parameters.emplace("storage_path", LogicalType::VARCHAR);
-	enable_fun.named_parameters.emplace("storage_normalize", LogicalType::BOOLEAN);
-	enable_fun.named_parameters.emplace("storage_buffer_size", LogicalType::UBIGINT);
+	enable_fun.GetSignature().AddSeparator().AddParameter("storage_path", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	enable_fun.GetSignature().AddSeparator().AddParameter("storage_normalize", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	enable_fun.GetSignature().AddSeparator().AddParameter("storage_buffer_size", LogicalType::UBIGINT, Value(LogicalType::UBIGINT));
 
-	enable_fun.SetVarArgs(LogicalType::ANY);
 	set.AddFunction(enable_fun);
 
 	auto disable_fun = TableFunction("disable_logging", {}, DisableLogging, BindDisableLogging, nullptr, nullptr);

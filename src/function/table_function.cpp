@@ -15,40 +15,69 @@ PartitionStatistics::PartitionStatistics() : row_start(0), count(0), count_type(
 TableFunctionInfo::~TableFunctionInfo() {
 }
 
+BaseTableFunction::BaseTableFunction(table_function_t function_, table_function_bind_t bind,
+                                     table_function_init_global_t init_global,
+                                     table_function_init_local_t init_local)
+    : bind(bind), bind_replace(nullptr), bind_operator(nullptr), init_global(init_global), init_local(init_local),
+      function(function_), in_out_function(nullptr), in_out_function_final(nullptr), statistics(nullptr),
+      statistics_extended(nullptr), dependency(nullptr), cardinality(nullptr), get_metrics(nullptr),
+      pushdown_complex_filter(nullptr), pushdown_expression(nullptr), combine_schema(nullptr), claim_batch(nullptr),
+      finish_batch(nullptr), supports_read_ahead(nullptr), schedule_io(nullptr), to_string(nullptr),
+      table_scan_progress(nullptr), get_partition_data(nullptr), get_bind_info(nullptr),
+      projection_expression_pushdown(nullptr), get_multi_file_reader(nullptr), supports_pushdown_type(nullptr),
+      supports_pushdown_extract(nullptr), is_repeatable(nullptr), get_partition_info(nullptr),
+      get_partition_stats(nullptr), get_virtual_columns(nullptr), get_row_id_columns(nullptr),
+      set_scan_order(nullptr), serialize(nullptr), deserialize(nullptr), projection_pushdown(false),
+      supports_cast_map(false), filter_pushdown(false), filter_prune(false), sampling_pushdown(false),
+      late_materialization(false), return_type(TableFunctionReturnType::TABLE_RETURNING_FUNCTION) {
+}
+
 TableFunction::TableFunction(Identifier name, const vector<LogicalType> &arguments, table_function_t function_,
                              table_function_bind_t bind, table_function_init_global_t init_global,
                              table_function_init_local_t init_local)
-    : SimpleNamedParameterFunction(std::move(name), arguments), bind(bind), bind_replace(nullptr),
-      bind_operator(nullptr), init_global(init_global), init_local(init_local), function(function_),
-      in_out_function(nullptr), in_out_function_final(nullptr), statistics(nullptr), statistics_extended(nullptr),
-      dependency(nullptr), cardinality(nullptr), get_metrics(nullptr), pushdown_complex_filter(nullptr),
-      pushdown_expression(nullptr), combine_schema(nullptr), claim_batch(nullptr), finish_batch(nullptr),
-      supports_read_ahead(nullptr), schedule_io(nullptr), to_string(nullptr), table_scan_progress(nullptr),
-      get_partition_data(nullptr), get_bind_info(nullptr), projection_expression_pushdown(nullptr),
-      get_multi_file_reader(nullptr), supports_pushdown_type(nullptr), supports_pushdown_extract(nullptr),
-      is_repeatable(nullptr), get_partition_info(nullptr), get_partition_stats(nullptr), get_virtual_columns(nullptr),
-      get_row_id_columns(nullptr), set_scan_order(nullptr), serialize(nullptr), deserialize(nullptr),
-      projection_pushdown(false), supports_cast_map(false), filter_pushdown(false), filter_prune(false),
-      sampling_pushdown(false), late_materialization(false),
-      return_type(TableFunctionReturnType::TABLE_RETURNING_FUNCTION) {
+    : BaseTableFunction(function_, bind, init_global, init_local),
+      SimpleFunction(std::move(name), arguments, LogicalType::INVALID) {
 }
 
-TableFunction::TableFunction(Identifier name, const vector<LogicalType> &arguments, std::nullptr_t function_,
+TableFunction::TableFunction(Identifier name, const vector<LogicalType> &arguments, std::nullptr_t,
                              table_function_bind_t bind, table_function_init_global_t init_global,
                              table_function_init_local_t init_local)
-    : SimpleNamedParameterFunction(std::move(name), arguments), bind(bind), bind_replace(nullptr),
-      bind_operator(nullptr), init_global(init_global), init_local(init_local), function(nullptr),
-      in_out_function(nullptr), in_out_function_final(nullptr), statistics(nullptr), statistics_extended(nullptr),
-      dependency(nullptr), cardinality(nullptr), get_metrics(nullptr), pushdown_complex_filter(nullptr),
-      pushdown_expression(nullptr), combine_schema(nullptr), claim_batch(nullptr), finish_batch(nullptr),
-      supports_read_ahead(nullptr), schedule_io(nullptr), to_string(nullptr), table_scan_progress(nullptr),
-      get_partition_data(nullptr), get_bind_info(nullptr), projection_expression_pushdown(nullptr),
-      get_multi_file_reader(nullptr), supports_pushdown_type(nullptr), supports_pushdown_extract(nullptr),
-      is_repeatable(nullptr), get_partition_info(nullptr), get_partition_stats(nullptr), get_virtual_columns(nullptr),
-      get_row_id_columns(nullptr), set_scan_order(nullptr), serialize(nullptr), deserialize(nullptr),
-      projection_pushdown(false), supports_cast_map(false), filter_pushdown(false), filter_prune(false),
-      sampling_pushdown(false), late_materialization(false),
-      return_type(TableFunctionReturnType::TABLE_RETURNING_FUNCTION) {
+    : BaseTableFunction(nullptr, bind, init_global, init_local),
+      SimpleFunction(std::move(name), arguments, LogicalType::INVALID) {
+}
+
+BoundTableFunction::BoundTableFunction() : BaseTableFunction(nullptr, nullptr, nullptr, nullptr) {
+}
+
+BoundTableFunction::BoundTableFunction(const TableFunction &function)
+    // the function does not come from a function set - copy it into a definition of its own
+    : BoundTableFunction(make_shared_ptr<const TableFunction>(function)) {
+}
+
+BoundTableFunction::BoundTableFunction(shared_ptr<const TableFunction> function_p)
+    // only the behaviour is copied - the definition keeps the declaration
+    : BaseTableFunction(*function_p) {
+	definition = std::move(function_p);
+	auto &function = *definition;
+	qualified_name = function.GetQualifiedName();
+	extra_info = function.extra_info;
+
+	// the parameters a call fills by position - these are the types plan serialization records, so the named
+	// options that follow them take no part
+	auto &signature = function.GetSignature();
+	for (idx_t i = 0; i < signature.GetPositionalParameterCount(); i++) {
+		arguments.push_back(signature.GetParameter(i).GetType());
+	}
+	positional_arguments = arguments.size();
+}
+
+bool BoundTableFunction::operator==(const BoundTableFunction &rhs) const {
+	return GetQualifiedName() == rhs.GetQualifiedName() && GetArguments() == rhs.GetArguments() &&
+	       BaseTableFunction::operator==(rhs);
+}
+
+bool BoundTableFunction::operator!=(const BoundTableFunction &rhs) const {
+	return !(*this == rhs);
 }
 
 TableFunction::TableFunction(const vector<LogicalType> &arguments, table_function_t function_,
@@ -65,8 +94,8 @@ TableFunction::TableFunction(const vector<LogicalType> &arguments, std::nullptr_
 TableFunction::TableFunction() : TableFunction("", {}, nullptr, nullptr, nullptr, nullptr) {
 }
 
-bool TableFunction::operator==(const TableFunction &rhs) const {
-	return name == rhs.name && arguments == rhs.GetArguments() && varargs == rhs.GetVarArgs() && bind == rhs.bind &&
+bool BaseTableFunction::operator==(const BaseTableFunction &rhs) const {
+	return bind == rhs.bind &&
 	       bind_replace == rhs.bind_replace && bind_operator == rhs.bind_operator && init_global == rhs.init_global &&
 	       init_local == rhs.init_local && function == rhs.function && in_out_function == rhs.in_out_function &&
 	       in_out_function_final == rhs.in_out_function_final && statistics == rhs.statistics &&
@@ -86,27 +115,18 @@ bool TableFunction::operator==(const TableFunction &rhs) const {
 	       global_initialization == rhs.global_initialization;
 }
 
+bool TableFunction::operator==(const TableFunction &rhs) const {
+	return name == rhs.name && GetSignature() == rhs.GetSignature() && BaseTableFunction::operator==(rhs);
+}
+
 bool TableFunction::operator!=(const TableFunction &rhs) const {
 	return !(*this == rhs);
 }
 
+//! Overload sets are deduplicated on this - two overloads are the same when they accept the same call, which is what
+//! comparing the signatures by parameter type and kind says
 bool TableFunction::Equal(const TableFunction &rhs) const {
-	// number of types
-	if (this->GetArguments().size() != rhs.GetArguments().size()) {
-		return false;
-	}
-	// argument types
-	for (idx_t i = 0; i < this->GetArguments().size(); ++i) {
-		if (this->GetArguments()[i] != rhs.GetArguments()[i]) {
-			return false;
-		}
-	}
-	// varargs
-	if (this->GetVarArgs() != rhs.GetVarArgs()) {
-		return false;
-	}
-
-	return true; // they are equal
+	return GetSignature().Equal(rhs.GetSignature());
 }
 
 bool TableFunctionInput::HandleBlocked(AsyncResult &blocked_result) {

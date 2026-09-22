@@ -364,12 +364,12 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 void CreateExternalResourceFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction fn("create_external_resource", {LogicalType::VARCHAR}, CreateExternalResourceFunction,
 	                 CreateExternalResourceBind, CreateExternalResourceInit);
-	fn.named_parameters["params"] = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
-	fn.named_parameters["resource_name"] = LogicalType::VARCHAR;
-	fn.named_parameters["handle"] = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
-	fn.named_parameters["teardown_on_failure"] = LogicalType::BOOLEAN;
-	fn.named_parameters["timeout_seconds"] = LogicalType::BIGINT;
-	fn.named_parameters["poll_interval_seconds"] = LogicalType::BIGINT;
+	fn.GetSignature().AddSeparator().AddParameter("params", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR), Value(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)));
+	fn.GetSignature().AddSeparator().AddParameter("resource_name", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	fn.GetSignature().AddSeparator().AddParameter("handle", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR), Value(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)));
+	fn.GetSignature().AddSeparator().AddParameter("teardown_on_failure", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	fn.GetSignature().AddSeparator().AddParameter("timeout_seconds", LogicalType::BIGINT, Value(LogicalType::BIGINT));
+	fn.GetSignature().AddSeparator().AddParameter("poll_interval_seconds", LogicalType::BIGINT, Value(LogicalType::BIGINT));
 	set.AddFunction(fn);
 }
 

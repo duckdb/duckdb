@@ -108,22 +108,6 @@ string SimpleFunction::ToString() const {
 	return SQLIdentifier::ToString(name.GetIdentifierName()) + signature.ToString();
 }
 
-SimpleNamedParameterFunction::SimpleNamedParameterFunction(Identifier name_p, vector<LogicalType> arguments_p,
-                                                           LogicalType varargs_p)
-    : Function(std::move(name_p)), arguments(std::move(arguments_p)), varargs(std::move(varargs_p)) {
-}
-
-SimpleNamedParameterFunction::~SimpleNamedParameterFunction() {
-}
-
-string SimpleNamedParameterFunction::ToString() const {
-	return Function::CallToString(GetCatalogName(), GetSchemaName(), name, arguments, named_parameters);
-}
-
-bool SimpleNamedParameterFunction::HasNamedParameters() const {
-	return !named_parameters.empty();
-}
-
 // add your initializer for new functions here
 void BuiltinFunctions::Initialize() {
 	RegisterTableScanFunctions();

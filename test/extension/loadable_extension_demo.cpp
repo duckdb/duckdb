@@ -133,7 +133,7 @@ class QuackFunction : public TableFunction {
 public:
 	QuackFunction() {
 		name = "quack";
-		arguments.push_back(LogicalType::BIGINT);
+		GetSignature().AddParameter(LogicalType::BIGINT);
 		bind = QuackBind;
 		init_global = QuackInit;
 		function = QuackFunc;
