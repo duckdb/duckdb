@@ -658,30 +658,115 @@ static bool RequiresCollationPropagation(const LogicalType &type) {
 	return type.id() == LogicalTypeId::VARCHAR && !type.HasAlias();
 }
 
+struct FunctionCollations {
+	string collation;
+	identifier_map_t<unique_ptr<FunctionCollations>> fields;
+
+	FunctionCollations &GetField(const Identifier &name) {
+		auto &field = fields[name];
+		if (!field) {
+			field = make_uniq<FunctionCollations>();
+		}
+		return *field;
+	}
+};
+
+static Identifier CollationFieldName(const LogicalType &type, idx_t index) {
+	return StructType::IsUnnamed(type) ? Identifier(to_string(index)) : StructType::GetChildName(type, index);
+}
+
 //! Recursively extracts the collation of a (possibly nested) type, e.g. the element collation of a LIST(VARCHAR).
-static string ExtractCollationFromType(const LogicalType &type) {
-	switch (type.id()) {
-	case LogicalTypeId::VARCHAR:
-		return RequiresCollationPropagation(type) ? StringType::GetCollation(type) : string();
+//! target is the resolved argument type and may include fields from other arguments.
+static void ExtractCollationFromType(const LogicalType &source_type, const LogicalType &target,
+                                     FunctionCollations &collations) {
+	// Leave collation of aliased types to their registered callbacks.
+	if (source_type.HasAlias() || target.HasAlias()) {
+		return;
+	}
+	switch (source_type.id()) {
+	case LogicalTypeId::VARCHAR: {
+		auto collation = StringType::GetCollation(source_type);
+		if (collations.collation.empty()) {
+			collations.collation = std::move(collation);
+		} else if (!collation.empty() && collations.collation != collation) {
+			throw BinderException("Cannot combine types with different collation");
+		}
+		break;
+	}
 	case LogicalTypeId::LIST:
-		return ExtractCollationFromType(ListType::GetChildType(type));
-	case LogicalTypeId::ARRAY:
-		return ExtractCollationFromType(ArrayType::GetChildType(type));
+	case LogicalTypeId::ARRAY: {
+		auto &source_child = source_type.id() == LogicalTypeId::LIST ? ListType::GetChildType(source_type)
+		                                                             : ArrayType::GetChildType(source_type);
+		auto &target_child = target.id() == LogicalTypeId::LIST    ? ListType::GetChildType(target)
+		                     : target.id() == LogicalTypeId::ARRAY ? ArrayType::GetChildType(target)
+		                                                           : source_child;
+		ExtractCollationFromType(source_child, target_child, collations);
+		break;
+	}
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
+		auto &target_type = StructType::IsStruct(target) && target.AuxInfo() ? target : source_type;
+		auto &source_children = StructType::GetChildTypes(source_type);
+		auto &target_children = StructType::GetChildTypes(target_type);
+
+		// If BOTH source and target_type are named, we can use named indexing, else we use positional.
+		if (!StructType::IsUnnamed(source_type) && !StructType::IsUnnamed(target_type)) {
+			// Named indexing, so build a map to map source fields to their position
+			identifier_map_t<idx_t> src_child_indices;
+			for (idx_t i = 0; i < source_children.size(); i++) {
+				src_child_indices.emplace(source_children[i].first, i);
+			}
+
+			for (idx_t i = 0; i < target_children.size(); i++) {
+				// Find index in the source fields, or skip if non existent.
+				auto entry = src_child_indices.find(target_children[i].first);
+				if (entry == src_child_indices.end()) {
+					continue;
+				}
+				const auto child_index = entry->second;
+				auto &field = collations.GetField(CollationFieldName(target_type, i));
+				ExtractCollationFromType(source_children[child_index].second, target_children[i].second, field);
+			}
+		} else {
+			// Use positional indexing, as not both source_type and target_type are named.
+			for (idx_t i = 0; i < MinValue(target_children.size(), source_children.size()); i++) {
+				auto &field = collations.GetField(CollationFieldName(target_type, i));
+				ExtractCollationFromType(source_children[i].second, target_children[i].second, field);
+			}
+		}
+		break;
+	}
 	default:
-		return string();
+		break;
 	}
 }
 
-//! Returns a copy of the type with the collation applied to every (nested) VARCHAR leaf.
-static LogicalType ApplyCollationToType(const LogicalType &type, const LogicalType &collation_type) {
+//! Returns a copy of the type with the collected collations applied to its VARCHAR fields.
+static LogicalType ApplyCollationToType(const LogicalType &type, const FunctionCollations &collations) {
+	// Rebuilding an aliased type would discard its alias and bypass its collation callbacks
+	if (type.HasAlias()) {
+		return type;
+	}
 	switch (type.id()) {
 	case LogicalTypeId::VARCHAR:
-		return RequiresCollationPropagation(type) ? collation_type : type;
+		return collations.collation.empty() ? type : LogicalType::VARCHAR_COLLATION(collations.collation);
 	case LogicalTypeId::LIST:
-		return LogicalType::LIST(ApplyCollationToType(ListType::GetChildType(type), collation_type));
+		return LogicalType::LIST(ApplyCollationToType(ListType::GetChildType(type), collations));
 	case LogicalTypeId::ARRAY:
-		return LogicalType::ARRAY(ApplyCollationToType(ArrayType::GetChildType(type), collation_type),
+		return LogicalType::ARRAY(ApplyCollationToType(ArrayType::GetChildType(type), collations),
 		                          ArrayType::GetSize(type));
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
+		auto children = StructType::GetChildTypes(type);
+		for (idx_t i = 0; i < children.size(); i++) {
+			auto entry = collations.fields.find(CollationFieldName(type, i));
+			if (entry != collations.fields.end()) {
+				children[i].second = ApplyCollationToType(children[i].second, *entry->second);
+			}
+		}
+		return StructType::IsUnnamed(type) ? LogicalType::TUPLE(std::move(children))
+		                                   : LogicalType::STRUCT(std::move(children));
+	}
 	default:
 		return type;
 	}
@@ -695,20 +780,6 @@ static string ExtractCollation(const vector<unique_ptr<Expression>> &children) {
 			continue;
 		}
 		auto child_collation = StringType::GetCollation(arg->GetReturnType());
-		if (collation.empty()) {
-			collation = child_collation;
-		} else if (!child_collation.empty() && collation != child_collation) {
-			throw BinderException("Cannot combine types with different collation!");
-		}
-	}
-	return collation;
-}
-
-//! Like ExtractCollation, but also considers the collation of nested (LIST/ARRAY) VARCHAR elements.
-static string ExtractNestedCollation(const vector<unique_ptr<Expression>> &children) {
-	string collation;
-	for (auto &arg : children) {
-		auto child_collation = ExtractCollationFromType(arg->GetReturnType());
 		if (collation.empty()) {
 			collation = child_collation;
 		} else if (!child_collation.empty() && collation != child_collation) {
@@ -736,26 +807,38 @@ static void PropagateCollations(ClientContext &, BoundSimpleFunction &bound_func
 
 static void PushCollations(ClientContext &context, BoundSimpleFunction &bound_function,
                            vector<unique_ptr<Expression>> &children, CollationType type) {
-	auto collation = ExtractNestedCollation(children);
-	if (collation.empty()) {
+	FunctionCollations collations;
+	auto &argument_types = bound_function.GetArguments();
+	for (idx_t i = 0; i < children.size(); i++) {
+		auto &source_type = children[i]->GetReturnType();
+		auto &target_type = argument_types[i].IsComplete() ? argument_types[i] : source_type;
+		ExtractCollationFromType(source_type, target_type, collations);
+	}
+	if (collations.collation.empty() && collations.fields.empty()) {
 		// no collation to push
 		return;
 	}
 	// push collation into the return type if required
-	auto collation_type = LogicalType::VARCHAR_COLLATION(std::move(collation));
-	if (RequiresCollationPropagation(bound_function.GetReturnType())) {
-		bound_function.SetReturnType(collation_type);
+	if (!collations.collation.empty() && RequiresCollationPropagation(bound_function.GetReturnType())) {
+		bound_function.SetReturnType(LogicalType::VARCHAR_COLLATION(collations.collation));
 	}
 	// push collations to the children
-	for (auto &arg : children) {
-		// apply the collation to the (possibly nested) varchar leaves of the argument type
-		auto collated_type = ApplyCollationToType(arg->GetReturnType(), collation_type);
+	for (idx_t i = 0; i < children.size(); i++) {
+		auto &arg = children[i];
+		auto &arg_type = argument_types[i];
+		auto &target_type = arg_type.IsComplete() ? arg_type : arg->GetReturnType();
+		// apply the collations to the (possibly nested) varchar leaves of the argument type
+		auto collated_type = ApplyCollationToType(target_type, collations);
+		arg = BoundCastExpression::AddCastToType(context, std::move(arg), collated_type);
 		if (RequiresCollationPropagation(arg->GetReturnType())) {
 			// if this is a varchar type - propagate the collation
-			arg->SetReturnType(collation_type);
+			arg->SetReturnType(collated_type);
 		}
 		// now push the actual collation handling
-		ExpressionBinder::PushCollation(context, arg, collated_type, type);
+		if (ExpressionBinder::PushCollation(context, arg, collated_type, type)) {
+			// Normalization can change field types, so do not cast back to the original argument type.
+			arg_type = arg->GetReturnType();
+		}
 	}
 }
 

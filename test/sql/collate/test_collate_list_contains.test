@@ -182,3 +182,65 @@ query I
 SELECT list_contains([{'x': 'A' COLLATE NOCASE, 'y': 'e' COLLATE NOACCENT}], {'x': 'a', 'y': 'é'})
 ----
 true
+
+# Collations on different fields can come from different arguments.
+query I
+SELECT list_contains([{'x': 'HELLO' COLLATE NOCASE, 'y': 'é'}], {'x': 'hello', 'y': 'e' COLLATE NOACCENT})
+----
+true
+
+query I
+SELECT list_position([{'x': 'hello', 'y': 'e' COLLATE NOACCENT}], {'x': 'HELLO' COLLATE NOCASE, 'y': 'é'})
+----
+1
+
+# Field names, rather than their order, determine which collations apply.
+query I
+SELECT list_contains([{'x': 'HELLO', 'y': 'é'}], {'y': 'e' COLLATE NOACCENT, 'x': 'hello' COLLATE NOCASE})
+----
+true
+
+# Tuple fields retain separate collations too.
+query I
+SELECT list_contains([('HELLO', 'é')], ('hello' COLLATE NOCASE, 'e' COLLATE NOACCENT))
+----
+true
+
+# Fixed-size arrays use the same comparison as lists.
+query I
+SELECT list_contains([{'x': 'HELLO'}]::STRUCT(x VARCHAR)[1], {'x': 'hello' COLLATE NOCASE})
+----
+true
+
+# Normalization can change a field's type before list search.
+query I
+SELECT list_position([{'x': '10:00:00+00'::TIMETZ}], {'x': '10:00:00+00'::TIMETZ})
+----
+1
+
+# A NULL tuple must still match a NULL element after collation is applied.
+query I
+SELECT list_position([('hello' COLLATE NOCASE, 1), NULL], NULL)
+----
+2
+
+# Constructing values is allowed; comparing conflicting collations is not.
+query I
+SELECT len([{'x': 'hello' COLLATE NOCASE}, {'x': 'hello' COLLATE NOACCENT}])
+----
+2
+
+statement error
+SELECT list_contains([{'x': 'hello' COLLATE NOCASE}], {'x': 'hello' COLLATE NOACCENT})
+----
+Cannot combine types with different collation
+
+statement error
+SELECT list_position([{'x': 'hello' COLLATE NOACCENT}], {'x': 'hello' COLLATE NOCASE})
+----
+Cannot combine types with different collation
+
+statement error
+SELECT list_contains([{'x': ['hello' COLLATE NOCASE]}], {'x': ['hello' COLLATE NOACCENT]})
+----
+Cannot combine types with different collation
