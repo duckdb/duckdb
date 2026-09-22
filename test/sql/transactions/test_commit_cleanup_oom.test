@@ -6,6 +6,13 @@ require no_alternative_verify
 
 require skip_reload
 
+require no_force_storage
+
+require vector_size 2048
+
+statement ok
+SET debug_skip_checkpoint_on_commit = true;
+
 statement ok
 SET preserve_insertion_order = false;
 
