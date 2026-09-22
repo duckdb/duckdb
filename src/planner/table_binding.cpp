@@ -280,8 +280,10 @@ unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const Identifie
 	// Get a copy of the generated column
 	auto expression = table_entry.GetColumn(LogicalIndex(column_index)).GeneratedExpression().Copy();
 	unordered_map<idx_t, Identifier> alias_map;
-	for (auto &entry : name_map) {
-		alias_map[entry.second] = entry.first;
+	for (idx_t i = 0; i < names.size(); i++) {
+		// the name map holds one entry per name, so a column shadowed by an earlier column with
+		// the same name is missing from it - take the names positionally instead
+		alias_map[i] = names[i];
 	}
 	ReplaceAliases(*expression, table_entry.GetColumns(), alias_map);
 	BakeTableName(*expression, alias);

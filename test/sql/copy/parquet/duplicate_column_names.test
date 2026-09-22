@@ -14,7 +14,11 @@ x
 y
 
 # the reader renames the second one, so the schema it reports is not the schema of the file
-# SHOULD: x, x, y - the names the file actually carries, with the second x reachable by position
+# SHOULD: x, x, y - the names the file actually carries, with the second x reachable by position.
+# Dropping the rename is not enough on its own: MultiFileColumnMapper maps global columns to
+# columns of the file by name (NameMapper, mapping mode BY_NAME), so two columns called x both
+# map to the first one and the second column reads the wrong data. The mapper needs to match
+# the nth occurrence of a name against the nth occurrence in the file first.
 query II
 SELECT column_name, column_type FROM (DESCRIBE FROM 'test/sql/copy/parquet/duplicate_column_names.parquet');
 ----

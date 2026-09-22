@@ -13,35 +13,51 @@ x
 x
 
 # ---------------------------------------------------------------------------
-# a CTE still renames them
-# SHOULD: x, x - a CTE is a derived table by another name
+# a CTE keeps them too
 # ---------------------------------------------------------------------------
 
 query I
 SELECT column_name FROM (DESCRIBE WITH c AS (SELECT 1 AS x, 2 AS x) SELECT * FROM c);
 ----
 x
-x_1
+x
 
 query I
 SELECT column_name FROM (DESCRIBE WITH c(x, x) AS (SELECT 1, 2) SELECT * FROM c);
 ----
 x
-x_1
+x
+
+query II
+WITH c AS (SELECT 1 AS x, 2 AS x) SELECT * FROM c;
+----
+1	2
 
 # ---------------------------------------------------------------------------
 # a column alias list on a base table still renames
-# SHOULD: x, x - PostgreSQL accepts a repeated name in a column alias list
+# SHOULD: x, x - PostgreSQL accepts a repeated name in a column alias list. Keeping the
+# duplicates here needs the qualification path to honour a resolved index first: the alias list
+# can rename a generated column onto the name of the column its expression reads, and expanding
+# it then resolves that name back to the generated column itself - see
+# test/fuzzer/pedro/gcol_stack_overflow.test
 # ---------------------------------------------------------------------------
 
 statement ok
 CREATE TABLE base_two(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO base_two VALUES (7, 8);
 
 query I
 SELECT column_name FROM (DESCRIBE SELECT * FROM base_two t(x, x));
 ----
 x
 x_1
+
+query II
+SELECT * FROM base_two t(x, x);
+----
+7	8
 
 # ---------------------------------------------------------------------------
 # the catalog cannot hold duplicate names, so these must keep renaming
