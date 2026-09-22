@@ -4,6 +4,8 @@
 #include "duckdb/common/enum_util.hpp"
 #include "parquet_reader.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 namespace duckdb {
 
@@ -20,6 +22,19 @@ struct ReadSingleParquetFileData : public TableFunctionData {
 	shared_ptr<ParquetFileMetadataCache> metadata;
 	//! The number of rows of the file, if it was read during binding
 	optional_idx cardinality;
+	//! The expressions the reader evaluates on columns instead of reading them (e.g. their length for strlen)
+	unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions;
+
+	//! Read the given column as the result of an expression on it - the column then has the type of that result
+	void AddProjectionExpression(idx_t column_idx, const ParquetReaderProjectionExpression &expression) {
+		projection_expressions[column_idx] = expression;
+		if (column_idx < parquet_types.size()) {
+			parquet_types[column_idx] = expression.return_type;
+		}
+		if (column_idx < columns.size()) {
+			columns[column_idx].type = expression.return_type;
+		}
+	}
 
 	//! The reader the bind opened for this file, handed to the first scan of this bind data so that the file does
 	//! not have to be opened again. Only set when the bind data is used to read the file
@@ -115,6 +130,18 @@ static unique_ptr<FunctionData> ReadSingleParquetFileBind(ClientContext &context
 	result->cardinality = reader->NumRows();
 	result->parquet_names = names;
 	result->parquet_types = return_types;
+	if (file_input.expected_bind_data) {
+		// expressions pushed into the scan after the schema was bound are read from this file in the same way
+		auto &expected = file_input.expected_bind_data->Cast<ReadSingleParquetFileData>();
+		if (expected.file.path == result->file.path) {
+			for (auto &entry : expected.projection_expressions) {
+				result->AddProjectionExpression(entry.first, entry.second);
+				if (entry.first < return_types.size()) {
+					return_types[entry.first] = entry.second.return_type;
+				}
+			}
+		}
+	}
 	if (!file_input.schema_only) {
 		// this file is read with this bind data - keep the reader so the scan does not open the file a second time
 		result->SetBindReader(std::move(reader));
@@ -144,6 +171,17 @@ static unique_ptr<GlobalTableFunctionState> ReadSingleParquetFileInitGlobal(Clie
 		    make_shared_ptr<ParquetReader>(context, parquet_data.file, parquet_data.options, parquet_data.metadata);
 	}
 	auto &reader = *result->reader;
+	for (auto &entry : parquet_data.projection_expressions) {
+		// the reader may have been opened before these expressions were pushed into the scan
+		auto column_idx = entry.first;
+		reader.projection_expressions[column_idx] = entry.second;
+		if (column_idx < reader.columns.size()) {
+			reader.columns[column_idx].type = entry.second.return_type;
+		}
+		if (column_idx < reader.root_schema->children.size()) {
+			reader.root_schema->children[column_idx].type = entry.second.return_type;
+		}
+	}
 	auto virtual_column_types = ReadSingleParquetFileVirtualColumns(context, nullptr);
 	// perform projection pushdown - the reader emits the columns in the order they are requested
 	vector<ColumnIndex> column_indexes;
@@ -365,15 +403,6 @@ ReadSingleParquetFileStatistics(ClientContext &context, const FunctionData *bind
 	                                     parquet_data.parquet_names[column_index]);
 }
 
-//! The columns that identify a row of a parquet scan
-static vector<column_t> ReadSingleParquetFileRowIdColumns(ClientContext &context,
-                                                          optional_ptr<FunctionData> bind_data) {
-	vector<column_t> result;
-	result.emplace_back(MultiFileReader::COLUMN_IDENTIFIER_FILE_INDEX);
-	result.emplace_back(MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER);
-	return result;
-}
-
 //! The row groups read from this file. The counts accumulate, so that a scan over several files reports their sum
 static void ReadSingleParquetFileGetMetrics(TableFunctionGetMetricsInput &input) {
 	if (!input.global_state) {
@@ -397,6 +426,86 @@ static vector<PartitionStatistics> ReadSingleParquetFilePartitionStats(ClientCon
 	// the row groups carry the statistics of their columns, which lets e.g. min/max be answered from the metadata
 	parquet_data.GetMetadataReader(context).GetPartitionStats(result);
 	return result;
+}
+
+bool ParquetScanFunction::ProjectionExpressionPushdown(ClientContext &context,
+                                                       const TableFunctionProjectionExpressionInput &input) {
+	if (input.expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	const auto &fn = input.expr.Cast<BoundFunctionExpression>();
+	if (const Identifier &name = fn.Function().GetName(); name != "strlen" && name != "octet_length") {
+		return false;
+	}
+	auto &bind_data = input.get.bind_data->CastNoConst<MultiFileBindData>();
+	// Don't do pushdown on custom schema users like Ducklake, or when the schemas of several files are unified
+	if (!bind_data.reader_bind.schema.empty() || !bind_data.union_readers.empty()) {
+		return false;
+	}
+	// Don't do pushdown with multiple files - the metadata of all but the first file is not available upfront, and
+	// the files may have their columns in a different order
+	if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES || !bind_data.initial_reader) {
+		return false;
+	}
+	const auto &column_id = input.get.GetColumnIds()[input.column_index];
+	// Pushdown extract columns i.e. SELECT x.y.z have a complex nested type update
+	if (column_id.IsPushdownExtract()) {
+		return false;
+	}
+	const idx_t idx = column_id.GetPrimaryIndex();
+	// Don't do pushdown of strlen to hive and filename columns
+	for (const auto &partition : bind_data.reader_bind.hive_partitioning_indexes) {
+		if (partition.index == idx) {
+			return false;
+		}
+	}
+	if (bind_data.reader_bind.filename_idx.IsValid() && bind_data.reader_bind.filename_idx.GetIndex() == idx) {
+		return false;
+	}
+	// We run scalar function pushdown after filter pushdown - a filter pushed into the scan needs the column itself
+	if (input.get.table_filters.HasFilter(input.column_index)) {
+		return false;
+	}
+	auto &reader = bind_data.initial_reader->Cast<TableFunctionFileReader>();
+	if (!reader.bind_data) {
+		return false;
+	}
+	auto &parquet_data = reader.bind_data->Cast<ReadSingleParquetFileData>();
+	auto &metadata_reader = parquet_data.GetMetadataReader(context);
+	auto &children = metadata_reader.root_schema->children;
+	if (idx >= children.size() || idx >= bind_data.types.size() || idx >= reader.types.size()) {
+		return false;
+	}
+	const idx_t column_flat_idx = children[idx].column_index;
+	for (const auto &group : metadata_reader.GetFileMetadata()->row_groups) {
+		D_ASSERT(column_flat_idx < group.columns.size());
+		for (const Encoding::type type : group.columns[column_flat_idx].meta_data.encodings) {
+			if (type == duckdb_parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY) {
+				return false;
+			}
+		}
+	}
+
+	const LogicalType type = LogicalType::BIGINT;
+	const ParquetReaderProjectionExpression expression {ParquetReaderProjectionExpressionType::BYTE_LENGTH, type};
+	// the file is read with this bind data, and every other bind of it takes the expression from here
+	parquet_data.AddProjectionExpression(idx, expression);
+	bind_data.types[idx] = type;
+	bind_data.columns[idx].type = type;
+	// the reader of the file was bound before the expression was pushed down - update its types
+	reader.types[idx] = type;
+	if (idx < reader.columns.size()) {
+		reader.columns[idx].type = type;
+	}
+	auto &data = bind_data.bind_data->Cast<TableFunctionMultiFileData>();
+	if (idx < data.options.expected_types.size()) {
+		data.options.expected_types[idx] = type;
+	}
+	return true;
+}
+
+const ParquetOptions &ParquetScanFunction::GetFileOptions(const FunctionData &file_bind_data) {
+	return file_bind_data.Cast<ReadSingleParquetFileData>().options;
 }
 
 TableFunction ParquetScanFunction::GetSingleFileFunction() {

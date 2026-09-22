@@ -120,6 +120,11 @@ public:
 	static void AddNamedParameters(TableFunction &table_function);
 	//! The multi-file parquet reader, built by wrapping the single-file reader above
 	static TableFunction GetMultiFileFunction(Identifier name);
+	//! Push strlen/octet_length on a column into the multi-file parquet reader of a single file
+	static bool ProjectionExpressionPushdown(ClientContext &context,
+	                                         const TableFunctionProjectionExpressionInput &input);
+	//! The options a file is read with, given the bind data of the single-file reader for it
+	static const ParquetOptions &GetFileOptions(const FunctionData &file_bind_data);
 };
 
 } // namespace duckdb
