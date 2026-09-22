@@ -682,7 +682,6 @@ private:
 	shared_ptr<const TableFunction> definition;
 
 public:
-
 	DUCKDB_API bool operator==(const BoundTableFunction &rhs) const;
 	DUCKDB_API bool operator!=(const BoundTableFunction &rhs) const;
 };

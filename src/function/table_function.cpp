@@ -16,8 +16,7 @@ TableFunctionInfo::~TableFunctionInfo() {
 }
 
 BaseTableFunction::BaseTableFunction(table_function_t function_, table_function_bind_t bind,
-                                     table_function_init_global_t init_global,
-                                     table_function_init_local_t init_local)
+                                     table_function_init_global_t init_global, table_function_init_local_t init_local)
     : bind(bind), bind_replace(nullptr), bind_operator(nullptr), init_global(init_global), init_local(init_local),
       function(function_), in_out_function(nullptr), in_out_function_final(nullptr), statistics(nullptr),
       statistics_extended(nullptr), dependency(nullptr), cardinality(nullptr), get_metrics(nullptr),
@@ -26,10 +25,10 @@ BaseTableFunction::BaseTableFunction(table_function_t function_, table_function_
       table_scan_progress(nullptr), get_partition_data(nullptr), get_bind_info(nullptr),
       projection_expression_pushdown(nullptr), get_multi_file_reader(nullptr), supports_pushdown_type(nullptr),
       supports_pushdown_extract(nullptr), is_repeatable(nullptr), get_partition_info(nullptr),
-      get_partition_stats(nullptr), get_virtual_columns(nullptr), get_row_id_columns(nullptr),
-      set_scan_order(nullptr), serialize(nullptr), deserialize(nullptr), projection_pushdown(false),
-      supports_cast_map(false), filter_pushdown(false), filter_prune(false), sampling_pushdown(false),
-      late_materialization(false), return_type(TableFunctionReturnType::TABLE_RETURNING_FUNCTION) {
+      get_partition_stats(nullptr), get_virtual_columns(nullptr), get_row_id_columns(nullptr), set_scan_order(nullptr),
+      serialize(nullptr), deserialize(nullptr), projection_pushdown(false), supports_cast_map(false),
+      filter_pushdown(false), filter_prune(false), sampling_pushdown(false), late_materialization(false),
+      return_type(TableFunctionReturnType::TABLE_RETURNING_FUNCTION) {
 }
 
 TableFunction::TableFunction(Identifier name, const vector<LogicalType> &arguments, table_function_t function_,
@@ -95,11 +94,10 @@ TableFunction::TableFunction() : TableFunction("", {}, nullptr, nullptr, nullptr
 }
 
 bool BaseTableFunction::operator==(const BaseTableFunction &rhs) const {
-	return bind == rhs.bind &&
-	       bind_replace == rhs.bind_replace && bind_operator == rhs.bind_operator && init_global == rhs.init_global &&
-	       init_local == rhs.init_local && function == rhs.function && in_out_function == rhs.in_out_function &&
-	       in_out_function_final == rhs.in_out_function_final && statistics == rhs.statistics &&
-	       dependency == rhs.dependency && cardinality == rhs.cardinality &&
+	return bind == rhs.bind && bind_replace == rhs.bind_replace && bind_operator == rhs.bind_operator &&
+	       init_global == rhs.init_global && init_local == rhs.init_local && function == rhs.function &&
+	       in_out_function == rhs.in_out_function && in_out_function_final == rhs.in_out_function_final &&
+	       statistics == rhs.statistics && dependency == rhs.dependency && cardinality == rhs.cardinality &&
 	       pushdown_complex_filter == rhs.pushdown_complex_filter && pushdown_expression == rhs.pushdown_expression &&
 	       to_string == rhs.to_string && table_scan_progress == rhs.table_scan_progress &&
 	       get_partition_data == rhs.get_partition_data && get_bind_info == rhs.get_bind_info &&

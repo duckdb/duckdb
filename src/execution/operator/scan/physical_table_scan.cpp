@@ -15,12 +15,13 @@
 
 namespace duckdb {
 
-PhysicalTableScan::PhysicalTableScan(PhysicalPlan &physical_plan, vector<LogicalType> types, BoundTableFunction function_p,
-                                     unique_ptr<FunctionData> bind_data_p, vector<LogicalType> returned_types_p,
-                                     vector<ColumnIndex> column_ids_p, vector<idx_t> projection_ids_p,
-                                     vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
-                                     idx_t estimated_cardinality, ExtraOperatorInfo extra_info,
-                                     vector<Value> parameters_p, virtual_column_map_t virtual_columns_p)
+PhysicalTableScan::PhysicalTableScan(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                     BoundTableFunction function_p, unique_ptr<FunctionData> bind_data_p,
+                                     vector<LogicalType> returned_types_p, vector<ColumnIndex> column_ids_p,
+                                     vector<idx_t> projection_ids_p, vector<string> names_p,
+                                     unique_ptr<TableFilterSet> table_filters_p, idx_t estimated_cardinality,
+                                     ExtraOperatorInfo extra_info, vector<Value> parameters_p,
+                                     virtual_column_map_t virtual_columns_p)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::TABLE_SCAN, std::move(types), estimated_cardinality),
 
       function(std::move(function_p)), bind_data(std::move(bind_data_p)), returned_types(std::move(returned_types_p)),
@@ -268,8 +269,7 @@ OperatorPartitionData PhysicalTableScan::GetPartitionData(ExecutionContext &cont
 
 string PhysicalTableScan::GetName() const {
 	auto &extra_info = function.GetExtraInfo();
-	return StringUtil::Upper(function.GetName().GetIdentifierName() +
-	                         (extra_info.empty() ? "" : " " + extra_info));
+	return StringUtil::Upper(function.GetName().GetIdentifierName() + (extra_info.empty() ? "" : " " + extra_info));
 }
 
 void AddProjectionNames(const ColumnIndex &index, const string &name, const LogicalType &type, string &result) {

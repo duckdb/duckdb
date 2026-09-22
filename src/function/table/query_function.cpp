@@ -105,7 +105,8 @@ void QueryTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	query_table_function.bind_replace = TableBindReplace;
 	query_table.AddFunction(query_table_function);
 
-	query_table_function.GetSignature() = FunctionSignature({LogicalType::LIST(LogicalType::VARCHAR)}, LogicalType(LogicalTypeId::INVALID));
+	query_table_function.GetSignature() =
+	    FunctionSignature({LogicalType::LIST(LogicalType::VARCHAR)}, LogicalType(LogicalTypeId::INVALID));
 	query_table.AddFunction(query_table_function);
 	// add by_name option
 	query_table_function.GetSignature().AddParameter(LogicalType::BOOLEAN);
