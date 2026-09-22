@@ -26,7 +26,7 @@ void ChimpFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id
 	auto handle = buffer_manager.Pin(state.context, segment.GetBlockHandle());
 	ChimpScanState<T> scan_state(std::move(handle), segment);
 	scan_state.Skip(segment, UnsafeNumericCast<idx_t>(row_id));
-	auto result_data = FlatVector::GetDataMutable<INTERNAL_TYPE>(result);
+	auto result_data = FlatVector::GetDataMutableUnsafe<INTERNAL_TYPE>(result);
 
 	if (scan_state.GroupFinished() && scan_state.total_value_count < scan_state.segment_count) {
 		scan_state.LoadGroup(scan_state.group_state.values);

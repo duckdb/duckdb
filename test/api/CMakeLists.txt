@@ -12,6 +12,8 @@ add_subdirectory(cpp)
 set(TEST_API_OBJECTS
     test_api.cpp
     test_process_util.cpp
+    test_remove_directory_extended.cpp
+    test_temporary_file_owner.cpp
     test_bind_statement.cpp
     test_scalar_function_decimal_return.cpp
     test_aggregate_state_bind_data.cpp
@@ -23,6 +25,7 @@ set(TEST_API_OBJECTS
     test_extension_setting_autoload.cpp
     test_instance_cache.cpp
     test_storage_extension_alias.cpp
+    test_result_unit.cpp
     test_results.cpp
     test_reset.cpp
     test_get_table_names.cpp
@@ -32,16 +35,21 @@ set(TEST_API_OBJECTS
     test_lifecycle_hooks.cpp
     test_extension_schema_api.cpp
     test_pending_query.cpp
+    test_query_result.cpp
+    test_query_result_stream.cpp
     test_plan_serialization.cpp
     test_relation_api.cpp
     test_stream_result_buffer.cpp
     test_operator_memory_limit.cpp
     test_query_profiler.cpp
     test_read_ahead_abandon.cpp
+    test_read_ahead_progress.cpp
+    test_read_ahead_failure.cpp
     test_row_id_deduplicator.cpp
     test_dbdir.cpp
     test_pending_with_parameters.cpp
     test_parse_statement_iterator.cpp
+    test_dialect_extension.cpp
     test_grammar_extension.cpp
     test_progress_bar.cpp
     test_uuid.cpp
@@ -53,7 +61,8 @@ set(TEST_API_OBJECTS
     test_object_cache.cpp
     test_partial_executor.cpp
     test_buffer_pool_eviction.cpp
-    test_block_allocator_tls.cpp)
+    test_block_allocator_tls.cpp
+    test_data_table_scan_without_row_groups.cpp)
 
 if(NOT WIN32)
   set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_read_only.cpp)

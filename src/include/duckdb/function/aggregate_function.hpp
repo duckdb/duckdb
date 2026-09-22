@@ -19,6 +19,7 @@
 namespace duckdb {
 
 class BufferManager;
+class FunctionBinder;
 class InterruptState;
 class BoundAggregateFunction;
 struct AggregateRewriteInput;
@@ -645,7 +646,7 @@ public:
 	}
 
 	template <class STATE, class RESULT_TYPE, class OP>
-	static AggregateFunction NullaryAggregate(LogicalType return_type) {
+	static AggregateFunction NullaryAggregate(const LogicalType &return_type) {
 		AggregateFunction result(
 		    Identifier(), {}, return_type, AggregateFunction::StateSize<STATE>,
 		    AggregateFunction::StateInitialize<STATE, OP>, AggregateFunction::NullaryScatterUpdate<STATE, OP>,
@@ -658,7 +659,7 @@ public:
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP,
 	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static AggregateFunction
-	UnaryAggregate(const LogicalType &input_type, LogicalType return_type,
+	UnaryAggregate(const LogicalType &input_type, const LogicalType &return_type,
 	               FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		AggregateFunction result(Identifier(), {input_type}, return_type, AggregateFunction::StateSize<STATE>,
 		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
@@ -688,7 +689,7 @@ public:
 	template <class STATE, class A_TYPE, class B_TYPE, class RESULT_TYPE, class OP,
 	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static AggregateFunction BinaryAggregate(const LogicalType &a_type, const LogicalType &b_type,
-	                                         LogicalType return_type) {
+	                                         const LogicalType &return_type) {
 		AggregateFunction result({a_type, b_type}, return_type, AggregateFunction::StateSize<STATE>,
 		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
 		                         AggregateFunction::BinaryScatterUpdate<STATE, A_TYPE, B_TYPE, OP>,
@@ -841,6 +842,7 @@ public:
 
 	//! Swap in a different implementation, keeping the definition this was bound from intact
 	void ReplaceImplementation(const AggregateFunction &function);
+	void ReplaceImplementation(const BoundAggregateFunction &function);
 
 	DUCKDB_API bool operator==(const BoundAggregateFunction &rhs) const;
 	DUCKDB_API bool operator!=(const BoundAggregateFunction &rhs) const;
@@ -854,11 +856,20 @@ public:
 	const shared_ptr<const AggregateFunction> &GetDefinition() const {
 		return definition;
 	}
-	//! Restore the definition after the bound function has been replaced wholesale
+	//! Restore the definition after the bound function has been replaced wholesale, together with the
+	//! qualification it carries - the replacement is a specialized implementation, not a different function
 	void SetDefinition(shared_ptr<const AggregateFunction> definition_p) {
 		definition = std::move(definition_p);
+		if (definition) {
+			qualified_name = definition->GetQualifiedName().WithName(GetName());
+		}
 	}
-
+	const vector<LogicalType> &GetLogicalArguments() const {
+		return logical_arguments;
+	}
+	const LogicalType &GetLogicalReturnType() const {
+		return logical_return_type;
+	}
 	AggregateStateLayout GetStateType(optional_ptr<FunctionData> bind_data) const {
 		D_ASSERT(callbacks.get_state_type);
 		AggregateLayoutInput input(*this, bind_data);
@@ -873,7 +884,18 @@ public:
 	}
 
 private:
+	void SetLogicalArguments(vector<LogicalType> arguments_p) {
+		logical_arguments = std::move(arguments_p);
+	}
+	void SetLogicalReturnType(LogicalType return_type_p) {
+		logical_return_type = std::move(return_type_p);
+	}
 	shared_ptr<const AggregateFunction> definition;
+	vector<LogicalType> logical_arguments;
+	LogicalType logical_return_type;
+
+	friend class FunctionSerializer;
+	friend class FunctionBinder;
 };
 
 // Defined here (after BoundAggregateFunction is complete) so the lambda body can call GetReturnType().

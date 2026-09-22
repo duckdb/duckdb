@@ -71,6 +71,7 @@ static void CheckTreeDepth(const LogicalOperator &op, idx_t max_depth, idx_t dep
 	}
 }
 
+#ifdef D_ASSERT_IS_ENABLED
 static bool ContainsDependentJoin(const LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 		return true;
@@ -132,6 +133,7 @@ static bool VerifyPlannedExpressions(const LogicalOperator &plan) {
 	}
 	return true;
 }
+#endif
 
 static void RunPostBindExtensions(ClientContext &context, Binder &binder, BoundStatement &statement) {
 	for (auto &planner_extension : PlannerExtension::Iterate(context)) {

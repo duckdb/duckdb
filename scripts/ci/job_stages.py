@@ -12,7 +12,8 @@ COMMON_JOBS = [
     "linux-relassert",
     "linux-relassert-tests",
     "tidy-check",
-    "extensions",
+    "extensions-build",
+    "extensions-deploy",
     "wasm-eh",
     "linux-release",
     "linux-release-tests",
@@ -48,7 +49,7 @@ MERGE_GROUP_JOBS = [
 
 RELEASE_JOBS = [
     "osx",
-    "staged-extension-install",
+    "extensions-install",
 ]
 
 SKIP_TESTS_JOBS = {
@@ -89,6 +90,7 @@ class JobSelection:
 class JobSelectionInput:
     event_name: str
     ref_name: str
+    default_branch: str
     repository: str
     skip_tests: bool
     changed_keys: set[str]
@@ -102,7 +104,7 @@ def should_save_cache(selection_input: JobSelectionInput) -> bool:
 def enabled_jobs(selection_input: JobSelectionInput) -> list[str]:
     if selection_input.event_name == "merge_group":
         selected_jobs = MERGE_GROUP_JOBS.copy()
-    elif selection_input.ref_name == "main":
+    elif selection_input.ref_name == selection_input.default_branch:
         selected_jobs = NIGHTLY_JOBS.copy()
     else:
         selected_jobs = PULL_REQUEST_JOBS.copy()
@@ -281,6 +283,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Compute enabled Main CI jobs and cache save policy.")
     parser.add_argument("--event", dest="event_name", required=True)
     parser.add_argument("--ref_name", required=True)
+    parser.add_argument("--default_branch", required=True)
     parser.add_argument("--repository", default="duckdb/duckdb")
     parser.add_argument("--skip-tests", default="false")
     parser.add_argument("--changed-keys", default="")
@@ -320,6 +323,7 @@ def main() -> int:
     selection_input = JobSelectionInput(
         event_name=args.event_name,
         ref_name=args.ref_name,
+        default_branch=args.default_branch,
         repository=args.repository,
         skip_tests=parse_bool(args.skip_tests),
         changed_keys=parse_changed_keys(args.changed_keys),

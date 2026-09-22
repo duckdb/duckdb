@@ -118,12 +118,17 @@ static unique_ptr<FunctionData> ListResizeBind(BindScalarFunctionInput &input) {
 }
 
 ScalarFunctionSet ListResizeFun::GetFunctions() {
-	ScalarFunction simple_fun({LogicalType::LIST(LogicalTypeId::ANY), LogicalTypeId::ANY},
-	                          LogicalType::LIST(LogicalTypeId::ANY), ListResizeFunction, ListResizeBind);
+	ScalarFunction simple_fun({}, LogicalType::LIST(LogicalTypeId::ANY), ListResizeFunction, ListResizeBind);
+	simple_fun.GetSignature()
+	    .AddParameter("list", LogicalType::LIST(LogicalTypeId::ANY))
+	    .AddParameter("size", LogicalTypeId::ANY);
 	simple_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	simple_fun.SetFallible();
-	ScalarFunction default_value_fun({LogicalType::LIST(LogicalTypeId::ANY), LogicalTypeId::ANY, LogicalTypeId::ANY},
-	                                 LogicalType::LIST(LogicalTypeId::ANY), ListResizeFunction, ListResizeBind);
+	ScalarFunction default_value_fun({}, LogicalType::LIST(LogicalTypeId::ANY), ListResizeFunction, ListResizeBind);
+	default_value_fun.GetSignature()
+	    .AddParameter("list", LogicalType::LIST(LogicalTypeId::ANY))
+	    .AddParameter("size", LogicalTypeId::ANY)
+	    .AddParameter("value", LogicalTypeId::ANY);
 	default_value_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	default_value_fun.SetFallible();
 	ScalarFunctionSet list_resize_set("list_resize");

@@ -209,3 +209,25 @@ query T
 SELECT hex(decode(from_hex('41E2'), 'ignore'));
 ----
 41
+
+# testing for issue 10747
+
+statement error
+SELECT list(hex(encode(s))) FROM read_parquet('data/parquet-testing/bug10747.parquet');
+----
+Invalid Input Error
+
+statement error
+SELECT list(hex(encode(s))) FROM read_parquet('data/parquet-testing/bug10747.parquet', utf8_validation='strict');
+----
+Invalid Input Error
+
+query T
+SELECT list(hex(encode(s))) FROM read_parquet('data/parquet-testing/bug10747.parquet', utf8_validation='replace');
+----
+[6361663F, 3F6C616974]
+
+query T
+SELECT list(hex(encode(s))) FROM read_parquet('data/parquet-testing/bug10747.parquet', utf8_validation='ignore');
+----
+[636166, 6C616974]

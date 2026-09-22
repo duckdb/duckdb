@@ -392,7 +392,8 @@ bool RowGroup::InitializeScanInternal(CollectionScanState &state, SegmentNode<Ro
 	}
 	D_ASSERT(state.prepared_vector.prepare_state == VectorPrepareState::NONE);
 	state.prepared_vector.Reset();
-	state.row_group = node;
+	state.assignment_io_registered = false;
+	state.SetRowGroup(node);
 	state.vector_index = vector_offset;
 	auto row_start = node.GetRowStart();
 	state.max_row_group_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
@@ -404,18 +405,28 @@ bool RowGroup::InitializeScanInternal(CollectionScanState &state, SegmentNode<Ro
 	return true;
 }
 
-bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset) {
+bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset,
+                                        bool initialize_columns) {
 	if (!InitializeScanInternal(state, node, vector_offset)) {
 		return false;
 	}
+	state.column_scans_pending = true;
+	if (initialize_columns) {
+		InitializeColumnScans(state);
+	}
+	return true;
+}
+
+void RowGroup::InitializeColumnScans(CollectionScanState &state) {
+	D_ASSERT(state.column_scans_pending);
 	const auto &column_ids = state.GetColumnIds();
-	auto row_number = vector_offset * STANDARD_VECTOR_SIZE;
+	auto row_number = state.vector_index * STANDARD_VECTOR_SIZE;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto &column_data = GetColumn(column_ids[i]);
 		column_data.InitializeScanWithOffset(state.column_scans[i], row_number);
 		state.column_scans[i].scan_options = &state.GetOptions();
 	}
-	return true;
+	state.column_scans_pending = false;
 }
 
 bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> &node) {
@@ -736,7 +747,12 @@ bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo 
 					supported = false;
 					break;
 				}
-				input_stats.push_back(GetStatistics(storage_index)->Copy());
+				auto column_stats = GetStatistics(storage_index);
+				if (!column_stats) {
+					supported = false;
+					break;
+				}
+				input_stats.push_back(column_stats->Copy());
 			}
 			if (!supported) {
 				continue;
@@ -867,18 +883,33 @@ vector<unique_ptr<AsyncTask>> RowGroup::CollectScanIOTasks(CollectionScanState &
 	return GetBlockManager().buffer_manager.CreatePrefetchTasks(state.context, prefetch_state.blocks);
 }
 
+idx_t RowGroup::PrefetchRowCount(CollectionScanState &state) {
+	const idx_t start_row = state.vector_index * STANDARD_VECTOR_SIZE;
+	idx_t end_row = state.max_row_group_row;
+	auto context = state.context.GetClientContext();
+	for (auto &entry : state.GetFilterInfo().GetFilterList()) {
+		if (entry.IsAlwaysTrue() || entry.table_column_index.IsPushdownExtract()) {
+			continue;
+		}
+		auto &column_data = GetColumn(entry.table_column_index);
+		end_row = MinValue<idx_t>(end_row, column_data.ZonemapScanEnd(context, start_row, end_row, entry.filter));
+	}
+	return end_row > start_row ? end_row - start_row : 0;
+}
+
 bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
 	auto &prepared = state.prepared_vector;
 	if (prepared.prepare_state != VectorPrepareState::NONE) {
 		return true;
 	}
 	while (true) {
-		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row_group_row) {
+		const idx_t remaining_rows = state.RemainingAssignmentRows();
+		if (remaining_rows == 0) {
 			// exceeded the amount of rows to scan
 			return false;
 		}
 		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
-		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row_group_row - current_row);
+		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, remaining_rows);
 		bool has_sample_selection = false;
 		idx_t sample_count = max_count;
 		auto &sample_sel = prepared.sample_sel;
@@ -893,7 +924,7 @@ bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
 					continue;
 				}
 				if (rate < 1) {
-					auto row_group_start = state.row_group->GetRowStart();
+					auto row_group_start = state.GetRowGroup()->GetRowStart();
 					sample_count =
 					    SystemRowsSelection(sampling_info, row_group_start + current_row, max_count, sample_sel);
 					if (sample_count == 0) {
@@ -915,10 +946,8 @@ bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
 		if (!CheckZonemapSegments(state)) {
 			continue;
 		}
-		auto &current_row_group = state.row_group->GetNode();
-
 		// second, scan the version chunk manager to figure out which tuples to load for this transaction
-		idx_t count = current_row_group.GetSelVector(options, state.vector_index, state.valid_sel, max_count);
+		idx_t count = GetSelVector(options, state.vector_index, state.valid_sel, max_count);
 		if (count == 0) {
 			// nothing to scan for this vector, skip the entire vector
 			NextVector(state);
@@ -1431,8 +1460,8 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 	}
 
 	idx_t column_count = row_groups[0].get().GetColumnCount();
-	for (auto &row_group : row_groups) {
-		D_ASSERT(column_count == row_group.get().GetColumnCount());
+	for (idx_t row_group_idx = 0; row_group_idx < row_groups.size(); row_group_idx++) {
+		D_ASSERT(column_count == row_groups[row_group_idx].get().GetColumnCount());
 		RowGroupWriteData write_data;
 		write_data.states.reserve(column_count);
 		write_data.statistics.reserve(column_count);
@@ -1495,11 +1524,17 @@ idx_t RowGroup::GetCommittedRowCount() {
 }
 
 idx_t RowGroup::GetVisibleRowCount(TransactionData transaction) {
+	return GetVisibleRowCount(transaction, 0, count);
+}
+
+idx_t RowGroup::GetVisibleRowCount(TransactionData transaction, idx_t start_vector, idx_t scan_count) {
+	D_ASSERT(start_vector * STANDARD_VECTOR_SIZE <= count);
+	D_ASSERT(scan_count <= count - start_vector * STANDARD_VECTOR_SIZE);
 	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
-		return count;
+		return scan_count;
 	}
-	return vinfo->GetRowCount(transaction, count);
+	return vinfo->GetRowCount(transaction, start_vector, scan_count);
 }
 
 bool RowGroup::HasUnloadedDeletes() const {
@@ -1586,7 +1621,7 @@ bool RowGroup::HasUnchangedColumns() const {
 
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	bool can_reuse_metadata = CanReuseMetadata(writer);
-	if (can_reuse_metadata && !HasChanges()) {
+	if (can_reuse_metadata && !HasChanges(writer.GetCheckpointOptions().visibility_bound)) {
 		RowGroupWriteData result;
 		result.write_action = RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA;
 		if (GetCollection().SupportsPerColumnWrites()) {
@@ -1874,12 +1909,12 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	return row_group_pointer;
 }
 
-bool RowGroup::HasChanges() const {
+bool RowGroup::HasChanges(VisibilityBound bound) const {
 	if (has_changes) {
 		return true;
 	}
 	auto version_info_loaded = version_info.load();
-	if (version_info_loaded && version_info_loaded->HasUnserializedChanges()) {
+	if (version_info_loaded && version_info_loaded->HasUnserializedChanges(bound)) {
 		// we have deletes
 		return true;
 	}
@@ -2007,7 +2042,7 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 	}
 
 	bool HasPendingWrites() override {
-		return row_group->HasChanges();
+		return row_group->HasChanges(VisibilityBound::AllCommitted());
 	}
 };
 

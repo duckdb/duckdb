@@ -182,9 +182,11 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
             endif()
         endif()
     endif()
-
-
-    target_compile_definitions(${TARGET_NAME} PUBLIC -DDUCKDB_BUILD_LOADABLE_EXTENSION)
+    if(MSVC)
+        target_compile_options(${TARGET_NAME} PRIVATE /UDUCKDB_BUILD_LIBRARY)
+    else()
+        target_compile_options(${TARGET_NAME} PRIVATE -UDUCKDB_BUILD_LIBRARY)
+    endif()
     set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX
             ".duckdb_extension")
 

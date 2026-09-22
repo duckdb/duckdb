@@ -7,7 +7,8 @@ static void HashFunction(DataChunk &args, ExpressionState &state, Vector &result
 }
 
 ScalarFunction HashFun::GetFunction() {
-	auto hash_fun = ScalarFunction({LogicalType::ANY}, LogicalType::HASH, HashFunction);
+	auto hash_fun = ScalarFunction({}, LogicalType::HASH, HashFunction);
+	hash_fun.GetSignature().AddParameter("value", LogicalType::ANY);
 	hash_fun.SetVarArgs(LogicalType::ANY);
 	hash_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return hash_fun;
