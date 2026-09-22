@@ -19,18 +19,14 @@ public:
 	//! The operator the files are scanned for, and how many files that scan reads
 	optional_ptr<const PhysicalOperator> op;
 	idx_t file_count = 1;
-	//! What the wrapped function has reported for the files of this scan. A reader is released once its file is
-	//! done, so the metrics of a file are collected here before that happens.
+	//! What the wrapped function has reported for the files of this scan - collected whenever a file may have
+	//! counted more, so that a reader can be released without losing what it counted.
 	//! "scanned" is handed over and cleared on every report - the profiler sums what each thread reports, so a
 	//! scanned row group must be handed over exactly once. "total" is the size of the scan, which every thread
 	//! reports identically and the profiler does not sum, so it is never cleared
 	mutex metrics_lock;
 	idx_t collected_scanned = 0;
-	idx_t finished_total = 0;
-	//! The largest size the scan has been seen to have. The size grows as row groups are registered, and the
-	//! profiler keeps whichever value was reported last rather than the largest - so a thread reporting while the
-	//! scan is still growing must not report less than one that reported before it
-	idx_t total_high_water = 0;
+	idx_t collected_total = 0;
 };
 
 class TableFunctionMultiFileLocalState : public LocalTableFunctionState {
@@ -174,18 +170,26 @@ void TableFunctionFileReader::AddVirtualColumn(column_t virtual_column_id) {
 	virtual_columns[columns.size() - 1] = virtual_column_id;
 }
 
-void TableFunctionFileReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) {
+void TableFunctionFileReader::CollectMetrics(ClientContext &context, GlobalTableFunctionState &gstate_p) {
 	if (!function.get_metrics || !global_state) {
 		return;
 	}
-	// this reader is about to be released - collect what the wrapped function reported for its file
 	auto &gstate = gstate_p.Cast<TableFunctionMultiFileGlobalState>();
+	// several threads can collect the metrics of a file at once - they are asked for under the lock, so that the
+	// growth of the file is added only once
+	lock_guard<mutex> guard(gstate.metrics_lock);
 	OperatorMetrics file_metrics;
 	TableFunctionGetMetricsInput input(context, bind_data.get(), nullptr, global_state.get(), file_metrics);
 	function.get_metrics(input);
-	lock_guard<mutex> guard(gstate.metrics_lock);
 	gstate.collected_scanned += file_metrics.row_groups_scanned;
-	gstate.finished_total += file_metrics.total_row_groups_to_scan;
+	// the function reports the size of its file as a whole - only add what it has grown by since we last asked
+	gstate.collected_total += file_metrics.total_row_groups_to_scan - collected_file_total;
+	collected_file_total = file_metrics.total_row_groups_to_scan;
+}
+
+void TableFunctionFileReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) {
+	// this reader is about to be released - collect what the wrapped function counted for its file
+	CollectMetrics(context, gstate);
 }
 
 TableFunctionInitInput TableFunctionFileReader::GetInitInput(TableFunctionFileInitInput &file_input) const {
@@ -215,7 +219,8 @@ TableFunctionInitInput TableFunctionFileReader::GetInitInput(TableFunctionFileIn
 	return input;
 }
 
-optional_idx TableFunctionFileReader::MaxThreads(ClientContext &context) {
+optional_idx TableFunctionFileReader::MaxThreads(ClientContext &context, GlobalTableFunctionState &gstate) {
+	SetScanState(gstate);
 	InitializeFunctionState(context);
 	if (!global_state) {
 		// no global state - the wrapped function is scanned by a single thread
@@ -291,14 +296,17 @@ bool TableFunctionFileReader::TryInitializeScan(ClientContext &context, GlobalTa
 	return true;
 }
 
-AsyncResult TableFunctionFileReader::ScheduleIO(ClientContext &context, GlobalTableFunctionState &,
+AsyncResult TableFunctionFileReader::ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,
                                                 LocalTableFunctionState &lstate_p) {
 	if (!settings.schedule_io) {
 		return SourceResultType::HAVE_MORE_OUTPUT;
 	}
 	auto &lstate = lstate_p.Cast<TableFunctionMultiFileLocalState>();
 	TableFunctionInput input(bind_data.get(), lstate.local_state.get(), global_state.get());
-	return settings.schedule_io(context, input);
+	auto result = settings.schedule_io(context, input);
+	// the file may already have been finished while this batch was queued - collect what scheduling it counted
+	CollectMetrics(context, gstate);
+	return result;
 }
 
 AsyncResult TableFunctionFileReader::Scan(ClientContext &context, GlobalTableFunctionState &,
@@ -449,7 +457,8 @@ optional_idx TableFunctionMultiFileWrapper::MaxThreads(ClientContext &context, c
 		// the file has not been opened yet - we cannot know how many threads it wants
 		return optional_idx();
 	}
-	return global_state.readers[0]->reader->Cast<TableFunctionFileReader>().MaxThreads(context);
+	return global_state.readers[0]->reader->Cast<TableFunctionFileReader>().MaxThreads(context,
+	                                                                                   *global_state.global_state);
 }
 
 void TableFunctionMultiFileWrapper::CombineSchemas(ClientContext &context,
@@ -684,40 +693,26 @@ static void TableFunctionMultiFileGetMetrics(TableFunctionGetMetricsInput &input
 		return;
 	}
 	auto &scan_state = gstate.global_state->Cast<TableFunctionMultiFileGlobalState>();
-	// what the files that are still open have to report, on top of the ones that have been finished with
-	OperatorMetrics open_metrics;
 	{
+		// collect what the files that are still open have counted so far
 		lock_guard<mutex> guard(gstate.lock);
 		for (auto &reader_data : gstate.readers) {
 			if (!reader_data || !reader_data->reader) {
 				continue;
 			}
-			auto &reader = reader_data->reader->Cast<TableFunctionFileReader>();
-			auto function_state = reader.GetFunctionState();
-			auto &function = reader.GetFunction();
-			if (!function_state || !function.get_metrics) {
-				continue;
-			}
-			TableFunctionGetMetricsInput file_input(input.context, reader.bind_data.get(), nullptr, function_state,
-			                                        open_metrics);
-			function.get_metrics(file_input);
+			reader_data->reader->Cast<TableFunctionFileReader>().CollectMetrics(input.context, scan_state);
 		}
 	}
 	lock_guard<mutex> metrics_guard(scan_state.metrics_lock);
-	scan_state.collected_scanned += open_metrics.row_groups_scanned;
 	// the row groups scanned are handed over once - the profiler sums what every thread reports
 	input.operator_metrics.row_groups_scanned += scan_state.collected_scanned;
 	scan_state.collected_scanned = 0;
 	// the size of the scan is reported as-is - it is not summed across the threads that report it
-	const idx_t total = scan_state.finished_total + open_metrics.total_row_groups_to_scan;
-	scan_state.total_high_water = MaxValue<idx_t>(scan_state.total_high_water, total);
-	input.operator_metrics.total_row_groups_to_scan = scan_state.total_high_water;
+	input.operator_metrics.total_row_groups_to_scan = scan_state.collected_total;
 }
 
-//! The row groups of the scan, as the wrapped function describes those of its files. Only reported when the whole
-//! scan is one file - the files after it have not been opened at this point, so their row groups are unknown
-static vector<PartitionStatistics> TableFunctionMultiFileGetPartitionStats(ClientContext &context,
-                                                                           GetPartitionStatsInput &input) {
+vector<PartitionStatistics> TableFunctionMultiFileWrapper::GetPartitionStats(ClientContext &context,
+                                                                             GetPartitionStatsInput &input) {
 	vector<PartitionStatistics> result;
 	auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
 	if (bind_data.file_list->GetExpandResult() != FileExpandResult::SINGLE_FILE || !bind_data.initial_reader) {
@@ -757,7 +752,7 @@ TableFunction TableFunctionMultiFileWrapper::CreateFunction(TableFunction single
 	result.late_materialization = single_file_function.late_materialization;
 	if (single_file_function.get_partition_stats) {
 		// the row groups of the scan are those of its files
-		result.get_partition_stats = TableFunctionMultiFileGetPartitionStats;
+		result.get_partition_stats = GetPartitionStats;
 	}
 	if (single_file_function.get_metrics) {
 		// the metrics of the scan include those the wrapped function keeps per file
