@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "duckdb/common/arena_containers/arena_ptr.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/parser/peg/peg_parser.hpp"
@@ -25,7 +26,7 @@ class TransformProcess;
 class GrammarChange;
 
 using grammar_transform_process_function_t =
-    std::function<unique_ptr<TransformProcess>(PEGTransformer &, ParseResult &)>;
+    std::function<arena_ptr<TransformProcess>(PEGTransformer &, ParseResult &)>;
 using grammar_cursor_function_t = std::function<bool(const PEGExpression &)>;
 using terminal_rule_overrides_t = case_insensitive_map_t<unique_ptr<Matcher>>;
 using terminal_rule_matcher_factory_t = std::function<unique_ptr<Matcher>(const PEGKeywordHelper &)>;
@@ -97,7 +98,7 @@ struct CompiledGrammarRule {
 	    : name(std::move(name_p)), transform_process(std::move(transform_process_p)) {
 	}
 
-	unique_ptr<TransformProcess> StartTransform(PEGTransformer &transformer, ParseResult &parse_result) const;
+	arena_ptr<TransformProcess> StartTransform(PEGTransformer &transformer, ParseResult &parse_result) const;
 
 	string name;
 	grammar_transform_process_function_t transform_process;

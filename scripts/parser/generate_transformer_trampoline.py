@@ -250,7 +250,7 @@ def typed_result_expr(cpp_type, expr, by_value):
     move_expr = expr if by_value else expr
     if by_value:
         move_expr = f"std::move({expr})"
-    return f"make_uniq<TypedTransformResult<{cpp_type}>>({move_expr})"
+    return f"transformer.MakeResult<{cpp_type}>({move_expr})"
 
 
 class RuleCapabilityStatus(Enum):
@@ -370,7 +370,7 @@ class UseGramPreviewEmitter:
                 f"\tstatic void {init_name(rule_name)}(PEGTransformer &transformer, GeneratedTransformProcess &process);\n"
             )
             lines.append(
-                f"\tstatic unique_ptr<TransformResultValue> {finalize_name(rule_name)}(PEGTransformer &transformer, "
+                f"\tstatic arena_ptr<TransformResultValue> {finalize_name(rule_name)}(PEGTransformer &transformer, "
                 f"GeneratedTransformProcess &process);\n"
             )
         lines.append(
@@ -378,7 +378,7 @@ class UseGramPreviewEmitter:
             "GeneratedTransformProcess &process);\n"
         )
         lines.append(
-            "\tstatic unique_ptr<TransformResultValue> "
+            "\tstatic arena_ptr<TransformResultValue> "
             "FinalizeIdentifierOrKeywordTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);\n"
         )
         for rule_name in self.emitted_rules():
@@ -389,7 +389,7 @@ class UseGramPreviewEmitter:
                 f"GeneratedTransformProcess &process);\n"
             )
             lines.append(
-                f"\tstatic unique_ptr<TransformResultValue> {self.finalize_hook(rule_name)}(PEGTransformer &transformer, "
+                f"\tstatic arena_ptr<TransformResultValue> {self.finalize_hook(rule_name)}(PEGTransformer &transformer, "
                 f"GeneratedTransformProcess &process);\n"
             )
         for rule_name in self.emitted_rules():
@@ -595,7 +595,7 @@ class UseGramPreviewEmitter:
             lines.append("}")
             lines.append("")
             lines.append(
-                f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
+                f"arena_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
                 f"GeneratedTransformProcess &process) {{"
             )
             lines.append(f"\tauto result = process.TakeResult<{cpp_type}>(0);")
@@ -614,7 +614,7 @@ class UseGramPreviewEmitter:
         lines.append("}")
         lines.append("")
         lines.append(
-            "unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline("
+            "arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeIdentifierOrKeywordTrampoline("
             "PEGTransformer &transformer, GeneratedTransformProcess &process) {"
         )
         lines.append("\tauto result = TransformIdentifierOrKeyword(transformer, process.parse_result);")
@@ -663,7 +663,7 @@ class UseGramPreviewEmitter:
         lines.append("}")
         lines.append("")
         lines.append(
-            f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
+            f"arena_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"GeneratedTransformProcess &process) {{"
         )
         lines.append(f"\tauto result = {result_expr};")
@@ -857,7 +857,7 @@ class UseGramPreviewEmitter:
         lines = self.emit_sequence_initialize(rule_name, sequence_ast)
         lines.append("")
         lines.append(
-            f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
+            f"arena_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"GeneratedTransformProcess &process) {{"
         )
         lines.extend(self.emit_sequence_forward_finalize_body(rule_name, plan, child_arg))
@@ -872,7 +872,7 @@ class UseGramPreviewEmitter:
         literal_values = literal_string_values(ast)
         lines.append("")
         lines.append(
-            f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
+            f"arena_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"GeneratedTransformProcess &process) {{"
         )
         if self.is_parse_result_syntax_only_rule(rule_name, ast):
@@ -924,7 +924,7 @@ class UseGramPreviewEmitter:
         )
         lines.append("")
         lines.append(
-            f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
+            f"arena_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"GeneratedTransformProcess &process) {{"
         )
         if self.is_parse_result_manual_choice_rule(rule_name, ast):
@@ -1118,7 +1118,7 @@ class UseGramPreviewEmitter:
 
         lines.append("")
         lines.append(
-            f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
+            f"arena_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"GeneratedTransformProcess &process) {{"
         )
         child_arg = self.auto_sequence_forward_child(rule_name, plan)

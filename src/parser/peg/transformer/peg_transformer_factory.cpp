@@ -116,8 +116,9 @@ PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar
 		auto process_info = entry.second;
 		grammar.SetTransformProcess(
 		    entry.first,
-		    [process_info](PEGTransformer &transformer, ParseResult &parse_result) -> unique_ptr<TransformProcess> {
-			    return make_uniq<GeneratedTransformProcess>(transformer, TransformInput {parse_result}, *process_info);
+		    [process_info](PEGTransformer &transformer, ParseResult &parse_result) -> arena_ptr<TransformProcess> {
+			    return transformer.MakeProcess<GeneratedTransformProcess>(transformer, TransformInput {parse_result},
+			                                                              *process_info);
 		    });
 	}
 }

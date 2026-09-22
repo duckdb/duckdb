@@ -12,7 +12,7 @@ TransformStep TransformStep::Child(TransformInput input) {
 	return TransformStep(input, nullptr);
 }
 
-TransformStep TransformStep::Complete(unique_ptr<TransformResultValue> result) {
+TransformStep TransformStep::Complete(arena_ptr<TransformResultValue> result) {
 	D_ASSERT(result);
 	return TransformStep(nullopt, std::move(result));
 }
@@ -21,7 +21,7 @@ optional<TransformInput> TransformStep::GetChild() {
 	return child;
 }
 
-unique_ptr<TransformResultValue> TransformStep::TakeResult() {
+arena_ptr<TransformResultValue> TransformStep::TakeResult() {
 	D_ASSERT(!child);
 	D_ASSERT(result);
 	return std::move(result);
@@ -29,7 +29,8 @@ unique_ptr<TransformResultValue> TransformStep::TakeResult() {
 
 GeneratedTransformProcess::GeneratedTransformProcess(PEGTransformer &transformer_p, TransformInput input,
                                                      const TransformFrameOps &info_p)
-    : parse_result(input.parse_result), info(info_p), transformer(transformer_p) {
+    : parse_result(input.parse_result), info(info_p), child_results(transformer_p.GetAllocator()),
+      transformer(transformer_p), pending_children(transformer_p.GetAllocator()) {
 	if (!info.initialize || !info.finalize) {
 		throw InternalException("Incomplete transformer process for rule '%s'", info.name);
 	}
@@ -38,9 +39,11 @@ GeneratedTransformProcess::GeneratedTransformProcess(PEGTransformer &transformer
 
 void GeneratedTransformProcess::ReserveChildSlots(idx_t count) {
 	child_results.resize(count);
+	// a rule pushes at most one child per slot, so the pending list never has to grow either
+	pending_children.reserve(count);
 }
 
-void GeneratedTransformProcess::SetChildResult(idx_t slot, unique_ptr<TransformResultValue> result) {
+void GeneratedTransformProcess::SetChildResult(idx_t slot, arena_ptr<TransformResultValue> result) {
 	if (slot >= child_results.size()) {
 		throw InternalException("Invalid transformer result slot %llu for rule '%s'", slot, info.name);
 	}
@@ -84,7 +87,7 @@ FinalizeTransformProcess::FinalizeTransformProcess(PEGTransformer &transformer_p
     : transformer(transformer_p), parse_result(parse_result_p), finalize(std::move(finalize_p)) {
 }
 
-TransformStep FinalizeTransformProcess::Resume(unique_ptr<TransformResultValue> child_result) {
+TransformStep FinalizeTransformProcess::Resume(arena_ptr<TransformResultValue> child_result) {
 	D_ASSERT(!completed);
 	D_ASSERT(!child_result);
 	auto result = finalize(transformer, parse_result);
@@ -95,8 +98,8 @@ TransformStep FinalizeTransformProcess::Resume(unique_ptr<TransformResultValue> 
 	return TransformStep::Complete(std::move(result));
 }
 
-unique_ptr<TransformProcess> CompiledGrammarRule::StartTransform(PEGTransformer &transformer,
-                                                                 ParseResult &parse_result) const {
+arena_ptr<TransformProcess> CompiledGrammarRule::StartTransform(PEGTransformer &transformer,
+                                                                ParseResult &parse_result) const {
 	if (!transform_process) {
 		throw NotImplementedException("No transform process found for rule '%s'", parse_result.Name());
 	}
@@ -107,7 +110,7 @@ unique_ptr<TransformProcess> CompiledGrammarRule::StartTransform(PEGTransformer 
 	return result;
 }
 
-TransformStep GeneratedTransformProcess::Resume(unique_ptr<TransformResultValue> child_result) {
+TransformStep GeneratedTransformProcess::Resume(arena_ptr<TransformResultValue> child_result) {
 	D_ASSERT(!completed);
 	D_ASSERT(child_result_slot.IsValid() == bool(child_result));
 	if (child_result) {
@@ -135,7 +138,7 @@ void TransformStack::InitializeFrame(TransformStackFrame &frame) {
 	frame.process = frame.rule->StartTransform(transformer, frame.parse_result);
 }
 
-unique_ptr<TransformResultValue> TransformStack::ExecuteFrame(TransformStackFrame &frame) {
+arena_ptr<TransformResultValue> TransformStack::ExecuteFrame(TransformStackFrame &frame) {
 	if (!frame.process) {
 		InitializeFrame(frame);
 	}
@@ -149,7 +152,7 @@ unique_ptr<TransformResultValue> TransformStack::ExecuteFrame(TransformStackFram
 	return nullptr;
 }
 
-unique_ptr<TransformResultValue> TransformStack::Execute(TransformInput input) {
+arena_ptr<TransformResultValue> TransformStack::Execute(TransformInput input) {
 	D_ASSERT(frames.empty());
 	if (!input.GetRule()) {
 		throw InternalException("No registered data exists for rule '%s'", input.parse_result.Name());
@@ -190,7 +193,7 @@ string TransformStack::FormatStack() const {
 }
 #endif
 
-unique_ptr<TransformResultValue> PEGTransformer::TransformInternal(ParseResult &parse_result) {
+arena_ptr<TransformResultValue> PEGTransformer::TransformInternal(ParseResult &parse_result) {
 	auto rule = parse_result.GetRule();
 	if (!rule) {
 		throw InternalException("No registered data exists for rule '%s'", parse_result.Name());
