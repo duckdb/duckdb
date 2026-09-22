@@ -250,12 +250,43 @@ private:
 	vector<idx_t> ready_schedule_stages;
 };
 
+//! The source state of a recursive CTE - tracks the rows emitted to estimate the progress, as the number of recursive
+//! iterations is not known up front
+class RecursiveCTEGlobalSourceState : public GlobalSourceState {
+public:
+	void StartIteration(idx_t row_count);
+	void StartFinalDrain(idx_t row_count);
+	void AddEmittedRows(idx_t row_count) {
+		emitted_rows.fetch_add(row_count, std::memory_order_relaxed);
+	}
+	void Finish() {
+		finished.store(true, std::memory_order_relaxed);
+	}
+	ProgressData GetProgress();
+
+private:
+	atomic<idx_t> emitted_rows {0};
+	atomic<bool> finished {false};
+	//! Protects the iteration statistics, which are updated once per iteration
+	mutex iteration_lock;
+	//! Whether the final state of a USING KEY recursion is being emitted (its size is then known)
+	bool draining = false;
+	idx_t iterations = 0;
+	//! Rows of the first, the current and the previous iteration
+	idx_t anchor_rows = 0;
+	idx_t iteration_rows = 0;
+	idx_t previous_iteration_rows = 0;
+	//! Rows emitted before the current iteration started
+	idx_t iteration_start_rows = 0;
+	MonotonicProgress progress;
+};
+
 class RecursiveCTEState : public GlobalSinkState {
 public:
 	explicit RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op);
 	~RecursiveCTEState() override;
 
-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk);
+	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, RecursiveCTEGlobalSourceState &source);
 	const ColumnDataCollection &CurrentInputTable() const;
 	idx_t CurrentInputCount() const {
 		return CurrentInputTable().Count();
@@ -276,9 +307,6 @@ public:
 	                       DataChunk &result);
 	void FinalizeAggregateRows(RowOperationsState &row_state, Vector &addresses, DataChunk &aggregates, idx_t count);
 	void AssembleStateRows(DataChunk &keys, DataChunk &aggregates, DataChunk &result) const;
-
-	//! Progress of the source - an estimate, as the number of recursive iterations is not known up front
-	ProgressData GetProgress() const;
 
 	const PhysicalRecursiveCTE &GetOperator() const {
 		return op;
@@ -375,29 +403,6 @@ private:
 	idx_t local_preaggregate_candidate_count = 0;
 	RecursiveCTESourcePhase source_phase = RecursiveCTESourcePhase::INITIAL;
 	bool output_is_working = false;
-	//! Source statistics used to estimate the progress
-	struct SourceProgressState {
-		bool finished = false;
-		//! Rows emitted by the source
-		idx_t emitted_rows = 0;
-		//! Rows emitted before the current iteration started
-		idx_t iteration_start_rows = 0;
-		//! Rows of the first, the current and the previous iteration
-		idx_t anchor_rows = 0;
-		idx_t iteration_rows = 0;
-		idx_t previous_iteration_rows = 0;
-		idx_t iterations = 0;
-		//! Whether the final state of a USING KEY recursion is being emitted (its size is then known)
-		bool draining = false;
-		//! The highest progress fraction reported so far
-		double max_fraction = 0;
-	};
-	mutable mutex progress_lock;
-	mutable SourceProgressState progress_state;
-	void StartOutputIteration(idx_t row_count);
-	void StartFinalDrain(idx_t row_count);
-	void AddEmittedRows(idx_t row_count);
-	void SetSourceFinished();
 	//! Cached chunk for distinct key extraction in the using_key Sink path
 	DataChunk distinct_rows;
 	//! Cached chunks for source-side hash table scans and recurring table copy paths
@@ -426,10 +431,12 @@ private:
 	bool can_reuse_new_group_candidates = false;
 	bool can_reuse_changed_group_candidates = false;
 
-	SourceResultType GetUsingKeyData(ExecutionContext &context, DataChunk &chunk);
+	SourceResultType GetUsingKeyData(ExecutionContext &context, DataChunk &chunk,
+	                                 RecursiveCTEGlobalSourceState &source);
 	template <bool COLLECT_METRICS>
-	SourceResultType GetUsingKeyDataInternal(ExecutionContext &context, DataChunk &chunk);
-	SourceResultType GetUnionData(ExecutionContext &context, DataChunk &chunk);
+	SourceResultType GetUsingKeyDataInternal(ExecutionContext &context, DataChunk &chunk,
+	                                         RecursiveCTEGlobalSourceState &source);
+	SourceResultType GetUnionData(ExecutionContext &context, DataChunk &chunk, RecursiveCTEGlobalSourceState &source);
 	void InitializeIntermediateAppend();
 	ColumnDataCollection &CurrentOutputTable();
 	ColumnDataCollection &CurrentInputTable();
