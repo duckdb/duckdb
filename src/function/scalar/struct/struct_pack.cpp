@@ -83,16 +83,17 @@ static ScalarFunction GetStructPackFunction() {
 	                   StructPackBind<IS_STRUCT_PACK>, StructPackStats);
 
 	if (IS_STRUCT_PACK) {
-		// struct_pack derive their (struct field) names from argument aliases, so the binder must capture argument
-		// expression aliases as named-argument names. This also preserves the legacy behavior of allowing positional
-		// arguments after named ones (the positional arguments simply take their expression's name as the field name).
+		// struct_pack derives its field names from argument aliases, so the binder must capture argument expression
+		// aliases as named-argument names. This also preserves the legacy behavior of allowing positional arguments
+		// after named ones (the positional arguments simply take their expression's name as the field name).
 		fun.GetSignature().AddKwargsParameter("kwargs", LogicalType::ANY);
+		fun.SetCaptureArgumentAliases(true);
 	} else {
+		// row produces an unnamed TUPLE, so it ignores the names of its arguments
 		fun.GetSignature().AddArgsParameter("args", LogicalType::ANY);
 	}
 
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	fun.SetCaptureArgumentAliases(true);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
 	return fun;

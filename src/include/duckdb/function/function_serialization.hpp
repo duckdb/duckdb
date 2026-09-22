@@ -234,7 +234,7 @@ public:
 		idx_t standard_count = 0;
 		for (auto &function : functions.functions) {
 			auto &signature = function->GetSignature();
-			if (!signature.GetKwargsParameter() && !function->GetProperties().GetCaptureArgumentAliases()) {
+			if (!signature.GetKwargsParameter()) {
 				continue;
 			}
 			takes_named = true;
