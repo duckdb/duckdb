@@ -751,6 +751,12 @@ jobs:
           -o build/release/gcc-static-library-smoke
         build/release/gcc-static-library-smoke
 
+    - name: Static extension link
+      shell: bash
+      run: |
+        build/release/test/static_link_smoke
+        build/release/test/static_link_explicit_smoke
+
     - name: GCC shared library compatibility
       if: ${{ matrix.config.is_canonical_build }}
       shell: bash
