@@ -1,0 +1,55 @@
+# name: test/sql/window/test_window_finalize_stage_error.test
+# description: A failing window sort stage task must not leave the other threads using its unwritten output
+# group: [window]
+
+statement ok
+PRAGMA threads=8
+
+# No spilling, so the memory limit is a hard wall.
+statement ok
+SET temp_directory=''
+
+statement ok
+CREATE TABLE t AS SELECT ((i * 2654435761) % 1000003)::VARCHAR AS s, i AS v FROM range(500000) tbl(i)
+
+# Many secondary sorts per partition put the memory high-water mark inside the window Finalize
+# stages, where one thread materializes a sort while the rest of the hash group waits on it.
+# The limit that crosses first depends on the machine, so sweep a range and accept either outcome.
+foreach mem 220MB 200MB 185MB 170MB 158MB 146MB 134MB 122MB
+
+statement ok
+SET memory_limit='{mem}'
+
+statement maybe
+SELECT first_value(v ORDER BY s) OVER w AS a,
+       first_value(v ORDER BY s DESC) OVER w AS b,
+       first_value(v ORDER BY s, v) OVER w AS c,
+       first_value(v ORDER BY s DESC, v) OVER w AS d,
+       first_value(v ORDER BY s, v DESC) OVER w AS e,
+       first_value(v ORDER BY s DESC, v DESC) OVER w AS f,
+       first_value(s ORDER BY v) OVER w AS g,
+       first_value(s ORDER BY v DESC) OVER w AS h
+FROM t
+WINDOW w AS (PARTITION BY v % 4)
+----
+Error
+
+statement maybe
+SELECT count(DISTINCT s) OVER w AS a,
+       count(DISTINCT v) OVER w AS b,
+       count(DISTINCT s || 'x') OVER w AS c,
+       count(DISTINCT v + 1) OVER w AS d
+FROM t
+WINDOW w AS (PARTITION BY v % 4)
+----
+Error
+
+endloop
+
+statement ok
+SET memory_limit='1GB'
+
+query I
+SELECT count(*) FROM t
+----
+500000
