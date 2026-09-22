@@ -157,7 +157,8 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		auto index = GenerateTableIndex();
 
 		auto alias = ref.alias.empty() ? ref.Table() : ref.alias;
-		auto names = BindContext::AliasColumnNames(alias, ctebinding->GetColumnNames(), ref.column_name_alias);
+		auto names = BindContext::AliasColumnNames(alias, ctebinding->GetColumnNames(), ref.column_name_alias,
+		                                           DuplicateColumnNames::ALLOW);
 
 		bind_context.AddGenericBinding(index, alias, names, ctebinding->GetColumnTypes());
 
