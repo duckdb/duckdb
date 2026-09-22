@@ -1060,13 +1060,14 @@ static vector<Identifier> ResolveArguments(const SimpleFunction &function, Bound
 		keyword_arguments[param_idx] = std::move(arg);
 	}
 
-	arguments.clear();
+	// the arguments in the order of the signature, moved back into "arguments" once they are all resolved
+	vector<unique_ptr<Expression>> resolved_arguments;
 	vector<Identifier> resolved_names;
 	vector<Identifier> named_arguments_names;
 	auto &bound_arguments = bound_function.GetArguments();
 
 	auto add_argument = [&](unique_ptr<Expression> arg, Identifier resolved_name) {
-		arguments.push_back(std::move(arg));
+		resolved_arguments.push_back(std::move(arg));
 		resolved_names.push_back(std::move(resolved_name));
 	};
 
@@ -1075,7 +1076,7 @@ static vector<Identifier> ResolveArguments(const SimpleFunction &function, Bound
 		switch (param.GetKind()) {
 		case FunctionParameterKind::VAR_POSITIONAL:
 			for (idx_t i = positional_count; i < passed_count; i++) {
-				bound_arguments.insert(bound_arguments.begin() + NumericCast<int64_t>(arguments.size()),
+				bound_arguments.insert(bound_arguments.begin() + NumericCast<int64_t>(resolved_arguments.size()),
 				                       param.GetType());
 				add_argument(std::move(positional_arguments[i]), Identifier());
 			}
@@ -1115,7 +1116,9 @@ static vector<Identifier> ResolveArguments(const SimpleFunction &function, Bound
 		}
 	}
 
-	bound_function.SetNamedArguments(arguments.size() - named_arguments_names.size(), std::move(named_arguments_names));
+	const auto positional_argument_count = resolved_arguments.size() - named_arguments_names.size();
+	bound_function.SetNamedArguments(positional_argument_count, std::move(named_arguments_names));
+	arguments = std::move(resolved_arguments);
 
 	return resolved_names;
 }
