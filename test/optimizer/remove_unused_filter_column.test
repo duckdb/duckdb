@@ -24,3 +24,19 @@ query II
 explain select i from '{TEST_DIR}/test.parquet' where j=0
 ----
 physical_plan	<!REGEX>:│ +j +│
+
+# the filter expressions collected for a table_get must stay valid while the
+# column_references for later filters are being registered (dangling vector entries)
+statement ok
+CREATE TABLE t1(b INTEGER, c INTEGER, d INTEGER, e INTEGER);
+
+statement ok
+INSERT INTO t1(b,c,d,e) VALUES(0,0,-10,0);
+
+statement ok
+INSERT INTO t1(b,c,d,e) VALUES(0,0,10,0);
+
+query I
+SELECT CASE WHEN c>(SELECT avg(c) FROM t1) THEN c ELSE b END FROM t1 WHERE c BETWEEN b AND coalesce(e,NULL) AND c>d;
+----
+0
