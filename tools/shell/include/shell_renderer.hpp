@@ -169,14 +169,14 @@ public:
 	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override;
 };
 
-class ShellLogStorage : public duckdb::LogStorage {
+class ShellLogSink : public duckdb::LogSink {
 public:
-	explicit ShellLogStorage(ShellState &state);
+	explicit ShellLogSink(ShellState &state);
 
-	~ShellLogStorage() override = default;
+	~ShellLogSink() override = default;
 
-	const string GetStorageName() override {
-		return "ShellLogStorage";
+	const string GetSinkName() override {
+		return "ShellLogSink";
 	}
 
 protected:

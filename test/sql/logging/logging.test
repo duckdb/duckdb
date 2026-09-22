@@ -56,7 +56,7 @@ set logging_storage='memory';
 statement error
 set logging_storage='quack';
 ----
-Invalid Input Error: Log storage 'quack' is not yet registered
+Invalid Input Error: Log sink 'quack' is not yet registered
 
 # Storage is now cleared because switching storage will clear it
 query IIIIII

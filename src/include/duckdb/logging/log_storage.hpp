@@ -33,14 +33,6 @@ class BufferedFileWriter;
 struct CSVWriterOptions;
 struct CSVReaderOptions;
 
-//! Logging storage can store entries normalized or denormalized. This enum describes what a single table/file/etc
-//! contains
-enum class LoggingTargetTable : uint8_t {
-	ALL_LOGS,     // Denormalized: log entries consisting of both the full log entry and the context
-	LOG_ENTRIES,  // Normalized: contains only the log entries and a context_id
-	LOG_CONTEXTS, // Normalized: contains only the log contexts
-};
-
 class LogStorageScanState {
 public:
 	explicit LogStorageScanState(LoggingTargetTable table_p) : table(table_p) {

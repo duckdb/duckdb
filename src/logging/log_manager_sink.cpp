@@ -70,9 +70,28 @@ bool LogManager::CanScan(LoggingTargetTable table) {
 	return enabled_sinks_by_name.at(DEFAULT_SINK_NAME)->CanScan(table);
 }
 
+void LogManager::EnableLogSink(const string &name, shared_ptr<LogSink> sink) {
+	lock_guard<mutex> lck(lock);
+	EnableLogSinkInternal(name, std::move(sink));
+}
+
 void LogManager::EnableLogSinkInternal(const string &name, shared_ptr<LogSink> sink) {
 	// insert_or_assign semantics: replaces whatever was previously enabled under this name, if anything.
 	enabled_sinks_by_name[name] = std::move(sink);
+	RebuildEnabledSinksSnapshot();
+}
+
+void LogManager::DisableLogSink(const string &name) {
+	lock_guard<mutex> lck(lock);
+	DisableLogSinkInternal(name);
+}
+
+void LogManager::DisableLogSinkInternal(const string &name) {
+	auto entry = enabled_sinks_by_name.find(name);
+	if (entry == enabled_sinks_by_name.end()) {
+		throw InvalidInputException("Log sink '%s' is not currently enabled", name);
+	}
+	enabled_sinks_by_name.erase(entry);
 	RebuildEnabledSinksSnapshot();
 }
 
@@ -198,20 +217,26 @@ void LogManager::SetLogSinkInternal(DatabaseInstance &db, const string &sink_nam
 		}
 	}
 
-	// Flush the old sink, we are going to replace it.
-	log_sink->FlushAll();
+	// Flush the old default sink, we are going to replace it.
+	auto old_default = enabled_sinks_by_name.find(DEFAULT_SINK_NAME);
+	if (old_default != enabled_sinks_by_name.end()) {
+		old_default->second->FlushAll();
+	}
 
+	shared_ptr<LogSink> new_sink;
 	if (sink_name_to_lower == LogConfig::IN_MEMORY_STORAGE_NAME) {
-		log_sink = make_shared_ptr<InMemoryLogSink>(db);
+		new_sink = make_shared_ptr<InMemoryLogSink>(db);
 	} else if (sink_name_to_lower == LogConfig::STDOUT_STORAGE_NAME) {
-		log_sink = make_shared_ptr<StdOutLogSink>(db);
+		new_sink = make_shared_ptr<StdOutLogSink>(db);
 	} else if (sink_name_to_lower == LogConfig::FILE_STORAGE_NAME) {
-		log_sink = make_shared_ptr<FileLogSink>(db);
+		new_sink = make_shared_ptr<FileLogSink>(db);
 	} else if (registered_log_sinks.find(sink_name_to_lower) != registered_log_sinks.end()) {
-		log_sink = registered_log_sinks[sink_name_to_lower];
+		new_sink = registered_log_sinks[sink_name_to_lower];
 	} else {
 		throw InvalidInputException("Log sink '%s' is not yet registered", sink_name);
 	}
+
+	EnableLogSinkInternal(DEFAULT_SINK_NAME, std::move(new_sink));
 	config.storage = sink_name_to_lower;
 }
 
@@ -231,7 +256,12 @@ void LogManager::SetLogSink(DatabaseInstance &db, const string &sink_name) {
 
 void LogManager::UpdateLogSinkConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config_value) {
 	unique_lock<mutex> lck(lock);
-	log_sink->UpdateConfig(db, config_value);
+	auto default_sink = enabled_sinks_by_name.find(DEFAULT_SINK_NAME);
+	if (default_sink == enabled_sinks_by_name.end()) {
+		throw InternalException("No default log sink is enabled");
+	}
+
+	default_sink->second->UpdateConfig(db, config_value);
 }
 
 void LogManager::SetEnableStructuredLoggers(vector<string> &enabled_logger_types) {
@@ -262,7 +292,13 @@ void LogManager::SetEnableStructuredLoggers(vector<string> &enabled_logger_types
 
 void LogManager::TruncateLogSink() {
 	unique_lock<mutex> lck(lock);
-	log_sink->Truncate();
+
+	auto default_sink = enabled_sinks_by_name.find(DEFAULT_SINK_NAME);
+	if (default_sink == enabled_sinks_by_name.end()) {
+		throw InternalException("No default log sink is enabled");
+	}
+
+	default_sink->second->Truncate();
 }
 
 LogConfig LogManager::GetConfig() {

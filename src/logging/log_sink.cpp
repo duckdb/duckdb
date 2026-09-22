@@ -88,7 +88,7 @@ void LogSink::UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &
 }
 
 unique_ptr<TableRef> LogSink::BindReplace(ClientContext &context, TableFunctionBindInput &input,
-                                             LoggingTargetTable table) {
+                                          LoggingTargetTable table) {
 	return nullptr;
 }
 
@@ -243,8 +243,8 @@ void BufferingLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensiti
 		} else if (StringUtil::Lower(it.first) == "normalize") {
 			throw InternalException("'normalize' setting should be handled in child class");
 		} else {
-			throw InvalidInputException("Unrecognized log sink config option for sink: '%s': '%s'",
-			                            GetSinkName(), it.first);
+			throw InvalidInputException("Unrecognized log sink config option for sink: '%s': '%s'", GetSinkName(),
+			                            it.first);
 		}
 	}
 }
@@ -475,8 +475,8 @@ void FileLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_ma
 }
 
 unique_ptr<TableRef> FileLogSink::BindReplaceInternal(ClientContext &context, TableFunctionBindInput &input,
-                                                         const string &path, const string &select_clause,
-                                                         const string &csv_columns) {
+                                                      const string &path, const string &select_clause,
+                                                      const string &csv_columns) {
 	string sub_query_string =
 	    StringUtil::Format("%s FROM read_csv_auto(%s, columns={%s})", select_clause, SQLString(path), csv_columns);
 
@@ -488,7 +488,7 @@ unique_ptr<TableRef> FileLogSink::BindReplaceInternal(ClientContext &context, Ta
 }
 
 unique_ptr<TableRef> FileLogSink::BindReplace(ClientContext &context, TableFunctionBindInput &input,
-                                                 LoggingTargetTable table) {
+                                              LoggingTargetTable table) {
 	lock_guard<mutex> lck(lock);
 
 	// We only allow scanning enabled tables
@@ -633,7 +633,7 @@ static void WriteLoggingContextsToChunk(DataChunk &chunk, const RegisteredLoggin
 }
 
 void BufferingLogSink::WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
-                                        const string &log_message, const RegisteredLoggingContext &context) {
+                                     const string &log_message, const RegisteredLoggingContext &context) {
 	unique_lock<mutex> lck(lock);
 
 	auto &log_entries_buffer =

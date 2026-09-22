@@ -7,7 +7,7 @@ namespace duckdb {
 class CallbackLogSink : public LogSink {
 public:
 	CallbackLogSink(const string &name, duckdb_logger_write_log_entry_t write_log_entry_fun, void *extra_data,
-	                   duckdb_delete_callback_t delete_callback)
+	                duckdb_delete_callback_t delete_callback)
 	    : name(name), write_log_entry_fun(write_log_entry_fun), extra_data(extra_data),
 	      delete_callback(delete_callback) {
 	}

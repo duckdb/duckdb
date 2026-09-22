@@ -847,12 +847,12 @@ Value LoggingStorage::GetSetting(const ClientContext &context) {
 }
 void LoggingStorage::SetGlobal(DatabaseInstance *db_p, DBConfig &config, const Value &parameter) {
 	auto &db = GetDB<LoggingStorage>(db_p);
-	db.GetLogManager().SetLogStorage(db, parameter.GetValue<string>());
+	db.GetLogManager().SetLogSink(db, parameter.GetValue<string>());
 }
 
 void LoggingStorage::ResetGlobal(DatabaseInstance *db_p, DBConfig &config) {
 	auto &db = GetDB<LoggingStorage>(db_p);
-	db.GetLogManager().SetLogStorage(db, LogConfig::DEFAULT_LOG_STORAGE);
+	db.GetLogManager().SetLogSink(db, LogConfig::DEFAULT_LOG_STORAGE);
 }
 
 //===----------------------------------------------------------------------===//
