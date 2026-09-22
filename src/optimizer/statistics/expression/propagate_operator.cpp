@@ -15,7 +15,7 @@ static bool CanFoldNullCheck(const BoundOperatorExpression &expr, const BaseStat
 	if (!child.CanThrow()) {
 		return true;
 	}
-	return !child_stats.CanHaveNoNull() && child.PropagatesNullValues();
+	return child_stats.CanHaveNull() && !child_stats.CanHaveNoNull() && child.PropagatesNullValues();
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperatorExpression &expr,
