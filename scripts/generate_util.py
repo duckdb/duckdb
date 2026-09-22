@@ -374,9 +374,6 @@ def generate_subclass_copy(entry):
     if class_name == 'FunctionExpression' or class_name == 'WindowExpression':
         lines.append('\tcopy->is_legacy_function_call = is_legacy_function_call;')
 
-    if class_name == 'ColumnRefExpression':
-        lines.append('\tcopy->resolved_index = resolved_index;')
-
     for member in entry.get('members', []):
         if member_should_be_copied(member):
             lines.extend(generate_member_copy(member))

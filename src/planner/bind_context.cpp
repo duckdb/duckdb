@@ -245,6 +245,10 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const BindingAli
 	if (bind_type == ColumnBindType::EXPAND_GENERATED_COLUMNS && ColumnIsGenerated(*binding, column_index)) {
 		return ExpandGeneratedColumn(binding->Cast<TableBinding>(), column_name);
 	}
+	if (column_index != DConstants::INVALID_INDEX) {
+		// rowid-style columns have no index in the binding - they still resolve by name
+		result->SetResolvedIndex(column_index);
+	}
 	auto &registered_name = binding->GetRegisteredColumnName(column_name);
 	if (registered_name.GetIdentifierName() != column_name.GetIdentifierName()) {
 		// because of case insensitivity in the binder we rename the column to the original name
@@ -286,6 +290,10 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const Identifier
 	auto column_index = binding->GetBindingIndex(column_name);
 	if (bind_type == ColumnBindType::EXPAND_GENERATED_COLUMNS && ColumnIsGenerated(*binding, column_index)) {
 		return ExpandGeneratedColumn(binding->Cast<TableBinding>(), column_name);
+	}
+	if (column_index != DConstants::INVALID_INDEX) {
+		// rowid-style columns have no index in the binding - they still resolve by name
+		result->SetResolvedIndex(column_index);
 	}
 	auto &registered_name = binding->GetRegisteredColumnName(column_name);
 	if (registered_name.GetIdentifierName() != column_name.GetIdentifierName()) {

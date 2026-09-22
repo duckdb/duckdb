@@ -100,7 +100,7 @@ column_t Binding::GetBindingIndex(const Identifier &column_name) {
 bool Binding::TryGetColumnIndex(ColumnRefExpression &colref, column_t &result) {
 	if (colref.HasResolvedIndex()) {
 		result = colref.GetResolvedIndex();
-		return result < names.size();
+		return result < names.size() || IsVirtualColumn(result);
 	}
 	return TryGetBindingIndex(colref.GetColumnName(), result);
 }
@@ -135,8 +135,14 @@ void Binding::SetBoundColumnAlias(ColumnRefExpression &colref, column_t column_i
 	if (!colref.GetAlias().empty()) {
 		return;
 	}
-	if (colref.HasResolvedIndex() && column_index < names.size()) {
-		// bound by index - the name in the binding is authoritative
+	auto entry = name_map.find(colref.GetColumnName());
+	if (entry != name_map.end() && entry->second == column_index) {
+		// the name resolves to this very column - keep the name it is registered under
+		colref.SetAlias(entry->first);
+		return;
+	}
+	if (column_index < names.size()) {
+		// the column is shadowed by an earlier column with the same name
 		colref.SetAlias(names[column_index]);
 		return;
 	}
