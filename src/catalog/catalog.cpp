@@ -1538,9 +1538,10 @@ ErrorData Catalog::SupportsCreateSchema(CreateSchemaInfo &info) {
 void Catalog::AlterSchema(CatalogTransaction transaction, SchemaCatalogEntry &schema, AlterSchemaInfo &info) {
 	switch (info.alter_schema_type) {
 	case AlterSchemaType::SET_SCHEMA_OPTIONS:
-		throw CatalogException("SET (<options>) is not supported for schemas in a %s catalog", GetCatalogType());
+		throw NotImplementedException("SET (<options>) is not supported for schemas in a %s catalog", GetCatalogType());
 	case AlterSchemaType::RESET_SCHEMA_OPTIONS:
-		throw CatalogException("RESET (<options>) is not supported for schemas in a %s catalog", GetCatalogType());
+		throw NotImplementedException("RESET (<options>) is not supported for schemas in a %s catalog",
+		                              GetCatalogType());
 	default:
 		throw InternalException("Unrecognized alter schema type!");
 	}

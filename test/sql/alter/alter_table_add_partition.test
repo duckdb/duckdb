@@ -1,0 +1,84 @@
+# name: test/sql/alter/alter_table_add_partition.test
+# description: Test ALTER TABLE ADD PARTITION
+# group: [alter]
+
+statement ok
+CREATE TABLE orders(dt DATE, country VARCHAR);
+
+statement error
+ALTER TABLE orders ADD
+  PARTITION (dt = '2016-05-31', country = 'IN') LOCATION 's3://amzn-s3-demo-bucket/path/to/INDIA_31_May_2016/'
+  PARTITION (dt = '2016-06-01', country = 'IN') LOCATION 's3://amzn-s3-demo-bucket/path/to/INDIA_01_June_2016/';
+----
+ADD PARTITION is not supported for DuckDB tables
+
+statement error
+ALTER TABLE orders ADD PARTITION (dt = '2016-05-31')
+----
+ADD PARTITION is not supported for DuckDB tables
+
+statement error
+alter table orders add if not exists partition (dt = DATE '2016-05-31', "country" = 'it''s') location 'it''s'
+----
+ADD PARTITION is not supported for DuckDB tables
+
+statement error
+ALTER TABLE orders ADD PARTITION (dt = '2016-05-31',)
+----
+ADD PARTITION is not supported for DuckDB tables
+
+# non-existent table
+statement error
+ALTER TABLE nonexistent ADD PARTITION (dt = '2016-05-31')
+----
+Table with name nonexistent does not exist
+
+statement ok
+ALTER TABLE IF EXISTS nonexistent ADD PARTITION (dt = '2016-05-31')
+
+# invalid syntax
+statement error
+ALTER TABLE orders ADD PARTITION ()
+----
+Parser Error
+
+statement error
+ALTER TABLE orders ADD PARTITION (dt)
+----
+Parser Error
+
+statement error
+ALTER TABLE orders ADD PARTITION (dt = '2016-05-31') LOCATION
+----
+Parser Error
+
+statement error
+ALTER TABLE orders ADD PARTITION (dt = '2016-05-31') LOCATION dt
+----
+Parser Error
+
+statement error
+ALTER TABLE orders ADD PARTITION (dt = '2016-05-31', dt = '2016-06-01')
+----
+Duplicate partition column
+
+statement error
+ALTER TABLE orders ADD PARTITION (dt = '2016-05-31'), PARTITION (dt = '2016-06-01')
+----
+Parser Error
+
+statement error
+ALTER TABLE orders ADD PARTITION (dt = '2016-05-31'), ADD PARTITION (dt = '2016-06-01')
+----
+Only one ALTER command per statement is supported
+
+# a column named partition can still be added
+statement ok
+ALTER TABLE orders ADD partition INTEGER
+
+statement ok
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS partition INTEGER
+
+query III
+SELECT * FROM orders
+----
