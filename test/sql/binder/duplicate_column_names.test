@@ -1,0 +1,131 @@
+# name: test/sql/binder/duplicate_column_names.test
+# description: Column names of queries that produce duplicate column names
+# group: [binder]
+
+# a select list can produce duplicate column names
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT i, i FROM range(5) tbl(i));
+----
+i	BIGINT
+i	BIGINT
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT 'x' AS x, 42 AS x);
+----
+x	VARCHAR
+x	INTEGER
+
+# describing the statement reports those names, but putting the very same query in a FROM
+# clause makes it a binding - which renames
+query II
+SELECT column_name, column_type FROM (DESCRIBE FROM (SELECT i, i FROM range(5) tbl(i)));
+----
+i	BIGINT
+i_1	BIGINT
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE FROM (SELECT 'x' AS x, 42 AS x));
+----
+x	VARCHAR
+x_1	INTEGER
+
+# so can a join of two relations with the same column name
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM range(5) tbl1(i) JOIN range(5) tbl2(i) ON tbl1.i=tbl2.i);
+----
+i	BIGINT
+i	BIGINT
+
+# a binding cannot hold duplicate names, so wrapping any of these in a subquery renames
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM (SELECT i, i FROM range(5) tbl(i)) tbl);
+----
+i	BIGINT
+i_1	BIGINT
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM (SELECT 'x' AS x, 42 AS x) tbl);
+----
+x	VARCHAR
+x_1	INTEGER
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM (SELECT i, i, i, i FROM range(5) tbl(i)) tbl);
+----
+i	BIGINT
+i_1	BIGINT
+i_2	BIGINT
+i_3	BIGINT
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM (SELECT * FROM range(5) tbl1(i) JOIN range(5) tbl2(i) ON tbl1.i=tbl2.i) tbl);
+----
+i	BIGINT
+i_1	BIGINT
+
+# an explicit column alias list is renamed the same way
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM (VALUES ('x', 42)) v(x, x));
+----
+x	VARCHAR
+x_1	INTEGER
+
+# the renamed column is the one that is addressable by name
+query II
+SELECT i, i_1 FROM (SELECT i AS i, i + 100 AS i FROM range(1) tbl(i)) tbl;
+----
+0	100
+
+# values are unaffected by the renaming
+query II
+SELECT * FROM (SELECT 'x' AS x, 42 AS x) tbl;
+----
+x	42
+
+query IIII
+SELECT * FROM (SELECT i, i + 1, i + 2, i + 3 FROM range(2) tbl(i)) tbl ORDER BY 1;
+----
+0	1	2	3
+1	2	3	4
+
+# renaming is position-dependent: the last column keeps its name at the top level, but is
+# renamed once the whole join becomes a binding
+query I
+SELECT column_name FROM (DESCRIBE SELECT * FROM (SELECT i, i, i, i FROM range(5) tbl(i)) tbl, (SELECT 32 AS i));
+----
+i
+i_1
+i_2
+i_3
+i
+
+query I
+SELECT column_name FROM (DESCRIBE SELECT * FROM (SELECT * FROM (SELECT i, i, i, i FROM range(5) tbl(i)) tbl, (SELECT 32 AS i)));
+----
+i
+i_1
+i_2
+i_3
+i_4
+
+# a synthesized name takes precedence over an explicit alias that already uses it
+query I
+SELECT column_name FROM (DESCRIBE SELECT * FROM (SELECT i, i FROM range(1) tbl(i)) tbl, (SELECT 32 AS i_1));
+----
+i
+i_1
+i_1
+
+query I
+SELECT column_name FROM (DESCRIBE SELECT * FROM (SELECT * FROM (SELECT i, i FROM range(1) tbl(i)) tbl, (SELECT 32 AS i_1)));
+----
+i
+i_1
+i_1_1
+
+# the column aliased AS i_1 is the one holding 32, but it is not the one named i_1
+query III
+SELECT * FROM (SELECT * FROM (SELECT i, 100 + i AS i FROM range(1) tbl(i)) tbl, (SELECT 32 AS i_1));
+----
+0	100	32
+
