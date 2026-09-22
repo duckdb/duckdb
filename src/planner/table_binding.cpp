@@ -110,6 +110,20 @@ bool Binding::HasMatchingBinding(const Identifier &column_name) {
 	return TryGetBindingIndex(column_name, result);
 }
 
+bool Binding::HasDuplicateColumnName(const Identifier &column_name) {
+	bool found = false;
+	for (auto &name : names) {
+		if (name != column_name) {
+			continue;
+		}
+		if (found) {
+			return true;
+		}
+		found = true;
+	}
+	return false;
+}
+
 void Binding::AddColumnAlias(const Identifier &column_alias, column_t column_index) {
 	D_ASSERT(column_index < names.size());
 	if (name_map.find(column_alias) != name_map.end()) {

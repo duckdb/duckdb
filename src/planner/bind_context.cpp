@@ -778,7 +778,12 @@ void BindContext::AddTableFunction(TableIndex index, const Identifier &alias, co
 	    make_uniq<TableBinding>(alias, types, names, bound_column_ids, entry, index, std::move(virtual_columns)));
 }
 
-static Identifier AddColumnNameToBinding(const Identifier &base_name, identifier_set_t &current_names) {
+static Identifier AddColumnNameToBinding(const Identifier &base_name, identifier_set_t &current_names,
+                                         DuplicateColumnNames duplicates) {
+	if (duplicates == DuplicateColumnNames::ALLOW) {
+		current_names.insert(base_name);
+		return base_name;
+	}
 	idx_t index = 1;
 	Identifier name = base_name;
 	while (current_names.find(name) != current_names.end()) {
@@ -789,7 +794,8 @@ static Identifier AddColumnNameToBinding(const Identifier &base_name, identifier
 }
 
 vector<Identifier> BindContext::AliasColumnNames(const Identifier &table_name, const vector<Identifier> &names,
-                                                 const vector<Identifier> &column_aliases) {
+                                                 const vector<Identifier> &column_aliases,
+                                                 DuplicateColumnNames duplicates) {
 	vector<Identifier> result;
 	if (column_aliases.size() > names.size()) {
 		throw BinderException("table %s has %lld columns available but %lld columns specified", table_name,
@@ -798,17 +804,17 @@ vector<Identifier> BindContext::AliasColumnNames(const Identifier &table_name, c
 	identifier_set_t current_names;
 	// use any provided column aliases first
 	for (idx_t i = 0; i < column_aliases.size(); i++) {
-		result.push_back(AddColumnNameToBinding(column_aliases[i], current_names));
+		result.push_back(AddColumnNameToBinding(column_aliases[i], current_names, duplicates));
 	}
 	// if not enough aliases were provided, use the default names for remaining columns
 	for (idx_t i = column_aliases.size(); i < names.size(); i++) {
-		result.push_back(AddColumnNameToBinding(names[i], current_names));
+		result.push_back(AddColumnNameToBinding(names[i], current_names, duplicates));
 	}
 	return result;
 }
 
 void BindContext::AddSubquery(TableIndex index, const Identifier &alias, SubqueryRef &ref, BoundStatement &subquery) {
-	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
+	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias, DuplicateColumnNames::ALLOW);
 	AddGenericBinding(index, alias, names, subquery.types);
 }
 
@@ -825,7 +831,7 @@ void BindContext::AddView(TableIndex index, const Identifier &alias, SubqueryRef
 
 void BindContext::AddSubquery(TableIndex index, const Identifier &alias, TableFunctionRef &ref,
                               BoundStatement &subquery) {
-	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
+	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias, DuplicateColumnNames::ALLOW);
 	AddGenericBinding(index, alias, names, subquery.types);
 }
 
