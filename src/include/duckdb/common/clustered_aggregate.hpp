@@ -26,11 +26,11 @@ using DictProps = unsafe_unique_array<int64_t>;
 static_assert((STANDARD_VECTOR_SIZE & (STANDARD_VECTOR_SIZE - 1)) == 0);
 template <unsigned int Arg>
 constexpr uint64_t log2() {
-    if constexpr (Arg < 2) {
-        return 0;
-    } else {
-        return 1 + log2<Arg / 2>();
-    }
+	if constexpr (Arg < 2) {
+		return 0;
+	} else {
+		return 1 + log2<Arg / 2>();
+	}
 }
 
 // Users of I64VectorSumSafe accumulate sum into int64_t. One bit is for sign,
