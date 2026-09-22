@@ -16,7 +16,6 @@ static constexpr int64_t JULIAN_TO_UNIX_EPOCH_DAYS = 2440588LL;
 static constexpr int64_t MILLISECONDS_PER_DAY = 86400000LL;
 static constexpr int64_t MICROSECONDS_PER_DAY = MILLISECONDS_PER_DAY * 1000LL;
 static constexpr int64_t NANOSECONDS_PER_MICRO = 1000LL;
-static constexpr int64_t NANOSECONDS_PER_DAY = MICROSECONDS_PER_DAY * 1000LL;
 
 static inline int64_t ImpalaTimestampToDays(const Int96 &impala_timestamp) {
 	return impala_timestamp.value[2] - JULIAN_TO_UNIX_EPOCH_DAYS;
@@ -29,31 +28,17 @@ static int64_t ImpalaTimestampToMicroseconds(const Int96 &impala_timestamp) {
 	return days_since_epoch * MICROSECONDS_PER_DAY + microseconds;
 }
 
-static int64_t ImpalaTimestampToNanoseconds(const Int96 &impala_timestamp) {
-	int64_t days_since_epoch = ImpalaTimestampToDays(impala_timestamp);
-	auto nanoseconds = Load<int64_t>(const_data_ptr_cast(impala_timestamp.value));
-	int64_t day_nanoseconds;
-	if (!TryMultiplyOperator::Operation(days_since_epoch, NANOSECONDS_PER_DAY, day_nanoseconds)) {
-		// out of range for TIMESTAMP_NS - saturate to +/- infinity
-		return days_since_epoch < 0 ? timestamp_ns_t::ninfinity().value : timestamp_ns_t::infinity().value;
-	}
-	int64_t result;
-	if (!TryAddOperator::Operation(day_nanoseconds, nanoseconds, result)) {
-		// out of range for TIMESTAMP_NS - saturate to +/- infinity
-		return day_nanoseconds < 0 ? timestamp_ns_t::ninfinity().value : timestamp_ns_t::infinity().value;
-	}
-	return result;
-}
-
-timestamp_ns_t ImpalaTimestampToTimestampNS(const Int96 &raw_ts) {
-	timestamp_ns_t result;
-	result.value = ImpalaTimestampToNanoseconds(raw_ts);
-	return result;
-}
-
 timestamp_t ImpalaTimestampToTimestamp(const Int96 &raw_ts) {
 	auto impala_us = ImpalaTimestampToMicroseconds(raw_ts);
 	return Timestamp::FromEpochMicroSeconds(impala_us);
+}
+
+date_t ImpalaTimestampToDate(const Int96 &raw_ts) {
+	return date_t(ImpalaTimestampToDays(raw_ts));
+}
+
+dtime_ns_t ImpalaTimestampToTimeNs(const Int96 &raw_ts) {
+	return dtime_ns_t(Load<int64_t>(const_data_ptr_cast(raw_ts.value)));
 }
 
 Int96 TimestampToImpalaTimestamp(timestamp_t &ts) {

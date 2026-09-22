@@ -613,10 +613,8 @@ const char *EnumUtil::ToChars<ParquetInt96AsOption>(ParquetInt96AsOption value) 
 	switch (value) {
 	case ParquetInt96AsOption::TIMESTAMP:
 		return "TIMESTAMP";
-	case ParquetInt96AsOption::TIMESTAMP_NS:
-		return "TIMESTAMP_NS";
-	case ParquetInt96AsOption::BLOB:
-		return "BLOB";
+	case ParquetInt96AsOption::STRUCT:
+		return "STRUCT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 	}
@@ -627,11 +625,8 @@ ParquetInt96AsOption EnumUtil::FromString<ParquetInt96AsOption>(const char *valu
 	if (StringUtil::Equals(value, "TIMESTAMP")) {
 		return ParquetInt96AsOption::TIMESTAMP;
 	}
-	if (StringUtil::Equals(value, "TIMESTAMP_NS")) {
-		return ParquetInt96AsOption::TIMESTAMP_NS;
-	}
-	if (StringUtil::Equals(value, "BLOB")) {
-		return ParquetInt96AsOption::BLOB;
+	if (StringUtil::Equals(value, "STRUCT")) {
+		return ParquetInt96AsOption::STRUCT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

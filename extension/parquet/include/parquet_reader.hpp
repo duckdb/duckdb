@@ -125,9 +125,8 @@ ParquetPrefetchStrategyOption EnumUtil::FromString<ParquetPrefetchStrategyOption
 
 //! How INT96 (deprecated Impala timestamp) columns are exposed by the Parquet reader
 enum class ParquetInt96AsOption : uint8_t {
-	TIMESTAMP,    //! Read as TIMESTAMP (microsecond precision) - the default
-	TIMESTAMP_NS, //! Read as TIMESTAMP_NS, preserving the nanosecond part
-	BLOB          //! Expose the raw 12-byte INT96 value as BLOB
+	TIMESTAMP, //! Read as TIMESTAMP (microsecond precision) - the default
+	STRUCT     //! Read as STRUCT(date DATE, time TIME_NS), preserving the full range and precision
 };
 
 ParquetInt96AsOption ParquetInt96AsOptionFromString(const string &value);

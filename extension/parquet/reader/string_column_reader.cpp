@@ -29,7 +29,7 @@ StringColumnReader::StringColumnReader(const ParquetReader &reader, const Parque
 		fixed_width_string_length = schema.type_length;
 	}
 	if (schema.parquet_type == Type::INT96) {
-		// INT96 is read as a raw 12-byte blob when int96_as='blob'
+		// INT96 is read as a raw 12-byte blob for int96_as='struct' (which converts it to STRUCT(date, time))
 		fixed_width_string_length = sizeof(Int96);
 	}
 }
