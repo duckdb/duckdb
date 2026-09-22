@@ -177,14 +177,16 @@ void EnableLoggingFun::RegisterFunction(BuiltinFunctions &set) {
 	// Base config
 	// a positional list, so it declares "*args" and no "**kwargs" - an argument named after no parameter is an error
 	enable_fun.GetSignature().AddArgsParameter("args", LogicalType::ANY);
-	enable_fun.GetSignature().AddSeparator().AddParameter("level", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	enable_fun.GetSignature().AddSeparator().AddParameter("storage", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	enable_fun.GetSignature().AddSeparator().AddParameter("storage_config", LogicalType::ANY, Value(LogicalType::ANY));
+	enable_fun.GetSignature()
+	    .AddOptionalNamedParameter("level", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("storage", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("storage_config", LogicalType::ANY);
 
 	// Config that is forwarded to the storage_config struct as syntactic sugar
-	enable_fun.GetSignature().AddSeparator().AddParameter("storage_path", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	enable_fun.GetSignature().AddSeparator().AddParameter("storage_normalize", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	enable_fun.GetSignature().AddSeparator().AddParameter("storage_buffer_size", LogicalType::UBIGINT, Value(LogicalType::UBIGINT));
+	enable_fun.GetSignature()
+	    .AddOptionalNamedParameter("storage_path", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("storage_normalize", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("storage_buffer_size", LogicalType::UBIGINT);
 
 	set.AddFunction(enable_fun);
 

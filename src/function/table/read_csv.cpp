@@ -58,53 +58,54 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 }
 
 void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_function) {
-	table_function.GetSignature().AddSeparator().AddParameter("sep", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("delim", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	// aliases that the CSV options accept - COPY has always taken these, so the table function takes them too
-	table_function.GetSignature().AddSeparator().AddParameter("separator", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("delimiter", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("null", LogicalType::ANY, Value(LogicalType::ANY));
-	table_function.GetSignature().AddSeparator().AddParameter("date_format", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("timestamp_format", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("quote", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("new_line", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("escape", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("nullstr", LogicalType::ANY, Value(LogicalType::ANY));
-	table_function.GetSignature().AddSeparator().AddParameter("columns", LogicalType::ANY, Value(LogicalType::ANY));
-	table_function.GetSignature().AddSeparator().AddParameter("auto_type_candidates", LogicalType::ANY, Value(LogicalType::ANY));
-	table_function.GetSignature().AddSeparator().AddParameter("header", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	table_function.GetSignature().AddSeparator().AddParameter("auto_detect", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	table_function.GetSignature().AddSeparator().AddParameter("sample_size", LogicalType::BIGINT, Value(LogicalType::BIGINT));
-	table_function.GetSignature().AddSeparator().AddParameter("all_varchar", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	table_function.GetSignature().AddSeparator().AddParameter("dateformat", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("timestampformat", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("normalize_names", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	table_function.GetSignature().AddSeparator().AddParameter("compression", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("skip", LogicalType::BIGINT, Value(LogicalType::BIGINT));
-	table_function.GetSignature().AddSeparator().AddParameter("max_line_size", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("maximum_line_size", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("ignore_errors", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	table_function.GetSignature().AddSeparator().AddParameter("store_rejects", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	table_function.GetSignature().AddSeparator().AddParameter("rejects_table", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("rejects_scan", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("rejects_limit", LogicalType::BIGINT, Value(LogicalType::BIGINT));
-	table_function.GetSignature().AddSeparator().AddParameter("rejects_line_size_limit", LogicalType::BIGINT, Value(LogicalType::BIGINT));
-	table_function.GetSignature().AddSeparator().AddParameter("force_not_null", LogicalType::LIST(LogicalType::VARCHAR), Value(LogicalType::LIST(LogicalType::VARCHAR)));
-	table_function.GetSignature().AddSeparator().AddParameter("buffer_size", LogicalType::UBIGINT, Value(LogicalType::UBIGINT));
-	table_function.GetSignature().AddSeparator().AddParameter("decimal_separator", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("parallel", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	table_function.GetSignature().AddSeparator().AddParameter("null_padding", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	table_function.GetSignature().AddSeparator().AddParameter("allow_quoted_nulls", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	table_function.GetSignature().AddSeparator().AddParameter("column_types", LogicalType::ANY, Value(LogicalType::ANY));
-	table_function.GetSignature().AddSeparator().AddParameter("dtypes", LogicalType::ANY, Value(LogicalType::ANY));
-	table_function.GetSignature().AddSeparator().AddParameter("types", LogicalType::ANY, Value(LogicalType::ANY));
-	table_function.GetSignature().AddSeparator().AddParameter("names", LogicalType::LIST(LogicalType::VARCHAR), Value(LogicalType::LIST(LogicalType::VARCHAR)));
-	table_function.GetSignature().AddSeparator().AddParameter("column_names", LogicalType::LIST(LogicalType::VARCHAR), Value(LogicalType::LIST(LogicalType::VARCHAR)));
-	table_function.GetSignature().AddSeparator().AddParameter("comment", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("encoding", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("strict_mode", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	table_function.GetSignature().AddSeparator().AddParameter("thousands", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("files_to_sniff", LogicalType::BIGINT, Value(LogicalType::BIGINT));
+	table_function.GetSignature()
+	    .AddOptionalNamedParameter("sep", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("delim", LogicalType::VARCHAR)
+	    // aliases that the CSV options accept - COPY has always taken these, so the table function takes them too
+	    .AddOptionalNamedParameter("separator", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("delimiter", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("null", LogicalType::ANY)
+	    .AddOptionalNamedParameter("date_format", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("timestamp_format", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("quote", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("new_line", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("escape", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("nullstr", LogicalType::ANY)
+	    .AddOptionalNamedParameter("columns", LogicalType::ANY)
+	    .AddOptionalNamedParameter("auto_type_candidates", LogicalType::ANY)
+	    .AddOptionalNamedParameter("header", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("auto_detect", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("sample_size", LogicalType::BIGINT)
+	    .AddOptionalNamedParameter("all_varchar", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("dateformat", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("timestampformat", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("normalize_names", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("compression", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("skip", LogicalType::BIGINT)
+	    .AddOptionalNamedParameter("max_line_size", LogicalType::BIGINT)
+	    .AddOptionalNamedParameter("maximum_line_size", LogicalType::BIGINT)
+	    .AddOptionalNamedParameter("ignore_errors", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("store_rejects", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("rejects_table", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("rejects_scan", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("rejects_limit", LogicalType::BIGINT)
+	    .AddOptionalNamedParameter("rejects_line_size_limit", LogicalType::BIGINT)
+	    .AddOptionalNamedParameter("force_not_null", LogicalType::LIST(LogicalType::VARCHAR))
+	    .AddOptionalNamedParameter("buffer_size", LogicalType::BIGINT)
+	    .AddOptionalNamedParameter("decimal_separator", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("parallel", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("null_padding", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("allow_quoted_nulls", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("column_types", LogicalType::ANY)
+	    .AddOptionalNamedParameter("dtypes", LogicalType::ANY)
+	    .AddOptionalNamedParameter("types", LogicalType::ANY)
+	    .AddOptionalNamedParameter("names", LogicalType::LIST(LogicalType::VARCHAR))
+	    .AddOptionalNamedParameter("column_names", LogicalType::LIST(LogicalType::VARCHAR))
+	    .AddOptionalNamedParameter("comment", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("encoding", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("strict_mode", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("thousands", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("files_to_sniff", LogicalType::BIGINT);
 
 	MultiFileReader::AddParameters(table_function);
 }

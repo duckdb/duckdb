@@ -248,12 +248,13 @@ static string PragmaTpcdsQuery(ClientContext &context, const FunctionParameters 
 
 static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction dsdgen_func("dsdgen", {}, DsdgenFunction, DsdgenBind, DsdgenInit);
-	dsdgen_func.GetSignature().AddSeparator().AddParameter("sf", LogicalType::DOUBLE, Value(LogicalType::DOUBLE));
-	dsdgen_func.GetSignature().AddSeparator().AddParameter("overwrite", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	dsdgen_func.GetSignature().AddSeparator().AddParameter("keys", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	dsdgen_func.GetSignature().AddSeparator().AddParameter("catalog", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	dsdgen_func.GetSignature().AddSeparator().AddParameter("schema", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	dsdgen_func.GetSignature().AddSeparator().AddParameter("suffix", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	dsdgen_func.GetSignature()
+	    .AddOptionalNamedParameter("sf", LogicalType::DOUBLE)
+	    .AddOptionalNamedParameter("overwrite", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("keys", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("catalog", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("schema", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("suffix", LogicalType::VARCHAR);
 	dsdgen_func.call_return_type = StatementReturnType::NOTHING;
 	dsdgen_func.table_scan_progress = DsdgenProgress;
 	dsdgen_func.cardinality = DsdgenCardinality;

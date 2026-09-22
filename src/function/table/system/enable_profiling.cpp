@@ -135,11 +135,12 @@ void EnableProfilingFun::RegisterFunction(BuiltinFunctions &set) {
 
 	// a positional list, so it declares "*args" and no "**kwargs" - an argument named after no parameter is an error
 	enable_fun.GetSignature().AddArgsParameter("args", LogicalType::LIST(LogicalType::VARCHAR));
-	enable_fun.GetSignature().AddSeparator().AddParameter("format", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	enable_fun.GetSignature().AddSeparator().AddParameter("coverage", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	enable_fun.GetSignature().AddSeparator().AddParameter("save_location", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	enable_fun.GetSignature().AddSeparator().AddParameter("mode", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	enable_fun.GetSignature().AddSeparator().AddParameter("metrics", LogicalType::ANY, Value(LogicalType::ANY));
+	enable_fun.GetSignature()
+	    .AddOptionalNamedParameter("format", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("coverage", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("save_location", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("mode", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("metrics", LogicalType::ANY);
 
 	set.AddFunction(enable_fun);
 

@@ -514,17 +514,18 @@ static vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &conte
 
 TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	MultiFileFunction<ParquetMultiFileInfo> table_function("parquet_scan");
-	table_function.GetSignature().AddSeparator().AddParameter("binary_as_string", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	table_function.GetSignature().AddSeparator().AddParameter("file_row_number", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	table_function.GetSignature().AddSeparator().AddParameter("debug_use_openssl", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	table_function.GetSignature().AddSeparator().AddParameter("compression", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("explicit_cardinality", LogicalType::UBIGINT, Value(LogicalType::UBIGINT));
-	table_function.GetSignature().AddSeparator().AddParameter("schema", LogicalTypeId::ANY, Value(LogicalTypeId::ANY));
-	table_function.GetSignature().AddSeparator().AddParameter("encryption_config", LogicalTypeId::ANY, Value(LogicalTypeId::ANY));
-	table_function.GetSignature().AddSeparator().AddParameter("parquet_version", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("can_have_nan", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	table_function.GetSignature().AddSeparator().AddParameter("prefetch_strategy", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("utf8_validation", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature()
+	    .AddOptionalNamedParameter("binary_as_string", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("file_row_number", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("debug_use_openssl", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("compression", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("explicit_cardinality", LogicalType::UBIGINT)
+	    .AddOptionalNamedParameter("schema", LogicalTypeId::ANY)
+	    .AddOptionalNamedParameter("encryption_config", LogicalTypeId::ANY)
+	    .AddOptionalNamedParameter("parquet_version", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("can_have_nan", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("prefetch_strategy", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("utf8_validation", LogicalType::VARCHAR);
 	table_function.statistics_extended = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStatsExtended;
 	table_function.get_metrics = ParquetScanGetMetrics;
 	table_function.projection_expression_pushdown = ParquetProjectionExpressionPushdown;

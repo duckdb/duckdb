@@ -155,12 +155,13 @@ static void ExternalResourceTypesFunction(ClientContext &context, TableFunctionI
 void RegisterExternalResourceTypeFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction fn("register_external_resource_type", {LogicalType::VARCHAR}, RegisterExternalResourceTypeFunction,
 	                 RegisterExternalResourceTypeBind, RegisterExternalResourceTypeInit);
-	fn.GetSignature().AddSeparator().AddParameter("kind", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	fn.GetSignature().AddSeparator().AddParameter("create_function", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	fn.GetSignature().AddSeparator().AddParameter("status_function", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	fn.GetSignature().AddSeparator().AddParameter("destroy_function", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	fn.GetSignature().AddSeparator().AddParameter("resolve_function", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	fn.GetSignature().AddSeparator().AddParameter("list_function", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	fn.GetSignature()
+	    .AddOptionalNamedParameter("kind", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("create_function", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("status_function", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("destroy_function", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("resolve_function", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("list_function", LogicalType::VARCHAR);
 	set.AddFunction(fn);
 }
 

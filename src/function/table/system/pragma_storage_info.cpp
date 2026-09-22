@@ -263,8 +263,9 @@ void PragmaStorageInfo::RegisterFunction(BuiltinFunctions &set) {
 	                           PragmaStorageInfoBind, PragmaStorageInfoInitGlobal, PragmaStorageInfoInitLocal);
 	storage_info.get_partition_data = PragmaStorageInfoGetPartitionData;
 	storage_info.table_scan_progress = PragmaStorageInfoProgress;
-	storage_info.GetSignature().AddSeparator().AddParameter("include_segment_info", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	storage_info.GetSignature().AddSeparator().AddParameter("loaded_segments_only", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	storage_info.GetSignature()
+	    .AddOptionalNamedParameter("include_segment_info", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("loaded_segments_only", LogicalType::BOOLEAN);
 	set.AddFunction(std::move(storage_info));
 }
 

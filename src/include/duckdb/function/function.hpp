@@ -289,6 +289,26 @@ public:
 		return *this;
 	}
 
+	//! Adds a parameter that can only be passed by name, closing the positional parameters first if they are not
+	//! closed already. Required: a call that leaves it out does not match
+	auto AddNamedParameter(Identifier name, LogicalType type) -> FunctionSignature & {
+		AddSeparator();
+		return AddParameter(std::move(name), std::move(type));
+	}
+
+	//! The same, with a default for calls that leave it out
+	auto AddNamedParameter(Identifier name, LogicalType type, Value default_value) -> FunctionSignature & {
+		AddSeparator();
+		return AddParameter(std::move(name), std::move(type), std::move(default_value));
+	}
+
+	//! Adds a named parameter the caller may leave out, defaulting to a NULL of its own type - the form a function's
+	//! options take, so that an option that is not passed simply does not reach it
+	auto AddOptionalNamedParameter(Identifier name, LogicalType type) -> FunctionSignature & {
+		auto default_value = Value(type);
+		return AddNamedParameter(std::move(name), std::move(type), std::move(default_value));
+	}
+
 	//! Adds a "**kwargs" parameter, receiving all named arguments that do not match another parameter
 	auto AddKwargsParameter(Identifier name, LogicalType type) -> FunctionSignature & {
 		parameters.emplace_back(std::move(name), std::move(type), FunctionParameterKind::VAR_KEYWORD);
@@ -301,8 +321,15 @@ public:
 	//! Does nothing when the positional parameters are already closed, by a "*args" or by an earlier separator, so
 	//! that several helpers can each declare options on the same function
 	auto AddSeparator() -> FunctionSignature & {
-		if (GetParameterByKind(FunctionParameterKind::VAR_POSITIONAL)) {
-			return *this;
+		// Is the last param a "*args" or keyword-only?
+		if (!parameters.empty()) {
+			const auto last_kind = parameters.back().GetKind();
+			if (last_kind == FunctionParameterKind::VAR_POSITIONAL) {
+				return *this;
+			}
+			if (last_kind == FunctionParameterKind::KEYWORD_ONLY) {
+				return *this;
+			}
 		}
 		parameters.emplace_back("*", LogicalType(LogicalTypeId::INVALID), FunctionParameterKind::VAR_POSITIONAL);
 		return *this;

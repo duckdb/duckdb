@@ -121,10 +121,11 @@ unique_ptr<FunctionData> JSONScan::Deserialize(Deserializer &deserializer, Bound
 }
 
 void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
-	table_function.GetSignature().AddSeparator().AddParameter("maximum_object_size", LogicalType::UINTEGER, Value(LogicalType::UINTEGER));
-	table_function.GetSignature().AddSeparator().AddParameter("ignore_errors", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	table_function.GetSignature().AddSeparator().AddParameter("format", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("compression", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature()
+	    .AddOptionalNamedParameter("maximum_object_size", LogicalType::UINTEGER)
+	    .AddOptionalNamedParameter("ignore_errors", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("format", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("compression", LogicalType::VARCHAR);
 
 	table_function.serialize = Serialize;
 	table_function.deserialize = Deserialize;
@@ -135,24 +136,26 @@ void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 }
 
 void JSONScan::AddReadJSONParameters(TableFunction &table_function) {
-	table_function.GetSignature().AddSeparator().AddParameter("columns", LogicalType::ANY, Value(LogicalType::ANY));
-	table_function.GetSignature().AddSeparator().AddParameter("auto_detect", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	table_function.GetSignature().AddSeparator().AddParameter("geojson", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	table_function.GetSignature().AddSeparator().AddParameter("sample_size", LogicalType::BIGINT, Value(LogicalType::BIGINT));
-	table_function.GetSignature().AddSeparator().AddParameter("dateformat", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("date_format", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("timestampformat", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("timestamp_format", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("records", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("array", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	table_function.GetSignature().AddSeparator().AddParameter("maximum_sample_files", LogicalType::BIGINT, Value(LogicalType::BIGINT));
+	table_function.GetSignature()
+	    .AddOptionalNamedParameter("columns", LogicalType::ANY)
+	    .AddOptionalNamedParameter("auto_detect", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("geojson", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("sample_size", LogicalType::BIGINT)
+	    .AddOptionalNamedParameter("dateformat", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("date_format", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("timestampformat", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("timestamp_format", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("records", LogicalType::ANY)
+	    .AddOptionalNamedParameter("array", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("maximum_sample_files", LogicalType::BIGINT);
 }
 
 void JSONScan::AddAutoDetectParameters(TableFunction &table_function) {
-	table_function.GetSignature().AddSeparator().AddParameter("maximum_depth", LogicalType::BIGINT, Value(LogicalType::BIGINT));
-	table_function.GetSignature().AddSeparator().AddParameter("field_appearance_threshold", LogicalType::DOUBLE, Value(LogicalType::DOUBLE));
-	table_function.GetSignature().AddSeparator().AddParameter("convert_strings_to_integers", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	table_function.GetSignature().AddSeparator().AddParameter("map_inference_threshold", LogicalType::BIGINT, Value(LogicalType::BIGINT));
+	table_function.GetSignature()
+	    .AddOptionalNamedParameter("maximum_depth", LogicalType::BIGINT)
+	    .AddOptionalNamedParameter("field_appearance_threshold", LogicalType::DOUBLE)
+	    .AddOptionalNamedParameter("convert_strings_to_integers", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("map_inference_threshold", LogicalType::BIGINT);
 }
 
 bool JSONScan::ParseOption(ClientContext &context, const Identifier &key, const Value &value,
@@ -302,7 +305,10 @@ bool JSONScan::ParseOption(ClientContext &context, const Identifier &key, const 
 		return true;
 	}
 	if (key == "records") {
-		auto arg = StringValue::Get(value);
+		// records is tri-state: 'auto', 'true' or 'false'. Accept a boolean for the latter two, since
+		// records = false reads more naturally than records = 'false'.
+		auto arg = value.type().id() == LogicalTypeId::BOOLEAN ? string(BooleanValue::Get(value) ? "true" : "false")
+		                                                       : StringValue::Get(value);
 		if (arg == "auto") {
 			options.record_type = JSONRecordType::AUTO_DETECT;
 		} else if (arg == "true") {

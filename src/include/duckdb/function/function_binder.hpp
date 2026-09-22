@@ -116,10 +116,25 @@ public:
 	                                     const vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args,
 	                                     ErrorData &error);
 
+	//! Bind a table function: select the overload, check the named arguments against its signature, and cast both
+	//! the positional and the named arguments to the types it declares
+	DUCKDB_API optional_idx BindFunction(const Identifier &name, const TableFunctionSet &functions,
+	                                     vector<unique_ptr<Expression>> &positional_arguments,
+	                                     vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+	                                     vector<Value> &parameters, named_parameter_map_t &named_parameters,
+	                                     ErrorData &error);
+
+	//! Bind a table in-out function. Its arguments are the columns of an input table, so there is nothing to place
+	//! or fold - only the overload is chosen
+	DUCKDB_API optional_idx BindTableInOutFunction(const Identifier &name, const TableFunctionSet &functions,
+	                                               const vector<LogicalType> &input_types, ErrorData &error);
+
 	//! Bind a pragma function from the set of functions and input arguments
 	DUCKDB_API optional_idx BindFunction(const Identifier &name, const PragmaFunctionSet &functions,
-	                                     vector<Value> &parameters,
-	                                     vector<pair<Identifier, Value>> &named_parameters, ErrorData &error);
+	                                     vector<unique_ptr<Expression>> &positional_arguments,
+	                                     vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+	                                     vector<Value> &parameters, named_parameter_map_t &named_parameters,
+	                                     ErrorData &error);
 
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const Identifier &schema, const Identifier &name,
 	                                                     vector<unique_ptr<Expression>> children, ErrorData &error,

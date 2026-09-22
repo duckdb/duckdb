@@ -4,7 +4,7 @@
 statement error
 select * FROM test_all_types(use_large_bignum := -32768, use_large_enum := NULL);
 ----
-Invalid Input Error: Cannot use NULL as argument for use_large_enum
+<REGEX>:.*No function matches.*test_all_types.*
 
 statement error
 select * FROM test_all_types(use_large_bignum := NULL);

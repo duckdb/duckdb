@@ -346,7 +346,7 @@ void TestVectorTypesFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction test_vector_types("test_vector_types", {LogicalType::ANY}, TestVectorTypesFunction,
 	                                TestVectorTypesBind, TestVectorTypesInit);
 	test_vector_types.GetSignature().AddArgsParameter("args", LogicalType::ANY);
-	test_vector_types.GetSignature().AddSeparator().AddParameter("all_flat", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
+	test_vector_types.GetSignature().AddOptionalNamedParameter("all_flat", LogicalType::BOOLEAN);
 	test_vector_types.table_scan_progress = TestVectorTypesProgress;
 
 	set.AddFunction(std::move(test_vector_types));

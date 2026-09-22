@@ -123,7 +123,12 @@ static unique_ptr<FunctionData> CreateExternalResourceBind(ClientContext &contex
 		} else if (key == "resource_name" && !np.second.IsNull()) {
 			result->resource_name = StringValue::Get(np.second);
 		} else if (key == "handle" && !np.second.IsNull()) {
-			result->adopt_handle = np.second;
+			// declared ANY so that a STRUCT of the handle's fields is accepted as readily as a MAP - anything
+			// that is not convertible to the handle's shape is reported here
+			result->adopt_handle =
+			    np.second.type().id() == LogicalTypeId::MAP
+			        ? np.second
+			        : np.second.DefaultCastAs(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
 		} else if (key == "teardown_on_failure" && !np.second.IsNull()) {
 			result->teardown_on_failure = BooleanValue::Get(np.second);
 		} else if (key == "timeout_seconds" && !np.second.IsNull()) {
@@ -364,12 +369,13 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 void CreateExternalResourceFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction fn("create_external_resource", {LogicalType::VARCHAR}, CreateExternalResourceFunction,
 	                 CreateExternalResourceBind, CreateExternalResourceInit);
-	fn.GetSignature().AddSeparator().AddParameter("params", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR), Value(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)));
-	fn.GetSignature().AddSeparator().AddParameter("resource_name", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	fn.GetSignature().AddSeparator().AddParameter("handle", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR), Value(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)));
-	fn.GetSignature().AddSeparator().AddParameter("teardown_on_failure", LogicalType::BOOLEAN, Value(LogicalType::BOOLEAN));
-	fn.GetSignature().AddSeparator().AddParameter("timeout_seconds", LogicalType::BIGINT, Value(LogicalType::BIGINT));
-	fn.GetSignature().AddSeparator().AddParameter("poll_interval_seconds", LogicalType::BIGINT, Value(LogicalType::BIGINT));
+	fn.GetSignature()
+	    .AddOptionalNamedParameter("params", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR))
+	    .AddOptionalNamedParameter("resource_name", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("handle", LogicalType::ANY)
+	    .AddOptionalNamedParameter("teardown_on_failure", LogicalType::BOOLEAN)
+	    .AddOptionalNamedParameter("timeout_seconds", LogicalType::BIGINT)
+	    .AddOptionalNamedParameter("poll_interval_seconds", LogicalType::BIGINT);
 	set.AddFunction(fn);
 }
 

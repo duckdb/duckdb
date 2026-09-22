@@ -215,7 +215,7 @@ void duckdb_table_function_add_named_parameter(duckdb_table_function function, c
 	}
 	auto &tf = GetCTableFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	tf.GetSignature().AddSeparator().AddParameter(name, *logical_type, duckdb::Value(*logical_type));
+	tf.GetSignature().AddOptionalNamedParameter(name, *logical_type);
 }
 
 void duckdb_table_function_set_extra_info(duckdb_table_function function, void *extra_info,

@@ -401,37 +401,122 @@ optional_idx FunctionBinder::BindFunction(const Identifier &name, const TableFun
 	return BindFunctionFromArguments(name, functions, regular_args, keyword_args, error);
 }
 
+//! Reject a named argument that no overload of the set accepts, naming the options that were available. Overload
+//! selection would otherwise report only that nothing matched the call, which hides which name was wrong
+template <class T>
+static void VerifyNamedArgumentsAccepted(const Identifier &name, const FunctionSet<T> &functions,
+                                         const vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
+	for (auto &named_argument : named_arguments) {
+		bool accepted = false;
+		for (idx_t i = 0; i < functions.functions.size() && !accepted; i++) {
+			auto &signature = functions.functions[i]->GetSignature();
+			accepted = signature.GetParameterIndexByName(named_argument.first).IsValid() ||
+			           signature.GetKwargsParameter() != nullptr;
+		}
+		if (accepted) {
+			continue;
+		}
+		// list every option any overload accepts, in name order
+		map<string, string> candidates;
+		for (idx_t i = 0; i < functions.functions.size(); i++) {
+			for (auto &param : functions.functions[i]->GetSignature().GetParameters()) {
+				if (!param.IsVariadic() && param.HasDefaultValue()) {
+					candidates[param.GetName().GetIdentifierName()] = param.GetType().ToString();
+				}
+			}
+		}
+		string candidate_list;
+		for (auto &candidate : candidates) {
+			candidate_list += "    " + candidate.first + " " + candidate.second + "\n";
+		}
+		throw BinderException("Invalid named parameter %s for function %s\n%s", named_argument.first,
+		                      name.GetIdentifierName(),
+		                      candidate_list.empty() ? "Function does not accept any named parameters."
+		                                             : "Candidates:\n" + candidate_list);
+	}
+}
+
+//! Fold an argument to the constant it was bound to. A constant expression carries its value directly - evaluating
+//! one is both wasteful and impossible for the types that have no vector representation, such as TABLE
+static Value FoldArgument(ClientContext &context, Expression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		return expr.Cast<BoundConstantExpression>().GetValue();
+	}
+	return ExpressionExecutor::EvaluateScalar(context, expr, true);
+}
+
+//! Place the arguments of a call onto the parameters of the chosen overload: fold each to a constant, cast it to the
+//! type that parameter declares, and hand the named ones back keyed by the name the caller actually wrote
+template <class T>
+static void PlaceArguments(ClientContext &context, const T &function,
+                           vector<unique_ptr<Expression>> &positional_arguments,
+                           vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments, vector<Value> &parameters,
+                           named_parameter_map_t &named_parameters) {
+	auto &signature = function.GetSignature();
+	const auto positional_count = signature.GetPositionalParameterCount();
+	for (idx_t i = 0; i < positional_arguments.size(); i++) {
+		auto value = FoldArgument(context, *positional_arguments[i]);
+		auto target_type = i < positional_count ? signature.GetParameter(i).GetType() : signature.GetVarArgs();
+		if (target_type != LogicalType::ANY && target_type != LogicalType::POINTER &&
+		    target_type.id() != LogicalTypeId::LIST && target_type != LogicalType::TABLE) {
+			value = value.CastAs(context, target_type);
+		}
+		parameters.push_back(std::move(value));
+	}
+
+	identifier_set_t seen_names;
+	for (auto &named_argument : named_arguments) {
+		auto &argument_name = named_argument.first;
+		if (!seen_names.insert(argument_name).second) {
+			throw BinderException("Duplicate named argument %s for function %s", argument_name,
+			                      function.GetName().GetIdentifierName());
+		}
+		auto value = FoldArgument(context, *named_argument.second);
+		auto param_idx = signature.GetParameterIndexByName(argument_name);
+		if (param_idx.IsValid()) {
+			// a "**kwargs" parameter has no declared type of its own to cast to
+			auto &param = signature.GetParameter(param_idx.GetIndex());
+			if (param.GetType().id() != LogicalTypeId::ANY) {
+				value = value.CastAs(context, param.GetType());
+			}
+		}
+		named_parameters.insert(make_pair(argument_name, std::move(value)));
+	}
+}
+
+optional_idx FunctionBinder::BindFunction(const Identifier &name, const TableFunctionSet &functions,
+                                          vector<unique_ptr<Expression>> &positional_arguments,
+                                          vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+                                          vector<Value> &parameters, named_parameter_map_t &named_parameters,
+                                          ErrorData &error) {
+	VerifyNamedArgumentsAccepted(name, functions, named_arguments);
+	auto entry = BindFunction(name, functions, positional_arguments, named_arguments, error);
+	if (!entry.IsValid()) {
+		return entry;
+	}
+	PlaceArguments(context, *functions.GetFunctionByOffset(entry.GetIndex()), positional_arguments, named_arguments,
+	               parameters, named_parameters);
+	return entry;
+}
+
+optional_idx FunctionBinder::BindTableInOutFunction(const Identifier &name, const TableFunctionSet &functions,
+                                                    const vector<LogicalType> &input_types, ErrorData &error) {
+	return BindFunctionFromArguments(name, functions, input_types, {}, error);
+}
+
 optional_idx FunctionBinder::BindFunction(const Identifier &name, const PragmaFunctionSet &functions,
-                                          vector<Value> &parameters,
-                                          vector<pair<Identifier, Value>> &named_parameters, ErrorData &error) {
-	vector<LogicalType> types;
-	for (auto &value : parameters) {
-		types.push_back(value.type());
-	}
-	vector<pair<Identifier, LogicalType>> named_types;
-	for (auto &named_parameter : named_parameters) {
-		named_types.emplace_back(named_parameter.first, named_parameter.second.type());
-	}
-	auto entry = BindFunctionFromArguments(name, functions, types, named_types, error);
+                                          vector<unique_ptr<Expression>> &positional_arguments,
+                                          vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+                                          vector<Value> &parameters, named_parameter_map_t &named_parameters,
+                                          ErrorData &error) {
+	VerifyNamedArgumentsAccepted(name, functions, named_arguments);
+	auto [args, kwargs] = GetArgumentsFromExpressions(positional_arguments, named_arguments);
+	auto entry = BindFunctionFromArguments(name, functions, args, kwargs, error);
 	if (!entry.IsValid()) {
 		error.Throw();
 	}
-	const auto &candidate_function = *functions.GetFunctionByOffset(entry.GetIndex());
-	const auto &signature = candidate_function.GetSignature();
-	const auto positional_count = signature.GetPositionalParameterCount();
-	// cast the input parameters - anything past the declared parameters was received by "*args"
-	for (idx_t i = 0; i < parameters.size(); i++) {
-		auto target_type = i < positional_count ? signature.GetParameter(i).GetType() : signature.GetVarArgs();
-		parameters[i] = parameters[i].CastAs(context, target_type);
-	}
-	// selection has already rejected any name that no parameter accepts, so every name matches one here
-	for (auto &named_parameter : named_parameters) {
-		auto param_idx = signature.GetParameterIndexByName(named_parameter.first);
-		auto &param = signature.GetParameter(param_idx.GetIndex());
-		if (param.GetType().id() != LogicalTypeId::ANY) {
-			named_parameter.second = named_parameter.second.DefaultCastAs(param.GetType());
-		}
-	}
+	PlaceArguments(context, *functions.GetFunctionByOffset(entry.GetIndex()), positional_arguments, named_arguments,
+	               parameters, named_parameters);
 	return entry;
 }
 

@@ -499,8 +499,9 @@ void DuckDBMultiFileInfo::GetVirtualColumns(ClientContext &, MultiFileBindData &
 }
 
 void ReadDuckDBAddNamedParameters(TableFunction &table_function) {
-	table_function.GetSignature().AddSeparator().AddParameter("schema_name", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
-	table_function.GetSignature().AddSeparator().AddParameter("table_name", LogicalType::VARCHAR, Value(LogicalType::VARCHAR));
+	table_function.GetSignature()
+	    .AddOptionalNamedParameter("schema_name", LogicalType::VARCHAR)
+	    .AddOptionalNamedParameter("table_name", LogicalType::VARCHAR);
 
 	MultiFileReader::AddParameters(table_function);
 }

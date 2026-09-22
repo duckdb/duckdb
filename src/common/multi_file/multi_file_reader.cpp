@@ -87,14 +87,13 @@ Value MultiFileReader::CreateValueFromFileList(const vector<string> &file_list) 
 
 void MultiFileReader::AddParameters(TableFunction &table_function, MultiFileParameters which) {
 	auto &signature = table_function.GetSignature();
-	signature.AddSeparator();
 	// a function may already declare some of these - e.g. one built on MultiFileFunction, whose constructor declares
 	// them, and which then runs a helper that declares them for the plain table functions that share it
 	auto add = [&](const char *name, const LogicalType &type) {
 		if (signature.GetParameterIndexByName(name).IsValid()) {
 			return;
 		}
-		signature.AddParameter(name, type, Value(type));
+		signature.AddOptionalNamedParameter(name, type);
 	};
 	if (which == MultiFileParameters::ALL) {
 		add("filename", LogicalType::ANY);

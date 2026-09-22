@@ -11,23 +11,17 @@
 namespace duckdb {
 
 unique_ptr<BoundPragmaInfo> Binder::BindPragma(PragmaInfo &info, QueryErrorContext error_context) {
-	vector<Value> params;
-	// the named arguments are kept in a vector, as for every other function kind, so that they reach overload
-	// selection by name and in the order they were written
-	vector<pair<Identifier, Value>> named_arguments;
+	// the arguments are bound here and folded to constants only after the overload has been chosen, so that a
+	// literal keeps its literal type for overload selection - as for every other function kind
+	vector<unique_ptr<Expression>> positional_arguments;
+	vector<pair<Identifier, unique_ptr<Expression>>> named_arguments;
 
-	// resolve the parameters
 	ConstantBinder pragma_binder(*this, context, "PRAGMA value");
 	for (auto &param : info.parameters) {
-		auto bound_value = pragma_binder.Bind(param);
-		auto value = ExpressionExecutor::EvaluateScalar(context, *bound_value, true);
-		params.push_back(std::move(value));
+		positional_arguments.push_back(pragma_binder.Bind(param));
 	}
-
 	for (auto &entry : info.named_parameters) {
-		auto bound_value = pragma_binder.Bind(entry.second);
-		auto value = ExpressionExecutor::EvaluateScalar(context, *bound_value, true);
-		named_arguments.emplace_back(entry.first, std::move(value));
+		named_arguments.emplace_back(Identifier(entry.first), pragma_binder.Bind(entry.second));
 	}
 
 	// bind the pragma function
@@ -53,19 +47,17 @@ unique_ptr<BoundPragmaInfo> Binder::BindPragma(PragmaInfo &info, QueryErrorConte
 
 	FunctionBinder function_binder(*this);
 	ErrorData error;
-	// selection, casting and named-argument checking all happen in the function binder
-	auto bound_idx = function_binder.BindFunction(entry->name, entry->functions, params, named_arguments, error);
+	// selection, folding, casting and named-argument checking all happen in the function binder
+	vector<Value> params;
+	named_parameter_map_t named_parameters;
+	auto bound_idx = function_binder.BindFunction(entry->name, entry->functions, positional_arguments, named_arguments,
+	                                              params, named_parameters, error);
 	if (!bound_idx.IsValid()) {
 		D_ASSERT(error.HasError());
 		error.AddQueryLocation(error_context);
 		error.Throw();
 	}
 	auto bound_function = *entry->functions.GetFunctionByOffset(bound_idx.GetIndex());
-	// the pragma implementations look their options up by name
-	named_parameter_map_t named_parameters;
-	for (auto &named_argument : named_arguments) {
-		named_parameters.insert(make_pair(named_argument.first, std::move(named_argument.second)));
-	}
 	return make_uniq<BoundPragmaInfo>(std::move(bound_function), std::move(params), std::move(named_parameters));
 }
 

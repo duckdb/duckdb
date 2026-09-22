@@ -297,12 +297,12 @@ CALL enable_profiling(this_does_not_exist = 'hello');
 ----
 Invalid named parameter "this_does_not_exist" for function enable_profiling
 
-statement error
+# a bare identifier is converted to the string 'format' and accepted as a metric name,
+# the same as any other unvalidated metric name
+statement ok
 CALL enable_profiling(format);
-----
-No function matches the given name and argument types 'enable_profiling(VARCHAR)'.
 
 statement error
 CALL enable_profiling('hello', 'goodbye');
 ----
-No function matches the given name and argument types 'enable_profiling(VARCHAR, VARCHAR)'
+<REGEX>:.*expected 0 or 1 parameter.*

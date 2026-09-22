@@ -566,14 +566,13 @@ TableFunction TableFunctionMultiFileWrapper::CreateFunction(TableFunction single
 	result.bind = TableFunctionMultiFileBind;
 	// forward the named parameters and the pushdown capabilities of the wrapped function
 	auto &signature = result.GetSignature();
-	signature.AddSeparator();
 	for (auto &param : single_file_function.GetSignature().GetParameters()) {
 		// the multi-file options the wrapper already declares are not forwarded again
 		if (param.GetKind() != FunctionParameterKind::KEYWORD_ONLY ||
 		    signature.GetParameterIndexByName(param.GetName()).IsValid()) {
 			continue;
 		}
-		signature.AddParameter(param.GetName(), param.GetType(), Value(param.GetType()));
+		signature.AddOptionalNamedParameter(param.GetName(), param.GetType());
 	}
 	result.projection_pushdown = single_file_function.projection_pushdown;
 	result.filter_pushdown = single_file_function.filter_pushdown;

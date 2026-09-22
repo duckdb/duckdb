@@ -19,23 +19,11 @@
 
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
 
 enum class TableFunctionBindType { STANDARD_TABLE_FUNCTION, TABLE_IN_OUT_FUNCTION, TABLE_PARAMETER_FUNCTION };
-
-//! The parameters a call can fill by name: every optional parameter, whether it is keyword-only or could also have
-//! been passed by position. This reproduces what the named_parameter_type_map_t of a table function used to hold, and
-//! goes away once table functions place their arguments through the function binder like every other function kind
-static named_parameter_type_map_t ToNamedParameterTypes(const FunctionSignature &signature) {
-	named_parameter_type_map_t result;
-	for (auto &param : signature.GetParameters()) {
-		if (!param.IsVariadic() && param.HasDefaultValue()) {
-			result[param.GetName()] = param.GetType();
-		}
-	}
-	return result;
-}
 
 static TableFunctionBindType GetTableFunctionBindType(TableFunctionCatalogEntry &table_function,
                                                       vector<unique_ptr<ParsedExpression>> &expressions) {
@@ -100,15 +88,14 @@ void Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &e
 
 bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
                                          vector<unique_ptr<ParsedExpression>> &expressions,
-                                         vector<LogicalType> &arguments, vector<Value> &parameters,
-                                         named_parameter_map_t &named_parameters, BoundStatement &subquery,
-                                         ErrorData &error) {
+                                         vector<unique_ptr<Expression>> &positional_arguments,
+                                         vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+                                         BoundStatement &subquery, bool &table_in_out, ErrorData &error) {
 	auto bind_type = GetTableFunctionBindType(table_function, expressions);
 	if (bind_type == TableFunctionBindType::TABLE_IN_OUT_FUNCTION) {
-		// bind table in-out function
+		// bind table in-out function - its arguments are the columns of the subquery, so there is nothing to fold
 		BindTableInTableOutFunction(expressions, subquery);
-		// fetch the arguments from the subquery
-		arguments = subquery.types;
+		table_in_out = true;
 		return true;
 	}
 	bool seen_subquery = false;
@@ -149,8 +136,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			subquery = binder->BindNode(*se.Subquery()->node);
 			MoveCorrelatedExpressions(*binder);
 			seen_subquery = true;
-			arguments.emplace_back(LogicalTypeId::TABLE);
-			parameters.emplace_back();
+			positional_arguments.push_back(make_uniq<BoundConstantExpression>(Value(LogicalType::TABLE)));
 			continue;
 		}
 
@@ -164,17 +150,18 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			// should have been eliminated before
 			throw InternalException("Table function requires a constant parameter");
 		}
-		auto constant = ExpressionExecutor::EvaluateScalar(context, *expr, true);
+		// The argument is folded to a constant only after the overload has been chosen, so that the bound
+		// expression's STRING_LITERAL / INTEGER_LITERAL type reaches overload selection - which is what lets
+		// "header = 1" match a BOOLEAN option, exactly as it already does for scalar functions
 		if (parameter_name.empty()) {
 			// unnamed parameter
-			if (!named_parameters.empty()) {
+			if (!named_arguments.empty()) {
 				error = ErrorData("Unnamed parameters cannot come after named parameters");
 				return false;
 			}
-			arguments.emplace_back(constant.IsNull() ? LogicalType::SQLNULL : sql_type);
-			parameters.emplace_back(std::move(constant));
+			positional_arguments.push_back(std::move(expr));
 		} else {
-			named_parameters[parameter_name] = std::move(constant);
+			named_arguments.emplace_back(parameter_name, std::move(expr));
 		}
 	}
 	return true;
@@ -194,8 +181,8 @@ static string GetAlias(const TableFunctionRef &ref) {
 //! Postgres names the single column of a set-returning function after the alias of the function
 //! (e.g. "SELECT t FROM generate_series(1, 2) t" returns the values, not a struct)
 //! returns the original column name, which is kept available as a column alias
-static Identifier ApplyPostgresSetofAliasCompatibility(const BaseTableFunction &table_function, const TableFunctionRef &ref,
-                                                       vector<Identifier> &return_names) {
+static Identifier ApplyPostgresSetofAliasCompatibility(const BaseTableFunction &table_function,
+                                                       const TableFunctionRef &ref, vector<Identifier> &return_names) {
 	if (table_function.return_type != TableFunctionReturnType::SET_RETURNING_FUNCTION || ref.alias.empty() ||
 	    !ref.column_name_alias.empty() || return_names.size() != 1) {
 		return Identifier();
@@ -304,7 +291,8 @@ BoundStatement Binder::BindTableFunctionInternal(BoundTableFunction &table_funct
 		SetAlwaysRequireRebind();
 	}
 	if (return_types.size() != return_names.size()) {
-		throw InternalException("Failed to bind \"%s\": return_types/names must have same size", table_function.GetName());
+		throw InternalException("Failed to bind \"%s\": return_types/names must have same size",
+		                        table_function.GetName());
 	}
 	if (return_types.empty()) {
 		throw InternalException("Failed to bind \"%s\": Table function must return at least one column",
@@ -442,11 +430,11 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	D_ASSERT(func_catalog.type == CatalogType::TABLE_FUNCTION_ENTRY);
 	auto &function = func_catalog.Cast<TableFunctionCatalogEntry>();
 
-	// evaluate the input parameters to the function
-	vector<LogicalType> arguments;
-	vector<Value> parameters;
-	named_parameter_map_t named_parameters;
+	// bind the input parameters to the function - they are folded to constants after the overload is chosen
+	vector<unique_ptr<Expression>> positional_arguments;
+	vector<pair<Identifier, unique_ptr<Expression>>> named_arguments;
 	BoundStatement subquery;
+	bool table_in_out = false;
 	ErrorData error;
 
 	vector<unique_ptr<ParsedExpression>> children;
@@ -454,25 +442,26 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		children.push_back(std::move(child.GetExpressionMutable()));
 	}
 
-	if (!BindTableFunctionParameters(function, children, arguments, parameters, named_parameters, subquery, error)) {
+	if (!BindTableFunctionParameters(function, children, positional_arguments, named_arguments, subquery, table_in_out,
+	                                 error)) {
 		error.AddQueryLocation(ref);
 		error.Throw();
 	}
 
-	// select the function based on the input parameters
+	// selection, named-argument checking, folding and casting all happen in the function binder
 	FunctionBinder function_binder(*this);
-	auto best_function_idx = function_binder.BindFunction(function.name, function.functions, arguments, error);
+	vector<Value> parameters;
+	named_parameter_map_t named_parameters;
+	auto best_function_idx =
+	    table_in_out ? function_binder.BindTableInOutFunction(function.name, function.functions, subquery.types, error)
+	                 : function_binder.BindFunction(function.name, function.functions, positional_arguments,
+	                                                named_arguments, parameters, named_parameters, error);
 	if (!best_function_idx.IsValid()) {
 		error.AddQueryLocation(ref);
 		error.Throw();
 	}
 	// copied out of the set: BindTableFunctionInternal fills in the bound return types
-	const auto &selected_function = *function.functions.GetFunctionByOffset(best_function_idx.GetIndex());
-	BoundTableFunction table_function(selected_function);
-
-	// now check the named parameters
-	auto declared_options = ToNamedParameterTypes(selected_function.GetSignature());
-	BindNamedParameters(declared_options, named_parameters, error_context, table_function.GetName());
+	BoundTableFunction table_function(function.functions.GetFunctionByOffset(best_function_idx.GetIndex()));
 
 	vector<LogicalType> input_table_types;
 	vector<Identifier> input_table_names;
@@ -486,24 +475,13 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 			input_table_names.push_back(Identifier());
 		}
 	}
-	if (!parameters.empty()) {
-		// cast the parameters to the type of the function
-		for (idx_t i = 0; i < arguments.size(); i++) {
-			const auto &signature = table_function.GetSignature();
+	if (parameters.empty() && subquery.plan) {
+		// the arguments are the columns of a subquery, so the declared types apply to those instead - the function
+		// binder casts the folded constants of every other call shape
+		const auto &signature = table_function.GetSignature();
+		for (idx_t i = 0; i < input_table_types.size(); i++) {
 			auto target_type = i < signature.GetPositionalParameterCount() ? signature.GetParameter(i).GetType()
 			                                                               : signature.GetVarArgs();
-
-			if (target_type != LogicalType::ANY && target_type != LogicalType::POINTER &&
-			    target_type.id() != LogicalTypeId::LIST && target_type != LogicalType::TABLE) {
-				parameters[i] = parameters[i].CastAs(context, target_type);
-			}
-		}
-	} else if (subquery.plan) {
-		for (idx_t i = 0; i < arguments.size(); i++) {
-			const auto &signature = table_function.GetSignature();
-			auto target_type = i < signature.GetPositionalParameterCount() ? signature.GetParameter(i).GetType()
-			                                                               : signature.GetVarArgs();
-
 			if (target_type != LogicalType::ANY && target_type != LogicalType::POINTER &&
 			    target_type.id() != LogicalTypeId::LIST) {
 				input_table_types[i] = target_type;

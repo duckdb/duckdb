@@ -6,13 +6,16 @@ statement ok
 SET default_null_order='nulls_first';
 
 # Corner Cases
-statement error
+# the integer literals 0 and 1 fit in a boolean, so these bind
+query I
 select bool_or(0)
 ----
+false
 
-statement error
+query I
 select bool_and(0)
 ----
+false
 
 query I
 select bool_or(NULL)
