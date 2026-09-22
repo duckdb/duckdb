@@ -250,6 +250,7 @@ AttachedDatabase &DuckDBReader::GetAttachedDatabase() {
 		auto &db_manager = DatabaseManager::Get(context);
 		AttachInfo info;
 		info.path = file.path;
+		// a unique name per reader: each reader detaches its own attachment when it finishes
 		info.name = GenerateInternalName("__duckdb_reader_");
 		info.on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
 		unordered_map<string, Value> attach_kv;

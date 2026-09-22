@@ -113,8 +113,9 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 	ensure_not_connected();
 	if (info->name_is_string_literal) {
 		// `CONNECT '<uri>'`: attach the connection string under an internal, hidden, ephemeral alias and
-		// bind to it in one shot. Use a UUID name to avoid accidental alias collisions. It is owned
-		// by this connection and detached again by DISCONNECT (see PhysicalDisconnect).
+		// bind to it in one shot. The name is a random UUID (like __pivot_enum_<uuid>): unique, ASCII
+		// (backend-safe), and unguessable, so it is not referenceable in SQL. It is owned by this
+		// connection and detached again by DISCONNECT (see PhysicalDisconnect).
 		AttachInfo attach_info;
 		attach_info.name = GenerateInternalName("__connect_");
 		attach_info.path = info->name.GetIdentifierName();

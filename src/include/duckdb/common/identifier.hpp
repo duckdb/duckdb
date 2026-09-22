@@ -93,8 +93,7 @@ private:
 	string value;
 };
 
-//! Generate a fresh UUID-suffixed internal name. The prefix must be valid UTF-8.
-//! These names are not reserved; callers still need to handle collisions when registering them.
+//! Generate an internal name: the given prefix followed by a random UUID
 DUCKDB_API Identifier GenerateInternalName(const char *prefix);
 
 //! Equality (case-insensitive)
