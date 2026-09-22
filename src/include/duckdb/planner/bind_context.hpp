@@ -38,6 +38,9 @@ struct UsingColumnSet {
 
 enum class ColumnBindType { EXPAND_GENERATED_COLUMNS, DO_NOT_EXPAND_GENERATED_COLUMNS };
 
+//! What to do when aliasing a set of column names produces the same name twice
+enum class DuplicateColumnNames { RENAME, ALLOW };
+
 //! The BindContext object keeps track of all the tables and columns that are
 //! encountered during the binding process.
 class BindContext {
@@ -155,7 +158,8 @@ public:
 	//! Alias a set of column names for the specified table, using the original names if there are not enough aliases
 	//! specified.
 	static vector<Identifier> AliasColumnNames(const Identifier &table_name, const vector<Identifier> &names,
-	                                           const vector<Identifier> &column_aliases);
+	                                           const vector<Identifier> &column_aliases,
+	                                           DuplicateColumnNames duplicates = DuplicateColumnNames::RENAME);
 
 	//! Add all the bindings from a BindContext to this BindContext. The other BindContext is destroyed in the process.
 	void AddContext(BindContext other);

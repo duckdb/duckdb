@@ -45,6 +45,8 @@ public:
 	bool TryGetColumnIndex(ColumnRefExpression &colref, column_t &column_index);
 	column_t GetBindingIndex(const Identifier &column_name);
 	bool HasMatchingBinding(const Identifier &column_name);
+	//! Whether more than one column in this binding carries the given name
+	bool HasDuplicateColumnName(const Identifier &column_name);
 	//! Register an alternative name for an existing column - the alias can be bound, but is hidden from *
 	void AddColumnAlias(const Identifier &column_alias, column_t column_index);
 	//! Returns the name under which a column is registered in this binding (this can differ from the provided name

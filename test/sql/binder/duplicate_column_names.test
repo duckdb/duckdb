@@ -15,19 +15,18 @@ SELECT column_name, column_type FROM (DESCRIBE SELECT 'x' AS x, 42 AS x);
 x	VARCHAR
 x	INTEGER
 
-# describing the statement reports those names, but putting the very same query in a FROM
-# clause makes it a binding - which renames
+# putting the same query in a FROM clause reports the same names
 query II
 SELECT column_name, column_type FROM (DESCRIBE FROM (SELECT i, i FROM range(5) tbl(i)));
 ----
 i	BIGINT
-i_1	BIGINT
+i	BIGINT
 
 query II
 SELECT column_name, column_type FROM (DESCRIBE FROM (SELECT 'x' AS x, 42 AS x));
 ----
 x	VARCHAR
-x_1	INTEGER
+x	INTEGER
 
 # so can a join of two relations with the same column name
 query II
@@ -36,47 +35,52 @@ SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM range(5) tbl1(i) JO
 i	BIGINT
 i	BIGINT
 
-# a binding cannot hold duplicate names, so wrapping any of these in a subquery renames
+# wrapping any of these in a subquery preserves the names
 query II
 SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM (SELECT i, i FROM range(5) tbl(i)) tbl);
 ----
 i	BIGINT
-i_1	BIGINT
+i	BIGINT
 
 query II
 SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM (SELECT 'x' AS x, 42 AS x) tbl);
 ----
 x	VARCHAR
-x_1	INTEGER
+x	INTEGER
 
 query II
 SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM (SELECT i, i, i, i FROM range(5) tbl(i)) tbl);
 ----
 i	BIGINT
-i_1	BIGINT
-i_2	BIGINT
-i_3	BIGINT
+i	BIGINT
+i	BIGINT
+i	BIGINT
 
 query II
 SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM (SELECT * FROM range(5) tbl1(i) JOIN range(5) tbl2(i) ON tbl1.i=tbl2.i) tbl);
 ----
 i	BIGINT
-i_1	BIGINT
+i	BIGINT
 
-# an explicit column alias list is renamed the same way
+# an explicit column alias list may repeat a name as well
 query II
 SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM (VALUES ('x', 42)) v(x, x));
 ----
 x	VARCHAR
-x_1	INTEGER
+x	INTEGER
 
-# the renamed column is the one that is addressable by name
+# the name resolves to the first of the duplicates, the rest are reachable by position
 query II
-SELECT i, i_1 FROM (SELECT i AS i, i + 100 AS i FROM range(1) tbl(i)) tbl;
+SELECT x, #2 FROM (SELECT i AS i, i + 100 AS i FROM range(1) tbl(i)) tbl(x, x);
 ----
 0	100
 
-# values are unaffected by the renaming
+query I
+SELECT x FROM (SELECT 1 AS x, 2 AS x) t;
+----
+1
+
+# values are unaffected
 query II
 SELECT * FROM (SELECT 'x' AS x, 42 AS x) tbl;
 ----
@@ -88,65 +92,62 @@ SELECT * FROM (SELECT i, i + 1, i + 2, i + 3 FROM range(2) tbl(i)) tbl ORDER BY 
 0	1	2	3
 1	2	3	4
 
-# renaming is position-dependent: the last column keeps its name at the top level, but is
-# renamed once the whole join becomes a binding
+# the names do not depend on how many levels of FROM the query passes through
 query I
 SELECT column_name FROM (DESCRIBE SELECT * FROM (SELECT i, i, i, i FROM range(5) tbl(i)) tbl, (SELECT 32 AS i));
 ----
 i
-i_1
-i_2
-i_3
+i
+i
+i
 i
 
 query I
 SELECT column_name FROM (DESCRIBE SELECT * FROM (SELECT * FROM (SELECT i, i, i, i FROM range(5) tbl(i)) tbl, (SELECT 32 AS i)));
 ----
 i
-i_1
-i_2
-i_3
-i_4
+i
+i
+i
+i
 
-# a synthesized name takes precedence over an explicit alias that already uses it
+# an explicit alias keeps its name, it is not displaced by a name invented for a duplicate
 query I
 SELECT column_name FROM (DESCRIBE SELECT * FROM (SELECT i, i FROM range(1) tbl(i)) tbl, (SELECT 32 AS i_1));
 ----
 i
-i_1
+i
 i_1
 
 query I
 SELECT column_name FROM (DESCRIBE SELECT * FROM (SELECT * FROM (SELECT i, i FROM range(1) tbl(i)) tbl, (SELECT 32 AS i_1)));
 ----
 i
+i
 i_1
-i_1_1
 
-# the column aliased AS i_1 is the one holding 32, but it is not the one named i_1
 query III
 SELECT * FROM (SELECT * FROM (SELECT i, 100 + i AS i FROM range(1) tbl(i)) tbl, (SELECT 32 AS i_1));
 ----
 0	100	32
 
-
-# query() parses its argument and returns it as a subquery, so it renames like any derived table
+# query() parses its argument and returns it as a subquery
 query II
 SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM query('SELECT 1 AS x, 2 AS x'));
 ----
 x	INTEGER
-x_1	INTEGER
+x	INTEGER
 
 query II
 SELECT * FROM query('SELECT 1 AS x, 2 AS x');
 ----
 1	2
 
-# the renamed column is a column of its own, so it must be grouped separately
+# grouping on the name groups the first column, so the second one is not grouped
 statement error
 SELECT * FROM (SELECT 1 AS x, 2 AS x) t GROUP BY x;
 ----
-<REGEX>:.*"x_1" must appear in the GROUP BY clause.*
+<REGEX>:.*"x" must appear in the GROUP BY clause.*
 
 query II
 SELECT x, count(*) FROM (SELECT 1 AS x, 2 AS x) t GROUP BY x;
