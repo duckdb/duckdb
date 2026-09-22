@@ -11,6 +11,7 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/valid_checker.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/object_cache.hpp"
@@ -687,18 +688,22 @@ void SingleFileStorageCommitState::FlushCommit() {
 	if (state != WALCommitState::IN_PROGRESS) {
 		return;
 	}
+
 	// Move the blocks in this COMMIT into the WAL and mark them as "in use".
-	try {
-		wal.Flush();
+	auto abort_mode = Settings::Get<DebugCheckpointAbortSetting>(storage.GetDatabase());
+	if (wal.Initialized() && abort_mode == CheckpointAbort::DEBUG_ABORT_BEFORE_WAL_FLUSH) {
+		auto &writer = wal.Initialize();
+		writer.Sync();
+		storage.SetWALSize(writer.GetFileSize());
+		ValidChecker::Invalidate(storage.GetDatabase(), "Simulated crash before WAL_FLUSH write");
+		ValidChecker::Invalidate(storage.GetAttached(), "Simulated crash before WAL_FLUSH write");
+		// Prevent `RevertCommit` from truncating the WAL so the torn records are kept for crash recovery
 		state = WALCommitState::FLUSHED;
-	} catch (FatalException &) {
-		if (Settings::Get<DebugCheckpointAbortSetting>(wal.GetDatabase().GetDatabase()) ==
-		    CheckpointAbort::DEBUG_ABORT_BEFORE_WAL_FLUSH) {
-			// Prevent `RevertCommit` from truncating the WAL so the torn records are kept for crash recovery
-			state = WALCommitState::FLUSHED;
-		}
-		throw;
+		throw FatalException("Simulated crash before WAL_FLUSH write");
 	}
+
+	wal.Flush();
+	state = WALCommitState::FLUSHED;
 }
 
 void SingleFileStorageCommitState::AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
