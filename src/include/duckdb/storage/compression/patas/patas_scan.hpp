@@ -53,17 +53,21 @@ public:
 		index = 0;
 	}
 
+	// Calculate the bytes ByteReader will consume so LoadGroup can check the full span before decoding.
 	idx_t LoadPackedData(const PatasPrimitives::PACKED_DATA_TYPE *packed_data, idx_t count) {
 		idx_t data_size = 0;
 		for (idx_t i = 0; i < count; i++) {
 			auto &unpacked = unpacked_data[i];
 			unpacked = Unpack(packed_data[i]);
+			// LoadValues initializes value_buffer[0] to zero, all later references must point to earlier values.
 			if (unpacked.index_diff > i || (i > 0 && unpacked.index_diff == 0)) {
 				ThrowPatasInvalidBackwardReference();
 			}
+			// Keep reads within EXACT_TYPE and the left shift during decoding below its bit width.
 			if (unpacked.significant_bytes > sizeof(EXACT_TYPE) || unpacked.trailing_zeros >= sizeof(EXACT_TYPE) * 8) {
 				ThrowPatasInvalidPackedValueMetadata();
 			}
+			// ByteReader treats zero bytes with fewer than eight trailing zeros as a full-width read.
 			if (unpacked.significant_bytes == 0 && unpacked.trailing_zeros < 8) {
 				data_size += sizeof(EXACT_TYPE);
 			} else {

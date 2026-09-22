@@ -110,10 +110,13 @@ public:
 		max_packed_data_to_read = packed_data_block_count;
 	}
 
+	// Count how many bits the decoder should read based on the metadata.
+	// LoadGroup checks the resulting range through CompressionSegmentReader before the BitReader reads any values.
 	idx_t ValidateAndCalculateDataBitCount(idx_t group_size) const {
 		using Decompression = Chimp128Decompression<CHIMP_TYPE>;
 		D_ASSERT(group_size == max_flags_to_read + 1);
 
+		// The first value is stored at full width and has no flag.
 		idx_t data_bit_count = Decompression::BIT_SIZE;
 		idx_t leading_zero_position = 0;
 		idx_t packed_data_position = 0;
@@ -121,11 +124,13 @@ public:
 		for (idx_t i = 1; i < group_size; i++) {
 			switch (flags[i]) {
 			case ChimpConstants::Flags::VALUE_IDENTICAL:
+				// Identical values still read a ring-buffer index from the bitstream.
 				data_bit_count += Decompression::INDEX_BITS_SIZE;
 				break;
 			case ChimpConstants::Flags::TRAILING_EXCEEDS_THRESHOLD: {
 				D_ASSERT(packed_data_position < max_packed_data_to_read);
 				auto &unpacked = unpacked_data_blocks[packed_data_position++];
+				// The decoder derives its left shift as BIT_SIZE - significant_bits - leading_zero.
 				if (unpacked.leading_zero > Decompression::BIT_SIZE ||
 				    unpacked.significant_bits > Decompression::BIT_SIZE - unpacked.leading_zero) {
 					ThrowChimpPackedDataExceedsType(unpacked.leading_zero, unpacked.significant_bits,
@@ -136,6 +141,7 @@ public:
 				break;
 			}
 			case ChimpConstants::Flags::LEADING_ZERO_EQUALITY:
+				// Equality reuses the decoder's leading-zero count, the initial value of 255 is invalid.
 				if (leading_zero > Decompression::BIT_SIZE) {
 					ThrowChimpLeadingZeroStateMissing();
 				}
