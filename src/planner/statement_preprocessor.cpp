@@ -42,9 +42,9 @@ void AddStatements(vector<unique_ptr<SQLStatement>> &body_statements,
 		// Here we do a `SET current_transaction_invalidation_policy='ALL_ERRORS_INVALIDATE_TRANSACTION';`, for the
 		// current transaction, to make sure multistatements/pragmas are fully transactional, and invalidate even with
 		// minor errors such as binder, parser, etc.
-		auto set_stmt = make_uniq<SetVariableStatement>(
-		    "current_transaction_invalidation_policy",
-		    make_uniq<ConstantExpression>(Value("ALL_ERRORS_INVALIDATE_TRANSACTION")), SetScope::GLOBAL);
+		auto set_stmt = make_uniq<SetVariableStatement>("current_transaction_invalidation_policy",
+		                                                ConstantExpression::String("ALL_ERRORS_INVALIDATE_TRANSACTION"),
+		                                                SetScope::GLOBAL);
 		set_stmt->query = set_stmt->ToString();
 		result_statements.push_back(std::move(set_stmt));
 	}
@@ -60,9 +60,8 @@ void AddStatements(vector<unique_ptr<SQLStatement>> &body_statements,
 		commit_stmt->query = commit_stmt->ToString();
 		result_statements.push_back(std::move(commit_stmt));
 	} else if (transaction_handling == PreprocessingTransactionHandling::SET_INVALIDATION_POLICY) {
-		auto set_stmt =
-		    make_uniq<SetVariableStatement>("current_transaction_invalidation_policy",
-		                                    make_uniq<ConstantExpression>(Value("STANDARD_POLICY")), SetScope::GLOBAL);
+		auto set_stmt = make_uniq<SetVariableStatement>(
+		    "current_transaction_invalidation_policy", ConstantExpression::String("STANDARD_POLICY"), SetScope::GLOBAL);
 		set_stmt->query = set_stmt->ToString();
 		result_statements.push_back(std::move(set_stmt));
 	}

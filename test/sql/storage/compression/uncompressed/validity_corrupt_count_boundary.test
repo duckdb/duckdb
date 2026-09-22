@@ -8,6 +8,9 @@ unzip data/storage/corrupt/validity_corrupt_count_boundary.db.gz {TEST_DIR}/vali
 
 load {TEST_DIR}/validity_corrupt_count_boundary.db readonly
 
+statement ok
+USE validity_corrupt_count_boundary
+
 query I
 SELECT compression FROM pragma_storage_info('t') WHERE segment_type='VALIDITY' AND compression='Uncompressed';
 ----

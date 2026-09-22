@@ -9,7 +9,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.regression.benchmark import BenchmarkRunner, EXTENSION_DIRECTORY_ENV, find_extension_directory
+from scripts.regression.benchmark import (
+    BENCHMARK_DATA_DIRECTORY,
+    BenchmarkRunner,
+    EXTENSION_DIRECTORY_ENV,
+    create_isolated_benchmark_root,
+    find_benchmark_cache_directory,
+    find_extension_directory,
+)
 from scripts.regression.comparison import benchmark_measurement, confirmation_run_count, sampling_batch_sizes
 
 
@@ -36,6 +43,41 @@ class TestBenchmarkRunner(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "multiple extension directories"):
                 find_extension_directory(str(runner_path))
 
+    def test_finds_shared_artifact_benchmark_cache_directory(self):
+        with tempfile.TemporaryDirectory() as temp_directory:
+            build_directory = Path(temp_directory) / "build"
+            runner_paths = [
+                build_directory / "base" / "release" / "benchmark" / "benchmark_runner",
+                build_directory / "current" / "release" / "benchmark" / "benchmark_runner",
+            ]
+            cache_directories = {find_benchmark_cache_directory(str(path)) for path in runner_paths}
+            expected_directory = os.path.abspath(build_directory / "duckdb_benchmark_data")
+            self.assertEqual(cache_directories, {expected_directory})
+
+    def test_isolated_root_symlinks_existing_benchmark_data(self):
+        with tempfile.TemporaryDirectory() as temp_directory:
+            source_root = Path(temp_directory) / "duckdb"
+            source_data_directory = source_root / BENCHMARK_DATA_DIRECTORY
+            source_data_directory.mkdir(parents=True)
+            (source_root / "benchmark").mkdir()
+            (source_data_directory / "real_nest.duckdb").write_text("data", encoding="utf-8")
+
+            target_roots = [Path(temp_directory) / "base", Path(temp_directory) / "pr"]
+            for target_root in target_roots:
+                create_isolated_benchmark_root(source_root, target_root)
+                data_directory = target_root / BENCHMARK_DATA_DIRECTORY
+                self.assertTrue((target_root / "benchmark").is_symlink())
+                self.assertFalse(data_directory.is_symlink())
+                self.assertEqual(
+                    (data_directory / "real_nest.duckdb").resolve(),
+                    (source_data_directory / "real_nest.duckdb").resolve(),
+                )
+
+            # generated data stays inside the root that wrote it
+            (target_roots[0] / BENCHMARK_DATA_DIRECTORY / "tpch_sf1.duckdb").write_text("base", encoding="utf-8")
+            self.assertFalse((target_roots[1] / BENCHMARK_DATA_DIRECTORY / "tpch_sf1.duckdb").exists())
+            self.assertFalse((source_data_directory / "tpch_sf1.duckdb").exists())
+
     def test_passes_artifact_extension_directory_to_runner(self):
         with tempfile.TemporaryDirectory() as temp_directory:
             release_directory = Path(temp_directory) / "release"
@@ -53,6 +95,64 @@ class TestBenchmarkRunner(unittest.TestCase):
             self.assertEqual(timings, [1.0])
             self.assertIsNone(error)
             self.assertEqual(run.call_args.kwargs["env"][EXTENSION_DIRECTORY_ENV], str(extension_directory.resolve()))
+
+    def test_surfaces_incorrect_result_diagnostic(self):
+        completed_process = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr=(
+                "name\trun\ttiming\n"
+                "query.benchmark\t1\tINCORRECT\n"
+                "INCORRECT RESULT: Invalid Input Error: attempted to read past the end of the segment\n"
+            ),
+        )
+
+        with patch("scripts.regression.benchmark.subprocess.run", return_value=completed_process):
+            timings, error = BenchmarkRunner("benchmark_runner", "current").run("query.benchmark", 1)
+
+        self.assertIsNone(timings)
+        self.assertEqual(
+            error,
+            "current benchmark runner reported INCORRECT for query.benchmark on run 1:\n"
+            "INCORRECT RESULT: Invalid Input Error: attempted to read past the end of the segment",
+        )
+
+    def test_surfaces_error_diagnostic(self):
+        completed_process = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr="name\trun\ttiming\nquery.benchmark\t2\tERROR\nData Corruption Error: invalid segment size\n",
+        )
+
+        with patch("scripts.regression.benchmark.subprocess.run", return_value=completed_process):
+            timings, error = BenchmarkRunner("benchmark_runner", "current").run("query.benchmark", 2)
+
+        self.assertIsNone(timings)
+        self.assertEqual(
+            error,
+            "current benchmark runner reported ERROR for query.benchmark on run 2:\n"
+            "Data Corruption Error: invalid segment size",
+        )
+
+    def test_uses_stdout_failure_summary_when_stderr_has_no_diagnostic(self):
+        completed_process = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="failure summary with the underlying exception\n",
+            stderr="name\trun\ttiming\nquery.benchmark\t1\tINCORRECT\n",
+        )
+
+        with patch("scripts.regression.benchmark.subprocess.run", return_value=completed_process):
+            timings, error = BenchmarkRunner("benchmark_runner", "current").run("query.benchmark", 1)
+
+        self.assertIsNone(timings)
+        self.assertEqual(
+            error,
+            "current benchmark runner reported INCORRECT for query.benchmark on run 1:\n"
+            "failure summary with the underlying exception",
+        )
 
 
 class TestBenchmarkComparison(unittest.TestCase):
@@ -151,7 +251,7 @@ with open(os.environ["BENCHMARK_ORDER_LOG"], "a", encoding="utf-8") as order_log
 values = {
     "q26.benchmark": {
         "old": [0.0805, 0.084, 0.0882, 0.095, 0.103],
-        "new": [0.0757, 0.082, 0.0859, 0.095, 0.104],
+        "new": [0.0757, 0.082, 0.085, 0.095, 0.104],
     },
     "q28.benchmark": {
         "old": [0.397, 0.420, 0.436, 0.460, 0.499],
@@ -183,7 +283,7 @@ with open(os.environ["BENCHMARK_ORDER_LOG"], "a", encoding="utf-8") as order_log
 counter_path = Path(os.environ["BENCHMARK_COUNTER_DIR"]) / f"{label}.count"
 invocation = int(counter_path.read_text(encoding="utf-8")) if counter_path.exists() else 0
 counter_path.write_text(str(invocation + 1), encoding="utf-8")
-timing = 1.03 if label == "new" and invocation < 2 else 1.0
+timing = 1.04 if label == "new" and invocation < 2 else 1.0
 print("name\\trun\\ttiming", file=sys.stderr)
 for run in range(1, runs + 1):
     print(f"{sys.argv[1]}\\t{run}\\t{timing}", file=sys.stderr)
@@ -206,7 +306,7 @@ for run in range(1, runs + 1):
     if label == "old":
         timing = 1.0
     elif invocation < 2:
-        timing = 1.03
+        timing = 1.04
     elif invocation < 4 and run <= 3:
         timing = 1.1
     else:
@@ -234,6 +334,84 @@ import sys
 
 print("name\\trun\\ttiming", file=sys.stderr)
 print("not-a-valid-timing-row", file=sys.stderr)
+"""
+
+    incorrect_runner_source = """#!/usr/bin/env python3
+import sys
+
+print("name\\trun\\ttiming", file=sys.stderr)
+print(f"{sys.argv[1]}\\t1\\tINCORRECT", file=sys.stderr)
+print("INCORRECT RESULT: Data Corruption Error: attempted to read past the end of the segment", file=sys.stderr)
+"""
+
+    benchmark_data_runner_source = """#!/usr/bin/env python3
+import os
+import sys
+from pathlib import Path
+
+label = os.path.basename(sys.argv[0])
+runs = int(sys.argv[sys.argv.index("--timed-runs") + 1])
+with open(os.environ["BENCHMARK_ORDER_LOG"], "a", encoding="utf-8") as order_log:
+    order_log.write(f"{label}:{runs}\\n")
+state_directory = Path(sys.argv[sys.argv.index("--root-dir") + 1]) / "duckdb_benchmark_data"
+owner_path = state_directory / "shared-owner"
+previous_owner = owner_path.read_text(encoding="utf-8") if owner_path.exists() else None
+owner_path.write_text(label, encoding="utf-8")
+print("name\\trun\\timing", file=sys.stderr)
+if label == "old" and previous_owner == "new":
+    print(f"{sys.argv[1]}\\t1\\tINCORRECT", file=sys.stderr)
+    print("INCORRECT RESULT: old runner opened state written by new runner", file=sys.stderr)
+else:
+    for run in range(1, runs + 1):
+        print(f"{sys.argv[1]}\\t{run}\\t1.0", file=sys.stderr)
+"""
+
+    external_state_runner_source = """#!/usr/bin/env python3
+import os
+import sys
+from pathlib import Path
+
+label = os.path.basename(sys.argv[0])
+runs = int(sys.argv[sys.argv.index("--timed-runs") + 1])
+with open(os.environ["BENCHMARK_ORDER_LOG"], "a", encoding="utf-8") as order_log:
+    order_log.write(f"{label}:{runs}\\n")
+owner_path = Path(os.environ["BENCHMARK_COUNTER_DIR"]) / "external-owner"
+previous_owner = owner_path.read_text(encoding="utf-8") if owner_path.exists() else None
+owner_path.write_text(label, encoding="utf-8")
+print("name\\trun\\timing", file=sys.stderr)
+if label == "old" and previous_owner == "new":
+    print(f"{sys.argv[1]}\\t1\\tINCORRECT", file=sys.stderr)
+    print("INCORRECT RESULT: old runner opened state written by new runner", file=sys.stderr)
+else:
+    for run in range(1, runs + 1):
+        print(f"{sys.argv[1]}\\t{run}\\t1.0", file=sys.stderr)
+"""
+
+    missing_base_runner_source = """#!/usr/bin/env python3
+import os
+import sys
+
+label = os.path.basename(sys.argv[0])
+benchmark = sys.argv[1]
+runs = int(sys.argv[sys.argv.index("--timed-runs") + 1])
+with open(os.environ["BENCHMARK_ORDER_LOG"], "a", encoding="utf-8") as order_log:
+    order_log.write(f"{label}:{runs}\\n")
+base_missing = benchmark in ("new_query.benchmark", "broken_query.benchmark", "missing_everywhere.benchmark")
+if label == "old" and base_missing:
+    print("Benchmark to run could not be found.", file=sys.stderr)
+    raise SystemExit(1)
+if label == "old" and benchmark == "base_error.benchmark":
+    print("Base benchmark setup failed.", file=sys.stderr)
+    raise SystemExit(1)
+if label == "new" and benchmark == "broken_query.benchmark":
+    print("PR benchmark setup failed.", file=sys.stderr)
+    raise SystemExit(1)
+if label == "new" and benchmark == "missing_everywhere.benchmark":
+    print("Benchmark to run could not be found.", file=sys.stderr)
+    raise SystemExit(1)
+print("name\\trun\\ttiming", file=sys.stderr)
+for run in range(1, runs + 1):
+    print(f"{benchmark}\\t{run}\\t1.0", file=sys.stderr)
 """
 
     def run_regression_test(
@@ -326,22 +504,22 @@ print("not-a-valid-timing-row", file=sys.stderr)
         self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
         self.assertEqual(order, self.expected_order(10))
         plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
-        self.assertIn("sampling: adaptive; 10 initial pairs, then 30–100 confirmation pairs outside ±2%", plain_output)
+        self.assertIn("sampling: adaptive; 10 initial pairs, then 30–100 confirmation pairs outside ±3%", plain_output)
         self.assertIn("query regression: median change ≥ +10.0% (warning)", plain_output)
         self.assertIn("CI failure: geomean change ≥ +10.0% or ≥ +50.0 ms", plain_output)
         self.assertNotIn("confidence", plain_output.lower())
         self.assertNotIn("UNCERTAIN", plain_output)
-        self.assertIn("UNCHANGED (±2%)\n1 benchmarks", plain_output)
+        self.assertIn("UNCHANGED (±3%)\n1 benchmarks", plain_output)
         self.assertTrue(plain_output.rstrip().endswith("result: passed; no query regressions"))
 
     def test_noise_boundaries_are_inclusive(self):
-        for new_timing in ("0.98", "1.02"):
+        for new_timing in ("0.97", "1.03"):
             with self.subTest(new_timing=new_timing):
                 process, order, _ = self.run_regression_test(self.stable_runner_source, new_timing=new_timing)
                 self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
                 self.assertEqual(order, self.expected_order(10))
                 plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
-                self.assertIn("UNCHANGED (±2%)", plain_output)
+                self.assertIn("UNCHANGED (±3%)", plain_output)
 
     def test_adaptive_batches_alternate_and_full_budget_is_default(self):
         process, order, _ = self.run_regression_test(self.stable_runner_source, new_timing="1.08")
@@ -360,7 +538,7 @@ print("not-a-valid-timing-row", file=sys.stderr)
         self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
         self.assertEqual(order, self.expected_order(20))
         self.assertIn(
-            "confirm: fake.benchmark: 10 pairs | median change +0.0% | within ±2% (stopped early)",
+            "confirm: fake.benchmark: 10 pairs | median change +0.0% | within ±3% (stopped early)",
             process.stdout,
         )
 
@@ -371,7 +549,7 @@ print("not-a-valid-timing-row", file=sys.stderr)
         self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
         self.assertEqual(order, self.expected_order(30))
         self.assertIn(
-            "confirm: fake.benchmark: 20 pairs | median change +0.0% | within ±2% (stopped early)",
+            "confirm: fake.benchmark: 20 pairs | median change +0.0% | within ±3% (stopped early)",
             process.stdout,
         )
 
@@ -479,6 +657,57 @@ print("not-a-valid-timing-row", file=sys.stderr)
         self.assertIn("::error title=Geomean benchmark regression::", process.stdout)
         self.assertIn("+50.0 ms (+5.0%)", process.stdout)
 
+    def test_missing_base_benchmark_warns_and_smoke_tests_pr_once(self):
+        process, order, summary = self.run_regression_test(
+            self.missing_base_runner_source,
+            ci=True,
+            benchmarks=["new_query.benchmark"],
+            step_summary=True,
+        )
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertEqual(order, ["old:5", "new:1"])
+        self.assertIn("::warning title=Benchmark missing from Linux Base::", process.stdout)
+        self.assertIn("SKIPPED (missing from Base)", process.stdout)
+        self.assertIn("new_query: PR smoke test passed", process.stdout)
+        self.assertIn("geomean: unavailable", process.stdout)
+        self.assertIn("1 benchmark skipped (missing from Base)", process.stdout)
+        self.assertIn("## Benchmarks Missing From Base: `benchmarks`", summary)
+        self.assertIn("| `new_query.benchmark` | passed |", summary)
+
+    def test_missing_base_query_does_not_exclude_supported_queries(self):
+        process, order, _ = self.run_regression_test(
+            self.missing_base_runner_source,
+            benchmarks=["stable.benchmark", "new_query.benchmark"],
+        )
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertEqual(order, ["old:5", "new:5", "new:5", "old:5", "old:5", "new:1"])
+        self.assertIn("UNCHANGED (±3%)", process.stdout)
+        self.assertIn("geomean: 1.0 s -> 1.0 s", process.stdout)
+        self.assertIn("new_query: PR smoke test passed", process.stdout)
+
+    def test_missing_base_benchmark_does_not_hide_pr_failure(self):
+        for benchmark in ("broken_query.benchmark", "missing_everywhere.benchmark"):
+            with self.subTest(benchmark=benchmark):
+                process, order, _ = self.run_regression_test(
+                    self.missing_base_runner_source,
+                    ci=True,
+                    benchmarks=[benchmark],
+                )
+                self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+                self.assertEqual(order, ["old:5", "new:1"])
+                self.assertIn("::error title=Regression benchmark failure::", process.stdout)
+                self.assertNotIn("::warning title=Benchmark missing from Linux Base::", process.stdout)
+
+    def test_other_base_errors_still_fail(self):
+        process, order, _ = self.run_regression_test(
+            self.missing_base_runner_source,
+            benchmarks=["base_error.benchmark"],
+        )
+        self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+        self.assertEqual(order, ["old:5", "new:5"])
+        self.assertIn("Base benchmark setup failed.", process.stdout)
+        self.assertIn("benchmark failure", process.stdout)
+
     def test_nofail_suppresses_only_geomean_gate(self):
         process, _, _ = self.run_regression_test(
             self.stable_runner_source, old_timing="1", new_timing="1.1", ci=True, extra_args=["--nofail"]
@@ -505,14 +734,13 @@ print("not-a-valid-timing-row", file=sys.stderr)
         process, _, _ = self.run_regression_test(
             self.stable_runner_source,
             extra_args=[
-                "--benchmark-cache=clear",
                 "--memory-limit",
                 "512MB",
                 "--benchmark-argument",
                 "sf=10",
             ],
             create_cache=True,
-            expected_cache_state="absent",
+            expected_cache_state="present",
             expected_memory_limit="512MB",
             expected_benchmark_argument="sf=10",
         )
@@ -534,6 +762,31 @@ print("not-a-valid-timing-row", file=sys.stderr)
         plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
         self.assertLess(plain_output.index("FAILURES SUMMARY"), plain_output.index("geomean:"))
         self.assertTrue(plain_output.rstrip().endswith("result: failed; benchmark failure; no query regressions"))
+
+    def test_incorrect_result_diagnostic_reaches_failure_summary(self):
+        process, _, _ = self.run_regression_test(self.incorrect_runner_source)
+        self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+        self.assertIn(
+            "INCORRECT RESULT: Data Corruption Error: attempted to read past the end of the segment",
+            process.stdout,
+        )
+        self.assertNotIn("could not convert string to float", process.stdout)
+
+    def test_failure_identifies_runner_that_ran_before_the_failing_runner(self):
+        process, order, _ = self.run_regression_test(self.external_state_runner_source)
+        self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+        self.assertEqual(order, ["old:5", "new:5", "new:5", "old:5"])
+        self.assertIn("Base benchmark runner reported INCORRECT", process.stdout)
+        self.assertIn("Comparison batch 2 ran PR immediately before Base.", process.stdout)
+        self.assertNotIn("Both runners use the same benchmark cache", process.stdout)
+        self.assertIn("PR:\n No failure", process.stdout)
+
+    def test_benchmark_directories_isolate_runner_writable_state(self):
+        process, order, _ = self.run_regression_test(self.benchmark_data_runner_source)
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertEqual(order, self.expected_order(10))
+        self.assertNotIn("opened state written by", process.stdout)
+        self.assertIn("benchmark cache: isolated Base and PR directories", process.stdout)
 
 
 if __name__ == "__main__":

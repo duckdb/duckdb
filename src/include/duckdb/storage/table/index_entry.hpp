@@ -42,7 +42,7 @@ public:
 	BoundIndex &GetOrCreate(BoundIndex &index, IndexDeltaType type);
 	bool ShouldUse(optional_idx active_checkpoint) const;
 	ErrorData MergeCheckpointDeltas(BoundIndex &index);
-	void MarkWritten(transaction_t checkpoint_id);
+	void MarkWritten(optional_idx checkpoint_id);
 	void Reset();
 
 private:
@@ -111,7 +111,7 @@ private:
 //! The IndexEntry provides a stable logical identity which refers to an interchangeable snapshot of an index.
 class IndexEntry : public enable_shared_from_this<IndexEntry> {
 public:
-	explicit IndexEntry(unique_ptr<Index> index);
+	explicit IndexEntry(unique_ptr<Index> index, optional_idx catalog_index_oid);
 	//! Append a chunk to the physical index, buffering it while the index is unbound.
 	void Append(DataChunk &chunk, Vector &row_ids);
 	//! Appends a chunk using delete and checkpoint indexes where required.
@@ -119,8 +119,6 @@ public:
 	                 IndexAppendMode append_mode, optional_idx active_checkpoint);
 	//! Reverts an append to the physical index or its checkpoint delta.
 	void RevertAppend(DataChunk &chunk, Vector &row_ids);
-	//! Reverts an append made directly to the bound physical index.
-	void RevertIndexAppend(DataChunk &chunk, Vector &row_ids);
 	//! Appends deleted rows to the bound physical index if it enforces uniqueness.
 	void AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids);
 	//! Applies a removal or removal rollback to the physical index and its deltas.
@@ -134,6 +132,8 @@ public:
 	Identifier GetName() const;
 	//! Returns the physical index type.
 	string GetIndexType() const;
+	//! Returns whether an unbound index has buffered WAL operations.
+	bool HasBufferedReplays() const;
 	//! Destroys the physical index.
 	void Retire();
 	//! Binds the unbound physical index without replacing it.
@@ -168,7 +168,7 @@ public:
 	//! Serializes the bound physical index for the write-ahead log.
 	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options);
 	//! Merges checkpoint deltas into the bound physical index and marks the checkpoint as written.
-	void MergeCheckpointDeltas(transaction_t checkpoint_id);
+	void MergeCheckpointDeltas(optional_idx checkpoint_id);
 	//! Adds transaction-local copies of the physical index to the target lists when required.
 	void InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const;
 
@@ -189,6 +189,9 @@ public:
 	void SetBindState(IndexBindState state) {
 		bind_state = state;
 	}
+	optional_idx GetCatalogIndexOid() const {
+		return catalog_index_oid;
+	}
 
 private:
 	template <class>
@@ -197,6 +200,7 @@ private:
 	friend class IndexWriteHandle;
 
 	atomic<IndexBindState> bind_state;
+	const optional_idx catalog_index_oid;
 	//! Phase-fair lock protecting the physical index and all delta indexes owned by this entry.
 	mutable StorageLock lock;
 	//! The physical index owned by this stable logical entry.

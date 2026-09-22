@@ -11,10 +11,7 @@ statement ok
 SET active_grammar_extensions = ['pipe_query_syntax'];
 
 statement ok
-SET debug_transformer_trampoline_style=true;
-
-statement ok
-CREATE TABLE produce(item VARCHAR, category VARCHAR, sales INTEGER);
+CREATE OR REPLACE TABLE produce(item VARCHAR, category VARCHAR, sales INTEGER);
 
 statement ok
 INSERT INTO produce VALUES

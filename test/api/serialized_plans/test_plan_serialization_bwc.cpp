@@ -54,7 +54,7 @@ TEST_CASE("Generate serialized plans file", "[.][serialization]") {
 	string query;
 	while (std::getline(queries, query)) {
 		con.BeginTransaction();
-		Parser p;
+		Parser p(*con.context);
 		p.ParseQuery(query);
 
 		Planner planner(*con.context);
@@ -116,7 +116,7 @@ TEST_CASE("Generate specific serialized plans", "[.][serialization]") {
 			REQUIRE_NO_FAIL(con.Query(statements[i]));
 		}
 
-		Parser p;
+		Parser p(*con.context);
 		p.ParseQuery(statements.back());
 		Planner planner(*con.context);
 		planner.CreatePlan(std::move(p.statements[0]));
@@ -189,12 +189,11 @@ TEST_CASE("Test specific serialized plans", "[.][serialization]") {
 
 		deserialized_plan->ResolveOperatorTypes();
 
-		auto deserialized_results =
-		    con.context->Query(make_uniq<LogicalPlanStatement>(std::move(deserialized_plan)), false);
+		auto deserialized_results = con.Query(make_uniq<LogicalPlanStatement>(std::move(deserialized_plan)));
 		REQUIRE_NO_FAIL(*deserialized_results);
 
 		// Now execute the original statement as well and compare results
-		Parser p;
+		Parser p(*con.context);
 		p.ParseQuery(target_stmt);
 		Planner planner(*con.context);
 		planner.CreatePlan(std::move(p.statements[0]));
@@ -233,7 +232,7 @@ TEST_CASE("Test specific serialized plans", "[.][serialization]") {
 		roundtrip_deserializer.End();
 
 		roundtrip_plan->ResolveOperatorTypes();
-		auto roundtrip_results = con.context->Query(make_uniq<LogicalPlanStatement>(std::move(roundtrip_plan)), false);
+		auto roundtrip_results = con.Query(make_uniq<LogicalPlanStatement>(std::move(roundtrip_plan)));
 		REQUIRE_NO_FAIL(*roundtrip_results);
 
 		con.Rollback();
@@ -259,11 +258,10 @@ void test_deserialization(const string &file_location) {
 		deserializer.End();
 
 		deserialized_plan->ResolveOperatorTypes();
-		auto deserialized_results =
-		    con.context->Query(make_uniq<LogicalPlanStatement>(std::move(deserialized_plan)), false);
+		auto deserialized_results = con.Query(make_uniq<LogicalPlanStatement>(std::move(deserialized_plan)));
 		REQUIRE_NO_FAIL(*deserialized_results);
 
-		Parser p;
+		Parser p(*con.context);
 		p.ParseQuery(query);
 		Planner planner(*con.context);
 		planner.CreatePlan(std::move(p.statements[0]));

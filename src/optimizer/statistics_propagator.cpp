@@ -22,6 +22,7 @@
 #include "duckdb/planner/operator/logical_secure_view.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/planner/operator/logical_limit.hpp"
 
 namespace duckdb {
 
@@ -80,6 +81,9 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 	case LogicalOperatorType::LOGICAL_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 		result = PropagateStatistics(node.Cast<LogicalJoin>(), node_ptr);
+		break;
+	case LogicalOperatorType::LOGICAL_LIMIT:
+		result = PropagateStatistics(node.Cast<LogicalLimit>(), node_ptr);
 		break;
 	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
 		result = PropagateStatistics(node.Cast<LogicalPositionalJoin>(), node_ptr);
@@ -157,7 +161,11 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression 
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(unique_ptr<Expression> &expr) {
+#ifdef D_ASSERT_IS_ENABLED
+	auto return_type = expr->GetReturnType();
+#endif
 	auto stats = PropagateExpression(*expr, expr);
+	D_ASSERT(expr->GetReturnType() != return_type || expr->GetReturnType().EqualsIncludingCollation(return_type));
 	if (Settings::Get<DebugVerifyStatsSetting>(context) && stats) {
 		expr->SetVerificationStats(stats->ToUnique());
 	}

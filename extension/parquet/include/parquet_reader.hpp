@@ -249,7 +249,12 @@ public:
 
 struct ParquetColumnDefinition {
 public:
-	static ParquetColumnDefinition FromSchemaValue(ClientContext &context, const Value &column_value);
+	static vector<ParquetColumnDefinition> FromSchemaMap(ClientContext &context, const Value &schema_value);
+	MultiFileColumnDefinition ToMultiFileColumnDefinition() const;
+	bool operator==(const ParquetColumnDefinition &other) const {
+		return field_id == other.field_id && name == other.name && type == other.type &&
+		       default_value == other.default_value && identifier == other.identifier && children == other.children;
+	}
 
 public:
 	// DEPRECATED, use 'identifier' instead
@@ -258,6 +263,7 @@ public:
 	LogicalType type;
 	Value default_value;
 	Value identifier;
+	vector<ParquetColumnDefinition> children;
 
 public:
 	void Serialize(Serializer &serializer) const;
@@ -276,7 +282,7 @@ struct ParquetOptions {
 
 	vector<ParquetColumnDefinition> schema;
 	idx_t explicit_cardinality = 0;
-	bool can_have_nan = false; // if floats or doubles can contain NaN values
+	bool can_have_nan = false; // if floats or doubles can contain NaN values (ignored if nan_count is present)
 	ParquetPrefetchStrategyOption prefetch_strategy = ParquetPrefetchStrategyOption::AUTO;
 	StringColumnReader::Utf8ValidationOption utf8_validation_option =
 	    StringColumnReader::Utf8ValidationOption::STRICT_UTF8;
@@ -346,7 +352,7 @@ public:
 	shared_ptr<EncryptionUtil> encryption_util;
 	bool can_use_metadata_statistics = false;
 	//! How many rows have been read from this file
-	atomic<idx_t> rows_read;
+	atomic<idx_t> rows_read {0};
 	ParquetIntervalBloomFilterVersion interval_bloom_filter_version {};
 	//! Storage indices of columns where expressions like strlen/octet_length are pushed down
 	unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions;

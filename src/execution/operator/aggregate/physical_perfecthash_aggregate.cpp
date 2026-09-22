@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/aggregate/physical_perfecthash_aggregate.hpp"
 
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -181,10 +182,23 @@ public:
 
 	//! The current position to scan the HT for output tuples
 	idx_t ht_scan_position;
+	atomic<idx_t> scanned_slots {0};
 };
 
 unique_ptr<GlobalSourceState> PhysicalPerfectHashAggregate::GetGlobalSourceState(ClientContext &context) const {
 	return make_uniq<PerfectHashAggregateState>();
+}
+
+ProgressData PhysicalPerfectHashAggregate::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
+	auto &state = gstate_p.Cast<PerfectHashAggregateState>();
+	auto &gstate = sink_state->Cast<PerfectHashAggregateGlobalState>();
+	return ProgressData {double(state.scanned_slots.load()), double(gstate.ht->Capacity()), false};
+}
+
+void PhysicalPerfectHashAggregate::SourceFinished(ClientContext &context, GlobalSourceState &gstate_p) const {
+	auto &state = gstate_p.Cast<PerfectHashAggregateState>();
+	auto &gstate = sink_state->Cast<PerfectHashAggregateGlobalState>();
+	state.scanned_slots = gstate.ht->Capacity();
 }
 
 SourceResultType PhysicalPerfectHashAggregate::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
@@ -193,6 +207,7 @@ SourceResultType PhysicalPerfectHashAggregate::GetDataInternal(ExecutionContext 
 	auto &gstate = sink_state->Cast<PerfectHashAggregateGlobalState>();
 
 	gstate.ht->Scan(state.ht_scan_position, chunk);
+	state.scanned_slots = state.ht_scan_position;
 
 	if (chunk.size() > 0) {
 		return SourceResultType::HAVE_MORE_OUTPUT;

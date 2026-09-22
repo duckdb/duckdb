@@ -33,7 +33,6 @@ class TableIndexIterationHelper;
 
 struct IndexSerializationInfo {
 	case_insensitive_map_t<Value> options;
-	transaction_t checkpoint_id;
 };
 
 // IndexStorageInfo is move-only. Keep every serialized info in owned_infos and expose stable ordered references.
@@ -51,7 +50,7 @@ public:
 	//! Iterates over shared ownership of stable index entries while holding the entry-list lock.
 	TableIndexIterationHelper<shared_ptr<IndexEntry>> IndexEntries() const;
 	//! Adds an index entry to the list of index entries.
-	void AddIndex(unique_ptr<Index> index);
+	void AddIndex(unique_ptr<Index> index, optional_idx index_oid);
 	//! Initializes the transaction-local delete and append indexes.
 	void InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const;
 	//! Appends a chunk to all index entries.
@@ -61,8 +60,8 @@ public:
 	                 IndexAppendMode append_mode, optional_idx active_checkpoint);
 	//! Reverts an append to all index entries.
 	void RevertAppend(DataChunk &chunk, Vector &row_ids);
-	//! Reverts an append made directly to all bound physical indexes.
-	void RevertIndexAppend(DataChunk &chunk, row_t row_start);
+	//! Reverts an append with generated row IDs starting at row_start.
+	void RevertAppend(DataChunk &chunk, row_t row_start);
 	//! Appends deleted rows to all unique indexes.
 	void AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids);
 	//! Applies a removal or removal rollback to all index entries.
@@ -70,12 +69,15 @@ public:
 	                       optional_idx active_checkpoint = optional_idx());
 	//! Removes an index entry from the list of index entries and release any storage the index owns.
 	void RemoveIndex(const Identifier &name);
+	void RemoveIndex(idx_t index_oid);
 	//! Returns true, if the index name does not exist.
 	bool NameIsUnique(const string &name) const;
 	//! Returns true if an index with the given name exists.
 	bool Contains(const Identifier &name) const;
 	//! Returns shared ownership of the stable logical index entry matching the name.
 	shared_ptr<IndexEntry> FindEntry(const Identifier &name) const;
+	//! Matches the catalog OID, or the name when both entries have no catalog OID.
+	shared_ptr<IndexEntry> FindEntry(const IndexEntry &index) const;
 	//! Binds unbound indexes possibly present after loading an extension.
 	void Bind(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type = {});
 	//! Returns true, if there are no index entries.
@@ -92,6 +94,8 @@ public:
 		annotated_lock_guard lock(index_entries_lock);
 		return unbound_count != 0;
 	}
+	//! Returns true if an unbound index has buffered WAL operations.
+	bool HasBufferedReplays() const;
 	//! Returns true, if there are unique indexes.
 	bool HasUniqueIndexes() const;
 	//! Verifies all unique ART indexes, optionally recording conflicts.
@@ -125,7 +129,7 @@ public:
 		other.unbound_count = 0;
 	}
 	//! Merge any changes added to deltas during a checkpoint back into the main indexes
-	void MergeCheckpointDeltas(transaction_t checkpoint_id) const;
+	void MergeCheckpointDeltas(optional_idx checkpoint_id) const;
 	//! Returns true, if all indexes
 	//! Find the foreign key matching the keys.
 	shared_ptr<IndexEntry> FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type);
@@ -140,7 +144,9 @@ public:
 	unordered_set<column_t> GetUniqueIndexColumns() const;
 	//! Serialize all indexes of the table.
 	IndexSerializationResult SerializeToDisk(QueryContext context, const IndexSerializationInfo &info);
-	//! Serializes the index matching the name for the write-ahead log, if it exists.
+	//! Serializes the index matching the OID for the write-ahead log, if it exists.
+	unique_ptr<IndexStorageInfo> SerializeToWAL(idx_t index_oid, const case_insensitive_map_t<Value> &options);
+	//! Serializes the constraint-backed index matching the name for the write-ahead log, if it exists.
 	unique_ptr<IndexStorageInfo> SerializeToWAL(const Identifier &name, const case_insensitive_map_t<Value> &options);
 
 public:

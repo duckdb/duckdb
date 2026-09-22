@@ -1,4 +1,5 @@
 #include "duckdb/catalog/default/default_table_functions.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
@@ -76,7 +77,7 @@ WHERE type ILIKE log_type
 )"},
 	{DEFAULT_SCHEMA, "duckdb_profiling_settings", {}, {}, R"(
 SELECT * EXCLUDE(input_type, scope, aliases, typed_value)
-  FROM duckdb_settings()
+  FROM duckdb_settings(deprecated := false)
   WHERE name IN (
       'enable_profiling',
       'profiling_coverage',

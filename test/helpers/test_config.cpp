@@ -109,6 +109,9 @@ static const TestConfigOption test_config_options[] = {
     {"settings", "Configuration settings to apply",
      LogicalType::LIST(LogicalType::STRUCT({{"name", LogicalType::VARCHAR}, {"value", LogicalType::VARCHAR}})),
      nullptr},
+    {"attach_options", "ATTACH-style options for the main database (e.g. IO_MODE)",
+     LogicalType::LIST(LogicalType::STRUCT({{"name", LogicalType::VARCHAR}, {"value", LogicalType::VARCHAR}})),
+     nullptr},
     {"extends", "List of config files to extend from", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {nullptr, nullptr, LogicalType::INVALID, nullptr},
 };
@@ -777,6 +780,19 @@ vector<ConfigSetting> TestConfiguration::GetConfigSettings() {
 	return result;
 }
 
+unordered_map<string, Value> TestConfiguration::GetMainDatabaseOptions() {
+	unordered_map<string, Value> result;
+	if (options.find("attach_options") != options.end()) {
+		auto entry = options["attach_options"];
+		auto list_children = ListValue::GetChildren(entry);
+		for (const auto &value : list_children) {
+			auto &struct_children = StructValue::GetChildren(value);
+			result[StringValue::Get(struct_children[0])] = struct_children[1];
+		}
+	}
+	return result;
+}
+
 string TestConfiguration::GetTestEnv(const string &key, const string &default_value) {
 	LoadTestEnvFromConfig();
 	if (test_env.find(key) == test_env.end()) {
@@ -918,6 +934,10 @@ idx_t FailureSummary::GetSummaryCounter() {
 	return ++summary.failures_summary_counter;
 }
 
+// don't log the same test failure many times:
+// e.g. log only the first failure in
+// `./build/debug/test/unittest --on-init "SET max_memory='400kb';"
+// test/fuzzer/pedro/concurrent_catalog_usage.test`
 bool FailureSummary::SkipLoggingSameError(const string &file_name) {
 	return Instance().SkipLoggingSameErrorInternal(file_name);
 }

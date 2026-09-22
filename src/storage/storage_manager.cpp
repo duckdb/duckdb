@@ -263,10 +263,12 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 		active_checkpoint.GetCheckpointTransaction(options);
 	} else {
 		auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
-		options.transaction_id = transaction_manager.GetLastCommit();
+		options.checkpoint_id = transaction_manager.NextCheckpointId();
+		options.visibility_bound = VisibilityBound::Through(transaction_manager.GetLastCommit());
 	}
 
-	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Start Checkpoint", options.transaction_id);
+	D_ASSERT(options.checkpoint_id.IsValid());
+	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Start Checkpoint", options.checkpoint_id.GetIndex());
 	if (!wal) {
 		return false;
 	}
@@ -427,8 +429,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 	StorageManagerOptions options;
 	options.read_only = read_only;
 	// MMAP + encryption would corrupt the file (in-place decryption); demote to BUFFERED_IO.
-	auto resolved_io_mode =
-	    storage_options.io_mode ? *storage_options.io_mode : Settings::Get<DefaultIoModeSetting>(config);
+	auto resolved_io_mode = storage_options.io_mode ? *storage_options.io_mode : FileIOMode::BUFFERED_IO;
 	if (storage_options.encryption && resolved_io_mode == FileIOMode::MMAP) {
 		DUCKDB_LOG_WARNING(db.GetDatabase(),
 		                   "MMAP IO_MODE is incompatible with encryption; falling back to BUFFERED_IO for \"%s\"",
@@ -627,6 +628,7 @@ public:
 	bool HasRowGroupData() override;
 
 private:
+	StorageManager &storage;
 	idx_t initial_wal_size = 0;
 	idx_t initial_written = 0;
 	WriteAheadLog &wal;
@@ -635,7 +637,7 @@ private:
 };
 
 SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &storage, WriteAheadLog &wal)
-    : wal(wal), state(WALCommitState::IN_PROGRESS) {
+    : storage(storage), wal(wal), state(WALCommitState::IN_PROGRESS) {
 	auto initial_size = storage.GetWALSize();
 	initial_written = wal.GetTotalWritten();
 	initial_wal_size = initial_size;
@@ -666,6 +668,16 @@ void SingleFileStorageCommitState::RevertCommit() {
 	if (wal.GetTotalWritten() > initial_written) {
 		// remove any entries written into the WAL by truncating it
 		wal.Truncate(initial_wal_size);
+	}
+	auto &block_manager = storage.GetBlockManager();
+	for (auto &entry : optimistically_written_data) {
+		for (auto &rg_entry : entry.second) {
+			if (rg_entry.second.row_group_data) {
+				for (auto &block_id : rg_entry.second.row_group_data->GetBlockIds()) {
+					block_manager.MarkBlockAsModified(block_id);
+				}
+			}
+		}
 	}
 	state = WALCommitState::TRUNCATED;
 }

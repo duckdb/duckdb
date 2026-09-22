@@ -248,6 +248,7 @@ ScalarFunctionSet GetStringDecompressFunctionSet() {
 ScalarFunction CMStringCompressFun::GetFunction(const LogicalType &result_type) {
 	ScalarFunction result(Identifier(StringCompressFunctionName(result_type)), {LogicalType::VARCHAR}, result_type,
 	                      GetStringCompressFunctionSwitch(result_type), CMUtils::Bind);
+	result.GetSignature().GetParameter(0).SetName("value");
 	result.SetSerializeCallback(CMStringCompressSerialize);
 	result.SetDeserializeCallback(CMStringCompressDeserialize);
 #if defined(D_ASSERT_IS_ENABLED)
@@ -262,6 +263,7 @@ ScalarFunction CMStringDecompressFun::GetFunction(const LogicalType &input_type)
 	ScalarFunction result(Identifier(StringDecompressFunctionName()), {input_type}, LogicalType::VARCHAR,
 	                      GetStringDecompressFunctionSwitch(input_type), CMUtils::Bind, nullptr,
 	                      StringDecompressLocalState::Init);
+	result.GetSignature().GetParameter(0).SetName("value");
 	result.SetSerializeCallback(CMStringDecompressSerialize);
 	result.SetDeserializeCallback(CMStringDecompressDeserialize);
 	return result;
@@ -294,6 +296,16 @@ ScalarFunction InternalCompressStringUhugeintFun::GetFunction() {
 
 ScalarFunctionSet InternalDecompressStringFun::GetFunctions() {
 	return GetStringDecompressFunctionSet();
+}
+
+CMExpressionType CMUtils::GetStringType(const BoundScalarFunction &function) {
+	if (function.GetDeserializeCallback() == CMStringCompressDeserialize) {
+		return CMExpressionType::COMPRESS;
+	}
+	if (function.GetDeserializeCallback() == CMStringDecompressDeserialize) {
+		return CMExpressionType::DECOMPRESS;
+	}
+	return CMExpressionType::NONE;
 }
 
 } // namespace duckdb

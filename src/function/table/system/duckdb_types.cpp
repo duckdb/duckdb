@@ -12,11 +12,13 @@
 namespace duckdb {
 
 struct DuckDBTypesData : public GlobalTableFunctionState {
-	DuckDBTypesData() : offset(0) {
+	DuckDBTypesData() : offset(0), constructor_offset(0) {
 	}
 
 	vector<reference<TypeCatalogEntry>> entries;
 	idx_t offset;
+	//! Every type emits one row per constructor overload, like duckdb_functions() does for functions
+	idx_t constructor_offset;
 	unordered_set<int64_t> oids;
 };
 
@@ -64,6 +66,15 @@ static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, TableFun
 
 	names.emplace_back("labels");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
+
+	names.emplace_back("parameters");
+	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
+
+	names.emplace_back("parameter_types");
+	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
+
+	names.emplace_back("varargs");
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }
@@ -116,10 +127,21 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 	auto &extension_name = output.data[12];
 	// labels, VARCHAR[]
 	auto &labels_vec = output.data[13];
+	// parameters, VARCHAR[]
+	auto &parameters = output.data[14];
+	// parameter_types, VARCHAR[]
+	auto &parameter_types = output.data[15];
+	// varargs, VARCHAR
+	auto &varargs = output.data[16];
 
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &type_entry = data.entries[data.offset++].get();
+		auto &type_entry = data.entries[data.offset].get();
 		auto &type = type_entry.user_type;
+		auto &constructor = *type_entry.constructors.GetFunctionByOffset(data.constructor_offset++);
+		if (data.constructor_offset >= type_entry.constructors.functions.size()) {
+			data.offset++;
+			data.constructor_offset = 0;
+		}
 
 		database_name.Append(Value(type_entry.catalog.GetName()));
 		database_oid.Append(Value::BIGINT(NumericCast<int64_t>(type_entry.catalog.GetOid())));
@@ -213,6 +235,17 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		} else {
 			labels_vec.Append(Value());
 		}
+
+		auto &signature = constructor.GetSignature();
+		vector<Value> parameter_names;
+		vector<Value> parameter_type_names;
+		for (auto &param : signature.GetParameters()) {
+			parameter_names.emplace_back(param.GetName());
+			parameter_type_names.emplace_back(param.GetType().ToString());
+		}
+		parameters.Append(Value::LIST(LogicalType::VARCHAR, std::move(parameter_names)));
+		parameter_types.Append(Value::LIST(LogicalType::VARCHAR, std::move(parameter_type_names)));
+		varargs.Append(signature.HasVarArgs() ? Value(signature.GetVarArgs().ToString()) : Value());
 
 		count++;
 	}

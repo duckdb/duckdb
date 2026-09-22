@@ -104,7 +104,8 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, DataChunk &
 //===--------------------------------------------------------------------===//
 class LimitPercentOperatorState : public GlobalSourceState {
 public:
-	explicit LimitPercentOperatorState(const PhysicalLimitPercent &op) : current_offset(0) {
+	explicit LimitPercentOperatorState(const PhysicalLimitPercent &op)
+	    : current_offset(0), progress(0), limit_validated(false) {
 		D_ASSERT(op.sink_state);
 		auto &gstate = op.sink_state->Cast<LimitPercentGlobalState>();
 		gstate.data.InitializeScan(scan_state);
@@ -113,10 +114,26 @@ public:
 	ColumnDataScanState scan_state;
 	optional_idx limit;
 	idx_t current_offset;
+	atomic<double> progress;
+	atomic<bool> limit_validated;
 };
 
 unique_ptr<GlobalSourceState> PhysicalLimitPercent::GetGlobalSourceState(ClientContext &context) const {
 	return make_uniq<LimitPercentOperatorState>(*this);
+}
+
+ProgressData PhysicalLimitPercent::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
+	ProgressData progress;
+	progress.done = gstate.Cast<LimitPercentOperatorState>().progress.load(std::memory_order_relaxed);
+	progress.total = 1.0;
+	return progress;
+}
+
+void PhysicalLimitPercent::SourceFinished(ClientContext &context, GlobalSourceState &gstate) const {
+	auto &state = gstate.Cast<LimitPercentOperatorState>();
+	if (state.limit_validated.load(std::memory_order_relaxed)) {
+		state.progress.store(1.0, std::memory_order_relaxed);
+	}
 }
 
 SourceResultType PhysicalLimitPercent::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
@@ -133,6 +150,7 @@ SourceResultType PhysicalLimitPercent::GetDataInternal(ExecutionContext &context
 			// no limit value and we have not set limit_percent
 			// we are running LIMIT % with a subquery over an empty table
 			D_ASSERT(gstate.data.Count() == 0);
+			state.limit_validated.store(true, std::memory_order_relaxed);
 			return SourceResultType::FINISHED;
 		}
 		idx_t count = gstate.data.Count();
@@ -148,6 +166,7 @@ SourceResultType PhysicalLimitPercent::GetDataInternal(ExecutionContext &context
 		} else {
 			limit = idx_t(limit_percentage);
 		}
+		state.limit_validated.store(true, std::memory_order_relaxed);
 		if (limit == 0) {
 			return SourceResultType::FINISHED;
 		}
@@ -161,6 +180,9 @@ SourceResultType PhysicalLimitPercent::GetDataInternal(ExecutionContext &context
 	}
 
 	PhysicalLimit::HandleOffset(chunk, current_offset, 0, limit.GetIndex());
+	const auto total = MinValue<idx_t>(limit.GetIndex(), gstate.data.Count());
+	D_ASSERT(total > 0);
+	state.progress.store(double(MinValue<idx_t>(current_offset, total)) / double(total), std::memory_order_relaxed);
 
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }

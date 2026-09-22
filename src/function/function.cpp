@@ -12,6 +12,7 @@ namespace duckdb {
 bool FunctionProperties::operator==(const FunctionProperties &rhs) const {
 	return stability == rhs.stability && null_handling == rhs.null_handling && errors == rhs.errors &&
 	       collation_handling == rhs.collation_handling && capture_argument_aliases == rhs.capture_argument_aliases &&
+	       requires_expression_names == rhs.requires_expression_names &&
 	       requires_ordered_execution == rhs.requires_ordered_execution;
 }
 
@@ -209,7 +210,8 @@ hash_t BoundSimpleFunction::Hash() const {
 }
 
 string BoundSimpleFunction::ToString() const {
-	return Function::CallToString(catalog_name, schema_name, name, arguments, LogicalTypeId::INVALID, return_type);
+	return Function::CallToString(GetCatalogName(), GetSchemaName(), GetName(), arguments, LogicalTypeId::INVALID,
+	                              return_type);
 }
 
 bool FunctionParameter::operator==(const FunctionParameter &other) const {

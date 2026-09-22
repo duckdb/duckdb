@@ -12,7 +12,6 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/function/table_function.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/parallel/executor_task.hpp"
@@ -28,6 +27,16 @@ class PipelineBuildStateData;
 class PhysicalCTE;
 
 enum class PipelineInputMode : uint8_t { SCHEDULED_SOURCE, EXTERNAL_INPUT };
+enum class PipelineDependencyType : uint8_t { REQUIRED, OPTIONAL_DEPENDENCY };
+
+//! A dependency of a Pipeline on another Pipeline within the same MetaPipeline
+struct PipelineDependency {
+	PipelineDependency(Pipeline &pipeline_p, PipelineDependencyType type_p);
+
+	weak_ptr<Pipeline> pipeline;
+	PipelineDependencyType type;
+};
+
 enum class ExternalInputEventState : uint8_t {
 	EXTERNAL_INPUT_UNSET,
 	EXTERNAL_INPUT_REGISTERED,
@@ -49,10 +58,6 @@ public:
 	string TaskType() const override {
 		return "PipelineTask";
 	}
-
-public:
-	const PipelineExecutor &GetPipelineExecutor() const;
-	bool TaskBlockedOnResult() const override;
 
 public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
@@ -94,6 +99,14 @@ private:
 	unique_ptr<PipelineBuildStateData> data;
 };
 
+//! Progress of a pipeline, split into the source and the (sink-adjusted) pipeline progress
+struct PipelineProgress {
+	//! Progress as reported by the source, before normalization
+	ProgressData source;
+	//! Progress of the pipeline: the normalized source progress, adjusted by the sink
+	ProgressData pipeline;
+};
+
 //! The Pipeline class represents an execution pipeline starting at a
 class Pipeline : public enable_shared_from_this<Pipeline> {
 	friend class Executor;
@@ -113,7 +126,14 @@ public:
 
 	void AddDependency(shared_ptr<Pipeline> &pipeline);
 	void AddDataflowDependency(shared_ptr<Pipeline> &pipeline);
+	//! The dependencies of this pipeline on pipelines of other MetaPipelines
 	vector<weak_ptr<Pipeline>> GetDependencies() const;
+	//! The dependencies of this pipeline on pipelines of the same MetaPipeline
+	const vector<PipelineDependency> &GetIntraDependencies() const {
+		return intra_dependencies;
+	}
+	//! All pipelines this pipeline waits on before it can start: 'intra_dependencies' and 'dependencies'
+	vector<shared_ptr<Pipeline>> GetAllDependencies() const;
 	const vector<weak_ptr<Pipeline>> &GetDataflowDependencies() const {
 		return dataflow_dependencies;
 	}
@@ -142,6 +162,8 @@ public:
 
 	//! Returns query progress
 	bool GetProgress(ProgressData &progress_data);
+	//! Returns the progress of the source and of the pipeline separately
+	void GetDetailedProgress(PipelineProgress &progress);
 
 	//! Returns a list of all operators (including source and sink) involved in this pipeline
 	vector<reference<PhysicalOperator>> GetOperators();
@@ -167,10 +189,6 @@ public:
 		return external_input_producers;
 	}
 	bool HasExternalInputProducer(const Pipeline &pipeline) const;
-	void SetExternalStreamingResultProducer() {
-		external_streaming_result_producer = true;
-	}
-	bool IsStreamingResultPipeline() const;
 	void SetExternalInputEvent(const shared_ptr<Event> &event);
 	void CompleteExternalInput();
 	bool CanUseExternalInput(const OperatorPartitionInfo &source_partition_info) const;
@@ -186,6 +204,10 @@ public:
 
 	//! Updates the batch index of a pipeline (and returns the new minimum batch index)
 	idx_t UpdateBatchIndex(idx_t old_index, idx_t new_index);
+
+private:
+	//! Tells the progress verifier (if any) that a new run of this pipeline starts
+	void NotifyProgressReset();
 
 private:
 	//! Whether or not the pipeline has been readied
@@ -206,8 +228,11 @@ private:
 
 	//! The parent pipelines (i.e. pipelines that are dependent on this pipeline to finish)
 	vector<weak_ptr<Pipeline>> parents;
-	//! The dependencies of this pipeline
+	//! The dependencies of this pipeline in other MetaPipelines
 	vector<weak_ptr<Pipeline>> dependencies;
+	//! The dependencies of this pipeline in the same MetaPipeline (or sibling MetaPipelines in case of recursive
+	//! dependencies)
+	vector<PipelineDependency> intra_dependencies;
 	//! Pipelines that must be initialized before this pipeline can consume their dataflow output
 	vector<weak_ptr<Pipeline>> dataflow_dependencies;
 	//! Pipelines that push input into this pipeline instead of scanning its source
@@ -217,8 +242,6 @@ private:
 	idx_t base_batch_index = 0;
 	//! How this pipeline receives input chunks
 	PipelineInputMode input_mode = PipelineInputMode::SCHEDULED_SOURCE;
-	//! Whether this pipeline directly feeds a streaming result collector
-	bool external_streaming_result_producer = false;
 	//! Event that represents execution of an externally fed pipeline
 	weak_ptr<Event> external_input_event DUCKDB_GUARDED_BY(external_input_lock);
 	ExternalInputEventState external_input_event_state DUCKDB_GUARDED_BY(external_input_lock) =
@@ -235,6 +258,13 @@ private:
 
 private:
 	void RemoveDependency(const shared_ptr<Pipeline> &pipeline);
+	//! Add a dependency on a pipeline within the same MetaPipeline (or sibling MetaPipelines in case of recursive
+	//! dependencies)
+	void AddIntraDependency(Pipeline &dependency, PipelineDependencyType type);
+	//! Remove an optional dependency on the given pipeline, returns whether one was removed
+	bool RemoveOptionalIntraDependency(const Pipeline &dependency);
+	//! Copy all dependencies (within and across MetaPipelines) of 'other'
+	void InheritDependencies(const Pipeline &other);
 	void ClearExternalInput();
 	void ScheduleSequentialTask(shared_ptr<Event> &event);
 	bool LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads);

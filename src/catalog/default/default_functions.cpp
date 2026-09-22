@@ -125,10 +125,8 @@ static const DefaultMacro internal_macros[] = {
     {"pg_catalog", "pg_size_pretty", "(bytes) AS format_bytes(bytes)"},
     {"pg_catalog", "pg_sleep", "(seconds) AS sleep_ms(CAST(seconds * 1000 AS BIGINT))"},
 
-    {DEFAULT_SCHEMA, "round_even",
-     "(x, n) AS CASE ((abs(x) * power(10, n+1)) % 10) WHEN 5 THEN round(x/2, n) * 2 ELSE round(x, n) END"},
-    {DEFAULT_SCHEMA, "roundbankers", "(x, n) AS round_even(x, n)"},
     {DEFAULT_SCHEMA, "nullif", "(a, b) AS CASE WHEN a=b THEN NULL ELSE a END"},
+    {DEFAULT_SCHEMA, "if", "(a, b, c) AS CASE WHEN a THEN b ELSE c END"},
     {DEFAULT_SCHEMA, "assert_true",
      "(condition) AS CASE WHEN condition THEN NULL ELSE error('Assertion failed') END, "
      "(condition, message) AS CASE WHEN condition THEN NULL ELSE "
@@ -230,7 +228,7 @@ static const DefaultMacro internal_macros[] = {
     {nullptr, nullptr, nullptr}};
 
 unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(const DefaultMacro &default_macro,
-	                                                                          ClientContext &context) {
+                                                                              ClientContext &context) {
 	auto bind_info = make_uniq<CreateMacroInfo>(CatalogType::MACRO_ENTRY);
 	// Build a full CREATE MACRO statement and let the parser handle parameters, types, and defaults.
 	// macro_definition may contain multiple comma-separated overloads, e.g. "(x) AS x, (x, y) AS x+y".
@@ -252,8 +250,7 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(co
 		}
 	}
 	bind_info->macros = std::move(macro_info.macros);
-	bind_info->SetQualifiedName(
-	    QualifiedName({Identifier(default_macro.schema)}, Identifier(default_macro.name)));
+	bind_info->SetQualifiedName(QualifiedName({Identifier(default_macro.schema)}, Identifier(default_macro.name)));
 	bind_info->temporary = true;
 	bind_info->internal = true;
 	return bind_info;
@@ -264,7 +261,7 @@ static bool DefaultFunctionMatches(const DefaultMacro &macro, const Identifier &
 }
 
 static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const Identifier &input_schema, const Identifier &input_name,
-	                                                     ClientContext &context) {
+                                                         ClientContext &context) {
 	auto &schema = input_schema;
 	auto &name = input_name;
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {

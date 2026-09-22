@@ -2,7 +2,6 @@
 #include "duckdb/main/client_context.hpp"
 
 #include "duckdb/main/settings.hpp"
-#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/sorting/sorted_run_merger.hpp"
@@ -23,33 +22,19 @@ Sort::Sort(ClientContext &client_context_p, const vector<BoundOrderByNode> &orde
 	// Convert orders to a single "create_sort_key" expression (and corresponding "decode_sort_key")
 	FunctionBinder binder(client_context);
 	vector<unique_ptr<Expression>> create_children;
-	vector<unique_ptr<Expression>> decode_children;
-	child_list_t<LogicalType> decode_child_list;
+	child_list_t<LogicalType> decode_columns;
+	vector<OrderModifiers> decode_modifiers;
 	for (idx_t col_idx = 0; col_idx < orders.size(); col_idx++) {
 		const auto &order = orders[col_idx];
+		const auto order_modifier = order.GetOrderModifier();
 
 		// Create: for each column we have two arguments: 1. the column, 2. sort specifier
 		create_children.emplace_back(order.expression->Copy());
-		create_children.emplace_back(make_uniq<BoundConstantExpression>(Value(order.GetOrderModifier())));
+		create_children.emplace_back(make_uniq<BoundConstantExpression>(Value(order_modifier)));
 
-		// Avoid having unnamed structs fields (otherwise we get a parser exception while binding)
-		const auto col_name = StringUtil::Format("c%llu", col_idx);
-		auto col_type = order.expression->GetReturnType();
-		decode_child_list.emplace_back(col_name, col_type);
-		col_type = TypeVisitor::VisitReplace(col_type, [](const LogicalType &type) {
-			if (!StructType::IsStruct(type)) {
-				return type;
-			}
-			child_list_t<LogicalType> internal_child_list;
-			for (const auto &child : StructType::GetChildTypes(type)) {
-				internal_child_list.emplace_back(StringUtil::Format("c%llu", internal_child_list.size()), child.second);
-			}
-			return LogicalType::STRUCT(std::move(internal_child_list));
-		});
-
-		// Decode: for each column we have two arguments: 1. col name + type, 2. sort specifier
-		decode_children.emplace_back(make_uniq<BoundConstantExpression>(Value(col_name + " " + col_type.ToString())));
-		decode_children.emplace_back(make_uniq<BoundConstantExpression>(order.GetOrderModifier()));
+		// Decode: bind field types directly and use the same modifiers as the encoder
+		decode_columns.emplace_back(StringUtil::Format("c%llu", col_idx), order.expression->GetReturnType());
+		decode_modifiers.push_back(OrderModifiers::Parse(order_modifier));
 	}
 
 	ErrorData error;
@@ -59,24 +44,10 @@ Sort::Sort(ClientContext &client_context_p, const vector<BoundOrderByNode> &orde
 		throw InternalException("Unable to bind create_sort_key in Sort::Sort");
 	}
 
-	switch (create_sort_key->GetReturnType().id()) {
-	case LogicalTypeId::BIGINT:
-		decode_children.insert(decode_children.begin(),
-		                       make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, static_cast<storage_t>(0)));
-		break;
-	default:
-		D_ASSERT(create_sort_key->GetReturnType().id() == LogicalTypeId::BLOB);
-		decode_children.insert(decode_children.begin(),
-		                       make_uniq<BoundReferenceExpression>(LogicalType::BLOB, static_cast<storage_t>(0)));
-	}
-
-	decode_sort_key = binder.BindScalarFunction(DecodeSortKeyFun::GetFunction(), std::move(decode_children));
-	if (!decode_sort_key) {
-		throw InternalException("Unable to bind decode_sort_key in Sort::Sort");
-	}
-
-	// A bit hacky, but this way we make sure that the output does contain the unnamed structs again
-	decode_sort_key->SetReturnType(LogicalType::STRUCT(std::move(decode_child_list)));
+	auto sort_key_reference =
+	    make_uniq<BoundReferenceExpression>(create_sort_key->GetReturnType(), static_cast<storage_t>(0));
+	decode_sort_key =
+	    DecodeSortKeyFun::Bind(std::move(sort_key_reference), std::move(decode_columns), std::move(decode_modifiers));
 
 	// For convenience, we fill the projection map if it is empty
 	if (projection_map.empty()) {

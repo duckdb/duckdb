@@ -33,4 +33,8 @@ bool WhereBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t de
 	return column_alias_binder->BindAlias(*this, expr_ptr, depth, root_expression, result);
 }
 
+bool WhereBinder::ClaimsAlias(ColumnRefExpression &colref) {
+	return column_alias_binder && column_alias_binder->DoesColumnAliasExist(colref);
+}
+
 } // namespace duckdb

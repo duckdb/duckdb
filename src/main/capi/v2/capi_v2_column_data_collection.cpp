@@ -6,14 +6,6 @@
 namespace duckdb {
 namespace capiv2 {
 
-static auto Convert(ColumnDataCollection *cdc) -> duckdb_v2_column_data_collection_handle {
-	return reinterpret_cast<duckdb_v2_column_data_collection_handle>(cdc);
-}
-
-static auto Convert(duckdb_v2_column_data_collection_handle cdc) -> ColumnDataCollection * {
-	return reinterpret_cast<ColumnDataCollection *>(cdc);
-}
-
 static auto Convert(ColumnDataAppendState *state) -> duckdb_v2_column_data_collection_append_state_handle {
 	return reinterpret_cast<duckdb_v2_column_data_collection_append_state_handle>(state);
 }
@@ -113,6 +105,12 @@ DUCKDB_V2_ERROR duckdb_v2_column_data_collection_reset(duckdb_v2_column_data_col
                                                        duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(collection);
 	return WithErrorHandler(err, [&]() { Convert(collection)->Reset(); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_column_data_collection_clear(duckdb_v2_column_data_collection_handle collection,
+                                                       duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(collection);
+	return WithErrorHandler(err, [&]() { Convert(collection)->ResetForReuse(); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_column_data_collection_destroy(duckdb_v2_column_data_collection_handle *collection) {

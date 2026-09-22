@@ -91,11 +91,13 @@ class JobStagesTest(unittest.TestCase):
         repository: str,
         skip_tests: bool = False,
         changed_keys: set[str] | None = None,
+        default_branch: str = "main",
     ) -> job_stages.JobSelection:
         return job_stages.compute_job_selection(
             job_stages.JobSelectionInput(
                 event_name=event_name,
                 ref_name=ref_name,
+                default_branch=default_branch,
                 repository=repository,
                 skip_tests=skip_tests,
                 changed_keys=changed_keys or set(),
@@ -133,14 +135,22 @@ class JobStagesTest(unittest.TestCase):
         required_jobs = {"linux-relassert", "linux-release", "linux-release-tests", "tidy-check"}
         self.assertTrue(required_jobs.issubset(set(selection.enabled_jobs)))
         self.assertNotIn("osx", selection.enabled_jobs)
-        self.assertTrue(selection.save_cache)
+        self.assertFalse(selection.save_cache)
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
-    def test_main_includes_main_only_jobs(self):
-        selection = self._compute_job_selection("push", "main", "duckdb/duckdb", changed_keys={"osx"})
+    def test_default_branch_includes_nightly_only_jobs(self):
+        selection = self._compute_job_selection(
+            "push", "v2.0-cyanoptera", "duckdb/duckdb", default_branch="v2.0-cyanoptera"
+        )
         self.assertIn("codecov", selection.enabled_jobs)
         self.assertEqual(selection.enabled_jobs.count("osx"), 1)
-        self.assertTrue(selection.save_cache)
+        self.assertFalse(selection.save_cache)
+
+        former_default_selection = self._compute_job_selection(
+            "push", "main", "duckdb/duckdb", default_branch="v2.0-cyanoptera"
+        )
+        self.assertNotIn("codecov", former_default_selection.enabled_jobs)
+        self.assertNotIn("osx", former_default_selection.enabled_jobs)
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_workflow_dispatch_adds_release_jobs(self):
@@ -174,7 +184,7 @@ class JobStagesTest(unittest.TestCase):
                 ],
                 ["amd64 optimized", "arm64 optimized"],
             )
-            self.assertEqual(workflow_dispatch_selection.save_cache, push_selection.save_cache)
+            self.assertTrue(workflow_dispatch_selection.save_cache)
 
     def test_regular_branch_excludes_main_only_jobs(self):
         selection = self._compute_job_selection("pull_request", "feature/my-branch", "duckdb/duckdb")
@@ -272,6 +282,8 @@ class JobStagesTest(unittest.TestCase):
                 "merge_group",
                 "--ref_name",
                 "gh-readonly-queue/main/pr-1-abc",
+                "--default_branch",
+                "v2.0-cyanoptera",
                 "--repository",
                 "duckdb/duckdb",
                 "--runners",
@@ -282,7 +294,7 @@ class JobStagesTest(unittest.TestCase):
             with open(output_path, "r", encoding="utf-8") as f:
                 out = f.read()
             self.assertIn("enabled_jobs=", out)
-            self.assertIn("save_cache=true", out)
+            self.assertIn("save_cache=false", out)
             payload = out.splitlines()[0].split("=", 1)[1]
             selected_jobs = json.loads(payload)
             required_jobs = {"linux-relassert", "linux-release", "linux-release-tests", "tidy-check"}
@@ -301,9 +313,12 @@ class JobStagesTest(unittest.TestCase):
     def test_job_selection_override_adds_prepare(self):
         old_value = os.environ.get("OVERRIDE_JOBS")
         try:
-            os.environ["OVERRIDE_JOBS"] = "extensions"
+            os.environ["OVERRIDE_JOBS"] = "extensions-build extensions-deploy extensions-install"
             selection = self._compute_job_selection("pull_request", "feature/my-branch", "duckdb/duckdb")
-            self.assertEqual(selection.enabled_jobs, ["prepare", "extensions"])
+            self.assertEqual(
+                selection.enabled_jobs,
+                ["prepare", "extensions-build", "extensions-deploy", "extensions-install"],
+            )
         finally:
             if old_value is None:
                 os.environ.pop("OVERRIDE_JOBS", None)
@@ -313,7 +328,7 @@ class JobStagesTest(unittest.TestCase):
     def test_job_selection_override_invalid_job_raises(self):
         old_value = os.environ.get("OVERRIDE_JOBS")
         try:
-            os.environ["OVERRIDE_JOBS"] = "extensions,not-a-job"
+            os.environ["OVERRIDE_JOBS"] = "extensions-deploy,not-a-job"
             with self.assertRaises(ValueError):
                 self._compute_job_selection("pull_request", "feature/my-branch", "duckdb/duckdb")
         finally:

@@ -15,6 +15,7 @@ add_library_unity(
   OBJECT
   aggregate_function.cpp
   aggregate_state_serialization.cpp
+  builtin_function_lookup.cpp
   built_in_functions.cpp
   cast_rules.cpp
   combine_types_rules.cpp
@@ -32,6 +33,7 @@ add_library_unity(
   table_macro_function.cpp
   scalar_function.cpp
   table_function.cpp
+  type_constructor.cpp
   window_function.cpp
   copy_blob.cpp)
 set(ALL_OBJECT_FILES
