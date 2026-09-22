@@ -89,7 +89,7 @@ struct ClientConfig {
 
 	optional<string> current_dialect;
 	//! The (ordered) list of grammar extensions currently used by the parser
-	case_insensitive_set_t active_grammar_extensions;
+	vector<string> active_grammar_extensions;
 	//! The compiled grammar active for the connection
 	shared_ptr<CompiledGrammar> cached_grammar;
 

@@ -23,6 +23,7 @@ constexpr LogLevel CheckpointLogType::LEVEL;
 constexpr LogLevel AdaptiveFilterLogType::LEVEL;
 constexpr LogLevel ParquetPrefetchLogType::LEVEL;
 constexpr LogLevel AsyncTaskScheduleLogType::LEVEL;
+constexpr LogLevel ProgressVerificationLogType::LEVEL;
 
 //===--------------------------------------------------------------------===//
 // QueryLogType
@@ -380,6 +381,33 @@ string AsyncTaskScheduleLogType::ConstructLogMessage(const string &pool, idx_t t
 	child_list_t<Value> child_list = {
 	    {"pool", Value(pool)},
 	    {"task_count", Value::BIGINT(static_cast<int64_t>(task_count))},
+	};
+	return Value::STRUCT(std::move(child_list)).ToString();
+}
+
+//===--------------------------------------------------------------------===//
+// ProgressVerificationLogType
+//===--------------------------------------------------------------------===//
+ProgressVerificationLogType::ProgressVerificationLogType() : LogType(NAME, LEVEL, GetLogType()) {
+}
+
+LogicalType ProgressVerificationLogType::GetLogType() {
+	child_list_t<LogicalType> child_list = {
+	    {"invariant", LogicalType::VARCHAR},
+	    {"operator", LogicalType::VARCHAR},
+	    {"pipeline", LogicalType::VARCHAR},
+	    {"detail", LogicalType::VARCHAR},
+	};
+	return LogicalType::STRUCT(child_list);
+}
+
+string ProgressVerificationLogType::ConstructLogMessage(const string &invariant, const string &operator_name,
+                                                        const string &pipeline, const string &detail) {
+	child_list_t<Value> child_list = {
+	    {"invariant", Value(invariant)},
+	    {"operator", Value(operator_name)},
+	    {"pipeline", Value(pipeline)},
+	    {"detail", Value(detail)},
 	};
 	return Value::STRUCT(std::move(child_list)).ToString();
 }

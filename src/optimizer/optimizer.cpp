@@ -61,6 +61,7 @@
 #include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/planner/operator/logical_prepare.hpp"
+#include "duckdb/planner/operator/logical_secure_view.hpp"
 #include "duckdb/optimizer/remote_pushdown_optimizer.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/settings.hpp"
@@ -243,6 +244,10 @@ void Optimizer::RunBuiltInOptimizers() {
 	default:
 		break;
 	}
+	// determine which secure views may expose the statistics of their contents - this runs before any rewrites so
+	// that the filters the optimizer pushes into a view are not mistaken for the view restricting its own rows
+	LogicalSecureView::AnalyzeStatistics(*plan);
+
 	// first we perform expression rewrites using the ExpressionRewriter
 	// this does not change the logical plan structure, but only simplifies the expression trees
 	RunOptimizer(OptimizerType::EXPRESSION_REWRITER, [&]() {

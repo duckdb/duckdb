@@ -700,6 +700,10 @@ public:
 	}
 };
 
+ProgressData PhysicalNestedLoopJoin::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
+	return gstate.Cast<NestedLoopJoinGlobalScanState>().scan_state.GetProgress();
+}
+
 unique_ptr<GlobalSourceState> PhysicalNestedLoopJoin::GetGlobalSourceState(ClientContext &context) const {
 	return make_uniq<NestedLoopJoinGlobalScanState>(*this, context);
 }

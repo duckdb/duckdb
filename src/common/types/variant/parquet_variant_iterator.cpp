@@ -1,4 +1,4 @@
-#include "reader/variant/parquet_variant_iterator.hpp"
+#include "duckdb/common/types/variant/parquet_variant_iterator.hpp"
 
 #include "duckdb/common/types/variant/variant_builder.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
@@ -9,7 +9,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
-#include "reader/uuid_column_reader.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "utf8proc_wrapper.hpp"
 
 #include <algorithm>
@@ -273,7 +273,7 @@ T CastDecimalValue(SRC value) {
 template <class T>
 T ReadBinaryUUID(const_data_ptr_t payload) {
 	if constexpr (std::is_same<T, hugeint_t>::value) {
-		return UUIDValueConversion::ReadParquetUUID(payload);
+		return BaseUUID::FromBlob(payload);
 	} else {
 		throw InternalException("Variant UUID must be read as hugeint_t");
 	}
@@ -703,18 +703,6 @@ void ParquetVariantConversion::ConvertBinary(Vector &metadata_and_value, Vector 
 	ParquetVariantIterator iterator(metadata_and_value);
 	ParquetBinaryVariantSource source(iterator, metadata_and_value);
 	BuildVariant(source, count, result);
-}
-
-static void VariantBytesToVariantFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	ParquetVariantConversion::ConvertBinary(input.data[0], result, input.size());
-}
-
-ScalarFunction ParquetVariantConversion::GetBytesToVariantFunction() {
-	ScalarFunction function("variant_bytes_to_variant", {}, LogicalType::VARIANT(), VariantBytesToVariantFunction);
-	function.GetSignature().AddParameter("blob", LogicalType::BLOB);
-	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	function.SetFallible();
-	return function;
 }
 
 } // namespace duckdb

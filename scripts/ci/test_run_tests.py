@@ -410,6 +410,44 @@ require-env FOO: 1
         self.assertIn("require json: 3", proc.stdout)
         self.assertIn("require-env FOO: 1", proc.stdout)
 
+    def test_counts_skips_when_summary_is_split_over_stdout_and_stderr(self):
+        test_list_path = create_temp_file("test/sql/a.test\n")
+        try:
+            with mock.patch(
+                "scripts.ci.run_tests.run_batch",
+                return_value={
+                    "failed": False,
+                    "stdout": "All tests passed (4 skipped tests, 100 assertions in 1 test cases)\n",
+                    "stderr": """
+Skipped tests for the following reasons:
+require json: 3
+require-env FOO: 1
+""",
+                    "message": None,
+                    "peak_rss_bytes": 0,
+                },
+            ):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--batch-size",
+                        "1",
+                        "--test-list",
+                        str(test_list_path),
+                        "--test-command",
+                        "echo fake-run {test_list}",
+                        "unused-binary",
+                    ]
+                )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn(", 4 skipped in ", proc.stdout)
+        self.assertIn("require json: 3", proc.stdout)
+        self.assertIn("require-env FOO: 1", proc.stdout)
+
     def test_retry_only_counts_skips_from_successful_attempt(self):
         test_list_path = create_temp_file("test/sql/a.test\n")
         try:

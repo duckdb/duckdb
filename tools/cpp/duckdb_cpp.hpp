@@ -4627,8 +4627,9 @@ public:
 			return *static_cast<T *>(GetUserDataInternal());
 		}
 
-		/// Reports how many rows a batch should carry, as the target the engine cuts batches at; the callback must
-		/// call this. A batch may still be smaller (the last one of a file, or when `BATCH_SIZE_BYTES` cuts it first).
+		/// Reports how many rows a batch should carry, as the target the engine cuts batches at. Not calling this
+		/// leaves the engine's default in effect. A batch may still be smaller (the last one of a file, or when
+		/// `BATCH_SIZE_BYTES` cuts it first).
 		/// @param rows The number of rows a batch should carry; must be greater than 0.
 		auto SetTarget(idx_t rows) -> void;
 

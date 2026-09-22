@@ -120,6 +120,8 @@ enum class CacheValidationMode : uint8_t;
 
 enum class CachingMode : uint8_t;
 
+enum class CanUnloadResult : uint8_t;
+
 enum class CatalogLookupBehavior : uint8_t;
 
 enum class CatalogType : uint8_t;
@@ -173,6 +175,8 @@ enum class DatePartSpecifier : uint8_t;
 enum class DebugInitialize : uint8_t;
 
 enum class DebugOrderVerification : uint8_t;
+
+enum class DebugProgressVerification : uint8_t;
 
 enum class DebugStatementVerification : uint8_t;
 
@@ -439,6 +443,8 @@ enum class PreserveOrderType : uint8_t;
 enum class ProfilingCoverage : uint8_t;
 
 enum class ProfilingParameterNames : uint8_t;
+
+enum class ProgressInvariant : uint8_t;
 
 enum class PushdownExtractSupport : uint8_t;
 
@@ -780,6 +786,9 @@ template<>
 const char* EnumUtil::ToChars<CachingMode>(CachingMode value);
 
 template<>
+const char* EnumUtil::ToChars<CanUnloadResult>(CanUnloadResult value);
+
+template<>
 const char* EnumUtil::ToChars<CatalogLookupBehavior>(CatalogLookupBehavior value);
 
 template<>
@@ -859,6 +868,9 @@ const char* EnumUtil::ToChars<DebugInitialize>(DebugInitialize value);
 
 template<>
 const char* EnumUtil::ToChars<DebugOrderVerification>(DebugOrderVerification value);
+
+template<>
+const char* EnumUtil::ToChars<DebugProgressVerification>(DebugProgressVerification value);
 
 template<>
 const char* EnumUtil::ToChars<DebugStatementVerification>(DebugStatementVerification value);
@@ -1258,6 +1270,9 @@ const char* EnumUtil::ToChars<ProfilingCoverage>(ProfilingCoverage value);
 
 template<>
 const char* EnumUtil::ToChars<ProfilingParameterNames>(ProfilingParameterNames value);
+
+template<>
+const char* EnumUtil::ToChars<ProgressInvariant>(ProgressInvariant value);
 
 template<>
 const char* EnumUtil::ToChars<PushdownExtractSupport>(PushdownExtractSupport value);
@@ -1702,6 +1717,9 @@ template<>
 CachingMode EnumUtil::FromString<CachingMode>(const char *value);
 
 template<>
+CanUnloadResult EnumUtil::FromString<CanUnloadResult>(const char *value);
+
+template<>
 CatalogLookupBehavior EnumUtil::FromString<CatalogLookupBehavior>(const char *value);
 
 template<>
@@ -1781,6 +1799,9 @@ DebugInitialize EnumUtil::FromString<DebugInitialize>(const char *value);
 
 template<>
 DebugOrderVerification EnumUtil::FromString<DebugOrderVerification>(const char *value);
+
+template<>
+DebugProgressVerification EnumUtil::FromString<DebugProgressVerification>(const char *value);
 
 template<>
 DebugStatementVerification EnumUtil::FromString<DebugStatementVerification>(const char *value);
@@ -2180,6 +2201,9 @@ ProfilingCoverage EnumUtil::FromString<ProfilingCoverage>(const char *value);
 
 template<>
 ProfilingParameterNames EnumUtil::FromString<ProfilingParameterNames>(const char *value);
+
+template<>
+ProgressInvariant EnumUtil::FromString<ProgressInvariant>(const char *value);
 
 template<>
 PushdownExtractSupport EnumUtil::FromString<PushdownExtractSupport>(const char *value);
