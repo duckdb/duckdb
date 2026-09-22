@@ -47,19 +47,14 @@ build/reldebug/test/unittest "test/sql/order/test_limit.test" "test/sql/order/li
 Progress lines go to stdout and failure output to stderr, so `2>/dev/null` keeps only progress and
 `1>/dev/null` keeps only failures.
 
-### Machine-Readable Output (`--output=json`)
+### Machine-Readable Output (`-json`)
 
-`--output=json` replaces the human-readable output with JSON Lines on stdout: a `test` object for
-every test case that did not pass, then one `summary` object. Nothing else is written to stdout, so
-the stream can be piped straight into a parser. The process exit code is unchanged.
-
-Passing tests are counted in the summary but not emitted individually - they are ~99% of the lines on
-a full run and carry nothing to act on. A whole green run is 73 lines instead of 6274. Pass Catch's
-`-s`/`--success` to get them back. Skipped tests are always emitted: they are few, and a test that
-silently did not run is usually worth knowing about.
+Use the `test/run` runner with `-json` to get test results as JSON Lines. The runner splits the
+selected tests into batches, runs the batches in parallel, and retries failed batches when asked
+(`--retry N`). Prefer it over invoking the `unittest` binary directly.
 
 ```bash
-build/reldebug/test/unittest "test/sql/order/*" --output=json
+build/reldebug/test/run -json "test/sql/order/*"
 ```
 
 ```json
@@ -67,11 +62,30 @@ build/reldebug/test/unittest "test/sql/order/*" --output=json
 {"event":"summary","total":35,"passed":34,"failed":0,"skipped":1,"assertions":{"passed":9355,"failed":0},"failed_tests":[],"skip_reasons":{"require notarealextension":1}}
 ```
 
+stdout carries a `test` object for every test case that did not pass, then one `summary` object, and
+nothing else, so the stream can be piped straight into a parser. The runner's human-readable output
+(progress, failure rendering, reproducer command) moves to stderr. The exit code is unchanged.
+
+Passing tests are counted in the summary but not emitted individually - they are ~99% of the lines on
+a full run and carry nothing to act on. Skipped tests are always emitted: they are few, and a test that
+silently did not run is usually worth knowing about.
+
 `status` is `pass`, `fail` or `skip`. A failing test carries a `failure` object with the structured
 detail - `kind` (e.g. `wrong_row_count`, `value_mismatch`, `unexpected_statement`), `file`, `line`,
 `query`, and the `expected` / `actual` values as flat row-major arrays over `columns` columns.
 `mismatch_rows` lists the zero-based rows that differ, computed over the **full** result even when
 the value arrays themselves are capped (`expected_truncated` / `actual_truncated`).
+
+The runner adds what only it knows:
+
+- A batch that crashes or times out fails the test that was running with `kind` `crash` or `timeout`,
+  with the tail of stderr in `error_message`. The batch's remaining tests are emitted as skips with
+  `skip_reason` `not run: batch aborted`.
+- A test that needed retries carries `attempts`. A test that failed and then passed on retry is
+  emitted with `status` `pass`, because it is flaky.
+- A batch that exits non-zero with no failing test (e.g. a leak report at exit) emits a `batch_error`
+  event listing the batch's `tests`, and the summary counts it in `batch_errors`.
+- With `--test-config`, every event carries the `config` it ran under.
 
 The `summary` object closes every run and names every failure, so a single invocation answers "what
 failed" without a second pass - do not run one invocation per test group and stitch the results
@@ -80,14 +94,13 @@ distinguishes a typo'd filter from a genuinely empty run.
 
 ```bash
 # just the verdict - the summary is always the last line
-build/reldebug/test/unittest "*" --output=json | tail -1
-
-# include passing tests too
-build/reldebug/test/unittest "*" --output=json -s
+build/reldebug/test/run -json "test/sql/order/*" 2>/dev/null | tail -1
 ```
 
-The default output is unaffected by this flag. `--emit-test-events` (`[TEST_EVENT] ` lines on stderr)
-is a separate, narrower mechanism and still behaves as before.
+The runner gets this stream from the `unittest` binary's `--output=json` flag, which prints the same
+`test` and `summary` objects for a single process; pass Catch's `-s`/`--success` there to include
+passing tests. `--emit-test-events` (`[TEST_EVENT] ` lines on stderr) is a separate, narrower
+mechanism and still behaves as before.
 
 ### Time-Limiting Queries
 

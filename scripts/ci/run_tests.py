@@ -2,6 +2,7 @@
 import argparse
 import concurrent.futures
 import contextlib
+import json
 import os
 import re
 import shutil
@@ -37,6 +38,10 @@ ANSI_RED = "\033[31m"
 ANSI_TEAL = "\033[36m"
 ANSI_DARK_GRAY = "\033[90m"
 ANSI_RESET = "\033[0m"
+# In -json mode each batch runs with the unittest JSON reporter. `-s` makes it emit a line for every finished
+# test, so a batch that crashes or times out still tells us which tests completed.
+JSON_BATCH_FLAGS = "--output=json -s"
+JSON_STDERR_TAIL_LINES = 50
 FAILURE_MARKER = "================================================================"
 
 
@@ -72,6 +77,7 @@ class TestRunnerConfig:
     max_failures: int | None
     fail_require_skip: bool
     coverage_profile_dir: Path | None
+    json_output: bool = False
 
 
 @dataclass(frozen=True)
@@ -211,6 +217,7 @@ class RunContext:
     state: BatchRunState
     future_to_batch: dict
     progress: DotProgressBar
+    json_sink: "JsonEventSink | None" = None
 
 
 def chunked(items, n):
@@ -280,6 +287,8 @@ def load_tests(path: Path):
 
 def build_test_command(config: TestRunnerConfig, test_list: str):
     flags = shlex.join(shlex.split(config.test_flags))
+    if config.json_output:
+        flags = " ".join(flag for flag in [flags, JSON_BATCH_FLAGS] if flag)
     return config.test_command.format(
         binary=shlex.quote(config.unittest_bin),
         flags=flags,
@@ -1586,7 +1595,10 @@ def run_batch(config: TestRunnerConfig, batch):
                 peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
             failed = proc.returncode != 0
             if not failed and config.fail_require_skip:
-                require_skip_lines = find_require_skip_lines(stdout)
+                if config.json_output:
+                    require_skip_lines = find_json_require_skips(stdout)
+                else:
+                    require_skip_lines = find_require_skip_lines(stdout)
                 if require_skip_lines:
                     failed = True
                     message = "error: detected require-based skipped tests: " + require_skip_lines[0]
@@ -1602,21 +1614,208 @@ def run_batch(config: TestRunnerConfig, batch):
         Path(stdout_capture.name).unlink(missing_ok=True)
         Path(stderr_capture.name).unlink(missing_ok=True)
 
-    return {
+    returncode = proc.returncode if "proc" in locals() else None
+    result = {
         "failed": failed,
         "stdout": stdout,
         "stderr": stderr,
         "message": message,
-        "returncode": proc.returncode if "proc" in locals() else None,
+        "returncode": returncode,
         "peak_rss_bytes": peak_rss_bytes,
         "allow_retry": allow_retry,
     }
+    if config.json_output:
+        result["json_tests"], result["json_batch_error"] = interpret_json_batch(
+            batch, stdout, stderr, message, returncode, failed
+        )
+    return result
 
 
 def find_require_skip_lines(output: str):
     ansi = r"(?:\x1b\[[0-9;]*m)*"
     pattern = rf"^{ansi}(require\s+\S+:\s+\d+){ansi}\s*$"
     return re.findall(pattern, output, flags=re.MULTILINE)
+
+
+def parse_json_lines(stdout: str):
+    records = []
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(record, dict):
+            records.append(record)
+    return records
+
+
+def find_json_require_skips(stdout: str):
+    reasons = []
+    for record in parse_json_lines(stdout):
+        reason = record.get("skip_reason", "")
+        if record.get("event") == "test" and reason.startswith("require "):
+            reasons.append(reason)
+    return reasons
+
+
+def stderr_tail(stderr: str):
+    lines = [strip_ansi(line) for line in stderr.splitlines() if line.strip()]
+    return "\n".join(lines[-JSON_STDERR_TAIL_LINES:])
+
+
+def interpret_json_batch(
+    batch: list[str], stdout: str, stderr: str, message: str | None, returncode: int | None, failed: bool
+):
+    """Returns one `test` event per test in the batch, in batch order, and a `batch_error` event (or None) for a
+    failed batch that no test failure accounts for."""
+    records = parse_json_lines(stdout)
+    finished = {record["name"]: record for record in records if record.get("event") == "test" and "name" in record}
+    completed = any(record.get("event") == "summary" for record in records)
+    tests = []
+    aborted = False
+    for name in batch:
+        event = finished.get(name)
+        if event is not None:
+            tests.append(event)
+        elif completed:
+            tests.append({"event": "test", "name": name, "status": "skip", "skip_reason": "no matching test"})
+        elif not aborted:
+            # Catch runs a -f list in file order, so the first test without an event is the one that was running.
+            aborted = True
+            if message is not None and message.startswith("batch timed out"):
+                kind = "timeout"
+            elif returncode is None:
+                kind = "launch_error"
+            else:
+                kind = "crash"
+            failure = {
+                "kind": kind,
+                "message": message or format_signal_summary(returncode) or f"unittest exited with code {returncode}",
+            }
+            tail = stderr_tail(stderr)
+            if tail:
+                failure["error_message"] = tail
+            tests.append({"event": "test", "name": name, "status": "fail", "failure": failure})
+        else:
+            tests.append({"event": "test", "name": name, "status": "skip", "skip_reason": "not run: batch aborted"})
+
+    batch_error = None
+    if failed and not any(test.get("status") == "fail" for test in tests):
+        batch_error = {
+            "event": "batch_error",
+            "tests": list(batch),
+            "message": message or format_signal_summary(returncode) or f"unittest exited with code {returncode}",
+        }
+        tail = stderr_tail(stderr)
+        if tail:
+            batch_error["error_message"] = tail
+    return tests, batch_error
+
+
+def batch_skipped_tests(result):
+    if "json_tests" not in result:
+        return extract_skipped_test_output(result["stdout"], result["stderr"])
+    skipped_count = 0
+    skipped_reasons = {}
+    for test in result["json_tests"]:
+        if test.get("status") == "skip":
+            skipped_count += 1
+            reason = test.get("skip_reason")
+            if reason:
+                skipped_reasons[reason] = skipped_reasons.get(reason, 0) + 1
+    return skipped_count, skipped_reasons
+
+
+class JsonEventSink:
+    """Writes the -json stream: the non-passing `test` events of every batch, then one merged `summary`."""
+
+    def __init__(self, stream):
+        self.stream = stream
+        self.config: str | None = None
+        self.passed = 0
+        self.failed = 0
+        self.skipped = 0
+        self.assertions_passed = 0
+        self.assertions_failed = 0
+        self.batch_errors = 0
+        self.failed_tests = []
+        self.skip_reasons = {}
+        self.retried_failures = {}
+
+    def write(self, record: dict):
+        self.stream.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n")
+        self.stream.flush()
+
+    def no_matching_tests(self, patterns: list[str]):
+        self.write({"event": "no_matching_tests", "filter": " ".join(patterns)})
+
+    def add_batch_result(self, batch_info, result, final: bool):
+        key = tuple(batch_info["batch"])
+        failed_names = {test["name"] for test in result["json_tests"] if test.get("status") == "fail"}
+        if not final:
+            self.retried_failures.setdefault(key, set()).update(failed_names)
+            return
+        retried = self.retried_failures.pop(key, set())
+        attempts = batch_info["attempt"] + 1
+        for test in result["json_tests"]:
+            status = test.get("status")
+            assertions = test.get("assertions", {})
+            self.assertions_passed += assertions.get("passed", 0)
+            self.assertions_failed += assertions.get("failed", 0)
+            if status == "fail":
+                self.failed += 1
+                entry = {"name": test["name"]}
+                failure = test.get("failure", {})
+                if failure.get("line"):
+                    entry["line"] = failure["line"]
+                entry["kind"] = failure.get("kind", "unknown")
+                if self.config is not None:
+                    entry["config"] = self.config
+                self.failed_tests.append(entry)
+            elif status == "skip":
+                self.skipped += 1
+                reason = test.get("skip_reason")
+                if reason:
+                    self.skip_reasons[reason] = self.skip_reasons.get(reason, 0) + 1
+            else:
+                self.passed += 1
+            # A test that failed an earlier attempt is reported even if it passed now: it is flaky
+            if status == "pass" and test["name"] not in retried:
+                continue
+            event = dict(test)
+            if self.config is not None:
+                event["config"] = self.config
+            if attempts > 1:
+                event["attempts"] = attempts
+            self.write(event)
+        batch_error = result.get("json_batch_error")
+        if batch_error is not None:
+            self.batch_errors += 1
+            event = dict(batch_error)
+            if self.config is not None:
+                event["config"] = self.config
+            self.write(event)
+
+    def finish(self, interrupted: bool):
+        summary = {
+            "event": "summary",
+            "total": self.passed + self.failed + self.skipped,
+            "passed": self.passed,
+            "failed": self.failed,
+            "skipped": self.skipped,
+            "assertions": {"passed": self.assertions_passed, "failed": self.assertions_failed},
+            "failed_tests": self.failed_tests,
+        }
+        if self.skip_reasons:
+            summary["skip_reasons"] = dict(sorted(self.skip_reasons.items()))
+        if self.batch_errors:
+            summary["batch_errors"] = self.batch_errors
+        if interrupted:
+            summary["interrupted"] = True
+        self.write(summary)
 
 
 def submit_batch(executor, config: TestRunnerConfig, batch, future_to_batch, batch_idx: int, attempt: int):
@@ -1647,7 +1846,10 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
     )
     lines = render_failure_lines_with_diagnostics(failure, result["stdout"], result["stderr"])
     reproduce_batch = failure.reproduce_batch
-    failed_test_names = extract_failed_test_names(failure, result["stdout"], result["stderr"], batch_info["batch"])
+    if "json_tests" in result:
+        failed_test_names = [test["name"] for test in result["json_tests"] if test.get("status") == "fail"]
+    else:
+        failed_test_names = extract_failed_test_names(failure, result["stdout"], result["stderr"], batch_info["batch"])
     ctx.state.add_failed_attempt(batch_info["batch_idx"], lines, reproduce_batch, failed_test_names)
     retry_target = format_failed_test_retry_target(failure.test_name, batch_info)
     if result.get("allow_retry", True) and ctx.state.can_retry(batch_info, ctx.config):
@@ -1691,7 +1893,10 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
 
 def report_batch_metrics(ctx: RunContext, batch_info, result, elapsed: float):
     if ctx.config.runtime_threshold_seconds is not None:
-        test_runtimes = extract_test_runtimes(result["stdout"], result["stderr"])
+        if "json_tests" in result:
+            test_runtimes = [(test["name"], test["duration"]) for test in result["json_tests"] if "duration" in test]
+        else:
+            test_runtimes = extract_test_runtimes(result["stdout"], result["stderr"])
         if test_runtimes:
             for test_name, test_elapsed in test_runtimes:
                 if test_elapsed >= ctx.config.runtime_threshold_seconds:
@@ -1764,6 +1969,13 @@ def parse_args(argv: list[str] | None = None):
         help="fail a batch if unittest output reports skipped tests for `require ...` reasons",
     )
     parser.add_argument("--coverage-report", type=Path, help="write an LCOV HTML coverage report to this directory")
+    parser.add_argument(
+        "-json",
+        "--json",
+        dest="json",
+        action="store_true",
+        help="write JSON Lines to stdout (non-passing tests, then a summary); human-readable output moves to stderr",
+    )
     # Accept options interleaved with positional patterns, e.g.:
     #   run_tests.py bin "[tag]" --fail-fast test/sql/foo.test
     return parser.parse_intermixed_args(argv)
@@ -1864,6 +2076,7 @@ def run_single_config(
             max_failures=max_failures,
             fail_require_skip=args.fail_require_skip,
             coverage_profile_dir=args.coverage_profile_dir,
+            json_output=args.json_sink is not None,
         )
 
         tests = load_tests(config.test_list)
@@ -1871,6 +2084,8 @@ def run_single_config(
             return ConfigRunResult(returncode=130, passed_tests=0, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0)
         if len(tests) == 0:
             print(f"error: no tests selected for config '{invocation.label}'")
+            if args.json_sink is not None:
+                args.json_sink.no_matching_tests(args.patterns)
             return ConfigRunResult(returncode=1, passed_tests=0, failed_tests=1, skipped_tests=0, elapsed_seconds=0.0)
         stabilization_tests = []
         if args.changed_tests is not None:
@@ -1896,7 +2111,7 @@ def run_single_config(
         print(f"config: {config_output}")
 
         batches = list(chunked(tests, computed_batch_size))
-        initial_run_result = run_tests(config, batches, len(tests))
+        initial_run_result = run_tests(config, batches, len(tests), json_sink=args.json_sink)
         if initial_run_result.returncode != 0 or not stabilization_tests:
             return initial_run_result
 
@@ -1916,14 +2131,14 @@ def run_single_config(
             if rerun_idx < fast_extra_runs and fast_tests:
                 print(f"stabilization rerun {rerun_round}/{fast_extra_runs} for fast tests")
                 fast_batches = list(chunked(fast_tests, computed_batch_size))
-                fast_result = run_tests(config, fast_batches, len(fast_tests))
+                fast_result = run_tests(config, fast_batches, len(fast_tests), json_sink=args.json_sink)
                 if fast_result.returncode != 0:
                     stabilization_failed = True
                     stabilization_failed_test_names.extend(fast_result.failed_test_names)
             if rerun_idx < slow_extra_runs and slow_tests:
                 print(f"stabilization rerun {rerun_round}/{slow_extra_runs} for slow tests")
                 slow_batches = list(chunked(slow_tests, computed_batch_size))
-                slow_result = run_tests(config, slow_batches, len(slow_tests))
+                slow_result = run_tests(config, slow_batches, len(slow_tests), json_sink=args.json_sink)
                 if slow_result.returncode != 0:
                     stabilization_failed = True
                     stabilization_failed_test_names.extend(slow_result.failed_test_names)
@@ -1960,6 +2175,21 @@ def main(argv: list[str] | None = None):
 
 def main_impl(argv: list[str] | None = None):
     args = parse_args(argv)
+    args.json_sink = None
+    if not args.json:
+        return run_main(args)
+    # JSON owns stdout, so everything the runner prints for humans goes to stderr
+    args.json_sink = JsonEventSink(sys.stdout)
+    returncode = 1
+    try:
+        with redirect_stdout(sys.stderr):
+            returncode = run_main(args)
+    finally:
+        args.json_sink.finish(interrupted=returncode == 130)
+    return returncode
+
+
+def run_main(args):
     args.coverage_profile_dir = None
     if args.changed_tests is not None and args.test_list is None:
         print("error: --changed-tests requires --test-list", file=sys.stderr)
@@ -2005,6 +2235,8 @@ def main_impl(argv: list[str] | None = None):
             if use_config_groups:
                 print(f"::group::test config: {invocation.label}")
                 group_open = True
+            if args.json_sink is not None:
+                args.json_sink.config = invocation.test_config
             print_config_header = not use_config_groups and not (
                 len(config_invocations) == 1 and invocation.label == "default"
             )
@@ -2094,7 +2326,7 @@ def invoke(argv: list[str], cwd: Path | None = None) -> InvocationResult:
     return InvocationResult(returncode=returncode, stdout=stdout_buffer.getvalue(), stderr=stderr_buffer.getvalue())
 
 
-def run_tests(config: TestRunnerConfig, batches, total_tests: int):
+def run_tests(config: TestRunnerConfig, batches, total_tests: int, json_sink: JsonEventSink | None = None):
     start = time.monotonic()
     state = BatchRunState()
     progress = DotProgressBar(len(batches))
@@ -2110,6 +2342,7 @@ def run_tests(config: TestRunnerConfig, batches, total_tests: int):
             state=state,
             future_to_batch=future_to_batch,
             progress=progress,
+            json_sink=json_sink,
         )
 
         if stop_requested():
@@ -2138,9 +2371,12 @@ def run_tests(config: TestRunnerConfig, batches, total_tests: int):
                 elapsed = time.monotonic() - batch_info["start"]
                 report_batch_metrics(ctx, batch_info, result, elapsed)
                 if result["failed"]:
-                    if handle_failed_batch(ctx, batch_info, result):
+                    retried = handle_failed_batch(ctx, batch_info, result)
+                    if json_sink is not None:
+                        json_sink.add_batch_result(batch_info, result, final=not retried)
+                    if retried:
                         continue
-                    skipped_count, skipped_reasons = extract_skipped_test_output(result["stdout"], result["stderr"])
+                    skipped_count, skipped_reasons = batch_skipped_tests(result)
                     total_skipped_tests += skipped_count
                     for reason, count in skipped_reasons.items():
                         skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
@@ -2156,7 +2392,9 @@ def run_tests(config: TestRunnerConfig, batches, total_tests: int):
                                 retry_count=batch_info["attempt"],
                             )
                         )
-                    skipped_count, skipped_reasons = extract_skipped_test_output(result["stdout"], result["stderr"])
+                    if json_sink is not None:
+                        json_sink.add_batch_result(batch_info, result, final=True)
+                    skipped_count, skipped_reasons = batch_skipped_tests(result)
                     total_skipped_tests += skipped_count
                     for reason, count in skipped_reasons.items():
                         skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
