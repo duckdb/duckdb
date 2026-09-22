@@ -548,14 +548,12 @@ bool HandleRename(StarExpression &expr, const QualifiedColumnName &qualified_nam
                   unique_ptr<ParsedExpression> &new_expr, StarBindState &state) {
 	auto replace_entry = expr.ReplaceList().find(qualified_name.column);
 	if (replace_entry != expr.ReplaceList().end()) {
-		if (state.replaced_columns.find(replace_entry->first) == state.replaced_columns.end()) {
-			new_expr = replace_entry->second->Copy();
-			new_expr->SetAlias(replace_entry->first);
-			state.replaced_columns.insert(replace_entry->first);
-			state.excluded_columns.insert(replace_entry->first);
-		} else {
-			return false;
-		}
+		// every column with this name is replaced - dropping the later ones would expand the
+		// star to fewer columns than the relation has
+		new_expr = replace_entry->second->Copy();
+		new_expr->SetAlias(replace_entry->first);
+		state.replaced_columns.insert(replace_entry->first);
+		state.excluded_columns.insert(replace_entry->first);
 	}
 	auto rename_entry = expr.RenameList().find(qualified_name);
 	if (rename_entry != expr.RenameList().end()) {
