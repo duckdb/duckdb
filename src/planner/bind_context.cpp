@@ -821,7 +821,8 @@ vector<Identifier> BindContext::AliasColumnNames(const Identifier &table_name, c
 }
 
 void BindContext::AddSubquery(TableIndex index, const Identifier &alias, SubqueryRef &ref, BoundStatement &subquery) {
-	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias, DuplicateColumnNames::ALLOW);
+	auto duplicates = ref.deduplicate_column_names ? DuplicateColumnNames::RENAME : DuplicateColumnNames::ALLOW;
+	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias, duplicates);
 	AddGenericBinding(index, alias, names, subquery.types);
 }
 
