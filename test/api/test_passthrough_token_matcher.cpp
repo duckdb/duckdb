@@ -1,7 +1,7 @@
 #include "catch.hpp"
 
 #include "duckdb/parser/peg/compiled_grammar.hpp"
-#include "duckdb/parser/peg/matcher/statement_token_matcher.hpp"
+#include "duckdb/parser/peg/passthrough_dialect.hpp"
 #include "duckdb/parser/peg/tokenizer/parser_tokenizer.hpp"
 #include "duckdb/parser/token_iterator.hpp"
 
@@ -34,7 +34,7 @@ MatchOutcome MatchTokenAt(const string &query, idx_t position) {
 	                     IdentifierCaseMode::PRESERVE_CASE, &packrat);
 	MatchState state(iterator, context);
 
-	StatementTokenMatcher matcher;
+	PassthroughTokenMatcher matcher;
 	auto result = matcher.MatchParseResult(state);
 	MatchOutcome outcome;
 	outcome.success = result.IsSuccess();
@@ -56,7 +56,7 @@ idx_t MatchTokensUntilFailure(const string &query) {
 
 } // namespace
 
-TEST_CASE("StatementTokenMatcher consumes a token of any type", "[api][statement_token]") {
+TEST_CASE("PassthroughTokenMatcher consumes a token of any type", "[api][passthrough_token]") {
 	// a keyword, an identifier, an operator, a string literal and a number all match
 	for (auto &query : vector<string> {"CREATE", "my_table", "(", "'a string'", "42"}) {
 		auto outcome = MatchTokenAt(query, 0);
@@ -65,7 +65,7 @@ TEST_CASE("StatementTokenMatcher consumes a token of any type", "[api][statement
 	}
 }
 
-TEST_CASE("StatementTokenMatcher stops at a statement boundary", "[api][statement_token]") {
+TEST_CASE("PassthroughTokenMatcher stops at a statement boundary", "[api][passthrough_token]") {
 	// GRANT is not DuckDB syntax - the point is that it is consumed anyway, up to the ';'
 	REQUIRE(MatchTokensUntilFailure("GRANT ALL PRIVILEGES ON DATABASE pg TO bob; SELECT 42") == 8);
 
@@ -74,7 +74,7 @@ TEST_CASE("StatementTokenMatcher stops at a statement boundary", "[api][statemen
 	REQUIRE(!MatchTokenAt("", 0).success);
 }
 
-TEST_CASE("StatementTokenMatcher does not split quoted text", "[api][statement_token]") {
+TEST_CASE("PassthroughTokenMatcher does not split quoted text", "[api][passthrough_token]") {
 	// a ';' inside a string, a quoted identifier or a dollar-quoted body is not a boundary
 	REQUIRE(MatchTokensUntilFailure("SELECT 'a;b'") == 2);
 	REQUIRE(MatchTokensUntilFailure("SELECT \"a;b\"") == 2);

@@ -1,6 +1,5 @@
 #include "duckdb/parser/peg/passthrough_dialect.hpp"
 
-#include "duckdb/parser/peg/matcher/statement_token_matcher.hpp"
 #include "duckdb/parser/peg/parsed_grammar.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/statement/passthrough_statement.hpp"
@@ -28,11 +27,11 @@ unique_ptr<TransformProcess> StartPassthroughTransform(PEGTransformer &, ParseRe
 void PassthroughDialect::ApplyGrammarChanges(GrammarChangesInput &input) {
 	auto &grammar = input.parsed_grammar;
 	// the body is a placeholder: the terminal override below is what matches a token
-	grammar.AddRule("StatementToken <- Identifier");
-	grammar.AddTerminalRuleOverride("StatementToken", [](const PEGKeywordHelper &) -> unique_ptr<Matcher> {
-		return make_uniq<StatementTokenMatcher>();
+	grammar.AddRule("PassthroughToken <- Identifier");
+	grammar.AddTerminalRuleOverride("PassthroughToken", [](const PEGKeywordHelper &) -> unique_ptr<Matcher> {
+		return make_uniq<PassthroughTokenMatcher>();
 	});
-	grammar.AddRule("PassthroughStatement <- StatementToken+", StartPassthroughTransform);
+	grammar.AddRule("PassthroughStatement <- PassthroughToken+", StartPassthroughTransform);
 	// keep Statement's dispatch transform - it forwards to whichever alternative matched
 	auto statement_rule = grammar.GetRule("Statement");
 	if (!statement_rule) {

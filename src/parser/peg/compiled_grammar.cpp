@@ -199,7 +199,7 @@ ParserCache::~ParserCache() {
 }
 
 shared_ptr<CompiledGrammar> ParserCache::GetPassthroughMatcher(const ClientContext &context) {
-	std::unique_lock<std::mutex> lock(passthrough_mutex);
+	lock_guard<std::mutex> lock(passthrough_mutex);
 	if (!passthrough_dialect) {
 		passthrough_dialect = make_uniq<PassthroughDialect>();
 	}
