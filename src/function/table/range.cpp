@@ -2,10 +2,43 @@
 #include "duckdb/function/table/summary.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 
 namespace duckdb {
+
+struct RangeFunctionGlobalState : public GlobalTableFunctionState {
+	atomic<double> progress {0};
+};
+
+static unique_ptr<GlobalTableFunctionState> RangeFunctionGlobalInit(ClientContext &, TableFunctionInitInput &input) {
+	// In-out execution must preserve the input pipeline's parallelism.
+	if (!input.op || input.op->type != PhysicalOperatorType::TABLE_SCAN) {
+		return nullptr;
+	}
+	return make_uniq<RangeFunctionGlobalState>();
+}
+
+static double RangeProgress(ClientContext &, const FunctionData *, const GlobalTableFunctionState *state) {
+	return state ? state->Cast<RangeFunctionGlobalState>().progress.load() : -1;
+}
+
+static void SetRangeProgress(TableFunctionInput &input, double progress) {
+	if (input.global_state) {
+		input.global_state->Cast<RangeFunctionGlobalState>().progress = progress;
+	}
+}
+
+static hugeint_t RangeProgressCount(hugeint_t start, hugeint_t end, hugeint_t increment) {
+	auto distance = increment < 0 ? start - end : end - start;
+	auto step = increment < 0 ? -increment : increment;
+	if (distance <= 0) {
+		return 0;
+	}
+	return (distance + step - 1) / step;
+}
 
 //===--------------------------------------------------------------------===//
 // Range (integers)
@@ -140,6 +173,7 @@ static OperatorResultType RangeFunction(ExecutionContext &context, TableFunction
 				// ran out of rows
 				state.current_input_row = 0;
 				state.initialized_row = false;
+				SetRangeProgress(data_p, 100);
 				return OperatorResultType::NEED_MORE_INPUT;
 			}
 			GenerateRangeParameters<GENERATE_SERIES>(input, state.current_input_row, state);
@@ -174,6 +208,10 @@ static OperatorResultType RangeFunction(ExecutionContext &context, TableFunction
 			state.current_input_row++;
 			state.initialized_row = false;
 			continue;
+		}
+		if (data_p.global_state) {
+			auto total = Hugeint::Cast<double>(RangeProgressCount(state.start, state.end, state.increment));
+			SetRangeProgress(data_p, MinValue(100.0, 100.0 * double(state.current_idx) / total));
 		}
 		return OperatorResultType::HAVE_MORE_OUTPUT;
 	}
@@ -346,6 +384,7 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 				// ran out of rows
 				state.current_input_row = 0;
 				state.initialized_row = false;
+				SetRangeProgress(data_p, 100);
 				return OperatorResultType::NEED_MORE_INPUT;
 			}
 			GenerateRangeDateTimeParameters<GENERATE_SERIES>(input, state.current_input_row, state);
@@ -359,6 +398,7 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 			return OperatorResultType::HAVE_MORE_OUTPUT;
 		}
 		idx_t size = 0;
+		auto last_value = state.current_state;
 		auto result_data = FlatVector::ScatterWriter<timestamp_t>(output.data[0]);
 		while (true) {
 			if (state.Finished(state.current_state)) {
@@ -367,6 +407,7 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 			if (size >= STANDARD_VECTOR_SIZE) {
 				break;
 			}
+			last_value = state.current_state;
 			result_data[size] = state.current_state;
 			size++;
 			state.current_state =
@@ -377,6 +418,16 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 			state.current_input_row++;
 			state.initialized_row = false;
 			continue;
+		}
+		if (data_p.global_state) {
+			if (state.Finished(state.current_state)) {
+				SetRangeProgress(data_p, 100);
+			} else {
+				// Calendar intervals need not produce evenly spaced timestamps.
+				auto done = hugeint_t(last_value.value) - hugeint_t(state.start.value);
+				auto total = hugeint_t(state.end.value) - hugeint_t(state.start.value);
+				SetRangeProgress(data_p, 100.0 * Hugeint::Cast<double>(done) / Hugeint::Cast<double>(total));
+			}
 		}
 		output.SetChildCardinality(size);
 		return OperatorResultType::HAVE_MORE_OUTPUT;
@@ -390,8 +441,9 @@ static bool RangeIsRepeatable(optional_ptr<const FunctionData>) {
 void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet range("range");
 
-	TableFunction range_function({LogicalType::BIGINT}, nullptr, RangeFunctionBind<false>, nullptr,
+	TableFunction range_function({LogicalType::BIGINT}, nullptr, RangeFunctionBind<false>, RangeFunctionGlobalInit,
 	                             RangeFunctionLocalInit);
+	range_function.table_scan_progress = RangeProgress;
 	range_function.in_out_function = RangeFunction<false>;
 	range_function.cardinality = RangeCardinality;
 	range_function.is_repeatable = RangeIsRepeatable;
@@ -407,7 +459,8 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	range_function.GetArguments() = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT};
 	range.AddFunction(range_function);
 	TableFunction range_in_out({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL}, nullptr,
-	                           RangeDateTimeBind<false>, nullptr, RangeDateTimeLocalInit);
+	                           RangeDateTimeBind<false>, RangeFunctionGlobalInit, RangeDateTimeLocalInit);
+	range_in_out.table_scan_progress = RangeProgress;
 	range_in_out.in_out_function = RangeDateTimeFunction<false>;
 	range_in_out.cardinality = RangeDateTimeCardinality;
 	range_in_out.is_repeatable = RangeIsRepeatable;
@@ -427,7 +480,9 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	range_function.GetArguments() = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT};
 	generate_series.AddFunction(range_function);
 	TableFunction generate_series_in_out({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
-	                                     nullptr, RangeDateTimeBind<true>, nullptr, RangeDateTimeLocalInit);
+	                                     nullptr, RangeDateTimeBind<true>, RangeFunctionGlobalInit,
+	                                     RangeDateTimeLocalInit);
+	generate_series_in_out.table_scan_progress = RangeProgress;
 	generate_series_in_out.in_out_function = RangeDateTimeFunction<true>;
 	generate_series_in_out.is_repeatable = RangeIsRepeatable;
 	generate_series_in_out.parallelism = TableFunctionParallelism::FORCE_SINGLE_THREADED;
