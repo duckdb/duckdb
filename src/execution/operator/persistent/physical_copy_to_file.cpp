@@ -2732,12 +2732,16 @@ void PartitionedCopy::FinalizeState(PartitionedCopyState &state, InterruptState 
 }
 
 void PartitionedCopy::NotifyFlushProgress() {
-	annotated_lock_guard<annotated_mutex> guard(lock);
-	++flush_progress;
-	for (auto &blocked_sink : blocked_sinks) {
+	vector<InterruptState> to_wake;
+	{
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		++flush_progress;
+		std::swap(to_wake, blocked_sinks);
+	}
+	// Waking outside the lock is safe: parking re-checks flush_progress under the lock
+	for (auto &blocked_sink : to_wake) {
 		blocked_sink.Callback();
 	}
-	blocked_sinks.clear();
 }
 
 SinkResultType PartitionedCopy::Sink(ExecutionContext &execution_context, DataChunk &chunk,
