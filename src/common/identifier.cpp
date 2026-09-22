@@ -1,10 +1,15 @@
 #include "duckdb/common/identifier.hpp"
 
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 #include <ostream>
 
 namespace duckdb {
+
+Identifier GenerateInternalName(const char *prefix) {
+	return Identifier(prefix + UUID::ToString(UUID::GenerateRandomUUID()));
+}
 
 bool Identifier::StartsWith(const string &prefix) const {
 	return StringUtil::CIStartsWith(value, prefix);
