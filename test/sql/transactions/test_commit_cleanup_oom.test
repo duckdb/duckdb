@@ -33,10 +33,8 @@ UPDATE t SET s = repeat('b', 100);
 statement ok
 SET memory_limit = '1.5MB';
 
-statement error
+statement ok
 COMMIT;
-----
-failed to pin block
 
 statement ok
 SET memory_limit = '10MB';

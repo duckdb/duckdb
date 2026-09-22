@@ -37,6 +37,7 @@ void DuckCleanupInfo::Cleanup() {
 	for (auto &transaction : transactions) {
 		if (transaction->awaiting_cleanup) {
 			transaction->Cleanup(lowest_visibility_bound);
+			transaction->awaiting_cleanup = false;
 		}
 	}
 }
@@ -281,18 +282,29 @@ transaction_t DuckTransactionManager::GetCommitTimestamp() {
 void DuckTransactionManager::CleanupTransactions() {
 	lock_guard<mutex> c_lock(cleanup_lock);
 	while (true) {
-		unique_ptr<DuckCleanupInfo> top_cleanup_info;
+		DuckCleanupInfo *top_cleanup_info = nullptr;
 		{
 			lock_guard<mutex> q_lock(cleanup_queue_lock);
 			if (cleanup_queue.empty()) {
 				// all transactions have been cleaned up - done
 				return;
 			}
-			top_cleanup_info = std::move(cleanup_queue.front());
-			cleanup_queue.pop();
+			top_cleanup_info = cleanup_queue.front().get();
 		}
-		if (top_cleanup_info) {
+		try {
 			top_cleanup_info->Cleanup();
+		} catch (FatalException &) {
+			throw;
+		} catch (std::exception &) {
+			// Cleanup failed (e.g. OOM while pinning blocks).
+			// We MUST NOT destroy top_cleanup_info, because its transactions' UndoBuffers
+			// may still have version pointers referenced by UpdateSegment or catalog.
+			// Leave it at the front of the cleanup queue so it remains alive and can be retried later.
+			return;
+		}
+		{
+			lock_guard<mutex> q_lock(cleanup_queue_lock);
+			cleanup_queue.pop();
 		}
 	}
 }
