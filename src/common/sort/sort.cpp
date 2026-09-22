@@ -134,8 +134,8 @@ public:
 	explicit SortGlobalSinkState(ClientContext &context)
 	    : num_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
 	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), sorted_tuples(0),
-	      external(Settings::Get<DebugForceExternalSetting>(context)), any_combined(false), total_count(0),
-	      partition_size(0) {
+	      input_tuples(0), finalized(false), external(Settings::Get<DebugForceExternalSetting>(context)),
+	      any_combined(false), total_count(0), partition_size(0) {
 	}
 
 public:
@@ -192,6 +192,10 @@ public:
 	vector<unique_ptr<SortedRun>> sorted_runs;
 	//! Sorted tuple count (for progress)
 	atomic<idx_t> sorted_tuples;
+	//! Rows accepted by Sink, including runs that have not been sorted yet
+	atomic<idx_t> input_tuples;
+	//! Whether the sink can no longer receive input
+	atomic<bool> finalized;
 
 	//! Whether this is an external sort
 	bool external;
@@ -244,6 +248,8 @@ SinkResultType Sort::Sink(ExecutionContext &context, DataChunk &chunk, OperatorS
 		lstate.InitializeSortedRun(*this, context.client);
 		gstate.UpdateLocalState(lstate);
 	}
+
+	gstate.input_tuples += chunk.size();
 
 	// Sink data into sorted run
 	lstate.key.Reset();
@@ -301,6 +307,7 @@ SinkCombineResultType Sort::Combine(ExecutionContext &context, OperatorSinkCombi
 
 SinkFinalizeType Sort::Finalize(ClientContext &context, OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<SortGlobalSinkState>();
+	gstate.finalized = true;
 	if (gstate.sorted_runs.empty()) {
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
 	}
@@ -322,13 +329,19 @@ SinkFinalizeType Sort::Finalize(ClientContext &context, OperatorSinkFinalizeInpu
 ProgressData Sort::GetSinkProgress(ClientContext &context, GlobalSinkState &gstate_p,
                                    const ProgressData source_progress) const {
 	auto &gstate = gstate_p.Cast<SortGlobalSinkState>();
-	// Estimate that half of the Sink effort is sorting
-	ProgressData res;
-	const auto sorted_tuples = static_cast<double>(gstate.sorted_tuples);
-	res.done = source_progress.done / 2 + sorted_tuples / 2;
-	res.total = source_progress.total;
-	res.invalid = source_progress.invalid;
-	return res;
+	// Weight source work and sorting equally in the source's progress units.
+	const auto sorted_tuples = gstate.sorted_tuples.load();
+	const auto input_tuples = gstate.input_tuples.load();
+	const auto sorted_fraction =
+	    input_tuples ? double(sorted_tuples) / double(input_tuples) : double(gstate.finalized.load());
+	ProgressData result = source_progress;
+	result.invalid = !source_progress.IsValid();
+	result.done *= (1.0 + sorted_fraction) / 2.0;
+	return result;
+}
+
+idx_t Sort::GetSortedCount(GlobalSinkState &gstate) const {
+	return gstate.Cast<SortGlobalSinkState>().sorted_tuples.load();
 }
 
 //===--------------------------------------------------------------------===//
@@ -409,7 +422,9 @@ SourceResultType Sort::GetData(ExecutionContext &context, DataChunk &chunk, Oper
 ProgressData Sort::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<SortGlobalSourceState>();
 	if (gstate.merger.total_count == 0) {
-		return ProgressData {};
+		ProgressData result;
+		result.done = result.total = 1;
+		return result;
 	}
 	return gstate.merger.GetProgress(context, *gstate.merger_global_state);
 }

@@ -59,37 +59,21 @@ FullSortGlobalSinkState::FullSortGlobalSinkState(ClientContext &client, const Fu
 }
 
 ProgressData FullSortGlobalSinkState::GetSinkProgress(ClientContext &client, const ProgressData source) const {
-	ProgressData result;
-	result.done = source.done / 2;
-	result.total = source.total;
-	result.invalid = source.invalid;
-
-	// Sort::GetSinkProgress assumes that there is only 1 sort.
-	// So we just use it to figure out how many rows have been sorted.
-	const ProgressData zero_progress;
 	lock_guard<mutex> guard(lock);
-	const auto &sort = full_sort.sort;
-
-	const auto group_progress = sort->GetSinkProgress(client, *hash_group->sort_global, zero_progress);
-	result.done += group_progress.done;
-	result.invalid = result.invalid || group_progress.invalid;
-
-	return result;
+	return full_sort.sort->GetSinkProgress(client, *hash_group->sort_global, source);
 }
 
 SinkFinalizeType FullSort::Finalize(ClientContext &client, OperatorSinkFinalizeInput &finalize) const {
 	auto &gsink = finalize.global_state.Cast<FullSortGlobalSinkState>();
 
-	//	Did we get any data?
-	if (!gsink.count) {
-		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
-	}
-
 	//	OVER(ORDER BY...)
 	auto &hash_group = gsink.hash_group;
 	auto &global_sink = *hash_group->sort_global;
 	OperatorSinkFinalizeInput hfinalize {global_sink, finalize.interrupt_state};
-	sort->Finalize(client, hfinalize);
+	const auto result = sort->Finalize(client, hfinalize);
+	if (result == SinkFinalizeType::NO_OUTPUT_POSSIBLE) {
+		return result;
+	}
 	hash_group->sort_source = sort->GetGlobalSourceState(client, global_sink);
 
 	return SinkFinalizeType::READY;

@@ -82,6 +82,7 @@ public:
 	SinkFinalizeType Finalize(ClientContext &context, OperatorSinkFinalizeInput &input) const;
 	ProgressData GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
 	                             const ProgressData source_progress) const;
+	idx_t GetSortedCount(GlobalSinkState &gstate) const;
 
 public:
 	//===--------------------------------------------------------------------===//
