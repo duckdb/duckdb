@@ -266,7 +266,8 @@ def build_package(
     include_files += [os.path.join('src', 'include', 'duckdb', 'main', 'extension_helper.hpp')]
     include_files += [os.path.join('src', 'include', 'duckdb_static_extension.h')]
     # include the separate extensions, and generate their describe functions plus the object that registers the linked ones.
-    # Every source is compiled straight into the package, so the registration runs before main.
+    # The registration only runs before main if the package's objects end up in the program: a consumer that archives
+    # them first has to force-link the archive or call duckdb_register_static_extensions itself.
     ext_loader_defines = ''
     ext_describers = ''
     ext_registrations = ''
@@ -350,8 +351,9 @@ def build_package(
     f.write(loader_code.encode('utf8'))
     f.close()
 
-    # the checked-in static initializer calls the loader before main
-    source_list += [loader_name, os.path.join('extension', 'loader', 'static_extension_autoregister.cpp')]
+    # the static initializer that calls the loader before main is already in the amalgamation source list, and only
+    # runs if its object is linked into the program
+    source_list += [loader_name]
 
     for src in source_list:
         copy_file(src, target_dir)
