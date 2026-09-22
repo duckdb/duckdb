@@ -94,7 +94,7 @@ private:
 };
 
 //! Generate an internal name: the given prefix followed by a random UUID
-DUCKDB_API Identifier GenerateInternalName(const char *prefix);
+Identifier GenerateInternalName(const char *prefix);
 
 //! Equality (case-insensitive)
 DUCKDB_API bool operator==(const Identifier &a, const Identifier &b);
