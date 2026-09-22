@@ -296,10 +296,6 @@ void DuckTransactionManager::CleanupTransactions() {
 		} catch (FatalException &) {
 			throw;
 		} catch (std::exception &) {
-			// Cleanup failed (e.g. OOM while pinning blocks).
-			// We MUST NOT destroy top_cleanup_info, because its transactions' UndoBuffers
-			// may still have version pointers referenced by UpdateSegment or catalog.
-			// Leave it at the front of the cleanup queue so it remains alive and can be retried later.
 			return;
 		}
 		{
