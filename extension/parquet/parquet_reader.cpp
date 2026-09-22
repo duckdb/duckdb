@@ -238,6 +238,8 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 			}
 			if (s_ele.logicalType.TIME.isAdjustedToUTC) {
 				return LogicalType::TIME_TZ;
+			} else if (s_ele.logicalType.TIME.unit.__isset.NANOS) {
+				return LogicalType::TIME_NS;
 			}
 			return LogicalType::TIME;
 		}
@@ -1341,8 +1343,10 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 
 	unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) override {
 		const idx_t primary_index = storage_index.GetPrimaryIndex();
+		if (primary_index >= root_schema->children.size()) {
+			return nullptr;
+		}
 		D_ASSERT(metadata.row_groups.size() > row_group_idx);
-		D_ASSERT(root_schema->children.size() > primary_index);
 
 		const auto &row_group = metadata.row_groups[row_group_idx];
 		const auto &column_schema = root_schema->children[primary_index];
@@ -1351,8 +1355,10 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 
 	bool MinMaxIsExact(const BaseStatistics &, const StorageIndex &storage_index) override {
 		const idx_t primary_index = storage_index.GetPrimaryIndex();
+		if (primary_index >= root_schema->children.size()) {
+			return false;
+		}
 		D_ASSERT(metadata.row_groups.size() > row_group_idx);
-		D_ASSERT(root_schema->children.size() > primary_index);
 
 		// Special handle generated columns.
 		const auto &column_schema = root_schema->children[primary_index];

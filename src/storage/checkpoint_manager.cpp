@@ -17,6 +17,8 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
@@ -40,6 +42,17 @@ SingleFileCheckpointWriter::SingleFileCheckpointWriter(QueryContext context, Att
                                                        BlockManager &block_manager, CheckpointOptions options_p)
     : CheckpointWriter(db), context(context.GetClientContext()),
       partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT), options(options_p) {
+}
+
+SingleFileCheckpointWriter::~SingleFileCheckpointWriter() {
+	// Only reached with an open transaction when CreateCheckpoint failed before committing it.
+	if (!bind_connection || !bind_connection->context->transaction.HasActiveTransaction()) {
+		return;
+	}
+	try {
+		bind_connection->context->transaction.Rollback(nullptr);
+	} catch (...) { // LCOV_EXCL_START
+	}               // LCOV_EXCL_STOP
 }
 
 BlockManager &SingleFileCheckpointWriter::GetBlockManager() {
@@ -161,6 +174,16 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
 	ActiveCheckpointWrapper active_checkpoint(transaction_manager);
 	auto has_wal = storage_manager.WALStartCheckpoint(meta_block, options);
+
+	// Starts a new read-only transaction here used for catalog lookups during index binding (see WriteTable).
+	// It is read-only so it doesn't try to acquire the start_transaction_lock while already holding the
+	// checkpoint_lock.
+	if (context && context->transaction.HasActiveTransaction()) {
+		bind_connection = make_uniq<Connection>(db.GetDatabase());
+		bind_connection->context->transaction.BeginTransaction();
+		bind_connection->context->transaction.SetReadOnly();
+		Transaction::Get(*bind_connection->context, db);
+	}
 
 	catalog_entry_vector_t catalog_entries;
 
@@ -299,6 +322,10 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		auto &table_info = storage.GetDataTableInfo();
 		auto &index_list = table_info->GetIndexes();
 		index_list.MergeCheckpointDeltas(options.transaction_id);
+	}
+	if (bind_connection) {
+		bind_connection->context->transaction.Commit();
+		bind_connection.reset();
 	}
 	active_checkpoint.Clear();
 }
@@ -592,12 +619,14 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 	// Write the table metadata
 	serializer.WriteProperty(100, "table", &table);
 
-	// If there is a context available, bind indexes before serialization.
-	// This is necessary so that buffered index operations are replayed before we checkpoint, otherwise
-	// we would lose them if there was a restart after this.
-	if (context && context->transaction.HasActiveTransaction()) {
+	// Explicit checkpoints bind indexes before serialization, so that buffered index operations are replayed
+	// and not lost on a restart. During a commit-time checkpoint the caller has no active transaction.
+	if (bind_connection) {
+		auto &bind_context = *bind_connection->context;
+		D_ASSERT(bind_context.transaction.HasActiveTransaction());
+		D_ASSERT(MetaTransaction::Get(bind_context).IsReadOnly());
 		auto &info = table.GetStorage().GetDataTableInfo();
-		info->BindIndexes(*context);
+		info->BindIndexes(bind_context);
 	}
 	// FIXME: If we do not have a context, however, the unbound indexes have to be serialized to disk.
 

@@ -1812,7 +1812,7 @@ struct HugeIntCastData {
 	using Operation = OP;
 	ResultType result;
 	IntermediateType intermediate;
-	uint8_t digits;
+	idx_t digits;
 
 	ResultType decimal;
 	uint16_t decimal_total_digits;

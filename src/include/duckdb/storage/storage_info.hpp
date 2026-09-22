@@ -96,6 +96,8 @@ public:
 	//! The canary should be "DUCKKEY".
 	static const char CANARY[];
 
+	//! From v2.0.0 onwards the main header version number is deprecated and always set to this value.
+	static constexpr uint64_t DEPRECATED_VERSION_NUMBER = 999;
 	//! The (storage) version of the database.
 	uint64_t version_number;
 	//! The set of flags used by the database.
