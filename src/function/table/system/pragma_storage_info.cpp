@@ -189,7 +189,7 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 				lock_guard<mutex> guard(gstate.lock);
 				has_more = bind_data.table_entry.ScanColumnSegmentInfo(query_context, gstate.scan_state, lstate.buffer);
 				if (has_more) {
-					gstate.scanned_row_groups++;
+					gstate.scanned_row_groups.fetch_add(1, std::memory_order_relaxed);
 				}
 			}
 			if (!has_more) {

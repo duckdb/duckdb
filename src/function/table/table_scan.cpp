@@ -402,7 +402,7 @@ public:
 
 	//! Claims the next assignment into the thread's own scan state, returns false when none are left
 	bool ClaimAssignment(ClientContext &context, TableScanLocalState &l_state) {
-		scanned_rows += l_state.assignment_progress.Finish();
+		scanned_rows.fetch_add(l_state.assignment_progress.Finish(), std::memory_order_relaxed);
 		auto rows = storage.NextParallelScan(context, state, l_state.scan_state);
 		if (!rows.IsValid()) {
 			return false;
@@ -414,7 +414,7 @@ public:
 
 	//! Counts the rows of the current assignment that were consumed by the scan
 	void UpdateScanProgress(TableScanLocalState &l_state, const TableScanState &scan_state) {
-		scanned_rows += l_state.assignment_progress.Update(scan_state);
+		scanned_rows.fetch_add(l_state.assignment_progress.Update(scan_state), std::memory_order_relaxed);
 	}
 
 	//! How TableScanFunc's loop proceeds after a persistent scan iteration
@@ -535,7 +535,7 @@ public:
 				return true;
 			}
 			// the job is exhausted, fold its scan counters into this thread and recycle its state
-			scanned_rows += l_state.assignment_progress.Finish();
+			scanned_rows.fetch_add(l_state.assignment_progress.Finish(), std::memory_order_relaxed);
 			l_state.job_rows_scanned += job_scan.RowsScanned();
 			job_scan.table_state.rows_scanned = 0;
 			job_scan.local_state.rows_scanned = 0;

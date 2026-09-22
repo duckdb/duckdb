@@ -27,8 +27,10 @@ struct DuckDBFunctionsData : public GlobalTableFunctionState {
 	}
 
 	vector<reference<CatalogEntry>> entries;
-	atomic<idx_t> offset;
+	idx_t offset;
 	idx_t offset_in_entry;
+	//! The offset, published once per chunk (for progress)
+	atomic<idx_t> progress_offset {0};
 };
 
 static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, TableFunctionBindInput &input,
@@ -781,6 +783,7 @@ void DuckDBFunctionsFunction(ClientContext &context, TableFunctionInput &data_p,
 		}
 		count++;
 	}
+	data.progress_offset.store(data.offset, std::memory_order_relaxed);
 }
 
 static double DuckDBFunctionsProgress(ClientContext &context, const FunctionData *bind_data,
@@ -789,7 +792,8 @@ static double DuckDBFunctionsProgress(ClientContext &context, const FunctionData
 	if (data.entries.empty()) {
 		return 100.0;
 	}
-	return 100.0 * static_cast<double>(data.offset) / static_cast<double>(data.entries.size());
+	auto offset = data.progress_offset.load(std::memory_order_relaxed);
+	return 100.0 * static_cast<double>(offset) / static_cast<double>(data.entries.size());
 }
 
 void DuckDBFunctionsFun::RegisterFunction(BuiltinFunctions &set) {

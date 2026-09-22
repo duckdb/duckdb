@@ -57,7 +57,7 @@ void DuckDBLogFunction(ClientContext &context, TableFunctionInput &data_p, DataC
 	auto &data = data_p.global_state->Cast<DuckDBLogData>();
 	if (data.log_storage) {
 		data.log_storage->Scan(*data.scan_state, output);
-		data.scanned_rows += output.size();
+		data.scanned_rows.fetch_add(output.size(), std::memory_order_relaxed);
 	}
 }
 

@@ -415,7 +415,7 @@ static void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &da
 		}
 	}
 	// WriteColumns appends to the child vectors - record the resulting cardinality on the chunk
-	data.offset = next;
+	data.offset.store(next, std::memory_order_relaxed);
 	data.column_offset = column_offset;
 }
 

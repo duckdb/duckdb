@@ -192,7 +192,7 @@ SourceResultType PhysicalLimit::GetDataInternal(ExecutionContext &context, DataC
 			state.initialized = true;
 		}
 		gstate.data.Scan(state.scan_state, chunk);
-		state.scanned_rows += chunk.size();
+		state.scanned_rows.fetch_add(chunk.size(), std::memory_order_relaxed);
 		if (chunk.size() == 0) {
 			return SourceResultType::FINISHED;
 		}

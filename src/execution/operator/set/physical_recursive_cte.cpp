@@ -1244,7 +1244,7 @@ SourceResultType PhysicalRecursiveCTEStateScan::GetDataFromState(DataChunk &chun
 			if (!recursive_state.GetHashTable().ScanGroups(gstate.scan_state, lstate.distinct_rows)) {
 				return SourceResultType::FINISHED;
 			}
-			gstate.scanned_groups += lstate.distinct_rows.size();
+			gstate.scanned_groups.fetch_add(lstate.distinct_rows.size(), std::memory_order_relaxed);
 		}
 		if (lstate.distinct_rows.size() == 0) {
 			continue;

@@ -330,7 +330,7 @@ void TestVectorTypesFunction(ClientContext &context, TableFunctionInput &data_p,
 		return;
 	}
 	output.Reference(*data.entries[data.offset]);
-	data.offset++;
+	data.offset.fetch_add(1, std::memory_order_relaxed);
 }
 
 static double TestVectorTypesProgress(ClientContext &context, const FunctionData *bind_data,

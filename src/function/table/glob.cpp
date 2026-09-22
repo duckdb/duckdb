@@ -53,9 +53,9 @@ static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		}
 		file_column.Append(Value(file.path));
 		count++;
-		state.files_returned++;
 		state.file_list_scan.scan_type = MultiFileListScanType::FETCH_IF_AVAILABLE;
 	}
+	state.files_returned.fetch_add(count, std::memory_order_relaxed);
 }
 
 static double GlobFunctionProgress(ClientContext &context, const FunctionData *bind_data_p,

@@ -356,13 +356,13 @@ SourceResultType SortedRunMergerLocalState::ExecuteTask(SortedRunMergerGlobalSta
 	case SortedRunMergerTask::SCAN_PARTITION:
 		if (chunk) {
 			ScanPartition(gstate, *chunk);
-			gstate.progress_scanned += chunk->size();
+			gstate.progress_scanned.fetch_add(chunk->size(), std::memory_order_relaxed);
 			progress_scanned += chunk->size();
 		} else {
 			MaterializePartition(gstate);
 		}
 		if (!chunk || chunk->size() == 0) {
-			gstate.progress_scanned += merged_partition_count - progress_scanned;
+			gstate.progress_scanned.fetch_add(merged_partition_count - progress_scanned, std::memory_order_relaxed);
 			progress_scanned = 0;
 			gstate.DestroyScannedData();
 			gstate.partitions[partition_idx.GetIndex()]->scanned = true;

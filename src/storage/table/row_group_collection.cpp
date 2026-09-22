@@ -431,7 +431,7 @@ optional_idx RowGroupCollection::NextParallelScan(ClientContext &context, Parall
 		                                             max_row, initialize_columns);
 		if (!need_to_scan) {
 			// skip this row group
-			state.skipped_rows += assignment_rows;
+			state.skipped_rows.fetch_add(assignment_rows, std::memory_order_relaxed);
 			continue;
 		}
 		return assignment_rows;
