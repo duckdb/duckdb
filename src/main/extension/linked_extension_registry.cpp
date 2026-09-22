@@ -5,6 +5,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb_static_extension.h"
 
+#include <atomic>
 #include <mutex>
 
 namespace duckdb {
@@ -21,6 +22,8 @@ struct RegistryState {
 	vector<LinkedExtension> extensions;
 	vector<RegisteredExtension> registered;
 	vector<string> errors;
+	//! set when a registration failed without recording why - recording it is what may have failed
+	std::atomic<bool> unknown_error {false};
 };
 
 // function-local so that registrations during static initialization always find it constructed
@@ -99,25 +102,30 @@ string LinkedExtensionRegistry::Describe(duckdb_extension_describe_t describe, S
 vector<LinkedExtension> LinkedExtensionRegistry::Get() {
 	auto &state = GetRegistryState();
 	std::lock_guard<std::mutex> guard(state.lock);
-	if (!state.errors.empty()) {
-		throw InvalidConfigurationException("Failed to register statically linked extensions: %s",
-		                                    StringUtil::Join(state.errors, "; "));
+	if (state.errors.empty() && !state.unknown_error) {
+		return state.extensions;
 	}
-	return state.extensions;
+	auto errors = state.errors;
+	if (state.unknown_error) {
+		errors.push_back("an extension registration failed with an unknown error");
+	}
+	throw InvalidConfigurationException("Failed to register statically linked extensions: %s",
+	                                    StringUtil::Join(errors, "; "));
 }
 
 } // namespace duckdb
 
 int32_t duckdb_register_static_extension(duckdb_extension_describe_t describe) {
+	auto &state = duckdb::GetRegistryState();
 	try {
 		auto error = duckdb::Register(describe);
 		if (error.empty()) {
 			return 0;
 		}
-		auto &state = duckdb::GetRegistryState();
 		std::lock_guard<std::mutex> guard(state.lock);
 		state.errors.push_back(std::move(error));
 	} catch (...) { // NOLINT: never throw across the C API
+		state.unknown_error = true;
 	}
 	return 1;
 }
