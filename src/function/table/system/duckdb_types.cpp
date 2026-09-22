@@ -240,12 +240,20 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		vector<Value> parameter_names;
 		vector<Value> parameter_type_names;
 		for (auto &param : signature.GetParameters()) {
+			if (param.IsVariadic()) {
+				continue;
+			}
 			parameter_names.emplace_back(param.GetName());
 			parameter_type_names.emplace_back(param.GetType().ToString());
 		}
 		parameters.Append(Value::LIST(LogicalType::VARCHAR, std::move(parameter_names)));
 		parameter_types.Append(Value::LIST(LogicalType::VARCHAR, std::move(parameter_type_names)));
-		varargs.Append(signature.HasVarArgs() ? Value(signature.GetVarArgs().ToString()) : Value());
+		auto variadic = signature.GetArgsParameter();
+		if (!variadic) {
+			variadic = signature.GetKwargsParameter();
+		}
+		// the legacy "varargs" column cannot tell "*args" and "**kwargs" apart
+		varargs.Append(variadic ? Value(variadic->GetType().ToString()) : Value());
 
 		count++;
 	}

@@ -145,15 +145,19 @@ BoundScalarFunction::BoundScalarFunction(shared_ptr<const ScalarFunction> functi
 	// Try to default bind the function, to fill in any missing information in the BoundScalarFunction (e.g. from the
 	// "bind" callback)
 	for (auto &param : function.GetSignature().GetParameters()) {
-		arguments.push_back(param.GetType());
+		if (!param.IsVariadic()) {
+			arguments.push_back(param.GetType());
+		}
 	}
+	positional_arguments = arguments.size();
 	logical_arguments = arguments;
 	logical_return_type = return_type;
 }
 
 bool BoundScalarFunction::operator==(const BoundScalarFunction &rhs) const {
 	return callbacks == rhs.callbacks && properties == rhs.properties && GetName() == rhs.GetName() &&
-	       return_type == rhs.return_type && arguments == rhs.arguments;
+	       return_type == rhs.return_type && arguments == rhs.arguments &&
+	       positional_arguments == rhs.positional_arguments && named_arguments == rhs.named_arguments;
 }
 bool BoundScalarFunction::operator!=(const BoundScalarFunction &rhs) const {
 	return !(*this == rhs);

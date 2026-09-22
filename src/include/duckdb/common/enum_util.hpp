@@ -266,6 +266,8 @@ enum class FunctionErrors : uint8_t;
 
 enum class FunctionNullHandling : uint8_t;
 
+enum class FunctionParameterKind : uint8_t;
+
 enum class FunctionStability : uint8_t;
 
 enum class GateStatus : uint8_t;
@@ -1003,6 +1005,9 @@ const char* EnumUtil::ToChars<FunctionErrors>(FunctionErrors value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value);
+
+template<>
+const char* EnumUtil::ToChars<FunctionParameterKind>(FunctionParameterKind value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionStability>(FunctionStability value);
@@ -1934,6 +1939,9 @@ FunctionErrors EnumUtil::FromString<FunctionErrors>(const char *value);
 
 template<>
 FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *value);
+
+template<>
+FunctionParameterKind EnumUtil::FromString<FunctionParameterKind>(const char *value);
 
 template<>
 FunctionStability EnumUtil::FromString<FunctionStability>(const char *value);
