@@ -70,9 +70,18 @@ struct ICUTableRange {
 		idx_t cardinality;
 	};
 
+	//! Progress of a range used as a source (i.e. with a single input row)
 	struct ICURangeGlobalState : public GlobalTableFunctionState {
-		//! Progress in percent - when used as a source there is a single input row
-		atomic<double> progress {0};
+		//! The bounds of the range, and the timestamp that is generated next
+		atomic<int64_t> start {0};
+		atomic<int64_t> end {0};
+		atomic<int64_t> current {0};
+
+		void Initialize(timestamp_tz_t start_p, timestamp_tz_t end_p) {
+			start.store(start_p.value, std::memory_order_relaxed);
+			end.store(end_p.value, std::memory_order_relaxed);
+			current.store(start_p.value, std::memory_order_relaxed);
+		}
 	};
 
 	struct ICURangeLocalState : public LocalTableFunctionState {
@@ -93,19 +102,6 @@ struct ICUTableRange {
 		bool greater_than_check;
 
 		bool empty_range = false;
-
-		void UpdateProgress(idx_t input_count) {
-			if (!global_state || input_count == 0) {
-				return;
-			}
-			auto range = static_cast<double>(end.value) - static_cast<double>(start.value);
-			auto row_fraction =
-			    range == 0 ? 1.0
-			               : (static_cast<double>(current_state.value) - static_cast<double>(start.value)) / range;
-			row_fraction = MaxValue<double>(MinValue<double>(row_fraction, 1.0), 0.0);
-			global_state->progress =
-			    100.0 * (static_cast<double>(current_input_row) + row_fraction) / static_cast<double>(input_count);
-		}
 
 		bool Finished(timestamp_tz_t current_value) const {
 			if (greater_than_check) {
@@ -195,7 +191,14 @@ struct ICUTableRange {
 
 	static double Progress(ClientContext &context, const FunctionData *bind_data,
 	                       const GlobalTableFunctionState *global_state) {
-		return global_state->Cast<ICURangeGlobalState>().progress;
+		auto &state = global_state->Cast<ICURangeGlobalState>();
+		auto start = static_cast<double>(state.start.load(std::memory_order_relaxed));
+		auto range = static_cast<double>(state.end.load(std::memory_order_relaxed)) - start;
+		if (range == 0) {
+			return 0;
+		}
+		auto fraction = (static_cast<double>(state.current.load(std::memory_order_relaxed)) - start) / range;
+		return 100.0 * MaxValue<double>(MinValue<double>(fraction, 1.0), 0.0);
 	}
 
 	static unique_ptr<NodeStatistics> Cardinality(ClientContext &context, const FunctionData *bind_data_p) {
@@ -224,6 +227,9 @@ struct ICUTableRange {
 				GenerateRangeDateTimeParameters<GENERATE_SERIES>(input, state.current_input_row, state);
 				state.initialized_row = true;
 				state.current_state = state.start;
+				if (state.global_state) {
+					state.global_state->Initialize(state.start, state.end);
+				}
 			}
 			if (state.empty_range) {
 				// empty range
@@ -251,7 +257,9 @@ struct ICUTableRange {
 				continue;
 			}
 			output.SetChildCardinality(size);
-			state.UpdateProgress(input.size());
+			if (state.global_state) {
+				state.global_state->current.store(state.current_state.value, std::memory_order_relaxed);
+			}
 			return OperatorResultType::HAVE_MORE_OUTPUT;
 		}
 	}
