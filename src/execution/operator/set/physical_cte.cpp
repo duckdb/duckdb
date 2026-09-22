@@ -44,6 +44,8 @@ public:
 	idx_t consumer_idx;
 	idx_t max_threads;
 	atomic<bool> unregistered {false};
+	//! The exchange total grows while the producer outruns its estimate - keeps the scan progress monotonic
+	MonotonicProgress scan_progress;
 };
 
 class CTEConsumerLocalSourceState : public LocalSourceState {
@@ -110,7 +112,7 @@ bool PhysicalCTEConsumerSource::ParallelSource() const {
 
 ProgressData PhysicalCTEConsumerSource::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
 	auto &state = gstate.Cast<CTEConsumerGlobalSourceState>();
-	return state.exchange->ScanProgress(state.consumer_idx, estimated_cardinality);
+	return state.scan_progress.Update(state.exchange->ScanProgress(state.consumer_idx, estimated_cardinality));
 }
 
 void PhysicalCTEConsumerSource::SourceFinished(ClientContext &context, GlobalSourceState &gstate) const {

@@ -134,8 +134,8 @@ public:
 	explicit SortGlobalSinkState(ClientContext &context)
 	    : num_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
 	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), sorted_tuples(0),
-	      sunk_tuples(0), max_progress(0), external(Settings::Get<DebugForceExternalSetting>(context)),
-	      any_combined(false), total_count(0), partition_size(0) {
+	      sunk_tuples(0), external(Settings::Get<DebugForceExternalSetting>(context)), any_combined(false),
+	      total_count(0), partition_size(0) {
 	}
 
 public:
@@ -194,8 +194,8 @@ public:
 	atomic<idx_t> sorted_tuples;
 	//! Sunk tuple count (for progress)
 	atomic<idx_t> sunk_tuples;
-	//! Highest sink progress fraction reported so far
-	atomic<double> max_progress;
+	//! Keeps the sink progress monotonic
+	MonotonicProgress sink_progress;
 
 	//! Whether this is an external sort
 	bool external;
@@ -255,7 +255,7 @@ SinkResultType Sort::Sink(ExecutionContext &context, DataChunk &chunk, OperatorS
 	lstate.key_executor.Execute(chunk, lstate.key);
 	lstate.payload.ReferenceColumns(chunk, input_projection_map);
 	lstate.sorted_run->Sink(lstate.key, lstate.payload);
-	gstate.sunk_tuples += chunk.size();
+	gstate.sunk_tuples.fetch_add(chunk.size(), std::memory_order_relaxed);
 
 	// Try to finish this call to Sink
 	unique_lock<mutex> guard;
@@ -327,7 +327,7 @@ SinkFinalizeType Sort::Finalize(ClientContext &context, OperatorSinkFinalizeInpu
 ProgressData Sort::GetSinkProgress(ClientContext &context, GlobalSinkState &gstate_p,
                                    const ProgressData source_progress) const {
 	auto &gstate = gstate_p.Cast<SortGlobalSinkState>();
-	return GetSinkProgress(source_progress, gstate.sorted_tuples, gstate.sunk_tuples, gstate.max_progress);
+	return GetSinkProgress(source_progress, gstate.sorted_tuples, gstate.sunk_tuples, gstate.sink_progress);
 }
 
 idx_t Sort::GetSortedCount(GlobalSinkState &gstate) const {
@@ -335,7 +335,7 @@ idx_t Sort::GetSortedCount(GlobalSinkState &gstate) const {
 }
 
 ProgressData Sort::GetSinkProgress(const ProgressData &source_progress, idx_t sorted_count, idx_t sunk_count,
-                                   atomic<double> &max_fraction) {
+                                   MonotonicProgress &monotonic_progress) {
 	ProgressData res;
 	res.total = source_progress.total;
 	res.invalid = source_progress.invalid;
@@ -351,13 +351,9 @@ ProgressData Sort::GetSinkProgress(const ProgressData &source_progress, idx_t so
 	} else {
 		sorted_fraction = MinValue<double>(static_cast<double>(sorted_count) / static_cast<double>(sunk_count), 1.0);
 	}
-	auto fraction = source_fraction * (1.0 + sorted_fraction) / 2;
+	res.done = source_progress.total * source_fraction * (1.0 + sorted_fraction) / 2;
 	// the sorted fraction drops when tuples are sunk faster than they are sorted
-	auto previous = max_fraction.load();
-	while (fraction > previous && !max_fraction.compare_exchange_weak(previous, fraction)) {
-	}
-	res.done = MaxValue<double>(fraction, previous) * source_progress.total;
-	return res;
+	return monotonic_progress.Update(res);
 }
 
 //===--------------------------------------------------------------------===//

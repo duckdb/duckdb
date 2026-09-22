@@ -220,8 +220,8 @@ public:
 	value_map_t<GlobalStatePtr> strategy_sinks;
 	//! The number of sunk rows (for progress)
 	atomic<idx_t> count;
-	//! Highest sink progress fraction reported so far
-	atomic<double> max_progress;
+	//! Keeps the sink progress monotonic
+	MonotonicProgress sink_progress;
 	//! The execution functions
 	Executors executors;
 	//! The shared expressions library
@@ -240,7 +240,7 @@ public:
 			strategy_sinks.insert(make_pair(Value(), sort_strategy->GetGlobalSinkState(context)));
 		}
 		count = 0;
-		max_progress = 0;
+		sink_progress.Reset();
 		GlobalSinkState::Reset(context);
 	}
 
@@ -352,7 +352,7 @@ static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &w
 }
 
 WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientContext &client)
-    : op(op), client(client), count(0), max_progress(0) {
+    : op(op), client(client), count(0) {
 	D_ASSERT(op.select_list[op.order_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 	auto &wexpr = op.select_list[op.order_idx]->Cast<BoundWindowExpression>();
 
@@ -486,17 +486,8 @@ ProgressData PhysicalWindow::GetSinkProgress(ClientContext &context, GlobalSinkS
 	for (auto &strategy_sink : gsink.strategy_sinks) {
 		progress.Add(gsink.sort_strategy->GetSinkProgress(context, *strategy_sink.second, progress));
 	}
-	if (!progress.IsValid() || progress.total <= 0) {
-		return progress;
-	}
 	// strategy sinks can be added while sinking (e.g. for partitioned input) - keep the progress monotonic
-	auto fraction = progress.done / progress.total;
-	auto previous = gsink.max_progress.load();
-	while (fraction > previous && !gsink.max_progress.compare_exchange_weak(previous, fraction)) {
-	}
-	progress.done = MaxValue<double>(fraction, previous) * source_progress.total;
-	progress.total = source_progress.total;
-	return progress;
+	return gsink.sink_progress.Update(progress);
 }
 
 //===--------------------------------------------------------------------===//
