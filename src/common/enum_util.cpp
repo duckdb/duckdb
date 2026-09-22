@@ -31,6 +31,7 @@
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
 #include "duckdb/common/enums/debug_order_verification.hpp"
+#include "duckdb/common/enums/debug_progress_verification.hpp"
 #include "duckdb/common/enums/debug_statement_verification.hpp"
 #include "duckdb/common/enums/debug_vector_verification.hpp"
 #include "duckdb/common/enums/debug_verification_mode.hpp"
@@ -182,6 +183,7 @@
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/pipeline_broadcast_exchange.hpp"
 #include "duckdb/parallel/pipeline_schedule.hpp"
+#include "duckdb/parallel/progress_verifier.hpp"
 #include "duckdb/parallel/scan_read_ahead.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
@@ -223,6 +225,7 @@
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/logical_operator_repeatability.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
 #include "duckdb/storage/caching_mode.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
@@ -1117,6 +1120,26 @@ CachingMode EnumUtil::FromString<CachingMode>(const char *value) {
 	return static_cast<CachingMode>(StringUtil::StringToEnum(GetCachingModeValues(), 3, "CachingMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetCanUnloadResultValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CanUnloadResult::CAN_UNLOAD), "CAN_UNLOAD" },
+		{ static_cast<uint32_t>(CanUnloadResult::ALREADY_UNLOADED), "ALREADY_UNLOADED" },
+		{ static_cast<uint32_t>(CanUnloadResult::PINNED), "PINNED" },
+		{ static_cast<uint32_t>(CanUnloadResult::NO_TEMP_DIRECTORY), "NO_TEMP_DIRECTORY" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CanUnloadResult>(CanUnloadResult value) {
+	return StringUtil::EnumToString(GetCanUnloadResultValues(), 4, "CanUnloadResult", static_cast<uint32_t>(value));
+}
+
+template<>
+CanUnloadResult EnumUtil::FromString<CanUnloadResult>(const char *value) {
+	return static_cast<CanUnloadResult>(StringUtil::StringToEnum(GetCanUnloadResultValues(), 4, "CanUnloadResult", value));
+}
+
 const StringUtil::EnumStringLiteral *GetCatalogLookupBehaviorValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CatalogLookupBehavior::STANDARD), "STANDARD" },
@@ -1696,6 +1719,25 @@ const char* EnumUtil::ToChars<DebugOrderVerification>(DebugOrderVerification val
 template<>
 DebugOrderVerification EnumUtil::FromString<DebugOrderVerification>(const char *value) {
 	return static_cast<DebugOrderVerification>(StringUtil::StringToEnum(GetDebugOrderVerificationValues(), 3, "DebugOrderVerification", value));
+}
+
+const StringUtil::EnumStringLiteral *GetDebugProgressVerificationValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DebugProgressVerification::NONE), "NONE" },
+		{ static_cast<uint32_t>(DebugProgressVerification::LOG), "LOG" },
+		{ static_cast<uint32_t>(DebugProgressVerification::ERROR), "ERROR" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DebugProgressVerification>(DebugProgressVerification value) {
+	return StringUtil::EnumToString(GetDebugProgressVerificationValues(), 3, "DebugProgressVerification", static_cast<uint32_t>(value));
+}
+
+template<>
+DebugProgressVerification EnumUtil::FromString<DebugProgressVerification>(const char *value) {
+	return static_cast<DebugProgressVerification>(StringUtil::StringToEnum(GetDebugProgressVerificationValues(), 3, "DebugProgressVerification", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDebugStatementVerificationValues() {
@@ -4854,6 +4896,30 @@ const char* EnumUtil::ToChars<ProfilingParameterNames>(ProfilingParameterNames v
 template<>
 ProfilingParameterNames EnumUtil::FromString<ProfilingParameterNames>(const char *value) {
 	return static_cast<ProfilingParameterNames>(StringUtil::StringToEnum(GetProfilingParameterNamesValues(), 5, "ProfilingParameterNames", value));
+}
+
+const StringUtil::EnumStringLiteral *GetProgressInvariantValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ProgressInvariant::UNSUPPORTED_SOURCE), "UNSUPPORTED_SOURCE" },
+		{ static_cast<uint32_t>(ProgressInvariant::UNSUPPORTED_SINK), "UNSUPPORTED_SINK" },
+		{ static_cast<uint32_t>(ProgressInvariant::MALFORMED_SOURCE), "MALFORMED_SOURCE" },
+		{ static_cast<uint32_t>(ProgressInvariant::MALFORMED_SINK), "MALFORMED_SINK" },
+		{ static_cast<uint32_t>(ProgressInvariant::NON_MONOTONIC), "NON_MONOTONIC" },
+		{ static_cast<uint32_t>(ProgressInvariant::INCOMPLETE), "INCOMPLETE" },
+		{ static_cast<uint32_t>(ProgressInvariant::STALLED), "STALLED" },
+		{ static_cast<uint32_t>(ProgressInvariant::INACCURATE), "INACCURATE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ProgressInvariant>(ProgressInvariant value) {
+	return StringUtil::EnumToString(GetProgressInvariantValues(), 8, "ProgressInvariant", static_cast<uint32_t>(value));
+}
+
+template<>
+ProgressInvariant EnumUtil::FromString<ProgressInvariant>(const char *value) {
+	return static_cast<ProgressInvariant>(StringUtil::StringToEnum(GetProgressInvariantValues(), 8, "ProgressInvariant", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPushdownExtractSupportValues() {

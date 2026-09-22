@@ -1066,13 +1066,13 @@ PEGTransformerFactory::FinalizeWithClauseTrampoline(PEGTransformer &transformer,
 
 pair<Identifier, unique_ptr<CommonTableExpressionInfo>>
 PEGTransformerFactory::TransformWithStatement(PEGTransformer &transformer, const Identifier &col_id_or_string,
-                                              const optional<vector<string>> &insert_column_list,
+                                              const optional<vector<string>> &column_aliases,
                                               optional<vector<unique_ptr<ParsedExpression>>> using_key,
                                               const optional<bool> &materialized, unique_ptr<TableRef> cte_body) {
 	auto result = make_uniq<CommonTableExpressionInfo>();
 	auto cte_name = col_id_or_string;
-	if (insert_column_list) {
-		result->aliases = StringsToIdentifiers(*insert_column_list);
+	if (column_aliases) {
+		result->aliases = StringsToIdentifiers(*column_aliases);
 	}
 	if (using_key) {
 		result->key_targets = std::move(*using_key);

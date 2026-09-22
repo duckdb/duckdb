@@ -360,8 +360,12 @@ bool DataTable::HasUniqueIndexes() const {
 	return info->indexes.HasUniqueIndexes();
 }
 
-void DataTable::AddIndex(unique_ptr<Index> index) {
-	info->indexes.AddIndex(std::move(index));
+void DataTable::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
+	info->indexes.AddIndex(std::move(index), index_oid);
+}
+
+void DataTable::AddConstraintIndex(unique_ptr<Index> index) {
+	info->indexes.AddIndex(std::move(index), /*index_oid=*/optional_idx());
 }
 
 bool DataTable::HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type) {
@@ -1686,7 +1690,7 @@ void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &
 	auto &io_manager = TableIOManager::Get(*this);
 	auto art = make_uniq<ART>(index_info.name, type, physical_ids, io_manager, std::move(expressions), db, nullptr,
 	                          index_info);
-	info->indexes.AddIndex(std::move(art));
+	info->indexes.AddIndex(std::move(art), /*index_oid=*/optional_idx());
 }
 
 } // namespace duckdb

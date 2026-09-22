@@ -54,6 +54,10 @@ public:
 	virtual bool IsStreaming() const {
 		return false;
 	}
+	//! Whether this collector builds its own result object, rather than serving it through a result buffer
+	virtual bool BuildsOwnResult() const {
+		return true;
+	}
 };
 
 } // namespace duckdb

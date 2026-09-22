@@ -294,6 +294,18 @@ void ClientContext::ProcessError(ErrorData &error, const string &query) const {
 
 template <class T>
 unique_ptr<T> ClientContext::ErrorResult(ErrorData error, const string &query) {
+	bool invalidates_transaction = true;
+	if (!ErrorInvalidatesTransaction(error.Type())) {
+		// standard exceptions don't invalidate the transaction
+		invalidates_transaction = false;
+	} else if (Exception::InvalidatesDatabase(error.Type())) {
+		auto &db_instance = DatabaseInstance::GetDatabase(*this);
+		ValidChecker::Invalidate(db_instance, error.RawMessage());
+	}
+	if (invalidates_transaction && HasActiveTransaction()) {
+		ValidChecker::Invalidate(ActiveTransaction(), error.RawMessage());
+	}
+
 	ProcessError(error, query);
 	return make_uniq<T>(std::move(error));
 }
@@ -641,23 +653,25 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 	// Decide how to get the result collector.
 	get_result_collector_t get_collector = PhysicalResultCollector::GetResultCollector;
 	auto &client_config = ClientConfig::GetConfig(*this);
-	const bool delegating = client_config.get_result_collector != nullptr;
-	if (delegating) {
-		if (parameters.format && !parameters.format->IsChunk()) {
-			// The collector builds its own result, which the format would never reach
-			throw InvalidInputException("A result format cannot be combined with a custom result collector");
-		}
-		if (parameters.format &&
-		    parameters.format->Cast<ChunkFormat>().MemoryType() == QueryResultMemoryType::BUFFER_MANAGED) {
-			// The collector chooses its own store, so the request would be silently downgraded
-			throw InvalidInputException("A buffer-managed result cannot be combined with a custom result collector");
-		}
+	if (client_config.get_result_collector) {
 		get_collector = client_config.get_result_collector;
 	}
 
 	// Get the result collector and initialize the executor.
 	auto collector = get_collector(*this, statement_data);
 	D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
+	// A custom hook can hand back the default sink, which is then served like any other query
+	const bool delegating = collector->Cast<PhysicalResultCollector>().BuildsOwnResult();
+	if (delegating && parameters.format) {
+		if (!parameters.format->IsChunk()) {
+			// The collector builds its own result, which the format would never reach
+			throw InvalidInputException("A result format cannot be combined with a custom result collector");
+		}
+		if (parameters.format->Cast<ChunkFormat>().MemoryType() == QueryResultMemoryType::BUFFER_MANAGED) {
+			// The collector chooses its own store, so the request would be silently downgraded
+			throw InvalidInputException("A buffer-managed result cannot be combined with a custom result collector");
+		}
+	}
 
 	// Read before Initialize starts the workers: a SET statement writes the settings from a task
 	auto client_properties = GetClientProperties();
@@ -1133,8 +1147,10 @@ unique_ptr<QueryResult> ClientContext::SubmitStatement(ClientContextLock &lock, 
 		result = ErrorResult<QueryResult>(std::move(error), query);
 	}
 	if (result->HasError()) {
-		// query failed: abort now
-		EndQueryInternal(lock, false, invalidate_query, result->GetErrorObject());
+		// query failed: abort now, unless a delegated collector's execution already ended it
+		if (active_query) {
+			EndQueryInternal(lock, false, invalidate_query, result->GetErrorObject());
+		}
 		return result;
 	}
 	// A collector that builds its own result object finishes the query inside the submission, so

@@ -388,6 +388,31 @@ TEST_CASE("A custom collector refuses a submission that asks for a format", "[ap
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));
 }
 
+TEST_CASE("A collector hook that hands back the default sink accepts a format", "[api][query_result]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &config = ClientConfig::GetConfig(*con.context);
+	DrainWatchdog watchdog(con);
+
+	ScopedConfigSetting setting(
+	    config, [](ClientConfig &config) { config.get_result_collector = PhysicalResultCollector::GetResultCollector; },
+	    [](ClientConfig &config) { config.get_result_collector = nullptr; });
+
+	QueryParameters parameters;
+	parameters.format = make_shared_ptr<TestFormat>(4096);
+	auto formatted = con.context->Query("SELECT i FROM range(20000) t(i)", parameters);
+	REQUIRE_NO_FAIL(*formatted);
+	REQUIRE(formatted->Collection<TestFormat>().Count() == 20000);
+
+	parameters.format = ChunkFormat::BufferManaged();
+	auto buffered = con.Submit("SELECT i FROM range(1000) t(i)", parameters);
+	REQUIRE(!buffered->HasError());
+	REQUIRE(buffered->RowCount() == 1000);
+
+	auto next = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(next, 0, {42}));
+}
+
 TEST_CASE("A custom collector refuses a submission that asks for a buffer-managed result", "[api][query_result]") {
 	DuckDB db(nullptr);
 	Connection con(db);

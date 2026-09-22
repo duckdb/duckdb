@@ -316,6 +316,13 @@
         "is_debug": true
     },
     {
+        "name": "debug_checkpoint_scan_sleep_ms",
+        "description": "DEBUG SETTING: time to sleep after a checkpoint has written a table's row groups, before it installs them",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "0"
+    },
+    {
         "name": "debug_checkpoint_sleep_ms",
         "description": "Time to sleep before a checkpoint is invoked.",
         "type": "UBIGINT",
@@ -519,6 +526,22 @@
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false",
+        "is_debug": true
+    },
+    {
+        "name": "debug_verify_progress",
+        "description": "Verify that operators report well-formed, monotonic and complete progress during execution (NONE, LOG or ERROR).",
+        "type": "ENUM<DebugProgressVerification>",
+        "default_scope": "local",
+        "default_value": "NONE",
+        "is_debug": true
+    },
+    {
+        "name": "debug_verify_progress_ignore",
+        "description": "Comma-separated list of progress violations to ignore, as INVARIANT or INVARIANT:OPERATOR (e.g. UNSUPPORTED_SOURCE:WINDOW).",
+        "type": "VARCHAR",
+        "default_scope": "local",
+        "default_value": "",
         "is_debug": true
     },
     {
