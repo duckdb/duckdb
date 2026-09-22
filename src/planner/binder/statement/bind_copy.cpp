@@ -518,18 +518,13 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	if (function.copy_to_select) {
 		auto bindings = select_node.plan->GetColumnBindings();
 
-		// a format can build its output structure out of these names - JSON writes an object per
-		// row - and a structure cannot hold the same name twice
-		auto select_names = select_node.names;
-		QueryResult::DeduplicateColumns(select_names);
-
 		CopyToSelectInput input = {context, stmt.info->options, {}, copy_to_type};
 		input.select_list.reserve(bindings.size());
 
 		// Create column references for the select list
 		for (idx_t i = 0; i < bindings.size(); i++) {
 			auto &binding = bindings[i];
-			auto &name = select_names[i];
+			auto &name = select_node.names[i];
 			auto &type = select_node.types[i];
 			input.select_list.push_back(make_uniq<BoundColumnRefExpression>(name, type, binding));
 		}
