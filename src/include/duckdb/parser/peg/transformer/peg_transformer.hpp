@@ -4420,9 +4420,10 @@ public:
 	                                                                unique_ptr<ParsedExpression> expression);
 	static unique_ptr<MacroFunction>
 	TransformTableMacroDefinition(PEGTransformer &transformer, unique_ptr<SelectStatement> select_statement_internal);
-	static unique_ptr<CreateStatement> TransformCreateSchemaStmt(PEGTransformer &transformer,
-	                                                             const optional<bool> &if_not_exists,
-	                                                             const QualifiedName &qualified_name);
+	static unique_ptr<CreateStatement>
+	TransformCreateSchemaStmt(PEGTransformer &transformer, const optional<bool> &if_not_exists,
+	                          const QualifiedName &qualified_name,
+	                          optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list);
 	static unique_ptr<CreateStatement>
 	TransformCreateSecretStmt(PEGTransformer &transformer, const optional<bool> &if_not_exists,
 	                          const optional<Identifier> &secret_name,

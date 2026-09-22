@@ -1517,6 +1517,15 @@ ErrorData Catalog::SupportsCreateTable(BoundCreateTableInfo &info) {
 	return ErrorData();
 }
 
+ErrorData Catalog::SupportsCreateSchema(CreateSchemaInfo &info) {
+	if (!info.options.empty()) {
+		return ErrorData(
+		    ExceptionType::CATALOG,
+		    StringUtil::Format("WITH clause is not supported for schemas in a %s catalog", GetCatalogType()));
+	}
+	return ErrorData();
+}
+
 optional<Identifier> Catalog::GetDefaultSchema() const {
 	return Identifier(DEFAULT_SCHEMA);
 }

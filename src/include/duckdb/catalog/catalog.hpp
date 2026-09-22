@@ -395,6 +395,7 @@ public:
 		return string();
 	}
 	virtual ErrorData SupportsCreateTable(BoundCreateTableInfo &info);
+	virtual ErrorData SupportsCreateSchema(CreateSchemaInfo &info);
 
 	virtual bool Supports(RemoteCapability capability) const {
 		return false;

@@ -298,9 +298,13 @@ void Binder::BindCreateSchema(CreateSchemaInfo &info) {
 	// component into a catalog (prepending the default catalog when it is a schema)
 	info.SetQualifiedName(ResolveCatalog(context, info.GetQualifiedName()));
 
+	auto &resolved_catalog = Catalog::GetCatalog(context, info.SchemaCatalog());
+	auto supports_create_schema = resolved_catalog.SupportsCreateSchema(info);
+	if (supports_create_schema.HasError()) {
+		supports_create_schema.Throw();
+	}
 	if (info.IsNested()) {
 		// nested schemas can only be persisted with storage version v2.0.0 or higher
-		auto &resolved_catalog = Catalog::GetCatalog(context, info.SchemaCatalog());
 		auto &attached = resolved_catalog.GetAttached();
 		if (attached.HasStorageManager()) {
 			auto &storage_manager = attached.GetStorageManager();

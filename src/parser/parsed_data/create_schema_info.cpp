@@ -36,6 +36,9 @@ bool CreateSchemaInfo::IsNested() const {
 unique_ptr<CreateInfo> CreateSchemaInfo::Copy() const {
 	auto result = make_uniq<CreateSchemaInfo>();
 	CopyProperties(*result);
+	for (auto &option : options) {
+		result->options.emplace(option.first, option.second->Copy());
+	}
 	return std::move(result);
 }
 
@@ -51,6 +54,14 @@ string CreateSchemaInfo::ToString() const {
 	}
 
 	string temp = temporary ? "TEMPORARY " : "";
+	if (!options.empty()) {
+		qualified += " WITH (";
+		for (auto &entry : options) {
+			qualified += "'" + entry.first + "'=" + entry.second->ToString() + ",";
+		}
+		qualified.pop_back();
+		qualified += ")";
+	}
 
 	string ret = "";
 	switch (on_conflict) {

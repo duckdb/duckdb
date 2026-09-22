@@ -8717,7 +8717,11 @@ PEGTransformerFactory::FinalizeTableMacroDefinitionTrampoline(PEGTransformer &tr
 void PEGTransformerFactory::InitializeCreateSchemaStmtTrampoline(PEGTransformer &transformer,
                                                                  GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(2);
+	process.ReserveChildSlots(3);
+	auto &with_list_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (with_list_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("WithList"), with_list_opt.GetResult()}, 2);
+	}
 	process.PushChild({transformer.GetRule("QualifiedName"), list_pr.GetChild(2)}, 1);
 	auto &if_not_exists_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (if_not_exists_opt.HasResult()) {
@@ -8733,7 +8737,11 @@ PEGTransformerFactory::FinalizeCreateSchemaStmtTrampoline(PEGTransformer &transf
 		if_not_exists = process.TakeResult<bool>(0);
 	}
 	auto qualified_name = process.TakeResult<QualifiedName>(1);
-	auto result = TransformCreateSchemaStmt(transformer, if_not_exists, qualified_name);
+	optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list {};
+	if (process.child_results[2]) {
+		with_list = process.TakeResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(2);
+	}
+	auto result = TransformCreateSchemaStmt(transformer, if_not_exists, qualified_name, std::move(with_list));
 	return make_uniq<TypedTransformResult<unique_ptr<CreateStatement>>>(std::move(result));
 }
 
