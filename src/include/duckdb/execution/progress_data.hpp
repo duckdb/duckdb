@@ -62,7 +62,7 @@ public:
 struct MonotonicProgress {
 public:
 	//! Returns the given progress, raised to the highest fraction that was returned before
-	ProgressData Update(const ProgressData &progress) {
+	ProgressData Update(const ProgressData &progress) const {
 		if (!progress.IsValid() || progress.total <= 0) {
 			return progress;
 		}
@@ -84,7 +84,8 @@ public:
 
 private:
 	static constexpr idx_t PRECISION = 1000000000;
-	atomic<idx_t> max_fraction {0};
+	//! Updated when progress is requested, which only has const access to the operator state
+	mutable atomic<idx_t> max_fraction {0};
 };
 
 //! Progress of a source that executes a known number of tasks - every task contributes UNITS_PER_TASK units once it
