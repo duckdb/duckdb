@@ -12,6 +12,7 @@
         "test/optimizer/eager_aggregate_execution.test",
         "test/optimizer/eager_aggregate_execution_parquet.test",
         "test/optimizer/partial_aggregate_precomputation.test",
+        "test/optimizer/zero_length_prefix_stats.test",
         "test/optimizer/partition_stats_exactness.test",
         "test/optimizer/statistics/statistics_count_not_null_join_pruning.test",
         "test/optimizer/statistics/statistics_count_not_null_pruning.test",
