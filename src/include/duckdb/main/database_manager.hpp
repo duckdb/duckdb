@@ -88,7 +88,7 @@ public:
 	void SetDefaultDatabase(const Identifier &name);
 
 	//! Inserts a path to name mapping to the database paths map
-	InsertDatabasePathResult InsertDatabasePath(const AttachInfo &info, AttachOptions &options);
+	InsertDatabasePathResult InsertDatabasePath(AttachInfo &info, AttachOptions &options);
 
 	//! Returns the database type. This might require checking the header of the file, in which case the file handle is
 	//! necessary. We can only grab the file handle, if it is not yet held, even for uncommitted changes. Thus, we have

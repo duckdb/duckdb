@@ -93,6 +93,10 @@ private:
 	string value;
 };
 
+//! Generate a fresh UUID-suffixed internal name. The prefix must be valid UTF-8.
+//! These names are not reserved; callers still need to handle collisions when registering them.
+DUCKDB_API Identifier GenerateInternalName(const char *prefix);
+
 //! Equality (case-insensitive)
 DUCKDB_API bool operator==(const Identifier &a, const Identifier &b);
 DUCKDB_API bool operator==(const Identifier &a, const string &b);

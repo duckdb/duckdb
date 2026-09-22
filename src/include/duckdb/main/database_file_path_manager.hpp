@@ -18,6 +18,7 @@
 namespace duckdb {
 struct AttachInfo;
 struct AttachOptions;
+struct StoredDatabasePath;
 class DatabaseManager;
 
 enum class InsertDatabasePathResult { SUCCESS, ALREADY_EXISTS };
@@ -28,6 +29,11 @@ struct DatabasePathInfo {
 	string name;
 	AccessMode access_mode;
 	reference_set_t<DatabaseManager> attached_databases;
+	//! Shared reader name, retained for the lifetime of this file entry.
+	Identifier reader_name;
+	//! Managers with a reader attachment that is open or being created.
+	//! Hidden attachments remain here while a transaction still holds a reference to them.
+	reference_set_t<DatabaseManager> reader_databases;
 	idx_t reference_count = 1;
 };
 
@@ -35,10 +41,11 @@ struct DatabasePathInfo {
 class DatabaseFilePathManager {
 public:
 	idx_t ApproxDatabaseCount() const;
-	InsertDatabasePathResult InsertDatabasePath(DatabaseManager &manager, const string &path, const Identifier &name,
+	//! For reader attachments, assigns the file's generated reader name to name.
+	InsertDatabasePathResult InsertDatabasePath(DatabaseManager &manager, const string &path, Identifier &name,
 	                                            OnCreateConflict on_conflict, AttachOptions &options);
 	//! Erase a database path - indicating we are done with using it
-	void EraseDatabasePath(const string &path);
+	void EraseDatabasePath(const StoredDatabasePath &stored_path);
 	//! Called when a database is detached, but before it is fully finished being used
 	void DetachDatabase(DatabaseManager &manager, const string &path);
 
