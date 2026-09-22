@@ -197,9 +197,9 @@ vector<reference<Binding>> BindContext::GetMatchingBindings(const Identifier &co
 	return result;
 }
 
-unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(TableBinding &table_binding,
+unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(TableBinding &table_binding, column_t column_index,
                                                                 const Identifier &column_name) {
-	auto result = table_binding.ExpandGeneratedColumn(column_name);
+	auto result = table_binding.ExpandGeneratedColumn(column_index);
 	result->SetAlias(column_name);
 	return result;
 }
@@ -222,8 +222,8 @@ static bool ColumnIsGenerated(Binding &binding, column_t index) {
 }
 
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const BindingAlias &table_alias,
-                                                                const Identifier &column_name,
-                                                                ColumnBindType bind_type) {
+                                                                const Identifier &column_name, ColumnBindType bind_type,
+                                                                optional_idx resolved_index) {
 	ErrorData error;
 	// emit the full (possibly nested) schema path so the produced reference is unambiguous
 	vector<Identifier> names;
@@ -242,8 +242,17 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const BindingAli
 		return std::move(result);
 	}
 	auto column_index = binding->GetBindingIndex(column_name);
+	if (resolved_index.IsValid()) {
+		// the reference already knows which column it is - the name on its own may reach a
+		// different column that shadows it
+		auto &binding_names = binding->GetColumnNames();
+		auto index = resolved_index.GetIndex();
+		if (index < binding_names.size() && binding_names[index] == column_name) {
+			column_index = index;
+		}
+	}
 	if (bind_type == ColumnBindType::EXPAND_GENERATED_COLUMNS && ColumnIsGenerated(*binding, column_index)) {
-		return ExpandGeneratedColumn(binding->Cast<TableBinding>(), column_name);
+		return ExpandGeneratedColumn(binding->Cast<TableBinding>(), column_index, column_name);
 	}
 	if (column_index != DConstants::INVALID_INDEX) {
 		// rowid-style columns have no index in the binding - they still resolve by name
@@ -289,7 +298,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const Identifier
 	}
 	auto column_index = binding->GetBindingIndex(column_name);
 	if (bind_type == ColumnBindType::EXPAND_GENERATED_COLUMNS && ColumnIsGenerated(*binding, column_index)) {
-		return ExpandGeneratedColumn(binding->Cast<TableBinding>(), column_name);
+		return ExpandGeneratedColumn(binding->Cast<TableBinding>(), column_index, column_name);
 	}
 	if (column_index != DConstants::INVALID_INDEX) {
 		// rowid-style columns have no index in the binding - they still resolve by name

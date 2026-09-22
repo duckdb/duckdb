@@ -250,6 +250,9 @@ static void ReplaceAliases(ParsedExpression &root_expr, const ColumnList &list,
 		auto idx_entry = list.GetColumnIndex(col_names[0]);
 		auto &alias = alias_map.at(idx_entry.index);
 		col_names = vector<Identifier> {alias};
+		// a column alias list can give this column the name of another column, so the name on
+		// its own no longer reaches it
+		colref.SetResolvedIndex(idx_entry.index);
 	});
 }
 
@@ -267,15 +270,13 @@ static void BakeTableName(ParsedExpression &root_expr, const BindingAlias &bindi
 	});
 }
 
-unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const Identifier &column_name) {
+unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(column_t column_index) {
 	auto catalog_entry = GetStandardEntry();
 	D_ASSERT(catalog_entry); // Should only be called on a TableBinding
 
 	D_ASSERT(catalog_entry->type == CatalogType::TABLE_ENTRY);
 	auto &table_entry = catalog_entry->Cast<TableCatalogEntry>();
 
-	// Get the index of the generated column
-	auto column_index = GetBindingIndex(column_name);
 	D_ASSERT(table_entry.GetColumn(LogicalIndex(column_index)).Generated());
 	// Get a copy of the generated column
 	auto expression = table_entry.GetColumn(LogicalIndex(column_index)).GeneratedExpression().Copy();

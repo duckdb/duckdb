@@ -143,7 +143,7 @@ public:
 	virtual_column_map_t virtual_columns;
 
 public:
-	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const Identifier &column_name);
+	unique_ptr<ParsedExpression> ExpandGeneratedColumn(column_t column_index);
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
 	optional_ptr<StandardEntry> GetStandardEntry() override;
 	ErrorData ColumnNotFoundError(const Identifier &column_name) const override;
