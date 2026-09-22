@@ -1,0 +1,50 @@
+# name: test/sql/copy/parquet/duplicate_column_names.test
+# description: Reading a Parquet file whose schema repeats a column name
+# group: [parquet]
+
+require parquet
+
+# the file genuinely holds two columns called x (COPY cannot write one - it renames on write,
+# so the fixture is produced by an external writer)
+query I
+SELECT name FROM parquet_schema('test/sql/copy/parquet/duplicate_column_names.parquet') OFFSET 1;
+----
+x
+x
+y
+
+# the reader renames the second one, so the schema it reports is not the schema of the file
+# SHOULD: x, x, y - the names the file actually carries, with the second x reachable by position
+query II
+SELECT column_name, column_type FROM (DESCRIBE FROM 'test/sql/copy/parquet/duplicate_column_names.parquet');
+----
+x	INTEGER
+x_1	INTEGER
+y	VARCHAR
+
+query III
+SELECT * FROM 'test/sql/copy/parquet/duplicate_column_names.parquet';
+----
+1	10	a
+2	20	b
+
+# the invented name is what makes the second column addressable today
+# SHOULD: no such column - the second x is reached as #2
+query I
+SELECT x_1 FROM 'test/sql/copy/parquet/duplicate_column_names.parquet';
+----
+10
+20
+
+query I
+SELECT x FROM 'test/sql/copy/parquet/duplicate_column_names.parquet';
+----
+1
+2
+
+# positional access already works and is unaffected by the renaming
+query I
+SELECT #2 FROM 'test/sql/copy/parquet/duplicate_column_names.parquet';
+----
+10
+20
