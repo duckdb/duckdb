@@ -8,6 +8,9 @@ namespace duckdb {
 StreamWrapper::~StreamWrapper() {
 }
 
+void StreamWrapper::FinalizeRead(StreamData &) {
+}
+
 void StreamWrapper::AbortWrite() {
 	Close();
 }
@@ -112,22 +115,6 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 		D_ASSERT(stream_data.in_buff_start <= stream_data.in_buff_end);
 		D_ASSERT(stream_data.in_buff_end <= stream_data.in_buff_start + stream_data.in_buf_size);
 
-		// read more input when requested and still data in the input stream
-		if (stream_data.refresh && (stream_data.in_buff_end == stream_data.in_buff.get() + stream_data.in_buf_size)) {
-			auto bufrem = stream_data.in_buff_end - stream_data.in_buff_start;
-			// buffer not empty, move remaining bytes to the beginning
-			memmove(stream_data.in_buff.get(), stream_data.in_buff_start, UnsafeNumericCast<size_t>(bufrem));
-			stream_data.in_buff_start = stream_data.in_buff.get();
-			// refill the rest of input buffer
-			auto sz = child_handle->Read(context, stream_data.in_buff_start + bufrem,
-			                             stream_data.in_buf_size - UnsafeNumericCast<idx_t>(bufrem));
-			stream_data.in_buff_end = stream_data.in_buff_start + bufrem + sz;
-			if (sz <= 0) {
-				stream_wrapper.reset();
-				break;
-			}
-		}
-
 		// read more input if none available
 		if (stream_data.in_buff_start == stream_data.in_buff_end) {
 			// empty input buffer: refill from the start
@@ -135,10 +122,12 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 			stream_data.in_buff_end = stream_data.in_buff_start;
 			auto sz = child_handle->Read(context, stream_data.in_buff.get(), stream_data.in_buf_size);
 			if (sz <= 0) {
+				stream_wrapper->FinalizeRead(stream_data);
 				stream_wrapper.reset();
 				break;
+			} else {
+				stream_data.in_buff_end = stream_data.in_buff_start + sz;
 			}
-			stream_data.in_buff_end = stream_data.in_buff_start + sz;
 		}
 
 		auto finished = stream_wrapper->Read(stream_data);

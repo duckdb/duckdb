@@ -48,14 +48,15 @@ static void RepeatFunction(ClientContext &context, TableFunctionInput &data_p, D
 	state.current_count += remaining;
 }
 
-static double RepeatProgress(ClientContext &context, const FunctionData *bind_data_p,
-                             const GlobalTableFunctionState *global_state) {
-	auto &bind_data = bind_data_p->Cast<RepeatFunctionData>();
-	auto &state = global_state->Cast<RepeatOperatorData>();
-	if (bind_data.target_count == 0) {
-		return 100.0;
+static double RepeatProgress(ClientContext &, const FunctionData *bind_data_p,
+                             const GlobalTableFunctionState *state_p) {
+	if (!state_p) {
+		return -1;
 	}
-	return 100.0 * static_cast<double>(state.current_count) / static_cast<double>(bind_data.target_count);
+	auto &bind_data = bind_data_p->Cast<RepeatFunctionData>();
+	auto &state = state_p->Cast<RepeatOperatorData>();
+	return bind_data.target_count == 0 ? 100
+	                                   : 100.0 * double(state.current_count.load()) / double(bind_data.target_count);
 }
 
 static unique_ptr<NodeStatistics> RepeatCardinality(ClientContext &context, const FunctionData *bind_data_p) {

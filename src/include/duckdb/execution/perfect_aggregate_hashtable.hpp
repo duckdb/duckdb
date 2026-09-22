@@ -28,12 +28,12 @@ public:
 	//! Combines the target perfect aggregate HT into this one
 	void Combine(PerfectAggregateHashTable &other);
 
-	//! Scan the HT starting from the scan_position
-	void Scan(idx_t &scan_position, DataChunk &result);
-
-	idx_t TotalGroups() const {
+	idx_t Capacity() const {
 		return total_groups;
 	}
+
+	//! Scan the HT starting from the scan_position
+	void Scan(idx_t &scan_position, DataChunk &result);
 
 protected:
 	Vector addresses;

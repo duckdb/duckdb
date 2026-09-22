@@ -18,7 +18,8 @@
 
 namespace duckdb {
 
-IndexEntry::IndexEntry(unique_ptr<Index> index_p) : owned_index(std::move(index_p)) {
+IndexEntry::IndexEntry(unique_ptr<Index> index_p, optional_idx catalog_index_oid_p)
+    : catalog_index_oid(catalog_index_oid_p), owned_index(std::move(index_p)) {
 	if (owned_index->IsBound()) {
 		bind_state = IndexBindState::BOUND;
 	} else {
@@ -114,8 +115,8 @@ void IndexEntry::InitializeLocalIndexes(TableIndexList &delete_indexes, TableInd
 	}
 
 	auto constraint_type = bound_index.GetConstraintType();
-	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type));
-	append_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type));
+	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), catalog_index_oid);
+	append_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), catalog_index_oid);
 }
 
 void IndexEntry::AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids) {
@@ -313,6 +314,14 @@ Identifier IndexEntry::GetName() const {
 string IndexEntry::GetIndexType() const {
 	auto entry_lock = lock.GetSharedLock();
 	return owned_index->GetIndexType();
+}
+
+bool IndexEntry::HasBufferedReplays() const {
+	auto entry_lock = lock.GetSharedLock();
+	if (!owned_index || owned_index->IsBound()) {
+		return false;
+	}
+	return owned_index->Cast<UnboundIndex>().HasBufferedReplays();
 }
 
 void IndexEntry::Retire() {

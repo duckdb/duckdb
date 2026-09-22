@@ -1,0 +1,38 @@
+diff --git a/test/sql/attach_nested_schema_dml.test b/test/sql/attach_nested_schema_dml.test
+index 163f23d..f724c88 100644
+--- a/test/sql/attach_nested_schema_dml.test
++++ b/test/sql/attach_nested_schema_dml.test
+@@ -137,15 +137,29 @@ select schema_name, table_name from duckdb_tables() where database_name='rpc' an
+ x	t
+ x	t2
+ 
+-# --- a table two schema levels below the catalog root cannot be named at all: that needs four name
+-# parts, which the parser rejects. This is a core limit and is not specific to quack
++# --- a table two schema levels below the catalog root needs four name parts
+ statement ok quack_db:quack_server_con
+ create schema a.x.deep;
+ 
+-statement error quack_db:quack_server_con
++statement ok quack_db:quack_server_con
+ create table a.x.deep.t(i int);
++
++statement ok quack_db:quack_server_con
++insert into a.x.deep.t values (42);
++
++# the schema was created after the catalog snapshot was taken
++statement ok
++CALL quack_clear_cache()
++
++query I
++from a.x.deep.t
++----
++42
++
++query I
++from rpc.a.x.deep.t
+ ----
+-<REGEX>:.*syntax error.*
++42
+ 
+ statement ok
+ use memory

@@ -109,13 +109,6 @@ DataChunk &ReservoirSample::Chunk() {
 	return reservoir_chunk->chunk;
 }
 
-idx_t ReservoirSample::RemainingSampleCount() const {
-	if (destroyed || !reservoir_chunk || reservoir_chunk->chunk.size() == 0) {
-		return 0;
-	}
-	return GetActiveSampleCount();
-}
-
 unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 	if (destroyed || !reservoir_chunk || Chunk().size() == 0) {
 		return nullptr;
@@ -906,10 +899,11 @@ unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk() {
 	return nullptr;
 }
 
-idx_t ReservoirSamplePercentage::RemainingSampleCount() const {
+idx_t ReservoirSamplePercentage::GetActiveSampleCount() const {
+	D_ASSERT(is_finalized);
 	idx_t count = 0;
 	for (auto &sample : finished_samples) {
-		count += sample->RemainingSampleCount();
+		count += sample->GetActiveSampleCount();
 	}
 	return count;
 }

@@ -103,13 +103,14 @@ static bool EnumToAnyCast(Vector &source, Vector &result, idx_t count, CastParam
 
 	// cast to varchar
 	CastParameters to_varchar_params(parameters, cast_data.to_varchar_cast.GetCastData(), lstate.to_varchar_local);
-	cast_data.to_varchar_cast.Cast(source, varchar_cast, count, to_varchar_params);
+	if (!cast_data.to_varchar_cast.Cast(source, varchar_cast, count, to_varchar_params)) {
+		return false;
+	}
 
 	// cast from varchar to the target
 	CastParameters from_varchar_params(parameters, cast_data.from_varchar_cast.GetCastData(),
 	                                   lstate.from_varchar_local);
-	cast_data.from_varchar_cast.Cast(varchar_cast, result, count, from_varchar_params);
-	return true;
+	return cast_data.from_varchar_cast.Cast(varchar_cast, result, count, from_varchar_params);
 }
 
 BoundCastInfo DefaultCasts::EnumCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
