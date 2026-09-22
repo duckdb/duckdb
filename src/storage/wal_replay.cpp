@@ -515,7 +515,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 		ErrorData error(ex);
 		// ignore serialization exceptions - they signal a torn WAL
 		if (config.options.abort_on_wal_failure || error.Type() != ExceptionType::SERIALIZATION) {
-			con.Query("ROLLBACK");
+			con.Rollback();
 			error.Throw("Failure while replaying WAL file \"" + wal_path + "\": ");
 		}
 	} // LCOV_EXCL_STOP
@@ -629,7 +629,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 
 	// If there are no committed transactions in the WAL, rollback and truncate.
 	if (last_wal_flush_end == 0) {
-		con.Query("ROLLBACK");
+		con.Rollback();
 		return make_uniq<WriteAheadLog>(storage_manager, wal_path, 0, WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE);
 	}
 
