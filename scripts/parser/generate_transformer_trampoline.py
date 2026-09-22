@@ -588,7 +588,7 @@ class UseGramPreviewEmitter:
             lines.append("\tauto child_rule = choice_result.GetRule();")
             lines.append("\tif (!child_rule) {")
             lines.append(
-                "\t\tthrow InternalException(\"No transform process registered for rule '%s'\", choice_result.name);"
+                "\t\tthrow InternalException(\"No transform process registered for rule '%s'\", choice_result.Name());"
             )
             lines.append("\t}")
             lines.append("\tprocess.PushChild({*child_rule, choice_result}, 0);")
@@ -1043,7 +1043,7 @@ class UseGramPreviewEmitter:
         )
         if self.cpp_type(rule_name) == "Identifier":
             direct_conditions = [
-                "choice_result.name.empty()",
+                "choice_result.Name().empty()",
                 "choice_result.type == ParseResultType::IDENTIFIER",
                 "choice_result.type == ParseResultType::KEYWORD",
                 "choice_result.type == ParseResultType::STRING",
@@ -1052,7 +1052,7 @@ class UseGramPreviewEmitter:
             lines.append("\t\treturn;")
             lines.append("\t}")
             if direct_string_names:
-                direct_string_conditions = [f'choice_result.name == "{name}"' for name in direct_string_names]
+                direct_string_conditions = [f'choice_result.Name() == "{name}"' for name in direct_string_names]
                 lines.append("\tif (!has_transform_process && (" + " || ".join(direct_string_conditions) + ")) {")
                 lines.append("\t\treturn;")
                 lines.append("\t}")
@@ -1067,12 +1067,12 @@ class UseGramPreviewEmitter:
             lines.append("\t\treturn;")
             lines.append("\t}")
             if external_string_names:
-                external_string_conditions = [f'choice_result.name == "{name}"' for name in external_string_names]
+                external_string_conditions = [f'choice_result.Name() == "{name}"' for name in external_string_names]
                 lines.append("\tif (!has_transform_process && (" + " || ".join(external_string_conditions) + ")) {")
                 lines.append("\t\treturn;")
                 lines.append("\t}")
         if syntax_only_alternatives:
-            syntax_only_conditions = [f'choice_result.name == "{name}"' for name in syntax_only_alternatives]
+            syntax_only_conditions = [f'choice_result.Name() == "{name}"' for name in syntax_only_alternatives]
             lines.append("\tif (!has_transform_process && (" + " || ".join(syntax_only_conditions) + ")) {")
             lines.append("\t\treturn;")
             lines.append("\t}")
@@ -1095,7 +1095,7 @@ class UseGramPreviewEmitter:
         else:
             lines.append("\tif (!has_transform_process) {")
             lines.append(
-                "\t\tthrow InternalException(\"No transform process registered for rule '%s'\", choice_result.name);"
+                "\t\tthrow InternalException(\"No transform process registered for rule '%s'\", choice_result.Name());"
             )
             lines.append("\t}")
         lines.append("\tprocess.PushChild({*child_rule, choice_result}, 0);")

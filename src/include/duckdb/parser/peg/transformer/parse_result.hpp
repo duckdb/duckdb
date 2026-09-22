@@ -129,13 +129,12 @@ public:
 	TARGET &Cast() {
 		if (TARGET::TYPE != ParseResultType::INVALID && type != TARGET::TYPE) {
 			throw InternalException("Failed to cast parse result of type %s to type %s for rule %s",
-			                        ParseResultToString(TARGET::TYPE), ParseResultToString(type), name);
+			                        ParseResultToString(TARGET::TYPE), ParseResultToString(type), Name());
 		}
 		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	ParseResultType type;
-	string name;
 	optional_ptr<const CompiledGrammarRule> rule;
 	optional_idx offset;
 	//! Source length: for leaf tokens the token length; for composite results the enclosing extent of children
@@ -143,6 +142,15 @@ public:
 
 	void SetRule(const CompiledGrammarRule &rule_p) {
 		rule = rule_p;
+	}
+	//! The name of the rule (or matcher) that produced this result. Rule names live in the compiled grammar and
+	//! outlive every parse, so a result points at one instead of owning a copy of it.
+	const string &Name() const {
+		static const string EMPTY;
+		return name ? *name : EMPTY;
+	}
+	void SetName(const string &name_p) {
+		name = &name_p;
 	}
 	optional_ptr<const CompiledGrammarRule> GetRule() const {
 		return rule;
@@ -170,8 +178,8 @@ public:
 	virtual void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
 	                              const std::string &indent, bool is_last) const {
 		ss << indent << (is_last ? "└─" : "├─") << " " << ParseResultToString(type);
-		if (!name.empty()) {
-			ss << " (" << name << ")";
+		if (!Name().empty()) {
+			ss << " (" << Name() << ")";
 		}
 	}
 
@@ -183,6 +191,9 @@ public:
 		ToStringInternal(ss, visited, "", true);
 		return ss.str();
 	}
+
+private:
+	const string *name = nullptr;
 };
 
 struct IdentifierParseResult : ParseResult {
@@ -232,9 +243,12 @@ struct ListParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::LIST;
 
 public:
-	explicit ListParseResult(unsafe_array_ptr<reference<ParseResult>> results_p, string name_p, optional_idx offset)
+	explicit ListParseResult(unsafe_array_ptr<reference<ParseResult>> results_p, const string *name_p,
+	                         optional_idx offset)
 	    : ParseResult(TYPE, offset), children(results_p) {
-		name = std::move(name_p);
+		if (name_p) {
+			SetName(*name_p);
+		}
 		for (auto &child : children) {
 			EncloseChild(child.get());
 		}
@@ -261,14 +275,14 @@ public:
 		ss << indent << (is_last ? "└─" : "├─");
 
 		if (visited.count(this)) {
-			ss << " List (" << name << ") [... already printed ...]\n";
+			ss << " List (" << Name() << ") [... already printed ...]\n";
 			return;
 		}
 		visited.insert(this);
 
 		ss << " " << ParseResultToString(type);
-		if (!name.empty()) {
-			ss << " (" << name << ")";
+		if (!Name().empty()) {
+			ss << " (" << Name() << ")";
 		}
 		ss << " [" << children.size() << " children]\n";
 
@@ -309,14 +323,14 @@ struct RepeatParseResult : ParseResult {
 		ss << indent << (is_last ? "└─" : "├─");
 
 		if (visited.count(this)) {
-			ss << " Repeat (" << name << ") [... already printed ...]\n";
+			ss << " Repeat (" << Name() << ") [... already printed ...]\n";
 			return;
 		}
 		visited.insert(this);
 
 		ss << " " << ParseResultToString(type);
-		if (!name.empty()) {
-			ss << " (" << name << ")";
+		if (!Name().empty()) {
+			ss << " (" << Name() << ")";
 		}
 		ss << " [" << children.size() << " children]\n";
 
@@ -337,7 +351,7 @@ struct OptionalParseResult : ParseResult {
 	}
 	explicit OptionalParseResult(optional_ptr<ParseResult> result_p, optional_idx offset)
 	    : ParseResult(TYPE, offset), optional_result(result_p) {
-		name = result_p->name;
+		SetName(result_p->Name());
 		EncloseChild(*result_p);
 	}
 
@@ -379,7 +393,7 @@ public:
 
 	explicit ChoiceParseResult(ParseResult &parse_result_p, idx_t selected_idx_p, optional_idx offset)
 	    : ParseResult(TYPE, offset), result(parse_result_p), selected_idx(selected_idx_p) {
-		name = parse_result_p.name;
+		SetName(parse_result_p.Name());
 		EncloseChild(parse_result_p);
 	}
 

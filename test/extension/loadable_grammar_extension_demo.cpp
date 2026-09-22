@@ -14,7 +14,7 @@
 using namespace duckdb;
 
 static bool IsRule(const ParseResult &parse_result, const char *name) {
-	return StringUtil::CIEquals(parse_result.name, name);
+	return StringUtil::CIEquals(parse_result.Name(), name);
 }
 
 static ParseResult &GetChoice(ParseResult &parse_result) {
@@ -145,7 +145,7 @@ static void ApplyPipeStage(PEGTransformer &transformer, ParseResult &parse_resul
 	} else if (IsRule(operation, "PipeAggregateGroupOnly")) {
 		ApplyAggregate(transformer, operation, select_node, true);
 	} else {
-		throw InternalException("Unknown pipe operator rule '%s'", operation.name);
+		throw InternalException("Unknown pipe operator rule '%s'", operation.Name());
 	}
 }
 

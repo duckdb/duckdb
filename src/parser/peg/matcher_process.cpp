@@ -92,9 +92,9 @@ public:
 		}
 		state.token_iterator.SetPosition(list_state.token_iterator);
 		DiscardSuggestions();
-		auto list_name = matcher.HasName() ? matcher.GetName() : string();
+		auto list_name = matcher.HasName() ? &matcher.GetName() : nullptr;
 		return MatchStep::Complete(state.AllocateParseResult<ListParseResult>(
-		    state.context.allocator.MakeChildren(results), std::move(list_name), start_offset));
+		    state.context.allocator.MakeChildren(results), list_name, start_offset));
 	}
 
 private:

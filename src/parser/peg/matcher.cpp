@@ -37,7 +37,7 @@ SuggestionType Matcher::AddSuggestion(MatchState &state) const {
 	return AddSuggestionInternal(state);
 }
 
-string Matcher::GetName() const {
+string Matcher::GetPrintName() const {
 	if (name.empty()) {
 		return ToString();
 	}

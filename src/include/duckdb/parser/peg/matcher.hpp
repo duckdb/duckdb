@@ -299,7 +299,12 @@ public:
 	bool HasName() const {
 		return !name.empty();
 	}
-	string GetName() const;
+	//! The stored name, which lives as long as the grammar and can therefore be referenced by a parse result
+	const string &GetName() const {
+		return name;
+	}
+	//! The name to print for this matcher, which for an unnamed one renders the grammar it matches
+	string GetPrintName() const;
 	optional_idx GetPackratId() const {
 		return packrat_id;
 	}
@@ -418,7 +423,7 @@ MatcherResult MatchState::AllocateParseResult(ARGS &&... args) {
 	auto result = context.allocator.Make<RESULT>(std::forward<ARGS>(args)...);
 	if (rule) {
 		result->SetRule(*rule);
-		result->name = rule->name;
+		result->SetName(rule->name);
 	}
 	return MatcherResult::Success(result);
 }

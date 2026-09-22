@@ -703,9 +703,10 @@ public:
 			return MatchStep::Complete(MatcherResult::Failure());
 		}
 		if (lifetime.create_result) {
+			static const string NESTED_RESULT_NAME = "nested result";
 			arena_vector<reference<ParseResult>> no_children(child_state.context.process_allocator);
 			return MatchStep::Complete(child_state.AllocateParseResult<ListParseResult>(
-			    child_state.context.allocator.MakeChildren(no_children), string("nested result"), optional_idx()));
+			    child_state.context.allocator.MakeChildren(no_children), &NESTED_RESULT_NAME, optional_idx()));
 		}
 		return MatchStep::Complete(MatcherResult::Success());
 	}
@@ -766,7 +767,7 @@ TEST_CASE("Matcher stack vector growth preserves custom process lifetimes", "[ap
 			auto result = stack.Execute({matcher, state});
 			REQUIRE(result.IsSuccess());
 			REQUIRE(result.HasParseResult());
-			REQUIRE(result.GetParseResult()->name == "nested result");
+			REQUIRE(result.GetParseResult()->Name() == "nested result");
 			REQUIRE(lifetime.active == 0);
 			REQUIRE(lifetime.state_valid);
 			REQUIRE(lifetime.started == depth);
@@ -1037,7 +1038,7 @@ TEST_CASE("Packrat results outlive reset process arenas", "[api][grammar_extensi
 	REQUIRE(lifetime.state_valid);
 	if (cached.IsSuccess()) {
 		REQUIRE(cached.HasParseResult());
-		REQUIRE(cached.GetParseResult()->name == "nested result");
+		REQUIRE(cached.GetParseResult()->Name() == "nested result");
 	}
 }
 
