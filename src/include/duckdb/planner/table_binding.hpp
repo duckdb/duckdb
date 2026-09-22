@@ -40,6 +40,9 @@ struct Binding {
 
 public:
 	bool TryGetBindingIndex(const Identifier &column_name, column_t &column_index);
+	//! Resolve a column reference to a column index - by index if the reference carries a
+	//! pre-resolved index, by name otherwise
+	bool TryGetColumnIndex(ColumnRefExpression &colref, column_t &column_index);
 	column_t GetBindingIndex(const Identifier &column_name);
 	bool HasMatchingBinding(const Identifier &column_name);
 	//! Register an alternative name for an existing column - the alias can be bound, but is hidden from *
@@ -87,6 +90,7 @@ protected:
 	void Initialize();
 	//! Set the alias of the column reference to the name under which the column is registered in this binding
 	void SetBoundColumnAlias(ColumnRefExpression &colref);
+	void SetBoundColumnAlias(ColumnRefExpression &colref, column_t column_index);
 
 protected:
 	//! The type of Binding

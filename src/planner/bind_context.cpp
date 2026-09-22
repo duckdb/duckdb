@@ -467,7 +467,8 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 	return binding->Bind(colref, depth);
 }
 
-string BindContext::BindColumn(PositionalReferenceExpression &ref, Identifier &table_name, Identifier &column_name) {
+string BindContext::BindColumn(PositionalReferenceExpression &ref, Identifier &table_name, Identifier &column_name,
+                               optional_idx &column_index) {
 	idx_t total_columns = 0;
 	idx_t current_position = ref.Index() - 1;
 	for (auto &entry : bindings_list) {
@@ -483,6 +484,7 @@ string BindContext::BindColumn(PositionalReferenceExpression &ref, Identifier &t
 		if (current_position < entry_column_count) {
 			table_name = binding.GetAlias();
 			column_name = column_names[current_position];
+			column_index = current_position;
 			return string();
 		} else {
 			total_columns += entry_column_count;
@@ -494,12 +496,18 @@ string BindContext::BindColumn(PositionalReferenceExpression &ref, Identifier &t
 
 unique_ptr<ColumnRefExpression> BindContext::PositionToColumn(PositionalReferenceExpression &ref) {
 	Identifier table_name, column_name;
+	optional_idx column_index;
 
-	string error = BindColumn(ref, table_name, column_name);
+	string error = BindColumn(ref, table_name, column_name, column_index);
 	if (!error.empty()) {
 		throw BinderException(error);
 	}
-	return make_uniq<ColumnRefExpression>(column_name, table_name);
+	auto result = make_uniq<ColumnRefExpression>(column_name, table_name);
+	if (column_index.IsValid()) {
+		// a positional reference names a column by index - bind it as such
+		result->SetResolvedIndex(column_index.GetIndex());
+	}
+	return result;
 }
 
 struct StarBindState {
@@ -512,6 +520,13 @@ struct StarBindState {
 	identifier_set_t replaced_columns;
 	vector<Identifier> candidate_columns;
 };
+
+static void SetResolvedColumnIndex(ParsedExpression &expr, idx_t column_index) {
+	if (expr.GetExpressionClass() != ExpressionClass::COLUMN_REF) {
+		return;
+	}
+	expr.Cast<ColumnRefExpression>().SetResolvedIndex(column_index);
+}
 
 bool CheckExclusionList(StarExpression &expr, const QualifiedColumnName &qualified_name, StarBindState &state) {
 	if (expr.ExcludeList().find(qualified_name) != expr.ExcludeList().end()) {
@@ -569,7 +584,8 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			auto &binding = *entry;
 			auto &column_names = binding.GetColumnNames();
 			auto &binding_alias = binding.GetBindingAlias();
-			for (auto &column_name : column_names) {
+			for (idx_t col_idx = 0; col_idx < column_names.size(); col_idx++) {
+				auto &column_name = column_names[col_idx];
 				star_state.candidate_columns.push_back(column_name);
 				QualifiedColumnName qualified_column(binding_alias, column_name);
 				if (CheckExclusionList(expr, qualified_column, star_state)) {
@@ -611,6 +627,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 				}
 				auto new_expr =
 				    CreateColumnReference(binding_alias, column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
+				SetResolvedColumnIndex(*new_expr, col_idx);
 				if (HandleRename(expr, qualified_column, new_expr, star_state)) {
 					new_select_list.push_back(std::move(new_expr));
 				}
@@ -657,7 +674,8 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 				}
 			}
 		} else {
-			for (auto &column_name : column_names) {
+			for (idx_t col_idx = 0; col_idx < column_names.size(); col_idx++) {
+				auto &column_name = column_names[col_idx];
 				star_state.candidate_columns.push_back(column_name);
 				QualifiedColumnName qualified_name(binding_alias, column_name);
 				if (CheckExclusionList(expr, qualified_name, star_state)) {
@@ -665,6 +683,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 				}
 				auto new_expr =
 				    CreateColumnReference(binding_alias, column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
+				SetResolvedColumnIndex(*new_expr, col_idx);
 				if (HandleRename(expr, qualified_name, new_expr, star_state)) {
 					new_select_list.push_back(std::move(new_expr));
 				}
