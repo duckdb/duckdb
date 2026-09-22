@@ -44,16 +44,13 @@ public:
 	                 ClientProperties options, ClientContext &context)
 	    : types(std::move(types_p)), names(std::move(names_p)), result(std::move(result_p)),
 	      options(std::move(options)), context(context) {
-		if (!result->Format().IsChunk()) {
-			prefetched_arrays = result->TakeCollection<ArrowFormat>();
-		}
 	}
 
 	vector<LogicalType> types;
 	vector<string> names;
+	//! Served as the Arrow arrays the engine produced when the query ran in the Arrow format, and
+	//! converted chunk by chunk otherwise
 	duckdb::unique_ptr<QueryResult> result;
-	//! Set when the query ran in the Arrow format: the record batches the engine produced
-	duckdb::unique_ptr<ResultUnitCollection> prefetched_arrays;
 	ClientProperties options;
 	ClientContext &context;
 

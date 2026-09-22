@@ -2881,12 +2881,12 @@ public:
 	auto RenderBox(idx_t max_rows = 0, idx_t max_width = 0, idx_t max_col_width = 0, const std::string &null_value = "",
 	               idx_t render_mode = 0, idx_t limit = 0) -> std::string;
 
-	/// Exports the result as a lazy `ArrowStream`, consuming it. The record batches are built by the engine's worker
-	/// threads, which produce the result in the Arrow format, so reading the stream only pops batches that are
+	/// Exports the result as a lazy `ArrowStream`, consuming it. The arrays are built by the engine's worker
+	/// threads, which produce the result in the Arrow format, so reading the stream only pops arrays that are
 	/// already finished.
 	/// Must be called before the result has yielded a chunk: a result that has already yielded one throws, since its
 	/// rows are committed to chunks by then. The result is consumed either way.
-	/// @param batch_size Target rows per Arrow array, 0 for the default of 131072. A batch is shorter at a row-group
+	/// @param batch_size Target rows per Arrow array, 0 for the default of 131072. An array is shorter at a row-group
 	/// boundary and at the end of a producer's input.
 	/// @return The stream, which owns the query from now on and frees the connection when released.
 	/// @throws Exception When the result has already yielded a chunk.

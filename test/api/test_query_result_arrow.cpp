@@ -45,7 +45,7 @@ idx_t TotalRows(const vector<unique_ptr<ArrowUnit>> &arrays) {
 	return rows;
 }
 
-//! Serves record batches that are already in hand as an ArrowArrayStream, so arrow_scan can read them
+//! Serves Arrow arrays that are already in hand as an ArrowArrayStream, so arrow_scan can read them
 //! back the way test/arrow does
 class ServedArrays {
 public:
@@ -103,7 +103,7 @@ private:
 	ArrowArrayStream stream {};
 };
 
-//! The record batches of a stream, scanned back into a DuckDB result
+//! The arrays of a stream, scanned back into a DuckDB result
 unique_ptr<QueryResult> ScanBack(Connection &con, FormattedResultStream<ArrowFormat> &stream,
                                  vector<unique_ptr<ArrowUnit>> arrays) {
 	ServedArrays served(stream.GetTypes(), IdentifiersToStrings(stream.GetNames()), stream.GetClientProperties(),
@@ -349,7 +349,7 @@ TEST_CASE("An empty result in the Arrow format has no units", "[api][query_resul
 	}
 }
 
-TEST_CASE("Query with an Arrow format returns the record batches and their schema", "[api][query_result_arrow]") {
+TEST_CASE("Query with an Arrow format returns its arrays and their schema", "[api][query_result_arrow]") {
 	constexpr idx_t ROWS = 20000;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -376,6 +376,129 @@ TEST_CASE("Query with an Arrow format returns the record batches and their schem
 		rows += unit->row_count;
 	}
 	REQUIRE(rows == ROWS);
+}
+
+TEST_CASE("An Arrow unit copies into a view that outlives the original", "[api][query_result_arrow]") {
+	constexpr idx_t ROWS = 3000;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	QueryParameters parameters;
+	parameters.format = make_shared_ptr<ArrowFormat>(1024);
+	auto result = con.context->Query("SELECT i FROM range(3000) t(i)", parameters);
+	REQUIRE_NO_FAIL(*result);
+
+	SECTION("fetching copies, so the result can be read twice") {
+		vector<unique_ptr<ArrowUnit>> first_pass;
+		while (auto unit = result->Fetch<ArrowFormat>()) {
+			first_pass.push_back(std::move(unit));
+		}
+		REQUIRE(first_pass.size() == ROWS / 1024 + 1);
+		REQUIRE(TotalRows(first_pass) == ROWS);
+		auto &collection = result->Collection<ArrowFormat>();
+		REQUIRE(collection.UnitCount() == first_pass.size());
+		REQUIRE(collection.Count() == ROWS);
+		for (idx_t i = 0; i < first_pass.size(); i++) {
+			auto &stored = collection.Units()[i]->Cast<ArrowUnit>().array.arrow_array;
+			auto &fetched = first_pass[i]->array.arrow_array;
+			REQUIRE(stored.release != nullptr);
+			REQUIRE(fetched.release != nullptr);
+			REQUIRE(fetched.length == stored.length);
+			// A copy shares the buffers rather than duplicating them
+			REQUIRE(fetched.children[0]->buffers[1] == stored.children[0]->buffers[1]);
+			REQUIRE(first_pass[i]->byte_size == collection.Units()[i]->byte_size);
+		}
+	}
+
+	SECTION("a copy stays readable after the original and the collection are gone") {
+		auto original = result->Fetch<ArrowFormat>();
+		REQUIRE(original);
+		auto copy = original->Copy();
+		REQUIRE(copy->row_count == original->row_count);
+		original.reset();
+		result.reset();
+		auto &array = copy->Cast<ArrowUnit>().array.arrow_array;
+		REQUIRE(array.length == 1024);
+		auto values = reinterpret_cast<const int64_t *>(array.children[0]->buffers[1]);
+		for (idx_t i = 0; i < 1024; i++) {
+			REQUIRE(values[array.offset + array.children[0]->offset + i] == NumericCast<int64_t>(i));
+		}
+	}
+
+	SECTION("a consumer holding a view keeps the buffers alive on its own") {
+		ArrowArray exported;
+		result->Fetch<ArrowFormat>()->array.MoveTo(exported);
+		result.reset();
+		REQUIRE(exported.release != nullptr);
+		auto values = reinterpret_cast<const int64_t *>(exported.children[0]->buffers[1]);
+		REQUIRE(values[exported.offset + exported.children[0]->offset + 1023] == 1023);
+		exported.release(&exported);
+		REQUIRE(exported.release == nullptr);
+	}
+}
+
+namespace {
+
+const int64_t *StructFieldA(const ArrowArray &array) {
+	auto &field = *array.children[0]->children[0];
+	return reinterpret_cast<const int64_t *>(field.buffers[1]) + field.offset;
+}
+
+} // namespace
+
+TEST_CASE("Views of one Arrow unit are independent struct trees over shared buffers", "[api][query_result_arrow]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	QueryParameters parameters;
+	parameters.format = make_shared_ptr<ArrowFormat>(1024);
+	auto result =
+	    con.context->Query("SELECT {'a': i, 'b': 'x' || i} AS s, [i, i + 1] AS l FROM range(2000) t(i)", parameters);
+	REQUIRE_NO_FAIL(*result);
+	auto first = result->Fetch<ArrowFormat>();
+	REQUIRE(first);
+	auto second = first->Copy();
+	auto &stored = result->Collection<ArrowFormat>().Units()[0]->Cast<ArrowUnit>().array.arrow_array;
+	auto &first_array = first->array.arrow_array;
+	auto &second_array = second->Cast<ArrowUnit>().array.arrow_array;
+	// Distinct child structs, the same buffers
+	REQUIRE(first_array.children != stored.children);
+	REQUIRE(first_array.children != second_array.children);
+	REQUIRE(first_array.children[0] != stored.children[0]);
+	REQUIRE(first_array.children[0]->children[0]->buffers[1] == stored.children[0]->children[0]->buffers[1]);
+	REQUIRE(first_array.children[1]->children[0]->buffers[1] == stored.children[1]->children[0]->buffers[1]);
+
+	SECTION("a child moved out of one view leaves the other views whole") {
+		// The C interface lets a consumer take a child by copying its struct and clearing its release
+		ArrowArray moved = *first_array.children[0];
+		first_array.children[0]->release = nullptr;
+		REQUIRE(stored.children[0]->release != nullptr);
+		REQUIRE(second_array.children[0]->release != nullptr);
+		REQUIRE(StructFieldA(second_array)[7] == 7);
+
+		moved.release(&moved);
+		REQUIRE(moved.release == nullptr);
+		first.reset();
+		result.reset();
+		REQUIRE(StructFieldA(second_array)[1023] == 1023);
+		REQUIRE(second_array.children[1]->children[0]->length == 2048);
+	}
+
+	SECTION("a released sibling does not touch the copies still alive") {
+		auto third = second->Copy();
+		second.reset();
+		REQUIRE(StructFieldA(first_array)[5] == 5);
+		result.reset();
+		first.reset();
+		auto &third_array = third->Cast<ArrowUnit>().array.arrow_array;
+		REQUIRE(third_array.children[0]->release != nullptr);
+		REQUIRE(StructFieldA(third_array)[1000] == 1000);
+		ArrowArray exported;
+		third->Cast<ArrowUnit>().array.MoveTo(exported);
+		third.reset();
+		REQUIRE(StructFieldA(exported)[1000] == 1000);
+		exported.release(&exported);
+	}
 }
 
 TEST_CASE("The chunk accessors reject an Arrow result", "[api][query_result_arrow]") {

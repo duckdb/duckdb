@@ -23,13 +23,25 @@ namespace duckdb {
 
 class ArrowTypeExtensionData;
 
-//! A unit holding one Arrow record batch.
+//! A unit holding one Arrow array. The array's buffers are shared: every unit made from them hands
+//! out its own view, a struct tree over the same buffers whose release drops one reference, and the
+//! buffers go with the last holder
 class ArrowUnit : public ResultUnit {
 public:
-	DUCKDB_API ArrowUnit(idx_t row_count, idx_t byte_size);
+	//! Takes over the array, which the appender finalized
+	DUCKDB_API ArrowUnit(idx_t row_count, idx_t byte_size, ArrowArray array);
+	//! A unit over buffers another unit already holds
+	DUCKDB_API ArrowUnit(idx_t row_count, idx_t byte_size, shared_ptr<ArrowArrayWrapper> owner);
 
 public:
+	DUCKDB_API unique_ptr<ResultUnit> Copy() const override;
+
+public:
+	//! This unit's view over the shared buffers, handed to a consumer with MoveTo
 	ArrowArrayWrapper array;
+
+private:
+	shared_ptr<ArrowArrayWrapper> owner;
 };
 
 //! Per-query Arrow state. The schema and the extension type map are resolved once, when the format
@@ -62,7 +74,7 @@ private:
 	ArrowSchemaWrapper schema;
 };
 
-//! Turns chunks into Arrow record batches of at most batch_size rows, one appender per producer.
+//! Turns chunks into Arrow arrays of at most batch_size rows, one appender per producer.
 //! Append and Finish run concurrently on worker threads that share this object and the global
 //! state, so they mutate only the local state
 class ArrowFormat : public ResultFormat {

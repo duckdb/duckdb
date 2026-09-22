@@ -38,8 +38,8 @@ module: arrow
 # a `consume` flag; each documents what it means there.
 #
 # `[[result_to_arrow_stream]]` uses neither converter. It asks the engine for its result in the
-# Arrow format, so the worker threads that produce the rows also build the record batches, and the
-# batches waiting to be taken are bounded by `max_streaming_buffer_size`.
+# Arrow format, so the worker threads that produce the rows also build the Arrow arrays, and the
+# arrays waiting to be taken are bounded by `max_streaming_buffer_size`.
 #
 # Out of scope, left to language bindings or to later work:
 #   - Registering an Arrow stream as a SQL table. A binding can keep its own name-to-stream
@@ -91,10 +91,10 @@ functions:
       connection can run its next query.
 
       The rows are converted by the worker threads that produce them: the result is asked for in the Arrow format,
-      so `get_next` only pops a record batch the engine already built, waiting internally until one is ready. A
-      batch holds up to `batch_size` rows, and is shorter at a row-group boundary and at the end of a producer's
-      input, so `batch_size` is a target rather than a guarantee. Batches that are ready but not yet taken stay
-      under `max_streaming_buffer_size`, and each engine thread may hold, beyond that, the batches it is still
+      so `get_next` only pops an array the engine already built, waiting internally until one is ready. An
+      array holds up to `batch_size` rows, and is shorter at a row-group boundary and at the end of a producer's
+      input, so `batch_size` is a target rather than a guarantee. Arrays that are ready but not yet taken stay
+      under `max_streaming_buffer_size`, and each engine thread may hold, beyond that, the arrays it is still
       building or handing over from its current chunk.
 
       The Arrow schema is built and cached here, while the query's transaction is still active, because building it

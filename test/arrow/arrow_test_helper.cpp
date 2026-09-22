@@ -38,12 +38,12 @@ static int NextFromMaterialized(QueryResult &res, ClientProperties properties, s
 	return 0;
 }
 
-static int NextFromArrow(ArrowTestFactory &factory, struct ArrowArray *out) {
-	auto unit = factory.prefetched_arrays->Fetch();
+static int NextFromArrow(QueryResult &res, struct ArrowArray *out) {
+	auto unit = res.Fetch<ArrowFormat>();
 	if (!unit) {
 		return 0;
 	}
-	unit->Cast<ArrowUnit>().array.MoveTo(*out);
+	unit->array.MoveTo(*out);
 	return 0;
 }
 
@@ -52,10 +52,11 @@ int ArrowTestFactory::ArrowArrayStreamGetNext(struct ArrowArrayStream *stream, s
 		throw InternalException("No private data!?");
 	}
 	auto &data = *((ArrowArrayStreamData *)stream->private_data);
-	if (!data.factory.prefetched_arrays) {
-		return NextFromMaterialized(*data.factory.result, data.options, out);
+	auto &result = *data.factory.result;
+	if (result.Format().IsChunk()) {
+		return NextFromMaterialized(result, data.options, out);
 	}
-	return NextFromArrow(data.factory, out);
+	return NextFromArrow(result, out);
 }
 
 const char *ArrowTestFactory::ArrowArrayStreamGetLastError(struct ArrowArrayStream *stream) {
@@ -204,7 +205,7 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 	auto client_properties = con.context->GetClientProperties();
 	auto types = initial_result->GetTypes();
 	auto names = duckdb::IdentifiersToStrings(initial_result->GetNames());
-	// We create an "arrow object" that consists of the record batches the query produced
+	// We create an "arrow object" that consists of the Arrow arrays the query produced
 	ArrowTestFactory factory(std::move(types), std::move(names), std::move(initial_result), client_properties,
 	                         *con.context);
 	// And construct a `arrow_scan` to read the created "arrow object"

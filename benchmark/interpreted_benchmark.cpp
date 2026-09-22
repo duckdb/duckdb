@@ -730,7 +730,7 @@ void InterpretedBenchmark::Run(BenchmarkState *state_p) {
 	auto temp_result = context->Query(run_query, parameters);
 	if (result_mode == BenchmarkResultMode::ARROW) {
 		if (temp_result->RowCount() > 0 && temp_result->Collection<ArrowFormat>().UnitCount() == 0) {
-			throw InternalException("Query produced rows but no Arrow record batches");
+			throw InternalException("Query produced rows but no Arrow arrays");
 		}
 		/* no-op, this is only used to test the overhead of the conversion */
 		state.result = nullptr;

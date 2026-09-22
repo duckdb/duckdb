@@ -21,15 +21,14 @@ using duckdb::QueryResult;
 namespace {
 
 //! Every duckdb_arrow result is produced in the Arrow format, so the engine's worker threads build
-//! the record batches and duckdb_query_arrow_array only hands them out
+//! the Arrow arrays and duckdb_query_arrow_array only hands them out
 QueryParameters ArrowParameters() {
 	QueryParameters parameters;
 	parameters.format = duckdb::make_shared_ptr<ArrowFormat>(STANDARD_VECTOR_SIZE);
 	return parameters;
 }
 
-//! The rows a CHANGED_ROWS statement affected. Read while the result still holds its record batches,
-//! because duckdb_query_arrow_array takes them out one by one
+//! The rows a CHANGED_ROWS statement affected
 idx_t ChangedRows(QueryResult &result) {
 	if (result.HasError()) {
 		return 0;
@@ -41,7 +40,7 @@ idx_t ChangedRows(QueryResult &result) {
 	if (types.size() != 1 || types[0].id() != duckdb::LogicalTypeId::BIGINT) {
 		return 0;
 	}
-	// A CHANGED_ROWS result is one BIGINT row, which the Arrow format wrapped in a record batch of a
+	// A CHANGED_ROWS result is one BIGINT row, which the Arrow format wrapped in an array with a
 	// single int64 child
 	auto &units = result.Collection<ArrowFormat>().Units();
 	if (units.empty()) {
@@ -213,13 +212,7 @@ duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query,
 		delete wrapper;
 		return DuckDBError;
 	}
-	// Handed out before the row count is read: the caller destroys the result even when the call fails
 	*out_result = (duckdb_arrow)wrapper;
-	try {
-		wrapper->rows_changed = ChangedRows(*wrapper->result);
-	} catch (...) {
-		return DuckDBError;
-	}
 	return !wrapper->result->HasError() ? DuckDBSuccess : DuckDBError;
 }
 
@@ -328,7 +321,12 @@ idx_t duckdb_arrow_column_count(duckdb_arrow result) {
 }
 
 idx_t duckdb_arrow_rows_changed(duckdb_arrow result) {
-	return reinterpret_cast<ArrowResultWrapper *>(result)->rows_changed;
+	auto wrapper = reinterpret_cast<ArrowResultWrapper *>(result);
+	try {
+		return ChangedRows(*wrapper->result);
+	} catch (...) { // LCOV_EXCL_START
+		return 0;
+	} // LCOV_EXCL_STOP
 }
 
 const char *duckdb_query_arrow_error(duckdb_arrow result) {
@@ -371,11 +369,6 @@ duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_st
 		return DuckDBError;
 	}
 	*out_result = reinterpret_cast<duckdb_arrow>(arrow_wrapper);
-	try {
-		arrow_wrapper->rows_changed = ChangedRows(*arrow_wrapper->result);
-	} catch (...) {
-		return DuckDBError;
-	}
 	return !arrow_wrapper->result->HasError() ? DuckDBSuccess : DuckDBError;
 }
 

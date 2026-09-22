@@ -5147,11 +5147,10 @@ typedef struct _duckdb_v2_arrow_exporter {
  * can run its next query.
  *
  * The rows are converted by the worker threads that produce them: the result is asked for in the Arrow format, so
- * `get_next` only pops a record batch the engine already built, waiting internally until one is ready. A batch holds up
- * to `batch_size` rows, and is shorter at a row-group boundary and at the end of a producer's input, so `batch_size` is
- * a target rather than a guarantee. Batches that are ready but not yet taken stay under `max_streaming_buffer_size`,
- * and each engine thread may hold, beyond that, the batches it is still building or handing over from its current
- * chunk.
+ * `get_next` only pops an array the engine already built, waiting internally until one is ready. An array holds up to
+ * `batch_size` rows, and is shorter at a row-group boundary and at the end of a producer's input, so `batch_size` is a
+ * target rather than a guarantee. Arrays that are ready but not yet taken stay under `max_streaming_buffer_size`, and
+ * each engine thread may hold, beyond that, the arrays it is still building or handing over from its current chunk.
  *
  * The Arrow schema is built and cached here, while the query's transaction is still active, because building it can run
  * extension populate-schema callbacks and read ENUM dictionaries. `get_schema` returns a copy of the cached schema and

@@ -39,7 +39,7 @@ struct ResultWrapperV2 {
 	//! Live while state == STREAMING, for a statement whose result can be streamed.
 	unique_ptr<QueryResultStream> stream;
 	//! The stream's counterpart on the unit path: live while the principal fragment delivers the
-	//! record batches its worker threads built.
+	//! Arrow arrays its worker threads built.
 	unique_ptr<FormattedResultStream<ArrowFormat>> unit_stream;
 
 	//! The format result_to_arrow_stream asked for, applied to the principal fragment when it leaves

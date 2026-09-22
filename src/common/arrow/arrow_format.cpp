@@ -5,11 +5,86 @@
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 
 namespace duckdb {
 
-ArrowUnit::ArrowUnit(idx_t row_count, idx_t byte_size) : ResultUnit(row_count, byte_size) {
+//===--------------------------------------------------------------------===//
+// ArrowUnit
+//===--------------------------------------------------------------------===//
+namespace {
+
+//! One node of a view: its own struct tree over the owner's buffers, so a consumer that moves a
+//! child out of this view, as the C interface allows, touches nothing another view still reads
+struct SharedArrayView {
+	shared_ptr<ArrowArrayWrapper> owner;
+	vector<unique_ptr<ArrowArray>> children;
+	vector<ArrowArray *> child_pointers;
+	unique_ptr<ArrowArray> dictionary;
+};
+
+void ReleaseSharedArrayView(ArrowArray *array) {
+	if (!array || !array->release) {
+		return;
+	}
+	auto view = static_cast<SharedArrayView *>(array->private_data);
+	for (auto &child : view->children) {
+		// A child without a release was moved out and is released by whoever took it
+		if (child->release) {
+			child->release(child.get());
+		}
+	}
+	if (view->dictionary && view->dictionary->release) {
+		view->dictionary->release(view->dictionary.get());
+	}
+	delete view;
+	array->private_data = nullptr;
+	array->release = nullptr;
+}
+
+ArrowArray ViewOf(const ArrowArray &source, const shared_ptr<ArrowArrayWrapper> &owner) {
+	auto view = make_uniq<SharedArrayView>();
+	view->owner = owner;
+	ArrowArray result = source;
+	for (int64_t i = 0; i < source.n_children; i++) {
+		view->children.push_back(make_uniq<ArrowArray>(ViewOf(*source.children[i], owner)));
+		view->child_pointers.push_back(view->children.back().get());
+	}
+	result.children = view->child_pointers.data();
+	if (source.dictionary) {
+		view->dictionary = make_uniq<ArrowArray>(ViewOf(*source.dictionary, owner));
+		result.dictionary = view->dictionary.get();
+	}
+	result.private_data = view.release();
+	result.release = ReleaseSharedArrayView;
+	return result;
+}
+
+ArrowArrayWrapper ViewOf(const shared_ptr<ArrowArrayWrapper> &owner) {
+	ArrowArrayWrapper view;
+	view.arrow_array = ViewOf(owner->arrow_array, owner);
+	return view;
+}
+
+shared_ptr<ArrowArrayWrapper> Own(ArrowArray array) {
+	auto owner = make_shared_ptr<ArrowArrayWrapper>();
+	owner->arrow_array = array;
+	return owner;
+}
+
+} // namespace
+
+ArrowUnit::ArrowUnit(idx_t row_count, idx_t byte_size, ArrowArray array_p)
+    : ArrowUnit(row_count, byte_size, Own(array_p)) {
+}
+
+ArrowUnit::ArrowUnit(idx_t row_count, idx_t byte_size, shared_ptr<ArrowArrayWrapper> owner_p)
+    : ResultUnit(row_count, byte_size), array(ViewOf(owner_p)), owner(std::move(owner_p)) {
+}
+
+unique_ptr<ResultUnit> ArrowUnit::Copy() const {
+	return make_uniq<ArrowUnit>(row_count, byte_size, owner);
 }
 
 ArrowFormatGlobalState::ArrowFormatGlobalState(vector<LogicalType> types_p, const vector<Identifier> &names,
@@ -40,8 +115,9 @@ public:
 
 unique_ptr<ArrowUnit> SealAppender(ArrowFormatLocalState &lstate) {
 	// Finalize hands the buffers to the array, so the size has to be read before it
-	auto unit = make_uniq<ArrowUnit>(lstate.appender->RowCount(), lstate.appender->ByteSize());
-	unit->array.arrow_array = lstate.appender->Finalize();
+	auto rows = lstate.appender->RowCount();
+	auto bytes = lstate.appender->ByteSize();
+	auto unit = make_uniq<ArrowUnit>(rows, bytes, lstate.appender->Finalize());
 	lstate.appender.reset();
 	return unit;
 }

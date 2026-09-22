@@ -30,7 +30,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		auto state = duckdb_query_arrow(tester.connection, "UPDATE test SET a = a + 1;", &arrow_result);
 		REQUIRE(state == DuckDBSuccess);
 
-		// Draining first is what a client does, and it empties the result's record batches
+		// Draining first is what a client does; fetching copies, so the count is still there
 		while (true) {
 			ArrowArray arrow_array;
 			arrow_array.Init();

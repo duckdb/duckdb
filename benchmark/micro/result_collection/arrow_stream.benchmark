@@ -1,5 +1,5 @@
 # name: benchmark/micro/result_collection/arrow_stream.benchmark
-# description: Arrow result stream: worker threads convert, the consumer drops the record batches
+# description: Arrow result stream: worker threads convert, the consumer drops the arrays
 # group: [result_collection]
 
 name arrow_stream
