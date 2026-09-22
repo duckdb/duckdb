@@ -383,7 +383,9 @@ public:
 	optional_ptr<ParseResult> Make(ARGS &&... args) {
 		static_assert(std::is_base_of<ParseResult, RESULT>::value, "Expected a parse result");
 		auto result = arena.Make<RESULT>(std::forward<ARGS>(args)...);
-		pending_destructors.emplace_back(result);
+		if (RESULT::NEEDS_DESTRUCTOR) {
+			pending_destructors.emplace_back(result);
+		}
 		return optional_ptr<ParseResult>(result);
 	}
 
@@ -405,7 +407,8 @@ private:
 	ArenaAllocator arena;
 	//! Dropping the arena reclaims the memory of every result at once but calls no destructors, so a result that
 	//! owns something has to be destroyed before that happens. An `arena_ptr` destroys what it points at without
-	//! freeing it, which is all these are here for; nothing ever reads the list.
+	//! freeing it, which is all these are here for. Only the node types that say `NEEDS_DESTRUCTOR` end up in the
+	//! list, and nothing ever reads it.
 	arena_vector<arena_ptr<ParseResult>> pending_destructors;
 };
 
