@@ -227,7 +227,8 @@ void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr, vec
 		auto &ref = expr->Cast<PositionalReferenceExpression>();
 		if (ref.GetAlias().empty()) {
 			Identifier table_name, column_name;
-			auto error = binder.bind_context.BindColumn(ref, table_name, column_name);
+			optional_idx column_index;
+			auto error = binder.bind_context.BindColumn(ref, table_name, column_name, column_index);
 			if (error.empty()) {
 				ref.SetAlias(column_name);
 			}
@@ -453,6 +454,11 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameWithManyDots(Colu
 
 unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(ColumnRefExpression &colref, ErrorData &error) {
 	auto qualified_colref = QualifyColumnNameInternal(colref, error);
+	if (qualified_colref && colref.HasResolvedIndex() &&
+	    qualified_colref->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+		// qualification rebuilds the column reference - carry the resolved index over
+		qualified_colref->Cast<ColumnRefExpression>().SetResolvedIndex(colref.GetResolvedIndex());
+	}
 	if (!qualified_colref) {
 		if (alias_binder) {
 			return alias_binder->ResolveAlias(colref);

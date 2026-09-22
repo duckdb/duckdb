@@ -95,6 +95,14 @@ column_t Binding::GetBindingIndex(const Identifier &column_name) {
 	return result;
 }
 
+bool Binding::TryGetColumnIndex(ColumnRefExpression &colref, column_t &result) {
+	if (colref.HasResolvedIndex()) {
+		result = colref.GetResolvedIndex();
+		return result < names.size();
+	}
+	return TryGetBindingIndex(colref.GetColumnName(), result);
+}
+
 bool Binding::HasMatchingBinding(const Identifier &column_name) {
 	column_t result;
 	return TryGetBindingIndex(column_name, result);
@@ -121,6 +129,18 @@ void Binding::SetBoundColumnAlias(ColumnRefExpression &colref) {
 	colref.SetAlias(GetRegisteredColumnName(colref.GetColumnName()));
 }
 
+void Binding::SetBoundColumnAlias(ColumnRefExpression &colref, column_t column_index) {
+	if (!colref.GetAlias().empty()) {
+		return;
+	}
+	if (colref.HasResolvedIndex() && column_index < names.size()) {
+		// bound by index - the name in the binding is authoritative
+		colref.SetAlias(names[column_index]);
+		return;
+	}
+	SetBoundColumnAlias(colref);
+}
+
 ErrorData Binding::ColumnNotFoundError(const Identifier &column_name) const {
 	return ErrorData(ExceptionType::BINDER,
 	                 StringUtil::Format("Values list %s does not have a column named %s", GetAlias(), column_name));
@@ -128,16 +148,14 @@ ErrorData Binding::ColumnNotFoundError(const Identifier &column_name) const {
 
 BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	column_t column_index;
-	bool success = false;
-	success = TryGetBindingIndex(colref.GetColumnName(), column_index);
-	if (!success) {
+	if (!TryGetColumnIndex(colref, column_index)) {
 		return BindResult(ColumnNotFoundError(colref.GetColumnName()));
 	}
 	ColumnBinding binding;
 	binding.table_index = index;
 	binding.column_index = ProjectionIndex(column_index);
 	LogicalType sql_type = types[column_index];
-	SetBoundColumnAlias(colref);
+	SetBoundColumnAlias(colref, column_index);
 	return BindResult(make_uniq<BoundColumnRefExpression>(Identifier(colref.GetName()), sql_type, binding, depth));
 }
 
@@ -291,9 +309,7 @@ ColumnBinding TableBinding::GetColumnBinding(column_t column_index) {
 BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	auto &column_name = colref.GetColumnName();
 	column_t column_index;
-	bool success = false;
-	success = TryGetBindingIndex(column_name, column_index);
-	if (!success) {
+	if (!TryGetColumnIndex(colref, column_index)) {
 		return BindResult(ColumnNotFoundError(column_name));
 	}
 	auto entry = GetStandardEntry();
@@ -315,7 +331,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	} else {
 		// normal column: fetch type from base column
 		col_type = types[column_index];
-		SetBoundColumnAlias(colref);
+		SetBoundColumnAlias(colref, column_index);
 	}
 	ColumnBinding binding = GetColumnBinding(column_index);
 	return BindResult(make_uniq<BoundColumnRefExpression>(Identifier(colref.GetName()), col_type, binding, depth));
