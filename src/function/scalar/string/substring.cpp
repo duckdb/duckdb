@@ -115,6 +115,16 @@ string_t SubstringUnicode(Vector &result, string_t input, int64_t offset, int64_
 
 	AssertInSupportedRange(input_size, offset, length);
 
+	if (offset > 0) {
+		// the result only depends on the first offset-1+max(length,0) code points; if those bytes are
+		// ASCII, code points and bytes coincide and we can slice directly
+		const auto needed =
+		    MinValue<int64_t>(UnsafeNumericCast<int64_t>(input_size), offset - 1 + MaxValue<int64_t>(length, 0));
+		if (IsAscii(input_data, UnsafeNumericCast<idx_t>(needed))) {
+			return SubstringASCII(result, input, offset, length);
+		}
+	}
+
 	if (length == 0) {
 		return SubstringEmptyString(result);
 	}
