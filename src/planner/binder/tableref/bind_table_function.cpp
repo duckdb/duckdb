@@ -1,6 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
@@ -141,8 +140,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		}
 
 		TableFunctionBinder binder(*this, context, table_function.name.GetIdentifierName());
-		LogicalType sql_type;
-		auto expr = binder.Bind(child, &sql_type);
+		auto expr = binder.Bind(child);
 		if (expr->HasParameter()) {
 			throw ParameterNotResolvedException();
 		}

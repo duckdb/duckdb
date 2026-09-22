@@ -258,24 +258,6 @@ string Function::CallToString(const Identifier &catalog_name, const Identifier &
 	return result;
 }
 
-string Function::CallToString(const Identifier &catalog_name, const Identifier &schema_name, const Identifier &name,
-                              const vector<LogicalType> &arguments,
-                              const named_parameter_type_map_t &named_parameters) {
-	vector<string> input_arguments;
-	input_arguments.reserve(arguments.size() + named_parameters.size());
-	for (auto &arg : arguments) {
-		input_arguments.push_back(arg.ToString());
-	}
-	for (auto &kv : named_parameters) {
-		input_arguments.push_back(StringUtil::Format("%s : %s", SQLIdentifier(kv.first), kv.second.ToString()));
-	}
-	string prefix = "";
-	if (RequiresCatalogAndSchemaNamePrefix(catalog_name, schema_name)) {
-		prefix = StringUtil::Format("%s.%s.", SQLIdentifier(catalog_name), SQLIdentifier(schema_name));
-	}
-	return StringUtil::Format("%s%s(%s)", prefix, name, StringUtil::Join(input_arguments, ", "));
-}
-
 hash_t BoundSimpleFunction::Hash() const {
 	hash_t hash = return_type.Hash();
 	for (auto &arg : arguments) {

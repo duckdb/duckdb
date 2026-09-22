@@ -452,10 +452,6 @@ public:
 	DUCKDB_API static string CallToString(const Identifier &catalog_name, const Identifier &schema_name,
 	                                      const Identifier &name, const vector<LogicalType> &arguments,
 	                                      const LogicalType &varargs, const LogicalType &return_type);
-	//! Returns the formatted string name(arg1, arg2.., np1=a, np2=b, ...)
-	DUCKDB_API static string CallToString(const Identifier &catalog_name, const Identifier &schema_name,
-	                                      const Identifier &name, const vector<LogicalType> &arguments,
-	                                      const named_parameter_type_map_t &named_parameters);
 
 private:
 	QualifiedName qualified_name;
