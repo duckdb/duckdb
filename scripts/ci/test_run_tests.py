@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 import os
 import shlex
 import sys
@@ -709,7 +710,7 @@ require windows: 2
         )
         run_calls = []
 
-        def fake_run_tests(_config, batches, total_tests):
+        def fake_run_tests(_config, batches, total_tests, json_sink=None):
             run_calls.append({"batches": batches, "total_tests": total_tests})
             return run_tests.ConfigRunResult(
                 returncode=0, passed_tests=total_tests, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
@@ -779,7 +780,7 @@ require windows: 2
         os.chmod(list_helper_path, 0o755)
         run_calls = []
 
-        def fake_run_tests(_config, batches, total_tests):
+        def fake_run_tests(_config, batches, total_tests, json_sink=None):
             run_calls.append({"batches": batches, "total_tests": total_tests})
             return run_tests.ConfigRunResult(
                 returncode=0, passed_tests=total_tests, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
@@ -839,7 +840,7 @@ require windows: 2
         os.chmod(list_helper_path, 0o755)
         run_calls = []
 
-        def fake_run_tests(_config, batches, total_tests):
+        def fake_run_tests(_config, batches, total_tests, json_sink=None):
             run_calls.append({"batches": batches, "total_tests": total_tests})
             return run_tests.ConfigRunResult(
                 returncode=0, passed_tests=total_tests, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
@@ -918,6 +919,127 @@ require windows: 2
         self.assertIn("error: stabilization rerun failure detected", proc.stdout)
         self.assertIn("reproduce all failed tests:", proc.stdout)
         self.assertIn("run '\"test/sql/fast.test\"'", proc.stdout)
+
+    def run_json_fake(self, script: str, test_names: list[str], extra_args: list[str] | None = None):
+        test_list_path = create_temp_file("".join(f"{name}\n" for name in test_names))
+        state_file_path = create_temp_file("")
+        state_file_path.unlink(missing_ok=True)
+        helper_path = create_temp_file(script, state_file_path=state_file_path)
+        os.chmod(helper_path, 0o755)
+        try:
+            proc = start_runner(
+                [
+                    "-json",
+                    "--workers",
+                    "1",
+                    "--batch-size",
+                    str(len(test_names)),
+                    "--test-list",
+                    str(test_list_path),
+                    "--test-command",
+                    f"{helper_path} {{test_list}}",
+                    *(extra_args or []),
+                    "unused-binary",
+                ]
+            )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+            state_file_path.unlink(missing_ok=True)
+            helper_path.unlink(missing_ok=True)
+        events = [json.loads(line) for line in proc.stdout.splitlines()]
+        return proc, events
+
+    def test_json_attributes_crash_to_first_unfinished_test(self):
+        proc, events = self.run_json_fake(
+            """
+            #!/bin/sh
+            echo '{{"event":"test","name":"test/sql/a.test","status":"pass","assertions":{{"passed":2,"failed":0}}}}'
+            echo "fatal: something broke" >&2
+            kill -SEGV $$
+            """,
+            ["test/sql/a.test", "test/sql/b.test", "test/sql/c.test"],
+        )
+
+        self.assertEqual(proc.returncode, 1, proc.stderr)
+        self.assertEqual([event["event"] for event in events], ["test", "test", "summary"])
+        crashed, not_run, summary = events
+        self.assertEqual(crashed["name"], "test/sql/b.test")
+        self.assertEqual(crashed["status"], "fail")
+        self.assertEqual(crashed["failure"]["kind"], "crash")
+        self.assertIn("SIGSEGV", crashed["failure"]["message"])
+        self.assertIn("fatal: something broke", crashed["failure"]["error_message"])
+        self.assertEqual(not_run["name"], "test/sql/c.test")
+        self.assertEqual(not_run["status"], "skip")
+        self.assertEqual(not_run["skip_reason"], "not run: batch aborted")
+        self.assertEqual((summary["passed"], summary["failed"], summary["skipped"]), (1, 1, 1))
+        self.assertEqual(summary["assertions"], {"passed": 2, "failed": 0})
+        self.assertEqual(summary["failed_tests"], [{"name": "test/sql/b.test", "kind": "crash"}])
+        self.assertIn("error: FAIL", run_tests.strip_ansi(proc.stderr))
+
+    def test_json_reports_test_that_passed_on_retry(self):
+        proc, events = self.run_json_fake(
+            """
+            #!/bin/sh
+            if [ ! -f {state_file_path} ]; then
+              touch {state_file_path}
+              echo '{{"event":"test","name":"test/sql/a.test","status":"fail","failure":{{"kind":"value_mismatch"}}}}'
+              echo '{{"event":"summary"}}'
+              exit 1
+            fi
+            echo '{{"event":"test","name":"test/sql/a.test","status":"pass"}}'
+            echo '{{"event":"summary"}}'
+            """,
+            ["test/sql/a.test"],
+            ["--retry", "1"],
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0]["status"], "pass")
+        self.assertEqual(events[0]["attempts"], 2)
+        self.assertEqual((events[1]["passed"], events[1]["failed"]), (1, 0))
+
+    def test_json_reports_batch_error_when_no_test_failed(self):
+        proc, events = self.run_json_fake(
+            """
+            #!/bin/sh
+            echo '{{"event":"test","name":"test/sql/a.test","status":"pass"}}'
+            echo '{{"event":"summary"}}'
+            echo "LeakSanitizer: detected memory leaks" >&2
+            exit 23
+            """,
+            ["test/sql/a.test"],
+        )
+
+        self.assertEqual(proc.returncode, 1, proc.stderr)
+        self.assertEqual([event["event"] for event in events], ["batch_error", "summary"])
+        self.assertEqual(events[0]["tests"], ["test/sql/a.test"])
+        self.assertIn("LeakSanitizer", events[0]["error_message"])
+        self.assertEqual(
+            (events[1]["passed"], events[1]["failed"], events[1]["batch_errors"]),
+            (1, 0, 1),
+        )
+
+    def test_json_reports_empty_selection(self):
+        test_list_path = create_temp_file("")
+        try:
+            proc = start_runner(
+                [
+                    "-json",
+                    "--test-list",
+                    str(test_list_path),
+                    "unused-binary",
+                    "[nothing]",
+                ]
+            )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 1)
+        events = [json.loads(line) for line in proc.stdout.splitlines()]
+        self.assertEqual(events[0], {"event": "no_matching_tests", "filter": "[nothing]"})
+        self.assertEqual(events[1]["event"], "summary")
+        self.assertIn("no tests selected", proc.stderr)
 
     def test_retries_failed_fake_job(self):
         test_list_path = create_temp_file("test/sql/a.test\n")

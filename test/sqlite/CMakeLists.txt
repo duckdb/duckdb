@@ -3,6 +3,12 @@ add_extension_definitions()
 add_definitions(-DDUCKDB_ROOT_DIRECTORY="${PROJECT_SOURCE_DIR}"
                 -DDUCKDB_BUILD_DIRECTORY="${PROJECT_BINARY_DIR}")
 
+# json_test_reporter.cpp derives from Catch's reporter bases, which catch.hpp
+# only declares under this flag. Set for the directory rather than the file:
+# these sources are combined into a unity build, so a per-file #define would
+# land after another source had already included catch.hpp.
+add_definitions(-DCATCH_CONFIG_EXTERNAL_INTERFACES)
+
 set(SQLITE_TEST_RUNNER_SOURCES
     result_helper.cpp
     sqllogic_command.cpp
@@ -10,7 +16,8 @@ set(SQLITE_TEST_RUNNER_SOURCES
     sqllogic_parser.cpp
     test_sqllogictest.cpp
     sqllogic_test_logger.cpp
-    catch_test_reporter.cpp)
+    catch_test_reporter.cpp
+    json_test_reporter.cpp)
 
 add_library_unity(test_sqlite OBJECT ${SQLITE_TEST_RUNNER_SOURCES})
 set(UNITTEST_OBJECT_FILES
