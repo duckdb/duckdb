@@ -49,13 +49,13 @@ enum class DatabaseCloseAction { CHECKPOINT, TRY_CHECKPOINT, SKIP_CHECKPOINT };
 class DatabaseFilePathManager;
 
 struct StoredDatabasePath {
-	StoredDatabasePath(DatabaseManager &db_manager, DatabaseFilePathManager &manager, string path, bool is_reader);
+	StoredDatabasePath(DatabaseManager &db_manager, DatabaseFilePathManager &manager, string path,
+	                   const Identifier &name);
 	~StoredDatabasePath();
 
 	DatabaseManager &db_manager;
 	DatabaseFilePathManager &manager;
 	string path;
-	bool is_reader;
 
 	void OnDetach();
 };
@@ -92,8 +92,6 @@ struct AttachOptions {
 	//! Whether this attachment is ephemeral: created implicitly by `CONNECT '<uri>'` and detached
 	//! again on DISCONNECT. Not settable via SQL; only the connection-string CONNECT path sets it.
 	bool ephemeral = false;
-	//! Created by read_duckdb; assign and reuse a generated name for this file. Not settable via SQL.
-	bool is_reader = false;
 	//! The stored database path (in the path manager)
 	unique_ptr<StoredDatabasePath> stored_database_path;
 	//! Per-database override of vacuum_rebuild_indexes. If not set, the global setting value is used.
@@ -171,9 +169,6 @@ public:
 	}
 	AttachVisibility GetVisibility() const {
 		return visibility;
-	}
-	bool IsReader() const {
-		return stored_database_path && stored_database_path->is_reader;
 	}
 	//! True for attachments created implicitly by `CONNECT '<uri>'`; DISCONNECT detaches them.
 	bool IsEphemeral() const {

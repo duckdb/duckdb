@@ -250,11 +250,11 @@ AttachedDatabase &DuckDBReader::GetAttachedDatabase() {
 		auto &db_manager = DatabaseManager::Get(context);
 		AttachInfo info;
 		info.path = file.path;
-		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+		info.name = GenerateInternalName("__duckdb_reader_");
+		info.on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
 		unordered_map<string, Value> attach_kv;
 		AttachOptions attach_options(attach_kv, AccessMode::READ_ONLY);
 		attach_options.visibility = AttachVisibility::HIDDEN;
-		attach_options.is_reader = true;
 
 		auto attached = db_manager.AttachDatabase(context, info, attach_options);
 		db_wrapper = make_shared_ptr<AttachedDatabaseWrapper>(context, std::move(attached));

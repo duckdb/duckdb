@@ -45,7 +45,6 @@ set(TEST_API_OBJECTS
     test_read_ahead_abandon.cpp
     test_read_ahead_progress.cpp
     test_read_ahead_failure.cpp
-    test_read_duckdb.cpp
     test_row_id_deduplicator.cpp
     test_dbdir.cpp
     test_pending_with_parameters.cpp

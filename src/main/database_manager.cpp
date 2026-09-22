@@ -103,15 +103,6 @@ bool RequiresTrackingAttaches(const string &path, const string &db_type) {
 	return true;
 }
 
-static void CheckReaderAttachmentConflict(const AttachedDatabase &existing, const AttachInfo &info, bool is_reader) {
-	if (existing.IsReader() != is_reader ||
-	    (is_reader && (existing.StoredPath() != info.path || !existing.IsReadOnly()))) {
-		throw BinderException("Internal reader attachment name collision: database name \"%s\" is already in use by "
-		                      "another attachment; cannot attach \"%s\"",
-		                      info.name, info.path);
-	}
-}
-
 shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
                                                              AttachOptions &options) {
 	string extension = "";
@@ -131,13 +122,11 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	}
 
 	// for IGNORE / REPLACE ON CONFLICT - first look for an existing entry
-	// Reader names are assigned by the file path manager below, together with the file reservation.
-	if (!options.is_reader && (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT ||
-	                           info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT)) {
+	if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT ||
+	    info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// constant-time lookup in the catalog for the db name
 		auto existing_db = GetDatabase(info.name);
 		if (existing_db) {
-			CheckReaderAttachmentConflict(*existing_db, info, options.is_reader);
 			if ((existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_WRITE) ||
 			    (!existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_ONLY)) {
 				auto existing_mode = existing_db->IsReadOnly() ? AccessMode::READ_ONLY : AccessMode::READ_WRITE;
@@ -180,7 +169,6 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 			auto &meta_transaction = MetaTransaction::Get(context);
 			if (auto existing_db = meta_transaction.GetReferencedDatabaseOwning(info.name)) {
 				// it does! return it
-				CheckReaderAttachmentConflict(*existing_db, info, options.is_reader);
 				return existing_db;
 			}
 
@@ -190,7 +178,6 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 			auto entry = databases.find(info.name);
 			if (entry != databases.end()) {
 				// The database ACTUALLY exists, so we return it.
-				CheckReaderAttachmentConflict(*entry->second, info, options.is_reader);
 				return entry->second;
 			}
 			context.InterruptCheck();
@@ -244,7 +231,6 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 		lock_guard<mutex> guard(databases_lock);
 		auto entry = databases.emplace(name, attached_db);
 		if (!entry.second) {
-			CheckReaderAttachmentConflict(*entry.first->second, info, attached_db->IsReader());
 			if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 				// override existing entry
 				detached_db = std::move(entry.first->second);
@@ -433,7 +419,7 @@ idx_t DatabaseManager::ApproxDatabaseCount() {
 	return path_manager->ApproxDatabaseCount();
 }
 
-InsertDatabasePathResult DatabaseManager::InsertDatabasePath(AttachInfo &info, AttachOptions &options) {
+InsertDatabasePathResult DatabaseManager::InsertDatabasePath(const AttachInfo &info, AttachOptions &options) {
 	return path_manager->InsertDatabasePath(*this, info.path, info.name, info.on_conflict, options);
 }
 

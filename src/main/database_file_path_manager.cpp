@@ -18,30 +18,19 @@ idx_t DatabaseFilePathManager::ApproxDatabaseCount() const {
 }
 
 InsertDatabasePathResult DatabaseFilePathManager::InsertDatabasePath(DatabaseManager &manager, const string &path,
-                                                                     Identifier &name, OnCreateConflict on_conflict,
+                                                                     const Identifier &name,
+                                                                     OnCreateConflict on_conflict,
                                                                      AttachOptions &options) {
 	if (path.empty() || path == IN_MEMORY_PATH) {
 		throw InternalException("DatabaseFilePathManager::InsertDatabasePath - cannot insert in-memory database");
 	}
 	lock_guard<mutex> path_lock(db_paths_lock);
-	if (options.is_reader) {
-		D_ASSERT(options.access_mode == AccessMode::READ_ONLY);
-		D_ASSERT(options.visibility == AttachVisibility::HIDDEN);
-		D_ASSERT(on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT);
-		auto existing = db_paths.find(path);
-		name = existing != db_paths.end() && !existing->second.reader_name.empty()
-		           ? existing->second.reader_name
-		           : GenerateInternalName("__duckdb_reader_");
-	}
 	auto entry = db_paths.emplace(path, DatabasePathInfo(manager, name, options.access_mode));
 	if (!entry.second) {
 		auto &existing = entry.first->second;
 		bool already_exists = false;
 		bool attached_in_this_system = false;
-		if (options.is_reader) {
-			already_exists = !existing.reader_name.empty();
-			attached_in_this_system = existing.reader_databases.find(manager) != existing.reader_databases.end();
-		} else if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT && existing.name == name) {
+		if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT && existing.name == name) {
 			already_exists = true;
 			attached_in_this_system = existing.attached_databases.find(manager) != existing.attached_databases.end();
 		}
@@ -68,25 +57,17 @@ InsertDatabasePathResult DatabaseFilePathManager::InsertDatabasePath(DatabaseMan
 			    name, path, existing.name);
 		}
 	}
-	if (options.is_reader) {
-		entry.first->second.reader_name = name;
-		entry.first->second.reader_databases.insert(manager);
-	}
-	options.stored_database_path = make_uniq<StoredDatabasePath>(manager, *this, path, options.is_reader);
+	options.stored_database_path = make_uniq<StoredDatabasePath>(manager, *this, path, name);
 	return InsertDatabasePathResult::SUCCESS;
 }
 
-void DatabaseFilePathManager::EraseDatabasePath(const StoredDatabasePath &stored_path) {
-	const auto &path = stored_path.path;
+void DatabaseFilePathManager::EraseDatabasePath(const string &path) {
 	if (path.empty() || path == IN_MEMORY_PATH) {
 		return;
 	}
 	lock_guard<mutex> path_lock(db_paths_lock);
 	auto entry = db_paths.find(path);
 	if (entry != db_paths.end()) {
-		if (stored_path.is_reader) {
-			entry->second.reader_databases.erase(stored_path.db_manager);
-		}
 		if (entry->second.reference_count <= 1) {
 			db_paths.erase(entry);
 		} else {

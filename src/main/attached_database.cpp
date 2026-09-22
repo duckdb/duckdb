@@ -24,12 +24,12 @@
 namespace duckdb {
 
 StoredDatabasePath::StoredDatabasePath(DatabaseManager &db_manager, DatabaseFilePathManager &manager, string path_p,
-                                       bool is_reader)
-    : db_manager(db_manager), manager(manager), path(std::move(path_p)), is_reader(is_reader) {
+                                       const Identifier &name)
+    : db_manager(db_manager), manager(manager), path(std::move(path_p)) {
 }
 
 StoredDatabasePath::~StoredDatabasePath() {
-	manager.EraseDatabasePath(*this);
+	manager.EraseDatabasePath(path);
 }
 
 void StoredDatabasePath::OnDetach() {
