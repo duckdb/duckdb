@@ -243,6 +243,7 @@ void AddColumnInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(401, "if_column_not_exists", if_column_not_exists);
 	serializer.WritePropertyWithDefault<bool>(402, "add_not_null", add_column_constraints.add_not_null);
 	serializer.WritePropertyWithDefault<bool>(403, "add_unique", add_column_constraints.add_unique);
+	serializer.WritePropertyWithDefault<bool>(404, "add_primary_key", add_column_constraints.add_primary_key);
 }
 
 unique_ptr<AlterTableInfo> AddColumnInfo::Deserialize(Deserializer &deserializer) {
@@ -251,6 +252,7 @@ unique_ptr<AlterTableInfo> AddColumnInfo::Deserialize(Deserializer &deserializer
 	deserializer.ReadPropertyWithDefault<bool>(401, "if_column_not_exists", result->if_column_not_exists);
 	deserializer.ReadPropertyWithDefault<bool>(402, "add_not_null", result->add_column_constraints.add_not_null);
 	deserializer.ReadPropertyWithDefault<bool>(403, "add_unique", result->add_column_constraints.add_unique);
+	deserializer.ReadPropertyWithDefault<bool>(404, "add_primary_key", result->add_column_constraints.add_primary_key);
 	return std::move(result);
 }
 

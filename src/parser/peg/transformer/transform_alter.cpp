@@ -44,7 +44,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 	const auto follow_ups = add_column.add_column_constraints;
 	const bool materialize_default =
 	    column_entry.HasDefaultValue() && !IsSimpleDefaultValue(column_entry.DefaultValue());
-	if (!follow_ups.add_not_null && !follow_ups.add_unique && !materialize_default) {
+	if (!follow_ups.add_not_null && !follow_ups.add_unique && !follow_ups.add_primary_key && !materialize_default) {
 		return std::move(result);
 	}
 
@@ -54,6 +54,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 		}
 		if (follow_ups.add_unique) {
 			throw NotImplementedException("Adding a UNIQUE column with IF NOT EXISTS is not supported");
+		}
+		if (follow_ups.add_primary_key) {
+			throw NotImplementedException("Adding a PRIMARY KEY column with IF NOT EXISTS is not supported");
 		}
 		// IF NOT EXISTS is not supported by the multi-statement rewrite - keep the plain ALTER
 		return std::move(result);
@@ -78,10 +81,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 	if (follow_ups.add_not_null) {
 		AddToMultiStatement(multi_statement, make_uniq<SetNotNullInfo>(alter_entry_data, column_name));
 	}
-	if (follow_ups.add_unique) {
+	if (follow_ups.add_unique || follow_ups.add_primary_key) {
 		vector<Identifier> unique_columns;
 		unique_columns.push_back(column_name);
-		auto unique_constraint = make_uniq<UniqueConstraint>(std::move(unique_columns), /*is_primary_key=*/false);
+		auto unique_constraint = make_uniq<UniqueConstraint>(std::move(unique_columns), follow_ups.add_primary_key);
 		AddToMultiStatement(multi_statement,
 		                    make_uniq<AddConstraintInfo>(alter_entry_data, std::move(unique_constraint)));
 	}
@@ -270,6 +273,9 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransfor
 		if (add_column_entry.add_column_constraints.add_unique) {
 			throw NotImplementedException("Adding UNIQUE constraints to nested fields is not supported");
 		}
+		if (add_column_entry.add_column_constraints.add_primary_key) {
+			throw NotImplementedException("Adding PRIMARY KEY constraints to nested fields is not supported");
+		}
 		if (add_column_entry.compression_type != CompressionType::COMPRESSION_AUTO) {
 			throw NotImplementedException("Adding compression to nested fields is not supported");
 		}
@@ -312,7 +318,7 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(
 			} else if (constraint_type == ConstraintType::UNIQUE && !constraint.constraint_type_info.first) {
 				new_column.add_column_constraints.add_unique = true;
 			} else if (constraint_type == ConstraintType::UNIQUE) {
-				throw ParserException("Adding columns with PRIMARY KEY constraints is not supported yet");
+				new_column.add_column_constraints.add_primary_key = true;
 			} else if (constraint_type == ConstraintType::CHECK) {
 				throw ParserException("Adding columns with CHECK constraints is not supported yet");
 			} else if (constraint_type == ConstraintType::FOREIGN_KEY) {
