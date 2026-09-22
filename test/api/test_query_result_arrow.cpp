@@ -501,6 +501,46 @@ TEST_CASE("Views of one Arrow unit are independent struct trees over shared buff
 	}
 }
 
+TEST_CASE("An Arrow stream outlives the connection that submitted it", "[api][query_result_arrow]") {
+	DuckDB db(nullptr);
+	auto con = make_uniq<Connection>(db);
+
+	FormattedResultStream<ArrowFormat> stream(SubmitArrow(*con, "SELECT i FROM range(3000) t(i)", 1024));
+	auto first = stream.Fetch();
+	REQUIRE(first);
+	REQUIRE(first->row_count == 1024);
+
+	// The stream keeps the query, and with it the context, alive
+	con.reset();
+
+	idx_t rows = first->row_count;
+	while (auto unit = stream.Fetch()) {
+		rows += unit->row_count;
+	}
+	REQUIRE(!stream.HasError());
+	REQUIRE(rows == 3000);
+}
+
+TEST_CASE("A statement on the connection ends an Arrow stream, which the stream reports", "[api][query_result_arrow]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	FormattedResultStream<ArrowFormat> stream(SubmitArrow(con, "SELECT i FROM range(200000) t(i)", 1000));
+	auto first = stream.Fetch();
+	REQUIRE(first);
+	REQUIRE(first->row_count == 1000);
+
+	REQUIRE_NO_FAIL(con.Query("SELECT 42"));
+
+	unique_ptr<ArrowUnit> next;
+	REQUIRE(stream.TryFetch(next) == QueryResultState::EXECUTION_ERROR);
+	REQUIRE(!next);
+	REQUIRE(StringUtil::Contains(stream.GetError(), "cancelled"));
+	REQUIRE(!stream.IsOpen());
+	// The error is sticky
+	REQUIRE_THROWS(stream.Fetch());
+}
+
 TEST_CASE("The chunk accessors reject an Arrow result", "[api][query_result_arrow]") {
 	DuckDB db(nullptr);
 	Connection con(db);
