@@ -15,11 +15,18 @@ ATTACH 'quack:localhost' AS qk (TOKEN 'test_token');
 statement ok
 CONNECT qk;
 
-# the forwarded query is bound as a table function, and a binding cannot hold duplicate names
-statement error
+# the forwarded query is bound as a table function - duplicate column names survive the round trip
+query II
 SELECT 2 AS x, 3 AS x;
 ----
-<REGEX>:Binder Error:.*duplicate column name.*
+2	3
+
+query II
+SELECT range AS x, range * 2 AS x FROM range(3);
+----
+0	0
+1	2
+2	4
 
 statement ok
 DISCONNECT;
