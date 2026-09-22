@@ -22,19 +22,15 @@
 namespace duckdb {
 
 Parser::Parser(const ParserOptions &options_p) : options(options_p) {
+	if (!options.compiled_grammar) {
+		throw InternalException("Parser was constructed with ParserOptions that have no compiled grammar");
+	}
 }
 
 Parser::~Parser() = default;
 
 CompiledGrammar &Parser::GetGrammar() {
-	if (!compiled_grammar) {
-		if (options.compiled_grammar) {
-			compiled_grammar = options.compiled_grammar;
-		} else {
-			compiled_grammar = CompiledGrammar::Create();
-		}
-	}
-	return *compiled_grammar;
+	return *options.compiled_grammar;
 }
 
 static bool ReplaceUnicodeSpaces(const string &query, string &new_query, vector<UnicodeSpace> &unicode_spaces) {

@@ -227,10 +227,6 @@ static const DefaultMacro internal_macros[] = {
 
     {nullptr, nullptr, nullptr}};
 
-unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(const DefaultMacro &default_macro) {
-	return CreateInternalMacroInfo(default_macro, ParserOptions());
-}
-
 unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(const DefaultMacro &default_macro,
                                                                               const ParserOptions &options) {
 	auto bind_info = make_uniq<CreateMacroInfo>(CatalogType::MACRO_ENTRY);
@@ -283,8 +279,7 @@ DefaultFunctionGenerator::DefaultFunctionGenerator(Catalog &catalog, SchemaCatal
 
 unique_ptr<CatalogEntry> DefaultFunctionGenerator::CreateDefaultEntry(ClientContext &context,
                                                                       const Identifier &entry_name) {
-	ParserOptions options;
-	options.compiled_grammar = CompiledGrammar::Get(context);
+	ParserOptions options(CompiledGrammar::Get(context));
 	auto info = GetDefaultFunction(schema.name, entry_name, options);
 	if (info) {
 		return make_uniq_base<CatalogEntry, ScalarMacroCatalogEntry>(catalog, schema, info->Cast<CreateMacroInfo>());

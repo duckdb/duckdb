@@ -216,7 +216,7 @@ BoundStatement Binder::BindDescribeTable(ShowRef &ref) {
 	} else {
 		sql = PragmaShow(ref.GetTableName().GetIdentifierName());
 	}
-	auto select = CreateViewInfo::ParseSelect(sql);
+	auto select = CreateViewInfo::ParseSelect(context, sql);
 	auto subquery = make_uniq<SubqueryRef>(std::move(select));
 	return Bind(*subquery);
 }

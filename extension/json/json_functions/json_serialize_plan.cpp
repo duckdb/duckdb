@@ -4,6 +4,7 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "json_common.hpp"
@@ -123,7 +124,7 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 		yyjson_mut_doc_set_root(doc, result_obj);
 
 		try {
-			Parser parser;
+			Parser parser(context.GetParserOptions());
 			parser.ParseQuery(input.GetString());
 			auto plans_arr = yyjson_mut_arr(doc);
 

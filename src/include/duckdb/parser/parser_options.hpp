@@ -20,6 +20,12 @@ class ParserExtension;
 struct CompiledGrammar;
 
 struct ParserOptions {
+	//! Normally obtained through ClientContext::GetParserOptions so the context's cached grammar is reused. Callers
+	//! without a context or database instance have to compile one explicitly with CompiledGrammar::Create().
+	explicit ParserOptions(shared_ptr<CompiledGrammar> compiled_grammar_p)
+	    : compiled_grammar(std::move(compiled_grammar_p)) {
+	}
+
 	IdentifierCaseMode identifier_case_mode = IdentifierCaseMode::PRESERVE_CASE;
 	bool integer_division = false;
 	RegexMatchOperatorSemantics regex_match_operator_semantics = RegexMatchOperatorSemantics::PARTIAL;

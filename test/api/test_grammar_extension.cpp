@@ -1204,7 +1204,8 @@ TEST_CASE("Parser options retain their compiled grammar", "[api][grammar_extensi
 	REQUIRE_NOTHROW(parser.ParseQuery("ANSWER"));
 	REQUIRE(parser.statements.size() == 1);
 
-	Parser base_parser;
+	ParserOptions base_options(CompiledGrammar::Create());
+	Parser base_parser(base_options);
 	REQUIRE_NOTHROW(base_parser.ParseQuery("SELECT 42"));
 	REQUIRE(base_parser.statements.size() == 1);
 }

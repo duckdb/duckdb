@@ -38,14 +38,13 @@ public:
 	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const Identifier &entry_name) override;
 	vector<Identifier> GetDefaultEntries() override;
 
-	static unique_ptr<CreateMacroInfo> CreateTableMacroInfo(const DefaultTableMacro &default_macro);
-	//! Overload taking ParserOptions, so the caller's compiled grammar is reused instead of rebuilt per macro.
 	static unique_ptr<CreateMacroInfo> CreateTableMacroInfo(const DefaultTableMacro &default_macro,
 	                                                        const ParserOptions &options);
 
 private:
 	static unique_ptr<CreateMacroInfo> CreateInternalTableMacroInfo(const DefaultTableMacro &default_macro,
-	                                                                unique_ptr<MacroFunction> function);
+	                                                                unique_ptr<MacroFunction> function,
+	                                                                const ParserOptions &options);
 };
 
 } // namespace duckdb

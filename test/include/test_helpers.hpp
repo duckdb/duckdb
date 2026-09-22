@@ -25,6 +25,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/parser/parser_options.hpp"
 #include "test_config.hpp"
 #include <sstream>
 #include <iostream>
@@ -76,6 +77,8 @@ void SetEmitTestEvents(bool emit);
 bool EmitTestEventsEnabled();
 
 unique_ptr<DBConfig> GetTestConfig();
+//! Parser options for tests that parse without a database, sharing one compiled grammar across all of them
+ParserOptions TestParserOptions();
 bool TestIsInternalError(unordered_set<string> &internal_error_messages, const string &error);
 
 // -----------------------------------------------------------------------------

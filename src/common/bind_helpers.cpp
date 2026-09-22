@@ -7,6 +7,7 @@
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -142,7 +143,7 @@ vector<BoundOrderByNode> ParseOrderByColumns(Binder &binder, const vector<Value>
 		order_by_strings.push_back(value.ToString());
 	}
 	const auto order_by_clause = StringUtil::Join(order_by_strings, ", ");
-	auto parsed_orders = Parser::ParseOrderList(order_by_clause);
+	auto parsed_orders = Parser::ParseOrderList(order_by_clause, binder.context.GetParserOptions());
 
 	// Bind
 	auto &config = DBConfig::GetConfig(binder.context);
