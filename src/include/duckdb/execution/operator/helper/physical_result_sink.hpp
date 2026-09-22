@@ -58,6 +58,9 @@ public:
 	PipelineExternalInputSupport GetExternalInputSupport() const override;
 	//! The plan-time answer: a deferred sink may stream, whatever the consumer decides later
 	bool IsStreaming() const override;
+	bool BuildsOwnResult() const override {
+		return false;
+	}
 
 private:
 	bool BatchOrdered() const {

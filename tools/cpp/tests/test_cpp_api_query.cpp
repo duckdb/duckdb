@@ -136,6 +136,24 @@ TEST_CASE("Stable C++API: GetQueryProgress reports idle values when no query is 
 	REQUIRE(progress.rows_processed == 0);
 	REQUIRE(progress.total_rows_to_process == 0);
 }
+
+TEST_CASE("Stable C++API: GetQueryProgress reports unavailable progress", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	conn.SetOption("enable_progress_bar", "true", SettingScope::LOCAL);
+
+	auto result = conn.Execute("SELECT sum(sin(i)) FROM range(100000) AS t(i)");
+	REQUIRE(result.FetchChunk());
+
+	auto progress = conn.GetQueryProgress();
+	REQUIRE(progress.percentage == 0.0);
+	REQUIRE(progress.rows_processed == 0);
+	REQUIRE(progress.total_rows_to_process == 0);
+}
+
 TEST_CASE("Stable C++API: ParseSQL iterates statements into Execute", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
