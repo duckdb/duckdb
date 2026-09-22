@@ -550,7 +550,7 @@ void ManagedAsyncWriteQueue::RegisterWrite(unique_ptr<AsyncWritePayload> payload
 }
 
 void ManagedAsyncWriteQueue::RegisterWrite(AsyncWriteRequest request, ScheduleMode schedule_mode) {
-	RegisterWriteInternal(std::move(request), 0, schedule_mode);
+	RegisterWriteInternal(std::move(request), schedule_mode);
 }
 
 ManagedAsyncWriteQueue::AccountedWriteAdoption
@@ -621,8 +621,7 @@ void ManagedAsyncWriteQueue::DiscardExternalPendingBytes(idx_t bytes, idx_t allo
 	}
 }
 
-void ManagedAsyncWriteQueue::RegisterWriteInternal(AsyncWriteRequest request, idx_t accounted_external_bytes,
-                                                   ScheduleMode schedule_mode) {
+void ManagedAsyncWriteQueue::RegisterWriteInternal(AsyncWriteRequest request, ScheduleMode schedule_mode) {
 	if (!request.payload || request.Size() == 0) {
 		return;
 	}
@@ -640,14 +639,7 @@ void ManagedAsyncWriteQueue::RegisterWriteInternal(AsyncWriteRequest request, id
 		lock_guard<mutex> guard(lock);
 		VerifyOpen();
 		pending_writes.emplace_back(std::move(request), request_size);
-		if (accounted_external_bytes > 0) {
-			D_ASSERT(external_pending_bytes >= accounted_external_bytes);
-			external_pending_bytes -= accounted_external_bytes;
-			D_ASSERT(external_retained_bytes >= allocation_size);
-			external_retained_bytes -= allocation_size;
-		} else {
-			retained_bytes += allocation_size;
-		}
+		retained_bytes += allocation_size;
 		pending_bytes += request_size;
 	}
 	UpdateMemoryState();

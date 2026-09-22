@@ -271,7 +271,7 @@ private:
 	//! Stop tracking wrapper-held bytes that will never become positional requests.
 	void DiscardExternalPendingBytes(idx_t bytes, idx_t allocation_size) noexcept;
 	//! Add one request to the managed queue. Caller may mark bytes already tracked as external.
-	void RegisterWriteInternal(AsyncWriteRequest request, idx_t accounted_external_bytes, ScheduleMode schedule_mode);
+	void RegisterWriteInternal(AsyncWriteRequest request, ScheduleMode schedule_mode);
 	//! Schedule drain requests from already registered pending writes.
 	void SchedulePendingWritesInternal(SchedulePolicy policy = SchedulePolicy::THRESHOLD);
 	//! Grow the TemporaryMemoryState reservation coarsely; it is released only when the queue closes.
