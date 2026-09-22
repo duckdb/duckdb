@@ -382,6 +382,20 @@ public:
 		return optional_ptr<ParseResult>(result);
 	}
 
+	//! Copy a collected set of children into the arena, where it lives as long as the results it belongs to
+	unsafe_array_ptr<reference<ParseResult>> MakeChildren(const arena_vector<reference<ParseResult>> &children) {
+		auto count = children.size();
+		arena.AlignNext();
+		// an empty set still takes an address from the arena, which costs nothing and keeps the span non-null
+		auto target =
+		    reinterpret_cast<reference<ParseResult> *>(arena.Allocate(count * sizeof(reference<ParseResult>)));
+		if (count > 0) {
+			memcpy(static_cast<void *>(target), static_cast<const void *>(children.data()),
+			       count * sizeof(reference<ParseResult>));
+		}
+		return unsafe_array_ptr<reference<ParseResult>>(target, count);
+	}
+
 private:
 	ArenaAllocator arena;
 	//! Dropping the arena reclaims the memory of every result at once but calls no destructors, so a result that

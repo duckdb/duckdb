@@ -703,8 +703,9 @@ public:
 			return MatchStep::Complete(MatcherResult::Failure());
 		}
 		if (lifetime.create_result) {
+			arena_vector<reference<ParseResult>> no_children(child_state.context.process_allocator);
 			return MatchStep::Complete(child_state.AllocateParseResult<ListParseResult>(
-			    vector<reference<ParseResult>>(), string("nested result"), optional_idx()));
+			    child_state.context.allocator.MakeChildren(no_children), string("nested result"), optional_idx()));
 		}
 		return MatchStep::Complete(MatcherResult::Success());
 	}

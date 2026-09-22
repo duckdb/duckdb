@@ -1,6 +1,7 @@
 #pragma once
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/arena_linked_list.hpp"
+#include "duckdb/common/array_ptr.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/string.hpp"
@@ -231,15 +232,15 @@ struct ListParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::LIST;
 
 public:
-	explicit ListParseResult(vector<reference<ParseResult>> results_p, string name_p, optional_idx offset)
-	    : ParseResult(TYPE, offset), children(std::move(results_p)) {
+	explicit ListParseResult(unsafe_array_ptr<reference<ParseResult>> results_p, string name_p, optional_idx offset)
+	    : ParseResult(TYPE, offset), children(results_p) {
 		name = std::move(name_p);
 		for (auto &child : children) {
 			EncloseChild(child.get());
 		}
 	}
 
-	vector<reference<ParseResult>> GetChildren() const {
+	unsafe_array_ptr<reference<ParseResult>> GetChildren() const {
 		return children;
 	}
 
@@ -278,20 +279,20 @@ public:
 	}
 
 private:
-	vector<reference<ParseResult>> children;
+	unsafe_array_ptr<reference<ParseResult>> children;
 };
 
 struct RepeatParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::REPEAT;
 
-	explicit RepeatParseResult(vector<reference<ParseResult>> results_p, optional_idx offset)
-	    : ParseResult(TYPE, offset), children(std::move(results_p)) {
+	explicit RepeatParseResult(unsafe_array_ptr<reference<ParseResult>> results_p, optional_idx offset)
+	    : ParseResult(TYPE, offset), children(results_p) {
 		for (auto &child : children) {
 			EncloseChild(child.get());
 		}
 	}
 
-	vector<reference<ParseResult>> GetChildren() const {
+	unsafe_array_ptr<reference<ParseResult>> GetChildren() const {
 		return children;
 	}
 
@@ -326,7 +327,7 @@ struct RepeatParseResult : ParseResult {
 	}
 
 private:
-	vector<reference<ParseResult>> children;
+	unsafe_array_ptr<reference<ParseResult>> children;
 };
 
 struct OptionalParseResult : ParseResult {
