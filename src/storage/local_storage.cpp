@@ -594,9 +594,8 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		// check if we have written data
 		// if we have, we cannot merge to disk after all
 		// so we need to revert the data we have already written
-		// this only happens for transactions that deleted rows after bulk-appending: a pure bulk
-		// append always takes the merge path above, using its pre-flushed blocks as written
-		D_ASSERT(!storage.HasFlushedRowGroups() || storage.deleted_rows > 0);
+		// this happens when rows were deleted after a bulk append, or when the optimistic writer
+		// flushed a partial row group that does not qualify as a bulk append
 		storage.Rollback();
 		// append to the indexes
 		storage.AppendToIndexes(transaction, append_state);

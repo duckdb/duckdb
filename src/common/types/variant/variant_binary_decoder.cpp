@@ -1,4 +1,4 @@
-#include "reader/variant/variant_binary_decoder.hpp"
+#include "duckdb/common/types/variant/variant_binary_decoder.hpp"
 
 #include <string.h>
 

@@ -503,7 +503,16 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 		// This node is the block's live queue entry, and we just dequeued it: the block no longer
 		// has an entry in the queue. Live entries are never counted as dead, so no decrement.
 		handle->SetHasLiveQueueEntry(lock, false);
-		if (!handle->CanUnload()) {
+		switch (handle->CanUnload()) {
+		case CanUnloadResult::CAN_UNLOAD:
+			break;
+		case CanUnloadResult::NO_TEMP_DIRECTORY:
+			// Unpinned temporary block that cannot be offloaded yet: re-enqueue until temp directory is set.
+			handle->SetHasLiveQueueEntry(lock, true);
+			q.enqueue(std::move(node));
+			return;
+		case CanUnloadResult::PINNED:
+		case CanUnloadResult::ALREADY_UNLOADED:
 			// The block cannot be unloaded right now (e.g. it is pinned). It gets a new queue
 			// entry when it is unpinned again.
 			continue;

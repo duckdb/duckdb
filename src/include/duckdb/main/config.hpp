@@ -317,7 +317,8 @@ public:
 	void AddAllowedConfig(const Identifier &config_name);
 	void AddAllowedDirectory(const string &path);
 	void AddAllowedPath(const string &path);
-	//! Allows a database file and its WAL files, so a database can be opened while external access is disabled
+	//! Allows a database file and its WAL files, so a database can be opened while external access is disabled.
+	//! Only possible through API calls, not SQL calls.
 	void AddAllowedDatabasePath(const string &database_path);
 	vector<string> GetAllowedDirectories() const;
 	vector<string> GetAllowedPaths() const;

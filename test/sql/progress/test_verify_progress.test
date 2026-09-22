@@ -1,0 +1,106 @@
+# name: test/sql/progress/test_verify_progress.test
+# description: Test the debug_verify_progress setting
+# group: [progress]
+
+statement ok
+SET threads=1
+
+statement error
+SET debug_verify_progress='unknown'
+----
+<REGEX>:.*unrecognized value "unknown" for enum "DebugProgressVerification".*
+
+statement ok
+CREATE TABLE integers AS SELECT i FROM range(500000) t(i)
+
+statement ok
+SET debug_verify_progress='error'
+
+statement ok
+SET debug_verify_progress_ignore=''
+
+# a sequential scan feeding an ungrouped aggregate reports correct progress
+query I
+SELECT sum(i) FROM integers
+----
+124999750000
+
+# range does not report progress (yet) - this fails the query in error mode
+statement error
+SELECT sum(i) FROM range(500000) t(i)
+----
+<REGEX>:Invalid Input Error: Progress verification failed:.*UNSUPPORTED_SOURCE \[RANGE\] in pipeline RANGE -> UNGROUPED_AGGREGATE.*debug_verify_progress_ignore='UNSUPPORTED_SOURCE:RANGE'.*
+
+# violations can be ignored per invariant and operator, per operator, or per invariant
+foreach ignore UNSUPPORTED_SOURCE:RANGE unsupported_source:range *:RANGE UNSUPPORTED_SOURCE STALLED,UNSUPPORTED_SOURCE:RANGE
+
+statement ok
+SET debug_verify_progress_ignore='{ignore}'
+
+query I
+SELECT sum(i) FROM range(500000) t(i)
+----
+124999750000
+
+endloop
+
+# other invariants or operators are not ignored
+foreach ignore UNSUPPORTED_SINK:RANGE UNSUPPORTED_SOURCE:SEQ_SCAN STALLED
+
+statement ok
+SET debug_verify_progress_ignore='{ignore}'
+
+statement error
+SELECT sum(i) FROM range(500000) t(i)
+----
+<REGEX>:.*UNSUPPORTED_SOURCE \[RANGE\].*
+
+endloop
+
+statement ok
+SET debug_verify_progress_ignore=''
+
+# single-chunk pipelines are not checked
+query I
+SELECT sum(i) FROM range(2) t(i)
+----
+1
+
+# pipelines that stop early (e.g. because of a LIMIT) are not required to complete
+query I
+SELECT max(i) FROM (SELECT i FROM integers WHERE i % 2 = 0 LIMIT 5000)
+----
+9998
+
+# in log mode, violations are logged instead of failing the query
+statement ok
+SET debug_verify_progress='log'
+
+statement ok
+CALL enable_logging('ProgressVerification')
+
+query I
+SELECT sum(i) FROM range(500000) t(i)
+----
+124999750000
+
+query III
+SELECT invariant, operator, pipeline FROM duckdb_logs_parsed('ProgressVerification')
+----
+UNSUPPORTED_SOURCE	RANGE	RANGE -> UNGROUPED_AGGREGATE
+
+statement ok
+SET debug_verify_progress='none'
+
+statement ok
+CALL truncate_duckdb_logs()
+
+query I
+SELECT sum(i) FROM range(500000) t(i)
+----
+124999750000
+
+query I
+SELECT count(*) FROM duckdb_logs_parsed('ProgressVerification')
+----
+0

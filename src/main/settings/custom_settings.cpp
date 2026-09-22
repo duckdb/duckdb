@@ -1793,7 +1793,7 @@ Value WriteBufferRowGroupMemoryLimitSetting::GetSetting(const ClientContext &con
 void CurrentTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (!info.context) {
 		throw InvalidInputException(
-		    "current_transaction_invalidaton_policy can only be set when there is an active client context");
+		    "current_transaction_invalidation_policy can only be set when there is an active client context");
 	}
 	info.context->transaction.SetInvalidationPolicy(
 	    EnumUtil::FromString<TransactionInvalidationPolicy>(input.GetValue<string>()));
@@ -1864,7 +1864,8 @@ void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Valu
 
 	auto &config = DatabaseInstance::GetDatabase(context).config;
 	auto &callback_manager = config.GetCallbackManager();
-	case_insensitive_set_t selected_extensions;
+	case_insensitive_set_t distinct_names;
+	vector<string> selected_extensions;
 	if (input.type().id() != LogicalTypeId::LIST) {
 		throw InvalidInputException("'active_grammar_extensions' setting value should be of type VARCHAR[], not %s",
 		                            input.type().ToString());
@@ -1876,9 +1877,10 @@ void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Valu
 			                            val.type().ToString());
 		}
 		auto val_str = val.GetValue<string>();
-		if (!selected_extensions.insert(val_str).second) {
+		if (!distinct_names.insert(val_str).second) {
 			throw InvalidInputException("'active_grammar_extensions' list contains duplicate value '%s'", val_str);
 		}
+		selected_extensions.emplace_back(std::move(val_str));
 	}
 
 	vector<string> missing;

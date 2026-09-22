@@ -241,6 +241,12 @@ public:
 	unordered_map<TableIndex, LogicalOperator *> recursive_ctes;
 
 public:
+	//! Whether the expression is COUNT(tbl.*)
+	static bool IsQualifiedCountStar(const ParsedExpression &expr);
+	//! Rewrites COUNT(tbl.*) into a COUNT that skips the rows NULL-extended by an outer join, or returns nullptr
+	unique_ptr<ParsedExpression> TryRewriteQualifiedCountStar(const ParsedExpression &expr);
+
+public:
 	DUCKDB_API BoundStatement Bind(SQLStatement &statement);
 	DUCKDB_API BoundStatement Bind(QueryNode &node);
 

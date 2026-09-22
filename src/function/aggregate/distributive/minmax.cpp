@@ -156,23 +156,24 @@ using MaxOperation = NumericMinMaxBase<Max>;
 struct BaseMinMaxStringState {
 	string_t value;
 	bool is_set;
-	uint32_t alloc_size;
+	//! Must be wide enough for NextPowerOfTwo(MAX_STRING_SIZE), which does not fit in a uint32_t
+	idx_t alloc_size;
 
 	void Assign(string_t input, AggregateInputData &input_data) {
 		if (input.IsInlined()) {
 			value = input;
 			alloc_size = 0;
 		} else {
-			auto len = UnsafeNumericCast<uint32_t>(input.GetSize());
+			auto len = input.GetSize();
 			char *ptr;
 			if (alloc_size >= len) {
 				ptr = value.GetDataWriteable();
 			} else {
-				alloc_size = UnsafeNumericCast<uint32_t>(NextPowerOfTwo(len));
+				alloc_size = NextPowerOfTwo(len);
 				ptr = char_ptr_cast(input_data.allocator.Allocate(alloc_size));
 			}
 			memcpy(ptr, input.GetData(), len);
-			value = string_t(ptr, len);
+			value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
 		}
 	}
 };
