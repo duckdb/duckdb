@@ -21,7 +21,14 @@ struct ClusteredAggrState;
 
 using DictProps = unsafe_unique_array<int64_t>;
 
-static constexpr uint64_t SUM_OVERFLOW_MASK = ~((uint64_t(1) << 53) - 1);
+// Users of I64VectorSumSafe accumulate sum into int64_t. One bit is for sign,
+// and there are 2028=2^11 values in Vector for sum partials, so we can
+// guarantee no overflow only if 64 - 11 - 1 = at most 52 low bits are set.
+// log2 is constexpr only from C++26 so we need a static assertion instead.
+static constexpr uint64_t VECTOR_SIZE_LOG2 = 11;
+static_assert((1 << VECTOR_SIZE_LOG2) == STANDARD_VECTOR_SIZE);
+static constexpr uint64_t SUM_OVERFLOW_MAX_BITS = 64 - 1 - VECTOR_SIZE_LOG2;
+static constexpr uint64_t SUM_OVERFLOW_MASK = ~((uint64_t(1) << SUM_OVERFLOW_MAX_BITS) - 1);
 static inline bool I64VectorSumSafe(int64_t v) {
 	return ((static_cast<uint64_t>(v) ^ static_cast<uint64_t>(v >> 63)) & SUM_OVERFLOW_MASK) == 0;
 }
