@@ -31,7 +31,9 @@ void Binding::Initialize() {
 		auto &name = names[i];
 		D_ASSERT(!name.empty());
 		if (name_map.find(name) != name_map.end()) {
-			throw BinderException("table %s has duplicate column name %s", alias.GetAlias(), name);
+			// duplicate column name - the first one wins for name resolution, the shadowed
+			// column remains reachable by index
+			continue;
 		}
 		name_map[name] = i;
 	}
@@ -276,8 +278,9 @@ const vector<ColumnIndex> &TableBinding::GetBoundColumnIds() const {
 		D_ASSERT(result.second);
 		auto it = std::find_if(name_map.begin(), name_map.end(),
 		                       [&](const std::pair<const Identifier, idx_t> &it) { return it.second == id; });
-		// assert that every id appears in the name_map
-		D_ASSERT(it != name_map.end());
+		// assert that every id is a column of this binding - a column shadowed by an earlier
+		// column with the same name is absent from the name_map
+		D_ASSERT(it != name_map.end() || id < names.size());
 		// the order that they appear in is not guaranteed to be sequential
 	}
 #endif
