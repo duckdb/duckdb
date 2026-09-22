@@ -87,4 +87,58 @@ private:
 	atomic<idx_t> max_fraction {0};
 };
 
+//! Progress of a source that executes a known number of tasks - every task contributes UNITS_PER_TASK units once it
+//! is finished, and threads report the units of the task they are working on as it advances
+struct TaskProgress {
+public:
+	static constexpr idx_t UNITS_PER_TASK = 1 << 20;
+
+	void AddUnits(idx_t count) {
+		units.fetch_add(count, std::memory_order_relaxed);
+	}
+	ProgressData GetProgress(idx_t task_count) const {
+		ProgressData result;
+		result.total = static_cast<double>(task_count);
+		result.done = static_cast<double>(units.load(std::memory_order_relaxed)) / static_cast<double>(UNITS_PER_TASK);
+		if (result.done > result.total) {
+			result.done = result.total;
+		}
+		return result;
+	}
+	void Reset() {
+		units.store(0, std::memory_order_relaxed);
+	}
+
+private:
+	atomic<idx_t> units {0};
+};
+
+//! Reports the progress of the task a thread is working on to a TaskProgress
+struct TaskProgressTracker {
+public:
+	//! Starts reporting a new task
+	void Start() {
+		reported_units = 0;
+	}
+	//! Reports that the current task has done "done" out of "total" work
+	void Update(TaskProgress &progress, idx_t done, idx_t total) {
+		idx_t task_units = TaskProgress::UNITS_PER_TASK;
+		if (total > 0 && done < total) {
+			task_units = static_cast<idx_t>(static_cast<double>(TaskProgress::UNITS_PER_TASK) *
+			                                static_cast<double>(done) / static_cast<double>(total));
+		}
+		if (task_units > reported_units) {
+			progress.AddUnits(task_units - reported_units);
+			reported_units = task_units;
+		}
+	}
+	//! Reports that the current task is finished
+	void Finish(TaskProgress &progress) {
+		Update(progress, 1, 1);
+	}
+
+private:
+	idx_t reported_units = 0;
+};
+
 } // namespace duckdb
