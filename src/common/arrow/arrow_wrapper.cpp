@@ -99,6 +99,18 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 		my_stream->last_error = scan_state.GetError();
 		return -1;
 	}
+	if (my_stream->stream_result) {
+		// A stream ended by another statement has not been asked yet; Poll records that as its error
+		if (my_stream->stream_result->Poll() == QueryResultState::EXECUTION_ERROR) {
+			my_stream->last_error = my_stream->stream_result->GetErrorObject();
+			return -1;
+		}
+		if (!my_stream->stream_result->IsOpen()) {
+			// The ended stream released its context, which converting a batch would need
+			out->release = nullptr;
+			return 0;
+		}
+	}
 	if (my_stream->column_types.empty()) {
 		my_stream->column_types = scan_state.Types();
 		my_stream->column_names = IdentifiersToStrings(scan_state.Names());
