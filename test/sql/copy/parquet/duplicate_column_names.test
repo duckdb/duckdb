@@ -52,3 +52,46 @@ SELECT #2 FROM 'test/sql/copy/parquet/duplicate_column_names.parquet';
 ----
 10
 20
+
+# ---------------------------------------------------------------------------
+# writing: COPY renames repeated names, so the file it writes never carries one
+# ---------------------------------------------------------------------------
+
+statement ok
+COPY (SELECT 1 AS a, 2 AS id, 3 AS "Id") TO '{TEMP_DIR}/copy_dup_case.parquet';
+
+query I
+SELECT name FROM parquet_schema('{TEMP_DIR}/copy_dup_case.parquet') OFFSET 1;
+----
+a
+id
+Id_1
+
+query III
+SELECT * FROM '{TEMP_DIR}/copy_dup_case.parquet';
+----
+1	2	3
+
+statement ok
+COPY (SELECT 2 AS x, 3 AS x) TO '{TEMP_DIR}/copy_dup_exact.parquet';
+
+query I
+SELECT name FROM parquet_schema('{TEMP_DIR}/copy_dup_exact.parquet') OFFSET 1;
+----
+x
+x_1
+
+query II
+SELECT * FROM '{TEMP_DIR}/copy_dup_exact.parquet';
+----
+2	3
+
+# a derived table that keeps the duplicates still writes a file with unique names
+statement ok
+COPY (SELECT * FROM (SELECT 2 AS x, 3 AS x) t) TO '{TEMP_DIR}/copy_dup_derived.parquet';
+
+query I
+SELECT name FROM parquet_schema('{TEMP_DIR}/copy_dup_derived.parquet') OFFSET 1;
+----
+x
+x_1
