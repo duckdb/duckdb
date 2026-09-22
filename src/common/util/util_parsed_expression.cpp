@@ -453,6 +453,9 @@ bool ColumnRefExpression::Equals(const ParsedExpression &other) const {
 			return false;
 		}
 	}
+	if (resolved_index != other_p.resolved_index) {
+		return false;
+	}
 	return true;
 }
 
@@ -466,8 +469,8 @@ hash_t ColumnRefExpression::Hash() const {
 
 unique_ptr<ParsedExpression> ColumnRefExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<ColumnRefExpression>(new ColumnRefExpression());
-	copy->resolved_index = resolved_index;
 	copy->column_names = column_names;
+	copy->resolved_index = resolved_index;
 	copy->CopyBase(*this);
 	return std::move(copy);
 }
