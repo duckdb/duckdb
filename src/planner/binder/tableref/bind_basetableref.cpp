@@ -277,7 +277,8 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 			return_types.push_back(col.Type());
 			return_names.emplace_back(col.Name());
 		}
-		table_names = BindContext::AliasColumnNames(ref.Table(), table_names, ref.column_name_alias);
+		table_names =
+		    BindContext::AliasColumnNames(ref.Table(), table_names, ref.column_name_alias, DuplicateColumnNames::ALLOW);
 
 		virtual_column_map_t virtual_columns;
 		if (scan_function.get_virtual_columns) {

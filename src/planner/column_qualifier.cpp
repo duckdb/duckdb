@@ -137,6 +137,18 @@ unique_ptr<ParsedExpression> ColumnQualifier::CreateStructPack(ColumnRefExpressi
 	return make_uniq<FunctionExpression>("struct_pack", std::move(child_expressions));
 }
 
+//! The index a column reference already resolved to, if it carries one
+static optional_idx ResolvedIndexOf(const ParsedExpression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::COLUMN_REF) {
+		return optional_idx();
+	}
+	auto &colref = expr.Cast<ColumnRefExpression>();
+	if (!colref.HasResolvedIndex()) {
+		return optional_idx();
+	}
+	return colref.GetResolvedIndex();
+}
+
 unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpression &expr,
                                                                 const Identifier &column_name, ErrorData &error) {
 	auto using_binding = binder.bind_context.GetUsingBinding(column_name);
@@ -183,7 +195,9 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpr
 
 	// bind as a regular column
 	if (table_binding) {
-		return binder.bind_context.CreateColumnReference(table_binding->GetBindingAlias(), column_name);
+		return binder.bind_context.CreateColumnReference(table_binding->GetBindingAlias(), column_name,
+		                                                 ColumnBindType::EXPAND_GENERATED_COLUMNS,
+		                                                 ResolvedIndexOf(expr));
 	}
 
 	// it's not, find candidates and error
@@ -515,7 +529,9 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameInternal(ColumnRe
 		auto binding = binder.GetMatchingBinding(col_ref.ColumnNames()[0], col_ref.ColumnNames()[1], error);
 		if (binding) {
 			// it is! return the column reference directly
-			return binder.bind_context.CreateColumnReference(binding->GetBindingAlias(), col_ref.GetColumnName());
+			return binder.bind_context.CreateColumnReference(binding->GetBindingAlias(), col_ref.GetColumnName(),
+			                                                 ColumnBindType::EXPAND_GENERATED_COLUMNS,
+			                                                 ResolvedIndexOf(col_ref));
 		}
 
 		// otherwise check if we can turn this into a struct extract

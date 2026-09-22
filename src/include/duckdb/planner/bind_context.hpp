@@ -67,7 +67,8 @@ public:
 	                  optional_idx &column_index);
 	unique_ptr<ColumnRefExpression> PositionToColumn(PositionalReferenceExpression &ref);
 
-	unique_ptr<ParsedExpression> ExpandGeneratedColumn(TableBinding &table_binding, const Identifier &column_name);
+	unique_ptr<ParsedExpression> ExpandGeneratedColumn(TableBinding &table_binding, column_t column_index,
+	                                                   const Identifier &column_name);
 
 	unique_ptr<ParsedExpression>
 	CreateColumnReference(const Identifier &table_name, const Identifier &column_name,
@@ -81,7 +82,8 @@ public:
 	                      ColumnBindType bind_type = ColumnBindType::EXPAND_GENERATED_COLUMNS);
 	unique_ptr<ParsedExpression>
 	CreateColumnReference(const BindingAlias &table_alias, const Identifier &column_name,
-	                      ColumnBindType bind_type = ColumnBindType::EXPAND_GENERATED_COLUMNS);
+	                      ColumnBindType bind_type = ColumnBindType::EXPAND_GENERATED_COLUMNS,
+	                      optional_idx resolved_index = optional_idx());
 
 	//! Generate column expressions for all columns that are present in the
 	//! referenced tables. This is used to resolve the * expression in a
