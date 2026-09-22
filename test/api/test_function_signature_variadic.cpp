@@ -30,6 +30,62 @@ TEST_CASE("Parameters declared after *args are keyword-only", "[api][scalar_func
 	REQUIRE(sig.ToString() == "(a INTEGER, *args INTEGER, kw INTEGER, **kwargs ANY) -> BIGINT");
 }
 
+TEST_CASE("A bare * separator declares keyword-only parameters without a pack", "[api][scalar_function]") {
+	FunctionSignature sig;
+	sig.AddParameter("a", LogicalType::INTEGER);
+	sig.AddSeparator();
+	sig.AddParameter("kw", LogicalType::INTEGER, Value(LogicalType::INTEGER));
+	sig.SetReturnType(LogicalType::BIGINT);
+	REQUIRE_NOTHROW(sig.Verify());
+
+	REQUIRE(sig.HasSeparator());
+	REQUIRE(sig.GetParameter(0).GetKind() == FunctionParameterKind::STANDARD);
+	REQUIRE(sig.GetParameter(2).GetKind() == FunctionParameterKind::KEYWORD_ONLY);
+	// the separator is a "*args" that receives nothing, so it takes a slot but is not varargs
+	REQUIRE(sig.GetParameterCount() == 3);
+	REQUIRE(!sig.HasVarArgs());
+	REQUIRE(sig.GetArgsParameter() == nullptr);
+	REQUIRE(sig.GetPositionalParameterCount() == 1);
+	REQUIRE(sig.GetRequiredParameterCount() == 1);
+	REQUIRE(sig.GetParameterIndexByName("kw").GetIndex() == 2);
+	REQUIRE(sig.ToString() == "(a INTEGER, *, kw INTEGER := NULL) -> BIGINT");
+}
+
+TEST_CASE("A * separator with no keyword-only parameter after it is allowed", "[api][scalar_function]") {
+	// registration adds options conditionally, so a function that declares none must still be valid
+	FunctionSignature sig;
+	sig.AddParameter("a", LogicalType::INTEGER);
+	sig.AddSeparator();
+	sig.SetReturnType(LogicalType::BIGINT);
+	REQUIRE_NOTHROW(sig.Verify());
+	REQUIRE(sig.GetParameterCount() == 2);
+	REQUIRE(sig.GetRequiredParameterCount() == 1);
+	REQUIRE(sig.ToString() == "(a INTEGER, *) -> BIGINT");
+}
+
+TEST_CASE("A *args parameter cannot follow a * separator", "[api][scalar_function]") {
+	// the separator is itself a "*args", so this is rejected as a second one
+	FunctionSignature sig;
+	sig.AddParameter("a", LogicalType::INTEGER);
+	sig.AddSeparator();
+	sig.AddArgsParameter("args", LogicalType::INTEGER);
+	REQUIRE_THROWS_AS(sig.Verify(), InvalidInputException);
+}
+
+TEST_CASE("A * separator still accepts a **kwargs after it", "[api][scalar_function]") {
+	FunctionSignature sig;
+	sig.AddParameter("a", LogicalType::INTEGER);
+	sig.AddSeparator();
+	sig.AddParameter("kw", LogicalType::INTEGER, Value(LogicalType::INTEGER));
+	sig.AddKwargsParameter("kwargs", LogicalType::ANY);
+	sig.SetReturnType(LogicalType::BIGINT);
+	REQUIRE_NOTHROW(sig.Verify());
+	REQUIRE(sig.HasSeparator());
+	REQUIRE(!sig.HasVarArgs());
+	REQUIRE(sig.GetKwargsParameter()->GetType() == LogicalType::ANY);
+	REQUIRE(sig.ToString() == "(a INTEGER, *, kw INTEGER := NULL, **kwargs ANY) -> BIGINT");
+}
+
 TEST_CASE("SetVarArgs declares *args and **kwargs of the same type", "[api][scalar_function]") {
 	FunctionSignature sig;
 	sig.AddParameter("a", LogicalType::INTEGER);

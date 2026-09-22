@@ -72,6 +72,10 @@ static bool RequiresCatalogAndSchemaNamePrefix(const Identifier &catalog_name, c
 
 string FunctionParameter::ToString() const {
 	if (kind == FunctionParameterKind::VAR_POSITIONAL) {
+		if (!type.IsValid()) {
+			// a bare "*" separator, which receives no arguments and so has no type
+			return "*";
+		}
 		return StringUtil::Format("*%s %s", SQLIdentifier(name), type.ToString());
 	}
 	if (kind == FunctionParameterKind::VAR_KEYWORD) {

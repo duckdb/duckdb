@@ -246,7 +246,12 @@ public:
 	DUCKDB_API auto SetVarArgs(LogicalType varargs_p) -> void;
 
 	auto GetArgsParameter() const -> optional_ptr<const FunctionParameter> {
-		return GetParameterByKind(FunctionParameterKind::VAR_POSITIONAL);
+		auto param = GetParameterByKind(FunctionParameterKind::VAR_POSITIONAL);
+		if (param && !param->GetType().IsValid()) {
+			// a bare "*" separator receives no arguments
+			return nullptr;
+		}
+		return param;
 	}
 	auto GetKwargsParameter() const -> optional_ptr<const FunctionParameter> {
 		return GetParameterByKind(FunctionParameterKind::VAR_KEYWORD);
@@ -278,6 +283,20 @@ public:
 	auto AddKwargsParameter(Identifier name, LogicalType type) -> FunctionSignature & {
 		parameters.emplace_back(std::move(name), std::move(type), FunctionParameterKind::VAR_KEYWORD);
 		return *this;
+	}
+
+	//! Adds a bare "*" separator, so that every parameter added after it is keyword-only. Lets a signature declare
+	//! keyword-only parameters without also accepting a "*args" pack. It is a "*args" that receives nothing, so it
+	//! has no type of its own
+	auto AddSeparator() -> FunctionSignature & {
+		parameters.emplace_back("*", LogicalType(LogicalTypeId::INVALID), FunctionParameterKind::VAR_POSITIONAL);
+		return *this;
+	}
+
+	//! Whether a bare "*" separator closes the positional parameters
+	auto HasSeparator() const -> bool {
+		auto param = GetParameterByKind(FunctionParameterKind::VAR_POSITIONAL);
+		return param && !param->GetType().IsValid();
 	}
 
 	//! Returns the index of the non-variadic parameter with the given name
@@ -323,13 +342,12 @@ private:
 		}
 		return nullptr;
 	}
+	//! Anything added after "*args", a bare "*" separator or a keyword-only parameter is itself keyword-only
 	auto GetNextKind() const -> FunctionParameterKind {
-		for (const auto &param : parameters) {
-			if (param.GetKind() != FunctionParameterKind::STANDARD) {
-				return FunctionParameterKind::KEYWORD_ONLY;
-			}
+		if (parameters.empty() || parameters.back().GetKind() == FunctionParameterKind::STANDARD) {
+			return FunctionParameterKind::STANDARD;
 		}
-		return FunctionParameterKind::STANDARD;
+		return FunctionParameterKind::KEYWORD_ONLY;
 	}
 
 private:

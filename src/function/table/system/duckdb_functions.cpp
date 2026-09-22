@@ -543,11 +543,11 @@ struct PragmaFunctionExtractor {
 		vector<Value> results;
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
 
-		for (idx_t i = 0; i < fun.GetArguments().size(); i++) {
-			results.emplace_back("col" + to_string(i));
-		}
-		for (auto &param : fun.named_parameters) {
-			results.emplace_back(param.first);
+		// the variadic parameters are reported in the "varargs" column instead
+		for (auto &param : fun.GetSignature().GetParameters()) {
+			if (!param.IsVariadic()) {
+				results.emplace_back(param.GetName());
+			}
 		}
 		return results;
 	}
@@ -556,18 +556,22 @@ struct PragmaFunctionExtractor {
 		vector<Value> results;
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
 
-		for (idx_t i = 0; i < fun.GetArguments().size(); i++) {
-			results.emplace_back(fun.GetArguments()[i].ToString());
-		}
-		for (auto &param : fun.named_parameters) {
-			results.emplace_back(param.second.ToString());
+		for (auto &param : fun.GetSignature().GetParameters()) {
+			if (!param.IsVariadic()) {
+				results.emplace_back(param.GetType().ToString());
+			}
 		}
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
 
 	static vector<LogicalType> GetParameterLogicalTypes(PragmaFunctionCatalogEntry &entry, idx_t offset) {
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
-		return fun.GetArguments();
+		const auto &signature = fun.GetSignature();
+		vector<LogicalType> result;
+		for (idx_t i = 0; i < signature.GetPositionalParameterCount(); i++) {
+			result.push_back(signature.GetParameter(i).GetType());
+		}
+		return result;
 	}
 
 	static Value GetVarArgs(PragmaFunctionCatalogEntry &entry, idx_t offset) {

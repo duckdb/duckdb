@@ -12,7 +12,9 @@ namespace duckdb {
 
 unique_ptr<BoundPragmaInfo> Binder::BindPragma(PragmaInfo &info, QueryErrorContext error_context) {
 	vector<Value> params;
-	named_parameter_map_t named_parameters;
+	// the named arguments are kept in a vector, as for every other function kind, so that they reach overload
+	// selection by name and in the order they were written
+	vector<pair<Identifier, Value>> named_arguments;
 
 	// resolve the parameters
 	ConstantBinder pragma_binder(*this, context, "PRAGMA value");
@@ -25,7 +27,7 @@ unique_ptr<BoundPragmaInfo> Binder::BindPragma(PragmaInfo &info, QueryErrorConte
 	for (auto &entry : info.named_parameters) {
 		auto bound_value = pragma_binder.Bind(entry.second);
 		auto value = ExpressionExecutor::EvaluateScalar(context, *bound_value, true);
-		named_parameters.insert(make_pair(entry.first, std::move(value)));
+		named_arguments.emplace_back(entry.first, std::move(value));
 	}
 
 	// bind the pragma function
@@ -51,15 +53,19 @@ unique_ptr<BoundPragmaInfo> Binder::BindPragma(PragmaInfo &info, QueryErrorConte
 
 	FunctionBinder function_binder(*this);
 	ErrorData error;
-	auto bound_idx = function_binder.BindFunction(entry->name, entry->functions, params, error);
+	// selection, casting and named-argument checking all happen in the function binder
+	auto bound_idx = function_binder.BindFunction(entry->name, entry->functions, params, named_arguments, error);
 	if (!bound_idx.IsValid()) {
 		D_ASSERT(error.HasError());
 		error.AddQueryLocation(error_context);
 		error.Throw();
 	}
 	auto bound_function = *entry->functions.GetFunctionByOffset(bound_idx.GetIndex());
-	// bind and check named params
-	BindNamedParameters(bound_function.named_parameters, named_parameters, error_context, bound_function.name);
+	// the pragma implementations look their options up by name
+	named_parameter_map_t named_parameters;
+	for (auto &named_argument : named_arguments) {
+		named_parameters.insert(make_pair(named_argument.first, std::move(named_argument.second)));
+	}
 	return make_uniq<BoundPragmaInfo>(std::move(bound_function), std::move(params), std::move(named_parameters));
 }
 

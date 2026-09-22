@@ -96,7 +96,8 @@ optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const 
 
 	idx_t maximum_arg_count = NumericLimits<idx_t>::Maximum();
 	if (!args_param && !kwargs_param) {
-		maximum_arg_count = sig.GetParameterCount();
+		// a bare "*" separator occupies a parameter slot but receives no argument of its own
+		maximum_arg_count = sig.GetParameterCount() - (sig.HasSeparator() ? 1 : 0);
 	}
 
 	if (received_arg_count < minimum_arg_count) {
@@ -461,21 +462,35 @@ optional_idx FunctionBinder::BindFunction(const Identifier &name, const TableFun
 }
 
 optional_idx FunctionBinder::BindFunction(const Identifier &name, const PragmaFunctionSet &functions,
-                                          vector<Value> &parameters, ErrorData &error) {
+                                          vector<Value> &parameters,
+                                          vector<pair<Identifier, Value>> &named_parameters, ErrorData &error) {
 	vector<LogicalType> types;
 	for (auto &value : parameters) {
 		types.push_back(value.type());
 	}
-	auto entry = BindFunctionFromArguments(name, functions, types, {}, error);
+	vector<pair<Identifier, LogicalType>> named_types;
+	for (auto &named_parameter : named_parameters) {
+		named_types.emplace_back(named_parameter.first, named_parameter.second.type());
+	}
+	auto entry = BindFunctionFromArguments(name, functions, types, named_types, error);
 	if (!entry.IsValid()) {
 		error.Throw();
 	}
 	const auto &candidate_function = *functions.GetFunctionByOffset(entry.GetIndex());
-	// cast the input parameters
+	const auto &signature = candidate_function.GetSignature();
+	const auto positional_count = signature.GetPositionalParameterCount();
+	// cast the input parameters - anything past the declared parameters was received by "*args"
 	for (idx_t i = 0; i < parameters.size(); i++) {
-		auto target_type = i < candidate_function.GetArguments().size() ? candidate_function.GetArguments()[i]
-		                                                                : candidate_function.GetVarArgs();
+		auto target_type = i < positional_count ? signature.GetParameter(i).GetType() : signature.GetVarArgs();
 		parameters[i] = parameters[i].CastAs(context, target_type);
+	}
+	// selection has already rejected any name that no parameter accepts, so every name matches one here
+	for (auto &named_parameter : named_parameters) {
+		auto param_idx = signature.GetParameterIndexByName(named_parameter.first);
+		auto &param = signature.GetParameter(param_idx.GetIndex());
+		if (param.GetType().id() != LogicalTypeId::ANY) {
+			named_parameter.second = named_parameter.second.DefaultCastAs(param.GetType());
+		}
 	}
 	return entry;
 }
@@ -1075,6 +1090,11 @@ static vector<Identifier> ResolveArguments(const SimpleFunction &function, Bound
 		const auto &param = sig.GetParameter(param_idx);
 		switch (param.GetKind()) {
 		case FunctionParameterKind::VAR_POSITIONAL:
+			if (!param.GetType().IsValid()) {
+				// a bare "*" separator receives nothing - any trailing positional argument is left to the tail below,
+				// exactly as for a signature that declares no "*args" at all
+				continue;
+			}
 			for (idx_t i = positional_count; i < passed_count; i++) {
 				bound_arguments.insert(bound_arguments.begin() + NumericCast<int64_t>(resolved_arguments.size()),
 				                       param.GetType());

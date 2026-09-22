@@ -60,6 +60,7 @@ class LogicalVacuum;
 
 class ColumnList;
 class ExternalDependency;
+class FunctionSignature;
 class TableFunction;
 class TableStorageInfo;
 class BoundConstraint;
