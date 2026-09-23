@@ -613,6 +613,8 @@ const char *EnumUtil::ToChars<ParquetInt96AsOption>(ParquetInt96AsOption value) 
 	switch (value) {
 	case ParquetInt96AsOption::TIMESTAMP:
 		return "TIMESTAMP";
+	case ParquetInt96AsOption::TIMESTAMP_NS:
+		return "TIMESTAMP_NS";
 	case ParquetInt96AsOption::STRUCT:
 		return "STRUCT";
 	default:
@@ -624,6 +626,9 @@ template <>
 ParquetInt96AsOption EnumUtil::FromString<ParquetInt96AsOption>(const char *value) {
 	if (StringUtil::Equals(value, "TIMESTAMP")) {
 		return ParquetInt96AsOption::TIMESTAMP;
+	}
+	if (StringUtil::Equals(value, "TIMESTAMP_NS")) {
+		return ParquetInt96AsOption::TIMESTAMP_NS;
 	}
 	if (StringUtil::Equals(value, "STRUCT")) {
 		return ParquetInt96AsOption::STRUCT;
