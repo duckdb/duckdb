@@ -35,19 +35,25 @@ SELECT x,y,lag(y,1,0) OVER (ORDER BY x,y),lead(y) OVER (ORDER BY x,y) FROM (VALU
 3	30	NULL	40
 NULL	40	30	NULL
 
-# Peer order is unspecified: compare the complete rows with a native run in this environment.
+# Break ties for order-sensitive values, including the NULL argument.
+query IIIII rowsort
+SELECT x,y,first_value(y IGNORE NULLS) OVER (ORDER BY x,y),last_value(y) OVER (ORDER BY x,y),nth_value(y,2) OVER (ORDER BY x,y) FROM (VALUES (1,10),(2,20),(2,NULL),(3,30),(NULL,40)) t(x,y);
+----
+1	10	10	10	NULL
+2	20	10	20	20
+2	NULL	10	NULL	20
+3	30	10	30	20
+NULL	40	10	40	20
 
-foreach mode off strict
-
-statement ok
-SET debug_verify_sql_export='{mode}';
-
-query IIIII rowsort window_peer_0
-SELECT x,y,first_value(y IGNORE NULLS) OVER (ORDER BY x),last_value(y) OVER (ORDER BY x),nth_value(y,2) OVER (ORDER BY x) FROM (VALUES (1,10),(2,20),(2,NULL),(3,30),(NULL,40)) t(x,y);
-
-endloop
-
-reset label window_peer_0
+# Equal peer values retain RANGE-frame coverage without depending on peer order.
+query IIIII rowsort
+SELECT x,y,first_value(y IGNORE NULLS) OVER (ORDER BY x),last_value(y) OVER (ORDER BY x),nth_value(y,3) OVER (ORDER BY x) FROM (VALUES (1,10),(2,20),(2,20),(3,NULL),(NULL,40)) t(x,y);
+----
+1	10	10	10	NULL
+2	20	10	20	20
+2	20	10	20	20
+3	NULL	10	NULL	20
+NULL	40	10	40	20
 
 query III rowsort
 SELECT x,y,sum(y) OVER (PARTITION BY x) FROM (VALUES (1,10),(2,20),(2,NULL),(3,30),(NULL,40)) t(x,y);
@@ -58,19 +64,15 @@ SELECT x,y,sum(y) OVER (PARTITION BY x) FROM (VALUES (1,10),(2,20),(2,NULL),(3,3
 3	30	30
 NULL	40	40
 
-# Peer order is unspecified: compare the complete rows with a native run in this environment.
-
-foreach mode off strict
-
-statement ok
-SET debug_verify_sql_export='{mode}';
-
-query III rowsort window_peer_1
-SELECT x,y,count(*) OVER (ORDER BY x ROWS BETWEEN 1 PRECEDING AND CURRENT ROW EXCLUDE TIES) FROM (VALUES (1,10),(2,20),(2,NULL),(3,30),(NULL,40)) t(x,y);
-
-endloop
-
-reset label window_peer_1
+# Either peer can precede the other; compare the counts without attaching them to y.
+query II rowsort
+SELECT x,count(*) OVER (ORDER BY x ROWS BETWEEN 1 PRECEDING AND CURRENT ROW EXCLUDE TIES) FROM (VALUES (1,10),(2,20),(2,NULL),(3,30),(NULL,40)) t(x,y);
+----
+1	1
+2	1
+2	2
+3	2
+NULL	2
 
 query III rowsort
 SELECT x,y,sum(y) OVER (ORDER BY x GROUPS BETWEEN 1 PRECEDING AND 1 FOLLOWING EXCLUDE GROUP) FROM (VALUES (1,10),(2,20),(2,NULL),(3,30),(NULL,40)) t(x,y);
