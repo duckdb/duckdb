@@ -10,6 +10,9 @@
         "test/sql/logging/logging.test",
         "test/sql/logging/logging_csv.test",
         "test/sql/logging/logging_types.test",
+        "test/sql/logging/test_logging_function.test",
+        "test/sql/logging/logging_buffer_size.test",
+        "test/sql/logging/logging_context_ids.test",
         "test/sql/pragma/test_query_log.test",
         "test/sql/logging/logging_file_truncate_rewrite.test"
       ]
@@ -77,7 +80,8 @@
     {
       "reason": "Statement verification temporarily disables profiling for its internal EXPLAIN, changing current_setting observations",
       "paths": [
-        "test/sql/pragma/profiling/test_custom_profiling_using_groups.test"
+        "test/sql/pragma/profiling/test_custom_profiling_using_groups.test",
+        "test/sql/pragma/profiling/call_enable_profiling_function.test"
       ]
     }
   ]
