@@ -14,6 +14,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/compression/alp/alp_constants.hpp"
 #include "duckdb/storage/compression/alp/alp_utils.hpp"
 
