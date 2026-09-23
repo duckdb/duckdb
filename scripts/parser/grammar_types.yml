@@ -1805,6 +1805,30 @@ matcher_rule_overrides:
     allow_type_overlap: true
     matcher: all_operators
 
+# collapsible_rules: see MatcherFactory::AddCollapsibleRule. Every rule below has a hand-written transformer that
+# returns its operand unchanged when the rest of the rule matched nothing. Take a rule out of this list if that
+# stops being true.
+collapsible_rules:
+  - LambdaArrowExpression
+  - LogicalOrExpression
+  - LogicalAndExpression
+  - LogicalNotExpression
+  - IsExpression
+  - IsDistinctFromExpression
+  - ComparisonExpression
+  - BetweenInLikeExpression
+  - OtherOperatorExpression
+  - BitwiseExpression
+  - AdditiveExpression
+  - MultiplicativeExpression
+  - ExponentiationExpression
+  - CollateExpression
+  - AtTimeZoneExpression
+  - PrefixExpression
+  - BaseExpression
+  - SelectSetOpChain
+  - IntersectChain
+
 packrat_memoized_rules:
   - Expression
   - Identifier
