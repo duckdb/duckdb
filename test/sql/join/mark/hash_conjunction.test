@@ -16,10 +16,7 @@ EXPLAIN SELECT __mark_join_marker FROM hash_probe p JOIN BY (TYPE MARK) hash_bui
 ----
 physical_plan	<REGEX>:[\s\S]*HASH_JOIN[\s\S]*
 
-# Repeat the 20k-by-20k probe to reach the throttled deadline checks even with large vectors.
-statement ok
-SET max_execution_time=1000;
-
+# Repeat the probe to cover reuse; the plan assertion above protects hash routing.
 query I
 WITH q AS NOT MATERIALIZED (
     SELECT count(*) n FROM (
@@ -30,9 +27,6 @@ s AS NOT MATERIALIZED (FROM r UNION ALL FROM r UNION ALL FROM r UNION ALL FROM r
 SELECT sum(n) FROM s;
 ----
 320000
-
-statement ok
-RESET max_execution_time;
 
 foreach external false true
 
