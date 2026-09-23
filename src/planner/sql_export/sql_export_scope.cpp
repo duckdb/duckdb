@@ -1,7 +1,6 @@
 #include "duckdb/planner/sql_export/logical_plan_sql_exporter_internal.hpp"
 #include "duckdb/planner/logical_plan_sql_exporter.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
@@ -248,17 +247,7 @@ void SetChildScope(SelectNode &select, LogicalPlanSQLExportedChild child, option
 	}
 	auto &source = child.relation.query->Cast<SelectNode>();
 	select.from_table = std::move(source.from_table);
-	if (source.where_clause) {
-		if (select.where_clause) {
-			vector<unique_ptr<ParsedExpression>> predicates;
-			predicates.push_back(std::move(source.where_clause));
-			predicates.push_back(std::move(select.where_clause));
-			select.where_clause =
-			    make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(predicates));
-		} else {
-			select.where_clause = std::move(source.where_clause);
-		}
-	}
+	select.where_clause = SQLExportHelpers::Conjoin(std::move(source.where_clause), std::move(select.where_clause));
 }
 
 bool IsIdentityProjection(const LogicalProjection &projection, const vector<LogicalPlanSQLExportField> &fields) {

@@ -7,7 +7,6 @@
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/planner/logical_plan_sql_exporter.hpp"
 #include "duckdb/common/limits.hpp"
-#include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
@@ -159,11 +158,7 @@ LogicalPlanSQLExportResult LogicalFilter::ToSQL(LogicalPlanSQLExportContext &exp
 		expression->SetAlias(FieldIdentifier(field_index));
 		select->select_list.push_back(std::move(expression));
 	}
-	if (predicates.size() == 1) {
-		select->where_clause = std::move(predicates[0]);
-	} else if (!predicates.empty()) {
-		select->where_clause = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(predicates));
-	}
+	select->where_clause = SQLExportHelpers::Conjoin(std::move(predicates));
 	SetChildScope(*select, std::move(child.GetValue()), plain);
 	LogicalPlanSQLExportRelation relation {std::move(select), std::move(fields.GetValue())};
 	return LogicalPlanSQLExportResult::Success(std::move(relation));

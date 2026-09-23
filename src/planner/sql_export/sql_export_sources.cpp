@@ -232,12 +232,8 @@ LogicalPlanSQLExportResult LogicalSecureView::ToSQL(LogicalPlanSQLExportContext 
 		if (predicate.HasError()) {
 			return LogicalPlanSQLExportResult::Failure(predicate.GetIssues());
 		}
-		if (select->where_clause) {
-			select->where_clause = make_uniq<ConjunctionExpression>(
-			    ExpressionType::CONJUNCTION_AND, std::move(select->where_clause), std::move(predicate.GetValue()));
-		} else {
-			select->where_clause = std::move(predicate.GetValue());
-		}
+		select->where_clause =
+		    SQLExportHelpers::Conjoin(std::move(select->where_clause), std::move(predicate.GetValue()));
 	}
 
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields.GetValue())});

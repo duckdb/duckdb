@@ -3,11 +3,32 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/planner/logical_plan_verification_result.hpp"
 
 namespace duckdb {
 namespace SQLExportHelpers {
+
+inline unique_ptr<ParsedExpression> Conjoin(unique_ptr<ParsedExpression> left, unique_ptr<ParsedExpression> right) {
+	if (!left) {
+		return right;
+	}
+	if (!right) {
+		return left;
+	}
+	return make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(left), std::move(right));
+}
+
+inline unique_ptr<ParsedExpression> Conjoin(vector<unique_ptr<ParsedExpression>> predicates) {
+	if (predicates.empty()) {
+		return nullptr;
+	}
+	if (predicates.size() == 1) {
+		return std::move(predicates[0]);
+	}
+	return make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(predicates));
+}
 
 inline LogicalPlanVerificationPath
 ChildPath(const LogicalPlanVerificationPath &path, idx_t ordinal,

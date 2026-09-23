@@ -5,7 +5,6 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
@@ -314,12 +313,8 @@ logical_plan_sql_export::ReconstructSQLSource(ClientContext &context, const Logi
 			if (exported.HasError()) {
 				return {nullptr, "to_sql_callback_declined_without_guard"};
 			}
-			if (select->where_clause) {
-				select->where_clause = make_uniq<ConjunctionExpression>(
-				    ExpressionType::CONJUNCTION_AND, std::move(select->where_clause), std::move(exported.GetValue()));
-			} else {
-				select->where_clause = std::move(exported.GetValue());
-			}
+			select->where_clause =
+			    SQLExportHelpers::Conjoin(std::move(select->where_clause), std::move(exported.GetValue()));
 		}
 	}
 

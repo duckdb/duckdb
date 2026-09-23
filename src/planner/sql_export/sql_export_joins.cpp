@@ -3,7 +3,6 @@
 #include "duckdb/planner/sql_export/logical_plan_sql_exporter_internal.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
-#include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
@@ -119,12 +118,7 @@ ExportJoinCondition(LogicalJoin &op, LogicalPlanSQLExportContext &context,
 				conjunct = make_uniq<ComparisonExpression>(condition.GetComparisonType(), std::move(conjunct),
 				                                           std::move(rhs.GetValue()));
 			}
-			if (predicate) {
-				predicate = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(predicate),
-				                                             std::move(conjunct));
-			} else {
-				predicate = std::move(conjunct);
-			}
+			predicate = SQLExportHelpers::Conjoin(std::move(predicate), std::move(conjunct));
 		}
 		if (!predicate) {
 			predicate = ConstantExpression::FromValue(Value::BOOLEAN(true));
