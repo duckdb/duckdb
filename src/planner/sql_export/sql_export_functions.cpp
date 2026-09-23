@@ -230,7 +230,7 @@ BoundExpressionSQLExportState::ExportScalarFunction(const BoundFunctionExpressio
 			}
 		}
 	}
-	if (!function.GetNamedArguments().empty()) {
+	if (!argument_aliases_are_semantic && !function.GetNamedArguments().empty()) {
 		auto positional_count = function.GetPositionalArgumentCount();
 		if (positional_count + function.GetNamedArguments().size() != expression.GetChildren().size()) {
 			return Failure(UnsupportedFunction(path, std::move(identity), "The named SQL arguments are incomplete"));

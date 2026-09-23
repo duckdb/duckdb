@@ -7,6 +7,10 @@ require parquet
 statement ok
 COPY (SELECT * FROM (VALUES ('abc'), ('x'), (NULL)) t(s)) TO '{TEST_DIR}/pushed_projection.parquet';
 
+# Retaining scan invocation arguments across serialization requires the v2 format.
+statement ok
+SET storage_compatibility_version='v2.0.0';
+
 foreach serializer false true
 
 statement ok
