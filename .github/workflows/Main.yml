@@ -685,21 +685,25 @@ jobs:
         cache-suffix: ${{ matrix.config.vcpkg_cache_suffix }}
         save-cache: ${{ matrix.config.save_vcpkg_cache && fromJson(needs.prepare.outputs.save_cache) }}
 
-    - name: Symbol Checks
-      run: make -j4 --output-sync=target symbol-checks
-
-    - name: CLI check
+    - name: Checks
       shell: bash
+      env:
+        TEST_STATIC: ${{ matrix.config.test_static }}
+        TEST_SHARED: ${{ matrix.config.is_canonical_build }}
       run: |
+        echo "::group::Symbol checks"
+        make -j4 --output-sync=target symbol-checks
+        echo "::endgroup::"
+
+        echo "::group::CLI check"
         ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
         if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
           # Fail on non-zero major version.
           ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v'
         fi
+        echo "::endgroup::"
 
-    - name: Verify build flags
-      shell: bash
-      run: |
+        echo "::group::Verify build flags"
         if [[ "${{ matrix.config.arch }}" == "amd64" ]]; then
           grep -Fq -- '-march=x86-64-v3' build/release/compile_commands.json
         else
@@ -714,37 +718,11 @@ jobs:
         else
           grep -Fq -- '-flto=thin' build/release/compile_commands.json
         fi
+        echo "::endgroup::"
 
-    - name: GCC static library compatibility
-      if: ${{ matrix.config.is_compatibility_build }}
-      shell: bash
-      run: |
-        gcc -std=c11 \
-          -Isrc/include \
-          examples/embedded-c/main.c \
-          build/release/src/libduckdb_static.a \
-          -ldl -lpthread -lm -lstdc++ \
-          -o build/release/gcc-static-library-smoke
-        build/release/gcc-static-library-smoke
-
-    - name: Static extension link
-      shell: bash
-      run: |
-        build/release/test/static_link_smoke
-        build/release/test/static_link_explicit_smoke
-
-    - name: GCC shared library compatibility
-      if: ${{ matrix.config.is_canonical_build }}
-      shell: bash
-      run: |
-        gcc -std=c11 \
-          -Isrc/include \
-          examples/embedded-c/main.c \
-          -Lbuild/release/src \
-          -Wl,-rpath,"$PWD/build/release/src" \
-          -lduckdb \
-          -o build/release/gcc-shared-library-smoke
-        build/release/gcc-shared-library-smoke
+        echo "::group::Link checks"
+        make linux-release-link-checks
+        echo "::endgroup::"
 
     - name: Deploy
       shell: bash

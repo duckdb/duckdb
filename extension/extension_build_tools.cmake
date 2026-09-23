@@ -98,6 +98,31 @@ function(link_threads LIBRARY LINKAGE)
     target_link_libraries(${LIBRARY} ${LINKAGE} Threads::Threads)
 endfunction()
 
+# Resolve archive LLVM IR into native code for non-LTO linkers.
+function(duckdb_make_native_lto_archive TARGET)
+    if(NOT NATIVE_LTO_STATIC_LIBRARIES)
+        return()
+    endif()
+    set(LTO_ARCHIVE "$<TARGET_FILE:${TARGET}>.lto.a")
+    set(LTO_OBJECT "$<TARGET_FILE:${TARGET}>.lto.o")
+    set(LTO_JOB_FLAG "")
+    if(CMAKE_LTO STREQUAL "thin" AND CMAKE_LTO_JOBS)
+        set(LTO_JOB_FLAG "-flto-jobs=${CMAKE_LTO_JOBS}")
+    endif()
+    add_custom_command(
+        TARGET ${TARGET}
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E rename "$<TARGET_FILE:${TARGET}>" "${LTO_ARCHIVE}"
+        COMMAND ${CMAKE_CXX_COMPILER} -O3 -flto=${CMAKE_LTO} ${LTO_JOB_FLAG}
+                -fuse-ld=lld -nostdlib -r -Wl,--whole-archive "${LTO_ARCHIVE}"
+                -Wl,--no-whole-archive -o "${LTO_OBJECT}"
+        COMMAND ${CMAKE_AR} qc "$<TARGET_FILE:${TARGET}>" "${LTO_OBJECT}"
+        COMMAND ${CMAKE_RANLIB} "$<TARGET_FILE:${TARGET}>"
+        COMMAND ${CMAKE_COMMAND} -E remove "${LTO_ARCHIVE}" "${LTO_OBJECT}"
+        COMMENT "Resolving LTO in $<TARGET_FILE_NAME:${TARGET}>"
+        VERBATIM)
+endfunction()
+
 # Deploys extensions to a local repository (a folder structure that contains the duckdb version + binary arch)
 if ("${LOCAL_EXTENSION_REPO}" STREQUAL "")
     set(LOCAL_EXTENSION_REPO_DIR ${CMAKE_BINARY_DIR}/repository)
@@ -367,6 +392,7 @@ function(build_static_extension NAME PARAMETERS)
     add_library(${NAME}_extension STATIC ${FILES})
     target_link_libraries(${NAME}_extension duckdb_static)
     duckdb_add_extension_describe(${NAME} CPP)
+    duckdb_make_native_lto_archive(${NAME}_extension)
 endfunction()
 
 # Adds the describe function to an extension archive created without build_static_extension.
@@ -439,6 +465,7 @@ function(build_static_extension_capi_internal NAME KIND API_VERSION FILES)
     target_link_libraries(${NAME}_extension duckdb_static)
     target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_BUILD_STATIC_EXTENSION)
     duckdb_add_extension_describe(${NAME} ${KIND} "${API_VERSION}")
+    duckdb_make_native_lto_archive(${NAME}_extension)
 endfunction()
 
 function(build_static_extension_capi NAME CAPI_VERSION_MAJOR CAPI_VERSION_MINOR CAPI_VERSION_PATCH PARAMETERS)
