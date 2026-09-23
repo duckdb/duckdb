@@ -35,7 +35,7 @@ public:
 		}
 		auto result = state.AllocateParseResult<KeywordParseResult>(token_text, start_offset, token_length);
 		if (result.HasParseResult()) {
-			result.GetParseResult()->SetName(name);
+			result.GetParseResult()->SetNameFrom(*this);
 		}
 		return result;
 	}

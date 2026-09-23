@@ -383,8 +383,10 @@ public:
 	optional_ptr<ParseResult> Make(ARGS &&... args) {
 		static_assert(std::is_base_of<ParseResult, RESULT>::value, "Expected a parse result");
 		auto result = arena.Make<RESULT>(std::forward<ARGS>(args)...);
-		if (RESULT::NEEDS_DESTRUCTOR) {
-			pending_destructors.emplace_back(result);
+		if (ParseResultNeedsDestructor<RESULT>::value) {
+			// held by an owner before growing the list, so the result is still destroyed if the growth throws
+			arena_ptr<ParseResult> owned(result);
+			pending_destructors.push_back(std::move(owned));
 		}
 		return optional_ptr<ParseResult>(result);
 	}
@@ -407,8 +409,8 @@ private:
 	ArenaAllocator arena;
 	//! Dropping the arena reclaims the memory of every result at once but calls no destructors, so a result that
 	//! owns something has to be destroyed before that happens. An `arena_ptr` destroys what it points at without
-	//! freeing it, which is all these are here for. Only the node types that say `NEEDS_DESTRUCTOR` end up in the
-	//! list, and nothing ever reads it.
+	//! freeing it, which is all these are here for. Only the node types that `ParseResultNeedsDestructor` selects end
+	//! up in the list, and nothing ever reads it.
 	arena_vector<arena_ptr<ParseResult>> pending_destructors;
 };
 
@@ -416,6 +418,14 @@ template <class PROCESS, class... ARGS>
 arena_ptr<MatchProcess> MatchState::Make(ARGS &&... args) {
 	static_assert(std::is_base_of<MatchProcess, PROCESS>::value, "Expected a matcher process");
 	return arena_ptr<MatchProcess>(context.process_allocator.Make<PROCESS>(std::forward<ARGS>(args)...));
+}
+
+void ParseResult::SetNameFrom(const CompiledGrammarRule &rule_p) {
+	name = &rule_p.name;
+}
+
+void ParseResult::SetNameFrom(const Matcher &matcher_p) {
+	name = &matcher_p.GetName();
 }
 
 template <class RESULT, class... ARGS>
@@ -426,7 +436,7 @@ MatcherResult MatchState::AllocateParseResult(ARGS &&... args) {
 	auto result = context.allocator.Make<RESULT>(std::forward<ARGS>(args)...);
 	if (rule) {
 		result->SetRule(*rule);
-		result->SetName(rule->name);
+		result->SetNameFrom(*rule);
 	}
 	return MatcherResult::Success(result);
 }

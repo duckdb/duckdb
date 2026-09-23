@@ -55,7 +55,7 @@ public:
 		auto result = state.AllocateParseResult<StringLiteralParseResult>(stripped_string, string_info.type,
 		                                                                  start_offset, token_length);
 		if (result.HasParseResult()) {
-			result.GetParseResult()->SetName(name);
+			result.GetParseResult()->SetNameFrom(*this);
 		}
 		return result;
 	}

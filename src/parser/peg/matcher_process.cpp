@@ -51,7 +51,9 @@ class ListMatchProcess : public MatchProcess {
 public:
 	ListMatchProcess(const ListMatcher &matcher_p, MatchState &state_p)
 	    : matcher(matcher_p), state(state_p), list_state(state_p), results(state_p.context.process_allocator) {
-		results.reserve(matcher_p.matchers.size());
+		if (state_p.BuildParseResult()) {
+			results.reserve(matcher_p.matchers.size());
+		}
 		saved_suggestion_size = matcher.suppress_suggestions ? list_state.context.suggestions.size() : 0;
 		if (auto current = list_state.token_iterator.Current()) {
 			start_offset = optional_idx(current->offset);
@@ -92,9 +94,9 @@ public:
 		}
 		state.token_iterator.SetPosition(list_state.token_iterator);
 		DiscardSuggestions();
-		auto list_name = matcher.HasName() ? &matcher.GetName() : nullptr;
+		auto named_matcher = matcher.HasName() ? &matcher : nullptr;
 		return MatchStep::Complete(state.AllocateParseResult<ListParseResult>(
-		    state.context.allocator.MakeChildren(results), list_name, start_offset));
+		    state.context.allocator.MakeChildren(results), named_matcher, start_offset));
 	}
 
 private:
