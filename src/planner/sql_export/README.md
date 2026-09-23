@@ -45,7 +45,7 @@ The C++ exporter consumes an already planned logical tree. It does not choose an
 
 ## Implementation layout
 
-Logical operators implement SQL reconstruction through `ToSQL`, including extension operators. The shared export context owns alias allocation, ancestor tracking, and named-relation scope. Its implementations are grouped by sources, VALUES/chunks, relational operators, joins, CTEs, LIMIT, and PIVOT. Shared binding and relation construction live in `sql_export_scope.cpp`.
+Logical operators implement SQL reconstruction through `ToSQL`, including extension operators. The shared export context owns alias allocation, ancestor tracking, and named-relation scope. Its implementations are grouped by sources, VALUES/chunks, relational operators, joins, CTEs, LIMIT, and PIVOT. Shared binding and relation construction live in `sql_export_scope.cpp`. LIMIT reconstruction returns its modifier together with the scalar-input relations it needs. The LIMIT operator materializes those relations once and substitutes their names only while exporting its child.
 
 The expression exporter owns binding context and lambda reference scopes. Constant values use the shared `ConstantExpression::FromValue` conversion, including nested type metadata and aggregate states. The exporter adds result typing and structured diagnostics; function calls and window expressions have separate implementations. Ordinary table functions reconstruct their qualified retained invocation by default. Source-specific callbacks return only a table reference; scan projection, ordinality, sampling and predicates are applied centrally. Generic source reconstruction lives in `table_function_sql_export.cpp`.
 

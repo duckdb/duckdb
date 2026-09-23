@@ -18,7 +18,6 @@ class LogicalProjection;
 class LogicalSecureView;
 class LogicalSample;
 class LogicalPivot;
-class LogicalLimit;
 class LogicalSetOperation;
 class LogicalAggregate;
 struct LogicalExtensionOperator;
@@ -29,6 +28,12 @@ using LogicalPlanSQLExportResult = LogicalPlanVerificationResult<LogicalPlanSQLE
 struct LogicalPlanSQLExportedChild {
 	LogicalPlanSQLExportRelation relation;
 	Identifier relation_alias;
+};
+
+struct LogicalPlanSQLExportSource {
+	reference<LogicalOperator> op;
+	Identifier name;
+	LogicalPlanSQLExportRelation relation;
 };
 
 class LogicalPlanSQLExportContext {
@@ -44,6 +49,9 @@ public:
 	Identifier NextRelationAlias(const Identifier &preferred = Identifier());
 	LogicalPlanVerificationResult<LogicalPlanSQLExportedChild> ExportChild(LogicalOperator &child,
 	                                                                       const LogicalPlanVerificationPath &path);
+	LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>
+	ExportChild(LogicalOperator &child, const LogicalPlanVerificationPath &path,
+	            const vector<LogicalPlanSQLExportSource> &sources);
 	LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
 	ExportExpression(const LogicalOperator &op, const vector<reference<const Expression>> &expressions,
 	                 idx_t expression_ordinal, const BoundExpressionSQLExportContext &expression_context,
@@ -60,15 +68,6 @@ public:
 	                                     const vector<LogicalPlanSQLExportField> &fields,
 	                                     optional_ptr<const SelectNode> plain = nullptr);
 
-	bool ProducesOneRow(const LogicalOperator &op, const vector<TableIndex> &single_row_ctes = {});
-	using LimitExpressionResult = LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>;
-	LimitExpressionResult LimitBindingFailure(const LogicalPlanVerificationPath &path);
-	LimitExpressionResult ResolveLimitColumn(const ColumnBinding &binding, LogicalOperator &input,
-	                                         const LogicalPlanVerificationPath &path);
-	LimitExpressionResult ExportLimitExpression(const Expression &expression, LogicalOperator &input,
-	                                            const LogicalPlanVerificationPath &path,
-	                                            const LogicalPlanVerificationPath &expression_path);
-
 private:
 	friend class duckdb::LogicalMaterializedCTE;
 	friend class duckdb::LogicalCTERef;
@@ -81,16 +80,11 @@ private:
 	friend class duckdb::LogicalSecureView;
 	friend class duckdb::LogicalSample;
 	friend class duckdb::LogicalPivot;
-	friend class duckdb::LogicalLimit;
 	friend class duckdb::LogicalSetOperation;
 	friend class duckdb::LogicalAggregate;
 
-	struct LimitSource {
-		optional_ptr<LogicalOperator> op;
-		Identifier name;
-		LogicalPlanSQLExportRelation relation;
-	};
-	vector<LimitSource> limit_sources;
+	struct SourceScope;
+	optional_ptr<const SourceScope> source_scope;
 	struct NamedRelation {
 		TableIndex index;
 		Identifier name;

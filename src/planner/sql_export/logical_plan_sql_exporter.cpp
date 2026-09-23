@@ -116,22 +116,36 @@ static LogicalPlanSQLExportResult ApplyOutputNames(LogicalPlanSQLExportResult re
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields)});
 }
 
+struct LogicalPlanSQLExportContext::SourceScope {
+	SourceScope(LogicalPlanSQLExportContext &context_p, const vector<LogicalPlanSQLExportSource> &sources_p)
+	    : context(context_p), sources(sources_p), parent(context.source_scope) {
+		context.source_scope = this;
+	}
+	~SourceScope() {
+		context.source_scope = parent;
+	}
+
+	LogicalPlanSQLExportContext &context;
+	const vector<LogicalPlanSQLExportSource> &sources;
+	optional_ptr<const SourceScope> parent;
+};
+
 LogicalPlanSQLExportContext::LogicalPlanSQLExportContext(ClientContext &context_p) : context(context_p) {
 }
 
 LogicalPlanSQLExportResult LogicalPlanSQLExportContext::Export(LogicalOperator &op,
                                                                const LogicalPlanVerificationPath &path) {
-	for (auto &source : limit_sources) {
-		if (source.op.get() == &op) {
-			return LogicalPlanSQLExportResult::Success(
-			    {CreateNamedSource(source.name, source.relation.fields), source.relation.fields});
+	for (auto scope = source_scope; scope; scope = scope->parent) {
+		for (auto &source : scope->sources) {
+			if (&source.op.get() == &op) {
+				return LogicalPlanSQLExportResult::Success(
+				    {CreateNamedSource(source.name, source.relation.fields), source.relation.fields});
+			}
 		}
 	}
-	auto source_count = limit_sources.size();
 	ancestors.push_back(op);
 	auto result = op.ToSQL(*this, path);
 	ancestors.pop_back();
-	limit_sources.resize(source_count);
 	return result;
 }
 
@@ -155,6 +169,13 @@ LogicalPlanSQLExportContext::ExportChild(LogicalOperator &child, const LogicalPl
 	}
 	LogicalPlanSQLExportedChild result {std::move(exported.GetValue()), NextRelationAlias()};
 	return LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>::Success(std::move(result));
+}
+
+LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>
+LogicalPlanSQLExportContext::ExportChild(LogicalOperator &child, const LogicalPlanVerificationPath &path,
+                                         const vector<LogicalPlanSQLExportSource> &sources) {
+	SourceScope scope(*this, sources);
+	return ExportChild(child, path);
 }
 
 LogicalPlanVerificationResult<unique_ptr<ParsedExpression>> LogicalPlanSQLExportContext::ExportExpression(
