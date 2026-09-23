@@ -381,6 +381,25 @@ TEST_CASE("V2 scalar: variadic tail", "[capi_v2][scalar_function]") {
 	REQUIRE(QueryI32(fx.conn, "SELECT vsum(42)") == 42);
 }
 
+TEST_CASE("V2 scalar: invalid parameter name preserves variadic tail", "[capi_v2][scalar_function]") {
+	EnvFixture fx;
+	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto function = MakeScalar(fx.conn, "vsum_retry");
+	auto sig = SigOf(function);
+
+	REQUIRE(duckdb_v2_function_signature_set_varargs(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, Ident("\x80"), integer, nullptr, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	SigParam(sig, "first", integer);
+	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, VarargSumExec, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_scalar_function_destroy(&function);
+	duckdb_v2_logical_type_destroy(&integer);
+
+	REQUIRE(QueryI32(fx.conn, "SELECT vsum_retry(1, 2, 3)") == 6);
+}
+
 // ===========================================================================
 // Bind resolves an ANY return type; bind/init/exec data flows through.
 // ===========================================================================
