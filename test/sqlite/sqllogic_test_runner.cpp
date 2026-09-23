@@ -901,6 +901,7 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 					// (1) skipif duckdb
 					// (2) onlyif <other_system>
 					skip_statement = true;
+					break;
 				}
 			}
 			parser.NextLine();
