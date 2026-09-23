@@ -35,6 +35,8 @@ public:
 	void SetRemainingSize(idx_t new_remaining_size);
 	//! Set the remaining size needed for this state and update the reservation
 	void SetRemainingSizeAndUpdateReservation(ClientContext &context, idx_t new_remaining_size);
+	//! Set demand and clamp the existing reservation without recalculating it.
+	void SetRemainingSizeAndReduceReservation(idx_t new_remaining_size);
 	//! Set the remaining size to 0 (NOTE: updates the reservation to 0 as well)
 	void SetZero();
 	//! Get the remaining size that was set for this state
