@@ -135,6 +135,9 @@ class JobStagesTest(unittest.TestCase):
         required_jobs = {"linux-relassert", "linux-release", "linux-release-tests", "tidy-check"}
         self.assertTrue(required_jobs.issubset(set(selection.enabled_jobs)))
         self.assertNotIn("osx", selection.enabled_jobs)
+        self.assertEqual([config["name"] for config in selection.linux_release_matrix], ["amd64 compatibility"])
+        self.assertFalse(selection.linux_release_matrix[0]["publish_static"])
+        self.assertTrue(selection.linux_release_matrix[0]["test_static"])
         self.assertFalse(selection.save_cache)
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
@@ -184,6 +187,24 @@ class JobStagesTest(unittest.TestCase):
                 ],
                 ["amd64 optimized", "arm64 optimized"],
             )
+            self.assertEqual(
+                [config["publish_static"] for config in workflow_dispatch_selection.linux_release_matrix],
+                [False, False, True, True],
+            )
+            self.assertEqual(
+                [config["test_static"] for config in workflow_dispatch_selection.linux_release_matrix],
+                [False, False, True, True],
+            )
+            self.assertEqual(
+                [config["publish_source"] for config in workflow_dispatch_selection.linux_release_matrix],
+                [True, False, False, False],
+            )
+            self.assertTrue(
+                all(
+                    "-DNATIVE_LTO_STATIC_LIBRARIES=1" in config["extra_cmake_variables"]
+                    for config in workflow_dispatch_selection.linux_release_matrix[2:]
+                )
+            )
             self.assertTrue(workflow_dispatch_selection.save_cache)
 
     def test_regular_branch_excludes_main_only_jobs(self):
@@ -192,6 +213,8 @@ class JobStagesTest(unittest.TestCase):
         self.assertNotIn("osx", selection.enabled_jobs)
         self.assertIn("linux-release-musl", selection.enabled_jobs)
         self.assertEqual([config["name"] for config in selection.linux_release_matrix], ["amd64 compatibility"])
+        self.assertFalse(selection.linux_release_matrix[0]["publish_static"])
+        self.assertTrue(selection.linux_release_matrix[0]["test_static"])
         self.assertEqual([config["name"] for config in selection.linux_musl_matrix], ["arm64"])
         self.assertFalse(selection.save_cache)
 

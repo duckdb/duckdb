@@ -174,8 +174,9 @@ def compatibility_release_config(*, runner: str, arch: str, optimized_release: b
         "extra_cmake_variables": "",
         "is_compatibility_build": True,
         "is_canonical_build": not optimized_release,
-        "publish_static": True,
+        "publish_static": False,
         "publish_source": is_amd64,
+        "test_static": not optimized_release,
         "run_smoke": is_amd64,
         "run_arm_tests": not is_amd64 and not optimized_release,
     }
@@ -198,11 +199,15 @@ def optimized_release_config(*, runner: str, arch: str) -> dict[str, object]:
         "save_vcpkg_cache": False,
         "lto": "thin",
         "lto_jobs": "8",
-        "extra_cmake_variables": "-DCMAKE_C_COMPILER_LAUNCHER= -DCMAKE_CXX_COMPILER_LAUNCHER=",
+        "extra_cmake_variables": (
+            "-DCMAKE_C_COMPILER_LAUNCHER= -DCMAKE_CXX_COMPILER_LAUNCHER= "
+            "-DNATIVE_LTO_STATIC_LIBRARIES=1"
+        ),
         "is_compatibility_build": False,
         "is_canonical_build": True,
-        "publish_static": False,
+        "publish_static": True,
         "publish_source": False,
+        "test_static": True,
         "run_smoke": True,
         "run_arm_tests": not is_amd64,
     }

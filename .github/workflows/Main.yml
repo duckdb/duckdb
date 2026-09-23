@@ -716,7 +716,7 @@ jobs:
         fi
 
     - name: GCC static library compatibility
-      if: ${{ matrix.config.is_compatibility_build }}
+      if: ${{ matrix.config.test_static }}
       shell: bash
       run: |
         gcc -std=c11 \
