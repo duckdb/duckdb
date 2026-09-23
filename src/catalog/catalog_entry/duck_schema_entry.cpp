@@ -172,6 +172,14 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 			}
 			OnDropEntry(transaction, *old_entry);
 			(void)set.DropEntry(transaction, entry_name, false, entry->internal);
+			if (old_entry->type == CatalogType::TABLE_ENTRY) {
+				vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
+				FindForeignKeyInformation(old_entry->Cast<TableCatalogEntry>(), AlterForeignKeyType::AFT_DELETE,
+				                          fk_arrays);
+				for (auto &fk_info : fk_arrays) {
+					Alter(transaction, *fk_info);
+				}
+			}
 		}
 	}
 	// now try to add the entry
