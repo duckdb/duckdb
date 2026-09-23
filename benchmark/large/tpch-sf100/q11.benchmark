@@ -3,7 +3,8 @@
 # group: [tpch-sf100]
 
 # Q11 is the only TPC-H query whose substitution parameter depends on the scale factor (FRACTION = 0.0001 / SF),
-# so it runs the SF 100 query text instead of the shared template
+# so it runs the SF 100 query text instead of the shared template. The result has ties on the ORDER BY key, so the
+# answer is verified in a deterministic order.
 
 name Q11
 group tpch
@@ -17,4 +18,6 @@ load benchmark/large/tpch-sf100/load.sql
 
 run benchmark/large/tpch-sf100/q11.sql
 
-result extension/tpch/dbgen/answers/sf100/q11.csv
+result_query extension/tpch/dbgen/answers/sf100/q11.csv
+SELECT ps_partkey, value FROM __answer ORDER BY value DESC, ps_partkey
+----

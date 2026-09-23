@@ -78,10 +78,6 @@ public:
 
 private:
 	string VerifyInternal(BenchmarkState *state_p, const BenchmarkQuery &query, MaterializedQueryResult &result);
-	string VerifyRows(InterpretedBenchmarkState &state, const BenchmarkQuery &query, MaterializedQueryResult &result,
-	                  const vector<vector<string>> &result_values);
-	bool ValuesMatch(InterpretedBenchmarkState &state, const string &expected, const Value &value);
-	string CanonicalExpectedValue(InterpretedBenchmarkState &state, const string &expected, const LogicalType &type);
 
 	BenchmarkQuery ReadQueryFromFile(BenchmarkFileReader &reader, string file);
 	BenchmarkQuery ReadQueryFromReader(BenchmarkFileReader &reader, const string &sql, const string &header);
