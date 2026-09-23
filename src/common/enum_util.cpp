@@ -2765,19 +2765,20 @@ const StringUtil::EnumStringLiteral *GetFunctionParameterKindValues() {
 		{ static_cast<uint32_t>(FunctionParameterKind::STANDARD), "STANDARD" },
 		{ static_cast<uint32_t>(FunctionParameterKind::VAR_POSITIONAL), "VAR_POSITIONAL" },
 		{ static_cast<uint32_t>(FunctionParameterKind::VAR_KEYWORD), "VAR_KEYWORD" },
-		{ static_cast<uint32_t>(FunctionParameterKind::KEYWORD_ONLY), "KEYWORD_ONLY" }
+		{ static_cast<uint32_t>(FunctionParameterKind::KEYWORD_ONLY), "KEYWORD_ONLY" },
+		{ static_cast<uint32_t>(FunctionParameterKind::POSITIONAL), "POSITIONAL" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<FunctionParameterKind>(FunctionParameterKind value) {
-	return StringUtil::EnumToString(GetFunctionParameterKindValues(), 4, "FunctionParameterKind", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetFunctionParameterKindValues(), 5, "FunctionParameterKind", static_cast<uint32_t>(value));
 }
 
 template<>
 FunctionParameterKind EnumUtil::FromString<FunctionParameterKind>(const char *value) {
-	return static_cast<FunctionParameterKind>(StringUtil::StringToEnum(GetFunctionParameterKindValues(), 4, "FunctionParameterKind", value));
+	return static_cast<FunctionParameterKind>(StringUtil::StringToEnum(GetFunctionParameterKindValues(), 5, "FunctionParameterKind", value));
 }
 
 const StringUtil::EnumStringLiteral *GetFunctionStabilityValues() {

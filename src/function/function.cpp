@@ -72,10 +72,6 @@ static bool RequiresCatalogAndSchemaNamePrefix(const Identifier &catalog_name, c
 
 string FunctionParameter::ToString() const {
 	if (kind == FunctionParameterKind::VAR_POSITIONAL) {
-		if (!type.IsValid()) {
-			// a bare "*" separator, which receives no arguments and so has no type
-			return "*";
-		}
 		return StringUtil::Format("*%s %s", SQLIdentifier(name), type.ToString());
 	}
 	if (kind == FunctionParameterKind::VAR_KEYWORD) {
@@ -90,8 +86,23 @@ string FunctionParameter::ToString() const {
 string FunctionSignature::ToString() const {
 	vector<string> params;
 	params.reserve(parameters.size());
-	for (auto &param : parameters) {
+	// A keyword-only parameter that no "*args" precedes closes the positional parameters by itself, which Python
+	// spells as a bare "*" in that position; a "/" likewise closes the positional-only parameters
+	const auto positional_only_count = GetPositionalOnlyParameterCount();
+	auto needs_separator = !HasVarArgs();
+	for (idx_t i = 0; i < parameters.size(); i++) {
+		auto &param = parameters[i];
+		if (i == positional_only_count && positional_only_count > 0) {
+			params.push_back("/");
+		}
+		if (needs_separator && param.GetKind() == FunctionParameterKind::KEYWORD_ONLY) {
+			params.push_back("*");
+			needs_separator = false;
+		}
 		params.push_back(param.ToString());
+	}
+	if (positional_only_count > 0 && positional_only_count == parameters.size()) {
+		params.push_back("/");
 	}
 	auto head = StringUtil::Format("(%s)", StringUtil::Join(params, ", "));
 	if (return_type.IsValid()) {
@@ -182,10 +193,12 @@ void FunctionSignature::Verify() const {
 		}
 	}
 
-	// And that the parameter kinds are in order: standard parameters, "*args", keyword-only parameters, "**kwargs"
+	// And that the parameter kinds are in order:
+	// positional-only, "/", standard parameters, "*args", keyword-only parameters, "**kwargs"
 	bool found_args = false;
 	bool found_kwargs = false;
 	bool found_keyword_only = false;
+	bool found_standard = false;
 	for (const auto &param : parameters) {
 		if (found_kwargs) {
 			throw InvalidInputException("Parameter '%s' follows '**kwargs', which must be the last parameter",
@@ -195,11 +208,19 @@ void FunctionSignature::Verify() const {
 			throw InvalidInputException("Variadic parameter '%s' cannot have a default value", param.ToString());
 		}
 		switch (param.GetKind()) {
+		case FunctionParameterKind::POSITIONAL:
+			if (found_standard || found_args || found_keyword_only) {
+				throw InvalidInputException(
+				    "Positional-only parameter '%s' must be declared before every parameter that can be passed by name",
+				    param.ToString());
+			}
+			break;
 		case FunctionParameterKind::STANDARD:
 			if (found_args || found_keyword_only) {
 				throw InvalidInputException("Parameter '%s' follows '*args' and must therefore be keyword-only",
 				                            param.ToString());
 			}
+			found_standard = true;
 			break;
 		case FunctionParameterKind::VAR_POSITIONAL:
 			if (found_args) {
@@ -287,7 +308,7 @@ FunctionParameterKind BoundSimpleFunction::GetArgumentParameterKind(const Functi
 		throw InternalException("%s: Argument index %llu is out of range", GetName(), argument_index);
 	}
 	if (argument_index < signature.GetPositionalParameterCount()) {
-		return FunctionParameterKind::STANDARD;
+		return signature.GetParameter(argument_index).GetKind();
 	}
 	if (argument_index < positional_arguments) {
 		return FunctionParameterKind::VAR_POSITIONAL;

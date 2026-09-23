@@ -240,6 +240,18 @@ TEST_CASE("Test Table Function named parameters in C API", "[capi]") {
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 126);
 	REQUIRE(result->Fetch<int64_t>(0, 1) == 252);
+
+	// the parameter added by duckdb_table_function_add_parameter is positional-only, so the synthetic name it is
+	// given cannot be used by a caller, while the one added by name still can
+	result = tester.Query("SELECT * FROM my_multiplier_function(col0 := 2)");
+	REQUIRE(result->HasError());
+	REQUIRE(duckdb::StringUtil::Contains(result->ErrorMessage(), "Invalid named parameter \"col0\""));
+	// only the parameter that was declared with a name is offered as a candidate
+	REQUIRE(duckdb::StringUtil::Contains(result->ErrorMessage(), "my_parameter BIGINT"));
+	REQUIRE(!duckdb::StringUtil::Contains(result->ErrorMessage(), "col0 BIGINT"));
+	result = tester.Query("SELECT * FROM my_multiplier_function(col0 := 2, my_parameter := 3)");
+	REQUIRE(result->HasError());
+	REQUIRE(duckdb::StringUtil::Contains(result->ErrorMessage(), "Invalid named parameter \"col0\""));
 }
 
 struct my_bind_connection_id_data {

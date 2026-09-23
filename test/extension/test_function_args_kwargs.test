@@ -242,3 +242,34 @@ query I
 SELECT test_varargs_bind(i, 2, x := 3, y := 4) FROM (SELECT i::INTEGER AS i FROM range(1) t(i));
 ----
 <22>|args=1|kwargs=2@2|a=0|*=2|**x=3|**y=4|
+
+# test_positional_only(a INTEGER, /, b INTEGER := 9, **kwargs ANY): "a" can only be passed by position
+query I
+SELECT test_positional_only(1, 2);
+----
+<22>|args=0|kwargs=0@2|/a=1|b=2|
+
+# "a := 2" does not match the positional-only parameter, so it is received by "**kwargs"
+query I
+SELECT test_positional_only(1, a := 2);
+----
+<22>|args=0|kwargs=1@2|/a=1|b=9|**a=2|
+
+# ... and "b" is still matched by name
+query I
+SELECT test_positional_only(1, b := 2, a := 3);
+----
+<22>|args=0|kwargs=1@2|/a=1|b=2|**a=3|
+
+# the positional-only parameter cannot be filled by name alone: "a := 1" goes to "**kwargs" and the
+# position is left empty, exactly as Python reports a missing positional argument
+statement error
+SELECT test_positional_only(a := 1);
+----
+<REGEX>:.*Missing value for parameter "a".*
+
+# a candidate list spells the closing "/" out
+statement error
+SELECT test_positional_only({'x': 1});
+----
+<REGEX>:.*test_positional_only\(a INTEGER, /, b INTEGER := 9, \*\*kwargs ANY\).*

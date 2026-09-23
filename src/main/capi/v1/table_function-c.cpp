@@ -205,7 +205,9 @@ void duckdb_table_function_add_parameter(duckdb_table_function function, duckdb_
 	}
 	auto &tf = GetCTableFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	tf.GetSignature().AddPositionalParameter(*logical_type);
+	// v1 declares no parameter name, so the parameter is positional-only - see duckdb_scalar_function_add_parameter.
+	// duckdb_table_function_add_named_parameter is the one that declares a name a caller can use
+	tf.GetSignature().AddPositionalOnlyParameter(*logical_type);
 }
 
 void duckdb_table_function_add_named_parameter(duckdb_table_function function, const char *name,
@@ -285,7 +287,7 @@ duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb
 		return DuckDBError;
 	}
 	for (auto &param : tf.GetSignature().GetParameters()) {
-		// the bare "*" that closes the positional parameters carries no type of its own
+		// a variadic parameter carries no type of its own
 		if (param.IsVariadic()) {
 			continue;
 		}

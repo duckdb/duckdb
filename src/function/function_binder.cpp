@@ -96,8 +96,7 @@ optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const 
 
 	idx_t maximum_arg_count = NumericLimits<idx_t>::Maximum();
 	if (!args_param && !kwargs_param) {
-		// a bare "*" separator occupies a parameter slot but receives no argument of its own
-		maximum_arg_count = sig.GetParameterCount() - (sig.HasSeparator() ? 1 : 0);
+		maximum_arg_count = sig.GetParameterCount();
 	}
 
 	if (received_arg_count < minimum_arg_count) {
@@ -1091,7 +1090,7 @@ static vector<Identifier> ResolveArguments(const SimpleFunction &function, Bound
 		}
 
 		const auto param_idx = opt_param_idx.GetIndex();
-		if (sig.GetParameter(param_idx).GetKind() == FunctionParameterKind::STANDARD && param_idx < passed_count) {
+		if (sig.GetParameter(param_idx).AcceptsPosition() && param_idx < passed_count) {
 			throw BinderException(location,
 			                      "Named argument '%s' cannot be used for parameter '%s' because it has already "
 			                      "been provided as a positional argument in function call to '%s'",
@@ -1115,11 +1114,6 @@ static vector<Identifier> ResolveArguments(const SimpleFunction &function, Bound
 		const auto &param = sig.GetParameter(param_idx);
 		switch (param.GetKind()) {
 		case FunctionParameterKind::VAR_POSITIONAL:
-			if (!param.GetType().IsValid()) {
-				// a bare "*" separator receives nothing - any trailing positional argument is left to the tail below,
-				// exactly as for a signature that declares no "*args" at all
-				continue;
-			}
 			for (idx_t i = positional_count; i < passed_count; i++) {
 				bound_arguments.insert(bound_arguments.begin() + NumericCast<int64_t>(resolved_arguments.size()),
 				                       param.GetType());
@@ -1137,7 +1131,7 @@ static vector<Identifier> ResolveArguments(const SimpleFunction &function, Bound
 			break;
 		}
 
-		if (param.GetKind() == FunctionParameterKind::STANDARD && param_idx < passed_count) {
+		if (param.AcceptsPosition() && param_idx < passed_count) {
 			add_argument(std::move(positional_arguments[param_idx]), param.GetName());
 		} else if (keyword_arguments[param_idx]) {
 			add_argument(std::move(keyword_arguments[param_idx]), param.GetName());

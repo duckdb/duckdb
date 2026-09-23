@@ -919,6 +919,9 @@ static unique_ptr<FunctionData> ArgsKwargsBind(BindScalarFunctionInput &input) {
 		case FunctionParameterKind::VAR_POSITIONAL:
 			result->labels.push_back("*");
 			break;
+		case FunctionParameterKind::POSITIONAL:
+			result->labels.push_back("/" + names[i].GetIdentifierName());
+			break;
 		case FunctionParameterKind::VAR_KEYWORD:
 			result->labels.push_back("**" + names[i].GetIdentifierName());
 			break;
@@ -1183,6 +1186,20 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 		bind_fn.SetBindCallback(ArgsKwargsBind);
 		bind_fn.SetNullHandling(NH::SPECIAL_HANDLING);
 		loader.RegisterFunction(std::move(bind_fn));
+	}
+
+	// test_positional_only(a INTEGER, /, b INTEGER, **kwargs ANY) -> VARCHAR
+	// "a" can only be passed by position, so "a := ..." does not match it and is received by "**kwargs" instead.
+	{
+		FunctionSignature sig;
+		sig.AddPositionalOnlyParameter("a", LogicalType::INTEGER);
+		sig.AddParameter("b", LogicalType::INTEGER, Value::INTEGER(9));
+		sig.AddKwargsParameter("kwargs", LogicalType::ANY);
+		sig.SetReturnType(LogicalType::VARCHAR);
+		ScalarFunction fn("test_positional_only", std::move(sig), ArgsKwargsBindFunction);
+		fn.SetBindCallback(ArgsKwargsBind);
+		fn.SetNullHandling(NH::SPECIAL_HANDLING);
+		loader.RegisterFunction(std::move(fn));
 	}
 
 	// test_varargs_bind(a INTEGER, ... INTEGER) -> VARCHAR

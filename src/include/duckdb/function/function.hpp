@@ -123,7 +123,15 @@ struct FunctionParameters {
 //! VAR_POSITIONAL -> "*args", receives all remaining positional arguments
 //! VAR_KEYWORD    -> "**kwargs", receives all named arguments that do not match another parameter
 //! KEYWORD_ONLY   -> declared after "*args", can only be passed by name
-enum class FunctionParameterKind : uint8_t { STANDARD = 0, VAR_POSITIONAL = 1, VAR_KEYWORD = 2, KEYWORD_ONLY = 3 };
+//! POSITIONAL     -> declared before "/", can only be passed by position. Its name is invisible to a caller, so an
+//!                   argument of that name is unmatched and reaches "**kwargs" instead
+enum class FunctionParameterKind : uint8_t {
+	STANDARD = 0,
+	VAR_POSITIONAL = 1,
+	VAR_KEYWORD = 2,
+	KEYWORD_ONLY = 3,
+	POSITIONAL = 4
+};
 
 class FunctionParameter {
 public:
@@ -172,6 +180,14 @@ public:
 	//! Whether this is a "*args" or "**kwargs" parameter
 	auto IsVariadic() const -> bool {
 		return kind == FunctionParameterKind::VAR_POSITIONAL || kind == FunctionParameterKind::VAR_KEYWORD;
+	}
+	//! Whether a caller can pass this parameter by position
+	auto AcceptsPosition() const -> bool {
+		return kind == FunctionParameterKind::STANDARD || kind == FunctionParameterKind::POSITIONAL;
+	}
+	//! Whether a caller can pass this parameter by name
+	auto AcceptsName() const -> bool {
+		return kind == FunctionParameterKind::STANDARD || kind == FunctionParameterKind::KEYWORD_ONLY;
 	}
 
 private:
@@ -246,12 +262,7 @@ public:
 	DUCKDB_API auto SetVarArgs(LogicalType varargs_p) -> void;
 
 	auto GetArgsParameter() const -> optional_ptr<const FunctionParameter> {
-		auto param = GetParameterByKind(FunctionParameterKind::VAR_POSITIONAL);
-		if (param && !param->GetType().IsValid()) {
-			// a bare "*" separator receives no arguments
-			return nullptr;
-		}
-		return param;
+		return GetParameterByKind(FunctionParameterKind::VAR_POSITIONAL);
 	}
 	auto GetKwargsParameter() const -> optional_ptr<const FunctionParameter> {
 		return GetParameterByKind(FunctionParameterKind::VAR_KEYWORD);
@@ -283,23 +294,40 @@ public:
 		return *this;
 	}
 
+	//! Adds a parameter that can only be passed by position, placing it after the parameters that already can only be
+	//! passed that way. Its name is invisible to a caller: an argument of that name reaches "**kwargs" instead
+	auto AddPositionalOnlyParameter(Identifier name, LogicalType type) -> FunctionSignature & {
+		auto position = GetPositionalOnlyParameterCount();
+		parameters.insert(parameters.begin() + NumericCast<int64_t>(position),
+		                  FunctionParameter(std::move(name), std::move(type), FunctionParameterKind::POSITIONAL));
+		return *this;
+	}
+
+	//! The same, for a caller that declares no name of its own
+	auto AddPositionalOnlyParameter(LogicalType type) -> FunctionSignature & {
+		auto name = Identifier(StringUtil::Format("col%d", GetPositionalOnlyParameterCount()));
+		return AddPositionalOnlyParameter(std::move(name), std::move(type));
+	}
+
 	//! Adds a "*args" parameter, receiving all remaining positional arguments
 	auto AddArgsParameter(Identifier name, LogicalType type) -> FunctionSignature & {
 		parameters.emplace_back(std::move(name), std::move(type), FunctionParameterKind::VAR_POSITIONAL);
 		return *this;
 	}
 
-	//! Adds a parameter that can only be passed by name, closing the positional parameters first if they are not
-	//! closed already. Required: a call that leaves it out does not match
+	//! Adds a parameter that can only be passed by name. It closes the positional parameters: a keyword-only
+	//! parameter that no "*args" precedes is itself the "*" separator. Required: a call that leaves it out does not
+	//! match
 	auto AddNamedParameter(Identifier name, LogicalType type) -> FunctionSignature & {
-		AddSeparator();
-		return AddParameter(std::move(name), std::move(type));
+		parameters.emplace_back(std::move(name), std::move(type), FunctionParameterKind::KEYWORD_ONLY);
+		return *this;
 	}
 
 	//! The same, with a default for calls that leave it out
 	auto AddNamedParameter(Identifier name, LogicalType type, Value default_value) -> FunctionSignature & {
-		AddSeparator();
-		return AddParameter(std::move(name), std::move(type), std::move(default_value));
+		parameters.emplace_back(std::move(name), std::move(type), std::move(default_value),
+		                        FunctionParameterKind::KEYWORD_ONLY);
+		return *this;
 	}
 
 	//! Adds a named parameter the caller may leave out, defaulting to a NULL of its own type - the form a function's
@@ -315,37 +343,12 @@ public:
 		return *this;
 	}
 
-	//! Closes the positional parameters with a bare "*" separator, so that every parameter added after it is
-	//! keyword-only. Lets a signature declare keyword-only parameters without also accepting a "*args" pack - it is a
-	//! "*args" that receives nothing, so it has no type of its own.
-	//! Does nothing when the positional parameters are already closed, by a "*args" or by an earlier separator, so
-	//! that several helpers can each declare options on the same function
-	auto AddSeparator() -> FunctionSignature & {
-		// Is the last param a "*args" or keyword-only?
-		if (!parameters.empty()) {
-			const auto last_kind = parameters.back().GetKind();
-			if (last_kind == FunctionParameterKind::VAR_POSITIONAL) {
-				return *this;
-			}
-			if (last_kind == FunctionParameterKind::KEYWORD_ONLY) {
-				return *this;
-			}
-		}
-		parameters.emplace_back("*", LogicalType(LogicalTypeId::INVALID), FunctionParameterKind::VAR_POSITIONAL);
-		return *this;
-	}
-
-	//! Whether a bare "*" separator closes the positional parameters
-	auto HasSeparator() const -> bool {
-		auto param = GetParameterByKind(FunctionParameterKind::VAR_POSITIONAL);
-		return param && !param->GetType().IsValid();
-	}
-
-	//! Returns the index of the non-variadic parameter with the given name
+	//! Returns the index of the parameter a caller can pass by the given name. Skips the variadic parameters and the
+	//! positional-only ones, whose names a caller cannot use
 	auto GetParameterIndexByName(const Identifier &name) const -> optional_idx {
 		// Parameter names are matched case-insensitively, consistent with SQL identifier semantics.
 		for (idx_t i = 0; i < parameters.size(); i++) {
-			if (!parameters[i].IsVariadic() && parameters[i].GetName() == name) {
+			if (parameters[i].AcceptsName() && parameters[i].GetName() == name) {
 				return i;
 			}
 		}
@@ -355,7 +358,16 @@ public:
 	//! The number of leading parameters that can be passed by position
 	auto GetPositionalParameterCount() const -> idx_t {
 		idx_t result = 0;
-		while (result < parameters.size() && parameters[result].GetKind() == FunctionParameterKind::STANDARD) {
+		while (result < parameters.size() && parameters[result].AcceptsPosition()) {
+			result++;
+		}
+		return result;
+	}
+
+	//! The number of leading parameters that can ONLY be passed by position
+	auto GetPositionalOnlyParameterCount() const -> idx_t {
+		idx_t result = 0;
+		while (result < parameters.size() && parameters[result].GetKind() == FunctionParameterKind::POSITIONAL) {
 			result++;
 		}
 		return result;
@@ -384,9 +396,9 @@ private:
 		}
 		return nullptr;
 	}
-	//! Anything added after "*args", a bare "*" separator or a keyword-only parameter is itself keyword-only
+	//! Anything added after "*args" or a keyword-only parameter is itself keyword-only
 	auto GetNextKind() const -> FunctionParameterKind {
-		if (parameters.empty() || parameters.back().GetKind() == FunctionParameterKind::STANDARD) {
+		if (parameters.empty() || parameters.back().AcceptsPosition()) {
 			return FunctionParameterKind::STANDARD;
 		}
 		return FunctionParameterKind::KEYWORD_ONLY;

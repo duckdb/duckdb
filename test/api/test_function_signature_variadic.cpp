@@ -30,60 +30,115 @@ TEST_CASE("Parameters declared after *args are keyword-only", "[api][scalar_func
 	REQUIRE(sig.ToString() == "(a INTEGER, *args INTEGER, kw INTEGER, **kwargs ANY) -> BIGINT");
 }
 
-TEST_CASE("A bare * separator declares keyword-only parameters without a pack", "[api][scalar_function]") {
+TEST_CASE("A keyword-only parameter closes the positional parameters", "[api][scalar_function]") {
 	FunctionSignature sig;
 	sig.AddParameter("a", LogicalType::INTEGER);
-	sig.AddSeparator();
-	sig.AddParameter("kw", LogicalType::INTEGER, Value(LogicalType::INTEGER));
+	sig.AddNamedParameter("kw", LogicalType::INTEGER, Value(LogicalType::INTEGER));
 	sig.SetReturnType(LogicalType::BIGINT);
 	REQUIRE_NOTHROW(sig.Verify());
 
-	REQUIRE(sig.HasSeparator());
 	REQUIRE(sig.GetParameter(0).GetKind() == FunctionParameterKind::STANDARD);
-	REQUIRE(sig.GetParameter(2).GetKind() == FunctionParameterKind::KEYWORD_ONLY);
-	// the separator is a "*args" that receives nothing, so it takes a slot but is not varargs
-	REQUIRE(sig.GetParameterCount() == 3);
+	REQUIRE(sig.GetParameter(1).GetKind() == FunctionParameterKind::KEYWORD_ONLY);
+	// no "*args" pack is declared, so the closure occupies no parameter slot of its own
+	REQUIRE(sig.GetParameterCount() == 2);
 	REQUIRE(!sig.HasVarArgs());
 	REQUIRE(sig.GetArgsParameter() == nullptr);
 	REQUIRE(sig.GetPositionalParameterCount() == 1);
 	REQUIRE(sig.GetRequiredParameterCount() == 1);
-	REQUIRE(sig.GetParameterIndexByName("kw").GetIndex() == 2);
+	REQUIRE(sig.GetParameterIndexByName("kw").GetIndex() == 1);
+	// it still reads as the bare "*" Python spells it with
 	REQUIRE(sig.ToString() == "(a INTEGER, *, kw INTEGER := NULL) -> BIGINT");
 }
 
-TEST_CASE("A * separator with no keyword-only parameter after it is allowed", "[api][scalar_function]") {
-	// registration adds options conditionally, so a function that declares none must still be valid
+TEST_CASE("A *args pack takes the place of the bare * separator", "[api][scalar_function]") {
+	// the keyword-only parameter is closed off by the pack, so no "*" is spelled out on top of it
 	FunctionSignature sig;
 	sig.AddParameter("a", LogicalType::INTEGER);
-	sig.AddSeparator();
+	sig.AddArgsParameter("args", LogicalType::INTEGER);
+	sig.AddNamedParameter("kw", LogicalType::INTEGER, Value(LogicalType::INTEGER));
 	sig.SetReturnType(LogicalType::BIGINT);
 	REQUIRE_NOTHROW(sig.Verify());
-	REQUIRE(sig.GetParameterCount() == 2);
-	REQUIRE(sig.GetRequiredParameterCount() == 1);
-	REQUIRE(sig.ToString() == "(a INTEGER, *) -> BIGINT");
+	REQUIRE(sig.HasVarArgs());
+	REQUIRE(sig.ToString() == "(a INTEGER, *args INTEGER, kw INTEGER := NULL) -> BIGINT");
 }
 
-TEST_CASE("A *args parameter cannot follow a * separator", "[api][scalar_function]") {
-	// the separator is itself a "*args", so this is rejected as a second one
+TEST_CASE("Keyword-only parameters still accept a **kwargs after them", "[api][scalar_function]") {
 	FunctionSignature sig;
 	sig.AddParameter("a", LogicalType::INTEGER);
-	sig.AddSeparator();
-	sig.AddArgsParameter("args", LogicalType::INTEGER);
-	REQUIRE_THROWS_AS(sig.Verify(), InvalidInputException);
-}
-
-TEST_CASE("A * separator still accepts a **kwargs after it", "[api][scalar_function]") {
-	FunctionSignature sig;
-	sig.AddParameter("a", LogicalType::INTEGER);
-	sig.AddSeparator();
-	sig.AddParameter("kw", LogicalType::INTEGER, Value(LogicalType::INTEGER));
+	sig.AddNamedParameter("kw", LogicalType::INTEGER, Value(LogicalType::INTEGER));
 	sig.AddKwargsParameter("kwargs", LogicalType::ANY);
 	sig.SetReturnType(LogicalType::BIGINT);
 	REQUIRE_NOTHROW(sig.Verify());
-	REQUIRE(sig.HasSeparator());
 	REQUIRE(!sig.HasVarArgs());
 	REQUIRE(sig.GetKwargsParameter()->GetType() == LogicalType::ANY);
 	REQUIRE(sig.ToString() == "(a INTEGER, *, kw INTEGER := NULL, **kwargs ANY) -> BIGINT");
+}
+
+TEST_CASE("A function with only keyword-only parameters takes no positional argument", "[api][scalar_function]") {
+	FunctionSignature sig;
+	sig.AddNamedParameter("kw", LogicalType::INTEGER, Value(LogicalType::INTEGER));
+	sig.SetReturnType(LogicalType::BIGINT);
+	REQUIRE_NOTHROW(sig.Verify());
+	REQUIRE(sig.GetPositionalParameterCount() == 0);
+	REQUIRE(sig.ToString() == "(*, kw INTEGER := NULL) -> BIGINT");
+}
+
+TEST_CASE("A positional-only parameter cannot be passed by name", "[api][scalar_function]") {
+	FunctionSignature sig;
+	sig.AddPositionalOnlyParameter("a", LogicalType::INTEGER);
+	sig.AddParameter("b", LogicalType::INTEGER);
+	sig.AddKwargsParameter("kwargs", LogicalType::ANY);
+	sig.SetReturnType(LogicalType::BIGINT);
+	REQUIRE_NOTHROW(sig.Verify());
+
+	REQUIRE(sig.GetParameter(0).GetKind() == FunctionParameterKind::POSITIONAL);
+	REQUIRE(sig.GetParameter(1).GetKind() == FunctionParameterKind::STANDARD);
+	// it takes a position like a standard parameter, but its name is invisible to a caller
+	REQUIRE(sig.GetPositionalParameterCount() == 2);
+	REQUIRE(sig.GetPositionalOnlyParameterCount() == 1);
+	REQUIRE(!sig.GetParameterIndexByName("a").IsValid());
+	REQUIRE(sig.GetParameterIndexByName("b").GetIndex() == 1);
+	REQUIRE(sig.ToString() == "(a INTEGER, /, b INTEGER, **kwargs ANY) -> BIGINT");
+}
+
+TEST_CASE("Positional-only parameters combine with the other kinds", "[api][scalar_function]") {
+	FunctionSignature sig;
+	sig.AddPositionalOnlyParameter("a", LogicalType::INTEGER);
+	sig.AddParameter("b", LogicalType::INTEGER);
+	sig.AddArgsParameter("args", LogicalType::INTEGER);
+	sig.AddParameter("kw", LogicalType::INTEGER, Value(LogicalType::INTEGER));
+	sig.SetReturnType(LogicalType::BIGINT);
+	REQUIRE_NOTHROW(sig.Verify());
+	REQUIRE(sig.ToString() == "(a INTEGER, /, b INTEGER, *args INTEGER, kw INTEGER := NULL) -> BIGINT");
+
+	// a signature of nothing but positional-only parameters still closes them
+	FunctionSignature only;
+	only.AddPositionalOnlyParameter("a", LogicalType::INTEGER);
+	only.AddPositionalOnlyParameter("b", LogicalType::INTEGER);
+	only.SetReturnType(LogicalType::BIGINT);
+	REQUIRE_NOTHROW(only.Verify());
+	REQUIRE(only.GetPositionalOnlyParameterCount() == 2);
+	REQUIRE(only.ToString() == "(a INTEGER, b INTEGER, /) -> BIGINT");
+
+	// the builder keeps them ahead of the parameters that can be passed by name
+	FunctionSignature ordered;
+	ordered.AddParameter("b", LogicalType::INTEGER);
+	ordered.AddPositionalOnlyParameter("a", LogicalType::INTEGER);
+	REQUIRE(ordered.GetParameter(0).GetName() == "a");
+	REQUIRE_NOTHROW(ordered.Verify());
+}
+
+TEST_CASE("Positional-only parameters must come first", "[api][scalar_function]") {
+	using Kind = FunctionParameterKind;
+	auto i32 = LogicalType::INTEGER;
+	auto verify = [&](vector<FunctionParameter> params) {
+		FunctionSignature(std::move(params), LogicalType::BIGINT).Verify();
+	};
+
+	REQUIRE_NOTHROW(verify({{"a", i32, Kind::POSITIONAL}, {"b", i32}}));
+	REQUIRE_THROWS(verify({{"b", i32}, {"a", i32, Kind::POSITIONAL}}));
+	REQUIRE_THROWS(verify({{"args", i32, Kind::VAR_POSITIONAL}, {"a", i32, Kind::POSITIONAL}}));
+	REQUIRE_THROWS(verify({{"kw", i32, Kind::KEYWORD_ONLY}, {"a", i32, Kind::POSITIONAL}}));
 }
 
 TEST_CASE("SetVarArgs declares *args and **kwargs of the same type", "[api][scalar_function]") {

@@ -725,7 +725,7 @@ void duckdb_copy_function_set_copy_from_function(duckdb_copy_function copy_funct
 		return;
 	}
 	for (auto &param : tf.GetSignature().GetParameters()) {
-		// the bare "*" that closes the positional parameters carries no type of its own
+		// a variadic parameter carries no type of its own
 		if (param.IsVariadic()) {
 			continue;
 		}

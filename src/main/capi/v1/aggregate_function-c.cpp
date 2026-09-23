@@ -186,7 +186,8 @@ void duckdb_aggregate_function_add_parameter(duckdb_aggregate_function function,
 	}
 	auto &aggregate_function = GetCAggregateFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	aggregate_function.GetSignature().AddParameter(*logical_type);
+	// v1 declares no parameter name, so the parameter is positional-only - see duckdb_scalar_function_add_parameter
+	aggregate_function.GetSignature().AddPositionalOnlyParameter(*logical_type);
 }
 
 void duckdb_aggregate_function_set_return_type(duckdb_aggregate_function function, duckdb_logical_type type) {
