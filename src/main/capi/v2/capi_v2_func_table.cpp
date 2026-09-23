@@ -663,7 +663,7 @@ public:
 		vector<LogicalType> positional;
 		for (idx_t i = 0; i < signature.GetParameterCount(); i++) {
 			const auto &param = signature.GetParameter(i);
-			if (!param.HasDefaultValue()) {
+			if (!param.IsVariadic() && !param.HasDefaultValue()) {
 				positional.push_back(param.GetType());
 			}
 		}
@@ -694,6 +694,9 @@ public:
 		auto function_info = make_shared_ptr<CV2TableFunctionInfo>(std::move(info));
 		for (idx_t i = 0; i < signature.GetParameterCount(); i++) {
 			const auto &param = signature.GetParameter(i);
+			if (param.IsVariadic()) {
+				continue;
+			}
 			if (param.HasDefaultValue()) {
 				function.named_parameters[param.GetName()] = param.GetType();
 				function_info->named_parameter_defaults[param.GetName()] = *param.GetDefaultValue();

@@ -90,8 +90,14 @@ optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const 
 
 	// And the minimum and maximum number of arguments the function can accept
 	const auto minimum_arg_count = sig.GetRequiredParameterCount();
+	const auto positional_count = sig.GetPositionalParameterCount();
+	const auto args_param = sig.GetArgsParameter();
+	const auto kwargs_param = sig.GetKwargsParameter();
 
-	const auto maximum_arg_count = sig.HasVarArgs() ? NumericLimits<idx_t>::Maximum() : sig.GetParameterCount();
+	idx_t maximum_arg_count = NumericLimits<idx_t>::Maximum();
+	if (!args_param && !kwargs_param) {
+		maximum_arg_count = sig.GetParameterCount();
+	}
 
 	if (received_arg_count < minimum_arg_count) {
 		// We have fewer arguments than the function requires, so this function cannot be a match.
@@ -100,6 +106,11 @@ optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const 
 
 	if (received_arg_count > maximum_arg_count) {
 		// We have more arguments than the function can take, so this function cannot be a match.
+		return optional_idx();
+	}
+
+	if (arguments.size() > positional_count && !args_param) {
+		// There is no "*args" to receive the extra positional arguments
 		return optional_idx();
 	}
 
@@ -112,7 +123,7 @@ optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const 
 			continue;
 		}
 
-		auto arg_type = i < sig.GetParameterCount() ? sig.GetParameter(i).GetType() : sig.GetVarArgs();
+		auto &arg_type = i < positional_count ? sig.GetParameter(i).GetType() : args_param->GetType();
 
 		int64_t cast_cost = ImplicitCastCost(context, arguments[i], arg_type);
 		if (cast_cost >= 0) {
@@ -130,15 +141,12 @@ optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const 
 		auto opt_param_idx = sig.GetParameterIndexByName(named_arg.first);
 
 		if (!opt_param_idx.IsValid()) {
-			if (!sig.HasVarArgs()) {
-				// no parameter with this name: continue
+			if (!kwargs_param) {
+				// no parameter with this name, and no "**kwargs" to receive it
 				return optional_idx();
 			}
 
-			// This is a named vararg argument, we can skip the parameter index check as varargs are always at the end
-			// of the argument list
-			auto &vararg_type = sig.GetVarArgs();
-			int64_t cast_cost = ImplicitCastCost(context, named_arg.second, vararg_type);
+			int64_t cast_cost = ImplicitCastCost(context, named_arg.second, kwargs_param->GetType());
 			if (cast_cost >= 0) {
 				// we can implicitly cast, add the cost to the total cost
 				cost += static_cast<idx_t>(cast_cost);
@@ -147,18 +155,18 @@ optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const 
 				return optional_idx();
 			}
 		} else {
-			// This parameter index might technically be invalid, in that it may point to a parameter that has already
+			// This parameter might technically be invalid, in that it may point to a parameter that has already
 			// been filled by a positional argument. However, we will catch that later when we actually bind the
 			// argument expressions to construct the bound function expression. At that point we will also have more
 			// context so we can give a better error message.
 			const auto param_idx = opt_param_idx.GetIndex();
+			auto &param = sig.GetParameter(param_idx);
 
-			if (param_idx < arguments.size()) {
+			if (param.GetKind() == FunctionParameterKind::STANDARD && param_idx < arguments.size()) {
 				// If already covered by a positional argument, skip the cost check here.
 				continue;
 			}
 
-			auto &param = sig.GetParameter(param_idx);
 			int64_t cast_cost = ImplicitCastCost(context, named_arg.second, param.GetType());
 			if (cast_cost >= 0) {
 				cost += idx_t(cast_cost);
@@ -384,11 +392,20 @@ optional_idx FunctionBinder::BindFunctionFromArguments(const Identifier &name, c
 	vector<LogicalType> positional;
 	vector<pair<Identifier, LogicalType>> named;
 
-	if (TrySplitArgumentTypes(arguments, positional, named)) {
-		return BindFunctionFromArguments(name, functions, positional, named, error);
+	// Does this call have a valid positional -> named argument shape?
+	const auto is_valid_call = TrySplitArgumentTypes(arguments, positional, named);
+	if (is_valid_call) {
+		// Yes. Let's try to bind
+		const auto result = BindFunctionFromArguments(name, functions, positional, named, error);
+
+		// We failed binding - does any other overload support implicit argument names?
+		// If not, this is a hard failure.
+		if (result.IsValid() || !AnyOverloadSupportsImplicitArgumentNames(functions)) {
+			return result;
+		}
 	}
 
-	// The split failed because a positional argument follows a named one.
+	// Either a positional argument follows a named one, or no overload takes the positional arguments.
 	// Check if there is any overload that supports implicit argument names.
 	if (AnyOverloadSupportsImplicitArgumentNames(functions)) {
 		// If so, we can attempt to salvage the call by implicitly naming the positional arguments and retrying again
@@ -402,8 +419,17 @@ optional_idx FunctionBinder::BindFunctionFromArguments(const Identifier &name, c
 		named.clear();
 
 		if (TrySplitArgumentTypes(arguments, positional, named)) {
-			return BindFunctionFromArguments(name, functions, positional, named, error);
+			ErrorData retry_error;
+			auto result = BindFunctionFromArguments(name, functions, positional, named, retry_error);
+			if (result.IsValid() || !is_valid_call) {
+				error = std::move(retry_error);
+				return result;
+			}
 		}
+	}
+	if (is_valid_call) {
+		// the call only failed to match an overload, which is reported in the error
+		return optional_idx();
 	}
 
 	// No overload could rescue the positional-after-named call, give a clear error.
@@ -975,28 +1001,29 @@ void FunctionBinder::CheckTemplateTypesResolved(const BoundSimpleFunction &bound
 	VerifyTemplateType(bound_function.GetReturnType(), bound_function.GetName());
 }
 
-// Drain all named argument and insert them in the correct position according to the function signature.
-// Also insert default arguments where needed.
-// Returns the resolved name of every argument slot: the signature parameter name for positional slots, the
-// caller-provided name for named varargs, and an empty identifier for unnamed varargs.
-static vector<Identifier> ResolveArguments(const SimpleFunction &function, vector<unique_ptr<Expression>> &arguments,
+// Drain all named arguments and lay out the arguments in the order of the function signature:
+// [standard parameters | *args | keyword-only parameters | **kwargs], inserting default values where needed.
+// The types of the variadic arguments are added to the arguments of the bound function.
+// Returns the resolved name of every argument: the parameter name for standard and keyword-only parameters, the
+// caller-provided name for "**kwargs" and an empty identifier for "*args".
+static vector<Identifier> ResolveArguments(const SimpleFunction &function, BoundSimpleFunction &bound_function,
+                                           vector<unique_ptr<Expression>> &arguments,
                                            vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
 	const auto &sig = function.GetSignature();
+	const auto positional_count = sig.GetPositionalParameterCount();
+	const auto args_param = sig.GetArgsParameter();
+	const auto kwargs_param = sig.GetKwargsParameter();
 
-	const auto kwargs_offset = arguments.size();
+	// The arguments that were passed by position
+	auto positional_arguments = std::move(arguments);
+	const auto passed_count = positional_arguments.size();
 
-	// Reserve space for the named arguments
-	if (arguments.size() < sig.GetParameterCount()) {
-		arguments.resize(sig.GetParameterCount());
-	}
+	// The arguments that were passed by name, by the index of their parameter
+	vector<unique_ptr<Expression>> keyword_arguments(sig.GetParameterCount());
+	vector<pair<Identifier, unique_ptr<Expression>>> kwargs;
 
 	identifier_set_t seen_names;
-
-	vector<pair<Identifier, unique_ptr<Expression>>> trailing_kwargs;
-
-	// We now need to reorder them to match the function signature, before appending them to the argument list.
-	for (idx_t kwarg_idx = 0; kwarg_idx < named_arguments.size(); kwarg_idx++) {
-		auto &[name, arg] = named_arguments[kwarg_idx];
+	for (auto &[name, arg] : named_arguments) {
 		const auto location = arg->GetQueryLocation();
 
 		if (name.empty()) {
@@ -1011,78 +1038,98 @@ static vector<Identifier> ResolveArguments(const SimpleFunction &function, vecto
 			throw BinderException(location, "Duplicate named argument %s in function call to '%s'", name,
 			                      function.GetName());
 		}
-
 		seen_names.insert(name);
 
 		const auto opt_param_idx = sig.GetParameterIndexByName(name);
 		if (!opt_param_idx.IsValid()) {
-			if (!sig.HasVarArgs()) {
+			if (!kwargs_param) {
 				throw BinderException(location, "Function '%s' does not have a parameter named '%s'",
 				                      function.GetName(), name);
 			}
-
-			// This is a named vararg argument, come back for it later
-			trailing_kwargs.emplace_back(name, std::move(arg));
+			kwargs.emplace_back(name, std::move(arg));
 			continue;
 		}
 
 		const auto param_idx = opt_param_idx.GetIndex();
-
-		if (param_idx < kwargs_offset) {
+		if (sig.GetParameter(param_idx).GetKind() == FunctionParameterKind::STANDARD && param_idx < passed_count) {
 			throw BinderException(location,
 			                      "Named argument '%s' cannot be used for parameter '%s' because it has already "
 			                      "been provided as a positional argument in function call to '%s'",
 			                      arg->ToString(), name, function.GetName());
 		}
-
-		// Move it into the correct reserved position
-		arguments[param_idx] = std::move(arg);
+		keyword_arguments[param_idx] = std::move(arg);
 	}
 
-	// Fill out missing arguments with default values if they exist, otherwise throw an error.
-	for (idx_t i = 0; i < sig.GetParameterCount(); i++) {
-		if (arguments[i]) {
+	// the arguments in the order of the signature, moved back into "arguments" once they are all resolved
+	vector<unique_ptr<Expression>> resolved_arguments;
+	vector<Identifier> resolved_names;
+	vector<Identifier> named_arguments_names;
+	auto &bound_arguments = bound_function.GetArguments();
+
+	auto add_argument = [&](unique_ptr<Expression> arg, Identifier resolved_name) {
+		resolved_arguments.push_back(std::move(arg));
+		resolved_names.push_back(std::move(resolved_name));
+	};
+
+	for (idx_t param_idx = 0; param_idx < sig.GetParameterCount(); param_idx++) {
+		const auto &param = sig.GetParameter(param_idx);
+		switch (param.GetKind()) {
+		case FunctionParameterKind::VAR_POSITIONAL:
+			for (idx_t i = positional_count; i < passed_count; i++) {
+				bound_arguments.insert(bound_arguments.begin() + NumericCast<int64_t>(resolved_arguments.size()),
+				                       param.GetType());
+				add_argument(std::move(positional_arguments[i]), Identifier());
+			}
 			continue;
+		case FunctionParameterKind::VAR_KEYWORD:
+			for (auto &[name, arg] : kwargs) {
+				bound_arguments.push_back(param.GetType());
+				named_arguments_names.push_back(name);
+				add_argument(std::move(arg), name);
+			}
+			continue;
+		default:
+			break;
 		}
 
-		const auto &param = sig.GetParameter(i);
-
-		if (param.HasDefaultValue()) {
-			arguments[i] = make_uniq<BoundConstantExpression>(*param.GetDefaultValue());
-			arguments[i]->SetAlias(param.GetName());
-
+		if (param.GetKind() == FunctionParameterKind::STANDARD && param_idx < passed_count) {
+			add_argument(std::move(positional_arguments[param_idx]), param.GetName());
+		} else if (keyword_arguments[param_idx]) {
+			add_argument(std::move(keyword_arguments[param_idx]), param.GetName());
+		} else if (param.HasDefaultValue()) {
+			auto default_arg = make_uniq<BoundConstantExpression>(*param.GetDefaultValue());
+			default_arg->SetAlias(param.GetName());
+			add_argument(std::move(default_arg), param.GetName());
 		} else {
 			throw BinderException("Missing value for parameter %s in function call to %s", param.GetName(),
 			                      function.GetName());
 		}
-	}
-
-	// Every slot covered by the signature is now filled, and sits at the position of its parameter.
-	vector<Identifier> argument_names(arguments.size());
-	for (idx_t i = 0; i < MinValue<idx_t>(arguments.size(), sig.GetParameterCount()); i++) {
-		argument_names[i] = sig.GetParameter(i).GetName();
-	}
-
-	// Now spread out any trailing named vararg arguments into the remaining argument slots, wherever they may be
-	idx_t kwarg_idx = 0;
-	for (idx_t slot_idx = kwargs_offset; slot_idx < arguments.size(); slot_idx++) {
-		if (!arguments[slot_idx]) {
-			argument_names[slot_idx] = trailing_kwargs[kwarg_idx].first;
-			arguments[slot_idx] = std::move(trailing_kwargs[kwarg_idx].second);
-			kwarg_idx++;
+		if (param.GetKind() == FunctionParameterKind::KEYWORD_ONLY) {
+			named_arguments_names.push_back(param.GetName());
 		}
 	}
 
-	// And if there are still some left, just append them to the end
-	idx_t kwargs_remaining = trailing_kwargs.size() - kwarg_idx;
-	while (kwargs_remaining) {
-		argument_names.push_back(trailing_kwargs[kwarg_idx].first);
-		arguments.push_back(std::move(trailing_kwargs[kwarg_idx].second));
-		kwarg_idx++;
-		kwargs_remaining--;
+	if (!args_param) {
+		// Without "*args", positional arguments beyond the signature stay behind the resolved arguments
+		for (idx_t i = positional_count; i < passed_count; i++) {
+			add_argument(std::move(positional_arguments[i]), Identifier());
+		}
 	}
 
-	return argument_names;
+	const auto positional_argument_count = resolved_arguments.size() - named_arguments_names.size();
+	bound_function.SetNamedArguments(positional_argument_count, std::move(named_arguments_names));
+	arguments = std::move(resolved_arguments);
+
+	return resolved_names;
+}
+
+// The names of the named arguments have to stay parallel to the last arguments
+static void VerifyArgumentCount(const BoundSimpleFunction &bound_function, idx_t resolved_count, idx_t argument_count) {
+	if (resolved_count != argument_count && !bound_function.GetNamedArguments().empty()) {
+		throw InternalException("Function '%s' cannot add or remove arguments in its bind callback when it is "
+		                        "called with keyword-only or '**kwargs' arguments",
+		                        bound_function.GetName());
+	}
 }
 
 static vector<LogicalType> CaptureLogicalArguments(const BoundSimpleFunction &function,
@@ -1102,19 +1149,11 @@ pair<BoundScalarFunction, unique_ptr<FunctionData>>
 FunctionBinder::ResolveFunction(shared_ptr<const ScalarFunction> function_p, vector<unique_ptr<Expression>> &arguments,
                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
 	auto &function = *function_p;
-	// Reorder named args
-	auto argument_names = ResolveArguments(function, arguments, named_arguments);
-
 	// Make a BoundScalarFunction out of the ScalarFunction, so we can store bind info and other properties in it.
 	BoundScalarFunction bound_function(std::move(function_p));
 
-	// Expand varargs if necessary
-	if (function.HasVarArgs()) {
-		const auto &varargs_type = function.GetVarArgs();
-		for (idx_t i = function.GetSignature().GetParameterCount(); i < arguments.size(); i++) {
-			bound_function.GetArguments().push_back(varargs_type);
-		}
-	}
+	// Reorder named args and expand the variadic arguments
+	auto argument_names = ResolveArguments(function, bound_function, arguments, named_arguments);
 
 	// Attempt to resolve template types, before we call the "Bind" callback.
 	ResolveTemplateTypes(bound_function, arguments);
@@ -1125,6 +1164,7 @@ FunctionBinder::ResolveFunction(shared_ptr<const ScalarFunction> function_p, vec
 	if (bound_function.HasBindCallback()) {
 		BindScalarFunctionInput input(context, bound_function, arguments, argument_names, binder);
 		bind_info = bound_function.GetBindCallback()(input);
+		VerifyArgumentCount(bound_function, argument_names.size(), arguments.size());
 	}
 
 	// After the "bind" callback, we verify that all template types are bound to concrete types.
@@ -1195,19 +1235,11 @@ FunctionBinder::ResolveFunction(shared_ptr<const AggregateFunction> function_p,
                                 vector<unique_ptr<Expression>> &children,
                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
 	auto &function = *function_p;
-	// Reorder named args
-	auto argument_names = ResolveArguments(function, children, named_arguments);
-
 	// Make a BoundFunction out of the func
 	BoundAggregateFunction bound_function(std::move(function_p));
 
-	// Expand varargs if necessary
-	if (function.HasVarArgs()) {
-		const auto &varargs_type = function.GetVarArgs();
-		for (idx_t i = function.GetSignature().GetParameterCount(); i < children.size(); i++) {
-			bound_function.GetArguments().push_back(varargs_type);
-		}
-	}
+	// Reorder named args and expand the variadic arguments
+	auto argument_names = ResolveArguments(function, bound_function, children, named_arguments);
 
 	ResolveTemplateTypes(bound_function, children);
 	bound_function.SetLogicalArguments(CaptureLogicalArguments(bound_function, children));
@@ -1220,6 +1252,7 @@ FunctionBinder::ResolveFunction(shared_ptr<const AggregateFunction> function_p,
 
 		// we may have lost some arguments in the bind
 		children.resize(MinValue(bound_function.GetArguments().size(), children.size()));
+		VerifyArgumentCount(bound_function, argument_names.size(), children.size());
 	}
 
 	CheckTemplateTypesResolved(bound_function);
@@ -1292,18 +1325,10 @@ FunctionBinder::ResolveFunction(shared_ptr<const WindowFunction> function_p, vec
                                 optional_ptr<vector<LogicalType>> order_types,
                                 optional_ptr<vector<LogicalType>> arg_order_types) {
 	auto &function = *function_p;
-	// Reorder named args
-	auto argument_names = ResolveArguments(function, children, named_arguments);
-
 	BoundWindowFunction bound_function(std::move(function_p));
 
-	// Expand varargs if necessary
-	if (function.HasVarArgs()) {
-		const auto &varargs_type = function.GetVarArgs();
-		for (idx_t i = function.GetSignature().GetParameterCount(); i < children.size(); i++) {
-			bound_function.GetArguments().push_back(varargs_type);
-		}
-	}
+	// Reorder named args and expand the variadic arguments
+	auto argument_names = ResolveArguments(function, bound_function, children, named_arguments);
 
 	ResolveTemplateTypes(bound_function, children);
 	auto logical_arguments = CaptureLogicalArguments(bound_function, children);
@@ -1316,6 +1341,7 @@ FunctionBinder::ResolveFunction(shared_ptr<const WindowFunction> function_p, vec
 		bind_info = bound_function.GetBindCallback()(input);
 		// we may have lost some arguments in the bind
 		children.resize(MinValue(bound_function.GetArguments().size(), children.size()));
+		VerifyArgumentCount(bound_function, argument_names.size(), children.size());
 	}
 
 	CheckTemplateTypesResolved(bound_function);

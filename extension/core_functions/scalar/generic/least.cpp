@@ -305,9 +305,9 @@ unique_ptr<FunctionData> BindLeastGreatest(BindScalarFunctionInput &input) {
 
 template <class OP>
 ScalarFunction GetLeastGreatestFunction() {
-	ScalarFunction fun({}, LogicalType::ANY, nullptr, BindLeastGreatest<OP>, PropagateLeastGreatestStats<OP>, nullptr,
-	                   LogicalType::ANY, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
-	fun.GetSignature().AddParameter("arg1", LogicalType::ANY);
+	ScalarFunction fun({{"arg1", LogicalType::ANY}}, LogicalType::ANY, nullptr, BindLeastGreatest<OP>,
+	                   PropagateLeastGreatestStats<OP>, nullptr, LogicalType::ANY, FunctionStability::CONSISTENT,
+	                   FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 

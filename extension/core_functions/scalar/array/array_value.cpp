@@ -92,7 +92,7 @@ unique_ptr<BaseStatistics> ArrayValueStats(ClientContext &context, FunctionStati
 ScalarFunction ArrayValueFun::GetFunction() {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun("array_value", {}, LogicalTypeId::ARRAY, ArrayValueFunction, ArrayValueBind, ArrayValueStats);
-	fun.SetVarArgs(LogicalType::ANY);
+	fun.GetSignature().AddArgsParameter("args", LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }

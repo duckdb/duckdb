@@ -2334,6 +2334,7 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 			break;
 		}
 		state.offset_in_chunk = 0;
+		state.chunks_done++;
 	} while (iterator.Next());
 
 	// now gather from the found rows

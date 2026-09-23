@@ -209,7 +209,7 @@ TableScanOptions &CollectionScanState::GetOptions() {
 }
 
 ParallelCollectionScanState::ParallelCollectionScanState()
-    : collection(nullptr), current_row_group(nullptr), processed_rows(0) {
+    : collection(nullptr), current_row_group(nullptr), processed_rows(0), skipped_rows(0) {
 }
 
 void ParallelCollectionScanState::AssignRowGroup(optional_ptr<SegmentNode<RowGroup>> row_group) {

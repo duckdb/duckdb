@@ -33,9 +33,7 @@ static void StructInsertFunction(DataChunk &args, ExpressionState &state, Vector
 static unique_ptr<FunctionData> StructInsertBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	if (arguments.empty()) {
-		throw InvalidInputException("Missing required arguments for struct_insert function.");
-	}
+	auto &names = *input.GetArgumentNames();
 	if (LogicalTypeId::STRUCT != arguments[0]->GetReturnType().id()) {
 		throw InvalidInputException("The first argument to struct_insert must be a STRUCT");
 	}
@@ -53,17 +51,13 @@ static unique_ptr<FunctionData> StructInsertBind(BindScalarFunctionInput &input)
 		new_children.push_back(make_pair(child.first, child.second));
 	}
 
-	// Loop through the additional arguments (name/value pairs)
+	// Loop through the fields that are inserted
 	for (idx_t i = 1; i < arguments.size(); i++) {
-		auto &child = arguments[i];
-		if (child->GetAlias().empty()) {
-			throw BinderException("Need named argument for struct insert, e.g., a := b");
+		if (name_collision_set.find(names[i]) != name_collision_set.end()) {
+			throw BinderException("Duplicate struct entry name \"%s\"", names[i]);
 		}
-		if (name_collision_set.find(child->GetAlias()) != name_collision_set.end()) {
-			throw BinderException("Duplicate struct entry name \"%s\"", child->GetAlias());
-		}
-		name_collision_set.insert(child->GetAlias());
-		new_children.emplace_back(make_pair(child->GetAlias(), arguments[i]->GetReturnType()));
+		name_collision_set.insert(names[i]);
+		new_children.emplace_back(make_pair(names[i], arguments[i]->GetReturnType()));
 	}
 
 	bound_function.SetReturnType(LogicalType::STRUCT(new_children));
@@ -114,7 +108,7 @@ static unique_ptr<ParsedExpression> StructInsertUnbind(FunctionUnbindInput &inpu
 ScalarFunction StructInsertFun::GetFunction() {
 	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructInsertFunction, StructInsertBind, StructInsertStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	fun.SetVarArgs(LogicalType::ANY);
+	fun.GetSignature().AddParameter("struct", LogicalType::ANY).AddKwargsParameter("kwargs", LogicalType::ANY);
 	fun.GetProperties().SetRequiresExpressionNames(true);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
