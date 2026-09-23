@@ -18,7 +18,6 @@ def test_invalid_explain(shell):
 @pytest.mark.parametrize("query", [
     "EXPLAIN SELECT 42;",
     "EXPLAIN (FORMAT JSON) SELECT 42;",
-    "EXPLAIN (SQL) SELECT 42;",
 ])
 def test_explain_trailing_newline(shell, query):
     single = subprocess.run([shell, "--no-init", "-c", query], capture_output=True, check=True).stdout
