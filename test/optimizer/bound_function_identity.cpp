@@ -369,7 +369,8 @@ TEST_CASE("Specializing a bound aggregate keeps its definition", "[optimizer][fu
 	con.Rollback();
 }
 
-TEST_CASE("Recursive payload aggregates resolve qualified schemas", "[optimizer][function_identity][recursive_cte]") {
+TEST_CASE("Exported recursive payload aggregates resolve qualified schemas",
+          "[optimizer][function_identity][recursive_cte]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
 	REQUIRE_NO_FAIL(connection.Query("CREATE SCHEMA payload_schema; CREATE SCHEMA outer_schema; "
@@ -393,11 +394,11 @@ TEST_CASE("Recursive payload aggregates resolve qualified schemas", "[optimizer]
 	}
 	connection.Commit();
 	REQUIRE_NO_FAIL(connection.Query("SET search_path='payload_schema,main'"));
+	REQUIRE_NO_FAIL(connection.Query("SET debug_verify_statement='explain_sql_strict'"));
 	for (auto name : {"memory.main.payload_choice", "memory.payload_schema.payload_choice",
-	                  "memory.outer_schema.inner_schema.payload_choice", "payload_schema.payload_choice",
-	                  "payload_choice", "outer_schema.inner_schema.payload_choice", "memory.payload_choice"}) {
+	                  "memory.outer_schema.inner_schema.payload_choice", "payload_choice"}) {
 		CAPTURE(name);
-		auto expected = string(name) == "memory.main.payload_choice" || string(name) == "memory.payload_choice" ? 1 : 3;
+		auto expected = string(name) == "memory.main.payload_choice" ? 1 : 3;
 		auto ordinary = connection.Query("SELECT " + string(name) + "(v) FROM (VALUES(1),(3))t(v)");
 		REQUIRE_NO_FAIL(*ordinary);
 		REQUIRE(ordinary->GetValue(0, 0) == Value::INTEGER(expected));

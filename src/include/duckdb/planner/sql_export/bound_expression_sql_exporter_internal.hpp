@@ -67,10 +67,13 @@ static LogicalPlanVerificationFunctionIdentity DefinitionFunctionIdentity(const 
 
 template <class FUNCTION>
 static optional<QualifiedName> RebindableFunctionName(const FUNCTION &definition) {
-	auto name =
-	    QualifiedName(definition.GetCatalogName().empty() ? Identifier::SystemCatalog() : definition.GetCatalogName(),
-	                  definition.GetSchemaName().empty() ? Identifier::DefaultSchema() : definition.GetSchemaName(),
-	                  definition.GetName());
+	auto name = definition.GetQualifiedName();
+	if (name.Catalog().empty()) {
+		name = name.WithCatalog(Identifier::SystemCatalog());
+	}
+	if (name.Schema().empty()) {
+		name = QualifiedName(name.Catalog(), Identifier::DefaultSchema(), name.Name());
+	}
 	if (name.Path().empty()) {
 		return {};
 	}
