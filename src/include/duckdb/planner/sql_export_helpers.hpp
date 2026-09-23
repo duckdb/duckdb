@@ -4,7 +4,6 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/common/type_visitor.hpp"
-#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/logical_plan_verification_result.hpp"
 
 namespace duckdb {
@@ -47,23 +46,11 @@ inline bool IsValidIdentifier(const Identifier &identifier) {
 }
 
 inline bool IsSQLExportType(LogicalTypeId id) {
-	static const auto admitted_ids = [] {
-		// TYPE has SQL syntax but is not included in AllTypes.
-		unordered_set<LogicalTypeId> ids {LogicalTypeId::SQLNULL, LogicalTypeId::TYPE};
-		for (auto &type : LogicalType::AllTypes()) {
-			ids.insert(type.id());
-		}
-		return ids;
-	}();
-	return admitted_ids.count(id) != 0;
+	return TypeExpression::IsSQLType(id);
 }
 
 inline bool IsSQLRepresentableType(const LogicalType &type) {
-	return type.IsComplete() && !TypeVisitor::Contains(type, [](const LogicalType &child) {
-		       const bool empty_tuple = child.id() == LogicalTypeId::TUPLE && StructType::GetChildCount(child) == 0;
-		       const bool empty_enum = child.id() == LogicalTypeId::ENUM && EnumType::GetSize(child) == 0;
-		       return !IsSQLExportType(child.id()) || empty_tuple || empty_enum;
-	       });
+	return TypeExpression::CanRepresent(type);
 }
 
 inline bool IsSQLValueType(const LogicalType &type) {

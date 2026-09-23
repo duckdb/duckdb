@@ -120,8 +120,6 @@ private:
 	BoundExpressionSQLExportResult RestoreResultType(const LogicalType &type, unique_ptr<ParsedExpression> result,
 	                                                 const LogicalPlanVerificationPath &path);
 	static bool RequiresConstantConstructor(const LogicalType &type);
-	BoundExpressionSQLExportResult ExportNestedConstant(const LogicalType &type, optional_ptr<const Value> value,
-	                                                    const LogicalPlanVerificationPath &path);
 	BoundExpressionSQLExportResult CastToConstructedType(const LogicalType &type, unique_ptr<ParsedExpression> child,
 	                                                     const LogicalPlanVerificationPath &path);
 	BoundExpressionSQLExportResult ExportConstant(const BoundConstantExpression &expression,

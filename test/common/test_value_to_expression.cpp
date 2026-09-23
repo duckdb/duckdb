@@ -33,6 +33,7 @@ static void RequireSameExpressionValue(const Value &actual, const Value &expecte
 	               << ") expected=" << expected.ToSQLString() << " (" << expected.type().ToString() << ")");
 	REQUIRE(actual.type() == expected.type());
 	REQUIRE(!ValueOperations::DistinctFrom(actual, expected));
+	REQUIRE(actual.type().EqualsIncludingCollation(expected.type()));
 }
 
 // Asserts the round-trip contract of ConstantExpression::FromValue: the expression binds back to the same
@@ -169,4 +170,19 @@ TEST_CASE("ConstantExpression::FromValue round-trips nested values", "[api]") {
 	RequireExpressionRoundTrip(con, "NULL::STRUCT(a INTEGER)");
 	RequireExpressionRoundTrip(con, "NULL::INTEGER[]");
 	RequireExpressionRoundTrip(con, "NULL::MAP(VARCHAR, INTEGER)");
+	RequireExpressionRoundTrip(con, "'A' COLLATE nocase");
+	RequireExpressionRoundTrip(con, "['A' COLLATE nocase, NULL]");
+	RequireExpressionRoundTrip(con, "CASE WHEN false THEN ['A' COLLATE nocase] ELSE [] END");
+	RequireExpressionRoundTrip(con, "CASE WHEN false THEN {'s': 'A' COLLATE nocase} ELSE NULL END");
+	RequireExpressionRoundTrip(con, "CASE WHEN false THEN map([1], ['A' COLLATE nocase]) ELSE NULL END");
+	RequireExpressionRoundTrip(con, "get_type(['A' COLLATE nocase])");
+	RequireExpressionRoundTrip(con, "[get_type(42), NULL]");
+	RequireExpressionRoundTrip(con, "(SELECT sum(i) EXPORT_STATE FROM range(3) t(i))");
+
+	// Parent metadata need not be repeated in the stored child Values.
+	auto collated = Value::ARRAY(LogicalType::VARCHAR, {Value("A")})
+	                    .WithType(LogicalType::ARRAY(LogicalType::VARCHAR_COLLATION("nocase"), 1));
+	auto expression = ConstantExpression::FromValue(collated);
+	RequireSameExpressionValue(BindAndEvaluate(con, expression->Copy()), collated);
+	RequireSameExpressionValue(EvalConstantExpression(con, expression->ToString()), collated);
 }

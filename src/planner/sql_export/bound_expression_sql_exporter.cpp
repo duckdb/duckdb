@@ -145,9 +145,9 @@ BoundExpressionSQLExportState::BoundExpressionSQLExportState(const BoundExpressi
 BoundExpressionSQLExportResult BoundExpressionSQLExportState::Export(const Expression &expression,
                                                                      const LogicalPlanVerificationPath &path) {
 	auto result = ExportInternal(expression, path);
-	const bool exports_own_type = expression.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT ||
-	                              expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION;
-	const bool preserves_collation = exports_own_type && expression.GetReturnType().id() != LogicalTypeId::VARCHAR;
+	const bool preserves_collation = expression.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT ||
+	                                 (expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
+	                                  expression.GetReturnType().id() != LogicalTypeId::VARCHAR);
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF || preserves_collation) {
 		return result;
 	}

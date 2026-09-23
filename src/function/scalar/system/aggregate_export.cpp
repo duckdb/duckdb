@@ -23,8 +23,8 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/planner/bound_expression_sql_exporter.hpp"
-#include "duckdb/planner/sql_export_helpers.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/parser/expression/type_expression.hpp"
 
 namespace duckdb {
 
@@ -797,20 +797,20 @@ unique_ptr<ParsedExpression> ExportAggregateFunction::StateToSQL(const LogicalTy
 	vector<Value> signature;
 	vector<unique_ptr<ParsedExpression>> constant_arguments;
 	for (idx_t i = 0; i < types.size(); i++) {
-		if (!SQLExportHelpers::IsSQLRepresentableType(types[i]) ||
-		    TypeVisitor::Contains(types[i], [](const LogicalType &child) {
+		if (!TypeExpression::CanRepresent(types[i]) || TypeVisitor::Contains(types[i], [](const LogicalType &child) {
 			    return child.id() == LogicalTypeId::VARCHAR && !StringType::GetCollation(child).empty();
 		    })) {
 			return nullptr;
 		}
 		signature.emplace_back(types[i].ToString());
 		auto entry = constants.find(i);
-		auto constant = BoundExpressionSQLExporter::Export(
-		    BoundConstantExpression(entry == constants.end() ? Value() : entry->second), {});
-		if (constant.HasError()) {
+		unique_ptr<ParsedExpression> constant;
+		try {
+			constant = ConstantExpression::FromValue(entry == constants.end() ? Value() : entry->second);
+		} catch (const NotImplementedException &) {
 			return nullptr;
 		}
-		constant_arguments.push_back(make_uniq<CastExpression>(LogicalType::VARIANT(), std::move(constant.GetValue())));
+		constant_arguments.push_back(make_uniq<CastExpression>(LogicalType::VARIANT(), std::move(constant)));
 	}
 	vector<unique_ptr<ParsedExpression>> arguments;
 	arguments.push_back(std::move(value));
