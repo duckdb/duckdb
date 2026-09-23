@@ -239,7 +239,13 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 		execute->named_values = std::move(prep_verifier.values);
 
 		ReplaceStatement(statement, std::move(execute));
-	} else if (verification == DebugStatementVerification::EXPLAIN_STATEMENT) {
+	} else if (verification == DebugStatementVerification::EXPLAIN_STATEMENT ||
+	           verification == DebugStatementVerification::EXPLAIN_SQL ||
+	           verification == DebugStatementVerification::EXPLAIN_SQL_STRICT) {
+		const bool export_sql = verification != DebugStatementVerification::EXPLAIN_STATEMENT;
+		if (export_sql && statement->type != StatementType::SELECT_STATEMENT) {
+			return;
+		}
 		if (statement->type == StatementType::EXPLAIN_STATEMENT) {
 			// don't explain explain...
 			return;
@@ -254,7 +260,8 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 		}
 		// deliberately left without source text: the EXPLAIN runs as a nested statement, and giving it a
 		// query would let it consume the error location that belongs to the statement we are verifying
-		auto explain_stmt = make_uniq<ExplainStatement>(statement->Copy());
+		auto explain_stmt = make_uniq<ExplainStatement>(statement->Copy(), export_sql ? ExplainType::EXPLAIN_SQL
+		                                                                              : ExplainType::EXPLAIN_STANDARD);
 		// Disable the profiler during the verification EXPLAIN to prevent it from consuming the profiler context
 		// (which would lose parser timing captured before StatementVerification was called) and from
 		// overwriting the profiling output file with the EXPLAIN's profiling data.
@@ -263,9 +270,28 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 		ScopedConfigSetting suppress_profiling(
 		    client_config, [](ClientConfig &config) { config.enable_profiler = false; },
 		    [saved_profiler](ClientConfig &config) { config.enable_profiler = saved_profiler; });
-		auto explain_result = RunStatementInternal(lock, std::move(explain_stmt), query_parameters);
+		auto explain_result = RunStatementInternal(lock, std::move(explain_stmt), query_parameters, false);
 		if (explain_result->HasError()) {
+			auto &error = explain_result->GetErrorObject();
+			if (verification == DebugStatementVerification::EXPLAIN_SQL &&
+			    error.ExtraInfo().find("sql_export_unsupported") != error.ExtraInfo().end()) {
+				return;
+			}
 			explain_result->ThrowError();
+		}
+		if (export_sql) {
+			auto chunk = explain_result->Fetch();
+			D_ASSERT(chunk && chunk->size() == 1 && chunk->ColumnCount() == 2);
+			auto sql = chunk->GetValue(1, 0).GetValue<string>();
+			auto parser_options = GetParserOptions();
+			parser_options.identifier_case_mode = IdentifierCaseMode::PRESERVE_CASE;
+			Parser parser(parser_options);
+			parser.ParseQuery(sql);
+			if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT ||
+			    !parser.statements[0]->named_param_map.empty()) {
+				throw InternalException("SQL export verification did not produce one parameter-free SELECT");
+			}
+			ReplaceStatement(statement, std::move(parser.statements[0]));
 		}
 	}
 }

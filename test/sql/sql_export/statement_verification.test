@@ -1,0 +1,45 @@
+# name: test/sql/sql_export/statement_verification.test
+# description: Verify exported SQL through the statement verifier and execute it once
+# group: [sql_export]
+
+statement ok
+SET debug_verify_statement='explain_sql_strict';
+
+query I
+SELECT sum(i) FROM (VALUES (1),(2),(2),(4)) t(i) WHERE i>1;
+----
+8
+
+statement ok
+CREATE SEQUENCE statement_export_calls;
+
+query II
+SELECT x,x FROM (SELECT nextval('statement_export_calls') x) q;
+----
+1	1
+
+query I
+SELECT nextval('statement_export_calls');
+----
+2
+
+statement error
+SELECT error('exported execution failure');
+----
+exported execution failure
+
+query I
+SELECT 42;
+----
+42
+
+statement ok
+PREPARE statement_export_parameter AS SELECT $1::INTEGER + 1;
+
+query I
+EXECUTE statement_export_parameter(4);
+----
+5
+
+statement ok
+RESET debug_verify_statement;
