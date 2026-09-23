@@ -200,8 +200,7 @@ def optimized_release_config(*, runner: str, arch: str) -> dict[str, object]:
         "lto": "thin",
         "lto_jobs": "8",
         "extra_cmake_variables": (
-            "-DCMAKE_C_COMPILER_LAUNCHER= -DCMAKE_CXX_COMPILER_LAUNCHER= "
-            "-DNATIVE_LTO_STATIC_LIBRARIES=1"
+            "-DCMAKE_C_COMPILER_LAUNCHER= -DCMAKE_CXX_COMPILER_LAUNCHER= " "-DNATIVE_LTO_STATIC_LIBRARIES=1"
         ),
         "is_compatibility_build": False,
         "is_canonical_build": True,
