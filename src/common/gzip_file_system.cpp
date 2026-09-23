@@ -503,7 +503,10 @@ string GZipFileSystem::UncompressGZIPString(const char *data, idx_t size) {
 
 	if (gzip_hdr[3] & GZIP_FLAG_NAME) {
 		auto end_ptr = data + size;
-		while (body_ptr < end_ptr && *body_ptr++ != '\0') {
+		while (body_ptr < end_ptr) {
+			if (*body_ptr++ == '\0') {
+				break;
+			}
 		}
 	}
 
