@@ -397,6 +397,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"iceberg_rewrite_data_files", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_rollback_to_snapshot", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_scan", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"iceberg_scan_plan", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"iceberg_scan_tasks", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_schema_properties", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_snapshots", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_table_properties", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -677,6 +679,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"now", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"odbc_begin_transaction", "odbc_scanner", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"odbc_bind_params", "odbc_scanner", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"odbc_cancel_query", "odbc_scanner", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"odbc_close", "odbc_scanner", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"odbc_commit", "odbc_scanner", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"odbc_connect", "odbc_scanner", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -1333,7 +1336,6 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"iceberg_unsafe_skip_puffin_verification", "iceberg"},
     {"iceberg_use_metadata_log", "iceberg"},
     {"iceberg_use_server_side_scan_planning", "iceberg"},
-    {"iceberg_via_aws_sdk_for_catalog_interactions", "iceberg"},
     {"json_geometry_format", "json"},
     {"merge_http_secret_into_s3_request", "httpfs"},
     {"mysql_bit1_as_boolean", "mysql_scanner"},
@@ -1538,8 +1540,8 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_LOG_TYPES[] = {
-    {"DuckLakeMetadata", "ducklake"},
-    {"Iceberg", "iceberg"},
+    {"DeltaKernel", "delta"}, {"DuckLakeMetadata", "ducklake"},         {"HTTPFSInfo", "httpfs"},
+    {"Iceberg", "iceberg"},   {"PostgresQueryLog", "postgres_scanner"}, {"Quack", "quack"},
 }; // END_OF_EXTENSION_LOG_TYPES
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {

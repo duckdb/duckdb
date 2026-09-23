@@ -20,8 +20,9 @@ JSONBufferHandle::JSONBufferHandle(JSONReader &reader, idx_t buffer_index_p, idx
 
 JSONFileHandle::JSONFileHandle(QueryContext context_p, unique_ptr<FileHandle> file_handle_p, Allocator &allocator_p)
     : context(context_p), file_handle(std::move(file_handle_p)), allocator(allocator_p),
-      can_seek(file_handle->CanSeek()), file_size(file_handle->GetFileSize()), read_position(0), requested_reads(0),
-      actual_reads(0), last_read_requested(false), cached_size(0) {
+      can_seek(file_handle->CanSeek()), file_size(file_handle->GetFileSize()),
+      compressed(file_handle->GetFileCompressionType() != FileCompressionType::UNCOMPRESSED), read_position(0),
+      requested_reads(0), actual_reads(0), last_read_requested(false), cached_size(0) {
 }
 
 bool JSONFileHandle::IsOpen() const {
@@ -60,6 +61,23 @@ idx_t JSONFileHandle::FileSize() const {
 
 idx_t JSONFileHandle::Remaining() const {
 	return file_size - read_position;
+}
+
+double JSONFileHandle::GetProgress() const {
+	if (file_size == 0) {
+		return 0;
+	}
+	idx_t position;
+	if (compressed) {
+		if (!IsOpen()) {
+			return last_read_requested ? 1 : 0;
+		}
+		// the progress of a compressed file is the position in the compressed stream
+		position = file_handle->GetProgress();
+	} else {
+		position = read_position;
+	}
+	return MinValue<double>(static_cast<double>(position) / static_cast<double>(file_size), 1.0);
 }
 
 bool JSONFileHandle::CanSeek() const {
@@ -377,11 +395,7 @@ double JSONReader::GetProgress() const {
 	if (!HasFileHandle()) {
 		return 0;
 	}
-	const auto file_size = file_handle->FileSize();
-	if (file_size == 0) {
-		return 0;
-	}
-	return 100.0 - 100.0 * double(file_handle->Remaining()) / double(file_size);
+	return 100.0 * file_handle->GetProgress();
 }
 
 static inline void TrimWhitespace(JSONString &line) {

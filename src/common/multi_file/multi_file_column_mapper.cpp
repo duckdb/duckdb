@@ -322,6 +322,9 @@ static ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColu
 		result.default_value = BindBuiltinScalarFunction(context, StructPackFun::Name, std::move(default_expressions));
 	}
 	result.column_index = make_uniq<ColumnIndex>(local_id.GetIndex(), std::move(child_indexes));
+	if (global_index.HasType()) {
+		result.column_index->SetType(global_column.type);
+	}
 	result.mapping = std::move(mapping);
 	return result;
 }
@@ -446,6 +449,9 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 	map_indexes.emplace_back(0, std::move(child_indexes));
 
 	result.column_index = make_uniq<ColumnIndex>(local_id.GetIndex(), std::move(map_indexes));
+	if (global_index.HasType()) {
+		result.column_index->SetType(global_column.type);
+	}
 	result.mapping = std::move(mapping);
 	return result;
 }
@@ -569,6 +575,15 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 	}
 	// the field exists! get the local column
 	auto &local_column = local_columns[local_idx];
+	if (local_column.type.id() == LogicalTypeId::SQLNULL) {
+		// An explicitly NULL field can represent any result type, including a nested field.
+		// Do not feed it into remap_struct, which requires matching nested source types.
+		auto &type = (is_root || global_index.IsPushdownExtract()) && global_index.HasType()
+		                 ? global_index.GetScanType()
+		                 : global_column.type;
+		result.default_value = make_uniq<BoundConstantExpression>(Value(type));
+		return result;
+	}
 	auto mapping_idx = is_root ? top_level_index : local_idx;
 	auto mapping = make_uniq<MultiFileIndexMapping>(mapping_idx);
 	if (global_column.children.empty() || !local_column.type.IsNested()) {

@@ -941,3 +941,24 @@ FROM read_parquet('{TEST_DIR}/bloom_nan.parquet')
 WHERE x IS NOT DISTINCT FROM 'NaN'::DOUBLE;
 ----
 2048
+
+# Division by one and the lossless INTEGER-to-DOUBLE cast must expose the Bloom probe.
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM read_parquet('{TEST_DIR}/bloom_in.parquet') WHERE r / 1 = 101;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM read_parquet('{TEST_DIR}/bloom_in.parquet') WHERE r::DOUBLE = 101;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+query I
+SELECT sum(payload) FROM read_parquet('{TEST_DIR}/bloom_in.parquet') WHERE r / 1 = 101;
+----
+NULL
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/bloom_in.parquet') WHERE r / 1 = 100;
+----
+205

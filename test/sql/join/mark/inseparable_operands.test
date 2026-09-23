@@ -1,0 +1,16 @@
+# name: test/sql/join/mark/inseparable_operands.test
+# description: Inseparable MARK operands stay in the predicate and execute per pair
+# group: [mark]
+
+statement ok
+SET debug_disable_optimizer=true;
+
+# Keep one separable comparison so this exercises the comparison-join predicate path.
+foreach condition a=a+1 b=b+1 a+b=1 1=a+b
+
+query I
+SELECT __mark_join_marker FROM (VALUES (1)) l(a) JOIN BY(TYPE MARK) (VALUES (2)) r(b) ON a=b-1 AND {condition};
+----
+false
+
+endloop

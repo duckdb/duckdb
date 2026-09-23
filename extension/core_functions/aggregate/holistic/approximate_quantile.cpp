@@ -549,9 +549,9 @@ unique_ptr<FunctionData> ApproxQuantileDecimalDeserialize(Deserializer &deserial
 	auto bind_data = ApproximateQuantileBindData::Deserialize(deserializer, function);
 	auto &return_type = deserializer.Get<const LogicalType &>();
 	if (return_type.id() == LogicalTypeId::LIST) {
-		function.ReplaceImplementation(ApproxQuantileDecimalListFunction(function.GetArguments()[0]));
+		ReplaceApproxQuantileDecimal(function, ApproxQuantileDecimalListFunction(function.GetArguments()[0]));
 	} else {
-		function.ReplaceImplementation(ApproxQuantileDecimalFunction(function.GetArguments()[0]));
+		ReplaceApproxQuantileDecimal(function, ApproxQuantileDecimalFunction(function.GetArguments()[0]));
 	}
 	return bind_data;
 }

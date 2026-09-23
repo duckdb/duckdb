@@ -120,6 +120,8 @@ enum class CacheValidationMode : uint8_t;
 
 enum class CachingMode : uint8_t;
 
+enum class CanUnloadResult : uint8_t;
+
 enum class CatalogLookupBehavior : uint8_t;
 
 enum class CatalogType : uint8_t;
@@ -173,6 +175,8 @@ enum class DatePartSpecifier : uint8_t;
 enum class DebugInitialize : uint8_t;
 
 enum class DebugOrderVerification : uint8_t;
+
+enum class DebugProgressVerification : uint8_t;
 
 enum class DebugStatementVerification : uint8_t;
 
@@ -248,6 +252,8 @@ enum class FileLockType : uint8_t;
 
 enum class FileNameSegmentType : uint8_t;
 
+enum class FileSyncMode : uint8_t;
+
 enum class FileWriteMode : uint8_t;
 
 enum class FilterPropagateResult : uint8_t;
@@ -259,6 +265,8 @@ enum class FunctionCollationHandling : uint8_t;
 enum class FunctionErrors : uint8_t;
 
 enum class FunctionNullHandling : uint8_t;
+
+enum class FunctionParameterKind : uint8_t;
 
 enum class FunctionStability : uint8_t;
 
@@ -376,6 +384,8 @@ enum class OperatorFinalResultType : uint8_t;
 
 enum class OperatorFinalizeResultType : uint8_t;
 
+enum class OperatorMatcherMode : uint8_t;
+
 enum class OperatorResultType : uint8_t;
 
 enum class OptimizerType : uint32_t;
@@ -393,8 +403,6 @@ enum class OrderType : uint8_t;
 enum class OrdinalityType : uint8_t;
 
 enum class OutputStream : uint8_t;
-
-enum class PEGKeywordCategory : uint8_t;
 
 enum class ParseInfoType : uint8_t;
 
@@ -437,6 +445,8 @@ enum class PreserveOrderType : uint8_t;
 enum class ProfilingCoverage : uint8_t;
 
 enum class ProfilingParameterNames : uint8_t;
+
+enum class ProgressInvariant : uint8_t;
 
 enum class PushdownExtractSupport : uint8_t;
 
@@ -778,6 +788,9 @@ template<>
 const char* EnumUtil::ToChars<CachingMode>(CachingMode value);
 
 template<>
+const char* EnumUtil::ToChars<CanUnloadResult>(CanUnloadResult value);
+
+template<>
 const char* EnumUtil::ToChars<CatalogLookupBehavior>(CatalogLookupBehavior value);
 
 template<>
@@ -857,6 +870,9 @@ const char* EnumUtil::ToChars<DebugInitialize>(DebugInitialize value);
 
 template<>
 const char* EnumUtil::ToChars<DebugOrderVerification>(DebugOrderVerification value);
+
+template<>
+const char* EnumUtil::ToChars<DebugProgressVerification>(DebugProgressVerification value);
 
 template<>
 const char* EnumUtil::ToChars<DebugStatementVerification>(DebugStatementVerification value);
@@ -970,6 +986,9 @@ template<>
 const char* EnumUtil::ToChars<FileNameSegmentType>(FileNameSegmentType value);
 
 template<>
+const char* EnumUtil::ToChars<FileSyncMode>(FileSyncMode value);
+
+template<>
 const char* EnumUtil::ToChars<FileWriteMode>(FileWriteMode value);
 
 template<>
@@ -986,6 +1005,9 @@ const char* EnumUtil::ToChars<FunctionErrors>(FunctionErrors value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value);
+
+template<>
+const char* EnumUtil::ToChars<FunctionParameterKind>(FunctionParameterKind value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionStability>(FunctionStability value);
@@ -1162,6 +1184,9 @@ template<>
 const char* EnumUtil::ToChars<OperatorFinalizeResultType>(OperatorFinalizeResultType value);
 
 template<>
+const char* EnumUtil::ToChars<OperatorMatcherMode>(OperatorMatcherMode value);
+
+template<>
 const char* EnumUtil::ToChars<OperatorResultType>(OperatorResultType value);
 
 template<>
@@ -1187,9 +1212,6 @@ const char* EnumUtil::ToChars<OrdinalityType>(OrdinalityType value);
 
 template<>
 const char* EnumUtil::ToChars<OutputStream>(OutputStream value);
-
-template<>
-const char* EnumUtil::ToChars<PEGKeywordCategory>(PEGKeywordCategory value);
 
 template<>
 const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value);
@@ -1253,6 +1275,9 @@ const char* EnumUtil::ToChars<ProfilingCoverage>(ProfilingCoverage value);
 
 template<>
 const char* EnumUtil::ToChars<ProfilingParameterNames>(ProfilingParameterNames value);
+
+template<>
+const char* EnumUtil::ToChars<ProgressInvariant>(ProgressInvariant value);
 
 template<>
 const char* EnumUtil::ToChars<PushdownExtractSupport>(PushdownExtractSupport value);
@@ -1697,6 +1722,9 @@ template<>
 CachingMode EnumUtil::FromString<CachingMode>(const char *value);
 
 template<>
+CanUnloadResult EnumUtil::FromString<CanUnloadResult>(const char *value);
+
+template<>
 CatalogLookupBehavior EnumUtil::FromString<CatalogLookupBehavior>(const char *value);
 
 template<>
@@ -1776,6 +1804,9 @@ DebugInitialize EnumUtil::FromString<DebugInitialize>(const char *value);
 
 template<>
 DebugOrderVerification EnumUtil::FromString<DebugOrderVerification>(const char *value);
+
+template<>
+DebugProgressVerification EnumUtil::FromString<DebugProgressVerification>(const char *value);
 
 template<>
 DebugStatementVerification EnumUtil::FromString<DebugStatementVerification>(const char *value);
@@ -1889,6 +1920,9 @@ template<>
 FileNameSegmentType EnumUtil::FromString<FileNameSegmentType>(const char *value);
 
 template<>
+FileSyncMode EnumUtil::FromString<FileSyncMode>(const char *value);
+
+template<>
 FileWriteMode EnumUtil::FromString<FileWriteMode>(const char *value);
 
 template<>
@@ -1905,6 +1939,9 @@ FunctionErrors EnumUtil::FromString<FunctionErrors>(const char *value);
 
 template<>
 FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *value);
+
+template<>
+FunctionParameterKind EnumUtil::FromString<FunctionParameterKind>(const char *value);
 
 template<>
 FunctionStability EnumUtil::FromString<FunctionStability>(const char *value);
@@ -2081,6 +2118,9 @@ template<>
 OperatorFinalizeResultType EnumUtil::FromString<OperatorFinalizeResultType>(const char *value);
 
 template<>
+OperatorMatcherMode EnumUtil::FromString<OperatorMatcherMode>(const char *value);
+
+template<>
 OperatorResultType EnumUtil::FromString<OperatorResultType>(const char *value);
 
 template<>
@@ -2106,9 +2146,6 @@ OrdinalityType EnumUtil::FromString<OrdinalityType>(const char *value);
 
 template<>
 OutputStream EnumUtil::FromString<OutputStream>(const char *value);
-
-template<>
-PEGKeywordCategory EnumUtil::FromString<PEGKeywordCategory>(const char *value);
 
 template<>
 ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value);
@@ -2172,6 +2209,9 @@ ProfilingCoverage EnumUtil::FromString<ProfilingCoverage>(const char *value);
 
 template<>
 ProfilingParameterNames EnumUtil::FromString<ProfilingParameterNames>(const char *value);
+
+template<>
+ProgressInvariant EnumUtil::FromString<ProgressInvariant>(const char *value);
 
 template<>
 PushdownExtractSupport EnumUtil::FromString<PushdownExtractSupport>(const char *value);

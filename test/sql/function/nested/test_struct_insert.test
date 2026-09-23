@@ -25,7 +25,7 @@ SELECT struct_insert({'a': 1, 'b': 'abc', 'c': true}, d := {'a': 'new stuff'});
 statement error
 SELECT struct_insert();
 ----
-<REGEX>:Invalid Input Error.*Missing required arguments for struct_insert function.*
+<REGEX>:Binder Error.*No function matches.*struct_insert\(\).*
 
 statement error
 SELECT struct_insert({a: 1, b: 2});

@@ -9,15 +9,15 @@ AlterTableOptions <- AddColumn / DropConstraint / DropColumn / AlterColumn / Add
         RenameColumn / RenameAlter / SetPartitionedBy / ResetPartitionedBy / SetSortedBy / ResetSortedBy / SetOptions / ResetOptions
 
 AddConstraint <- 'ADD' TopLevelConstraint
-DropConstraint <- 'DROP' 'CONSTRAINT' IfExists? Identifier DropBehavior?
+DropConstraint <- 'DROP' 'CONSTRAINT' IfExists? ConstraintName DropBehavior?
 AddColumn <- 'ADD' 'COLUMN'? IfNotExists? AddColumnEntry
 AddColumnEntry <- DottedIdentifier Type? GeneratedColumn? ColumnConstraint*
 DropColumn <- 'DROP' 'COLUMN'? IfExists? NestedColumnName DropBehavior?
 AlterColumn <- 'ALTER' 'COLUMN'? NestedColumnName AlterColumnEntry
-RenameColumn <- 'RENAME' 'COLUMN'? NestedColumnName 'TO' Identifier
+RenameColumn <- 'RENAME' 'COLUMN'? NestedColumnName 'TO' ColIdOrString
 NestedColumnName <- IdentifierDot* ColumnName
 IdentifierDot <- Identifier '.'
-RenameAlter <- 'RENAME' 'TO' Identifier
+RenameAlter <- 'RENAME' 'TO' ColIdOrString
 SetPartitionedBy <- 'SET' 'PARTITIONED' 'BY' Parens(List(Expression))
 ResetPartitionedBy <- 'RESET' 'PARTITIONED' 'BY'
 SetSortedBy <- 'SET' 'SORTED' 'BY' Parens(OrderByExpressions)

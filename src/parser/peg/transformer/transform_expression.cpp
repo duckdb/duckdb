@@ -18,9 +18,16 @@
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
+
+//! Only an unqualified star (e.g. COUNT(*)) refers to the rows themselves - a qualified star (e.g. COUNT(tbl.*))
+//! refers to the columns of that relation and is expanded by the binder
+static bool ExpressionIsUnqualifiedStar(const ParsedExpression &expr) {
+	return PEGTransformerFactory::ExpressionIsEmptyStar(expr) && expr.Cast<StarExpression>().RelationName().empty();
+}
 
 unique_ptr<SQLStatement>
 PEGTransformerFactory::TransformExpressionStatement(PEGTransformer &transformer,
@@ -187,7 +194,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 	if (filter_clause) {
 		filter_expr = std::move(*filter_clause);
 	}
-	if (function_children.size() == 1 && ExpressionIsEmptyStar(*function_children[0].GetExpressionMutable()) &&
+	if (function_children.size() == 1 && ExpressionIsUnqualifiedStar(function_children[0].GetExpression()) &&
 	    !distinct && order_modifier->orders.empty()) {
 		// COUNT(*) gets converted into COUNT()
 		function_children.clear();
@@ -1174,10 +1181,31 @@ string PEGTransformerFactory::TransformNotSimilarToOp(PEGTransformer &transforme
 	return "!" + RegexMatchOperatorFunctionName(transformer);
 }
 
+static unique_ptr<ParsedExpression> TransformOperatorFunction(const string &operator_name,
+                                                              vector<unique_ptr<ParsedExpression>> children) {
+	vector split_operator = StringUtil::Split(operator_name, ".");
+	string schema_name;
+	string function_name;
+	if (split_operator.size() == 1) {
+		function_name = std::move(split_operator[0]);
+	} else if (split_operator.size() == 2) {
+		schema_name = std::move(split_operator[0]);
+		function_name = std::move(split_operator[1]);
+	} else {
+		throw ParserException("Too many identifiers found, expected schema.operator or operator");
+	}
+
+	auto result = make_uniq<FunctionExpression>(
+	    QualifiedName(Identifier(), Identifier(std::move(schema_name)), Identifier(std::move(function_name))),
+	    std::move(children));
+	result->IsOperatorMutable() = true;
+	return std::move(result);
+}
+
 unique_ptr<ParsedExpression>
-PEGTransformerFactory::TransformOtherOperatorExpression(PEGTransformer &transformer,
-                                                        unique_ptr<ParsedExpression> bitwise_expression,
-                                                        optional<vector<OtherOperatorTail>> other_operator_tail) {
+PEGTransformerFactory::TransformInfixOtherOperatorExpression(PEGTransformer &transformer,
+                                                             unique_ptr<ParsedExpression> bitwise_expression,
+                                                             optional<vector<OtherOperatorTail>> other_operator_tail) {
 	auto expr = std::move(bitwise_expression);
 	if (!other_operator_tail) {
 		return expr;
@@ -1252,26 +1280,18 @@ PEGTransformerFactory::TransformOtherOperatorExpression(PEGTransformer &transfor
 			vector<unique_ptr<ParsedExpression>> children_function;
 			children_function.push_back(std::move(expr));
 			children_function.push_back(std::move(right_expr));
-			vector split_operator = StringUtil::Split(other_operator, ".");
-			string schema_name;
-			string func_name = "";
-			if (split_operator.size() == 1) {
-				func_name = split_operator[0];
-			} else if (split_operator.size() == 2) {
-				schema_name = split_operator[0];
-				func_name = split_operator[1];
-			} else {
-				throw ParserException("Too many identifiers found, expected schema.operator or operator");
-			}
-
-			auto func_expr = make_uniq<FunctionExpression>(
-			    QualifiedName(Identifier(), Identifier(std::move(schema_name)), Identifier(std::move(func_name))),
-			    std::move(children_function));
-			func_expr->IsOperatorMutable() = true;
-			expr = std::move(func_expr);
+			expr = TransformOperatorFunction(other_operator, std::move(children_function));
 		}
 	}
 	return expr;
+}
+
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformCustomPrefixExpression(PEGTransformer &transformer, const string &operator_literal,
+                                                       unique_ptr<ParsedExpression> other_operator_expression) {
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(std::move(other_operator_expression));
+	return TransformOperatorFunction(operator_literal, std::move(children));
 }
 
 OtherOperatorTail PEGTransformerFactory::TransformOtherOperatorTail(PEGTransformer &transformer,
@@ -1305,18 +1325,19 @@ string PEGTransformerFactory::TransformQualifiedOperator(PEGTransformer &transfo
 
 string PEGTransformerFactory::TransformQualifiedOperatorContents(PEGTransformer &transformer,
                                                                  const optional<vector<string>> &col_id_dot,
-                                                                 const string &any_op) {
+                                                                 const string &any_operator_literal) {
 	vector<string> result;
 	if (col_id_dot) {
 		result = *col_id_dot;
 	}
-	result.push_back(any_op);
+	result.push_back(any_operator_literal);
 	return StringUtil::Join(result, ".");
 }
 
-pair<string, bool> PEGTransformerFactory::TransformAnyAllOperator(PEGTransformer &transformer, const string &any_op,
+pair<string, bool> PEGTransformerFactory::TransformAnyAllOperator(PEGTransformer &transformer,
+                                                                  const string &any_operator_literal,
                                                                   const bool &any_or_all) {
-	return make_pair(any_op, any_or_all);
+	return make_pair(any_operator_literal, any_or_all);
 }
 
 bool PEGTransformerFactory::TransformSubqueryAny(PEGTransformer &transformer) {
@@ -1753,7 +1774,7 @@ unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformMethodExpression(PEGTransformer &transformer, const string &col_label,
                                                  MethodArguments method_expression_arguments) {
 	if (method_expression_arguments.arguments.size() == 1 &&
-	    ExpressionIsEmptyStar(method_expression_arguments.arguments[0].GetExpression())) {
+	    ExpressionIsUnqualifiedStar(method_expression_arguments.arguments[0].GetExpression())) {
 		// COUNT(*) gets converted into COUNT()
 		method_expression_arguments.arguments.clear();
 	}

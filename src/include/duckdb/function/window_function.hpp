@@ -378,13 +378,30 @@ public:
 	const shared_ptr<const WindowFunction> &GetDefinition() const {
 		return definition;
 	}
+	//! The number of arguments that were received by "*args", they directly follow the standard parameters
+	idx_t GetVarArgsCount() const {
+		return BoundSimpleFunction::GetVarArgsCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by "**kwargs", they are the last arguments
+	idx_t GetKwargsCount() const {
+		return BoundSimpleFunction::GetKwargsCount(definition->GetSignature());
+	}
+	//! The kind of the parameter that received the argument at the given index
+	FunctionParameterKind GetArgumentParameterKind(idx_t argument_index) const {
+		return BoundSimpleFunction::GetArgumentParameterKind(definition->GetSignature(), argument_index);
+	}
+	const vector<LogicalType> &GetLogicalArguments() const {
+		return logical_arguments;
+	}
+	const LogicalType &GetLogicalReturnType() const {
+		return logical_return_type;
+	}
 	//! Restore the definition after the bound function has been replaced wholesale, together with the
 	//! qualification it carries - the replacement is a specialized implementation, not a different function
 	void SetDefinition(shared_ptr<const WindowFunction> definition_p) {
 		definition = std::move(definition_p);
 		if (definition) {
-			schema_name = definition->GetSchemaName();
-			catalog_name = definition->GetCatalogName();
+			qualified_name = definition->GetQualifiedName().WithName(GetName());
 		}
 	}
 
@@ -446,7 +463,18 @@ public:
 	}
 
 private:
+	void SetLogicalArguments(vector<LogicalType> arguments_p) {
+		logical_arguments = std::move(arguments_p);
+	}
+	void SetLogicalReturnType(LogicalType return_type_p) {
+		logical_return_type = std::move(return_type_p);
+	}
 	shared_ptr<const WindowFunction> definition;
+	vector<LogicalType> logical_arguments;
+	LogicalType logical_return_type;
+
+	friend class FunctionBinder;
+	friend class FunctionSerializer;
 };
 
 } // namespace duckdb

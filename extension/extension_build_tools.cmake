@@ -1,40 +1,6 @@
-
+# Deprecated no-op, kept so extensions that still call it configure.
 function(add_extension_definitions)
-    include_directories(${PROJECT_SOURCE_DIR}/extension)
-    if(NOT "${TEST_WITH_LOADABLE_EXTENSION}" STREQUAL "")
-        string(REPLACE ";"  "," COMMA_SEPARATED_EXTENSIONS "${TEST_WITH_LOADABLE_EXTENSION}")
-        # Note: weird commas are for easy substring matching in c++
-        add_definitions(-DDUCKDB_EXTENSIONS_TEST_WITH_LOADABLE=\",${COMMA_SEPARATED_EXTENSIONS},\")
-        add_definitions(-DDUCKDB_EXTENSIONS_BUILD_PATH="${CMAKE_BINARY_DIR}/extension")
-    endif()
-
-    if(${DISABLE_BUILTIN_EXTENSIONS})
-        add_definitions(-DDISABLE_BUILTIN_EXTENSIONS=${DISABLE_BUILTIN_EXTENSIONS})
-    endif()
-
-    # Include paths for any registered out-of-tree extensions
-    foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
-        string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
-        if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
-            add_definitions(-DDUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_LINKED=1)
-            if (DEFINED DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_INCLUDE_PATH)
-                include_directories("${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_INCLUDE_PATH}")
-            else()
-                # We try the default locations for headers
-                include_directories("${PROJECT_SOURCE_DIR}/extension_external/${EXT_NAME}/src/include")
-                include_directories("${PROJECT_SOURCE_DIR}/extension_external/${EXT_NAME}/include")
-            endif()
-        endif()
-    endforeach()
-endfunction()
-
-function(add_extension_dependencies LIBRARY)
-    foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
-        string(TOUPPER ${EXT_NAME} EXTENSION_NAME_UPPERCASE)
-        if (DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK)
-            add_dependencies(${LIBRARY} ${EXT_NAME}_extension)
-        endif()
-    endforeach()
+    message(DEPRECATION "add_extension_definitions() no longer does anything and can be removed")
 endfunction()
 
 function(get_statically_linked_extensions DUCKDB_EXTENSION_NAMES OUT_VARIABLE)
@@ -52,16 +18,80 @@ function(get_statically_linked_extensions DUCKDB_EXTENSION_NAMES OUT_VARIABLE)
     endif()
 endfunction()
 
+# Writes OUT_FILE from extension/loader/static_extension_loader.c.in: a C source defining
+# duckdb_register_static_extensions, which registers each named extension through its describe function.
+# scripts/generate_static_extension_loader.py renders the same template outside CMake.
+function(duckdb_write_static_extension_loader OUT_FILE)
+    set(LINK_EXTENSION_LIST "")
+    set(DESCRIBE_DECLARATIONS "")
+    set(DESCRIBE_REGISTRATIONS "")
+    foreach(EXT_NAME IN LISTS ARGN)
+        string(APPEND LINK_EXTENSION_LIST " ${EXT_NAME}")
+        string(APPEND DESCRIBE_DECLARATIONS "int32_t duckdb_extension_${EXT_NAME}_describe(duckdb_extension_descriptor *descriptor);\n")
+        string(APPEND DESCRIBE_REGISTRATIONS "\tif (duckdb_register_static_extension(duckdb_extension_${EXT_NAME}_describe) != 0) {\n\t\tresult = 1;\n\t}\n")
+    endforeach()
+    string(STRIP "${LINK_EXTENSION_LIST}" LINK_EXTENSION_LIST)
+    foreach(PART DESCRIBE_DECLARATIONS DESCRIBE_REGISTRATIONS)
+        string(REGEX REPLACE "\n$" "" ${PART} "${${PART}}")
+    endforeach()
+    configure_file(${DUCKDB_MODULE_BASE_DIR}/extension/loader/static_extension_loader.c.in ${OUT_FILE} @ONLY)
+endfunction()
+
+# Links the named extensions into TARGET, in the given order, which is also their load order: their archives, plus a
+# generated <TARGET>_static_extension_loader.c defining duckdb_register_static_extensions and, unless EXPLICIT is
+# given, extension/loader/static_extension_autoregister.cpp calling it before main. Extensions this build does not build
+# are skipped and reported. Each target picks its own set, so a shell and a test binary in the same build can link
+# different extensions.
+function(duckdb_link_extensions TARGET)
+    set(LINKAGE "")
+    set(AUTOLOAD TRUE)
+    set(EXTENSIONS ${ARGN})
+    list(GET EXTENSIONS 0 FIRST_ARG)
+    if(EXTENSIONS AND ("${FIRST_ARG}" STREQUAL "PRIVATE" OR "${FIRST_ARG}" STREQUAL "PUBLIC"))
+        set(LINKAGE ${FIRST_ARG})
+        list(REMOVE_AT EXTENSIONS 0)
+    endif()
+    list(FIND EXTENSIONS "EXPLICIT" EXPLICIT_INDEX)
+    if(NOT EXPLICIT_INDEX EQUAL -1)
+        set(AUTOLOAD FALSE)
+        list(REMOVE_AT EXTENSIONS ${EXPLICIT_INDEX})
+    endif()
+    set(LINKED "")
+    set(MISSING "")
+    foreach(EXT_NAME IN LISTS EXTENSIONS)
+        if(TARGET ${EXT_NAME}_extension)
+            target_link_libraries(${TARGET} ${LINKAGE} ${EXT_NAME}_extension)
+            list(APPEND LINKED ${EXT_NAME})
+        else()
+            list(APPEND MISSING ${EXT_NAME})
+        endif()
+    endforeach()
+    if(NOT "${MISSING}" STREQUAL "")
+        string(REPLACE ";" ", " MISSING_TEXT "${MISSING}")
+        message(STATUS "Extensions requested by ${TARGET} but not built: ${MISSING_TEXT}")
+    endif()
+    if("${LINKED}" STREQUAL "")
+        return()
+    endif()
+    set(HELPER "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}_static_extension_loader.c")
+    duckdb_write_static_extension_loader(${HELPER} ${LINKED})
+    target_sources(${TARGET} PRIVATE ${HELPER})
+    if(AUTOLOAD)
+        target_sources(${TARGET} PRIVATE ${DUCKDB_MODULE_BASE_DIR}/extension/loader/static_extension_autoregister.cpp)
+    endif()
+endfunction()
+
+# Links the extensions this build is configured to link by default (every loaded extension without DONT_LINK).
 function(link_extension_libraries LIBRARY LINKAGE)
-    target_link_libraries(${LIBRARY} ${LINKAGE} duckdb_generated_extension_loader)
     get_statically_linked_extensions("${DUCKDB_EXTENSION_NAMES}" STATICALLY_LINKED_EXTENSIONS)
-    # Now link against any registered out-of-tree extensions
+    set(DEFAULT_EXTENSIONS "")
     foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
         string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
         if (${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
-            target_link_libraries(${LIBRARY} ${LINKAGE} ${EXT_NAME}_extension)
+            list(APPEND DEFAULT_EXTENSIONS ${EXT_NAME})
         endif()
     endforeach()
+    duckdb_link_extensions(${LIBRARY} ${LINKAGE} ${DEFAULT_EXTENSIONS})
 endfunction()
 
 function(link_threads LIBRARY LINKAGE)
@@ -156,19 +186,28 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
         # TODO strip all symbols except the capi init
     elseif (EXTENSION_STATIC_BUILD)
         if (WIN32)
-            target_link_libraries(${TARGET_NAME} duckdb_static dummy_static_extension_loader ${DUCKDB_EXTRA_LINK_FLAGS})
+            target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
         elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
             if (APPLE)
                 set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
                 # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
                 set(WHITELIST "-Wl,-exported_symbol,_${NAME}_duckdb_cpp_init")
-                target_link_libraries(${TARGET_NAME} duckdb_static dummy_static_extension_loader ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
+                target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
             elseif (ZOS)
-                target_link_libraries(${TARGET_NAME} duckdb_static dummy_static_extension_loader ${DUCKDB_EXTRA_LINK_FLAGS})
+                target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
             else()
                 # For GNU we rely on fvisibility=hidden to hide the extension symbols and use -exclude-libs to hide the duckdb symbols
                 set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
-                target_link_libraries(${TARGET_NAME} duckdb_static dummy_static_extension_loader ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
+                if(DUCKDB_LOADABLE_FROM_ARCHIVE)
+                    # The entry point comes from an archive too, so --exclude-libs,ALL would hide it; export it alone
+                    # through a version script instead.
+                    set(EXPORTS_MAP "${CMAKE_CURRENT_BINARY_DIR}/${NAME}_loadable_exports.map")
+                    file(WRITE "${EXPORTS_MAP}" "{ global: ${NAME}_duckdb_cpp_init; local: *; };\n")
+                    target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--version-script=${EXPORTS_MAP})
+                    set_property(TARGET ${TARGET_NAME} APPEND PROPERTY LINK_DEPENDS "${EXPORTS_MAP}")
+                else()
+                    target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
+                endif()
             endif()
         else()
             message(FATAL_ERROR "EXTENSION static build is only intended for Linux and Windows on MVSC")
@@ -182,9 +221,11 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
             endif()
         endif()
     endif()
-
-
-    target_compile_definitions(${TARGET_NAME} PUBLIC -DDUCKDB_BUILD_LOADABLE_EXTENSION)
+    if(MSVC)
+        target_compile_options(${TARGET_NAME} PRIVATE /UDUCKDB_BUILD_LIBRARY)
+    else()
+        target_compile_options(${TARGET_NAME} PRIVATE -UDUCKDB_BUILD_LIBRARY)
+    endif()
     set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX
             ".duckdb_extension")
 
@@ -283,26 +324,136 @@ function(build_loadable_extension_capi_internal NAME VERSION ABI_TYPE PARAMETERS
     build_loadable_extension_directory(${NAME} ${ABI_TYPE} "extension/${NAME}" "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION}" "${VERSION}" "${PARAMETERS}" ${FILES})
 endfunction()
 
+# Adds the describe function of a static extension archive, duckdb_extension_<NAME>_describe, to <NAME>_extension. It
+# describes the extension's entrypoint to duckdb_register_static_extension. KIND is CPP, CAPI or CAPI_V2. The optional
+# third argument is what the entrypoint was built against, the DuckDB version by default, as the metadata of a loadable
+# extension carries it.
+function(duckdb_add_extension_describe NAME KIND)
+    set(API_VERSION "${DUCKDB_NORMALIZED_VERSION}")
+    if(ARGC GREATER 2)
+        set(API_VERSION "${ARGV2}")
+    endif()
+    if("${KIND}" STREQUAL "CAPI")
+        set(ENTRY_NAME "${NAME}_init_c_api")
+        set(ENTRY_FIELD "entry_capi_v1")
+        # takes a duckdb_extension_info and a duckdb_extension_access pointer, returns bool
+        set(ENTRY_DECLARATION "int ${ENTRY_NAME}(void *info, void *access);")
+    elseif("${KIND}" STREQUAL "CAPI_V2")
+        set(ENTRY_NAME "${NAME}_init_c_api_v2")
+        set(ENTRY_FIELD "entry_capi_v2")
+        # takes a duckdb_v2_extension_input pointer
+        set(ENTRY_DECLARATION "void ${ENTRY_NAME}(void *input);")
+    else()
+        set(ENTRY_NAME "${NAME}_duckdb_cpp_init")
+        set(ENTRY_FIELD "entry_cpp")
+        # takes a duckdb::ExtensionLoader reference, passed as a pointer
+        set(ENTRY_DECLARATION "void ${ENTRY_NAME}(void *loader);")
+    endif()
+    string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
+    string(REGEX REPLACE "[\"\\\\]" "" EXTENSION_VERSION "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION}")
+    set(EXTENSION_VERSION "\"${EXTENSION_VERSION}\"")
+    string(REGEX REPLACE "[\"\\\\]" "" API_VERSION "${API_VERSION}")
+    set(API_VERSION "\"${API_VERSION}\"")
+    set(DESCRIBE_FILE "${DuckDB_BINARY_DIR}/codegen/link/${NAME}_describe.c")
+    configure_file(${DUCKDB_MODULE_BASE_DIR}/extension/loader/extension_describe.c.in ${DESCRIBE_FILE} @ONLY)
+    target_sources(${NAME}_extension PRIVATE ${DESCRIBE_FILE})
+    set_property(TARGET ${NAME}_extension PROPERTY DUCKDB_EXTENSION_KIND "${KIND}")
+endfunction()
+
 function(build_static_extension NAME PARAMETERS)
     # all parameters after name
     set(FILES "${ARGV}")
     list(REMOVE_AT FILES 0)
     add_library(${NAME}_extension STATIC ${FILES})
     target_link_libraries(${NAME}_extension duckdb_static)
-    set_property(TARGET ${NAME}_extension PROPERTY DUCKDB_EXTENSION_KIND "CPP")
+    duckdb_add_extension_describe(${NAME} CPP)
+endfunction()
+
+# Adds the describe function to an extension archive created without build_static_extension.
+function(duckdb_add_missing_extension_describe NAME)
+    if(NOT TARGET ${NAME}_extension)
+        return()
+    endif()
+    get_target_property(TARGET_TYPE ${NAME}_extension TYPE)
+    get_property(KIND TARGET ${NAME}_extension PROPERTY DUCKDB_EXTENSION_KIND)
+    if(NOT "${TARGET_TYPE}" STREQUAL "STATIC_LIBRARY" OR NOT "${KIND}" STREQUAL "")
+        return()
+    endif()
+    duckdb_add_extension_describe(${NAME} CPP)
+endfunction()
+
+# Compiles a C++ extension once into lib<NAME>_extension.a and links its loadable from that archive.
+# NO_LOADABLE builds the archive only; NO_WARNINGS silences compiler warnings.
+function(build_extension_library NAME)
+    cmake_parse_arguments(PARSE_ARGV 1 ARG "NO_LOADABLE;NO_WARNINGS;DEFAULT_VISIBILITY" "" "")
+    set(FILES ${ARG_UNPARSED_ARGUMENTS})
+    set(PARAMETERS "-warnings")
+    if(ARG_NO_WARNINGS)
+        set(PARAMETERS "-no-warnings")
+    endif()
+
+    build_static_extension(${NAME} ${FILES})
+    if(ARG_NO_WARNINGS)
+        disable_target_warnings(${NAME}_extension)
+    endif()
+    if(ARG_NO_LOADABLE)
+        return()
+    endif()
+    if(EMSCRIPTEN OR WASM_LOADABLE_EXTENSIONS)
+        # the wasm side module is produced from the loadable target's own objects
+        build_loadable_extension(${NAME} "${PARAMETERS}" ${FILES})
+        return()
+    endif()
+
+    # the loadable exports only its entry point either way; DEFAULT_VISIBILITY keeps internals visible through libduckdb
+    if(NOT ARG_DEFAULT_VISIBILITY)
+        set_target_properties(${NAME}_extension PROPERTIES CXX_VISIBILITY_PRESET hidden)
+    endif()
+    set(LOADABLE_SOURCE "${DuckDB_BINARY_DIR}/codegen/loadable_from_archive.cpp")
+    if(NOT EXISTS "${LOADABLE_SOURCE}")
+        file(WRITE "${LOADABLE_SOURCE}" "// A loadable extension built by build_extension_library takes its code from its static archive.\n")
+    endif()
+    set(DUCKDB_LOADABLE_FROM_ARCHIVE TRUE)
+    string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
+    build_loadable_extension_directory(${NAME} "CPP" "extension/${NAME}" "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION}" "" "${PARAMETERS}" ${LOADABLE_SOURCE})
+    target_link_libraries(${NAME}_loadable_extension ${NAME}_extension)
+    # the entrypoint lives in the archive, so the link has to ask for it
+    set(ENTRY ${NAME}_duckdb_cpp_init)
+    if(MSVC)
+        if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+            set(ENTRY "_${ENTRY}")
+        endif()
+        target_link_options(${NAME}_loadable_extension PRIVATE "/INCLUDE:${ENTRY}")
+    elseif(APPLE)
+        target_link_options(${NAME}_loadable_extension PRIVATE "-Wl,-u,_${ENTRY}")
+    else()
+        if(MINGW AND CMAKE_SIZEOF_VOID_P EQUAL 4)
+            set(ENTRY "_${ENTRY}")
+        endif()
+        target_link_options(${NAME}_loadable_extension PRIVATE "-Wl,-u,${ENTRY}")
+    endif()
+endfunction()
+
+function(build_static_extension_capi_internal NAME KIND API_VERSION FILES)
+    add_library(${NAME}_extension STATIC ${FILES})
+    target_link_libraries(${NAME}_extension duckdb_static)
+    target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_BUILD_STATIC_EXTENSION)
+    duckdb_add_extension_describe(${NAME} ${KIND} "${API_VERSION}")
 endfunction()
 
 function(build_static_extension_capi NAME CAPI_VERSION_MAJOR CAPI_VERSION_MINOR CAPI_VERSION_PATCH PARAMETERS)
     set(FILES "${ARGV}")
     list(REMOVE_AT FILES 0 1 2 3)
-    add_library(${NAME}_extension STATIC ${FILES})
-    target_link_libraries(${NAME}_extension duckdb_static)
-    target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_BUILD_STATIC_EXTENSION)
+    set(CAPI_VERSION "v${CAPI_VERSION_MAJOR}.${CAPI_VERSION_MINOR}.${CAPI_VERSION_PATCH}")
+    if (${CAPI_VERSION_MAJOR} EQUAL 2)
+        build_static_extension_capi_internal(${NAME} CAPI_V2 "${CAPI_VERSION}" "${FILES}")
+    else()
+        build_static_extension_capi_internal(${NAME} CAPI "${CAPI_VERSION}" "${FILES}")
+    endif()
     target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_MAJOR=${CAPI_VERSION_MAJOR})
     target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_MINOR=${CAPI_VERSION_MINOR})
     target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_PATCH=${CAPI_VERSION_PATCH})
     target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_EXTENSION_NAME=${NAME})
-    set_property(TARGET ${NAME}_extension PROPERTY DUCKDB_EXTENSION_KIND "CAPI")
 endfunction()
 
 # Versioned build against the V2 C API, statically linked into DuckDB.
@@ -313,19 +464,15 @@ function(build_static_extension_capi_v2 NAME CAPI_VERSION_MAJOR CAPI_VERSION_MIN
     set(FILES "${ARGV}")
     list(REMOVE_AT FILES 0 1 2 3)
     build_static_extension_capi(${NAME} ${CAPI_VERSION_MAJOR} ${CAPI_VERSION_MINOR} ${CAPI_VERSION_PATCH} ${FILES})
-    set_property(TARGET ${NAME}_extension PROPERTY DUCKDB_EXTENSION_KIND "CAPI_V2")
 endfunction()
 
 # The unstable API is the V2 API: everything that was unstable in V1 was stabilized into v1.5.6.
 function(build_static_extension_capi_unstable NAME PARAMETERS)
     set(FILES "${ARGV}")
     list(REMOVE_AT FILES 0)
-    add_library(${NAME}_extension STATIC ${FILES})
-    target_link_libraries(${NAME}_extension duckdb_static)
-    target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_BUILD_STATIC_EXTENSION)
+    build_static_extension_capi_internal(${NAME} CAPI_V2 "${DUCKDB_NORMALIZED_VERSION}" "${FILES}")
     target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_UNSTABLE=${DUCKDB_NORMALIZED_VERSION})
     target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_EXTENSION_NAME=${NAME})
-    set_property(TARGET ${NAME}_extension PROPERTY DUCKDB_EXTENSION_KIND "CAPI_V2")
 endfunction()
 
 # Internal extension register function
@@ -506,12 +653,6 @@ function(duckdb_extension_load NAME)
     string(TOLOWER ${NAME} EXTENSION_NAME_LOWERCASE)
     string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
 
-    # Aggregate LINKED_LIBS globally
-    if(duckdb_extension_load_LINKED_LIBS)
-        list(APPEND DUCKDB_ALL_LINKED_LIBS ${duckdb_extension_load_LINKED_LIBS})
-        set(DUCKDB_ALL_LINKED_LIBS ${DUCKDB_ALL_LINKED_LIBS} PARENT_SCOPE)
-    endif()
-
     # If extension was set already, we ignore subsequent calls
     list (FIND DUCKDB_EXTENSION_NAMES ${EXTENSION_NAME_LOWERCASE} _index)
     if (${_index} GREATER -1)
@@ -660,20 +801,6 @@ endif()
 # Load base extension config
 include(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config.cmake)
 
-# Write linked libs to file for bundle-setup
-if(DUCKDB_ALL_LINKED_LIBS)
-    string(REPLACE ";" "\n" LINKED_LIBS_CONTENT "${DUCKDB_ALL_LINKED_LIBS}")
-    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/linked_libs.txt" "${LINKED_LIBS_CONTENT}")
-endif()
-
-# For extensions whose tests were loaded, but not linked into duckdb, we need to ensure they are registered to have
-# the sqllogictest "require" statement load the loadable extensions instead of the baked in static one
-foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
-    string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
-    if (NOT "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK}" AND "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_LOAD_TESTS}")
-        list(APPEND TEST_WITH_LOADABLE_EXTENSION ${EXT_NAME})
-    endif()
-endforeach()
 
 
 
@@ -720,6 +847,7 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
 
     if (DEFINED DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH)
         add_subdirectory(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH} extension/${EXT_NAME})
+        duckdb_add_missing_extension_describe(${EXT_NAME})
     else()
         message(FATAL_ERROR "No path found for registered extension '${EXT_NAME}'")
     endif()

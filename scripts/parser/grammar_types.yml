@@ -411,6 +411,8 @@ Expression:
     - LikeClause
     - EscapeClause
     - OtherOperatorExpression
+    - InfixOtherOperatorExpression
+    - CustomPrefixExpression
     - BitwiseExpression
     - AdditiveExpression
     - MultiplicativeExpression
@@ -716,6 +718,8 @@ StringList:
     - ColumnList
     - NameList
     - DottedIdentifier
+    - CommentTarget
+    - CommentStringLiteralIdentifier
     - ColumnAliases
     - TriggerColumnList
     - RepositoryPublicKey
@@ -1067,11 +1071,7 @@ String:
     - QualifiedOperator
     - QualifiedOperatorContents
     - ColIdDot
-    - AnyOp
-    - StringOperator
-    - JsonOperator
-    - InetOperator
-    - ListOperator
+    - AnyOperatorLiteral
     - BitOperator
     - Term
     - Factor
@@ -1699,6 +1699,7 @@ IdentifierType:
     - AnalyzeKeyword
     - ColId
     - ColIdOrString
+    - UsingColumnName
     - ColLabelOrString
     - ColLabelIdentifier
     - StringLiteralIdentifier
@@ -1805,30 +1806,17 @@ matcher_rule_overrides:
   OperatorLiteral:
     allow_type_overlap: true
     matcher: operator
+  AnyOperatorLiteral:
+    allow_type_overlap: true
+    matcher: all_operators
 
 packrat_memoized_rules:
   - Expression
-  - LambdaArrowExpression
-  - LogicalOrExpression
-  - LogicalAndExpression
-  - LogicalNotExpression
-  - IsExpression
-  - ComparisonExpression
-  - BitwiseExpression
-  - AdditiveExpression
-  - MultiplicativeExpression
-  - ExponentiationExpression
-  - PrefixExpression
-  - CollateExpression
-  - AtTimeZoneExpression
-  - SingleExpression
-  - BaseExpression
-  - ParensExpression
-  - ParenthesisExpression
   - Identifier
   - ColId
-  - ColumnReference
-  - FunctionExpression
+  - CatalogQualification
+  - SchemaQualification
+  - ReservedSchemaQualification
 
 # ---------------------------------------------------------------------------
 # excluded_rules: no transformer stub generated, no semantic value extracted

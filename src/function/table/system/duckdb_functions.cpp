@@ -1,4 +1,5 @@
 #include "duckdb/function/table/system_functions.hpp"
+#include "duckdb/common/atomic.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
@@ -28,6 +29,8 @@ struct DuckDBFunctionsData : public GlobalTableFunctionState {
 	vector<reference<CatalogEntry>> entries;
 	idx_t offset;
 	idx_t offset_in_entry;
+	//! The offset, published once per chunk (for progress)
+	atomic<idx_t> progress_offset {0};
 };
 
 static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, TableFunctionBindInput &input,
@@ -137,6 +140,15 @@ Value FunctionStabilityToValue(FunctionStability stability) {
 	}
 }
 
+//! The legacy "varargs" column cannot tell "*args" and "**kwargs" apart - report whichever the function has
+Value VariadicTypeValue(const FunctionSignature &signature) {
+	auto variadic = signature.GetArgsParameter();
+	if (!variadic) {
+		variadic = signature.GetKwargsParameter();
+	}
+	return variadic ? Value(variadic->GetType().ToString()) : Value();
+}
+
 struct ScalarFunctionExtractor {
 	static idx_t FunctionCount(ScalarFunctionCatalogEntry &entry) {
 		return entry.functions.Size();
@@ -153,7 +165,9 @@ struct ScalarFunctionExtractor {
 	static vector<Value> GetParameters(ScalarFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		for (auto &param : entry.functions.GetFunctionByOffset(offset)->GetSignature().GetParameters()) {
-			results.emplace_back(param.GetName());
+			if (!param.IsVariadic()) {
+				results.emplace_back(param.GetName());
+			}
 		}
 		return results;
 	}
@@ -162,7 +176,9 @@ struct ScalarFunctionExtractor {
 		vector<Value> results;
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
 		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
-			results.emplace_back(fun.GetSignature().GetParameter(i).GetType().ToString());
+			if (!fun.GetSignature().GetParameter(i).IsVariadic()) {
+				results.emplace_back(fun.GetSignature().GetParameter(i).GetType().ToString());
+			}
 		}
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
@@ -171,14 +187,15 @@ struct ScalarFunctionExtractor {
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
 		vector<LogicalType> results;
 		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
-			results.emplace_back(fun.GetSignature().GetParameter(i).GetType());
+			if (!fun.GetSignature().GetParameter(i).IsVariadic()) {
+				results.emplace_back(fun.GetSignature().GetParameter(i).GetType());
+			}
 		}
 		return results;
 	}
 
 	static Value GetVarArgs(ScalarFunctionCatalogEntry &entry, idx_t offset) {
-		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
-		return !fun.HasVarArgs() ? Value() : Value(fun.GetVarArgs().ToString());
+		return VariadicTypeValue(entry.functions.GetFunctionByOffset(offset)->GetSignature());
 	}
 
 	static Value GetMacroDefinition(ScalarFunctionCatalogEntry &entry, idx_t offset) {
@@ -211,7 +228,9 @@ struct WindowFunctionExtractor {
 	static vector<Value> GetParameters(WindowFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		for (auto &param : entry.functions.GetFunctionByOffset(offset)->GetSignature().GetParameters()) {
-			results.emplace_back(param.GetName());
+			if (!param.IsVariadic()) {
+				results.emplace_back(param.GetName());
+			}
 		}
 		return results;
 	}
@@ -220,7 +239,9 @@ struct WindowFunctionExtractor {
 		vector<Value> results;
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
 		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
-			results.emplace_back(fun.GetSignature().GetParameter(i).GetType().ToString());
+			if (!fun.GetSignature().GetParameter(i).IsVariadic()) {
+				results.emplace_back(fun.GetSignature().GetParameter(i).GetType().ToString());
+			}
 		}
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
@@ -229,7 +250,9 @@ struct WindowFunctionExtractor {
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
 		vector<LogicalType> results;
 		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
-			results.emplace_back(fun.GetSignature().GetParameter(i).GetType());
+			if (!fun.GetSignature().GetParameter(i).IsVariadic()) {
+				results.emplace_back(fun.GetSignature().GetParameter(i).GetType());
+			}
 		}
 		return results;
 	}
@@ -267,7 +290,9 @@ struct AggregateFunctionExtractor {
 	static vector<Value> GetParameters(AggregateFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		for (auto &param : entry.functions.GetFunctionByOffset(offset)->GetSignature().GetParameters()) {
-			results.emplace_back(param.GetName());
+			if (!param.IsVariadic()) {
+				results.emplace_back(param.GetName());
+			}
 		}
 		return results;
 	}
@@ -276,7 +301,9 @@ struct AggregateFunctionExtractor {
 		vector<Value> results;
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
 		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
-			results.emplace_back(fun.GetSignature().GetParameter(i).GetType().ToString());
+			if (!fun.GetSignature().GetParameter(i).IsVariadic()) {
+				results.emplace_back(fun.GetSignature().GetParameter(i).GetType().ToString());
+			}
 		}
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
@@ -285,14 +312,15 @@ struct AggregateFunctionExtractor {
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
 		vector<LogicalType> results;
 		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
-			results.emplace_back(fun.GetSignature().GetParameter(i).GetType());
+			if (!fun.GetSignature().GetParameter(i).IsVariadic()) {
+				results.emplace_back(fun.GetSignature().GetParameter(i).GetType());
+			}
 		}
 		return results;
 	}
 
 	static Value GetVarArgs(AggregateFunctionCatalogEntry &entry, idx_t offset) {
-		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
-		return !fun.HasVarArgs() ? Value() : Value(fun.GetVarArgs().ToString());
+		return VariadicTypeValue(entry.functions.GetFunctionByOffset(offset)->GetSignature());
 	}
 
 	static Value GetMacroDefinition(AggregateFunctionCatalogEntry &entry, idx_t offset) {
@@ -780,11 +808,23 @@ void DuckDBFunctionsFunction(ClientContext &context, TableFunctionInput &data_p,
 		}
 		count++;
 	}
+	data.progress_offset.store(data.offset, std::memory_order_relaxed);
+}
+
+static double DuckDBFunctionsProgress(ClientContext &context, const FunctionData *bind_data,
+                                      const GlobalTableFunctionState *global_state) {
+	auto &data = global_state->Cast<DuckDBFunctionsData>();
+	if (data.entries.empty()) {
+		return 100.0;
+	}
+	auto offset = data.progress_offset.load(std::memory_order_relaxed);
+	return 100.0 * static_cast<double>(offset) / static_cast<double>(data.entries.size());
 }
 
 void DuckDBFunctionsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    TableFunction("duckdb_functions", {}, DuckDBFunctionsFunction, DuckDBFunctionsBind, DuckDBFunctionsInit));
+	TableFunction functions("duckdb_functions", {}, DuckDBFunctionsFunction, DuckDBFunctionsBind, DuckDBFunctionsInit);
+	functions.table_scan_progress = DuckDBFunctionsProgress;
+	set.AddFunction(functions);
 }
 
 } // namespace duckdb

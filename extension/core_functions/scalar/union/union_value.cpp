@@ -39,15 +39,8 @@ unique_ptr<FunctionData> UnionValueBind(BindScalarFunctionInput &input) {
 	if (arguments.size() != 1) {
 		throw BinderException("union_value takes exactly one argument");
 	}
-	auto &child = arguments[0];
-
-	if (child->GetAlias().empty()) {
-		throw BinderException("Need named argument for union tag, e.g. UNION_VALUE(a := b)");
-	}
-
 	child_list_t<LogicalType> union_members;
-
-	union_members.emplace_back(make_pair(child->GetAlias(), child->GetReturnType()));
+	union_members.emplace_back(make_pair(input.GetArgumentNames()->at(0), arguments[0]->GetReturnType()));
 
 	bound_function.SetReturnType(LogicalType::UNION(std::move(union_members)));
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
@@ -57,7 +50,7 @@ unique_ptr<FunctionData> UnionValueBind(BindScalarFunctionInput &input) {
 
 ScalarFunction UnionValueFun::GetFunction() {
 	ScalarFunction fun("union_value", {}, LogicalTypeId::UNION, UnionValueFunction, UnionValueBind, nullptr, nullptr);
-	fun.SetVarArgs(LogicalType::ANY);
+	fun.GetSignature().AddKwargsParameter("kwargs", LogicalType::ANY);
 	fun.GetProperties().SetRequiresExpressionNames(true);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);

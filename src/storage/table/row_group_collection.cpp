@@ -3,6 +3,7 @@
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/thread.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/art/art.hpp"
@@ -310,7 +311,6 @@ void RowGroupCollection::InitializeScan(const QueryContext &context, CollectionS
                                         optional_ptr<TableFilterSet> table_filters) {
 	state.row_groups = GetRowGroups();
 	auto row_group = state.GetRootSegment();
-	D_ASSERT(row_group);
 	state.max_row = state.row_groups->GetBaseRowId() + next_row_id.load();
 	state.Initialize(context, GetTypes());
 	while (row_group && !row_group->GetNode().InitializeScan(state, *row_group)) {
@@ -357,6 +357,16 @@ void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &sta
 	state.max_row = state.row_groups->GetBaseRowId() + next_row_id.load();
 	state.batch_index = 0;
 	state.processed_rows = 0;
+	state.skipped_rows = 0;
+	if (state.reorderer) {
+		// row groups pruned by the reorderer are never scanned
+		idx_t total_rows = 0;
+		for (auto &row_group : state.row_groups->SegmentNodes()) {
+			total_rows += row_group.GetNode().count;
+		}
+		auto scan_rows = state.reorderer->ScanRowCount();
+		state.skipped_rows = total_rows > scan_rows ? total_rows - scan_rows : 0;
+	}
 }
 
 optional_idx RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollectionScanState &state,
@@ -421,6 +431,7 @@ optional_idx RowGroupCollection::NextParallelScan(ClientContext &context, Parall
 		                                             max_row, initialize_columns);
 		if (!need_to_scan) {
 			// skip this row group
+			state.skipped_rows.fetch_add(assignment_rows, std::memory_order_relaxed);
 			continue;
 		}
 		return assignment_rows;
@@ -1764,6 +1775,11 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	}
 	// all tasks have been successfully scheduled - execute tasks until we are done
 	checkpoint_state.executor->WorkOnTasks();
+
+	auto scan_sleep_ms = Settings::Get<DebugCheckpointScanSleepMsSetting>(writer.GetDatabase());
+	if (scan_sleep_ms > 0) {
+		ThreadUtil::SleepMs(scan_sleep_ms);
+	}
 
 	// no errors - finalize the row groups
 	// if the table already exists on disk - check if all row groups have stayed the same

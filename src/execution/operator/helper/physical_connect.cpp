@@ -1,7 +1,7 @@
 #include "duckdb/execution/operator/helper/physical_connect.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/execution/operator/helper/launch_external_resource.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -62,7 +62,7 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 			owns_resource = true;
 		}
 		AttachInfo attach_info;
-		attach_info.name = Identifier("__connect_" + UUID::ToString(UUID::GenerateRandomUUID()));
+		attach_info.name = GenerateInternalName("__connect_");
 		// Applying the resource, parsing its options and the attach can all throw, and by now the
 		// resource exists with nothing owning it. One guard covers the lot; a narrower one strands it.
 		auto reap_if_owned = [&]() {
@@ -117,7 +117,7 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 		// (backend-safe), and unguessable, so it is not referenceable in SQL. It is owned by this
 		// connection and detached again by DISCONNECT (see PhysicalDisconnect).
 		AttachInfo attach_info;
-		attach_info.name = Identifier("__connect_" + UUID::ToString(UUID::GenerateRandomUUID()));
+		attach_info.name = GenerateInternalName("__connect_");
 		attach_info.path = info->name.GetIdentifierName();
 		attach_info.options = info->options;
 
