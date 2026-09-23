@@ -2691,6 +2691,14 @@ public:
 	                                                        GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue>
 	FinalizeOtherOperatorExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeInfixOtherOperatorExpressionTrampoline(PEGTransformer &transformer,
+	                                                             GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue>
+	FinalizeInfixOtherOperatorExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeCustomPrefixExpressionTrampoline(PEGTransformer &transformer,
+	                                                       GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue>
+	FinalizeCustomPrefixExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static void InitializeOtherOperatorTailTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeOtherOperatorTailTrampoline(PEGTransformer &transformer,
 	                                                                            GeneratedTransformProcess &process);
@@ -5033,8 +5041,11 @@ public:
 	TransformBetweenClause(PEGTransformer &transformer, unique_ptr<ParsedExpression> other_operator_expression,
 	                       unique_ptr<ParsedExpression> other_operator_expression_1);
 	static unique_ptr<ParsedExpression>
-	TransformOtherOperatorExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> bitwise_expression,
-	                                 optional<vector<OtherOperatorTail>> other_operator_tail);
+	TransformInfixOtherOperatorExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> bitwise_expression,
+	                                      optional<vector<OtherOperatorTail>> other_operator_tail);
+	static unique_ptr<ParsedExpression>
+	TransformCustomPrefixExpression(PEGTransformer &transformer, const string &operator_literal,
+	                                unique_ptr<ParsedExpression> other_operator_expression);
 	static OtherOperatorTail TransformOtherOperatorTail(PEGTransformer &transformer, ParsedOperator other_operator,
 	                                                    unique_ptr<ParsedExpression> bitwise_expression);
 	static ParsedOperator TransformAnyAllParsedOperator(PEGTransformer &transformer,
