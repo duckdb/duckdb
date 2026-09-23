@@ -21,15 +21,11 @@ namespace duckdb {
 // Forward declaration.
 class BlockHandle;
 
-//! A cached byte range of a file. The blocks of a file never overlap and are sized by the reads that created them,
-//! so the cache holds the requested bytes rather than aligned blocks around them.
 struct CacheBlock {
 	CacheBlock(idx_t location_p, idx_t size_p) : location(location_p), size(size_p) {
 	}
 
-	//! File offset of the first byte of the block
 	const idx_t location;
-	//! Number of file bytes the block covers
 	const idx_t size;
 
 	mutable annotated_mutex mtx;

@@ -82,7 +82,7 @@ private:
 	idx_t read_count DUCKDB_GUARDED_BY(lock) = 0;
 };
 
-//! File system that records the ranges of the positional reads that reach it.
+//! Records the ranges of positional reads.
 class ReadRecordingFileSystem : public SimpleTrackingFileSystem {
 public:
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
@@ -93,7 +93,7 @@ public:
 		SimpleTrackingFileSystem::Read(handle, buffer, nr_bytes, location);
 	}
 
-	//! Return the recorded reads ordered by location, and clear them
+	//! Recorded reads sorted by location, clears them
 	vector<pair<idx_t, idx_t>> TakeReads() {
 		annotated_lock_guard<annotated_mutex> guard(lock);
 		auto result = std::move(reads);

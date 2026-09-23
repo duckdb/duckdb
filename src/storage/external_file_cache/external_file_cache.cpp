@@ -82,7 +82,6 @@ bool ExternalFileCache::ShouldCacheFile(const string &path) const {
 	return Settings::Get<CacheLocalFilesSetting>(db);
 }
 
-//! Whether the buffer manager dropped the block's buffer, so it would have to be fetched again
 static bool IsDroppedBlock(CacheBlock &block) {
 	const annotated_lock_guard<annotated_mutex> block_guard(block.mtx);
 	if (block.state != CacheBlockState::LOADED || !block.block_handle) {
@@ -122,7 +121,7 @@ vector<shared_ptr<CacheBlock>> ExternalFileCache::AcquireBlocks(CachedFile &cach
 			// re-fetch a dropped block only as far as this read needs it
 			it = blocks.erase(it);
 		}
-		// the bytes up to the next cached block are missing, create blocks for exactly those
+		// create blocks for the missing bytes up to the next cached block
 		const idx_t gap_end = it == blocks.end() ? end : MinValue(end, it->first);
 		while (pos < gap_end) {
 			const idx_t size = MinValue(gap_end - pos, max_block_size);

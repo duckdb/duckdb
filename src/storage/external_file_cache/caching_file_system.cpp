@@ -348,12 +348,11 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 
 	auto current_cached_file = EnsureCachedFileCurrent();
 	const idx_t max_block_size = external_file_cache.GetCacheBlockSize(current_cached_file->path);
-	// the blocks cover exactly the requested bytes, missing ranges get new blocks that are fetched below
 	idx_t fetch_location = location;
 	idx_t fetch_bytes = nr_bytes;
 	const idx_t file_size = GetFileSize();
 	if (file_size <= max_block_size && location + nr_bytes <= file_size) {
-		// a file that fits in one block is fetched whole, so later reads of it are served from the cache
+		// fetch a file that fits in one block whole, so later reads of it hit the cache
 		fetch_location = 0;
 		fetch_bytes = file_size;
 	}
@@ -378,7 +377,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	for (idx_t idx = 0; idx < num_blocks && remaining > 0; idx++) {
 		auto &block = *blocks[idx];
 		if (block.location + block.size <= location) {
-			// fetched along with the rest of a small file, but before the requested range
+			// part of a small file fetched whole, before the requested range
 			continue;
 		}
 		const idx_t offset_in_block = location > block.location ? location - block.location : 0;
