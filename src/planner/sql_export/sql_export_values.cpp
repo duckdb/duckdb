@@ -232,6 +232,7 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportExpressionGet(Logica
                                                                           const LogicalPlanVerificationPath &path) {
 	D_ASSERT(get.children.size() == 1 && get.children[0]);
 	D_ASSERT(!get.expressions.empty() && !get.expressions[0].empty());
+#ifdef D_ASSERT_IS_ENABLED
 	auto column_count = get.expressions[0].size();
 	D_ASSERT(get.expr_types.size() == column_count);
 	for (auto &row : get.expressions) {
@@ -240,6 +241,7 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportExpressionGet(Logica
 			D_ASSERT(row[i] && row[i]->GetReturnType() == get.expr_types[i]);
 		}
 	}
+#endif
 	auto fields = CreateFields(get, path);
 	if (fields.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());

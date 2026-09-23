@@ -20,10 +20,6 @@
 namespace duckdb {
 namespace logical_plan_sql_export {
 
-static bool IsValidText(const string &value) {
-	return SQLExportHelpers::IsValidIdentifier(Identifier(value));
-}
-
 static LogicalPlanVerificationIssue ExtensionIssue(LogicalPlanVerificationIssueCode code,
                                                    const LogicalPlanVerificationPath &path, const string &identifier,
                                                    string message) {
@@ -253,7 +249,7 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportSecureView(LogicalSe
 LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportExtension(LogicalExtensionOperator &extension,
                                                                       const LogicalPlanVerificationPath &path) {
 	auto extension_identifier = extension.GetExtensionName();
-	D_ASSERT(IsValidText(extension_identifier));
+	D_ASSERT(SQLExportHelpers::IsValidIdentifier(Identifier(extension_identifier)));
 	auto fields = CreateFields(extension, path);
 	if (fields.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
@@ -290,9 +286,11 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportExtension(LogicalExt
 		if (handled) {
 			return std::move(*handled);
 		}
+#ifdef D_ASSERT_IS_ENABLED
 		for (auto &child : child_views) {
 			D_ASSERT(child.table);
 		}
+#endif
 	}
 	for (auto &registered_extension : OperatorExtension::Iterate(context)) {
 		if (registered_extension->GetName() != extension_identifier) {
@@ -303,9 +301,11 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportExtension(LogicalExt
 		if (handled) {
 			return std::move(*handled);
 		}
+#ifdef D_ASSERT_IS_ENABLED
 		for (auto &child : child_views) {
 			D_ASSERT(child.table);
 		}
+#endif
 		break;
 	}
 	return PlanFailure(ExtensionIssue(LogicalPlanVerificationIssueCode::UNSUPPORTED_EXTENSION, path,
@@ -324,7 +324,7 @@ optional<LogicalPlanSQLExportResult> LogicalPlanSQLExportState::HandleExtensionR
 		return LogicalPlanSQLExportResult::Success({std::move(result.query), fields});
 	case LogicalPlanSQLExportExtensionResultType::UNSUPPORTED:
 		D_ASSERT(!result.query && !result.reason.empty());
-		D_ASSERT(IsValidText(result.reason));
+		D_ASSERT(SQLExportHelpers::IsValidIdentifier(Identifier(result.reason)));
 		return PlanFailure(ExtensionIssue(LogicalPlanVerificationIssueCode::UNSUPPORTED_EXTENSION, path,
 		                                  extension_identifier, std::move(result.reason)));
 	default:

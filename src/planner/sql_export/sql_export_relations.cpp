@@ -133,9 +133,11 @@ LogicalPlanSQLExportState::ExportContextExpressions(LogicalOperator &op, const L
 LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportFilter(LogicalFilter &filter,
                                                                    const LogicalPlanVerificationPath &path) {
 	D_ASSERT(filter.children.size() == 1);
+#ifdef D_ASSERT_IS_ENABLED
 	for (auto &expression : filter.expressions) {
 		D_ASSERT(expression && expression->GetReturnType() == LogicalType::BOOLEAN);
 	}
+#endif
 	auto fields = CreateFields(filter, path);
 	if (fields.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
@@ -354,9 +356,11 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportSetOperation(Logical
 LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportAggregate(LogicalAggregate &aggregate,
                                                                       const LogicalPlanVerificationPath &path) {
 	D_ASSERT(aggregate.children.size() == 1);
+#ifdef D_ASSERT_IS_ENABLED
 	for (auto &expression : aggregate.expressions) {
 		D_ASSERT(expression && expression->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 	}
+#endif
 	auto fields = CreateFields(aggregate, path);
 	if (fields.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
