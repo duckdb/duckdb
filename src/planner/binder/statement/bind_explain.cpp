@@ -26,6 +26,7 @@ BoundStatement Binder::Bind(ExplainStatement &stmt) {
 	explain->logical_plan_unopt = logical_plan_unopt;
 	if (stmt.explain_type == ExplainType::EXPLAIN_SQL) {
 		explain->sql_output_names = std::move(plan.names);
+		explain->allow_unsupported_sql = stmt.allow_unsupported_sql;
 	}
 
 	result.plan = std::move(explain);

@@ -29,6 +29,7 @@ public:
 	string logical_plan_unopt;
 	string logical_plan_opt;
 	vector<Identifier> sql_output_names;
+	bool allow_unsupported_sql = false;
 
 public:
 	void Serialize(Serializer &serializer) const override;

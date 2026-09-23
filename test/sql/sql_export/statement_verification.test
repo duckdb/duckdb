@@ -43,3 +43,56 @@ EXECUTE statement_export_parameter(4);
 
 statement ok
 RESET debug_verify_statement;
+
+statement ok
+CREATE TABLE export_transaction(i INTEGER);
+
+statement ok
+SET debug_verify_statement='explain_sql';
+
+statement ok
+BEGIN;
+
+query I
+WITH ins AS (INSERT INTO export_transaction VALUES (1)) SELECT 42;
+----
+42
+
+query I
+SELECT count(*) FROM export_transaction;
+----
+1
+
+statement ok
+ROLLBACK;
+
+query I
+SELECT count(*) FROM export_transaction;
+----
+0
+
+foreach verification explain_sql explain_sql_strict
+
+statement ok
+SET debug_verify_statement='{verification}';
+
+statement ok
+BEGIN;
+
+statement error
+SELECT error('exported runtime failure');
+----
+exported runtime failure
+
+statement error
+SELECT 42;
+----
+Current transaction is aborted
+
+statement ok
+ROLLBACK;
+
+endloop
+
+statement ok
+RESET debug_verify_statement;

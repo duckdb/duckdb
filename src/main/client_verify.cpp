@@ -262,6 +262,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 		// query would let it consume the error location that belongs to the statement we are verifying
 		auto explain_stmt = make_uniq<ExplainStatement>(statement->Copy(), export_sql ? ExplainType::EXPLAIN_SQL
 		                                                                              : ExplainType::EXPLAIN_STANDARD);
+		explain_stmt->allow_unsupported_sql = verification == DebugStatementVerification::EXPLAIN_SQL;
 		// Disable the profiler during the verification EXPLAIN to prevent it from consuming the profiler context
 		// (which would lose parser timing captured before StatementVerification was called) and from
 		// overwriting the profiling output file with the EXPLAIN's profiling data.
@@ -272,15 +273,14 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 		    [saved_profiler](ClientConfig &config) { config.enable_profiler = saved_profiler; });
 		auto explain_result = RunStatementInternal(lock, std::move(explain_stmt), query_parameters, false);
 		if (explain_result->HasError()) {
-			auto &error = explain_result->GetErrorObject();
-			if (verification == DebugStatementVerification::EXPLAIN_SQL &&
-			    error.ExtraInfo().find("sql_export_unsupported") != error.ExtraInfo().end()) {
-				return;
-			}
 			explain_result->ThrowError();
 		}
 		if (export_sql) {
 			auto chunk = explain_result->Fetch();
+			if (!chunk || chunk->size() == 0) {
+				D_ASSERT(verification == DebugStatementVerification::EXPLAIN_SQL);
+				return;
+			}
 			D_ASSERT(chunk && chunk->size() == 1 && chunk->ColumnCount() == 2);
 			auto sql = chunk->GetValue(1, 0).GetValue<string>();
 			auto parser_options = GetParserOptions();

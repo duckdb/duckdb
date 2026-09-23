@@ -29,26 +29,33 @@ unique_ptr<LogicalOperator> LogicalExplain::CreateSQLResult(ClientContext &conte
 			message = StringUtil::Format("EXPLAIN (SQL) cannot render table function \"%s\".",
 			                             issue.construct->function->name);
 		}
-		switch (issue.code) {
-		case LogicalPlanVerificationIssueCode::UNSUPPORTED_OPERATOR:
-		case LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPRESSION:
-		case LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION:
-		case LogicalPlanVerificationIssueCode::UNSUPPORTED_SOURCE:
-		case LogicalPlanVerificationIssueCode::UNSUPPORTED_EXTENSION:
-		case LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE:
+		for (auto &entry : exported.GetIssues()) {
+			switch (entry.code) {
+			case LogicalPlanVerificationIssueCode::UNSUPPORTED_OPERATOR:
+			case LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPRESSION:
+			case LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION:
+			case LogicalPlanVerificationIssueCode::UNSUPPORTED_SOURCE:
+			case LogicalPlanVerificationIssueCode::UNSUPPORTED_EXTENSION:
+			case LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE:
+				break;
+			default:
+				throw InternalException("EXPLAIN (SQL) cannot render this query: " + entry.message);
+			}
+		}
+		if (!allow_unsupported_sql) {
 			throw NotImplementedException({{"sql_export_unsupported", "true"}}, message);
-		default:
-			throw InternalException(message);
 		}
 	}
 	vector<LogicalType> result_types {LogicalType::VARCHAR, LogicalType::VARCHAR};
 	auto collection =
 	    make_uniq<ColumnDataCollection>(context, result_types, ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
-	DataChunk chunk;
-	chunk.Initialize(Allocator::Get(context), result_types);
-	chunk.data[0].Append(Value("sql"));
-	chunk.data[1].Append(Value(exported.GetValue().query->ToString()));
-	collection->Append(chunk);
+	if (exported.IsSuccess()) {
+		DataChunk chunk;
+		chunk.Initialize(Allocator::Get(context), result_types);
+		chunk.data[0].Append(Value("sql"));
+		chunk.data[1].Append(Value(exported.GetValue().query->ToString()));
+		collection->Append(chunk);
+	}
 	return make_uniq<LogicalColumnDataGet>(table_index, std::move(result_types), std::move(collection));
 }
 

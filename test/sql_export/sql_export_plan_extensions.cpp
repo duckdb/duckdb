@@ -3,6 +3,7 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
+#include "duckdb/planner/operator/logical_explain.hpp"
 
 namespace logical_plan_sql_export_test {
 using namespace logical_plan_sql_export;
@@ -40,6 +41,26 @@ TEST_CASE("Extension operators without SQL reconstruction remain unsupported",
 	auto plan = LeafExtension("unhandled_extension", TableIndex(82));
 	RequirePlanExportIssue(LogicalPlanSQLExporter::Export(*connection.context, *plan),
 	                       LogicalPlanVerificationIssueCode::UNSUPPORTED_EXTENSION);
+}
+
+TEST_CASE("SQL verification fallback preserves extension reconstruction failures",
+          "[sql_export][logical_plan_sql_export]") {
+	DuckDB db;
+	Connection connection(db);
+	for (bool allow_unsupported : {false, true}) {
+		auto plan = LeafExtension("failed_extension", TableIndex(82));
+		plan->export_sql = [](SQLExportExtensionOperator &, LogicalPlanSQLExportContext &,
+		                      const LogicalPlanVerificationPath &path) {
+			auto unsupported = PlanUnsupportedFeature(path, "extension_feature", "Unsupported extension feature");
+			auto defect = SQLExportHelpers::MakeIssue(LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT,
+			                                          LogicalPlanVerificationPhase::PLAN_EXPORT, path, {},
+			                                          "Extension reconstruction defect");
+			return PlanExportResult::Failure({std::move(unsupported), std::move(defect)});
+		};
+		LogicalExplain explain(std::move(plan), ExplainType::EXPLAIN_SQL, ProfilerPrintFormat::Default());
+		explain.allow_unsupported_sql = allow_unsupported;
+		REQUIRE_THROWS_AS(explain.CreateSQLResult(*connection.context, TableIndex(83)), InternalException);
+	}
 }
 
 TEST_CASE("Extension SQL reconstruction owns its result and preserves positional bindings",
