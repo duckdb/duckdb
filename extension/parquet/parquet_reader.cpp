@@ -116,10 +116,13 @@ ParquetInt96AsOption ParquetInt96AsOptionFromString(const string &value) {
 	if (lower == "timestamp") {
 		return ParquetInt96AsOption::TIMESTAMP;
 	}
+	if (lower == "timestamp_ns") {
+		return ParquetInt96AsOption::TIMESTAMP_NS;
+	}
 	if (lower == "struct") {
 		return ParquetInt96AsOption::STRUCT;
 	}
-	throw BinderException("Unrecognized int96_as '%s' (supported: 'timestamp', 'struct')", value);
+	throw BinderException("Unrecognized int96_as '%s' (supported: 'timestamp', 'timestamp_ns', 'struct')", value);
 }
 
 static idx_t ParquetColumnChunkFileOffset(const duckdb_parquet::ColumnChunk &chunk) {
@@ -612,6 +615,8 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 			switch (parquet_options.int96_as) {
 			case ParquetInt96AsOption::TIMESTAMP:
 				return LogicalType::TIMESTAMP;
+			case ParquetInt96AsOption::TIMESTAMP_NS:
+				return LogicalType::TIMESTAMP_NS;
 			case ParquetInt96AsOption::STRUCT:
 				return LogicalType::STRUCT({{"date", LogicalType::DATE}, {"time", LogicalType::TIME_NS}});
 			default:

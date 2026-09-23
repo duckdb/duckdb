@@ -26,6 +26,29 @@ TIMESTAMP	2026-09-16 10:20:30.123456
 TIMESTAMP	2200-12-31 23:59:59.987654
 TIMESTAMP	NULL
 
+# int96_as='timestamp_ns' preserves the full nanosecond precision
+query II
+SELECT typeof(ts), ts::VARCHAR
+FROM read_parquet('{DATA_DIR}/parquet-testing/int96_nanoseconds.parquet', int96_as='timestamp_ns')
+ORDER BY ts
+----
+TIMESTAMP_NS	1970-01-02 00:00:00.000000001
+TIMESTAMP_NS	2026-09-16 10:20:30.123456789
+TIMESTAMP_NS	2200-12-31 23:59:59.987654321
+TIMESTAMP_NS	NULL
+
+# int96_as='timestamp_ns' also works for dictionary-encoded INT96 columns
+query II
+SELECT typeof(ts), ts::VARCHAR
+FROM read_parquet('{DATA_DIR}/parquet-testing/int96_nanoseconds_dictionary.parquet', int96_as='timestamp_ns')
+ORDER BY ts
+----
+TIMESTAMP_NS	1970-01-01 00:00:00.000000001
+TIMESTAMP_NS	2026-09-16 10:20:30.123456789
+TIMESTAMP_NS	2026-09-16 10:20:30.123456789
+TIMESTAMP_NS	2026-09-16 10:20:30.123456789
+TIMESTAMP_NS	NULL
+
 # int96_as='struct' reads the value losslessly as STRUCT(date DATE, time TIME_NS)
 query II
 SELECT typeof(ts), ts
@@ -83,6 +106,13 @@ LIMIT 1
 ----
 DATE
 
+query I
+SELECT typeof(ts)
+FROM parquet_scan('{DATA_DIR}/parquet-testing/int96_nanoseconds.parquet', int96_as='timestamp_ns')
+LIMIT 1
+----
+TIMESTAMP_NS
+
 # int96_as also works as a COPY ... FROM option
 statement ok
 CREATE TABLE int96_copy(ts STRUCT(date DATE, "time" TIME_NS))
@@ -100,6 +130,23 @@ STRUCT(date DATE, "time" TIME_NS)	{'date': 1970-01-02, 'time': '00:00:00.0000000
 STRUCT(date DATE, "time" TIME_NS)	{'date': 2026-09-16, 'time': '10:20:30.123456789'}
 STRUCT(date DATE, "time" TIME_NS)	{'date': 2200-12-31, 'time': '23:59:59.987654321'}
 STRUCT(date DATE, "time" TIME_NS)	NULL
+
+statement ok
+CREATE TABLE int96_copy_ns(ts TIMESTAMP_NS)
+
+statement ok
+COPY int96_copy_ns FROM '{DATA_DIR}/parquet-testing/int96_nanoseconds.parquet'
+    (FORMAT parquet, int96_as 'timestamp_ns')
+
+query II
+SELECT typeof(ts), ts::VARCHAR
+FROM int96_copy_ns
+ORDER BY ts
+----
+TIMESTAMP_NS	1970-01-02 00:00:00.000000001
+TIMESTAMP_NS	2026-09-16 10:20:30.123456789
+TIMESTAMP_NS	2200-12-31 23:59:59.987654321
+TIMESTAMP_NS	NULL
 
 # an unrecognized value raises a binder error
 statement error
@@ -130,12 +177,19 @@ statement ok
 COPY int96_full_range TO '{TEST_DIR}/int96_full_range.parquet'
     (FORMAT parquet, write_timestamp_as_int96 true)
 
-query II
-SELECT typeof(lo), lo::VARCHAR
-FROM read_parquet('{TEST_DIR}/int96_full_range.parquet')
+# the default reads these files fine (at microsecond precision)
+query I
+SELECT lo::VARCHAR || '|' || hi::VARCHAR FROM read_parquet('{TEST_DIR}/int96_full_range.parquet')
 ----
-TIMESTAMP	0001-01-01 00:00:00
+0001-01-01 00:00:00|9999-12-31 23:59:59.999999
 
+# timestamp_ns saturates the out-of-range sentinels to -infinity / +infinity
+query II
+SELECT lo::VARCHAR, hi::VARCHAR FROM read_parquet('{TEST_DIR}/int96_full_range.parquet', int96_as='timestamp_ns')
+----
+-infinity	infinity
+
+# the struct mode is the only one that reads the full 0001-9999 range intact
 query IIII
 SELECT lo['date'], lo['time'], hi['date'], hi['time']
 FROM read_parquet('{TEST_DIR}/int96_full_range.parquet', int96_as='struct')
