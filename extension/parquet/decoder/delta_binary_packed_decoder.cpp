@@ -35,7 +35,7 @@ void DeltaBinaryPackedDecoder::Read(uint8_t *defines, idx_t read_count, Vector &
 	idx_t valid_count = reader.GetValidCount(defines, read_count, result_offset);
 
 	auto &buffer_manager = reader.reader.buffer_manager;
-	decoded_data_buffer.Pin(buffer_manager);
+	ResizeableBuffer::PinGuard pin_guard(decoded_data_buffer, buffer_manager);
 	decoded_data_buffer.Reset();
 	switch (reader.Schema().parquet_type) {
 	case duckdb_parquet::Type::INT32:
@@ -52,7 +52,6 @@ void DeltaBinaryPackedDecoder::Read(uint8_t *defines, idx_t read_count, Vector &
 	}
 	// Plain() will put NULLs in the right place
 	reader.Plain(decoded_data_buffer, defines, read_count, result_offset, result);
-	decoded_data_buffer.Unpin();
 }
 
 void DeltaBinaryPackedDecoder::Skip(uint8_t *defines, idx_t skip_count) {

@@ -378,8 +378,29 @@ protected:
 
 private:
 	void AllocateBlock(idx_t size);
+	//! Pins block and rebases decoders.
 	void PinBlock();
 	void RebaseDecoders();
+
+	//! RAII pin for block, like std::lock_guard: construct it as a named local to keep block pinned for that
+	//! scope. Re-resolves ColumnReader::block at destruction time (rather than capturing it) since it can be reset
+	//! and reallocated while the guard is live, e.g. across pages in ApplyPendingSkips.
+	class BlockPinGuard {
+	public:
+		explicit BlockPinGuard(ColumnReader &reader) : reader(reader) {
+			reader.PinBlock();
+		}
+		~BlockPinGuard() {
+			if (reader.block) {
+				reader.block->Unpin();
+			}
+		}
+		BlockPinGuard(const BlockPinGuard &) = delete;
+		BlockPinGuard &operator=(const BlockPinGuard &) = delete;
+
+	private:
+		ColumnReader &reader;
+	};
 	void PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state,
 	                 idx_t rows_to_skip = 0);
 	void PreparePage(PageHeader &page_hdr);

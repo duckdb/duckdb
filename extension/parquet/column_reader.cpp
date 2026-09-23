@@ -799,7 +799,7 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 		return;
 	}
 
-	PinBlock();
+	BlockPinGuard pin_guard(*this);
 
 	// read the defines/repeats
 	const auto all_valid = PrepareRead(read_now, define_out, repeat_out, result_offset);
@@ -815,7 +815,6 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 			}
 		}
 		page_rows_available -= read_now;
-		block->Unpin();
 		return;
 	}
 	// read the data according to the encoder
@@ -844,7 +843,6 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 		break;
 	}
 	page_rows_available -= read_now;
-	block->Unpin();
 }
 
 void ColumnReader::FinishRead(idx_t read_count) {
@@ -915,7 +913,7 @@ void ColumnReader::DirectSelect(ColumnReaderInput &input, Vector &result, const 
 	auto read_now = ReadPageHeaders(to_read);
 
 	// pin after BeginRead in case of skips
-	PinBlock();
+	BlockPinGuard pin_guard(*this);
 
 	// we can only push the filter into the decoder if we are reading the ENTIRE vector in one go
 	if (!page_is_filtered_out && read_now == to_read && encoding == ColumnEncoding::PLAIN) {
@@ -925,16 +923,10 @@ void ColumnReader::DirectSelect(ColumnReaderInput &input, Vector &result, const 
 
 		page_rows_available -= read_now;
 		FinishRead(to_read);
-		if (block) {
-			block->Unpin();
-		}
 		return;
 	}
 	// fallback to regular read + filter
 	ReadInternal(input, result);
-	if (block) {
-		block->Unpin();
-	}
 }
 
 void ColumnReader::Filter(ColumnReaderInput &input, Vector &result, const TableFilter &filter,
@@ -962,7 +954,7 @@ void ColumnReader::DirectFilter(ColumnReaderInput &input, Vector &result, const 
 	auto read_now = ReadPageHeaders(to_read, &filter, &filter_state);
 
 	// pin after BeginRead in case of skips
-	PinBlock();
+	BlockPinGuard pin_guard(*this);
 
 	// we can only push the filter into the decoder if we are reading the ENTIRE vector in one go
 	if (encoding == ColumnEncoding::DICTIONARY && read_now == to_read && dictionary_decoder.HasFilter()) {
@@ -978,17 +970,11 @@ void ColumnReader::DirectFilter(ColumnReaderInput &input, Vector &result, const 
 		}
 		page_rows_available -= read_now;
 		FinishRead(to_read);
-		if (block) {
-			block->Unpin();
-		}
 		return;
 	}
 	// fallback to regular read + filter
 	ReadInternal(input, result);
 	ApplyFilter(result, filter, filter_state, num_values, sel, approved_tuple_count);
-	if (block) {
-		block->Unpin();
-	}
 }
 
 void ColumnReader::ApplyFilter(Vector &v, const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
@@ -1014,7 +1000,7 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 	data_ptr_t skip_define_out = HasDefines() ? skip_defines : define_out;
 	data_ptr_t skip_repeat_out = HasRepeats() ? skip_repeats : repeat_out;
 
-	PinBlock();
+	BlockPinGuard pin_guard(*this);
 
 	// start reading but do not apply skips (we are skipping now)
 	BeginRead(nullptr, nullptr);
@@ -1057,9 +1043,6 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 		to_skip -= skip_now;
 	}
 	FinishRead(num_values);
-	if (block) {
-		block->Unpin();
-	}
 }
 
 //===--------------------------------------------------------------------===//

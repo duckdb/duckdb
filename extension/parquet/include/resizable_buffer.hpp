@@ -193,6 +193,22 @@ public:
 		}
 	}
 
+	//! RAII pin, like std::lock_guard: construct it as a named local to keep the buffer pinned for that scope.
+	class PinGuard {
+	public:
+		PinGuard(ResizeableBuffer &buffer, BufferManager &buffer_manager) : buffer(buffer) {
+			buffer.Pin(buffer_manager);
+		}
+		~PinGuard() {
+			buffer.Unpin();
+		}
+		PinGuard(const PinGuard &) = delete;
+		PinGuard &operator=(const PinGuard &) = delete;
+
+	private:
+		ResizeableBuffer &buffer;
+	};
+
 	shared_ptr<BlockHandle> &GetBlockHandle() {
 		return block_handle;
 	}
