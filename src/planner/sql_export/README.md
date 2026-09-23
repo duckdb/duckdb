@@ -49,7 +49,7 @@ Logical operators implement SQL reconstruction through `ToSQL`, including extens
 
 The expression exporter owns binding context and lambda reference scopes. Constant values use the shared `ConstantExpression::FromValue` conversion, including nested type metadata and aggregate states. The exporter adds result typing and structured diagnostics; function calls and window expressions have separate implementations. Ordinary table functions reconstruct their qualified retained invocation by default. Source-specific callbacks return only a table reference; scan projection, ordinality, sampling and predicates are applied centrally. Generic source reconstruction lives in `table_function_sql_export.cpp`.
 
-Internal helper declarations live under `src/include/duckdb/planner/sql_export/`. Public entry points retain their headers directly under `duckdb/planner/`. General logical-plan verification and repeatability analysis remain separate planner facilities. Statement replacement verification lives in `src/main/client_verify.cpp`.
+Internal helper declarations live under `src/include/duckdb/planner/sql_export/`. Public entry points retain their headers directly under `duckdb/planner/`. Shared SQL constructors in `sql_export_helpers.hpp` combine predicates and qualify generated system-function calls. General logical-plan verification and repeatability analysis remain separate planner facilities. Statement replacement verification lives in `src/main/client_verify.cpp`.
 
 C++ tests under `test/sql_export/` follow these feature boundaries; shared fixtures live in the corresponding test-helper files. SQL regression tests live under `test/sql/sql_export/`.
 

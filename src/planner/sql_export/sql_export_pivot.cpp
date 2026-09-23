@@ -160,7 +160,7 @@ LogicalPlanSQLExportResult LogicalPivot::ToSQL(LogicalPlanSQLExportContext &expo
 		if (second) {
 			arguments.push_back(std::move(second));
 		}
-		return make_uniq<FunctionExpression>(QualifiedName("system", "main", name), std::move(arguments));
+		return SQLExportHelpers::SystemFunction(name, std::move(arguments));
 	};
 	auto key_name = export_context.NextRelationAlias();
 	auto encoded_keys = call("list_transform", ChildColumn(child.GetValue(), info.group_count + aggregate_count),
@@ -219,7 +219,7 @@ LogicalPlanSQLExportResult LogicalPivot::ToSQL(LogicalPlanSQLExportContext &expo
 	for (idx_t i = 0; i < select->select_list.size(); i++) {
 		row.emplace_back(FieldIdentifier(i), std::move(select->select_list[i]));
 	}
-	auto packed_row = make_uniq<FunctionExpression>(QualifiedName("system", "main", "struct_pack"), std::move(row));
+	auto packed_row = SQLExportHelpers::SystemFunction("struct_pack", std::move(row));
 	select->select_list.clear();
 	return export_context.ExportRow(std::move(select), std::move(packed_row), std::move(fields.GetValue()));
 }

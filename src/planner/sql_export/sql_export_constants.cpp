@@ -24,7 +24,7 @@ BoundExpressionSQLExportState::CastToConstructedType(const LogicalType &type, un
 		return Failure(UnsupportedFeature(path, "constant_type", ErrorData(ex).RawMessage()));
 	}
 	return BoundExpressionSQLExportResult::Success(
-	    make_uniq<FunctionExpression>(QualifiedName("system", "main", "cast_to_type"), std::move(arguments)));
+	    SQLExportHelpers::SystemFunction("cast_to_type", std::move(arguments)));
 }
 
 BoundExpressionSQLExportResult

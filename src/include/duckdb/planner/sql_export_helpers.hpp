@@ -1,14 +1,29 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/planner/sql_export_helpers.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/planner/logical_plan_verification_result.hpp"
 
 namespace duckdb {
 namespace SQLExportHelpers {
+
+template <class ARGUMENT>
+inline unique_ptr<FunctionExpression> SystemFunction(Identifier name, vector<ARGUMENT> arguments) {
+	return make_uniq<FunctionExpression>(
+	    QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(), std::move(name)), std::move(arguments));
+}
 
 inline unique_ptr<ParsedExpression> Conjoin(unique_ptr<ParsedExpression> left, unique_ptr<ParsedExpression> right) {
 	if (!left) {

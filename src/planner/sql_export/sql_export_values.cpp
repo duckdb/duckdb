@@ -322,8 +322,7 @@ LogicalPlanSQLExportResult LogicalExpressionGet::ExportSQLInput(LogicalPlanSQLEx
 			}
 			arguments.emplace_back(FieldIdentifier(column), std::move(expression.GetValue()));
 		}
-		auto value =
-		    make_uniq<FunctionExpression>(QualifiedName("system", "main", "struct_pack"), std::move(arguments));
+		auto value = SQLExportHelpers::SystemFunction("struct_pack", std::move(arguments));
 		if (row + 1 == get.expressions.size()) {
 			cases->ElseMutable() = std::move(value);
 		} else {
@@ -356,7 +355,7 @@ LogicalPlanSQLExportResult logical_plan_sql_export::LogicalPlanSQLExportContext:
 	// Keep row evaluation below consumers that can filter or limit emitted rows.
 	vector<unique_ptr<ParsedExpression>> list_arguments;
 	list_arguments.push_back(std::move(value));
-	auto list = make_uniq<FunctionExpression>(QualifiedName("system", "main", "list_value"), std::move(list_arguments));
+	auto list = SQLExportHelpers::SystemFunction("list_value", std::move(list_arguments));
 	vector<unique_ptr<ParsedExpression>> unnest_arguments;
 	unnest_arguments.push_back(std::move(list));
 	auto unnest = make_uniq<FunctionExpression>(Identifier("unnest"), std::move(unnest_arguments));
