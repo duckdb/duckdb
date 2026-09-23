@@ -640,6 +640,17 @@ public:
 	DUCKDB_API
 	TableFunction(const vector<LogicalType> &arguments, std::nullptr_t function, table_function_bind_t bind = nullptr,
 	              table_function_init_global_t init_global = nullptr, table_function_init_local_t init_local = nullptr);
+	// Overloads taking a braced list, so that "{}" does not also match FunctionSignature
+	TableFunction(Identifier name, std::initializer_list<LogicalType> arguments, table_function_t function,
+	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
+	              table_function_init_local_t init_local = nullptr)
+	    : TableFunction(std::move(name), vector<LogicalType>(arguments), function, bind, init_global, init_local) {
+	}
+	TableFunction(Identifier name, std::initializer_list<LogicalType> arguments, std::nullptr_t function,
+	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
+	              table_function_init_local_t init_local = nullptr)
+	    : TableFunction(std::move(name), vector<LogicalType>(arguments), function, bind, init_global, init_local) {
+	}
 	// Overloads taking proper signatures
 	DUCKDB_API
 	TableFunction(Identifier name, FunctionSignature signature, table_function_t function,

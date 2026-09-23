@@ -37,6 +37,17 @@ public:
 	DUCKDB_API static PragmaFunction PragmaCall(const Identifier &name, pragma_function_t function,
 	                                            vector<LogicalType> arguments,
 	                                            LogicalType varargs = LogicalType::INVALID);
+	//! Overloads taking a braced list, so that "{}" does not also match FunctionSignature
+	static PragmaFunction PragmaCall(const Identifier &name, pragma_query_t query,
+	                                 std::initializer_list<LogicalType> arguments,
+	                                 LogicalType varargs = LogicalType::INVALID) {
+		return PragmaCall(name, query, vector<LogicalType>(arguments), std::move(varargs));
+	}
+	static PragmaFunction PragmaCall(const Identifier &name, pragma_function_t function,
+	                                 std::initializer_list<LogicalType> arguments,
+	                                 LogicalType varargs = LogicalType::INVALID) {
+		return PragmaCall(name, function, vector<LogicalType>(arguments), std::move(varargs));
+	}
 	//! The same, declaring the parameters in full - so that they carry their own names and defaults instead of the
 	//! synthetic "colN" the type-only overloads give them
 	DUCKDB_API static PragmaFunction PragmaCall(const Identifier &name, pragma_query_t query,

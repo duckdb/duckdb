@@ -199,9 +199,7 @@ private:
 
 class FunctionSignature {
 public:
-	//! Explicit so that a braced "{}" argument still unambiguously means an empty vector of parameter types, which is
-	//! how the type-only overloads of TableFunction and PragmaCall are called
-	explicit FunctionSignature() = default;
+	FunctionSignature() = default;
 
 	FunctionSignature(vector<LogicalType> arguments, LogicalType varargs, LogicalType return_type)
 	    : return_type(std::move(return_type)) {
