@@ -342,6 +342,8 @@ typedef duckdb_v2_bytes duckdb_v2_bignum_t;
  * case-insensitively. Compare two identifiers case-insensitively rather than byte for byte, and render one into SQL
  * through the identifier-quoting entry point rather than embedding it raw. The catalog preserves casing; some
  * registries (config settings) canonicalize to lowercase.
+ *
+ * Direct identifier-name inputs to v2 API functions must contain valid UTF-8; invalid input is rejected.
  */
 typedef duckdb_v2_str duckdb_v2_identifier_t;
 
@@ -2994,7 +2996,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_attach_options_create(duckdb_v2_instance_
  * The key is matched case-insensitively, as an unquoted SQL identifier is. The setting is passed on as the text a
  * quoted SQL literal would produce: the engine casts the options it knows (READ_ONLY, RECOVERY_MODE, TYPE,
  * DEFAULT_TABLE, VACUUM_REBUILD_INDEXES, BLOCK_SIZE, ENCRYPTION_KEY, ...) and hands the rest to the storage extension
- * that ends up owning the database, which decides what they mean. Nothing is validated here; an unknown or ill-typed
+ * that ends up owning the database, which decides what they mean. Keys must be valid UTF-8; an unknown or ill-typed
  * option fails the attach. Both views are borrowed and copied. Setting the same key again replaces it.
  *
  * history:

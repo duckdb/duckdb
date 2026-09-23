@@ -598,6 +598,8 @@ TEST_CASE("V2 scalar: null arguments and destroy null-safety", "[capi_v2][scalar
 
 	REQUIRE(duckdb_v2_scalar_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_name(function, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	auto invalid_name = Convert("\x80");
+	REQUIRE(duckdb_v2_scalar_function_set_name(function, &invalid_name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_function_signature_handle sig = nullptr;
 	REQUIRE(duckdb_v2_scalar_function_get_signature(nullptr, &sig, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_scalar_function_register(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);

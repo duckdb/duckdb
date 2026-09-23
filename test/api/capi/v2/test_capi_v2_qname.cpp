@@ -150,6 +150,8 @@ TEST_CASE("V2 qname: construction refusals", "[capi_v2][qname]") {
 
 	duckdb_v2_identifier_t with_empty[2] = {Convert("a"), Convert("")};
 	REQUIRE(duckdb_v2_qname_create(with_empty, 2, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	duckdb_v2_identifier_t with_invalid_utf8[2] = {Convert("a"), Convert("\x80")};
+	REQUIRE(duckdb_v2_qname_create(with_invalid_utf8, 2, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	duckdb_v2_identifier_t one[1] = {Convert("a")};
 	REQUIRE(duckdb_v2_qname_create(nullptr, 1, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);

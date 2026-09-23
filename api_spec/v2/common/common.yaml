@@ -262,6 +262,9 @@ aliases:
       render one into SQL through the identifier-quoting entry point rather
       than embedding it raw. The catalog preserves casing; some registries
       (config settings) canonicalize to lowercase.
+
+      Direct identifier-name inputs to v2 API functions must contain valid
+      UTF-8; invalid input is rejected.
 constants:
   BYTES_INLINE_LENGTH:
     value: 12

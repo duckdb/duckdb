@@ -13,9 +13,9 @@ DUCKDB_V2_ERROR duckdb_v2_function_signature_add_parameter(duckdb_v2_function_si
 	return WithErrorHandler(err, [&]() {
 		auto &signature = *Convert(sig);
 		if (value) {
-			signature.AddParameter(duckdb::Identifier(Convert(name)), *Convert(type), *Convert(value));
+			signature.AddParameter(duckdb::Identifier(ConvertIdentifierName(name)), *Convert(type), *Convert(value));
 		} else {
-			signature.AddParameter(duckdb::Identifier(Convert(name)), *Convert(type));
+			signature.AddParameter(duckdb::Identifier(ConvertIdentifierName(name)), *Convert(type));
 		}
 	});
 }
