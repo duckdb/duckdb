@@ -638,7 +638,7 @@ typedef struct {
 	(duckdb_v2_scalar_function_handle function, duckdb_v2_scalar_function_init_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_set_name)
-	(duckdb_v2_scalar_function_handle function, duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
+	(duckdb_v2_scalar_function_handle function, duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_set_user_data)
 	(duckdb_v2_scalar_function_handle function, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_bind_get_user_data)
@@ -715,7 +715,7 @@ typedef struct {
 	(duckdb_v2_aggregate_function_handle function, duckdb_v2_aggregate_function_init_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_set_name)
-	(duckdb_v2_aggregate_function_handle function, duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
+	(duckdb_v2_aggregate_function_handle function, duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_set_size_callback)
 	(duckdb_v2_aggregate_function_handle function, duckdb_v2_aggregate_function_size_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
@@ -826,7 +826,7 @@ typedef struct {
 	(duckdb_v2_table_function_handle function, duckdb_v2_table_function_init_local_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_name)
-	(duckdb_v2_table_function_handle function, duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
+	(duckdb_v2_table_function_handle function, duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_progress_callback)
 	(duckdb_v2_table_function_handle function, duckdb_v2_table_function_progress_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
@@ -1077,7 +1077,7 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_function_register)
 	(duckdb_v2_copy_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_function_set_name)
-	(duckdb_v2_copy_function_handle function, duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
+	(duckdb_v2_copy_function_handle function, duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_function_set_user_data)
 	(duckdb_v2_copy_function_handle function, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_to_batch_get_bind_data)

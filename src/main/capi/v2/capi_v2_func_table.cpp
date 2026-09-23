@@ -798,7 +798,7 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_set_name(duckdb_v2_table_function_handl
 	DUCKDB_CHECK_ARG(function);
 	DUCKDB_CHECK_ARG(name);
 	DUCKDB_CHECK_ARG(*name);
-	return WithErrorHandler(err, [&]() { Convert(function)->name = duckdb::Identifier(Convert(*name)); });
+	return WithErrorHandler(err, [&]() { Convert(function)->name = duckdb::Identifier(ConvertIdentifierName(*name)); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_table_function_get_signature(duckdb_v2_table_function_handle function,
@@ -951,7 +951,7 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_bind_add_result_column(duckdb_v2_table_
 			throw duckdb::InvalidInputException("Result column type must be a fully defined concrete type");
 		}
 		auto &bind_info = *Convert(info);
-		bind_info.out_column_names.emplace_back(Convert(name));
+		bind_info.out_column_names.emplace_back(ConvertIdentifierName(name));
 		bind_info.out_column_types.push_back(column_type);
 	});
 }
