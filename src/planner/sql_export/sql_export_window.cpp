@@ -1,4 +1,4 @@
-#include "duckdb/planner/sql_export/bound_expression_sql_exporter_internal.hpp"
+#include "bound_expression_sql_exporter_internal.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/sql_export_helpers.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
