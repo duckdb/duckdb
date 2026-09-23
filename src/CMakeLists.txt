@@ -143,6 +143,7 @@ install(
   FILES "${PROJECT_SOURCE_DIR}/src/include/duckdb.hpp"
         "${PROJECT_SOURCE_DIR}/src/include/duckdb.h"
         "${PROJECT_SOURCE_DIR}/src/include/duckdb_extension.h"
+        "${PROJECT_SOURCE_DIR}/src/include/duckdb_static_extension.h"
   DESTINATION "${INSTALL_INCLUDE_DIR}")
 
 install(

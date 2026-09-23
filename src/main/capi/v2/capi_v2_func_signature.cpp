@@ -12,11 +12,15 @@ DUCKDB_V2_ERROR duckdb_v2_function_signature_add_parameter(duckdb_v2_function_si
 
 	return WithErrorHandler(err, [&]() {
 		auto &signature = *Convert(sig);
+		// the varargs can be set before the parameters, but they come after them in the signature
+		auto varargs = signature.GetVarArgs();
+		signature.SetVarArgs(duckdb::LogicalType(duckdb::LogicalTypeId::INVALID));
 		if (value) {
 			signature.AddParameter(duckdb::Identifier(Convert(name)), *Convert(type), *Convert(value));
 		} else {
 			signature.AddParameter(duckdb::Identifier(Convert(name)), *Convert(type));
 		}
+		signature.SetVarArgs(std::move(varargs));
 	});
 }
 

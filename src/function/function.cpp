@@ -71,6 +71,12 @@ static bool RequiresCatalogAndSchemaNamePrefix(const Identifier &catalog_name, c
 }
 
 string FunctionParameter::ToString() const {
+	if (kind == FunctionParameterKind::VAR_POSITIONAL) {
+		return StringUtil::Format("*%s %s", SQLIdentifier(name), type.ToString());
+	}
+	if (kind == FunctionParameterKind::VAR_KEYWORD) {
+		return StringUtil::Format("**%s %s", SQLIdentifier(name), type.ToString());
+	}
 	if (default_value) {
 		return StringUtil::Format("%s %s := %s", SQLIdentifier(name), type.ToString(), default_value->ToString());
 	}
@@ -82,9 +88,6 @@ string FunctionSignature::ToString() const {
 	params.reserve(parameters.size());
 	for (auto &param : parameters) {
 		params.push_back(param.ToString());
-	}
-	if (varargs.IsValid()) {
-		params.push_back("[" + varargs.ToString() + "...]");
 	}
 	auto head = StringUtil::Format("(%s)", StringUtil::Join(params, ", "));
 	if (return_type.IsValid()) {
@@ -141,8 +144,92 @@ hash_t FunctionSignature::Hash() const {
 	hash_t hash = return_type.Hash();
 	for (auto &param : parameters) {
 		hash = duckdb::CombineHash(hash, param.GetType().Hash());
+		hash = duckdb::CombineHash(hash, duckdb::Hash(static_cast<uint8_t>(param.GetKind())));
 	}
 	return hash;
+}
+
+const LogicalType &FunctionSignature::GetVarArgs() const {
+	static const LogicalType INVALID_TYPE(LogicalTypeId::INVALID);
+	auto args = GetArgsParameter();
+	return args ? args->GetType() : INVALID_TYPE;
+}
+
+void FunctionSignature::SetVarArgs(LogicalType varargs_p) {
+	for (idx_t i = parameters.size(); i > 0; i--) {
+		if (parameters[i - 1].IsVariadic()) {
+			parameters.erase_at(i - 1);
+		}
+	}
+	if (varargs_p.id() == LogicalTypeId::INVALID) {
+		return;
+	}
+	AddArgsParameter("args", varargs_p);
+	AddKwargsParameter("kwargs", std::move(varargs_p));
+}
+
+void FunctionSignature::Verify() const {
+	// Check for duplicate parameter names
+	identifier_set_t seen_names;
+	for (const auto &param : parameters) {
+		if (seen_names.find(param.GetName()) != seen_names.end()) {
+			throw InvalidInputException("Duplicate parameter name: %s", param.GetName());
+		}
+		seen_names.insert(param.GetName());
+	}
+
+	// Also check for default values that are not at the end of the positional parameters
+	bool found_default_value = false;
+	for (const auto &param : parameters) {
+		if (param.GetKind() != FunctionParameterKind::STANDARD) {
+			continue;
+		}
+		if (param.HasDefaultValue()) {
+			found_default_value = true;
+		} else if (found_default_value) {
+			throw InvalidInputException(
+			    "Parameters with default values must be at the end of the parameter list. Parameter '%s' does not "
+			    "have a default value but follows a parameter with a default value.",
+			    param.GetName());
+		}
+	}
+
+	// And that the parameter kinds are in order: standard parameters, "*args", keyword-only parameters, "**kwargs"
+	bool found_args = false;
+	bool found_kwargs = false;
+	bool found_keyword_only = false;
+	for (const auto &param : parameters) {
+		if (found_kwargs) {
+			throw InvalidInputException("Parameter '%s' follows '**kwargs', which must be the last parameter",
+			                            param.ToString());
+		}
+		if (param.IsVariadic() && param.HasDefaultValue()) {
+			throw InvalidInputException("Variadic parameter '%s' cannot have a default value", param.ToString());
+		}
+		switch (param.GetKind()) {
+		case FunctionParameterKind::STANDARD:
+			if (found_args || found_keyword_only) {
+				throw InvalidInputException("Parameter '%s' follows '*args' and must therefore be keyword-only",
+				                            param.ToString());
+			}
+			break;
+		case FunctionParameterKind::VAR_POSITIONAL:
+			if (found_args) {
+				throw InvalidInputException("A function signature can only have one '*args' parameter");
+			}
+			if (found_keyword_only) {
+				throw InvalidInputException("Parameter '%s' cannot follow a keyword-only parameter", param.ToString());
+			}
+			found_args = true;
+			break;
+		case FunctionParameterKind::VAR_KEYWORD:
+			found_kwargs = true;
+			break;
+		case FunctionParameterKind::KEYWORD_ONLY:
+			found_keyword_only = true;
+			break;
+		}
+	}
 }
 
 hash_t SimpleFunction::Hash() const {
@@ -209,13 +296,44 @@ hash_t BoundSimpleFunction::Hash() const {
 	return hash;
 }
 
+idx_t BoundSimpleFunction::GetVarArgsCount(const FunctionSignature &signature) const {
+	const auto standard_count = signature.GetPositionalParameterCount();
+	return positional_arguments > standard_count ? positional_arguments - standard_count : 0;
+}
+
+idx_t BoundSimpleFunction::GetKwargsCount(const FunctionSignature &signature) const {
+	idx_t result = 0;
+	for (auto &name : named_arguments) {
+		if (!signature.GetParameterIndexByName(name).IsValid()) {
+			result++;
+		}
+	}
+	return result;
+}
+
+FunctionParameterKind BoundSimpleFunction::GetArgumentParameterKind(const FunctionSignature &signature,
+                                                                    idx_t argument_index) const {
+	if (argument_index >= positional_arguments + named_arguments.size()) {
+		throw InternalException("%s: Argument index %llu is out of range", GetName(), argument_index);
+	}
+	if (argument_index < signature.GetPositionalParameterCount()) {
+		return FunctionParameterKind::STANDARD;
+	}
+	if (argument_index < positional_arguments) {
+		return FunctionParameterKind::VAR_POSITIONAL;
+	}
+	auto &name = named_arguments[argument_index - positional_arguments];
+	return signature.GetParameterIndexByName(name).IsValid() ? FunctionParameterKind::KEYWORD_ONLY
+	                                                         : FunctionParameterKind::VAR_KEYWORD;
+}
+
 string BoundSimpleFunction::ToString() const {
 	return Function::CallToString(GetCatalogName(), GetSchemaName(), GetName(), arguments, LogicalTypeId::INVALID,
 	                              return_type);
 }
 
 bool FunctionParameter::operator==(const FunctionParameter &other) const {
-	return type == other.type && name == other.name;
+	return type == other.type && name == other.name && kind == other.kind;
 }
 
 bool FunctionParameter::operator!=(const FunctionParameter &other) const {
@@ -223,7 +341,7 @@ bool FunctionParameter::operator!=(const FunctionParameter &other) const {
 }
 
 bool FunctionSignature::operator==(const FunctionSignature &other) const {
-	return parameters == other.parameters && varargs == other.varargs && return_type == other.return_type;
+	return parameters == other.parameters && return_type == other.return_type;
 }
 
 bool FunctionSignature::operator!=(const FunctionSignature &other) const {
@@ -235,12 +353,10 @@ bool FunctionSignature::Equal(const FunctionSignature &other) const {
 		return false;
 	}
 	for (idx_t i = 0; i < parameters.size(); i++) {
-		if (parameters[i].GetType() != other.parameters[i].GetType()) {
+		if (parameters[i].GetType() != other.parameters[i].GetType() ||
+		    parameters[i].GetKind() != other.parameters[i].GetKind()) {
 			return false;
 		}
-	}
-	if (varargs != other.varargs) {
-		return false;
 	}
 	if (return_type != other.return_type) {
 		return false;
@@ -313,8 +429,8 @@ optional_idx BindFunctionInput::GetArgumentIndex(const Identifier &name) const {
 		throw InternalException("Function '%s' was bound without argument names, cannot look up argument '%s' by name",
 		                        function.GetName(), name);
 	}
-	// The binder resolves every argument to a slot and reports its name: the signature parameter name for positional
-	// slots, or the name the caller used for named varargs.
+	// The binder resolves every argument to a slot and reports its name: the signature parameter name for standard
+	// and keyword-only parameters, or the name the caller used for "**kwargs".
 	for (idx_t arg_idx = 0; arg_idx < argument_names->size(); arg_idx++) {
 		if ((*argument_names)[arg_idx] == name) {
 			return optional_idx(arg_idx);

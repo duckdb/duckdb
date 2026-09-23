@@ -37,11 +37,13 @@ struct JoinHTScanState {
 public:
 	JoinHTScanState(TupleDataCollection &collection, idx_t chunk_idx_from, idx_t chunk_idx_to,
 	                TupleDataPinProperties properties = TupleDataPinProperties::ALREADY_PINNED)
-	    : iterator(collection, properties, chunk_idx_from, chunk_idx_to, false), offset_in_chunk(0) {
+	    : iterator(collection, properties, chunk_idx_from, chunk_idx_to, false), offset_in_chunk(0), chunks_done(0) {
 	}
 
 	TupleDataChunkIterator iterator;
 	idx_t offset_in_chunk;
+	//! The number of chunks that have been scanned entirely
+	idx_t chunks_done;
 
 private:
 	//! Implicit copying is not allowed

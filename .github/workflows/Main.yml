@@ -723,10 +723,15 @@ jobs:
           -Isrc/include \
           examples/embedded-c/main.c \
           build/release/src/libduckdb_static.a \
-          build/release/extension/libdummy_static_extension_loader.a \
           -ldl -lpthread -lm -lstdc++ \
           -o build/release/gcc-static-library-smoke
         build/release/gcc-static-library-smoke
+
+    - name: Static extension link
+      shell: bash
+      run: |
+        build/release/test/static_link_smoke
+        build/release/test/static_link_explicit_smoke
 
     - name: GCC shared library compatibility
       if: ${{ matrix.config.is_canonical_build }}
@@ -758,8 +763,7 @@ jobs:
           assets+=(libduckdb-src.zip)
         fi
         if [[ "${{ matrix.config.publish_static }}" == "true" ]]; then
-          make gather-libs
-          make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/libs/*"
+          make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/src/libduckdb_static.a build/release/extension/*/lib*_extension.a"
           assets+=(duckdb-static-libs-${{ matrix.config.artifact_suffix }}.tar.gz)
         fi
         if [[ "${{ matrix.config.is_canonical_build }}" == "true" ]]; then
@@ -971,8 +975,7 @@ jobs:
       run: |
         make cli-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} CLI_BINARY=build/release/duckdb
         make shared-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} SHARED_LIBRARIES="build/release/src/libduckdb.so*"
-        make gather-libs
-        make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/libs/*"
+        make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/src/libduckdb_static.a build/release/extension/*/lib*_extension.a"
         ./scripts/upload-assets-to-staging.sh github_release \
           duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz \
           duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz \

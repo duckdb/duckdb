@@ -1201,12 +1201,8 @@ include(${PROJECT_SOURCE_DIR}/extension/extension_build_tools.cmake)
 
 include(${PROJECT_SOURCE_DIR}/scripts/architecture_flags.cmake)
 
-# These compile definitions/paths are consumed by sources in src/ (e.g.
-# extension_helper.cpp, allocator.cpp), so they must be configured before
-# add_subdirectory(src).
-include_directories("${PROJECT_BINARY_DIR}/codegen/include/")
-add_extension_definitions()
-add_definitions(-DGENERATED_EXTENSION_HEADERS=1)
+# These compile definitions are consumed by sources in src/, so they must be
+# configured before add_subdirectory(src).
 add_definitions(-DDUCKDB_MAJOR_VERSION=${DUCKDB_MAJOR_VERSION})
 add_definitions(-DDUCKDB_MINOR_VERSION=${DUCKDB_MINOR_VERSION})
 add_definitions(-DDUCKDB_PATCH_VERSION=${DUCKDB_PATCH_VERSION})

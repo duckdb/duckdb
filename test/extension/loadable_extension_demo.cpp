@@ -893,6 +893,61 @@ static void TestFunctionArgs(DataChunk &args, ExpressionState &state, Vector &re
 	}
 }
 
+// Bind data of test_args_kwargs_bind: where each argument ended up, as seen by the bind callback
+struct ArgsKwargsBindData : public FunctionData {
+	vector<string> labels;
+	idx_t varargs_count;
+	idx_t kwargs_offset;
+	idx_t kwargs_count;
+
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<ArgsKwargsBindData>(*this);
+	}
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<ArgsKwargsBindData>();
+		return labels == other.labels && varargs_count == other.varargs_count && kwargs_offset == other.kwargs_offset &&
+		       kwargs_count == other.kwargs_count;
+	}
+};
+
+static unique_ptr<FunctionData> ArgsKwargsBind(BindScalarFunctionInput &input) {
+	auto result = make_uniq<ArgsKwargsBindData>();
+	auto &bound_function = input.GetBoundFunction();
+	auto &names = *input.GetArgumentNames();
+	for (idx_t i = 0; i < names.size(); i++) {
+		switch (bound_function.GetArgumentParameterKind(i)) {
+		case FunctionParameterKind::VAR_POSITIONAL:
+			result->labels.push_back("*");
+			break;
+		case FunctionParameterKind::VAR_KEYWORD:
+			result->labels.push_back("**" + names[i].GetIdentifierName());
+			break;
+		default:
+			result->labels.push_back(names[i].GetIdentifierName());
+			break;
+		}
+	}
+	result->varargs_count = bound_function.GetVarArgsCount();
+	result->kwargs_count = bound_function.GetKwargsCount();
+	result->kwargs_offset = names.size() - result->kwargs_count;
+	return std::move(result);
+}
+
+// Prints "<22>|args=N|kwargs=N@offset|name=value|...", with "*" as the name of the "*args" arguments and a "**"
+// prefix for the "**kwargs" arguments
+static void ArgsKwargsBindFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<ArgsKwargsBindData>();
+	args.Flatten();
+	for (idx_t row = 0; row < args.size(); row++) {
+		string str = StringUtil::Format("<22>|args=%llu|kwargs=%llu@%llu|", bind_data.varargs_count,
+		                                bind_data.kwargs_count, bind_data.kwargs_offset);
+		for (idx_t col = 0; col < args.ColumnCount(); col++) {
+			str += bind_data.labels[col] + "=" + args.data[col].GetValue(row).ToSQLString() + "|";
+		}
+		FlatVector::GetDataMutable<string_t>(result)[row] = StringVector::AddString(result, str);
+	}
+}
+
 // Aggregate counterpart of the scalar inspection function. The state captures the argument values
 // from the first row it sees; on finalize it emits "<7>|a|b|c|" so a test can observe how named
 // arguments / default values were bound into positional order.
@@ -1109,6 +1164,77 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 		loader.RegisterFunction(ScalarFunction("test_named_nullshort", std::move(sig), TestFunctionArgs<6>));
 	}
 
+	// test_args_kwargs(a INTEGER, *args INTEGER, kw INTEGER, kw2 INTEGER := 7, **kwargs ANY) -> VARCHAR
+	// The arguments are laid out in the order of the signature; "kw" and "kw2" can only be passed by name.
+	{
+		FunctionSignature sig;
+		sig.AddParameter("a", LogicalType::INTEGER);
+		sig.AddArgsParameter("args", LogicalType::INTEGER);
+		sig.AddParameter("kw", LogicalType::INTEGER);
+		sig.AddParameter("kw2", LogicalType::INTEGER, Value::INTEGER(7));
+		sig.AddKwargsParameter("kwargs", LogicalType::ANY);
+		sig.SetReturnType(LogicalType::VARCHAR);
+		ScalarFunction fn("test_args_kwargs", sig, TestFunctionArgs<20>);
+		fn.SetNullHandling(NH::SPECIAL_HANDLING);
+		loader.RegisterFunction(std::move(fn));
+
+		// Same signature, but reports what the bind callback saw
+		ScalarFunction bind_fn("test_args_kwargs_bind", sig, ArgsKwargsBindFunction);
+		bind_fn.SetBindCallback(ArgsKwargsBind);
+		bind_fn.SetNullHandling(NH::SPECIAL_HANDLING);
+		loader.RegisterFunction(std::move(bind_fn));
+	}
+
+	// test_varargs_bind(a INTEGER, ... INTEGER) -> VARCHAR
+	// Declared with SetVarArgs: named trailing arguments are received by an unnamed "**kwargs".
+	{
+		FunctionSignature sig;
+		sig.AddParameter("a", LogicalType::INTEGER);
+		sig.SetVarArgs(LogicalType::INTEGER);
+		sig.SetReturnType(LogicalType::VARCHAR);
+		ScalarFunction fn("test_varargs_bind", std::move(sig), ArgsKwargsBindFunction);
+		fn.SetBindCallback(ArgsKwargsBind);
+		fn.SetNullHandling(NH::SPECIAL_HANDLING);
+		loader.RegisterFunction(std::move(fn));
+	}
+
+	// test_varargs_bind(a INTEGER, ... INTEGER) -> VARCHAR
+	// Declared with SetVarArgs: named trailing arguments are received by "**kwargs".
+	{
+		FunctionSignature sig;
+		sig.AddParameter("a", LogicalType::INTEGER);
+		sig.SetVarArgs(LogicalType::INTEGER);
+		sig.SetReturnType(LogicalType::VARCHAR);
+		ScalarFunction fn("test_varargs_bind", std::move(sig), ArgsKwargsBindFunction);
+		fn.SetBindCallback(ArgsKwargsBind);
+		fn.SetNullHandling(NH::SPECIAL_HANDLING);
+		loader.RegisterFunction(std::move(fn));
+	}
+
+	// test_args_only(a INTEGER, *args INTEGER) -> VARCHAR
+	// Without "**kwargs", a named argument that does not match a parameter is rejected.
+	{
+		FunctionSignature sig;
+		sig.AddParameter("a", LogicalType::INTEGER);
+		sig.AddArgsParameter("args", LogicalType::INTEGER);
+		sig.SetReturnType(LogicalType::VARCHAR);
+		ScalarFunction fn("test_args_only", std::move(sig), TestFunctionArgs<21>);
+		fn.SetNullHandling(NH::SPECIAL_HANDLING);
+		loader.RegisterFunction(std::move(fn));
+	}
+
+	// test_args_template(*args T, **kwargs T) -> VARCHAR
+	// All variadic arguments are unified to a single type.
+	{
+		FunctionSignature sig;
+		sig.AddArgsParameter("args", LogicalType::TEMPLATE("T"));
+		sig.AddKwargsParameter("kwargs", LogicalType::TEMPLATE("T"));
+		sig.SetReturnType(LogicalType::VARCHAR);
+		ScalarFunction fn("test_args_template", std::move(sig), TestFunctionArgs<23>);
+		fn.SetNullHandling(NH::SPECIAL_HANDLING);
+		loader.RegisterFunction(std::move(fn));
+	}
+
 	// test_named_agg_inspect(a INTEGER, b INTEGER = 100, c INTEGER = 200) -> VARCHAR
 	// Aggregate counterpart of test_named_inspect. AggregateFunction has no FunctionSignature
 	// constructor, so we build it from positional types and then set parameter names + defaults on
@@ -1126,6 +1252,21 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 		sig.GetParameter(1).SetDefaultValue(Value::INTEGER(100));
 		sig.GetParameter(2).SetName("c");
 		sig.GetParameter(2).SetDefaultValue(Value::INTEGER(200));
+		loader.RegisterFunction(std::move(agg));
+	}
+
+	// test_args_agg(a INTEGER, *args INTEGER, kw INTEGER := 9) -> VARCHAR
+	{
+		AggregateFunction agg("test_args_agg", {LogicalType::INTEGER}, LogicalType::VARCHAR,
+		                      AggregateFunction::StateSize<InspectAggState>,
+		                      AggregateFunction::StateInitialize<InspectAggState, InspectAggOp>, InspectAggUpdate,
+		                      AggregateFunction::StateCombine<InspectAggState, InspectAggOp>,
+		                      AggregateFunction::StateFinalize<InspectAggState, string_t, InspectAggOp>,
+		                      NH::DEFAULT_NULL_HANDLING);
+		auto &sig = agg.GetSignature();
+		sig.GetParameter(0).SetName("a");
+		sig.AddArgsParameter("args", LogicalType::INTEGER);
+		sig.AddParameter("kw", LogicalType::INTEGER, Value::INTEGER(9));
 		loader.RegisterFunction(std::move(agg));
 	}
 }
