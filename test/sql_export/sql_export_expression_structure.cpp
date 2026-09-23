@@ -1,3 +1,5 @@
+#include "duckdb/main/config.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "catch.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "test_helpers.hpp"
@@ -49,6 +51,18 @@ struct OffsetCastOperation {
 static bool IntegerToBigintPlusOne(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	return VectorCastHelpers::TemplatedCastLoop<int32_t, int64_t, OffsetCastOperation<1>>(source, result, count,
 	                                                                                      parameters);
+}
+
+static bool StringToIntegerEight(Vector &, Vector &result, idx_t count, CastParameters &) {
+	result.Reference(Value::INTEGER(8), count_t(count));
+	return true;
+}
+
+static idx_t cast_bind_calls = 0;
+
+static BoundCastInfo CountCastBinding(BindCastInput &, const LogicalType &, const LogicalType &) {
+	cast_bind_calls++;
+	return BoundCastInfo(IntegerToBigintPlusOne);
 }
 
 TEST_CASE("Bound expression SQL export resolves columns only by binding", "[sql_export][bound_expression_sql_export]") {
@@ -201,8 +215,108 @@ TEST_CASE("Bound expression SQL export reconstructs registered casts", "[sql_exp
 	unrelated_context.client_context = unrelated_connection.context.get();
 	auto default_unrelated = BoundCastExpression::AddDefaultCastToType(Constant(Value("7")), LogicalType::INTEGER);
 	auto default_unrelated_result = BoundExpressionSQLExporter::Export(*default_unrelated, unrelated_context);
-	REQUIRE(default_unrelated_result.HasError());
-	REQUIRE(*default_unrelated_result.GetIssues()[0].construct->identifier == "default_cast_binding");
+	REQUIRE(default_unrelated_result.IsSuccess());
+	auto unrelated_rebound = unrelated_connection.Query("SELECT " + default_unrelated_result.GetValue()->ToString());
+	REQUIRE_NO_FAIL(*unrelated_rebound);
+	REQUIRE(unrelated_rebound->GetValue(0, 0) == Value::INTEGER(7));
+
+	for (auto nested_types : vector<pair<LogicalType, LogicalType>> {
+	         {LogicalType::LIST(LogicalType::INTEGER), LogicalType::LIST(LogicalType::BIGINT)},
+	         {LogicalType::ARRAY(LogicalType::INTEGER, 2), LogicalType::ARRAY(LogicalType::BIGINT, 2)},
+	         {LogicalType::STRUCT({{"v", LogicalType::INTEGER}}), LogicalType::STRUCT({{"v", LogicalType::BIGINT}})},
+	         {LogicalType::MAP(LogicalType::VARCHAR, LogicalType::INTEGER),
+	          LogicalType::MAP(LogicalType::VARCHAR, LogicalType::BIGINT)},
+	         {LogicalType::UNION({{"v", LogicalType::INTEGER}}), LogicalType::UNION({{"v", LogicalType::BIGINT}})}}) {
+		INFO(nested_types.first.ToString());
+		auto nested =
+		    BoundCastExpression::AddDefaultCastToType(Constant(Value(nested_types.first)), nested_types.second);
+		auto rejected = BoundExpressionSQLExporter::Export(*nested, context);
+		REQUIRE(rejected.HasError());
+		REQUIRE(*rejected.GetIssues()[0].construct->identifier == "default_cast_binding");
+	}
+
+	auto list = Value::LIST(LogicalType::VARCHAR, {Value("7"), Value(LogicalType::VARCHAR)});
+	auto unrelated_list =
+	    BoundCastExpression::AddDefaultCastToType(Constant(list), LogicalType::LIST(LogicalType::INTEGER));
+	auto list_export = BoundExpressionSQLExporter::Export(*unrelated_list, context);
+	REQUIRE(list_export.IsSuccess());
+	auto list_result = registered_connection.Query("SELECT " + list_export.GetValue()->ToString());
+	REQUIRE_NO_FAIL(*list_result);
+	REQUIRE(list_result->GetValue(0, 0) ==
+	        ExpressionExecutor::EvaluateScalar(*registered_connection.context, *unrelated_list));
+
+	auto union_type = LogicalType::UNION({{"small", LogicalType::INTEGER}, {"big", LogicalType::BIGINT}});
+	auto union_cast = BoundCastExpression::AddDefaultCastToType(Constant(Value::INTEGER(7)), union_type);
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*registered_connection.context, *union_cast).type() == union_type);
+	auto union_export = BoundExpressionSQLExporter::Export(*union_cast, context);
+	REQUIRE(union_export.HasError());
+	REQUIRE(*union_export.GetIssues()[0].construct->identifier == "default_cast_binding");
+	auto ambiguous_union = registered_connection.Query("SELECT CAST(7 AS UNION(small INTEGER, big BIGINT))");
+	REQUIRE(ambiguous_union->HasError());
+}
+
+TEST_CASE("Default cast checks do not invoke custom bind callbacks", "[sql_export][bound_expression_sql_export]") {
+	DuckDB db;
+	Connection connection(db);
+	ExtensionLoader loader(*db.instance, "cast_binding_probe");
+	loader.RegisterCastFunction(LogicalType::INTEGER, LogicalType::BIGINT, CountCastBinding, 0);
+	const auto &casts = CastFunctionSet::Get(*connection.context);
+	cast_bind_calls = 0;
+	REQUIRE(casts.CanOverrideDefaultCast(LogicalType::INTEGER, LogicalType::BIGINT));
+	REQUIRE(
+	    casts.CanOverrideDefaultCast(LogicalType::LIST(LogicalType::INTEGER), LogicalType::LIST(LogicalType::BIGINT)));
+	REQUIRE_FALSE(casts.CanOverrideDefaultCast(LogicalType::INTEGER, LogicalType::INTEGER));
+	REQUIRE_FALSE(casts.CanOverrideDefaultCast(LogicalType::VARCHAR, LogicalType::INTEGER));
+	REQUIRE(cast_bind_calls == 0);
+	auto bound =
+	    BoundCastExpression::AddCastToType(*connection.context, Constant(Value::INTEGER(7)), LogicalType::BIGINT);
+	REQUIRE(cast_bind_calls == 1);
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *bound) == Value::BIGINT(8));
+
+	loader.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::INTEGER, CountCastBinding, 0);
+	auto enum_result = connection.Query("SELECT '7'::ENUM('7')");
+	REQUIRE_NO_FAIL(*enum_result);
+	cast_bind_calls = 0;
+	REQUIRE(casts.CanOverrideDefaultCast(enum_result->GetTypes()[0], LogicalType::INTEGER));
+	REQUIRE(cast_bind_calls == 0);
+
+	loader.RegisterCastFunction(LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR, CountCastBinding, 0);
+	REQUIRE(casts.CanOverrideDefaultCast(LogicalType::LIST(LogicalType::DOUBLE), LogicalType::VARCHAR));
+	REQUIRE(cast_bind_calls == 0);
+}
+
+TEST_CASE("Default VARIANT casts retain runtime binding protection", "[sql_export][bound_expression_sql_export]") {
+	DuckDB db;
+	Connection connection(db);
+	ExtensionLoader loader(*db.instance, "variant_cast_probe");
+	loader.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::INTEGER, BoundCastInfo(StringToIntegerEight), 0);
+	auto input = connection.Query("SELECT '7'::VARIANT");
+	REQUIRE_NO_FAIL(*input);
+	auto value = input->GetValue(0, 0);
+	auto original = BoundCastExpression::AddDefaultCastToType(Constant(value), LogicalType::INTEGER);
+	auto rebound = BoundCastExpression::AddCastToType(*connection.context, Constant(value), LogicalType::INTEGER);
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *original) == Value::INTEGER(7));
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *rebound) == Value::INTEGER(8));
+	BoundExpressionSQLExportContext context;
+	context.client_context = connection.context.get();
+	auto exported = BoundExpressionSQLExporter::Export(*original, context);
+	REQUIRE(exported.HasError());
+	REQUIRE(*exported.GetIssues()[0].construct->identifier == "default_cast_binding");
+	REQUIRE(CastFunctionSet::Get(*connection.context)
+	            .CanOverrideDefaultCast(LogicalType::LIST(LogicalType::VARIANT()),
+	                                    LogicalType::LIST(LogicalType::INTEGER)));
+
+	DBConfig default_config;
+	default_config.options.load_extensions = false;
+	DuckDB default_db(nullptr, &default_config);
+	Connection default_connection(default_db);
+	context.client_context = default_connection.context.get();
+	auto safe_export = BoundExpressionSQLExporter::Export(*original, context);
+	INFO((safe_export.HasError() ? safe_export.GetIssues()[0].message : string()));
+	REQUIRE(safe_export.IsSuccess());
+	auto result = default_connection.Query("SELECT " + safe_export.GetValue()->ToString());
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->GetValue(0, 0) == Value::INTEGER(7));
 }
 
 TEST_CASE("Bound expression SQL export rejects TRY around volatile children",

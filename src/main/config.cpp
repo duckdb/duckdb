@@ -593,6 +593,11 @@ CastFunctionSet &DBConfig::GetCastFunctions() {
 	return type_manager->GetCastFunctions();
 }
 
+const CastFunctionSet &DBConfig::GetCastFunctions() const {
+	const auto &manager = *type_manager;
+	return manager.GetCastFunctions();
+}
+
 TypeManager &DBConfig::GetTypeManager() {
 	return *type_manager;
 }
