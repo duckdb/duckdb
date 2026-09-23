@@ -1,0 +1,92 @@
+diff --git a/src/sqlsmith_extension.cpp b/src/sqlsmith_extension.cpp
+index 6e77c8c..ac7e042 100644
+--- a/src/sqlsmith_extension.cpp
++++ b/src/sqlsmith_extension.cpp
+@@ -177,36 +177,42 @@ static void FuzzAllFunctions(ClientContext &context, TableFunctionInput &data_p,
+ static void LoadInternal(ExtensionLoader &loader) {
+ 
+ 	TableFunction sqlsmith_func("sqlsmith", {}, SQLSmithFunction, SQLSmithBind);
+-	sqlsmith_func.named_parameters["seed"] = LogicalType::INTEGER;
+-	sqlsmith_func.named_parameters["max_queries"] = LogicalType::UBIGINT;
+-	sqlsmith_func.named_parameters["max_query_length"] = LogicalType::UBIGINT;
+-	sqlsmith_func.named_parameters["exclude_catalog"] = LogicalType::BOOLEAN;
+-	sqlsmith_func.named_parameters["dump_all_queries"] = LogicalType::BOOLEAN;
+-	sqlsmith_func.named_parameters["dump_all_graphs"] = LogicalType::BOOLEAN;
+-	sqlsmith_func.named_parameters["verbose_output"] = LogicalType::BOOLEAN;
+-	sqlsmith_func.named_parameters["complete_log"] = LogicalType::VARCHAR;
+-	sqlsmith_func.named_parameters["log"] = LogicalType::VARCHAR;
++	sqlsmith_func.GetSignature()
++	    .AddOptionalNamedParameter("seed", LogicalType::INTEGER)
++	    .AddOptionalNamedParameter("max_queries", LogicalType::UBIGINT)
++	    .AddOptionalNamedParameter("max_query_length", LogicalType::UBIGINT)
++	    .AddOptionalNamedParameter("exclude_catalog", LogicalType::BOOLEAN)
++	    .AddOptionalNamedParameter("dump_all_queries", LogicalType::BOOLEAN)
++	    .AddOptionalNamedParameter("dump_all_graphs", LogicalType::BOOLEAN)
++	    .AddOptionalNamedParameter("verbose_output", LogicalType::BOOLEAN)
++	    .AddOptionalNamedParameter("complete_log", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("log", LogicalType::VARCHAR);
+ 	loader.RegisterFunction(sqlsmith_func);
+ 
+ 	TableFunction fuzzy_duck_fun("fuzzyduck", {}, FuzzyDuckFunction, FuzzyDuckBind);
+-	fuzzy_duck_fun.named_parameters["seed"] = LogicalType::INTEGER;
+-	fuzzy_duck_fun.named_parameters["max_queries"] = LogicalType::UBIGINT;
+-	fuzzy_duck_fun.named_parameters["max_query_length"] = LogicalType::UBIGINT;
+-	fuzzy_duck_fun.named_parameters["log"] = LogicalType::VARCHAR;
+-	fuzzy_duck_fun.named_parameters["complete_log"] = LogicalType::VARCHAR;
+-	fuzzy_duck_fun.named_parameters["verbose_output"] = LogicalType::BOOLEAN;
+-	fuzzy_duck_fun.named_parameters["enable_verification"] = LogicalType::BOOLEAN;
++	fuzzy_duck_fun.GetSignature()
++	    .AddOptionalNamedParameter("seed", LogicalType::INTEGER)
++	    .AddOptionalNamedParameter("max_queries", LogicalType::UBIGINT)
++	    .AddOptionalNamedParameter("max_query_length", LogicalType::UBIGINT)
++	    .AddOptionalNamedParameter("log", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("complete_log", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("verbose_output", LogicalType::BOOLEAN)
++	    .AddOptionalNamedParameter("enable_verification", LogicalType::BOOLEAN);
+ 	loader.RegisterFunction(fuzzy_duck_fun);
+ 
+ 	TableFunction fuzz_all_functions("fuzz_all_functions", {}, FuzzAllFunctions, FuzzyDuckBind);
+-	fuzz_all_functions.named_parameters["seed"] = LogicalType::INTEGER;
+-	fuzz_all_functions.named_parameters["max_query_length"] = LogicalType::UBIGINT;
+-	fuzz_all_functions.named_parameters["log"] = LogicalType::VARCHAR;
+-	fuzz_all_functions.named_parameters["complete_log"] = LogicalType::VARCHAR;
+-	fuzz_all_functions.named_parameters["verbose_output"] = LogicalType::BOOLEAN;
++	fuzz_all_functions.GetSignature()
++	    .AddOptionalNamedParameter("seed", LogicalType::INTEGER)
++	    .AddOptionalNamedParameter("max_query_length", LogicalType::UBIGINT)
++	    .AddOptionalNamedParameter("log", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("complete_log", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("verbose_output", LogicalType::BOOLEAN);
+ 	loader.RegisterFunction(fuzz_all_functions);
+ 
+-	TableFunction reduce_sql_function("reduce_sql_statement", {LogicalType::VARCHAR}, ReduceSQLFunction, ReduceSQLBind);
++	FunctionSignature reduce_sql_signature;
++	reduce_sql_signature.AddParameter("statement", LogicalType::VARCHAR);
++	TableFunction reduce_sql_function("reduce_sql_statement", std::move(reduce_sql_signature), ReduceSQLFunction,
++	                                  ReduceSQLBind);
+ 	loader.RegisterFunction(reduce_sql_function);
+ }
+ void SqlsmithExtension::Load(ExtensionLoader &loader) {
+diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
+index 5e9ebf9..7826501 100644
+--- a/src/statement_generator.cpp
++++ b/src/statement_generator.cpp
+@@ -575,12 +575,15 @@ unique_ptr<TableRef> StatementGenerator::GenerateTableFunctionRef() {
+ 
+ 	auto result = make_uniq<TableFunctionRef>();
+ 	vector<unique_ptr<ParsedExpression>> children;
+-	for (idx_t i = 0; i < table_function.GetArguments().size(); i++) {
++	auto &signature = table_function.GetSignature();
++	for (idx_t i = 0; i < signature.GetPositionalParameterCount(); i++) {
+ 		children.push_back(GenerateConstant());
+ 	}
+ 	vector<Identifier> names;
+-	for (auto &e : table_function.named_parameters) {
+-		names.push_back(e.first);
++	for (auto &param : signature.GetParameters()) {
++		if (param.GetKind() == FunctionParameterKind::KEYWORD_ONLY) {
++			names.push_back(param.GetName());
++		}
+ 	}
+ 	while (!names.empty() && RandomPercentage(50)) {
+ 		auto name = Choose(names);

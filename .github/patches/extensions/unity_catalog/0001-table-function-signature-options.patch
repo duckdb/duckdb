@@ -1,0 +1,108 @@
+diff --git a/src/functions/uc_deletion_vector.cpp b/src/functions/uc_deletion_vector.cpp
+index ffab32e..5d9530e 100644
+--- a/src/functions/uc_deletion_vector.cpp
++++ b/src/functions/uc_deletion_vector.cpp
+@@ -92,10 +92,16 @@ static void ReadDVFunction(ClientContext &, TableFunctionInput &data_p, DataChun
+ 	output.SetChildCardinality(count);
+ }
+ 
++static FunctionSignature ReadDeletionVectorSignature() {
++	FunctionSignature signature;
++	signature.AddParameter("path", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("content_offset", LogicalType::BIGINT)
++	    .AddOptionalNamedParameter("content_size", LogicalType::BIGINT);
++	return signature;
++}
++
+ UCReadDeletionVectorFunction::UCReadDeletionVectorFunction()
+-    : TableFunction("uc_read_deletion_vector", {LogicalType::VARCHAR}, ReadDVFunction, ReadDVBind, ReadDVInit) {
+-	named_parameters["content_offset"] = LogicalType::BIGINT;
+-	named_parameters["content_size"] = LogicalType::BIGINT;
++    : TableFunction("uc_read_deletion_vector", ReadDeletionVectorSignature(), ReadDVFunction, ReadDVBind, ReadDVInit) {
+ }
+ 
+ } // namespace duckdb
+diff --git a/src/functions/uc_plan_table_scan.cpp b/src/functions/uc_plan_table_scan.cpp
+index 8a41c20..fcee062 100644
+--- a/src/functions/uc_plan_table_scan.cpp
++++ b/src/functions/uc_plan_table_scan.cpp
+@@ -68,12 +68,20 @@ static void PlanScanFunction(ClientContext &, TableFunctionInput &data_p, DataCh
+ 	output.SetChildCardinality(1);
+ }
+ 
++static FunctionSignature PlanTableScanSignature() {
++	FunctionSignature signature;
++	signature.AddParameter("endpoint", LogicalType::VARCHAR)
++	    .AddParameter("catalog", LogicalType::VARCHAR)
++	    .AddParameter("schema", LogicalType::VARCHAR)
++	    .AddParameter("table", LogicalType::VARCHAR)
++	    .AddParameter("token", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("filter", LogicalType::VARCHAR);
++	return signature;
++}
++
+ UCInternalPlanTableScanFunction::UCInternalPlanTableScanFunction()
+-    : TableFunction("__internal_uc_plan_table_scan",
+-                    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
+-                     LogicalType::VARCHAR},
+-                    PlanScanFunction, PlanScanBind, PlanScanInit) {
+-	named_parameters["filter"] = LogicalType::VARCHAR;
++    : TableFunction("__internal_uc_plan_table_scan", PlanTableScanSignature(), PlanScanFunction, PlanScanBind,
++                    PlanScanInit) {
+ }
+ 
+ } // namespace duckdb
+diff --git a/src/include/uc_multi_file_list.hpp b/src/include/uc_multi_file_list.hpp
+index 9b547a6..ff89d30 100644
+--- a/src/include/uc_multi_file_list.hpp
++++ b/src/include/uc_multi_file_list.hpp
+@@ -73,7 +73,7 @@ private:
+ extern thread_local shared_ptr<UCMultiFileList> tl_uc_file_list;
+ 
+ // Registered as get_multi_file_reader on a parquet_scan copy; consumes tl_uc_file_list.
+-unique_ptr<MultiFileReader> UCMultiFileReaderFactory(const TableFunction &function);
++unique_ptr<MultiFileReader> UCMultiFileReaderFactory(const BoundTableFunction &function);
+ 
+ // The DeleteFilter for one data file, or nullptr if it has no deletes. Positional deletes are
+ // supported in both physical forms (parquet (file_path, pos) files and deletion-vector puffin
+diff --git a/src/storage/uc_table_entry.cpp b/src/storage/uc_table_entry.cpp
+index 715a9c3..3ea099f 100644
+--- a/src/storage/uc_table_entry.cpp
++++ b/src/storage/uc_table_entry.cpp
+@@ -234,8 +234,10 @@ static unique_ptr<GlobalTableFunctionState> UCScanPlanInitGlobal(ClientContext &
+ 	TableFunctionRef dummy_ref;
+ 	vector<LogicalType> return_types;
+ 	vector<Identifier> return_names;
++	// the bind sees the function as a bound call would; nothing is read back off it afterwards
++	BoundTableFunction bound_parquet_fn(parquet_fn);
+ 	TableFunctionBindInput bind_input(inputs, named_params, input_table_types, input_table_names, nullptr, nullptr,
+-	                                  parquet_fn, dummy_ref);
++	                                  bound_parquet_fn, dummy_ref);
+ 	try {
+ 		gstate->inner_bind_data = parquet_fn.bind(context, bind_input, return_types, return_names);
+ 	} catch (...) {
+diff --git a/src/uc_multi_file_list.cpp b/src/uc_multi_file_list.cpp
+index 47ca2d3..f9af5ba 100644
+--- a/src/uc_multi_file_list.cpp
++++ b/src/uc_multi_file_list.cpp
+@@ -96,7 +96,7 @@ bool UCMultiFileList::ExpandNextPath() const {
+ // parquet_fn.bind(), moved out by the factory on the same thread.
+ thread_local shared_ptr<UCMultiFileList> tl_uc_file_list;
+ 
+-unique_ptr<MultiFileReader> UCMultiFileReaderFactory(const TableFunction &) {
++unique_ptr<MultiFileReader> UCMultiFileReaderFactory(const BoundTableFunction &) {
+ 	D_ASSERT(tl_uc_file_list);
+ 	return make_uniq<UCMultiFileReader>(std::move(tl_uc_file_list));
+ }
+@@ -124,8 +124,10 @@ static void ScanParquetFile(ClientContext &context, const string &path,
+ 	TableFunctionRef dummy_ref;
+ 	vector<LogicalType> return_types;
+ 	vector<Identifier> return_names;
++	// the bind sees the function as a bound call would; nothing is read back off it afterwards
++	BoundTableFunction bound_parquet_fn(parquet_fn);
+ 	TableFunctionBindInput bind_input(inputs, named_params, input_table_types, input_table_names, nullptr, nullptr,
+-	                                  parquet_fn, dummy_ref);
++	                                  bound_parquet_fn, dummy_ref);
+ 	auto bind_data = parquet_fn.bind(context, bind_input, return_types, return_names);
+ 
+ 	vector<column_t> column_ids;

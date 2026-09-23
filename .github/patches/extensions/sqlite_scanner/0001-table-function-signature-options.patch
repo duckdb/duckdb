@@ -1,0 +1,63 @@
+diff --git a/src/sqlite_scanner.cpp b/src/sqlite_scanner.cpp
+index 0ff7852..4d15e96 100644
+--- a/src/sqlite_scanner.cpp
++++ b/src/sqlite_scanner.cpp
+@@ -417,11 +417,11 @@ SqliteStatistics(ClientContext &context, const FunctionData *bind_data_p,
+ */
+ 
+ static void SqliteScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+-                               const TableFunction &function) {
++                               const BoundTableFunction &function) {
+ 	throw NotImplementedException("SqliteScanSerialize");
+ }
+ 
+-static unique_ptr<FunctionData> SqliteScanDeserialize(Deserializer &deserializer, TableFunction &function) {
++static unique_ptr<FunctionData> SqliteScanDeserialize(Deserializer &deserializer, BoundTableFunction &function) {
+ 	throw NotImplementedException("SqliteScanDeserialize");
+ }
+ 
+@@ -489,9 +489,15 @@ static void AttachFunction(ClientContext &context, TableFunctionInput &data_p, D
+ 	data.finished = true;
+ }
+ 
++static FunctionSignature SqliteAttachSignature() {
++	FunctionSignature signature;
++	signature.AddParameter("file_name", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("overwrite", LogicalType::BOOLEAN);
++	return signature;
++}
++
+ SqliteAttachFunction::SqliteAttachFunction()
+-    : TableFunction("sqlite_attach", {LogicalType::VARCHAR}, AttachFunction, AttachBind) {
+-	named_parameters["overwrite"] = LogicalType::BOOLEAN;
++    : TableFunction("sqlite_attach", SqliteAttachSignature(), AttachFunction, AttachBind) {
+ }
+ 
+ } // namespace duckdb
+diff --git a/src/storage/sqlite_query.cpp b/src/storage/sqlite_query.cpp
+index d2857d2..8b2a576 100644
+--- a/src/storage/sqlite_query.cpp
++++ b/src/storage/sqlite_query.cpp
+@@ -93,13 +93,20 @@ static unique_ptr<FunctionData> SQLiteQueryBind(ClientContext &context, TableFun
+ 	return std::move(result);
+ }
+ 
++static FunctionSignature SQLiteQuerySignature() {
++	FunctionSignature signature;
++	signature.AddParameter("database", LogicalType::VARCHAR)
++	    .AddParameter("sql", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("params", LogicalType::ANY);
++	return signature;
++}
++
+ SQLiteQueryFunction::SQLiteQueryFunction()
+-    : TableFunction("sqlite_query", {LogicalType::VARCHAR, LogicalType::VARCHAR}, nullptr, SQLiteQueryBind) {
++    : TableFunction("sqlite_query", SQLiteQuerySignature(), nullptr, SQLiteQueryBind) {
+ 	SqliteScanFunction scan_function;
+ 	init_global = scan_function.init_global;
+ 	init_local = scan_function.init_local;
+ 	function = scan_function.function;
+ 	global_initialization = TableFunctionInitialization::INITIALIZE_ON_SCHEDULE;
+-	named_parameters["params"] = LogicalType::ANY;
+ }
+ } // namespace duckdb

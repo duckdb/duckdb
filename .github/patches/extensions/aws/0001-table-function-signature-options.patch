@@ -1,0 +1,87 @@
+diff --git a/src/cloudformation_functions.cpp b/src/cloudformation_functions.cpp
+index 7117bfb..1ce4e28 100644
+--- a/src/cloudformation_functions.cpp
++++ b/src/cloudformation_functions.cpp
+@@ -1107,29 +1107,36 @@ void CloudFormationFunctions::Register(ExtensionLoader &loader) {
+ 
+ 	// The template is the only positional argument: it is what the verb acts on.
+ 	// Everything else modifies the call.
+-	TableFunction create_fn("cloudformation_create_stack", {LogicalType::VARCHAR}, CloudFormationCreateStackFun,
+-	                        CloudFormationCreateStackBind);
+-	create_fn.named_parameters["name"] = LogicalType::VARCHAR;
+-	create_fn.named_parameters["region"] = LogicalType::VARCHAR;
+-	create_fn.named_parameters["template_parameters"] = map_vv;
+-	create_fn.named_parameters["tags"] = map_vv;
+-	// Typed BOOLEAN rather than a string key: a value that failed to parse would
+-	// fall through to false and create a real stack.
+-	create_fn.named_parameters["dry_run"] = LogicalType::BOOLEAN;
++	FunctionSignature create_signature;
++	create_signature.AddParameter("template", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("name", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("region", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("template_parameters", map_vv)
++	    .AddOptionalNamedParameter("tags", map_vv)
++	    // Typed BOOLEAN rather than a string key: a value that failed to parse would
++	    // fall through to false and create a real stack.
++	    .AddOptionalNamedParameter("dry_run", LogicalType::BOOLEAN);
++	TableFunction create_fn("cloudformation_create_stack", std::move(create_signature),
++	                        CloudFormationCreateStackFun, CloudFormationCreateStackBind);
+ 	loader.RegisterFunction(create_fn);
+ 
+-	TableFunction describe_fn("cloudformation_describe_stack", {map_vv}, CloudFormationDescribeStackFun,
+-	                          CloudFormationDescribeStackBind);
++	FunctionSignature describe_signature;
++	describe_signature.AddParameter("handle", map_vv);
++	TableFunction describe_fn("cloudformation_describe_stack", std::move(describe_signature),
++	                          CloudFormationDescribeStackFun, CloudFormationDescribeStackBind);
+ 	loader.RegisterFunction(describe_fn);
+ 
+-	TableFunction delete_fn("cloudformation_delete_stack", {map_vv}, CloudFormationDeleteStackFun,
++	FunctionSignature delete_signature;
++	delete_signature.AddParameter("handle", map_vv).AddOptionalNamedParameter("dry_run", LogicalType::BOOLEAN);
++	TableFunction delete_fn("cloudformation_delete_stack", std::move(delete_signature), CloudFormationDeleteStackFun,
+ 	                        CloudFormationDeleteStackBind);
+-	delete_fn.named_parameters["dry_run"] = LogicalType::BOOLEAN;
+ 	loader.RegisterFunction(delete_fn);
+ 
+-	TableFunction list_fn("cloudformation_list_stacks", {LogicalType::VARCHAR}, CloudFormationListStacksFun,
++	FunctionSignature list_signature;
++	list_signature.AddParameter("region", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("status_filter", LogicalType::LIST(LogicalType::VARCHAR));
++	TableFunction list_fn("cloudformation_list_stacks", std::move(list_signature), CloudFormationListStacksFun,
+ 	                      CloudFormationListStacksBind);
+-	list_fn.named_parameters["status_filter"] = LogicalType::LIST(LogicalType::VARCHAR);
+ 	loader.RegisterFunction(list_fn);
+ 
+ 	// Overloaded: no arg -> all default regions (parallel); VARCHAR -> one region; LIST(VARCHAR) -> those
+diff --git a/src/create_aws_legacy_function_stubs.cpp b/src/create_aws_legacy_function_stubs.cpp
+index 4fe885c..d454481 100644
+--- a/src/create_aws_legacy_function_stubs.cpp
++++ b/src/create_aws_legacy_function_stubs.cpp
+@@ -27,15 +27,19 @@ static void LoadAWSCredentialsFunction(ClientContext &, TableFunctionInput &, Da
+ 
+ void CreateAwsLegacyFunctionStubs::Register(ExtensionLoader &loader) {
+ 	TableFunctionSet function_set("load_aws_credentials");
+-	auto base_fun = TableFunction("load_aws_credentials", {}, LoadAWSCredentialsFunction, LoadAWSCredentialsBind);
+-	auto profile_fun = TableFunction("load_aws_credentials", {LogicalTypeId::VARCHAR}, LoadAWSCredentialsFunction,
++	FunctionSignature base_signature;
++	base_signature.AddOptionalNamedParameter("set_region", LogicalTypeId::BOOLEAN)
++	    .AddOptionalNamedParameter("redact_secret", LogicalTypeId::BOOLEAN);
++	auto base_fun = TableFunction("load_aws_credentials", std::move(base_signature), LoadAWSCredentialsFunction,
++	                              LoadAWSCredentialsBind);
++
++	FunctionSignature profile_signature;
++	profile_signature.AddParameter("profile", LogicalTypeId::VARCHAR)
++	    .AddOptionalNamedParameter("set_region", LogicalTypeId::BOOLEAN)
++	    .AddOptionalNamedParameter("redact_secret", LogicalTypeId::BOOLEAN);
++	auto profile_fun = TableFunction("load_aws_credentials", std::move(profile_signature), LoadAWSCredentialsFunction,
+ 	                                 LoadAWSCredentialsBind);
+ 
+-	base_fun.named_parameters["set_region"] = LogicalTypeId::BOOLEAN;
+-	base_fun.named_parameters["redact_secret"] = LogicalTypeId::BOOLEAN;
+-	profile_fun.named_parameters["set_region"] = LogicalTypeId::BOOLEAN;
+-	profile_fun.named_parameters["redact_secret"] = LogicalTypeId::BOOLEAN;
+-
+ 	function_set.AddFunction(base_fun);
+ 	function_set.AddFunction(profile_fun);
+ 

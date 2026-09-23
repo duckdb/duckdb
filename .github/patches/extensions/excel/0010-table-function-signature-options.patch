@@ -1,0 +1,37 @@
+diff --git a/src/excel/xlsx/read_xlsx.cpp b/src/excel/xlsx/read_xlsx.cpp
+index 21c2887..196fdc8 100644
+--- a/src/excel/xlsx/read_xlsx.cpp
++++ b/src/excel/xlsx/read_xlsx.cpp
+@@ -750,20 +750,21 @@ static unique_ptr<TableRef> XLSXReplacementScan(ClientContext &context, Replacem
+ //-------------------------------------------------------------------
+ TableFunction ReadXLSX::GetFunction() {
+ 
+-	TableFunction read_xlsx("read_xlsx", {LogicalType::VARCHAR}, Execute, Bind);
++	FunctionSignature signature;
++	signature.AddParameter("file_path", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("header", LogicalType::BOOLEAN)
++	    .AddOptionalNamedParameter("all_varchar", LogicalType::BOOLEAN)
++	    .AddOptionalNamedParameter("ignore_errors", LogicalType::BOOLEAN)
++	    .AddOptionalNamedParameter("range", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("sheet", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("stop_at_empty", LogicalType::BOOLEAN)
++	    .AddOptionalNamedParameter("empty_as_varchar", LogicalType::BOOLEAN)
++	    .AddOptionalNamedParameter("normalize_names", LogicalType::BOOLEAN);
++
++	TableFunction read_xlsx("read_xlsx", std::move(signature), Execute, Bind);
+ 	read_xlsx.init_global = InitGlobal;
+ 	read_xlsx.table_scan_progress = Progress;
+ 
+-	// Parameters
+-	read_xlsx.named_parameters["header"] = LogicalType::BOOLEAN;
+-	read_xlsx.named_parameters["all_varchar"] = LogicalType::BOOLEAN;
+-	read_xlsx.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
+-	read_xlsx.named_parameters["range"] = LogicalType::VARCHAR;
+-	read_xlsx.named_parameters["sheet"] = LogicalType::VARCHAR;
+-	read_xlsx.named_parameters["stop_at_empty"] = LogicalType::BOOLEAN;
+-	read_xlsx.named_parameters["empty_as_varchar"] = LogicalType::BOOLEAN;
+-	read_xlsx.named_parameters["normalize_names"] = LogicalType::BOOLEAN;
+-
+ 	return read_xlsx;
+ }
+ 

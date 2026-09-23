@@ -1,0 +1,396 @@
+diff --git a/src/catalog/rest/catalog_entry/table/iceberg_table_schema_version.cpp b/src/catalog/rest/catalog_entry/table/iceberg_table_schema_version.cpp
+index add1902da..98cbf337c 100644
+--- a/src/catalog/rest/catalog_entry/table/iceberg_table_schema_version.cpp
++++ b/src/catalog/rest/catalog_entry/table/iceberg_table_schema_version.cpp
+@@ -98,7 +98,9 @@ TableFunction IcebergTableSchemaVersion::GetScanFunction(ClientContext &context,
+ 	// Set the S3 path as input to table function
+ 	const auto &storage_location = metadata.location;
+ 	vector<Value> inputs = {storage_location};
+-	TableFunctionBindInput bind_input(inputs, param_map, return_types, names, nullptr, nullptr, iceberg_scan_function,
++	// the bind sees the function as a bound call would; nothing is read back off it afterwards
++	BoundTableFunction bound_scan_function(iceberg_scan_function);
++	TableFunctionBindInput bind_input(inputs, param_map, return_types, names, nullptr, nullptr, bound_scan_function,
+ 	                                  empty_ref);
+ 	auto result = iceberg_scan_function.bind(context, bind_input, return_types, names);
+ 	bind_data = std::move(result);
+diff --git a/src/function/ducklake/iceberg_to_ducklake.cpp b/src/function/ducklake/iceberg_to_ducklake.cpp
+index 40142f8bc..989f94017 100644
+--- a/src/function/ducklake/iceberg_to_ducklake.cpp
++++ b/src/function/ducklake/iceberg_to_ducklake.cpp
+@@ -970,7 +970,7 @@ TableFunctionSet IcebergFunctions::GetIcebergToDuckLakeFunction() {
+ 
+ 	auto fun = TableFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, IcebergToDuckLakeFunction,
+ 	                         iceberg::ducklake::IcebergToDuckLakeBind, IcebergToDuckLakeGlobalTableFunctionState::Init);
+-	fun.named_parameters.emplace("skip_tables", LogicalType::LIST(LogicalTypeId::VARCHAR));
++	fun.GetSignature().AddOptionalNamedParameter("skip_tables", LogicalType::LIST(LogicalTypeId::VARCHAR));
+ 	function_set.AddFunction(fun);
+ 
+ 	return function_set;
+diff --git a/src/function/metadata/iceberg_column_stats.cpp b/src/function/metadata/iceberg_column_stats.cpp
+index 595b44d6f..8ec174860 100644
+--- a/src/function/metadata/iceberg_column_stats.cpp
++++ b/src/function/metadata/iceberg_column_stats.cpp
+@@ -281,12 +281,13 @@ TableFunctionSet IcebergFunctions::GetIcebergColumnStatsFunction() {
+ 	TableFunction fun({LogicalType::VARCHAR}, IcebergColumnStatsFunction, IcebergColumnStatsBind,
+ 	                  IcebergColumnStatsGlobalTableFunctionState::Init);
+ 
+-	fun.named_parameters["allow_moved_paths"] = LogicalType::BOOLEAN;
+-	fun.named_parameters["metadata_compression_codec"] = LogicalType::VARCHAR;
+-	fun.named_parameters["version"] = LogicalType::VARCHAR;
+-	fun.named_parameters["version_name_format"] = LogicalType::VARCHAR;
+-	fun.named_parameters["snapshot_from_timestamp"] = LogicalType::TIMESTAMP_MS;
+-	fun.named_parameters["snapshot_from_id"] = LogicalType::UBIGINT;
++	fun.GetSignature()
++	    .AddOptionalNamedParameter("allow_moved_paths", LogicalType::BOOLEAN)
++	    .AddOptionalNamedParameter("metadata_compression_codec", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("version", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("version_name_format", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("snapshot_from_timestamp", LogicalType::TIMESTAMP_MS)
++	    .AddOptionalNamedParameter("snapshot_from_id", LogicalType::UBIGINT);
+ 	function_set.AddFunction(fun);
+ 	return function_set;
+ }
+diff --git a/src/function/metadata/iceberg_metadata.cpp b/src/function/metadata/iceberg_metadata.cpp
+index f236e94b7..42937043c 100644
+--- a/src/function/metadata/iceberg_metadata.cpp
++++ b/src/function/metadata/iceberg_metadata.cpp
+@@ -189,12 +189,13 @@ TableFunctionSet IcebergFunctions::GetIcebergMetadataFunction() {
+ 
+ 	auto fun = TableFunction({LogicalType::VARCHAR}, IcebergMetaDataFunction, IcebergMetaDataBind,
+ 	                         IcebergMetaDataGlobalTableFunctionState::Init);
+-	fun.named_parameters["allow_moved_paths"] = LogicalType::BOOLEAN;
+-	fun.named_parameters["metadata_compression_codec"] = LogicalType::VARCHAR;
+-	fun.named_parameters["version"] = LogicalType::VARCHAR;
+-	fun.named_parameters["version_name_format"] = LogicalType::VARCHAR;
+-	fun.named_parameters["snapshot_from_timestamp"] = LogicalType::TIMESTAMP_MS;
+-	fun.named_parameters["snapshot_from_id"] = LogicalType::UBIGINT;
++	fun.GetSignature()
++	    .AddOptionalNamedParameter("allow_moved_paths", LogicalType::BOOLEAN)
++	    .AddOptionalNamedParameter("metadata_compression_codec", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("version", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("version_name_format", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("snapshot_from_timestamp", LogicalType::TIMESTAMP_MS)
++	    .AddOptionalNamedParameter("snapshot_from_id", LogicalType::UBIGINT);
+ 	function_set.AddFunction(fun);
+ 
+ 	return function_set;
+diff --git a/src/function/metadata/iceberg_partition_stats.cpp b/src/function/metadata/iceberg_partition_stats.cpp
+index 84d00452d..d9cbd6132 100644
+--- a/src/function/metadata/iceberg_partition_stats.cpp
++++ b/src/function/metadata/iceberg_partition_stats.cpp
+@@ -199,12 +199,13 @@ TableFunctionSet IcebergFunctions::GetIcebergPartitionStatsFunction() {
+ 	TableFunction fun({LogicalType::VARCHAR}, IcebergPartitionStatsFunction, IcebergPartitionStatsBind,
+ 	                  IcebergPartitionStatsGlobalTableFunctionState::Init);
+ 
+-	fun.named_parameters["allow_moved_paths"] = LogicalType::BOOLEAN;
+-	fun.named_parameters["metadata_compression_codec"] = LogicalType::VARCHAR;
+-	fun.named_parameters["version"] = LogicalType::VARCHAR;
+-	fun.named_parameters["version_name_format"] = LogicalType::VARCHAR;
+-	fun.named_parameters["snapshot_from_timestamp"] = LogicalType::TIMESTAMP_MS;
+-	fun.named_parameters["snapshot_from_id"] = LogicalType::UBIGINT;
++	fun.GetSignature()
++	    .AddOptionalNamedParameter("allow_moved_paths", LogicalType::BOOLEAN)
++	    .AddOptionalNamedParameter("metadata_compression_codec", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("version", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("version_name_format", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("snapshot_from_timestamp", LogicalType::TIMESTAMP_MS)
++	    .AddOptionalNamedParameter("snapshot_from_id", LogicalType::UBIGINT);
+ 	function_set.AddFunction(fun);
+ 	return function_set;
+ }
+diff --git a/src/function/metadata/iceberg_rewrite_data_files.cpp b/src/function/metadata/iceberg_rewrite_data_files.cpp
+index cbea56a4b..9e655eeba 100644
+--- a/src/function/metadata/iceberg_rewrite_data_files.cpp
++++ b/src/function/metadata/iceberg_rewrite_data_files.cpp
+@@ -185,12 +185,13 @@ TableFunctionSet IcebergFunctions::GetIcebergRewriteDataFilesFunction() {
+ 	TableFunctionSet function_set("iceberg_rewrite_data_files");
+ 	TableFunction function("iceberg_rewrite_data_files", {LogicalType::VARCHAR}, nullptr);
+ 	function.bind_operator = RewriteDataFilesBindOperator;
+-	function.named_parameters["target_file_size_bytes"] = LogicalType::ANY;
+-	function.named_parameters["min_file_size_bytes"] = LogicalType::ANY;
+-	function.named_parameters["max_file_size_bytes"] = LogicalType::ANY;
+-	function.named_parameters["min_input_files"] = LogicalType::BIGINT;
+-	function.named_parameters["max_files_to_rewrite"] = LogicalType::BIGINT;
+-	function.named_parameters["rewrite_all"] = LogicalType::BOOLEAN;
++	function.GetSignature()
++	    .AddOptionalNamedParameter("target_file_size_bytes", LogicalType::ANY)
++	    .AddOptionalNamedParameter("min_file_size_bytes", LogicalType::ANY)
++	    .AddOptionalNamedParameter("max_file_size_bytes", LogicalType::ANY)
++	    .AddOptionalNamedParameter("min_input_files", LogicalType::BIGINT)
++	    .AddOptionalNamedParameter("max_files_to_rewrite", LogicalType::BIGINT)
++	    .AddOptionalNamedParameter("rewrite_all", LogicalType::BOOLEAN);
+ 	function_set.AddFunction(function);
+ 	return function_set;
+ }
+diff --git a/src/function/metadata/iceberg_snapshots.cpp b/src/function/metadata/iceberg_snapshots.cpp
+index 050446552..3885c8120 100644
+--- a/src/function/metadata/iceberg_snapshots.cpp
++++ b/src/function/metadata/iceberg_snapshots.cpp
+@@ -133,9 +133,10 @@ TableFunctionSet IcebergFunctions::GetIcebergSnapshotsFunction() {
+ 	TableFunctionSet function_set("iceberg_snapshots");
+ 	TableFunction table_function({LogicalType::VARCHAR}, IcebergSnapshotsFunction, IcebergSnapshotsBind,
+ 	                             IcebergSnapshotGlobalTableFunctionState::Init);
+-	table_function.named_parameters["metadata_compression_codec"] = LogicalType::VARCHAR;
+-	table_function.named_parameters["version"] = LogicalType::VARCHAR;
+-	table_function.named_parameters["version_name_format"] = LogicalType::VARCHAR;
++	table_function.GetSignature()
++	    .AddOptionalNamedParameter("metadata_compression_codec", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("version", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("version_name_format", LogicalType::VARCHAR);
+ 	function_set.AddFunction(table_function);
+ 	return function_set;
+ }
+diff --git a/src/function/scan/iceberg_scan.cpp b/src/function/scan/iceberg_scan.cpp
+index 367c67890..80cc752e3 100644
+--- a/src/function/scan/iceberg_scan.cpp
++++ b/src/function/scan/iceberg_scan.cpp
+@@ -38,13 +38,14 @@
+ namespace duckdb {
+ 
+ static void AddNamedParameters(TableFunction &fun) {
+-	fun.named_parameters["allow_moved_paths"] = LogicalType::BOOLEAN;
+-	fun.named_parameters["mode"] = LogicalType::VARCHAR;
+-	fun.named_parameters["metadata_compression_codec"] = LogicalType::VARCHAR;
+-	fun.named_parameters["version"] = LogicalType::VARCHAR;
+-	fun.named_parameters["version_name_format"] = LogicalType::VARCHAR;
+-	fun.named_parameters["snapshot_from_timestamp"] = LogicalType::TIMESTAMP_MS;
+-	fun.named_parameters["snapshot_from_id"] = LogicalType::UBIGINT;
++	fun.GetSignature()
++	    .AddOptionalNamedParameter("allow_moved_paths", LogicalType::BOOLEAN)
++	    .AddOptionalNamedParameter("mode", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("metadata_compression_codec", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("version", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("version_name_format", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("snapshot_from_timestamp", LogicalType::TIMESTAMP_MS)
++	    .AddOptionalNamedParameter("snapshot_from_id", LogicalType::UBIGINT);
+ }
+ 
+ virtual_column_map_t IcebergVirtualColumns(ClientContext &context, optional_ptr<FunctionData> bind_data_p) {
+@@ -55,10 +56,10 @@ virtual_column_map_t IcebergVirtualColumns(ClientContext &context, optional_ptr<
+ }
+ 
+ static void IcebergScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+-                                 const TableFunction &function) {
++                                 const BoundTableFunction &function) {
+ 	throw NotImplementedException("IcebergScan serialization not implemented");
+ }
+-static unique_ptr<FunctionData> IcebergScanDeserialize(Deserializer &deserializer, TableFunction &function) {
++static unique_ptr<FunctionData> IcebergScanDeserialize(Deserializer &deserializer, BoundTableFunction &function) {
+ 	throw NotImplementedException("IcebergScan deserialization not implemented");
+ }
+ 
+@@ -115,7 +116,15 @@ TableFunctionSet IcebergFunctions::GetIcebergScanFunction(ExtensionLoader &loade
+ 		// function.supports_pushdown_type = IcebergScanSupportsPushdownType;
+ 
+ 		// Schema param is just confusing here
+-		function.named_parameters.erase("schema");
++		// A signature declares no removal, so it is rebuilt without the schema parameter
++		auto &signature = function.GetSignature();
++		vector<FunctionParameter> parameters;
++		for (auto &param : signature.GetParameters()) {
++			if (param.GetName() != "schema") {
++				parameters.push_back(param);
++			}
++		}
++		signature = FunctionSignature(std::move(parameters), signature.GetReturnType());
+ 		AddNamedParameters(function);
+ 
+ 		function.SetName("iceberg_scan");
+diff --git a/src/function/scan_planning/iceberg_scan_plan.cpp b/src/function/scan_planning/iceberg_scan_plan.cpp
+index 5c88b1ead..fa87f38c4 100644
+--- a/src/function/scan_planning/iceberg_scan_plan.cpp
++++ b/src/function/scan_planning/iceberg_scan_plan.cpp
+@@ -236,9 +236,10 @@ TableFunctionSet IcebergFunctions::GetIcebergScanPlanFunction() {
+ 	TableFunctionSet function_set("iceberg_scan_plan");
+ 	auto fun = TableFunction({LogicalType::VARCHAR}, IcebergScanPlanFunction, IcebergScanPlanBind,
+ 	                         IcebergScanPlanGlobalState::Init);
+-	fun.named_parameters["produce_sequence_number"] = LogicalType::BOOLEAN;
+-	fun.named_parameters["snapshot_from_id"] = LogicalType::UBIGINT;
+-	fun.named_parameters["snapshot_from_timestamp"] = LogicalType::TIMESTAMP_MS;
++	fun.GetSignature()
++	    .AddOptionalNamedParameter("produce_sequence_number", LogicalType::BOOLEAN)
++	    .AddOptionalNamedParameter("snapshot_from_id", LogicalType::UBIGINT)
++	    .AddOptionalNamedParameter("snapshot_from_timestamp", LogicalType::TIMESTAMP_MS);
+ 	function_set.AddFunction(fun);
+ 	return function_set;
+ }
+diff --git a/src/function/scan_planning/iceberg_scan_tasks.cpp b/src/function/scan_planning/iceberg_scan_tasks.cpp
+index cc8ad1713..64e7077e6 100644
+--- a/src/function/scan_planning/iceberg_scan_tasks.cpp
++++ b/src/function/scan_planning/iceberg_scan_tasks.cpp
+@@ -106,7 +106,7 @@ struct IcebergTaskReader : public IcebergMultiFileReader {
+ 	explicit IcebergTaskReader(shared_ptr<TableFunctionInfo> info) : IcebergMultiFileReader(std::move(info)) {
+ 	}
+ 
+-	static unique_ptr<MultiFileReader> CreateInstance(const TableFunction &function) {
++	static unique_ptr<MultiFileReader> CreateInstance(const BoundTableFunction &function) {
+ 		return make_uniq<IcebergTaskReader>(function.function_info);
+ 	}
+ 
+@@ -272,8 +272,10 @@ static unique_ptr<IcebergActiveTask> StartTask(ExecutionContext &context, const
+ 	vector<LogicalType> input_types;
+ 	vector<Identifier> input_names;
+ 	TableFunctionRef ref;
+-	TableFunctionBindInput bind_input(arguments, parameters, input_types, input_names, nullptr, nullptr,
+-	                                  result->function, ref);
++	// the bind sees the function as a bound call would; nothing is read back off it afterwards
++	BoundTableFunction bound_function(result->function);
++	TableFunctionBindInput bind_input(arguments, parameters, input_types, input_names, nullptr, nullptr, bound_function,
++	                                  ref);
+ 	vector<LogicalType> types;
+ 	vector<Identifier> names;
+ 	result->bind = result->function.bind(context.client, bind_input, types, names);
+diff --git a/src/include/planning/iceberg_multi_file_reader.hpp b/src/include/planning/iceberg_multi_file_reader.hpp
+index 687d19b13..fc7e0ba98 100644
+--- a/src/include/planning/iceberg_multi_file_reader.hpp
++++ b/src/include/planning/iceberg_multi_file_reader.hpp
+@@ -94,7 +94,7 @@ public:
+ 	IcebergMultiFileReader(shared_ptr<TableFunctionInfo> function_info);
+ 
+ public:
+-	static unique_ptr<MultiFileReader> CreateInstance(const TableFunction &table);
++	static unique_ptr<MultiFileReader> CreateInstance(const BoundTableFunction &table);
+ 	static vector<PartitionStatistics> IcebergGetPartitionStats(ClientContext &context, GetPartitionStatsInput &input);
+ 
+ public:
+diff --git a/src/include/planning/metadata_io/avro/iceberg_avro_multi_file_reader.hpp b/src/include/planning/metadata_io/avro/iceberg_avro_multi_file_reader.hpp
+index 9660d6bcb..429a9b656 100644
+--- a/src/include/planning/metadata_io/avro/iceberg_avro_multi_file_reader.hpp
++++ b/src/include/planning/metadata_io/avro/iceberg_avro_multi_file_reader.hpp
+@@ -33,7 +33,7 @@ public:
+ 	                   ExpressionExecutor &executor, optional_ptr<MultiFileReaderGlobalState> global_state) override;
+ 
+ public:
+-	static unique_ptr<MultiFileReader> CreateInstance(const TableFunction &table);
++	static unique_ptr<MultiFileReader> CreateInstance(const BoundTableFunction &table);
+ 
+ private:
+ 	shared_ptr<TableFunctionInfo> function_info;
+diff --git a/src/include/planning/metadata_io/deletes/iceberg_deletes_file_reader.hpp b/src/include/planning/metadata_io/deletes/iceberg_deletes_file_reader.hpp
+index 7b3ecd6cd..b50c85bab 100644
+--- a/src/include/planning/metadata_io/deletes/iceberg_deletes_file_reader.hpp
++++ b/src/include/planning/metadata_io/deletes/iceberg_deletes_file_reader.hpp
+@@ -33,7 +33,7 @@ struct IcebergDeleteFileReader : public MultiFileReader {
+ 	bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
+ 	          vector<Identifier> &names, MultiFileReaderBindData &bind_data) override;
+ 
+-	static unique_ptr<MultiFileReader> CreateInstance(const TableFunction &table);
++	static unique_ptr<MultiFileReader> CreateInstance(const BoundTableFunction &table);
+ 
+ public:
+ 	shared_ptr<TableFunctionInfo> function_info;
+diff --git a/src/planning/deletes/iceberg_delete_file_scanner.cpp b/src/planning/deletes/iceberg_delete_file_scanner.cpp
+index 448c6f649..42faa5f6d 100644
+--- a/src/planning/deletes/iceberg_delete_file_scanner.cpp
++++ b/src/planning/deletes/iceberg_delete_file_scanner.cpp
+@@ -322,8 +322,10 @@ static void ScanParquetDeleteFiles(const IcebergDeleteExecutionContext &context,
+ 	auto delete_info = make_shared_ptr<IcebergDeleteScanInfo>(std::move(delete_file_infos), std::move(delete_schema));
+ 	delete_scan_function.function_info = delete_info;
+ 
++	// the bind sees the function as a bound call would; nothing is read back off it afterwards
++	BoundTableFunction bound_delete_scan_function(delete_scan_function);
+ 	TableFunctionBindInput bind_input(children, named_params, input_types, input_names, nullptr, nullptr,
+-	                                  delete_scan_function, empty);
++	                                  bound_delete_scan_function, empty);
+ 	vector<LogicalType> return_types;
+ 	vector<Identifier> return_names;
+ 	auto bind_data = delete_scan_function.bind(context.context, bind_input, return_types, return_names);
+diff --git a/src/planning/iceberg_multi_file_reader.cpp b/src/planning/iceberg_multi_file_reader.cpp
+index 0f46782ee..f422cbab8 100644
+--- a/src/planning/iceberg_multi_file_reader.cpp
++++ b/src/planning/iceberg_multi_file_reader.cpp
+@@ -92,7 +92,7 @@ IcebergMultiFileReader::IcebergMultiFileReader(shared_ptr<TableFunctionInfo> fun
+ 	last_updated_sequence_number_column->identifier = Value::INTEGER(MultiFileReader::LAST_UPDATED_SEQUENCE_NUMBER_ID);
+ }
+ 
+-unique_ptr<MultiFileReader> IcebergMultiFileReader::CreateInstance(const TableFunction &table) {
++unique_ptr<MultiFileReader> IcebergMultiFileReader::CreateInstance(const BoundTableFunction &table) {
+ 	return make_uniq<IcebergMultiFileReader>(table.function_info);
+ }
+ 
+diff --git a/src/planning/iceberg_optimizer.cpp b/src/planning/iceberg_optimizer.cpp
+index 80048f0db..ce3dbcf08 100644
+--- a/src/planning/iceberg_optimizer.cpp
++++ b/src/planning/iceberg_optimizer.cpp
+@@ -42,7 +42,7 @@ void IcebergOptimizerRoutine::VisitOperator(unique_ptr<LogicalOperator> &op, boo
+ 		// reliably across the extension linking boundary; instead the function
+ 		// pointer uniquely identifies our scan, which guarantees the bind data
+ 		// and file list are the iceberg types we expect.
+-		if (get.function.name != "iceberg_scan" ||
++		if (get.function.GetName() != "iceberg_scan" ||
+ 		    get.function.get_multi_file_reader != IcebergMultiFileReader::CreateInstance || !get.bind_data) {
+ 			VisitOperator(child, below_write);
+ 			continue;
+diff --git a/src/planning/metadata_io/avro/avro_scan.cpp b/src/planning/metadata_io/avro/avro_scan.cpp
+index 17ba5e565..45cf1d18d 100644
+--- a/src/planning/metadata_io/avro/avro_scan.cpp
++++ b/src/planning/metadata_io/avro/avro_scan.cpp
+@@ -50,8 +50,10 @@ AvroScan::AvroScan(const string &path, ClientContext &context, shared_ptr<Iceber
+ 	dummy_table_function.get_multi_file_reader = IcebergAvroMultiFileReader::CreateInstance;
+ 	dummy_table_function.function_info = avro_scan_info;
+ 
++	// the bind sees the function as a bound call would; nothing is read back off it afterwards
++	BoundTableFunction bound_table_function(dummy_table_function);
+ 	TableFunctionBindInput bind_input(children, named_params, input_types, input_names, nullptr, nullptr,
+-	                                  dummy_table_function, empty);
++	                                  bound_table_function, empty);
+ 	bind_data = avro_scan->bind(context, bind_input, return_types, return_names);
+ 
+ 	for (idx_t i = 0; i < return_types.size(); i++) {
+diff --git a/src/planning/metadata_io/avro/iceberg_avro_multi_file_reader.cpp b/src/planning/metadata_io/avro/iceberg_avro_multi_file_reader.cpp
+index 660dde258..88f64b094 100644
+--- a/src/planning/metadata_io/avro/iceberg_avro_multi_file_reader.cpp
++++ b/src/planning/metadata_io/avro/iceberg_avro_multi_file_reader.cpp
+@@ -23,7 +23,7 @@
+ 
+ namespace duckdb {
+ 
+-unique_ptr<MultiFileReader> IcebergAvroMultiFileReader::CreateInstance(const TableFunction &table) {
++unique_ptr<MultiFileReader> IcebergAvroMultiFileReader::CreateInstance(const BoundTableFunction &table) {
+ 	return make_uniq<IcebergAvroMultiFileReader>(table.function_info);
+ }
+ 
+diff --git a/src/planning/metadata_io/deletes/iceberg_deletes_file_reader.cpp b/src/planning/metadata_io/deletes/iceberg_deletes_file_reader.cpp
+index 75bf8ae1c..100821965 100644
+--- a/src/planning/metadata_io/deletes/iceberg_deletes_file_reader.cpp
++++ b/src/planning/metadata_io/deletes/iceberg_deletes_file_reader.cpp
+@@ -19,10 +19,11 @@ static virtual_column_map_t IcebergDeleteVirtualColumns(ClientContext &context,
+ }
+ 
+ static void IcebergDeletesScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+-                                        const TableFunction &function) {
++                                        const BoundTableFunction &function) {
+ 	throw NotImplementedException("IcebergDeletesScan serialization not implemented");
+ }
+-static unique_ptr<FunctionData> IcebergDeletesScanDeserialize(Deserializer &deserializer, TableFunction &function) {
++static unique_ptr<FunctionData> IcebergDeletesScanDeserialize(Deserializer &deserializer,
++                                                              BoundTableFunction &function) {
+ 	throw NotImplementedException("IcebergDeletesScan deserialization not implemented");
+ }
+ 
+@@ -58,7 +59,15 @@ TableFunctionSet IcebergFunctions::GetIcebergDeletesScanFunction(ClientContext &
+ 		function.get_virtual_columns = IcebergDeleteVirtualColumns;
+ 
+ 		// Schema param is just confusing here
+-		function.named_parameters.erase("schema");
++		// A signature declares no removal, so it is rebuilt without the schema parameter
++		auto &signature = function.GetSignature();
++		vector<FunctionParameter> parameters;
++		for (auto &param : signature.GetParameters()) {
++			if (param.GetName() != "schema") {
++				parameters.push_back(param);
++			}
++		}
++		signature = FunctionSignature(std::move(parameters), signature.GetReturnType());
+ 		function.SetName("iceberg_deletes_scan");
+ 	});
+ 
+@@ -70,7 +79,7 @@ IcebergDeleteFileReader::IcebergDeleteFileReader(shared_ptr<TableFunctionInfo> f
+     : function_info(function_info) {
+ }
+ 
+-unique_ptr<MultiFileReader> IcebergDeleteFileReader::CreateInstance(const TableFunction &table) {
++unique_ptr<MultiFileReader> IcebergDeleteFileReader::CreateInstance(const BoundTableFunction &table) {
+ 	return make_uniq<IcebergDeleteFileReader>(table.function_info);
+ }
+ 

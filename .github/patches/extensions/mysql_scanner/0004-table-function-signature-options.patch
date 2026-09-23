@@ -1,0 +1,119 @@
+diff --git a/src/mysql_scanner.cpp b/src/mysql_scanner.cpp
+index fb62257..cea915f 100644
+--- a/src/mysql_scanner.cpp
++++ b/src/mysql_scanner.cpp
+@@ -170,11 +170,11 @@ static InsertionOrderPreservingMap<string> MySQLScanToString(TableFunctionToStri
+ }
+ 
+ static void MySQLScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+-                               const TableFunction &function) {
++                               const BoundTableFunction &function) {
+ 	throw NotImplementedException("MySQLScanSerialize");
+ }
+ 
+-static unique_ptr<FunctionData> MySQLScanDeserialize(Deserializer &deserializer, TableFunction &function) {
++static unique_ptr<FunctionData> MySQLScanDeserialize(Deserializer &deserializer, BoundTableFunction &function) {
+ 	throw NotImplementedException("MySQLScanDeserialize");
+ }
+ 
+@@ -496,28 +496,35 @@ static void MySQLQueryScan(ClientContext &context, TableFunctionInput &data, Dat
+ 	MySQLScan(context, data, output);
+ }
+ 
++static FunctionSignature MySQLQuerySignature(bool stream_results, bool suppress_dml_output) {
++	FunctionSignature signature;
++	signature.AddParameter("database", LogicalType::VARCHAR)
++	    .AddParameter("sql", LogicalType::VARCHAR)
++	    .AddOptionalNamedParameter("params", LogicalType::ANY)
++	    .AddOptionalNamedParameter("params_handle", LogicalType::BIGINT);
++	if (stream_results) {
++		signature.AddOptionalNamedParameter("stream_results", LogicalType::BOOLEAN);
++	}
++	signature.AddOptionalNamedParameter("connection", LogicalType::UBIGINT)
++	    .AddOptionalNamedParameter("prepare", LogicalType::BOOLEAN);
++	if (suppress_dml_output) {
++		signature.AddOptionalNamedParameter("suppress_dml_output", LogicalType::BOOLEAN);
++	}
++	return signature;
++}
++
+ MySQLQueryFunction::MySQLQueryFunction()
+-    : TableFunction("mysql_query", {LogicalType::VARCHAR, LogicalType::VARCHAR}, MySQLQueryScan, MySQLQueryBind,
++    : TableFunction("mysql_query", MySQLQuerySignature(true, true), MySQLQueryScan, MySQLQueryBind,
+                     MySQLQueryInitGlobalState, MySQLInitLocalState) {
+ 	serialize = MySQLScanSerialize;
+ 	deserialize = MySQLScanDeserialize;
+-	named_parameters["params"] = LogicalType::ANY;
+-	named_parameters["params_handle"] = LogicalType::BIGINT;
+-	named_parameters["stream_results"] = LogicalType::BOOLEAN;
+-	named_parameters["connection"] = LogicalType::UBIGINT;
+-	named_parameters["prepare"] = LogicalType::BOOLEAN;
+-	named_parameters["suppress_dml_output"] = LogicalType::BOOLEAN;
+ }
+ 
+ MySQLExecuteFunction::MySQLExecuteFunction()
+-    : TableFunction("mysql_execute", {LogicalType::VARCHAR, LogicalType::VARCHAR}, MySQLQueryScan, MySQLQueryBind,
++    : TableFunction("mysql_execute", MySQLQuerySignature(false, false), MySQLQueryScan, MySQLQueryBind,
+                     MySQLQueryInitGlobalState, MySQLInitLocalState) {
+ 	serialize = MySQLScanSerialize;
+ 	deserialize = MySQLScanDeserialize;
+-	named_parameters["params"] = LogicalType::ANY;
+-	named_parameters["params_handle"] = LogicalType::BIGINT;
+-	named_parameters["connection"] = LogicalType::UBIGINT;
+-	named_parameters["prepare"] = LogicalType::BOOLEAN;
+ }
+ 
+ static void MySQLPinConnection(DataChunk &args, ExpressionState &state, Vector &result) {
+diff --git a/src/storage/mysql_catalog.cpp b/src/storage/mysql_catalog.cpp
+index c544aec..14eeef9 100644
+--- a/src/storage/mysql_catalog.cpp
++++ b/src/storage/mysql_catalog.cpp
+@@ -513,7 +513,7 @@ string MySQLCatalog::GetDBPath() {
+ void MySQLCatalog::MaterializeMySQLScans(PhysicalOperator &op) {
+ 	if (op.type == PhysicalOperatorType::TABLE_SCAN) {
+ 		auto &table_scan = op.Cast<PhysicalTableScan>();
+-		auto &function_name = table_scan.function.name.GetIdentifierName();
++		auto &function_name = table_scan.function.GetName().GetIdentifierName();
+ 		if (MySQLCatalog::IsMySQLScan(function_name)) {
+ 			auto &bind_data = table_scan.bind_data->Cast<MySQLBindData>();
+ 			bind_data.optimizer_streaming = MySQLResultStreaming::FORCE_MATERIALIZATION;
+diff --git a/src/storage/mysql_connection_pool.cpp b/src/storage/mysql_connection_pool.cpp
+index 80189fa..73a62c1 100644
+--- a/src/storage/mysql_connection_pool.cpp
++++ b/src/storage/mysql_connection_pool.cpp
+@@ -124,7 +124,7 @@ MySQLConfigurePoolFunction::MySQLConfigurePoolFunction()
+                     ConfigurePool::Function<MySQLConnection, GetConnnectionPoolFromCatalog>, ConfigurePool::Bind,
+                     ConfigurePool::InitGlobalState, ConfigurePool::InitLocalState) {
+ 	for (auto &en : ConfigurePool::NamedParameters()) {
+-		named_parameters[en.first] = en.second;
++		GetSignature().AddOptionalNamedParameter(en.first, en.second);
+ 	}
+ }
+ 
+diff --git a/src/storage/mysql_optimizer.cpp b/src/storage/mysql_optimizer.cpp
+index 3d654ba..d091426 100644
+--- a/src/storage/mysql_optimizer.cpp
++++ b/src/storage/mysql_optimizer.cpp
+@@ -19,11 +19,11 @@ void GatherMySQLScans(ClientContext &ctx, LogicalOperator &op, MySQLOperators &r
+ 	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+ 		auto &get = op.Cast<LogicalGet>();
+ 		auto &table_scan = get.function;
+-		if (MySQLCatalog::IsMySQLScan(table_scan.name.GetIdentifierName())) {
++		if (MySQLCatalog::IsMySQLScan(table_scan.GetName().GetIdentifierName())) {
+ 			auto &bdata = get.bind_data->Cast<MySQLBindData>();
+ 			result.scans[bdata.table_name.Catalog().GetIdentifierName()].push_back(get);
+ 		}
+-		if (MySQLCatalog::IsMySQLQuery(table_scan.name.GetIdentifierName())) {
++		if (MySQLCatalog::IsMySQLQuery(table_scan.GetName().GetIdentifierName())) {
+ 			auto &bdata = get.bind_data->Cast<MySQLQueryBindData>();
+ 			result.scans[bdata.catalog_name.GetIdentifierName()].push_back(get);
+ 		}
+@@ -43,7 +43,7 @@ void MySQLOptimizer::Optimize(OptimizerExtensionInput &input, unique_ptr<Logical
+ 		}
+ 		for (auto &logical_get : entry.second) {
+ 			auto &get = logical_get.get();
+-			auto &function_name = get.function.name.GetIdentifierName();
++			auto &function_name = get.function.GetName().GetIdentifierName();
+ 			if (MySQLCatalog::IsMySQLScan(function_name)) {
+ 				auto &bind_data = get.bind_data->Cast<MySQLBindData>();
+ 				if (bind_data.optimizer_streaming == MySQLResultStreaming::UNINITIALIZED ||
