@@ -236,7 +236,8 @@ TEST_CASE("A read spanning cached ranges only fetches the gaps between them", "[
 	auto &db_instance = *db.instance;
 	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
 
-	const idx_t FILE_SIZE = 12288;
+	// larger than the default local block size, so the file is not fetched whole
+	const idx_t FILE_SIZE = 20480;
 	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_efc_fill_gaps.bin", content);
 
@@ -245,13 +246,36 @@ TEST_CASE("A read spanning cached ranges only fetches the gaps between them", "[
 	auto &cache = db_instance.GetExternalFileCache();
 
 	REQUIRE(ReadFull(*handle, 4096, 0) == content.substr(0, 4096));
-	REQUIRE(ReadFull(*handle, 2048, 10240) == content.substr(10240, 2048));
+	REQUIRE(ReadFull(*handle, 4096, 16384) == content.substr(16384, 4096));
 	recording_fs->TakeReads();
 
 	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
-	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{4096, 6144}});
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{4096, 12288}});
 	REQUIRE(CountCachedBlocks(cache) == 3);
 	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
+}
+
+TEST_CASE("A file no larger than the block size is fetched whole on the first read", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+
+	const idx_t FILE_SIZE = 3000;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_small_file.bin", content);
+
+	CachingFileSystem cfs(*recording_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	auto &cache = db_instance.GetExternalFileCache();
+
+	REQUIRE(ReadFull(*handle, 100, 2800) == content.substr(2800, 100));
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, FILE_SIZE}});
+	REQUIRE(CountCachedBlocks(cache) == 1);
+	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
+
+	// Any later read of the file is served from the cache
+	REQUIRE(ReadFull(*handle, 500, 100) == content.substr(100, 500));
+	REQUIRE(recording_fs->TakeReads().empty());
 }
 
 TEST_CASE("Disabled external file cache does not insert into ObjectCache", "[external_file_cache]") {
