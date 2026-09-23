@@ -35,11 +35,6 @@ namespace duckdb {
 template <class CHIMP_TYPE>
 struct ChimpGroupState {
 public:
-	void Init(unsafe_array_ptr<const uint8_t> data, uint8_t bit_offset = 0) {
-		chimp_state.input.SetStream(data, bit_offset);
-		Reset();
-	}
-
 	void Reset() {
 		chimp_state.Reset();
 		index = 0;
@@ -158,10 +153,10 @@ public:
 		return data_bit_count;
 	}
 
-	void LoadValues(CHIMP_TYPE *result, idx_t count) {
+	void LoadValues(BitReader &input, CHIMP_TYPE *result, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			result[i] = Chimp128Decompression<CHIMP_TYPE>::Load(flags[i], leading_zeros, leading_zero_index,
-			                                                    unpacked_data_blocks, unpacked_index, chimp_state);
+			result[i] = Chimp128Decompression<CHIMP_TYPE>::Load(
+			    flags[i], leading_zeros, leading_zero_index, unpacked_data_blocks, unpacked_index, chimp_state, input);
 		}
 	}
 
@@ -289,10 +284,11 @@ public:
 		auto data_byte_count = (static_cast<idx_t>(bit_offset) + data_bit_count + 7) / 8;
 		auto data = metadata.GetSubReader(ChimpPrimitives::HEADER_SIZE, metadata.Size() - ChimpPrimitives::HEADER_SIZE,
 		                                  "Chimp data");
-		group_state.Init(data.GetBytes(data_byte_position, data_byte_count), bit_offset);
+		BitReader input(data.GetBytes(data_byte_position, data_byte_count), bit_offset);
+		group_state.Reset();
 
 		// Load all values for the group
-		group_state.LoadValues(value_buffer, group_size);
+		group_state.LoadValues(input, value_buffer, group_size);
 		data_bit_position += data_bit_count;
 	}
 

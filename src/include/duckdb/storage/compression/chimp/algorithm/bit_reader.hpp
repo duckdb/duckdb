@@ -54,13 +54,9 @@ private:
 	};
 
 public:
-	BitReader() : input(nullptr, 0), index(0) {
-	}
-
-	void SetStream(unsafe_array_ptr<const uint8_t> input, uint8_t bit_offset = 0) {
+	explicit BitReader(unsafe_array_ptr<const uint8_t> input, uint8_t bit_offset = 0)
+	    : input(input), index(bit_offset) {
 		D_ASSERT(bit_offset < 8);
-		this->input = input;
-		index = bit_offset;
 	}
 
 	template <class T, uint8_t SIZE>
