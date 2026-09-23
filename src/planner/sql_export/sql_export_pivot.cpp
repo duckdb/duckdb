@@ -1,4 +1,4 @@
-#include "logical_plan_sql_exporter_internal.hpp"
+#include "duckdb/planner/sql_export/logical_plan_sql_exporter_internal.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"

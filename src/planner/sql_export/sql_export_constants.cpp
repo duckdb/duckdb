@@ -1,4 +1,4 @@
-#include "bound_expression_sql_exporter_internal.hpp"
+#include "duckdb/planner/sql_export/bound_expression_sql_exporter_internal.hpp"
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/planner/sql_export_helpers.hpp"

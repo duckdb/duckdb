@@ -3,7 +3,7 @@
 #include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
-#include "logical_plan_sql_exporter_internal.hpp"
+#include "duckdb/planner/sql_export/logical_plan_sql_exporter_internal.hpp"
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/planner/logical_plan_sql_exporter.hpp"
 #include "duckdb/common/limits.hpp"

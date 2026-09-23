@@ -1,4 +1,4 @@
-#include "logical_plan_sql_exporter_internal.hpp"
+#include "duckdb/planner/sql_export/logical_plan_sql_exporter_internal.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"

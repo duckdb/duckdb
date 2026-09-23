@@ -1,6 +1,6 @@
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "logical_plan_sql_exporter_internal.hpp"
+#include "duckdb/planner/sql_export/logical_plan_sql_exporter_internal.hpp"
 #include "duckdb/planner/logical_plan_sql_exporter.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"

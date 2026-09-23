@@ -1,6 +1,6 @@
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
-#include "logical_plan_sql_exporter_internal.hpp"
+#include "duckdb/planner/sql_export/logical_plan_sql_exporter_internal.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/planner/logical_plan_sql_exporter.hpp"

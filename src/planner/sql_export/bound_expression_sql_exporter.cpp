@@ -1,4 +1,4 @@
-#include "bound_expression_sql_exporter_internal.hpp"
+#include "duckdb/planner/sql_export/bound_expression_sql_exporter_internal.hpp"
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/planner/bound_expression_sql_exporter.hpp"

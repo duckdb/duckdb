@@ -1,6 +1,6 @@
 #include "duckdb/planner/operator/logical_unconditional_join.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
-#include "logical_plan_sql_exporter_internal.hpp"
+#include "duckdb/planner/sql_export/logical_plan_sql_exporter_internal.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
