@@ -53,17 +53,13 @@ public:
 
 	LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>
 	ExportNamedProducer(LogicalOperator &op, const LogicalPlanVerificationPath &path, const Identifier &name);
-	string MarkConditionUnsupportedReason(const LogicalComparisonJoin &join);
-	bool RequiresMarkGroupMetadata(const LogicalComparisonJoin &join);
-	LogicalPlanSQLExportResult ExportJoin(LogicalOperator &op, const LogicalPlanVerificationPath &path);
 
 	LogicalPlanSQLExportResult ExportRow(unique_ptr<SelectNode> select, unique_ptr<ParsedExpression> value,
 	                                     vector<LogicalPlanSQLExportField> fields);
 	unique_ptr<SelectNode> ForwardFields(const LogicalPlanSQLExportedChild &child,
 	                                     const vector<LogicalPlanSQLExportField> &fields,
 	                                     optional_ptr<const SelectNode> plain = nullptr);
-	LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
-	ExportPivotDefault(const BoundAggregateExpression &aggregate, const LogicalPlanVerificationPath &path);
+
 	bool ProducesOneRow(const LogicalOperator &op, const vector<TableIndex> &single_row_ctes = {});
 	using LimitExpressionResult = LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>;
 	LimitExpressionResult LimitBindingFailure(const LogicalPlanVerificationPath &path);

@@ -21,9 +21,9 @@
 namespace duckdb {
 using namespace logical_plan_sql_export;
 
-LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
-logical_plan_sql_export::LogicalPlanSQLExportContext::ExportPivotDefault(const BoundAggregateExpression &aggregate,
-                                                                         const LogicalPlanVerificationPath &path) {
+static LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
+ExportPivotDefault(ClientContext &context, const BoundAggregateExpression &aggregate,
+                   const LogicalPlanVerificationPath &path) {
 	if (aggregate.Function().GetStability() == FunctionStability::VOLATILE ||
 	    aggregate.Function().GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
 		return LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>::Failure(
@@ -99,7 +99,8 @@ LogicalPlanSQLExportResult LogicalPivot::ToSQL(LogicalPlanSQLExportContext &expo
 			return PlanFailure(PlanUnsupportedFeature(path, "pivot_layout",
 			                                          "The PIVOT aggregate metadata does not match its output types"));
 		}
-		auto value = export_context.ExportPivotDefault(aggregate, PlanExpressionPath(path, aggregate_idx));
+		auto value =
+		    ExportPivotDefault(export_context.GetClientContext(), aggregate, PlanExpressionPath(path, aggregate_idx));
 		if (value.HasError()) {
 			return LogicalPlanSQLExportResult::Failure(value.GetIssues());
 		}

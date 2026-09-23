@@ -14,8 +14,7 @@
 namespace duckdb {
 using namespace logical_plan_sql_export;
 
-string logical_plan_sql_export::LogicalPlanSQLExportContext::MarkConditionUnsupportedReason(
-    const LogicalComparisonJoin &join) {
+static string MarkConditionUnsupportedReason(const LogicalComparisonJoin &join) {
 	bool comparisons_only = !join.conditions.empty();
 	bool all_equal = true;
 	bool all_null_safe = true;
@@ -50,8 +49,7 @@ string logical_plan_sql_export::LogicalPlanSQLExportContext::MarkConditionUnsupp
 	return string();
 }
 
-bool logical_plan_sql_export::LogicalPlanSQLExportContext::RequiresMarkGroupMetadata(
-    const LogicalComparisonJoin &join) {
+static bool RequiresMarkGroupMetadata(const LogicalComparisonJoin &join) {
 	if (join.join_type != JoinType::MARK || join.mark_types.empty()) {
 		return false;
 	}
@@ -73,19 +71,80 @@ bool logical_plan_sql_export::LogicalPlanSQLExportContext::RequiresMarkGroupMeta
 	return (comparison_count > 1 || tuple_comparison) && all_equal;
 }
 
-LogicalPlanSQLExportResult
-logical_plan_sql_export::LogicalPlanSQLExportContext::ExportJoin(LogicalOperator &op,
-                                                                 const LogicalPlanVerificationPath &path) {
+static LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
+ExportJoinCondition(LogicalJoin &op, LogicalPlanSQLExportContext &context,
+                    const BoundExpressionSQLExportContext &expression_context,
+                    const LogicalPlanVerificationPath &path) {
+	using Result = LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>;
+	unique_ptr<ParsedExpression> predicate;
+	auto expressions = CollectExpressions(op);
+	if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+		if (op.join_type == JoinType::MARK) {
+			return Result::Failure({PlanUnsupportedFeature(
+			    path, "mark_condition_semantics", "The MARK condition requires conjunction execution semantics")});
+		}
+		auto exported = context.ExportExpression(op, expressions, 0, expression_context, path);
+		if (exported.HasError()) {
+			return Result::Failure(exported.GetIssues());
+		}
+		predicate = std::move(exported.GetValue());
+	} else {
+		auto &comparison = op.Cast<LogicalComparisonJoin>();
+		if (!comparison.duplicate_eliminated_columns.empty()) {
+			return Result::Failure({PlanUnsupportedFeature(path, "join_delim_state",
+			                                               "The join requires a duplicate-eliminated input scope")});
+		}
+		if (comparison.join_type == JoinType::MARK) {
+			auto reason = MarkConditionUnsupportedReason(comparison);
+			if (!reason.empty()) {
+				return Result::Failure({PlanUnsupportedFeature(path, "mark_condition_semantics", reason)});
+			}
+		}
+		if (RequiresMarkGroupMetadata(comparison)) {
+			return Result::Failure({PlanUnsupportedFeature(
+			    path, "mark_group_null_semantics", "The MARK join requires its group-specific NULL semantics")});
+		}
+		idx_t ordinal = 0;
+		for (auto &condition : comparison.conditions) {
+			auto lhs = context.ExportExpression(op, expressions, ordinal++, expression_context, path);
+			if (lhs.HasError()) {
+				return Result::Failure(lhs.GetIssues());
+			}
+			auto conjunct = std::move(lhs.GetValue());
+			if (condition.IsComparison()) {
+				auto rhs = context.ExportExpression(op, expressions, ordinal++, expression_context, path);
+				if (rhs.HasError()) {
+					return Result::Failure(rhs.GetIssues());
+				}
+				conjunct = make_uniq<ComparisonExpression>(condition.GetComparisonType(), std::move(conjunct),
+				                                           std::move(rhs.GetValue()));
+			}
+			if (predicate) {
+				predicate = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(predicate),
+				                                             std::move(conjunct));
+			} else {
+				predicate = std::move(conjunct);
+			}
+		}
+		if (!predicate) {
+			predicate = ConstantExpression::FromValue(Value::BOOLEAN(true));
+		}
+	}
+	return Result::Success(std::move(predicate));
+}
+
+static LogicalPlanSQLExportResult ExportJoin(LogicalOperator &op, LogicalPlanSQLExportContext &context,
+                                             const LogicalPlanVerificationPath &path) {
 	D_ASSERT(op.children.size() == 2);
 	auto fields = CreateFields(op, path);
 	if (fields.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
 	}
-	auto left = ExportChild(*op.children[0], PlanChildPath(path, 0));
+	auto left = context.ExportChild(*op.children[0], PlanChildPath(path, 0));
 	if (left.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(left.GetIssues());
 	}
-	auto right = ExportChild(*op.children[1], PlanChildPath(path, 1));
+	auto right = context.ExportChild(*op.children[1], PlanChildPath(path, 1));
 	if (right.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(right.GetIssues());
 	}
@@ -120,7 +179,7 @@ logical_plan_sql_export::LogicalPlanSQLExportContext::ExportJoin(LogicalOperator
 			}
 		}
 	}
-	auto expression_context = CreateBindingContext(context, children, {left_plain, right_plain});
+	auto expression_context = CreateBindingContext(context.GetClientContext(), children, {left_plain, right_plain});
 	auto join = make_uniq<JoinRef>();
 	optional_ptr<LogicalJoin> logical_join;
 	if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
@@ -130,62 +189,14 @@ logical_plan_sql_export::LogicalPlanSQLExportContext::ExportJoin(LogicalOperator
 	} else {
 		logical_join = op.Cast<LogicalJoin>();
 		join->type = logical_join->join_type;
-		auto expressions = CollectExpressions(op);
-		if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
-			if (join->type == JoinType::MARK) {
-				return PlanFailure(PlanUnsupportedFeature(
-				    path, "mark_condition_semantics", "The MARK condition requires conjunction execution semantics"));
-			}
-			auto predicate = ExportExpression(op, expressions, 0, expression_context, path);
-			if (predicate.HasError()) {
-				return LogicalPlanSQLExportResult::Failure(predicate.GetIssues());
-			}
-			join->condition = std::move(predicate.GetValue());
-		} else {
-			auto &comparison = op.Cast<LogicalComparisonJoin>();
-			if (!comparison.duplicate_eliminated_columns.empty()) {
-				return PlanFailure(PlanUnsupportedFeature(path, "join_delim_state",
-				                                          "The join requires a duplicate-eliminated input scope"));
-			}
-			if (comparison.join_type == JoinType::MARK) {
-				auto reason = MarkConditionUnsupportedReason(comparison);
-				if (!reason.empty()) {
-					return PlanFailure(PlanUnsupportedFeature(path, "mark_condition_semantics", reason));
-				}
-			}
-			if (RequiresMarkGroupMetadata(comparison)) {
-				return PlanFailure(PlanUnsupportedFeature(path, "mark_group_null_semantics",
-				                                          "The MARK join requires its group-specific NULL semantics"));
-			}
-			if (op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
-				join->ref_type = JoinRefType::ASOF;
-			}
-			idx_t ordinal = 0;
-			for (auto &condition : comparison.conditions) {
-				auto lhs = ExportExpression(op, expressions, ordinal++, expression_context, path);
-				if (lhs.HasError()) {
-					return LogicalPlanSQLExportResult::Failure(lhs.GetIssues());
-				}
-				auto predicate = std::move(lhs.GetValue());
-				if (condition.IsComparison()) {
-					auto rhs = ExportExpression(op, expressions, ordinal++, expression_context, path);
-					if (rhs.HasError()) {
-						return LogicalPlanSQLExportResult::Failure(rhs.GetIssues());
-					}
-					predicate = make_uniq<ComparisonExpression>(condition.GetComparisonType(), std::move(predicate),
-					                                            std::move(rhs.GetValue()));
-				}
-				if (join->condition) {
-					join->condition = make_uniq<ConjunctionExpression>(
-					    ExpressionType::CONJUNCTION_AND, std::move(join->condition), std::move(predicate));
-				} else {
-					join->condition = std::move(predicate);
-				}
-			}
-			if (!join->condition) {
-				join->condition = ConstantExpression::FromValue(Value::BOOLEAN(true));
-			}
+		if (op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+			join->ref_type = JoinRefType::ASOF;
 		}
+		auto condition = ExportJoinCondition(*logical_join, context, expression_context, path);
+		if (condition.HasError()) {
+			return LogicalPlanSQLExportResult::Failure(condition.GetIssues());
+		}
+		join->condition = std::move(condition.GetValue());
 	}
 	auto select = make_uniq<SelectNode>();
 	for (auto &field : fields.GetValue()) {
@@ -215,7 +226,7 @@ LogicalJoin::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerifi
 	    type != LogicalOperatorType::LOGICAL_ASOF_JOIN) {
 		return LogicalOperator::ToSQL(context, path);
 	}
-	return context.ExportJoin(*this, path);
+	return ExportJoin(*this, context, path);
 }
 
 LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
@@ -223,7 +234,7 @@ LogicalUnconditionalJoin::ToSQL(LogicalPlanSQLExportContext &context, const Logi
 	if (type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT && type != LogicalOperatorType::LOGICAL_POSITIONAL_JOIN) {
 		return LogicalOperator::ToSQL(context, path);
 	}
-	return context.ExportJoin(*this, path);
+	return ExportJoin(*this, context, path);
 }
 
 } // namespace duckdb
