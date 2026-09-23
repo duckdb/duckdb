@@ -54,8 +54,7 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportConstant(con
 		return BoundExpressionSQLExportResult::Failure(
 		    {UnsupportedFeature(path, "constant_value", ErrorData(ex).RawMessage())});
 	}
-	if (RequiresConstantConstructor(return_type) || !IsSQLRepresentableType(return_type) ||
-	    return_type.id() == LogicalTypeId::VARCHAR) {
+	if (RequiresConstantConstructor(return_type) || !IsSQLRepresentableType(return_type)) {
 		return BoundExpressionSQLExportResult::Success(std::move(result));
 	}
 	if (return_type.id() != LogicalTypeId::SQLNULL) {

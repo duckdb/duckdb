@@ -160,3 +160,8 @@ SELECT date_part('year',payload[1])::BIGINT*12+date_part('month',payload[1]),
 FROM literals;
 ----
 -2147483648	-2147483648	-9223372036854775808
+
+statement error
+SELECT equi_width_bins('a'::VARCHAR,'z'::VARCHAR,2,true);
+----
+Unsupported type "VARCHAR"
