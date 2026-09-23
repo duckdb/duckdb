@@ -15,6 +15,7 @@ set(TEST_API_OBJECTS
     test_remove_directory_extended.cpp
     test_temporary_file_owner.cpp
     test_bind_statement.cpp
+    test_function_signature_variadic.cpp
     test_scalar_function_decimal_return.cpp
     test_aggregate_state_bind_data.cpp
     test_config.cpp
@@ -25,6 +26,7 @@ set(TEST_API_OBJECTS
     test_extension_setting_autoload.cpp
     test_instance_cache.cpp
     test_storage_extension_alias.cpp
+    test_result_unit.cpp
     test_results.cpp
     test_reset.cpp
     test_get_table_names.cpp
@@ -60,7 +62,8 @@ set(TEST_API_OBJECTS
     test_object_cache.cpp
     test_partial_executor.cpp
     test_buffer_pool_eviction.cpp
-    test_block_allocator_tls.cpp)
+    test_block_allocator_tls.cpp
+    test_data_table_scan_without_row_groups.cpp)
 
 if(NOT WIN32)
   set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_read_only.cpp)

@@ -1621,7 +1621,7 @@ bool RowGroup::HasUnchangedColumns() const {
 
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	bool can_reuse_metadata = CanReuseMetadata(writer);
-	if (can_reuse_metadata && !HasChanges()) {
+	if (can_reuse_metadata && !HasChanges(writer.GetCheckpointOptions().visibility_bound)) {
 		RowGroupWriteData result;
 		result.write_action = RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA;
 		if (GetCollection().SupportsPerColumnWrites()) {
@@ -1909,12 +1909,12 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	return row_group_pointer;
 }
 
-bool RowGroup::HasChanges() const {
+bool RowGroup::HasChanges(VisibilityBound bound) const {
 	if (has_changes) {
 		return true;
 	}
 	auto version_info_loaded = version_info.load();
-	if (version_info_loaded && version_info_loaded->HasUnserializedChanges()) {
+	if (version_info_loaded && version_info_loaded->HasUnserializedChanges(bound)) {
 		// we have deletes
 		return true;
 	}
@@ -2042,7 +2042,7 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 	}
 
 	bool HasPendingWrites() override {
-		return row_group->HasChanges();
+		return row_group->HasChanges(VisibilityBound::AllCommitted());
 	}
 };
 

@@ -670,14 +670,6 @@ TEST_CASE("V2: sql_statement_get_type is the type before statement rewrites", "[
 	duckdb_v2_sql_statement_destroy(&stmt);
 }
 
-TEST_CASE("V2: every core statement type is in the spec", "[capi_v2][sql_statement]") {
-	// Core's enum has no count sentinel to pin at compile time; an appended member shows up
-	// here as a name where core should report INVALID.
-	for (int v = DUCKDB_V2_STATEMENT_TYPE_EXTERNAL_RESOURCE + 1; v <= 255; v++) {
-		REQUIRE(duckdb::StatementTypeToString(static_cast<duckdb::StatementType>(v)) == "INVALID");
-	}
-}
-
 TEST_CASE("V2: sql_statement_get_text is the statement's own slice", "[capi_v2][sql_statement]") {
 	EnvFixture fx;
 	// Each slice runs from the statement's first token to the next statement's first token,

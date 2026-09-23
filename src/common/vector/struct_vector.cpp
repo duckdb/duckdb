@@ -163,7 +163,7 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::SliceInternal(const LogicalType &ty
 buffer_ptr<VectorBuffer> VectorStructBuffer::ConstantSliceInternal(const LogicalType &type, count_t count) {
 	vector<Vector> result_children;
 	for (idx_t i = 0; i < children.size(); i++) {
-		result_children.emplace_back(Vector::Ref(children[i]));
+		result_children.emplace_back(children[i], *ConstantVector::ZeroSelectionVector(), count);
 	}
 	auto result = make_buffer<VectorStructBuffer>(std::move(result_children), capacity_t(1ULL));
 	result->GetValidityMask().Set(0, validity.RowIsValid(0));

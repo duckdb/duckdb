@@ -688,13 +688,11 @@ void StandardBufferManager::DeleteTemporaryFile(BlockMemory &memory) {
 	// The file is not in the shared pool of files.
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto path = GetTemporaryPath(id);
-	if (fs.FileExists(path)) {
+	auto metadata = fs.GetStatsIfExists(path);
+	if (metadata) {
 		evicted_data_per_tag[uint8_t(memory.GetMemoryTag())] -= memory.GetMemoryUsage();
-		auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
-		auto content_size = handle->GetFileSize();
-		handle.reset();
 		fs.RemoveFile(path);
-		temporary_directory.handle->GetTempFile().DecreaseSizeOnDisk(content_size);
+		temporary_directory.handle->GetTempFile().DecreaseSizeOnDisk(NumericCast<idx_t>(metadata->file_size));
 	}
 }
 
@@ -746,15 +744,14 @@ vector<TemporaryFileInformation> StandardBufferManager::GetTemporaryFiles() {
 
 		// Another process or thread can delete the file before we can get its file size.
 		auto path = fs.JoinPath(temporary_directory.path, name);
-		auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
-		if (!handle) {
+		auto metadata = fs.GetStatsIfExists(path);
+		if (!metadata) {
 			return;
 		}
 
 		TemporaryFileInformation info;
 		info.path = std::move(path);
-		info.size = NumericCast<idx_t>(fs.GetFileSize(*handle));
-		handle.reset();
+		info.size = NumericCast<idx_t>(metadata->file_size);
 		result.push_back(info);
 	});
 	return result;
