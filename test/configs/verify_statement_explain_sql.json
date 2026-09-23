@@ -36,7 +36,7 @@
       ]
     },
     {
-      "reason": "The extension injects an internal rowid_filter whose bind callback deliberately throws; it has no rebindable SQL representation",
+      "reason": "The extension injects an internal rowid_filter without a SQL catalog entry; it has no rebindable SQL representation",
       "paths": [
         "test/extension/test_extensible_filter.test"
       ]

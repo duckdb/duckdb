@@ -134,20 +134,6 @@
         "test/sql/attach/external_resource_option_collision.test",
         "test/sql/attach/external_resource_attach_failure.test"
       ]
-    },
-    {
-      "reason": "Checks session-local sequence state, including effects of failed queries, which is lost across forced restarts.",
-      "paths": [
-        "test/sql/sql_export/execution_once.test",
-        "test/sql/sql_export/recursive_payload_results.test",
-        "test/sql/sql_export/recursive_state.test"
-      ]
-    },
-    {
-      "reason": "Checks in-memory query logs across statements; forced restarts discard those logs.",
-      "paths": [
-        "test/sql/sql_export/verification_logging.test"
-      ]
     }
   ]
 }

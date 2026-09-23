@@ -2,6 +2,9 @@
 # description: SQL verification logs the original statement once
 # group: [sql_export]
 
+# These checks depend on session state across statements.
+require skip_reload
+
 statement ok
 SET debug_verify_statement='explain_sql_strict';
 

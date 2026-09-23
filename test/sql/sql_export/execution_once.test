@@ -2,6 +2,9 @@
 # description: Execute exported SQL once and verify its results and subsequent state
 # group: [sql_export]
 
+# These checks depend on session state across statements.
+require skip_reload
+
 statement ok
 CREATE SEQUENCE exported_calls;
 

@@ -49,12 +49,6 @@
         "test/sql/sql_export/empty_aggregate_state.test",
         "test/sql/sql_export/mark_condition_shapes.test"
       ]
-    },
-    {
-      "reason": "Debug plan serialization to v1 omits the custom-bound table-function invocation needed by strict SQL export.",
-      "paths": [
-        "test/sql/sql_export/source_invocation_results.test"
-      ]
     }
   ]
 }
