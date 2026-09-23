@@ -35,16 +35,13 @@ struct FlagBufferConstants {
 template <bool EMPTY>
 class FlagBuffer {
 public:
-	FlagBuffer() : counter(0), read_buffer(nullptr, 0), write_buffer(nullptr) {
+	explicit FlagBuffer(unsafe_array_ptr<const uint8_t> buffer)
+	    : counter(0), read_buffer(buffer), write_buffer(nullptr) {
 	}
 
 public:
 	void SetBuffer(uint8_t *buffer) {
 		write_buffer = buffer;
-		this->counter = 0;
-	}
-	void SetInput(unsafe_array_ptr<const uint8_t> buffer) {
-		read_buffer = buffer;
 		this->counter = 0;
 	}
 	void Reset() {

@@ -51,16 +51,13 @@ public:
 	static constexpr uint32_t BUFFER_SIZE = MAX_BYTES_USED_BY_ZERO_BLOCKS;
 
 public:
-	LeadingZeroBuffer() : current(0), counter(0), read_buffer(nullptr, 0), write_buffer(nullptr) {
+	explicit LeadingZeroBuffer(unsafe_array_ptr<const uint8_t> buffer)
+	    : current(0), counter(0), read_buffer(buffer), write_buffer(nullptr) {
 	}
 	void SetBuffer(uint8_t *buffer) {
 		// Set the internal buffer, when inserting this should be BUFFER_SIZE bytes in length
 		// This buffer does not need to be zero-initialized for inserting
 		write_buffer = buffer;
-		this->counter = 0;
-	}
-	void SetInput(unsafe_array_ptr<const uint8_t> buffer) {
-		read_buffer = buffer;
 		this->counter = 0;
 	}
 	void Flush() {

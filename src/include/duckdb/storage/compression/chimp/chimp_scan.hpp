@@ -55,8 +55,7 @@ public:
 	}
 
 	void LoadFlags(unsafe_array_ptr<const uint8_t> packed_data, idx_t group_size) {
-		FlagBuffer<false> flag_buffer;
-		flag_buffer.SetInput(packed_data);
+		FlagBuffer<false> flag_buffer(packed_data);
 		flags[0] = ChimpConstants::Flags::VALUE_IDENTICAL; // First value doesn't require a flag
 		for (idx_t i = 0; i < group_size; i++) {
 			flags[1 + i] = static_cast<ChimpConstants::Flags>(flag_buffer.Extract());
@@ -66,8 +65,7 @@ public:
 	}
 
 	void LoadLeadingZeros(unsafe_array_ptr<const uint8_t> packed_data, idx_t leading_zero_count) {
-		LeadingZeroBuffer<false> leading_zero_buffer;
-		leading_zero_buffer.SetInput(packed_data);
+		LeadingZeroBuffer<false> leading_zero_buffer(packed_data);
 		for (idx_t i = 0; i < leading_zero_count; i++) {
 			leading_zeros[i] = ChimpConstants::Decompression::LEADING_REPRESENTATION[leading_zero_buffer.Extract()];
 		}
