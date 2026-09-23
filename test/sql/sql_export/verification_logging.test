@@ -3,15 +3,12 @@
 # group: [sql_export]
 
 statement ok
-SET debug_verify_sql_export='strict';
+SET debug_verify_statement='explain_sql_strict';
 
 query I
 SELECT 42
 ----
 42
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 statement ok
 CALL enable_logging();
@@ -26,7 +23,7 @@ SELECT 42
 42
 
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_statement='none';
 
 query I
 SELECT count(*) FROM duckdb_logs WHERE type='QueryLog' AND message='SELECT 42';

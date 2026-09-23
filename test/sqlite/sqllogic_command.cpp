@@ -1,7 +1,4 @@
 #include "sqllogic_command.hpp"
-#include "duckdb/main/sql_export_verification.hpp"
-#include "duckdb/main/settings.hpp"
-#include "duckdb/common/json_document.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "sqllogic_test_runner.hpp"
 #include "result_helper.hpp"
@@ -234,119 +231,6 @@ static unique_ptr<QueryResult> DrainStream(unique_ptr<QueryResult> handle) {
 }
 #endif
 
-class SQLExportCollectionScope {
-public:
-	explicit SQLExportCollectionScope(ClientContext &context_p)
-	    : context(context_p), already_attached(SQLExportVerificationState::Get(context) != nullptr),
-	      observer(SQLExportVerificationState::GetOrCreate(context)), retain_failure_sql(observer->retain_failure_sql) {
-	}
-	~SQLExportCollectionScope() {
-		observer->retain_failure_sql = retain_failure_sql;
-		if (!already_attached) {
-			SQLExportVerificationState::Remove(context);
-		}
-	}
-
-private:
-	ClientContext &context;
-	bool already_attached;
-
-public:
-	shared_ptr<SQLExportVerificationState> observer;
-	bool retain_failure_sql;
-};
-
-class ExplainSQLVerificationOverride {
-public:
-	explicit ExplainSQLVerificationOverride(ClientContext &context_p)
-	    : context(context_p), settings(ClientConfig::GetConfig(context).user_settings),
-	      was_set(settings.IsSet(DebugVerifySqlExportSetting::SettingIndex)) {
-		if (was_set) {
-			context.TryGetCurrentUserSetting(DebugVerifySqlExportSetting::SettingIndex, previous);
-		}
-		Set(Value("off"), false);
-	}
-
-	void Restore() {
-		Set(was_set ? previous : Value(DebugVerifySqlExportSetting::DefaultValue), !was_set);
-	}
-
-private:
-	void Set(Value value, bool reset) {
-		// Executing SET would perturb the observer's statement count.
-		SettingCallbackInfo info(context, SetScope::SESSION);
-		info.is_reset = reset;
-		DebugVerifySqlExportSetting::OnSet(info, value);
-		if (reset) {
-			settings.ClearSetting(DebugVerifySqlExportSetting::SettingIndex);
-		} else {
-			settings.SetUserSetting(DebugVerifySqlExportSetting::SettingIndex, std::move(value));
-		}
-	}
-
-	ClientContext &context;
-	LocalUserSettings &settings;
-	bool was_set;
-	Value previous;
-};
-
-static unique_ptr<QueryResult> ExecuteExplainedSQLInternal(Connection &connection, const string &sql,
-                                                           const string &file, idx_t line) {
-	auto statements = connection.ExtractStatements(sql);
-	if (statements.size() != 1 || statements[0]->type != StatementType::SELECT_STATEMENT) {
-		TEST_FAIL_LINE(file, line, "explain_sql requires exactly one query");
-	}
-	auto explained = connection.Query("EXPLAIN (SQL) " + sql);
-	if (explained->HasError()) {
-		TEST_FAIL_LINE(file, line, "EXPLAIN (SQL) failed: " + explained->GetError());
-	}
-	const bool has_expected_columns =
-	    explained->GetNames() == vector<Identifier> {"explain_key", "explain_value"} &&
-	    explained->GetTypes() == vector<LogicalType> {LogicalType::VARCHAR, LogicalType::VARCHAR};
-	const bool has_sql_row = explained->RowCount() == 1 && has_expected_columns &&
-	                         explained->GetValue(0, 0) == Value("sql") && !explained->GetValue(1, 0).IsNull();
-	if (!has_sql_row) {
-		TEST_FAIL_LINE(file, line, "EXPLAIN (SQL) returned an unexpected result shape");
-	}
-	auto generated_sql = explained->GetValue(1, 0).GetValue<string>();
-	auto generated = connection.ExtractStatements(generated_sql);
-	if (generated.size() != 1 || generated[0]->type != StatementType::SELECT_STATEMENT) {
-		TEST_FAIL_LINE(file, line, "EXPLAIN (SQL) did not return exactly one query");
-	}
-	auto prepared = connection.Prepare(generated_sql);
-	if (prepared->HasError()) {
-		TEST_FAIL_LINE(file, line, "Generated SQL could not be prepared: " + prepared->GetError());
-	}
-	auto original = connection.Prepare(sql);
-	if (original->HasError()) {
-		TEST_FAIL_LINE(file, line, "Original query schema could not be prepared: " + original->GetError());
-	}
-	if (prepared->GetTypes() != original->GetTypes() || prepared->GetNames() != original->GetNames()) {
-		TEST_FAIL_LINE(file, line, "EXPLAIN (SQL) changed the output names or logical types");
-	}
-	for (idx_t i = 0; i < original->GetTypes().size(); i++) {
-		if (!prepared->GetTypes()[i].EqualsIncludingCollation(original->GetTypes()[i])) {
-			TEST_FAIL_LINE(file, line, "EXPLAIN (SQL) changed output collation annotations");
-		}
-	}
-	vector<Value> parameters;
-	return prepared->Execute(parameters);
-}
-
-static unique_ptr<QueryResult> ExecuteExplainedSQL(Connection &connection, const string &sql, const string &file,
-                                                   idx_t line) {
-	ExplainSQLVerificationOverride verification(*connection.context);
-	unique_ptr<QueryResult> result;
-	try {
-		result = ExecuteExplainedSQLInternal(connection, sql, file, line);
-	} catch (...) {
-		verification.Restore();
-		throw;
-	}
-	verification.Restore();
-	return result;
-}
-
 unique_ptr<QueryResult> Command::ExecuteQuery(ExecuteContext &context, reference<Connection> connection,
                                               string file_name, idx_t query_line) const {
 	query_break(query_line);
@@ -355,90 +239,40 @@ unique_ptr<QueryResult> Command::ExecuteQuery(ExecuteContext &context, reference
 		RestartDatabase(context, connection, context.sql_query);
 	}
 
-	if (explain_sql) {
-		auto result = ExecuteExplainedSQL(connection, context.sql_query, file_name, query_line);
-		runner.explain_sql_generated++;
-		if (TestConfiguration::Get().EmitSQLExportEvents()) {
-			JSONWriter writer;
-			auto event = writer.CreateObject();
-			event.AddString("event", "explain_sql");
-			event.AddString("file", file_name);
-			event.Add("line", writer.CreateUnsignedInteger(query_line));
-			event.AddString("connection", connection_name);
-			event.Add("statement", writer.CreateUnsignedInteger(0));
-			event.AddString("execution", result->HasError() ? "ERRORED" : "SUCCEEDED");
-			auto loops = writer.CreateArray();
-			for (auto &loop : context.running_loops) {
-				auto entry = writer.CreateObject();
-				entry.AddString("name", loop.loop_iterator_name);
-				entry.Add("iteration", writer.CreateUnsignedInteger(loop.loop_idx));
-				loops.Append(entry);
-			}
-			event.Add("loops", loops);
-			writer.SetRoot(event);
-			SQLLogicTestLogger::EmitTestEvent(writer.ToString());
-		}
-		return result;
-	}
-
 	QueryParameters parameters;
 	parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
 
-	SQLExportCollectionScope collection(*connection.get().context);
-	auto &observer = collection.observer;
-	observer->TakeRecords();
-	observer->retain_failure_sql = TestConfiguration::Get().RetainSQLExportFailureSQL();
-	context.sql_export_strict_failure = false;
-	unique_ptr<QueryResult> materialized;
 	try {
-		auto execute = [&]() -> unique_ptr<QueryResult> {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
-			auto ccontext = connection.get().context;
-			// A submission takes a single statement, and only the engine's own parse is profiled, so the
-			// text is counted here and submitted as text. A parse failure takes the blocking path, which
-			// reports it with its location and type, and runs text that only parses after a LOAD
-			idx_t statement_count = 0;
-			try {
-				statement_count = connection.get().ExtractStatements(context.sql_query).size();
-			} catch (std::exception &) {
-			}
-			if (statement_count != 1) {
-				return ccontext->Query(context.sql_query, parameters);
-			}
-			auto handle = ccontext->Submit(context.sql_query, parameters);
-			if (handle->HasError()) {
-				return handle;
-			}
-			auto &properties = handle->GetStatementProperties();
-			if (properties.result_eagerness == ResultEagerness::FORCED ||
-			    properties.return_type != StatementReturnType::QUERY_RESULT) {
-				handle->Complete();
-				return handle;
-			}
-			return DrainStream(std::move(handle));
+		auto ccontext = connection.get().context;
+		// A submission takes a single statement, and only the engine's own parse is profiled, so the
+		// text is counted here and submitted as text. A parse failure takes the blocking path, which
+		// reports it with its location and type, and runs text that only parses after a LOAD
+		idx_t statement_count = 0;
+		try {
+			statement_count = connection.get().ExtractStatements(context.sql_query).size();
+		} catch (std::exception &) {
+		}
+		if (statement_count != 1) {
+			return ccontext->Query(context.sql_query, parameters);
+		}
+		auto handle = ccontext->Submit(context.sql_query, parameters);
+		if (handle->HasError()) {
+			return handle;
+		}
+		auto &properties = handle->GetStatementProperties();
+		if (properties.result_eagerness == ResultEagerness::FORCED ||
+		    properties.return_type != StatementReturnType::QUERY_RESULT) {
+			handle->Complete();
+			return handle;
+		}
+		return DrainStream(std::move(handle));
 #else
-			return connection.get().context->Query(context.sql_query, parameters);
+		return connection.get().context->Query(context.sql_query, parameters);
 #endif
-		};
-		materialized = execute();
 	} catch (std::exception &ex) {
-		materialized = make_uniq<QueryResult>(ErrorData(ex));
+		return make_uniq<QueryResult>(ErrorData(ex));
 	}
-	auto statement_count = observer->StatementCount();
-	auto records = observer->TakeRecords();
-	auto mode = Settings::Get<DebugVerifySqlExportSetting>(*connection.get().context);
-	const bool has_recorded_query_error = !records.empty() && records.back().query_error;
-	if (mode != DebugSQLExportVerification::OFF && materialized->HasError() && !has_recorded_query_error) {
-		SQLExportVerificationRecord record;
-		record.mode = mode;
-		record.statement_index = statement_count;
-		record.query_error = true;
-		record.code = "ORIGINAL_BEFORE_QUERY";
-		record.phase = "ORIGINAL_PLANNING";
-		records.push_back(std::move(record));
-	}
-	runner.RecordSQLExport(*this, context, std::move(records));
-	return materialized;
 }
 
 bool CheckLoopCondition(ExecuteContext &context, const vector<Condition> &conditions) {

@@ -3,20 +3,17 @@
 # group: [sql_export]
 
 statement ok
-SET debug_verify_sql_export='strict';
-
-statement ok
-SET max_execution_time=5000;
+SET debug_verify_statement='explain_sql_strict';
 
 foreach threads 1 4
 
 statement ok
 SET threads={threads};
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
@@ -41,10 +38,10 @@ EXPLAIN (SQL) SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v F
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 31 [(]Reservoir, 42[)].*
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
@@ -69,10 +66,10 @@ EXPLAIN (SQL) SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) US
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 31 [(]Reservoir, 42[)].*
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
@@ -97,10 +94,10 @@ EXPLAIN (SQL) SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 31 (re
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 31 [(]Reservoir, 42[)].*
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
@@ -125,10 +122,10 @@ EXPLAIN (SQL) SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v F
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 20[.]0% [(]Reservoir, 42[)].*
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
@@ -153,10 +150,10 @@ EXPLAIN (SQL) SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) US
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 20[.]0% [(]Reservoir, 42[)].*
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
@@ -181,10 +178,10 @@ EXPLAIN (SQL) SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 20% (r
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 20[.]0% [(]Reservoir, 42[)].*
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
@@ -209,10 +206,10 @@ EXPLAIN (SQL) SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v F
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 50[.]0% [(]Bernoulli, 42[)].*
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
@@ -237,10 +234,10 @@ EXPLAIN (SQL) SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) US
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 50[.]0% [(]Bernoulli, 42[)].*
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
@@ -265,10 +262,10 @@ EXPLAIN (SQL) SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 50% (b
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 50[.]0% [(]Bernoulli, 42[)].*
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
@@ -293,10 +290,10 @@ EXPLAIN (SQL) SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v F
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 50[.]0% [(]System, 42[)].*
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
@@ -321,10 +318,10 @@ EXPLAIN (SQL) SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) US
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 50[.]0% [(]System, 42[)].*
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
@@ -349,10 +346,10 @@ EXPLAIN (SQL) SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 50% (s
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 50[.]0% [(]System, 42[)].*
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
@@ -377,10 +374,10 @@ EXPLAIN (SQL) SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v F
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 80[.]0% [(]System, 1[)].*
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
@@ -405,10 +402,10 @@ EXPLAIN (SQL) SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) US
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 80[.]0% [(]System, 1[)].*
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
@@ -433,10 +430,10 @@ EXPLAIN (SQL) SELECT * FROM (SELECT i,i v FROM range(0)t(i)) USING SAMPLE 80% (s
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 80[.]0% [(]System, 1[)].*
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
@@ -461,10 +458,10 @@ EXPLAIN (SQL) SELECT * FROM (SELECT i,CASE WHEN i%5=0 THEN NULL ELSE i%3 END v F
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 0 [(]Reservoir, 42[)].*
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
@@ -489,10 +486,10 @@ EXPLAIN (SQL) SELECT * FROM (SELECT i,nextval('seq') v FROM range(10000)t(i)) US
 ----
 sql	<REGEX>:.*FROM [(]SELECT.*[)] AS r[0-9]+[(]c0, c1[)] USING SAMPLE 0 [(]Reservoir, 42[)].*
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 DROP SEQUENCE IF EXISTS seq;
@@ -522,10 +519,10 @@ endloop
 statement ok
 SET threads=1;
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 query I nosort sample_37
 SELECT * FROM range(10000) USING SAMPLE 31 (system,42);
@@ -536,7 +533,7 @@ reset label sample_37
 
 # The invalid method/count combination fails during generated preparation.
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_statement='none';
 
 statement error
 SELECT * FROM range(10000) USING SAMPLE 31 (bernoulli,42);
@@ -544,7 +541,7 @@ SELECT * FROM range(10000) USING SAMPLE 31 (bernoulli,42);
 <REGEX>:Parser Error:.*cannot be used with a discrete sample count.*
 
 statement ok
-SET debug_verify_sql_export='strict';
+SET debug_verify_statement='explain_sql_strict';
 
 query TT
 EXPLAIN (SQL) SELECT * FROM range(10000) USING SAMPLE 31 (bernoulli,42);
@@ -554,10 +551,10 @@ sql	<REGEX>:.*USING SAMPLE 31 [(]Bernoulli, 42[)].*
 statement ok
 CREATE TABLE sample_source AS SELECT i FROM range(10000) t(i);
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 query I nosort sample_38
 SELECT * FROM sample_source USING SAMPLE 31 (system,42) ORDER BY i;
@@ -571,10 +568,10 @@ EXPLAIN (SQL) SELECT * FROM sample_source USING SAMPLE 31 (system,42) ORDER BY i
 ----
 sql	<REGEX>:.*USING SAMPLE.*
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 query I nosort sample_39
 SELECT * FROM sample_source USING SAMPLE 25% (system,42) ORDER BY i;

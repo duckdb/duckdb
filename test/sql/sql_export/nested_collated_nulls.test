@@ -3,7 +3,7 @@
 # group: [sql_export]
 
 statement ok
-SET debug_verify_sql_export='strict';
+SET debug_verify_statement='explain_sql_strict';
 
 query T
 SELECT CASE WHEN false THEN ['x' COLLATE nocase] ELSE NULL END AS v;

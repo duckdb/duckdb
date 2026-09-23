@@ -6,7 +6,7 @@ statement ok
 CREATE SEQUENCE exported_calls;
 
 statement ok
-SET debug_verify_sql_export='strict';
+SET debug_verify_statement='explain_sql_strict';
 
 query II
 SELECT x,x FROM (SELECT nextval('exported_calls') AS x FROM (VALUES (1),(2),(2)) t(i)) q

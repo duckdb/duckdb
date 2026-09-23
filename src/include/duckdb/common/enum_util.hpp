@@ -178,8 +178,6 @@ enum class DebugOrderVerification : uint8_t;
 
 enum class DebugProgressVerification : uint8_t;
 
-enum class DebugSQLExportVerification : uint8_t;
-
 enum class DebugStatementVerification : uint8_t;
 
 enum class DebugVectorVerification : uint8_t;
@@ -501,14 +499,6 @@ enum class ResultOrdering : uint8_t;
 enum class RowGroupAppendMode : uint8_t;
 
 enum class RowIdHandling : uint8_t;
-
-enum class SQLExportComparability : uint8_t;
-
-enum class SQLExportExecutionRoute : uint8_t;
-
-enum class SQLExportExecutionStatus : uint8_t;
-
-enum class SQLExportOutcome : uint8_t;
 
 enum class SampleMethod : uint8_t;
 
@@ -889,9 +879,6 @@ const char* EnumUtil::ToChars<DebugOrderVerification>(DebugOrderVerification val
 
 template<>
 const char* EnumUtil::ToChars<DebugProgressVerification>(DebugProgressVerification value);
-
-template<>
-const char* EnumUtil::ToChars<DebugSQLExportVerification>(DebugSQLExportVerification value);
 
 template<>
 const char* EnumUtil::ToChars<DebugStatementVerification>(DebugStatementVerification value);
@@ -1377,18 +1364,6 @@ template<>
 const char* EnumUtil::ToChars<RowIdHandling>(RowIdHandling value);
 
 template<>
-const char* EnumUtil::ToChars<SQLExportComparability>(SQLExportComparability value);
-
-template<>
-const char* EnumUtil::ToChars<SQLExportExecutionRoute>(SQLExportExecutionRoute value);
-
-template<>
-const char* EnumUtil::ToChars<SQLExportExecutionStatus>(SQLExportExecutionStatus value);
-
-template<>
-const char* EnumUtil::ToChars<SQLExportOutcome>(SQLExportOutcome value);
-
-template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value);
 
 template<>
@@ -1847,9 +1822,6 @@ DebugOrderVerification EnumUtil::FromString<DebugOrderVerification>(const char *
 
 template<>
 DebugProgressVerification EnumUtil::FromString<DebugProgressVerification>(const char *value);
-
-template<>
-DebugSQLExportVerification EnumUtil::FromString<DebugSQLExportVerification>(const char *value);
 
 template<>
 DebugStatementVerification EnumUtil::FromString<DebugStatementVerification>(const char *value);
@@ -2333,18 +2305,6 @@ RowGroupAppendMode EnumUtil::FromString<RowGroupAppendMode>(const char *value);
 
 template<>
 RowIdHandling EnumUtil::FromString<RowIdHandling>(const char *value);
-
-template<>
-SQLExportComparability EnumUtil::FromString<SQLExportComparability>(const char *value);
-
-template<>
-SQLExportExecutionRoute EnumUtil::FromString<SQLExportExecutionRoute>(const char *value);
-
-template<>
-SQLExportExecutionStatus EnumUtil::FromString<SQLExportExecutionStatus>(const char *value);
-
-template<>
-SQLExportOutcome EnumUtil::FromString<SQLExportOutcome>(const char *value);
 
 template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value);

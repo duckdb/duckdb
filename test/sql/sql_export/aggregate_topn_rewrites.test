@@ -3,7 +3,7 @@
 # group: [sql_export]
 
 statement ok
-SET debug_verify_sql_export='strict';
+SET debug_verify_statement='explain_sql_strict';
 
 statement ok
 CREATE TEMP TABLE reuse_owner AS FROM (VALUES (1,10),(2,20),(3,30),(4,40)) t(k,dim_id);

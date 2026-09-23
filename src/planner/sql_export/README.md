@@ -20,7 +20,7 @@ Optimization can also fold observations made while planning into the generated S
 
 ## Supported statements and errors
 
-SQL mode accepts supported SELECT, VALUES, and WITH queries. It does not combine with ANALYZE or FORMAT, and it does not support DDL/DML, CALL, or EXPLAIN EXECUTE. Existing restrictions on SQL PREPARE also apply. Some logical operators and expressions cannot yet be exported; their errors describe the unsupported query or source. The debug verifier retains structured issue codes, phases, and plan locations. Unsupported export never returns the original query as a fallback.
+SQL mode accepts supported SELECT, VALUES, and WITH queries. It does not combine with ANALYZE or FORMAT, and it does not support DDL/DML, CALL, or EXPLAIN EXECUTE. Existing restrictions on SQL PREPARE also apply. Some logical operators and expressions cannot yet be exported; their errors describe the unsupported query or source. The C++ export result retains structured issue codes, phases, and plan locations. Unsupported export never returns the original query as a fallback.
 
 PIVOT with values discovered from data is rejected because column discovery requires executing auxiliary statements. Specify the values with an explicit IN list to export supported PIVOT queries. Unresolved parameters and explicit optimizer opt-outs may also leave unsupported plan nodes.
 
@@ -49,15 +49,15 @@ The logical-plan exporter owns alias allocation, ancestor tracking, and named-re
 
 The expression exporter owns binding context and lambda reference scopes. Literal construction, function calls, and window expressions have separate implementations. Generic table-function invocation reconstruction lives in `table_function_sql_export.cpp`; source-specific callbacks remain with their sources.
 
-Internal state declarations live under `duckdb/planner/sql_export/`. Public entry points retain their headers directly under `duckdb/planner/`. General logical-plan verification and repeatability analysis remain separate planner facilities. Runtime differential verification lives in `src/main/sql_export_verification.cpp`.
+Internal state declarations live under `duckdb/planner/sql_export/`. Public entry points retain their headers directly under `duckdb/planner/`. General logical-plan verification and repeatability analysis remain separate planner facilities. Statement replacement verification lives in `src/main/client_verify.cpp`.
 
 C++ tests under `test/sql_export/` follow these feature boundaries; shared fixtures live in the corresponding test-helper files. SQL regression tests live under `test/sql/sql_export/`.
 
-The CI Query Verification configuration uses `debug_verify_sql_export='supported'`.
+The CI Query Verification configuration uses `debug_verify_statement='explain_sql'`.
 It executes reconstructed SQL when export succeeds and falls back for explicitly
-unsupported shapes. Verifier defects fail the test, including expected-error tests.
-The separate strict corpus also rejects unsupported shapes, protecting the supported
-subset from regressions to fallback.
+unsupported shapes. Errors from reconstruction and generated execution propagate normally. Focused SQL
+tests use `debug_verify_statement='explain_sql_strict'`, which also rejects unsupported
+shapes. Both modes execute the generated statement once against existing expected results.
 
 Projection expressions consumed by a scan are currently unsupported when their SQL
 provenance is no longer retained. The optimizer records this condition explicitly,

@@ -1,5 +1,4 @@
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/sql_export_verification.hpp"
 
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -91,8 +90,6 @@ struct ActiveQueryContext {
 public:
 	//! The query that is currently being executed
 	string query;
-	//! Source text for positions in a generated plan, while the public query remains unchanged.
-	string error_query;
 	//! Prepared statement data
 	shared_ptr<PreparedStatementData> prepared;
 	//! The query executor
@@ -460,11 +457,6 @@ const string &ClientContext::GetCurrentQuery() {
 	return active_query->query;
 }
 
-const string &ClientContext::GetCurrentQueryErrorSource() const {
-	D_ASSERT(active_query);
-	return active_query->error_query.empty() ? active_query->query : active_query->error_query;
-}
-
 connection_t ClientContext::GetConnectionId() const {
 	return connection_id;
 }
@@ -480,17 +472,9 @@ static bool IsExplainAnalyze(SQLStatement *statement) {
 	return explain.explain_type == ExplainType::EXPLAIN_ANALYZE;
 }
 
-shared_ptr<PreparedStatementData>
-ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
-                                               const QueryParameters &parameters,
-                                               optional_ptr<SQLExportVerification> verification) {
-	if (verification) {
-		// Retire a discarded attempt before the next original bind or optimization can fail.
-		verification->BeginPlanningAttempt();
-		active_query->error_query.clear();
-	}
-	bool has_parameters =
-	    !statement->named_param_map.empty() || (parameters.statement_args && !parameters.statement_args->empty());
+shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock,
+                                                                                 unique_ptr<SQLStatement> statement,
+                                                                                 const QueryParameters &parameters) {
 	StatementType statement_type = statement->type;
 	auto result = make_shared_ptr<PreparedStatementData>(statement_type);
 
@@ -510,26 +494,19 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, unique_p
 		D_ASSERT(logical_planner.plan || !logical_planner.properties.bound_all_parameters);
 	}
 
-	if (!logical_planner.properties.bound_all_parameters) {
-		result->properties = logical_planner.properties;
-		result->names = logical_planner.names;
-		result->types = logical_planner.types;
-		result->value_map = std::move(logical_planner.value_map);
-		// not all parameters were bound - return
-		if (verification) {
-			verification->Verify(logical_planner, statement_type, has_parameters);
-		}
-		return result;
-	}
-	logical_planner.Optimize();
-	if (verification) {
-		verification->Verify(logical_planner, statement_type, has_parameters);
+	if (logical_planner.properties.bound_all_parameters) {
+		logical_planner.Optimize();
 	}
 	auto logical_plan = std::move(logical_planner.plan);
+	// extract the result column names from the plan
 	result->properties = logical_planner.properties;
 	result->names = logical_planner.names;
 	result->types = logical_planner.types;
 	result->value_map = std::move(logical_planner.value_map);
+	if (!logical_planner.properties.bound_all_parameters) {
+		// not all parameters were bound - return
+		return result;
+	}
 
 	// Convert the logical query plan into a physical query plan.
 	{
@@ -544,28 +521,6 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, unique_p
 shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientContextLock &lock,
                                                                          unique_ptr<SQLStatement> statement,
                                                                          const QueryParameters &parameters) {
-	auto mode = Settings::Get<DebugVerifySqlExportSetting>(*this);
-	if (mode == DebugSQLExportVerification::OFF) {
-		return CreatePreparedStatementWithRetry(lock, std::move(statement), parameters, nullptr);
-	}
-	SQLExportVerification verification(*this, mode);
-	shared_ptr<PreparedStatementData> result;
-	try {
-		result = CreatePreparedStatementWithRetry(lock, std::move(statement), parameters, &verification);
-	} catch (...) {
-		active_query->error_query = verification.ErrorQuery();
-		verification.Publish(false);
-		throw;
-	}
-	active_query->error_query = verification.ErrorQuery();
-	verification.Publish(true);
-	return result;
-}
-
-shared_ptr<PreparedStatementData>
-ClientContext::CreatePreparedStatementWithRetry(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
-                                                const QueryParameters &parameters,
-                                                optional_ptr<SQLExportVerification> verification) {
 	// check if any client context state could request a rebind
 	bool can_request_rebind = false;
 	for (auto &state : registered_state->States()) {
@@ -578,11 +533,8 @@ ClientContext::CreatePreparedStatementWithRetry(ClientContextLock &lock, unique_
 		// if any registered state can request a rebind we do the binding on a copy first
 		shared_ptr<PreparedStatementData> result;
 		try {
-			result = CreatePreparedStatementInternal(lock, statement->Copy(), parameters, verification);
+			result = CreatePreparedStatementInternal(lock, statement->Copy(), parameters);
 		} catch (std::exception &ex) {
-			if (verification && verification->HasVerifierException()) {
-				throw;
-			}
 			ErrorData error(ex);
 			// check if any registered client context state wants to try a rebind
 			for (auto &state : registered_state->States()) {
@@ -610,7 +562,7 @@ ClientContext::CreatePreparedStatementWithRetry(ClientContextLock &lock, unique_
 		// an extension wants to do a rebind - do it once
 	}
 
-	return CreatePreparedStatementInternal(lock, std::move(statement), parameters, verification);
+	return CreatePreparedStatementInternal(lock, std::move(statement), parameters);
 }
 
 QueryProgress ClientContext::GetQueryProgress() {
@@ -831,7 +783,7 @@ QueryResultState ClientContext::FailQueryInternal(ClientContextLock &lock, BaseQ
 		auto &db_instance = DatabaseInstance::GetDatabase(*this);
 		ValidChecker::Invalidate(db_instance, error.RawMessage());
 	}
-	ProcessError(error, GetCurrentQueryErrorSource());
+	ProcessError(error, active_query->query);
 	result.SetError(std::move(error));
 	EndQueryInternal(lock, false, invalidate_transaction, result.GetErrorObject());
 	return QueryResultState::EXECUTION_ERROR;
@@ -1157,7 +1109,7 @@ unique_ptr<QueryResult> ClientContext::SubmitStatement(ClientContextLock &lock, 
 			ValidChecker::Invalidate(db_instance, error.RawMessage());
 		}
 		// other types of exceptions do invalidate the current transaction
-		result = ErrorResult<QueryResult>(std::move(error), GetCurrentQueryErrorSource());
+		result = ErrorResult<QueryResult>(std::move(error), query);
 	}
 	if (result->HasError()) {
 		// query failed: abort now, unless a delegated collector's execution already ended it

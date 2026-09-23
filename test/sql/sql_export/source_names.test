@@ -12,7 +12,7 @@ statement ok
 INSERT INTO "_3_schema"."_4_table" VALUES (1,'a',2,3),(1,'a',2,3),(NULL,'n',NULL,4)
 
 statement ok
-SET debug_verify_sql_export='strict'
+SET debug_verify_statement='explain_sql_strict'
 
 query ITII rowsort
 SELECT "_0_a", "_1_b", "__2_c", _a3 FROM "_3_schema"."_4_table"

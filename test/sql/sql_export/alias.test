@@ -9,7 +9,7 @@ statement ok
 INSERT INTO names VALUES (1,2),(NULL,3),(1,2);
 
 statement ok
-SET debug_verify_sql_export='strict';
+SET debug_verify_statement='explain_sql_strict';
 
 query TT rowsort
 SELECT alias(mixed), alias(other) AS "explicit name" FROM names

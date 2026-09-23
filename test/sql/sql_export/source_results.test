@@ -3,7 +3,7 @@
 # group: [sql_export]
 
 statement ok
-SET debug_verify_sql_export='strict';
+SET debug_verify_statement='explain_sql_strict';
 
 query I
 SELECT count(*) FROM range(4);
@@ -21,10 +21,10 @@ SELECT x,x FROM range(5) t(x) WHERE x>=2 ORDER BY x DESC;
 3	3
 2	2
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 query TT nosort source_rows_0
 SELECT * FROM duckdb_keywords() ORDER BY ALL;
@@ -33,10 +33,10 @@ endloop
 
 reset label source_rows_0
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 query T nosort source_rows_1
 SELECT * FROM duckdb_optimizers() ORDER BY ALL;
@@ -45,10 +45,10 @@ endloop
 
 reset label source_rows_1
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 query TTT nosort source_rows_2
 SELECT database_name,schema_name,table_name FROM system.main.duckdb_tables() ORDER BY ALL;
@@ -57,10 +57,10 @@ endloop
 
 reset label source_rows_2
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 query T nosort source_rows_3
 SELECT * FROM pragma_user_agent();

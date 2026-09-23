@@ -1,4 +1,8 @@
 #include "catch.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/planner/bound_parameter_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "test_helpers.hpp"
@@ -671,6 +675,46 @@ TEST_CASE("SQL export retains bound alias names across copies and renamed inputs
 		function.SetAlias(Identifier("explicit"));
 		RequireRoundTrip(connection, function, context, from, "'explicit'");
 	}
+	connection.Rollback();
+}
+
+TEST_CASE("Function deserialization restores enclosing context after callback exceptions",
+          "[sql_export][serialization]") {
+	DuckDB db;
+	Connection connection(db);
+	ExtensionLoader loader(*db.instance, "sql_export_deserialization_context");
+	ScalarFunction function("throwing_deserializer", {LogicalType::INTEGER}, LogicalType::INTEGER,
+	                        ScalarFunction::NopFunction);
+	function.SetSerializeCallback([](Serializer &, const optional_ptr<FunctionData>, const BoundScalarFunction &) {});
+	function.SetDeserializeCallback([](Deserializer &deserializer, BoundScalarFunction &) -> unique_ptr<FunctionData> {
+		REQUIRE(deserializer.Get<const LogicalType &>() == LogicalType::INTEGER);
+		auto &children = deserializer.Get<const const_expression_list_t &>();
+		REQUIRE(children.size() == 1);
+		REQUIRE(children[0].get().GetReturnType() == LogicalType::INTEGER);
+		throw InvalidInputException("Synthetic deserialization failure");
+	});
+	loader.RegisterFunction(std::move(function));
+	connection.BeginTransaction();
+	auto plan = BindExportQuery(connection, "SELECT throwing_deserializer(7::INTEGER)");
+	auto expression = FindExpression(*plan, [](const Expression &candidate) {
+		return candidate.GetExpressionType() == ExpressionType::BOUND_FUNCTION;
+	});
+	REQUIRE(expression);
+	MemoryStream stream(Allocator::Get(*connection.context));
+	BinarySerializer::Serialize(*expression, stream);
+	stream.Rewind();
+	BinaryDeserializer deserializer(stream);
+	bound_parameter_map_t parameters;
+	deserializer.Set<ClientContext &>(*connection.context);
+	deserializer.Set<bound_parameter_map_t &>(parameters);
+	const LogicalType enclosing_type = LogicalType::VARCHAR;
+	auto enclosing_child = Constant(Value::BIGINT(42));
+	const const_expression_list_t enclosing_children {*enclosing_child};
+	deserializer.Set<const LogicalType &>(enclosing_type);
+	deserializer.Set<const const_expression_list_t &>(enclosing_children);
+	REQUIRE_THROWS_AS(deserializer.Deserialize<Expression>(), InvalidInputException);
+	REQUIRE(&deserializer.Get<const LogicalType &>() == &enclosing_type);
+	REQUIRE(&deserializer.Get<const const_expression_list_t &>() == &enclosing_children);
 	connection.Rollback();
 }
 

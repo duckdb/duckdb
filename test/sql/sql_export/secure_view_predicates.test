@@ -15,7 +15,7 @@ statement ok
 CREATE SECURE VIEW nested_rows AS SELECT * FROM public_rows;
 
 statement ok
-SET debug_verify_sql_export='strict';
+SET debug_verify_statement='explain_sql_strict';
 
 foreach view public_rows nested_rows
 

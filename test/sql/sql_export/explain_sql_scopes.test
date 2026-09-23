@@ -12,14 +12,13 @@ EXPLAIN (SQL) SELECT NULL::INTEGER AS "null value", 2::BIGINT AS "two";
 ----
 sql	SELECT CAST(NULL AS INTEGER) AS "null value", CAST(2 AS BIGINT) AS two
 
-explain_sql
+statement ok
+SET debug_verify_statement='explain_sql_strict';
 
 query II
 SELECT 1 AS same, 2::BIGINT AS same;
 ----
 1	2
-
-explain_sql
 
 query II
 SELECT i AS c1, j AS c0 FROM (VALUES (1, 30), (2, 10), (2, 10), (NULL, 20)) t(i,j) ORDER BY c0, c1 NULLS LAST LIMIT 3;
@@ -28,8 +27,6 @@ SELECT i AS c1, j AS c0 FROM (VALUES (1, 30), (2, 10), (2, 10), (NULL, 20)) t(i,
 2	10
 NULL	20
 
-explain_sql
-
 query I
 WITH RECURSIVE r(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM r WHERE i<3) SELECT i FROM r ORDER BY i;
 ----
@@ -37,16 +34,12 @@ WITH RECURSIVE r(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM r WHERE i<3) SELECT i
 2
 3
 
-explain_sql
-
 query I
 SELECT i FROM (VALUES (1)) t(i) WHERE false;
 ----
 
 statement ok
 CREATE SEQUENCE fromless_sequence;
-
-explain_sql
 
 query II
 SELECT nextval('fromless_sequence'), nextval('fromless_sequence');
@@ -57,8 +50,6 @@ query I
 SELECT currval('fromless_sequence');
 ----
 2
-
-explain_sql
 
 query I
 SELECT 1 AS result UNION ALL SELECT 1;

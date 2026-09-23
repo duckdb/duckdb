@@ -3,7 +3,7 @@
 # group: [sql_export]
 
 statement ok
-SET debug_verify_sql_export='strict';
+SET debug_verify_statement='explain_sql_strict';
 
 require parquet
 
@@ -45,10 +45,10 @@ INSERT INTO csv_source VALUES(1,'a'),(2,NULL);
 statement ok
 COPY csv_source TO '__TEST_DIR__/generic_source.csv' (HEADER,DELIMITER '|');
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 query IT nosort source_0
 SELECT * FROM read_csv('__TEST_DIR__/generic_source.csv', header := true, delim := '|', auto_detect := true) ORDER BY i;
@@ -57,10 +57,10 @@ endloop
 
 reset label source_0
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 query I nosort source_1
 SELECT count(*) FROM read_csv('__TEST_DIR__/generic_source.csv', header := true, delim := '|', auto_detect := true);
@@ -69,10 +69,10 @@ endloop
 
 reset label source_1
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 query IT nosort source_2
 SELECT i,filename FROM read_csv('__TEST_DIR__/generic_source.csv', header := true, delim := '|', auto_detect := true,filename := true) ORDER BY i;
@@ -87,10 +87,10 @@ COPY (SELECT * FROM (VALUES (10,1),(10,1),(NULL,1),(20,2),(30,NULL)) t(i,p)) TO 
 statement ok
 SET debug_verify_serializer=false;
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 query I nosort file_predicate_CSV0
 SELECT i FROM read_csv('__TEST_DIR__/retained_predicates_CSV/*/*.csv',hive_partitioning := true) WHERE p=1 ORDER BY i;
@@ -131,10 +131,10 @@ foreach serializer false true
 statement ok
 SET debug_verify_serializer={serializer};
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 query I nosort file_predicate_parquet0
 SELECT i FROM read_parquet('__TEST_DIR__/retained_predicates_parquet/*/*.parquet',hive_partitioning := true) WHERE p=1 ORDER BY i;

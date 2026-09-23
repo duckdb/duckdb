@@ -3,13 +3,10 @@
 # group: [sql_export]
 
 statement ok
-SET debug_verify_sql_export='strict';
+SET debug_verify_statement='explain_sql_strict';
 
 statement ok
 SET threads=1;
-
-statement ok
-SET max_execution_time=5000;
 
 statement ok
 SET disabled_optimizers='compressed_materialization';
@@ -201,10 +198,10 @@ WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c WHERE x<3) SELECT x
 statement ok
 SET disabled_optimizers='cte_inlining';
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 CREATE OR REPLACE SEQUENCE cte_sequence;
@@ -249,10 +246,10 @@ endloop
 
 reset label cte_limit_effects
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 CREATE OR REPLACE SEQUENCE cte_sequence;
@@ -297,10 +294,10 @@ endloop
 
 reset label cte_limit_effects
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 CREATE OR REPLACE SEQUENCE cte_sequence;
@@ -348,10 +345,10 @@ reset label cte_limit_effects
 statement ok
 SET disabled_optimizers='';
 
-foreach mode off strict
+foreach mode none explain_sql_strict
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 statement ok
 CREATE OR REPLACE SEQUENCE cte_sequence;

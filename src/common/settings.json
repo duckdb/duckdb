@@ -553,14 +553,6 @@
         "is_debug": true
     },
     {
-        "name": "debug_verify_sql_export",
-        "description": "Verify optimized plans through SQL export (off, report, supported, strict)",
-        "is_debug": true,
-        "type": "ENUM<DebugSQLExportVerification>",
-        "default_scope": "local",
-        "default_value": "OFF"
-    },
-    {
         "name": "debug_verify_statement",
         "description": "Specify the type of statement verification to perform.",
         "type": "ENUM<DebugStatementVerification>",

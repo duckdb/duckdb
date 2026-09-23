@@ -15,7 +15,7 @@ statement ok
 SET disabled_optimizers='statistics_propagation'
 
 statement ok
-SET debug_verify_sql_export='strict'
+SET debug_verify_statement='explain_sql_strict'
 
 query I
 SELECT i FROM offset_rows ORDER BY i LIMIT 1 OFFSET 122880

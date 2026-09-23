@@ -65,11 +65,10 @@ static LogicalOperatorRepeatability ClassifyOperatorType(LogicalOperator &op) {
 		if (get.GetTable()) {
 			return LogicalOperatorRepeatability::REPEATABLE;
 		}
-		if (!get.function.is_repeatable) {
+		if (!get.function.is_repeatable || !get.function.is_repeatable(get.bind_data.get())) {
 			return LogicalOperatorRepeatability::UNKNOWN;
 		}
-		return get.function.is_repeatable(get.bind_data.get()) ? LogicalOperatorRepeatability::REPEATABLE
-		                                                       : LogicalOperatorRepeatability::NON_REPEATABLE;
+		return LogicalOperatorRepeatability::REPEATABLE;
 	}
 	case LogicalOperatorType::LOGICAL_SAMPLE: {
 		auto &sample = op.Cast<LogicalSample>();

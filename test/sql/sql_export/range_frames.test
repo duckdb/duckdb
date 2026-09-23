@@ -3,10 +3,7 @@
 # group: [sql_export]
 
 statement ok
-SET debug_verify_sql_export='strict';
-
-statement ok
-SET max_execution_time=2000;
+SET debug_verify_statement='explain_sql_strict';
 
 statement ok
 CREATE TABLE frame_values(id INTEGER,k INTEGER,d DATE,v INTEGER);
@@ -17,9 +14,6 @@ INSERT INTO frame_values VALUES (1,1,'2024-02-28',10),(2,1,'2024-02-29',20),
 
 statement ok
 CREATE SEQUENCE range_seq;
-
-statement ok
-SET debug_verify_sql_export='strict';
 
 query II
 SELECT id,sum(v) OVER (ORDER BY k RANGE BETWEEN 0 PRECEDING AND 0 FOLLOWING)

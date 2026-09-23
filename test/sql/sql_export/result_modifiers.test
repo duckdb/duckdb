@@ -3,7 +3,7 @@
 # group: [sql_export]
 
 statement ok
-SET debug_verify_sql_export='strict';
+SET debug_verify_statement='explain_sql_strict';
 
 query I
 SELECT x FROM (VALUES (3,30), (1,10), (NULL,40), (3,20), (NULL,50)) t(x,y) ORDER BY x DESC NULLS LAST, y;
@@ -183,14 +183,14 @@ sql	<REGEX>:.*WHERE .*false.*
 
 # This signature has no SQL representation; check native execution with verification disabled.
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_statement='none';
 
 query T
 SELECT * FROM (SELECT count(x) EXPORT_STATE s FROM (VALUES(1))t(x))t WHERE false;
 ----
 
 statement ok
-SET debug_verify_sql_export='strict';
+SET debug_verify_statement='explain_sql_strict';
 
 statement error
 EXPLAIN (SQL) SELECT * FROM (SELECT count(x) EXPORT_STATE s FROM (VALUES(1))t(x))t WHERE false;

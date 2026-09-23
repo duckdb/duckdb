@@ -942,20 +942,6 @@ struct DebugVerifySerializerSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
-struct DebugVerifySqlExportSetting {
-	using RETURN_TYPE = DebugSQLExportVerification;
-	static constexpr const char *Name = "debug_verify_sql_export";
-	static constexpr const char *Description =
-	    "Verify optimized plans through SQL export (off, report, supported, strict)";
-	static constexpr const char *InputType = "VARCHAR";
-	static constexpr bool IsDebug = true;
-	static constexpr bool IsDeprecated = false;
-	static constexpr const char *DefaultValue = "OFF";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-	static void OnSet(SettingCallbackInfo &info, Value &input);
-};
-
 struct DebugVerifyStatementSetting {
 	using RETURN_TYPE = DebugStatementVerification;
 	static constexpr const char *Name = "debug_verify_statement";

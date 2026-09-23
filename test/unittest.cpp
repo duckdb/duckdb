@@ -135,19 +135,29 @@ static bool GetMinimumThreadStackSize(size_t default_stack_size, size_t page_siz
 		error = "Default pthread stack size is below the glibc minimum";
 		return false;
 	}
-	// Probe upwards so calibration cannot cache a stack larger than the requested worker stack.
-	for (auto page = lower_page; page <= upper_page; page++) {
-		auto probe_result = TryThreadStackSize(page * page_size, error);
-		if (probe_result == ThreadStackProbeResult::SUCCESS) {
-			minimum_stack_size = page * page_size;
-			return true;
+	auto default_probe_result = TryThreadStackSize(upper_page * page_size, error);
+	if (default_probe_result != ThreadStackProbeResult::SUCCESS) {
+		if (default_probe_result == ThreadStackProbeResult::TOO_SMALL) {
+			error = "Unable to create a thread with the default pthread stack size";
+		} else {
+			error = "Unable to create a thread with the default pthread stack size: " + error;
 		}
-		if (probe_result == ThreadStackProbeResult::ERROR) {
+		return false;
+	}
+
+	while (lower_page < upper_page) {
+		auto middle_page = lower_page + (upper_page - lower_page) / 2;
+		auto probe_result = TryThreadStackSize(middle_page * page_size, error);
+		if (probe_result == ThreadStackProbeResult::SUCCESS) {
+			upper_page = middle_page;
+		} else if (probe_result == ThreadStackProbeResult::TOO_SMALL) {
+			lower_page = middle_page + 1;
+		} else {
 			return false;
 		}
 	}
-	error = "Unable to create a thread with the default pthread stack size";
-	return false;
+	minimum_stack_size = lower_page * page_size;
+	return true;
 }
 
 static bool SetThreadStackSize(size_t requested_stack_size, string &error) {

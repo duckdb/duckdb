@@ -1,7 +1,7 @@
 {
   "description": "Round-trip supported queries through SQL; reject verification defects and preserve native expectations",
-  "on_init": "SET debug_verify_sql_export='supported';",
-  "on_new_connection": "SET debug_verify_sql_export='supported';",
+  "on_init": "SET debug_verify_statement='explain_sql';",
+  "on_new_connection": "SET debug_verify_statement='explain_sql';",
   "skip_compiled": true,
   "skip_tests": [
     {

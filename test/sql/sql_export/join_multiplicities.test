@@ -3,7 +3,7 @@
 # group: [sql_export]
 
 statement ok
-SET debug_verify_sql_export='strict';
+SET debug_verify_statement='explain_sql_strict';
 
 query IIII rowsort
 SELECT * FROM (VALUES (1,10),(2,20),(2,21),(NULL,30)) l(a,x) CROSS JOIN (VALUES (2,100),(3,200),(NULL,300)) r(b,y);
@@ -225,7 +225,7 @@ NULL	30	true
 
 # Mixed MARK comparisons remain an explicit export restriction.
 statement ok
-SET debug_verify_sql_export='off';
+SET debug_verify_statement='none';
 
 query III rowsort
 SELECT * FROM (VALUES (1,10),(2,20),(2,20),(NULL,30)) l(a,x) JOIN BY (TYPE mark) (VALUES (2,20),(3,30),(NULL,40)) r(b,y) ON a=b AND x<y;
@@ -236,7 +236,7 @@ SELECT * FROM (VALUES (1,10),(2,20),(2,20),(NULL,30)) l(a,x) JOIN BY (TYPE mark)
 NULL	30	NULL
 
 statement ok
-SET debug_verify_sql_export='strict';
+SET debug_verify_statement='explain_sql_strict';
 
 statement error
 EXPLAIN (SQL) SELECT * FROM (VALUES (1,10),(2,20),(2,20),(NULL,30)) l(a,x) JOIN BY (TYPE mark) (VALUES (2,20),(3,30),(NULL,40)) r(b,y) ON a=b AND x<y;

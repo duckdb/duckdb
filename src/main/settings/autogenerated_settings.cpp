@@ -137,16 +137,6 @@ void DebugVerifyProgressSetting::OnSet(SettingCallbackInfo &info, Value &paramet
 }
 
 //===----------------------------------------------------------------------===//
-// Debug Verify Sql Export
-//===----------------------------------------------------------------------===//
-void DebugVerifySqlExportSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
-	if (parameter.IsNull()) {
-		throw InvalidInputException("debug_verify_sql_export setting cannot be NULL");
-	}
-	EnumUtil::FromString<DebugSQLExportVerification>(StringValue::Get(parameter));
-}
-
-//===----------------------------------------------------------------------===//
 // Debug Verify Statement
 //===----------------------------------------------------------------------===//
 void DebugVerifyStatementSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

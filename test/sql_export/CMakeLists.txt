@@ -14,10 +14,7 @@ add_library_unity(
   sql_export_plan_pivot.cpp
   sql_export_plan_relations.cpp
   sql_export_plan_sources.cpp
-  sql_export_plan_values.cpp
-  sql_export_verification_admission.cpp
-  sql_export_verification_lifecycle.cpp
-  sql_export_verification_test_helpers.cpp)
+  sql_export_plan_values.cpp)
 
 set(UNITTEST_OBJECT_FILES
     ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_export>

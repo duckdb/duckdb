@@ -937,10 +937,6 @@ public:
 			return;
 		}
 		out.Print(data[1]);
-		auto plan = data[1].GetString();
-		if (!plan.empty() && plan.back() != '\n') {
-			out.Print("\n");
-		}
 		// after EXPLAIN ANALYZE (interactive), point users at the full (expanded) tree when the pretty tree folded
 		// low-impact operators, and always at the ".web" command which opens the profile in a browser.
 		// (skip it for EXPLAIN ANALYZE (FORMAT WEB), whose result value is empty and which already opened the profile)

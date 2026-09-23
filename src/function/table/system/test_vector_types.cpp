@@ -347,9 +347,6 @@ void TestVectorTypesFun::RegisterFunction(BuiltinFunctions &set) {
 	                                TestVectorTypesBind, TestVectorTypesInit);
 	test_vector_types.to_sql = TableFunction::ToSQLFunctionCall;
 	test_vector_types.SetVarArgs(LogicalType::ANY);
-	test_vector_types.is_repeatable = [](optional_ptr<const FunctionData>) {
-		return true;
-	};
 	test_vector_types.named_parameters["all_flat"] = LogicalType::BOOLEAN;
 	test_vector_types.table_scan_progress = TestVectorTypesProgress;
 

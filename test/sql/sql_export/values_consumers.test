@@ -9,7 +9,7 @@ statement ok
 INSERT INTO values_input VALUES (1),(1),(2),(NULL);
 
 statement ok
-SET debug_verify_sql_export='strict';
+SET debug_verify_statement='explain_sql_strict';
 
 query I
 SELECT count(*) FROM values_input a,

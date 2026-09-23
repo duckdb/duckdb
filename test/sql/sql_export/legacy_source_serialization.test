@@ -13,10 +13,10 @@ COPY (SELECT * FROM (VALUES (10,1),(10,1),(NULL,1),(20,2),(30,NULL)) t(i,p)) TO 
 statement ok
 SET debug_verify_serializer=true;
 
-foreach mode off report
+foreach mode none explain_sql
 
 statement ok
-SET debug_verify_sql_export='{mode}';
+SET debug_verify_statement='{mode}';
 
 query I
 SELECT i FROM read_parquet('{TEST_DIR}/legacy_source_parquet/*/*.parquet', hive_partitioning := true) WHERE p=1 ORDER BY i;

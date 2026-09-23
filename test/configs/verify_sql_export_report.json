@@ -1,7 +1,0 @@
-{
-  "description": "Measure optimized-plan SQL export using unchanged query expectations",
-  "on_init": "SET debug_verify_sql_export='report';",
-  "on_new_connection": "SET debug_verify_sql_export='report';",
-  "sql_export_events": true,
-  "skip_compiled": true
-}

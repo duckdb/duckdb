@@ -369,7 +369,7 @@ void QueryResult::HandleFetchFailure(ClientContextLock &lock, ErrorData error) {
 		auto &db_instance = DatabaseInstance::GetDatabase(*context);
 		ValidChecker::Invalidate(db_instance, error.RawMessage());
 	}
-	context->ProcessError(error, context->GetCurrentQueryErrorSource());
+	context->ProcessError(error, context->GetCurrentQuery());
 	SetError(std::move(error));
 	context->CleanupInternal(lock, this, invalidate_query);
 }

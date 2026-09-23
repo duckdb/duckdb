@@ -60,7 +60,6 @@ class Connection;
 class PhysicalTransaction;
 class RegisteredStateManager;
 struct TransactionInfo;
-class SQLExportVerification;
 
 //! A statement parameter: identifier ($1 -> "1"), binding index, and inferred type (UNKNOWN if not inferred).
 struct StatementParameter {
@@ -324,7 +323,6 @@ private:
 
 	unique_ptr<ClientContextLock> LockContext();
 
-	const string &GetCurrentQueryErrorSource() const;
 	void BeginQueryInternal(ClientContextLock &lock, const SQLStatement &statement);
 	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
 	                           optional_ptr<ErrorData> previous_error);
@@ -345,14 +343,9 @@ private:
 	template <class T>
 	unique_ptr<T> ErrorResult(ErrorData error, const string &query = string());
 
-	shared_ptr<PreparedStatementData>
-	CreatePreparedStatementWithRetry(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
-	                                 const QueryParameters &parameters,
-	                                 optional_ptr<SQLExportVerification> verification);
 	shared_ptr<PreparedStatementData> CreatePreparedStatementInternal(ClientContextLock &lock,
 	                                                                  unique_ptr<SQLStatement> statement,
-	                                                                  const QueryParameters &parameters,
-	                                                                  optional_ptr<SQLExportVerification> verification);
+	                                                                  const QueryParameters &parameters);
 
 	bool ErrorInvalidatesTransaction(ExceptionType type);
 

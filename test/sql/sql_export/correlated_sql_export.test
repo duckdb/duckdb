@@ -15,7 +15,7 @@ statement ok
 INSERT INTO r VALUES (1,10),(1,10),(1,NULL),(2,99),(NULL,NULL);
 
 statement ok
-SET debug_verify_sql_export='report';
+SET debug_verify_statement='explain_sql';
 
 query IIII rowsort
 SELECT id,x=ANY(SELECT y FROM r WHERE r.k=l.k),x<>ALL(SELECT y FROM r WHERE r.k=l.k),x=ALL(SELECT y FROM r WHERE r.k=l.k) FROM l;
@@ -64,4 +64,4 @@ SELECT id,x=ANY(SELECT y FROM r WHERE r.k=l.k),x=ALL(SELECT y FROM r WHERE r.k=l
 8	false	true
 
 statement ok
-RESET debug_verify_sql_export;
+RESET debug_verify_statement;

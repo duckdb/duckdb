@@ -223,18 +223,6 @@ SQLLogicToken SQLLogicParser::Tokenize() {
 	if (argument_list.empty()) {
 		Fail("Empty line!?");
 	}
-	if (argument_list[0] == "explain_sql") {
-		if (argument_list.size() != 1 || !NextLineEmptyOrComment() || !NextStatement()) {
-			Fail("explain_sql requires a following query or statement command");
-		}
-		result = Tokenize();
-		if (result.explain_sql || (result.type != SQLLogicTokenType::SQLLOGIC_QUERY &&
-		                           result.type != SQLLogicTokenType::SQLLOGIC_STATEMENT)) {
-			Fail("explain_sql requires a following query or statement command");
-		}
-		result.explain_sql = true;
-		return result;
-	}
 	result.type = CommandToToken(argument_list[0]);
 	for (idx_t i = 1; i < argument_list.size(); i++) {
 		result.parameters.push_back(std::move(argument_list[i]));
