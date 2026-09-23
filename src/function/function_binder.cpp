@@ -88,8 +88,7 @@ optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const 
 	// Compute total number of arguments passed
 	const auto received_arg_count = static_cast<idx_t>(arguments.size() + named_arguments.size());
 
-	// And the minimum and maximum number of arguments the function can accept
-	const auto minimum_arg_count = sig.GetRequiredParameterCount();
+	// And the maximum number of arguments the function can accept
 	const auto positional_count = sig.GetPositionalParameterCount();
 	const auto args_param = sig.GetArgsParameter();
 	const auto kwargs_param = sig.GetKwargsParameter();
@@ -99,9 +98,30 @@ optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const 
 		maximum_arg_count = sig.GetParameterCount();
 	}
 
-	if (received_arg_count < minimum_arg_count) {
-		// We have fewer arguments than the function requires, so this function cannot be a match.
-		return optional_idx();
+	// Every parameter without a default has to be filled by the call, either from its position or by its name.
+	// Counting the arguments instead would let a named argument stand in for a required positional parameter, so
+	// that f(a, *, opt := NULL) matched a call f(opt := 1) that cannot fill "a" just as well as f(*, opt := NULL).
+	for (idx_t i = 0; i < sig.GetParameterCount(); i++) {
+		auto &param = sig.GetParameter(i);
+		if (param.IsVariadic() || param.HasDefaultValue()) {
+			continue;
+		}
+		if (param.AcceptsPosition() && i < arguments.size()) {
+			continue;
+		}
+		bool filled = false;
+		if (param.AcceptsName()) {
+			for (auto &named_arg : named_arguments) {
+				if (named_arg.first == param.GetName()) {
+					filled = true;
+					break;
+				}
+			}
+		}
+		if (!filled) {
+			// This parameter cannot be filled by the call, so this function cannot be a match.
+			return optional_idx();
+		}
 	}
 
 	if (received_arg_count > maximum_arg_count) {
@@ -171,6 +191,7 @@ optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const 
 			if (cast_cost >= 0) {
 				cost += idx_t(cast_cost);
 			} else {
+				// A named argument reaches its parameter only by an implicit cast, exactly like a positional one
 				return optional_idx();
 			}
 		}
@@ -435,6 +456,24 @@ static void VerifyNamedArgumentsAccepted(const Identifier &name, const FunctionS
 	}
 }
 
+enum class LogicalTypeComparisonResult : uint8_t { IDENTICAL_TYPE, TARGET_IS_ANY, DIFFERENT_TYPES };
+
+static LogicalTypeComparisonResult RequiresCast(const LogicalType &source_type, const LogicalType &target_type) {
+	if (target_type.id() == LogicalTypeId::ANY) {
+		return LogicalTypeComparisonResult::TARGET_IS_ANY;
+	}
+	if (source_type == target_type) {
+		return LogicalTypeComparisonResult::IDENTICAL_TYPE;
+	}
+	if (source_type.id() == LogicalTypeId::LIST && target_type.id() == LogicalTypeId::LIST) {
+		return RequiresCast(ListType::GetChildType(source_type), ListType::GetChildType(target_type));
+	}
+	if (source_type.id() == LogicalTypeId::ARRAY && target_type.id() == LogicalTypeId::ARRAY) {
+		return RequiresCast(ArrayType::GetChildType(source_type), ArrayType::GetChildType(target_type));
+	}
+	return LogicalTypeComparisonResult::DIFFERENT_TYPES;
+}
+
 //! Fold an argument to the constant it was bound to. A constant expression carries its value directly - evaluating
 //! one is both wasteful and impossible for the types that have no vector representation, such as TABLE
 static Value FoldArgument(ClientContext &context, Expression &expr) {
@@ -445,7 +484,9 @@ static Value FoldArgument(ClientContext &context, Expression &expr) {
 }
 
 //! Place the arguments of a call onto the parameters of the chosen overload: fold each to a constant, cast it to the
-//! type that parameter declares, and hand the named ones back keyed by the name the caller actually wrote
+//! type that parameter declares, and hand the named ones back keyed by the name the caller actually wrote.
+//! Overload selection has already established that every cast here is one the implicit rules allow, so this converts
+//! rather than forces - an argument no implicit cast reaches never selects the overload in the first place.
 template <class T>
 static void PlaceArguments(ClientContext &context, const T &function,
                            vector<unique_ptr<Expression>> &positional_arguments,
@@ -456,8 +497,7 @@ static void PlaceArguments(ClientContext &context, const T &function,
 	for (idx_t i = 0; i < positional_arguments.size(); i++) {
 		auto value = FoldArgument(context, *positional_arguments[i]);
 		auto target_type = i < positional_count ? signature.GetParameter(i).GetType() : signature.GetVarArgs();
-		if (target_type != LogicalType::ANY && target_type != LogicalType::POINTER &&
-		    target_type.id() != LogicalTypeId::LIST && target_type != LogicalType::TABLE) {
+		if (RequiresCast(value.type(), target_type) == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
 			value = value.CastAs(context, target_type);
 		}
 		parameters.push_back(std::move(value));
@@ -475,7 +515,14 @@ static void PlaceArguments(ClientContext &context, const T &function,
 		if (param_idx.IsValid()) {
 			// a "**kwargs" parameter has no declared type of its own to cast to
 			auto &param = signature.GetParameter(param_idx.GetIndex());
-			if (param.GetType().id() != LogicalTypeId::ANY) {
+			if (param.AcceptsPosition() && param_idx.GetIndex() < positional_arguments.size()) {
+				throw BinderException(named_argument.second->GetQueryLocation(),
+				                      "Named argument '%s' cannot be used for parameter '%s' because it has already "
+				                      "been provided as a positional argument in function call to '%s'",
+				                      named_argument.second->ToString(), argument_name,
+				                      function.GetName().GetIdentifierName());
+			}
+			if (RequiresCast(value.type(), param.GetType()) == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
 				value = value.CastAs(context, param.GetType());
 			}
 		}
@@ -556,24 +603,6 @@ optional_idx FunctionBinder::BindFunction(const Identifier &name, const TableFun
                                           ErrorData &error) {
 	auto [args, kwargs] = GetArgumentsFromExpressions(regular_args, keyword_args);
 	return BindFunctionFromArguments(name, functions, args, kwargs, error);
-}
-
-enum class LogicalTypeComparisonResult : uint8_t { IDENTICAL_TYPE, TARGET_IS_ANY, DIFFERENT_TYPES };
-
-static LogicalTypeComparisonResult RequiresCast(const LogicalType &source_type, const LogicalType &target_type) {
-	if (target_type.id() == LogicalTypeId::ANY) {
-		return LogicalTypeComparisonResult::TARGET_IS_ANY;
-	}
-	if (source_type == target_type) {
-		return LogicalTypeComparisonResult::IDENTICAL_TYPE;
-	}
-	if (source_type.id() == LogicalTypeId::LIST && target_type.id() == LogicalTypeId::LIST) {
-		return RequiresCast(ListType::GetChildType(source_type), ListType::GetChildType(target_type));
-	}
-	if (source_type.id() == LogicalTypeId::ARRAY && target_type.id() == LogicalTypeId::ARRAY) {
-		return RequiresCast(ArrayType::GetChildType(source_type), ArrayType::GetChildType(target_type));
-	}
-	return LogicalTypeComparisonResult::DIFFERENT_TYPES;
 }
 
 static bool TypeRequiresPrepare(const LogicalType &type) {

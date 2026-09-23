@@ -180,10 +180,11 @@ FROM query_table(NULL);
 ----
 <REGEX>:.*Cannot use NULL.*
 
+# the empty list is cast to the declared VARCHAR[] like any other argument, so the function itself reports it
 statement error
 FROM query_table([]);
 ----
-Expected a table or a list with tables as input
+Input list is empty
 
 statement error
 FROM query_table(['']);

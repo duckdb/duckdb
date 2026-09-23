@@ -37,6 +37,12 @@ public:
 	DUCKDB_API static PragmaFunction PragmaCall(const Identifier &name, pragma_function_t function,
 	                                            vector<LogicalType> arguments,
 	                                            LogicalType varargs = LogicalType::INVALID);
+	//! The same, declaring the parameters in full - so that they carry their own names and defaults instead of the
+	//! synthetic "colN" the type-only overloads give them
+	DUCKDB_API static PragmaFunction PragmaCall(const Identifier &name, pragma_query_t query,
+	                                            FunctionSignature signature);
+	DUCKDB_API static PragmaFunction PragmaCall(const Identifier &name, pragma_function_t function,
+	                                            FunctionSignature signature);
 	// Statement
 	DUCKDB_API static PragmaFunction PragmaStatement(const Identifier &name, pragma_query_t query);
 	DUCKDB_API static PragmaFunction PragmaStatement(const Identifier &name, pragma_function_t function);
@@ -52,6 +58,8 @@ public:
 private:
 	PragmaFunction(Identifier name, PragmaType pragma_type, pragma_query_t query, pragma_function_t function,
 	               vector<LogicalType> arguments, LogicalType varargs);
+	PragmaFunction(Identifier name, PragmaType pragma_type, pragma_query_t query, pragma_function_t function,
+	               FunctionSignature signature);
 };
 
 } // namespace duckdb

@@ -57,11 +57,12 @@ SELECT test_args_kwargs(i, i + 1, kw := i * 2, x := i::VARCHAR) FROM (SELECT i::
 <20>|1|2|2|7|'1'|
 <20>|2|3|4|7|'2'|
 
-# A keyword-only parameter cannot be passed by position
+# A keyword-only parameter cannot be passed by position, and an overload that cannot fill its required 'kw' is
+# not a candidate - the trailing positional arguments go to "*args" instead
 statement error
 SELECT test_args_kwargs(1, 2, 3, 4);
 ----
-Missing value for parameter "kw"
+<REGEX>:Binder Error:.*No function matches.*
 
 statement error
 SELECT test_args_kwargs(1);
@@ -261,12 +262,12 @@ SELECT test_positional_only(1, b := 2, a := 3);
 ----
 <22>|args=0|kwargs=1@2|/a=1|b=2|**a=3|
 
-# the positional-only parameter cannot be filled by name alone: "a := 1" goes to "**kwargs" and the
-# position is left empty, exactly as Python reports a missing positional argument
+# the positional-only parameter cannot be filled by name alone: "a := 1" goes to "**kwargs" and the position is
+# left empty, so the overload is not a candidate. The candidate list spells out why, with the closing "/".
 statement error
 SELECT test_positional_only(a := 1);
 ----
-<REGEX>:.*Missing value for parameter "a".*
+<REGEX>:.*No function matches.*a INTEGER, /.*
 
 # a candidate list spells the closing "/" out
 statement error

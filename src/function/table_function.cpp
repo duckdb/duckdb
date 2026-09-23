@@ -45,6 +45,18 @@ TableFunction::TableFunction(Identifier name, const vector<LogicalType> &argumen
       SimpleFunction(std::move(name), arguments, LogicalType::INVALID) {
 }
 
+TableFunction::TableFunction(Identifier name, FunctionSignature signature, table_function_t function_,
+                             table_function_bind_t bind, table_function_init_global_t init_global,
+                             table_function_init_local_t init_local)
+    : BaseTableFunction(function_, bind, init_global, init_local),
+      SimpleFunction(std::move(name), std::move(signature)) {
+}
+
+TableFunction::TableFunction(Identifier name, FunctionSignature signature, std::nullptr_t, table_function_bind_t bind,
+                             table_function_init_global_t init_global, table_function_init_local_t init_local)
+    : BaseTableFunction(nullptr, bind, init_global, init_local), SimpleFunction(std::move(name), std::move(signature)) {
+}
+
 BoundTableFunction::BoundTableFunction() : BaseTableFunction(nullptr, nullptr, nullptr, nullptr) {
 }
 

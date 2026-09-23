@@ -640,6 +640,15 @@ public:
 	DUCKDB_API
 	TableFunction(const vector<LogicalType> &arguments, std::nullptr_t function, table_function_bind_t bind = nullptr,
 	              table_function_init_global_t init_global = nullptr, table_function_init_local_t init_local = nullptr);
+	// Overloads taking proper signatures
+	DUCKDB_API
+	TableFunction(Identifier name, FunctionSignature signature, table_function_t function,
+	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
+	              table_function_init_local_t init_local = nullptr);
+	DUCKDB_API
+	TableFunction(Identifier name, FunctionSignature signature, std::nullptr_t function,
+	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
+	              table_function_init_local_t init_local = nullptr);
 
 public:
 	DUCKDB_API bool Equal(const TableFunction &rhs) const;

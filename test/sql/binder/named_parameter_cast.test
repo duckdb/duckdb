@@ -1,5 +1,5 @@
 # name: test/sql/binder/named_parameter_cast.test
-# description: A named table function parameter is cast to its declared type like an explicit cast, extension casts included
+# description: A named table function parameter reaches its parameter by an implicit cast, extension casts included
 # group: [binder]
 
 require icu
@@ -11,14 +11,18 @@ statement ok
 COPY (SELECT 42 AS a) TO '__TEST_DIR__/named_parameter_cast.csv' (HEADER false);
 
 # -----------------------------------------------------------------------------
-# ICU's TIMESTAMPTZ -> VARCHAR cast prints in the session time zone
+# A named argument is matched to its parameter the same way a positional one is: by an implicit cast. There is no
+# implicit cast from TIMESTAMPTZ to VARCHAR, so this is refused rather than silently stringified.
 #
 
-# names is a LIST(VARCHAR) parameter, so the binder casts the timestamp into a column name
-query I
+statement error
 SELECT column_name FROM (DESCRIBE SELECT * FROM read_csv('__TEST_DIR__/named_parameter_cast.csv', names => [TIMESTAMPTZ '2024-01-01 12:00:00+00']));
 ----
-2024-01-01 04:00:00-08
+<REGEX>:.*No function matches.*"names" := TIMESTAMP WITH TIME ZONE\[\].*
+
+# -----------------------------------------------------------------------------
+# Spelling the cast out reaches ICU's TIMESTAMPTZ -> VARCHAR cast, which prints in the session time zone
+#
 
 query I
 SELECT column_name FROM (DESCRIBE SELECT * FROM read_csv('__TEST_DIR__/named_parameter_cast.csv', names => [TIMESTAMPTZ '2024-01-01 12:00:00+00'::VARCHAR]));

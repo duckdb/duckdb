@@ -32,6 +32,20 @@ PragmaFunction PragmaFunction::PragmaCall(const Identifier &name, pragma_functio
 	return PragmaFunction(name, PragmaType::PRAGMA_CALL, nullptr, function, std::move(arguments), std::move(varargs));
 }
 
+PragmaFunction::PragmaFunction(Identifier name, PragmaType pragma_type, pragma_query_t query,
+                               pragma_function_t function, FunctionSignature signature)
+    : SimpleFunction(std::move(name), std::move(signature)), type(pragma_type), query(query), function(function) {
+}
+
+PragmaFunction PragmaFunction::PragmaCall(const Identifier &name, pragma_query_t query, FunctionSignature signature) {
+	return PragmaFunction(name, PragmaType::PRAGMA_CALL, query, nullptr, std::move(signature));
+}
+
+PragmaFunction PragmaFunction::PragmaCall(const Identifier &name, pragma_function_t function,
+                                          FunctionSignature signature) {
+	return PragmaFunction(name, PragmaType::PRAGMA_CALL, nullptr, function, std::move(signature));
+}
+
 PragmaFunction PragmaFunction::PragmaStatement(const Identifier &name, pragma_query_t query) {
 	vector<LogicalType> types;
 	return PragmaFunction(name, PragmaType::PRAGMA_STATEMENT, query, nullptr, std::move(types), LogicalType::INVALID);
