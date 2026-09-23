@@ -53,8 +53,6 @@ LogicalPlanVerificationIssue UnsupportedFeature(const LogicalPlanVerificationPat
 LogicalPlanVerificationIssue UnsupportedFunction(const LogicalPlanVerificationPath &path,
                                                  LogicalPlanVerificationFunctionIdentity identity, string message);
 
-BoundExpressionSQLExportResult Failure(LogicalPlanVerificationIssue issue);
-
 bool HasNestedCollation(const LogicalType &type);
 
 BoundExpressionSQLExportResult PreserveCollation(const LogicalType &type, BoundExpressionSQLExportResult result,

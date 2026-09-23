@@ -26,12 +26,6 @@ LogicalPlanVerificationPath PlanExpressionPath(const LogicalPlanVerificationPath
 	return SQLExportHelpers::ChildPath(path, ordinal, LogicalPlanVerificationPathComponentType::OPERATOR_EXPRESSION);
 }
 
-LogicalPlanSQLExportResult PlanFailure(LogicalPlanVerificationIssue issue) {
-	vector<LogicalPlanVerificationIssue> issues;
-	issues.push_back(std::move(issue));
-	return LogicalPlanSQLExportResult::Failure(std::move(issues));
-}
-
 LogicalPlanVerificationResult<unique_ptr<ParsedExpression>> ExportTypedNull(const LogicalType &type,
                                                                             const LogicalPlanVerificationPath &path) {
 	auto result = BoundExpressionSQLExporter::Export(BoundConstantExpression(Value(type)), {});
@@ -44,12 +38,6 @@ LogicalPlanVerificationResult<unique_ptr<ParsedExpression>> ExportTypedNull(cons
 		issue.phase = LogicalPlanVerificationPhase::PLAN_EXPORT;
 	}
 	return LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>::Failure(std::move(issues));
-}
-
-LogicalPlanSQLFieldResult FieldFailure(LogicalPlanVerificationIssue issue) {
-	vector<LogicalPlanVerificationIssue> issues;
-	issues.push_back(std::move(issue));
-	return LogicalPlanSQLFieldResult::Failure(std::move(issues));
 }
 
 LogicalPlanVerificationIssue PlanUnsupportedFeature(const LogicalPlanVerificationPath &path, string feature,
@@ -107,7 +95,7 @@ LogicalPlanSQLFieldResult CreateFields(LogicalOperator &op, const LogicalPlanVer
 			issue.facts.emplace_back("logical_type", Value(op.types[i].ToString()));
 			issue.facts.emplace_back("varchar_collations",
 			                         Value(SQLExportHelpers::TypeCollationSignature(op.types[i])));
-			return FieldFailure(std::move(issue));
+			return LogicalPlanSQLFieldResult::Failure({std::move(issue)});
 		}
 		fields.push_back({bindings[i], op.types[i]});
 	}

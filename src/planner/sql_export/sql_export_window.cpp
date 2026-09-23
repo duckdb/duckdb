@@ -151,22 +151,23 @@ BoundExpressionSQLExportState::ExportWindowFunction(const BoundWindowExpression 
 	auto identity =
 	    DefinitionFunctionIdentity(*definition, function.GetLogicalArguments(), function.GetLogicalReturnType());
 	if (!identity.IsValid()) {
-		return Failure(InternalExpressionInvariant(path, expression, "Bound window function identity is incomplete"));
+		return BoundExpressionSQLExportResult::Failure(
+		    {InternalExpressionInvariant(path, expression, "Bound window function identity is incomplete")});
 	}
 	if (expression.GetChildren().size() != function.GetLogicalArguments().size()) {
-		return Failure(
-		    UnsupportedFunction(path, std::move(identity), "The window function does not retain every SQL argument"));
+		return BoundExpressionSQLExportResult::Failure(
+		    {UnsupportedFunction(path, std::move(identity), "The window function does not retain every SQL argument")});
 	}
 	auto name = RebindableFunctionName(*definition);
 	if (!name || !IsSQLValueType(expression.GetReturnType()) ||
 	    definition->GetProperties().GetCaptureArgumentAliases()) {
-		return Failure(UnsupportedFunction(path, std::move(identity),
-		                                   "The window function no longer represents its logical SQL signature"));
+		return BoundExpressionSQLExportResult::Failure({UnsupportedFunction(
+		    path, std::move(identity), "The window function no longer represents its logical SQL signature")});
 	}
 	auto frame = ReconstructWindowFrame(expression);
 	if ((expression.StartExpr() && !frame.start) || (expression.EndExpr() && !frame.end)) {
-		return Failure(UnsupportedFeature(path, "window_range_offset",
-		                                  "The RANGE endpoint does not retain its SQL offset and ordering operand"));
+		return BoundExpressionSQLExportResult::Failure({UnsupportedFeature(
+		    path, "window_range_offset", "The RANGE endpoint does not retain its SQL offset and ordering operand")});
 	}
 
 	vector<ChildExpression> source_children;
@@ -212,7 +213,8 @@ BoundExpressionSQLExportState::ExportWindowFunction(const BoundWindowExpression 
 	auto &named_arguments = function.GetNamedArguments();
 	auto positional_count = function.GetPositionalArgumentCount();
 	if (!named_arguments.empty() && positional_count + named_arguments.size() != expression.GetChildren().size()) {
-		return Failure(UnsupportedFunction(path, std::move(identity), "The named SQL arguments are incomplete"));
+		return BoundExpressionSQLExportResult::Failure(
+		    {UnsupportedFunction(path, std::move(identity), "The named SQL arguments are incomplete")});
 	}
 	for (idx_t i = 0; i < expression.GetChildren().size(); i++) {
 		auto argument_name =

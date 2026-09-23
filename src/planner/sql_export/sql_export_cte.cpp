@@ -43,8 +43,8 @@ LogicalPlanSQLExportResult LogicalMaterializedCTE::ToSQL(LogicalPlanSQLExportCon
 		return LogicalPlanSQLExportResult::Failure(consumer.GetIssues());
 	}
 	if (references == 0) {
-		return PlanFailure(PlanUnsupportedFeature(path, "cte_unreferenced_evaluation",
-		                                          "SQL would discard the unreferenced CTE producer"));
+		return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
+		    path, "cte_unreferenced_evaluation", "SQL would discard the unreferenced CTE producer")});
 	}
 	auto info = make_uniq<CommonTableExpressionInfo>();
 	for (idx_t i = 0; i < producer.GetValue().relation.fields.size(); i++) {
@@ -77,8 +77,8 @@ LogicalPlanSQLExportResult LogicalCTERef::ToSQL(LogicalPlanSQLExportContext &exp
 		}
 	}
 	if (!name) {
-		return PlanFailure(PlanUnsupportedFeature(path, "cte_reference_scope",
-		                                          "The referenced CTE is not in the exported relation scope"));
+		return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
+		    path, "cte_reference_scope", "The referenced CTE is not in the exported relation scope")});
 	}
 	auto fields = CreateFields(ref, path);
 	if (fields.HasError()) {
@@ -183,9 +183,9 @@ LogicalPlanSQLExportResult LogicalRecursiveCTE::ExportSQLDefinition(LogicalPlanS
 			const bool has_order = aggregate.GetOrderBys() && !aggregate.GetOrderBys()->orders.empty();
 			const bool has_modifiers = aggregate.IsDistinct() || aggregate.GetFilter() || has_order;
 			if (has_modifiers || aggregate.StateExportMode() != AggregateStateExportMode::NONE) {
-				return PlanFailure(
-				    PlanUnsupportedFeature(PlanExpressionPath(path, ordinal), "recursive_payload_modifiers",
-				                           "The recursive payload clause cannot preserve these aggregate modifiers"));
+				return LogicalPlanSQLExportResult::Failure(
+				    {PlanUnsupportedFeature(PlanExpressionPath(path, ordinal), "recursive_payload_modifiers",
+				                            "The recursive payload clause cannot preserve these aggregate modifiers")});
 			}
 			auto exported = BoundExpressionSQLExporter::ExportAggregateCallAtPath(aggregate, key_context,
 			                                                                      PlanExpressionPath(path, ordinal));
@@ -239,9 +239,9 @@ LogicalPlanSQLExportResult LogicalRecursiveCTE::ToSQL(LogicalPlanSQLExportContex
 	auto &cte = *this;
 	if (Optimizer::OptimizerDisabled(export_context.context, OptimizerType::CTE_INLINING) ||
 	    Settings::Get<DebugDisableOptimizerSetting>(export_context.context)) {
-		return PlanFailure(
-		    PlanUnsupportedFeature(path, "recursive_cte_materialization",
-		                           "The SQL wrapper requires CTE inlining to preserve recursive evaluation"));
+		return LogicalPlanSQLExportResult::Failure(
+		    {PlanUnsupportedFeature(path, "recursive_cte_materialization",
+		                            "The SQL wrapper requires CTE inlining to preserve recursive evaluation")});
 	}
 	auto name = export_context.NextRelationAlias(cte.ctename);
 	auto recursive = ExportSQLDefinition(export_context, path, name);

@@ -53,12 +53,8 @@ LogicalPlanVerificationPath PlanChildPath(const LogicalPlanVerificationPath &pat
 
 LogicalPlanVerificationPath PlanExpressionPath(const LogicalPlanVerificationPath &path, idx_t ordinal);
 
-LogicalPlanSQLExportResult PlanFailure(LogicalPlanVerificationIssue issue);
-
 LogicalPlanVerificationResult<unique_ptr<ParsedExpression>> ExportTypedNull(const LogicalType &type,
                                                                             const LogicalPlanVerificationPath &path);
-
-LogicalPlanSQLFieldResult FieldFailure(LogicalPlanVerificationIssue issue);
 
 LogicalPlanVerificationIssue PlanUnsupportedFeature(const LogicalPlanVerificationPath &path, string feature,
                                                     string message);

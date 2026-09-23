@@ -21,7 +21,8 @@ BoundExpressionSQLExportState::CastToConstructedType(const LogicalType &type, un
 	try {
 		arguments.push_back(ConstantExpression::FromValue(Value(type)));
 	} catch (const NotImplementedException &ex) {
-		return Failure(UnsupportedFeature(path, "constant_type", ErrorData(ex).RawMessage()));
+		return BoundExpressionSQLExportResult::Failure(
+		    {UnsupportedFeature(path, "constant_type", ErrorData(ex).RawMessage())});
 	}
 	return BoundExpressionSQLExportResult::Success(
 	    SQLExportHelpers::SystemFunction("cast_to_type", std::move(arguments)));
@@ -43,13 +44,15 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportConstant(con
 	auto &value = expression.GetValue();
 	D_ASSERT(return_type == value.type());
 	if (!IsSQLValueType(return_type)) {
-		return Failure(InternalExpressionInvariant(path, expression, "Bound constant has an unexportable type"));
+		return BoundExpressionSQLExportResult::Failure(
+		    {InternalExpressionInvariant(path, expression, "Bound constant has an unexportable type")});
 	}
 	unique_ptr<ParsedExpression> result;
 	try {
 		result = ConstantExpression::FromValue(value);
 	} catch (const NotImplementedException &ex) {
-		return Failure(UnsupportedFeature(path, "constant_value", ErrorData(ex).RawMessage()));
+		return BoundExpressionSQLExportResult::Failure(
+		    {UnsupportedFeature(path, "constant_value", ErrorData(ex).RawMessage())});
 	}
 	if (RequiresConstantConstructor(return_type) || !IsSQLRepresentableType(return_type) ||
 	    return_type.id() == LogicalTypeId::VARCHAR) {

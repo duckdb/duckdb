@@ -93,8 +93,8 @@ static LogicalPlanSQLExportResult ApplyOutputNames(LogicalPlanSQLExportResult re
 		return result;
 	}
 	if (output_names.size() != result.GetValue().fields.size()) {
-		return PlanFailure(PlanUnsupportedFeature(LogicalPlanVerificationPath(), "output_names",
-		                                          "Output name count does not match the exported plan"));
+		return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
+		    LogicalPlanVerificationPath(), "output_names", "Output name count does not match the exported plan")});
 	}
 	if (result.GetValue().query->type == QueryNodeType::SELECT_NODE) {
 		auto &select = result.GetValue().query->Cast<SelectNode>();
@@ -232,10 +232,10 @@ LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
 LogicalOperator::ToSQL(LogicalPlanSQLExportContext &, const LogicalPlanVerificationPath &path) {
 	using namespace logical_plan_sql_export;
 	if (type == LogicalOperatorType::LOGICAL_DELIM_GET) {
-		return PlanFailure(UnsupportedSource(path, LogicalSourceIdentity(), "delim_get"));
+		return LogicalPlanSQLExportResult::Failure({UnsupportedSource(path, LogicalSourceIdentity(), "delim_get")});
 	}
 	D_ASSERT(type != LogicalOperatorType::LOGICAL_INVALID);
-	return PlanFailure(UnsupportedOperator(path, type));
+	return LogicalPlanSQLExportResult::Failure({UnsupportedOperator(path, type)});
 }
 
 LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>

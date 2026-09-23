@@ -76,11 +76,13 @@ LogicalPlanSQLExportResult LogicalPivot::ToSQL(LogicalPlanSQLExportContext &expo
 	const bool has_output_metadata = has_valid_groups && info.types.size() == fields.GetValue().size() &&
 	                                 info.pivot_values.size() == fields.GetValue().size() - info.group_count;
 	if (!has_complete_targets || !has_output_metadata) {
-		return PlanFailure(PlanUnsupportedFeature(path, "pivot_layout", "The PIVOT output layout is incomplete"));
+		return LogicalPlanSQLExportResult::Failure(
+		    {PlanUnsupportedFeature(path, "pivot_layout", "The PIVOT output layout is incomplete")});
 	}
 	auto target_count = (fields.GetValue().size() - info.group_count) / aggregate_count;
 	if (target_count == 0) {
-		return PlanFailure(PlanUnsupportedFeature(path, "pivot_layout", "The PIVOT has no output targets"));
+		return LogicalPlanSQLExportResult::Failure(
+		    {PlanUnsupportedFeature(path, "pivot_layout", "The PIVOT has no output targets")});
 	}
 
 	auto defaults = make_uniq<SelectNode>();
@@ -90,14 +92,14 @@ LogicalPlanSQLExportResult LogicalPivot::ToSQL(LogicalPlanSQLExportContext &expo
 	for (idx_t aggregate_idx = 0; aggregate_idx < aggregate_count; aggregate_idx++) {
 		auto &expression = info.aggregates[aggregate_idx];
 		if (!expression || expression->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
-			return PlanFailure(
-			    PlanUnsupportedFeature(path, "pivot_layout", "The PIVOT aggregate metadata is incomplete"));
+			return LogicalPlanSQLExportResult::Failure(
+			    {PlanUnsupportedFeature(path, "pivot_layout", "The PIVOT aggregate metadata is incomplete")});
 		}
 		auto &aggregate = expression->Cast<BoundAggregateExpression>();
 		if (!aggregate.GetReturnType().EqualsIncludingCollation(
 		        fields.GetValue()[info.group_count + aggregate_idx].type)) {
-			return PlanFailure(PlanUnsupportedFeature(path, "pivot_layout",
-			                                          "The PIVOT aggregate metadata does not match its output types"));
+			return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
+			    path, "pivot_layout", "The PIVOT aggregate metadata does not match its output types")});
 		}
 		auto value =
 		    ExportPivotDefault(export_context.GetClientContext(), aggregate, PlanExpressionPath(path, aggregate_idx));
@@ -117,8 +119,8 @@ LogicalPlanSQLExportResult LogicalPivot::ToSQL(LogicalPlanSQLExportContext &expo
 			    info.aggregates[aggregate_idx]->GetReturnType().EqualsIncludingCollation(output_type) &&
 			    info.types[output_idx].EqualsIncludingCollation(output_type);
 			if (!has_matching_pivot_value || !has_matching_types) {
-				return PlanFailure(PlanUnsupportedFeature(
-				    path, "pivot_layout", "The PIVOT target blocks do not match the retained aggregate layout"));
+				return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
+				    path, "pivot_layout", "The PIVOT target blocks do not match the retained aggregate layout")});
 			}
 		}
 	}
@@ -128,29 +130,30 @@ LogicalPlanSQLExportResult LogicalPivot::ToSQL(LogicalPlanSQLExportContext &expo
 		return LogicalPlanSQLExportResult::Failure(child.GetIssues());
 	}
 	if (child.GetValue().relation.fields.size() != info.group_count + aggregate_count + 1) {
-		return PlanFailure(
-		    PlanUnsupportedFeature(path, "pivot_layout", "The PIVOT child does not contain aligned lists"));
+		return LogicalPlanSQLExportResult::Failure(
+		    {PlanUnsupportedFeature(path, "pivot_layout", "The PIVOT child does not contain aligned lists")});
 	}
 	for (idx_t group_idx = 0; group_idx < info.group_count; group_idx++) {
 		if (!info.types[group_idx].EqualsIncludingCollation(fields.GetValue()[group_idx].type) ||
 		    !child.GetValue().relation.fields[group_idx].type.EqualsIncludingCollation(
 		        fields.GetValue()[group_idx].type)) {
-			return PlanFailure(
-			    PlanUnsupportedFeature(path, "pivot_layout", "The PIVOT group types do not match its child"));
+			return LogicalPlanSQLExportResult::Failure(
+			    {PlanUnsupportedFeature(path, "pivot_layout", "The PIVOT group types do not match its child")});
 		}
 	}
 	for (idx_t aggregate_idx = 0; aggregate_idx < aggregate_count; aggregate_idx++) {
 		auto &list_type = child.GetValue().relation.fields[info.group_count + aggregate_idx].type;
 		if (list_type.id() != LogicalTypeId::LIST || !ListType::GetChildType(list_type).EqualsIncludingCollation(
 		                                                 info.aggregates[aggregate_idx]->GetReturnType())) {
-			return PlanFailure(PlanUnsupportedFeature(path, "pivot_layout",
-			                                          "The PIVOT aggregate list type does not match its output"));
+			return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
+			    path, "pivot_layout", "The PIVOT aggregate list type does not match its output")});
 		}
 	}
 	auto &key_list_type = child.GetValue().relation.fields.back().type;
 	if (key_list_type.id() != LogicalTypeId::LIST ||
 	    ListType::GetChildType(key_list_type).id() != LogicalTypeId::VARCHAR) {
-		return PlanFailure(PlanUnsupportedFeature(path, "pivot_layout", "The PIVOT key list is not textual"));
+		return LogicalPlanSQLExportResult::Failure(
+		    {PlanUnsupportedFeature(path, "pivot_layout", "The PIVOT key list is not textual")});
 	}
 
 	auto call = [](const char *name, unique_ptr<ParsedExpression> first,

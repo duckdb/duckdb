@@ -182,7 +182,8 @@ LogicalPlanSQLExportResult LogicalColumnDataGet::ToSQL(LogicalPlanSQLExportConte
 	auto &get = *this;
 	D_ASSERT(get.children.empty() && get.collection);
 	if (!get.collection.is_owned()) {
-		return PlanFailure(UnsupportedSource(path, LogicalSourceIdentity(), "borrowed_chunk_collection"));
+		return LogicalPlanSQLExportResult::Failure(
+		    {UnsupportedSource(path, LogicalSourceIdentity(), "borrowed_chunk_collection")});
 	}
 	if (get.collection->Count() == 0) {
 		LogicalEmptyResult empty(get.types, get.GetColumnBindings());
@@ -210,8 +211,8 @@ LogicalPlanSQLExportResult LogicalColumnDataGet::ToSQL(LogicalPlanSQLExportConte
 				auto value =
 				    BoundExpressionSQLExporter::Export(BoundConstantExpression(chunk.GetValue(column, row)), {});
 				if (value.HasError()) {
-					return PlanFailure(PlanUnsupportedFeature(path, "chunk_value",
-					                                          "The materialized value cannot be represented in SQL"));
+					return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
+					    path, "chunk_value", "The materialized value cannot be represented in SQL")});
 				}
 				exported_row.push_back(std::move(value.GetValue()));
 			}
@@ -221,8 +222,8 @@ LogicalPlanSQLExportResult LogicalColumnDataGet::ToSQL(LogicalPlanSQLExportConte
 	if (repacked &&
 	    HasChunkSensitiveConsumer(export_context.context, export_context.ancestors.front().get(),
 	                              Settings::Get<ScalarSubqueryErrorOnMultipleRowsSetting>(export_context.context))) {
-		return PlanFailure(PlanUnsupportedFeature(path, "chunk_consumer_evaluation",
-		                                          "SQL cannot retain source chunks for an effectful consumer"));
+		return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
+		    path, "chunk_consumer_evaluation", "SQL cannot retain source chunks for an effectful consumer")});
 	}
 	auto select = make_uniq<SelectNode>();
 	for (idx_t i = 0; i < fields.GetValue().size(); i++) {
@@ -293,8 +294,8 @@ LogicalPlanSQLExportResult LogicalExpressionGet::ExportSQLInput(LogicalPlanSQLEx
                                                                 vector<LogicalPlanSQLExportField> fields) {
 	auto &get = *this;
 	if (HasEffectfulExpressionSubtree(get)) {
-		return PlanFailure(PlanUnsupportedFeature(path, "values_expression_evaluation",
-		                                          "VALUES with input requires nonvolatile, nonthrowing expressions"));
+		return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
+		    path, "values_expression_evaluation", "VALUES with input requires nonvolatile, nonthrowing expressions")});
 	}
 	auto child = export_context.ExportChild(*get.children[0], PlanChildPath(path, 0));
 	if (child.HasError()) {

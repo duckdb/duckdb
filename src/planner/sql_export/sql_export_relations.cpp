@@ -258,11 +258,12 @@ LogicalPlanSQLExportResult LogicalSample::ToSQL(LogicalPlanSQLExportContext &exp
 	D_ASSERT(sample.children.size() == 1 && sample.sample_options);
 	auto &sampling = *sample.sample_options;
 	if (sampling.seed.IsValid() != sampling.repeatable) {
-		return PlanFailure(
-		    PlanUnsupportedFeature(path, "sample_repeatability", "SQL sampling seeds imply repeatable sampling"));
+		return LogicalPlanSQLExportResult::Failure(
+		    {PlanUnsupportedFeature(path, "sample_repeatability", "SQL sampling seeds imply repeatable sampling")});
 	}
 	if (sampling.seed.IsValid() && sampling.seed.GetIndex() > idx_t(NumericLimits<int64_t>::Maximum())) {
-		return PlanFailure(PlanUnsupportedFeature(path, "sample_seed", "The sampling seed has no SQL spelling"));
+		return LogicalPlanSQLExportResult::Failure(
+		    {PlanUnsupportedFeature(path, "sample_seed", "The sampling seed has no SQL spelling")});
 	}
 	auto fields = CreateFields(sample, path);
 	if (fields.HasError()) {
@@ -478,8 +479,8 @@ LogicalWindow::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVeri
 				            window.Partitions().empty() && window.OrderBy().empty() && window.GetChildren().empty();
 			}
 			if (!supported) {
-				return PlanFailure(PlanUnsupportedFeature(
-				    path, "ordinality_window", "The source ordinality cannot be reconstructed through this window"));
+				return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
+				    path, "ordinality_window", "The source ordinality cannot be reconstructed through this window")});
 			}
 			return get.ExportSQLSource(context, PlanChildPath(path, 0), &fields.GetValue().back());
 		}

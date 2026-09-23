@@ -35,7 +35,8 @@ LogicalPlanSQLExportResult LogicalGet::ExportSQLSource(LogicalPlanSQLExportConte
 	auto &get = *this;
 	D_ASSERT(get.children.size() <= 1);
 	if (get.has_pushed_projection) {
-		return PlanFailure(UnsupportedSource(path, LogicalSourceIdentity(get), "pushed_projection"));
+		return LogicalPlanSQLExportResult::Failure(
+		    {UnsupportedSource(path, LogicalSourceIdentity(get), "pushed_projection")});
 	}
 	auto fields = CreateFields(get, path);
 	if (fields.HasError()) {
@@ -43,8 +44,8 @@ LogicalPlanSQLExportResult LogicalGet::ExportSQLSource(LogicalPlanSQLExportConte
 	}
 	if ((!get.extra_info.file_filters.empty() || get.extra_info.total_files.IsValid()) &&
 	    !get.extra_info.file_filter_expressions) {
-		return PlanFailure(PlanUnsupportedFeature(
-		    path, "file_filter_residual", "The source does not retain the SQL predicate used for file pruning"));
+		return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
+		    path, "file_filter_residual", "The source does not retain the SQL predicate used for file pruning")});
 	}
 	if (get.row_group_order_options &&
 	    (get.row_group_order_options->row_group_offset || get.row_group_order_options->leading_null_group_offset)) {
@@ -60,8 +61,8 @@ LogicalPlanSQLExportResult LogicalGet::ExportSQLSource(LogicalPlanSQLExportConte
 			}
 		}
 		if (!has_unpruned_offset) {
-			return PlanFailure(PlanUnsupportedFeature(path, "pruned_offset",
-			                                          "The row group pruning does not retain its original SQL offset"));
+			return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
+			    path, "pruned_offset", "The row group pruning does not retain its original SQL offset")});
 		}
 	}
 
@@ -69,7 +70,8 @@ LogicalPlanSQLExportResult LogicalGet::ExportSQLSource(LogicalPlanSQLExportConte
 	for (idx_t i = 0; i < get.GetColumnIds().size(); i++) {
 		auto &type = get.GetColumnType(get.GetColumnIds()[i]);
 		if (!SQLExportHelpers::IsSQLValueType(type)) {
-			return PlanFailure(PlanUnsupportedFeature(path, "scan_type", "Scan type cannot be represented in SQL"));
+			return LogicalPlanSQLExportResult::Failure(
+			    {PlanUnsupportedFeature(path, "scan_type", "Scan type cannot be represented in SQL")});
 		}
 		scan_fields.push_back({ColumnBinding(get.table_index, ProjectionIndex(i)), type});
 	}
@@ -93,7 +95,8 @@ LogicalPlanSQLExportResult LogicalGet::ExportSQLSource(LogicalPlanSQLExportConte
 	    ReconstructSQLSource(export_context.context, get, std::move(input), relation_alias, bool(ordinality));
 	if (!source_sql.query) {
 		auto guard = source_sql.unsupported_reason.empty() ? "to_sql_callback_declined" : source_sql.unsupported_reason;
-		return PlanFailure(UnsupportedSource(path, LogicalSourceIdentity(get), std::move(guard)));
+		return LogicalPlanSQLExportResult::Failure(
+		    {UnsupportedSource(path, LogicalSourceIdentity(get), std::move(guard))});
 	}
 	auto query = std::move(source_sql.query);
 	if (get.extra_info.sample_options) {
@@ -102,11 +105,12 @@ LogicalPlanSQLExportResult LogicalGet::ExportSQLSource(LogicalPlanSQLExportConte
 			sampling->seed = optional_idx::Invalid();
 		}
 		if (sampling->repeatable && !sampling->seed.IsValid()) {
-			return PlanFailure(
-			    PlanUnsupportedFeature(path, "sample_repeatability", "SQL sampling seeds imply repeatable sampling"));
+			return LogicalPlanSQLExportResult::Failure(
+			    {PlanUnsupportedFeature(path, "sample_repeatability", "SQL sampling seeds imply repeatable sampling")});
 		}
 		if (sampling->seed.IsValid() && sampling->seed.GetIndex() > idx_t(NumericLimits<int64_t>::Maximum())) {
-			return PlanFailure(PlanUnsupportedFeature(path, "sample_seed", "The sampling seed has no SQL spelling"));
+			return LogicalPlanSQLExportResult::Failure(
+			    {PlanUnsupportedFeature(path, "sample_seed", "The sampling seed has no SQL spelling")});
 		}
 		sampling->sample_rate = -1.0;
 		LogicalPlanSQLExportedChild unsampled {{std::move(query), scan_fields}, export_context.NextRelationAlias()};
@@ -158,30 +162,30 @@ LogicalPlanSQLExportResult LogicalSecureView::ToSQL(LogicalPlanSQLExportContext 
 		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
 	}
 	if (!view.has_source || view.source_name.Path().empty() || view.source_types.empty()) {
-		return PlanFailure(PlanUnsupportedFeature(path, "secure_view_source",
-		                                          "The secure view does not retain its qualified source metadata"));
+		return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
+		    path, "secure_view_source", "The secure view does not retain its qualified source metadata")});
 	}
 	for (auto &component : view.source_name.Path()) {
 		if (component.empty()) {
-			return PlanFailure(PlanUnsupportedFeature(path, "secure_view_source",
-			                                          "The secure view source name cannot be represented in SQL"));
+			return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
+			    path, "secure_view_source", "The secure view source name cannot be represented in SQL")});
 		}
 	}
 	if (view.output_bindings.size() != fields.GetValue().size() ||
 	    view.output_expressions.size() != fields.GetValue().size()) {
-		return PlanFailure(
-		    PlanUnsupportedFeature(path, "secure_view_output", "The secure view output mapping is incomplete"));
+		return LogicalPlanSQLExportResult::Failure(
+		    {PlanUnsupportedFeature(path, "secure_view_output", "The secure view output mapping is incomplete")});
 	}
 	for (auto &type : view.source_types) {
 		if (!SQLExportHelpers::IsSQLRepresentableType(type)) {
-			return PlanFailure(PlanUnsupportedFeature(path, "secure_view_source",
-			                                          "A secure view source type cannot be represented in SQL"));
+			return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
+			    path, "secure_view_source", "A secure view source type cannot be represented in SQL")});
 		}
 	}
 
 	if (view.source_filters.size() != view.pushed_filters.size()) {
-		return PlanFailure(PlanUnsupportedFeature(path, "secure_view_filter",
-		                                          "The secure view does not retain every caller predicate"));
+		return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
+		    path, "secure_view_filter", "The secure view does not retain every caller predicate")});
 	}
 
 	auto source_alias = export_context.NextRelationAlias();
@@ -211,8 +215,8 @@ LogicalPlanSQLExportResult LogicalSecureView::ToSQL(LogicalPlanSQLExportContext 
 	for (idx_t i = 0; i < fields.GetValue().size(); i++) {
 		if (view.output_bindings[i] != fields.GetValue()[i].source_binding ||
 		    !view.output_expressions[i]->GetReturnType().EqualsIncludingCollation(fields.GetValue()[i].type)) {
-			return PlanFailure(PlanUnsupportedFeature(
-			    path, "secure_view_output", "The secure view output mapping does not match its current schema"));
+			return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
+			    path, "secure_view_output", "The secure view output mapping does not match its current schema")});
 		}
 		auto expression = BoundExpressionSQLExporter::ExportAtPath(*view.output_expressions[i], expression_context,
 		                                                           PlanExpressionPath(path, i));
@@ -224,8 +228,8 @@ LogicalPlanSQLExportResult LogicalSecureView::ToSQL(LogicalPlanSQLExportContext 
 	}
 	for (idx_t i = 0; i < view.source_filters.size(); i++) {
 		if (!view.source_filters[i]) {
-			return PlanFailure(PlanUnsupportedFeature(
-			    path, "secure_view_filter", "The secure view caller predicate has no complete source mapping"));
+			return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
+			    path, "secure_view_filter", "The secure view caller predicate has no complete source mapping")});
 		}
 		auto predicate = BoundExpressionSQLExporter::ExportAtPath(
 		    *view.source_filters[i], expression_context, PlanExpressionPath(path, fields.GetValue().size() + i));
@@ -246,8 +250,9 @@ LogicalPlanVerificationResult<LogicalPlanSQLExportRelation> LogicalGet::ToSQL(Lo
 
 LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
 LogicalExtensionOperator::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path) {
-	return PlanFailure(ExtensionIssue(LogicalPlanVerificationIssueCode::UNSUPPORTED_EXTENSION, path, GetExtensionName(),
-	                                  "The extension operator does not implement SQL reconstruction"));
+	return LogicalPlanSQLExportResult::Failure(
+	    {ExtensionIssue(LogicalPlanVerificationIssueCode::UNSUPPORTED_EXTENSION, path, GetExtensionName(),
+	                    "The extension operator does not implement SQL reconstruction")});
 }
 
 } // namespace duckdb
