@@ -802,21 +802,31 @@ static unique_ptr<ColumnReader> CreateInt96StructReader(ClientContext &context, 
 	// (0001-01-01 through 9999-12-31), unlike TIMESTAMP/TIMESTAMP_NS which clamp or truncate
 	// The blob schema is a copy of the leaf schema with a different type; it is kept alive on the
 	// expression reader's heap (the ColumnReader base class only holds a reference to it)
+	if (pushdown_child) {
+		// The scan only exposes a single child of the INT96-as-struct column (e.g. ts['date']).
+		// Follow the same pattern as a pushed-down extract on a regular STRUCT column: wrap the leaf in an
+		// EXPRESSION schema carrying the child's type so the reader reports the child type and produces no
+		// (struct) row group statistics, which a filter on the child would otherwise be checked against.
+		auto expr = CreateInt96AsStructChildExpression(context, pushdown_child->GetPrimaryIndex());
+		if (expr->GetReturnType() != pushdown_child->GetType()) {
+			expr = BoundCastExpression::AddCastToType(context, std::move(expr), pushdown_child->GetType());
+		}
+		auto expr_schema = make_uniq<ParquetColumnSchema>(
+		    ParquetColumnSchema::FromParentSchema(schema, expr->GetReturnType(), ParquetColumnSchemaType::EXPRESSION));
+		// FromParentSchema embeds a copy of the leaf schema as its first child - retype that copy to BLOB so the
+		// embedded child is the raw INT96 leaf and stays alive through the expression schema's ownership
+		expr_schema->children[0].type = LogicalType::BLOB;
+		vector<unique_ptr<ColumnReader>> children;
+		children.push_back(make_uniq<StringColumnReader>(reader, expr_schema->children[0]));
+		return make_uniq<ExpressionColumnReader>(context, std::move(children), std::move(expr), std::move(expr_schema));
+	}
 	auto child_schema = make_uniq<ParquetColumnSchema>(schema);
 	child_schema->type = LogicalType::BLOB;
 	auto blob_reader = make_uniq<StringColumnReader>(reader, *child_schema);
 
 	vector<unique_ptr<ColumnReader>> children;
 	children.push_back(std::move(blob_reader));
-	unique_ptr<Expression> expr;
-	if (pushdown_child) {
-		expr = CreateInt96AsStructChildExpression(context, pushdown_child->GetPrimaryIndex());
-		if (expr->GetReturnType() != pushdown_child->GetType()) {
-			expr = BoundCastExpression::AddCastToType(context, std::move(expr), pushdown_child->GetType());
-		}
-	} else {
-		expr = CreateInt96AsStructExpression(context);
-	}
+	auto expr = CreateInt96AsStructExpression(context);
 	auto result = make_uniq<ExpressionColumnReader>(context, std::move(children), std::move(expr), schema);
 	result->owned_schema = std::move(child_schema);
 	return result;
