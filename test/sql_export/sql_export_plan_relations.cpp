@@ -1,3 +1,4 @@
+#include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "sql_export_test_helpers.hpp"
 #include "catch.hpp"
 #include "test_helpers.hpp"
@@ -49,9 +50,8 @@ TEST_CASE("Logical plan SQL export identifies rejected output types", "[sql_expo
 
 	SECTION("unrepresentable output") {
 		LogicalType type = LogicalType::POINTER;
-		auto plan = make_uniq<SQLExportExtensionOperator>(
-		    "unrepresentable_output", vector<ColumnBinding> {ColumnBinding(TableIndex(1), ProjectionIndex(0))},
-		    vector<LogicalType> {type});
+		auto plan = make_uniq<LogicalEmptyResult>(
+		    vector<LogicalType> {type}, vector<ColumnBinding> {ColumnBinding(TableIndex(1), ProjectionIndex(0))});
 		plan->ResolveOperatorTypes();
 		auto result = LogicalPlanSQLExporter::Export(*connection.context, *plan);
 		RequirePlanExportIssue(result, LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE);
@@ -115,15 +115,15 @@ TEST_CASE("Logical plan field types follow expression SQL type admission", "[sql
 			};
 			auto expression_result = BoundExpressionSQLExporter::Export(expression, context);
 			SQLExportExtensionOperator op("sql_type_admission", {binding}, {candidate}, {TableIndex(74)});
-			LogicalPlanSQLExportOptions options;
-			options.extension_resolver = [](const LogicalPlanSQLExportExtensionInput &input) {
+			op.export_sql = [](SQLExportExtensionOperator &input, LogicalPlanSQLExportContext &,
+			                   const LogicalPlanVerificationPath &path) {
 				auto query = make_uniq<SelectNode>();
-				for (idx_t i = 0; i < input.op.types.size(); i++) {
+				for (idx_t i = 0; i < input.types.size(); i++) {
 					query->select_list.push_back(ConstantExpression::Null());
 				}
-				return LogicalPlanSQLExportExtensionResult::Exported(std::move(query));
+				return input.ExportQuery(std::move(query), path);
 			};
-			auto result = LogicalPlanSQLExporter::Export(*connection.context, op, options);
+			auto result = LogicalPlanSQLExporter::Export(*connection.context, op);
 			REQUIRE(result.IsValid());
 			REQUIRE(result.IsSuccess() == expression_result.IsSuccess());
 		}

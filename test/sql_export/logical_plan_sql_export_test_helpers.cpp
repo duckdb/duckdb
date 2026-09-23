@@ -79,12 +79,6 @@ unique_ptr<LogicalProjection> PlanProjection(TableIndex table_index, unique_ptr<
 	return result;
 }
 
-LogicalPlanSQLExportOptions PlanResolverOptions(logical_plan_sql_export_t callback) {
-	LogicalPlanSQLExportOptions options;
-	options.extension_resolver = std::move(callback);
-	return options;
-}
-
 vector<string> SQLExportRows(QueryResult &result, bool ordered) {
 	vector<string> rows;
 	for (idx_t row = 0; row < result.RowCount(); row++) {

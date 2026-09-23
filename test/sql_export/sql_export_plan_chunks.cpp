@@ -337,23 +337,29 @@ TEST_CASE("Owned chunk SQL export requires an explicit consumer evaluation contr
 		    TableIndex(2000), vector<LogicalType> {LogicalType::BIGINT}, std::move(collection)));
 		op->ResolveOperatorTypes();
 		REQUIRE(op->expressions.empty());
-		LogicalPlanSQLExportOptions options;
 		idx_t callbacks = 0;
-		options.extension_resolver = [&](const LogicalPlanSQLExportExtensionInput &input) {
+		op->export_sql = [&](SQLExportExtensionOperator &input, LogicalPlanSQLExportContext &context,
+		                     const LogicalPlanVerificationPath &path) -> PlanExportResult {
+			auto child = context.ExportChild(*input.children[0], logical_plan_sql_export::PlanChildPath(path, 0));
+			if (child.HasError()) {
+				return PlanExportResult::Failure(child.GetIssues());
+			}
 			callbacks++;
-			REQUIRE(input.expression_count == 0);
+			REQUIRE(input.expressions.empty());
+			auto binding_context =
+			    logical_plan_sql_export::CreateBindingContext(context.GetClientContext(), {child.GetValue()});
 			auto select = make_uniq<SelectNode>();
-			auto column = input.binding_context.resolve_binding(ColumnBinding(TableIndex(2000), ProjectionIndex(0)));
+			auto column = binding_context.resolve_binding(ColumnBinding(TableIndex(2000), ProjectionIndex(0)));
 			REQUIRE(column);
 			select->select_list.push_back(make_uniq<ColumnRefExpression>(column->names));
 			for (auto name : {"sql_export_values_next", "sql_export_values_peek"}) {
 				vector<unique_ptr<ParsedExpression>> arguments;
 				select->select_list.push_back(make_uniq<FunctionExpression>(Identifier(name), std::move(arguments)));
 			}
-			select->from_table = std::move(input.children[0].table);
-			return LogicalPlanSQLExportExtensionResult::Exported(std::move(select));
+			select->from_table = logical_plan_sql_export::CreateSubquery(std::move(child.GetValue()));
+			return input.ExportQuery(std::move(select), path);
 		};
-		auto exported = LogicalPlanSQLExporter::Export(*connection.context, *op, options);
+		auto exported = LogicalPlanSQLExporter::Export(*connection.context, *op);
 		if (combined) {
 			REQUIRE(exported.HasError());
 			REQUIRE(*exported.GetIssues()[0].construct ==

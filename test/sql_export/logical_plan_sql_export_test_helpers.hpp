@@ -6,6 +6,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/logical_plan_sql_exporter.hpp"
+#include "duckdb/planner/sql_export/logical_plan_sql_exporter_internal.hpp"
 #include "duckdb/planner/sql_export_helpers.hpp"
 #include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
@@ -51,6 +52,25 @@ public:
 	      table_indexes(std::move(table_indexes_p)) {
 	}
 
+	std::function<PlanExportResult(SQLExportExtensionOperator &, LogicalPlanSQLExportContext &,
+	                               const LogicalPlanVerificationPath &)>
+	    export_sql;
+
+	PlanExportResult ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path) override {
+		if (!export_sql) {
+			return LogicalExtensionOperator::ToSQL(context, path);
+		}
+		return export_sql(*this, context, path);
+	}
+
+	PlanExportResult ExportQuery(unique_ptr<QueryNode> query, const LogicalPlanVerificationPath &path) {
+		auto fields = logical_plan_sql_export::CreateFields(*this, path);
+		if (fields.HasError()) {
+			return PlanExportResult::Failure(fields.GetIssues());
+		}
+		return PlanExportResult::Success({std::move(query), std::move(fields.GetValue())});
+	}
+
 	vector<ColumnBinding> GetColumnBindings() override {
 		return bindings;
 	}
@@ -83,8 +103,6 @@ private:
 	vector<LogicalType> resolved_types;
 	vector<TableIndex> table_indexes;
 };
-
-LogicalPlanSQLExportOptions PlanResolverOptions(logical_plan_sql_export_t callback);
 
 vector<string> SQLExportRows(QueryResult &result, bool ordered);
 

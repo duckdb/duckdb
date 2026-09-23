@@ -44,8 +44,9 @@ TEST_CASE("SQL export inlines plain join sources without alias capture", "[sql_e
 			};
 			auto plan = make_uniq<LogicalCrossProduct>(leaf("left", 800), leaf("right", 801));
 			plan->ResolveOperatorTypes();
-			auto options = PlanResolverOptions([&](const LogicalPlanSQLExportExtensionInput &input) {
-				auto is_left = input.op.GetExtensionName() == "left";
+			auto export_source = [&](SQLExportExtensionOperator &input, LogicalPlanSQLExportContext &,
+			                         const LogicalPlanVerificationPath &path) {
+				auto is_left = input.GetExtensionName() == "left";
 				auto alias = is_left ? aliases.first : aliases.second;
 				auto values = is_left ? "(VALUES(1),(2))" : "(VALUES(10),(20))";
 				auto sql = "SELECT " + alias + ".x FROM " + values + " " + alias + "(x)";
@@ -54,10 +55,12 @@ TEST_CASE("SQL export inlines plain join sources without alias capture", "[sql_e
 				}
 				Parser parser;
 				parser.ParseQuery(sql);
-				return LogicalPlanSQLExportExtensionResult::Exported(
-				    std::move(parser.statements[0]->Cast<SelectStatement>().node));
-			});
-			auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan, options);
+				return input.ExportQuery(std::move(parser.statements[0]->Cast<SelectStatement>().node), path);
+			};
+			for (auto &child : plan->children) {
+				child->Cast<SQLExportExtensionOperator>().export_sql = export_source;
+			}
+			auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
 			INFO((exported.HasError() ? exported.GetIssues()[0].message : string()));
 			REQUIRE(exported.IsSuccess());
 			if (aliases.first == "v" && aliases.second == "w" && !filtered) {

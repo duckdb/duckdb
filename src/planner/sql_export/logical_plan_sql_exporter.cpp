@@ -116,9 +116,7 @@ static LogicalPlanSQLExportResult ApplyOutputNames(LogicalPlanSQLExportResult re
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields)});
 }
 
-LogicalPlanSQLExportContext::LogicalPlanSQLExportContext(ClientContext &context_p,
-                                                         const LogicalPlanSQLExportOptions &options_p)
-    : context(context_p), options(options_p) {
+LogicalPlanSQLExportContext::LogicalPlanSQLExportContext(ClientContext &context_p) : context(context_p) {
 }
 
 LogicalPlanSQLExportResult LogicalPlanSQLExportContext::Export(LogicalOperator &op,
@@ -219,24 +217,6 @@ LogicalOperator::ToSQL(LogicalPlanSQLExportContext &, const LogicalPlanVerificat
 	return PlanFailure(UnsupportedOperator(path, type));
 }
 
-LogicalPlanSQLExportExtensionResult LogicalPlanSQLExportExtensionResult::NotHandled() {
-	return LogicalPlanSQLExportExtensionResult();
-}
-
-LogicalPlanSQLExportExtensionResult LogicalPlanSQLExportExtensionResult::Exported(unique_ptr<QueryNode> query_p) {
-	LogicalPlanSQLExportExtensionResult result;
-	result.type = LogicalPlanSQLExportExtensionResultType::EXPORTED;
-	result.query = std::move(query_p);
-	return result;
-}
-
-LogicalPlanSQLExportExtensionResult LogicalPlanSQLExportExtensionResult::Unsupported(string reason_p) {
-	LogicalPlanSQLExportExtensionResult result;
-	result.type = LogicalPlanSQLExportExtensionResultType::UNSUPPORTED;
-	result.reason = std::move(reason_p);
-	return result;
-}
-
 LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
 LogicalPlanSQLExporter::Export(ClientContext &context, LogicalOperator &root,
                                const LogicalPlanSQLExportOptions &options) {
@@ -244,7 +224,7 @@ LogicalPlanSQLExporter::Export(ClientContext &context, LogicalOperator &root,
 	if (verification.HasError()) {
 		return LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>::Failure(verification.GetIssues());
 	}
-	logical_plan_sql_export::LogicalPlanSQLExportContext state(context, options);
+	logical_plan_sql_export::LogicalPlanSQLExportContext state(context);
 	auto result = state.Export(root, LogicalPlanVerificationPath());
 	if (!options.output_names) {
 		return result;

@@ -35,7 +35,7 @@ CREATE SEQUENCE example_sequence;
 EXPLAIN (SQL) SELECT nextval('example_sequence');
 ```
 
-Explanation does not advance the sequence. Executing the returned query advances it once. Queries that cannot preserve observable evaluation behavior are rejected explicitly. Source and extension export callbacks must return owned SQL representations without executing their source or performing effects.
+Explanation does not advance the sequence. Executing the returned query advances it once. Queries that cannot preserve observable evaluation behavior are rejected explicitly. Source callbacks and operator SQL reconstruction methods must return owned SQL representations without executing their source or performing effects.
 
 The debug SQL-export verifier is a separate testing facility. `EXPLAIN (SQL)` works without enabling it and does not run differential executions to establish correctness.
 
@@ -45,11 +45,11 @@ The C++ exporter consumes an already planned logical tree. It does not choose an
 
 ## Implementation layout
 
-The logical-plan exporter owns alias allocation, ancestor tracking, and named-relation scope in one state object. Its implementations are grouped by sources, VALUES/chunks, relational operators, joins, CTEs, LIMIT, and PIVOT. Shared binding and relation construction live in `sql_export_scope.cpp`.
+Logical operators implement SQL reconstruction through `ToSQL`, including extension operators. The shared export context owns alias allocation, ancestor tracking, and named-relation scope. Its implementations are grouped by sources, VALUES/chunks, relational operators, joins, CTEs, LIMIT, and PIVOT. Shared binding and relation construction live in `sql_export_scope.cpp`.
 
 The expression exporter owns binding context and lambda reference scopes. Literal construction, function calls, and window expressions have separate implementations. Ordinary table functions reconstruct their qualified retained invocation by default. Source-specific callbacks return only a table reference; scan projection, ordinality, sampling and predicates are applied centrally. Generic source reconstruction lives in `table_function_sql_export.cpp`.
 
-Internal state declarations live beside their implementations under `src/planner/sql_export/`. Public entry points retain their headers directly under `duckdb/planner/`. General logical-plan verification and repeatability analysis remain separate planner facilities. Statement replacement verification lives in `src/main/client_verify.cpp`.
+Internal helper declarations live under `src/include/duckdb/planner/sql_export/`. Public entry points retain their headers directly under `duckdb/planner/`. General logical-plan verification and repeatability analysis remain separate planner facilities. Statement replacement verification lives in `src/main/client_verify.cpp`.
 
 C++ tests under `test/sql_export/` follow these feature boundaries; shared fixtures live in the corresponding test-helper files. SQL regression tests live under `test/sql/sql_export/`.
 

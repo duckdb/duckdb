@@ -16,8 +16,6 @@
 namespace duckdb {
 
 struct DBConfig;
-struct LogicalPlanSQLExportExtensionInput;
-struct LogicalPlanSQLExportExtensionResult;
 
 //! The OperatorExtensionInfo holds static information relevant to the operator extension
 struct OperatorExtensionInfo {
@@ -43,9 +41,6 @@ public:
 
 	virtual ~OperatorExtension() {
 	}
-
-	DUCKDB_API virtual LogicalPlanSQLExportExtensionResult
-	ExportLogicalPlanSQL(const LogicalPlanSQLExportExtensionInput &input);
 
 	static void Register(DBConfig &config, shared_ptr<OperatorExtension> extension);
 	static ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> Iterate(ClientContext &context) {

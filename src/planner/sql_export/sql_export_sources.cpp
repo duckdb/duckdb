@@ -17,7 +17,6 @@
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/sql_export_helpers.hpp"
 #include "duckdb/planner/operator/logical_secure_view.hpp"
-#include "duckdb/planner/operator_extension.hpp"
 
 namespace duckdb {
 using namespace logical_plan_sql_export;
@@ -244,94 +243,6 @@ LogicalPlanSQLExportResult LogicalSecureView::ToSQL(LogicalPlanSQLExportContext 
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields.GetValue())});
 }
 
-LogicalPlanSQLExportResult
-logical_plan_sql_export::LogicalPlanSQLExportContext::ExportExtension(LogicalExtensionOperator &extension,
-                                                                      const LogicalPlanVerificationPath &path) {
-	auto extension_identifier = extension.GetExtensionName();
-	D_ASSERT(SQLExportHelpers::IsValidIdentifier(Identifier(extension_identifier)));
-	auto fields = CreateFields(extension, path);
-	if (fields.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
-	}
-
-	vector<LogicalPlanSQLExportedChild> exported_children;
-	exported_children.reserve(extension.children.size());
-	for (idx_t child_index = 0; child_index < extension.children.size(); child_index++) {
-		auto child = ExportChild(*extension.children[child_index], PlanChildPath(path, child_index));
-		if (child.HasError()) {
-			return LogicalPlanSQLExportResult::Failure(child.GetIssues());
-		}
-		exported_children.push_back(std::move(child.GetValue()));
-	}
-	vector<reference<const LogicalPlanSQLExportedChild>> child_references;
-	for (auto &child : exported_children) {
-		child_references.push_back(child);
-	}
-	auto expression_context = CreateBindingContext(context, child_references);
-	vector<LogicalPlanSQLExportChild> child_views;
-	for (auto &child : exported_children) {
-		child_views.emplace_back(CreateSubquery(std::move(child)));
-	}
-	auto expressions = CollectExpressions(extension);
-	auto expression_exporter = [&](idx_t expression_ordinal) {
-		return ExportExpression(extension, expressions, expression_ordinal, expression_context, path);
-	};
-	LogicalPlanSQLExportExtensionInput input(extension, child_views, expressions.size(), std::move(expression_exporter),
-	                                         expression_context);
-
-	if (options.extension_resolver) {
-		auto result = options.extension_resolver(input);
-		auto handled = HandleExtensionResult(path, extension_identifier, std::move(result), fields.GetValue());
-		if (handled) {
-			return std::move(*handled);
-		}
-#ifdef D_ASSERT_IS_ENABLED
-		for (auto &child : child_views) {
-			D_ASSERT(child.table);
-		}
-#endif
-	}
-	for (auto &registered_extension : OperatorExtension::Iterate(context)) {
-		if (registered_extension->GetName() != extension_identifier) {
-			continue;
-		}
-		auto result = registered_extension->ExportLogicalPlanSQL(input);
-		auto handled = HandleExtensionResult(path, extension_identifier, std::move(result), fields.GetValue());
-		if (handled) {
-			return std::move(*handled);
-		}
-#ifdef D_ASSERT_IS_ENABLED
-		for (auto &child : child_views) {
-			D_ASSERT(child.table);
-		}
-#endif
-		break;
-	}
-	return PlanFailure(ExtensionIssue(LogicalPlanVerificationIssueCode::UNSUPPORTED_EXTENSION, path,
-	                                  extension_identifier, "No SQL export handler accepted the extension operator"));
-}
-
-optional<LogicalPlanSQLExportResult> logical_plan_sql_export::LogicalPlanSQLExportContext::HandleExtensionResult(
-    const LogicalPlanVerificationPath &path, const string &extension_identifier,
-    LogicalPlanSQLExportExtensionResult result, const vector<LogicalPlanSQLExportField> &fields) {
-	switch (result.type) {
-	case LogicalPlanSQLExportExtensionResultType::NOT_HANDLED:
-		D_ASSERT(!result.query && result.reason.empty());
-		return {};
-	case LogicalPlanSQLExportExtensionResultType::EXPORTED:
-		D_ASSERT(result.query && result.reason.empty());
-		return LogicalPlanSQLExportResult::Success({std::move(result.query), fields});
-	case LogicalPlanSQLExportExtensionResultType::UNSUPPORTED:
-		D_ASSERT(!result.query && !result.reason.empty());
-		D_ASSERT(SQLExportHelpers::IsValidIdentifier(Identifier(result.reason)));
-		return PlanFailure(ExtensionIssue(LogicalPlanVerificationIssueCode::UNSUPPORTED_EXTENSION, path,
-		                                  extension_identifier, std::move(result.reason)));
-	default:
-		D_ASSERT(false);
-		return {};
-	}
-}
-
 LogicalPlanVerificationResult<LogicalPlanSQLExportRelation> LogicalGet::ToSQL(LogicalPlanSQLExportContext &context,
                                                                               const LogicalPlanVerificationPath &path) {
 	return ExportSQLSource(context, path);
@@ -339,7 +250,8 @@ LogicalPlanVerificationResult<LogicalPlanSQLExportRelation> LogicalGet::ToSQL(Lo
 
 LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
 LogicalExtensionOperator::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path) {
-	return context.ExportExtension(*this, path);
+	return PlanFailure(ExtensionIssue(LogicalPlanVerificationIssueCode::UNSUPPORTED_EXTENSION, path, GetExtensionName(),
+	                                  "The extension operator does not implement SQL reconstruction"));
 }
 
 } // namespace duckdb

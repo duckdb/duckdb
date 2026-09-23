@@ -33,7 +33,7 @@ struct LogicalPlanSQLExportedChild {
 
 class LogicalPlanSQLExportContext {
 public:
-	LogicalPlanSQLExportContext(ClientContext &context_p, const LogicalPlanSQLExportOptions &options_p);
+	explicit LogicalPlanSQLExportContext(ClientContext &context_p);
 	LogicalPlanSQLExportResult Export(LogicalOperator &op, const LogicalPlanVerificationPath &path);
 
 public:
@@ -72,12 +72,6 @@ public:
 	LimitExpressionResult ExportLimitExpression(const Expression &expression, LogicalOperator &input,
 	                                            const LogicalPlanVerificationPath &path,
 	                                            const LogicalPlanVerificationPath &expression_path);
-	LogicalPlanSQLExportResult ExportExtension(LogicalExtensionOperator &extension,
-	                                           const LogicalPlanVerificationPath &path);
-	optional<LogicalPlanSQLExportResult> HandleExtensionResult(const LogicalPlanVerificationPath &path,
-	                                                           const string &extension_identifier,
-	                                                           LogicalPlanSQLExportExtensionResult result,
-	                                                           const vector<LogicalPlanSQLExportField> &fields);
 
 private:
 	friend class duckdb::LogicalMaterializedCTE;
@@ -108,7 +102,6 @@ private:
 		idx_t references;
 	};
 	ClientContext &context;
-	LogicalPlanSQLExportOptions options;
 	idx_t next_relation_ordinal = 0;
 	identifier_set_t relation_aliases;
 	vector<reference<LogicalOperator>> ancestors;
