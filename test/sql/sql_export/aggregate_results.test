@@ -134,6 +134,11 @@ SELECT sum(DISTINCT i) FILTER (WHERE i>1) FROM aggregate_values;
 ----
 2
 
+query II
+SELECT first(i ORDER BY i DESC NULLS LAST), last(i ORDER BY i DESC NULLS LAST) FROM aggregate_values;
+----
+2	NULL
+
 query T
 SELECT list(i ORDER BY i DESC NULLS FIRST) FROM aggregate_values;
 ----

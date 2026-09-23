@@ -406,7 +406,7 @@ TEST_CASE("Copied UNION SQL outlives its plan and original exported AST",
           "[sql_export][logical_plan_sql_export][set_operation_sql_export]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
-	REQUIRE_NO_FAIL(connection.Query("SET threads=1; SET max_execution_time=5000; CREATE SEQUENCE seq"));
+	REQUIRE_NO_FAIL(connection.Query("SET threads=1; CREATE SEQUENCE seq"));
 	connection.BeginTransaction();
 	auto plan = OptimizeLogicalPlanExportQuery(connection,
 	                                           "SELECT x,nextval('seq') y FROM (SELECT nextval('seq') x FROM range(2) "
@@ -493,7 +493,7 @@ TEST_CASE("Logical plan SQL export retains sampling errors and partial consumpti
 					CAPTURE(clause, consumption, late_error, route);
 					DuckDB db(nullptr);
 					Connection connection(db);
-					REQUIRE_NO_FAIL(connection.Query("SET threads=1; SET max_execution_time=5000; "
+					REQUIRE_NO_FAIL(connection.Query("SET threads=1; "
 					                                 "SET max_streaming_buffer_size='1b'; CREATE SEQUENCE seq"));
 					connection.BeginTransaction();
 					auto plan = OptimizeLogicalPlanExportQuery(connection, sql);

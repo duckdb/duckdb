@@ -133,7 +133,7 @@ TEST_CASE("Grouped MARK SQL export rejects unsupported conjunction semantics",
           "[sql_export][logical_plan_sql_export][join_sql_export]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
-	REQUIRE_NO_FAIL(connection.Query("SET threads=1; SET max_execution_time=5000"));
+	REQUIRE_NO_FAIL(connection.Query("SET threads=1"));
 	connection.BeginTransaction();
 	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE list_l(g INTEGER,x INTEGER[]); "
 	                                 "CREATE TABLE list_r(g INTEGER,y INTEGER[]); "

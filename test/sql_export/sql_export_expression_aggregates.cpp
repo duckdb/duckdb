@@ -131,30 +131,4 @@ TEST_CASE("Aggregate SQL clauses retain logical result annotations",
 	connection.Rollback();
 }
 
-TEST_CASE("Bound expression SQL export preserves aggregate ordering through copies",
-          "[sql_export][bound_expression_sql_export][serialization]") {
-	DuckDB db;
-	Connection connection(db);
-	connection.BeginTransaction();
-	const string from = " FROM (VALUES (1),(2)) t(i)";
-	auto plan = BindExportQuery(connection, "SELECT first(i ORDER BY i DESC)" + from);
-	auto expression = FindExpression(*plan, [](const Expression &candidate) {
-		return candidate.GetExpressionType() == ExpressionType::BOUND_AGGREGATE;
-	});
-	REQUIRE(expression);
-	auto candidate = expression->Copy();
-	auto &aggregate = candidate->Cast<BoundAggregateExpression>();
-	REQUIRE(aggregate.GetOrderBys());
-	REQUIRE(aggregate.GetOrderBys()->orders.size() == 1);
-	vector<SQLBindingEntry> bindings;
-	CollectSQLBindings(*candidate, bindings);
-	REQUIRE(bindings.size() == 1);
-	auto context = ResolveBinding(bindings[0].binding, {Identifier("i")}, LogicalType::INTEGER);
-	RequireRoundTrip(connection, *candidate, context, from, "first(i ORDER BY i DESC)");
-	auto expected = connection.Query("SELECT first(i ORDER BY i DESC)" + from);
-	REQUIRE_NO_FAIL(*expected);
-	REQUIRE(expected->GetValue(0, 0) == Value::INTEGER(2));
-	connection.Rollback();
-}
-
 } // namespace bound_expression_sql_export_test

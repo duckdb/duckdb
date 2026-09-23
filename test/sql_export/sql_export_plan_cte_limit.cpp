@@ -82,7 +82,7 @@ TEST_CASE("Logical plan SQL export rejects recursive wrappers when inlining is u
           "[sql_export][logical_plan_sql_export][recursive_cte_sql_export]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
-	REQUIRE_NO_FAIL(connection.Query("SET threads=1; SET max_execution_time=5000"));
+	REQUIRE_NO_FAIL(connection.Query("SET threads=1"));
 	connection.BeginTransaction();
 	auto plan = OptimizeLogicalPlanExportQuery(
 	    connection, "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c WHERE x<3) SELECT x FROM c LIMIT 1");

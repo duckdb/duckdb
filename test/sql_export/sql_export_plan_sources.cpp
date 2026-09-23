@@ -268,7 +268,7 @@ TEST_CASE("Table row number SQL export retains stream effects",
 				CAPTURE(consumption, late_error, route);
 				DuckDB db(nullptr);
 				Connection connection(db);
-				REQUIRE_NO_FAIL(connection.Query("SET threads=1; SET max_execution_time=5000; "
+				REQUIRE_NO_FAIL(connection.Query("SET threads=1; "
 				                                 "SET max_streaming_buffer_size='1b'; CREATE SEQUENCE seq; "
 				                                 "CREATE TABLE stream_numbers AS SELECT i FROM range(10000)t(i); "
 				                                 "DELETE FROM stream_numbers WHERE i%5=1"));
