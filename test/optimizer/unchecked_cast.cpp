@@ -37,7 +37,7 @@ static BaseStatistics CreateNumericStats(const LogicalType &type, const Value &m
 }
 
 static unique_ptr<LogicalOperator> OptimizeQuery(Connection &connection, const string &query) {
-	Parser parser(connection.context->GetParserOptions());
+	Parser parser(*connection.context);
 	parser.ParseQuery(query);
 	REQUIRE(parser.statements.size() == 1);
 	Planner planner(*connection.context);

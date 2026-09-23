@@ -19,6 +19,7 @@
 
 namespace duckdb {
 
+class ClientContext;
 struct CompiledGrammar;
 struct MatcherToken;
 class TokenIterator;
@@ -36,7 +37,15 @@ struct UnicodeSpace {
 //! plan and executed.
 class Parser {
 public:
-	explicit Parser(const ParserOptions &options = ParserOptions());
+	//! Snapshot the connection's parser settings, extensions and cached grammar.
+	explicit Parser(ClientContext &context);
+	//! Preserve identifier spelling when reparsing generated SQL.
+	explicit Parser(ClientContext &context, IdentifierCaseMode identifier_case_mode);
+	//! Explicit standalone configuration, without a client context.
+	explicit Parser(const ParserOptions &options);
+	Parser(Parser &&other) noexcept;
+	//! Built-in semantics and shared built-in grammar, independent of any connection.
+	static Parser GetBuiltinParser();
 	~Parser();
 
 	//! The parsed SQL statements from an invocation to ParseQuery.
@@ -78,24 +87,19 @@ public:
 	// Returns the Keyword category
 	static KeywordCategory ToKeywordCategory(const string &text);
 	//! Parses a list of expressions (i.e. the list found in a SELECT clause)
-	DUCKDB_API static vector<unique_ptr<ParsedExpression>>
-	ParseExpressionList(const string &select_list, const ParserOptions &options = ParserOptions());
+	DUCKDB_API vector<unique_ptr<ParsedExpression>> ParseExpressionList(const string &select_list);
 	//! Parses a list of GROUP BY expressions
-	static GroupByNode ParseGroupByList(const string &group_by, const ParserOptions &options = ParserOptions());
+	GroupByNode ParseGroupByList(const string &group_by);
 	//! Parses a list as found in an ORDER BY expression (i.e. including optional ASCENDING/DESCENDING modifiers)
-	static vector<OrderByNode> ParseOrderList(const string &select_list,
-	                                          const ParserOptions &options = ParserOptions());
+	vector<OrderByNode> ParseOrderList(const string &select_list);
 	//! Parses an update list (i.e. the list found in the SET clause of an UPDATE statement)
-	static void ParseUpdateList(const string &update_list, vector<Identifier> &update_columns,
-	                            vector<unique_ptr<ParsedExpression>> &expressions,
-	                            const ParserOptions &options = ParserOptions());
+	void ParseUpdateList(const string &update_list, vector<Identifier> &update_columns,
+	                     vector<unique_ptr<ParsedExpression>> &expressions);
 	//! Parses a VALUES list (i.e. the list of expressions after a VALUES clause)
-	static vector<vector<unique_ptr<ParsedExpression>>> ParseValuesList(const string &value_list,
-	                                                                    const ParserOptions &options = ParserOptions());
+	vector<vector<unique_ptr<ParsedExpression>>> ParseValuesList(const string &value_list);
 	//! Parses a column list (i.e. as found in a CREATE TABLE statement)
-	static ColumnList ParseColumnList(const string &column_list, const ParserOptions &options = ParserOptions());
-	static ColumnDefinition ParseColumnDefinition(const string &column_definition,
-	                                              const ParserOptions &options = ParserOptions());
+	ColumnList ParseColumnList(const string &column_list);
+	ColumnDefinition ParseColumnDefinition(const string &column_definition);
 
 	static bool StripUnicodeSpaces(const string &query_str, string &new_query);
 

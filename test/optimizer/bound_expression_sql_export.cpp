@@ -75,7 +75,7 @@ static void RequireCastTarget(const ParsedExpression &expression, const LogicalT
 }
 
 static unique_ptr<LogicalOperator> OptimizeExportQuery(Connection &connection, const string &query) {
-	Parser parser(connection.context->GetParserOptions());
+	Parser parser(*connection.context);
 	parser.ParseQuery(query);
 	REQUIRE(parser.statements.size() == 1);
 	Planner planner(*connection.context);
@@ -85,7 +85,7 @@ static unique_ptr<LogicalOperator> OptimizeExportQuery(Connection &connection, c
 }
 
 static unique_ptr<LogicalOperator> BindExportQuery(Connection &connection, const string &query) {
-	Parser parser(connection.context->GetParserOptions());
+	Parser parser(*connection.context);
 	parser.ParseQuery(query);
 	REQUIRE(parser.statements.size() == 1);
 	Planner planner(*connection.context);

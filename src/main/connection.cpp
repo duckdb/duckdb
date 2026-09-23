@@ -290,7 +290,7 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<st
 	named_parameter_map_t options;
 	child_list_t<Value> column_list;
 	for (auto &column : columns) {
-		auto col_list = Parser::ParseColumnList(column, context->GetParserOptions());
+		auto col_list = Parser(*context).ParseColumnList(column);
 		if (col_list.LogicalColumnCount() != 1) {
 			throw ParserException("Expected a single column definition");
 		}

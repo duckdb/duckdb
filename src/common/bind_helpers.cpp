@@ -142,7 +142,7 @@ vector<BoundOrderByNode> ParseOrderByColumns(Binder &binder, const vector<Value>
 		order_by_strings.push_back(value.ToString());
 	}
 	const auto order_by_clause = StringUtil::Join(order_by_strings, ", ");
-	auto parsed_orders = Parser::ParseOrderList(order_by_clause);
+	auto parsed_orders = Parser(binder.context).ParseOrderList(order_by_clause);
 
 	// Bind
 	auto &config = DBConfig::GetConfig(binder.context);

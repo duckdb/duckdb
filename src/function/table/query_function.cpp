@@ -8,8 +8,8 @@
 
 namespace duckdb {
 
-static unique_ptr<SubqueryRef> ParseSubquery(const string &query, const ParserOptions &options, const string &err_msg) {
-	Parser parser(options);
+static unique_ptr<SubqueryRef> ParseSubquery(const string &query, ClientContext &context, const string &err_msg) {
+	Parser parser(context);
 	parser.ParseQuery(query);
 	if (parser.statements.size() != 1) {
 		throw ParserException(err_msg);
@@ -68,14 +68,13 @@ static string UnionTablesQuery(TableFunctionBindInput &input) {
 
 static unique_ptr<TableRef> QueryBindReplace(ClientContext &context, TableFunctionBindInput &input) {
 	auto query = input.inputs[0].ToString();
-	auto subquery_ref = ParseSubquery(query, context.GetParserOptions(), "Expected a single SELECT statement");
+	auto subquery_ref = ParseSubquery(query, context, "Expected a single SELECT statement");
 	return std::move(subquery_ref);
 }
 
 static unique_ptr<TableRef> TableBindReplace(ClientContext &context, TableFunctionBindInput &input) {
 	auto query = UnionTablesQuery(input);
-	auto subquery_ref =
-	    ParseSubquery(query, context.GetParserOptions(), "Expected a table or a list with tables as input");
+	auto subquery_ref = ParseSubquery(query, context, "Expected a table or a list with tables as input");
 	return std::move(subquery_ref);
 }
 
