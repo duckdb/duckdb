@@ -111,7 +111,6 @@ struct ParquetMultiFileInfo : MultiFileReaderInterface {
 
 class ParquetScanFunction {
 public:
-	static TableFunctionSet GetFunctionSet();
 	//! The single-file parquet reader that the multi-file reader is built on
 	static TableFunction GetSingleFileFunction();
 	//! How the single-file parquet reader is wrapped into the multi-file reader

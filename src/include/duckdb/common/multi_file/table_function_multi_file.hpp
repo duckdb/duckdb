@@ -365,6 +365,14 @@ public:
 	                                                  vector<Identifier> &expected_names,
 	                                                  vector<LogicalType> &expected_types);
 
+	//! Binds a COPY ... FROM over the given single-file function. Use this to build a "copy_from_bind" of your own
+	//! when the multi-file function carries no info of ours - the counterpart of MultiFileBindWith
+	static unique_ptr<FunctionData> MultiFileBindCopyWith(ClientContext &context, CopyFromFunctionBindInput &input,
+	                                                      vector<Identifier> &expected_names,
+	                                                      vector<LogicalType> &expected_types,
+	                                                      TableFunction single_file_function,
+	                                                      TableFunctionMultiFileSettings settings);
+
 	//! The row groups of a scan that reads a single file, as the wrapped function describes them - the files of a
 	//! scan over several files have not been opened at this point, so their row groups are unknown
 	static vector<PartitionStatistics> GetPartitionStats(ClientContext &context, GetPartitionStatsInput &input);
