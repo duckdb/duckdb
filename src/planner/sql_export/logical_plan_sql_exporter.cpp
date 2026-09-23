@@ -116,13 +116,13 @@ static LogicalPlanSQLExportResult ApplyOutputNames(LogicalPlanSQLExportResult re
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields)});
 }
 
-LogicalPlanSQLExportState::LogicalPlanSQLExportState(ClientContext &context_p,
-                                                     const LogicalPlanSQLExportOptions &options_p)
+LogicalPlanSQLExportContext::LogicalPlanSQLExportContext(ClientContext &context_p,
+                                                         const LogicalPlanSQLExportOptions &options_p)
     : context(context_p), options(options_p) {
 }
 
-LogicalPlanSQLExportResult LogicalPlanSQLExportState::Export(LogicalOperator &op,
-                                                             const LogicalPlanVerificationPath &path) {
+LogicalPlanSQLExportResult LogicalPlanSQLExportContext::Export(LogicalOperator &op,
+                                                               const LogicalPlanVerificationPath &path) {
 	for (auto &source : limit_sources) {
 		if (source.op.get() == &op) {
 			return LogicalPlanSQLExportResult::Success(
@@ -131,72 +131,13 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::Export(LogicalOperator &op
 	}
 	auto source_count = limit_sources.size();
 	ancestors.push_back(op);
-	auto result = ExportOperator(op, path);
+	auto result = op.ToSQL(*this, path);
 	ancestors.pop_back();
 	limit_sources.resize(source_count);
 	return result;
 }
 
-LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportOperator(LogicalOperator &op,
-                                                                     const LogicalPlanVerificationPath &path) {
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
-		return ExportExpressionGet(op.Cast<LogicalExpressionGet>(), path);
-	case LogicalOperatorType::LOGICAL_FILTER:
-		return ExportFilter(op.Cast<LogicalFilter>(), path);
-	case LogicalOperatorType::LOGICAL_PROJECTION:
-		return ExportProjection(op.Cast<LogicalProjection>(), path);
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		return ExportAggregate(op.Cast<LogicalAggregate>(), path);
-	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
-	case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
-		return ExportConstantSource(op, path);
-	case LogicalOperatorType::LOGICAL_ORDER_BY:
-	case LogicalOperatorType::LOGICAL_TOP_N:
-	case LogicalOperatorType::LOGICAL_DISTINCT:
-		return ExportModifier(op, path);
-	case LogicalOperatorType::LOGICAL_LIMIT:
-		return ExportLimit(op.Cast<LogicalLimit>(), path);
-	case LogicalOperatorType::LOGICAL_SAMPLE:
-		return ExportSample(op.Cast<LogicalSample>(), path);
-	case LogicalOperatorType::LOGICAL_PIVOT:
-		return ExportPivot(op.Cast<LogicalPivot>(), path);
-	case LogicalOperatorType::LOGICAL_SECURE_VIEW:
-		return ExportSecureView(op.Cast<LogicalSecureView>(), path);
-	case LogicalOperatorType::LOGICAL_UNION:
-	case LogicalOperatorType::LOGICAL_EXCEPT:
-	case LogicalOperatorType::LOGICAL_INTERSECT:
-		return ExportSetOperation(op.Cast<LogicalSetOperation>(), path);
-	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
-		return ExportExtension(op.Cast<LogicalExtensionOperator>(), path);
-	case LogicalOperatorType::LOGICAL_GET:
-		return ExportGet(op.Cast<LogicalGet>(), path);
-	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
-	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-	case LogicalOperatorType::LOGICAL_ANY_JOIN:
-	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-		return ExportJoin(op, path);
-	case LogicalOperatorType::LOGICAL_CHUNK_GET:
-		return ExportChunkGet(op.Cast<LogicalColumnDataGet>(), path);
-	case LogicalOperatorType::LOGICAL_WINDOW:
-	case LogicalOperatorType::LOGICAL_UNNEST:
-		return ExportContextExpressions(op, path);
-	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
-		return ExportMaterializedCTE(op.Cast<LogicalMaterializedCTE>(), path);
-	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
-		return ExportRecursiveCTE(op.Cast<LogicalRecursiveCTE>(), path);
-	case LogicalOperatorType::LOGICAL_CTE_REF:
-		return ExportCTERef(op.Cast<LogicalCTERef>(), path);
-	case LogicalOperatorType::LOGICAL_DELIM_GET:
-		return PlanFailure(UnsupportedSource(path, LogicalSourceIdentity(), "delim_get"));
-	default:
-		D_ASSERT(op.type != LogicalOperatorType::LOGICAL_INVALID);
-		return PlanFailure(UnsupportedOperator(path, op.type));
-	}
-}
-
-Identifier LogicalPlanSQLExportState::NextRelationAlias(const Identifier &preferred) {
+Identifier LogicalPlanSQLExportContext::NextRelationAlias(const Identifier &preferred) {
 	if (!preferred.empty() && relation_aliases.insert(preferred).second) {
 		return preferred;
 	}
@@ -209,7 +150,7 @@ Identifier LogicalPlanSQLExportState::NextRelationAlias(const Identifier &prefer
 }
 
 LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>
-LogicalPlanSQLExportState::ExportChild(LogicalOperator &child, const LogicalPlanVerificationPath &path) {
+LogicalPlanSQLExportContext::ExportChild(LogicalOperator &child, const LogicalPlanVerificationPath &path) {
 	auto exported = Export(child, path);
 	if (exported.HasError()) {
 		return LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>::Failure(exported.GetIssues());
@@ -218,7 +159,7 @@ LogicalPlanSQLExportState::ExportChild(LogicalOperator &child, const LogicalPlan
 	return LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>::Success(std::move(result));
 }
 
-LogicalPlanVerificationResult<unique_ptr<ParsedExpression>> LogicalPlanSQLExportState::ExportExpression(
+LogicalPlanVerificationResult<unique_ptr<ParsedExpression>> LogicalPlanSQLExportContext::ExportExpression(
     const LogicalOperator &op, const vector<reference<const Expression>> &expressions, idx_t expression_ordinal,
     const BoundExpressionSQLExportContext &expression_context, const LogicalPlanVerificationPath &path) {
 	D_ASSERT(expression_ordinal < expressions.size());
@@ -244,9 +185,9 @@ LogicalPlanVerificationResult<unique_ptr<ParsedExpression>> LogicalPlanSQLExport
 	                                                PlanExpressionPath(path, expression_ordinal));
 }
 
-unique_ptr<SelectNode> LogicalPlanSQLExportState::ForwardFields(const LogicalPlanSQLExportedChild &child,
-                                                                const vector<LogicalPlanSQLExportField> &fields,
-                                                                optional_ptr<const SelectNode> plain) {
+unique_ptr<SelectNode> LogicalPlanSQLExportContext::ForwardFields(const LogicalPlanSQLExportedChild &child,
+                                                                  const vector<LogicalPlanSQLExportField> &fields,
+                                                                  optional_ptr<const SelectNode> plain) {
 	auto select = make_uniq<SelectNode>();
 	for (auto &field : fields) {
 		bool found = false;
@@ -267,6 +208,16 @@ unique_ptr<SelectNode> LogicalPlanSQLExportState::ForwardFields(const LogicalPla
 }
 
 } // namespace logical_plan_sql_export
+
+LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
+LogicalOperator::ToSQL(LogicalPlanSQLExportContext &, const LogicalPlanVerificationPath &path) {
+	using namespace logical_plan_sql_export;
+	if (type == LogicalOperatorType::LOGICAL_DELIM_GET) {
+		return PlanFailure(UnsupportedSource(path, LogicalSourceIdentity(), "delim_get"));
+	}
+	D_ASSERT(type != LogicalOperatorType::LOGICAL_INVALID);
+	return PlanFailure(UnsupportedOperator(path, type));
+}
 
 LogicalPlanSQLExportExtensionResult LogicalPlanSQLExportExtensionResult::NotHandled() {
 	return LogicalPlanSQLExportExtensionResult();
@@ -293,7 +244,7 @@ LogicalPlanSQLExporter::Export(ClientContext &context, LogicalOperator &root,
 	if (verification.HasError()) {
 		return LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>::Failure(verification.GetIssues());
 	}
-	logical_plan_sql_export::LogicalPlanSQLExportState state(context, options);
+	logical_plan_sql_export::LogicalPlanSQLExportContext state(context, options);
 	auto result = state.Export(root, LogicalPlanVerificationPath());
 	if (!options.output_names) {
 		return result;

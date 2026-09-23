@@ -1,3 +1,5 @@
+#include "duckdb/planner/operator/logical_extension_operator.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "logical_plan_sql_exporter_internal.hpp"
 #include "duckdb/planner/logical_plan_sql_exporter.hpp"
 #include "duckdb/common/limits.hpp"
@@ -18,7 +20,7 @@
 #include "duckdb/planner/operator_extension.hpp"
 
 namespace duckdb {
-namespace logical_plan_sql_export {
+using namespace logical_plan_sql_export;
 
 static LogicalPlanVerificationIssue ExtensionIssue(LogicalPlanVerificationIssueCode code,
                                                    const LogicalPlanVerificationPath &path, const string &identifier,
@@ -28,9 +30,8 @@ static LogicalPlanVerificationIssue ExtensionIssue(LogicalPlanVerificationIssueC
 	                                   std::move(message));
 }
 
-LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportGet(LogicalGet &get,
-                                                                const LogicalPlanVerificationPath &path,
-                                                                optional<LogicalPlanSQLExportField> ordinality) {
+LogicalPlanSQLExportResult logical_plan_sql_export::LogicalPlanSQLExportContext::ExportGet(
+    LogicalGet &get, const LogicalPlanVerificationPath &path, optional<LogicalPlanSQLExportField> ordinality) {
 	D_ASSERT(get.children.size() <= 1);
 	if (get.has_pushed_projection) {
 		return PlanFailure(UnsupportedSource(path, LogicalSourceIdentity(get), "pushed_projection"));
@@ -154,8 +155,9 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportGet(LogicalGet &get,
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields.GetValue())});
 }
 
-LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportSecureView(LogicalSecureView &view,
-                                                                       const LogicalPlanVerificationPath &path) {
+LogicalPlanSQLExportResult LogicalSecureView::ToSQL(LogicalPlanSQLExportContext &export_context,
+                                                    const LogicalPlanVerificationPath &path) {
+	auto &view = *this;
 	auto fields = CreateFields(view, path);
 	if (fields.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
@@ -187,7 +189,7 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportSecureView(LogicalSe
 		                                          "The secure view does not retain every caller predicate"));
 	}
 
-	auto source_alias = NextRelationAlias();
+	auto source_alias = export_context.NextRelationAlias();
 	auto table = make_uniq<BaseTableRef>();
 	table->SetQualifiedName(view.source_name);
 	table->alias = source_alias;
@@ -199,7 +201,7 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportSecureView(LogicalSe
 	}
 
 	BoundExpressionSQLExportContext expression_context;
-	expression_context.client_context = &context;
+	expression_context.client_context = &export_context.context;
 	expression_context.resolve_binding = [source_alias, source_types = view.source_types](
 	                                         const ColumnBinding &binding) -> optional<ResolvedSQLColumnReference> {
 		if (binding.table_index != TableIndex(0) || binding.column_index.GetIndex() >= source_types.size()) {
@@ -246,7 +248,8 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportSecureView(LogicalSe
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields.GetValue())});
 }
 
-LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportExtension(LogicalExtensionOperator &extension,
+LogicalPlanSQLExportResult
+logical_plan_sql_export::LogicalPlanSQLExportContext::ExportExtension(LogicalExtensionOperator &extension,
                                                                       const LogicalPlanVerificationPath &path) {
 	auto extension_identifier = extension.GetExtensionName();
 	D_ASSERT(SQLExportHelpers::IsValidIdentifier(Identifier(extension_identifier)));
@@ -312,7 +315,7 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportExtension(LogicalExt
 	                                  extension_identifier, "No SQL export handler accepted the extension operator"));
 }
 
-optional<LogicalPlanSQLExportResult> LogicalPlanSQLExportState::HandleExtensionResult(
+optional<LogicalPlanSQLExportResult> logical_plan_sql_export::LogicalPlanSQLExportContext::HandleExtensionResult(
     const LogicalPlanVerificationPath &path, const string &extension_identifier,
     LogicalPlanSQLExportExtensionResult result, const vector<LogicalPlanSQLExportField> &fields) {
 	switch (result.type) {
@@ -333,5 +336,14 @@ optional<LogicalPlanSQLExportResult> LogicalPlanSQLExportState::HandleExtensionR
 	}
 }
 
-} // namespace logical_plan_sql_export
+LogicalPlanVerificationResult<LogicalPlanSQLExportRelation> LogicalGet::ToSQL(LogicalPlanSQLExportContext &context,
+                                                                              const LogicalPlanVerificationPath &path) {
+	return context.ExportGet(*this, path);
+}
+
+LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
+LogicalExtensionOperator::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path) {
+	return context.ExportExtension(*this, path);
+}
+
 } // namespace duckdb

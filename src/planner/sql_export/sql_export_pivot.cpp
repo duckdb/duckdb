@@ -19,11 +19,11 @@
 #include "duckdb/planner/operator/logical_pivot.hpp"
 
 namespace duckdb {
-namespace logical_plan_sql_export {
+using namespace logical_plan_sql_export;
 
 LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
-LogicalPlanSQLExportState::ExportPivotDefault(const BoundAggregateExpression &aggregate,
-                                              const LogicalPlanVerificationPath &path) {
+logical_plan_sql_export::LogicalPlanSQLExportContext::ExportPivotDefault(const BoundAggregateExpression &aggregate,
+                                                                         const LogicalPlanVerificationPath &path) {
 	if (aggregate.Function().GetStability() == FunctionStability::VOLATILE ||
 	    aggregate.Function().GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
 		return LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>::Failure(
@@ -60,8 +60,9 @@ LogicalPlanSQLExportState::ExportPivotDefault(const BoundAggregateExpression &ag
 	return LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>::Success(std::move(result.GetValue()));
 }
 
-LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportPivot(LogicalPivot &pivot,
-                                                                  const LogicalPlanVerificationPath &path) {
+LogicalPlanSQLExportResult LogicalPivot::ToSQL(LogicalPlanSQLExportContext &export_context,
+                                               const LogicalPlanVerificationPath &path) {
+	auto &pivot = *this;
 	D_ASSERT(pivot.children.size() == 1);
 	auto fields = CreateFields(pivot, path);
 	if (fields.HasError()) {
@@ -85,7 +86,7 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportPivot(LogicalPivot &
 	auto defaults = make_uniq<SelectNode>();
 	defaults->from_table = make_uniq<EmptyTableRef>();
 	defaults->where_clause = ConstantExpression::FromValue(Value::BOOLEAN(false));
-	auto defaults_name = NextRelationAlias();
+	auto defaults_name = export_context.NextRelationAlias();
 	for (idx_t aggregate_idx = 0; aggregate_idx < aggregate_count; aggregate_idx++) {
 		auto &expression = info.aggregates[aggregate_idx];
 		if (!expression || expression->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
@@ -98,7 +99,7 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportPivot(LogicalPivot &
 			return PlanFailure(PlanUnsupportedFeature(path, "pivot_layout",
 			                                          "The PIVOT aggregate metadata does not match its output types"));
 		}
-		auto value = ExportPivotDefault(aggregate, PlanExpressionPath(path, aggregate_idx));
+		auto value = export_context.ExportPivotDefault(aggregate, PlanExpressionPath(path, aggregate_idx));
 		if (value.HasError()) {
 			return LogicalPlanSQLExportResult::Failure(value.GetIssues());
 		}
@@ -121,7 +122,7 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportPivot(LogicalPivot &
 		}
 	}
 
-	auto child = ExportChild(*pivot.children[0], PlanChildPath(path, 0));
+	auto child = export_context.ExportChild(*pivot.children[0], PlanChildPath(path, 0));
 	if (child.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(child.GetIssues());
 	}
@@ -160,7 +161,7 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportPivot(LogicalPivot &
 		}
 		return make_uniq<FunctionExpression>(QualifiedName("system", "main", name), std::move(arguments));
 	};
-	auto key_name = NextRelationAlias();
+	auto key_name = export_context.NextRelationAlias();
 	auto encoded_keys = call("list_transform", ChildColumn(child.GetValue(), info.group_count + aggregate_count),
 	                         make_uniq<LambdaExpression>(vector<string> {key_name.GetIdentifierName()},
 	                                                     call("encode", make_uniq<ColumnRefExpression>(key_name))));
@@ -219,8 +220,7 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportPivot(LogicalPivot &
 	}
 	auto packed_row = make_uniq<FunctionExpression>(QualifiedName("system", "main", "struct_pack"), std::move(row));
 	select->select_list.clear();
-	return ExportRow(std::move(select), std::move(packed_row), std::move(fields.GetValue()));
+	return export_context.ExportRow(std::move(select), std::move(packed_row), std::move(fields.GetValue()));
 }
 
-} // namespace logical_plan_sql_export
 } // namespace duckdb

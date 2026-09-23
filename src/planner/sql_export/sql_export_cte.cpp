@@ -20,24 +20,25 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
-namespace logical_plan_sql_export {
+using namespace logical_plan_sql_export;
 
-LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportMaterializedCTE(LogicalMaterializedCTE &cte,
-                                                                            const LogicalPlanVerificationPath &path) {
+LogicalPlanSQLExportResult LogicalMaterializedCTE::ToSQL(LogicalPlanSQLExportContext &export_context,
+                                                         const LogicalPlanVerificationPath &path) {
+	auto &cte = *this;
 	D_ASSERT(cte.children.size() == 2);
 	auto fields = CreateFields(cte, path);
 	if (fields.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
 	}
-	auto name = NextRelationAlias(cte.ctename);
-	auto producer = ExportNamedProducer(*cte.children[0], PlanChildPath(path, 0), name);
+	auto name = export_context.NextRelationAlias(cte.ctename);
+	auto producer = export_context.ExportNamedProducer(*cte.children[0], PlanChildPath(path, 0), name);
 	if (producer.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(producer.GetIssues());
 	}
-	named_relations.push_back({cte.table_index, name, false, 0});
-	auto consumer = ExportChild(*cte.children[1], PlanChildPath(path, 1));
-	auto references = named_relations.back().references;
-	named_relations.pop_back();
+	export_context.named_relations.push_back({cte.table_index, name, false, 0});
+	auto consumer = export_context.ExportChild(*cte.children[1], PlanChildPath(path, 1));
+	auto references = export_context.named_relations.back().references;
+	export_context.named_relations.pop_back();
 	if (consumer.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(consumer.GetIssues());
 	}
@@ -56,18 +57,19 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportMaterializedCTE(Logi
 	}
 	info->query_node = std::move(producer.GetValue().relation.query);
 	info->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
-	auto select = ForwardFields(consumer.GetValue(), fields.GetValue());
+	auto select = export_context.ForwardFields(consumer.GetValue(), fields.GetValue());
 	select->from_table = CreateSubquery(std::move(consumer.GetValue()));
 	select->cte_map.map.insert(name, std::move(info));
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields.GetValue())});
 }
 
-LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportCTERef(LogicalCTERef &ref,
-                                                                   const LogicalPlanVerificationPath &path) {
+LogicalPlanSQLExportResult LogicalCTERef::ToSQL(LogicalPlanSQLExportContext &export_context,
+                                                const LogicalPlanVerificationPath &path) {
+	auto &ref = *this;
 	D_ASSERT(ref.children.empty());
 	optional<Identifier> name;
-	for (idx_t i = named_relations.size(); i > 0; i--) {
-		auto &relation = named_relations[i - 1];
+	for (idx_t i = export_context.named_relations.size(); i > 0; i--) {
+		auto &relation = export_context.named_relations[i - 1];
 		if (relation.index == ref.cte_index && relation.is_recurring == ref.is_recurring) {
 			relation.references++;
 			name = relation.name;
@@ -83,12 +85,11 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportCTERef(LogicalCTERef
 		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
 	}
 	return LogicalPlanSQLExportResult::Success(
-	    {CreateNamedSource(*name, fields.GetValue(), ref.is_recurring), std::move(fields.GetValue())});
+	    {export_context.CreateNamedSource(*name, fields.GetValue(), ref.is_recurring), std::move(fields.GetValue())});
 }
 
-unique_ptr<SelectNode> LogicalPlanSQLExportState::CreateNamedSource(const Identifier &name,
-                                                                    const vector<LogicalPlanSQLExportField> &fields,
-                                                                    bool recurring) {
+unique_ptr<SelectNode> logical_plan_sql_export::LogicalPlanSQLExportContext::CreateNamedSource(
+    const Identifier &name, const vector<LogicalPlanSQLExportField> &fields, bool recurring) {
 	auto table = make_uniq<BaseTableRef>();
 	table->SetTable(name);
 	if (recurring) {
@@ -104,9 +105,8 @@ unique_ptr<SelectNode> LogicalPlanSQLExportState::CreateNamedSource(const Identi
 	return select;
 }
 
-LogicalPlanSQLExportResult LogicalPlanSQLExportState::BuildRecursiveCTE(LogicalRecursiveCTE &cte,
-                                                                        const LogicalPlanVerificationPath &path,
-                                                                        const Identifier &name) {
+LogicalPlanSQLExportResult logical_plan_sql_export::LogicalPlanSQLExportContext::BuildRecursiveCTE(
+    LogicalRecursiveCTE &cte, const LogicalPlanVerificationPath &path, const Identifier &name) {
 	D_ASSERT(cte.children.size() == 2);
 	auto fields = CreateFields(cte, path);
 	if (fields.HasError()) {
@@ -200,8 +200,9 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::BuildRecursiveCTE(LogicalR
 }
 
 LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>
-LogicalPlanSQLExportState::ExportNamedProducer(LogicalOperator &op, const LogicalPlanVerificationPath &path,
-                                               const Identifier &name) {
+logical_plan_sql_export::LogicalPlanSQLExportContext::ExportNamedProducer(LogicalOperator &op,
+                                                                          const LogicalPlanVerificationPath &path,
+                                                                          const Identifier &name) {
 	if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		D_ASSERT(op.children.size() == 1);
 		auto fields = CreateFields(op, path);
@@ -231,16 +232,17 @@ LogicalPlanSQLExportState::ExportNamedProducer(LogicalOperator &op, const Logica
 	    {std::move(exported.GetValue()), NextRelationAlias()});
 }
 
-LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportRecursiveCTE(LogicalRecursiveCTE &cte,
-                                                                         const LogicalPlanVerificationPath &path) {
-	if (Optimizer::OptimizerDisabled(context, OptimizerType::CTE_INLINING) ||
-	    Settings::Get<DebugDisableOptimizerSetting>(context)) {
+LogicalPlanSQLExportResult LogicalRecursiveCTE::ToSQL(LogicalPlanSQLExportContext &export_context,
+                                                      const LogicalPlanVerificationPath &path) {
+	auto &cte = *this;
+	if (Optimizer::OptimizerDisabled(export_context.context, OptimizerType::CTE_INLINING) ||
+	    Settings::Get<DebugDisableOptimizerSetting>(export_context.context)) {
 		return PlanFailure(
 		    PlanUnsupportedFeature(path, "recursive_cte_materialization",
 		                           "The SQL wrapper requires CTE inlining to preserve recursive evaluation"));
 	}
-	auto name = NextRelationAlias(cte.ctename);
-	auto recursive = BuildRecursiveCTE(cte, path, name);
+	auto name = export_context.NextRelationAlias(cte.ctename);
+	auto recursive = export_context.BuildRecursiveCTE(cte, path, name);
 	if (recursive.HasError()) {
 		return recursive;
 	}
@@ -251,10 +253,9 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportRecursiveCTE(Logical
 	}
 	info->query_node = std::move(recursive.GetValue().query);
 	info->materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
-	auto select = CreateNamedSource(name, recursive.GetValue().fields);
+	auto select = export_context.CreateNamedSource(name, recursive.GetValue().fields);
 	select->cte_map.map.insert(name, std::move(info));
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(recursive.GetValue().fields)});
 }
 
-} // namespace logical_plan_sql_export
 } // namespace duckdb

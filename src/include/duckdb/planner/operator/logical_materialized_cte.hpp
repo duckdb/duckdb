@@ -28,6 +28,9 @@ class LogicalMaterializedCTE : public LogicalCTE {
 	}
 
 public:
+	LogicalPlanVerificationResult<LogicalPlanSQLExportRelation> ToSQL(LogicalPlanSQLExportContext &context,
+	                                                                  const LogicalPlanVerificationPath &path) override;
+
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_MATERIALIZED_CTE;
 
 public:

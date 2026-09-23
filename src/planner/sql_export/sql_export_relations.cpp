@@ -1,3 +1,8 @@
+#include "duckdb/planner/operator/logical_unnest.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/planner/operator/logical_distinct.hpp"
+#include "duckdb/planner/operator/logical_top_n.hpp"
+#include "duckdb/planner/operator/logical_order.hpp"
 #include "logical_plan_sql_exporter_internal.hpp"
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/planner/logical_plan_sql_exporter.hpp"
@@ -27,7 +32,7 @@
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
 
 namespace duckdb {
-namespace logical_plan_sql_export {
+using namespace logical_plan_sql_export;
 
 static LogicalType SemanticExpressionType(const Expression &expression,
                                           const BoundExpressionSQLExportContext &context) {
@@ -78,8 +83,8 @@ static bool HasSafePredicates(const LogicalOperator &op) {
 	return HasSafePredicates(*op.children[0]);
 }
 
-LogicalPlanSQLExportResult
-LogicalPlanSQLExportState::ExportContextExpressions(LogicalOperator &op, const LogicalPlanVerificationPath &path) {
+LogicalPlanSQLExportResult logical_plan_sql_export::LogicalPlanSQLExportContext::ExportContextExpressions(
+    LogicalOperator &op, const LogicalPlanVerificationPath &path) {
 	D_ASSERT(op.children.size() == 1);
 	auto fields = CreateFields(op, path);
 	if (fields.HasError()) {
@@ -130,8 +135,9 @@ LogicalPlanSQLExportState::ExportContextExpressions(LogicalOperator &op, const L
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields.GetValue())});
 }
 
-LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportFilter(LogicalFilter &filter,
-                                                                   const LogicalPlanVerificationPath &path) {
+LogicalPlanSQLExportResult LogicalFilter::ToSQL(LogicalPlanSQLExportContext &export_context,
+                                                const LogicalPlanVerificationPath &path) {
+	auto &filter = *this;
 	D_ASSERT(filter.children.size() == 1);
 #ifdef D_ASSERT_IS_ENABLED
 	for (auto &expression : filter.expressions) {
@@ -142,7 +148,7 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportFilter(LogicalFilter
 	if (fields.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
 	}
-	auto child = ExportChild(*filter.children[0], PlanChildPath(path, 0));
+	auto child = export_context.ExportChild(*filter.children[0], PlanChildPath(path, 0));
 	if (child.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(child.GetIssues());
 	}
@@ -160,11 +166,12 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportFilter(LogicalFilter
 		}
 	}
 	vector<reference<const LogicalPlanSQLExportedChild>> child_references {child.GetValue()};
-	auto expression_context = CreateBindingContext(context, child_references, {plain});
+	auto expression_context = CreateBindingContext(export_context.context, child_references, {plain});
 	auto expressions = CollectExpressions(filter);
 	vector<unique_ptr<ParsedExpression>> predicates;
 	for (idx_t expression_index = 0; expression_index < filter.expressions.size(); expression_index++) {
-		auto predicate = ExportExpression(filter, expressions, expression_index, expression_context, path);
+		auto predicate =
+		    export_context.ExportExpression(filter, expressions, expression_index, expression_context, path);
 		if (predicate.HasError()) {
 			return LogicalPlanSQLExportResult::Failure(predicate.GetIssues());
 		}
@@ -188,8 +195,9 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportFilter(LogicalFilter
 	return LogicalPlanSQLExportResult::Success(std::move(relation));
 }
 
-LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportProjection(LogicalProjection &projection,
-                                                                       const LogicalPlanVerificationPath &path) {
+LogicalPlanSQLExportResult LogicalProjection::ToSQL(LogicalPlanSQLExportContext &export_context,
+                                                    const LogicalPlanVerificationPath &path) {
+	auto &projection = *this;
 	D_ASSERT(projection.children.size() == 1 && !projection.expressions.empty());
 	auto fields = CreateFields(projection, path);
 	if (fields.HasError()) {
@@ -197,7 +205,7 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportProjection(LogicalPr
 	}
 	D_ASSERT(projection.expressions.size() == fields.GetValue().size());
 	bool fromless = projection.children[0]->type == LogicalOperatorType::LOGICAL_DUMMY_SCAN;
-	auto child = ExportChild(*projection.children[0], PlanChildPath(path, 0));
+	auto child = export_context.ExportChild(*projection.children[0], PlanChildPath(path, 0));
 	if (child.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(child.GetIssues());
 	}
@@ -207,14 +215,15 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportProjection(LogicalPr
 	}
 	auto plain = PlainScope(*child.GetValue().relation.query);
 	vector<reference<const LogicalPlanSQLExportedChild>> child_references {child.GetValue()};
-	auto expression_context = CreateBindingContext(context, child_references, {plain});
+	auto expression_context = CreateBindingContext(export_context.context, child_references, {plain});
 	auto expressions = CollectExpressions(projection);
 	auto select = make_uniq<SelectNode>();
 	for (idx_t expression_index = 0; expression_index < projection.expressions.size(); expression_index++) {
 		fromless = fromless && projection.expressions[expression_index]->IsScalar();
 		ApplySemanticType(fields.GetValue()[expression_index], *projection.expressions[expression_index],
 		                  expression_context);
-		auto expression = ExportExpression(projection, expressions, expression_index, expression_context, path);
+		auto expression =
+		    export_context.ExportExpression(projection, expressions, expression_index, expression_context, path);
 		if (expression.HasError()) {
 			return LogicalPlanSQLExportResult::Failure(expression.GetIssues());
 		}
@@ -230,7 +239,8 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportProjection(LogicalPr
 	return LogicalPlanSQLExportResult::Success(std::move(relation));
 }
 
-LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportModifier(LogicalOperator &op,
+LogicalPlanSQLExportResult
+logical_plan_sql_export::LogicalPlanSQLExportContext::ExportModifier(LogicalOperator &op,
                                                                      const LogicalPlanVerificationPath &path) {
 	D_ASSERT(op.children.size() == 1);
 	auto fields = CreateFields(op, path);
@@ -294,8 +304,9 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportModifier(LogicalOper
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields.GetValue())});
 }
 
-LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportSample(LogicalSample &sample,
-                                                                   const LogicalPlanVerificationPath &path) {
+LogicalPlanSQLExportResult LogicalSample::ToSQL(LogicalPlanSQLExportContext &export_context,
+                                                const LogicalPlanVerificationPath &path) {
+	auto &sample = *this;
 	D_ASSERT(sample.children.size() == 1 && sample.sample_options);
 	auto &sampling = *sample.sample_options;
 	if (sampling.seed.IsValid() != sampling.repeatable) {
@@ -309,18 +320,19 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportSample(LogicalSample
 	if (fields.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
 	}
-	auto child = ExportChild(*sample.children[0], PlanChildPath(path, 0));
+	auto child = export_context.ExportChild(*sample.children[0], PlanChildPath(path, 0));
 	if (child.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(child.GetIssues());
 	}
-	auto select = ForwardFields(child.GetValue(), fields.GetValue());
+	auto select = export_context.ForwardFields(child.GetValue(), fields.GetValue());
 	select->sample = sampling.Copy();
 	select->from_table = CreateSubquery(std::move(child.GetValue()));
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields.GetValue())});
 }
 
-LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportSetOperation(LogicalSetOperation &op,
-                                                                         const LogicalPlanVerificationPath &path) {
+LogicalPlanSQLExportResult LogicalSetOperation::ToSQL(LogicalPlanSQLExportContext &export_context,
+                                                      const LogicalPlanVerificationPath &path) {
+	auto &op = *this;
 	D_ASSERT(!op.children.empty());
 	D_ASSERT(op.type == LogicalOperatorType::LOGICAL_UNION || op.children.size() == 2);
 	auto fields = CreateFields(op, path);
@@ -333,7 +345,7 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportSetOperation(Logical
 	                    : op.type == LogicalOperatorType::LOGICAL_EXCEPT ? SetOperationType::EXCEPT
 	                                                                     : SetOperationType::INTERSECT;
 	for (idx_t i = 0; i < op.children.size(); i++) {
-		auto child = Export(*op.children[i], PlanChildPath(path, i));
+		auto child = export_context.Export(*op.children[i], PlanChildPath(path, i));
 		if (child.HasError()) {
 			return LogicalPlanSQLExportResult::Failure(child.GetIssues());
 		}
@@ -344,7 +356,7 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportSetOperation(Logical
 		// Retain the UNION boundary when optimization removed every other arm.
 		LogicalEmptyResult empty(op.types, op.GetColumnBindings());
 		empty.ResolveOperatorTypes();
-		auto exported = ExportConstantSource(empty, path);
+		auto exported = export_context.ExportConstantSource(empty, path);
 		if (exported.HasError()) {
 			return exported;
 		}
@@ -353,8 +365,9 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportSetOperation(Logical
 	return LogicalPlanSQLExportResult::Success({std::move(query), std::move(fields.GetValue())});
 }
 
-LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportAggregate(LogicalAggregate &aggregate,
-                                                                      const LogicalPlanVerificationPath &path) {
+LogicalPlanSQLExportResult LogicalAggregate::ToSQL(LogicalPlanSQLExportContext &export_context,
+                                                   const LogicalPlanVerificationPath &path) {
+	auto &aggregate = *this;
 	D_ASSERT(aggregate.children.size() == 1);
 #ifdef D_ASSERT_IS_ENABLED
 	for (auto &expression : aggregate.expressions) {
@@ -367,13 +380,13 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportAggregate(LogicalAgg
 	}
 	D_ASSERT(aggregate.groups.size() + aggregate.expressions.size() + aggregate.grouping_functions.size() ==
 	         fields.GetValue().size());
-	auto child = ExportChild(*aggregate.children[0], PlanChildPath(path, 0));
+	auto child = export_context.ExportChild(*aggregate.children[0], PlanChildPath(path, 0));
 	if (child.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(child.GetIssues());
 	}
 	auto plain = PlainScope(*child.GetValue().relation.query);
 	vector<reference<const LogicalPlanSQLExportedChild>> child_references {child.GetValue()};
-	auto expression_context = CreateBindingContext(context, child_references, {plain});
+	auto expression_context = CreateBindingContext(export_context.context, child_references, {plain});
 	auto expressions = CollectExpressions(aggregate);
 	for (idx_t group_index = 0; group_index < aggregate.groups.size(); group_index++) {
 		ApplySemanticType(fields.GetValue()[group_index], *aggregate.groups[group_index], expression_context);
@@ -389,7 +402,7 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportAggregate(LogicalAgg
 			input->select_list.push_back(std::move(expression));
 		}
 		for (idx_t i = 0; i < aggregate.groups.size(); i++) {
-			auto expression = ExportExpression(aggregate, expressions, i, expression_context, path);
+			auto expression = export_context.ExportExpression(aggregate, expressions, i, expression_context, path);
 			if (expression.HasError()) {
 				return LogicalPlanSQLExportResult::Failure(expression.GetIssues());
 			}
@@ -398,9 +411,9 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportAggregate(LogicalAgg
 			input_fields.push_back(fields.GetValue()[i]);
 		}
 		SetChildScope(*input, std::move(child.GetValue()), plain);
-		child.GetValue() = {{std::move(input), std::move(input_fields)}, NextRelationAlias()};
+		child.GetValue() = {{std::move(input), std::move(input_fields)}, export_context.NextRelationAlias()};
 		plain = nullptr;
-		expression_context = CreateBindingContext(context, {child.GetValue()});
+		expression_context = CreateBindingContext(export_context.context, {child.GetValue()});
 	}
 	auto select = make_uniq<SelectNode>();
 	for (idx_t expression_index = 0; expression_index < expressions.size(); expression_index++) {
@@ -409,7 +422,8 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportAggregate(LogicalAgg
 			result = ChildColumn(child.GetValue(), input_field_count + expression_index);
 			select->groups.group_expressions.push_back(result->Copy());
 		} else {
-			auto expression = ExportExpression(aggregate, expressions, expression_index, expression_context, path);
+			auto expression =
+			    export_context.ExportExpression(aggregate, expressions, expression_index, expression_context, path);
 			if (expression.HasError()) {
 				return LogicalPlanSQLExportResult::Failure(expression.GetIssues());
 			}
@@ -440,5 +454,29 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportAggregate(LogicalAgg
 	return LogicalPlanSQLExportResult::Success(std::move(relation));
 }
 
-} // namespace logical_plan_sql_export
+LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
+LogicalOrder::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path) {
+	return context.ExportModifier(*this, path);
+}
+
+LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
+LogicalTopN::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path) {
+	return context.ExportModifier(*this, path);
+}
+
+LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
+LogicalDistinct::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path) {
+	return context.ExportModifier(*this, path);
+}
+
+LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
+LogicalWindow::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path) {
+	return context.ExportContextExpressions(*this, path);
+}
+
+LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
+LogicalUnnest::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path) {
+	return context.ExportContextExpressions(*this, path);
+}
+
 } // namespace duckdb

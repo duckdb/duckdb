@@ -1,3 +1,5 @@
+#include "duckdb/planner/operator/logical_unconditional_join.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
 #include "logical_plan_sql_exporter_internal.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
@@ -10,9 +12,10 @@
 #include "duckdb/planner/sql_export_helpers.hpp"
 
 namespace duckdb {
-namespace logical_plan_sql_export {
+using namespace logical_plan_sql_export;
 
-string LogicalPlanSQLExportState::MarkConditionUnsupportedReason(const LogicalComparisonJoin &join) {
+string logical_plan_sql_export::LogicalPlanSQLExportContext::MarkConditionUnsupportedReason(
+    const LogicalComparisonJoin &join) {
 	bool comparisons_only = !join.conditions.empty();
 	bool all_equal = true;
 	bool all_null_safe = true;
@@ -47,7 +50,8 @@ string LogicalPlanSQLExportState::MarkConditionUnsupportedReason(const LogicalCo
 	return string();
 }
 
-bool LogicalPlanSQLExportState::RequiresMarkGroupMetadata(const LogicalComparisonJoin &join) {
+bool logical_plan_sql_export::LogicalPlanSQLExportContext::RequiresMarkGroupMetadata(
+    const LogicalComparisonJoin &join) {
 	if (join.join_type != JoinType::MARK || join.mark_types.empty()) {
 		return false;
 	}
@@ -69,7 +73,8 @@ bool LogicalPlanSQLExportState::RequiresMarkGroupMetadata(const LogicalCompariso
 	return (comparison_count > 1 || tuple_comparison) && all_equal;
 }
 
-LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportJoin(LogicalOperator &op,
+LogicalPlanSQLExportResult
+logical_plan_sql_export::LogicalPlanSQLExportContext::ExportJoin(LogicalOperator &op,
                                                                  const LogicalPlanVerificationPath &path) {
 	D_ASSERT(op.children.size() == 2);
 	auto fields = CreateFields(op, path);
@@ -204,5 +209,18 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportJoin(LogicalOperator
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields.GetValue())});
 }
 
-} // namespace logical_plan_sql_export
+LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
+LogicalJoin::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path) {
+	if (type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN && type != LogicalOperatorType::LOGICAL_ANY_JOIN &&
+	    type != LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+		return LogicalOperator::ToSQL(context, path);
+	}
+	return context.ExportJoin(*this, path);
+}
+
+LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
+LogicalUnconditionalJoin::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path) {
+	return context.ExportJoin(*this, path);
+}
+
 } // namespace duckdb

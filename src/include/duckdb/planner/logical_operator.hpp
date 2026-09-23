@@ -23,6 +23,14 @@
 namespace duckdb {
 
 class LogicalPlanVerifier;
+struct LogicalPlanSQLExportRelation;
+struct LogicalPlanVerificationPath;
+template <class T>
+class LogicalPlanVerificationResult;
+namespace logical_plan_sql_export {
+class LogicalPlanSQLExportContext;
+}
+using LogicalPlanSQLExportContext = logical_plan_sql_export::LogicalPlanSQLExportContext;
 
 //! LogicalOperator is the base class of the logical operators present in the
 //! logical query tree
@@ -47,6 +55,8 @@ public:
 	bool has_estimated_cardinality;
 
 public:
+	virtual LogicalPlanVerificationResult<LogicalPlanSQLExportRelation> ToSQL(LogicalPlanSQLExportContext &context,
+	                                                                          const LogicalPlanVerificationPath &path);
 	virtual vector<ColumnBinding> GetColumnBindings();
 	virtual TableIndex GetRootIndex();
 	static string ColumnBindingsToString(const vector<ColumnBinding> &bindings);
