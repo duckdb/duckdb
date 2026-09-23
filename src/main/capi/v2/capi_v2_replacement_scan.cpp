@@ -367,9 +367,8 @@ DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_alias(duckdb_v2_replacement_scan_
                                                      duckdb_v2_identifier_t alias, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(alias);
-	return WithErrorHandler(err, [&]() {
-		Convert(info)->out_alias = duckdb::Identifier(ConvertIdentifierName(alias));
-	});
+	return WithErrorHandler(err,
+	                        [&]() { Convert(info)->out_alias = duckdb::Identifier(ConvertIdentifierName(alias)); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_replacement_scan_register(duckdb_v2_replacement_scan_handle scan,

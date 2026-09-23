@@ -6151,7 +6151,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_to_set_bind_callback(duckdb_v2_copy_
  * Sets the optional batch size callback of the `COPY ... TO` side.
  *
  * The batch size callback is invoked during query planning, after the bind callback, for each `COPY ... TO` statement
- * that does not set `BATCH_SIZE` itself. It must report how many rows a batch should carry via
+ * that does not set `BATCH_SIZE` itself. It should report how many rows a batch should carry via
  * `duckdb_v2_copy_to_batch_size_set_target()`; the engine then cuts the rows being written into batches of that size
  * and hands each to the batch callback. Without a batch size from either the statement or the callback, a batch is cut
  * for every chunk of rows sunk, i.e. a vector at a time. A batch may still be smaller than the reported size (the last
@@ -6457,7 +6457,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_to_batch_size_get_bind_data(duckdb_v
 
 /*!
  * Sets the number of rows a batch should carry, as the target the engine cuts batches at. The batch size callback must
- * set this to a value greater than 0; the statement fails otherwise.
+ * set this to a value greater than 0; the statement fails otherwise. DuckDB defines the `BATCH_SIZE` on omission of
+ * calling the function.
  *
  * history:
  * - stable: v2.0.0
