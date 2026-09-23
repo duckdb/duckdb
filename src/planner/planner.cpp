@@ -34,6 +34,19 @@ namespace duckdb {
 Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context)), context(context) {
 }
 
+static void RenderSQLExplain(unique_ptr<LogicalOperator> &op, ClientContext &context, Binder &binder) {
+	if (op->type == LogicalOperatorType::LOGICAL_PREPARE || op->type == LogicalOperatorType::LOGICAL_EXECUTE) {
+		for (auto &child : op->children) {
+			RenderSQLExplain(child, context, binder);
+		}
+	} else if (op->type == LogicalOperatorType::LOGICAL_EXPLAIN) {
+		auto &explain = op->Cast<LogicalExplain>();
+		if (explain.explain_type == ExplainType::EXPLAIN_SQL) {
+			op = explain.CreateSQLResult(context, binder.GenerateTableIndex());
+		}
+	}
+}
+
 void Planner::Optimize() {
 	auto &profiler = QueryProfiler::Get(context);
 #ifdef DEBUG
@@ -61,12 +74,7 @@ void Planner::Optimize() {
 		plan->Verify(context);
 #endif
 	}
-	if (plan->type == LogicalOperatorType::LOGICAL_EXPLAIN) {
-		auto &explain = plan->Cast<LogicalExplain>();
-		if (explain.explain_type == ExplainType::EXPLAIN_SQL) {
-			plan = explain.CreateSQLResult(context, binder->GenerateTableIndex());
-		}
-	}
+	RenderSQLExplain(plan, context, *binder);
 }
 
 // Pre-decorrelation pass: replace LogicalTrigger with LogicalDependentJoin so the standard
