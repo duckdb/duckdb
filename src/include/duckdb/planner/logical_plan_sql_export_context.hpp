@@ -46,22 +46,16 @@ public:
 	                 const LogicalPlanVerificationPath &path);
 	unique_ptr<SelectNode> CreateNamedSource(const Identifier &name, const vector<LogicalPlanSQLExportField> &fields,
 	                                         bool recurring = false);
-	LogicalPlanSQLExportResult BuildRecursiveCTE(LogicalRecursiveCTE &cte, const LogicalPlanVerificationPath &path,
-	                                             const Identifier &name);
+
 	LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>
 	ExportNamedProducer(LogicalOperator &op, const LogicalPlanVerificationPath &path, const Identifier &name);
 	LogicalPlanSQLExportResult ExportContextExpressions(LogicalOperator &op, const LogicalPlanVerificationPath &path);
 	string MarkConditionUnsupportedReason(const LogicalComparisonJoin &join);
 	bool RequiresMarkGroupMetadata(const LogicalComparisonJoin &join);
 	LogicalPlanSQLExportResult ExportJoin(LogicalOperator &op, const LogicalPlanVerificationPath &path);
-	optional<LogicalPlanVerificationIssue> CheckExpressionGetInput(LogicalExpressionGet &get,
-	                                                               const LogicalPlanVerificationPath &path);
-	LogicalPlanSQLExportResult ExportExpressionGetInput(LogicalExpressionGet &get,
-	                                                    const LogicalPlanVerificationPath &path,
-	                                                    vector<LogicalPlanSQLExportField> fields);
+
 	LogicalPlanSQLExportResult ExportRow(unique_ptr<SelectNode> select, unique_ptr<ParsedExpression> value,
 	                                     vector<LogicalPlanSQLExportField> fields);
-	LogicalPlanSQLExportResult ExportConstantSource(LogicalOperator &op, const LogicalPlanVerificationPath &path);
 	unique_ptr<SelectNode> ForwardFields(const LogicalPlanSQLExportedChild &child,
 	                                     const vector<LogicalPlanSQLExportField> &fields,
 	                                     optional_ptr<const SelectNode> plain = nullptr);

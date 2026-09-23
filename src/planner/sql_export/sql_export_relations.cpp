@@ -356,7 +356,7 @@ LogicalPlanSQLExportResult LogicalSetOperation::ToSQL(LogicalPlanSQLExportContex
 		// Retain the UNION boundary when optimization removed every other arm.
 		LogicalEmptyResult empty(op.types, op.GetColumnBindings());
 		empty.ResolveOperatorTypes();
-		auto exported = export_context.ExportConstantSource(empty, path);
+		auto exported = empty.ToSQL(export_context, path);
 		if (exported.HasError()) {
 			return exported;
 		}

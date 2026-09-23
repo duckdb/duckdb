@@ -187,7 +187,7 @@ LogicalPlanSQLExportResult LogicalColumnDataGet::ToSQL(LogicalPlanSQLExportConte
 	if (get.collection->Count() == 0) {
 		LogicalEmptyResult empty(get.types, get.GetColumnBindings());
 		empty.ResolveOperatorTypes();
-		return export_context.ExportConstantSource(empty, path);
+		return empty.ToSQL(export_context, path);
 	}
 	auto fields = CreateFields(get, path);
 	if (fields.HasError()) {
@@ -252,7 +252,7 @@ LogicalPlanSQLExportResult LogicalExpressionGet::ToSQL(LogicalPlanSQLExportConte
 		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
 	}
 	if (get.children[0]->type != LogicalOperatorType::LOGICAL_DUMMY_SCAN) {
-		return export_context.ExportExpressionGetInput(get, path, std::move(fields.GetValue()));
+		return ExportSQLInput(export_context, path, std::move(fields.GetValue()));
 	}
 
 	auto values = make_uniq<ExpressionListRef>();
@@ -288,32 +288,24 @@ LogicalPlanSQLExportResult LogicalExpressionGet::ToSQL(LogicalPlanSQLExportConte
 	return LogicalPlanSQLExportResult::Success(std::move(relation));
 }
 
-optional<LogicalPlanVerificationIssue>
-logical_plan_sql_export::LogicalPlanSQLExportContext::CheckExpressionGetInput(LogicalExpressionGet &get,
-                                                                              const LogicalPlanVerificationPath &path) {
+LogicalPlanSQLExportResult LogicalExpressionGet::ExportSQLInput(LogicalPlanSQLExportContext &export_context,
+                                                                const LogicalPlanVerificationPath &path,
+                                                                vector<LogicalPlanSQLExportField> fields) {
+	auto &get = *this;
 	if (HasEffectfulExpressionSubtree(get)) {
-		return PlanUnsupportedFeature(path, "values_expression_evaluation",
-		                              "VALUES with input requires nonvolatile, nonthrowing expressions");
+		return PlanFailure(PlanUnsupportedFeature(path, "values_expression_evaluation",
+		                                          "VALUES with input requires nonvolatile, nonthrowing expressions"));
 	}
-	return {};
-}
-
-LogicalPlanSQLExportResult logical_plan_sql_export::LogicalPlanSQLExportContext::ExportExpressionGetInput(
-    LogicalExpressionGet &get, const LogicalPlanVerificationPath &path, vector<LogicalPlanSQLExportField> fields) {
-	auto issue = CheckExpressionGetInput(get, path);
-	if (issue) {
-		return PlanFailure(std::move(*issue));
-	}
-	auto child = ExportChild(*get.children[0], PlanChildPath(path, 0));
+	auto child = export_context.ExportChild(*get.children[0], PlanChildPath(path, 0));
 	if (child.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(child.GetIssues());
 	}
-	auto expression_context = CreateBindingContext(context, {child.GetValue()});
+	auto expression_context = CreateBindingContext(export_context.context, {child.GetValue()});
 	auto expressions = CollectExpressions(get);
 	auto select = make_uniq<SelectNode>();
 	select->from_table = CreateSubquery(std::move(child.GetValue()));
 
-	auto row_alias = NextRelationAlias();
+	auto row_alias = export_context.NextRelationAlias();
 	auto cases = make_uniq<CaseExpression>();
 	auto rows = make_uniq<ExpressionListRef>();
 	rows->alias = row_alias;
@@ -323,8 +315,8 @@ LogicalPlanSQLExportResult logical_plan_sql_export::LogicalPlanSQLExportContext:
 		// Keep all expressions of a VALUES row in one evaluation group.
 		vector<FunctionArgument> arguments;
 		for (idx_t column = 0; column < fields.size(); column++) {
-			auto expression =
-			    ExportExpression(get, expressions, row * fields.size() + column, expression_context, path);
+			auto expression = export_context.ExportExpression(get, expressions, row * fields.size() + column,
+			                                                  expression_context, path);
 			if (expression.HasError()) {
 				return LogicalPlanSQLExportResult::Failure(expression.GetIssues());
 			}
@@ -356,7 +348,7 @@ LogicalPlanSQLExportResult logical_plan_sql_export::LogicalPlanSQLExportContext:
 		select->from_table = std::move(join);
 		value = std::move(cases);
 	}
-	return ExportRow(std::move(select), std::move(value), std::move(fields));
+	return export_context.ExportRow(std::move(select), std::move(value), std::move(fields));
 }
 
 LogicalPlanSQLExportResult logical_plan_sql_export::LogicalPlanSQLExportContext::ExportRow(
@@ -388,9 +380,8 @@ LogicalPlanSQLExportResult logical_plan_sql_export::LogicalPlanSQLExportContext:
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields)});
 }
 
-LogicalPlanSQLExportResult
-logical_plan_sql_export::LogicalPlanSQLExportContext::ExportConstantSource(LogicalOperator &op,
-                                                                           const LogicalPlanVerificationPath &path) {
+static LogicalPlanSQLExportResult ExportConstantSource(LogicalOperator &op, bool has_rows,
+                                                       const LogicalPlanVerificationPath &path) {
 	D_ASSERT(op.children.empty() && op.expressions.empty());
 	auto fields = CreateFields(op, path);
 	if (fields.HasError()) {
@@ -406,7 +397,7 @@ logical_plan_sql_export::LogicalPlanSQLExportContext::ExportConstantSource(Logic
 		expression.GetValue()->SetAlias(FieldIdentifier(i));
 		select->select_list.push_back(std::move(expression.GetValue()));
 	}
-	if (op.type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+	if (!has_rows) {
 		select->where_clause = ConstantExpression::FromValue(Value::BOOLEAN(false));
 	}
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields.GetValue())});
@@ -414,12 +405,12 @@ logical_plan_sql_export::LogicalPlanSQLExportContext::ExportConstantSource(Logic
 
 LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
 LogicalDummyScan::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path) {
-	return context.ExportConstantSource(*this, path);
+	return ExportConstantSource(*this, true, path);
 }
 
 LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
 LogicalEmptyResult::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path) {
-	return context.ExportConstantSource(*this, path);
+	return ExportConstantSource(*this, false, path);
 }
 
 } // namespace duckdb

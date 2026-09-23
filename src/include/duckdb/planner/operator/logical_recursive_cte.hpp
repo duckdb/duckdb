@@ -48,6 +48,12 @@ public:
 	vector<TableIndex> GetTableIndex() const override;
 	string GetName() const override;
 
+private:
+	friend class logical_plan_sql_export::LogicalPlanSQLExportContext;
+	LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
+	ExportSQLDefinition(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path,
+	                    const Identifier &name);
+
 protected:
 	void ResolveTypes() override;
 };
