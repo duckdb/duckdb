@@ -13,6 +13,8 @@
         "test/sql/logging/test_logging_function.test",
         "test/sql/logging/logging_buffer_size.test",
         "test/sql/logging/logging_context_ids.test",
+        "test/sql/logging/http_logging.test",
+        "test/sql/logging/file_system_logging.test",
         "test/sql/pragma/test_query_log.test",
         "test/sql/logging/logging_file_truncate_rewrite.test"
       ]
