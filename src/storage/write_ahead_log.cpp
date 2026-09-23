@@ -14,7 +14,7 @@
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
-#include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/storage/single_file_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -414,12 +414,6 @@ void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, T
 	WriteIndexStorage(serializer, list.SerializeToWAL(index_oid, options));
 }
 
-void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, TableIndexList &list,
-                    const Identifier &name) {
-	auto options = GetIndexSerializationOptions(db);
-	WriteIndexStorage(serializer, list.SerializeToWAL(name, options));
-}
-
 void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 	WriteAheadLogSerializer serializer(*this, WALType::CREATE_INDEX);
 	serializer.WriteProperty(101, "index_catalog_entry", &entry);
@@ -567,18 +561,14 @@ void WriteAheadLog::WriteAlter(CatalogEntry &entry, const AlterInfo &info) {
 		return serializer.End();
 	}
 
-	auto &table_info = info.Cast<AlterTableInfo>();
-	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
-	auto &unique = constraint_info.constraint->Cast<UniqueConstraint>();
-
-	auto &table_entry = entry.Cast<DuckTableEntry>();
-	auto &parent = table_entry.Parent().Cast<DuckTableEntry>();
-	auto &parent_info = parent.GetStorage().GetDataTableInfo();
-	auto &list = parent_info->GetIndexes();
-
-	auto name = unique.GetName(parent.name);
-	auto &database = GetDatabase();
-	SerializeIndex(database, serializer, list, name);
+	auto &table = entry.Cast<DuckTableEntry>();
+	auto &parent = entry.Parent().Cast<DuckTableEntry>();
+	auto constraint_index = table.GetConstraints().size();
+	D_ASSERT(constraint_index < parent.GetConstraints().size());
+	auto &constraint = *parent.GetConstraints()[constraint_index];
+	D_ASSERT(constraint.type == ConstraintType::UNIQUE);
+	auto &list = parent.GetStorage().GetDataTableInfo()->GetIndexes();
+	SerializeIndex(GetDatabase(), serializer, list, constraint.GetBackingIndexOid());
 	serializer.End();
 }
 

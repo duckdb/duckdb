@@ -6,9 +6,11 @@
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/index_map.hpp"
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
@@ -178,6 +180,8 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 		if (constraint->type == ConstraintType::UNIQUE) {
 			// UNIQUE constraint: Create a unique index.
 			auto &unique = constraint->Cast<UniqueConstraint>();
+			auto index_oid = DatabaseManager::Get(catalog.GetDatabase()).NextOid();
+			constraint->SetBackingIndexOid(index_oid);
 			IndexConstraintType constraint_type = IndexConstraintType::UNIQUE;
 			if (unique.is_primary_key) {
 				constraint_type = IndexConstraintType::PRIMARY;
@@ -186,7 +190,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 			auto column_indexes = unique.GetLogicalIndexes(columns);
 			if (info.indexes.empty()) {
 				auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
-				storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info));
+				storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info), index_oid);
 				continue;
 			}
 
@@ -197,7 +201,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				index_storage_info.name = name_info.name;
 			}
 
-			storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_storage_info));
+			storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_storage_info), index_oid);
 			continue;
 		}
 
@@ -206,6 +210,8 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 			auto &bfk = constraint->Cast<ForeignKeyConstraint>();
 			if (bfk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
 			    bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
+				auto index_oid = DatabaseManager::Get(catalog.GetDatabase()).NextOid();
+				constraint->SetBackingIndexOid(index_oid);
 				vector<LogicalIndex> column_indexes;
 				for (const auto &physical_index : bfk.info.fk_keys) {
 					auto &col = columns.GetColumn(physical_index);
@@ -215,7 +221,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				if (info.indexes.empty()) {
 					auto constraint_type = IndexConstraintType::FOREIGN;
 					auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
-					storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info));
+					storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info), index_oid);
 					continue;
 				}
 
@@ -226,7 +232,8 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 					index_storage_info.name = name_info.name;
 				}
 
-				storage->AddIndex(columns, column_indexes, IndexConstraintType::FOREIGN, std::move(index_storage_info));
+				storage->AddIndex(columns, column_indexes, IndexConstraintType::FOREIGN, std::move(index_storage_info),
+				                  index_oid);
 			}
 		}
 	}
@@ -1393,7 +1400,6 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 
 	// Rolls back any physical index creation for index-based constraints.
 
-	auto &table = Cast<DuckTableEntry>();
 	auto &prev_table = prev_entry.Cast<DuckTableEntry>();
 	auto &prev_info = prev_table.GetStorage().GetDataTableInfo();
 	auto &prev_indexes = prev_info->GetIndexes();
@@ -1401,24 +1407,20 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 	// Find all index-based constraints that exist in rollback_table, but not in table.
 	// Then, remove them.
 
-	identifier_set_t names;
+	unordered_set<idx_t> prev_oids;
 	for (const auto &constraint : prev_table.GetConstraints()) {
 		if (constraint->type != ConstraintType::UNIQUE) {
 			continue;
 		}
-		const auto &unique = constraint->Cast<UniqueConstraint>();
-		auto index_name = unique.GetName(prev_table.name);
-		names.insert(index_name);
+		prev_oids.insert(constraint->GetBackingIndexOid());
 	}
-
 	for (const auto &constraint : GetConstraints()) {
 		if (constraint->type != ConstraintType::UNIQUE) {
 			continue;
 		}
-		const auto &unique = constraint->Cast<UniqueConstraint>();
-		auto index_name = unique.GetName(table.name);
-		if (names.find(index_name) == names.end()) {
-			prev_indexes.RemoveIndex(index_name);
+		auto oid = constraint->GetBackingIndexOid();
+		if (prev_oids.find(oid) == prev_oids.end()) {
+			prev_indexes.RemoveIndex(oid);
 		}
 	}
 }
@@ -1432,13 +1434,14 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 	auto &table_info = create_info->Cast<CreateTableInfo>();
 
 	if (info.constraint->type == ConstraintType::UNIQUE) {
-		const auto &unique = info.constraint->Cast<UniqueConstraint>();
+		auto &unique = info.constraint->Cast<UniqueConstraint>();
 		const auto existing_pk = GetPrimaryKey();
 
 		if (unique.is_primary_key && existing_pk) {
 			auto existing_name = existing_pk->ToString();
 			throw CatalogException("table %s can have only one primary key: %s", name, existing_name);
 		}
+		unique.SetBackingIndexOid(DatabaseManager::Get(context).NextOid());
 		table_info.constraints.push_back(info.constraint->Copy());
 
 	} else {
