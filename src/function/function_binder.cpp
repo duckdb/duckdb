@@ -495,8 +495,15 @@ static void PlaceArguments(ClientContext &context, const T &function,
 	auto &signature = function.GetSignature();
 	const auto positional_count = signature.GetPositionalParameterCount();
 	for (idx_t i = 0; i < positional_arguments.size(); i++) {
-		auto value = FoldArgument(context, *positional_arguments[i]);
 		auto target_type = i < positional_count ? signature.GetParameter(i).GetType() : signature.GetVarArgs();
+		if (target_type.id() == LogicalTypeId::TABLE) {
+			// A TABLE parameter is filled by the subquery itself rather than by a value, so its slot holds a plain
+			// NULL. A NULL of type TABLE would not do: TABLE has no physical type, so such a value cannot be read
+			// back when the plan is deserialized.
+			parameters.emplace_back();
+			continue;
+		}
+		auto value = FoldArgument(context, *positional_arguments[i]);
 		if (RequiresCast(value.type(), target_type) == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
 			value = value.CastAs(context, target_type);
 		}

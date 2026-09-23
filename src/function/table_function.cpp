@@ -66,12 +66,63 @@ BoundTableFunction::BoundTableFunction(const TableFunction &function)
 }
 
 BoundTableFunction::BoundTableFunction(shared_ptr<const TableFunction> function_p)
-    // only the behaviour is copied - the definition keeps the declaration
-    : BaseTableFunction(*function_p) {
+    : BaseTableFunction(nullptr, nullptr, nullptr, nullptr) {
 	definition = std::move(function_p);
 	auto &function = *definition;
 	qualified_name = function.GetQualifiedName();
 	extra_info = function.extra_info;
+
+	// the behaviour is taken over one member at a time - the declaration stays behind on the definition
+	bind = function.bind;
+	bind_replace = function.bind_replace;
+	bind_operator = function.bind_operator;
+	init_global = function.init_global;
+	init_local = function.init_local;
+	this->function = function.function;
+	in_out_function = function.in_out_function;
+	in_out_function_final = function.in_out_function_final;
+	statistics = function.statistics;
+	statistics_extended = function.statistics_extended;
+	dependency = function.dependency;
+	cardinality = function.cardinality;
+	get_metrics = function.get_metrics;
+	pushdown_complex_filter = function.pushdown_complex_filter;
+	pushdown_expression = function.pushdown_expression;
+	combine_schema = function.combine_schema;
+	claim_batch = function.claim_batch;
+	finish_batch = function.finish_batch;
+	supports_read_ahead = function.supports_read_ahead;
+	schedule_io = function.schedule_io;
+	to_string = function.to_string;
+	table_scan_progress = function.table_scan_progress;
+	get_partition_data = function.get_partition_data;
+	get_bind_info = function.get_bind_info;
+	projection_expression_pushdown = function.projection_expression_pushdown;
+	get_multi_file_reader = function.get_multi_file_reader;
+	supports_pushdown_type = function.supports_pushdown_type;
+	supports_pushdown_extract = function.supports_pushdown_extract;
+	is_repeatable = function.is_repeatable;
+	get_partition_info = function.get_partition_info;
+	get_partition_stats = function.get_partition_stats;
+	get_virtual_columns = function.get_virtual_columns;
+	get_row_id_columns = function.get_row_id_columns;
+	set_scan_order = function.set_scan_order;
+	set_partitions_to_scan = function.set_partitions_to_scan;
+	serialize = function.serialize;
+	deserialize = function.deserialize;
+	verify_serialization = function.verify_serialization;
+	projection_pushdown = function.projection_pushdown;
+	supports_cast_map = function.supports_cast_map;
+	filter_pushdown = function.filter_pushdown;
+	filter_prune = function.filter_prune;
+	sampling_pushdown = function.sampling_pushdown;
+	late_materialization = function.late_materialization;
+	function_info = function.function_info;
+	BaseTableFunction::return_type = function.return_type;
+	call_return_type = function.call_return_type;
+	order_preservation_type = function.order_preservation_type;
+	global_initialization = function.global_initialization;
+	parallelism = function.parallelism;
 
 	// the parameters a call fills by position - these are the types plan serialization records, so the named
 	// options that follow them take no part
