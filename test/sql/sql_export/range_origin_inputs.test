@@ -66,6 +66,14 @@ FROM (VALUES (1::BIGINT),(2),(3)) t(x) ORDER BY x;
 2	3
 3	5
 
+query II
+SELECT x::INTEGER, count(*) OVER (ORDER BY x DESC RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING)
+FROM (VALUES (1::DECIMAL(38,1)),(2),(3)) t(x) ORDER BY x;
+----
+1	2
+2	3
+3	2
+
 endloop
 
 endloop

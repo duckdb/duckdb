@@ -42,28 +42,21 @@ static WindowSQLFrame ReconstructWindowFrame(const BoundWindowExpression &expres
 	};
 	WindowSQLFrame frame;
 	if (expression.OrderBy().size() == 1) {
-		frame.order = expression.OrderBy()[0].expression.get();
-		const bool has_original_order_type = frame.order && expression.SQLRangeOrderType().IsComplete();
-		const bool order_type_changed =
-		    has_original_order_type &&
-		    !frame.order->GetReturnType().EqualsIncludingCollation(expression.SQLRangeOrderType());
-		if (order_type_changed && BoundCastExpression::IsCast(*frame.order)) {
-			auto &cast = frame.order->Cast<BoundFunctionExpression>();
-			const bool has_regular_cast =
-			    BoundCastExpression::HasValidBindData(cast) && !BoundCastExpression::IsTryCast(cast);
-			const bool has_cast_child = cast.GetChildren().size() == 1 && cast.GetChildren()[0];
-			const bool restores_order_type =
-			    has_cast_child &&
-			    cast.GetChildren()[0]->GetReturnType().EqualsIncludingCollation(expression.SQLRangeOrderType());
-			if (has_regular_cast && restores_order_type) {
-				frame.order = cast.GetChildren()[0].get();
-			}
+		frame.order = WindowRangeCast::Match(*expression.OrderBy()[0].expression, expression.SQLRangeOrderCasts());
+		if (frame.order && expression.SQLRangeOrderType().IsComplete() &&
+		    !frame.order->GetReturnType().EqualsIncludingCollation(expression.SQLRangeOrderType())) {
+			frame.order = nullptr;
 		}
 	}
 	auto range_offset = [&](const unique_ptr<Expression> &endpoint, WindowBoundary boundary,
-	                        const unique_ptr<Expression> &literal) -> optional_ptr<const Expression> {
+	                        const unique_ptr<Expression> &literal,
+	                        const unique_ptr<WindowRangeBoundary> &origin) -> optional_ptr<const Expression> {
 		if (!is_range_offset(boundary)) {
 			return endpoint.get();
+		}
+		if (!origin || !endpoint || !frame.order || origin->boundary != boundary ||
+		    origin->direction != expression.OrderBy()[0].type) {
+			return nullptr;
 		}
 		const bool has_literal_offset = literal && literal->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT;
 		const bool has_retained_endpoint = has_literal_offset && endpoint && frame.order;
@@ -75,36 +68,11 @@ static WindowSQLFrame ReconstructWindowFrame(const BoundWindowExpression &expres
 				return literal.get();
 			}
 		}
-		if (!endpoint || expression.OrderBy().size() != 1 ||
-		    endpoint->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		auto input = origin->Match(*endpoint, *frame.order);
+		if (!input) {
 			return nullptr;
 		}
-		auto &arithmetic = endpoint->Cast<BoundFunctionExpression>();
-		auto &order = expression.OrderBy()[0];
-		const bool subtract =
-		    (boundary == WindowBoundary::EXPR_PRECEDING_RANGE) == (order.type == OrderType::ASCENDING);
-		auto definition = arithmetic.Function().GetDefinition();
-		auto arithmetic_name = definition ? RebindableFunctionName(*definition) : optional<QualifiedName>();
-		const bool has_expected_function =
-		    arithmetic_name && *arithmetic_name == QualifiedName("system", "main", subtract ? "-" : "+");
-		if (!has_expected_function) {
-			return nullptr;
-		}
-		auto &children = arithmetic.GetChildren();
-		if (children.size() != 2 || !children[0] || !children[1]) {
-			return nullptr;
-		}
-		const bool has_explicit_order = order.type == OrderType::ASCENDING || order.type == OrderType::DESCENDING;
-		if (!order.expression || !frame.order || !has_explicit_order) {
-			return nullptr;
-		}
-		const bool matches_order_type = endpoint->GetReturnType() == order.expression->GetReturnType();
-		const bool matches_order_operand =
-		    Expression::Equals(*children[0], *frame.order) || Expression::Equals(*children[0], *order.expression);
-		if (!matches_order_type || !matches_order_operand) {
-			return nullptr;
-		}
-		auto &offset = *arithmetic.GetChildren()[1];
+		auto &offset = *input;
 		if (offset.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
 		    offset.Cast<BoundConstantExpression>().GetValue().IsNull()) {
 			return nullptr;
@@ -126,8 +94,10 @@ static WindowSQLFrame ReconstructWindowFrame(const BoundWindowExpression &expres
 	};
 	frame.start_literal = retained_offset(expression.SQLRangeStart());
 	frame.end_literal = retained_offset(expression.SQLRangeEnd());
-	frame.start = range_offset(expression.StartExpr(), expression.WindowStart(), frame.start_literal);
-	frame.end = range_offset(expression.EndExpr(), expression.WindowEnd(), frame.end_literal);
+	frame.start = range_offset(expression.StartExpr(), expression.WindowStart(), frame.start_literal,
+	                           expression.SQLRangeStartBoundary());
+	frame.end =
+	    range_offset(expression.EndExpr(), expression.WindowEnd(), frame.end_literal, expression.SQLRangeEndBoundary());
 	return frame;
 }
 

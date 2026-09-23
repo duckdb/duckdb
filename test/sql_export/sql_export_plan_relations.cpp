@@ -283,14 +283,13 @@ TEST_CASE("Window SQL range origins survive copies and optional serialization fi
 			auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
 			REQUIRE(exported.IsSuccess());
 			window.RetainSQLRange(nullptr, nullptr, LogicalType::INVALID);
+			window.SQLRangeStartBoundaryMutable().reset();
+			window.SQLRangeEndBoundaryMutable().reset();
+			window.SQLRangeOrderCastsMutable().clear();
 			auto legacy = plan->Copy(*connection.context);
 			auto without_origin = LogicalPlanSQLExporter::Export(*connection.context, *legacy);
-			if (i < 2) {
-				REQUIRE(without_origin.HasError());
-				REQUIRE(without_origin.GetIssues()[0].construct->identifier == "window_range_offset");
-			} else {
-				REQUIRE(without_origin.IsSuccess());
-			}
+			REQUIRE(without_origin.HasError());
+			REQUIRE(without_origin.GetIssues()[0].construct->identifier == "window_range_offset");
 		}
 	}
 	connection.Rollback();
@@ -321,7 +320,28 @@ TEST_CASE("Window SQL export rejects unrelated RANGE endpoints",
 		REQUIRE(exported.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE);
 		REQUIRE(exported.GetIssues()[0].construct->identifier == "window_range_offset");
 	}
+	for (idx_t recovery = 0; recovery < 3; recovery++) {
+		window.StartExprMutable() = endpoint->Copy();
+		auto &function = window.StartExprMutable()->Cast<BoundFunctionExpression>().FunctionMutable();
+		auto definition = make_shared_ptr<ScalarFunction>(*function.GetDefinition());
+		if (recovery == 0) {
+			definition->SetUnbindCallback(
+			    [](FunctionUnbindInput &) -> unique_ptr<ParsedExpression> { return nullptr; });
+		} else if (recovery == 1) {
+			definition->GetProperties().SetCaptureArgumentAliases(true);
+		} else {
+			definition->GetProperties().SetRequiresExpressionNames(true);
+		}
+		function.SetDefinition(std::move(definition));
+		REQUIRE(LogicalPlanSQLExporter::Export(*connection.context, *plan).HasError());
+	}
 	window.StartExprMutable() = endpoint->Copy();
+	window.OrderByMutable()[0].type = OrderType::DESCENDING;
+	REQUIRE(LogicalPlanSQLExporter::Export(*connection.context, *plan).HasError());
+	window.OrderByMutable()[0].type = OrderType::ASCENDING;
+	window.WindowStartMutable() = WindowBoundary::EXPR_FOLLOWING_RANGE;
+	REQUIRE(LogicalPlanSQLExporter::Export(*connection.context, *plan).HasError());
+	window.WindowStartMutable() = WindowBoundary::EXPR_PRECEDING_RANGE;
 	window.StartExprMutable()->Cast<BoundFunctionExpression>().GetChildrenMutable()[1] =
 	    make_uniq<BoundConstantExpression>(Value::INTEGER(2));
 	auto changed = LogicalPlanSQLExporter::Export(*connection.context, *plan);
