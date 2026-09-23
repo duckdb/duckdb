@@ -162,16 +162,17 @@ inline bool IsValueNull(const char *null_str_ptr, const idx_t null_str_size, con
 		}
 	}
 	return true;
-}bool StringValueResult::HandleTooManyColumnsError(const char *value_ptr, const idx_t size) {
+}
+bool StringValueResult::HandleTooManyColumnsError(const char *value_ptr, const idx_t size) {
 	if (cur_col_id >= number_of_columns) {
 		if (state_machine.state_machine_options.strict_mode.GetValue()) {
 			bool error = true;
 			if (cur_col_id == number_of_columns && ((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
 				// we make an exception if the first over-value is null
 				bool is_value_null = false;
-			for (idx_t i = 0; i < null_str_count; i++) {
-				is_value_null = is_value_null || IsValueNull(null_str_ptr[i], null_str_size[i], value_ptr, size);
-			}
+				for (idx_t i = 0; i < null_str_count; i++) {
+					is_value_null = is_value_null || IsValueNull(null_str_ptr[i], null_str_size[i], value_ptr, size);
+				}
 				error = !is_value_null;
 			}
 			if (error) {
