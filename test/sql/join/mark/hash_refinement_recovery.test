@@ -16,16 +16,25 @@ foreach external false true
 statement ok
 SET debug_force_external={external};
 
+foreach optimizer true false
+
 statement ok
 CREATE OR REPLACE TABLE p AS SELECT NULL::BIGINT a, 0::BIGINT x, 100::BIGINT z;
 
 statement ok
 CREATE OR REPLACE TABLE b AS SELECT i a, i+1 y, i z, true fail FROM range(17) t(i);
 
+# Disabling the optimizer at prepare time retains the physical plan across errors.
+statement ok
+SET enable_optimizer={optimizer};
+
 statement ok
 PREPARE refinement AS SELECT __mark_join_marker FROM p JOIN BY(TYPE MARK) b
 ON p.a=b.a AND p.x<b.y AND p.z>b.z
 AND CASE WHEN b.fail AND p.x+b.y>0 THEN error('refinement failed') ELSE false END;
+
+statement ok
+SET enable_optimizer=true;
 
 # The NULL equality key sends this error through range-index refinement.
 statement error
@@ -56,6 +65,8 @@ false
 
 statement ok
 DEALLOCATE refinement;
+
+endloop
 
 endloop
 
