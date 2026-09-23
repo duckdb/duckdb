@@ -757,7 +757,7 @@ void add_env_tag(vector<string> &tags, const string &name, const string *value =
 void SQLLogicTestRunner::ConfigureDefaultInMemoryTemporaryDirectory(DuckDB &database, const string &db_path) {
 	auto &db_config = DBConfig::GetConfig(*database.instance);
 	if (!db_path.empty() || !db_config.options.use_temporary_directory ||
-	    db_config.options.temporary_directory != ".tmp") {
+	    db_config.options.temporary_directory != ".tmp" || !Settings::Get<EnableExternalAccessSetting>(db_config)) {
 		return;
 	}
 	auto normalized_script = StringUtil::Replace(file_name, "\\", "/");
