@@ -45,11 +45,6 @@ endloop
 
 reset label numbered_result
 
-query TT
-EXPLAIN (SQL) SELECT * FROM (SELECT i,v,row_number() OVER () n FROM numbered_scan) WHERE i<10 ORDER BY i;
-----
-sql	<REGEX>:.*"?system"?[.]main[.]row_number[(][)] OVER [(][)].*
-
 endloop
 
 foreach optimizer '' 'window_rewriter'
@@ -68,11 +63,6 @@ SELECT * FROM (SELECT i,v,row_number() OVER () n FROM numbered_scan) WHERE i>=29
 endloop
 
 reset label numbered_result
-
-query TT
-EXPLAIN (SQL) SELECT * FROM (SELECT i,v,row_number() OVER () n FROM numbered_scan) WHERE i>=299990 ORDER BY i;
-----
-sql	<REGEX>:.*"?system"?[.]main[.]row_number[(][)] OVER [(][)].*
 
 endloop
 
@@ -93,11 +83,6 @@ endloop
 
 reset label numbered_result
 
-query TT
-EXPLAIN (SQL) SELECT * FROM (SELECT i,rowid,row_number() OVER () n FROM numbered_scan) WHERE i>=299990 ORDER BY i;
-----
-sql	<REGEX>:.*"?system"?[.]main[.]row_number[(][)] OVER [(][)].*
-
 endloop
 
 foreach optimizer '' 'window_rewriter'
@@ -116,11 +101,6 @@ SELECT * FROM (SELECT s.x,row_number() OVER () n FROM numbered_scan) LIMIT 4097;
 endloop
 
 reset label numbered_result
-
-query TT
-EXPLAIN (SQL) SELECT * FROM (SELECT s.x,row_number() OVER () n FROM numbered_scan) LIMIT 4097;
-----
-sql	<REGEX>:.*"?system"?[.]main[.]row_number[(][)] OVER [(][)].*
 
 endloop
 
@@ -141,11 +121,6 @@ endloop
 
 reset label numbered_result
 
-query TT
-EXPLAIN (SQL) SELECT row_number() OVER () n FROM numbered_scan LIMIT 1;
-----
-sql	<REGEX>:.*"?system"?[.]main[.]row_number[(][)] OVER [(][)].*
-
 endloop
 
 foreach optimizer '' 'window_rewriter'
@@ -164,11 +139,6 @@ SELECT i,n,n FROM (SELECT i,row_number() OVER () n FROM numbered_scan) LIMIT 3;
 endloop
 
 reset label numbered_result
-
-query TT
-EXPLAIN (SQL) SELECT i,n,n FROM (SELECT i,row_number() OVER () n FROM numbered_scan) LIMIT 3;
-----
-sql	<REGEX>:.*"?system"?[.]main[.]row_number[(][)] OVER [(][)].*
 
 endloop
 

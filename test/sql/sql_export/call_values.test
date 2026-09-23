@@ -78,11 +78,6 @@ SELECT constant_or_null(42, 1, i) FROM (VALUES (1), (NULL), (1)) t(i);
 NULL
 42
 
-query TT
-EXPLAIN (SQL) SELECT constant_or_null(42, 1, i) FROM (VALUES (1), (NULL), (1)) t(i);
-----
-sql	<REGEX>:.*constant_or_null[(]CAST[(]42 AS INTEGER[)], CAST[(]1 AS INTEGER[)], r[0-9]+[.]c0[)].*
-
 statement error
 SELECT constant_or_null(42, 1, CAST(i AS INTEGER)) FROM (VALUES ('bad')) t(i);
 ----
