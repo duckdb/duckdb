@@ -253,7 +253,7 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<Ope
 				    representable = false;
 				    return;
 			    }
-			    column.BindingMutable() = ColumnBinding(TableIndex(TableFunctionToSQLInput::FILE_FILTER_TABLE_INDEX),
+			    column.BindingMutable() = ColumnBinding(TableIndex(ExtraOperatorInfo::FILE_FILTER_TABLE_INDEX),
 			                                            ProjectionIndex(index.GetPrimaryIndex()));
 		    });
 		if (!representable) {

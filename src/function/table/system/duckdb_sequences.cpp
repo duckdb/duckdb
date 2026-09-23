@@ -158,7 +158,6 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 void DuckDBSequencesFun::RegisterFunction(BuiltinFunctions &set) {
 	auto function =
 	    TableFunction("duckdb_sequences", {}, DuckDBSequencesFunction, DuckDBSequencesBind, DuckDBSequencesInit);
-	function.to_sql = TableFunction::ToSQLFunctionCall;
 	set.AddFunction(std::move(function));
 }
 

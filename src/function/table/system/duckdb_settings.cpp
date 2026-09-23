@@ -182,7 +182,6 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 
 void DuckDBSettingsFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction settings_fun("duckdb_settings", {}, DuckDBSettingsFunction, DuckDBSettingsBind, DuckDBSettingsInit);
-	settings_fun.to_sql = TableFunction::ToSQLFunctionCall;
 	settings_fun.named_parameters["debug"] = LogicalType::BOOLEAN;
 	settings_fun.named_parameters["deprecated"] = LogicalType::BOOLEAN;
 	set.AddFunction(settings_fun);

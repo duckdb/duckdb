@@ -21,6 +21,8 @@ namespace duckdb {
 
 class ExtraOperatorInfo {
 public:
+	static constexpr idx_t FILE_FILTER_TABLE_INDEX = 0;
+
 	ExtraOperatorInfo() : file_filters(""), sample_options(nullptr) {
 	}
 	ExtraOperatorInfo(ExtraOperatorInfo &&extra_info) noexcept = default;

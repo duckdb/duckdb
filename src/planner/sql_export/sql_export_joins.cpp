@@ -220,6 +220,9 @@ LogicalJoin::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerifi
 
 LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
 LogicalUnconditionalJoin::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path) {
+	if (type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT && type != LogicalOperatorType::LOGICAL_POSITIONAL_JOIN) {
+		return LogicalOperator::ToSQL(context, path);
+	}
 	return context.ExportJoin(*this, path);
 }
 

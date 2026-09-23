@@ -47,7 +47,7 @@ The C++ exporter consumes an already planned logical tree. It does not choose an
 
 The logical-plan exporter owns alias allocation, ancestor tracking, and named-relation scope in one state object. Its implementations are grouped by sources, VALUES/chunks, relational operators, joins, CTEs, LIMIT, and PIVOT. Shared binding and relation construction live in `sql_export_scope.cpp`.
 
-The expression exporter owns binding context and lambda reference scopes. Literal construction, function calls, and window expressions have separate implementations. Generic table-function invocation reconstruction lives in `table_function_sql_export.cpp`; source-specific callbacks remain with their sources.
+The expression exporter owns binding context and lambda reference scopes. Literal construction, function calls, and window expressions have separate implementations. Ordinary table functions reconstruct their qualified retained invocation by default. Source-specific callbacks return only a table reference; scan projection, ordinality, sampling and predicates are applied centrally. Generic source reconstruction lives in `table_function_sql_export.cpp`.
 
 Internal state declarations live beside their implementations under `src/planner/sql_export/`. Public entry points retain their headers directly under `duckdb/planner/`. General logical-plan verification and repeatability analysis remain separate planner facilities. Statement replacement verification lives in `src/main/client_verify.cpp`.
 

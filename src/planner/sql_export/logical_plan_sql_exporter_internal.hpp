@@ -33,6 +33,14 @@ using LogicalPlanSQLExportResult = LogicalPlanVerificationResult<LogicalPlanSQLE
 
 using LogicalPlanSQLFieldResult = LogicalPlanVerificationResult<vector<LogicalPlanSQLExportField>>;
 
+struct SQLSourceQueryResult {
+	unique_ptr<QueryNode> query;
+	string unsupported_reason;
+};
+
+SQLSourceQueryResult ReconstructSQLSource(ClientContext &context, const LogicalGet &get, unique_ptr<TableRef> input,
+                                          const Identifier &relation_alias, bool source_ordinality);
+
 LogicalPlanVerificationPath PlanChildPath(const LogicalPlanVerificationPath &path, idx_t ordinal);
 
 LogicalPlanVerificationPath PlanExpressionPath(const LogicalPlanVerificationPath &path, idx_t ordinal);

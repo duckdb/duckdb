@@ -85,19 +85,13 @@ LogicalPlanSQLExportResult LogicalGet::ExportSQLSource(LogicalPlanSQLExportConte
 		}
 		input = CreateSubquery(std::move(child.GetValue()));
 	}
-	auto to_sql = get.function.to_sql;
-	if (!to_sql) {
-		return PlanFailure(UnsupportedSource(path, LogicalSourceIdentity(get), "to_sql_callback"));
-	}
 	if (ordinality) {
 		fields.GetValue().push_back(*ordinality);
 		scan_fields.push_back(*ordinality);
 	}
 	auto relation_alias = export_context.NextRelationAlias();
 	auto source_sql =
-	    to_sql(export_context.context, get,
-	           {std::move(input), relation_alias, bool(ordinality),
-	            get.extra_info.file_filter_expressions ? &*get.extra_info.file_filter_expressions : nullptr});
+	    ReconstructSQLSource(export_context.context, get, std::move(input), relation_alias, bool(ordinality));
 	if (!source_sql.query) {
 		auto guard = source_sql.unsupported_reason.empty() ? "to_sql_callback_declined" : source_sql.unsupported_reason;
 		return PlanFailure(UnsupportedSource(path, LogicalSourceIdentity(get), std::move(guard)));

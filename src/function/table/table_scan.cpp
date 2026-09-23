@@ -1234,35 +1234,6 @@ void SetPartitionsToScan(vector<idx_t> partition_indices, optional_ptr<FunctionD
 	bind_data.partitions_to_scan = make_uniq<unordered_set<idx_t>>(partition_indices.begin(), partition_indices.end());
 }
 
-static unique_ptr<ParsedExpression> TableScanColumnToSQL(const ColumnIndex &index, const LogicalType &type,
-                                                         unique_ptr<ParsedExpression> expression) {
-	if (!index.IsPushdownExtract()) {
-		if (index.HasType() && index.GetType() != type) {
-			return make_uniq<CastExpression>(index.GetType(), std::move(expression));
-		}
-		return expression;
-	}
-	D_ASSERT(index.ChildIndexCount() == 1);
-	auto &child = index.GetChildIndex(0);
-	Value key;
-	LogicalType child_type;
-	if (child.HasPrimaryIndex()) {
-		D_ASSERT(type.id() == LogicalTypeId::STRUCT);
-		auto field = child.GetPrimaryIndex();
-		key = StructType::IsUnnamed(type) ? Value::BIGINT(NumericCast<int64_t>(field + 1))
-		                                  : Value(StructType::GetChildName(type, field));
-		child_type = StructType::GetChildType(type, field);
-	} else {
-		D_ASSERT(type.id() == LogicalTypeId::VARIANT);
-		key = Value(child.GetFieldName());
-		child_type = type;
-	}
-	auto extract = make_uniq<OperatorExpression>(ExpressionType::ARRAY_EXTRACT);
-	extract->GetChildrenMutable().push_back(std::move(expression));
-	extract->GetChildrenMutable().push_back(ConstantExpression::FromValue(key));
-	return TableScanColumnToSQL(child, child_type, std::move(extract));
-}
-
 static string TableScanToSQLGuard(const LogicalGet &get, bool has_input) {
 	auto &data = get.bind_data->Cast<TableScanBindData>();
 	if (has_input) {
@@ -1299,45 +1270,15 @@ static string TableScanToSQLGuard(const LogicalGet &get, bool has_input) {
 	return string();
 }
 
-static TableFunctionToSQLResult TableScanToSQL(ClientContext &, const LogicalGet &get, TableFunctionToSQLInput input) {
-	if (input.source_ordinality || (input.file_filters && !input.file_filters->empty())) {
-		return {nullptr, "table_scan_source_modifiers"};
-	}
-	const auto &relation_alias = input.relation_alias;
-	auto guard = TableScanToSQLGuard(get, input.child != nullptr);
+static TableFunctionToSQLResult TableScanToSQL(ClientContext &, const LogicalGet &get) {
+	auto guard = TableScanToSQLGuard(get, !get.children.empty());
 	if (!guard.empty()) {
 		return {nullptr, std::move(guard)};
 	}
-	auto &data = get.bind_data->Cast<TableScanBindData>();
 	auto table = make_uniq<BaseTableRef>();
-	table->SetQualifiedName(data.table.schema.GetQualifiedName(data.table.name));
-	table->alias = relation_alias;
-	bool positional_names = false;
-	for (auto &column : data.table.GetColumns().Logical()) {
-		positional_names |= column.Name() == Identifier("rowid") || column.Name() == Identifier("rownum");
-	}
-	for (auto &column : data.table.GetColumns().Logical()) {
-		table->column_name_alias.push_back(
-		    positional_names ? Identifier("column" + to_string(table->column_name_alias.size())) : column.Name());
-	}
-	auto select = make_uniq<SelectNode>();
-	for (auto &index : get.GetColumnIds()) {
-		if (index.IsRowIdColumn()) {
-			select->select_list.push_back(make_uniq<ColumnRefExpression>(Identifier("rowid"), table->alias));
-		} else if (index.IsRowNumberColumn()) {
-			auto row_number = make_uniq<WindowExpression>("system", "main", "row_number");
-			row_number->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
-			row_number->WindowEndMutable() = WindowBoundary::CURRENT_ROW_RANGE;
-			select->select_list.push_back(std::move(row_number));
-		} else {
-			auto &definition = data.table.GetColumn(index.ToLogical());
-			auto column =
-			    make_uniq<ColumnRefExpression>(table->column_name_alias[index.GetPrimaryIndex()], table->alias);
-			select->select_list.push_back(TableScanColumnToSQL(index, definition.Type(), std::move(column)));
-		}
-	}
-	select->from_table = std::move(table);
-	return {std::move(select), {}};
+	auto entry = get.GetTable();
+	table->SetQualifiedName(entry->schema.GetQualifiedName(entry->name));
+	return {std::move(table), {}};
 }
 
 TableFunction TableScanFunction::GetFunction() {

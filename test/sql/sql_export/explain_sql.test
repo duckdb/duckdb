@@ -113,7 +113,7 @@ JOIN BY (TYPE MARK) (VALUES (1,NULL::INTEGER)) r(b,c) ON a=b AND a+c>0;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query:.*MARK condition.*
 
-statement error
+query TT
 EXPLAIN (SQL) SELECT * FROM duckdb_views();
 ----
-EXPLAIN (SQL) cannot render table function "duckdb_views".
+sql	<REGEX>:.*FROM.*duckdb_views.*

@@ -428,28 +428,13 @@ typedef unique_ptr<FunctionData> (*table_function_combine_schema_t)(ClientContex
 typedef InsertionOrderPreservingMap<string> (*table_function_to_string_t)(TableFunctionToStringInput &input);
 
 struct TableFunctionToSQLResult {
-	unique_ptr<QueryNode> query;
+	unique_ptr<TableRef> source;
 	string unsupported_reason;
 };
 
-struct TableFunctionToSQLInput {
-	static constexpr idx_t FILE_FILTER_TABLE_INDEX = 0;
-
-	unique_ptr<TableRef> child;
-	Identifier relation_alias;
-	//! Append one ordinality column to replace a surrounding row-number window.
-	bool source_ordinality = false;
-	//! Borrowed predicates bound to FILE_FILTER_TABLE_INDEX and unprojected returned_types positions.
-	optional_ptr<const vector<unique_ptr<Expression>>> file_filters;
-};
-
-//! Return owned SQL for GetColumnIds, projected_input, then the requested extra ordinality column.
-//! The child has positional aliases. Apply file_filters before outer filters and projections.
-//! Honor the complete request or return a reason without a query; do not retain borrowed input.
-//! The exporter does not verify the returned query against this request; ignoring source_ordinality or file_filters
-//! can produce invalid or incorrect SQL.
-typedef TableFunctionToSQLResult (*table_function_to_sql_t)(ClientContext &context, const LogicalGet &get,
-                                                            TableFunctionToSQLInput input);
+//! Reconstruct the unprojected source; the exporter applies scan projections, predicates and ordinality.
+//! Return an owned table reference without executing the source, or a reason why reconstruction is unsupported.
+typedef TableFunctionToSQLResult (*table_function_to_sql_t)(ClientContext &context, const LogicalGet &get);
 
 typedef void (*table_function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                            const TableFunction &function);
@@ -658,9 +643,6 @@ public:
 	DUCKDB_API bool Equal(const TableFunction &rhs) const;
 	DUCKDB_API bool operator==(const TableFunction &rhs) const;
 	DUCKDB_API bool operator!=(const TableFunction &rhs) const;
-	//! SQL callback for sources fully reconstructed by their retained constant arguments.
-	DUCKDB_API static TableFunctionToSQLResult ToSQLFunctionCall(ClientContext &context, const LogicalGet &get,
-	                                                             TableFunctionToSQLInput input);
 };
 
 } // namespace duckdb

@@ -5,6 +5,22 @@
 statement ok
 SET debug_verify_statement='explain_sql_strict';
 
+# Ordinary registered sources need no export callback.
+foreach serializer false true
+
+statement ok
+SET debug_verify_serializer={serializer};
+
+query I
+SELECT count(*)>0 FROM duckdb_functions();
+----
+1
+
+endloop
+
+statement ok
+SET debug_verify_serializer=false;
+
 query I
 SELECT count(*) FROM range(4);
 ----

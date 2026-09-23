@@ -335,7 +335,6 @@ TableFunction JSONFunctions::GetJSONTableFunction(Identifier name, shared_ptr<JS
 	settings.maximum_sample_files = 32;
 	auto function = TableFunctionMultiFileWrapper::CreateFunction(std::move(single_file_function), std::move(name),
 	                                                              std::move(settings));
-	function.to_sql = TableFunction::ToSQLFunctionCall;
 	return function;
 }
 

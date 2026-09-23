@@ -43,7 +43,6 @@ void PragmaUserAgentFunction(ClientContext &context, TableFunctionInput &data_p,
 void PragmaUserAgent::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction pragma_user_agent("pragma_user_agent", {}, PragmaUserAgentFunction, PragmaUserAgentBind,
 	                                PragmaUserAgentInit);
-	pragma_user_agent.to_sql = TableFunction::ToSQLFunctionCall;
 	set.AddFunction(pragma_user_agent);
 }
 

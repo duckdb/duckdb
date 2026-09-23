@@ -1,3 +1,8 @@
+#include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "sql_export_test_helpers.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "catch.hpp"
@@ -46,8 +51,7 @@ TEST_CASE("Logical plan SQL export rejects opaque table sources",
 		auto plan = OptimizeLogicalPlanExportQuery(connection, "SELECT * FROM range(1)");
 		auto get = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_GET);
 		REQUIRE(get);
-		get->Cast<LogicalGet>().function.to_sql = [](ClientContext &, const LogicalGet &,
-		                                             TableFunctionToSQLInput) -> TableFunctionToSQLResult {
+		get->Cast<LogicalGet>().function.to_sql = [](ClientContext &, const LogicalGet &) -> TableFunctionToSQLResult {
 			return {nullptr, "test_opaque"};
 		};
 		auto result = LogicalPlanSQLExporter::Export(*connection.context, *get);
@@ -56,6 +60,15 @@ TEST_CASE("Logical plan SQL export rejects opaque table sources",
 		REQUIRE(issue.construct->function->name == "range");
 		REQUIRE(issue.facts.size() == 1);
 		REQUIRE((issue.facts[0] == pair<string, Value> {"guard", Value("test_opaque")}));
+	}
+	SECTION("process-local binding input") {
+		auto plan = OptimizeLogicalPlanExportQuery(connection, "SELECT * FROM range(1)");
+		auto get = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_GET);
+		REQUIRE(get);
+		get->Cast<LogicalGet>().bind_info = make_shared_ptr<TableFunctionInfo>();
+		auto result = LogicalPlanSQLExporter::Export(*connection.context, *get);
+		RequirePlanExportIssue(result, LogicalPlanVerificationIssueCode::UNSUPPORTED_SOURCE);
+		REQUIRE((result.GetIssues()[0].facts[0] == pair<string, Value> {"guard", Value("process_local_input")}));
 	}
 	SECTION("retained invocation and absent callback") {
 		auto plan = OptimizeLogicalPlanExportQuery(connection, "SELECT sum(x) FROM range(10) t(x)");
@@ -68,14 +81,12 @@ TEST_CASE("Logical plan SQL export rejects opaque table sources",
 		REQUIRE(copied_get->Cast<LogicalGet>().parameters == parameters);
 		REQUIRE(LogicalPlanSQLExporter::Export(*connection.context, *copy).IsSuccess());
 		copied_get->Cast<LogicalGet>().function.to_sql = nullptr;
-		auto unsupported = LogicalPlanSQLExporter::Export(*connection.context, *copy);
-		REQUIRE(unsupported.HasError());
-		REQUIRE(unsupported.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_SOURCE);
+		REQUIRE(LogicalPlanSQLExporter::Export(*connection.context, *copy).IsSuccess());
 	}
 	connection.Rollback();
 }
 
-TEST_CASE("Source SQL callbacks can wrap invocation reconstruction",
+TEST_CASE("Source SQL callbacks preserve centrally applied scan modifiers",
           "[sql_export][logical_plan_sql_export][table_source_sql]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
@@ -84,8 +95,19 @@ TEST_CASE("Source SQL callbacks can wrap invocation reconstruction",
 		auto &entry = loader.GetTableFunction(original);
 		auto function = *entry.functions.GetFunctionByArguments(*connection.context, {argument});
 		function.name = name;
-		function.to_sql = [](ClientContext &context, const LogicalGet &get, TableFunctionToSQLInput input) {
-			return TableFunction::ToSQLFunctionCall(context, get, std::move(input));
+		function.to_sql = [](ClientContext &, const LogicalGet &get) -> TableFunctionToSQLResult {
+			vector<unique_ptr<ParsedExpression>> arguments;
+			for (auto &parameter : get.parameters) {
+				arguments.push_back(ConstantExpression::FromValue(parameter));
+			}
+			for (auto &parameter : get.named_parameters) {
+				arguments.push_back(make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL,
+				                                                    make_uniq<ColumnRefExpression>(parameter.first),
+				                                                    ConstantExpression::FromValue(parameter.second)));
+			}
+			auto source = make_uniq<TableFunctionRef>();
+			source->function = make_uniq<FunctionExpression>(get.function.GetQualifiedName(), std::move(arguments));
+			return {std::move(source), {}};
 		};
 		loader.RegisterFunction(std::move(function));
 	};
@@ -150,19 +172,6 @@ TEST_CASE("Source SQL callbacks can wrap invocation reconstruction",
 				REQUIRE(Value::NotDistinctFrom(generated->GetValue(column, row), native->GetValue(column, row)));
 			}
 		}
-	}
-	if (ordinal || file_filter) {
-		auto &source = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_GET)->Cast<LogicalGet>();
-		source.function.to_sql = [](ClientContext &, const LogicalGet &,
-		                            TableFunctionToSQLInput input) -> TableFunctionToSQLResult {
-			REQUIRE((input.source_ordinality || (input.file_filters && !input.file_filters->empty())));
-			return {nullptr, "unsupported_source_modifier"};
-		};
-		auto rejected = LogicalPlanSQLExporter::Export(*connection.context, *plan);
-		REQUIRE(rejected.HasError());
-		REQUIRE(rejected.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_SOURCE);
-		REQUIRE(
-		    (rejected.GetIssues()[0].facts[0] == pair<string, Value> {"guard", Value("unsupported_source_modifier")}));
 	}
 	connection.Rollback();
 }
@@ -369,7 +378,7 @@ TEST_CASE("Table row number SQL export guards filtered numbering",
 	auto plan = OptimizeLogicalPlanExportQuery(connection, "SELECT i,row_number() OVER () FROM filtered_numbers");
 	auto &get = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_GET)->Cast<LogicalGet>();
 	get.dynamic_filters = make_shared_ptr<DynamicTableFilterSet>();
-	REQUIRE_FALSE(get.function.to_sql(*connection.context, get, {nullptr, Identifier("scan")}).query);
+	REQUIRE_FALSE(get.function.to_sql(*connection.context, get).source);
 	connection.Rollback();
 }
 
