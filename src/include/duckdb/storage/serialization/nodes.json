@@ -1394,12 +1394,6 @@
         "id": 104,
         "name": "file_filter_expressions",
         "type": "optional<vector<unique_ptr<Expression>>>"
-      },
-      {
-        "id": 105,
-        "name": "has_pushed_projection",
-        "type": "bool",
-        "default": "false"
       }
     ],
     "pointer_type": "none"

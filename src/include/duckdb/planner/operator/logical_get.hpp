@@ -64,6 +64,8 @@ public:
 	//! pushed down into the table scan
 	//! Stored so the can be included in explain output
 	ExtraOperatorInfo extra_info;
+	//! The scan consumed a projection whose source expression is no longer retained.
+	bool has_pushed_projection = false;
 	//! Contains a reference to dynamically generated table filters (through e.g. a join up in the tree)
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
 	//! Information for WITH ORDINALITY

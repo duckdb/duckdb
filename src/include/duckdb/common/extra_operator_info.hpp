@@ -28,16 +28,13 @@ public:
 
 	bool operator==(const ExtraOperatorInfo &other) const {
 		return file_filters == other.file_filters && total_files == other.total_files &&
-		       filtered_files == other.filtered_files && sample_options == other.sample_options &&
-		       has_pushed_projection == other.has_pushed_projection;
+		       filtered_files == other.filtered_files && sample_options == other.sample_options;
 	}
 
 	//! Filters that have been pushed down into the main file list
 	string file_filters;
 	//! Consumed file predicates with bindings in the unprojected source column space.
 	optional<vector<unique_ptr<Expression>>> file_filter_expressions;
-	//! A scan consumed a projection whose SQL expression is no longer retained.
-	bool has_pushed_projection = false;
 	//! Total size of file list
 	optional_idx total_files;
 	//! Size of file list after applying filters

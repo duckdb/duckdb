@@ -330,6 +330,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(215, "scan_partition_indices", scan_partition_indices, vector<idx_t>());
 	serializer.WritePropertyWithDefault(216, "source_ordinality", source_ordinality,
 	                                    OrdinalityType::WITHOUT_ORDINALITY);
+	serializer.WritePropertyWithDefault(217, "has_pushed_projection", has_pushed_projection, false);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -365,6 +366,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	    deserializer.ReadPropertyWithExplicitDefault<vector<idx_t>>(215, "scan_partition_indices", vector<idx_t>());
 	result->source_ordinality = deserializer.ReadPropertyWithExplicitDefault<OrdinalityType>(
 	    216, "source_ordinality", OrdinalityType::WITHOUT_ORDINALITY);
+	result->has_pushed_projection =
+	    deserializer.ReadPropertyWithExplicitDefault<bool>(217, "has_pushed_projection", false);
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
 			throw SerializationException(
