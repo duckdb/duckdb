@@ -20,13 +20,6 @@ using namespace duckdb;
 
 namespace logical_plan_sql_export_test {
 
-static void RequireMarkConditionRejection(const LogicalPlanVerificationResult<LogicalPlanSQLExportRelation> &result) {
-	REQUIRE(result.HasError());
-	REQUIRE(result.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE);
-	REQUIRE(result.GetIssues()[0].construct ==
-	        LogicalPlanVerificationConstructIdentity::ExportFeature("mark_condition_semantics"));
-}
-
 TEST_CASE("SQL export inlines plain join sources without alias capture", "[sql_export][logical_plan_sql_export]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
@@ -126,27 +119,6 @@ TEST_CASE("Logical plan SQL export preserves join output maps and empty sides",
 			REQUIRE(SQLExportRows(*generated, false) == SQLExportRows(*direct, false));
 		}
 	}
-	connection.Rollback();
-}
-
-TEST_CASE("Grouped MARK SQL export rejects unsupported conjunction semantics",
-          "[sql_export][logical_plan_sql_export][join_sql_export]") {
-	DuckDB db(nullptr);
-	Connection connection(db);
-	REQUIRE_NO_FAIL(connection.Query("SET threads=1"));
-	connection.BeginTransaction();
-	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE list_l(g INTEGER,x INTEGER[]); "
-	                                 "CREATE TABLE list_r(g INTEGER,y INTEGER[]); "
-	                                 "INSERT INTO list_l VALUES (1,[10,NULL]); INSERT INTO list_r VALUES (1,NULL); "
-	                                 "CREATE SEQUENCE mark_copy_guard"));
-	auto plan = OptimizeLogicalPlanExportQuery(connection, "SELECT nextval('mark_copy_guard'),"
-	                                                       "x=ANY(SELECT y FROM list_r r WHERE r.g=l.g) FROM list_l l");
-	auto copied = plan->Copy(*connection.context);
-	copied->ResolveOperatorTypes();
-	RequireMarkConditionRejection(LogicalPlanSQLExporter::Export(*connection.context, *copied));
-	auto sequence = connection.Query("SELECT last_value FROM duckdb_sequences() WHERE sequence_name='mark_copy_guard'");
-	REQUIRE_NO_FAIL(*sequence);
-	REQUIRE(sequence->GetValue(0, 0).IsNull());
 	connection.Rollback();
 }
 

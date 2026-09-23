@@ -109,6 +109,11 @@ NULL	NULL	NULL
 x	1	x
 x	1	x
 
+query III
+SELECT b AS same,a AS same,b AS same FROM (VALUES (10,20)) t(a,b);
+----
+20	10	20
+
 statement ok
 CREATE TABLE lhs(i INTEGER);
 

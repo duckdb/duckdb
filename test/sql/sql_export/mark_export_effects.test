@@ -108,3 +108,35 @@ SELECT last_value FROM duckdb_sequences() WHERE sequence_name='seq';
 NULL
 
 endloop
+
+statement ok
+CREATE TABLE list_l(g INTEGER,x INTEGER[]);
+
+statement ok
+CREATE TABLE list_r(g INTEGER,y INTEGER[]);
+
+statement ok
+INSERT INTO list_l VALUES (1,[10,NULL]);
+
+statement ok
+INSERT INTO list_r VALUES (1,NULL);
+
+foreach serializer false true
+
+statement ok
+SET debug_verify_serializer={serializer};
+
+statement ok
+CREATE OR REPLACE SEQUENCE mark_copy_guard;
+
+statement error
+EXPLAIN (SQL) SELECT nextval('mark_copy_guard'),x=ANY(SELECT y FROM list_r r WHERE r.g=l.g) FROM list_l l;
+----
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+
+query I
+SELECT last_value FROM duckdb_sequences() WHERE sequence_name='mark_copy_guard';
+----
+NULL
+
+endloop

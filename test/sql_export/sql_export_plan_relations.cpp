@@ -130,32 +130,6 @@ TEST_CASE("Logical plan field types follow expression SQL type admission", "[sql
 	}
 }
 
-TEST_CASE("Logical plan SQL export resolves bindings independently of display aliases",
-          "[sql_export][logical_plan_sql_export]") {
-	DuckDB db(nullptr);
-	Connection connection(db);
-	auto child = IntegerValues(TableIndex(20), {{10, 20}});
-	vector<unique_ptr<Expression>> expressions;
-	expressions.push_back(make_uniq<BoundColumnRefExpression>(Identifier("same"), LogicalType::INTEGER,
-	                                                          ColumnBinding(TableIndex(20), ProjectionIndex(1))));
-	expressions.push_back(make_uniq<BoundColumnRefExpression>(Identifier("same"), LogicalType::INTEGER,
-	                                                          ColumnBinding(TableIndex(20), ProjectionIndex(0))));
-	expressions.push_back(make_uniq<BoundColumnRefExpression>(Identifier("same"), LogicalType::INTEGER,
-	                                                          ColumnBinding(TableIndex(20), ProjectionIndex(1))));
-	auto plan = PlanProjection(TableIndex(21), std::move(child), std::move(expressions));
-
-	auto result = LogicalPlanSQLExporter::Export(*connection.context, *plan);
-	REQUIRE(result.IsSuccess());
-	auto query_result = connection.Query(result.GetValue().query->ToString());
-	REQUIRE_FALSE(query_result->HasError());
-	auto chunk = query_result->Fetch();
-	REQUIRE(chunk);
-	REQUIRE(chunk->size() == 1);
-	REQUIRE(chunk->GetValue(0, 0) == Value::INTEGER(20));
-	REQUIRE(chunk->GetValue(1, 0) == Value::INTEGER(10));
-	REQUIRE(chunk->GetValue(2, 0) == Value::INTEGER(20));
-}
-
 TEST_CASE("Logical plan SQL export applies filter predicates and projection maps",
           "[sql_export][logical_plan_sql_export]") {
 	DuckDB db(nullptr);
