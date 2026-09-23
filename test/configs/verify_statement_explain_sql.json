@@ -59,6 +59,12 @@
       "paths": [
         "test/sql/progress/test_verify_progress.test"
       ]
+    },
+    {
+      "reason": "Reconstructed expressions have locations in generated SQL rather than the original source; the fixture requires original-source error carets",
+      "paths": [
+        "test/sql/cast/cast_error_location.test"
+      ]
     }
   ]
 }
