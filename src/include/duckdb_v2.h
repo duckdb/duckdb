@@ -3224,9 +3224,9 @@ typedef struct _duckdb_v2_qname {
  * Parses SQL text into a qualified name.
  *
  * Applies the engine's qualified-name rules: dots separate parts, and a double-quoted part may contain dots and doubled
- * interior quotes. More than three parts and an unterminated quote are rejected with the parser's own error; text
- * without at least one non-empty part is rejected with `ERROR_INPUT_INVALID`. When the parts are already separate,
- * build the name with `duckdb_v2_qname_create()` rather than joining them and parsing the result.
+ * interior quotes. More than three parts and an unterminated quote are rejected with the parser's own error. Invalid
+ * UTF-8 and text without at least one non-empty part are rejected with `ERROR_INPUT_INVALID`. When the parts are
+ * already separate, build the name with `duckdb_v2_qname_create()` rather than joining them and parsing the result.
  *
  * history:
  * - stable: v2.0.0
@@ -4303,7 +4303,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_create_with_extension(
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_name(duckdb_v2_aggregate_function_handle function,
-                                                                   duckdb_v2_str *name,
+                                                                   duckdb_v2_identifier_t *name,
                                                                    duckdb_v2_error_info_handle *err);
 
 /*!
@@ -5336,7 +5336,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_importer_destroy(duckdb_v2_arrow_im
  *
  * @param context The context whose Arrow settings are captured and whose transaction resolves the types.
  * @param types An array of `count` column types. May be NULL only when `count` is 0.
- * @param names An array of `count` column names, parallel to `types`. May be NULL only when `count` is 0.
+ * @param names An array of `count` column names, parallel to `types`. Each name must be valid UTF-8. May be NULL only
+ * when `count` is 0.
  * @param count The number of columns, being the length of both `types` and `names`.
  * @param batch_size Maximum rows per produced array, or 0 for no maximum.
  * @param out_exporter On success, receives the new exporter. Owned by the caller; destroy via
@@ -6105,7 +6106,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_function_create_with_extension(duckd
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_function_set_name(duckdb_v2_copy_function_handle function,
-                                                              duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
+                                                              duckdb_v2_identifier_t *name,
+                                                              duckdb_v2_error_info_handle *err);
 
 /*!
  * Sets arbitrary user data on the copy function.
@@ -8687,7 +8689,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_create_with_extension(duc
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_name(duckdb_v2_scalar_function_handle function,
-                                                                duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
+                                                                duckdb_v2_identifier_t *name,
+                                                                duckdb_v2_error_info_handle *err);
 
 /*!
  * Returns the function's signature so it can be configured.
@@ -12332,7 +12335,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_create_with_extension(duck
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_name(duckdb_v2_table_function_handle function,
-                                                               duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
+                                                               duckdb_v2_identifier_t *name,
+                                                               duckdb_v2_error_info_handle *err);
 
 /*!
  * Returns the function's signature so it can be configured.
