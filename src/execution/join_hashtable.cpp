@@ -1585,7 +1585,6 @@ ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state
       last_sel_vector(STANDARD_VECTOR_SIZE) {
 	if (ht.HasMarkJoinConjunction()) {
 		found_unknown = make_unsafe_uniq_array_uninitialized<bool>(STANDARD_VECTOR_SIZE);
-		mark_predicate_state = make_uniq<MarkPredicateState>(ht.context, ht.condition_types);
 	}
 	if (ht.residual_predicate) {
 		residual_executor = make_uniq<ExpressionExecutor>(ht.context);
@@ -1660,6 +1659,9 @@ bool ScanStructure::PointersExhausted() const {
 
 idx_t ScanStructure::ResolveMarkPredicates(DataChunk &keys, DataChunk &probe_data, SelectionVector &match_sel,
                                            optional_ptr<SelectionVector> no_match_sel) {
+	if (!mark_predicate_state) {
+		mark_predicate_state = make_uniq<MarkPredicateState>(ht.context, ht.condition_types);
+	}
 	auto &state = *mark_predicate_state;
 	auto pair_false = state.pair_false.get();
 	auto pair_unknown = state.pair_unknown.get();
