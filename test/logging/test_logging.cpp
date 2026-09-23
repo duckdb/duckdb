@@ -238,66 +238,65 @@ TEST_CASE("Test multiple pluggable log sinks", "[logging][.]") {
 	REQUIRE(sink_b->log_store.find("HELLO, MULTIPLE SINKS") != sink_b->log_store.end());
 }
 
-
 TEST_CASE("Test multiple log entries to multiple sinks", "[logging][.]") {
-    DuckDB db(nullptr);
-    Connection con(db);
+	DuckDB db(nullptr);
+	Connection con(db);
 
-    auto sink_a = make_shared_ptr<MyLogSink>();
-    auto sink_b = make_shared_ptr<MyLogSink>();
+	auto sink_a = make_shared_ptr<MyLogSink>();
+	auto sink_b = make_shared_ptr<MyLogSink>();
 
-    auto &log_manager = db.instance->GetLogManager();
+	auto &log_manager = db.instance->GetLogManager();
 
-    duckdb::shared_ptr<LogSink> sink_a_base = sink_a;
-    duckdb::shared_ptr<LogSink> sink_b_base = sink_b;
+	duckdb::shared_ptr<LogSink> sink_a_base = sink_a;
+	duckdb::shared_ptr<LogSink> sink_b_base = sink_b;
 
-    log_manager.RegisterLogSink("sink_a", sink_a_base);
-    log_manager.RegisterLogSink("sink_b", sink_b_base);
+	log_manager.RegisterLogSink("sink_a", sink_a_base);
+	log_manager.RegisterLogSink("sink_b", sink_b_base);
 
-    log_manager.EnableLogSink("sink_a", sink_a);
-    log_manager.EnableLogSink("sink_b", sink_b);
+	log_manager.EnableLogSink("sink_a", sink_a);
+	log_manager.EnableLogSink("sink_b", sink_b);
 
-    REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
-    REQUIRE_NO_FAIL(con.Query("select write_log('MESSAGE A');"));
-    REQUIRE_NO_FAIL(con.Query("select write_log('MESSAGE B');"));
+	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
+	REQUIRE_NO_FAIL(con.Query("select write_log('MESSAGE A');"));
+	REQUIRE_NO_FAIL(con.Query("select write_log('MESSAGE B');"));
 
-    REQUIRE(sink_a->log_store.find("MESSAGE A") != sink_a->log_store.end());
-    REQUIRE(sink_a->log_store.find("MESSAGE B") != sink_a->log_store.end());
-    REQUIRE(sink_b->log_store.find("MESSAGE A") != sink_b->log_store.end());
-    REQUIRE(sink_b->log_store.find("MESSAGE B") != sink_b->log_store.end());
+	REQUIRE(sink_a->log_store.find("MESSAGE A") != sink_a->log_store.end());
+	REQUIRE(sink_a->log_store.find("MESSAGE B") != sink_a->log_store.end());
+	REQUIRE(sink_b->log_store.find("MESSAGE A") != sink_b->log_store.end());
+	REQUIRE(sink_b->log_store.find("MESSAGE B") != sink_b->log_store.end());
 }
 
 TEST_CASE("Test disabling one of multiple log sinks", "[logging][.]") {
-    DuckDB db(nullptr);
-    Connection con(db);
+	DuckDB db(nullptr);
+	Connection con(db);
 
-    auto sink_a = make_shared_ptr<MyLogSink>();
-    auto sink_b = make_shared_ptr<MyLogSink>();
+	auto sink_a = make_shared_ptr<MyLogSink>();
+	auto sink_b = make_shared_ptr<MyLogSink>();
 
-    auto &log_manager = db.instance->GetLogManager();
+	auto &log_manager = db.instance->GetLogManager();
 
-    duckdb::shared_ptr<LogSink> sink_a_base = sink_a;
-    duckdb::shared_ptr<LogSink> sink_b_base = sink_b;
+	duckdb::shared_ptr<LogSink> sink_a_base = sink_a;
+	duckdb::shared_ptr<LogSink> sink_b_base = sink_b;
 
-    log_manager.RegisterLogSink("sink_a", sink_a_base);
-    log_manager.RegisterLogSink("sink_b", sink_b_base);
+	log_manager.RegisterLogSink("sink_a", sink_a_base);
+	log_manager.RegisterLogSink("sink_b", sink_b_base);
 
-    log_manager.EnableLogSink("sink_a", sink_a);
-    log_manager.EnableLogSink("sink_b", sink_b);
+	log_manager.EnableLogSink("sink_a", sink_a);
+	log_manager.EnableLogSink("sink_b", sink_b);
 
-    REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
-    REQUIRE_NO_FAIL(con.Query("select write_log('BEFORE DISABLE');"));
+	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
+	REQUIRE_NO_FAIL(con.Query("select write_log('BEFORE DISABLE');"));
 
-    // Disable sink A while keeping sink B enabled.
-    log_manager.DisableLogSink("sink_a");
+	// Disable sink A while keeping sink B enabled.
+	log_manager.DisableLogSink("sink_a");
 
-    REQUIRE_NO_FAIL(con.Query("select write_log('AFTER DISABLE');"));
+	REQUIRE_NO_FAIL(con.Query("select write_log('AFTER DISABLE');"));
 
-    REQUIRE(sink_a->log_store.find("BEFORE DISABLE") != sink_a->log_store.end());
-    REQUIRE(sink_a->log_store.find("AFTER DISABLE") == sink_a->log_store.end());
+	REQUIRE(sink_a->log_store.find("BEFORE DISABLE") != sink_a->log_store.end());
+	REQUIRE(sink_a->log_store.find("AFTER DISABLE") == sink_a->log_store.end());
 
-    REQUIRE(sink_b->log_store.find("BEFORE DISABLE") != sink_b->log_store.end());
-    REQUIRE(sink_b->log_store.find("AFTER DISABLE") != sink_b->log_store.end());
+	REQUIRE(sink_b->log_store.find("BEFORE DISABLE") != sink_b->log_store.end());
+	REQUIRE(sink_b->log_store.find("AFTER DISABLE") != sink_b->log_store.end());
 }
 
 struct CorrectLogType : public LogType {

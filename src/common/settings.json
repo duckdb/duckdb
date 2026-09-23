@@ -1139,7 +1139,7 @@
         "struct": "LoggingSink",
         "custom_implementation": true,
         "aliases": [
-            "log_storage"
+            "logging_storage"
         ]
     },
     {
