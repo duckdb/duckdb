@@ -93,8 +93,7 @@ private:
 	//! Whether validation metadata permits using cached blocks.
 	bool CanUseCache();
 	//! Reconcile cached blocks with validation metadata observed while reading them.
-	void ReconcileCacheAfterRead(CachedFile &cached_file, idx_t first_block,
-	                             const vector<shared_ptr<CacheBlock>> &blocks);
+	void ReconcileCacheAfterRead(CachedFile &cached_file, const vector<shared_ptr<CacheBlock>> &blocks);
 	//! Record a timed read of a local file into the throughput estimate
 	void RecordReadThroughput(double total_seconds, idx_t bytes);
 

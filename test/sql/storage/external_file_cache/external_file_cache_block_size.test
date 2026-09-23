@@ -1,5 +1,5 @@
 # name: test/sql/storage/external_file_cache/external_file_cache_block_size.test
-# description: Test that changing cache block size lazily re-indexes blocks on next read
+# description: Test that changing the cache block size keeps cached blocks and reads stay correct
 # group: [external_file_cache]
 
 require parquet
@@ -39,13 +39,13 @@ select count(*) > 0 from duckdb_external_file_cache();
 ----
 true
 
-# Total cached bytes should be preserved (reindex is deferred to next read)
+# Total cached bytes should be preserved
 query I
 select (select sum(nr_bytes) from duckdb_external_file_cache()) = (select total from cached_bytes_before);
 ----
 true
 
-# Reading triggers lazy re-index and returns correct data
+# Reading returns correct data
 query II
 select count(*), sum(i) from '{TEST_DIR}/test_block_size.parquet';
 ----
@@ -58,11 +58,11 @@ drop table cached_bytes_before;
 statement ok
 create temp table cached_bytes_before as select sum(nr_bytes) as total from duckdb_external_file_cache();
 
-# Change block size back to 16KiB (merge)
+# Change block size back to 16KiB
 statement ok
 set external_file_cache_local_block_size=16384;
 
-# Total cached bytes should be preserved (reindex deferred to next read)
+# Total cached bytes should be preserved
 query I
 select (select sum(nr_bytes) from duckdb_external_file_cache()) = (select total from cached_bytes_before);
 ----
@@ -89,7 +89,7 @@ select (select sum(nr_bytes) from duckdb_external_file_cache()) = (select total 
 ----
 true
 
-# Reset local block size to default — same size, so no-op re-index
+# Reset local block size to default
 statement ok
 drop table cached_bytes_before;
 
@@ -110,7 +110,7 @@ select count(*), sum(i) from '{TEST_DIR}/test_block_size.parquet';
 ----
 10000	49995000
 
-# Change to a different size, then reset — lazy re-index back to default on next read
+# Change to a different size, then reset
 statement ok
 drop table cached_bytes_before;
 
