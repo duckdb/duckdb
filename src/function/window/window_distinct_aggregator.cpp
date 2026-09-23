@@ -1,5 +1,6 @@
 #include "duckdb/function/window/window_distinct_aggregator.hpp"
 
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/sorting/sort.hpp"
 #include "duckdb/execution/merge_sort_tree.hpp"
 #include "duckdb/function/window/window_aggregate_states.hpp"
