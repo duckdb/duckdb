@@ -10,7 +10,6 @@
 
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/logging/log_sink.hpp"
-#include "duckdb/logging/log_sink.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 
