@@ -343,7 +343,7 @@ typedef duckdb_v2_bytes duckdb_v2_bignum_t;
  * through the identifier-quoting entry point rather than embedding it raw. The catalog preserves casing; some
  * registries (config settings) canonicalize to lowercase.
  *
- * Direct identifier-name inputs to v2 API functions must contain valid UTF-8; invalid input is rejected.
+ * An identifier passed into the API must be valid UTF-8; otherwise the call fails with `ERROR_INPUT_INVALID`.
  */
 typedef duckdb_v2_str duckdb_v2_identifier_t;
 
