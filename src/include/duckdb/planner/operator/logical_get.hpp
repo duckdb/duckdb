@@ -125,7 +125,7 @@ protected:
 	void ResolveTypes() override;
 
 private:
-	friend class logical_plan_sql_export::LogicalPlanSQLExportContext;
+	friend class LogicalWindow;
 	LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
 	ExportSQLSource(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path,
 	                optional_ptr<const LogicalPlanSQLExportField> ordinality = nullptr);

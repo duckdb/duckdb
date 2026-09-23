@@ -37,6 +37,10 @@ public:
 	LogicalPlanSQLExportResult Export(LogicalOperator &op, const LogicalPlanVerificationPath &path);
 
 public:
+	ClientContext &GetClientContext() const {
+		return context;
+	}
+
 	Identifier NextRelationAlias(const Identifier &preferred = Identifier());
 	LogicalPlanVerificationResult<LogicalPlanSQLExportedChild> ExportChild(LogicalOperator &child,
 	                                                                       const LogicalPlanVerificationPath &path);
@@ -49,7 +53,6 @@ public:
 
 	LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>
 	ExportNamedProducer(LogicalOperator &op, const LogicalPlanVerificationPath &path, const Identifier &name);
-	LogicalPlanSQLExportResult ExportContextExpressions(LogicalOperator &op, const LogicalPlanVerificationPath &path);
 	string MarkConditionUnsupportedReason(const LogicalComparisonJoin &join);
 	bool RequiresMarkGroupMetadata(const LogicalComparisonJoin &join);
 	LogicalPlanSQLExportResult ExportJoin(LogicalOperator &op, const LogicalPlanVerificationPath &path);
@@ -59,7 +62,6 @@ public:
 	unique_ptr<SelectNode> ForwardFields(const LogicalPlanSQLExportedChild &child,
 	                                     const vector<LogicalPlanSQLExportField> &fields,
 	                                     optional_ptr<const SelectNode> plain = nullptr);
-	LogicalPlanSQLExportResult ExportModifier(LogicalOperator &op, const LogicalPlanVerificationPath &path);
 	LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
 	ExportPivotDefault(const BoundAggregateExpression &aggregate, const LogicalPlanVerificationPath &path);
 	bool ProducesOneRow(const LogicalOperator &op, const vector<TableIndex> &single_row_ctes = {});

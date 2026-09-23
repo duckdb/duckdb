@@ -20,10 +20,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
-#include "duckdb/planner/operator/logical_distinct.hpp"
-#include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
-#include "duckdb/planner/operator/logical_top_n.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/sql_export_helpers.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -83,48 +80,25 @@ static bool HasSafePredicates(const LogicalOperator &op) {
 	return HasSafePredicates(*op.children[0]);
 }
 
-LogicalPlanSQLExportResult logical_plan_sql_export::LogicalPlanSQLExportContext::ExportContextExpressions(
-    LogicalOperator &op, const LogicalPlanVerificationPath &path) {
+template <class EXPRESSION, class EXPORTER>
+static LogicalPlanSQLExportResult ExportContextExpressions(LogicalOperator &op, LogicalPlanSQLExportContext &context,
+                                                           const LogicalPlanVerificationPath &path,
+                                                           vector<LogicalPlanSQLExportField> fields,
+                                                           EXPORTER exporter) {
 	D_ASSERT(op.children.size() == 1);
-	auto fields = CreateFields(op, path);
-	if (fields.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
-	}
-	if (op.type == LogicalOperatorType::LOGICAL_WINDOW && op.children[0]->type == LogicalOperatorType::LOGICAL_GET) {
-		auto &get = op.children[0]->Cast<LogicalGet>();
-		if (get.source_ordinality == OrdinalityType::WITH_ORDINALITY && !get.ordinality_idx.IsValid()) {
-			bool supported =
-			    op.expressions.size() == 1 && !get.table_filters.HasFilters() && !get.extra_info.sample_options;
-			if (supported) {
-				auto &window = op.expressions[0]->Cast<BoundWindowExpression>();
-				supported = window.GetExpressionType() == ExpressionType::WINDOW_ROW_NUMBER &&
-				            window.Partitions().empty() && window.OrderBy().empty() && window.GetChildren().empty();
-			}
-			if (!supported) {
-				return PlanFailure(PlanUnsupportedFeature(
-				    path, "ordinality_window", "The source ordinality cannot be reconstructed through this window"));
-			}
-			return get.ExportSQLSource(*this, PlanChildPath(path, 0), &fields.GetValue().back());
-		}
-	}
-	auto child = ExportChild(*op.children[0], PlanChildPath(path, 0));
+	auto child = context.ExportChild(*op.children[0], PlanChildPath(path, 0));
 	if (child.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(child.GetIssues());
 	}
-	PropagateSemanticTypes(fields.GetValue(), {child.GetValue()});
+	PropagateSemanticTypes(fields, {child.GetValue()});
 	auto select = make_uniq<SelectNode>();
 	for (idx_t i = 0; i < child.GetValue().relation.fields.size(); i++) {
 		select->select_list.push_back(ChildColumn(child.GetValue(), i));
 	}
-	auto expression_context = CreateBindingContext(context, {child.GetValue()});
+	auto expression_context = CreateBindingContext(context.GetClientContext(), {child.GetValue()});
 	for (idx_t i = 0; i < op.expressions.size(); i++) {
 		auto expression_path = PlanExpressionPath(path, i);
-		auto expression =
-		    op.type == LogicalOperatorType::LOGICAL_WINDOW
-		        ? BoundExpressionSQLExporter::ExportWindowAtPath(op.expressions[i]->Cast<BoundWindowExpression>(),
-		                                                         expression_context, expression_path)
-		        : BoundExpressionSQLExporter::ExportUnnestAtPath(op.expressions[i]->Cast<BoundUnnestExpression>(),
-		                                                         expression_context, expression_path);
+		auto expression = exporter(op.expressions[i]->Cast<EXPRESSION>(), expression_context, expression_path);
 		if (expression.HasError()) {
 			return LogicalPlanSQLExportResult::Failure(expression.GetIssues());
 		}
@@ -132,7 +106,7 @@ LogicalPlanSQLExportResult logical_plan_sql_export::LogicalPlanSQLExportContext:
 		select->select_list.push_back(std::move(expression.GetValue()));
 	}
 	select->from_table = CreateSubquery(std::move(child.GetValue()));
-	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields.GetValue())});
+	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields)});
 }
 
 LogicalPlanSQLExportResult LogicalFilter::ToSQL(LogicalPlanSQLExportContext &export_context,
@@ -239,67 +213,46 @@ LogicalPlanSQLExportResult LogicalProjection::ToSQL(LogicalPlanSQLExportContext 
 	return LogicalPlanSQLExportResult::Success(std::move(relation));
 }
 
-LogicalPlanSQLExportResult
-logical_plan_sql_export::LogicalPlanSQLExportContext::ExportModifier(LogicalOperator &op,
-                                                                     const LogicalPlanVerificationPath &path) {
+static LogicalPlanVerificationResult<unique_ptr<OrderModifier>>
+ExportOrderModifier(LogicalOperator &op, LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path,
+                    const vector<BoundOrderByNode> &orders, const BoundExpressionSQLExportContext &expression_context,
+                    idx_t expression_ordinal) {
+	using Result = LogicalPlanVerificationResult<unique_ptr<OrderModifier>>;
+	auto expressions = CollectExpressions(op);
+	auto modifier = make_uniq<OrderModifier>();
+	for (auto &order : orders) {
+		auto expression = context.ExportExpression(op, expressions, expression_ordinal++, expression_context, path);
+		if (expression.HasError()) {
+			return Result::Failure(expression.GetIssues());
+		}
+		modifier->orders.emplace_back(
+		    order.type, order.null_order,
+		    SQLExportHelpers::OrderExpression(SemanticExpressionType(*order.expression, expression_context),
+		                                      std::move(expression.GetValue())));
+	}
+	return Result::Success(std::move(modifier));
+}
+
+static LogicalPlanSQLExportResult ExportOrderedRelation(LogicalOperator &op, LogicalPlanSQLExportContext &context,
+                                                        const LogicalPlanVerificationPath &path,
+                                                        const vector<BoundOrderByNode> &orders) {
 	D_ASSERT(op.children.size() == 1);
 	auto fields = CreateFields(op, path);
 	if (fields.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
 	}
-	auto child = ExportChild(*op.children[0], PlanChildPath(path, 0));
+	auto child = context.ExportChild(*op.children[0], PlanChildPath(path, 0));
 	if (child.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(child.GetIssues());
 	}
 	PropagateSemanticTypes(fields.GetValue(), {child.GetValue()});
-	auto expression_context = CreateBindingContext(context, {child.GetValue()});
-	auto expressions = CollectExpressions(op);
-	auto select = ForwardFields(child.GetValue(), fields.GetValue());
-	idx_t expression_ordinal = 0;
-	optional_ptr<const vector<BoundOrderByNode>> orders;
-	if (op.type == LogicalOperatorType::LOGICAL_DISTINCT) {
-		auto &distinct = op.Cast<LogicalDistinct>();
-		auto modifier = make_uniq<DistinctModifier>();
-		// DISTINCT targets describe the grouping keys, including optimizer-pruned full-row DISTINCT.
-		for (auto &target : distinct.distinct_targets) {
-			(void)target;
-			auto expression = ExportExpression(op, expressions, expression_ordinal++, expression_context, path);
-			if (expression.HasError()) {
-				return LogicalPlanSQLExportResult::Failure(expression.GetIssues());
-			}
-			modifier->distinct_on_targets.push_back(std::move(expression.GetValue()));
-		}
-		select->modifiers.push_back(std::move(modifier));
-		if (distinct.order_by) {
-			orders = distinct.order_by->orders;
-		}
-	} else if (op.type == LogicalOperatorType::LOGICAL_ORDER_BY) {
-		orders = op.Cast<LogicalOrder>().orders;
-	} else {
-		orders = op.Cast<LogicalTopN>().orders;
+	auto expression_context = CreateBindingContext(context.GetClientContext(), {child.GetValue()});
+	auto select = context.ForwardFields(child.GetValue(), fields.GetValue());
+	auto modifier = ExportOrderModifier(op, context, path, orders, expression_context, 0);
+	if (modifier.HasError()) {
+		return LogicalPlanSQLExportResult::Failure(modifier.GetIssues());
 	}
-	if (orders) {
-		auto modifier = make_uniq<OrderModifier>();
-		for (auto &order : *orders) {
-			auto expression = ExportExpression(op, expressions, expression_ordinal++, expression_context, path);
-			if (expression.HasError()) {
-				return LogicalPlanSQLExportResult::Failure(expression.GetIssues());
-			}
-			modifier->orders.emplace_back(
-			    order.type, order.null_order,
-			    SQLExportHelpers::OrderExpression(SemanticExpressionType(*order.expression, expression_context),
-			                                      std::move(expression.GetValue())));
-		}
-		select->modifiers.push_back(std::move(modifier));
-	}
-	if (op.type == LogicalOperatorType::LOGICAL_TOP_N) {
-		auto &top_n = op.Cast<LogicalTopN>();
-		auto modifier = make_uniq<LimitModifier>();
-		modifier->limit = ConstantExpression::FromValue(Value::BIGINT(NumericCast<int64_t>(top_n.limit)));
-		auto offset = top_n.unpruned_offset.IsValid() ? top_n.unpruned_offset.GetIndex() : top_n.offset;
-		modifier->offset = ConstantExpression::FromValue(Value::BIGINT(NumericCast<int64_t>(offset)));
-		select->modifiers.push_back(std::move(modifier));
-	}
+	select->modifiers.push_back(std::move(modifier.GetValue()));
 	select->from_table = CreateSubquery(std::move(child.GetValue()));
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields.GetValue())});
 }
@@ -454,29 +407,100 @@ LogicalPlanSQLExportResult LogicalAggregate::ToSQL(LogicalPlanSQLExportContext &
 	return LogicalPlanSQLExportResult::Success(std::move(relation));
 }
 
-LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
-LogicalOrder::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path) {
-	return context.ExportModifier(*this, path);
+LogicalPlanSQLExportResult LogicalDistinct::ToSQL(LogicalPlanSQLExportContext &context,
+                                                  const LogicalPlanVerificationPath &path) {
+	auto &op = *this;
+	D_ASSERT(op.children.size() == 1);
+	auto fields = CreateFields(op, path);
+	if (fields.HasError()) {
+		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
+	}
+	auto child = context.ExportChild(*op.children[0], PlanChildPath(path, 0));
+	if (child.HasError()) {
+		return LogicalPlanSQLExportResult::Failure(child.GetIssues());
+	}
+	PropagateSemanticTypes(fields.GetValue(), {child.GetValue()});
+	auto expression_context = CreateBindingContext(context.GetClientContext(), {child.GetValue()});
+	auto select = context.ForwardFields(child.GetValue(), fields.GetValue());
+	auto expressions = CollectExpressions(op);
+	auto modifier = make_uniq<DistinctModifier>();
+	idx_t expression_ordinal = 0;
+	// DISTINCT targets include optimizer-pruned full-row DISTINCT.
+	for (idx_t i = 0; i < distinct_targets.size(); i++) {
+		auto expression = context.ExportExpression(op, expressions, expression_ordinal++, expression_context, path);
+		if (expression.HasError()) {
+			return LogicalPlanSQLExportResult::Failure(expression.GetIssues());
+		}
+		modifier->distinct_on_targets.push_back(std::move(expression.GetValue()));
+	}
+	select->modifiers.push_back(std::move(modifier));
+	if (order_by) {
+		auto order = ExportOrderModifier(op, context, path, order_by->orders, expression_context, expression_ordinal);
+		if (order.HasError()) {
+			return LogicalPlanSQLExportResult::Failure(order.GetIssues());
+		}
+		select->modifiers.push_back(std::move(order.GetValue()));
+	}
+	select->from_table = CreateSubquery(std::move(child.GetValue()));
+	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields.GetValue())});
 }
 
-LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
-LogicalTopN::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path) {
-	return context.ExportModifier(*this, path);
+LogicalPlanSQLExportResult LogicalOrder::ToSQL(LogicalPlanSQLExportContext &context,
+                                               const LogicalPlanVerificationPath &path) {
+	return ExportOrderedRelation(*this, context, path, orders);
 }
 
-LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
-LogicalDistinct::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path) {
-	return context.ExportModifier(*this, path);
+LogicalPlanSQLExportResult LogicalTopN::ToSQL(LogicalPlanSQLExportContext &context,
+                                              const LogicalPlanVerificationPath &path) {
+	auto result = ExportOrderedRelation(*this, context, path, orders);
+	if (result.HasError()) {
+		return result;
+	}
+	auto modifier = make_uniq<LimitModifier>();
+	modifier->limit = ConstantExpression::FromValue(Value::BIGINT(NumericCast<int64_t>(limit)));
+	auto original_offset = unpruned_offset.IsValid() ? unpruned_offset.GetIndex() : offset;
+	modifier->offset = ConstantExpression::FromValue(Value::BIGINT(NumericCast<int64_t>(original_offset)));
+	result.GetValue().query->modifiers.push_back(std::move(modifier));
+	return result;
 }
 
 LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
 LogicalWindow::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path) {
-	return context.ExportContextExpressions(*this, path);
+	auto &op = *this;
+	D_ASSERT(children.size() == 1);
+	auto fields = CreateFields(op, path);
+	if (fields.HasError()) {
+		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
+	}
+	if (op.children[0]->type == LogicalOperatorType::LOGICAL_GET) {
+		auto &get = op.children[0]->Cast<LogicalGet>();
+		if (get.source_ordinality == OrdinalityType::WITH_ORDINALITY && !get.ordinality_idx.IsValid()) {
+			bool supported =
+			    op.expressions.size() == 1 && !get.table_filters.HasFilters() && !get.extra_info.sample_options;
+			if (supported) {
+				auto &window = op.expressions[0]->Cast<BoundWindowExpression>();
+				supported = window.GetExpressionType() == ExpressionType::WINDOW_ROW_NUMBER &&
+				            window.Partitions().empty() && window.OrderBy().empty() && window.GetChildren().empty();
+			}
+			if (!supported) {
+				return PlanFailure(PlanUnsupportedFeature(
+				    path, "ordinality_window", "The source ordinality cannot be reconstructed through this window"));
+			}
+			return get.ExportSQLSource(context, PlanChildPath(path, 0), &fields.GetValue().back());
+		}
+	}
+	return ExportContextExpressions<BoundWindowExpression>(*this, context, path, std::move(fields.GetValue()),
+	                                                       BoundExpressionSQLExporter::ExportWindowAtPath);
 }
 
 LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
 LogicalUnnest::ToSQL(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path) {
-	return context.ExportContextExpressions(*this, path);
+	auto fields = CreateFields(*this, path);
+	if (fields.HasError()) {
+		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
+	}
+	return ExportContextExpressions<BoundUnnestExpression>(*this, context, path, std::move(fields.GetValue()),
+	                                                       BoundExpressionSQLExporter::ExportUnnestAtPath);
 }
 
 } // namespace duckdb
