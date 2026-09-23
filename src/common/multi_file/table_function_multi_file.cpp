@@ -676,9 +676,15 @@ unique_ptr<FunctionData> TableFunctionMultiFileWrapper::MultiFileBindCopy(Client
                                                                           vector<Identifier> &expected_names,
                                                                           vector<LogicalType> &expected_types) {
 	auto &info = input.tf.function_info->Cast<TableFunctionMultiFileInfo>();
+	return MultiFileBindCopyWith(context, input, expected_names, expected_types, info.function, info.settings);
+}
+
+unique_ptr<FunctionData> TableFunctionMultiFileWrapper::MultiFileBindCopyWith(
+    ClientContext &context, CopyFromFunctionBindInput &input, vector<Identifier> &expected_names,
+    vector<LogicalType> &expected_types, TableFunction single_file_function, TableFunctionMultiFileSettings settings) {
 	return TableFunctionMultiFileFunction::MultiFileBindCopyInterface(
 	    context, input, expected_names, expected_types,
-	    make_uniq<TableFunctionMultiFileWrapper>(info.function, info.settings));
+	    make_uniq<TableFunctionMultiFileWrapper>(std::move(single_file_function), std::move(settings)));
 }
 
 //! Report the metrics of the scan: the shared multi-file ones, plus those the wrapped function keeps for each of
