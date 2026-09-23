@@ -56,8 +56,8 @@ DUCKDB_V2_ERROR duckdb_v2_connection_set_option(duckdb_v2_connection_handle conn
 	DUCKDB_CHECK_ARG(setting);
 	return WithErrorHandler(err, [&]() {
 		auto &client = *Convert(conn)->context;
-		duckdb::PhysicalSet::SetVariable(client, duckdb::Identifier(Convert(name)), MapSettingScope(scope),
-		                                 duckdb::Value(duckdb::string(Convert(setting))));
+		duckdb::PhysicalSet::SetVariable(client, duckdb::Identifier(ConvertIdentifierName(name)),
+		                                 MapSettingScope(scope), duckdb::Value(duckdb::string(Convert(setting))));
 	});
 }
 
@@ -70,7 +70,7 @@ DUCKDB_V2_ERROR duckdb_v2_connection_get_option_by_name(duckdb_v2_connection_han
 	*out_option = nullptr;
 	return WithErrorHandler(err, [&]() {
 		CV2OptionSource source(*Convert(conn)->context);
-		*out_option = Convert(CV2Option::FromName(source, Convert(name)).release());
+		*out_option = Convert(CV2Option::FromName(source, ConvertIdentifierName(name)).release());
 	});
 }
 
