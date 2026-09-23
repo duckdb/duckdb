@@ -12,7 +12,6 @@ cache tpch_sf100.duckdb
 
 load benchmark/large/tpch-sf100/load.sql
 
-run
-PRAGMA tpch(${QUERY_NUMBER}, sf=100);
+run extension/tpch/dbgen/queries/q${QUERY_NUMBER_PADDED}.sql
 
 result extension/tpch/dbgen/answers/sf100/q${QUERY_NUMBER_PADDED}.csv
