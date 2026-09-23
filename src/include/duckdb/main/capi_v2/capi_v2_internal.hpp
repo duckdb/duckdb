@@ -75,6 +75,7 @@ inline auto Convert(duckdb_v2_str str) -> std::string_view {
 	return std::string_view(str.ptr, str.len);
 }
 
+// Validates identifier UTF-8 and returns its text; throws on invalid input. Defined in capi_v2_utf8.cpp.
 auto ConvertIdentifierName(duckdb_v2_identifier_t name) -> std::string_view;
 
 inline auto Convert(std::string_view str) -> duckdb_v2_str {
