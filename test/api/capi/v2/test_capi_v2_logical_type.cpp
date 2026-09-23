@@ -217,6 +217,9 @@ TEST_CASE("V2: logical_type create_from_id parameter validation", "[capi_v2][log
 	REQUIRE(duckdb_v2_connection_create_type_from_id(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, one, 1, &out,
 	                                                 nullptr) == DUCKDB_V2_ERROR_QUERY_BINDER);
 	REQUIRE(out == nullptr);
+	duckdb_v2_identifier_t invalid_name[1] = {Convert("\x80")};
+	REQUIRE(duckdb_v2_connection_create_type_from_id(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, invalid_name, one, 1,
+	                                                 &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	duckdb_v2_value_destroy(&one[0]);
 

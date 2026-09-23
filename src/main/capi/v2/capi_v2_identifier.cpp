@@ -9,7 +9,7 @@ DUCKDB_V2_ERROR duckdb_v2_identifier_render_quoted(duckdb_v2_identifier_t name, 
 	DUCKDB_CHECK_ARG(out_length);
 	return WithErrorHandler(err, [&]() {
 		*out_length = 0;
-		auto rendered = duckdb::SQLIdentifier::ToString(duckdb::string(Convert(name)));
+		auto rendered = duckdb::SQLIdentifier::ToString(duckdb::string(ConvertIdentifierName(name)));
 		FillCallerText(out_text, out_capacity, out_length, rendered, "duckdb_v2_identifier_render_quoted");
 	});
 }
