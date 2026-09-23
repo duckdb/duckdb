@@ -79,3 +79,4 @@ test/sql/sql_export/nested_collated_nulls.test
 test/sql/sql_export/secure_view_predicates.test
 
 test/sql/sql_export/ci_reconstruction.test
+test/sql/sql_export/json_ordering.test

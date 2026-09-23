@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/identifier.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -32,6 +33,9 @@ inline LogicalPlanVerificationIssue MakeIssue(LogicalPlanVerificationIssueCode c
 
 inline unique_ptr<ParsedExpression> OrderExpression(const LogicalType &type, unique_ptr<ParsedExpression> expression) {
 	if (type.id() == LogicalTypeId::VARCHAR) {
+		if (type.HasAlias()) {
+			expression = make_uniq<CastExpression>(LogicalType::VARCHAR, std::move(expression));
+		}
 		return make_uniq<CollateExpression>("C", std::move(expression));
 	}
 	return expression;

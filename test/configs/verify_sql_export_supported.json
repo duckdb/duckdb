@@ -17,7 +17,8 @@
       "paths": [
         "test/sql/types/geo/geometry_from_wkb_stats.test",
         "test/sql/types/geo/geometry_vertex_extract.test",
-        "test/optimizer/statistics/statistics_filter_pruning.test"
+        "test/optimizer/statistics/statistics_filter_pruning.test",
+        "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test"
       ]
     },
     {
@@ -43,7 +44,8 @@
     {
       "reason": "PARQUET_VARIANT is an internal type alias that is not registered for SQL type lookup",
       "paths": [
-        "test/parquet/variant/variant_to_parquet_variant.test"
+        "test/parquet/variant/variant_to_parquet_variant.test",
+        "test/parquet/variant/variant_bytes_to_variant.test"
       ]
     },
     {
