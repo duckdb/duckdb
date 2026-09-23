@@ -166,7 +166,7 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportSecureView(LogicalSe
 		                                          "The secure view does not retain its qualified source metadata"));
 	}
 	for (auto &component : view.source_name.Path()) {
-		if (!IsValidText(component.GetIdentifierName())) {
+		if (component.empty()) {
 			return PlanFailure(PlanUnsupportedFeature(path, "secure_view_source",
 			                                          "The secure view source name cannot be represented in SQL"));
 		}

@@ -35,14 +35,14 @@ static string SQLFunctionCallGuard(const LogicalGet &get, bool has_input) {
 	}
 	{
 		auto name = get.function.GetQualifiedName();
-		if (!SQLExportHelpers::IsValidIdentifier(name.Catalog())) {
+		if (name.Catalog().empty()) {
 			return "catalog_identifier";
 		}
-		if (!SQLExportHelpers::IsValidIdentifier(name.Schema())) {
+		if (name.Schema().empty()) {
 			return "schema_identifier";
 		}
 		for (auto &component : name.Path()) {
-			if (!SQLExportHelpers::IsValidIdentifier(component)) {
+			if (component.empty()) {
 				return "function_identifier";
 			}
 		}
@@ -180,9 +180,6 @@ TableFunctionToSQLResult TableFunction::ToSQLFunctionCall(ClientContext &context
 		}
 	}
 	for (auto &parameter : get.named_parameters) {
-		if (!SQLExportHelpers::IsValidIdentifier(parameter.first)) {
-			return {nullptr, "named_parameter_identifier"};
-		}
 		auto exported = BoundExpressionSQLExporter::Export(BoundConstantExpression(parameter.second), {});
 		if (exported.HasError()) {
 			return {nullptr, "named_parameter_expression"};

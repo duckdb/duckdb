@@ -86,12 +86,23 @@ BoundExpressionSQLExportState::ExportWindowFunction(const BoundWindowExpression 
 		    (boundary == WindowBoundary::EXPR_PRECEDING_RANGE) == (order.type == OrderType::ASCENDING);
 		auto definition = arithmetic.Function().GetDefinition();
 		auto arithmetic_name = definition ? RebindableFunctionName(*definition) : optional<QualifiedName>();
-		if (!arithmetic_name || *arithmetic_name != QualifiedName("system", "main", subtract ? "-" : "+") ||
-		    arithmetic.GetChildren().size() != 2 || !arithmetic.GetChildren()[0] || !arithmetic.GetChildren()[1] ||
-		    !order.expression || (order.type != OrderType::ASCENDING && order.type != OrderType::DESCENDING) ||
-		    endpoint->GetReturnType() != order.expression->GetReturnType() || !sql_order ||
-		    (!Expression::Equals(*arithmetic.GetChildren()[0], *sql_order) &&
-		     !Expression::Equals(*arithmetic.GetChildren()[0], *order.expression))) {
+		const bool has_expected_function =
+		    arithmetic_name && *arithmetic_name == QualifiedName("system", "main", subtract ? "-" : "+");
+		if (!has_expected_function) {
+			return nullptr;
+		}
+		auto &children = arithmetic.GetChildren();
+		if (children.size() != 2 || !children[0] || !children[1]) {
+			return nullptr;
+		}
+		const bool has_explicit_order = order.type == OrderType::ASCENDING || order.type == OrderType::DESCENDING;
+		if (!order.expression || !sql_order || !has_explicit_order) {
+			return nullptr;
+		}
+		const bool matches_order_type = endpoint->GetReturnType() == order.expression->GetReturnType();
+		const bool matches_order_operand =
+		    Expression::Equals(*children[0], *sql_order) || Expression::Equals(*children[0], *order.expression);
+		if (!matches_order_type || !matches_order_operand) {
 			return nullptr;
 		}
 		auto &offset = *arithmetic.GetChildren()[1];

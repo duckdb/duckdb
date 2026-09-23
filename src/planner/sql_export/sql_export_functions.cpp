@@ -39,13 +39,6 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportLambda(const
 		return Failure(
 		    UnsupportedFeature(path, "lambda_binding", "The bound lambda does not retain its SQL parameter binding"));
 	}
-	identifier_set_t unique_parameters;
-	for (auto &parameter : lambda.ParameterNames()) {
-		if (!IsValidIdentifier(parameter) || !unique_parameters.insert(parameter).second) {
-			return Failure(
-			    UnsupportedFeature(path, "lambda_binding", "The bound lambda has an invalid SQL parameter name"));
-		}
-	}
 
 	vector<unique_ptr<ParsedExpression>> references;
 	for (idx_t index = 0; index < lambda.ParameterCount(); index++) {
@@ -183,7 +176,7 @@ BoundExpressionSQLExportState::ExportScalarFunction(const BoundFunctionExpressio
 	                            qualified_name == QualifiedName("system", "main", "datepart")) &&
 	                           function.GetLogicalArguments().size() == 2 && expression.GetChildren().size() == 1 &&
 	                           function.GetName() != definition->GetName() &&
-	                           IsOptimizerFunctionQualification(function) && IsValidIdentifier(function.GetName());
+	                           IsOptimizerFunctionQualification(function) && !function.GetName().empty();
 	const bool retained_variadic_arguments =
 	    definition->HasVarArgs() && expression.GetChildren().size() >= function.GetLogicalArguments().size();
 	if ((!lambda_index.IsValid() && !retained_variadic_arguments &&
@@ -225,17 +218,6 @@ BoundExpressionSQLExportState::ExportScalarFunction(const BoundFunctionExpressio
 				return Failure(UnsupportedFunction(path, std::move(identity),
 				                                   "The bound scalar function is missing a SQL argument name"));
 			}
-		}
-	}
-	for (idx_t argument_index = 0; argument_index < argument_names.size(); argument_index++) {
-		auto &argument_name = argument_names[argument_index];
-		if (argument_name.empty()) {
-			continue;
-		}
-		if (!IsValidIdentifier(argument_name)) {
-			return Failure(
-			    InternalExpressionInvariant(ChildPath(path, argument_index), *expression.GetChildren()[argument_index],
-			                                "The scalar SQL argument-name callback returned an invalid identifier"));
 		}
 	}
 	vector<unique_ptr<ParsedExpression>> children;

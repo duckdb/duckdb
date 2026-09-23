@@ -75,7 +75,7 @@ static optional<QualifiedName> RebindableFunctionName(const FUNCTION &definition
 		return {};
 	}
 	for (auto &component : name.Path()) {
-		if (!IsValidIdentifier(component)) {
+		if (component.empty()) {
 			return {};
 		}
 	}
