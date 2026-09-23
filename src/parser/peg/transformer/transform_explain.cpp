@@ -55,7 +55,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainStatement(
 		if (format_is_set || explain_type == ExplainType::EXPLAIN_ANALYZE) {
 			throw InvalidInputException("EXPLAIN (SQL) cannot be combined with ANALYZE or FORMAT");
 		}
-		transformer.PivotEntryCheck("EXPLAIN (SQL)");
+		transformer.PivotEntryCheck("EXPLAIN (SQL) statement");
 		explain_type = ExplainType::EXPLAIN_SQL;
 	}
 	auto statement = std::move(explainable_statements);

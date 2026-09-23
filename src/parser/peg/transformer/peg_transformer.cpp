@@ -340,9 +340,10 @@ unique_ptr<SQLStatement> PEGTransformer::CreatePivotStatement(unique_ptr<SQLStat
 
 void PEGTransformer::PivotEntryCheck(const string &type) {
 	if (!pivot_entries.empty()) {
-		throw ParserException("PIVOT statements with pivot elements extracted from the data cannot be used in %s.\nThe "
-		                      "PIVOT values must be manually specified, e.g.:\nPIVOT ... ON %s IN (val1, val2, ...)",
-		                      type, pivot_entries[0]->column->ToString());
+		throw ParserException(
+		    "PIVOT statements with pivot elements extracted from the data cannot be used in %ss.\nIn order to use "
+		    "PIVOT in a %s the PIVOT values must be manually specified, e.g.:\nPIVOT ... ON %s IN (val1, val2, ...)",
+		    type, type, pivot_entries[0]->column->ToString());
 	}
 }
 

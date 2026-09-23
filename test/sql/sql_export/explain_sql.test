@@ -90,7 +90,7 @@ sql	<REGEX>:.*error.*execution only.*
 statement error
 EXPLAIN (SQL) PIVOT (SELECT nextval('explain_sequence') AS i) ON i;
 ----
-PIVOT statements with pivot elements extracted from the data cannot be used in EXPLAIN (SQL).
+PIVOT statements with pivot elements extracted from the data cannot be used in EXPLAIN (SQL) statements.
 
 query I
 SELECT last_value IS NULL FROM duckdb_sequences() WHERE sequence_name='explain_sequence';
