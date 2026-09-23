@@ -26,6 +26,7 @@ class ClientContext;
 class DataChunk;
 class PhysicalOperator;
 class PipelineExecutor;
+class ProgressVerifier;
 class OperatorState;
 class QueryProfiler;
 class ThreadContext;
@@ -136,6 +137,11 @@ public:
 		return completed_pipelines.load();
 	}
 
+	//! The progress verifier of this query (if debug_verify_progress is enabled)
+	optional_ptr<ProgressVerifier> GetProgressVerifier() {
+		return progress_verifier.get();
+	}
+
 private:
 	//! Whether the result sink waits on the consumer: a producer is parked for the retention
 	//! decision, or for space that only a pop frees
@@ -188,6 +194,8 @@ private:
 	shared_ptr<QueryProfiler> profiler;
 	//! Task error manager
 	TaskErrorManager error_manager;
+	//! Verifies the progress reported by the pipelines (debug setting)
+	unique_ptr<ProgressVerifier> progress_verifier;
 
 	//! The amount of completed pipelines of the query
 	atomic<idx_t> completed_pipelines;

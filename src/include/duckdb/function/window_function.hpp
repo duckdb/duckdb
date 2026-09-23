@@ -378,6 +378,18 @@ public:
 	const shared_ptr<const WindowFunction> &GetDefinition() const {
 		return definition;
 	}
+	//! The number of arguments that were received by "*args", they directly follow the standard parameters
+	idx_t GetVarArgsCount() const {
+		return BoundSimpleFunction::GetVarArgsCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by "**kwargs", they are the last arguments
+	idx_t GetKwargsCount() const {
+		return BoundSimpleFunction::GetKwargsCount(definition->GetSignature());
+	}
+	//! The kind of the parameter that received the argument at the given index
+	FunctionParameterKind GetArgumentParameterKind(idx_t argument_index) const {
+		return BoundSimpleFunction::GetArgumentParameterKind(definition->GetSignature(), argument_index);
+	}
 	const vector<LogicalType> &GetLogicalArguments() const {
 		return logical_arguments;
 	}

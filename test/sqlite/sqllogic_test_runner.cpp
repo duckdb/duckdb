@@ -4,7 +4,6 @@
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/json_document.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
-#include "duckdb/main/extension/generated_extension_loader.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension_helper.hpp"
@@ -451,6 +450,14 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 
 	if (param == "windows") {
 #ifndef _WIN32
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
+	if (param == "linux") {
+#ifndef __linux__
 		return RequireResult::MISSING;
 #else
 		return RequireResult::PRESENT;
@@ -1194,8 +1201,8 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 				parser.Fail("%s cannot be called in a loop", directive);
 			}
 
-			if (token.parameters.empty() || (exclude_values && token.parameters.size() < 2)) {
-				parser.Fail(exclude_values ? "require-env-not requires <env name> <excluded value> [excluded value ...]"
+			if (token.parameters.empty()) {
+				parser.Fail(exclude_values ? "require-env-not requires <env name> [excluded value ...]"
 				                           : "require-env requires <env name> [expected value ...]");
 			}
 			auto skip_reason = directive + " " + StringUtil::Join(token.parameters, " ");
@@ -1219,6 +1226,14 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 				// More proper solution is wrapping std::getenv in a duckdb::test_getenv, and having a way to inject env
 				// variables
 				env_actual = default_local_repo.c_str();
+			}
+			if (exclude_values && token.parameters.size() == 1) {
+				if (env_actual != nullptr) {
+					SkipTest(skip_reason);
+					return;
+				}
+				// An absent variable has no value to register for substitution or tagging.
+				continue;
 			}
 			if (env_actual == nullptr) {
 				// Environment variable was not found, this test should not be run

@@ -310,8 +310,9 @@ void FailingFromExec(CopyFunction::CopyFromExecInput &) {
 	throw InvalidInputException("copy from exec failed on purpose");
 }
 
-// A batch size callback that sets no target fails the statement.
-void EmptyBatchSize(CopyFunction::CopyToBatchSizeInput &) {
+// A batch size callback that sets a target of 0 fails the statement.
+void ZeroBatchSize(CopyFunction::CopyToBatchSizeInput &input) {
+	input.SetTarget(0);
 }
 
 // The batch can only be taken once.
@@ -541,13 +542,13 @@ TEST_CASE("Stable C++API: copy function callback errors fail the query", "[cpp_a
 	                       InvalidInputException, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 
 	auto empty_batch_size = CopyFunction::Create(conn);
-	empty_batch_size.SetName("cpp_copy_empty_batch_size")
-	    .SetCopyToBatchSizeCallback(EmptyBatchSize)
+	empty_batch_size.SetName("cpp_copy_zero_batch_size")
+	    .SetCopyToBatchSizeCallback(ZeroBatchSize)
 	    .SetCopyToBatchCallback(NoopBatch)
 	    .SetCopyToFlushCallback(NoopFlush);
 	empty_batch_size.Register();
 	REQUIRE_THROWS_MATCHES(
-	    conn.Execute(CopyToStatement("SELECT r FROM range(3) t(r)", path, "cpp_copy_empty_batch_size")),
+	    conn.Execute(CopyToStatement("SELECT r FROM range(3) t(r)", path, "cpp_copy_zero_batch_size")),
 	    InvalidInputException, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 
 	auto take_twice = CopyFunction::Create(conn);

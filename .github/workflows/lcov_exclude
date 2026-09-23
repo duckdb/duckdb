@@ -15,7 +15,6 @@
 */extension/tpch/*
 */extension/json/yyjson/*
 */extension_helper.cpp
-*/generated_extension_loader.hpp
 */adbc/*
 */enum_util.cpp
 */enums/expression_type.cpp

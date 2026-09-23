@@ -1490,7 +1490,7 @@ ScalarFunction CreateSortKeyFun::GetFunction() {
 	ScalarFunction sort_key_function("create_sort_key", {LogicalType::ANY}, LogicalType::BLOB, CreateSortKeyFunction,
 	                                 CreateSortKeyBind);
 	sort_key_function.GetSignature().GetParameter(0).SetName("key1");
-	sort_key_function.SetVarArgs(LogicalType::ANY);
+	sort_key_function.GetSignature().AddArgsParameter("args", LogicalType::ANY);
 	sort_key_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return sort_key_function;
 }
@@ -1521,7 +1521,7 @@ ScalarFunction DecodeSortKeyFun::GetFunction() {
 	    "decode_sort_key",
 	    {{"sort_key", LogicalType::ANY}, {"col", LogicalType::VARCHAR}, {"sort_specifier", LogicalType::VARCHAR}},
 	    LogicalType::STRUCT({{"any", LogicalType::ANY}}), DecodeSortKeyFunction, DecodeSortKeyBind);
-	sort_key_function.SetVarArgs(LogicalType::VARCHAR);
+	sort_key_function.GetSignature().AddArgsParameter("args", LogicalType::VARCHAR);
 	return sort_key_function;
 }
 

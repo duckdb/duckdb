@@ -58,6 +58,8 @@ public:
 
 	idx_t FileSize() const;
 	idx_t Remaining() const;
+	//! The fraction of the file that has been read, in [0, 1]
+	double GetProgress() const;
 
 	bool CanSeek() const;
 	bool IsPipe() const;
@@ -84,6 +86,8 @@ private:
 	//! File properties
 	const bool can_seek;
 	const idx_t file_size;
+	//! Whether the file is compressed - the read position then refers to the decompressed data
+	const bool compressed;
 
 	//! Read properties
 	atomic<idx_t> read_position;

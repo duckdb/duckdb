@@ -31,6 +31,7 @@
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
 #include "duckdb/common/enums/debug_order_verification.hpp"
+#include "duckdb/common/enums/debug_progress_verification.hpp"
 #include "duckdb/common/enums/debug_statement_verification.hpp"
 #include "duckdb/common/enums/debug_vector_verification.hpp"
 #include "duckdb/common/enums/debug_verification_mode.hpp"
@@ -182,6 +183,7 @@
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/pipeline_broadcast_exchange.hpp"
 #include "duckdb/parallel/pipeline_schedule.hpp"
+#include "duckdb/parallel/progress_verifier.hpp"
 #include "duckdb/parallel/scan_read_ahead.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
@@ -1719,6 +1721,25 @@ DebugOrderVerification EnumUtil::FromString<DebugOrderVerification>(const char *
 	return static_cast<DebugOrderVerification>(StringUtil::StringToEnum(GetDebugOrderVerificationValues(), 3, "DebugOrderVerification", value));
 }
 
+const StringUtil::EnumStringLiteral *GetDebugProgressVerificationValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DebugProgressVerification::NONE), "NONE" },
+		{ static_cast<uint32_t>(DebugProgressVerification::LOG), "LOG" },
+		{ static_cast<uint32_t>(DebugProgressVerification::ERROR), "ERROR" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DebugProgressVerification>(DebugProgressVerification value) {
+	return StringUtil::EnumToString(GetDebugProgressVerificationValues(), 3, "DebugProgressVerification", static_cast<uint32_t>(value));
+}
+
+template<>
+DebugProgressVerification EnumUtil::FromString<DebugProgressVerification>(const char *value) {
+	return static_cast<DebugProgressVerification>(StringUtil::StringToEnum(GetDebugProgressVerificationValues(), 3, "DebugProgressVerification", value));
+}
+
 const StringUtil::EnumStringLiteral *GetDebugStatementVerificationValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(DebugStatementVerification::NONE), "NONE" },
@@ -2737,6 +2758,26 @@ const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value) 
 template<>
 FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *value) {
 	return static_cast<FunctionNullHandling>(StringUtil::StringToEnum(GetFunctionNullHandlingValues(), 2, "FunctionNullHandling", value));
+}
+
+const StringUtil::EnumStringLiteral *GetFunctionParameterKindValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(FunctionParameterKind::STANDARD), "STANDARD" },
+		{ static_cast<uint32_t>(FunctionParameterKind::VAR_POSITIONAL), "VAR_POSITIONAL" },
+		{ static_cast<uint32_t>(FunctionParameterKind::VAR_KEYWORD), "VAR_KEYWORD" },
+		{ static_cast<uint32_t>(FunctionParameterKind::KEYWORD_ONLY), "KEYWORD_ONLY" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<FunctionParameterKind>(FunctionParameterKind value) {
+	return StringUtil::EnumToString(GetFunctionParameterKindValues(), 4, "FunctionParameterKind", static_cast<uint32_t>(value));
+}
+
+template<>
+FunctionParameterKind EnumUtil::FromString<FunctionParameterKind>(const char *value) {
+	return static_cast<FunctionParameterKind>(StringUtil::StringToEnum(GetFunctionParameterKindValues(), 4, "FunctionParameterKind", value));
 }
 
 const StringUtil::EnumStringLiteral *GetFunctionStabilityValues() {
@@ -4877,6 +4918,30 @@ ProfilingParameterNames EnumUtil::FromString<ProfilingParameterNames>(const char
 	return static_cast<ProfilingParameterNames>(StringUtil::StringToEnum(GetProfilingParameterNamesValues(), 5, "ProfilingParameterNames", value));
 }
 
+const StringUtil::EnumStringLiteral *GetProgressInvariantValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ProgressInvariant::UNSUPPORTED_SOURCE), "UNSUPPORTED_SOURCE" },
+		{ static_cast<uint32_t>(ProgressInvariant::UNSUPPORTED_SINK), "UNSUPPORTED_SINK" },
+		{ static_cast<uint32_t>(ProgressInvariant::MALFORMED_SOURCE), "MALFORMED_SOURCE" },
+		{ static_cast<uint32_t>(ProgressInvariant::MALFORMED_SINK), "MALFORMED_SINK" },
+		{ static_cast<uint32_t>(ProgressInvariant::NON_MONOTONIC), "NON_MONOTONIC" },
+		{ static_cast<uint32_t>(ProgressInvariant::INCOMPLETE), "INCOMPLETE" },
+		{ static_cast<uint32_t>(ProgressInvariant::STALLED), "STALLED" },
+		{ static_cast<uint32_t>(ProgressInvariant::INACCURATE), "INACCURATE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ProgressInvariant>(ProgressInvariant value) {
+	return StringUtil::EnumToString(GetProgressInvariantValues(), 8, "ProgressInvariant", static_cast<uint32_t>(value));
+}
+
+template<>
+ProgressInvariant EnumUtil::FromString<ProgressInvariant>(const char *value) {
+	return static_cast<ProgressInvariant>(StringUtil::StringToEnum(GetProgressInvariantValues(), 8, "ProgressInvariant", value));
+}
+
 const StringUtil::EnumStringLiteral *GetPushdownExtractSupportValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(PushdownExtractSupport::UNCHECKED), "UNCHECKED" },
@@ -5983,19 +6048,20 @@ const StringUtil::EnumStringLiteral *GetStatementTypeValues() {
 		{ static_cast<uint32_t>(StatementType::MERGE_INTO_STATEMENT), "MERGE_INTO_STATEMENT" },
 		{ static_cast<uint32_t>(StatementType::CONNECT_STATEMENT), "CONNECT_STATEMENT" },
 		{ static_cast<uint32_t>(StatementType::DISCONNECT_STATEMENT), "DISCONNECT_STATEMENT" },
-		{ static_cast<uint32_t>(StatementType::EXTERNAL_RESOURCE_STATEMENT), "EXTERNAL_RESOURCE_STATEMENT" }
+		{ static_cast<uint32_t>(StatementType::EXTERNAL_RESOURCE_STATEMENT), "EXTERNAL_RESOURCE_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::ENUM_SIZE), "ENUM_SIZE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<StatementType>(StatementType value) {
-	return StringUtil::EnumToString(GetStatementTypeValues(), 34, "StatementType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetStatementTypeValues(), static_cast<uint32_t>(StatementType::ENUM_SIZE), "StatementType", static_cast<uint32_t>(value));
 }
 
 template<>
 StatementType EnumUtil::FromString<StatementType>(const char *value) {
-	return static_cast<StatementType>(StringUtil::StringToEnum(GetStatementTypeValues(), 34, "StatementType", value));
+	return static_cast<StatementType>(StringUtil::StringToEnum(GetStatementTypeValues(), static_cast<uint32_t>(StatementType::ENUM_SIZE), "StatementType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetStatisticsPropagationModeValues() {
@@ -6471,12 +6537,12 @@ const StringUtil::EnumStringLiteral *GetTaskSchedulerTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<TaskSchedulerType>(TaskSchedulerType value) {
-	return StringUtil::EnumToString(GetTaskSchedulerTypeValues(), 3, "TaskSchedulerType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetTaskSchedulerTypeValues(), static_cast<uint32_t>(TaskSchedulerType::ENUM_SIZE), "TaskSchedulerType", static_cast<uint32_t>(value));
 }
 
 template<>
 TaskSchedulerType EnumUtil::FromString<TaskSchedulerType>(const char *value) {
-	return static_cast<TaskSchedulerType>(StringUtil::StringToEnum(GetTaskSchedulerTypeValues(), 3, "TaskSchedulerType", value));
+	return static_cast<TaskSchedulerType>(StringUtil::StringToEnum(GetTaskSchedulerTypeValues(), static_cast<uint32_t>(TaskSchedulerType::ENUM_SIZE), "TaskSchedulerType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTemporaryBufferSizeValues() {
@@ -6898,12 +6964,12 @@ const StringUtil::EnumStringLiteral *GetVariantLogicalTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<VariantLogicalType>(VariantLogicalType value) {
-	return StringUtil::EnumToString(GetVariantLogicalTypeValues(), 36, "VariantLogicalType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetVariantLogicalTypeValues(), static_cast<uint32_t>(VariantLogicalType::ENUM_SIZE), "VariantLogicalType", static_cast<uint32_t>(value));
 }
 
 template<>
 VariantLogicalType EnumUtil::FromString<VariantLogicalType>(const char *value) {
-	return static_cast<VariantLogicalType>(StringUtil::StringToEnum(GetVariantLogicalTypeValues(), 36, "VariantLogicalType", value));
+	return static_cast<VariantLogicalType>(StringUtil::StringToEnum(GetVariantLogicalTypeValues(), static_cast<uint32_t>(VariantLogicalType::ENUM_SIZE), "VariantLogicalType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVariantStatsShreddingStateValues() {

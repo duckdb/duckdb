@@ -39,6 +39,8 @@ public:
 	OperatorPartitionData GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	                                       LocalSourceState &lstate, const OperatorPartitionInfo &partition_info) const;
 	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const;
+	//! Whether all partitions have been scanned
+	bool IsFinished(GlobalSourceState &gstate) const;
 
 public:
 	//===--------------------------------------------------------------------===//

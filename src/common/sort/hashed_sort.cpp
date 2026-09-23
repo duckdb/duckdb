@@ -272,27 +272,8 @@ bool HashedSortGlobalSinkState::CanBypassSort(idx_t hash_bin) const {
 }
 
 ProgressData HashedSortGlobalSinkState::GetSinkProgress(ClientContext &client, const ProgressData source) const {
-	ProgressData result;
-	result.done = source.done / 2;
-	result.total = source.total;
-	result.invalid = source.invalid;
-
-	// Sort::GetSinkProgress assumes that there is only 1 sort.
-	// So we just use it to figure out how many rows have been sorted.
-	const ProgressData zero_progress;
-	lock_guard<mutex> guard(lock);
-	const auto &sort = hashed_sort.sort;
-	for (auto &hash_group : hash_groups) {
-		if (!hash_group || !hash_group->sort_global) {
-			continue;
-		}
-
-		const auto group_progress = sort->GetSinkProgress(client, *hash_group->sort_global, zero_progress);
-		result.done += group_progress.done;
-		result.invalid = result.invalid || group_progress.invalid;
-	}
-
-	return result;
+	// the hash groups are sorted after the sink has finished
+	return source;
 }
 
 SinkFinalizeType HashedSort::Finalize(ClientContext &client, OperatorSinkFinalizeInput &finalize) const {
