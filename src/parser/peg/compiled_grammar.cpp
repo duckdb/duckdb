@@ -147,6 +147,11 @@ shared_ptr<CompiledGrammar> CompiledGrammar::Create(const vector<reference<Gramm
 	return new_matcher;
 }
 
+shared_ptr<CompiledGrammar> CompiledGrammar::DefaultGrammar() {
+	static auto grammar = Create();
+	return grammar;
+}
+
 shared_ptr<CompiledGrammar> CompiledGrammar::Create() {
 	return Create({});
 }

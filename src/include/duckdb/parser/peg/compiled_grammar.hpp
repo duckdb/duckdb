@@ -36,6 +36,8 @@ public:
 
 public:
 	static shared_ptr<CompiledGrammar> Get(ClientContext &context);
+	//! Get the shared, lazily compiled base DuckDB grammar.
+	static shared_ptr<CompiledGrammar> DefaultGrammar();
 	//! Compile the base DuckDB grammar.
 	static shared_ptr<CompiledGrammar> Create();
 	//! Compile a grammar for the selected extensions without changing the client configuration.

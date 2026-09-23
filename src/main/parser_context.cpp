@@ -52,7 +52,7 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher() {
 			return matcher;
 		}
 	}
-	auto new_matcher = CompiledGrammar::Create();
+	auto new_matcher = CompiledGrammar::DefaultGrammar();
 
 	std::unique_lock<std::mutex> lock(mutex);
 	if (!matcher) {

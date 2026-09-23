@@ -28,9 +28,8 @@ Parser::~Parser() = default;
 Parser::Parser(Parser &&other) noexcept = default;
 
 ParserOptions ParserOptions::Builtin() {
-	static auto grammar = CompiledGrammar::Create();
 	ParserOptions options;
-	options.compiled_grammar = grammar;
+	options.compiled_grammar = CompiledGrammar::DefaultGrammar();
 	return options;
 }
 
