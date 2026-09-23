@@ -5,6 +5,11 @@
 statement ok
 SET debug_verify_statement='explain_sql_strict';
 
+foreach serializer false true
+
+statement ok
+SET debug_verify_serializer={serializer};
+
 statement ok
 PRAGMA disable_optimizer;
 
@@ -13,20 +18,10 @@ SELECT TRY_CAST(CAST(42 AS INTEGER) AS BIGINT);
 ----
 42
 
-query TT
-EXPLAIN (SQL) SELECT TRY_CAST(CAST(42 AS INTEGER) AS BIGINT) AS exported;
-----
-sql	<REGEX>:.*TRY_CAST.*
-
 query T
 SELECT 1 = 2;
 ----
 0
-
-query TT
-EXPLAIN (SQL) SELECT 1 = 2 AS exported;
-----
-sql	<REGEX>:.*=.*
 
 query T
 SELECT 1 != 2;
@@ -38,170 +33,85 @@ SELECT 1 < 2;
 ----
 1
 
-query TT
-EXPLAIN (SQL) SELECT 1 < 2 AS exported;
-----
-sql	<REGEX>:.*<.*
-
 query T
 SELECT 1 > 2;
 ----
 0
-
-query TT
-EXPLAIN (SQL) SELECT 1 > 2 AS exported;
-----
-sql	<REGEX>:.*>.*
 
 query T
 SELECT 1 <= 2;
 ----
 1
 
-query TT
-EXPLAIN (SQL) SELECT 1 <= 2 AS exported;
-----
-sql	<REGEX>:.*<=.*
-
 query T
 SELECT 1 >= 2;
 ----
 0
-
-query TT
-EXPLAIN (SQL) SELECT 1 >= 2 AS exported;
-----
-sql	<REGEX>:.*>=.*
 
 query T
 SELECT 1 IS DISTINCT FROM 2;
 ----
 1
 
-query TT
-EXPLAIN (SQL) SELECT 1 IS DISTINCT FROM 2 AS exported;
-----
-sql	<REGEX>:.*IS DISTINCT FROM.*
-
 query T
 SELECT 1 IS NOT DISTINCT FROM 2;
 ----
 0
-
-query TT
-EXPLAIN (SQL) SELECT 1 IS NOT DISTINCT FROM 2 AS exported;
-----
-sql	<REGEX>:.*IS NOT DISTINCT FROM.*
 
 query T
 SELECT 2 BETWEEN 1 AND 3;
 ----
 1
 
-query TT
-EXPLAIN (SQL) SELECT 2 BETWEEN 1 AND 3 AS exported;
-----
-sql	<REGEX>:.* >= .*AND.* <= .*
-
 query T
 SELECT (1=1) AND ((2=2) AND (3=3));
 ----
 1
-
-query TT
-EXPLAIN (SQL) SELECT (1=1) AND ((2=2) AND (3=3)) AS exported;
-----
-sql	<REGEX>:.*AND.*AND.*
 
 query T
 SELECT CASE WHEN false THEN 10 WHEN true THEN 20 ELSE 30 END;
 ----
 20
 
-query TT
-EXPLAIN (SQL) SELECT CASE WHEN false THEN 10 WHEN true THEN 20 ELSE 30 END AS exported;
-----
-sql	<REGEX>:.*CASE.*WHEN.*THEN.*WHEN.*THEN.*ELSE.*END.*
-
 query T
 SELECT NOT true;
 ----
 0
-
-query TT
-EXPLAIN (SQL) SELECT NOT true AS exported;
-----
-sql	<REGEX>:.*NOT.*
 
 query T
 SELECT NULL::INTEGER IS NULL;
 ----
 1
 
-query TT
-EXPLAIN (SQL) SELECT NULL::INTEGER IS NULL AS exported;
-----
-sql	<REGEX>:.*IS NULL.*
-
 query T
 SELECT NULL::INTEGER IS NOT NULL;
 ----
 0
-
-query TT
-EXPLAIN (SQL) SELECT NULL::INTEGER IS NOT NULL AS exported;
-----
-sql	<REGEX>:.*IS NOT NULL.*
 
 query T
 SELECT 1 IN (2,3);
 ----
 0
 
-query TT
-EXPLAIN (SQL) SELECT 1 IN (2,3) AS exported;
-----
-sql	<REGEX>:.* IN .*
-
 query T
 SELECT 1 NOT IN (2,3);
 ----
 1
-
-query TT
-EXPLAIN (SQL) SELECT 1 NOT IN (2,3) AS exported;
-----
-sql	<REGEX>:.*NOT.* IN .*
 
 query T
 SELECT coalesce(NULL::INTEGER,4);
 ----
 4
 
-query TT
-EXPLAIN (SQL) SELECT coalesce(NULL::INTEGER,4) AS exported;
-----
-sql	<REGEX>:.*COALESCE.*
-
 query T
 SELECT TRY(5);
 ----
 5
 
-query TT
-EXPLAIN (SQL) SELECT TRY(5) AS exported;
-----
-sql	<REGEX>:.*TRY.*
-
 query T
 SELECT TRY(CAST('not an integer' AS INTEGER));
 ----
 NULL
-
-query TT
-EXPLAIN (SQL) SELECT TRY(CAST('not an integer' AS INTEGER)) AS exported;
-----
-sql	<REGEX>:.*TRY.*
 
 query T
 SELECT value FROM (SELECT row(42) AS value);
@@ -216,10 +126,10 @@ SELECT r >= 0 AND r < 1 FROM (SELECT random() AS r);
 ----
 1
 
-query TT
-EXPLAIN (SQL) SELECT random() AS exported;
-----
-sql	<REGEX>:.*random[(][)].*
+endloop
+
+statement ok
+SET debug_verify_serializer=false;
 
 statement ok
 CREATE TABLE scalar_values(i INTEGER,s VARCHAR);
@@ -250,19 +160,3 @@ SELECT alias(i % 2) AS p FROM scalar_values;
 ----
 p
 p
-
-query TT
-EXPLAIN (SQL) SELECT i + 2 FROM scalar_values;
-----
-sql	<REGEX>:.*"?system"?[.]main[.]"[+]"[(].*
-
-statement ok
-PRAGMA disable_optimizer;
-
-query TT
-EXPLAIN (SQL) SELECT 1 != 2 AS exported;
-----
-sql	<REGEX>:.* != .*
-
-statement ok
-PRAGMA enable_optimizer;

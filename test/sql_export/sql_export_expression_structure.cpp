@@ -381,26 +381,6 @@ TEST_CASE("Bound expression SQL export rejects repeated volatile exclusive BETWE
 	connection.Rollback();
 }
 
-TEST_CASE("Bound expression SQL export preserves structural operators through copies",
-          "[sql_export][bound_expression_sql_export]") {
-	DuckDB db;
-	Connection connection(db);
-	connection.BeginTransaction();
-	BoundExpressionSQLExportContext context;
-	vector<unique_ptr<Expression>> structural;
-	structural.push_back(
-	    BoundCastExpression::AddCastToType(*connection.context, Constant(Value::INTEGER(7)), LogicalType::BIGINT));
-	structural.push_back(BoundBetweenExpression::Create(Constant(Value::INTEGER(7)), Constant(Value::INTEGER(2)),
-	                                                    Constant(Value::INTEGER(9)), true, true));
-	for (auto &expression : structural) {
-		REQUIRE(BoundExpressionSQLExporter::Export(*expression->Copy(), context).IsSuccess());
-		auto restored = BinaryRoundTrip(*connection.context, *expression);
-		REQUIRE(BoundExpressionSQLExporter::Export(*restored, context).IsSuccess());
-	}
-
-	connection.Rollback();
-}
-
 TEST_CASE("Bound expression SQL export rejects deferred expression kinds",
           "[sql_export][bound_expression_sql_export]") {
 	BoundExpressionSQLExportContext context;
