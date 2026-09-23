@@ -596,7 +596,7 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const idx_t buffer_pos,
                                                 const char *value_ptr, const idx_t length, const bool empty) {
 	if (result.escaped) {
-		if (result.projecting_columns) {
+		if (result.projecting_columns && result.cur_col_id < result.number_of_columns) {
 			if (!result.projected_columns[result.cur_col_id]) {
 				result.cur_col_id++;
 				result.escaped = false;
