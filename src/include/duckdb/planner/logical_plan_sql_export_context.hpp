@@ -54,8 +54,6 @@ public:
 	string MarkConditionUnsupportedReason(const LogicalComparisonJoin &join);
 	bool RequiresMarkGroupMetadata(const LogicalComparisonJoin &join);
 	LogicalPlanSQLExportResult ExportJoin(LogicalOperator &op, const LogicalPlanVerificationPath &path);
-	LogicalPlanSQLExportResult ExportGet(LogicalGet &get, const LogicalPlanVerificationPath &path,
-	                                     optional<LogicalPlanSQLExportField> ordinality = {});
 	optional<LogicalPlanVerificationIssue> CheckExpressionGetInput(LogicalExpressionGet &get,
 	                                                               const LogicalPlanVerificationPath &path);
 	LogicalPlanSQLExportResult ExportExpressionGetInput(LogicalExpressionGet &get,

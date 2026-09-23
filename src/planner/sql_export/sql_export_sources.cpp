@@ -30,8 +30,10 @@ static LogicalPlanVerificationIssue ExtensionIssue(LogicalPlanVerificationIssueC
 	                                   std::move(message));
 }
 
-LogicalPlanSQLExportResult logical_plan_sql_export::LogicalPlanSQLExportContext::ExportGet(
-    LogicalGet &get, const LogicalPlanVerificationPath &path, optional<LogicalPlanSQLExportField> ordinality) {
+LogicalPlanSQLExportResult LogicalGet::ExportSQLSource(LogicalPlanSQLExportContext &export_context,
+                                                       const LogicalPlanVerificationPath &path,
+                                                       optional_ptr<const LogicalPlanSQLExportField> ordinality) {
+	auto &get = *this;
 	D_ASSERT(get.children.size() <= 1);
 	if (get.has_pushed_projection) {
 		return PlanFailure(UnsupportedSource(path, LogicalSourceIdentity(get), "pushed_projection"));
@@ -48,8 +50,8 @@ LogicalPlanSQLExportResult logical_plan_sql_export::LogicalPlanSQLExportContext:
 	if (get.row_group_order_options &&
 	    (get.row_group_order_options->row_group_offset || get.row_group_order_options->leading_null_group_offset)) {
 		bool has_unpruned_offset = false;
-		for (idx_t i = ancestors.size(); i > 0; i--) {
-			auto &ancestor = ancestors[i - 1].get();
+		for (idx_t i = export_context.ancestors.size(); i > 0; i--) {
+			auto &ancestor = export_context.ancestors[i - 1].get();
 			if (ancestor.type == LogicalOperatorType::LOGICAL_LIMIT) {
 				has_unpruned_offset = ancestor.Cast<LogicalLimit>().unpruned_offset.IsValid();
 				break;
@@ -74,7 +76,7 @@ LogicalPlanSQLExportResult logical_plan_sql_export::LogicalPlanSQLExportContext:
 	}
 	unique_ptr<TableRef> input;
 	if (!get.children.empty()) {
-		auto child = ExportChild(*get.children[0], PlanChildPath(path, 0));
+		auto child = export_context.ExportChild(*get.children[0], PlanChildPath(path, 0));
 		if (child.HasError()) {
 			return LogicalPlanSQLExportResult::Failure(child.GetIssues());
 		}
@@ -91,9 +93,9 @@ LogicalPlanSQLExportResult logical_plan_sql_export::LogicalPlanSQLExportContext:
 		fields.GetValue().push_back(*ordinality);
 		scan_fields.push_back(*ordinality);
 	}
-	auto relation_alias = NextRelationAlias();
+	auto relation_alias = export_context.NextRelationAlias();
 	auto source_sql =
-	    to_sql(context, get,
+	    to_sql(export_context.context, get,
 	           {std::move(input), relation_alias, bool(ordinality),
 	            get.extra_info.file_filter_expressions ? &*get.extra_info.file_filter_expressions : nullptr});
 	if (!source_sql.query) {
@@ -114,8 +116,8 @@ LogicalPlanSQLExportResult logical_plan_sql_export::LogicalPlanSQLExportContext:
 			return PlanFailure(PlanUnsupportedFeature(path, "sample_seed", "The sampling seed has no SQL spelling"));
 		}
 		sampling->sample_rate = -1.0;
-		LogicalPlanSQLExportedChild unsampled {{std::move(query), scan_fields}, NextRelationAlias()};
-		auto sampled = ForwardFields(unsampled, scan_fields);
+		LogicalPlanSQLExportedChild unsampled {{std::move(query), scan_fields}, export_context.NextRelationAlias()};
+		auto sampled = export_context.ForwardFields(unsampled, scan_fields);
 		sampled->sample = std::move(sampling);
 		sampled->from_table = CreateSubquery(std::move(unsampled));
 		query = std::move(sampled);
@@ -125,8 +127,8 @@ LogicalPlanSQLExportResult logical_plan_sql_export::LogicalPlanSQLExportContext:
 	if (plain && (plain->where_clause || plain->select_list.size() != source.relation.fields.size())) {
 		plain = nullptr;
 	}
-	auto binding_context = CreateBindingContext(context, {source}, {plain});
-	auto select = ForwardFields(source, fields.GetValue(), plain);
+	auto binding_context = CreateBindingContext(export_context.context, {source}, {plain});
+	auto select = export_context.ForwardFields(source, fields.GetValue(), plain);
 	vector<unique_ptr<Expression>> predicates;
 	for (auto &entry : get.table_filters) {
 		if (ExpressionFilter::IsOptionalFilter(entry.Filter())) {
@@ -338,7 +340,7 @@ optional<LogicalPlanSQLExportResult> logical_plan_sql_export::LogicalPlanSQLExpo
 
 LogicalPlanVerificationResult<LogicalPlanSQLExportRelation> LogicalGet::ToSQL(LogicalPlanSQLExportContext &context,
                                                                               const LogicalPlanVerificationPath &path) {
-	return context.ExportGet(*this, path);
+	return ExportSQLSource(context, path);
 }
 
 LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>

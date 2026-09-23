@@ -19,6 +19,7 @@
 namespace duckdb {
 class TableCatalogEntry;
 class DynamicTableFilterSet;
+struct LogicalPlanSQLExportField;
 
 //! LogicalGet represents a scan operation from a data source
 class LogicalGet : public LogicalOperator {
@@ -124,6 +125,10 @@ protected:
 	void ResolveTypes() override;
 
 private:
+	friend class logical_plan_sql_export::LogicalPlanSQLExportContext;
+	LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
+	ExportSQLSource(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path,
+	                optional_ptr<const LogicalPlanSQLExportField> ordinality = nullptr);
 	LogicalGet();
 
 private:

@@ -104,7 +104,7 @@ LogicalPlanSQLExportResult logical_plan_sql_export::LogicalPlanSQLExportContext:
 				return PlanFailure(PlanUnsupportedFeature(
 				    path, "ordinality_window", "The source ordinality cannot be reconstructed through this window"));
 			}
-			return ExportGet(get, PlanChildPath(path, 0), fields.GetValue().back());
+			return get.ExportSQLSource(*this, PlanChildPath(path, 0), &fields.GetValue().back());
 		}
 	}
 	auto child = ExportChild(*op.children[0], PlanChildPath(path, 0));
