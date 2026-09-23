@@ -525,6 +525,7 @@ string GZipFileSystem::UncompressGZIPString(const char *data, idx_t size) {
 		mz_stream_ptr->avail_out = sizeof(decompress_buffer);
 		status = mz_inflate(mz_stream_ptr.get(), duckdb_miniz::MZ_NO_FLUSH);
 		if (status != duckdb_miniz::MZ_STREAM_END && status != duckdb_miniz::MZ_OK) {
+			duckdb_miniz::mz_inflateEnd(mz_stream_ptr.get());
 			throw IOException("Failed to uncompress");
 		}
 		decompressed.append(char_ptr_cast(decompress_buffer), mz_stream_ptr->total_out - decompressed.size());
