@@ -350,7 +350,7 @@ TEST_CASE("SQL export streaming observations are published only on completion",
 
 TEST_CASE("SQL export propagates generated planning failures and recovers", "[sql_export][sql_export_verification]") {
 	for (auto source : {"parser", "binder", "rebind", "optimizer"}) {
-		for (auto mode : {"report", "strict"}) {
+		for (auto mode : {"report", "supported", "strict"}) {
 			CAPTURE(source, mode);
 			DuckDB db(nullptr);
 			Connection con(db);
@@ -395,7 +395,7 @@ TEST_CASE("SQL export propagates generated planning failures and recovers", "[sq
 			REQUIRE(record.export_count == 1);
 			REQUIRE(record.route == SQLExportExecutionRoute::NONE);
 			REQUIRE(record.outcome == expected);
-			REQUIRE(record.strict_failure == (string(mode) == "strict"));
+			REQUIRE(record.strict_failure == (string(mode) != "report"));
 			REQUIRE(retry->errors == 0);
 			if (string(source) == "rebind") {
 				REQUIRE(record.code == "REBIND_EXCEPTION");

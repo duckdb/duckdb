@@ -534,6 +534,7 @@ unittest_release:
 	build/release/test/run $(T)
 
 TEST_CONFIGS_QUERY_VERIFICATION := \
+	test/configs/verify_sql_export_supported.json \
 	test/configs/verify_statement_copy.json \
 	test/configs/verify_statement_to_string.json \
 	test/configs/verify_statement_explain.json \
@@ -582,7 +583,7 @@ TEST_CONFIGS_STORAGE_ENGINE := \
 TEST_CONFIGS := $(TEST_CONFIGS_QUERY_VERIFICATION) $(TEST_CONFIGS_EXECUTION) $(TEST_CONFIGS_PERSISTENCE) \
 	$(TEST_CONFIGS_STORAGE_ENGINE)
 
-.PHONY: test_configs test_configs_query_verification test_configs_execution test_configs_persistence \
+.PHONY: test_sql_export test_configs test_configs_query_verification test_configs_execution test_configs_persistence \
 	test_configs_storage_engine
 
 test_configs:
@@ -590,6 +591,11 @@ test_configs:
 
 test_configs_query_verification:
 	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS_QUERY_VERIFICATION),--test-config=$(cfg))
+
+test_sql_export:
+	@set -e; sql_export_dir=$$(mktemp -d build/sql_export_XXXXXX); \
+	python3 scripts/sql_export_corpus.py run --mode strict --manifest test/configs/sql_export/strict_manifest.txt --unittest build/release/test/unittest --workers 2 --timeout 120 --output "$$sql_export_dir/strict"; \
+	python3 scripts/sql_export_corpus.py selftest --unittest build/release/test/unittest --output "$$sql_export_dir/runner"
 
 test_configs_execution:
 	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS_EXECUTION),--test-config=$(cfg))

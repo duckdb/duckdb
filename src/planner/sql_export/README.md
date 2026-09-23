@@ -52,3 +52,13 @@ The expression exporter owns binding context and lambda reference scopes. Litera
 Internal state declarations live under `duckdb/planner/sql_export/`. Public entry points retain their headers directly under `duckdb/planner/`. General logical-plan verification and repeatability analysis remain separate planner facilities. Runtime differential verification lives in `src/main/sql_export_verification.cpp`.
 
 C++ tests under `test/sql_export/` follow these feature boundaries; shared fixtures live in the corresponding test-helper files. SQL regression tests live under `test/sql/sql_export/`.
+
+The CI Query Verification configuration uses `debug_verify_sql_export='supported'`.
+It executes reconstructed SQL when export succeeds and falls back for explicitly
+unsupported shapes. Verifier defects fail the test, including expected-error tests.
+The separate strict corpus also rejects unsupported shapes, protecting the supported
+subset from regressions to fallback.
+
+Projection expressions consumed by a scan are currently unsupported when their SQL
+provenance is no longer retained. The optimizer records this condition explicitly,
+including across plan serialization; native pushdown remains enabled.

@@ -945,7 +945,8 @@ struct DebugVerifySerializerSetting {
 struct DebugVerifySqlExportSetting {
 	using RETURN_TYPE = DebugSQLExportVerification;
 	static constexpr const char *Name = "debug_verify_sql_export";
-	static constexpr const char *Description = "Verify optimized plans through SQL export (off, report, strict)";
+	static constexpr const char *Description =
+	    "Verify optimized plans through SQL export (off, report, supported, strict)";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr bool IsDebug = true;
 	static constexpr bool IsDeprecated = false;

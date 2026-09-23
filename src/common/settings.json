@@ -554,7 +554,7 @@
     },
     {
         "name": "debug_verify_sql_export",
-        "description": "Verify optimized plans through SQL export (off, report, strict)",
+        "description": "Verify optimized plans through SQL export (off, report, supported, strict)",
         "is_debug": true,
         "type": "ENUM<DebugSQLExportVerification>",
         "default_scope": "local",

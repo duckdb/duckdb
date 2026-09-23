@@ -1747,19 +1747,20 @@ const StringUtil::EnumStringLiteral *GetDebugSQLExportVerificationValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(DebugSQLExportVerification::OFF), "OFF" },
 		{ static_cast<uint32_t>(DebugSQLExportVerification::REPORT), "REPORT" },
-		{ static_cast<uint32_t>(DebugSQLExportVerification::VERIFY_STRICT), "STRICT" }
+		{ static_cast<uint32_t>(DebugSQLExportVerification::VERIFY_STRICT), "STRICT" },
+		{ static_cast<uint32_t>(DebugSQLExportVerification::VERIFY_SUPPORTED), "SUPPORTED" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<DebugSQLExportVerification>(DebugSQLExportVerification value) {
-	return StringUtil::EnumToString(GetDebugSQLExportVerificationValues(), 3, "DebugSQLExportVerification", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetDebugSQLExportVerificationValues(), 4, "DebugSQLExportVerification", static_cast<uint32_t>(value));
 }
 
 template<>
 DebugSQLExportVerification EnumUtil::FromString<DebugSQLExportVerification>(const char *value) {
-	return static_cast<DebugSQLExportVerification>(StringUtil::StringToEnum(GetDebugSQLExportVerificationValues(), 3, "DebugSQLExportVerification", value));
+	return static_cast<DebugSQLExportVerification>(StringUtil::StringToEnum(GetDebugSQLExportVerificationValues(), 4, "DebugSQLExportVerification", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDebugStatementVerificationValues() {

@@ -1,6 +1,7 @@
 The SQL export verifier is opt-in. `debug_verify_sql_export` defaults to `off`.
 `report` executes generated SQL after a successful round trip and uses the original
-plan for deliberately classified failures. `strict` rejects those failures. Thrown
+plan for deliberately classified failures. `supported` permits fallback only for explicitly unsupported cases and fails verifier defects.
+`strict` rejects all export failures. Thrown
 extension, binding, and optimizer exceptions retain their normal propagation.
 Explicit prepare/execute and parameterized queries are outside the initial envelope.
 
@@ -33,7 +34,17 @@ python3 scripts/sql_export_corpus.py selftest --output build/sql_export_runner_c
 
 Strict verification failures bypass ordinary expected-error matching. Each strict
 file must also have positive eligible and generated counts; unavailable requirements
-cannot make the corpus command pass. No broad configuration is added to ordinary CI.
+cannot make the corpus command pass.
+
+CI runs `verify_sql_export_supported.json` as part of the Query Verification
+configuration matrix. New SQL tests are included automatically unless explicitly
+excluded. Queries outside the export envelope run normally; supported queries
+execute their generated SQL against the existing test oracle. Verification defects
+fail even statements expecting a SQL error.
+
+The same CI job runs `make test_sql_export`, which requires successful round trips
+for the strict manifest and runs the corpus runner selftests. Its coverage records
+and logs are uploaded as the `sql-export-coverage` artifact.
 
 Use `--failure-sql` on a corpus run to retain generated SQL in diagnostic records.
 This includes successful query execution, since an expected-result mismatch is

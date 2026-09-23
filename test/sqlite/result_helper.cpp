@@ -72,7 +72,10 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 
 	SQLLogicTestLogger logger(context, query);
 	if (context.sql_export_strict_failure) {
-		logger.LogFailure("Strict SQL export verification failed before execution.\n");
+		logger.LogFailure("SQL export verification failed before execution.\n");
+		if (result.HasError()) {
+			logger.LogFailure(result.GetError() + "\n");
+		}
 		return false;
 	}
 	if (result.HasError()) {
@@ -350,7 +353,10 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 	auto &result = *owned_result;
 	SQLLogicTestLogger logger(context, statement);
 	if (context.sql_export_strict_failure) {
-		logger.LogFailure("Strict SQL export verification failed before execution.\n");
+		logger.LogFailure("SQL export verification failed before execution.\n");
+		if (result.HasError()) {
+			logger.LogFailure(result.GetError() + "\n");
+		}
 		return false;
 	}
 	if (runner.output_result_mode || runner.debug_mode) {

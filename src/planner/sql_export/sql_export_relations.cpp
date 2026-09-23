@@ -273,7 +273,10 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportModifier(LogicalOper
 			if (expression.HasError()) {
 				return LogicalPlanSQLExportResult::Failure(expression.GetIssues());
 			}
-			modifier->orders.emplace_back(order.type, order.null_order, std::move(expression.GetValue()));
+			modifier->orders.emplace_back(
+			    order.type, order.null_order,
+			    SQLExportHelpers::OrderExpression(SemanticExpressionType(*order.expression, expression_context),
+			                                      std::move(expression.GetValue())));
 		}
 		select->modifiers.push_back(std::move(modifier));
 	}

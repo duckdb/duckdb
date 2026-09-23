@@ -12,6 +12,6 @@
 
 namespace duckdb {
 
-enum class DebugSQLExportVerification : uint8_t { OFF, REPORT, VERIFY_STRICT };
+enum class DebugSQLExportVerification : uint8_t { OFF, REPORT, VERIFY_STRICT, VERIFY_SUPPORTED };
 
 } // namespace duckdb

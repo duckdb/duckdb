@@ -36,6 +36,9 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportGet(LogicalGet &get,
                                                                 const LogicalPlanVerificationPath &path,
                                                                 optional<LogicalPlanSQLExportField> ordinality) {
 	D_ASSERT(get.children.size() <= 1);
+	if (get.extra_info.has_pushed_projection) {
+		return PlanFailure(UnsupportedSource(path, LogicalSourceIdentity(get), "pushed_projection"));
+	}
 	auto fields = CreateFields(get, path);
 	if (fields.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());

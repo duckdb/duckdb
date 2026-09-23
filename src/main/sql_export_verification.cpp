@@ -119,8 +119,9 @@ void SQLExportVerification::Publish(bool planning_succeeded) {
 	if (!planning_succeeded) {
 		record.route = SQLExportExecutionRoute::NONE;
 		record.propagated_error = !record.strict_failure;
-		record.strict_failure |=
-		    record.mode == DebugSQLExportVerification::VERIFY_STRICT && record.eligible && verifier_exception;
+		const bool enforce_verification = record.mode == DebugSQLExportVerification::VERIFY_STRICT ||
+		                                  record.mode == DebugSQLExportVerification::VERIFY_SUPPORTED;
+		record.strict_failure |= enforce_verification && record.eligible && verifier_exception;
 	}
 	if (observer) {
 		if (!observer->retain_failure_sql) {
@@ -130,10 +131,26 @@ void SQLExportVerification::Publish(bool planning_succeeded) {
 	}
 }
 
+static bool IsUnsupportedSQLExport(SQLExportOutcome outcome) {
+	switch (outcome) {
+	case SQLExportOutcome::UNSUPPORTED_EXPRESSION:
+	case SQLExportOutcome::UNSUPPORTED_OPERATOR:
+	case SQLExportOutcome::UNSUPPORTED_SOURCE:
+	case SQLExportOutcome::UNSUPPORTED_EXTENSION:
+	case SQLExportOutcome::UNSUPPORTED_EXPORT_FEATURE:
+	case SQLExportOutcome::UNSUPPORTED_INPUT_PROFILE:
+		return true;
+	default:
+		return false;
+	}
+}
+
 void SQLExportVerification::Failure(SQLExportOutcome outcome, const string &code) {
 	record.outcome = outcome;
 	record.code = code;
-	if (record.mode == DebugSQLExportVerification::VERIFY_STRICT) {
+	const bool verify_supported = record.mode == DebugSQLExportVerification::VERIFY_SUPPORTED;
+	if (record.mode == DebugSQLExportVerification::VERIFY_STRICT ||
+	    (verify_supported && !IsUnsupportedSQLExport(outcome))) {
 		record.strict_failure = true;
 		record.route = SQLExportExecutionRoute::NONE;
 		throw InvalidInputException("SQL export verification failed: %s (%s)", code, record.phase);

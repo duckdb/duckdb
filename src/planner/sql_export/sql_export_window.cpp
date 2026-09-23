@@ -194,10 +194,19 @@ BoundExpressionSQLExportState::ExportWindowFunction(const BoundWindowExpression 
 		window->PartitionsMutable().push_back(std::move(children[ordinal++]));
 	}
 	for (auto &order : expression.OrderBy()) {
-		window->OrderByMutable().emplace_back(order.type, order.null_order, std::move(children[ordinal++]));
+		window->OrderByMutable().emplace_back(
+		    order.type, order.null_order,
+		    SQLExportHelpers::OrderExpression(order.expression->GetReturnType(), std::move(children[ordinal++])));
+	}
+	auto &named_arguments = function.GetNamedArguments();
+	auto positional_count = function.GetPositionalArgumentCount();
+	if (!named_arguments.empty() && positional_count + named_arguments.size() != expression.GetChildren().size()) {
+		return Failure(UnsupportedFunction(path, std::move(identity), "The named SQL arguments are incomplete"));
 	}
 	for (idx_t i = 0; i < expression.GetChildren().size(); i++) {
-		window->GetArgumentsMutable().emplace_back(std::move(children[ordinal++]));
+		auto argument_name =
+		    !named_arguments.empty() && i >= positional_count ? named_arguments[i - positional_count] : Identifier();
+		window->GetArgumentsMutable().emplace_back(std::move(argument_name), std::move(children[ordinal++]));
 	}
 	if (expression.Filter()) {
 		window->FilterMutable() = std::move(children[ordinal++]);
@@ -209,7 +218,9 @@ BoundExpressionSQLExportState::ExportWindowFunction(const BoundWindowExpression 
 		window->EndExprMutable() = std::move(children[ordinal++]);
 	}
 	for (auto &order : expression.ArgOrders()) {
-		window->ArgOrdersMutable().emplace_back(order.type, order.null_order, std::move(children[ordinal++]));
+		window->ArgOrdersMutable().emplace_back(
+		    order.type, order.null_order,
+		    SQLExportHelpers::OrderExpression(order.expression->GetReturnType(), std::move(children[ordinal++])));
 	}
 	window->IgnoreNullsMutable() = expression.IgnoreNulls();
 	window->HasIgnoreNullsMutable() = expression.IgnoreNulls();

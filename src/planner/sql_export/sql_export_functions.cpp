@@ -219,11 +219,25 @@ BoundExpressionSQLExportState::ExportScalarFunction(const BoundFunctionExpressio
 	if (argument_aliases_are_semantic) {
 		argument_names.resize(expression.GetChildren().size());
 		for (idx_t argument_index = first_argument_alias; argument_index < argument_names.size(); argument_index++) {
-			argument_names[argument_index] = expression.GetChildren()[argument_index]->GetAlias();
+			if (qualified_name == QualifiedName("system", "main", "struct_pack")) {
+				argument_names[argument_index] = StructType::GetChildName(expression.GetReturnType(), argument_index);
+			} else {
+				argument_names[argument_index] = expression.GetChildren()[argument_index]->GetAlias();
+			}
 			if (argument_names[argument_index].empty()) {
 				return Failure(UnsupportedFunction(path, std::move(identity),
 				                                   "The bound scalar function is missing a SQL argument name"));
 			}
+		}
+	}
+	if (!function.GetNamedArguments().empty()) {
+		auto positional_count = function.GetPositionalArgumentCount();
+		if (positional_count + function.GetNamedArguments().size() != expression.GetChildren().size()) {
+			return Failure(UnsupportedFunction(path, std::move(identity), "The named SQL arguments are incomplete"));
+		}
+		argument_names.resize(expression.GetChildren().size());
+		for (idx_t i = 0; i < function.GetNamedArguments().size(); i++) {
+			argument_names[positional_count + i] = function.GetNamedArguments()[i];
 		}
 	}
 	vector<unique_ptr<ParsedExpression>> children;
@@ -341,9 +355,18 @@ BoundExpressionSQLExportState::BuildAggregateCall(const BoundAggregateExpression
 	if (!issues.empty()) {
 		return BoundAggregateSQLExportResult::Failure(std::move(issues));
 	}
-	vector<unique_ptr<ParsedExpression>> arguments;
+	auto &named_arguments = function.GetNamedArguments();
+	auto positional_count = function.GetPositionalArgumentCount();
+	if (!named_arguments.empty() && positional_count + named_arguments.size() != expression.GetChildren().size()) {
+		return AggregateFailure(
+		    UnsupportedFunction(path, std::move(identity), "The named SQL arguments are incomplete"));
+	}
+	vector<FunctionArgument> arguments;
 	for (idx_t child_index = 0; child_index < expression.GetChildren().size(); child_index++) {
-		arguments.push_back(std::move(children[child_index]));
+		auto argument_name = !named_arguments.empty() && child_index >= positional_count
+		                         ? named_arguments[child_index - positional_count]
+		                         : Identifier();
+		arguments.emplace_back(std::move(argument_name), std::move(children[child_index]));
 	}
 	idx_t child_index = expression.GetChildren().size();
 	unique_ptr<ParsedExpression> filter;
@@ -354,7 +377,9 @@ BoundExpressionSQLExportState::BuildAggregateCall(const BoundAggregateExpression
 	if (expression.GetOrderBys()) {
 		order_bys = make_uniq<OrderModifier>();
 		for (auto &order : expression.GetOrderBys()->orders) {
-			order_bys->orders.emplace_back(order.type, order.null_order, std::move(children[child_index++]));
+			order_bys->orders.emplace_back(order.type, order.null_order,
+			                               SQLExportHelpers::OrderExpression(order.expression->GetReturnType(),
+			                                                                 std::move(children[child_index++])));
 		}
 	}
 	auto result = make_uniq<FunctionExpression>(*name, std::move(arguments), std::move(filter), std::move(order_bys),

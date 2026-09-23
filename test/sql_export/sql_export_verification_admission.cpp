@@ -61,6 +61,13 @@ TEST_CASE("SQL export modes classify unsupported plans and preserve off", "[sql_
 	}
 	REQUIRE(found_source);
 
+	SetSQLExportMode(con, *observer, "supported");
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM sql_export_opaque_source(3) ORDER BY 1"));
+	auto supported = TakeSQLExportRecord(*observer);
+	REQUIRE(supported.outcome == SQLExportOutcome::UNSUPPORTED_SOURCE);
+	REQUIRE(supported.route == SQLExportExecutionRoute::ORIGINAL_FALLBACK);
+	REQUIRE_FALSE(supported.strict_failure);
+
 	SetSQLExportMode(con, *observer, "strict");
 	REQUIRE_FAIL(con.Query("SELECT * FROM sql_export_opaque_source(3) ORDER BY 1"));
 	auto strict = TakeSQLExportRecord(*observer);
@@ -265,7 +272,7 @@ TEST_CASE("SQL export retains final properties after generated optimization", "[
 
 TEST_CASE("SQL export checks final type annotations after generated optimization",
           "[sql_export][sql_export_verification]") {
-	for (auto mode : {"off", "report", "strict"}) {
+	for (auto mode : {"off", "report", "supported", "strict"}) {
 		CAPTURE(mode);
 		DuckDB db(nullptr);
 		Connection con(db);
@@ -290,10 +297,10 @@ TEST_CASE("SQL export checks final type annotations after generated optimization
 			REQUIRE(record.code == "GENERATED_SCHEMA_OR_PROPERTIES");
 			REQUIRE(record.phase == "SCHEMA");
 			REQUIRE(record.outcome != SQLExportOutcome::STRUCTURALLY_VALIDATED);
-			REQUIRE(record.strict_failure == (string(mode) == "strict"));
-			REQUIRE(record.route == (string(mode) == "strict" ? SQLExportExecutionRoute::NONE
+			REQUIRE(record.strict_failure == (string(mode) != "report"));
+			REQUIRE(record.route == (string(mode) != "report" ? SQLExportExecutionRoute::NONE
 			                                                  : SQLExportExecutionRoute::ORIGINAL_FALLBACK));
-			if (string(mode) == "strict") {
+			if (string(mode) != "report") {
 				REQUIRE(result->HasError());
 			} else {
 				REQUIRE_NO_FAIL(*result);

@@ -125,6 +125,7 @@ unique_ptr<LogicalOperator> PushdownOptimize(ClientContext &context, unique_ptr<
 			}
 			TableFunctionProjectionExpressionInput input {analysis.get, *expr, column_index};
 			if (analysis.get.function.projection_expression_pushdown(context, input)) {
+				analysis.get.extra_info.has_pushed_projection = true;
 				analysis.get.returned_types[analysis.StorageIndex(column_index)] = expr->GetReturnType();
 				if (!analysis.get.types.empty()) {
 					analysis.get.ResolveOperatorTypes();

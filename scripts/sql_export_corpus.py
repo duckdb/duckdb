@@ -319,6 +319,27 @@ def selftest(args):
         "VALUES (1); SELECT CAST(s AS INTEGER) FROM (VALUES " + ','.join(["('0')"] * 5000 + ["('bad')"]) + ') t(s);'
     )
     probes = {
+        'supported_fallback': (
+            True,
+            "statement ok\nSET debug_verify_sql_export='supported'; SET delim_join_as_cte=false;\n"
+            "\nquery II\nSELECT i, (SELECT sum(j) FROM range(3)t(j) WHERE j < i) FROM range(3)r(i) ORDER BY i;\n"
+            "----\n0\tNULL\n1\t0\n2\t1\n\nquery I\nSELECT 42;\n----\n42\n",
+        ),
+        'supported_execution_once': (
+            True,
+            "statement ok\nSET debug_verify_sql_export='supported'; CREATE SEQUENCE s;\n"
+            "\nquery I\nSELECT nextval('s');\n----\n1\n"
+            "\nquery I\nSELECT currval('s');\n----\n1\n",
+        ),
+        'supported_result_mismatch': (
+            False,
+            "statement ok\nSET debug_verify_sql_export='supported';\n\nquery I\nSELECT 1;\n----\n2\n",
+        ),
+        'supported_execution_error': (
+            True,
+            "statement ok\nSET debug_verify_sql_export='supported';\n"
+            "\nstatement error\nSELECT CAST(s AS INTEGER) FROM (VALUES ('bad')) t(s);\n----\n<REGEX>:.*\n",
+        ),
         'explain_once': (
             True,
             "statement ok\nCREATE SEQUENCE s;\n\nexplain_sql\n\nquery I\nSELECT nextval('s');\n----\n1\n"
@@ -464,6 +485,15 @@ endloop
                 assert all(record['connection'] == 'named' for record in explained)
             elif name == 'explain_setting_restore':
                 assert len(records) == 1 and records[0]['route'] == 'GENERATED'
+        elif name.startswith('supported_'):
+            supported = [record for record in records if record['mode'] == 'SUPPORTED' and record['eligible']]
+            assert supported and not any(record['strict_failure'] for record in supported)
+            if name == 'supported_fallback':
+                assert supported[0]['route'] == 'ORIGINAL_FALLBACK'
+                assert supported[0]['outcome'] == 'UNSUPPORTED_OPERATOR'
+                assert supported[-1]['route'] == 'GENERATED'
+            else:
+                assert all(record['route'] == 'GENERATED' for record in supported)
         elif name == 'expected_verifier_error':
             assert len(records) == 2 and records[0]['outcome'] == 'NOT_APPLICABLE'
             record = records[1]

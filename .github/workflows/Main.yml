@@ -1311,6 +1311,17 @@ jobs:
       run: |
         make ${{ matrix.target }}
 
+    - name: Test SQL Export Strict Coverage
+      if: ${{ (success() || failure()) && matrix.group == 'Query Verification' }}
+      run: make test_sql_export
+
+    - name: Upload SQL Export Coverage
+      if: ${{ always() && matrix.group == 'Query Verification' }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: sql-export-coverage
+        path: build/sql_export_*/
+
     - name: Test Storage Compatibility
       if: ${{ (success() || failure()) && matrix.group == 'Persistence' }}
       run: |
