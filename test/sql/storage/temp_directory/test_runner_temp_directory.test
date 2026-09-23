@@ -50,4 +50,3 @@ query I
 SELECT current_setting('enable_external_access');
 ----
 0
-
