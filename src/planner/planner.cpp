@@ -26,6 +26,7 @@
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/planner/planner_extension.hpp"
 #include "duckdb/planner/logical_plan_verifier.hpp"
+#include "duckdb/planner/operator/logical_explain.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 
 namespace duckdb {
@@ -59,6 +60,12 @@ void Planner::Optimize() {
 #ifdef DEBUG
 		plan->Verify(context);
 #endif
+	}
+	if (plan->type == LogicalOperatorType::LOGICAL_EXPLAIN) {
+		auto &explain = plan->Cast<LogicalExplain>();
+		if (explain.explain_type == ExplainType::EXPLAIN_SQL) {
+			plan = explain.CreateSQLResult(context, binder->GenerateTableIndex());
+		}
 	}
 }
 

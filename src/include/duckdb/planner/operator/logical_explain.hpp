@@ -34,6 +34,8 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
+	unique_ptr<LogicalOperator> CreateSQLResult(ClientContext &context, TableIndex table_index);
+
 	idx_t EstimateCardinality(ClientContext &context) override;
 	bool SupportSerialization() const override;
 

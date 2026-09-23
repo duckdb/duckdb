@@ -1,5 +1,4 @@
 #include "duckdb/common/tree_renderer.hpp"
-#include "duckdb/planner/logical_plan_sql_exporter.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/helper/physical_explain_analyze.hpp"
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
@@ -12,72 +11,41 @@ namespace duckdb {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 	D_ASSERT(op.children.size() == 1);
-	vector<string> keys, values;
-	if (op.explain_type == ExplainType::EXPLAIN_SQL) {
-		LogicalPlanSQLExportOptions options;
-		options.output_names = op.sql_output_names;
-		auto exported = LogicalPlanSQLExporter::Export(context, *op.children[0], options);
-		if (exported.HasError()) {
-			auto &issue = exported.GetIssues()[0];
-			auto message = "EXPLAIN (SQL) cannot render this query: " + issue.message;
-			const bool is_source_function =
-			    issue.construct && issue.construct->type == LogicalPlanVerificationConstructType::SOURCE_FUNCTION;
-			const bool has_source_name =
-			    is_source_function && issue.construct->function && issue.construct->function->name != "logical_source";
-			if (has_source_name) {
-				message = StringUtil::Format("EXPLAIN (SQL) cannot render table function \"%s\".",
-				                             issue.construct->function->name);
-			}
-			switch (issue.code) {
-			case LogicalPlanVerificationIssueCode::UNSUPPORTED_OPERATOR:
-			case LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPRESSION:
-			case LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION:
-			case LogicalPlanVerificationIssueCode::UNSUPPORTED_SOURCE:
-			case LogicalPlanVerificationIssueCode::UNSUPPORTED_EXTENSION:
-			case LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE:
-				throw NotImplementedException(message);
-			default:
-				throw InternalException(message);
-			}
-		}
-		keys = {"sql"};
-		values = {exported.GetValue().query->ToString()};
-	} else {
-		// single-plan formats (e.g. FORMAT WEB) render only the final plan, so they produce a single artifact
-		auto renderer = TreeRenderer::CreateRenderer(context, op.format);
-		bool single_plan = renderer && renderer->RendersSinglePlan();
-		bool analyze = op.explain_type == ExplainType::EXPLAIN_ANALYZE;
-		// render the optimized logical plan before physical planning consumes it - but only when it will be shown
-		string logical_plan_opt;
-		if (!analyze && !single_plan) {
-			logical_plan_opt = op.children[0]->ToString(context, op.format);
-		}
-		auto &plan = CreatePlan(*op.children[0]);
-		if (analyze) {
-			auto &explain = Make<PhysicalExplainAnalyze>(op.types, op.format);
-			explain.children.push_back(plan);
-			return explain;
-		}
+	// single-plan formats (e.g. FORMAT WEB) render only the final plan, so they produce a single artifact
+	auto renderer = TreeRenderer::CreateRenderer(context, op.format);
+	bool single_plan = renderer && renderer->RendersSinglePlan();
+	bool analyze = op.explain_type == ExplainType::EXPLAIN_ANALYZE;
+	// render the optimized logical plan before physical planning consumes it - but only when it will be shown
+	string logical_plan_opt;
+	if (!analyze && !single_plan) {
+		logical_plan_opt = op.children[0]->ToString(context, op.format);
+	}
+	auto &plan = CreatePlan(*op.children[0]);
+	if (analyze) {
+		auto &explain = Make<PhysicalExplainAnalyze>(op.types, op.format);
+		explain.children.push_back(plan);
+		return explain;
+	}
 
-		// Format the plan and set the output of the EXPLAIN.
-		op.physical_plan = plan.ToString(context, op.format);
-		if (single_plan) {
+	// Format the plan and set the output of the EXPLAIN.
+	op.physical_plan = plan.ToString(context, op.format);
+	vector<string> keys, values;
+	if (single_plan) {
+		keys = {"physical_plan"};
+		values = {op.physical_plan};
+	} else {
+		switch (Settings::Get<ExplainOutputSetting>(context)) {
+		case ExplainOutputType::OPTIMIZED_ONLY:
+			keys = {"logical_opt"};
+			values = {logical_plan_opt};
+			break;
+		case ExplainOutputType::PHYSICAL_ONLY:
 			keys = {"physical_plan"};
 			values = {op.physical_plan};
-		} else {
-			switch (Settings::Get<ExplainOutputSetting>(context)) {
-			case ExplainOutputType::OPTIMIZED_ONLY:
-				keys = {"logical_opt"};
-				values = {logical_plan_opt};
-				break;
-			case ExplainOutputType::PHYSICAL_ONLY:
-				keys = {"physical_plan"};
-				values = {op.physical_plan};
-				break;
-			default:
-				keys = {"logical_plan", "logical_opt", "physical_plan"};
-				values = {op.logical_plan_unopt, logical_plan_opt, op.physical_plan};
-			}
+			break;
+		default:
+			keys = {"logical_plan", "logical_opt", "physical_plan"};
+			values = {op.logical_plan_unopt, logical_plan_opt, op.physical_plan};
 		}
 	}
 
