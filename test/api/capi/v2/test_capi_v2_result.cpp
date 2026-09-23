@@ -665,25 +665,20 @@ TEST_CASE("V2: interrupt with no active query is a no-op", "[capi_v2][query_resu
 }
 
 // ===========================================================================
-// connection_query_progress.
+// connection_progress_get.
 // ===========================================================================
 
-TEST_CASE("V2: query_progress reports idle values when no query is active", "[capi_v2][query_result]") {
+TEST_CASE("V2: connection_progress_get reports idle values when no query is active", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
 	auto progress = ReadProgress(fx.conn);
 	REQUIRE(progress.percentage == -1.0);
 	REQUIRE(progress.rows_processed == 0);
 	REQUIRE(progress.total_rows_to_process == 0);
-
-	// The snapshot destructor is null-safe.
-	REQUIRE(duckdb_v2_query_progress_destroy(nullptr) == DUCKDB_V2_ERROR_NONE);
-	duckdb_v2_query_progress_handle already_null = nullptr;
-	REQUIRE(duckdb_v2_query_progress_destroy(&already_null) == DUCKDB_V2_ERROR_NONE);
 }
 
 #if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
-TEST_CASE("V2: query_progress advances while stepping a query", "[capi_v2][query_result]") {
+TEST_CASE("V2: connection_progress_get advances while stepping a query", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
 	// Single-threaded so all execution happens in our steps, and the
@@ -700,7 +695,7 @@ TEST_CASE("V2: query_progress advances while stepping a query", "[capi_v2][query
 	REQUIRE(Query(fx.conn, "SELECT sum(a) FROM tbl", &r, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	// Progress restarts at 0 when the query begins and advances as steps
-	// drive execution. Each snapshot is an independent owned object.
+	// drive execution. Each call reads all fields from one snapshot.
 	QueryProgress progress;
 	bool saw_progress = false;
 	// Each round reads a snapshot, and the round count is timing-dependent, so
@@ -874,12 +869,7 @@ TEST_CASE("V2: result accessors reject null handle and null out-params", "[capi_
 	REQUIRE(duckdb_v2_connection_interrupt(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	double pct;
 	uint64_t rows, total;
-	duckdb_v2_query_progress_handle progress = nullptr;
-	REQUIRE(duckdb_v2_connection_query_progress(nullptr, &progress, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_query_progress_get_percentage(nullptr, &pct, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_query_progress_get_rows_processed(nullptr, &rows, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_query_progress_get_total_rows_to_process(nullptr, &total, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_progress_get(nullptr, &pct, &rows, &total, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	duckdb_v2_result_handle r = nullptr;
 	Query(fx.conn, "SELECT 1", &r, nullptr);
@@ -889,13 +879,13 @@ TEST_CASE("V2: result accessors reject null handle and null out-params", "[capi_
 	REQUIRE(duckdb_v2_result_step(r, nullptr, &status, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_result_step(r, &chunk, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_result_fetch_chunk(r, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_connection_query_progress(fx.conn, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_connection_query_progress(fx.conn, &progress, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_query_progress_get_percentage(progress, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_query_progress_get_rows_processed(progress, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_query_progress_get_total_rows_to_process(progress, nullptr, nullptr) ==
+	REQUIRE(duckdb_v2_connection_progress_get(fx.conn, nullptr, &rows, &total, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	duckdb_v2_query_progress_destroy(&progress);
+	REQUIRE(duckdb_v2_connection_progress_get(fx.conn, &pct, nullptr, &total, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_progress_get(fx.conn, &pct, &rows, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_progress_get(fx.conn, &pct, &rows, &total, nullptr) == DUCKDB_V2_ERROR_NONE);
+
 	duckdb_v2_result_destroy(&r);
 }
 
@@ -952,22 +942,6 @@ TEST_CASE("V2: statement_type numeric round-trip for higher-numbered values", "[
 		REQUIRE(st == c.expected);
 		duckdb_v2_result_destroy(&r);
 	}
-}
-
-// ===========================================================================
-// Drift detector: probe the first numeric value past the highest core
-// variant V2 currently mirrors. EnumUtil::ToString throws
-// NotImplementedException for values not present in its lookup table; if
-// a new variant is appended to duckdb::StatementType, the call will
-// instead return a string and this assertion will fire, signalling that
-// DUCKDB_V2_STATEMENT_TYPE in api_spec/v2/query_result/query_result.yaml
-// needs a matching id.
-// ===========================================================================
-
-TEST_CASE("V2: STATEMENT_TYPE has no gaps vs duckdb::StatementType", "[capi_v2][query_result]") {
-	constexpr auto highest_known = static_cast<uint8_t>(duckdb::StatementType::EXTERNAL_RESOURCE_STATEMENT);
-	auto probe = static_cast<duckdb::StatementType>(highest_known + 1);
-	REQUIRE_THROWS_AS(duckdb::EnumUtil::ToString(probe), duckdb::NotImplementedException);
 }
 
 // ===========================================================================

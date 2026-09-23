@@ -715,6 +715,8 @@ StringList:
     - ColumnList
     - NameList
     - DottedIdentifier
+    - CommentTarget
+    - CommentStringLiteralIdentifier
     - ColumnAliases
     - TriggerColumnList
     - RepositoryPublicKey
@@ -1692,6 +1694,7 @@ IdentifierType:
     - AnalyzeKeyword
     - ColId
     - ColIdOrString
+    - UsingColumnName
     - ColLabelOrString
     - ColLabelIdentifier
     - StringLiteralIdentifier
@@ -1804,27 +1807,11 @@ matcher_rule_overrides:
 
 packrat_memoized_rules:
   - Expression
-  - LambdaArrowExpression
-  - LogicalOrExpression
-  - LogicalAndExpression
-  - LogicalNotExpression
-  - IsExpression
-  - ComparisonExpression
-  - BitwiseExpression
-  - AdditiveExpression
-  - MultiplicativeExpression
-  - ExponentiationExpression
-  - PrefixExpression
-  - CollateExpression
-  - AtTimeZoneExpression
-  - SingleExpression
-  - BaseExpression
-  - ParensExpression
-  - ParenthesisExpression
   - Identifier
   - ColId
-  - ColumnReference
-  - FunctionExpression
+  - CatalogQualification
+  - SchemaQualification
+  - ReservedSchemaQualification
 
 # ---------------------------------------------------------------------------
 # excluded_rules: no transformer stub generated, no semantic value extracted

@@ -606,6 +606,19 @@ struct DebugCheckpointAbortSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct DebugCheckpointScanSleepMsSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "debug_checkpoint_scan_sleep_ms";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: time to sleep after a checkpoint has written a table's row groups, before it installs them";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "0";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugCheckpointSleepMsSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "debug_checkpoint_sleep_ms";
@@ -887,6 +900,33 @@ struct DebugVerifyColumnBindingsSetting {
 	static constexpr bool IsDeprecated = false;
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugVerifyProgressSetting {
+	using RETURN_TYPE = DebugProgressVerification;
+	static constexpr const char *Name = "debug_verify_progress";
+	static constexpr const char *Description = "Verify that operators report well-formed, monotonic and complete "
+	                                           "progress during execution (NONE, LOG or ERROR).";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr bool IsDebug = true;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "NONE";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct DebugVerifyProgressIgnoreSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "debug_verify_progress_ignore";
+	static constexpr const char *Description = "Comma-separated list of progress violations to ignore, as INVARIANT or "
+	                                           "INVARIANT:OPERATOR (e.g. UNSUPPORTED_SOURCE:WINDOW).";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr bool IsDebug = true;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 

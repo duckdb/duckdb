@@ -36,14 +36,19 @@ BoundWindowFunction::BoundWindowFunction(shared_ptr<const WindowFunction> base_p
 	// Try to default bind the function, to fill in any missing information in the BoundScalarFunction (e.g. from the
 	// "bind" callback)
 	for (auto &param : base.GetSignature().GetParameters()) {
-		arguments.push_back(param.GetType());
+		if (!param.IsVariadic()) {
+			arguments.push_back(param.GetType());
+		}
 	}
+	positional_arguments = arguments.size();
 	logical_arguments = arguments;
 	logical_return_type = return_type;
 }
 
 bool BoundWindowFunction::operator==(const BoundWindowFunction &rhs) const {
-	return window_enum == rhs.window_enum && arguments == rhs.arguments && return_type == rhs.return_type;
+	return window_enum == rhs.window_enum && arguments == rhs.arguments &&
+	       positional_arguments == rhs.positional_arguments && named_arguments == rhs.named_arguments &&
+	       return_type == rhs.return_type;
 }
 
 bool BoundWindowFunction::operator!=(const BoundWindowFunction &rhs) const {

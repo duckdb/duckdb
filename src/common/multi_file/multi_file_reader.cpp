@@ -133,7 +133,7 @@ OpenFileInfo MultiFileReader::ParseFileEntry(const Value &input) {
 			// structs of its entries, which fills the options an entry did not specify with NULL
 			continue;
 		}
-		extended_info->SetUserOption(name.GetIdentifierName(), child);
+		extended_info->options[name.GetIdentifierName()] = child;
 	}
 	if (!found_path) {
 		throw ParserException("%s reader requires a file struct to have a \"%s\" field holding the path of the file",

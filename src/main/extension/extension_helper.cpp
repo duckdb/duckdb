@@ -1,5 +1,6 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
+#include "duckdb/main/extension/linked_extension_registry.hpp"
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -16,81 +17,22 @@
 #include "duckdb/main/extension_repository_manager.hpp"
 #include "duckdb/main/settings.hpp"
 
-// Note that c++ preprocessor doesn't have a nice way to clean this up so we need to set the defines we use to false
-// explicitly when they are undefined
-#ifndef DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED
-#define DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED false
-#endif
-
-#ifndef DUCKDB_EXTENSION_ICU_LINKED
-#define DUCKDB_EXTENSION_ICU_LINKED false
-#endif
-
-#ifndef DUCKDB_EXTENSION_EXCEL_LINKED
-#define DUCKDB_EXTENSION_EXCEL_LINKED false
-#endif
-
-#ifndef DUCKDB_EXTENSION_PARQUET_LINKED
-#define DUCKDB_EXTENSION_PARQUET_LINKED false
-#endif
-
-#ifndef DUCKDB_EXTENSION_TPCH_LINKED
-#define DUCKDB_EXTENSION_TPCH_LINKED false
-#endif
-
-#ifndef DUCKDB_EXTENSION_TPCDS_LINKED
-#define DUCKDB_EXTENSION_TPCDS_LINKED false
-#endif
-
-#ifndef DUCKDB_EXTENSION_HTTPFS_LINKED
-#define DUCKDB_EXTENSION_HTTPFS_LINKED false
-#endif
-
-#ifndef DUCKDB_EXTENSION_JSON_LINKED
-#define DUCKDB_EXTENSION_JSON_LINKED false
-#endif
-
-#ifndef DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED
-#define DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED false
-#endif
-
-// Load the generated header file containing our list of extension headers
-#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS
-#include "duckdb/main/extension/generated_extension_loader.hpp"
-#else
-// TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds, after that
-//		 these can be removed
-#if DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED
-#include "core_functions_extension.hpp"
-#endif
-
-#if DUCKDB_EXTENSION_ICU_LINKED
-#include "icu_extension.hpp"
-#endif
-
-#if DUCKDB_EXTENSION_PARQUET_LINKED
-#include "parquet_extension.hpp"
-#endif
-
-#if DUCKDB_EXTENSION_TPCH_LINKED
-#include "tpch_extension.hpp"
-#endif
-
-#if DUCKDB_EXTENSION_TPCDS_LINKED
-#include "tpcds_extension.hpp"
-#endif
-
-#if DUCKDB_EXTENSION_JSON_LINKED
-#include "json_extension.hpp"
-#endif
-
-#if DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED
-#include "autocomplete_extension.hpp"
-#endif
-
-#endif
-
 namespace duckdb {
+
+void ExtensionHelper::RegisterLinkedExtensions(DBConfig &config) {
+	for (auto &linked : LinkedExtensionRegistry::Get()) {
+		bool present = false;
+		for (auto &existing : config.linked_extensions) {
+			if (StringUtil::CIEquals(existing.name, linked.name)) {
+				present = true;
+				break;
+			}
+		}
+		if (!present) {
+			config.linked_extensions.push_back(linked);
+		}
+	}
+}
 
 //! Loads an extension that was linked into the binary, via the registry the config carries. This is
 //! deliberately not generated code: an extension with its own copy of DuckDB links no generated
@@ -119,37 +61,37 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 // Default Extensions
 //===--------------------------------------------------------------------===//
 static const DefaultExtension internal_extensions[] = {
-    {"core_functions", "Core function library", DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED},
-    {"icu", "Adds support for time zones and collations using the ICU library", DUCKDB_EXTENSION_ICU_LINKED},
-    {"excel", "Adds support for Excel-like format strings", DUCKDB_EXTENSION_EXCEL_LINKED},
-    {"parquet", "Adds support for reading and writing parquet files", DUCKDB_EXTENSION_PARQUET_LINKED},
-    {"tpch", "Adds TPC-H data generation and query support", DUCKDB_EXTENSION_TPCH_LINKED},
-    {"tpcds", "Adds TPC-DS data generation and query support", DUCKDB_EXTENSION_TPCDS_LINKED},
-    {"httpfs", "Adds support for reading and writing files over a HTTP(S) connection", DUCKDB_EXTENSION_HTTPFS_LINKED},
-    {"json", "Adds support for JSON operations", DUCKDB_EXTENSION_JSON_LINKED},
-    {"autocomplete", "Adds support for autocomplete in the shell", DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED},
-    {"motherduck", "Enables motherduck integration with the system", false},
-    {"mysql_scanner", "Adds support for connecting to a MySQL database", false},
-    {"odbc_scanner", "Adds support for connecting to remote databases over ODBC", false},
-    {"sqlite_scanner", "Adds support for reading and writing SQLite database files", false},
-    {"postgres_scanner", "Adds support for connecting to a Postgres database", false},
-    {"inet", "Adds support for IP-related data types and functions", false},
-    {"spatial", "Geospatial extension that adds support for working with spatial data and functions", false},
-    {"aws", "Provides features that depend on the AWS SDK", false},
-    {"azure", "Adds a filesystem abstraction for Azure blob storage to DuckDB", false},
-    {"encodings", "All unicode encodings to UTF-8", false},
-    {"iceberg", "Adds support for Apache Iceberg", false},
-    {"vss", "Adds indexing support to accelerate Vector Similarity Search", false},
-    {"delta", "Adds support for Delta Lake", false},
-    {"fts", "Adds support for Full-Text Search Indexes", false},
-    {"ui", "Adds local UI for DuckDB", false},
-    {"ducklake", "Adds support for DuckLake, SQL as a Lakehouse Format", false},
-    {"quack", "The DuckDB 'Quack' Client/Server Protocol", false},
-    {"vortex", "Adds support for reading and writing files using the Vortex file format", false},
-    {"lance", "Adds support for querying Lance datasets", false},
-    {"avro", "Adds support for reading Avro files", false},
-    {"unity_catalog", "Adds support for connecting to Unity Catalog", false},
-    {nullptr, nullptr, false}};
+    {"core_functions", "Core function library"},
+    {"icu", "Adds support for time zones and collations using the ICU library"},
+    {"excel", "Adds support for Excel-like format strings"},
+    {"parquet", "Adds support for reading and writing parquet files"},
+    {"tpch", "Adds TPC-H data generation and query support"},
+    {"tpcds", "Adds TPC-DS data generation and query support"},
+    {"httpfs", "Adds support for reading and writing files over a HTTP(S) connection"},
+    {"json", "Adds support for JSON operations"},
+    {"autocomplete", "Adds support for autocomplete in the shell"},
+    {"motherduck", "Enables motherduck integration with the system"},
+    {"mysql_scanner", "Adds support for connecting to a MySQL database"},
+    {"odbc_scanner", "Adds support for connecting to remote databases over ODBC"},
+    {"sqlite_scanner", "Adds support for reading and writing SQLite database files"},
+    {"postgres_scanner", "Adds support for connecting to a Postgres database"},
+    {"inet", "Adds support for IP-related data types and functions"},
+    {"spatial", "Geospatial extension that adds support for working with spatial data and functions"},
+    {"aws", "Provides features that depend on the AWS SDK"},
+    {"azure", "Adds a filesystem abstraction for Azure blob storage to DuckDB"},
+    {"encodings", "All unicode encodings to UTF-8"},
+    {"iceberg", "Adds support for Apache Iceberg"},
+    {"vss", "Adds indexing support to accelerate Vector Similarity Search"},
+    {"delta", "Adds support for Delta Lake"},
+    {"fts", "Adds support for Full-Text Search Indexes"},
+    {"ui", "Adds local UI for DuckDB"},
+    {"ducklake", "Adds support for DuckLake, SQL as a Lakehouse Format"},
+    {"quack", "The DuckDB 'Quack' Client/Server Protocol"},
+    {"vortex", "Adds support for reading and writing files using the Vortex file format"},
+    {"lance", "Adds support for querying Lance datasets"},
+    {"avro", "Adds support for reading Avro files"},
+    {"unity_catalog", "Adds support for connecting to Unity Catalog"},
+    {nullptr, nullptr}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
 	idx_t index;

@@ -176,6 +176,8 @@ static void setTextMode(FILE *file, int isOutput) {
 
 /* True if the timer is enabled */
 static bool enableTimer = false;
+/* Number of decimals printed for the real time */
+static int timerDigits = 3;
 
 #if !defined(_WIN32) && !defined(WIN32) && !defined(__minux)
 #include <sys/time.h>
@@ -191,8 +193,8 @@ struct rusage {
 #endif
 
 /* Saved resource information for the beginning of an operation */
-static struct rusage sBegin; /* CPU time at start */
-static int64_t iBegin;       /* Monotonic time at start */
+static struct rusage sBegin;     /* CPU time at start */
+static duckdb::TimePoint tBegin; /* Monotonic time at start */
 
 /*
 ** Begin timing an operation
@@ -200,7 +202,7 @@ static int64_t iBegin;       /* Monotonic time at start */
 static void beginTimer(void) {
 	if (enableTimer) {
 		getrusage(RUSAGE_SELF, &sBegin);
-		iBegin = duckdb::TimePoint::GetTickMs();
+		tBegin = duckdb::TimePoint::Tick();
 	}
 }
 
@@ -214,10 +216,9 @@ static double timeDiff(struct timeval *pStart, struct timeval *pEnd) {
 */
 static void endTimer(void) {
 	if (enableTimer) {
-		int64_t iEnd = duckdb::TimePoint::GetTickMs();
 		struct rusage sEnd;
 		getrusage(RUSAGE_SELF, &sEnd);
-		printf("Run Time (s): real %.3f user %f sys %f\n", (iEnd - iBegin) * 0.001,
+		printf("Run Time (s): real %.*f user %f sys %f\n", timerDigits, tBegin.ElapsedSeconds(),
 		       timeDiff(&sBegin.ru_utime, &sEnd.ru_utime), timeDiff(&sBegin.ru_stime, &sEnd.ru_stime));
 	}
 }
@@ -232,7 +233,7 @@ static void endTimer(void) {
 static HANDLE hProcess;
 static FILETIME ftKernelBegin;
 static FILETIME ftUserBegin;
-static int64_t ftMonotonicBegin;
+static duckdb::TimePoint tBegin;
 typedef BOOL(WINAPI *GETPROCTIMES)(HANDLE, LPFILETIME, LPFILETIME, LPFILETIME, LPFILETIME);
 static GETPROCTIMES getProcessTimesAddr = NULL;
 
@@ -272,7 +273,7 @@ static void beginTimer(void) {
 	if (enableTimer && getProcessTimesAddr) {
 		FILETIME ftCreation, ftExit;
 		getProcessTimesAddr(hProcess, &ftCreation, &ftExit, &ftKernelBegin, &ftUserBegin);
-		ftMonotonicBegin = duckdb::TimePoint::GetTickMs();
+		tBegin = duckdb::TimePoint::Tick();
 	}
 }
 
@@ -289,9 +290,8 @@ static double timeDiff(FILETIME *pStart, FILETIME *pEnd) {
 static void endTimer(void) {
 	if (enableTimer && getProcessTimesAddr) {
 		FILETIME ftCreation, ftExit, ftKernelEnd, ftUserEnd;
-		int64_t ftMonotonicEnd = duckdb::TimePoint::GetTickMs();
 		getProcessTimesAddr(hProcess, &ftCreation, &ftExit, &ftKernelEnd, &ftUserEnd);
-		printf("Run Time (s): real %.3f user %f sys %f\n", (ftMonotonicEnd - ftMonotonicBegin) * 0.001,
+		printf("Run Time (s): real %.*f user %f sys %f\n", timerDigits, tBegin.ElapsedSeconds(),
 		       timeDiff(&ftUserBegin, &ftUserEnd), timeDiff(&ftKernelBegin, &ftKernelEnd));
 	}
 }
@@ -2644,6 +2644,17 @@ SuccessState ShellState::ShowDatabases() {
 }
 
 MetadataResult ShellState::ToggleTimer(ShellState &state, const vector<string> &args) {
+	if (args.size() < 2 || args.size() > 3) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	if (args.size() == 3) {
+		auto digits = ShellState::StringToInt(args[2]);
+		if (digits < 0 || digits > 9) {
+			state.PrintF(PrintOutput::STDERR, ".timer DIGITS must be between 0 and 9\n");
+			return MetadataResult::FAIL;
+		}
+		timerDigits = static_cast<int>(digits);
+	}
 	enableTimer = state.StringToBool(args[1]);
 	if (enableTimer && !HAS_TIMER) {
 		state.PrintF(PrintOutput::STDERR, "Error: timer not available on this system.\n");

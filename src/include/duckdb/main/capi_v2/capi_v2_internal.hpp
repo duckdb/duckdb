@@ -106,8 +106,8 @@ inline auto Convert(duckdb_v2_interval_t value) -> interval_t {
 	return out;
 }
 
-// The V2 enum surfaces core's StatementType under the same numeric values; every spec member is pinned. Core has no
-// count sentinel, so a member appended in core is caught by the test over the values past the last spec member.
+// The V2 enum surfaces core's StatementType under the same numeric values; every spec member is pinned, and the count
+// pins the highest one - appending a member in core fails to compile until the v2 spec mirrors it.
 #define DUCKDB_V2_ASSERT_STATEMENT_TYPE(member)                                                                        \
 	static_assert(static_cast<uint8_t>(StatementType::member##_STATEMENT) == DUCKDB_V2_STATEMENT_TYPE_##member,        \
 	              "StatementType::" #member "_STATEMENT must mirror DUCKDB_V2_STATEMENT_TYPE_" #member)
@@ -146,6 +146,8 @@ DUCKDB_V2_ASSERT_STATEMENT_TYPE(CONNECT);
 DUCKDB_V2_ASSERT_STATEMENT_TYPE(DISCONNECT);
 DUCKDB_V2_ASSERT_STATEMENT_TYPE(EXTERNAL_RESOURCE);
 #undef DUCKDB_V2_ASSERT_STATEMENT_TYPE
+static_assert(static_cast<uint8_t>(StatementType::ENUM_SIZE) == DUCKDB_V2_STATEMENT_TYPE_EXTERNAL_RESOURCE + 1,
+              "a StatementType was added: give it a DUCKDB_V2_STATEMENT_TYPE id in the v2 spec and pin it above");
 inline auto Convert(StatementType type) -> DUCKDB_V2_STATEMENT_TYPE {
 	return static_cast<DUCKDB_V2_STATEMENT_TYPE>(type);
 }

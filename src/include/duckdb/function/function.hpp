@@ -118,14 +118,23 @@ struct FunctionParameters {
 	named_parameter_map_t named_parameters;
 };
 
+//! How a parameter receives its arguments, mirroring Python's parameter kinds
+//! STANDARD       -> can be passed by position or by name
+//! VAR_POSITIONAL -> "*args", receives all remaining positional arguments
+//! VAR_KEYWORD    -> "**kwargs", receives all named arguments that do not match another parameter
+//! KEYWORD_ONLY   -> declared after "*args", can only be passed by name
+enum class FunctionParameterKind : uint8_t { STANDARD = 0, VAR_POSITIONAL = 1, VAR_KEYWORD = 2, KEYWORD_ONLY = 3 };
+
 class FunctionParameter {
 public:
-	FunctionParameter(Identifier name, LogicalType type)
-	    : name(std::move(name)), type(std::move(type)), default_value(nullptr) {
+	FunctionParameter(Identifier name, LogicalType type, FunctionParameterKind kind = FunctionParameterKind::STANDARD)
+	    : name(std::move(name)), type(std::move(type)), default_value(nullptr), kind(kind) {
 	}
 
-	FunctionParameter(Identifier name, LogicalType type, Value value)
-	    : name(std::move(name)), type(std::move(type)), default_value(make_shared_ptr<Value>(std::move(value))) {
+	FunctionParameter(Identifier name, LogicalType type, Value value,
+	                  FunctionParameterKind kind = FunctionParameterKind::STANDARD)
+	    : name(std::move(name)), type(std::move(type)), default_value(make_shared_ptr<Value>(std::move(value))),
+	      kind(kind) {
 	}
 
 	string ToString() const;
@@ -157,10 +166,19 @@ public:
 		return default_value != nullptr;
 	}
 
+	auto GetKind() const -> FunctionParameterKind {
+		return kind;
+	}
+	//! Whether this is a "*args" or "**kwargs" parameter
+	auto IsVariadic() const -> bool {
+		return kind == FunctionParameterKind::VAR_POSITIONAL || kind == FunctionParameterKind::VAR_KEYWORD;
+	}
+
 private:
 	Identifier name;
 	LogicalType type;
 	shared_ptr<Value> default_value;
+	FunctionParameterKind kind;
 };
 
 class FunctionSignature {
@@ -168,16 +186,22 @@ public:
 	FunctionSignature() = default;
 
 	FunctionSignature(vector<LogicalType> arguments, LogicalType varargs, LogicalType return_type)
-	    : varargs(std::move(varargs)), return_type(std::move(return_type)) {
+	    : return_type(std::move(return_type)) {
 		for (auto &arg : arguments) {
 			AddParameter(std::move(arg));
 		}
+		if (varargs.id() != LogicalTypeId::INVALID) {
+			SetVarArgs(std::move(varargs));
+		}
 	}
 	FunctionSignature(vector<FunctionParameter> parameters, LogicalType return_type)
-	    : parameters(std::move(parameters)), varargs(LogicalTypeId::INVALID), return_type(std::move(return_type)) {
+	    : parameters(std::move(parameters)), return_type(std::move(return_type)) {
 	}
 	FunctionSignature(vector<FunctionParameter> parameters, LogicalType varargs, LogicalType return_type)
-	    : parameters(std::move(parameters)), varargs(std::move(varargs)), return_type(std::move(return_type)) {
+	    : parameters(std::move(parameters)), return_type(std::move(return_type)) {
+		if (varargs.id() != LogicalTypeId::INVALID) {
+			SetVarArgs(std::move(varargs));
+		}
 	}
 	FunctionSignature(vector<LogicalType> arguments, LogicalType return_type)
 	    : FunctionSignature(std::move(arguments), LogicalType(LogicalTypeId::INVALID), std::move(return_type)) {
@@ -211,81 +235,105 @@ public:
 		return_type = std::move(return_type_p);
 	}
 
+	//! Whether the signature has a "*args" parameter
 	auto HasVarArgs() const -> bool {
-		return varargs.id() != LogicalTypeId::INVALID;
+		return GetArgsParameter() != nullptr;
 	}
-	auto GetVarArgs() const -> const LogicalType & {
-		return varargs;
+	//! The type of the "*args" parameter, or INVALID if there is none
+	DUCKDB_API auto GetVarArgs() const -> const LogicalType &;
+	//! Replaces the variadic parameters by an "*args" and "**kwargs" of the given type, so that any trailing argument
+	//! is accepted. Removes the variadic parameters if the type is INVALID.
+	DUCKDB_API auto SetVarArgs(LogicalType varargs_p) -> void;
+
+	auto GetArgsParameter() const -> optional_ptr<const FunctionParameter> {
+		return GetParameterByKind(FunctionParameterKind::VAR_POSITIONAL);
 	}
-	auto SetVarArgs(LogicalType varargs_p) -> void {
-		varargs = std::move(varargs_p);
+	auto GetKwargsParameter() const -> optional_ptr<const FunctionParameter> {
+		return GetParameterByKind(FunctionParameterKind::VAR_KEYWORD);
 	}
 
+	//! A parameter added after "*args" is keyword-only
 	auto AddParameter(Identifier name, LogicalType type, Value default_value) -> FunctionSignature & {
-		parameters.emplace_back(std::move(name), std::move(type), std::move(default_value));
+		parameters.emplace_back(std::move(name), std::move(type), std::move(default_value), GetNextKind());
 		return *this;
 	}
 
 	auto AddParameter(Identifier name, LogicalType type) -> FunctionSignature & {
-		parameters.emplace_back(std::move(name), std::move(type));
+		parameters.emplace_back(std::move(name), std::move(type), GetNextKind());
 		return *this;
 	}
 
 	auto AddParameter(LogicalType type) -> FunctionSignature & {
 		auto name = StringUtil::Format("col%d", parameters.size());
-		parameters.emplace_back(Identifier(name), std::move(type));
+		return AddParameter(Identifier(name), std::move(type));
+	}
+
+	//! Adds a "*args" parameter, receiving all remaining positional arguments
+	auto AddArgsParameter(Identifier name, LogicalType type) -> FunctionSignature & {
+		parameters.emplace_back(std::move(name), std::move(type), FunctionParameterKind::VAR_POSITIONAL);
 		return *this;
 	}
 
+	//! Adds a "**kwargs" parameter, receiving all named arguments that do not match another parameter
+	auto AddKwargsParameter(Identifier name, LogicalType type) -> FunctionSignature & {
+		parameters.emplace_back(std::move(name), std::move(type), FunctionParameterKind::VAR_KEYWORD);
+		return *this;
+	}
+
+	//! Returns the index of the non-variadic parameter with the given name
 	auto GetParameterIndexByName(const Identifier &name) const -> optional_idx {
 		// Parameter names are matched case-insensitively, consistent with SQL identifier semantics.
 		for (idx_t i = 0; i < parameters.size(); i++) {
-			if (parameters[i].GetName() == name) {
+			if (!parameters[i].IsVariadic() && parameters[i].GetName() == name) {
 				return i;
 			}
 		}
 		return optional_idx();
 	}
 
+	//! The number of leading parameters that can be passed by position
+	auto GetPositionalParameterCount() const -> idx_t {
+		idx_t result = 0;
+		while (result < parameters.size() && parameters[result].GetKind() == FunctionParameterKind::STANDARD) {
+			result++;
+		}
+		return result;
+	}
+
 	auto GetRequiredParameterCount() const -> idx_t {
 		idx_t result = 0;
 		for (const auto &param : parameters) {
-			if (!param.HasDefaultValue()) {
+			if (!param.IsVariadic() && !param.HasDefaultValue()) {
 				result++;
 			}
 		}
 		return result;
 	}
 
-	void Verify() const {
-		// Check for duplicate parameter names
-		identifier_set_t seen_names;
-		for (const auto &param : parameters) {
-			if (seen_names.find(param.GetName()) != seen_names.end()) {
-				throw InvalidInputException("Duplicate parameter name: %s", param.GetName());
-			}
-			seen_names.insert(param.GetName());
-		}
-
-		// Also check for default values that are not at the end of the parameter list
-		bool found_default_value = false;
-		for (const auto &param : parameters) {
-			if (param.HasDefaultValue()) {
-				found_default_value = true;
-			} else if (found_default_value) {
-				throw InvalidInputException(
-				    "Parameters with default values must be at the end of the parameter list. Parameter '%s' does not "
-				    "have a default value but follows a parameter with a default value.",
-				    param.GetName());
-			}
-		}
-	}
+	DUCKDB_API void Verify() const;
 
 	hash_t Hash() const;
 
 private:
+	auto GetParameterByKind(FunctionParameterKind kind) const -> optional_ptr<const FunctionParameter> {
+		for (const auto &param : parameters) {
+			if (param.GetKind() == kind) {
+				return param;
+			}
+		}
+		return nullptr;
+	}
+	auto GetNextKind() const -> FunctionParameterKind {
+		for (const auto &param : parameters) {
+			if (param.GetKind() != FunctionParameterKind::STANDARD) {
+				return FunctionParameterKind::KEYWORD_ONLY;
+			}
+		}
+		return FunctionParameterKind::STANDARD;
+	}
+
+private:
 	vector<FunctionParameter> parameters;
-	LogicalType varargs;
 	LogicalType return_type;
 };
 
@@ -521,6 +569,10 @@ protected:
 
 	//! The set of arguments of the function
 	vector<LogicalType> arguments;
+	//! The number of leading arguments that are matched to the parameters by position
+	idx_t positional_arguments = 0;
+	//! The names of the remaining arguments, which are matched to the parameters by name
+	vector<Identifier> named_arguments;
 	//! Return type of the function
 	LogicalType return_type;
 
@@ -560,6 +612,26 @@ public:
 		return arguments;
 	}
 
+	auto GetPositionalArgumentCount() const -> idx_t {
+		return positional_arguments;
+	}
+	auto GetNamedArguments() const -> const vector<Identifier> & {
+		return named_arguments;
+	}
+	auto SetNamedArguments(idx_t positional_arguments_p, vector<Identifier> named_arguments_p) -> void {
+		positional_arguments = positional_arguments_p;
+		named_arguments = std::move(named_arguments_p);
+	}
+
+protected:
+	//! The arguments are laid out as [standard | *args | keyword-only | **kwargs], these need the signature of the
+	//! function to tell them apart
+	DUCKDB_API auto GetVarArgsCount(const FunctionSignature &signature) const -> idx_t;
+	DUCKDB_API auto GetKwargsCount(const FunctionSignature &signature) const -> idx_t;
+	DUCKDB_API auto GetArgumentParameterKind(const FunctionSignature &signature, idx_t argument_index) const
+	    -> FunctionParameterKind;
+
+public:
 	auto GetReturnType() const -> const LogicalType & {
 		return return_type;
 	}
@@ -621,7 +693,6 @@ private:
 
 private:
 	ClientContext &context;
-	//! Only used to name the function in error messages
 	const BoundSimpleFunction &function;
 	vector<unique_ptr<Expression>> &arguments;
 	optional_ptr<const vector<Identifier>> argument_names;

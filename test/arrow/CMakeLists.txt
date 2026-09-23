@@ -8,7 +8,8 @@ add_library_unity(
   arrow_dictionary_sentinel.cpp
   arrow_dict_nested_offset.cpp
   arrow_list_view_nested_offset.cpp
-  arrow_output_version_buffers.cpp)
+  arrow_output_version_buffers.cpp
+  arrow_result_stream.cpp)
 set(UNITTEST_OBJECT_FILES
     ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_arrow_roundtrip>
     PARENT_SCOPE)
