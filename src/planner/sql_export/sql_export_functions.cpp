@@ -158,7 +158,6 @@ BoundExpressionSQLExportState::ExportScalarFunction(const BoundFunctionExpressio
 			    InternalExpressionInvariant(path, expression, "Bound scalar function identity is incomplete"));
 		}
 	}
-	auto qualified_name = definition->GetQualifiedName();
 	optional_idx lambda_index;
 	for (idx_t index = 0; index < MinValue(expression.GetChildren().size(), function.GetLogicalArguments().size());
 	     index++) {
@@ -174,39 +173,23 @@ BoundExpressionSQLExportState::ExportScalarFunction(const BoundFunctionExpressio
 		return Failure(UnsupportedFunction(path, std::move(identity),
 		                                   "The scalar function does not retain its SQL lambda argument"));
 	}
-	const bool is_date_part = qualified_name == QualifiedName("system", "main", "date_part") ||
-	                          qualified_name == QualifiedName("system", "main", "datepart");
-	const bool has_specialized_name = function.GetName() != definition->GetName() &&
-	                                  IsOptimizerFunctionQualification(function) && !function.GetName().empty();
 	const auto logical_argument_count = function.GetLogicalArguments().size();
 	const auto child_count = expression.GetChildren().size();
-	const bool rewritten_date_part =
-	    is_date_part && logical_argument_count == 2 && child_count == 1 && has_specialized_name;
 	const bool retained_variadic_arguments = definition->HasVarArgs() && child_count >= logical_argument_count;
 	const bool has_scalar_arguments =
-	    child_count == logical_argument_count || retained_variadic_arguments || rewritten_date_part;
+	    child_count == logical_argument_count || retained_variadic_arguments || definition->HasUnbindCallback();
 	const bool has_expected_arguments =
 	    lambda_index.IsValid() ? child_count >= logical_argument_count : has_scalar_arguments;
 	if (!has_expected_arguments) {
 		return Failure(
 		    UnsupportedFunction(path, std::move(identity), "The scalar function does not retain every SQL argument"));
 	}
-	auto name = rewritten_date_part ? optional<QualifiedName>(QualifiedName("system", "main", function.GetName()))
-	                                : RebindableFunctionName(*definition);
+	auto name = RebindableFunctionName(*definition);
 	if (!name || !IsSQLValueType(expression.GetReturnType())) {
 		return Failure(UnsupportedFunction(path, std::move(identity),
 		                                   "The retained scalar function definition is not representable as SQL"));
 	}
-	bool captured_aliases_are_ignored = *name == QualifiedName("system", "main", "row");
-	bool argument_aliases_are_semantic = qualified_name == QualifiedName("system", "main", "struct_pack");
-	idx_t first_argument_alias = 0;
-	if (qualified_name == QualifiedName("system", "main", "struct_update") ||
-	    qualified_name == QualifiedName("system", "main", "write_log")) {
-		argument_aliases_are_semantic = true;
-		first_argument_alias = 1;
-	}
-	const bool can_reconstruct_argument_names =
-	    argument_aliases_are_semantic || captured_aliases_are_ignored || definition->HasUnbindCallback();
+	const bool can_reconstruct_argument_names = definition->HasUnbindCallback();
 	if (definition->GetProperties().GetCaptureArgumentAliases() && !can_reconstruct_argument_names) {
 		return Failure(UnsupportedFunction(path, std::move(identity),
 		                                   "The bound scalar function does not expose its SQL argument names"));
@@ -216,21 +199,7 @@ BoundExpressionSQLExportState::ExportScalarFunction(const BoundFunctionExpressio
 		    path, std::move(identity), "The bound scalar function requires expression names that are not retained"));
 	}
 	vector<Identifier> argument_names;
-	if (argument_aliases_are_semantic) {
-		argument_names.resize(expression.GetChildren().size());
-		for (idx_t argument_index = first_argument_alias; argument_index < argument_names.size(); argument_index++) {
-			if (qualified_name == QualifiedName("system", "main", "struct_pack")) {
-				argument_names[argument_index] = StructType::GetChildName(expression.GetReturnType(), argument_index);
-			} else {
-				argument_names[argument_index] = expression.GetChildren()[argument_index]->GetAlias();
-			}
-			if (argument_names[argument_index].empty()) {
-				return Failure(UnsupportedFunction(path, std::move(identity),
-				                                   "The bound scalar function is missing a SQL argument name"));
-			}
-		}
-	}
-	if (!argument_aliases_are_semantic && !function.GetNamedArguments().empty()) {
+	if (!definition->HasUnbindCallback() && !function.GetNamedArguments().empty()) {
 		auto positional_count = function.GetPositionalArgumentCount();
 		if (positional_count + function.GetNamedArguments().size() != expression.GetChildren().size()) {
 			return Failure(UnsupportedFunction(path, std::move(identity), "The named SQL arguments are incomplete"));
@@ -243,9 +212,6 @@ BoundExpressionSQLExportState::ExportScalarFunction(const BoundFunctionExpressio
 	vector<unique_ptr<ParsedExpression>> children;
 	auto sql_argument_count =
 	    lambda_index.IsValid() ? function.GetLogicalArguments().size() : expression.GetChildren().size();
-	if (rewritten_date_part) {
-		sql_argument_count = 1;
-	}
 	for (idx_t child_index = 0; child_index < sql_argument_count; child_index++) {
 		auto child = lambda_index == child_index
 		                 ? ExportLambda(expression.GetChildren()[child_index]->Cast<BoundLambdaExpression>(),
@@ -274,9 +240,8 @@ BoundExpressionSQLExportState::ExportScalarFunction(const BoundFunctionExpressio
 		result = make_uniq<FunctionExpression>(*name, std::move(children), nullptr, nullptr, false, false, false);
 	}
 	// Restore result types when binding or optimization changed argument types.
-	const bool can_restore_result_type = !captured_aliases_are_ignored &&
-	                                     IsSQLRepresentableType(expression.GetReturnType()) &&
-	                                     !expression.GetReturnType().IsAggregateState();
+	const bool can_restore_result_type =
+	    IsSQLRepresentableType(expression.GetReturnType()) && !expression.GetReturnType().IsAggregateState();
 	const bool has_specialized_result_type =
 	    (definition->HasBindCallback() || definition->GetReturnType().id() == LogicalTypeId::SQLNULL) &&
 	    definition->GetReturnType() != expression.GetReturnType();

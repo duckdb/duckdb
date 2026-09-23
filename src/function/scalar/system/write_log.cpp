@@ -1,3 +1,4 @@
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/function/scalar/system_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -148,6 +149,19 @@ void WriteLogFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	}
 }
 
+static unique_ptr<ParsedExpression> WriteLogUnbind(FunctionUnbindInput &input) {
+	vector<FunctionArgument> arguments;
+	for (idx_t i = 0; i < input.children.size(); i++) {
+		auto name = i == 0 ? Identifier() : input.expression.GetChildren()[i]->GetAlias();
+		if (i > 0 && name.empty()) {
+			return nullptr;
+		}
+		arguments.emplace_back(std::move(name), std::move(input.children[i]));
+	}
+	return make_uniq<FunctionExpression>(input.expression.Function().GetDefinition()->GetQualifiedName(),
+	                                     std::move(arguments));
+}
+
 } // namespace
 
 ScalarFunctionSet WriteLogFun::GetFunctions() {
@@ -157,6 +171,7 @@ ScalarFunctionSet WriteLogFun::GetFunctions() {
 	                   nullptr, LogicalType(LogicalTypeId::INVALID), FunctionStability::VOLATILE);
 	fun.GetSignature().AddKwargsParameter("kwargs", LogicalType::ANY);
 	fun.GetProperties().SetRequiresExpressionNames(true);
+	fun.SetUnbindCallback(WriteLogUnbind);
 	set.AddFunction(std::move(fun));
 
 	return set;

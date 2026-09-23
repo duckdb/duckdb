@@ -31,6 +31,26 @@ FROM dates;
 2024	4	56000000	1709210096.0	2460370.5242592595
 NULL	NULL	NULL	NULL	NULL
 
+# Cover both the retained binary invocation and the specialized unary call after serialization.
+foreach serializer false true
+
+statement ok
+SET debug_verify_serializer={serializer};
+
+query RRI rowsort
+SELECT date_part(part, ts), datepart(part := part, ts := ts), date_part(ts := ts, part := 'year')
+FROM dates, (VALUES ('year'), ('month')) parts(part);
+----
+2.0	2.0	2024
+2024.0	2024.0	2024
+NULL	NULL	NULL
+NULL	NULL	NULL
+
+endloop
+
+statement ok
+SET debug_verify_serializer=false;
+
 query TT
 EXPLAIN (SQL) SELECT date_part('year', ts) FROM dates;
 ----
