@@ -15,6 +15,7 @@
 #include "duckdb/parser/keyword_helper.hpp"
 #include "debug_fs_extension.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
@@ -765,28 +766,91 @@ string InterpretedBenchmark::VerifyInternal(BenchmarkState *state_p, const Bench
 		                          (int64_t)result_values.size(), (int64_t)result.RowCount(), result.ToString());
 	}
 	// compare values
+	auto in_order_error = VerifyRows(state, query, result, result_values);
+	if (in_order_error.empty()) {
+		return string();
+	}
+	// rows that tie on the ORDER BY keys can come back in any order, so retry with both sides sorted
+	vector<vector<string>> sorted_expected;
+	for (auto &row : result_values) {
+		vector<string> canonical_row;
+		for (idx_t c = 0; c < query.column_count; c++) {
+			canonical_row.push_back(CanonicalExpectedValue(state, row[c], result.GetTypes()[c]));
+		}
+		sorted_expected.push_back(std::move(canonical_row));
+	}
+	std::sort(sorted_expected.begin(), sorted_expected.end());
+	vector<vector<Value>> sorted_result;
+	for (idx_t r = 0; r < result.RowCount(); r++) {
+		vector<Value> row;
+		for (idx_t c = 0; c < query.column_count; c++) {
+			row.push_back(result.GetValue(c, r));
+		}
+		sorted_result.push_back(std::move(row));
+	}
+	std::sort(sorted_result.begin(), sorted_result.end(), [](const vector<Value> &a, const vector<Value> &b) {
+		for (idx_t c = 0; c < a.size(); c++) {
+			auto lhs = a[c].IsNull() ? "NULL" : a[c].ToString();
+			auto rhs = b[c].IsNull() ? "NULL" : b[c].ToString();
+			if (lhs != rhs) {
+				return lhs < rhs;
+			}
+		}
+		return false;
+	});
+	for (idx_t r = 0; r < sorted_expected.size(); r++) {
+		for (idx_t c = 0; c < query.column_count; c++) {
+			if (!ValuesMatch(state, sorted_expected[r][c], sorted_result[r][c])) {
+				return in_order_error;
+			}
+		}
+	}
+	return string();
+}
+
+bool InterpretedBenchmark::ValuesMatch(InterpretedBenchmarkState &state, const string &expected, const Value &value) {
+	if (expected == "NULL" && value.IsNull()) {
+		return true;
+	}
+	if (expected == value.ToString()) {
+		return true;
+	}
+	if (expected == "(empty)" && (value.ToString() == "" || value.IsNull())) {
+		return true;
+	}
+	Value verify_val(expected);
+	try {
+		verify_val = verify_val.CastAs(*state.con.context, value.type());
+	} catch (...) {
+	}
+	return Value::ValuesAreEqual(*state.con.context, verify_val, value);
+}
+
+//! Render an expected value the way the result renders it, so that both sides sort the same way
+string InterpretedBenchmark::CanonicalExpectedValue(InterpretedBenchmarkState &state, const string &expected,
+                                                    const LogicalType &type) {
+	if (expected == "NULL") {
+		return expected;
+	}
+	if (expected == "(empty)") {
+		return string();
+	}
+	try {
+		return Value(expected).CastAs(*state.con.context, type).ToString();
+	} catch (...) {
+		return expected;
+	}
+}
+
+string InterpretedBenchmark::VerifyRows(InterpretedBenchmarkState &state, const BenchmarkQuery &query,
+                                        MaterializedQueryResult &result, const vector<vector<string>> &result_values) {
 	for (idx_t r = 0; r < result_values.size(); r++) {
 		for (idx_t c = 0; c < query.column_count; c++) {
 			auto value = result.GetValue(c, r);
-			if (result_values[r][c] == "NULL" && value.IsNull()) {
-				continue;
-			}
-			if (result_values[r][c] == value.ToString()) {
-				continue;
-			}
-			if (result_values[r][c] == "(empty)" && (value.ToString() == "" || value.IsNull())) {
-				continue;
-			}
-
-			Value verify_val(result_values[r][c]);
-			try {
-				verify_val = verify_val.CastAs(*state.con.context, value.type());
-			} catch (...) {
-			}
-			if (!Value::ValuesAreEqual(*state.con.context, verify_val, value)) {
+			if (!ValuesMatch(state, result_values[r][c], value)) {
 				return StringUtil::Format("Error in result on row %lld column %lld: expected value \"%s\" but got "
 				                          "value \"%s\"\nObtained result:\n%s",
-				                          r + 1, c + 1, verify_val.ToString().c_str(), value.ToString().c_str(),
+				                          r + 1, c + 1, result_values[r][c].c_str(), value.ToString().c_str(),
 				                          result.ToString().c_str());
 			}
 		}

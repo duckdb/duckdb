@@ -10,6 +10,7 @@ name Q${QUERY_NUMBER_PADDED}
 group tpch
 subgroup sf${sf}
 
-run extension/tpch/dbgen/queries/q${QUERY_NUMBER_PADDED}.sql
+run
+PRAGMA tpch(${QUERY_NUMBER}, sf=${sf});
 
 result extension/tpch/dbgen/answers/sf10/q${QUERY_NUMBER_PADDED}.csv
