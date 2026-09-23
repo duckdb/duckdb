@@ -258,6 +258,7 @@ struct TransformFrameOps {
 	const char *name;
 	transform_process_initialize_t initialize;
 	transform_process_finalize_t finalize;
+	bool is_forwarding = false;
 };
 
 template <typename T>
@@ -306,6 +307,11 @@ public:
 
 	//! Resume transforming, optionally with the result of the previously requested child.
 	virtual TransformStep Resume(unique_ptr<TransformResultValue> child_result) = 0;
+
+	//! Returns true if this process just passes through a child's result without adding to the tree.
+	virtual bool IsForwarding() const {
+		return false;
+	}
 };
 
 class GeneratedTransformProcess final : public TransformProcess {
@@ -316,6 +322,13 @@ public:
 	void SetChildResult(idx_t slot, unique_ptr<TransformResultValue> result);
 	void PushChild(TransformInput input, idx_t slot);
 	TransformStep Resume(unique_ptr<TransformResultValue> child_result) override;
+	bool IsForwarding() const override {
+		return info.is_forwarding || is_forwarding;
+	}
+	//! Set during initialization when this input only forwards its child result.
+	void SetForwarding(bool forwarding) {
+		is_forwarding = forwarding;
+	}
 
 	template <class T>
 	T TakeResult(idx_t slot) {
@@ -367,6 +380,7 @@ private:
 	vector<PendingChild> pending_children;
 	optional_idx child_result_slot;
 	bool completed = false;
+	bool is_forwarding = false;
 };
 
 using transform_finalize_function_t =
@@ -388,6 +402,8 @@ private:
 struct TransformStackFrame {
 	explicit TransformStackFrame(TransformInput input);
 
+	// Keep non-forwarding frames charged while suspended for child transformations.
+	optional<StackChecker<PEGTransformer>> depth_guard;
 	optional_ptr<const CompiledGrammarRule> rule;
 	ParseResult &parse_result;
 	unique_ptr<TransformProcess> process;

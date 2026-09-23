@@ -278,6 +278,7 @@ class UseGramPreviewEmitter:
         self.excluded_rules = excluded_rules
         self.matcher_overrides = matcher_overrides
         self.rule_config = rule_config
+        self.forwarding_rules = set()
         self.syntax_only_rules = self.collect_syntax_only_rules()
         self.rule_capabilities = self.collect_rule_capabilities()
 
@@ -512,6 +513,18 @@ class UseGramPreviewEmitter:
         sys.exit(1)
 
     def emit_source(self):
+        self.forwarding_rules = set()
+        rule_definitions = []
+        for rule_name, rule in self.rules.items():
+            capability = self.rule_capabilities[rule_name]
+            if capability.status not in (
+                RuleCapabilityStatus.GENERATED,
+                RuleCapabilityStatus.MANUAL_FINALIZE,
+            ):
+                continue
+            ast = None if rule_name in self.matcher_overrides else tokens_to_ast(rule.tokens)
+            rule_definitions.extend(self.emit_rule(rule_name, ast))
+            rule_definitions.append("")
         lines = []
         lines.append(GENERATED_HEADER)
         lines.append(
@@ -525,26 +538,15 @@ class UseGramPreviewEmitter:
             lines.append(
                 f"static const TransformFrameOps {ops_name(rule_name)} = "
                 f'{{"{rule_name}", &PEGTransformerFactory::{self.initialize_hook(rule_name)}, '
-                f"&PEGTransformerFactory::{self.finalize_hook(rule_name)}}};"
+                f"&PEGTransformerFactory::{self.finalize_hook(rule_name)}"
+                f"{', true' if rule_name in self.forwarding_rules else ''}}};"
             )
         lines.append("")
         lines.extend(self.emit_ops_lookup())
         lines.append("")
         lines.extend(self.emit_special_dispatch_rules())
         lines.append("")
-        for rule_name, rule in self.rules.items():
-            capability = self.rule_capabilities[rule_name]
-            if capability.status not in (
-                RuleCapabilityStatus.GENERATED,
-                RuleCapabilityStatus.MANUAL_FINALIZE,
-            ):
-                continue
-            if rule_name in self.matcher_overrides:
-                lines.extend(self.emit_rule(rule_name, None))
-                lines.append("")
-                continue
-            lines.extend(self.emit_rule(rule_name, tokens_to_ast(rule.tokens)))
-            lines.append("")
+        lines.extend(rule_definitions)
         lines.append("} // namespace duckdb")
         return "\n".join(lines)
 
@@ -832,6 +834,7 @@ class UseGramPreviewEmitter:
         return self.sequence_forward_child(rule_name, plan)
 
     def emit_sequence_forward_finalize_body(self, rule_name, plan, child_arg):
+        self.forwarding_rules.add(rule_name)
         cpp_type = self.cpp_type(rule_name)
         by_value = self.by_value(rule_name)
         slot_expr = self.adjusted_slot_expr(plan, child_arg.slot_idx)
@@ -1005,6 +1008,7 @@ class UseGramPreviewEmitter:
             lines.append(f"\t\tresult = process.TakeResult<{cpp_type}>(0);")
             lines.append("\t}")
         else:
+            self.forwarding_rules.add(rule_name)
             lines.append(f"\tauto result = process.TakeResult<{cpp_type}>(0);")
         lines.append(f"\treturn {typed_result_expr(cpp_type, 'result', by_value)};")
         lines.append("}")
@@ -1345,6 +1349,23 @@ class UseGramPreviewEmitter:
             logical_child_slots = max(logical_child_slots, dynamic_child.slot_start + 1)
         if frame_children or dynamic_child:
             lines.append("\tauto &list_pr = process.parse_result.Cast<ListParseResult>();")
+        config = self.rule_config_entry(rule_name)
+        if config is not None and config.mode == TrampolineRuleMode.FORWARD_IF_SINGLE_CHILD:
+            optional_children = [i for i, child in enumerate(ast.children) if isinstance(child, OptionalNode)]
+            remaining = [child for child in ast.children if not isinstance(child, OptionalNode)]
+            if (
+                not optional_children
+                or len(remaining) != 1
+                or not isinstance(remaining[0], ReferenceNode)
+                or self.cpp_type(remaining[0].name) != self.cpp_type(rule_name)
+            ):
+                raise NotImplementedError(
+                    "forward_if_single_child requires one child of the same result type and optional siblings"
+                )
+            condition = " && ".join(
+                f"!list_pr.Child<OptionalParseResult>({index}).HasResult()" for index in optional_children
+            )
+            lines.append(f"\tprocess.SetForwarding({condition});")
         if dynamic_child:
             if plan.list_child:
                 list_child = plan.list_child
