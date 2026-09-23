@@ -502,11 +502,9 @@ string GZipFileSystem::UncompressGZIPString(const char *data, idx_t size) {
 	}
 
 	if (gzip_hdr[3] & GZIP_FLAG_NAME) {
-		char c;
-		do {
-			c = *body_ptr;
-			body_ptr++;
-		} while (c != '\0' && static_cast<idx_t>(body_ptr - data) < size);
+		auto end_ptr = data + size;
+		while (body_ptr < end_ptr && *body_ptr++ != '\0') {
+		}
 	}
 
 	// stream is now set to beginning of payload data
