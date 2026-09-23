@@ -182,7 +182,6 @@ select json_structure('{"a": 1, "A": 1}');
 ----
 {"a":"UBIGINT","A":"UBIGINT"}
 
-# deeply nested JSON exceeds the extraction recursion limit instead of overflowing the stack
 statement error
 select json_structure(repeat('[', 200) || repeat(']', 200));
 ----
