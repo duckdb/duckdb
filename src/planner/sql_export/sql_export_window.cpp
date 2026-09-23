@@ -147,10 +147,7 @@ BoundExpressionSQLExportResult
 BoundExpressionSQLExportState::ExportWindowFunction(const BoundWindowExpression &expression, const FUNCTION &function,
                                                     const LogicalPlanVerificationPath &path) {
 	auto &definition = function.GetDefinition();
-	if (!definition) {
-		return Failure(
-		    InternalExpressionInvariant(path, expression, "Bound window function has no retained definition"));
-	}
+	D_ASSERT(definition);
 	auto identity =
 	    DefinitionFunctionIdentity(*definition, function.GetLogicalArguments(), function.GetLogicalReturnType());
 	if (!identity.IsValid()) {

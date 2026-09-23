@@ -123,10 +123,7 @@ BoundExpressionSQLExportState::ExportScalarFunction(const BoundFunctionExpressio
                                                     const LogicalPlanVerificationPath &path) {
 	auto &function = expression.Function();
 	auto &definition = function.GetDefinition();
-	if (!definition) {
-		return Failure(
-		    InternalExpressionInvariant(path, expression, "Bound scalar function has no retained definition"));
-	}
+	D_ASSERT(definition);
 	if (function.GetBindCallback() == TableFilterFunctions::Bind &&
 	    TableFilterFunctions::IsTableFilterFunction(function.GetName())) {
 		auto identity =
@@ -135,10 +132,7 @@ BoundExpressionSQLExportState::ExportScalarFunction(const BoundFunctionExpressio
 			return Failure(UnsupportedFunction(path, std::move(identity),
 			                                   "Internal table filters require their complete logical plan"));
 		}
-		if (expression.GetReturnType() != LogicalType::BOOLEAN || expression.GetChildren().size() != 1) {
-			return Failure(
-			    InternalExpressionInvariant(path, expression, "Internal table filter metadata is malformed"));
-		}
+		D_ASSERT(expression.GetReturnType() == LogicalType::BOOLEAN && expression.GetChildren().size() == 1);
 		return BoundExpressionSQLExportResult::Success(ConstantExpression::FromValue(Value::BOOLEAN(true)));
 	}
 	auto compressed = TryExportCompressedMaterialization(expression, path);
@@ -257,10 +251,7 @@ BoundExpressionSQLExportState::BuildAggregateCall(const BoundAggregateExpression
 	D_ASSERT(expression.GetExpressionType() == ExpressionType::BOUND_AGGREGATE);
 	auto &function = expression.Function();
 	auto &definition = function.GetDefinition();
-	if (!definition) {
-		return AggregateFailure(
-		    InternalExpressionInvariant(path, expression, "Bound aggregate function has no retained definition"));
-	}
+	D_ASSERT(definition);
 	auto identity =
 	    DefinitionFunctionIdentity(*definition, function.GetLogicalArguments(), function.GetLogicalReturnType());
 	if (!identity.IsValid()) {
@@ -294,13 +285,9 @@ BoundExpressionSQLExportState::BuildAggregateCall(const BoundAggregateExpression
 	}
 	if (expression.GetOrderBys()) {
 		for (auto &order : expression.GetOrderBys()->orders) {
-			const bool has_explicit_order = order.type == OrderType::ASCENDING || order.type == OrderType::DESCENDING;
-			const bool has_explicit_null_order =
-			    order.null_order == OrderByNullType::NULLS_FIRST || order.null_order == OrderByNullType::NULLS_LAST;
-			if (!has_explicit_order || !has_explicit_null_order) {
-				return AggregateFailure(
-				    InternalExpressionInvariant(path, expression, "Bound aggregate has an invalid ordering mode"));
-			}
+			D_ASSERT(order.type == OrderType::ASCENDING || order.type == OrderType::DESCENDING);
+			D_ASSERT(order.null_order == OrderByNullType::NULLS_FIRST ||
+			         order.null_order == OrderByNullType::NULLS_LAST);
 			source_children.emplace_back(order.expression.get());
 		}
 	}
