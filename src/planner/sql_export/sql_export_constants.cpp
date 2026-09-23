@@ -88,14 +88,6 @@ static unique_ptr<ParsedExpression> BinarySystemFunction(const string &name, uni
 	return SystemFunction(name, std::move(arguments));
 }
 
-static unique_ptr<ParsedExpression> IntervalSQLConstant(const interval_t &value) {
-	auto months = UnarySystemFunction("to_months", ConstantExpression::FromValue(Value::INTEGER(value.months)));
-	auto days = UnarySystemFunction("to_days", ConstantExpression::FromValue(Value::INTEGER(value.days)));
-	auto micros = UnarySystemFunction("to_microseconds", ConstantExpression::FromValue(Value::BIGINT(value.micros)));
-	return BinarySystemFunction("add", BinarySystemFunction("add", std::move(months), std::move(days)),
-	                            std::move(micros));
-}
-
 bool BoundExpressionSQLExportState::RequiresConstantConstructor(const LogicalType &type) {
 	if (HasNestedCollation(type)) {
 		return true;
@@ -265,34 +257,9 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportConstant(con
 	    (!IsSQLRepresentableType(return_type) || RequiresConstantConstructor(return_type))) {
 		return ExportNestedConstant(return_type, value, path);
 	}
-	unique_ptr<ParsedExpression> result;
-	if (!value.IsNull() && return_type.id() == LogicalTypeId::INTERVAL) {
-		return BoundExpressionSQLExportResult::Success(IntervalSQLConstant(IntervalValue::Get(value)));
-	}
-	if (return_type.id() == LogicalTypeId::GEOMETRY) {
-		if (value.IsNull()) {
-			auto geometry = GeoType::HasCRS(return_type) ? Value("GEOMETRYCOLLECTION EMPTY") : Value();
-			result = SQLCast(LogicalType::GEOMETRY(), ConstantExpression::FromValue(geometry));
-		} else {
-			result = UnarySystemFunction("st_geomfromwkb",
-			                             ConstantExpression::FromValue(Value::BLOB_RAW(StringValue::Get(value))));
-		}
-		if (GeoType::HasCRS(return_type)) {
-			vector<unique_ptr<ParsedExpression>> arguments;
-			arguments.push_back(std::move(result));
-			arguments.push_back(ConstantExpression::FromValue(Value(GeoType::GetCRS(return_type).GetDefinition())));
-			result = make_uniq<FunctionExpression>(QualifiedName("system", "main", "st_setcrs"), std::move(arguments));
-			if (value.IsNull()) {
-				auto typed_null = make_uniq<CaseExpression>();
-				typed_null->CaseChecksMutable().push_back(
-				    {ConstantExpression::FromValue(Value::BOOLEAN(false)), std::move(result)});
-				typed_null->ElseMutable() = ConstantExpression::FromValue(Value());
-				result = std::move(typed_null);
-			}
-			return BoundExpressionSQLExportResult::Success(std::move(result));
-		}
-	} else {
-		result = ConstantExpression::FromValue(value.WithType(SQLCastType(return_type)));
+	auto result = ConstantExpression::FromValue(value.WithType(SQLCastType(return_type)));
+	if (return_type.id() == LogicalTypeId::GEOMETRY && GeoType::HasCRS(return_type)) {
+		return BoundExpressionSQLExportResult::Success(std::move(result));
 	}
 	if (return_type.id() != LogicalTypeId::SQLNULL) {
 		const bool has_result_cast = result->GetExpressionClass() == ExpressionClass::CAST &&

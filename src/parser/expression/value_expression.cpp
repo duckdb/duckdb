@@ -1,4 +1,6 @@
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/geometry_crs.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
@@ -64,7 +66,7 @@ static unique_ptr<ParsedExpression> StringCast(const Value &value) {
 }
 
 static unique_ptr<ParsedExpression> ListValueExpression(vector<unique_ptr<ParsedExpression>> children) {
-	return make_uniq<FunctionExpression>("list_value", std::move(children));
+	return make_uniq<FunctionExpression>(QualifiedName("system", "main", "list_value"), std::move(children));
 }
 
 static vector<unique_ptr<ParsedExpression>> ChildExpressions(const vector<Value> &values) {
@@ -83,14 +85,15 @@ static unique_ptr<ParsedExpression> NamedArgument(const Identifier &name, const 
 	child->SetAlias(name);
 	vector<FunctionArgument> arguments;
 	arguments.emplace_back(name, std::move(child));
-	return make_uniq<FunctionExpression>(Identifier(function_name), std::move(arguments));
+	return make_uniq<FunctionExpression>(QualifiedName("system", "main", Identifier(function_name)),
+	                                     std::move(arguments));
 }
 
 static unique_ptr<ParsedExpression> StructExpression(const Value &value) {
 	auto &type = value.type();
 	auto &children = StructValue::GetChildren(value);
 	if (StructType::IsUnnamed(type)) {
-		return make_uniq<FunctionExpression>("row", ChildExpressions(children));
+		return make_uniq<FunctionExpression>(QualifiedName("system", "main", "row"), ChildExpressions(children));
 	}
 	vector<FunctionArgument> arguments;
 	for (idx_t i = 0; i < children.size(); i++) {
@@ -99,7 +102,7 @@ static unique_ptr<ParsedExpression> StructExpression(const Value &value) {
 		child->SetAlias(name);
 		arguments.emplace_back(name, std::move(child));
 	}
-	return make_uniq<FunctionExpression>("struct_pack", std::move(arguments));
+	return make_uniq<FunctionExpression>(QualifiedName("system", "main", "struct_pack"), std::move(arguments));
 }
 
 static unique_ptr<ParsedExpression> MapExpression(const Value &value) {
@@ -114,11 +117,70 @@ static unique_ptr<ParsedExpression> MapExpression(const Value &value) {
 	arguments.push_back(ListValueExpression(std::move(keys)));
 	arguments.push_back(ListValueExpression(std::move(values)));
 	// the map constructor cannot reproduce empty or NULL-only key/value types
-	return CastTo(value.type(), make_uniq<FunctionExpression>("map", std::move(arguments)));
+	return CastTo(value.type(),
+	              make_uniq<FunctionExpression>(QualifiedName("system", "main", "map"), std::move(arguments)));
+}
+
+static unique_ptr<ParsedExpression> ValueFunction(const string &name, vector<unique_ptr<ParsedExpression>> arguments) {
+	return make_uniq<FunctionExpression>(QualifiedName("system", "main", Identifier(name)), std::move(arguments));
+}
+
+static unique_ptr<ParsedExpression> IntervalExpression(const interval_t &value) {
+	vector<unique_ptr<ParsedExpression>> parts;
+	for (auto &part : vector<pair<string, Value>> {{"to_months", Value::INTEGER(value.months)},
+	                                               {"to_days", Value::INTEGER(value.days)},
+	                                               {"to_microseconds", Value::BIGINT(value.micros)}}) {
+		vector<unique_ptr<ParsedExpression>> arguments;
+		arguments.push_back(ConstantExpression::FromValue(part.second));
+		parts.push_back(ValueFunction(part.first, std::move(arguments)));
+	}
+	vector<unique_ptr<ParsedExpression>> sum;
+	sum.push_back(std::move(parts[0]));
+	sum.push_back(std::move(parts[1]));
+	auto months_and_days = ValueFunction("add", std::move(sum));
+	vector<unique_ptr<ParsedExpression>> result;
+	result.push_back(std::move(months_and_days));
+	result.push_back(std::move(parts[2]));
+	return ValueFunction("add", std::move(result));
+}
+
+static unique_ptr<ParsedExpression> GeometryExpression(const Value &value) {
+	auto &type = value.type();
+	unique_ptr<ParsedExpression> result;
+	if (value.IsNull()) {
+		auto geometry = GeoType::HasCRS(type) ? Value("GEOMETRYCOLLECTION EMPTY") : Value();
+		result = CastTo(LogicalType::GEOMETRY(), ConstantExpression::FromValue(geometry));
+	} else {
+		vector<unique_ptr<ParsedExpression>> arguments;
+		arguments.push_back(ConstantExpression::FromValue(Value::BLOB_RAW(StringValue::Get(value))));
+		result = ValueFunction("st_geomfromwkb", std::move(arguments));
+	}
+	if (!GeoType::HasCRS(type)) {
+		return result;
+	}
+	vector<unique_ptr<ParsedExpression>> arguments;
+	arguments.push_back(std::move(result));
+	arguments.push_back(ConstantExpression::String(GeoType::GetCRS(type).GetDefinition()));
+	result = ValueFunction("st_setcrs", std::move(arguments));
+	if (value.IsNull()) {
+		auto typed_null = make_uniq<CaseExpression>();
+		typed_null->CaseChecksMutable().push_back({ConstantExpression::Boolean(false), std::move(result)});
+		typed_null->ElseMutable() = ConstantExpression::Null();
+		result = std::move(typed_null);
+	}
+	return result;
 }
 
 unique_ptr<ParsedExpression> ConstantExpression::FromValue(const Value &value) {
 	auto &type = value.type();
+	if (type.id() == LogicalTypeId::GEOMETRY) {
+		auto result = GeometryExpression(value);
+		return type.HasAlias() ? CastTo(type, std::move(result)) : std::move(result);
+	}
+	if (!value.IsNull() && type.id() == LogicalTypeId::INTERVAL) {
+		auto result = IntervalExpression(IntervalValue::Get(value));
+		return type.HasAlias() ? CastTo(type, std::move(result)) : std::move(result);
+	}
 	if (value.IsNull()) {
 		if (type.id() == LogicalTypeId::SQLNULL) {
 			return Null();
@@ -187,7 +249,8 @@ unique_ptr<ParsedExpression> ConstantExpression::FromValue(const Value &value) {
 		if (children.empty()) {
 			return CastTo(type, ListValueExpression({}));
 		}
-		return CastTo(type, make_uniq<FunctionExpression>("array_value", ChildExpressions(children)));
+		return CastTo(type, make_uniq<FunctionExpression>(QualifiedName("system", "main", "array_value"),
+		                                                  ChildExpressions(children)));
 	}
 	case LogicalTypeId::MAP:
 		return MapExpression(value);

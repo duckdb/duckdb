@@ -137,3 +137,26 @@ endloop
 
 statement ok
 SET debug_verify_serializer=false;
+
+# Literal constructors keep their built-in identity when a macro shadows the name.
+statement ok
+CREATE MACRO list_value(a, b) AS 99;
+
+query I
+SELECT system.main.list_value(1, 2);
+----
+[1, 2]
+
+statement ok
+DROP MACRO list_value;
+
+query III
+WITH literals AS MATERIALIZED (
+    SELECT [to_months(-2147483648)+to_days(-2147483648)+to_microseconds(-9223372036854775808)] payload
+)
+SELECT date_part('year',payload[1])::BIGINT*12+date_part('month',payload[1]),
+       date_part('day',payload[1]),
+       date_part('hour',payload[1])::HUGEINT*3600000000+date_part('minute',payload[1])::HUGEINT*60000000+date_part('microsecond',payload[1])
+FROM literals;
+----
+-2147483648	-2147483648	-9223372036854775808

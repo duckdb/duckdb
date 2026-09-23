@@ -65,12 +65,13 @@ TEST_CASE("ConstantExpression::FromValue emits bare literals only when they re-b
 	REQUIRE(Render(Value::DATE(date_t::epoch())) == "CAST('1970-01-01' AS DATE)");
 	REQUIRE(Render(Value::BLOB_RAW(string("\x00\xff", 2))) == "X'00FF'");
 	REQUIRE(Render(Value::BIT("0101")) == "B'0101'");
-	REQUIRE(Render(Value::LIST(LogicalType::INTEGER, {})) == "CAST(list_value() AS INTEGER[])");
-	REQUIRE(Render(Value::LIST(LogicalType::INTEGER, {Value::INTEGER(1), Value::INTEGER(2)})) == "list_value(1, 2)");
+	REQUIRE(Render(Value::LIST(LogicalType::INTEGER, {})) == "CAST(\"system\".main.list_value() AS INTEGER[])");
+	REQUIRE(Render(Value::LIST(LogicalType::INTEGER, {Value::INTEGER(1), Value::INTEGER(2)})) ==
+	        "\"system\".main.list_value(1, 2)");
 	child_list_t<Value> fields;
 	fields.emplace_back("a", Value::INTEGER(1));
 	fields.emplace_back("b", Value("x"));
-	REQUIRE(Render(Value::STRUCT(std::move(fields))) == "struct_pack(a := 1, b := 'x')");
+	REQUIRE(Render(Value::STRUCT(std::move(fields))) == "\"system\".main.struct_pack(a := 1, b := 'x')");
 }
 
 TEST_CASE("ConstantExpression::FromValue round-trips scalar values", "[api]") {
@@ -116,6 +117,10 @@ TEST_CASE("ConstantExpression::FromValue round-trips scalar values", "[api]") {
 	RequireExpressionRoundTrip(con, "TIMESTAMP '2020-01-02 12:34:56.789'");
 	RequireExpressionRoundTrip(con, "TIMESTAMP_NS '2020-01-02 12:34:56.789123456'");
 	RequireExpressionRoundTrip(con, "INTERVAL '1 day 2 hours'");
+	RequireExpressionRoundTrip(con,
+	                           "to_months(-2147483648)+to_days(-2147483648)+to_microseconds(-9223372036854775808)");
+	RequireExpressionRoundTrip(con, "'POINT ZM(1.25 -2.5 3.75 4.5)'::GEOMETRY('OGC:CRS84')");
+	RequireExpressionRoundTrip(con, "NULL::GEOMETRY('OGC:CRS84')");
 	RequireExpressionRoundTrip(con, "'5ecb6a72-1fc3-4b5f-9d8a-0d3a4b5c6d7e'::UUID");
 	RequireExpressionRoundTrip(con, "'a'::ENUM('a', 'b')");
 	// the JSON alias only exists when the json extension is part of the build
