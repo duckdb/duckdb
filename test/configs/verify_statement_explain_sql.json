@@ -9,7 +9,9 @@
       "paths": [
         "test/sql/logging/logging.test",
         "test/sql/logging/logging_csv.test",
-        "test/sql/logging/logging_types.test"
+        "test/sql/logging/logging_types.test",
+        "test/sql/pragma/test_query_log.test",
+        "test/sql/logging/logging_file_truncate_rewrite.test"
       ]
     },
     {
@@ -64,6 +66,18 @@
       "reason": "Reconstructed expressions have locations in generated SQL rather than the original source; the fixture requires original-source error carets",
       "paths": [
         "test/sql/cast/cast_error_location.test"
+      ]
+    },
+    {
+      "reason": "The internal EXPLAIN exceeds the 300 KiB limit; the fixture deliberately distinguishes SELECT from EXPLAIN allocations",
+      "paths": [
+        "test/issues/internal/test_5457.test"
+      ]
+    },
+    {
+      "reason": "Statement verification temporarily disables profiling for its internal EXPLAIN, changing current_setting observations",
+      "paths": [
+        "test/sql/pragma/profiling/test_custom_profiling_using_groups.test"
       ]
     }
   ]
