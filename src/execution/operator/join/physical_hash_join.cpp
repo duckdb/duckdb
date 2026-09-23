@@ -335,6 +335,7 @@ public:
 	      initial_radix_bits(num_threads < 100 ? 4 : 5), finalized(false), active_local_states(0), total_size(0),
 	      max_partition_size(0), max_partition_count(0), probe_side_requirement(0), scanned_data(false) {
 		hash_table = op.InitializeHashTable(context, initial_radix_bits);
+		hash_table->SetMarkJoinMemoryState(*temporary_memory_state);
 
 		// For perfect hash join
 		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
@@ -2396,6 +2397,7 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 	if (!sink.external ||
 	    !ht.PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() - sink.probe_side_requirement)) {
 		global_stage = HashJoinSourceStage::DONE;
+		ht.ReleaseMarkJoinState();
 		sink.temporary_memory_state->SetZero();
 		return;
 	}
@@ -2639,6 +2641,7 @@ SourceResultType PhysicalHashJoin::GetDataInternal(ExecutionContext &context, Da
 				sink.scanned_data = false;
 			} else {
 				sink.hash_table->Reset();
+				sink.hash_table->ReleaseMarkJoinState();
 				sink.temporary_memory_state->SetZero();
 			}
 		}

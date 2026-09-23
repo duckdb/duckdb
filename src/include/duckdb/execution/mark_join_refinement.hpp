@@ -9,6 +9,8 @@
 
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/arena_containers/arena_vector.hpp"
+#include "duckdb/common/arena_containers/arena_ptr.hpp"
 #include "duckdb/common/array.hpp"
 #include <functional>
 #include "duckdb/common/set.hpp"
@@ -32,13 +34,17 @@ struct MarkPatternClassification {
 	vector<idx_t> ranges;
 };
 
+template <class KEY, class VALUE>
+using mark_refinement_map_t = map<KEY, VALUE, std::less<KEY>, arena_stl_allocator<pair<const KEY, VALUE>>>;
+
 struct MarkJoinRefinementIndex {
 	MarkJoinRefinementIndex();
 	~MarkJoinRefinementIndex();
-	static unique_ptr<MarkJoinRefinementIndex> BuildHash(ClientContext &context, const PhysicalOperator &op,
-	                                                     MarkJoinRefinementGroup &group, uint64_t equality_mask,
-	                                                     const vector<JoinCondition> &conditions,
-	                                                     const mark_key_fetch_t &fetch);
+	static arena_ptr<MarkJoinRefinementIndex> Create(ArenaAllocator &arena);
+	static arena_ptr<MarkJoinRefinementIndex> BuildHash(ClientContext &context, const PhysicalOperator &op,
+	                                                    MarkJoinRefinementGroup &group, uint64_t equality_mask,
+	                                                    const vector<JoinCondition> &conditions,
+	                                                    const mark_key_fetch_t &fetch);
 
 	//! Equality lookup and its row-identity payload.
 	vector<idx_t> columns;
@@ -48,25 +54,32 @@ struct MarkJoinRefinementIndex {
 	//! Two-key range orders.
 	unique_ptr<IEJoinBuildOrders> ranges;
 	//! Single-range extremum and its exact-comparison witness.
-	Value bound;
 	idx_t witness = 0;
 };
 
 struct MarkJoinRefinementGroup {
-	map<idx_t, vector<sel_t>> selections;
-	map<uint64_t, unique_ptr<MarkJoinRefinementIndex>> indexes;
+	explicit MarkJoinRefinementGroup(ArenaAllocator &arena) : arena(arena), selections(arena), indexes(arena) {
+	}
+	ArenaAllocator &arena;
+	mark_refinement_map_t<idx_t, arena_vector<sel_t>> selections;
+	mark_refinement_map_t<uint64_t, arena_ptr<MarkJoinRefinementIndex>> indexes;
 	idx_t count = 0;
 };
 
 struct MarkJoinRefinement {
-	static uint64_t NullMask(const DataChunk &keys, idx_t row, const vector<JoinCondition> &conditions);
+	MarkJoinRefinement(ClientContext &context, std::function<void(idx_t, idx_t, bool)> update_memory);
+	void Reserve(idx_t additional = 0);
+	void BuildIndex(idx_t additional, const std::function<void()> &build);
+	static vector<uint64_t> NullMasks(const DataChunk &keys, const vector<JoinCondition> &conditions);
 	static MarkPatternClassification Classify(uint64_t probe_mask, uint64_t build_mask,
 	                                          const vector<JoinCondition> &conditions);
 	void AddChunk(const DataChunk &keys, idx_t chunk, const vector<JoinCondition> &conditions);
 	idx_t SizeInBytes() const;
 
-	map<uint64_t, MarkJoinRefinementGroup> groups;
-	vector<array<idx_t, 3>> chunks;
+	ArenaAllocator arena;
+	mark_refinement_map_t<uint64_t, MarkJoinRefinementGroup> groups;
+	arena_vector<array<idx_t, 3>> chunks;
+	std::function<void(idx_t, idx_t, bool)> update_memory;
 };
 
 class MarkPatternRefiner {
@@ -107,6 +120,7 @@ private:
 	DataChunk &chunk;
 	idx_t cached_chunk = 0;
 	DataChunk &keys;
+	vector<uint64_t> probe_masks;
 	optional_ptr<bool> matches;
 	ValidityMask &validity;
 	vector<LogicalType> condition_types;

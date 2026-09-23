@@ -29,6 +29,8 @@
 
 namespace duckdb {
 
+class TemporaryMemoryState;
+
 class BufferManager;
 class BufferHandle;
 class ColumnDataCollection;
@@ -111,6 +113,18 @@ public:
 		// whether or not the given tuple has found a match
 		unsafe_unique_array<bool> found_match;
 		unsafe_unique_array<bool> found_unknown;
+		struct MarkPredicateState {
+			MarkPredicateState(ClientContext &context, const vector<LogicalType> &types);
+			DataChunk left;
+			DataChunk right;
+			Vector comparison;
+			VectorCache comparison_cache;
+			unsafe_unique_array<bool> pair_false;
+			unsafe_unique_array<bool> pair_unknown;
+			SelectionVector candidates;
+			SelectionVector candidate_rows;
+		};
+		unique_ptr<MarkPredicateState> mark_predicate_state;
 		JoinHashTable &ht;
 		bool finished;
 		bool is_null;
@@ -279,6 +293,9 @@ public:
 	void RefineMarkPatterns(DataChunk &keys, DataChunk &probe_data, bool matches[], ValidityMask &validity);
 	bool HasMarkJoinConjunction() const;
 	idx_t MarkJoinSize() const;
+	void SetMarkJoinMemoryState(TemporaryMemoryState &state);
+	void UpdateMarkJoinMemoryLocked(idx_t cache_size, idx_t additional = 0, bool update_reservation = true);
+	void ReleaseMarkJoinState();
 	bool HasUncorrelatedMarkJoin() const;
 	//! Construct a MARK result, including selective UNKNOWN refinement when enabled
 	void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result,
@@ -433,7 +450,10 @@ public:
 	bool CanUseDictionaryEmission(const PhysicalHashJoin &op, bool external, idx_t probe_cardinality) const;
 
 	struct {
-		mutex mj_lock;
+		mutable mutex mj_lock;
+		optional_ptr<TemporaryMemoryState> memory_state;
+		idx_t cache_size = 0;
+		idx_t charged_size = 0;
 		//! The types of the duplicate eliminated columns, only used in correlated MARK JOIN for flattening
 		//! ANY()/ALL() expressions
 		vector<LogicalType> correlated_types;

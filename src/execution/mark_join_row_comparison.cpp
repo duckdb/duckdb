@@ -1,6 +1,5 @@
 #include "duckdb/execution/mark_join_row_comparison.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/value_operations/value_operations.hpp"
 
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
@@ -77,68 +76,6 @@ void MarkJoinRowComparison::CompareEquality(const Vector &left, idx_t left_row, 
 	CompareRowEqualityInternal(left, left_row, left_count, right, right_count, active, row_is_false, row_is_unknown);
 	for (idx_t right_row = 0; right_row < right_count; right_row++) {
 		D_ASSERT(!row_is_false[right_row] || !row_is_unknown[right_row]);
-	}
-}
-
-template <class T>
-static Value MarkRangeExtreme(const Vector &key, bool maximum, idx_t &null_count) {
-	auto values = key.Values<T>();
-	idx_t best = DConstants::INVALID_INDEX;
-	for (idx_t row = 0; row < values.size(); row++) {
-		auto entry = values[row];
-		if (!entry.IsValid()) {
-			null_count++;
-		} else if (best == DConstants::INVALID_INDEX ||
-		           (maximum ? GreaterThan::Operation(entry.GetValue(), values[best].GetValue())
-		                    : LessThan::Operation(entry.GetValue(), values[best].GetValue()))) {
-			best = row;
-		}
-	}
-	return best == DConstants::INVALID_INDEX ? Value(key.GetType()) : key.GetValue(best);
-}
-
-void MarkJoinRowComparison::UpdateRangeBound(const Vector &key, ExpressionType comparison, Value &bound,
-                                             idx_t &null_count) {
-	const bool maximum =
-	    comparison == ExpressionType::COMPARE_LESSTHAN || comparison == ExpressionType::COMPARE_LESSTHANOREQUALTO;
-	D_ASSERT(maximum || comparison == ExpressionType::COMPARE_GREATERTHAN ||
-	         comparison == ExpressionType::COMPARE_GREATERTHANOREQUALTO);
-	Value value;
-	switch (key.GetType().InternalType()) {
-#define MARK_RANGE_EXTREME(TYPE, CPP_TYPE)                                                                             \
-	case PhysicalType::TYPE:                                                                                           \
-		value = MarkRangeExtreme<CPP_TYPE>(key, maximum, null_count);                                                  \
-		break;
-		MARK_RANGE_EXTREME(BOOL, bool)
-		MARK_RANGE_EXTREME(INT8, int8_t)
-		MARK_RANGE_EXTREME(INT16, int16_t)
-		MARK_RANGE_EXTREME(INT32, int32_t)
-		MARK_RANGE_EXTREME(INT64, int64_t)
-		MARK_RANGE_EXTREME(INT128, hugeint_t)
-		MARK_RANGE_EXTREME(UINT8, uint8_t)
-		MARK_RANGE_EXTREME(UINT16, uint16_t)
-		MARK_RANGE_EXTREME(UINT32, uint32_t)
-		MARK_RANGE_EXTREME(UINT64, uint64_t)
-		MARK_RANGE_EXTREME(UINT128, uhugeint_t)
-		MARK_RANGE_EXTREME(FLOAT, float)
-		MARK_RANGE_EXTREME(DOUBLE, double)
-		MARK_RANGE_EXTREME(VARCHAR, string_t)
-		MARK_RANGE_EXTREME(INTERVAL, interval_t)
-#undef MARK_RANGE_EXTREME
-	default:
-		for (idx_t row = 0; row < key.size(); row++) {
-			auto entry = key.GetValue(row);
-			if (entry.IsNull()) {
-				null_count++;
-			} else if (value.IsNull() || (maximum ? ValueOperations::GreaterThan(entry, value)
-			                                      : ValueOperations::LessThan(entry, value))) {
-				value = std::move(entry);
-			}
-		}
-	}
-	if (!value.IsNull() && (bound.IsNull() || (maximum ? ValueOperations::GreaterThan(value, bound)
-	                                                   : ValueOperations::LessThan(value, bound)))) {
-		bound = std::move(value);
 	}
 }
 

@@ -19,7 +19,6 @@ struct MarkJoinRowComparison {
 	enum class Mode { NESTED_LOOP, COMPOSITE };
 	explicit MarkJoinRowComparison(const DataChunk &left, Mode mode = Mode::NESTED_LOOP);
 
-	static void UpdateRangeBound(const Vector &key, ExpressionType comparison, Value &bound, idx_t &null_count);
 	static void Compare(const Vector &left, const Vector &right, ExpressionType comparison_type, Vector &result);
 	void CompareConjunction(DataChunk &left, idx_t left_row, DataChunk &right, const vector<JoinCondition> &conditions,
 	                        Vector &result);

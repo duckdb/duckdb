@@ -7,6 +7,7 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/allocator.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 
 namespace duckdb {
@@ -14,22 +15,52 @@ namespace duckdb {
 MarkJoinRefinementIndex::MarkJoinRefinementIndex() = default;
 MarkJoinRefinementIndex::~MarkJoinRefinementIndex() = default;
 
-uint64_t MarkJoinRefinement::NullMask(const DataChunk &keys, idx_t row, const vector<JoinCondition> &conditions) {
-	if (conditions.size() > 64) {
-		return 0;
+arena_ptr<MarkJoinRefinementIndex> MarkJoinRefinementIndex::Create(ArenaAllocator &arena) {
+	return arena_ptr<MarkJoinRefinementIndex>(new (arena.AllocateAligned(sizeof(MarkJoinRefinementIndex)))
+	                                              MarkJoinRefinementIndex());
+}
+
+MarkJoinRefinement::MarkJoinRefinement(ClientContext &context, std::function<void(idx_t, idx_t, bool)> update_memory)
+    : arena(BufferAllocator::Get(context)), groups(arena), chunks(arena), update_memory(std::move(update_memory)) {
+}
+
+void MarkJoinRefinement::Reserve(idx_t additional) {
+	update_memory(SizeInBytes(), additional, true);
+}
+
+void MarkJoinRefinement::BuildIndex(idx_t additional, const std::function<void()> &build) {
+	try {
+		Reserve(additional);
+		build();
+		Reserve();
+	} catch (...) {
+		update_memory(SizeInBytes(), 0, false);
+		throw;
 	}
-	uint64_t mask = 0;
+}
+
+vector<uint64_t> MarkJoinRefinement::NullMasks(const DataChunk &keys, const vector<JoinCondition> &conditions) {
+	vector<uint64_t> masks(keys.size(), 0);
+	if (conditions.size() > 64) {
+		return masks;
+	}
 	for (idx_t col = 0; col < conditions.size(); col++) {
 		const auto comparison = conditions[col].GetComparisonType();
 		if (keys.data[col].GetType().IsNested() || comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
 		    comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			continue;
 		}
-		if (keys.data[col].GetValue(row).IsNull()) {
-			mask |= uint64_t(1) << col;
+		auto validity = keys.data[col].Validity();
+		if (validity.CannotHaveNull()) {
+			continue;
+		}
+		for (idx_t row = 0; row < keys.size(); row++) {
+			if (!validity.IsValid(row)) {
+				masks[row] |= uint64_t(1) << col;
+			}
 		}
 	}
-	return mask;
+	return masks;
 }
 
 MarkPatternClassification MarkJoinRefinement::Classify(uint64_t probe_mask, uint64_t build_mask,
@@ -65,11 +96,11 @@ MarkPatternClassification MarkJoinRefinement::Classify(uint64_t probe_mask, uint
 	return result;
 }
 
-unique_ptr<MarkJoinRefinementIndex>
+arena_ptr<MarkJoinRefinementIndex>
 MarkJoinRefinementIndex::BuildHash(ClientContext &context, const PhysicalOperator &op, MarkJoinRefinementGroup &group,
                                    uint64_t equality_mask, const vector<JoinCondition> &conditions,
                                    const mark_key_fetch_t &fetch) {
-	auto built = make_uniq<MarkJoinRefinementIndex>();
+	auto built = MarkJoinRefinementIndex::Create(group.arena);
 	vector<LogicalType> types;
 	for (idx_t col = 0; col < conditions.size(); col++) {
 		if (equality_mask & (uint64_t(1) << col)) {
@@ -99,8 +130,11 @@ MarkJoinRefinementIndex::BuildHash(ClientContext &context, const PhysicalOperato
 		index_keys.ReferenceColumns(chunk, built->columns);
 		index_keys.Slice(selected, selection.second.size());
 		payload.Reset();
-		for (auto row : selection.second) {
-			payload.data[0].Append(Value::UBIGINT(selection.first * STANDARD_VECTOR_SIZE + row));
+		{
+			auto ids = FlatVector::Writer<uint64_t>(payload.data[0], selection.second.size());
+			for (auto row : selection.second) {
+				ids.WriteValue(selection.first * STANDARD_VECTOR_SIZE + row);
+			}
 		}
 		payload.SetChildCardinality(selection.second.size());
 		built->hash->Build(append, index_keys, payload);
@@ -114,22 +148,32 @@ MarkJoinRefinementIndex::BuildHash(ClientContext &context, const PhysicalOperato
 }
 
 void MarkJoinRefinement::AddChunk(const DataChunk &keys, idx_t chunk, const vector<JoinCondition> &conditions) {
+	auto masks = NullMasks(keys, conditions);
 	for (idx_t row = 0; row < keys.size(); row++) {
-		auto &group = groups[NullMask(keys, row, conditions)];
-		group.selections[chunk].push_back(UnsafeNumericCast<sel_t>(row));
+		auto entry = groups.find(masks[row]);
+		if (entry == groups.end()) {
+			entry = groups.emplace(masks[row], MarkJoinRefinementGroup(arena)).first;
+		}
+		auto &group = entry->second;
+		auto selection = group.selections.find(chunk);
+		if (selection == group.selections.end()) {
+			selection = group.selections.emplace(chunk, arena_vector<sel_t>(arena)).first;
+		}
+		selection->second.push_back(UnsafeNumericCast<sel_t>(row));
 		group.count++;
 	}
 }
 
 idx_t MarkJoinRefinement::SizeInBytes() const {
-	idx_t size = sizeof(*this) + chunks.capacity() * sizeof(chunks[0]);
+	idx_t size = sizeof(*this) + arena.AllocationSize();
 	for (auto &entry : groups) {
-		size += sizeof(entry);
-		for (auto &selection : entry.second.selections) {
-			size += sizeof(selection) + selection.second.capacity() * sizeof(sel_t);
-		}
 		for (auto &index : entry.second.indexes) {
-			size += sizeof(index) + sizeof(*index.second) + index.second->columns.capacity() * sizeof(idx_t);
+			if (!index.second) {
+				continue;
+			}
+			size += index.second->columns.capacity() * sizeof(idx_t) +
+			        index.second->output_columns.capacity() * sizeof(idx_t) +
+			        index.second->conditions.capacity() * sizeof(JoinCondition);
 			if (index.second->hash) {
 				size += index.second->hash->SizeInBytes() + index.second->hash->capacity * sizeof(ht_entry_t);
 			}
@@ -148,6 +192,7 @@ MarkPatternRefiner::MarkPatternRefiner(ClientContext &context, const PhysicalCom
     : context(context), op(op), conditions(op.conditions), refinement(refinement), lock(lock), fetch(std::move(fetch)),
       finish_candidates(std::move(finish_candidates)), chunk(this->fetch(0)), keys(keys), matches(matches),
       validity(validity), comparison(LogicalType::BOOLEAN), comparer(keys, MarkJoinRowComparison::Mode::COMPOSITE) {
+	probe_masks = MarkJoinRefinement::NullMasks(keys, conditions);
 	condition_types = keys.GetTypes();
 	candidates.InitializeEmpty(condition_types);
 }
@@ -188,11 +233,13 @@ MarkJoinRefinementIndex &MarkPatternRefiner::BuildEqualityIndex(MarkJoinRefineme
 	lock_guard<mutex> guard(lock);
 	auto &cached = group.indexes[equality_mask];
 	if (!cached) {
-		cached = MarkJoinRefinementIndex::BuildHash(context, op, group, equality_mask, conditions,
-		                                            [&](idx_t index) -> DataChunk & {
-			                                            Fetch(index);
-			                                            return chunk;
-		                                            });
+		refinement.BuildIndex(group.count * (conditions.size() * sizeof(Value) + sizeof(idx_t)), [&]() {
+			cached = MarkJoinRefinementIndex::BuildHash(context, op, group, equality_mask, conditions,
+			                                            [&](idx_t index) -> DataChunk & {
+				                                            Fetch(index);
+				                                            return chunk;
+			                                            });
+		});
 	}
 	return *cached;
 }
@@ -208,8 +255,7 @@ void MarkPatternRefiner::ProbeEqualityIndex(MarkJoinRefinementIndex &index, uint
 	SelectionVector selected(STANDARD_VECTOR_SIZE);
 	idx_t probe_count = 0;
 	for (idx_t row = 0; row < keys.size(); row++) {
-		if (!matches[row] && validity.RowIsValid(row) &&
-		    MarkJoinRefinement::NullMask(keys, row, conditions) == probe_mask) {
+		if (!matches[row] && validity.RowIsValid(row) && probe_masks[row] == probe_mask) {
 			selected.set_index(probe_count++, row);
 		}
 	}
@@ -304,10 +350,14 @@ unique_ptr<IEJoinBuildOrders> MarkPatternRefiner::BuildRangeIndex(ExecutionConte
 		context.InterruptCheck();
 		Fetch(selection.first);
 		projected.Reset();
-		for (auto row : selection.second) {
-			projected.data[0].Append(chunk.GetValue(driving[0], row));
-			projected.data[1].Append(chunk.GetValue(driving[1], row));
-			projected.data[2].Append(Value::UBIGINT(selection.first * STANDARD_VECTOR_SIZE + row));
+		SelectionVector selected(selection.second.data(), selection.second.size());
+		projected.data[0].Slice(chunk.data[driving[0]], selected, selection.second.size());
+		projected.data[1].Slice(chunk.data[driving[1]], selected, selection.second.size());
+		{
+			auto ids = FlatVector::Writer<uint64_t>(projected.data[2], selection.second.size());
+			for (auto row : selection.second) {
+				ids.WriteValue(selection.first * STANDARD_VECTOR_SIZE + row);
+			}
 		}
 		projected.SetChildCardinality(selection.second.size());
 		input.Append(append, projected);
@@ -332,15 +382,20 @@ void MarkPatternRefiner::RunRangeJoin(ExecutionContext &execution, IEJoinBuildOr
 		auto &probe_keys = probe_fetch(offset / STANDARD_VECTOR_SIZE);
 		projected.Reset();
 		idx_t count = 0;
+		SelectionVector selected(STANDARD_VECTOR_SIZE);
+		auto masks = MarkJoinRefinement::NullMasks(probe_keys, conditions);
 		for (idx_t row = 0; row < probe_keys.size(); row++) {
-			if (markers.get()[offset + row] ||
-			    MarkJoinRefinement::NullMask(probe_keys, row, conditions) != probe_mask) {
-				continue;
+			if (!markers.get()[offset + row] && masks[row] == probe_mask) {
+				selected.set_index(count++, row);
 			}
-			projected.data[0].Append(probe_keys.GetValue(driving[0], row));
-			projected.data[1].Append(probe_keys.GetValue(driving[1], row));
-			projected.data[2].Append(Value::UBIGINT(offset + row));
-			count++;
+		}
+		projected.data[0].Slice(probe_keys.data[driving[0]], selected, count);
+		projected.data[1].Slice(probe_keys.data[driving[1]], selected, count);
+		{
+			auto ids = FlatVector::Writer<uint64_t>(projected.data[2], count);
+			for (idx_t row = 0; row < count; row++) {
+				ids.WriteValue(offset + selected.get_index(row));
+			}
 		}
 		projected.SetChildCardinality(count);
 		input.Append(append, projected);
@@ -461,10 +516,12 @@ void MarkPatternRefiner::RefineRangePattern(MarkJoinRefinementGroup &group, idx_
 		const auto mask = (uint64_t(1) << driving[0]) | (uint64_t(1) << driving[1]);
 		auto &index = group.indexes[mask];
 		if (!index) {
-			index = make_uniq<MarkJoinRefinementIndex>();
+			index = MarkJoinRefinementIndex::Create(group.arena);
 		}
 		if (!index->ranges) {
-			index->ranges = BuildRangeIndex(execution, group, driving, range_conditions);
+			refinement.BuildIndex(group.count * (4 * sizeof(Value) + 4 * sizeof(idx_t)), [&]() {
+				index->ranges = BuildRangeIndex(execution, group, driving, range_conditions);
+			});
 		}
 		return *index->ranges;
 	}();
@@ -484,29 +541,63 @@ void MarkPatternRefiner::RefineRangePattern(MarkJoinRefinementGroup &group, idx_
 	}
 }
 
+static idx_t FindRangeExtreme(Vector &keys, bool maximum) {
+	SelectionVector selected(STANDARD_VECTOR_SIZE), left(STANDARD_VECTOR_SIZE), right(STANDARD_VECTOR_SIZE);
+	idx_t count = keys.size();
+	D_ASSERT(count > 0);
+	for (idx_t row = 0; row < count; row++) {
+		selected.set_index(row, row);
+	}
+	Vector lhs(keys.GetType()), rhs(keys.GetType()), comparison(LogicalType::BOOLEAN);
+	while (count > 1) {
+		const auto pairs = count / 2;
+		for (idx_t row = 0; row < pairs; row++) {
+			left.set_index(row, selected.get_index(2 * row));
+			right.set_index(row, selected.get_index(2 * row + 1));
+		}
+		lhs.Slice(keys, left, pairs);
+		rhs.Slice(keys, right, pairs);
+		MarkJoinRowComparison::Compare(
+		    lhs, rhs, maximum ? ExpressionType::COMPARE_GREATERTHAN : ExpressionType::COMPARE_LESSTHAN, comparison);
+		auto values = comparison.Values<bool>();
+		for (idx_t row = 0; row < pairs; row++) {
+			D_ASSERT(values[row].IsValid());
+			selected.set_index(row, values[row].GetValue() ? left.get_index(row) : right.get_index(row));
+		}
+		if (count % 2) {
+			selected.set_index(pairs, selected.get_index(count - 1));
+		}
+		count = pairs + count % 2;
+	}
+	return selected.get_index(0);
+}
+
 void MarkPatternRefiner::RefineOneRange(MarkJoinRefinementGroup &group, uint64_t probe_mask, uint64_t dropped,
                                         idx_t range_column) {
 	auto &index = [&]() -> MarkJoinRefinementIndex & {
 		lock_guard<mutex> guard(lock);
 		auto &cached = group.indexes[uint64_t(1) << range_column];
 		if (!cached) {
-			auto built = make_uniq<MarkJoinRefinementIndex>();
+			auto built = MarkJoinRefinementIndex::Create(group.arena);
+			Value bound;
 			const auto comparison_type = conditions[range_column].GetComparisonType();
 			const bool maximum = comparison_type == ExpressionType::COMPARE_LESSTHAN ||
 			                     comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
 			for (auto &selection : group.selections) {
 				context.InterruptCheck();
 				Fetch(selection.first);
-				for (auto row : selection.second) {
-					auto value = chunk.GetValue(range_column, row);
-					if (built->bound.IsNull() || (maximum ? ValueOperations::GreaterThan(value, built->bound)
-					                                      : ValueOperations::LessThan(value, built->bound))) {
-						built->bound = std::move(value);
-						built->witness = selection.first * STANDARD_VECTOR_SIZE + row;
-					}
+				SelectionVector selected(selection.second.data(), selection.second.size());
+				Vector values(chunk.data[range_column], selected, selection.second.size());
+				const auto row = selected.get_index(FindRangeExtreme(values, maximum));
+				auto value = chunk.GetValue(range_column, row);
+				if (bound.IsNull() ||
+				    (maximum ? ValueOperations::GreaterThan(value, bound) : ValueOperations::LessThan(value, bound))) {
+					bound = std::move(value);
+					built->witness = selection.first * STANDARD_VECTOR_SIZE + row;
 				}
 			}
 			cached = std::move(built);
+			refinement.Reserve();
 		}
 		return *cached;
 	}();
@@ -532,12 +623,20 @@ bool MarkPatternRefiner::RefineExact(MarkJoinRefinementGroup &group, idx_t probe
 }
 
 void MarkPatternRefiner::Refine() {
+	bool scalar_conditions = conditions.size() <= 64;
+	for (const auto &condition : conditions) {
+		scalar_conditions &= !condition.GetLHS().GetReturnType().IsNested();
+	}
 	for (idx_t probe = 0; probe < keys.size(); probe++) {
 		if (matches.get()[probe] || !validity.RowIsValid(probe)) {
 			continue;
 		}
-		const auto probe_mask = MarkJoinRefinement::NullMask(keys, probe, conditions);
+		const auto probe_mask = probe_masks[probe];
 		for (auto &entry : refinement.groups) {
+			// Native probing already completed scalar pairs with no dropped comparison.
+			if (scalar_conditions && !(probe_mask | entry.first)) {
+				continue;
+			}
 			auto &group = entry.second;
 			const auto classification = MarkJoinRefinement::Classify(probe_mask, entry.first, conditions);
 			const auto dropped = classification.dropped;
@@ -575,8 +674,7 @@ void MarkPatternRefiner::RefineWitnessBatch(idx_t id, uint64_t probe_mask) {
 	SelectionVector selected(STANDARD_VECTOR_SIZE);
 	idx_t count = 0;
 	for (idx_t row = 0; row < keys.size(); row++) {
-		if (!matches.get()[row] && validity.RowIsValid(row) &&
-		    MarkJoinRefinement::NullMask(keys, row, conditions) == probe_mask) {
+		if (!matches.get()[row] && validity.RowIsValid(row) && probe_masks[row] == probe_mask) {
 			selected.set_index(count++, row);
 		}
 	}

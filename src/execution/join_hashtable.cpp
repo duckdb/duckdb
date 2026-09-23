@@ -1,4 +1,5 @@
 #include "duckdb/execution/join_hashtable.hpp"
+#include "duckdb/storage/temporary_memory_manager.hpp"
 #include "duckdb/execution/ie_join_union.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/common/set.hpp"
@@ -175,6 +176,7 @@ bool JoinHashTable::HasMarkJoinConjunction() const {
 }
 
 idx_t JoinHashTable::MarkJoinSize() const {
+	lock_guard<mutex> guard(mark_join_info.mj_lock);
 	idx_t size =
 	    mark_join_info.uncorrelated_condition_rows ? mark_join_info.uncorrelated_condition_rows->SizeInBytes() : 0;
 
@@ -182,6 +184,42 @@ idx_t JoinHashTable::MarkJoinSize() const {
 		size += mark_join_info.refinement->SizeInBytes();
 	}
 	return size;
+}
+
+void JoinHashTable::SetMarkJoinMemoryState(TemporaryMemoryState &state) {
+	mark_join_info.memory_state = state;
+}
+
+void JoinHashTable::UpdateMarkJoinMemoryLocked(idx_t cache_size, idx_t additional, bool update_reservation) {
+	auto &info = mark_join_info;
+	if (info.memory_state) {
+		auto &state = *info.memory_state;
+		const auto minimum = state.GetMinimumReservation();
+		state.SetMinimumReservation(minimum - MinValue(minimum, info.cache_size) + cache_size);
+		const auto remaining = state.GetRemainingSize();
+		const auto demand = remaining - MinValue(remaining, info.charged_size) + cache_size + additional;
+		info.cache_size = cache_size;
+		info.charged_size = cache_size + additional;
+		if (!update_reservation) {
+			state.SetRemainingSizeAndReduceReservation(demand);
+		} else if (demand) {
+			state.SetRemainingSizeAndUpdateReservation(context, demand);
+		} else {
+			state.SetZero();
+		}
+	}
+	info.cache_size = cache_size;
+	info.charged_size = cache_size + additional;
+}
+
+void JoinHashTable::ReleaseMarkJoinState() {
+	lock_guard<mutex> guard(mark_join_info.mj_lock);
+	mark_join_info.refinement.reset();
+	if (mark_join_info.uncorrelated_condition_rows) {
+		auto types = mark_join_info.uncorrelated_condition_rows->Types();
+		mark_join_info.uncorrelated_condition_rows = make_uniq<ColumnDataCollection>(context, types);
+	}
+	UpdateMarkJoinMemoryLocked(0);
 }
 
 void JoinHashTable::Merge(JoinHashTable &other) {
@@ -647,8 +685,16 @@ static bool MarkJoinKeysHaveNull(DataChunk &keys, optional_ptr<bool> rows_with_n
 
 static bool MarkJoinKeysCanBeUnknown(const DataChunk &keys) {
 	for (const auto &key : keys.data) {
-		if (key.GetType().IsNested() || key.Validity().CanHaveNull()) {
+		if (key.GetType().IsNested()) {
 			return true;
+		}
+		auto validity = key.Validity();
+		if (validity.CanHaveNull()) {
+			for (idx_t row = 0; row < key.size(); row++) {
+				if (!validity.IsValid(row)) {
+					return true;
+				}
+			}
 		}
 	}
 	return false;
@@ -1522,6 +1568,15 @@ JoinHashTable::ResidualPredicateProbeState::ResidualPredicateProbeState(JoinHash
 	eval_chunk.Initialize(Allocator::Get(ht.context), eval_types, initialize_columns, STANDARD_VECTOR_SIZE);
 }
 
+ScanStructure::MarkPredicateState::MarkPredicateState(ClientContext &context, const vector<LogicalType> &types)
+    : comparison(LogicalType::BOOLEAN), comparison_cache(Allocator::Get(context), LogicalType::BOOLEAN),
+      pair_false(make_unsafe_uniq_array_uninitialized<bool>(STANDARD_VECTOR_SIZE)),
+      pair_unknown(make_unsafe_uniq_array_uninitialized<bool>(STANDARD_VECTOR_SIZE)), candidates(STANDARD_VECTOR_SIZE),
+      candidate_rows(STANDARD_VECTOR_SIZE) {
+	left.InitializeEmpty(types);
+	right.Initialize(context, types);
+}
+
 ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state_p)
     : key_state(key_state_p), pointers(LogicalType::POINTER), count(0), sel_vector(STANDARD_VECTOR_SIZE),
       chain_match_sel_vector(STANDARD_VECTOR_SIZE), chain_no_match_sel_vector(STANDARD_VECTOR_SIZE),
@@ -1530,6 +1585,7 @@ ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state
       last_sel_vector(STANDARD_VECTOR_SIZE) {
 	if (ht.HasMarkJoinConjunction()) {
 		found_unknown = make_unsafe_uniq_array_uninitialized<bool>(STANDARD_VECTOR_SIZE);
+		mark_predicate_state = make_uniq<MarkPredicateState>(ht.context, ht.condition_types);
 	}
 	if (ht.residual_predicate) {
 		residual_executor = make_uniq<ExpressionExecutor>(ht.context);
@@ -1604,15 +1660,20 @@ bool ScanStructure::PointersExhausted() const {
 
 idx_t ScanStructure::ResolveMarkPredicates(DataChunk &keys, DataChunk &probe_data, SelectionVector &match_sel,
                                            optional_ptr<SelectionVector> no_match_sel) {
-	bool pair_false[STANDARD_VECTOR_SIZE] = {false};
-	bool pair_unknown[STANDARD_VECTOR_SIZE] = {false};
+	auto &state = *mark_predicate_state;
+	auto pair_false = state.pair_false.get();
+	auto pair_unknown = state.pair_unknown.get();
+	memset(pair_false, 0, count * sizeof(bool));
+	memset(pair_unknown, 0, count * sizeof(bool));
+	state.right.Reset();
 	for (idx_t col = 0; col < ht.conditions.size(); col++) {
-		Vector lhs(keys.data[col].GetType());
+		auto &lhs = state.left.data[col];
+		auto &rhs = state.right.data[col];
 		lhs.Slice(keys.data[col], sel_vector, count);
-		Vector rhs(keys.data[col].GetType());
 		GatherResult(rhs, sel_vector, count, col);
 		FlatVector::SetSize(rhs, count);
-		Vector comparison(LogicalType::BOOLEAN);
+		auto &comparison = state.comparison;
+		comparison.ResetFromCache(state.comparison_cache);
 		MarkJoinRowComparison::Compare(lhs, rhs, ht.conditions[col].GetComparisonType(), comparison);
 		auto entries = comparison.Values<bool>();
 		for (idx_t row = 0; row < count; row++) {
@@ -1622,7 +1683,8 @@ idx_t ScanStructure::ResolveMarkPredicates(DataChunk &keys, DataChunk &probe_dat
 		}
 	}
 	if (ht.residual_predicate) {
-		SelectionVector candidates(STANDARD_VECTOR_SIZE), candidate_rows(STANDARD_VECTOR_SIZE);
+		auto &candidates = state.candidates;
+		auto &candidate_rows = state.candidate_rows;
 		idx_t candidate_count = 0;
 		for (idx_t row = 0; row < count; row++) {
 			if (!pair_false[row]) {
@@ -2185,19 +2247,29 @@ void JoinHashTable::RefineMarkPatterns(DataChunk &keys, DataChunk &probe_data, b
 	auto &refinement = [&]() -> MarkJoinRefinement & {
 		lock_guard<mutex> guard(mark_join_info.mj_lock);
 		if (!mark_join_info.refinement) {
-			auto state = make_uniq<MarkJoinRefinement>();
-			ColumnDataParallelScanState scan;
-			ColumnDataLocalScanState local;
-			rows.InitializeScan(scan);
-			DataChunk chunk;
-			rows.InitializeScanChunk(chunk);
-			idx_t chunk_index, segment_index, row_index;
-			while (rows.NextScanIndex(scan.scan_state, chunk_index, segment_index, row_index)) {
-				context.InterruptCheck();
-				chunk.Reset();
-				rows.ScanAtIndex(scan, local, chunk, chunk_index, segment_index, row_index);
-				state->AddChunk(chunk, state->chunks.size(), conditions);
-				state->chunks.push_back({chunk_index, segment_index, row_index});
+			auto state =
+			    make_uniq<MarkJoinRefinement>(context, [&](idx_t size, idx_t additional, bool update_reservation) {
+				    UpdateMarkJoinMemoryLocked(size, additional, update_reservation);
+			    });
+			try {
+				state->Reserve(rows.Count() * (sizeof(MarkJoinRefinementGroup) + 8 * sizeof(idx_t)));
+				ColumnDataParallelScanState scan;
+				ColumnDataLocalScanState local;
+				rows.InitializeScan(scan);
+				DataChunk chunk;
+				rows.InitializeScanChunk(chunk);
+				idx_t chunk_index, segment_index, row_index;
+				while (rows.NextScanIndex(scan.scan_state, chunk_index, segment_index, row_index)) {
+					context.InterruptCheck();
+					chunk.Reset();
+					rows.ScanAtIndex(scan, local, chunk, chunk_index, segment_index, row_index);
+					state->AddChunk(chunk, state->chunks.size(), conditions);
+					state->chunks.push_back({chunk_index, segment_index, row_index});
+				}
+				state->Reserve();
+			} catch (...) {
+				UpdateMarkJoinMemoryLocked(0, 0, false);
+				throw;
 			}
 			mark_join_info.refinement = std::move(state);
 		}
@@ -2775,6 +2847,7 @@ void JoinHashTable::Reset() {
 
 static void ResetMarkJoinInfo(JoinHashTable &ht) {
 	auto &info = ht.mark_join_info;
+	lock_guard<mutex> guard(info.mj_lock);
 	if (!info.correlated_types.empty()) {
 		vector<AggregateObject> correlated_aggregates;
 		vector<LogicalType> payload_types;
@@ -2794,6 +2867,7 @@ static void ResetMarkJoinInfo(JoinHashTable &ht) {
 	}
 	if (info.uncorrelated_condition_rows) {
 		info.refinement.reset();
+		ht.UpdateMarkJoinMemoryLocked(0);
 		info.uncorrelated_has_null = false;
 		info.conditions_can_be_unknown = false;
 		auto retained_types = info.uncorrelated_condition_rows->Types();
@@ -2843,6 +2917,11 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 }
 
 bool JoinHashTable::PrepareExternalFinalize(const idx_t max_ht_size) {
+	idx_t partition_budget;
+	{
+		lock_guard<mutex> guard(mark_join_info.mj_lock);
+		partition_budget = max_ht_size - MinValue(max_ht_size, mark_join_info.cache_size);
+	}
 	if (finalized) {
 		Reset();
 	}
@@ -2890,7 +2969,7 @@ bool JoinHashTable::PrepareExternalFinalize(const idx_t max_ht_size) {
 		const auto incl_count = count + partitions[partition_idx]->Count();
 		const auto incl_data_size = data_size + partitions[partition_idx]->SizeInBytes();
 		const auto incl_ht_size = incl_data_size + PointerTableSize(incl_count);
-		if (count > 0 && incl_ht_size > max_ht_size) {
+		if (count > 0 && incl_ht_size > partition_budget) {
 			break; // Always add at least one partition
 		}
 		count = incl_count;

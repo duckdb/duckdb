@@ -1,0 +1,66 @@
+# name: test/sql/join/mark/hash_refinement_recovery.test
+# description: Prepared hash MARK joins recover after errors during indexed refinement
+# group: [mark]
+
+statement ok
+SET threads=1;
+
+statement ok
+SET nested_loop_join_threshold=0;
+
+statement ok
+SET merge_join_threshold=0;
+
+foreach external false true
+
+statement ok
+SET debug_force_external={external};
+
+statement ok
+CREATE OR REPLACE TABLE p AS SELECT NULL::BIGINT a, 0::BIGINT x, 100::BIGINT z;
+
+statement ok
+CREATE OR REPLACE TABLE b AS SELECT i a, i+1 y, i z, true fail FROM range(17) t(i);
+
+statement ok
+PREPARE refinement AS SELECT __mark_join_marker FROM p JOIN BY(TYPE MARK) b
+ON p.a=b.a AND p.x<b.y AND p.z>b.z
+AND CASE WHEN b.fail AND p.x+b.y>0 THEN error('refinement failed') ELSE false END;
+
+# The NULL equality key sends this error through range-index refinement.
+statement error
+EXECUTE refinement;
+----
+refinement failed
+
+# Keep the failed prepared plan alive while another join uses the same manager.
+query I
+SELECT count(*) FROM (
+ SELECT __mark_join_marker m FROM range(4099) p(i) JOIN BY(TYPE MARK) range(17) b(i)
+ ON NULL::BIGINT=b.i AND p.i<b.i) WHERE m IS NULL;
+----
+16
+
+statement ok
+UPDATE b SET fail=false;
+
+query I
+EXECUTE refinement;
+----
+false
+
+query I
+EXECUTE refinement;
+----
+false
+
+statement ok
+DEALLOCATE refinement;
+
+endloop
+
+statement ok
+RESET debug_force_external;
+
+statement ok
+RESET threads;
