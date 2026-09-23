@@ -1244,6 +1244,17 @@ bool RowGroup::HasUnloadedDeletes() const {
 	return !deletes_is_loaded;
 }
 
+vector<MetaBlockPointer> RowGroup::GetPersistedDeletePointers() const {
+	if (HasUnloadedDeletes()) {
+		return deletes_pointers;
+	}
+	auto vinfo = version_info.load();
+	if (!vinfo) {
+		return vector<MetaBlockPointer>();
+	}
+	return vinfo->GetStoragePointers();
+}
+
 PerColumnMetadataBlocks RowGroup::ComputePerColumnMetadataBlocks() const {
 	PerColumnMetadataBlocks result;
 	if (column_pointers.empty()) {

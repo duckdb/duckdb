@@ -731,7 +731,14 @@ public:
 			// Check if the maximum subplan fully contains the column bindings of the other subplans
 			for (idx_t subplan_idx = 1; subplan_idx < subplan_info.subplans.size() && !bail; subplan_idx++) {
 				const auto &subplan_bindings = subplan_info.subplans[subplan_idx].canonical_bindings;
+				column_binding_set_t subplan_column_binding_set;
 				for (auto &cb : subplan_bindings) {
+					if (subplan_column_binding_set.find(cb) != subplan_column_binding_set.end()) {
+						bail = true; // Subplan contains duplicate column bindings, i.e., column bindings that
+						             // collapse onto the same column produced by the primary subplan
+						break;
+					}
+					subplan_column_binding_set.insert(cb);
 					if (max_subplan_column_binding_set.find(cb) == max_subplan_column_binding_set.end()) {
 						bail = true; // Subplan does not fully contain the the other subplans
 						break;
