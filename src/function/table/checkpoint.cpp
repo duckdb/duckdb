@@ -40,7 +40,7 @@ static unique_ptr<FunctionData> CheckpointBind(ClientContext &context, TableFunc
 		database_name = DatabaseManager::GetDefaultDatabase(context);
 	}
 	if (!db_manager.GetDatabase(context, database_name)) {
-		throw BinderException("Database \"%s\" not found", database_name);
+		throw BinderException("Database %s not found", database_name);
 	}
 	return make_uniq<CheckpointBindData>(std::move(database_name));
 }
@@ -50,7 +50,7 @@ static void TemplatedCheckpointFunction(ClientContext &context, TableFunctionInp
 	auto &bind_data = data_p.bind_data->Cast<CheckpointBindData>();
 	auto database = DatabaseManager::Get(context).GetDatabase(context, bind_data.database_name);
 	if (!database) {
-		throw BinderException("Database \"%s\" not found", bind_data.database_name);
+		throw BinderException("Database %s not found", bind_data.database_name);
 	}
 	auto &transaction_manager = TransactionManager::Get(*database);
 	transaction_manager.Checkpoint(context, FORCE);
