@@ -382,9 +382,6 @@ private:
 	void PinBlock();
 	void RebaseDecoders();
 
-	//! RAII pin for block, like std::lock_guard: construct it as a named local to keep block pinned for that
-	//! scope. Re-resolves ColumnReader::block at destruction time (rather than capturing it) since it can be reset
-	//! and reallocated while the guard is live, e.g. across pages in ApplyPendingSkips.
 	class BlockPinGuard {
 	public:
 		explicit BlockPinGuard(ColumnReader &reader) : reader(reader) {
