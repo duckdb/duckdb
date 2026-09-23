@@ -41,7 +41,7 @@ The debug SQL-export verifier is a separate testing facility. `EXPLAIN (SQL)` wo
 
 ## Fragment export
 
-The C++ exporter consumes an already planned logical tree. It does not choose an optimization stage or undo constant folding. Distributed fragment export is experimental: callers must preserve the catalog, data, settings, and transaction assumptions under which the input was planned. Exported field bindings belong to that plan; they are not stable identifiers shared between independent exports. Pre-folding export options, stable fragment identities, and aggregate rendering callbacks are not provided by this API.
+The C++ exporter consumes an already planned logical tree. It does not choose an optimization stage or undo constant folding. Distributed fragment export is experimental: callers must preserve the catalog, data, settings, and transaction assumptions under which the input was planned. Exported field bindings belong to that plan; they are not stable identifiers shared between independent exports. Pre-folding export options and stable fragment identities are not provided by this API. Scalar and aggregate functions can provide unbind callbacks to reconstruct their specialized invocations. The exporter attaches aggregate modifiers to the returned call.
 
 ## Implementation layout
 
@@ -49,7 +49,7 @@ The logical-plan exporter owns alias allocation, ancestor tracking, and named-re
 
 The expression exporter owns binding context and lambda reference scopes. Literal construction, function calls, and window expressions have separate implementations. Generic table-function invocation reconstruction lives in `table_function_sql_export.cpp`; source-specific callbacks remain with their sources.
 
-Internal state declarations live under `duckdb/planner/sql_export/`. Public entry points retain their headers directly under `duckdb/planner/`. General logical-plan verification and repeatability analysis remain separate planner facilities. Statement replacement verification lives in `src/main/client_verify.cpp`.
+Internal state declarations live beside their implementations under `src/planner/sql_export/`. Public entry points retain their headers directly under `duckdb/planner/`. General logical-plan verification and repeatability analysis remain separate planner facilities. Statement replacement verification lives in `src/main/client_verify.cpp`.
 
 C++ tests under `test/sql_export/` follow these feature boundaries; shared fixtures live in the corresponding test-helper files. SQL regression tests live under `test/sql/sql_export/`.
 

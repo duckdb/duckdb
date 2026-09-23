@@ -1,3 +1,4 @@
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
@@ -7,6 +8,14 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
+
+AggregateFunctionUnbindInput::AggregateFunctionUnbindInput(const BoundAggregateExpression &expression_p,
+                                                           vector<unique_ptr<ParsedExpression>> children_p)
+    : expression(expression_p), children(std::move(children_p)) {
+}
+
+AggregateFunctionUnbindInput::~AggregateFunctionUnbindInput() {
+}
 
 unique_ptr<BaseStatistics> AggregateFunction::PropagateInputValueStats(ClientContext &context,
                                                                        BoundAggregateExpression &expr,
@@ -85,7 +94,7 @@ bool AggregateFunctionCallbacks::operator==(const AggregateFunctionCallbacks &rh
 	       combine == rhs.combine && finalize == rhs.finalize &&
 	       init_local_state_finalize == rhs.init_local_state_finalize && cluster_update == rhs.cluster_update &&
 	       window == rhs.window && window_init == rhs.window_init && window_batch == rhs.window_batch &&
-	       bind == rhs.bind && destructor == rhs.destructor && statistics == rhs.statistics &&
+	       bind == rhs.bind && unbind == rhs.unbind && destructor == rhs.destructor && statistics == rhs.statistics &&
 	       serialize == rhs.serialize && deserialize == rhs.deserialize && direct_rewrite == rhs.direct_rewrite &&
 	       rewrite == rhs.rewrite && rewrite_policy == rhs.rewrite_policy &&
 	       rewrite_optimizer_type == rhs.rewrite_optimizer_type && rewrite_cost == rhs.rewrite_cost &&

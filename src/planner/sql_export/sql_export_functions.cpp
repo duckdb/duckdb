@@ -268,16 +268,7 @@ BoundExpressionSQLExportState::BuildAggregateCall(const BoundAggregateExpression
 		    InternalExpressionInvariant(path, expression, "Bound aggregate function identity is incomplete"));
 	}
 	auto name = RebindableFunctionName(*definition);
-	const bool rewritten_min =
-	    name && *name == QualifiedName("system", "main", "min") && function.GetName() == "arg_min";
-	const bool rewritten_max =
-	    name && *name == QualifiedName("system", "main", "max") && function.GetName() == "arg_max";
-	const bool has_collation_argument = expression.GetChildren().size() == function.GetLogicalArguments().size() + 1;
-	const bool collated_minmax =
-	    (rewritten_min || rewritten_max) && IsOptimizerFunctionQualification(function) && has_collation_argument;
-	if (collated_minmax) {
-		name = QualifiedName("system", "main", function.GetName());
-	} else if (expression.GetChildren().size() != function.GetLogicalArguments().size()) {
+	if (!definition->HasUnbindCallback() && expression.GetChildren().size() != function.GetLogicalArguments().size()) {
 		return AggregateFailure(
 		    UnsupportedFunction(path, std::move(identity), "The aggregate does not retain every SQL argument"));
 	}
@@ -289,8 +280,8 @@ BoundExpressionSQLExportState::BuildAggregateCall(const BoundAggregateExpression
 	         expression.GetAggregateType() == AggregateType::DISTINCT);
 	D_ASSERT(expression.StateExportMode() == AggregateStateExportMode::NONE ||
 	         expression.StateExportMode() == AggregateStateExportMode::STATE_EXPORT);
-	if (definition->GetProperties().GetCaptureArgumentAliases() ||
-	    definition->GetProperties().RequiresExpressionNames()) {
+	if (!definition->HasUnbindCallback() && (definition->GetProperties().GetCaptureArgumentAliases() ||
+	                                         definition->GetProperties().RequiresExpressionNames())) {
 		return AggregateFailure(UnsupportedFunction(
 		    path, std::move(identity), "The bound aggregate requires argument aliases that are not retained"));
 	}
@@ -320,36 +311,51 @@ BoundExpressionSQLExportState::BuildAggregateCall(const BoundAggregateExpression
 	if (!issues.empty()) {
 		return BoundAggregateSQLExportResult::Failure(std::move(issues));
 	}
-	auto &named_arguments = function.GetNamedArguments();
-	auto positional_count = function.GetPositionalArgumentCount();
-	if (!named_arguments.empty() && positional_count + named_arguments.size() != expression.GetChildren().size()) {
-		return AggregateFailure(
-		    UnsupportedFunction(path, std::move(identity), "The named SQL arguments are incomplete"));
-	}
-	vector<FunctionArgument> arguments;
-	for (idx_t child_index = 0; child_index < expression.GetChildren().size(); child_index++) {
-		auto argument_name = !named_arguments.empty() && child_index >= positional_count
-		                         ? named_arguments[child_index - positional_count]
-		                         : Identifier();
-		arguments.emplace_back(std::move(argument_name), std::move(children[child_index]));
+	unique_ptr<FunctionExpression> result;
+	if (definition->HasUnbindCallback()) {
+		vector<unique_ptr<ParsedExpression>> arguments;
+		for (idx_t i = 0; i < expression.GetChildren().size(); i++) {
+			arguments.push_back(std::move(children[i]));
+		}
+		AggregateFunctionUnbindInput input(expression, std::move(arguments));
+		result = definition->GetUnbindCallback()(input);
+		if (!result) {
+			return AggregateFailure(UnsupportedFunction(path, std::move(identity),
+			                                            "The aggregate cannot reconstruct its bound invocation"));
+		}
+	} else {
+		auto &named_arguments = function.GetNamedArguments();
+		auto positional_count = function.GetPositionalArgumentCount();
+		if (!named_arguments.empty() && positional_count + named_arguments.size() != expression.GetChildren().size()) {
+			return AggregateFailure(
+			    UnsupportedFunction(path, std::move(identity), "The named SQL arguments are incomplete"));
+		}
+		vector<FunctionArgument> arguments;
+		for (idx_t i = 0; i < expression.GetChildren().size(); i++) {
+			auto argument_name = !named_arguments.empty() && i >= positional_count
+			                         ? named_arguments[i - positional_count]
+			                         : Identifier();
+			arguments.emplace_back(std::move(argument_name), std::move(children[i]));
+		}
+		result = make_uniq<FunctionExpression>(*name, std::move(arguments));
 	}
 	idx_t child_index = expression.GetChildren().size();
 	unique_ptr<ParsedExpression> filter;
 	if (expression.GetFilter()) {
 		filter = std::move(children[child_index++]);
 	}
-	unique_ptr<OrderModifier> order_bys;
+	auto order_bys = make_uniq<OrderModifier>();
 	if (expression.GetOrderBys()) {
-		order_bys = make_uniq<OrderModifier>();
 		for (auto &order : expression.GetOrderBys()->orders) {
 			order_bys->orders.emplace_back(order.type, order.null_order,
 			                               SQLExportHelpers::OrderExpression(order.expression->GetReturnType(),
 			                                                                 std::move(children[child_index++])));
 		}
 	}
-	auto result = make_uniq<FunctionExpression>(*name, std::move(arguments), std::move(filter), std::move(order_bys),
-	                                            expression.IsDistinct(), false,
-	                                            expression.StateExportMode() == AggregateStateExportMode::STATE_EXPORT);
+	result->FilterMutable() = std::move(filter);
+	result->OrderByMutable() = std::move(order_bys);
+	result->DistinctMutable() = expression.IsDistinct();
+	result->ExportStateMutable() = expression.StateExportMode() == AggregateStateExportMode::STATE_EXPORT;
 	return BoundAggregateSQLExportResult::Success(std::move(result));
 }
 
