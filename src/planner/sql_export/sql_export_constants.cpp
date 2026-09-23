@@ -294,11 +294,13 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportConstant(con
 	} else {
 		result = ConstantExpression::FromValue(value.WithType(SQLCastType(return_type)));
 	}
-	if (return_type.id() != LogicalTypeId::SQLNULL &&
-	    (result->GetExpressionClass() != ExpressionClass::CAST ||
-	     !result->Cast<CastExpression>().TargetType().Equals(
-	         *TypeExpression::FromLogicalType(SQLCastType(return_type))))) {
-		result = SQLCast(return_type, std::move(result));
+	if (return_type.id() != LogicalTypeId::SQLNULL) {
+		const bool has_result_cast = result->GetExpressionClass() == ExpressionClass::CAST &&
+		                             result->Cast<CastExpression>().TargetType().Equals(
+		                                 *TypeExpression::FromLogicalType(SQLCastType(return_type)));
+		if (!has_result_cast) {
+			result = SQLCast(return_type, std::move(result));
+		}
 	}
 	return BoundExpressionSQLExportResult::Success(std::move(result));
 }

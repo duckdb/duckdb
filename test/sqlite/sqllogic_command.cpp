@@ -300,9 +300,12 @@ static unique_ptr<QueryResult> ExecuteExplainedSQLInternal(Connection &connectio
 	if (explained->HasError()) {
 		TEST_FAIL_LINE(file, line, "EXPLAIN (SQL) failed: " + explained->GetError());
 	}
-	if (explained->RowCount() != 1 || explained->GetNames() != vector<Identifier> {"explain_key", "explain_value"} ||
-	    explained->GetTypes() != vector<LogicalType> {LogicalType::VARCHAR, LogicalType::VARCHAR} ||
-	    explained->GetValue(0, 0) != Value("sql") || explained->GetValue(1, 0).IsNull()) {
+	const bool has_expected_columns =
+	    explained->GetNames() == vector<Identifier> {"explain_key", "explain_value"} &&
+	    explained->GetTypes() == vector<LogicalType> {LogicalType::VARCHAR, LogicalType::VARCHAR};
+	const bool has_sql_row = explained->RowCount() == 1 && has_expected_columns &&
+	                         explained->GetValue(0, 0) == Value("sql") && !explained->GetValue(1, 0).IsNull();
+	if (!has_sql_row) {
 		TEST_FAIL_LINE(file, line, "EXPLAIN (SQL) returned an unexpected result shape");
 	}
 	auto generated_sql = explained->GetValue(1, 0).GetValue<string>();
@@ -424,8 +427,8 @@ unique_ptr<QueryResult> Command::ExecuteQuery(ExecuteContext &context, reference
 	auto statement_count = observer->StatementCount();
 	auto records = observer->TakeRecords();
 	auto mode = Settings::Get<DebugVerifySqlExportSetting>(*connection.get().context);
-	if (mode != DebugSQLExportVerification::OFF && materialized->HasError() &&
-	    (records.empty() || !records.back().query_error)) {
+	const bool has_recorded_query_error = !records.empty() && records.back().query_error;
+	if (mode != DebugSQLExportVerification::OFF && materialized->HasError() && !has_recorded_query_error) {
 		SQLExportVerificationRecord record;
 		record.mode = mode;
 		record.statement_index = statement_count;

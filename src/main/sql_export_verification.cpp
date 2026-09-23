@@ -274,13 +274,11 @@ static bool CompatibleProperties(const StatementProperties &original, const Stat
 			return false;
 		}
 	}
-	if (!generated.bound_all_parameters || generated.parameter_count != 0 ||
-	    generated.return_type != original.return_type ||
-	    generated.requires_valid_transaction != original.requires_valid_transaction ||
-	    generated.result_eagerness != original.result_eagerness) {
-		return false;
-	}
-	return true;
+	const bool has_bound_parameters = generated.bound_all_parameters && generated.parameter_count == 0;
+	const bool has_matching_result =
+	    generated.return_type == original.return_type && generated.result_eagerness == original.result_eagerness;
+	const bool has_matching_transaction = generated.requires_valid_transaction == original.requires_valid_transaction;
+	return has_bound_parameters && has_matching_result && has_matching_transaction;
 }
 
 static SQLExportComparability ClassifyComparability(LogicalOperator &op) {
@@ -288,8 +286,10 @@ static SQLExportComparability ClassifyComparability(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
 	    repeatability == LogicalOperatorRepeatability::REPEATABLE) {
 		for (auto &condition : op.Cast<LogicalComparisonJoin>().conditions) {
-			if ((condition.IsComparison() && (condition.GetLHS().CanThrow() || condition.GetRHS().CanThrow())) ||
-			    (!condition.IsComparison() && condition.GetJoinExpression().CanThrow())) {
+			const bool can_throw = condition.IsComparison()
+			                           ? condition.GetLHS().CanThrow() || condition.GetRHS().CanThrow()
+			                           : condition.GetJoinExpression().CanThrow();
+			if (can_throw) {
 				repeatability = LogicalOperatorRepeatability::UNKNOWN;
 			}
 		}
@@ -451,9 +451,11 @@ void SQLExportVerification::RoundTrip(Planner &planner) {
 	generated_planner->plan->ResolveOperatorTypes();
 	// Optimizer hooks can register dependencies on the binder after CreatePlan copied its properties.
 	auto &final_properties = generated_planner->binder->GetStatementProperties();
-	if (!CompatibleTypes(generated_planner->plan->types, generated_planner->types) ||
-	    !CompatibleTypes(planner.types, generated_planner->types) || generated_planner->names != planner.names ||
-	    relation.fields.size() != planner.types.size() || !CompatibleProperties(planner.properties, final_properties)) {
+	const bool has_matching_types = CompatibleTypes(generated_planner->plan->types, generated_planner->types) &&
+	                                CompatibleTypes(planner.types, generated_planner->types);
+	const bool has_matching_columns =
+	    generated_planner->names == planner.names && relation.fields.size() == planner.types.size();
+	if (!has_matching_types || !has_matching_columns || !CompatibleProperties(planner.properties, final_properties)) {
 		Failure(SQLExportOutcome::OUTPUT_SCHEMA_MISMATCH, "GENERATED_SCHEMA_OR_PROPERTIES");
 		return;
 	}

@@ -69,10 +69,12 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportPivot(LogicalPivot &
 	}
 	auto &info = pivot.bound_pivot;
 	auto aggregate_count = info.aggregates.size();
-	if (aggregate_count == 0 || info.group_count > fields.GetValue().size() ||
-	    (fields.GetValue().size() - info.group_count) % aggregate_count != 0 ||
-	    info.types.size() != fields.GetValue().size() ||
-	    info.pivot_values.size() != fields.GetValue().size() - info.group_count) {
+	const bool has_valid_groups = aggregate_count > 0 && info.group_count <= fields.GetValue().size();
+	const bool has_complete_targets =
+	    has_valid_groups && (fields.GetValue().size() - info.group_count) % aggregate_count == 0;
+	const bool has_output_metadata = has_valid_groups && info.types.size() == fields.GetValue().size() &&
+	                                 info.pivot_values.size() == fields.GetValue().size() - info.group_count;
+	if (!has_complete_targets || !has_output_metadata) {
 		return PlanFailure(PlanUnsupportedFeature(path, "pivot_layout", "The PIVOT output layout is incomplete"));
 	}
 	auto target_count = (fields.GetValue().size() - info.group_count) / aggregate_count;
@@ -106,11 +108,13 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::ExportPivot(LogicalPivot &
 	for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
 		for (idx_t aggregate_idx = 0; aggregate_idx < aggregate_count; aggregate_idx++) {
 			auto output_idx = info.group_count + target_idx * aggregate_count + aggregate_idx;
-			if (info.pivot_values[target_idx * aggregate_count + aggregate_idx] !=
-			        info.pivot_values[target_idx * aggregate_count] ||
-			    !info.aggregates[aggregate_idx]->GetReturnType().EqualsIncludingCollation(
-			        fields.GetValue()[output_idx].type) ||
-			    !info.types[output_idx].EqualsIncludingCollation(fields.GetValue()[output_idx].type)) {
+			const bool has_matching_pivot_value = info.pivot_values[target_idx * aggregate_count + aggregate_idx] ==
+			                                      info.pivot_values[target_idx * aggregate_count];
+			auto &output_type = fields.GetValue()[output_idx].type;
+			const bool has_matching_types =
+			    info.aggregates[aggregate_idx]->GetReturnType().EqualsIncludingCollation(output_type) &&
+			    info.types[output_idx].EqualsIncludingCollation(output_type);
+			if (!has_matching_pivot_value || !has_matching_types) {
 				return PlanFailure(PlanUnsupportedFeature(
 				    path, "pivot_layout", "The PIVOT target blocks do not match the retained aggregate layout"));
 			}

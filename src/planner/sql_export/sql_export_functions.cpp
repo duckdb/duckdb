@@ -33,9 +33,11 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportLambda(const
                                                                            const BoundFunctionExpression &function,
                                                                            idx_t logical_argument_count,
                                                                            const LogicalPlanVerificationPath &path) {
-	if (lambda.GetExpressionType() != ExpressionType::LAMBDA || lambda.GetReturnType() != LogicalType::LAMBDA ||
-	    !lambda.LambdaExpr() || !lambda.Captures().empty() || lambda.ParameterCount() == 0 ||
-	    lambda.ParameterNames().size() != lambda.ParameterCount()) {
+	const bool has_lambda_body = lambda.GetExpressionType() == ExpressionType::LAMBDA &&
+	                             lambda.GetReturnType() == LogicalType::LAMBDA && lambda.LambdaExpr();
+	const bool has_parameter_names =
+	    lambda.ParameterCount() > 0 && lambda.ParameterNames().size() == lambda.ParameterCount();
+	if (!has_lambda_body || !lambda.Captures().empty() || !has_parameter_names) {
 		return Failure(
 		    UnsupportedFeature(path, "lambda_binding", "The bound lambda does not retain its SQL parameter binding"));
 	}
@@ -172,16 +174,20 @@ BoundExpressionSQLExportState::ExportScalarFunction(const BoundFunctionExpressio
 		return Failure(UnsupportedFunction(path, std::move(identity),
 		                                   "The scalar function does not retain its SQL lambda argument"));
 	}
-	bool rewritten_date_part = (qualified_name == QualifiedName("system", "main", "date_part") ||
-	                            qualified_name == QualifiedName("system", "main", "datepart")) &&
-	                           function.GetLogicalArguments().size() == 2 && expression.GetChildren().size() == 1 &&
-	                           function.GetName() != definition->GetName() &&
-	                           IsOptimizerFunctionQualification(function) && !function.GetName().empty();
-	const bool retained_variadic_arguments =
-	    definition->HasVarArgs() && expression.GetChildren().size() >= function.GetLogicalArguments().size();
-	if ((!lambda_index.IsValid() && !retained_variadic_arguments &&
-	     expression.GetChildren().size() != function.GetLogicalArguments().size() && !rewritten_date_part) ||
-	    (lambda_index.IsValid() && expression.GetChildren().size() < function.GetLogicalArguments().size())) {
+	const bool is_date_part = qualified_name == QualifiedName("system", "main", "date_part") ||
+	                          qualified_name == QualifiedName("system", "main", "datepart");
+	const bool has_specialized_name = function.GetName() != definition->GetName() &&
+	                                  IsOptimizerFunctionQualification(function) && !function.GetName().empty();
+	const auto logical_argument_count = function.GetLogicalArguments().size();
+	const auto child_count = expression.GetChildren().size();
+	const bool rewritten_date_part =
+	    is_date_part && logical_argument_count == 2 && child_count == 1 && has_specialized_name;
+	const bool retained_variadic_arguments = definition->HasVarArgs() && child_count >= logical_argument_count;
+	const bool has_scalar_arguments =
+	    child_count == logical_argument_count || retained_variadic_arguments || rewritten_date_part;
+	const bool has_expected_arguments =
+	    lambda_index.IsValid() ? child_count >= logical_argument_count : has_scalar_arguments;
+	if (!has_expected_arguments) {
 		return Failure(
 		    UnsupportedFunction(path, std::move(identity), "The scalar function does not retain every SQL argument"));
 	}
@@ -199,13 +205,13 @@ BoundExpressionSQLExportState::ExportScalarFunction(const BoundFunctionExpressio
 		argument_aliases_are_semantic = true;
 		first_argument_alias = 1;
 	}
-	if (definition->GetProperties().GetCaptureArgumentAliases() && !argument_aliases_are_semantic &&
-	    !captured_aliases_are_ignored && !definition->HasUnbindCallback()) {
+	const bool can_reconstruct_argument_names =
+	    argument_aliases_are_semantic || captured_aliases_are_ignored || definition->HasUnbindCallback();
+	if (definition->GetProperties().GetCaptureArgumentAliases() && !can_reconstruct_argument_names) {
 		return Failure(UnsupportedFunction(path, std::move(identity),
 		                                   "The bound scalar function does not expose its SQL argument names"));
 	}
-	if (definition->GetProperties().RequiresExpressionNames() && !definition->HasUnbindCallback() &&
-	    !argument_aliases_are_semantic && !captured_aliases_are_ignored) {
+	if (definition->GetProperties().RequiresExpressionNames() && !can_reconstruct_argument_names) {
 		return Failure(UnsupportedFunction(
 		    path, std::move(identity), "The bound scalar function requires expression names that are not retained"));
 	}
@@ -254,10 +260,13 @@ BoundExpressionSQLExportState::ExportScalarFunction(const BoundFunctionExpressio
 		result = make_uniq<FunctionExpression>(*name, std::move(children), nullptr, nullptr, false, false, false);
 	}
 	// Restore result types when binding or optimization changed argument types.
-	if (!captured_aliases_are_ignored && IsSQLRepresentableType(expression.GetReturnType()) &&
-	    !expression.GetReturnType().IsAggregateState() &&
+	const bool can_restore_result_type = !captured_aliases_are_ignored &&
+	                                     IsSQLRepresentableType(expression.GetReturnType()) &&
+	                                     !expression.GetReturnType().IsAggregateState();
+	const bool has_specialized_result_type =
 	    (definition->HasBindCallback() || definition->GetReturnType().id() == LogicalTypeId::SQLNULL) &&
-	    definition->GetReturnType() != expression.GetReturnType()) {
+	    definition->GetReturnType() != expression.GetReturnType();
+	if (can_restore_result_type && has_specialized_result_type) {
 		return RestoreResultType(expression.GetReturnType(), std::move(result), path);
 	}
 	return BoundExpressionSQLExportResult::Success(std::move(result));
@@ -280,12 +289,13 @@ BoundExpressionSQLExportState::BuildAggregateCall(const BoundAggregateExpression
 		    InternalExpressionInvariant(path, expression, "Bound aggregate function identity is incomplete"));
 	}
 	auto name = RebindableFunctionName(*definition);
+	const bool rewritten_min =
+	    name && *name == QualifiedName("system", "main", "min") && function.GetName() == "arg_min";
+	const bool rewritten_max =
+	    name && *name == QualifiedName("system", "main", "max") && function.GetName() == "arg_max";
+	const bool has_collation_argument = expression.GetChildren().size() == function.GetLogicalArguments().size() + 1;
 	const bool collated_minmax =
-	    name &&
-	    ((*name == QualifiedName("system", "main", "min") && function.GetName() == "arg_min") ||
-	     (*name == QualifiedName("system", "main", "max") && function.GetName() == "arg_max")) &&
-	    IsOptimizerFunctionQualification(function) &&
-	    expression.GetChildren().size() == function.GetLogicalArguments().size() + 1;
+	    (rewritten_min || rewritten_max) && IsOptimizerFunctionQualification(function) && has_collation_argument;
 	if (collated_minmax) {
 		name = QualifiedName("system", "main", function.GetName());
 	} else if (expression.GetChildren().size() != function.GetLogicalArguments().size()) {
@@ -314,8 +324,10 @@ BoundExpressionSQLExportState::BuildAggregateCall(const BoundAggregateExpression
 	}
 	if (expression.GetOrderBys()) {
 		for (auto &order : expression.GetOrderBys()->orders) {
-			if ((order.type != OrderType::ASCENDING && order.type != OrderType::DESCENDING) ||
-			    (order.null_order != OrderByNullType::NULLS_FIRST && order.null_order != OrderByNullType::NULLS_LAST)) {
+			const bool has_explicit_order = order.type == OrderType::ASCENDING || order.type == OrderType::DESCENDING;
+			const bool has_explicit_null_order =
+			    order.null_order == OrderByNullType::NULLS_FIRST || order.null_order == OrderByNullType::NULLS_LAST;
+			if (!has_explicit_order || !has_explicit_null_order) {
 				return AggregateFailure(
 				    InternalExpressionInvariant(path, expression, "Bound aggregate has an invalid ordering mode"));
 			}
@@ -361,9 +373,12 @@ BoundExpressionSQLExportState::ExportAggregate(const BoundAggregateExpression &e
 	auto &function = expression.Function();
 	auto &definition = function.GetDefinition();
 	unique_ptr<ParsedExpression> result = std::move(call.GetValue());
-	if (expression.StateExportMode() == AggregateStateExportMode::NONE &&
-	    IsSQLRepresentableType(expression.GetReturnType()) && !expression.GetReturnType().IsAggregateState() &&
-	    definition->HasBindCallback() && definition->GetReturnType() != expression.GetReturnType()) {
+	const bool can_restore_result_type = expression.StateExportMode() == AggregateStateExportMode::NONE &&
+	                                     IsSQLRepresentableType(expression.GetReturnType()) &&
+	                                     !expression.GetReturnType().IsAggregateState();
+	const bool has_specialized_result_type =
+	    definition->HasBindCallback() && definition->GetReturnType() != expression.GetReturnType();
+	if (can_restore_result_type && has_specialized_result_type) {
 		return RestoreResultType(expression.GetReturnType(), std::move(result), path);
 	}
 	return BoundExpressionSQLExportResult::Success(std::move(result));

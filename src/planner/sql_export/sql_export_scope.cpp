@@ -217,9 +217,12 @@ optional_ptr<const SelectNode> PlainScope(const QueryNode &query) {
 		return nullptr;
 	}
 	auto &select = query.Cast<SelectNode>();
-	if (!select.from_table || select.sample || select.from_table->sample || !select.groups.group_expressions.empty() ||
-	    !select.groups.grouping_sets.empty() || select.having || select.qualify ||
-	    select.aggregate_handling != AggregateHandling::STANDARD_HANDLING) {
+	if (!select.from_table || select.sample || select.from_table->sample) {
+		return nullptr;
+	}
+	const bool has_groups = !select.groups.group_expressions.empty() || !select.groups.grouping_sets.empty();
+	const bool has_aggregate_handling = select.aggregate_handling != AggregateHandling::STANDARD_HANDLING;
+	if (has_groups || select.having || select.qualify || has_aggregate_handling) {
 		return nullptr;
 	}
 	identifier_set_t aliases;

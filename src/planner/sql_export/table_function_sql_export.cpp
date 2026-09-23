@@ -17,8 +17,10 @@
 namespace duckdb {
 
 static string SQLFunctionCallGuard(const LogicalGet &get, bool has_input) {
-	if (!has_input && ((!get.function.HasVarArgs() && get.parameters.size() != get.function.GetArguments().size()) ||
-	                   get.parameters.size() < get.function.GetArguments().size())) {
+	const auto argument_count = get.function.GetArguments().size();
+	const bool has_expected_parameters =
+	    get.function.HasVarArgs() ? get.parameters.size() >= argument_count : get.parameters.size() == argument_count;
+	if (!has_input && !has_expected_parameters) {
 		return "positional_parameters";
 	}
 	if (has_input && !get.function.in_out_function) {
@@ -149,9 +151,11 @@ TableFunctionToSQLResult TableFunction::ToSQLFunctionCall(ClientContext &context
 		bool consumed_input = false;
 		for (idx_t i = 0; i < get.parameters.size(); i++) {
 			if (i < signature.size() && signature[i] == LogicalType::TABLE) {
-				if (!input || consumed_input || !get.projected_input.empty() ||
-				    input->column_name_alias.size() < get.input_table_types.size() ||
-				    get.input_table_names.size() != get.input_table_types.size()) {
+				const bool has_available_input = input && !consumed_input && get.projected_input.empty();
+				const bool has_input_columns = has_available_input &&
+				                               input->column_name_alias.size() >= get.input_table_types.size() &&
+				                               get.input_table_names.size() == get.input_table_types.size();
+				if (!has_input_columns) {
 					return {nullptr, "table_parameter"};
 				}
 				auto query = make_uniq<SelectNode>();

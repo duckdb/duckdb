@@ -784,9 +784,11 @@ unique_ptr<ParsedExpression> ExportAggregateFunction::StateToSQL(const LogicalTy
 	}
 	auto name = info->properties.find("function_name");
 	auto parameters = info->properties.find("parameters");
-	if (name == info->properties.end() || name->second.IsNull() || name->second.type().id() != LogicalTypeId::VARCHAR ||
-	    parameters == info->properties.end() || parameters->second.IsNull() ||
-	    parameters->second.type().id() != LogicalTypeId::LIST) {
+	const bool has_function_name =
+	    name != info->properties.end() && !name->second.IsNull() && name->second.type().id() == LogicalTypeId::VARCHAR;
+	const bool has_parameters = parameters != info->properties.end() && !parameters->second.IsNull() &&
+	                            parameters->second.type().id() == LogicalTypeId::LIST;
+	if (!has_function_name || !has_parameters) {
 		return nullptr;
 	}
 	vector<LogicalType> types;

@@ -20,8 +20,11 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 		if (exported.HasError()) {
 			auto &issue = exported.GetIssues()[0];
 			auto message = "EXPLAIN (SQL) cannot render this query: " + issue.message;
-			if (issue.construct && issue.construct->type == LogicalPlanVerificationConstructType::SOURCE_FUNCTION &&
-			    issue.construct->function && issue.construct->function->name != "logical_source") {
+			const bool is_source_function =
+			    issue.construct && issue.construct->type == LogicalPlanVerificationConstructType::SOURCE_FUNCTION;
+			const bool has_source_name =
+			    is_source_function && issue.construct->function && issue.construct->function->name != "logical_source";
+			if (has_source_name) {
 				message = StringUtil::Format("EXPLAIN (SQL) cannot render table function \"%s\".",
 				                             issue.construct->function->name);
 			}

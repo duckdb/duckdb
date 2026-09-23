@@ -178,9 +178,9 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportState::BuildRecursiveCTE(LogicalR
 			}
 			auto ordinal = expression_ordinal++;
 			auto &aggregate = expressions[ordinal].get().Cast<BoundAggregateExpression>();
-			if (aggregate.IsDistinct() || aggregate.GetFilter() ||
-			    (aggregate.GetOrderBys() && !aggregate.GetOrderBys()->orders.empty()) ||
-			    aggregate.StateExportMode() != AggregateStateExportMode::NONE) {
+			const bool has_order = aggregate.GetOrderBys() && !aggregate.GetOrderBys()->orders.empty();
+			const bool has_modifiers = aggregate.IsDistinct() || aggregate.GetFilter() || has_order;
+			if (has_modifiers || aggregate.StateExportMode() != AggregateStateExportMode::NONE) {
 				return PlanFailure(
 				    PlanUnsupportedFeature(PlanExpressionPath(path, ordinal), "recursive_payload_modifiers",
 				                           "The recursive payload clause cannot preserve these aggregate modifiers"));

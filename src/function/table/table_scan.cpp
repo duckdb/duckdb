@@ -1280,9 +1280,10 @@ static string TableScanToSQLGuard(const LogicalGet &get, bool has_input) {
 	if (data.partitions_to_scan) {
 		return "bound_scan_partitions";
 	}
+	const bool has_filters =
+	    get.table_filters.HasFilters() || get.table_filters.HasMultiColumnFilters() || get.dynamic_filters;
 	for (auto &index : get.GetColumnIds()) {
-		if (index.IsRowNumberColumn() &&
-		    (get.table_filters.HasFilters() || get.table_filters.HasMultiColumnFilters() || get.dynamic_filters)) {
+		if (index.IsRowNumberColumn() && has_filters) {
 			return "row_number_with_filters";
 		}
 		if (index.IsVirtualColumn() && !index.IsRowIdColumn() && !index.IsRowNumberColumn()) {

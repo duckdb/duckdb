@@ -60,8 +60,10 @@ static bool ChildrenAreConsistentWithArguments(const vector<unique_ptr<Expressio
 		return false;
 	}
 	for (idx_t child_index = 0; child_index < children.size(); child_index++) {
-		if (!children[child_index] || !children[child_index]->GetReturnType().IsComplete() ||
-		    (arguments[child_index].IsComplete() && children[child_index]->GetReturnType() != arguments[child_index])) {
+		if (!children[child_index] || !children[child_index]->GetReturnType().IsComplete()) {
+			return false;
+		}
+		if (arguments[child_index].IsComplete() && children[child_index]->GetReturnType() != arguments[child_index]) {
 			return false;
 		}
 	}
@@ -143,10 +145,10 @@ BoundExpressionSQLExportState::BoundExpressionSQLExportState(const BoundExpressi
 BoundExpressionSQLExportResult BoundExpressionSQLExportState::Export(const Expression &expression,
                                                                      const LogicalPlanVerificationPath &path) {
 	auto result = ExportInternal(expression, path);
-	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF ||
-	    ((expression.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT ||
-	      expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) &&
-	     expression.GetReturnType().id() != LogicalTypeId::VARCHAR)) {
+	const bool exports_own_type = expression.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT ||
+	                              expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION;
+	const bool preserves_collation = exports_own_type && expression.GetReturnType().id() != LogicalTypeId::VARCHAR;
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF || preserves_collation) {
 		return result;
 	}
 	return PreserveCollation(expression.GetReturnType(), std::move(result), path);
@@ -344,11 +346,17 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportFunction(con
 
 BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportCast(const BoundFunctionExpression &expression,
                                                                          const LogicalPlanVerificationPath &path) {
-	if (expression.GetExpressionType() != ExpressionType::OPERATOR_CAST || expression.GetChildren().size() != 1 ||
-	    !expression.GetChildren()[0] || !BoundCastExpression::HasValidBindData(expression) ||
-	    !ChildrenAreConsistentWithArguments(expression.GetChildren(), expression.Function().GetArguments()) ||
-	    expression.GetReturnType() != expression.Function().GetReturnType() ||
-	    !IsSQLValueType(expression.GetReturnType()) || !IsSQLValueType(expression.GetChildren()[0]->GetReturnType())) {
+	const bool has_expected_kind = expression.GetExpressionType() == ExpressionType::OPERATOR_CAST;
+	const bool has_expected_children = expression.GetChildren().size() == 1 && expression.GetChildren()[0];
+	const bool has_valid_binding =
+	    has_expected_kind && has_expected_children && BoundCastExpression::HasValidBindData(expression);
+	const bool has_matching_signature =
+	    has_valid_binding &&
+	    ChildrenAreConsistentWithArguments(expression.GetChildren(), expression.Function().GetArguments()) &&
+	    expression.GetReturnType() == expression.Function().GetReturnType();
+	const bool has_valid_types = has_matching_signature && IsSQLValueType(expression.GetReturnType()) &&
+	                             IsSQLValueType(expression.GetChildren()[0]->GetReturnType());
+	if (!has_valid_types) {
 		return Failure(InternalExpressionInvariant(path, expression, "Bound cast has malformed type, data, or arity"));
 	}
 	if (!IsSQLRepresentableType(expression.GetReturnType()) ||
@@ -407,13 +415,19 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportCast(const B
 BoundExpressionSQLExportResult
 BoundExpressionSQLExportState::ExportComparison(const BoundFunctionExpression &expression,
                                                 const LogicalPlanVerificationPath &path) {
-	if (!BoundComparisonExpression::IsComparison(expression.GetExpressionType()) ||
-	    expression.GetReturnType() != LogicalType::BOOLEAN || expression.GetChildren().size() != 2 ||
-	    !expression.GetChildren()[0] || !expression.GetChildren()[1] || expression.BindInfo() ||
-	    !ChildrenAreConsistentWithArguments(expression.GetChildren(), expression.Function().GetArguments()) ||
-	    expression.GetReturnType() != expression.Function().GetReturnType() ||
-	    !IsSQLValueType(expression.GetChildren()[0]->GetReturnType()) ||
-	    expression.GetChildren()[0]->GetReturnType() != expression.GetChildren()[1]->GetReturnType()) {
+	const bool has_expected_kind = BoundComparisonExpression::IsComparison(expression.GetExpressionType()) &&
+	                               expression.GetReturnType() == LogicalType::BOOLEAN;
+	const bool has_expected_children =
+	    expression.GetChildren().size() == 2 && expression.GetChildren()[0] && expression.GetChildren()[1];
+	const bool has_valid_binding = has_expected_kind && has_expected_children && !expression.BindInfo();
+	const bool has_matching_signature =
+	    has_valid_binding &&
+	    ChildrenAreConsistentWithArguments(expression.GetChildren(), expression.Function().GetArguments()) &&
+	    expression.GetReturnType() == expression.Function().GetReturnType();
+	const bool has_valid_types =
+	    has_matching_signature && IsSQLValueType(expression.GetChildren()[0]->GetReturnType()) &&
+	    expression.GetChildren()[0]->GetReturnType() == expression.GetChildren()[1]->GetReturnType();
+	if (!has_valid_types) {
 		return Failure(InternalExpressionInvariant(path, expression, "Bound comparison has malformed type or arity"));
 	}
 	vector<unique_ptr<ParsedExpression>> children;
@@ -428,15 +442,21 @@ BoundExpressionSQLExportState::ExportComparison(const BoundFunctionExpression &e
 
 BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportBetween(const BoundFunctionExpression &expression,
                                                                             const LogicalPlanVerificationPath &path) {
-	if (expression.GetExpressionType() != ExpressionType::COMPARE_BETWEEN ||
-	    expression.GetReturnType() != LogicalType::BOOLEAN || expression.GetChildren().size() != 3 ||
-	    !expression.GetChildren()[0] || !expression.GetChildren()[1] || !expression.GetChildren()[2] ||
-	    !BoundBetweenExpression::HasValidBindData(expression) ||
-	    !ChildrenAreConsistentWithArguments(expression.GetChildren(), expression.Function().GetArguments()) ||
-	    expression.GetReturnType() != expression.Function().GetReturnType() ||
-	    !IsSQLValueType(expression.GetChildren()[0]->GetReturnType()) ||
-	    expression.GetChildren()[0]->GetReturnType() != expression.GetChildren()[1]->GetReturnType() ||
-	    expression.GetChildren()[0]->GetReturnType() != expression.GetChildren()[2]->GetReturnType()) {
+	const bool has_expected_kind = expression.GetExpressionType() == ExpressionType::COMPARE_BETWEEN &&
+	                               expression.GetReturnType() == LogicalType::BOOLEAN;
+	const bool has_expected_children = expression.GetChildren().size() == 3 && expression.GetChildren()[0] &&
+	                                   expression.GetChildren()[1] && expression.GetChildren()[2];
+	const bool has_valid_binding =
+	    has_expected_kind && has_expected_children && BoundBetweenExpression::HasValidBindData(expression);
+	const bool has_matching_signature =
+	    has_valid_binding &&
+	    ChildrenAreConsistentWithArguments(expression.GetChildren(), expression.Function().GetArguments()) &&
+	    expression.GetReturnType() == expression.Function().GetReturnType();
+	const bool has_valid_types =
+	    has_matching_signature && IsSQLValueType(expression.GetChildren()[0]->GetReturnType()) &&
+	    expression.GetChildren()[0]->GetReturnType() == expression.GetChildren()[1]->GetReturnType() &&
+	    expression.GetChildren()[0]->GetReturnType() == expression.GetChildren()[2]->GetReturnType();
+	if (!has_valid_types) {
 		return Failure(
 		    InternalExpressionInvariant(path, expression, "Bound BETWEEN has malformed type, data, or arity"));
 	}
@@ -468,9 +488,9 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportBetween(cons
 BoundExpressionSQLExportResult
 BoundExpressionSQLExportState::ExportConjunction(const BoundConjunctionExpression &expression,
                                                  const LogicalPlanVerificationPath &path) {
-	if ((expression.GetExpressionType() != ExpressionType::CONJUNCTION_AND &&
-	     expression.GetExpressionType() != ExpressionType::CONJUNCTION_OR) ||
-	    expression.GetReturnType() != LogicalType::BOOLEAN || expression.GetChildren().size() < 2) {
+	const bool is_conjunction = expression.GetExpressionType() == ExpressionType::CONJUNCTION_AND ||
+	                            expression.GetExpressionType() == ExpressionType::CONJUNCTION_OR;
+	if (!is_conjunction || expression.GetReturnType() != LogicalType::BOOLEAN || expression.GetChildren().size() < 2) {
 		return Failure(InternalExpressionInvariant(path, expression, "Bound conjunction has malformed type or arity"));
 	}
 	vector<unique_ptr<ParsedExpression>> children;

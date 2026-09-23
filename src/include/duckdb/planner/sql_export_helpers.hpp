@@ -48,9 +48,9 @@ inline bool IsSQLExportType(LogicalTypeId id) {
 
 inline bool IsSQLRepresentableType(const LogicalType &type) {
 	return type.IsComplete() && !TypeVisitor::Contains(type, [](const LogicalType &child) {
-		       return !IsSQLExportType(child.id()) ||
-		              (child.id() == LogicalTypeId::TUPLE && StructType::GetChildCount(child) == 0) ||
-		              (child.id() == LogicalTypeId::ENUM && EnumType::GetSize(child) == 0);
+		       const bool empty_tuple = child.id() == LogicalTypeId::TUPLE && StructType::GetChildCount(child) == 0;
+		       const bool empty_enum = child.id() == LogicalTypeId::ENUM && EnumType::GetSize(child) == 0;
+		       return !IsSQLExportType(child.id()) || empty_tuple || empty_enum;
 	       });
 }
 

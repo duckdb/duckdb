@@ -53,13 +53,18 @@ BoundExpressionSQLExportState::ExportWindowFunction(const BoundWindowExpression 
 	optional_ptr<const Expression> sql_order;
 	if (expression.OrderBy().size() == 1) {
 		sql_order = expression.OrderBy()[0].expression.get();
-		if (sql_order && expression.SQLRangeOrderType().IsComplete() &&
-		    !sql_order->GetReturnType().EqualsIncludingCollation(expression.SQLRangeOrderType()) &&
-		    BoundCastExpression::IsCast(*sql_order)) {
+		const bool has_original_order_type = sql_order && expression.SQLRangeOrderType().IsComplete();
+		const bool order_type_changed = has_original_order_type && !sql_order->GetReturnType().EqualsIncludingCollation(
+		                                                               expression.SQLRangeOrderType());
+		if (order_type_changed && BoundCastExpression::IsCast(*sql_order)) {
 			auto &cast = sql_order->Cast<BoundFunctionExpression>();
-			if (BoundCastExpression::HasValidBindData(cast) && !BoundCastExpression::IsTryCast(cast) &&
-			    cast.GetChildren().size() == 1 && cast.GetChildren()[0] &&
-			    cast.GetChildren()[0]->GetReturnType().EqualsIncludingCollation(expression.SQLRangeOrderType())) {
+			const bool has_regular_cast =
+			    BoundCastExpression::HasValidBindData(cast) && !BoundCastExpression::IsTryCast(cast);
+			const bool has_cast_child = cast.GetChildren().size() == 1 && cast.GetChildren()[0];
+			const bool restores_order_type =
+			    has_cast_child &&
+			    cast.GetChildren()[0]->GetReturnType().EqualsIncludingCollation(expression.SQLRangeOrderType());
+			if (has_regular_cast && restores_order_type) {
 				sql_order = cast.GetChildren()[0].get();
 			}
 		}
@@ -69,8 +74,11 @@ BoundExpressionSQLExportState::ExportWindowFunction(const BoundWindowExpression 
 		if (!is_range_offset(boundary)) {
 			return endpoint.get();
 		}
-		if (endpoint && sql_order && literal && literal->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
-		    Expression::Equals(*endpoint, *expression.OrderBy()[0].expression)) {
+		const bool has_literal_offset = literal && literal->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT;
+		const bool has_retained_endpoint = has_literal_offset && endpoint && sql_order;
+		const bool endpoint_is_order =
+		    has_retained_endpoint && Expression::Equals(*endpoint, *expression.OrderBy()[0].expression);
+		if (endpoint_is_order) {
 			auto &value = literal->Cast<BoundConstantExpression>().GetValue();
 			if (!value.IsNull() && value.type().IsNumeric() && value == Value::Numeric(value.type(), 0)) {
 				return literal.get();
@@ -114,8 +122,8 @@ BoundExpressionSQLExportState::ExportWindowFunction(const BoundWindowExpression 
 		    offset.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 			auto &original = literal->Cast<BoundConstantExpression>().GetValue();
 			auto &current = offset.Cast<BoundConstantExpression>().GetValue();
-			if (!original.IsNull() && original.type().IsNumeric() && current.type().IsNumeric() &&
-			    original == current) {
+			const bool has_numeric_offsets = original.type().IsNumeric() && current.type().IsNumeric();
+			if (!original.IsNull() && has_numeric_offsets && original == current) {
 				return literal.get();
 			}
 		}

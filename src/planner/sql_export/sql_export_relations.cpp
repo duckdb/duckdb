@@ -34,9 +34,12 @@ static LogicalType SemanticExpressionType(const Expression &expression,
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF && context.resolve_binding) {
 		auto &column = expression.Cast<BoundColumnRefExpression>();
 		auto resolved = context.resolve_binding(column.Binding());
-		if (resolved && (resolved->type == column.GetReturnType() ||
-		                 (resolved->optimizer_type && *resolved->optimizer_type == column.GetReturnType()))) {
-			return resolved->type;
+		if (resolved) {
+			const bool matches_optimizer_type =
+			    resolved->optimizer_type && *resolved->optimizer_type == column.GetReturnType();
+			if (resolved->type == column.GetReturnType() || matches_optimizer_type) {
+				return resolved->type;
+			}
 		}
 	}
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {

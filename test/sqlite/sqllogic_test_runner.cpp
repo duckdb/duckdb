@@ -825,8 +825,10 @@ void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &s
 	}
 
 	ExecuteScript(parser, script);
-	if (test_config.RequireSQLExportRoundTrip() && !test_skipped_requirement &&
-	    (sql_export_eligible + explain_sql_generated == 0 || sql_export_generated + explain_sql_generated == 0)) {
+	const bool requires_sql_export = test_config.RequireSQLExportRoundTrip() && !test_skipped_requirement;
+	const bool has_sql_export_coverage =
+	    sql_export_eligible + explain_sql_generated > 0 && sql_export_generated + explain_sql_generated > 0;
+	if (requires_sql_export && !has_sql_export_coverage) {
 		TEST_FAIL("SQL export configuration requires positive eligible and generated statement counts");
 	}
 

@@ -24,7 +24,8 @@ string LogicalPlanSQLExportState::MarkConditionUnsupportedReason(const LogicalCo
 		all_equal &= condition.GetComparisonType() == ExpressionType::COMPARE_EQUAL;
 		all_null_safe &= condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 	}
-	if (!comparisons_only || (join.conditions.size() != 1 && !all_equal && !all_null_safe)) {
+	const bool has_supported_conjunction = join.conditions.size() == 1 || all_equal || all_null_safe;
+	if (!comparisons_only || !has_supported_conjunction) {
 		return "The MARK condition requires conjunction execution semantics";
 	}
 	for (auto &condition : join.conditions) {
