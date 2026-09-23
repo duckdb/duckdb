@@ -237,15 +237,20 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 	//===--------------------------------------------------------------------===//
 	// START GENERATED COLLAPSIBLE RULES
 	//===--------------------------------------------------------------------===//
+	AddCollapsibleRule("Expression");
+	AddCollapsibleRule("ColumnDefaultExpr");
 	AddCollapsibleRule("LambdaArrowExpression");
 	AddCollapsibleRule("LogicalOrExpression");
+	AddCollapsibleRule("ColDefOrExpr");
 	AddCollapsibleRule("LogicalAndExpression");
+	AddCollapsibleRule("ColDefAndExpr");
 	AddCollapsibleRule("LogicalNotExpression");
 	AddCollapsibleRule("IsExpression");
 	AddCollapsibleRule("IsDistinctFromExpression");
 	AddCollapsibleRule("ComparisonExpression");
 	AddCollapsibleRule("BetweenInLikeExpression");
 	AddCollapsibleRule("OtherOperatorExpression");
+	AddCollapsibleRule("InfixOtherOperatorExpression");
 	AddCollapsibleRule("BitwiseExpression");
 	AddCollapsibleRule("AdditiveExpression");
 	AddCollapsibleRule("MultiplicativeExpression");
@@ -256,6 +261,7 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 	AddCollapsibleRule("BaseExpression");
 	AddCollapsibleRule("SelectSetOpChain");
 	AddCollapsibleRule("IntersectChain");
+	AddCollapsibleRule("TableRef");
 	//===--------------------------------------------------------------------===//
 	// END GENERATED COLLAPSIBLE RULES
 	//===--------------------------------------------------------------------===//

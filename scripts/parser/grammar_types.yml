@@ -1811,15 +1811,20 @@ matcher_rule_overrides:
 # returns its operand unchanged when the rest of the rule matched nothing. Take a rule out of this list if that
 # stops being true.
 collapsible_rules:
+  - Expression
+  - ColumnDefaultExpr
   - LambdaArrowExpression
   - LogicalOrExpression
+  - ColDefOrExpr
   - LogicalAndExpression
+  - ColDefAndExpr
   - LogicalNotExpression
   - IsExpression
   - IsDistinctFromExpression
   - ComparisonExpression
   - BetweenInLikeExpression
   - OtherOperatorExpression
+  - InfixOtherOperatorExpression
   - BitwiseExpression
   - AdditiveExpression
   - MultiplicativeExpression
@@ -1830,6 +1835,7 @@ collapsible_rules:
   - BaseExpression
   - SelectSetOpChain
   - IntersectChain
+  - TableRef
 
 packrat_memoized_rules:
   - Expression
