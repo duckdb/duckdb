@@ -650,6 +650,9 @@ TEST_CASE("Table function defaults survive serialization", "[serialization][func
 		planner.CreatePlan(std::move(parser.statements[0]));
 		auto &get = FindGet(*planner.plan);
 		REQUIRE(Value::NotDistinctFrom(get.named_parameters.at("opt"), test_case.value));
+		// the call records only the options it passed, which is all a plan stores
+		auto passed = StringUtil::Contains(test_case.sql, "opt :=");
+		REQUIRE(get.function.GetNamedArguments().size() == (passed ? 1 : 0));
 		if (test_case.drop_option) {
 			get.named_parameters.clear();
 		}
