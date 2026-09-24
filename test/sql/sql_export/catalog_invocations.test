@@ -3,9 +3,6 @@
 # group: [sql_export]
 
 statement ok
-SET debug_verify_statement='explain_sql_strict';
-
-statement ok
 ATTACH ':memory:' AS attached;
 
 statement ok
@@ -49,17 +46,17 @@ SELECT * FROM temp.main.scan_rows;
 99
 
 # Compare complete build-dependent rows with native calls from the same database.
+foreach mode none explain_sql_strict
+
 statement ok
-SET debug_verify_statement='none';
+SET debug_verify_statement='{mode}';
 
 query TTT nosort version_all
 SELECT * FROM pragma_version();
 
-statement ok
-SET debug_verify_statement='explain_sql_strict';
+endloop
 
-query TTT nosort version_all
-SELECT * FROM pragma_version();
+reset label version_all
 
 foreach mode none explain_sql_strict
 
@@ -84,6 +81,3 @@ SELECT platform FROM pragma_platform();
 endloop
 
 reset label platform
-
-statement ok
-SET debug_verify_statement='explain_sql_strict';

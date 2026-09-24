@@ -3,40 +3,36 @@
 # group: [sql_export]
 
 statement ok
-SET debug_verify_statement='explain_sql_strict';
-
-statement ok
 SET threads=1;
 
 statement ok
 SET default_collation='nocase';
 
+foreach mode none explain_sql_strict
+
 statement ok
-SET debug_verify_statement='none';
+SET debug_verify_statement='{mode}';
 
 query TTT nosort settings_values
 SELECT name,value,typed_value FROM system.main.duckdb_settings() WHERE name IN ('threads','default_collation') ORDER BY name;
 
-statement ok
-SET debug_verify_statement='explain_sql_strict';
-
-query TTT nosort settings_values
-SELECT name,value,typed_value FROM system.main.duckdb_settings() WHERE name IN ('threads','default_collation') ORDER BY name;
+endloop
 
 statement ok
 SET default_collation='';
 
+foreach mode none explain_sql_strict
+
 statement ok
-SET debug_verify_statement='none';
+SET debug_verify_statement='{mode}';
 
 query IT nosort named_type_values
 SELECT bigint,varchar FROM test_all_types(use_large_enum := true,use_large_bignum := true) ORDER BY bigint NULLS LAST;
 
-statement ok
-SET debug_verify_statement='explain_sql_strict';
+endloop
 
-query IT nosort named_type_values
-SELECT bigint,varchar FROM test_all_types(use_large_enum := true,use_large_bignum := true) ORDER BY bigint NULLS LAST;
+statement ok
+RESET debug_verify_statement;
 
 query TT
 EXPLAIN (SQL) SELECT bigint,varchar FROM test_all_types(use_large_enum := true,use_large_bignum := true) ORDER BY bigint NULLS LAST;

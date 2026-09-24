@@ -2,32 +2,22 @@
 # description: Source invocation, common subplans and consumed file predicates
 # group: [sql_export]
 
-statement ok
-SET debug_verify_statement='explain_sql_strict';
-
 require parquet
 
 foreach serializer false true
 
+foreach mode none explain_sql_strict
+
 statement ok
 SET debug_verify_serializer={serializer};
+
+statement ok
+SET debug_verify_statement='{mode}';
 
 query I
 SELECT a.s+b.s FROM (SELECT sum(x) s FROM range(10) t(x)) a, (SELECT sum(x) s FROM range(10) u(x)) b;
 ----
 90
-
-endloop
-
-query TT
-EXPLAIN SELECT a.s+b.s FROM (SELECT sum(x) s FROM range(10) t(x)) a, (SELECT sum(x) s FROM range(10) u(x)) b;
-----
-physical_plan	<REGEX>:.*CTE.*
-
-foreach serializer false true
-
-statement ok
-SET debug_verify_serializer={serializer};
 
 query I
 SELECT a.s+b.s FROM (SELECT sum(x) s FROM range(10) t(x)) a, (SELECT sum(x) s FROM range(11) u(x)) b;
@@ -35,6 +25,19 @@ SELECT a.s+b.s FROM (SELECT sum(x) s FROM range(10) t(x)) a, (SELECT sum(x) s FR
 100
 
 endloop
+
+endloop
+
+statement ok
+SET debug_verify_serializer=false;
+
+statement ok
+RESET debug_verify_statement;
+
+query TT
+EXPLAIN SELECT a.s+b.s FROM (SELECT sum(x) s FROM range(10) t(x)) a, (SELECT sum(x) s FROM range(10) u(x)) b;
+----
+physical_plan	<REGEX>:.*CTE.*
 
 statement ok
 CREATE TABLE csv_source(i INTEGER,s VARCHAR);

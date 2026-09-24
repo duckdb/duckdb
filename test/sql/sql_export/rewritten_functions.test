@@ -3,9 +3,6 @@
 # group: [sql_export]
 
 statement ok
-SET debug_verify_statement='explain_sql_strict';
-
-statement ok
 CREATE TABLE bounded_values(i INTEGER);
 
 statement ok
@@ -69,6 +66,9 @@ endloop
 
 reset label summary_4
 
+statement ok
+RESET debug_verify_statement;
+
 query T rowsort
 SELECT to_aggregate_state(12::HUGEINT, 'sum', ['INTEGER']);
 ----
@@ -122,8 +122,13 @@ SELECT finalize(min(s) EXPORT_STATE) FROM (VALUES ('1'::BIT), ('01'::BIT), (NULL
 # Function-owned unbinding must retain aggregate modifiers.
 foreach serializer false true
 
+foreach mode none explain_sql_strict
+
 statement ok
 SET debug_verify_serializer={serializer};
+
+statement ok
+SET debug_verify_statement='{mode}';
 
 query TT
 SELECT min(DISTINCT s COLLATE nocase ORDER BY s COLLATE nocase) FILTER (WHERE keep),
@@ -131,5 +136,7 @@ SELECT min(DISTINCT s COLLATE nocase ORDER BY s COLLATE nocase) FILTER (WHERE ke
 FROM (VALUES ('z', false), ('a', true), ('B', true), (NULL, true), ('a', true)) t(s, keep);
 ----
 a	z
+
+endloop
 
 endloop
