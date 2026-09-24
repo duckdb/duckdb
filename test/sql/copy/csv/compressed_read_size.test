@@ -4,6 +4,11 @@
 
 require parquet
 
+require no_extension_autoloading "FIXME: Autoloading on zstd compression (parquet) not yet there"
+
+# the logging setting does not survive restarts
+require noforcestorage
+
 statement ok
 COPY (SELECT i, md5(i::VARCHAR) AS h FROM range(200000) t(i)) TO '{TEST_DIR}/read_size.csv.gz' (COMPRESSION gzip)
 
