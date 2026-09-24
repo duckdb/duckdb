@@ -932,7 +932,10 @@ SimpleParameter <- TypeFuncName Type?
 ScalarMacroDefinition <- Expression
 TableMacroDefinition <- 'TABLE' SelectStatementInternal
 
-CreateSchemaStmt <- 'SCHEMA' IfNotExists? QualifiedName WithList?
+CreateSchemaStmt <- 'SCHEMA' IfNotExists? QualifiedName WithOptionList?
+
+WithOptionList <- 'WITH' RelOptionList
+
 CreateSecretStmt <- 'SECRET' IfNotExists? SecretName? SecretStorageSpecifier? GenericCopyOptionList
 
 SecretStorageSpecifier <- 'IN' Identifier

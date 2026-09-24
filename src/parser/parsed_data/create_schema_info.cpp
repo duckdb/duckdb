@@ -12,10 +12,8 @@ const Identifier &CreateSchemaInfo::SchemaName() const {
 }
 
 const Identifier &CreateSchemaInfo::SchemaCatalog() const {
-	static const Identifier EMPTY;
-	auto &path = GetQualifiedName().Path();
 	// the catalog is the leading component once the path carries [catalog, schema, <empty name>]
-	return path.size() >= 3 ? path[0] : EMPTY;
+	return GetQualifiedName().Catalog();
 }
 
 vector<Identifier> CreateSchemaInfo::ParentSchemas() const {
@@ -56,10 +54,14 @@ string CreateSchemaInfo::ToString() const {
 	string temp = temporary ? "TEMPORARY " : "";
 	if (!options.empty()) {
 		qualified += " WITH (";
+		idx_t i = 0;
 		for (auto &entry : options) {
-			qualified += "'" + entry.first + "'=" + entry.second->ToString() + ",";
+			if (i > 0) {
+				qualified += ", ";
+			}
+			qualified += SQLString(entry.first) + "=" + entry.second->ToString();
+			i++;
 		}
-		qualified.pop_back();
 		qualified += ")";
 	}
 

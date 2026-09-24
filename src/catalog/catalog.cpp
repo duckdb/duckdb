@@ -122,6 +122,10 @@ Catalog &Catalog::GetCatalog(ClientContext &context, const Identifier &catalog_n
 // Schema
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo &info) {
+	auto supports_create_schema = SupportsCreateSchema(info);
+	if (supports_create_schema.HasError()) {
+		supports_create_schema.Throw();
+	}
 	return CreateSchema(GetCatalogTransaction(context), info);
 }
 

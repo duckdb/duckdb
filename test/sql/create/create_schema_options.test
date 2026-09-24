@@ -72,3 +72,12 @@ CREATE SCHEMA s1;
 
 statement ok
 CREATE TABLE s1.t(i INTEGER);
+
+# option keys are escaped when the statement is stringified
+statement ok
+SET debug_verify_statement='reparse_statement'
+
+statement error
+CREATE SCHEMA s2 WITH ('a''b'=1);
+----
+<REGEX>:.*WITH clause is not supported for schemas in a duckdb catalog.*

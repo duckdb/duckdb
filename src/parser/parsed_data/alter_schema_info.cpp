@@ -28,9 +28,7 @@ const Identifier &AlterSchemaInfo::SchemaName() const {
 }
 
 const Identifier &AlterSchemaInfo::SchemaCatalog() const {
-	static const Identifier EMPTY;
-	auto &path = GetQualifiedName().Path();
-	return path.size() >= 3 ? path[0] : EMPTY;
+	return GetQualifiedName().Catalog();
 }
 
 vector<Identifier> AlterSchemaInfo::SchemaPath() const {

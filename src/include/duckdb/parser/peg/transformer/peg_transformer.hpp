@@ -1483,6 +1483,9 @@ public:
 	static void InitializeCreateSchemaStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeCreateSchemaStmtTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
+	static void InitializeWithOptionListTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeWithOptionListTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
 	static void InitializeCreateSecretStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeCreateSecretStmtTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
@@ -4426,7 +4429,10 @@ public:
 	static unique_ptr<CreateStatement>
 	TransformCreateSchemaStmt(PEGTransformer &transformer, const optional<bool> &if_not_exists,
 	                          const QualifiedName &qualified_name,
-	                          optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list);
+	                          optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_option_list);
+	static case_insensitive_map_t<unique_ptr<ParsedExpression>>
+	TransformWithOptionList(PEGTransformer &transformer,
+	                        case_insensitive_map_t<unique_ptr<ParsedExpression>> rel_option_list);
 	static unique_ptr<CreateStatement>
 	TransformCreateSecretStmt(PEGTransformer &transformer, const optional<bool> &if_not_exists,
 	                          const optional<Identifier> &secret_name,
