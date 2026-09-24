@@ -1,5 +1,4 @@
 #include "duckdb/common/radix.hpp"
-#include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
 #include "duckdb/common/types/variant_comparison.hpp"
@@ -99,7 +98,6 @@ bool IsPrimitiveEqual(const VariantNode &haystack, const VariantNode &needle, Va
 	return false;
 }
 
-
 //! Determines if the needle is an equivalent subset of the subtree of the haystack at the given node (inner walk).
 bool IsEquivalentSubset(vector<ContainsFrame> &stack) {
 	D_ASSERT(stack.size() == 1);
@@ -128,8 +126,8 @@ bool IsEquivalentSubset(vector<ContainsFrame> &stack) {
 				}
 				frame.state = ContainsState::OBJECT_NEXT;
 			} else {
-				frame.result = IsPrimitiveEqual(frame.haystack, frame.needle, haystack_type, needle_type,
-				                                haystack_category);
+				frame.result =
+				    IsPrimitiveEqual(frame.haystack, frame.needle, haystack_type, needle_type, haystack_category);
 				frame.state = ContainsState::RETURN;
 			}
 			break;
