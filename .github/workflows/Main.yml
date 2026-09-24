@@ -725,6 +725,7 @@ jobs:
         echo "::endgroup::"
 
     - name: Deploy
+      if: ${{ matrix.config.publish_source || matrix.config.publish_static || matrix.config.is_canonical_build }}
       shell: bash
       env:
         AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
