@@ -409,11 +409,13 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	return std::move(expr->BindInfoMutable());
 }
 
+//! BindMinMax replaces a collated min/max with arg_min/arg_max over the collation key, so the bound call has one
+//! more argument than the definition and must be rendered under the replacement's own name
 static unique_ptr<FunctionExpression> MinMaxUnbind(AggregateFunctionUnbindInput &input) {
 	auto &function = input.expression.Function();
 	auto name = function.GetDefinition()->GetQualifiedName();
 	if (input.children.size() == function.GetLogicalArguments().size() + 1) {
-		name = QualifiedName("system", "main", function.GetName());
+		name = function.GetQualifiedName();
 	} else if (input.children.size() != function.GetLogicalArguments().size()) {
 		return nullptr;
 	}

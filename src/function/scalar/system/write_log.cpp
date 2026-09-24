@@ -149,6 +149,8 @@ void WriteLogFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	}
 }
 
+//! write_log captures its named arguments as child aliases rather than as named parameters, so they are reattached
+//! as names when the call is rendered
 static unique_ptr<ParsedExpression> WriteLogUnbind(FunctionUnbindInput &input) {
 	vector<FunctionArgument> arguments;
 	for (idx_t i = 0; i < input.children.size(); i++) {

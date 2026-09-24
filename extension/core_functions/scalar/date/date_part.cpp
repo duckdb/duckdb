@@ -2717,11 +2717,12 @@ ScalarFunctionSet JulianDayFun::GetFunctions() {
 	return operator_set;
 }
 
+//! Binding date_part with a constant part replaces it with the unary part function (year, month, ...), so the bound
+//! call has one argument and must be rendered under the replacement's own name
 static unique_ptr<ParsedExpression> DatePartUnbind(FunctionUnbindInput &input) {
 	auto &function = input.expression.Function();
 	if (input.children.size() == 1) {
-		return make_uniq<FunctionExpression>(QualifiedName("system", "main", function.GetName()),
-		                                     std::move(input.children));
+		return make_uniq<FunctionExpression>(function.GetQualifiedName(), std::move(input.children));
 	}
 	if (input.children.size() != 2) {
 		return nullptr;
