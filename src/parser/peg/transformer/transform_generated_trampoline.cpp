@@ -16308,6 +16308,7 @@ PEGTransformerFactory::FinalizeOtherOperatorExpressionTrampoline(PEGTransformer 
 void PEGTransformerFactory::InitializeInfixOtherOperatorExpressionTrampoline(PEGTransformer &transformer,
                                                                              GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.SetForwarding(!list_pr.Child<OptionalParseResult>(1).HasResult());
 	auto &repeat_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	idx_t dynamic_child_count = 0;
 	if (repeat_opt.HasResult()) {

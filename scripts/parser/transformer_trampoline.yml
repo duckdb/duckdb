@@ -16,6 +16,7 @@ forward_single_child:
   - ComparisonExpression
   - BetweenInLikeExpression
   - OtherOperatorExpression
+  - InfixOtherOperatorExpression
   - BitwiseExpression
   - AdditiveExpression
   - MultiplicativeExpression
