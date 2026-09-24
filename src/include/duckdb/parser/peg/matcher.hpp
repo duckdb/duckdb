@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/arena_containers/arena_ptr.hpp"
+#include "duckdb/common/arena_containers/arena_vector.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
@@ -298,7 +299,12 @@ public:
 	bool HasName() const {
 		return !name.empty();
 	}
-	string GetName() const;
+	//! The stored name, which lives as long as the grammar and can therefore be referenced by a parse result
+	const string &GetName() const {
+		return name;
+	}
+	//! The name to print for this matcher, which for an unnamed one renders the grammar it matches
+	string GetPrintName() const;
 	optional_idx GetPackratId() const {
 		return packrat_id;
 	}
@@ -370,10 +376,42 @@ private:
 
 class ParseResultAllocator {
 public:
-	optional_ptr<ParseResult> Allocate(unique_ptr<ParseResult> parse_result);
+	ParseResultAllocator();
+	~ParseResultAllocator();
+
+	template <class RESULT, class... ARGS>
+	optional_ptr<ParseResult> Make(ARGS &&... args) {
+		static_assert(std::is_base_of<ParseResult, RESULT>::value, "Expected a parse result");
+		auto result = arena.Make<RESULT>(std::forward<ARGS>(args)...);
+		if (ParseResultNeedsDestructor<RESULT>::value) {
+			// held by an owner before growing the list, so the result is still destroyed if the growth throws
+			arena_ptr<ParseResult> owned(result);
+			pending_destructors.push_back(std::move(owned));
+		}
+		return optional_ptr<ParseResult>(result);
+	}
+
+	//! Copy a collected set of children into the arena, where it lives as long as the results it belongs to
+	unsafe_array_ptr<reference<ParseResult>> MakeChildren(const arena_vector<reference<ParseResult>> &children) {
+		auto count = children.size();
+		arena.AlignNext();
+		// an empty set still takes an address from the arena, which costs nothing and keeps the span non-null
+		auto target =
+		    reinterpret_cast<reference<ParseResult> *>(arena.Allocate(count * sizeof(reference<ParseResult>)));
+		if (count > 0) {
+			memcpy(static_cast<void *>(target), static_cast<const void *>(children.data()),
+			       count * sizeof(reference<ParseResult>));
+		}
+		return unsafe_array_ptr<reference<ParseResult>>(target, count);
+	}
 
 private:
-	vector<unique_ptr<ParseResult>> parse_results;
+	ArenaAllocator arena;
+	//! Dropping the arena reclaims the memory of every result at once but calls no destructors, so a result that
+	//! owns something has to be destroyed before that happens. An `arena_ptr` destroys what it points at without
+	//! freeing it, which is all these are here for. Only the node types that `ParseResultNeedsDestructor` selects end
+	//! up in the list, and nothing ever reads it.
+	arena_vector<arena_ptr<ParseResult>> pending_destructors;
 };
 
 template <class PROCESS, class... ARGS>
@@ -382,15 +420,23 @@ arena_ptr<MatchProcess> MatchState::Make(ARGS &&... args) {
 	return arena_ptr<MatchProcess>(context.process_allocator.Make<PROCESS>(std::forward<ARGS>(args)...));
 }
 
+void ParseResult::SetNameFrom(const CompiledGrammarRule &rule_p) {
+	name = &rule_p.name;
+}
+
+void ParseResult::SetNameFrom(const Matcher &matcher_p) {
+	name = &matcher_p.GetName();
+}
+
 template <class RESULT, class... ARGS>
 MatcherResult MatchState::AllocateParseResult(ARGS &&... args) {
 	if (!BuildParseResult()) {
 		return MatcherResult::Success();
 	}
-	auto result = context.allocator.Allocate(make_uniq<RESULT>(std::forward<ARGS>(args)...));
+	auto result = context.allocator.Make<RESULT>(std::forward<ARGS>(args)...);
 	if (rule) {
 		result->SetRule(*rule);
-		result->name = rule->name;
+		result->SetNameFrom(*rule);
 	}
 	return MatcherResult::Success(result);
 }

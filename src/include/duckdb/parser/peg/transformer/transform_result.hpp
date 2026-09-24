@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/arena_containers/arena_ptr.hpp"
 
 #include <cstring>
 

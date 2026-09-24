@@ -37,7 +37,7 @@ public:
 			if (!result.empty()) {
 				result += " ";
 			}
-			result += matcher.get().GetName();
+			result += matcher.get().GetPrintName();
 		}
 		return "(" + result + ")";
 	}

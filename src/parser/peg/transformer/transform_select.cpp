@@ -74,7 +74,7 @@ void PEGTransformerFactory::InitializeSelectStatementInternalTrampoline(PEGTrans
 	PushSelectStatementInternalRemainder(process);
 }
 
-unique_ptr<TransformResultValue>
+arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeSelectStatementInternalTrampoline(PEGTransformer &transformer,
                                                                  GeneratedTransformProcess &process) {
 	if (process.manual_state == 0) {
@@ -119,7 +119,7 @@ PEGTransformerFactory::FinalizeSelectStatementInternalTrampoline(PEGTransformer 
 			}
 		}
 	}
-	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(select_statement));
+	return transformer.MakeResult<unique_ptr<SelectStatement>>(std::move(select_statement));
 }
 
 unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectSetOpChain(
@@ -274,7 +274,7 @@ void PEGTransformerFactory::InitializeSimpleSelectTrampoline(PEGTransformer &tra
 	PushSimpleSelectRemainder(process);
 }
 
-unique_ptr<TransformResultValue>
+arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeSimpleSelectTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
 	if (process.manual_state == 0) {
 		process.TakeResult<vector<unique_ptr<ParsedExpression>>>(4);
@@ -308,7 +308,7 @@ PEGTransformerFactory::FinalizeSimpleSelectTrampoline(PEGTransformer &transforme
 	auto select_statement = make_uniq<SelectStatement>();
 	select_statement->node = std::move(select_node);
 	transformer.window_clauses.clear();
-	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(select_statement));
+	return transformer.MakeResult<unique_ptr<SelectStatement>>(std::move(select_statement));
 }
 
 FunctionArgument PEGTransformerFactory::TransformNamedFunctionArgument(PEGTransformer &transformer,
@@ -394,13 +394,13 @@ void PEGTransformerFactory::InitializeTableRefTrampoline(PEGTransformer &transfo
 	process.PushChild({list_pr.GetChild(0)}, 0);
 }
 
-unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTableRefTrampoline(PEGTransformer &transformer,
-                                                                                   GeneratedTransformProcess &process) {
+arena_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTableRefTrampoline(PEGTransformer &transformer,
+                                                                                  GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	auto inner_table_ref = process.TakeResult<unique_ptr<TableRef>>(0);
 	auto &join_or_pivot_opt = list_pr.Child<OptionalParseResult>(1);
 	if (!join_or_pivot_opt.HasResult()) {
-		return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(inner_table_ref));
+		return transformer.MakeResult<unique_ptr<TableRef>>(std::move(inner_table_ref));
 	}
 	auto &repeat_join_or_pivot = join_or_pivot_opt.GetResult().Cast<RepeatParseResult>();
 	auto repeat_children = repeat_join_or_pivot.GetChildren();
@@ -419,7 +419,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTableRefTrampoli
 			                              EnumUtil::ToString(transform_join_or_pivot->type));
 		}
 	}
-	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(inner_table_ref));
+	return transformer.MakeResult<unique_ptr<TableRef>>(std::move(inner_table_ref));
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformTableUnpivotClauseBody(PEGTransformer &transformer,
@@ -1038,7 +1038,7 @@ void PEGTransformerFactory::InitializeWithClauseTrampoline(PEGTransformer &trans
 	}
 }
 
-unique_ptr<TransformResultValue>
+arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeWithClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	bool is_recursive = list_pr.Child<OptionalParseResult>(1).HasResult();
@@ -1061,7 +1061,7 @@ PEGTransformerFactory::FinalizeWithClauseTrampoline(PEGTransformer &transformer,
 		}
 		result.map.insert(with_entry.first, std::move(with_entry.second));
 	}
-	return make_uniq<TypedTransformResult<CommonTableExpressionMap>>(std::move(result));
+	return transformer.MakeResult<CommonTableExpressionMap>(std::move(result));
 }
 
 pair<Identifier, unique_ptr<CommonTableExpressionInfo>>
@@ -1138,7 +1138,7 @@ void PEGTransformerFactory::InitializeWindowDefinitionTrampoline(PEGTransformer 
 	process.PushChild({list_pr.GetChild(2)}, 0);
 }
 
-unique_ptr<TransformResultValue>
+arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeWindowDefinitionTrampoline(PEGTransformer &transformer,
                                                           GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
@@ -1147,7 +1147,7 @@ PEGTransformerFactory::FinalizeWindowDefinitionTrampoline(PEGTransformer &transf
 	auto window_name = list_pr.Child<IdentifierParseResult>(0).identifier;
 	RegisterWindowClause(transformer, window_name, *window_function);
 	unique_ptr<ParsedExpression> result = std::move(window_function);
-	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
 }
 
 unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleEntryFunction(
