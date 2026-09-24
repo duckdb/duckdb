@@ -58,11 +58,11 @@ FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) = 2;
 2024-01-01	100
 2024-01-01	100
 
-# 5. Case with no partitions (should not optimize per current logic)
+# 5. Case with no partitions should produce a cross join
 query II
 EXPLAIN FROM services QUALIFY count(*) OVER() = 1;
 ----
-physical_plan	<REGEX>:.*WINDOW.*
+physical_plan	<REGEX>:.*CROSS_PRODUCT.*
 
 # 6. Case with ORDER BY (should not optimize)
 query II

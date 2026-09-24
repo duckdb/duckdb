@@ -3,6 +3,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -156,9 +157,6 @@ bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
 	default:
 		return false;
 	}
-	if (w_expr.Partitions().empty()) {
-		return false;
-	}
 	if (w_expr.WindowExclude() != WindowExcludeMode::NO_OTHER) {
 		return false;
 	}
@@ -273,18 +271,23 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 			throw InternalException("LogicalAggregate types size mismatch");
 		}
 
-		// Inner Join on the partition keys
-		auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
-		for (size_t i = 0; i < partitions.size(); ++i) {
-			auto left_expr = partitions[i]->Copy();
-			auto right_expr = make_uniq<BoundColumnRefExpression>(partitions[i]->GetReturnType(),
-			                                                      ColumnBinding(group_index, ProjectionIndex(i)));
-			join->conditions.push_back(
-			    JoinCondition(std::move(left_expr), std::move(right_expr), ExpressionType::COMPARE_NOT_DISTINCT_FROM));
+		// Inner Join on the partition keys, or cross join against the aggregate
+		unique_ptr<LogicalOperator> join;
+		if (partitions.empty()) {
+			join = LogicalCrossProduct::Create(std::move(original_child), std::move(agg_op));
+		} else {
+			auto cjoin = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+			for (size_t i = 0; i < partitions.size(); ++i) {
+				auto left_expr = partitions[i]->Copy();
+				auto right_expr = make_uniq<BoundColumnRefExpression>(partitions[i]->GetReturnType(),
+				                                                      ColumnBinding(group_index, ProjectionIndex(i)));
+				cjoin->conditions.push_back(JoinCondition(std::move(left_expr), std::move(right_expr),
+				                                          ExpressionType::COMPARE_NOT_DISTINCT_FROM));
+			}
+			join = std::move(cjoin);
+			join->children.push_back(std::move(original_child));
+			join->children.push_back(std::move(agg_op));
 		}
-
-		join->children.push_back(std::move(original_child));
-		join->children.push_back(std::move(agg_op));
 		join->ResolveOperatorTypes();
 
 		// Replace aggregate bindings
@@ -296,7 +299,7 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 			replacer.replacement_bindings.emplace_back(old_binding, new_binding);
 		}
 
-		return std::move(join);
+		return join;
 	} else if (!op->children.empty()) {
 		for (auto &child : op->children) {
 			child = OptimizeInternal(std::move(child), replacer);
