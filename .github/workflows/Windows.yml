@@ -151,6 +151,12 @@ jobs:
         path: duckdb-static-libs-windows-amd64.tar.gz
         archive: false
 
+    - uses: actions/upload-artifact@v7
+      with:
+        name: release-core-extensions-windows-amd64
+        path: repository
+        if-no-files-found: error
+
  win-release-32:
     name: Windows (32 Bit)
     needs:
@@ -284,6 +290,12 @@ jobs:
          path: duckdb-static-libs-windows-arm64.tar.gz
          archive: false
 
+     - uses: actions/upload-artifact@v7
+       with:
+         name: release-core-extensions-windows-arm64
+         path: repository
+         if-no-files-found: error
+
  mingw:
      name: MinGW (64 Bit)
      needs:
@@ -381,3 +393,9 @@ jobs:
          with:
            path: duckdb-static-libs-windows-mingw.tar.gz
            archive: false
+
+       - uses: actions/upload-artifact@v7
+         with:
+           name: release-core-extensions-windows-mingw
+           path: build/release/repository
+           if-no-files-found: error

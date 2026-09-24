@@ -794,6 +794,13 @@ jobs:
         path: duckdb-static-libs-${{ matrix.config.artifact_suffix }}.tar.gz
         archive: false
 
+    - uses: actions/upload-artifact@v7
+      if: ${{ matrix.config.publish_static }}
+      with:
+        name: release-core-extensions-${{ matrix.config.artifact_suffix }}
+        path: build/release/repository
+        if-no-files-found: error
+
     - name: ARM64 release tests
       if: ${{ matrix.config.run_arm_tests && !fromJson(needs.prepare.outputs.skip_tests) }}
       shell: bash
@@ -998,6 +1005,12 @@ jobs:
       with:
         path: duckdb-static-libs-${{ matrix.config.artifact_suffix }}.tar.gz
         archive: false
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: release-core-extensions-${{ matrix.config.artifact_suffix }}
+        path: build/release/repository
+        if-no-files-found: error
 
     - name: Release tests
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
