@@ -29,7 +29,6 @@
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
 
 namespace duckdb {
-namespace bound_expression_sql_export {
 
 static inline bool IsExpressionRootPath(const LogicalPlanVerificationPath &path) {
 	if (!path.IsValid()) {
@@ -70,40 +69,45 @@ static inline bool ChildrenAreConsistentWithArguments(const vector<unique_ptr<Ex
 	return true;
 }
 
-LogicalPlanVerificationIssue InternalInvariant(optional<LogicalPlanVerificationPath> path, string message,
-                                               optional<LogicalPlanVerificationConstructIdentity> construct) {
+LogicalPlanVerificationIssue
+BoundExpressionSQLExportState::InternalInvariant(optional<LogicalPlanVerificationPath> path, string message,
+                                                 optional<LogicalPlanVerificationConstructIdentity> construct) {
 	return SQLExportHelpers::MakeIssue(LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT,
 	                                   LogicalPlanVerificationPhase::EXPRESSION_EXPORT, std::move(path),
 	                                   std::move(construct), std::move(message));
 }
 
-LogicalPlanVerificationIssue InternalExpressionInvariant(const LogicalPlanVerificationPath &path,
-                                                         const Expression &expression, string message) {
-	return InternalInvariant(path, std::move(message),
-	                         LogicalPlanVerificationConstructIdentity::Expression(expression.GetExpressionClass()));
+LogicalPlanVerificationIssue
+BoundExpressionSQLExportState::InternalExpressionInvariant(const LogicalPlanVerificationPath &path,
+                                                           const Expression &expression, string message) {
+	return BoundExpressionSQLExportState::InternalInvariant(
+	    path, std::move(message),
+	    LogicalPlanVerificationConstructIdentity::Expression(expression.GetExpressionClass()));
 }
 
-LogicalPlanVerificationIssue UnsupportedFeature(const LogicalPlanVerificationPath &path, string feature,
-                                                string message) {
+LogicalPlanVerificationIssue BoundExpressionSQLExportState::UnsupportedFeature(const LogicalPlanVerificationPath &path,
+                                                                               string feature, string message) {
 	return SQLExportHelpers::MakeIssue(
 	    LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE, LogicalPlanVerificationPhase::EXPRESSION_EXPORT,
 	    path, LogicalPlanVerificationConstructIdentity::ExportFeature(std::move(feature)), std::move(message));
 }
 
-LogicalPlanVerificationIssue UnsupportedFunction(const LogicalPlanVerificationPath &path,
-                                                 LogicalPlanVerificationFunctionIdentity identity, string message) {
+LogicalPlanVerificationIssue
+BoundExpressionSQLExportState::UnsupportedFunction(const LogicalPlanVerificationPath &path,
+                                                   LogicalPlanVerificationFunctionIdentity identity, string message) {
 	return SQLExportHelpers::MakeIssue(
 	    LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION, LogicalPlanVerificationPhase::EXPRESSION_EXPORT, path,
 	    LogicalPlanVerificationConstructIdentity::Function(std::move(identity)), std::move(message));
 }
 
-bool HasNestedCollation(const LogicalType &type) {
+bool BoundExpressionSQLExportState::HasNestedCollation(const LogicalType &type) {
 	return type.id() != LogicalTypeId::VARCHAR && TypeVisitor::Contains(type, [](const LogicalType &child) {
 		       return child.id() == LogicalTypeId::VARCHAR && !StringType::GetCollation(child).empty();
 	       });
 }
 
-BoundExpressionSQLExportResult PreserveCollation(const LogicalType &type, BoundExpressionSQLExportResult result,
+BoundExpressionSQLExportResult
+BoundExpressionSQLExportState::PreserveCollation(const LogicalType &type, BoundExpressionSQLExportResult result,
                                                  const LogicalPlanVerificationPath &path) {
 	if (result.HasError()) {
 		return result;
@@ -113,9 +117,9 @@ BoundExpressionSQLExportResult PreserveCollation(const LogicalType &type, BoundE
 		if (!collation.empty()) {
 			result.GetValue() = make_uniq<CollateExpression>(std::move(collation), std::move(result.GetValue()));
 		}
-	} else if (HasNestedCollation(type)) {
-		auto issue = UnsupportedFeature(path, "nested_result_collation",
-		                                "Nested result collations require a typed SQL representation");
+	} else if (BoundExpressionSQLExportState::HasNestedCollation(type)) {
+		auto issue = BoundExpressionSQLExportState::UnsupportedFeature(
+		    path, "nested_result_collation", "Nested result collations require a typed SQL representation");
 		issue.facts.emplace_back("logical_type", Value(type.ToString()));
 		issue.facts.emplace_back("varchar_collations", Value(SQLExportHelpers::TypeCollationSignature(type)));
 		return BoundExpressionSQLExportResult::Failure({std::move(issue)});
@@ -123,13 +127,14 @@ BoundExpressionSQLExportResult PreserveCollation(const LogicalType &type, BoundE
 	return result;
 }
 
-LogicalType SQLCastType(const LogicalType &type) {
+LogicalType BoundExpressionSQLExportState::SQLCastType(const LogicalType &type) {
 	// Scalar collations are applied by COLLATE, outside the cast's type expression.
 	return type.id() == LogicalTypeId::VARCHAR && !type.HasAlias() ? LogicalType::VARCHAR : type;
 }
 
-unique_ptr<ParsedExpression> SQLCast(const LogicalType &type, unique_ptr<ParsedExpression> child, bool try_cast) {
-	return make_uniq<CastExpression>(SQLCastType(type), std::move(child), try_cast);
+unique_ptr<ParsedExpression> BoundExpressionSQLExportState::SQLCast(const LogicalType &type,
+                                                                    unique_ptr<ParsedExpression> child, bool try_cast) {
+	return make_uniq<CastExpression>(BoundExpressionSQLExportState::SQLCastType(type), std::move(child), try_cast);
 }
 
 BoundExpressionSQLExportState::BoundExpressionSQLExportState(const BoundExpressionSQLExportContext &context_p)
@@ -145,7 +150,7 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::Export(const Expre
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF || preserves_collation) {
 		return result;
 	}
-	return PreserveCollation(expression.GetReturnType(), std::move(result), path);
+	return BoundExpressionSQLExportState::PreserveCollation(expression.GetReturnType(), std::move(result), path);
 }
 
 BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportInternal(const Expression &expression,
@@ -199,14 +204,14 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportInternal(con
 	case ExpressionClass::BETWEEN:
 	case ExpressionClass::LAMBDA_REF:
 	case ExpressionClass::TYPE:
-		return BoundExpressionSQLExportResult::Failure(
-		    {InternalExpressionInvariant(path, expression, "Expression export requires a final bound class")});
+		return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::InternalExpressionInvariant(
+		    path, expression, "Expression export requires a final bound class")});
 	case ExpressionClass::INVALID:
-		return BoundExpressionSQLExportResult::Failure(
-		    {InternalInvariant(path, "Expression export received an invalid expression class")});
+		return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::InternalInvariant(
+		    path, "Expression export received an invalid expression class")});
 	}
-	return BoundExpressionSQLExportResult::Failure(
-	    {InternalInvariant(path, "Expression export received an unknown expression class")});
+	return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::InternalInvariant(
+	    path, "Expression export received an unknown expression class")});
 }
 
 BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportUnnest(const BoundUnnestExpression &expression,
@@ -218,7 +223,7 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportUnnest(const
 	}
 	vector<unique_ptr<ParsedExpression>> arguments;
 	arguments.push_back(std::move(child.GetValue()));
-	return PreserveCollation(
+	return BoundExpressionSQLExportState::PreserveCollation(
 	    expression.GetReturnType(),
 	    BoundExpressionSQLExportResult::Success(make_uniq<FunctionExpression>("unnest", std::move(arguments))), path);
 }
@@ -242,13 +247,13 @@ BoundExpressionSQLExportState::ExportColumnRef(const BoundColumnRefExpression &e
 		return BoundExpressionSQLExportResult::Failure(
 		    {InvalidBinding(path, binding, "Bound column reference has an incomplete binding")});
 	}
-	if (!IsSQLValueType(expression.GetReturnType())) {
-		return BoundExpressionSQLExportResult::Failure(
-		    {InternalExpressionInvariant(path, expression, "Bound column reference has an incomplete type")});
+	if (!SQLExportHelpers::IsSQLValueType(expression.GetReturnType())) {
+		return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::InternalExpressionInvariant(
+		    path, expression, "Bound column reference has an incomplete type")});
 	}
 	if (expression.Depth() != 0) {
-		auto issue = UnsupportedFeature(path, "correlated_column_reference",
-		                                "Correlated column references require an owning query export context");
+		auto issue = BoundExpressionSQLExportState::UnsupportedFeature(
+		    path, "correlated_column_reference", "Correlated column references require an owning query export context");
 		issue.facts.emplace_back("depth", Value::UBIGINT(expression.Depth()));
 		return BoundExpressionSQLExportResult::Failure({std::move(issue)});
 	}
@@ -266,14 +271,14 @@ BoundExpressionSQLExportState::ExportColumnRef(const BoundColumnRefExpression &e
 		    {InvalidBinding(path, binding, "The resolved SQL column name is empty")});
 	}
 	for (auto &name : resolved->names) {
-		if (!IsValidIdentifier(name)) {
+		if (!SQLExportHelpers::IsValidIdentifier(name)) {
 			return BoundExpressionSQLExportResult::Failure(
 			    {InvalidBinding(path, binding, "The resolved SQL column name contains an invalid identifier")});
 		}
 	}
-	if (!IsSQLValueType(resolved->type)) {
-		return BoundExpressionSQLExportResult::Failure(
-		    {InternalExpressionInvariant(path, expression, "The resolved SQL column type is incomplete")});
+	if (!SQLExportHelpers::IsSQLValueType(resolved->type)) {
+		return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::InternalExpressionInvariant(
+		    path, expression, "The resolved SQL column type is incomplete")});
 	}
 	auto optimizer_type_match = resolved->optimizer_type && *resolved->optimizer_type == expression.GetReturnType();
 	if (resolved->type != expression.GetReturnType() && !optimizer_type_match) {
@@ -292,8 +297,9 @@ BoundExpressionSQLExportState::ExportColumnRef(const BoundColumnRefExpression &e
 	}
 	if (!expression.GetReturnType().EqualsIncludingCollation(resolved->type)) {
 		if (expression.GetReturnType().id() != LogicalTypeId::VARCHAR) {
-			auto issue = UnsupportedFeature(path, "nested_result_collation",
-			                                "Changing nested input collations requires a typed SQL representation");
+			auto issue = BoundExpressionSQLExportState::UnsupportedFeature(
+			    path, "nested_result_collation",
+			    "Changing nested input collations requires a typed SQL representation");
 			issue.facts.emplace_back("logical_type", Value(expression.GetReturnType().ToString()));
 			issue.facts.emplace_back("input_logical_type", Value(resolved->type.ToString()));
 			issue.facts.emplace_back("input_varchar_collations",
@@ -303,10 +309,10 @@ BoundExpressionSQLExportState::ExportColumnRef(const BoundColumnRefExpression &e
 			return BoundExpressionSQLExportResult::Failure({std::move(issue)});
 		}
 		if (StringType::GetCollation(expression.GetReturnType()).empty()) {
-			return BoundExpressionSQLExportResult::Failure({UnsupportedFeature(
+			return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
 			    path, "column_collation_reset", "Clearing an input collation requires a SQL representation")});
 		}
-		return PreserveCollation(expression.GetReturnType(), std::move(result), path);
+		return BoundExpressionSQLExportState::PreserveCollation(expression.GetReturnType(), std::move(result), path);
 	}
 	return result;
 }
@@ -343,8 +349,8 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportFunction(con
 	case ExpressionType::COMPARE_BETWEEN:
 		return ExportBetween(expression, path);
 	default:
-		return BoundExpressionSQLExportResult::Failure(
-		    {InternalExpressionInvariant(path, expression, "Bound function has an invalid expression type")});
+		return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::InternalExpressionInvariant(
+		    path, expression, "Bound function has an invalid expression type")});
 	}
 }
 
@@ -355,16 +361,16 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportCast(const B
 	D_ASSERT(BoundCastExpression::HasValidBindData(expression));
 	D_ASSERT(ChildrenAreConsistentWithArguments(expression.GetChildren(), expression.Function().GetArguments()));
 	D_ASSERT(expression.GetReturnType() == expression.Function().GetReturnType());
-	if (!IsSQLRepresentableType(expression.GetReturnType()) ||
-	    !IsSQLRepresentableType(expression.GetChildren()[0]->GetReturnType())) {
-		return BoundExpressionSQLExportResult::Failure(
-		    {UnsupportedFeature(path, "cast_type", "The cast type has no SQL type representation")});
+	if (!SQLExportHelpers::IsSQLRepresentableType(expression.GetReturnType()) ||
+	    !SQLExportHelpers::IsSQLRepresentableType(expression.GetChildren()[0]->GetReturnType())) {
+		return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
+		    path, "cast_type", "The cast type has no SQL type representation")});
 	}
 	if (context.discard_optimizer_metadata && CMUtils::GetExpressionType(expression) == CMExpressionType::CAST) {
 		if (!BoundCastExpression::IsDefaultCast(expression)) {
-			return BoundExpressionSQLExportResult::Failure(
-			    {UnsupportedFeature(path, "compressed_materialization_cast",
-			                        "The compressed materialization projection contains a non-default cast")});
+			return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
+			    path, "compressed_materialization_cast",
+			    "The compressed materialization projection contains a non-default cast")});
 		}
 		return ExportChild(*expression.GetChildren()[0], path, 0);
 	}
@@ -372,9 +378,9 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportCast(const B
 		if (!context.client_context ||
 		    CastFunctionSet::Get(*context.client_context)
 		        .CanOverrideDefaultCast(expression.GetChildren()[0]->GetReturnType(), expression.GetReturnType())) {
-			return BoundExpressionSQLExportResult::Failure(
-			    {UnsupportedFeature(path, "default_cast_binding",
-			                        "A default-only bound cast cannot be reconstructed through this SQL binding")});
+			return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
+			    path, "default_cast_binding",
+			    "A default-only bound cast cannot be reconstructed through this SQL binding")});
 		}
 	}
 	auto child = ExportChild(*expression.GetChildren()[0], path, 0);
@@ -388,22 +394,23 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportCast(const B
 		    CastFunctionSet::Get(*context.client_context)
 		        .CanOverrideDefaultCast(source_type, expression.GetReturnType()) ||
 		    CastFunctionSet::Get(*context.client_context).CanOverrideDefaultCast(source_type, storage_type)) {
-			return BoundExpressionSQLExportResult::Failure(
-			    {UnsupportedFeature(path, "aggregate_state_try_cast",
-			                        "Aggregate state TRY_CAST or custom casts require a SQL representation")});
+			return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
+			    path, "aggregate_state_try_cast",
+			    "Aggregate state TRY_CAST or custom casts require a SQL representation")});
 		}
-		auto result = ExportAggregateFunction::StateToSQL(expression.GetReturnType(),
-		                                                  SQLCast(storage_type, std::move(child.GetValue())));
+		auto result = ExportAggregateFunction::StateToSQL(
+		    expression.GetReturnType(),
+		    BoundExpressionSQLExportState::SQLCast(storage_type, std::move(child.GetValue())));
 		if (!result) {
-			return BoundExpressionSQLExportResult::Failure({UnsupportedFeature(
+			return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
 			    path, "aggregate_state_parameters", "Aggregate state SQL parameters are not representable")});
 		}
 		return BoundExpressionSQLExportResult::Success(std::move(result));
 	}
-	if (HasNestedCollation(expression.GetReturnType())) {
+	if (BoundExpressionSQLExportState::HasNestedCollation(expression.GetReturnType())) {
 		if (BoundCastExpression::IsTryCast(expression) ||
 		    expression.GetReturnType() == expression.GetChildren()[0]->GetReturnType()) {
-			return BoundExpressionSQLExportResult::Failure({UnsupportedFeature(
+			return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
 			    path, "nested_result_collation", "This cast cannot preserve nested collations through SQL")});
 		}
 		return CastToConstructedType(expression.GetReturnType(), std::move(child.GetValue()), path);
@@ -411,8 +418,8 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportCast(const B
 	if (RequiresConstantConstructor(expression.GetReturnType()) && !BoundCastExpression::IsTryCast(expression)) {
 		return CastToConstructedType(expression.GetReturnType(), std::move(child.GetValue()), path);
 	}
-	return BoundExpressionSQLExportResult::Success(
-	    SQLCast(expression.GetReturnType(), std::move(child.GetValue()), BoundCastExpression::IsTryCast(expression)));
+	return BoundExpressionSQLExportResult::Success(BoundExpressionSQLExportState::SQLCast(
+	    expression.GetReturnType(), std::move(child.GetValue()), BoundCastExpression::IsTryCast(expression)));
 }
 
 BoundExpressionSQLExportResult
@@ -459,7 +466,7 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportBetween(cons
 		    make_uniq<BetweenExpression>(std::move(children[0]), std::move(children[1]), std::move(children[2])));
 	}
 	if (expression.GetChildren()[0]->IsVolatile()) {
-		return BoundExpressionSQLExportResult::Failure({UnsupportedFeature(
+		return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
 		    path, "exclusive_between_input_evaluation",
 		    "An exclusive BETWEEN cannot duplicate a volatile input while preserving evaluation semantics")});
 	}
@@ -544,8 +551,8 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportOperator(con
 		D_ASSERT(expression.GetChildren().size() == 1 && expression.GetChildren()[0] &&
 		         expression.GetReturnType().IsComplete());
 		if (expression.GetChildren()[0]->IsVolatile()) {
-			return BoundExpressionSQLExportResult::Failure(
-			    {UnsupportedFeature(path, "try_volatile_child", "TRY cannot be rebound around a volatile expression")});
+			return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
+			    path, "try_volatile_child", "TRY cannot be rebound around a volatile expression")});
 		}
 		expected_type = expression.GetReturnType();
 		break;
@@ -557,11 +564,11 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportOperator(con
 	case ExpressionType::STRUCT_EXTRACT:
 	case ExpressionType::ARRAY_CONSTRUCTOR:
 	case ExpressionType::ARROW:
-		return BoundExpressionSQLExportResult::Failure(
-		    {UnsupportedFeature(path, "bound_operator", "The bound operator has no admitted parsed SQL AST form")});
+		return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
+		    path, "bound_operator", "The bound operator has no admitted parsed SQL AST form")});
 	default:
-		return BoundExpressionSQLExportResult::Failure(
-		    {InternalExpressionInvariant(path, expression, "Bound operator has an invalid expression type")});
+		return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::InternalExpressionInvariant(
+		    path, expression, "Bound operator has an invalid expression type")});
 	}
 	vector<unique_ptr<ParsedExpression>> children;
 	vector<LogicalPlanVerificationIssue> issues;
@@ -576,7 +583,7 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportOperator(con
 BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportChild(const Expression &expression,
                                                                           const LogicalPlanVerificationPath &path,
                                                                           idx_t child_index) {
-	return Export(expression, ChildPath(path, child_index));
+	return Export(expression, SQLExportHelpers::ChildPath(path, child_index));
 }
 
 void BoundExpressionSQLExportState::ExportChildren(const vector<unique_ptr<Expression>> &source,
@@ -597,7 +604,7 @@ void BoundExpressionSQLExportState::ExportChildren(const vector<ChildExpression>
                                                    vector<LogicalPlanVerificationIssue> &issues) {
 	result.resize(source.size());
 	for (idx_t child_index = 0; child_index < source.size(); child_index++) {
-		auto child_path = ChildPath(path, child_index);
+		auto child_path = SQLExportHelpers::ChildPath(path, child_index);
 		auto &input = source[child_index];
 		D_ASSERT(input.expression);
 		D_ASSERT(!input.expected_type || input.expression->GetReturnType() == *input.expected_type);
@@ -612,8 +619,6 @@ void BoundExpressionSQLExportState::ExportChildren(const vector<ChildExpression>
 	}
 }
 
-} // namespace bound_expression_sql_export
-
 LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
 BoundExpressionSQLExporter::Export(const Expression &expression, const BoundExpressionSQLExportContext &context) {
 	LogicalPlanVerificationPath path;
@@ -624,8 +629,8 @@ BoundExpressionSQLExporter::Export(const Expression &expression, const BoundExpr
 LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
 BoundExpressionSQLExporter::ExportAtPath(const Expression &expression, const BoundExpressionSQLExportContext &context,
                                          const LogicalPlanVerificationPath &path) {
-	D_ASSERT(bound_expression_sql_export::IsExpressionRootPath(path));
-	bound_expression_sql_export::BoundExpressionSQLExportState state(context);
+	D_ASSERT(IsExpressionRootPath(path));
+	BoundExpressionSQLExportState state(context);
 	return state.Export(expression, path);
 }
 
@@ -633,8 +638,8 @@ LogicalPlanVerificationResult<unique_ptr<FunctionExpression>>
 BoundExpressionSQLExporter::ExportAggregateCallAtPath(const BoundAggregateExpression &expression,
                                                       const BoundExpressionSQLExportContext &context,
                                                       const LogicalPlanVerificationPath &path) {
-	D_ASSERT(bound_expression_sql_export::IsExpressionRootPath(path));
-	bound_expression_sql_export::BoundExpressionSQLExportState state(context);
+	D_ASSERT(IsExpressionRootPath(path));
+	BoundExpressionSQLExportState state(context);
 	return state.ExportAggregateCall(expression, path);
 }
 
@@ -642,8 +647,8 @@ LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
 BoundExpressionSQLExporter::ExportWindowAtPath(const BoundWindowExpression &expression,
                                                const BoundExpressionSQLExportContext &context,
                                                const LogicalPlanVerificationPath &path) {
-	D_ASSERT(bound_expression_sql_export::IsExpressionRootPath(path));
-	bound_expression_sql_export::BoundExpressionSQLExportState state(context);
+	D_ASSERT(IsExpressionRootPath(path));
+	BoundExpressionSQLExportState state(context);
 	return state.ExportWindow(expression, path);
 }
 
@@ -651,8 +656,8 @@ LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
 BoundExpressionSQLExporter::ExportUnnestAtPath(const BoundUnnestExpression &expression,
                                                const BoundExpressionSQLExportContext &context,
                                                const LogicalPlanVerificationPath &path) {
-	D_ASSERT(bound_expression_sql_export::IsExpressionRootPath(path));
-	bound_expression_sql_export::BoundExpressionSQLExportState state(context);
+	D_ASSERT(IsExpressionRootPath(path));
+	BoundExpressionSQLExportState state(context);
 	return state.ExportUnnest(expression, path);
 }
 

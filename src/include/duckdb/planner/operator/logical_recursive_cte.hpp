@@ -18,8 +18,8 @@ class LogicalRecursiveCTE : public LogicalCTE {
 	LogicalRecursiveCTE();
 
 public:
-	LogicalPlanVerificationResult<LogicalPlanSQLExportRelation> ToSQL(LogicalPlanSQLExportContext &context,
-	                                                                  const LogicalPlanVerificationPath &path) override;
+	LogicalPlanSQLExportResult ToSQL(LogicalPlanSQLExportContext &context,
+	                                 const LogicalPlanVerificationPath &path) override;
 
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_RECURSIVE_CTE;
 
@@ -49,7 +49,7 @@ public:
 	string GetName() const override;
 
 private:
-	friend class logical_plan_sql_export::LogicalPlanSQLExportContext;
+	friend class LogicalPlanSQLExportContext;
 	LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
 	ExportSQLDefinition(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path,
 	                    const Identifier &name);

@@ -27,77 +27,69 @@ class BoundReferenceExpression;
 class BoundUnnestExpression;
 class BoundWindowExpression;
 
-namespace bound_expression_sql_export {
-
 using BoundExpressionSQLExportResult = LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>;
-
 using BoundAggregateSQLExportResult = LogicalPlanVerificationResult<unique_ptr<FunctionExpression>>;
-
-using SQLExportHelpers::ChildPath;
-
-using SQLExportHelpers::IsSQLRepresentableType;
-
-using SQLExportHelpers::IsSQLValueType;
-
-using SQLExportHelpers::IsValidIdentifier;
-
-LogicalPlanVerificationIssue InternalInvariant(optional<LogicalPlanVerificationPath> path, string message,
-                                               optional<LogicalPlanVerificationConstructIdentity> construct = {});
-
-LogicalPlanVerificationIssue InternalExpressionInvariant(const LogicalPlanVerificationPath &path,
-                                                         const Expression &expression, string message);
-
-LogicalPlanVerificationIssue UnsupportedFeature(const LogicalPlanVerificationPath &path, string feature,
-                                                string message);
-
-LogicalPlanVerificationIssue UnsupportedFunction(const LogicalPlanVerificationPath &path,
-                                                 LogicalPlanVerificationFunctionIdentity identity, string message);
-
-bool HasNestedCollation(const LogicalType &type);
-
-BoundExpressionSQLExportResult PreserveCollation(const LogicalType &type, BoundExpressionSQLExportResult result,
-                                                 const LogicalPlanVerificationPath &path);
-
-template <class FUNCTION>
-static LogicalPlanVerificationFunctionIdentity DefinitionFunctionIdentity(const FUNCTION &definition,
-                                                                          const vector<LogicalType> &arguments,
-                                                                          const LogicalType &return_type) {
-	LogicalPlanVerificationFunctionIdentity identity;
-	identity.catalog = definition.GetCatalogName().GetIdentifierName();
-	identity.schema = definition.GetSchemaName().GetIdentifierName();
-	identity.name = definition.GetName().GetIdentifierName();
-	identity.arguments = arguments;
-	identity.return_type = return_type;
-	return identity;
-}
-
-template <class FUNCTION>
-static optional<QualifiedName> RebindableFunctionName(const FUNCTION &definition) {
-	auto name = definition.GetQualifiedName();
-	if (name.Catalog().empty()) {
-		name = name.WithCatalog(Identifier::SystemCatalog());
-	}
-	if (name.Schema().empty()) {
-		name = QualifiedName(name.Catalog(), Identifier::DefaultSchema(), name.Name());
-	}
-	if (name.Path().empty()) {
-		return {};
-	}
-	for (auto &component : name.Path()) {
-		if (component.empty()) {
-			return {};
-		}
-	}
-	return name;
-}
-
-LogicalType SQLCastType(const LogicalType &type);
-
-unique_ptr<ParsedExpression> SQLCast(const LogicalType &type, unique_ptr<ParsedExpression> child,
-                                     bool try_cast = false);
 
 class BoundExpressionSQLExportState {
 public:
+	static LogicalPlanVerificationIssue
+	InternalInvariant(optional<LogicalPlanVerificationPath> path, string message,
+	                  optional<LogicalPlanVerificationConstructIdentity> construct = {});
+
+	static LogicalPlanVerificationIssue InternalExpressionInvariant(const LogicalPlanVerificationPath &path,
+	                                                                const Expression &expression, string message);
+
+	static LogicalPlanVerificationIssue UnsupportedFeature(const LogicalPlanVerificationPath &path, string feature,
+	                                                       string message);
+
+	static LogicalPlanVerificationIssue UnsupportedFunction(const LogicalPlanVerificationPath &path,
+	                                                        LogicalPlanVerificationFunctionIdentity identity,
+	                                                        string message);
+
+	static bool HasNestedCollation(const LogicalType &type);
+
+	static BoundExpressionSQLExportResult PreserveCollation(const LogicalType &type,
+	                                                        BoundExpressionSQLExportResult result,
+	                                                        const LogicalPlanVerificationPath &path);
+
+	template <class FUNCTION>
+	static LogicalPlanVerificationFunctionIdentity DefinitionFunctionIdentity(const FUNCTION &definition,
+	                                                                          const vector<LogicalType> &arguments,
+	                                                                          const LogicalType &return_type) {
+		LogicalPlanVerificationFunctionIdentity identity;
+		identity.catalog = definition.GetCatalogName().GetIdentifierName();
+		identity.schema = definition.GetSchemaName().GetIdentifierName();
+		identity.name = definition.GetName().GetIdentifierName();
+		identity.arguments = arguments;
+		identity.return_type = return_type;
+		return identity;
+	}
+
+	template <class FUNCTION>
+	static optional<QualifiedName> RebindableFunctionName(const FUNCTION &definition) {
+		auto name = definition.GetQualifiedName();
+		if (name.Catalog().empty()) {
+			name = name.WithCatalog(Identifier::SystemCatalog());
+		}
+		if (name.Schema().empty()) {
+			name = QualifiedName(name.Catalog(), Identifier::DefaultSchema(), name.Name());
+		}
+		if (name.Path().empty()) {
+			return {};
+		}
+		for (auto &component : name.Path()) {
+			if (component.empty()) {
+				return {};
+			}
+		}
+		return name;
+	}
+
+	static LogicalType SQLCastType(const LogicalType &type);
+
+	static unique_ptr<ParsedExpression> SQLCast(const LogicalType &type, unique_ptr<ParsedExpression> child,
+	                                            bool try_cast = false);
+
 	explicit BoundExpressionSQLExportState(const BoundExpressionSQLExportContext &context_p);
 	BoundExpressionSQLExportResult Export(const Expression &expression, const LogicalPlanVerificationPath &path);
 	BoundExpressionSQLExportResult ExportWindow(const BoundWindowExpression &expression,
@@ -176,5 +168,4 @@ private:
 	vector<vector<unique_ptr<ParsedExpression>>> lambda_reference_scopes;
 };
 
-} // namespace bound_expression_sql_export
 } // namespace duckdb

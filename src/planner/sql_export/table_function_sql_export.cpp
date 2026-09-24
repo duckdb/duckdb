@@ -176,9 +176,10 @@ static unique_ptr<ParsedExpression> TableFunctionColumn(const LogicalGet &get, c
 	return std::move(column);
 }
 
-logical_plan_sql_export::SQLSourceQueryResult
-logical_plan_sql_export::ReconstructSQLSource(ClientContext &context, const LogicalGet &get, unique_ptr<TableRef> input,
-                                              const Identifier &relation_alias, bool source_ordinality) {
+SQLSourceQueryResult LogicalPlanSQLExportHelpers::ReconstructSQLSource(ClientContext &context, const LogicalGet &get,
+                                                                       unique_ptr<TableRef> input,
+                                                                       const Identifier &relation_alias,
+                                                                       bool source_ordinality) {
 	if (!get.scan_partition_indices.empty()) {
 		return {nullptr, "scan_partitions"};
 	}

@@ -17,8 +17,8 @@ class ColumnBindingResolver;
 
 struct LogicalExtensionOperator : public LogicalOperator {
 public:
-	LogicalPlanVerificationResult<LogicalPlanSQLExportRelation> ToSQL(LogicalPlanSQLExportContext &context,
-	                                                                  const LogicalPlanVerificationPath &path) override;
+	LogicalPlanSQLExportResult ToSQL(LogicalPlanSQLExportContext &context,
+	                                 const LogicalPlanVerificationPath &path) override;
 
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR;
 

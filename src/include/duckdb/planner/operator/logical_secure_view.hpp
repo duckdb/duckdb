@@ -20,8 +20,8 @@ class BoundAtClause;
 //! acts as an optimization barrier that prevents the optimizer from pushing anything into the view.
 class LogicalSecureView : public LogicalOperator {
 public:
-	LogicalPlanVerificationResult<LogicalPlanSQLExportRelation> ToSQL(LogicalPlanSQLExportContext &context,
-	                                                                  const LogicalPlanVerificationPath &path) override;
+	LogicalPlanSQLExportResult ToSQL(LogicalPlanSQLExportContext &context,
+	                                 const LogicalPlanVerificationPath &path) override;
 
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_SECURE_VIEW;
 

@@ -17,15 +17,6 @@
 #include "duckdb/planner/operator/logical_expression_get.hpp"
 
 namespace duckdb {
-using logical_plan_sql_export::CreateFields;
-using logical_plan_sql_export::CreateSubquery;
-using logical_plan_sql_export::FieldIdentifier;
-using logical_plan_sql_export::LogicalPlanSQLExportResult;
-using logical_plan_sql_export::LogicalPlanSQLExportSource;
-using logical_plan_sql_export::PlanChildPath;
-using logical_plan_sql_export::PlanExpressionPath;
-using logical_plan_sql_export::PlanUnsupportedFeature;
-using logical_plan_sql_export::PropagateSemanticTypes;
 
 namespace {
 
@@ -88,8 +79,8 @@ bool LimitSQLExporter::ProducesOneRow(const LogicalOperator &op, const vector<Ta
 }
 
 LimitSQLExporter::LimitExpressionResult LimitSQLExporter::LimitBindingFailure(const LogicalPlanVerificationPath &path) {
-	return LimitExpressionResult::Failure(
-	    {PlanUnsupportedFeature(path, "limit_binding", "SQL LIMIT requires an independent, single-row scalar input")});
+	return LimitExpressionResult::Failure({LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(
+	    path, "limit_binding", "SQL LIMIT requires an independent, single-row scalar input")});
 }
 
 LimitSQLExporter::LimitExpressionResult LimitSQLExporter::ResolveLimitColumn(const ColumnBinding &binding,
@@ -102,11 +93,12 @@ LimitSQLExporter::LimitExpressionResult LimitSQLExporter::ResolveLimitColumn(con
 	}
 	auto column = NumericCast<idx_t>(found - bindings.begin());
 	if (input.type == LogicalOperatorType::LOGICAL_PROJECTION) {
-		return ExportLimitExpression(*input.expressions[column], *input.children[0], PlanChildPath(path, 0),
-		                             PlanExpressionPath(path, column));
+		return ExportLimitExpression(*input.expressions[column], *input.children[0],
+		                             LogicalPlanSQLExportHelpers::PlanChildPath(path, 0),
+		                             LogicalPlanSQLExportHelpers::PlanExpressionPath(path, column));
 	}
 	if (input.type == LogicalOperatorType::LOGICAL_ORDER_BY) {
-		return ResolveLimitColumn(binding, *input.children[0], PlanChildPath(path, 0));
+		return ResolveLimitColumn(binding, *input.children[0], LogicalPlanSQLExportHelpers::PlanChildPath(path, 0));
 	}
 	if (input.type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 		return LimitBindingFailure(path);
@@ -118,7 +110,7 @@ LimitSQLExporter::LimitExpressionResult LimitSQLExporter::ResolveLimitColumn(con
 		if (child_column == child_bindings.end()) {
 			continue;
 		}
-		auto child_path = PlanChildPath(path, child_index);
+		auto child_path = LogicalPlanSQLExportHelpers::PlanChildPath(path, child_index);
 		if (!ProducesOneRow(child)) {
 			return ResolveLimitColumn(binding, child, child_path);
 		}
@@ -140,8 +132,8 @@ LimitSQLExporter::LimitExpressionResult LimitSQLExporter::ResolveLimitColumn(con
 		auto table = make_uniq<BaseTableRef>();
 		table->SetTable(sources[source_index].name);
 		scalar->from_table = std::move(table);
-		scalar->select_list.push_back(
-		    make_uniq<ColumnRefExpression>(FieldIdentifier(NumericCast<idx_t>(child_column - child_bindings.begin()))));
+		scalar->select_list.push_back(make_uniq<ColumnRefExpression>(
+		    LogicalPlanSQLExportHelpers::FieldIdentifier(NumericCast<idx_t>(child_column - child_bindings.begin()))));
 		auto subquery = make_uniq<SubqueryExpression>();
 		subquery->SubqueryMutable() = make_uniq<SelectStatement>();
 		subquery->SubqueryMutable()->node = std::move(scalar);
@@ -175,7 +167,7 @@ LimitSQLExporter::ExportLimitExpression(const Expression &expression, LogicalOpe
 		auto bindings = input.GetColumnBindings();
 		auto found = std::find(bindings.begin(), bindings.end(), binding);
 		D_ASSERT(found != bindings.end());
-		vector<Identifier> names {context.NextRelationAlias(), FieldIdentifier(0)};
+		vector<Identifier> names {context.NextRelationAlias(), LogicalPlanSQLExportHelpers::FieldIdentifier(0)};
 		replacements.emplace_back(names, std::move(resolved.GetValue()));
 		return ResolvedSQLColumnReference {
 		    std::move(names), input.types[NumericCast<idx_t>(found - bindings.begin())], {}};
@@ -222,9 +214,9 @@ LogicalPlanVerificationResult<LimitSQLExport> LimitSQLExporter::Export(LogicalLi
 		case LimitNodeType::EXPRESSION_VALUE:
 		case LimitNodeType::EXPRESSION_PERCENTAGE: {
 			if (!value.GetExpression()->IsScalar()) {
-				auto expression =
-				    ExportLimitExpression(*value.GetExpression(), *limit.children[0], PlanChildPath(path, 0),
-				                          PlanExpressionPath(path, expression_ordinal++));
+				auto expression = ExportLimitExpression(
+				    *value.GetExpression(), *limit.children[0], LogicalPlanSQLExportHelpers::PlanChildPath(path, 0),
+				    LogicalPlanSQLExportHelpers::PlanExpressionPath(path, expression_ordinal++));
 				if (expression.HasError()) {
 					return LogicalPlanVerificationResult<LimitSQLExport>::Failure(expression);
 				}
@@ -237,8 +229,9 @@ LogicalPlanVerificationResult<LimitSQLExport> LimitSQLExporter::Export(LogicalLi
 			if (value.Type() == LimitNodeType::EXPRESSION_PERCENTAGE) {
 				modifier->limit_type = LimitValueType::PERCENTAGE;
 			}
-			auto expression = BoundExpressionSQLExporter::ExportAtPath(*value.GetExpression(), {},
-			                                                           PlanExpressionPath(path, expression_ordinal++));
+			auto expression = BoundExpressionSQLExporter::ExportAtPath(
+			    *value.GetExpression(), {},
+			    LogicalPlanSQLExportHelpers::PlanExpressionPath(path, expression_ordinal++));
 			if (expression.HasError()) {
 				return LogicalPlanVerificationResult<LimitSQLExport>::Failure(expression);
 			}
@@ -258,7 +251,7 @@ LogicalPlanSQLExportResult LogicalLimit::ToSQL(LogicalPlanSQLExportContext &expo
                                                const LogicalPlanVerificationPath &path) {
 	auto &limit = *this;
 	D_ASSERT(limit.children.size() == 1);
-	auto fields = CreateFields(limit, path);
+	auto fields = LogicalPlanSQLExportHelpers::CreateFields(limit, path);
 	if (fields.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(fields);
 	}
@@ -269,11 +262,12 @@ LogicalPlanSQLExportResult LogicalLimit::ToSQL(LogicalPlanSQLExportContext &expo
 	}
 	auto &modifier = exported.GetValue().modifier;
 	auto &sources = exported.GetValue().sources;
-	auto child = export_context.ExportChild(*limit.children[0], PlanChildPath(path, 0), sources);
+	auto child =
+	    export_context.ExportChild(*limit.children[0], LogicalPlanSQLExportHelpers::PlanChildPath(path, 0), sources);
 	if (child.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(child);
 	}
-	PropagateSemanticTypes(fields.GetValue(), {child.GetValue()});
+	LogicalPlanSQLExportHelpers::PropagateSemanticTypes(fields.GetValue(), {child.GetValue()});
 	if (limit.unpruned_offset.IsValid()) {
 		modifier->offset =
 		    ConstantExpression::FromValue(Value::BIGINT(NumericCast<int64_t>(limit.unpruned_offset.GetIndex())));
@@ -286,7 +280,7 @@ LogicalPlanSQLExportResult LogicalLimit::ToSQL(LogicalPlanSQLExportContext &expo
 	unique_ptr<QueryNode> query;
 	if (has_limit) {
 		auto select = export_context.ForwardFields(child.GetValue(), fields.GetValue());
-		select->from_table = CreateSubquery(std::move(child.GetValue()));
+		select->from_table = LogicalPlanSQLExportHelpers::CreateSubquery(std::move(child.GetValue()));
 		query = std::move(select);
 	} else {
 		query = std::move(child.GetValue().relation.query);
@@ -295,7 +289,7 @@ LogicalPlanSQLExportResult LogicalLimit::ToSQL(LogicalPlanSQLExportContext &expo
 	for (auto &source : sources) {
 		auto info = make_uniq<CommonTableExpressionInfo>();
 		for (idx_t i = 0; i < source.relation.fields.size(); i++) {
-			info->aliases.push_back(FieldIdentifier(i));
+			info->aliases.push_back(LogicalPlanSQLExportHelpers::FieldIdentifier(i));
 		}
 		info->query_node = std::move(source.relation.query);
 		info->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;

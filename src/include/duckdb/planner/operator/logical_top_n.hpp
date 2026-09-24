@@ -17,8 +17,8 @@ struct DynamicFilterData;
 //! LogicalTopN represents a comibination of ORDER BY and LIMIT clause, using Min/Max Heap
 class LogicalTopN : public LogicalOperator {
 public:
-	LogicalPlanVerificationResult<LogicalPlanSQLExportRelation> ToSQL(LogicalPlanSQLExportContext &context,
-	                                                                  const LogicalPlanVerificationPath &path) override;
+	LogicalPlanSQLExportResult ToSQL(LogicalPlanSQLExportContext &context,
+	                                 const LogicalPlanVerificationPath &path) override;
 
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_TOP_N;
 

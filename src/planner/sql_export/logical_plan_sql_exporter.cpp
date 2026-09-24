@@ -17,7 +17,6 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
-namespace logical_plan_sql_export {
 
 static LogicalPlanVerificationIssue UnsupportedOperator(const LogicalPlanVerificationPath &path,
                                                         LogicalOperatorType type) {
@@ -79,7 +78,7 @@ static LogicalPlanSQLExportResult ApplyOutputNames(LogicalPlanSQLExportResult re
 		return result;
 	}
 	if (output_names.size() != result.GetValue().fields.size()) {
-		return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
+		return LogicalPlanSQLExportResult::Failure({LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(
 		    LogicalPlanVerificationPath(), "output_names", "Output name count does not match the exported plan")});
 	}
 	if (result.GetValue().query->type == QueryNodeType::SELECT_NODE) {
@@ -94,11 +93,12 @@ static LogicalPlanSQLExportResult ApplyOutputNames(LogicalPlanSQLExportResult re
 	LogicalPlanSQLExportedChild child {std::move(result.GetValue()), Identifier("exported_query")};
 	auto select = make_uniq<SelectNode>();
 	for (idx_t i = 0; i < output_names.size(); i++) {
-		auto expression = make_uniq<ColumnRefExpression>(FieldIdentifier(i), child.relation_alias);
+		auto expression =
+		    make_uniq<ColumnRefExpression>(LogicalPlanSQLExportHelpers::FieldIdentifier(i), child.relation_alias);
 		expression->SetAlias(output_names[i]);
 		select->select_list.push_back(std::move(expression));
 	}
-	select->from_table = CreateSubquery(std::move(child));
+	select->from_table = LogicalPlanSQLExportHelpers::CreateSubquery(std::move(child));
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields)});
 }
 
@@ -208,8 +208,9 @@ LogicalPlanVerificationResult<unique_ptr<ParsedExpression>> LogicalPlanSQLExport
 			}
 		}
 	}
-	return BoundExpressionSQLExporter::ExportAtPath(restored ? *restored : expression, expression_context,
-	                                                PlanExpressionPath(path, expression_ordinal));
+	return BoundExpressionSQLExporter::ExportAtPath(
+	    restored ? *restored : expression, expression_context,
+	    LogicalPlanSQLExportHelpers::PlanExpressionPath(path, expression_ordinal));
 }
 
 unique_ptr<SelectNode> LogicalPlanSQLExportContext::ForwardFields(const LogicalPlanSQLExportedChild &child,
@@ -222,8 +223,9 @@ unique_ptr<SelectNode> LogicalPlanSQLExportContext::ForwardFields(const LogicalP
 			if (field.source_binding != child.relation.fields[i].source_binding) {
 				continue;
 			}
-			auto expression = plain ? plain->select_list[i]->Copy() : ChildColumn(child, i);
-			expression->SetAlias(FieldIdentifier(select->select_list.size()));
+			auto expression =
+			    plain ? plain->select_list[i]->Copy() : LogicalPlanSQLExportHelpers::ChildColumn(child, i);
+			expression->SetAlias(LogicalPlanSQLExportHelpers::FieldIdentifier(select->select_list.size()));
 			select->select_list.push_back(std::move(expression));
 			found = true;
 			break;
@@ -234,16 +236,11 @@ unique_ptr<SelectNode> LogicalPlanSQLExportContext::ForwardFields(const LogicalP
 	return select;
 }
 
-} // namespace logical_plan_sql_export
-
 LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
 LogicalOperator::ToSQL(LogicalPlanSQLExportContext &, const LogicalPlanVerificationPath &path) {
-	using logical_plan_sql_export::LogicalPlanSQLExportResult;
-	using logical_plan_sql_export::LogicalSourceIdentity;
-	using logical_plan_sql_export::UnsupportedOperator;
-	using logical_plan_sql_export::UnsupportedSource;
 	if (type == LogicalOperatorType::LOGICAL_DELIM_GET) {
-		return LogicalPlanSQLExportResult::Failure({UnsupportedSource(path, LogicalSourceIdentity(), "delim_get")});
+		return LogicalPlanSQLExportResult::Failure({LogicalPlanSQLExportHelpers::UnsupportedSource(
+		    path, LogicalPlanSQLExportHelpers::LogicalSourceIdentity(), "delim_get")});
 	}
 	D_ASSERT(type != LogicalOperatorType::LOGICAL_INVALID);
 	return LogicalPlanSQLExportResult::Failure({UnsupportedOperator(path, type)});
@@ -256,12 +253,12 @@ LogicalPlanSQLExporter::Export(ClientContext &context, LogicalOperator &root,
 	if (verification.HasError()) {
 		return LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>::Failure(verification);
 	}
-	logical_plan_sql_export::LogicalPlanSQLExportContext state(context);
+	LogicalPlanSQLExportContext state(context);
 	auto result = state.Export(root, LogicalPlanVerificationPath());
 	if (!options.output_names) {
 		return result;
 	}
-	return logical_plan_sql_export::ApplyOutputNames(std::move(result), *options.output_names);
+	return ApplyOutputNames(std::move(result), *options.output_names);
 }
 
 } // namespace duckdb

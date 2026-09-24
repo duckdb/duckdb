@@ -36,6 +36,8 @@ struct LogicalPlanSQLExportRelation {
 	vector<LogicalPlanSQLExportField> fields;
 };
 
+using LogicalPlanSQLExportResult = LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>;
+
 struct LogicalPlanSQLExportOptions {
 	optional<vector<Identifier>> output_names;
 };

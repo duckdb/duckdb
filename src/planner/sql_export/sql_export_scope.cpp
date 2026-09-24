@@ -16,18 +16,19 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
-namespace logical_plan_sql_export {
 
-LogicalPlanVerificationPath PlanChildPath(const LogicalPlanVerificationPath &path, idx_t ordinal) {
+LogicalPlanVerificationPath LogicalPlanSQLExportHelpers::PlanChildPath(const LogicalPlanVerificationPath &path,
+                                                                       idx_t ordinal) {
 	return SQLExportHelpers::ChildPath(path, ordinal, LogicalPlanVerificationPathComponentType::OPERATOR_CHILD);
 }
 
-LogicalPlanVerificationPath PlanExpressionPath(const LogicalPlanVerificationPath &path, idx_t ordinal) {
+LogicalPlanVerificationPath LogicalPlanSQLExportHelpers::PlanExpressionPath(const LogicalPlanVerificationPath &path,
+                                                                            idx_t ordinal) {
 	return SQLExportHelpers::ChildPath(path, ordinal, LogicalPlanVerificationPathComponentType::OPERATOR_EXPRESSION);
 }
 
-LogicalPlanVerificationResult<unique_ptr<ParsedExpression>> ExportTypedNull(const LogicalType &type,
-                                                                            const LogicalPlanVerificationPath &path) {
+LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
+LogicalPlanSQLExportHelpers::ExportTypedNull(const LogicalType &type, const LogicalPlanVerificationPath &path) {
 	auto result = BoundExpressionSQLExporter::Export(BoundConstantExpression(Value(type)), {});
 	if (!result.HasError()) {
 		return result;
@@ -40,21 +41,22 @@ LogicalPlanVerificationResult<unique_ptr<ParsedExpression>> ExportTypedNull(cons
 	return LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>::Failure(std::move(issues));
 }
 
-LogicalPlanVerificationIssue PlanUnsupportedFeature(const LogicalPlanVerificationPath &path, string feature,
+LogicalPlanVerificationIssue
+LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(const LogicalPlanVerificationPath &path, string feature,
                                                     string message) {
 	return SQLExportHelpers::MakeIssue(
 	    LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE, LogicalPlanVerificationPhase::PLAN_EXPORT, path,
 	    LogicalPlanVerificationConstructIdentity::ExportFeature(std::move(feature)), std::move(message));
 }
 
-LogicalPlanVerificationFunctionIdentity LogicalSourceIdentity() {
+LogicalPlanVerificationFunctionIdentity LogicalPlanSQLExportHelpers::LogicalSourceIdentity() {
 	LogicalPlanVerificationFunctionIdentity source;
 	source.name = "logical_source";
 	source.return_type = LogicalType::TABLE;
 	return source;
 }
 
-LogicalPlanVerificationFunctionIdentity LogicalSourceIdentity(const LogicalGet &get) {
+LogicalPlanVerificationFunctionIdentity LogicalPlanSQLExportHelpers::LogicalSourceIdentity(const LogicalGet &get) {
 	LogicalPlanVerificationFunctionIdentity source;
 	source.catalog = get.function.GetCatalogName().GetIdentifierName();
 	source.schema = get.function.GetSchemaName().GetIdentifierName();
@@ -69,7 +71,8 @@ LogicalPlanVerificationFunctionIdentity LogicalSourceIdentity(const LogicalGet &
 	return source;
 }
 
-LogicalPlanVerificationIssue UnsupportedSource(const LogicalPlanVerificationPath &path,
+LogicalPlanVerificationIssue
+LogicalPlanSQLExportHelpers::UnsupportedSource(const LogicalPlanVerificationPath &path,
                                                LogicalPlanVerificationFunctionIdentity source, string guard) {
 	auto issue = SQLExportHelpers::MakeIssue(
 	    LogicalPlanVerificationIssueCode::UNSUPPORTED_SOURCE, LogicalPlanVerificationPhase::PLAN_EXPORT, path,
@@ -79,18 +82,20 @@ LogicalPlanVerificationIssue UnsupportedSource(const LogicalPlanVerificationPath
 	return issue;
 }
 
-Identifier FieldIdentifier(idx_t ordinal) {
+Identifier LogicalPlanSQLExportHelpers::FieldIdentifier(idx_t ordinal) {
 	return Identifier("c" + to_string(ordinal));
 }
 
-LogicalPlanSQLFieldResult CreateFields(LogicalOperator &op, const LogicalPlanVerificationPath &path) {
+LogicalPlanSQLFieldResult LogicalPlanSQLExportHelpers::CreateFields(LogicalOperator &op,
+                                                                    const LogicalPlanVerificationPath &path) {
 	auto bindings = op.GetColumnBindings();
 	D_ASSERT(bindings.size() == op.types.size());
 	vector<LogicalPlanSQLExportField> fields;
 	for (idx_t i = 0; i < bindings.size(); i++) {
 		D_ASSERT(bindings[i].table_index.IsValid() && bindings[i].column_index.IsValid());
 		if (!SQLExportHelpers::IsSQLValueType(op.types[i])) {
-			auto issue = PlanUnsupportedFeature(path, "output_type", "Output type cannot be represented in SQL");
+			auto issue = LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(
+			    path, "output_type", "Output type cannot be represented in SQL");
 			issue.facts.emplace_back("column_index", Value::UBIGINT(i));
 			issue.facts.emplace_back("logical_type", Value(op.types[i].ToString()));
 			issue.facts.emplace_back("varchar_collations",
@@ -103,8 +108,9 @@ LogicalPlanSQLFieldResult CreateFields(LogicalOperator &op, const LogicalPlanVer
 }
 
 BoundExpressionSQLExportContext
-CreateBindingContext(ClientContext &context, const vector<reference<const LogicalPlanSQLExportedChild>> &children,
-                     const vector<optional_ptr<const SelectNode>> &plain_scopes) {
+LogicalPlanSQLExportHelpers::CreateBindingContext(ClientContext &context,
+                                                  const vector<reference<const LogicalPlanSQLExportedChild>> &children,
+                                                  const vector<optional_ptr<const SelectNode>> &plain_scopes) {
 	D_ASSERT(plain_scopes.empty() || plain_scopes.size() == children.size());
 	column_binding_map_t<ResolvedSQLColumnReference> entries;
 	for (idx_t child_index = 0; child_index < children.size(); child_index++) {
@@ -112,8 +118,9 @@ CreateBindingContext(ClientContext &context, const vector<reference<const Logica
 		auto plain = plain_scopes.empty() ? nullptr : plain_scopes[child_index];
 		for (idx_t i = 0; i < child.relation.fields.size(); i++) {
 			auto &field = child.relation.fields[i];
-			auto names = plain ? plain->select_list[i]->Cast<ColumnRefExpression>().ColumnNames()
-			                   : vector<Identifier> {child.relation_alias, FieldIdentifier(i)};
+			auto names =
+			    plain ? plain->select_list[i]->Cast<ColumnRefExpression>().ColumnNames()
+			          : vector<Identifier> {child.relation_alias, LogicalPlanSQLExportHelpers::FieldIdentifier(i)};
 			entries.emplace(field.source_binding,
 			                ResolvedSQLColumnReference {std::move(names), field.type, field.optimizer_type});
 		}
@@ -132,8 +139,8 @@ CreateBindingContext(ClientContext &context, const vector<reference<const Logica
 	return result;
 }
 
-void PropagateSemanticTypes(vector<LogicalPlanSQLExportField> &fields,
-                            const vector<reference<const LogicalPlanSQLExportedChild>> &children) {
+void LogicalPlanSQLExportHelpers::PropagateSemanticTypes(
+    vector<LogicalPlanSQLExportField> &fields, const vector<reference<const LogicalPlanSQLExportedChild>> &children) {
 	for (auto &field : fields) {
 		for (auto &child : children) {
 			for (auto &child_field : child.get().relation.fields) {
@@ -147,26 +154,28 @@ void PropagateSemanticTypes(vector<LogicalPlanSQLExportField> &fields,
 	}
 }
 
-unique_ptr<TableRef> CreateSubquery(LogicalPlanSQLExportedChild child) {
+unique_ptr<TableRef> LogicalPlanSQLExportHelpers::CreateSubquery(LogicalPlanSQLExportedChild child) {
 	auto statement = make_uniq<SelectStatement>();
 	statement->node = std::move(child.relation.query);
 	auto result = make_uniq<SubqueryRef>(std::move(statement), std::move(child.relation_alias));
 	for (idx_t i = 0; i < child.relation.fields.size(); i++) {
-		result->column_name_alias.push_back(FieldIdentifier(i));
+		result->column_name_alias.push_back(LogicalPlanSQLExportHelpers::FieldIdentifier(i));
 	}
 	return std::move(result);
 }
 
-unique_ptr<ParsedExpression> ChildColumn(const LogicalPlanSQLExportedChild &child, idx_t field_index,
-                                         optional_ptr<const SelectNode> plain) {
+unique_ptr<ParsedExpression> LogicalPlanSQLExportHelpers::ChildColumn(const LogicalPlanSQLExportedChild &child,
+                                                                      idx_t field_index,
+                                                                      optional_ptr<const SelectNode> plain) {
 	D_ASSERT(field_index < child.relation.fields.size());
 	if (plain) {
 		return plain->select_list[field_index]->Copy();
 	}
-	return make_uniq<ColumnRefExpression>(FieldIdentifier(field_index), child.relation_alias);
+	return make_uniq<ColumnRefExpression>(LogicalPlanSQLExportHelpers::FieldIdentifier(field_index),
+	                                      child.relation_alias);
 }
 
-vector<reference<const Expression>> CollectExpressions(const LogicalOperator &op) {
+vector<reference<const Expression>> LogicalPlanSQLExportHelpers::CollectExpressions(const LogicalOperator &op) {
 	vector<reference<const Expression>> expressions;
 	LogicalOperatorVisitor::EnumerateExpressions(op, [&](const unique_ptr<Expression> *expression) {
 		D_ASSERT(expression && *expression);
@@ -175,8 +184,8 @@ vector<reference<const Expression>> CollectExpressions(const LogicalOperator &op
 	return expressions;
 }
 
-bool HasEffectfulExpressions(const LogicalOperator &op) {
-	for (auto &expression : CollectExpressions(op)) {
+bool LogicalPlanSQLExportHelpers::HasEffectfulExpressions(const LogicalOperator &op) {
+	for (auto &expression : LogicalPlanSQLExportHelpers::CollectExpressions(op)) {
 		if (expression.get().IsVolatile() || expression.get().CanThrow()) {
 			return true;
 		}
@@ -184,7 +193,7 @@ bool HasEffectfulExpressions(const LogicalOperator &op) {
 	return false;
 }
 
-bool CollectScopeAliases(const TableRef &table, identifier_set_t &aliases) {
+bool LogicalPlanSQLExportHelpers::CollectScopeAliases(const TableRef &table, identifier_set_t &aliases) {
 	if (table.sample) {
 		return false;
 	}
@@ -195,11 +204,11 @@ bool CollectScopeAliases(const TableRef &table, identifier_set_t &aliases) {
 		return false;
 	}
 	auto &join = table.Cast<JoinRef>();
-	return join.left && join.right && CollectScopeAliases(*join.left, aliases) &&
-	       CollectScopeAliases(*join.right, aliases);
+	return join.left && join.right && LogicalPlanSQLExportHelpers::CollectScopeAliases(*join.left, aliases) &&
+	       LogicalPlanSQLExportHelpers::CollectScopeAliases(*join.right, aliases);
 }
 
-optional_ptr<const SelectNode> PlainScope(const QueryNode &query) {
+optional_ptr<const SelectNode> LogicalPlanSQLExportHelpers::PlainScope(const QueryNode &query) {
 	if (query.type != QueryNodeType::SELECT_NODE || !query.modifiers.empty() || !query.cte_map.map.empty()) {
 		return nullptr;
 	}
@@ -213,7 +222,7 @@ optional_ptr<const SelectNode> PlainScope(const QueryNode &query) {
 		return nullptr;
 	}
 	identifier_set_t aliases;
-	if (!CollectScopeAliases(*select.from_table, aliases)) {
+	if (!LogicalPlanSQLExportHelpers::CollectScopeAliases(*select.from_table, aliases)) {
 		return nullptr;
 	}
 	for (auto &expression : select.select_list) {
@@ -228,9 +237,10 @@ optional_ptr<const SelectNode> PlainScope(const QueryNode &query) {
 	return select;
 }
 
-void SetChildScope(SelectNode &select, LogicalPlanSQLExportedChild child, optional_ptr<const SelectNode> plain) {
+void LogicalPlanSQLExportHelpers::SetChildScope(SelectNode &select, LogicalPlanSQLExportedChild child,
+                                                optional_ptr<const SelectNode> plain) {
 	if (!plain) {
-		select.from_table = CreateSubquery(std::move(child));
+		select.from_table = LogicalPlanSQLExportHelpers::CreateSubquery(std::move(child));
 		return;
 	}
 	auto &source = child.relation.query->Cast<SelectNode>();
@@ -238,7 +248,8 @@ void SetChildScope(SelectNode &select, LogicalPlanSQLExportedChild child, option
 	select.where_clause = SQLExportHelpers::Conjoin(std::move(source.where_clause), std::move(select.where_clause));
 }
 
-bool IsIdentityProjection(const LogicalProjection &projection, const vector<LogicalPlanSQLExportField> &fields) {
+bool LogicalPlanSQLExportHelpers::IsIdentityProjection(const LogicalProjection &projection,
+                                                       const vector<LogicalPlanSQLExportField> &fields) {
 	if (projection.expressions.size() != fields.size()) {
 		return false;
 	}
@@ -256,5 +267,4 @@ bool IsIdentityProjection(const LogicalProjection &projection, const vector<Logi
 	return true;
 }
 
-} // namespace logical_plan_sql_export
 } // namespace duckdb

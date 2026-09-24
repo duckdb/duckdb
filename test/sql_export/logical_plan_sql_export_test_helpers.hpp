@@ -64,7 +64,7 @@ public:
 	}
 
 	PlanExportResult ExportQuery(unique_ptr<QueryNode> query, const LogicalPlanVerificationPath &path) {
-		auto fields = logical_plan_sql_export::CreateFields(*this, path);
+		auto fields = LogicalPlanSQLExportHelpers::CreateFields(*this, path);
 		if (fields.HasError()) {
 			return PlanExportResult::Failure(fields.GetIssues());
 		}

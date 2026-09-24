@@ -18,8 +18,8 @@ namespace duckdb {
 //! LogicalOrder represents an ORDER BY clause, sorting the data
 class LogicalOrder : public LogicalOperator {
 public:
-	LogicalPlanVerificationResult<LogicalPlanSQLExportRelation> ToSQL(LogicalPlanSQLExportContext &context,
-	                                                                  const LogicalPlanVerificationPath &path) override;
+	LogicalPlanSQLExportResult ToSQL(LogicalPlanSQLExportContext &context,
+	                                 const LogicalPlanVerificationPath &path) override;
 
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_ORDER_BY;
 

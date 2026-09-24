@@ -6,7 +6,6 @@
 #include "duckdb/planner/operator/logical_explain.hpp"
 
 namespace logical_plan_sql_export_test {
-using namespace logical_plan_sql_export;
 
 static unique_ptr<SQLExportExtensionOperator> LeafExtension(const string &name, TableIndex index) {
 	return make_uniq<SQLExportExtensionOperator>(name, vector<ColumnBinding> {{index, ProjectionIndex(0)}},
@@ -16,14 +15,14 @@ static unique_ptr<SQLExportExtensionOperator> LeafExtension(const string &name, 
 
 static PlanExportResult ExportExtensionProjection(SQLExportExtensionOperator &op, LogicalPlanSQLExportContext &context,
                                                   const LogicalPlanVerificationPath &path) {
-	auto child = context.ExportChild(*op.children[0], PlanChildPath(path, 0));
+	auto child = context.ExportChild(*op.children[0], LogicalPlanSQLExportHelpers::PlanChildPath(path, 0));
 	if (child.HasError()) {
 		return PlanExportResult::Failure(child.GetIssues());
 	}
-	auto bindings = CreateBindingContext(context.GetClientContext(), {child.GetValue()});
+	auto bindings = LogicalPlanSQLExportHelpers::CreateBindingContext(context.GetClientContext(), {child.GetValue()});
 	auto select = make_uniq<SelectNode>();
-	select->from_table = CreateSubquery(std::move(child.GetValue()));
-	auto expressions = CollectExpressions(op);
+	select->from_table = LogicalPlanSQLExportHelpers::CreateSubquery(std::move(child.GetValue()));
+	auto expressions = LogicalPlanSQLExportHelpers::CollectExpressions(op);
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		auto expression = context.ExportExpression(op, expressions, i, bindings, path);
 		if (expression.HasError()) {
@@ -51,7 +50,8 @@ TEST_CASE("SQL verification fallback preserves extension reconstruction failures
 		auto plan = LeafExtension("failed_extension", TableIndex(82));
 		plan->export_sql = [](SQLExportExtensionOperator &, LogicalPlanSQLExportContext &,
 		                      const LogicalPlanVerificationPath &path) {
-			auto unsupported = PlanUnsupportedFeature(path, "extension_feature", "Unsupported extension feature");
+			auto unsupported = LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(path, "extension_feature",
+			                                                                       "Unsupported extension feature");
 			auto defect = SQLExportHelpers::MakeIssue(LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT,
 			                                          LogicalPlanVerificationPhase::PLAN_EXPORT, path, {},
 			                                          "Extension reconstruction defect");

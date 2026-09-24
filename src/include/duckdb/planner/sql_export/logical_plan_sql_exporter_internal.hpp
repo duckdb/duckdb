@@ -35,64 +35,63 @@ class LogicalAggregate;
 struct LogicalExtensionOperator;
 class ClientContext;
 
-namespace logical_plan_sql_export {
-
-using LogicalPlanSQLExportResult = LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>;
-
 using LogicalPlanSQLFieldResult = LogicalPlanVerificationResult<vector<LogicalPlanSQLExportField>>;
-
 struct SQLSourceQueryResult {
 	unique_ptr<QueryNode> query;
 	string unsupported_reason;
 };
 
-SQLSourceQueryResult ReconstructSQLSource(ClientContext &context, const LogicalGet &get, unique_ptr<TableRef> input,
-                                          const Identifier &relation_alias, bool source_ordinality);
+//! Helpers shared by the logical operators' SQL reconstruction
+struct LogicalPlanSQLExportHelpers {
+	static SQLSourceQueryResult ReconstructSQLSource(ClientContext &context, const LogicalGet &get,
+	                                                 unique_ptr<TableRef> input, const Identifier &relation_alias,
+	                                                 bool source_ordinality);
 
-LogicalPlanVerificationPath PlanChildPath(const LogicalPlanVerificationPath &path, idx_t ordinal);
+	static LogicalPlanVerificationPath PlanChildPath(const LogicalPlanVerificationPath &path, idx_t ordinal);
 
-LogicalPlanVerificationPath PlanExpressionPath(const LogicalPlanVerificationPath &path, idx_t ordinal);
+	static LogicalPlanVerificationPath PlanExpressionPath(const LogicalPlanVerificationPath &path, idx_t ordinal);
 
-LogicalPlanVerificationResult<unique_ptr<ParsedExpression>> ExportTypedNull(const LogicalType &type,
-                                                                            const LogicalPlanVerificationPath &path);
+	static LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
+	ExportTypedNull(const LogicalType &type, const LogicalPlanVerificationPath &path);
 
-LogicalPlanVerificationIssue PlanUnsupportedFeature(const LogicalPlanVerificationPath &path, string feature,
-                                                    string message);
+	static LogicalPlanVerificationIssue PlanUnsupportedFeature(const LogicalPlanVerificationPath &path, string feature,
+	                                                           string message);
 
-LogicalPlanVerificationFunctionIdentity LogicalSourceIdentity();
+	static LogicalPlanVerificationFunctionIdentity LogicalSourceIdentity();
 
-LogicalPlanVerificationFunctionIdentity LogicalSourceIdentity(const LogicalGet &get);
+	static LogicalPlanVerificationFunctionIdentity LogicalSourceIdentity(const LogicalGet &get);
 
-LogicalPlanVerificationIssue UnsupportedSource(const LogicalPlanVerificationPath &path,
-                                               LogicalPlanVerificationFunctionIdentity source, string guard);
+	static LogicalPlanVerificationIssue UnsupportedSource(const LogicalPlanVerificationPath &path,
+	                                                      LogicalPlanVerificationFunctionIdentity source, string guard);
 
-Identifier FieldIdentifier(idx_t ordinal);
+	static Identifier FieldIdentifier(idx_t ordinal);
 
-LogicalPlanSQLFieldResult CreateFields(LogicalOperator &op, const LogicalPlanVerificationPath &path);
+	static LogicalPlanSQLFieldResult CreateFields(LogicalOperator &op, const LogicalPlanVerificationPath &path);
 
-BoundExpressionSQLExportContext
-CreateBindingContext(ClientContext &context, const vector<reference<const LogicalPlanSQLExportedChild>> &children,
-                     const vector<optional_ptr<const SelectNode>> &plain_scopes = {});
+	static BoundExpressionSQLExportContext
+	CreateBindingContext(ClientContext &context, const vector<reference<const LogicalPlanSQLExportedChild>> &children,
+	                     const vector<optional_ptr<const SelectNode>> &plain_scopes = {});
 
-void PropagateSemanticTypes(vector<LogicalPlanSQLExportField> &fields,
-                            const vector<reference<const LogicalPlanSQLExportedChild>> &children);
+	static void PropagateSemanticTypes(vector<LogicalPlanSQLExportField> &fields,
+	                                   const vector<reference<const LogicalPlanSQLExportedChild>> &children);
 
-unique_ptr<TableRef> CreateSubquery(LogicalPlanSQLExportedChild child);
+	static unique_ptr<TableRef> CreateSubquery(LogicalPlanSQLExportedChild child);
 
-unique_ptr<ParsedExpression> ChildColumn(const LogicalPlanSQLExportedChild &child, idx_t field_index,
-                                         optional_ptr<const SelectNode> plain = nullptr);
+	static unique_ptr<ParsedExpression> ChildColumn(const LogicalPlanSQLExportedChild &child, idx_t field_index,
+	                                                optional_ptr<const SelectNode> plain = nullptr);
 
-vector<reference<const Expression>> CollectExpressions(const LogicalOperator &op);
+	static vector<reference<const Expression>> CollectExpressions(const LogicalOperator &op);
 
-bool HasEffectfulExpressions(const LogicalOperator &op);
+	static bool HasEffectfulExpressions(const LogicalOperator &op);
 
-bool CollectScopeAliases(const TableRef &table, identifier_set_t &aliases);
+	static bool CollectScopeAliases(const TableRef &table, identifier_set_t &aliases);
 
-optional_ptr<const SelectNode> PlainScope(const QueryNode &query);
+	static optional_ptr<const SelectNode> PlainScope(const QueryNode &query);
 
-void SetChildScope(SelectNode &select, LogicalPlanSQLExportedChild child, optional_ptr<const SelectNode> plain);
+	static void SetChildScope(SelectNode &select, LogicalPlanSQLExportedChild child,
+	                          optional_ptr<const SelectNode> plain);
 
-bool IsIdentityProjection(const LogicalProjection &projection, const vector<LogicalPlanSQLExportField> &fields);
-
-} // namespace logical_plan_sql_export
+	static bool IsIdentityProjection(const LogicalProjection &projection,
+	                                 const vector<LogicalPlanSQLExportField> &fields);
+};
 } // namespace duckdb

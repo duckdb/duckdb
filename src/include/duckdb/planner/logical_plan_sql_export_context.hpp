@@ -10,8 +10,6 @@ class LogicalComparisonJoin;
 struct LogicalExtensionOperator;
 class ClientContext;
 
-namespace logical_plan_sql_export {
-using LogicalPlanSQLExportResult = LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>;
 struct LogicalPlanSQLExportedChild {
 	LogicalPlanSQLExportRelation relation;
 	Identifier relation_alias;
@@ -82,5 +80,4 @@ private:
 	vector<NamedRelation> named_relations;
 };
 
-} // namespace logical_plan_sql_export
 } // namespace duckdb

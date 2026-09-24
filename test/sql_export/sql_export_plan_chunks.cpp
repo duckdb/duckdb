@@ -340,14 +340,14 @@ TEST_CASE("Owned chunk SQL export requires an explicit consumer evaluation contr
 		idx_t callbacks = 0;
 		op->export_sql = [&](SQLExportExtensionOperator &input, LogicalPlanSQLExportContext &context,
 		                     const LogicalPlanVerificationPath &path) -> PlanExportResult {
-			auto child = context.ExportChild(*input.children[0], logical_plan_sql_export::PlanChildPath(path, 0));
+			auto child = context.ExportChild(*input.children[0], LogicalPlanSQLExportHelpers::PlanChildPath(path, 0));
 			if (child.HasError()) {
 				return PlanExportResult::Failure(child.GetIssues());
 			}
 			callbacks++;
 			REQUIRE(input.expressions.empty());
 			auto binding_context =
-			    logical_plan_sql_export::CreateBindingContext(context.GetClientContext(), {child.GetValue()});
+			    LogicalPlanSQLExportHelpers::CreateBindingContext(context.GetClientContext(), {child.GetValue()});
 			auto select = make_uniq<SelectNode>();
 			auto column = binding_context.resolve_binding(ColumnBinding(TableIndex(2000), ProjectionIndex(0)));
 			REQUIRE(column);
@@ -356,7 +356,7 @@ TEST_CASE("Owned chunk SQL export requires an explicit consumer evaluation contr
 				vector<unique_ptr<ParsedExpression>> arguments;
 				select->select_list.push_back(make_uniq<FunctionExpression>(Identifier(name), std::move(arguments)));
 			}
-			select->from_table = logical_plan_sql_export::CreateSubquery(std::move(child.GetValue()));
+			select->from_table = LogicalPlanSQLExportHelpers::CreateSubquery(std::move(child.GetValue()));
 			return input.ExportQuery(std::move(select), path);
 		};
 		auto exported = LogicalPlanSQLExporter::Export(*connection.context, *op);

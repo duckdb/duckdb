@@ -10,7 +10,6 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
 namespace duckdb {
-namespace bound_expression_sql_export {
 
 struct WindowSQLFrame {
 	optional_ptr<const Expression> order;
@@ -108,12 +107,12 @@ static WindowSQLFrame ReconstructWindowFrame(const BoundWindowExpression &expres
 BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportWindow(const BoundWindowExpression &expression,
                                                                            const LogicalPlanVerificationPath &path) {
 	if (expression.AggregateFunction()) {
-		return PreserveCollation(expression.GetReturnType(),
-		                         ExportWindowFunction(expression, *expression.AggregateFunction(), path), path);
+		return BoundExpressionSQLExportState::PreserveCollation(
+		    expression.GetReturnType(), ExportWindowFunction(expression, *expression.AggregateFunction(), path), path);
 	}
 	D_ASSERT(expression.WindowFunction());
-	return PreserveCollation(expression.GetReturnType(),
-	                         ExportWindowFunction(expression, *expression.WindowFunction(), path), path);
+	return BoundExpressionSQLExportState::PreserveCollation(
+	    expression.GetReturnType(), ExportWindowFunction(expression, *expression.WindowFunction(), path), path);
 }
 
 template <class FUNCTION>
@@ -122,25 +121,25 @@ BoundExpressionSQLExportState::ExportWindowFunction(const BoundWindowExpression 
                                                     const LogicalPlanVerificationPath &path) {
 	auto &definition = function.GetDefinition();
 	D_ASSERT(definition);
-	auto identity =
-	    DefinitionFunctionIdentity(*definition, function.GetLogicalArguments(), function.GetLogicalReturnType());
+	auto identity = BoundExpressionSQLExportState::DefinitionFunctionIdentity(
+	    *definition, function.GetLogicalArguments(), function.GetLogicalReturnType());
 	if (!identity.IsValid()) {
-		return BoundExpressionSQLExportResult::Failure(
-		    {InternalExpressionInvariant(path, expression, "Bound window function identity is incomplete")});
+		return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::InternalExpressionInvariant(
+		    path, expression, "Bound window function identity is incomplete")});
 	}
 	if (expression.GetChildren().size() != function.GetLogicalArguments().size()) {
-		return BoundExpressionSQLExportResult::Failure(
-		    {UnsupportedFunction(path, std::move(identity), "The window function does not retain every SQL argument")});
+		return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFunction(
+		    path, std::move(identity), "The window function does not retain every SQL argument")});
 	}
-	auto name = RebindableFunctionName(*definition);
-	if (!name || !IsSQLValueType(expression.GetReturnType()) ||
+	auto name = BoundExpressionSQLExportState::RebindableFunctionName(*definition);
+	if (!name || !SQLExportHelpers::IsSQLValueType(expression.GetReturnType()) ||
 	    definition->GetProperties().GetCaptureArgumentAliases()) {
-		return BoundExpressionSQLExportResult::Failure({UnsupportedFunction(
+		return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFunction(
 		    path, std::move(identity), "The window function no longer represents its logical SQL signature")});
 	}
 	auto frame = ReconstructWindowFrame(expression);
 	if ((expression.StartExpr() && !frame.start) || (expression.EndExpr() && !frame.end)) {
-		return BoundExpressionSQLExportResult::Failure({UnsupportedFeature(
+		return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFeature(
 		    path, "window_range_offset", "The RANGE endpoint does not retain its SQL offset and ordering operand")});
 	}
 
@@ -187,8 +186,8 @@ BoundExpressionSQLExportState::ExportWindowFunction(const BoundWindowExpression 
 	auto &named_arguments = function.GetNamedArguments();
 	auto positional_count = function.GetPositionalArgumentCount();
 	if (!named_arguments.empty() && positional_count + named_arguments.size() != expression.GetChildren().size()) {
-		return BoundExpressionSQLExportResult::Failure(
-		    {UnsupportedFunction(path, std::move(identity), "The named SQL arguments are incomplete")});
+		return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::UnsupportedFunction(
+		    path, std::move(identity), "The named SQL arguments are incomplete")});
 	}
 	for (idx_t i = 0; i < expression.GetChildren().size(); i++) {
 		auto argument_name =
@@ -216,12 +215,11 @@ BoundExpressionSQLExportState::ExportWindowFunction(const BoundWindowExpression 
 	window->WindowEndMutable() = expression.WindowEnd();
 	window->WindowExcludeMutable() = expression.WindowExclude();
 	unique_ptr<ParsedExpression> result = std::move(window);
-	if (IsSQLRepresentableType(expression.GetReturnType()) && definition->HasBindCallback() &&
+	if (SQLExportHelpers::IsSQLRepresentableType(expression.GetReturnType()) && definition->HasBindCallback() &&
 	    definition->GetReturnType() != expression.GetReturnType()) {
 		return RestoreResultType(expression.GetReturnType(), std::move(result), path);
 	}
 	return BoundExpressionSQLExportResult::Success(std::move(result));
 }
 
-} // namespace bound_expression_sql_export
 } // namespace duckdb

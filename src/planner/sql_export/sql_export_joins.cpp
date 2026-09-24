@@ -11,18 +11,6 @@
 #include "duckdb/planner/sql_export_helpers.hpp"
 
 namespace duckdb {
-using logical_plan_sql_export::CollectExpressions;
-using logical_plan_sql_export::CollectScopeAliases;
-using logical_plan_sql_export::CreateBindingContext;
-using logical_plan_sql_export::CreateFields;
-using logical_plan_sql_export::CreateSubquery;
-using logical_plan_sql_export::FieldIdentifier;
-using logical_plan_sql_export::LogicalPlanSQLExportedChild;
-using logical_plan_sql_export::LogicalPlanSQLExportResult;
-using logical_plan_sql_export::PlainScope;
-using logical_plan_sql_export::PlanChildPath;
-using logical_plan_sql_export::PlanUnsupportedFeature;
-using logical_plan_sql_export::PropagateSemanticTypes;
 
 static string MarkConditionUnsupportedReason(const LogicalComparisonJoin &join) {
 	bool comparisons_only = !join.conditions.empty();
@@ -87,10 +75,10 @@ ExportJoinCondition(LogicalJoin &op, LogicalPlanSQLExportContext &context,
                     const LogicalPlanVerificationPath &path) {
 	using Result = LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>;
 	unique_ptr<ParsedExpression> predicate;
-	auto expressions = CollectExpressions(op);
+	auto expressions = LogicalPlanSQLExportHelpers::CollectExpressions(op);
 	if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
 		if (op.join_type == JoinType::MARK) {
-			return Result::Failure({PlanUnsupportedFeature(
+			return Result::Failure({LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(
 			    path, "mark_condition_semantics", "The MARK condition requires conjunction execution semantics")});
 		}
 		auto exported = context.ExportExpression(op, expressions, 0, expression_context, path);
@@ -101,17 +89,18 @@ ExportJoinCondition(LogicalJoin &op, LogicalPlanSQLExportContext &context,
 	} else {
 		auto &comparison = op.Cast<LogicalComparisonJoin>();
 		if (!comparison.duplicate_eliminated_columns.empty()) {
-			return Result::Failure({PlanUnsupportedFeature(path, "join_delim_state",
-			                                               "The join requires a duplicate-eliminated input scope")});
+			return Result::Failure({LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(
+			    path, "join_delim_state", "The join requires a duplicate-eliminated input scope")});
 		}
 		if (comparison.join_type == JoinType::MARK) {
 			auto reason = MarkConditionUnsupportedReason(comparison);
 			if (!reason.empty()) {
-				return Result::Failure({PlanUnsupportedFeature(path, "mark_condition_semantics", reason)});
+				return Result::Failure(
+				    {LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(path, "mark_condition_semantics", reason)});
 			}
 		}
 		if (RequiresMarkGroupMetadata(comparison)) {
-			return Result::Failure({PlanUnsupportedFeature(
+			return Result::Failure({LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(
 			    path, "mark_group_null_semantics", "The MARK join requires its group-specific NULL semantics")});
 		}
 		idx_t ordinal = 0;
@@ -141,22 +130,22 @@ ExportJoinCondition(LogicalJoin &op, LogicalPlanSQLExportContext &context,
 static LogicalPlanSQLExportResult ExportJoin(LogicalOperator &op, LogicalPlanSQLExportContext &context,
                                              const LogicalPlanVerificationPath &path) {
 	D_ASSERT(op.children.size() == 2);
-	auto fields = CreateFields(op, path);
+	auto fields = LogicalPlanSQLExportHelpers::CreateFields(op, path);
 	if (fields.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(fields);
 	}
-	auto left = context.ExportChild(*op.children[0], PlanChildPath(path, 0));
+	auto left = context.ExportChild(*op.children[0], LogicalPlanSQLExportHelpers::PlanChildPath(path, 0));
 	if (left.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(left);
 	}
-	auto right = context.ExportChild(*op.children[1], PlanChildPath(path, 1));
+	auto right = context.ExportChild(*op.children[1], LogicalPlanSQLExportHelpers::PlanChildPath(path, 1));
 	if (right.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(right);
 	}
 	vector<reference<const LogicalPlanSQLExportedChild>> children {left.GetValue(), right.GetValue()};
-	PropagateSemanticTypes(fields.GetValue(), children);
-	auto left_plain = PlainScope(*left.GetValue().relation.query);
-	auto right_plain = PlainScope(*right.GetValue().relation.query);
+	LogicalPlanSQLExportHelpers::PropagateSemanticTypes(fields.GetValue(), children);
+	auto left_plain = LogicalPlanSQLExportHelpers::PlainScope(*left.GetValue().relation.query);
+	auto right_plain = LogicalPlanSQLExportHelpers::PlainScope(*right.GetValue().relation.query);
 	if (left_plain && left_plain->where_clause) {
 		left_plain = nullptr;
 	}
@@ -165,13 +154,13 @@ static LogicalPlanSQLExportResult ExportJoin(LogicalOperator &op, LogicalPlanSQL
 	}
 	identifier_set_t left_aliases, right_aliases;
 	if (left_plain) {
-		CollectScopeAliases(*left_plain->from_table, left_aliases);
+		LogicalPlanSQLExportHelpers::CollectScopeAliases(*left_plain->from_table, left_aliases);
 		if (left_aliases.count(right.GetValue().relation_alias)) {
 			left_plain = nullptr;
 		}
 	}
 	if (right_plain) {
-		CollectScopeAliases(*right_plain->from_table, right_aliases);
+		LogicalPlanSQLExportHelpers::CollectScopeAliases(*right_plain->from_table, right_aliases);
 		if (right_aliases.count(left.GetValue().relation_alias)) {
 			right_plain = nullptr;
 		}
@@ -184,7 +173,8 @@ static LogicalPlanSQLExportResult ExportJoin(LogicalOperator &op, LogicalPlanSQL
 			}
 		}
 	}
-	auto expression_context = CreateBindingContext(context.GetClientContext(), children, {left_plain, right_plain});
+	auto expression_context = LogicalPlanSQLExportHelpers::CreateBindingContext(context.GetClientContext(), children,
+	                                                                            {left_plain, right_plain});
 	auto join = make_uniq<JoinRef>();
 	optional_ptr<LogicalJoin> logical_join;
 	if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
@@ -214,13 +204,13 @@ static LogicalPlanSQLExportResult ExportJoin(LogicalOperator &op, LogicalPlanSQL
 			D_ASSERT(resolved && resolved->type == field.type);
 			expression = make_uniq<ColumnRefExpression>(resolved->names);
 		}
-		expression->SetAlias(FieldIdentifier(select->select_list.size()));
+		expression->SetAlias(LogicalPlanSQLExportHelpers::FieldIdentifier(select->select_list.size()));
 		select->select_list.push_back(std::move(expression));
 	}
 	join->left = left_plain ? std::move(left.GetValue().relation.query->Cast<SelectNode>().from_table)
-	                        : CreateSubquery(std::move(left.GetValue()));
+	                        : LogicalPlanSQLExportHelpers::CreateSubquery(std::move(left.GetValue()));
 	join->right = right_plain ? std::move(right.GetValue().relation.query->Cast<SelectNode>().from_table)
-	                          : CreateSubquery(std::move(right.GetValue()));
+	                          : LogicalPlanSQLExportHelpers::CreateSubquery(std::move(right.GetValue()));
 	select->from_table = std::move(join);
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields.GetValue())});
 }
