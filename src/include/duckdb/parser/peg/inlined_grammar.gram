@@ -1468,7 +1468,7 @@ OperatorLiteral <- Identifier
 AnyOperatorLiteral <- Identifier
 AnyAllOperator <- AnyOperatorLiteral AnyOrAll
 AnyOrAll <- SubqueryAny / SubqueryAll
-SubqueryAny <- 'ANY'
+SubqueryAny <- 'ANY' / 'SOME'
 SubqueryAll <- 'ALL'
 QualifiedOperator <- 'OPERATOR' Parens(QualifiedOperatorContents)
 QualifiedOperatorContents <- ColIdDot* AnyOperatorLiteral
