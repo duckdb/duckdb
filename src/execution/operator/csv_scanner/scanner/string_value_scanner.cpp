@@ -167,7 +167,7 @@ bool StringValueResult::HandleTooManyColumnsError(const char *value_ptr, const i
 				// we make an exception if the first over-value is null
 				bool is_value_null = false;
 				for (idx_t i = 0; i < null_str_count; i++) {
-					is_value_null = is_value_null || IsValueNull(null_str_ptr[i], value_ptr, size);
+					is_value_null = is_value_null || (size == null_str_size[i] && IsValueNull(null_str_ptr[i], value_ptr, size));
 				}
 				error = !is_value_null;
 			}
@@ -248,7 +248,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 			// we make an exception if the first over-value is null
 			bool is_value_null = false;
 			for (idx_t i = 0; i < null_str_count; i++) {
-				is_value_null = is_value_null || IsValueNull(null_str_ptr[i], value_ptr, size);
+				is_value_null = is_value_null || (size == null_str_size[i] && IsValueNull(null_str_ptr[i], value_ptr, size));
 			}
 			error = !is_value_null;
 		}
