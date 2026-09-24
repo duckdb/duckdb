@@ -4,6 +4,9 @@
 
 require httpfs
 
+# Logging and the attached database are session state that a restart between statements would discard
+require skip_reload
+
 statement ok
 CALL enable_logging('HTTP')
 
