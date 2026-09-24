@@ -143,6 +143,30 @@ private:
 	BufferHandle &result_pin;
 };
 
+//===----------------------------------------------------------------------===//
+// ReadRangeTask
+//===----------------------------------------------------------------------===//
+
+class ReadRangeTask : public BaseExecutorTask {
+public:
+	ReadRangeTask(CachingFileHandle &caching_file_handle_p, TaskExecutor &executor, QueryContext context_p,
+	              data_ptr_t buffer_p, idx_t nr_bytes_p, idx_t location_p)
+	    : BaseExecutorTask(executor), caching_file_handle(caching_file_handle_p), context(context_p), buffer(buffer_p),
+	      nr_bytes(nr_bytes_p), location(location_p) {
+	}
+
+	void ExecuteTask() override {
+		caching_file_handle.ReadAndRecord(context, buffer, nr_bytes, location);
+	}
+
+private:
+	CachingFileHandle &caching_file_handle;
+	QueryContext context;
+	data_ptr_t buffer;
+	idx_t nr_bytes;
+	idx_t location;
+};
+
 } // namespace
 
 //===----------------------------------------------------------------------===//
@@ -340,7 +364,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 
 	if (!external_file_cache.IsEnabled() || !external_file_cache.ShouldCacheFile(path.path) || !CanUseCache()) {
 		auto buf = AllocateUncachedReadBuffer(external_file_cache.GetBufferManager(), nr_bytes);
-		ReadAndRecord(context, buf.GetDataMutable(), nr_bytes, location);
+		ReadUncached(buf.GetDataMutable(), nr_bytes, location);
 		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
 		mem_handles.push_back({std::move(buf), 0, nr_bytes});
 		return FileBufferHandleGroup(std::move(mem_handles));
@@ -396,6 +420,22 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	ReconcileCacheAfterRead(*current_cached_file, blocks);
 
 	return FileBufferHandleGroup(std::move(mem_handles));
+}
+
+void CachingFileHandle::ReadUncached(data_ptr_t buffer, idx_t nr_bytes, idx_t location) {
+	const idx_t max_block_size = external_file_cache.GetCacheBlockSize(path.path);
+	if (nr_bytes <= max_block_size || !external_file_cache.ShouldCacheFile(path.path) || !CanSeek()) {
+		ReadAndRecord(context, buffer, nr_bytes, location);
+		return;
+	}
+	// split like cached reads, so the requests are the same whether or not the cache is enabled
+	auto &scheduler = TaskScheduler::GetScheduler(caching_file_system.db);
+	TaskExecutor executor(scheduler, TaskSchedulerType::ASYNC);
+	for (idx_t offset = 0; offset < nr_bytes; offset += max_block_size) {
+		executor.ScheduleTask(make_uniq<ReadRangeTask>(*this, executor, context, buffer + offset,
+		                                               MinValue(max_block_size, nr_bytes - offset), location + offset));
+	}
+	executor.WorkOnTasks();
 }
 
 FileBufferHandleGroup CachingFileHandle::Read(idx_t &nr_bytes) {
