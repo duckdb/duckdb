@@ -1276,6 +1276,28 @@ if(PREBUILT_BINARY)
   target_link_libraries(duckdb_static INTERFACE ${DUCKDB_SYSTEM_LIBS})
   link_threads(duckdb_static INTERFACE)
 
+  if(BUILD_SHELL AND NOT SUN)
+    get_filename_component(_DUCKDB_PREBUILT_LIBRARY_DIRECTORY
+                           "${PREBUILT_BINARY_PATH}" DIRECTORY)
+    if(MSVC)
+      set(_DUCKDB_PREBUILT_SHELL_PATH
+          "${_DUCKDB_PREBUILT_LIBRARY_DIRECTORY}/duckdb_shell.lib")
+    else()
+      set(_DUCKDB_PREBUILT_SHELL_PATH
+          "${_DUCKDB_PREBUILT_LIBRARY_DIRECTORY}/libduckdb_shell.a")
+    endif()
+    if(NOT EXISTS "${_DUCKDB_PREBUILT_SHELL_PATH}")
+      message(
+        FATAL_ERROR
+          "Prebuilt DuckDB shell library does not exist: ${_DUCKDB_PREBUILT_SHELL_PATH}"
+      )
+    endif()
+    message(
+      STATUS
+        "Using pre-built shell library from file ${_DUCKDB_PREBUILT_SHELL_PATH}"
+    )
+  endif()
+
   foreach(
     DUCKDB_PREBUILT_LINK_LIBRARY
     duckdb_fastpforlib
