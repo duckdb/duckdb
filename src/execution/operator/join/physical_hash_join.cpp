@@ -335,7 +335,6 @@ public:
 	      initial_radix_bits(num_threads < 100 ? 4 : 5), finalized(false), active_local_states(0), total_size(0),
 	      max_partition_size(0), max_partition_count(0), probe_side_requirement(0), scanned_data(false) {
 		hash_table = op.InitializeHashTable(context, initial_radix_bits);
-		hash_table->SetMarkJoinMemoryState(*temporary_memory_state);
 
 		// For perfect hash join
 		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
@@ -712,19 +711,13 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 	const bool has_row_equality =
 	    conditions.size() > 1 ||
 	    (conditions.size() == 1 && conditions[0].GetLHS().GetReturnType().id() == LogicalTypeId::TUPLE);
-	if (delim_types.empty() && join_type == JoinType::MARK && (has_row_equality || predicate)) {
+	if (delim_types.empty() && join_type == JoinType::MARK && has_row_equality) {
 		bool all_equal = true;
 		for (auto &condition : conditions) {
 			all_equal = all_equal && condition.GetComparisonType() == ExpressionType::COMPARE_EQUAL;
 		}
-		bool all_null_safe = true;
-		for (auto &condition : conditions) {
-			all_null_safe &= condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-		}
 		if (all_equal) {
 			result->InitializeUncorrelatedMarkJoin();
-		} else if (!all_null_safe) {
-			result->InitializeUncorrelatedMarkJoin(true);
 		}
 	}
 	return result;
@@ -2088,8 +2081,7 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 	D_ASSERT(!sink.scanned_data);
 
 	if (sink.hash_table->Count() == 0) {
-		if (sink.hash_table->HasUncorrelatedMarkJoin() &&
-		    sink.hash_table->mark_join_info.uncorrelated_condition_rows->Count() != 0) {
+		if (sink.hash_table->HasUncorrelatedMarkJoin()) {
 			state.lhs_join_keys.Reset();
 			state.probe_executor.Execute(input, state.lhs_join_keys);
 			state.lhs_probe_data.ReferenceColumns(input, lhs_probe_columns.col_idxs);
@@ -2397,7 +2389,6 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 	if (!sink.external ||
 	    !ht.PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() - sink.probe_side_requirement)) {
 		global_stage = HashJoinSourceStage::DONE;
-		ht.ReleaseMarkJoinState();
 		sink.temporary_memory_state->SetZero();
 		return;
 	}
@@ -2641,7 +2632,6 @@ SourceResultType PhysicalHashJoin::GetDataInternal(ExecutionContext &context, Da
 				sink.scanned_data = false;
 			} else {
 				sink.hash_table->Reset();
-				sink.hash_table->ReleaseMarkJoinState();
 				sink.temporary_memory_state->SetZero();
 			}
 		}

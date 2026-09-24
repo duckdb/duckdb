@@ -8,10 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/types/vector_cache.hpp"
-
-#include "duckdb/execution/mark_join_refinement.hpp"
-
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/column/column_data_consumer.hpp"
@@ -28,8 +24,6 @@
 #include "duckdb/planner/joinside.hpp"
 
 namespace duckdb {
-
-class TemporaryMemoryState;
 
 class BufferManager;
 class BufferHandle;
@@ -80,12 +74,16 @@ public:
 	struct ResidualPredicateProbeState {
 		//! Evaluation chunk
 		DataChunk eval_chunk;
-		VectorCache result_cache;
-		Vector result;
 		SelectionVector selected_sel;
 		SelectionVector remaining_sel;
 
-		explicit ResidualPredicateProbeState(JoinHashTable &ht);
+		ResidualPredicateProbeState() : selected_sel(STANDARD_VECTOR_SIZE), remaining_sel(STANDARD_VECTOR_SIZE) {
+		}
+
+		void Initialize(Allocator &allocator, const vector<LogicalType> &eval_types,
+		                const vector<bool> &initialize_columns) {
+			eval_chunk.Initialize(allocator, eval_types, initialize_columns, STANDARD_VECTOR_SIZE);
+		}
 	};
 
 #ifdef DUCKDB_HASH_ZERO
@@ -112,23 +110,9 @@ public:
 
 		// whether or not the given tuple has found a match
 		unsafe_unique_array<bool> found_match;
-		unsafe_unique_array<bool> found_unknown;
-		struct MarkPredicateState {
-			MarkPredicateState(ClientContext &context, const vector<LogicalType> &types);
-			DataChunk left;
-			DataChunk right;
-			Vector comparison;
-			VectorCache comparison_cache;
-			unsafe_unique_array<bool> pair_false;
-			unsafe_unique_array<bool> pair_unknown;
-			SelectionVector candidates;
-			SelectionVector candidate_rows;
-		};
-		unique_ptr<MarkPredicateState> mark_predicate_state;
 		JoinHashTable &ht;
 		bool finished;
 		bool is_null;
-		bool null_free_mark = false;
 		bool has_null_value_filter = false;
 
 		// it records the RHS pointers for the result chunk
@@ -175,8 +159,6 @@ public:
 		//! Update the data chunk compaction buffer
 		void UpdateCompactionBuffer(idx_t base_count, SelectionVector &result_vector, idx_t result_count);
 
-		void PrepareResidualInput(DataChunk &probe_data, const SelectionVector &selection, idx_t count);
-
 		//! Apply residual predicate filtering
 		idx_t ApplyResidualPredicate(DataChunk &probe_data, SelectionVector &match_sel, idx_t match_count,
 		                             optional_ptr<SelectionVector> no_match_sel, idx_t no_match_offset = 0);
@@ -192,8 +174,6 @@ public:
 		                  const idx_t count, const idx_t col_idx);
 		void GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count, const idx_t col_idx);
 		void GatherResult(Vector &result, const idx_t count, const idx_t col_idx);
-		idx_t ResolveMarkPredicates(DataChunk &keys, DataChunk &probe_data, SelectionVector &match_sel,
-		                            optional_ptr<SelectionVector> no_match_sel);
 		idx_t ResolvePredicates(DataChunk &keys, DataChunk &probe_data, SelectionVector &match_sel,
 		                        optional_ptr<SelectionVector> no_match_sel);
 	};
@@ -289,18 +269,11 @@ public:
 	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
 	//! Enable selective NULL refinement for an uncorrelated multi-column MARK join
-	void InitializeUncorrelatedMarkJoin(bool compare_conditions = false);
-	void RefineMarkPatterns(DataChunk &keys, DataChunk &probe_data, bool matches[], ValidityMask &validity);
-	bool HasMarkJoinConjunction() const;
-	idx_t MarkJoinSize() const;
-	void SetMarkJoinMemoryState(TemporaryMemoryState &state);
-	void UpdateMarkJoinMemoryLocked(idx_t cache_size, idx_t additional = 0, bool update_reservation = true);
-	void ReleaseMarkJoinState();
+	void InitializeUncorrelatedMarkJoin();
 	bool HasUncorrelatedMarkJoin() const;
 	//! Construct a MARK result, including selective UNKNOWN refinement when enabled
 	void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result,
-	                             optional_ptr<const bool> found_match = nullptr,
-	                             optional_ptr<const bool> found_unknown = nullptr);
+	                             optional_ptr<const bool> found_match = nullptr);
 	//! Scan the HT to construct the full outer join result
 	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result) const;
 
@@ -336,7 +309,9 @@ public:
 	}
 	idx_t SizeInBytes() const {
 		idx_t size = data_collection ? data_collection->SizeInBytes() : 0;
-		size += MarkJoinSize();
+		if (mark_join_info.uncorrelated_condition_rows) {
+			size += mark_join_info.uncorrelated_condition_rows->SizeInBytes();
+		}
 		return size;
 	}
 
@@ -450,10 +425,7 @@ public:
 	bool CanUseDictionaryEmission(const PhysicalHashJoin &op, bool external, idx_t probe_cardinality) const;
 
 	struct {
-		mutable mutex mj_lock;
-		optional_ptr<TemporaryMemoryState> memory_state;
-		idx_t cache_size = 0;
-		idx_t charged_size = 0;
+		mutex mj_lock;
 		//! The types of the duplicate eliminated columns, only used in correlated MARK JOIN for flattening
 		//! ANY()/ALL() expressions
 		vector<LogicalType> correlated_types;
@@ -469,11 +441,8 @@ public:
 		DataChunk result_chunk;
 		//! Whether an RHS condition can produce UNKNOWN during equality comparison
 		bool uncorrelated_has_null = false;
-		bool conditions_can_be_unknown = false;
 		//! All RHS condition rows, used only for uncorrelated row equality NULL refinement
 		unique_ptr<ColumnDataCollection> uncorrelated_condition_rows;
-		bool compare_conditions = false;
-		unique_ptr<MarkJoinRefinement> refinement;
 	} mark_join_info;
 
 private:

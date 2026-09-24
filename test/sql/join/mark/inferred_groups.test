@@ -37,16 +37,11 @@ SELECT id,__mark_join_marker FROM probes p JOIN BY (TYPE MARK) candidates c ON p
 5	true
 6	false
 
-query II
+# Group keys must precede the quantified comparison.
+statement error
 SELECT id,__mark_join_marker FROM probes p JOIN BY (TYPE MARK) candidates c ON p.v=c.v AND p.g IS NOT DISTINCT FROM c.g ORDER BY id;
 ----
-0	false
-1	NULL
-2	true
-3	NULL
-4	false
-5	true
-6	false
+Unsupported explicit MARK join conditions
 
 query TT
 EXPLAIN SELECT __mark_join_marker FROM probes p JOIN BY (TYPE MARK) candidates c ON p.g IS NOT DISTINCT FROM c.g AND p.v=c.v;

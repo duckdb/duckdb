@@ -13,17 +13,7 @@ SELECT row(NULL::INT,2) = ANY (SELECT row(1,2));
 false
 
 query I
-SELECT __mark_join_marker FROM (VALUES (row(NULL::INT,2),1)) p(k,v) JOIN BY (TYPE MARK) (VALUES (row(1,2),2)) b(k,v) ON p.k=b.k AND p.v<b.v;
-----
-false
-
-query I
 SELECT row(NULL::INT,2) = ANY (SELECT row(NULL::INT,2));
-----
-true
-
-query I
-SELECT __mark_join_marker FROM (VALUES (row(NULL::INT,2),1)) p(k,v) JOIN BY (TYPE MARK) (VALUES (row(NULL::INT,2),2)) b(k,v) ON p.k=b.k AND p.v<b.v;
 ----
 true
 
@@ -33,17 +23,7 @@ SELECT NULL::TUPLE(INT,INT) = ANY (SELECT row(1,2));
 NULL
 
 query I
-SELECT __mark_join_marker FROM (VALUES (NULL::TUPLE(INT,INT),1)) p(k,v) JOIN BY (TYPE MARK) (VALUES (row(1,2),2)) b(k,v) ON p.k=b.k AND p.v<b.v;
-----
-NULL
-
-query I
 SELECT row(1,2) = ANY (SELECT row(NULL::INT,2));
-----
-false
-
-query I
-SELECT __mark_join_marker FROM (VALUES (row(1,2),1)) p(k,v) JOIN BY (TYPE MARK) (VALUES (row(NULL::INT,2),2)) b(k,v) ON p.k=b.k AND p.v<b.v;
 ----
 false
 

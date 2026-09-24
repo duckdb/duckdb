@@ -32,12 +32,6 @@ void TemporaryMemoryState::SetRemainingSizeAndUpdateReservation(ClientContext &c
 	temporary_memory_manager.UpdateState(context, *this);
 }
 
-void TemporaryMemoryState::SetRemainingSizeAndReduceReservation(idx_t new_remaining_size) {
-	const annotated_lock_guard<annotated_mutex> guard(temporary_memory_manager.lock);
-	temporary_memory_manager.SetRemainingSize(*this, new_remaining_size);
-	temporary_memory_manager.SetReservation(*this, MinValue(reservation.load(), new_remaining_size));
-}
-
 void TemporaryMemoryState::SetZero() {
 	const annotated_lock_guard<annotated_mutex> guard(temporary_memory_manager.lock);
 	temporary_memory_manager.SetRemainingSize(*this, 0);

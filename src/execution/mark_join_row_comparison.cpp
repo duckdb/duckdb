@@ -1,5 +1,4 @@
 #include "duckdb/execution/mark_join_row_comparison.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
@@ -105,8 +104,7 @@ void MarkJoinRowComparison::Compare(const Vector &left, const Vector &right, Exp
 	}
 }
 
-MarkJoinRowComparison::MarkJoinRowComparison(const DataChunk &left, Mode mode)
-    : comparison(LogicalType::BOOLEAN), mode(mode) {
+MarkJoinRowComparison::MarkJoinRowComparison(const DataChunk &left) : comparison(LogicalType::BOOLEAN) {
 	left_reference.Initialize(Allocator::DefaultAllocator(), left.GetTypes());
 }
 
@@ -121,7 +119,7 @@ void MarkJoinRowComparison::CompareConjunction(DataChunk &left, idx_t left_row, 
 	bool pair_is_unknown[STANDARD_VECTOR_SIZE] = {false};
 	for (idx_t condition_idx = 0; condition_idx < conditions.size(); condition_idx++) {
 		const auto type = conditions[condition_idx].GetComparisonType();
-		if (mode == Mode::NESTED_LOOP && left.data[condition_idx].GetType().id() == LogicalTypeId::TUPLE &&
+		if (left.data[condition_idx].GetType().id() == LogicalTypeId::TUPLE &&
 		    (type == ExpressionType::COMPARE_EQUAL || type == ExpressionType::COMPARE_NOTEQUAL)) {
 			bool is_false[STANDARD_VECTOR_SIZE] = {false};
 			bool is_unknown[STANDARD_VECTOR_SIZE] = {false};
@@ -163,30 +161,6 @@ void MarkJoinRowComparison::CompareConjunction(DataChunk &left, idx_t left_row, 
 		} else {
 			writer.WriteValue(true);
 		}
-	}
-}
-
-void MarkJoinRowComparison::CompareTail(DataChunk &left, DataChunk &right, const vector<JoinCondition> &conditions,
-                                        const vector<idx_t> &tail, Vector &result) {
-	D_ASSERT(left.size() == right.size());
-	D_ASSERT(left.size() <= STANDARD_VECTOR_SIZE);
-	if (tail.empty()) {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-		FlatVector::ValidityMutable(result).Reset(left.size());
-		auto writer = FlatVector::Writer<bool>(result, left.size());
-		for (idx_t row = 0; row < left.size(); row++) {
-			writer.WriteValue(true);
-		}
-		return;
-	}
-	const auto first = tail[0];
-	Compare(left.data[first], right.data[first], conditions[first].GetComparisonType(), result);
-	for (idx_t i = 1; i < tail.size(); i++) {
-		const auto col = tail[i];
-		Vector comparison(LogicalType::BOOLEAN), conjunction(LogicalType::BOOLEAN);
-		Compare(left.data[col], right.data[col], conditions[col].GetComparisonType(), comparison);
-		VectorOperations::And(result, comparison, conjunction);
-		result.Reference(conjunction);
 	}
 }
 
