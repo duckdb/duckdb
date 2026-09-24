@@ -242,7 +242,7 @@ bool IterativeHaystackWalk(const VariantNode &needle, vector<WalkFrame> &stack, 
 			}
 		}
 		if (node_type == VariantLogicalType::OBJECT) {
-			for (const auto entry : haystack.GetObjectChildren()) {
+			for (const auto &entry : haystack.GetObjectChildren()) {
 				stack.emplace_back(entry.value);
 			}
 		}
