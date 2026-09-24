@@ -96,11 +96,34 @@ public:
 
 		bool has_serialize = function.HasSerializationCallbacks();
 		serializer.WriteProperty(503, "has_serialize", has_serialize);
+		if constexpr (std::is_base_of_v<BoundSimpleFunction, FUNC>) {
+			SerializeNamedArguments(serializer, function);
+		}
 		if (has_serialize) {
 			serializer.WriteObject(504, "function_data",
 			                       [&](Serializer &obj) { function.GetSerializeCallback()(obj, bind_info, function); });
 			D_ASSERT(function.GetDeserializeCallback());
 		}
+	}
+
+	//! Only written if the function was called with keyword-only or "**kwargs" arguments
+	template <class FUNC>
+	static void SerializeNamedArguments(Serializer &serializer, const FUNC &function) {
+		auto &named_arguments = function.GetNamedArguments();
+		if (named_arguments.empty()) {
+			return;
+		}
+		if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+			if (named_arguments.size() > function.GetKwargsCount()) {
+				throw SerializationException("Function %s has keyword-only parameters, which cannot be serialized "
+				                             "to a storage version older than v2.0.0",
+				                             function.GetName());
+			}
+			// the "**kwargs" arguments are matched to "*args" instead, or named after their alias
+			return;
+		}
+		serializer.WriteProperty(508, "positional_arguments", function.GetPositionalArgumentCount());
+		serializer.WriteProperty(509, "named_arguments", named_arguments);
 	}
 
 	//! Plans written by versions whose binds erased the arguments they folded into their bind data record the
@@ -154,7 +177,7 @@ public:
 
 	template <class FUNC>
 	static unique_ptr<FunctionData> FunctionDeserialize(Deserializer &deserializer, FUNC &function) {
-		if (!function.HasSerializationCallbacks()) {
+		if (!function.GetDeserializeCallback()) {
 			throw SerializationException("Function requires deserialization but no deserialization function for %s",
 			                             function.GetName());
 		}
@@ -202,6 +225,34 @@ public:
 		}
 	}
 
+	//! Plans written before the argument names were serialized hold the names of the named arguments in the aliases
+	//! of the trailing arguments. Only the arguments behind the standard parameters can have been named.
+	template <class FUNCTION_SET>
+	static void RestoreNamesFromAliases(const FUNCTION_SET &functions, const vector<unique_ptr<Expression>> &children,
+	                                    idx_t &positional_count, vector<Identifier> &named_arguments) {
+		bool takes_named = false;
+		idx_t standard_count = 0;
+		for (auto &function : functions.functions) {
+			auto &signature = function->GetSignature();
+			if (!signature.GetKwargsParameter()) {
+				continue;
+			}
+			takes_named = true;
+			standard_count = MaxValue(standard_count, signature.GetPositionalParameterCount());
+		}
+		if (!takes_named || children.size() != positional_count) {
+			return;
+		}
+		idx_t named_offset = children.size();
+		while (named_offset > standard_count && !children[named_offset - 1]->GetAlias().empty()) {
+			named_offset--;
+		}
+		for (idx_t i = named_offset; i < children.size(); i++) {
+			named_arguments.push_back(children[i]->GetAlias());
+		}
+		positional_count = named_offset;
+	}
+
 	template <class FUNC, class CATALOG_ENTRY>
 	static pair<FUNC, unique_ptr<FunctionData>> Deserialize(Deserializer &deserializer, CatalogType catalog_type,
 	                                                        vector<unique_ptr<Expression>> &children,
@@ -213,6 +264,8 @@ public:
 		auto original_arguments = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(502, "original_arguments");
 		auto qualified_name = DeserializeQualifiedName(deserializer, std::move(name));
 		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
+		auto positional_count = deserializer.ReadPropertyWithDefault<idx_t>(508, "positional_arguments");
+		auto named_arguments = deserializer.ReadPropertyWithDefault<vector<Identifier>>(509, "named_arguments");
 
 		RestoreErasedArguments(arguments, original_arguments);
 
@@ -233,16 +286,65 @@ public:
 			throw InternalException("DeserializeFunction - cant find catalog entry for function %s",
 			                        qualified_name.Name().GetIdentifierName());
 		}
-		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
-		const auto function = functions.functions.GetFunctionByArguments(context, arguments);
+
+		auto &functions = func_catalog.Cast<CATALOG_ENTRY>().functions;
+
+		// If there are no argument names serialized, treat all arguments as positional
+		if (named_arguments.empty()) {
+			positional_count = arguments.size();
+			RestoreNamesFromAliases(functions, children, positional_count, named_arguments);
+		}
+
+		// Sanity check: The named arguments are the last arguments, so the number of arguments has to add up
+		const auto has_valid_count = positional_count + named_arguments.size() == arguments.size();
+		if (!has_valid_count || (!named_arguments.empty() && children.size() != arguments.size())) {
+			throw SerializationException(
+			    "Function %s has %llu argument types and %llu arguments, but %llu positional and %llu named arguments",
+			    qualified_name.ToString(), arguments.size(), children.size(), positional_count, named_arguments.size());
+		}
+
+		// Split types by positional and keyword arguments
+		vector<LogicalType> positional_types;
+		vector<pair<Identifier, LogicalType>> keyword_types;
+
+		for (idx_t arg_idx = 0; arg_idx < arguments.size(); arg_idx++) {
+			if (arg_idx < positional_count) {
+				positional_types.push_back(arguments[arg_idx]);
+			} else {
+				const auto kw_idx = arg_idx - positional_count;
+				keyword_types.emplace_back(named_arguments[kw_idx], arguments[arg_idx]);
+			}
+		}
+
+		// Lookup the function (and the correct overload)
+		FunctionBinder binder(context);
+		ErrorData error;
+		const auto func_idx =
+		    binder.BindFunction(qualified_name.Name(), functions, positional_types, keyword_types, error);
+
+		// Ensure the function overload was found
+		if (!func_idx.IsValid()) {
+			throw SerializationException("Failed to find function %s(%s)\n%s", qualified_name.ToString(),
+			                             StringUtil::ToString(arguments, ","), error.RawMessage());
+		}
+
+		const auto function = functions.GetFunctionByOffset(func_idx.GetIndex());
 
 		// Does this function support serializing its bound data?
 		if (!has_serialize) {
 			// No, then just rebind the function
 			try {
-				FunctionBinder binder(context);
+				// Split children into positional and keyword args expression
+				vector<pair<Identifier, unique_ptr<Expression>>> keyword_args;
+				if (!named_arguments.empty()) {
+					for (idx_t i = positional_count; i < children.size(); i++) {
+						keyword_args.emplace_back(named_arguments[i - positional_count], std::move(children[i]));
+					}
+					children.resize(positional_count);
+				}
 
-				auto [bound_function, bound_data] = binder.ResolveFunction(function, children);
+				// Resolve function
+				auto [bound_function, bound_data] = binder.ResolveFunction(function, children, keyword_args);
 
 				if (TypeRequiresAssignment(bound_function.GetReturnType())) {
 					bound_function.SetReturnType(std::move(return_type));
@@ -250,15 +352,17 @@ public:
 
 				return make_pair(std::move(bound_function), std::move(bound_data));
 			} catch (std::exception &ex) {
-				ErrorData error(ex);
+				ErrorData inner_error(ex);
 				throw SerializationException("Error during bind of function in deserialization: %s",
-				                             error.RawMessage());
+				                             inner_error.RawMessage());
 			}
 		}
 
 		// Otherwise, construct the bound function from its parts
 		FUNC bound_function(function);
 		bound_function.GetArguments() = std::move(arguments);
+
+		bound_function.SetNamedArguments(positional_count, std::move(named_arguments));
 		RestoreLogicalSignature(bound_function, children, return_type);
 
 		// Invoke deserialization function

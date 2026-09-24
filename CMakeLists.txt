@@ -655,6 +655,26 @@ option(
   FALSE)
 option(BUILD_UNITTESTS "Build the unittest runner." TRUE)
 option(ENABLE_UNITTEST_CPP_TESTS "Build the C++ Unit Tests." TRUE)
+option(NATIVE_LTO_STATIC_LIBRARIES
+       "Run LTO before writing static libraries so non-LTO linkers can use them"
+       OFF)
+if(NATIVE_LTO_STATIC_LIBRARIES)
+  if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux"
+     OR NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$"
+     OR NOT CMAKE_LTO)
+    message(
+      FATAL_ERROR
+        "NATIVE_LTO_STATIC_LIBRARIES requires a Linux Clang build with CMAKE_LTO set"
+    )
+  endif()
+  find_program(DUCKDB_LLD_LINKER NAMES ld.lld)
+  if(NOT DUCKDB_LLD_LINKER)
+    message(
+      FATAL_ERROR
+        "NATIVE_LTO_STATIC_LIBRARIES requires ld.lld to produce native relocatable objects"
+    )
+  endif()
+endif()
 option(
   EXTENSION_CONFIG_BUILD
   "Produce extension configuration artifacts instead of building. (such as shared vcpkg.json, extensions.txt)"
@@ -1201,12 +1221,8 @@ include(${PROJECT_SOURCE_DIR}/extension/extension_build_tools.cmake)
 
 include(${PROJECT_SOURCE_DIR}/scripts/architecture_flags.cmake)
 
-# These compile definitions/paths are consumed by sources in src/ (e.g.
-# extension_helper.cpp, allocator.cpp), so they must be configured before
-# add_subdirectory(src).
-include_directories("${PROJECT_BINARY_DIR}/codegen/include/")
-add_extension_definitions()
-add_definitions(-DGENERATED_EXTENSION_HEADERS=1)
+# These compile definitions are consumed by sources in src/, so they must be
+# configured before add_subdirectory(src).
 add_definitions(-DDUCKDB_MAJOR_VERSION=${DUCKDB_MAJOR_VERSION})
 add_definitions(-DDUCKDB_MINOR_VERSION=${DUCKDB_MINOR_VERSION})
 add_definitions(-DDUCKDB_PATCH_VERSION=${DUCKDB_PATCH_VERSION})

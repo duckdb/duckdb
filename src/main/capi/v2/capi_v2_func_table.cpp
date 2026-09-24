@@ -663,7 +663,7 @@ public:
 		vector<LogicalType> positional;
 		for (idx_t i = 0; i < signature.GetParameterCount(); i++) {
 			const auto &param = signature.GetParameter(i);
-			if (!param.HasDefaultValue()) {
+			if (!param.IsVariadic() && !param.HasDefaultValue()) {
 				positional.push_back(param.GetType());
 			}
 		}
@@ -694,6 +694,9 @@ public:
 		auto function_info = make_shared_ptr<CV2TableFunctionInfo>(std::move(info));
 		for (idx_t i = 0; i < signature.GetParameterCount(); i++) {
 			const auto &param = signature.GetParameter(i);
+			if (param.IsVariadic()) {
+				continue;
+			}
 			if (param.HasDefaultValue()) {
 				function.named_parameters[param.GetName()] = param.GetType();
 				function_info->named_parameter_defaults[param.GetName()] = *param.GetDefaultValue();
@@ -795,7 +798,7 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_set_name(duckdb_v2_table_function_handl
 	DUCKDB_CHECK_ARG(function);
 	DUCKDB_CHECK_ARG(name);
 	DUCKDB_CHECK_ARG(*name);
-	return WithErrorHandler(err, [&]() { Convert(function)->name = duckdb::Identifier(Convert(*name)); });
+	return WithErrorHandler(err, [&]() { Convert(function)->name = duckdb::Identifier(ConvertIdentifierName(*name)); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_table_function_get_signature(duckdb_v2_table_function_handle function,
@@ -948,7 +951,7 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_bind_add_result_column(duckdb_v2_table_
 			throw duckdb::InvalidInputException("Result column type must be a fully defined concrete type");
 		}
 		auto &bind_info = *Convert(info);
-		bind_info.out_column_names.emplace_back(Convert(name));
+		bind_info.out_column_names.emplace_back(ConvertIdentifierName(name));
 		bind_info.out_column_types.push_back(column_type);
 	});
 }

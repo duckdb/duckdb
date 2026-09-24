@@ -204,7 +204,7 @@ static duckdb::vector<duckdb::TypeArgument> CollectTypeArgsV2(const duckdb_v2_id
 		if (!param_values[i]) {
 			throw duckdb::InvalidInputException("null parameter value at index %llu", i);
 		}
-		args.emplace_back(duckdb::string(Convert(param_name)), *Convert(param_values[i]));
+		args.emplace_back(duckdb::string(ConvertIdentifierName(param_name)), *Convert(param_values[i]));
 	}
 	return args;
 }
@@ -462,7 +462,7 @@ duckdb::LogicalType AliasOf(duckdb_v2_logical_type_handle base_type, duckdb_v2_i
 	if (alias_name.len == 0) {
 		throw duckdb::InvalidInputException("alias name cannot be empty");
 	}
-	return Convert(base_type)->WithAlias(std::string(Convert(alias_name)));
+	return Convert(base_type)->WithAlias(std::string(ConvertIdentifierName(alias_name)));
 }
 
 } // namespace

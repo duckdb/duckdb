@@ -336,6 +336,8 @@ public:
 	atomic<bool> stopped;
 	//! The number of completed tasks for each stage
 	array<atomic<idx_t>, static_cast<size_t>(IEJoinSourceStage::DONE) + 1> completed;
+	//! The progress of the tasks
+	TaskProgress task_progress;
 
 	//! L1
 	unique_ptr<SortedTable> l1;
@@ -482,6 +484,20 @@ public:
 	}
 
 	bool TryAssignTask();
+	//! Reports the progress of the current task
+	void UpdateProgress() {
+		if (!task) {
+			return;
+		}
+		if (TaskFinished()) {
+			task_progress.Finish(gsource.task_progress);
+		} else if (task->stage == IEJoinSourceStage::INNER && joiner) {
+			// the inner join advances over the rows of its range
+			auto done = joiner->i > inner_begin ? joiner->i - inner_begin : 0;
+			auto total = joiner->n > inner_begin ? joiner->n - inner_begin : 0;
+			task_progress.Update(gsource.task_progress, done, total);
+		}
+	}
 	//	Sort L1
 	void ExecuteSinkL1Task(ExecutionContext &context, InterruptState &interrupt);
 	//	Finalize L1 sort
@@ -535,6 +551,10 @@ public:
 	TaskPtr task;
 	//! The task storage
 	Task task_local;
+	//! The progress reported for the current task
+	TaskProgressTracker task_progress;
+	//! The first row of the current inner join task
+	idx_t inner_begin = 0;
 
 	// Joining
 	unique_ptr<IEJoinUnion> joiner;
@@ -588,6 +608,7 @@ bool IEJoinLocalSourceState::TryAssignTask() {
 	// Because downstream operators may be using our internal buffers,
 	// we can't "finish" a task until we are about to get the next one.
 	if (task) {
+		task_progress.Finish(gsource.task_progress);
 		++gsource.GetStageNext(task->stage);
 		left_matches = nullptr;
 		right_matches = nullptr;
@@ -596,6 +617,7 @@ bool IEJoinLocalSourceState::TryAssignTask() {
 	if (!gsource.TryNextTask(task, task_local)) {
 		return false;
 	}
+	task_progress.Start();
 
 	auto &gsink = gsource.gsink;
 	auto &left_table = *gsink.tables[0];
@@ -620,6 +642,7 @@ bool IEJoinLocalSourceState::TryAssignTask() {
 		right_base = 0;
 
 		joiner = make_uniq<IEJoinUnion>(*gsource.l2, *gsource.li, *gsource.p, gsource.op.conditions, task->range);
+		inner_begin = joiner->i;
 		break;
 	case IEJoinSourceStage::OUTER:
 		if (task->thread_idx < gsource.left_outers) {
@@ -1408,17 +1431,12 @@ bool IEJoinGlobalSourceState::TryNextTask(Task &task) {
 
 ProgressData IEJoinGlobalSourceState::GetProgress() const {
 	const auto count = GetTaskCount();
-
-	const auto returned = finished.load();
-
-	ProgressData res;
-	if (count) {
-		res.done = double(returned);
-		res.total = double(count);
-	} else {
+	if (!count) {
+		ProgressData res;
 		res.SetInvalid();
+		return res;
 	}
-	return res;
+	return task_progress.GetProgress(count);
 }
 unique_ptr<GlobalSourceState> PhysicalIEJoin::GetGlobalSourceState(ClientContext &client) const {
 	auto &gsink = sink_state->Cast<IEJoinGlobalState>();
@@ -1446,6 +1464,7 @@ SourceResultType PhysicalIEJoin::GetDataInternal(ExecutionContext &context, Data
 	while (gsource.stage != IEJoinSourceStage::DONE && result.size() == 0) {
 		if (!lsource.TaskFinished() || lsource.TryAssignTask()) {
 			lsource.ExecuteTask(context, result, input.interrupt_state);
+			lsource.UpdateProgress();
 		} else {
 			annotated_lock_guard<annotated_mutex> guard(gsource.lock);
 			if (gsource.TryPrepareNextStage() || gsource.stage == IEJoinSourceStage::DONE) {

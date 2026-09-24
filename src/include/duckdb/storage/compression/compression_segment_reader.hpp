@@ -80,6 +80,27 @@ public:
 		return result;
 	}
 
+	//! Returns a view over the preceding length bytes and moves the position backward.
+	unsafe_array_ptr<const uint8_t> ReadBytesBackward(idx_t length) {
+		CheckBackwardRead(length);
+		position -= length;
+		return unsafe_array_ptr<const uint8_t>(data + position, length);
+	}
+
+	//! Returns a view over the preceding count aligned elements and moves the position backward.
+	template <class T>
+	unsafe_array_ptr<const T> ReadArrayBackward(idx_t count) {
+		static_assert(std::is_trivially_copyable_v<T>,
+		              "ReadArrayBackward element must be a trivially copyable data type");
+		if (DUCKDB_UNLIKELY(count > position / sizeof(T))) {
+			ThrowBackwardReadOutOfBounds();
+		}
+		auto offset = position - count * sizeof(T);
+		auto result = GetArray<T>(offset, count);
+		position = offset;
+		return result;
+	}
+
 	//! Copies the next length bytes into destination and advances the position.
 	//! The caller must ensure destination has capacity for length bytes.
 	void ReadBytesInto(data_ptr_t destination, idx_t length) {
@@ -202,6 +223,10 @@ public:
 	//! Aligns the position relative to this reader's origin.
 	//! Throws if alignment is zero or the padding exceeds the range.
 	void Align(idx_t alignment);
+
+	//! Aligns the position backward relative to this reader's origin.
+	//! Throws if alignment is zero.
+	void AlignBackward(idx_t alignment);
 
 private:
 	void CheckForwardRead(idx_t length) const {

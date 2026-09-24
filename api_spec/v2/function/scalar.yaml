@@ -150,7 +150,7 @@ functions:
         type: scalar_function
         description: The function to set the name of.
       name:
-        type: str
+        type: identifier
         indirection: 1
         description: The name to set. Borrowed and copied.
       err:

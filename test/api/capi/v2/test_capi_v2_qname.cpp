@@ -150,13 +150,17 @@ TEST_CASE("V2 qname: construction refusals", "[capi_v2][qname]") {
 
 	duckdb_v2_identifier_t with_empty[2] = {Convert("a"), Convert("")};
 	REQUIRE(duckdb_v2_qname_create(with_empty, 2, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	duckdb_v2_identifier_t with_invalid_utf8[2] = {Convert("a"), Convert("\x80")};
+	REQUIRE(duckdb_v2_qname_create(with_invalid_utf8, 2, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	duckdb_v2_identifier_t one[1] = {Convert("a")};
 	REQUIRE(duckdb_v2_qname_create(nullptr, 1, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_qname_create(one, 1, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
-	// Text without a usable part, and more parts than the engine qualifies.
+	// Reject unusable text, invalid UTF-8 and excess parts.
 	REQUIRE(duckdb_v2_qname_parse(Convert(""), &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_qname_parse(Convert("a.\x80"), &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(name == nullptr);
 	REQUIRE(duckdb_v2_qname_parse(Convert("a.b.c.d"), &name, nullptr) != DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_qname_parse(Convert("\"unterminated"), &name, nullptr) != DUCKDB_V2_ERROR_NONE);
 }
