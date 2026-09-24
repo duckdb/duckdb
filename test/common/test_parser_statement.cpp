@@ -83,7 +83,7 @@ TEST_CASE("Parser statement copies round-trip through SQL", "[parser]") {
 	}
 }
 
-TEST_CASE("Parser query nodes remain equal after copying", "[parser]") {
+TEST_CASE("Parser query nodes remain equal after copying and reparsing", "[parser]") {
 	duckdb::vector<pair<string, StatementType>> statements {
 	    {"SELECT DISTINCT ON (a) a, sum(b) FROM tbl WHERE a > 0 GROUP BY GROUPING SETS ((a), ()) "
 	     "HAVING sum(b) > 0 QUALIFY row_number() OVER () = 1 ORDER BY a DESC NULLS LAST LIMIT 10 OFFSET 1",
@@ -94,7 +94,7 @@ TEST_CASE("Parser query nodes remain equal after copying", "[parser]") {
 	    {"PIVOT sales ON category IN ('a', 'b') USING sum(amount) GROUP BY id", StatementType::SELECT_STATEMENT},
 	    {"UNPIVOT sales ON jan, feb INTO NAME month VALUE amount", StatementType::SELECT_STATEMENT},
 	    {"SELECT 1 AS a UNION BY NAME SELECT 2 AS b ORDER BY ALL LIMIT 2", StatementType::SELECT_STATEMENT},
-	    {"WITH RECURSIVE r(i) AS (VALUES (1) UNION ALL SELECT i + 1 FROM r WHERE i < 3) SELECT * FROM r",
+	    {"WITH RECURSIVE r(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM r WHERE i < 3) SELECT * FROM r",
 	     StatementType::SELECT_STATEMENT},
 	    {"INSERT INTO target AS t (id, value) VALUES (1, DEFAULT) ON CONFLICT (id) DO UPDATE SET "
 	     "value = excluded.value WHERE t.value <> excluded.value RETURNING id, value",
@@ -116,9 +116,13 @@ TEST_CASE("Parser query nodes remain equal after copying", "[parser]") {
 		auto statement = ParseSingleStatement(entry.first);
 		REQUIRE(statement->type == entry.second);
 		auto copy = statement->Copy();
-		CAPTURE(entry.first);
+		auto rendered = copy->ToString();
+		CAPTURE(entry.first, rendered);
 		REQUIRE(GetQueryNode(*statement).Equals(&GetQueryNode(*copy)));
-		RequireStatementRoundTrip(entry.first, entry.second);
+
+		auto reparsed = ParseSingleStatement(rendered);
+		REQUIRE(reparsed->type == entry.second);
+		REQUIRE(GetQueryNode(*statement).Equals(&GetQueryNode(*reparsed)));
 	}
 }
 
@@ -127,10 +131,13 @@ TEST_CASE("Parser tokenizes errors for shell highlighting", "[parser]") {
 	                     "LINE 1: SELECT missing FROM tbl\n"
 	                     "                       ^";
 	auto tokens = Parser::TokenizeError(error);
-	REQUIRE(!tokens.empty());
+	REQUIRE(tokens.size() == 11);
 	REQUIRE(tokens[0].type == SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR_EMPHASIS);
+	REQUIRE(tokens[0].start == 0);
 	REQUIRE(HasTokenType(tokens, SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR));
 	REQUIRE(HasTokenType(tokens, SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR_SUGGESTION));
+	REQUIRE(tokens[8].type == SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR_EMPHASIS);
+	REQUIRE(tokens[8].start == error.find("FROM tbl"));
 
 	for (auto &token : tokens) {
 		REQUIRE(token.start < error.size());
