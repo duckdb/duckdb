@@ -49,6 +49,7 @@ MERGE_GROUP_JOBS = [
 
 RELEASE_JOBS = [
     "osx",
+    "codecov",
     "extensions-install",
 ]
 

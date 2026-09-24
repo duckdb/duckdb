@@ -231,6 +231,8 @@ class JobStagesTest(unittest.TestCase):
         selection = self._compute_job_selection("workflow_dispatch", "main", "duckdb/duckdb", skip_tests=True)
         self.assertIn("linux-release", selection.enabled_jobs)
         self.assertNotIn("linux-release-tests", selection.enabled_jobs)
+        self.assertIn("osx", selection.enabled_jobs)
+        self.assertIn("codecov", selection.enabled_jobs)
         self.assertTrue(selection.optimized_release)
         self.assertEqual(
             [config["name"] for config in selection.linux_release_matrix],
