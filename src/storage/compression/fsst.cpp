@@ -505,6 +505,11 @@ void FSSTStorage::FinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
+[[noreturn]] static void ThrowInvalidFSSTSegment(const char *reason) {
+	throw DataCorruptionException("Failed to read FSST string segment - %s. Database file appears to be corrupted.",
+	                              reason);
+}
+
 struct FSSTScanState : public SegmentScanState {
 	explicit FSSTScanState(const idx_t string_block_limit) {
 		ResetStoredDelta();
@@ -560,9 +565,7 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(const QueryContext &con
 	auto block_size = segment.GetBlockSize();
 	auto block_offset = segment.GetBlockOffset();
 	if (block_offset > block_size) {
-		throw DataCorruptionException(
-		    "Failed to read FSST string segment - header was out of range. Database file appears to be "
-		    "corrupted.");
+		ThrowInvalidFSSTSegment("header was out of range");
 	}
 	auto segment_capacity = block_size - block_offset;
 	auto string_block_limit = StringUncompressed::GetStringBlockLimit(block_size);
@@ -733,9 +736,7 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 	auto block_size = segment.GetBlockSize();
 	auto block_offset = segment.GetBlockOffset();
 	if (block_offset > block_size) {
-		throw DataCorruptionException(
-		    "Failed to read FSST string segment - header was out of range. Database file appears to be "
-		    "corrupted.");
+		ThrowInvalidFSSTSegment("header was out of range");
 	}
 	auto segment_capacity = block_size - block_offset;
 	auto base_ptr = handle.GetDataMutable() + block_offset;
@@ -818,11 +819,6 @@ char *FSSTStorage::FetchStringPointer(StringDictionaryContainer dict, data_ptr_t
 	auto dict_end = baseptr + dict.end;
 	auto dict_pos = dict_end - dict_offset;
 	return char_ptr_cast(dict_pos);
-}
-
-static void ThrowInvalidFSSTSegment(const char *reason) {
-	throw DataCorruptionException("Failed to read FSST string segment - %s. Database file appears to be corrupted.",
-	                              reason);
 }
 
 // Returns false if no symbol table was found. This means all strings are either empty or null
