@@ -264,4 +264,29 @@ explain
 FROM avg_price
 WHERE l_linenumber >= 20;
 ----
-logical_opt	<REGEX>:.*Filters:.* >= '1970-01-21'::DATE.*
+logical_opt	<REGEX>:.*SEQ_SCAN.*Filters:.* >= '1970-01-21'::DATE.*
+
+# Don't use non-comparisons.
+statement ok 
+create or replace table test as 
+	from values 
+		(1, 'Hello'), 
+		(2, 'hello'), 
+		(3, 'H'), 
+		(4, 'i'), 
+		(5, 'I') 
+	t(id, var);
+
+statement ok 
+create view avg_id as (
+	select 
+		*, 
+		avg(id) over (partition by lower(var) order by id) as col2 
+	from test 
+);
+
+query II
+explain
+from avg_id where var like '%hel%';
+----
+logical_opt	<!REGEX>:.*SEQ_SCAN.*Filters:.*
