@@ -1,0 +1,51 @@
+# name: test/sql/table_function/table_function_positional_by_name.test
+# description: A positional parameter passed by name reaches the table function in its positional slot
+# group: [table_function]
+
+query I
+SELECT * FROM range(1, col1 := 5)
+----
+1
+2
+3
+4
+
+query I
+SELECT * FROM range(col0 := 3)
+----
+0
+1
+2
+
+query I
+SELECT * FROM generate_series(col0 := 1, col1 := 10, col2 := 4)
+----
+1
+5
+9
+
+query I
+SELECT * FROM range(1, 10, col2 := 4)
+----
+1
+5
+9
+
+statement error
+SELECT * FROM range(1, col0 := 5)
+----
+No function matches
+
+statement error
+SELECT * FROM range(col1 := 5)
+----
+No function matches
+
+statement ok
+CREATE TABLE t (a INTEGER, b VARCHAR)
+
+query I
+SELECT name FROM pragma_table_info(col0 := 't')
+----
+a
+b

@@ -331,7 +331,7 @@ public:
 	}
 
 	//! Adds a named parameter the caller may leave out, defaulting to a NULL of its own type - the form a function's
-	//! options take, so that an option that is not passed simply does not reach it
+	//! options take, so that an option that is not passed simply does not reach a table function
 	auto AddOptionalNamedParameter(Identifier name, LogicalType type) -> FunctionSignature & {
 		auto default_value = Value(type);
 		return AddNamedParameter(std::move(name), std::move(type), std::move(default_value));

@@ -453,3 +453,168 @@ TEST_CASE("Custom scan serialization retains invocation inputs", "[serialization
 	}
 	connection.Rollback();
 }
+
+namespace {
+
+struct KeywordScanBindData : public TableFunctionData {
+	explicit KeywordScanBindData(Value value_p) : value(std::move(value_p)) {
+	}
+	Value value;
+};
+
+//! Returns the option it was called with, typed as the overload it was bound to declares it
+static unique_ptr<FunctionData> KeywordScanBind(ClientContext &, TableFunctionBindInput &input,
+                                                vector<LogicalType> &types, vector<Identifier> &names) {
+	auto &signature = input.table_function.GetSignature();
+	auto param_idx = signature.GetParameterIndexByName("opt");
+	REQUIRE(param_idx.IsValid());
+	auto &type = signature.GetParameter(param_idx.GetIndex()).GetType();
+	auto entry = input.named_parameters.find("opt");
+	types.push_back(type);
+	names.emplace_back("opt");
+	return make_uniq<KeywordScanBindData>(entry == input.named_parameters.end() ? Value(type) : entry->second);
+}
+
+static void KeywordScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> data,
+                                 const BoundTableFunction &) {
+	serializer.WriteProperty(100, "value", data->Cast<KeywordScanBindData>().value);
+}
+
+static unique_ptr<FunctionData> KeywordScanDeserialize(Deserializer &deserializer, BoundTableFunction &) {
+	return make_uniq<KeywordScanBindData>(deserializer.ReadProperty<Value>(100, "value"));
+}
+
+static TableFunction KeywordScan(FunctionSignature signature, bool serialize_bind_data) {
+	TableFunction function("keyword_scan", std::move(signature), nullptr, KeywordScanBind);
+	if (serialize_bind_data) {
+		function.serialize = KeywordScanSerialize;
+		function.deserialize = KeywordScanDeserialize;
+	}
+	return function;
+}
+
+static LogicalGet &FindGet(LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		return op.Cast<LogicalGet>();
+	}
+	REQUIRE(op.children.size() == 1);
+	return FindGet(*op.children[0]);
+}
+
+} // namespace
+
+TEST_CASE("Table function overloads selected by named arguments survive serialization",
+          "[serialization][function_invocation]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	connection.BeginTransaction();
+	auto &context = *connection.context;
+	bool serialize_bind_data = false;
+	SECTION("Rebound on deserialization") {
+	}
+	SECTION("Bind data serialized") {
+		serialize_bind_data = true;
+	}
+	// one overload requires an INTEGER option, the other two take a positional argument and differ only in the type
+	// of an optional one
+	TableFunctionSet set("keyword_scan");
+	set.AddFunction(
+	    KeywordScan(FunctionSignature().AddNamedParameter("opt", LogicalType::INTEGER), serialize_bind_data));
+	set.AddFunction(KeywordScan(
+	    FunctionSignature().AddParameter(LogicalType::VARCHAR).AddOptionalNamedParameter("opt", LogicalType::DOUBLE),
+	    serialize_bind_data));
+	set.AddFunction(KeywordScan(
+	    FunctionSignature().AddParameter(LogicalType::VARCHAR).AddOptionalNamedParameter("opt", LogicalType::DATE),
+	    serialize_bind_data));
+	CreateTableFunctionInfo info(set);
+	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
+
+	struct Case {
+		string sql;
+		LogicalType type;
+		Value value;
+	};
+	vector<Case> cases {{"SELECT * FROM keyword_scan(opt := 42)", LogicalType::INTEGER, Value::INTEGER(42)},
+	                    {"SELECT * FROM keyword_scan('a', opt := 1.5)", LogicalType::DOUBLE, Value::DOUBLE(1.5)},
+	                    {"SELECT * FROM keyword_scan('a', opt := DATE '2024-01-02')", LogicalType::DATE,
+	                     Value::DATE(date_t(Date::FromDate(2024, 1, 2)))}};
+	for (auto &test_case : cases) {
+		CAPTURE(test_case.sql);
+		Parser parser(context.GetParserOptions());
+		parser.ParseQuery(test_case.sql);
+		Planner planner(context);
+		planner.CreatePlan(std::move(parser.statements[0]));
+		auto &get = FindGet(*planner.plan);
+		REQUIRE(get.returned_types == vector<LogicalType> {test_case.type});
+
+		MemoryStream stream(Allocator::Get(context));
+		BinarySerializer::Serialize(get, stream, SerializationOptions());
+		stream.Rewind();
+		bound_parameter_map_t parameters;
+		auto copy = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
+		auto &copied_get = copy->Cast<LogicalGet>();
+		REQUIRE(copied_get.function.GetDefinition() == get.function.GetDefinition());
+		REQUIRE(copied_get.function.GetArguments() == get.function.GetArguments());
+		REQUIRE(copied_get.function.GetNamedArguments() == get.function.GetNamedArguments());
+		REQUIRE(copied_get.returned_types == vector<LogicalType> {test_case.type});
+		REQUIRE(copied_get.bind_data->Cast<KeywordScanBindData>().value == test_case.value);
+	}
+
+	// a plan for an older version records only the positional arguments, which cannot select the first overload
+	Parser parser(context.GetParserOptions());
+	parser.ParseQuery(cases[0].sql);
+	Planner planner(context);
+	planner.CreatePlan(std::move(parser.statements[0]));
+	SerializationOptions options;
+	options.storage_compatibility = StorageCompatibility::FromString("v1.5.0");
+	MemoryStream stream(Allocator::Get(context));
+	REQUIRE_THROWS_WITH(BinarySerializer::Serialize(FindGet(*planner.plan), stream, options),
+	                    Catch::Matchers::Contains("required keyword-only parameter"));
+	connection.Rollback();
+}
+
+TEST_CASE("Table function options survive plans written for older versions", "[serialization][function_invocation]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	connection.BeginTransaction();
+	auto &context = *connection.context;
+	bool serialize_bind_data = false;
+	SECTION("Rebound on deserialization") {
+	}
+	SECTION("Bind data serialized") {
+		serialize_bind_data = true;
+	}
+	TableFunctionSet set("keyword_scan");
+	set.AddFunction(KeywordScan(FunctionSignature()
+	                                .AddParameter(LogicalType::VARCHAR)
+	                                .AddOptionalNamedParameter("opt", LogicalType::DOUBLE),
+	                            serialize_bind_data));
+	CreateTableFunctionInfo info(set);
+	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
+
+	Parser parser(context.GetParserOptions());
+	parser.ParseQuery("SELECT * FROM keyword_scan('a', opt := 1.5)");
+	Planner planner(context);
+	planner.CreatePlan(std::move(parser.statements[0]));
+	auto &get = FindGet(*planner.plan);
+
+	for (const auto &version : {"v1.3.0", "v1.4.0", "v1.5.0"}) {
+		CAPTURE(version);
+		SerializationOptions options;
+		options.storage_compatibility = StorageCompatibility::FromString(version);
+		MemoryStream stream(Allocator::Get(context));
+		BinarySerializer::Serialize(get, stream, options);
+		stream.Rewind();
+		bound_parameter_map_t parameters;
+		auto copy = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
+		auto &copied_get = copy->Cast<LogicalGet>();
+		REQUIRE(copied_get.function.GetDefinition() == get.function.GetDefinition());
+		if (!serialize_bind_data) {
+			// older versions write the options only when the bind is repeated on deserialization
+			REQUIRE(copied_get.named_parameters == get.named_parameters);
+		}
+		REQUIRE(copied_get.returned_types == vector<LogicalType> {LogicalType::DOUBLE});
+		REQUIRE(copied_get.bind_data->Cast<KeywordScanBindData>().value == Value::DOUBLE(1.5));
+	}
+	connection.Rollback();
+}

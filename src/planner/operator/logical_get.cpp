@@ -374,8 +374,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault(203, "column_ids", legacy_column_ids);
 	deserializer.ReadProperty(204, "projection_ids", result->projection_ids);
 	deserializer.ReadProperty(205, "table_filters", result->table_filters);
-	auto entry = FunctionSerializer::DeserializeBase<BoundTableFunction, TableFunctionCatalogEntry>(
-	    deserializer, CatalogType::TABLE_FUNCTION_ENTRY);
+	auto entry = FunctionSerializer::DeserializeTableFunction(deserializer);
 	result->function = entry.first;
 	auto &function = result->function;
 	auto has_serialize = entry.second;

@@ -697,6 +697,9 @@ public:
 	FunctionParameterKind GetArgumentParameterKind(idx_t argument_index) const {
 		return BoundSimpleFunction::GetArgumentParameterKind(definition->GetSignature(), argument_index);
 	}
+	//! Records the arguments of the call this was bound to, laid out as [standard | *args | keyword-only | **kwargs].
+	//! Plan serialization writes them, so that deserialization selects the same overload the call did
+	DUCKDB_API void SetCallArguments(const vector<Value> &parameters, const named_parameter_map_t &named_parameters);
 
 private:
 	shared_ptr<const TableFunction> definition;

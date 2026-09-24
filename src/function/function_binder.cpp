@@ -483,8 +483,27 @@ static Value FoldArgument(ClientContext &context, Expression &expr) {
 	return ExpressionExecutor::EvaluateScalar(context, expr, true);
 }
 
-//! Place the arguments of a call onto the parameters of the chosen overload: fold each to a constant, cast it to the
-//! type that parameter declares, and hand the named ones back keyed by the name the caller actually wrote.
+//! Fold an argument to a constant and cast it to the type of the parameter it fills
+static Value PlaceArgument(ClientContext &context, Expression &expr, const LogicalType &target_type) {
+	if (target_type.id() == LogicalTypeId::TABLE) {
+		// A TABLE parameter is filled by the subquery itself rather than by a value, so its slot holds a plain
+		// NULL. A NULL of type TABLE would not do: TABLE has no physical type, so such a value cannot be read
+		// back when the plan is deserialized.
+		return Value();
+	}
+	auto value = FoldArgument(context, expr);
+	if (RequiresCast(value.type(), target_type) == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
+		value = value.CastAs(context, target_type);
+	}
+	return value;
+}
+
+//! Place the arguments of a call onto the parameters of the chosen overload: fold each to a constant and cast it to
+//! the type that parameter declares. Every parameter that accepts a position gets its slot in "parameters", whether
+//! the caller passed it by position, by name or not at all, so "range(1, col1 := 5)" reaches the callback exactly as
+//! "range(1, 5)" does. Only keyword-only and "**kwargs" arguments are handed back in "named_parameters", keyed by the
+//! name the caller wrote. A parameter the call leaves out receives its default, except a named one defaulting to
+//! NULL: it stays out of "named_parameters", so the callback can still tell that the option was not passed.
 //! Overload selection has already established that every cast here is one the implicit rules allow, so this converts
 //! rather than forces - an argument no implicit cast reaches never selects the overload in the first place.
 template <class T>
@@ -494,22 +513,10 @@ static void PlaceArguments(ClientContext &context, const T &function,
                            named_parameter_map_t &named_parameters) {
 	auto &signature = function.GetSignature();
 	const auto positional_count = signature.GetPositionalParameterCount();
-	for (idx_t i = 0; i < positional_arguments.size(); i++) {
-		auto target_type = i < positional_count ? signature.GetParameter(i).GetType() : signature.GetVarArgs();
-		if (target_type.id() == LogicalTypeId::TABLE) {
-			// A TABLE parameter is filled by the subquery itself rather than by a value, so its slot holds a plain
-			// NULL. A NULL of type TABLE would not do: TABLE has no physical type, so such a value cannot be read
-			// back when the plan is deserialized.
-			parameters.emplace_back();
-			continue;
-		}
-		auto value = FoldArgument(context, *positional_arguments[i]);
-		if (RequiresCast(value.type(), target_type) == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
-			value = value.CastAs(context, target_type);
-		}
-		parameters.push_back(std::move(value));
-	}
+	const auto passed_count = positional_arguments.size();
 
+	// the positional parameters the caller filled by name, by parameter index
+	vector<optional_ptr<Expression>> named_slots(positional_count);
 	identifier_set_t seen_names;
 	for (auto &named_argument : named_arguments) {
 		auto &argument_name = named_argument.first;
@@ -517,23 +524,50 @@ static void PlaceArguments(ClientContext &context, const T &function,
 			throw BinderException("Duplicate named argument %s for function %s", argument_name,
 			                      function.GetName().GetIdentifierName());
 		}
-		auto value = FoldArgument(context, *named_argument.second);
 		auto param_idx = signature.GetParameterIndexByName(argument_name);
-		if (param_idx.IsValid()) {
-			// a "**kwargs" parameter has no declared type of its own to cast to
-			auto &param = signature.GetParameter(param_idx.GetIndex());
-			if (param.AcceptsPosition() && param_idx.GetIndex() < positional_arguments.size()) {
-				throw BinderException(named_argument.second->GetQueryLocation(),
-				                      "Named argument '%s' cannot be used for parameter '%s' because it has already "
-				                      "been provided as a positional argument in function call to '%s'",
-				                      named_argument.second->ToString(), argument_name,
-				                      function.GetName().GetIdentifierName());
-			}
-			if (RequiresCast(value.type(), param.GetType()) == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
-				value = value.CastAs(context, param.GetType());
-			}
+		if (!param_idx.IsValid()) {
+			// received by "**kwargs", which has no declared type of its own to cast to
+			named_parameters.insert(make_pair(argument_name, FoldArgument(context, *named_argument.second)));
+			continue;
 		}
-		named_parameters.insert(make_pair(argument_name, std::move(value)));
+		auto &param = signature.GetParameter(param_idx.GetIndex());
+		if (!param.AcceptsPosition()) {
+			named_parameters.insert(
+			    make_pair(argument_name, PlaceArgument(context, *named_argument.second, param.GetType())));
+			continue;
+		}
+		if (param_idx.GetIndex() < passed_count) {
+			throw BinderException(named_argument.second->GetQueryLocation(),
+			                      "Named argument '%s' cannot be used for parameter '%s' because it has already "
+			                      "been provided as a positional argument in function call to '%s'",
+			                      named_argument.second->ToString(), argument_name,
+			                      function.GetName().GetIdentifierName());
+		}
+		named_slots[param_idx.GetIndex()] = *named_argument.second;
+	}
+
+	for (idx_t i = 0; i < positional_count; i++) {
+		auto &param = signature.GetParameter(i);
+		if (i < passed_count) {
+			parameters.push_back(PlaceArgument(context, *positional_arguments[i], param.GetType()));
+		} else if (named_slots[i]) {
+			parameters.push_back(PlaceArgument(context, *named_slots[i], param.GetType()));
+		} else if (param.HasDefaultValue()) {
+			parameters.push_back(*param.GetDefaultValue());
+		} else {
+			// overload selection only picks an overload whose required parameters the call fills
+			throw InternalException("Missing value for parameter %s in function call to %s", param.GetName(),
+			                        function.GetName().GetIdentifierName());
+		}
+	}
+	for (idx_t i = positional_count; i < passed_count; i++) {
+		parameters.push_back(PlaceArgument(context, *positional_arguments[i], signature.GetVarArgs()));
+	}
+	for (auto &param : signature.GetParameters()) {
+		if (param.GetKind() == FunctionParameterKind::KEYWORD_ONLY && param.HasDefaultValue() &&
+		    !param.GetDefaultValue()->IsNull() && !seen_names.count(param.GetName())) {
+			named_parameters.insert(make_pair(param.GetName(), *param.GetDefaultValue()));
+		}
 	}
 }
 

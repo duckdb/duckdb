@@ -639,7 +639,7 @@ TEST_CASE("V2 table: multiple result columns share the batch row count", "[capi_
 #endif
 
 // ===========================================================================
-// Argument routing: required parameters are positional, defaulted ones named.
+// Argument routing: every parameter can be passed by position or by name, and a defaulted one can be omitted.
 // ===========================================================================
 
 TEST_CASE("V2 table: parameter defaults, named arguments and varargs", "[capi_v2][table_function]") {
@@ -676,13 +676,12 @@ TEST_CASE("V2 table: parameter defaults, named arguments and varargs", "[capi_v2
 	REQUIRE(table_arg_probe.values[0] == 1);
 	REQUIRE(table_arg_probe.values[1] == 5);
 
-	// The variadic tail follows the fixed slots, in call order.
-	REQUIRE(QueryI64(fx.conn, "SELECT * FROM my_args(1, 30, 40)") == 4);
-	REQUIRE(table_arg_probe.arg_count == 4);
+	// A defaulted parameter is filled by position before the variadic tail, which follows in call order.
+	REQUIRE(QueryI64(fx.conn, "SELECT * FROM my_args(1, 30, 40)") == 3);
+	REQUIRE(table_arg_probe.arg_count == 3);
 	REQUIRE(table_arg_probe.values[0] == 1);
-	REQUIRE(table_arg_probe.values[1] == 7);
-	REQUIRE(table_arg_probe.values[2] == 30);
-	REQUIRE(table_arg_probe.values[3] == 40);
+	REQUIRE(table_arg_probe.values[1] == 30);
+	REQUIRE(table_arg_probe.values[2] == 40);
 }
 
 // ===========================================================================

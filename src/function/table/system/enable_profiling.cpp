@@ -82,16 +82,12 @@ static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, Tabl
 			bind_data->mode = StringUtil::Lower(named_param.second.ToString());
 			break;
 		case ProfilingParameterNames::METRICS:
-			bind_data->metrics = named_param.second;
-			break;
+			throw InternalException("enable_profiling: metrics is placed by position");
 		}
 	}
 
-	// The metrics are equally a positional argument. Which overload was chosen already settled that this is a
-	// pattern or a list of names, and the binder rejects a call that gives it both ways.
-	if (!input.inputs.empty()) {
-		bind_data->metrics = input.inputs[0];
-	}
+	// The metrics are placed by position however they were passed; the overload settled pattern or list of names
+	bind_data->metrics = input.inputs[0];
 
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");

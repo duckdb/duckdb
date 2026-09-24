@@ -1,5 +1,8 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/partition_stats.hpp"
+#include "duckdb/common/string_util.hpp"
+
+#include <algorithm>
 
 namespace duckdb {
 
@@ -131,6 +134,41 @@ BoundTableFunction::BoundTableFunction(shared_ptr<const TableFunction> function_
 		arguments.push_back(signature.GetParameter(i).GetType());
 	}
 	positional_arguments = arguments.size();
+}
+
+void BoundTableFunction::SetCallArguments(const vector<Value> &parameters,
+                                          const named_parameter_map_t &named_parameters) {
+	auto &signature = GetSignature();
+	const auto positional_count = signature.GetPositionalParameterCount();
+	arguments.clear();
+	for (idx_t i = 0; i < positional_count; i++) {
+		arguments.push_back(signature.GetParameter(i).GetType());
+	}
+	auto &varargs = signature.GetVarArgs();
+	for (idx_t i = positional_count; i < parameters.size(); i++) {
+		auto is_typed = varargs.id() != LogicalTypeId::INVALID && varargs.id() != LogicalTypeId::ANY;
+		arguments.push_back(is_typed ? varargs : parameters[i].type());
+	}
+	const auto positional_argument_count = arguments.size();
+
+	// only the options the signature receives by name - sorted, as the map has no order of its own
+	vector<Identifier> names;
+	for (auto &entry : named_parameters) {
+		auto param_idx = signature.GetParameterIndexByName(entry.first);
+		auto is_keyword_only = param_idx.IsValid() && !signature.GetParameter(param_idx.GetIndex()).AcceptsPosition();
+		if (is_keyword_only || (!param_idx.IsValid() && signature.GetKwargsParameter())) {
+			names.push_back(entry.first);
+		}
+	}
+	std::sort(names.begin(), names.end(), [](const Identifier &lhs, const Identifier &rhs) {
+		return StringUtil::CILessThan(lhs.GetIdentifierName(), rhs.GetIdentifierName());
+	});
+	for (auto &name : names) {
+		auto param_idx = signature.GetParameterIndexByName(name);
+		arguments.push_back(param_idx.IsValid() ? signature.GetParameter(param_idx.GetIndex()).GetType()
+		                                        : named_parameters.at(name).type());
+	}
+	SetNamedArguments(positional_argument_count, std::move(names));
 }
 
 bool BoundTableFunction::operator==(const BoundTableFunction &rhs) const {

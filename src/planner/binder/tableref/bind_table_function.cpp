@@ -215,6 +215,7 @@ BoundStatement Binder::BindTableFunctionInternal(BoundTableFunction &table_funct
 	auto constexpr ordinality_name = "ordinality";
 	string ordinality_column_name = ordinality_name;
 	optional_idx ordinality_column_id;
+	table_function.SetCallArguments(parameters, named_parameters);
 	if (table_function.bind || table_function.bind_replace || table_function.bind_operator) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
 		                                  table_function.function_info.get(), this, table_function, ref, input_plan);

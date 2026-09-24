@@ -4,6 +4,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
 using namespace duckdb;
 
@@ -220,4 +221,62 @@ TEST_CASE("Argument names cannot be serialized to older storage versions", "[api
 	auto result = con.Query("SELECT count_arguments(i::INTEGER, kw := 1) FROM range(1) t(i)");
 	REQUIRE(result->HasError());
 	REQUIRE(StringUtil::Contains(result->GetError(), "cannot be serialized to a storage version older than"));
+}
+
+namespace {
+
+//! The arguments the last bind of "defaults_probe" received
+struct DefaultsProbe {
+	vector<Value> inputs;
+	named_parameter_map_t named_parameters;
+};
+DefaultsProbe defaults_probe;
+
+unique_ptr<FunctionData> DefaultsProbeBind(ClientContext &, TableFunctionBindInput &input, vector<LogicalType> &types,
+                                           vector<Identifier> &names) {
+	defaults_probe.inputs = input.inputs;
+	defaults_probe.named_parameters = input.named_parameters;
+	types.push_back(LogicalType::BOOLEAN);
+	names.emplace_back("ok");
+	return make_uniq<TableFunctionData>();
+}
+
+void DefaultsProbeScan(ClientContext &, TableFunctionInput &, DataChunk &output) {
+	output.SetCardinality(0);
+}
+
+} // namespace
+
+TEST_CASE("A table function receives the declared defaults, and no value for an option", "[api][table_function]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.BeginTransaction();
+	auto &context = *con.context;
+
+	FunctionSignature sig;
+	sig.AddParameter("a", LogicalType::INTEGER, Value::INTEGER(42));
+	sig.AddNamedParameter("k", LogicalType::INTEGER, Value::INTEGER(7));
+	sig.AddOptionalNamedParameter("o", LogicalType::INTEGER);
+	TableFunction function("defaults_probe", std::move(sig), DefaultsProbeScan, DefaultsProbeBind);
+	CreateTableFunctionInfo info(function);
+	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
+
+	// every default is supplied, the option is left out
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM defaults_probe()"));
+	REQUIRE(defaults_probe.inputs == vector<Value> {Value::INTEGER(42)});
+	REQUIRE(defaults_probe.named_parameters.size() == 1);
+	REQUIRE(defaults_probe.named_parameters.at("k") == Value::INTEGER(7));
+
+	// passed arguments replace the defaults, and a passed option - even a NULL one - is present
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM defaults_probe(1, k := 2, o := NULL)"));
+	REQUIRE(defaults_probe.inputs == vector<Value> {Value::INTEGER(1)});
+	REQUIRE(defaults_probe.named_parameters.size() == 2);
+	REQUIRE(defaults_probe.named_parameters.at("k") == Value::INTEGER(2));
+	REQUIRE(defaults_probe.named_parameters.at("o").IsNull());
+
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM defaults_probe(a := 3, o := 4)"));
+	REQUIRE(defaults_probe.inputs == vector<Value> {Value::INTEGER(3)});
+	REQUIRE(defaults_probe.named_parameters.at("k") == Value::INTEGER(7));
+	REQUIRE(defaults_probe.named_parameters.at("o") == Value::INTEGER(4));
+	con.Rollback();
 }
