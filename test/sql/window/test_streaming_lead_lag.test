@@ -259,3 +259,20 @@ FROM VALUES
 ----
 3
 3
+
+# UNIONs mess up the pipelining
+query II
+WITH t AS (
+	SELECT range AS i FROM range(3) 
+	UNION ALL 
+	SELECT range AS i FROM range(3)
+)
+SELECT i, lead(i, 1) OVER () AS next_i
+FROM t;
+----
+0	1
+1	2
+2	0
+0	1
+1	2
+2	NULL
