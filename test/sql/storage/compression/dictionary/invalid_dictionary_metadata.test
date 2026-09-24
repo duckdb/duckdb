@@ -56,7 +56,7 @@ SELECT count(*) FROM pragma_storage_info('dict_end_db.tbl') WHERE compression='D
 statement error
 SELECT sum(length(STREET)) FROM dict_end_db.tbl
 ----
-Data Corruption Error: Failed to scan dictionary string - dictionary was out of range. Database file appears to be corrupted.
+Data Corruption Error
 
 restart
 
@@ -101,4 +101,4 @@ SELECT block_offset FROM pragma_storage_info('segment_end_db.tbl') WHERE compres
 statement error
 SELECT sum(length(STREET)) FROM segment_end_db.tbl
 ----
-Data Corruption Error: Failed to scan dictionary string - dictionary was out of range. Database file appears to be corrupted.
+Data Corruption Error

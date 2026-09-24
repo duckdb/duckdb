@@ -1,5 +1,6 @@
 #pragma once
 
+#include "duckdb/storage/compression/compression_segment_reader.hpp"
 #include "duckdb/storage/compression/dictionary/common.hpp"
 
 namespace duckdb {
@@ -8,46 +9,55 @@ namespace duckdb {
 // Scan
 //===--------------------------------------------------------------------===//
 struct CompressedStringScanState : public SegmentScanState {
+private:
+	//! Dictionary segment data from disk, with byte ranges checked by ReadLayout.
+	struct DictionarySegmentLayout {
+		//! Bits per dictionary index, derived from the entry count and checked against the stored width.
+		bitpacking_width_t current_width;
+		//! Packed indices, mapping each row to a dictionary entry.
+		CompressionSegmentReader selection_reader;
+		//! String contents stored backwards from dict_end.
+		CompressionSegmentReader dictionary_reader;
+		//! Offsets to the strings, measured backwards from dict_end.
+		//! Consecutive offsets determine each string's length.
+		unsafe_array_ptr<const uint32_t> index_buffer;
+	};
+
 public:
-	explicit CompressedStringScanState(BufferHandle &&handle_p)
-	    : owned_handle(std::move(handle_p)), handle(owned_handle) {
+	CompressedStringScanState(BufferHandle &&handle_p, const ColumnSegment &segment)
+	    : owned_handle(std::move(handle_p)), layout(ReadLayout(owned_handle, segment)) {
 	}
-	explicit CompressedStringScanState(BufferHandle &handle_p) : owned_handle(), handle(handle_p) {
+	CompressedStringScanState(BufferHandle &handle_p, const ColumnSegment &segment)
+	    : layout(ReadLayout(handle_p, segment)) {
 	}
 
 public:
-	void Initialize(ColumnSegment &segment, bool initialize_dictionary = true);
+	void InitializeDictionary(const ColumnSegment &segment);
 	template <bool NEEDS_STRING_OFFSET_CHECK = false>
 	void ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count);
 	void ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset, idx_t start,
 	                            idx_t scan_count);
 
 private:
-	string_t FetchStringFromDict(uint32_t dict_offset, uint16_t string_len);
-	uint16_t GetStringLength(sel_t index);
+	static DictionarySegmentLayout ReadLayout(const BufferHandle &handle, const ColumnSegment &segment);
+	string_t FetchStringFromDict(uint32_t dict_offset, uint32_t string_len) const;
+	//! The index must be within the table, and the offsets must be nondecreasing to avoid underflow.
+	uint32_t GetStringLength(sel_t index) const;
+	//! Returns packed bytes starting at the group containing start.
+	//! decompress_count must cover whole bitpacking groups that fit within the selection stream.
+	unsafe_array_ptr<const uint8_t> GetSelectionBytes(idx_t start, idx_t decompress_count) const;
 	void ValidateDictionary(const SelectionVector &sel, idx_t scan_count) const;
 	//! Validate the index buffer (offsets monotonic and within the dictionary) so scans can trust it.
 	void ValidateIndexBuffer() const;
 
 public:
 	BufferHandle owned_handle;
-	optional_ptr<BufferHandle> handle;
 
-	bitpacking_width_t current_width;
+	DictionarySegmentLayout layout;
 	buffer_ptr<SelectionVector> sel_vec;
 	idx_t sel_vec_size = 0;
 
-	//! Start of the block (pointing to the dictionary_header)
-	data_ptr_t baseptr;
-	//! Start of the data (pointing to the start of the selection buffer)
-	data_ptr_t base_data;
-	uint32_t *index_buffer_ptr;
-	uint32_t index_buffer_count;
-
 	buffer_ptr<DictionaryEntry> dictionary;
-	idx_t dictionary_size;
-	StringDictionaryContainer dict;
-	idx_t block_size;
 };
 
 } // namespace duckdb
