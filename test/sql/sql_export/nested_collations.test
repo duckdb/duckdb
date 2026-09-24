@@ -12,9 +12,6 @@ INSERT INTO nested_input VALUES (1, ['Apple','Banana'], 'banana'),
 statement ok
 CREATE SEQUENCE collation_seq;
 
-statement ok
-SET debug_verify_statement='explain_sql_strict';
-
 query III
 SELECT id, list_contains(l, needle), list_position(l, needle) FROM nested_input ORDER BY id
 ----

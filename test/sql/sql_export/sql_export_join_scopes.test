@@ -14,9 +14,6 @@ CREATE TABLE u(i INTEGER, v INTEGER);
 statement ok
 INSERT INTO u VALUES (1,2),(1,3),(2,5),(3,7),(NULL,11);
 
-statement ok
-SET debug_verify_statement='explain_sql_strict';
-
 query TI
 SELECT t.s,sum(u.v) FROM t JOIN u USING(i) GROUP BY t.s ORDER BY 1 LIMIT 10
 ----

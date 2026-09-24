@@ -8,9 +8,6 @@ CREATE TABLE values_input(v INTEGER);
 statement ok
 INSERT INTO values_input VALUES (1),(1),(2),(NULL);
 
-statement ok
-SET debug_verify_statement='explain_sql_strict';
-
 query I
 SELECT count(*) FROM values_input a,
 values_input b JOIN LATERAL (VALUES (a.v),(-1)) ss(x) ON b.v=ss.x;

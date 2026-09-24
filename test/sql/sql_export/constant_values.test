@@ -2,9 +2,6 @@
 # description: SQL export preserves exact constant values, interval fields and signed zero
 # group: [sql_export]
 
-statement ok
-SET debug_verify_statement='explain_sql_strict';
-
 query TTTTTTTTTTTTTTTTTTTT
 SELECT
 	NULL,

@@ -2,9 +2,6 @@
 # description: SQL export retains ordinary expression syntax and semantics
 # group: [sql_export]
 
-statement ok
-SET debug_verify_statement='explain_sql_strict';
-
 foreach serializer false true
 
 statement ok

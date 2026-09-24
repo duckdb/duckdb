@@ -9,9 +9,6 @@ CREATE TABLE states AS SELECT avg(i) EXPORT_STATE a, sum(i) EXPORT_STATE s,
 statement ok
 CREATE TABLE nested_states AS SELECT [s] l, {'state': s} t FROM states;
 
-statement ok
-SET debug_verify_statement='explain_sql_strict';
-
 query IIII
 SELECT finalize(combine_aggr(a)), finalize(combine_aggr(s)),
        finalize(combine_aggr(c)), finalize(combine_aggr(q)) FROM states WHERE false

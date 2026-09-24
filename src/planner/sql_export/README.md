@@ -57,9 +57,12 @@ C++ tests under `test/sql_export/` follow these feature boundaries; shared fixtu
 
 The CI Query Verification configuration uses `debug_verify_statement='explain_sql'`.
 It executes reconstructed SQL when export succeeds and falls back for explicitly
-unsupported shapes. Errors from reconstruction and generated execution propagate normally. Focused SQL
-tests use `debug_verify_statement='explain_sql_strict'`, which also rejects unsupported
-shapes. Both modes execute the generated statement once against existing expected results.
+unsupported shapes. Errors from reconstruction and generated execution propagate normally.
+The fixtures under `test/sql/sql_export/` are ordinary tests that this configuration
+routes through generated SQL like every other test. Only fixtures that assert rejection
+diagnostics, compare verification modes, or check the verification lifecycle set
+`debug_verify_statement` themselves; `explain_sql_strict` also rejects unsupported shapes.
+Both modes execute the generated statement once against existing expected results.
 
 Projection expressions consumed by a scan are currently unsupported when their SQL
 provenance is no longer retained. The optimizer records this condition explicitly,

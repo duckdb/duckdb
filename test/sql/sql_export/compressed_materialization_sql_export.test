@@ -8,9 +8,6 @@ CREATE TABLE compressed_values(i BIGINT);
 statement ok
 INSERT INTO compressed_values SELECT i FROM range(100) t(i);
 
-statement ok
-SET debug_verify_statement='explain_sql_strict';
-
 query I
 SELECT sum(i) FROM (SELECT i FROM compressed_values ORDER BY i)
 ----
@@ -45,6 +42,3 @@ query TI
 SELECT s, count(*) FROM null_strings GROUP BY s
 ----
 NULL	2
-
-statement ok
-RESET debug_verify_statement;

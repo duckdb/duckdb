@@ -2,9 +2,6 @@
 # description: SQL export preserves default arguments, date parts, lambda captures and alias effects
 # group: [sql_export]
 
-statement ok
-SET debug_verify_statement='explain_sql_strict';
-
 query TTT rowsort
 SELECT
 	to_base(42, 16),

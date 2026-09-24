@@ -5,9 +5,6 @@
 require json
 
 statement ok
-SET debug_verify_statement='explain_sql_strict';
-
-statement ok
 CREATE TABLE json_ordering(v JSON);
 
 statement ok

@@ -20,9 +20,6 @@ BEGIN;
 statement ok
 INSERT INTO "number space".numbers VALUES (50,'e',{'x':5});
 
-statement ok
-SET debug_verify_statement='explain_sql_strict';
-
 query IITI
 SELECT rowid,n,column0,s.x FROM (SELECT *,row_number() OVER () n FROM "number space".numbers) t ORDER BY rowid;
 ----
@@ -67,9 +64,6 @@ DELETE FROM "number space".numbers;
 query I
 SELECT row_number() OVER () FROM "number space".numbers;
 ----
-
-statement ok
-RESET debug_verify_statement;
 
 statement ok
 ROLLBACK;

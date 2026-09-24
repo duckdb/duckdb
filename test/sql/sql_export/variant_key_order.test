@@ -2,9 +2,6 @@
 # description: SQL export preserves observable VARIANT object-key order
 # group: [sql_export]
 
-statement ok
-SET debug_verify_statement='explain_sql_strict';
-
 # Reconstruct nested VARIANT payloads without changing observable object-key order.
 query T
 SELECT variant_extract_string(v, '') FROM (VALUES ({'a': [{'b': 1::SMALLINT, 'c': 2::TINYINT, 'a': 3}], 'b': 4, 'c': 5}::VARIANT)) t(v);

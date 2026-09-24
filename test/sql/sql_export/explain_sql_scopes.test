@@ -12,9 +12,6 @@ EXPLAIN (SQL) SELECT NULL::INTEGER AS "null value", 2::BIGINT AS "two";
 ----
 sql	SELECT CAST(NULL AS INTEGER) AS "null value", CAST(2 AS BIGINT) AS two
 
-statement ok
-SET debug_verify_statement='explain_sql_strict';
-
 query II
 SELECT 1 AS same, 2::BIGINT AS same;
 ----

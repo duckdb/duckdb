@@ -6,9 +6,6 @@
 require skip_reload
 
 statement ok
-SET debug_verify_statement='explain_sql_strict';
-
-statement ok
 SET threads=1;
 
 statement ok

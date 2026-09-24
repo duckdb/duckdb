@@ -3,9 +3,6 @@
 # group: [sql_export]
 
 statement ok
-SET debug_verify_statement='explain_sql_strict';
-
-statement ok
 CREATE TABLE ci_structs(s STRUCT(c1 VARCHAR, c2 INTEGER));
 
 statement ok

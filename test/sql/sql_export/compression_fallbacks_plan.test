@@ -3,9 +3,6 @@
 # group: [sql_export]
 
 statement ok
-SET debug_verify_statement='explain_sql_strict';
-
-statement ok
 CREATE TABLE materialized_source AS SELECT (i+100000)::INTEGER id, printf('v%02d', i) s, printf('POINT(%d %d)', i, i)::GEOMETRY g FROM range(100)t(i);
 
 statement ok

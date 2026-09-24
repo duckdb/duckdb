@@ -122,9 +122,7 @@
     {
       "reason": "SQL export explicitly rejects nested collations in synthetic aggregate-state results.",
       "paths": [
-        "test/sql/sql_export/rewritten_functions.test",
-        "test/sql/sql_export/nested_collations.test",
-        "test/sql/sql_export/ci_reconstruction.test"
+        "test/sql/sql_export/rewritten_functions.test"
       ]
     }
   ]

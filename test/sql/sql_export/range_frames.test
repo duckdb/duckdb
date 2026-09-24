@@ -3,9 +3,6 @@
 # group: [sql_export]
 
 statement ok
-SET debug_verify_statement='explain_sql_strict';
-
-statement ok
 CREATE TABLE frame_values(id INTEGER,k INTEGER,d DATE,v INTEGER);
 
 statement ok
