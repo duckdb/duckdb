@@ -2,7 +2,6 @@ add_library_unity(
   duckdb_optimizer_pushdown
   OBJECT
   pushdown_aggregate.cpp
-  pushdown_cte.cpp
   pushdown_cross_product.cpp
   pushdown_distinct.cpp
   pushdown_filter.cpp

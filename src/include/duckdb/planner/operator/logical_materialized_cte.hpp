@@ -13,11 +13,15 @@
 
 namespace duckdb {
 
+class LogicalCTERef;
+
 //! Retaining outer rows preserves every domain partition needed for their results.
 //! The domain scan has no consumers independent of the outer-row scan.
 struct CTEFilterDependency {
 	CTEFilterDependency(TableIndex row_scan, TableIndex domain_scan) : row_scan(row_scan), domain_scan(domain_scan) {
 	}
+
+	bool MatchesConsumers(const vector<reference<LogicalCTERef>> &references) const;
 
 	TableIndex row_scan;
 	TableIndex domain_scan;

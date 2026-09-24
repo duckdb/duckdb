@@ -1,5 +1,4 @@
-#include "duckdb/optimizer/filter_pushdown.hpp"
-#include "duckdb/optimizer/cte_filter_pusher.hpp"
+#include "duckdb/optimizer/cte_join_filter_collector.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/expression_barrier.hpp"
@@ -12,6 +11,17 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
+
+CTEJoinFilterCollector::CTEJoinFilterCollector(const unordered_map<TableIndex, TableIndex> &targets)
+    : join_targets(targets) {
+}
+
+vector<CTEJoinFilter> CTEJoinFilterCollector::Collect(LogicalOperator &op,
+                                                      const unordered_map<TableIndex, TableIndex> &targets) {
+	CTEJoinFilterCollector collector(targets);
+	collector.VisitOperator(op);
+	return std::move(collector.join_filters);
+}
 
 static bool CanPassCTEJoinFilter(LogicalOperator &op) {
 	bool safe = true;
@@ -69,9 +79,9 @@ static optional_ptr<LogicalCTERef> FindCTEJoinSource(LogicalOperator &op, vector
 	return FindCTEJoinSource(*op.children[0], keys);
 }
 
-void FilterPushdown::CollectCTEJoinFilters(LogicalOperator &op, CTEFilterPusher &context) {
+void CTEJoinFilterCollector::VisitOperator(LogicalOperator &op) {
 	for (auto &child : op.children) {
-		CollectCTEJoinFilters(*child, context);
+		VisitOperator(*child);
 	}
 	if (op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 	    op.Cast<LogicalComparisonJoin>().join_type != JoinType::INNER || !CanPassCTEJoinFilter(op)) {
@@ -99,24 +109,23 @@ void FilterPushdown::CollectCTEJoinFilters(LogicalOperator &op, CTEFilterPusher 
 		auto source_keys = side == 0 ? left_keys : right_keys;
 		auto source = FindCTEJoinSource(*op.children[side], source_keys);
 		if (source) {
-			PushCTEJoinFilter(*op.children[1 - side], *source, source_keys, side == 0 ? right_keys : left_keys,
-			                  comparisons, context);
+			PushFilter(*op.children[1 - side], *source, source_keys, side == 0 ? right_keys : left_keys, comparisons);
 		}
 	}
 }
 
-void FilterPushdown::PushCTEJoinFilter(LogicalOperator &op, const LogicalCTERef &source,
-                                       const vector<ColumnBinding> &source_keys, vector<ColumnBinding> target_keys,
-                                       const vector<ExpressionType> &comparisons, CTEFilterPusher &context) {
+void CTEJoinFilterCollector::PushFilter(LogicalOperator &op, const LogicalCTERef &source,
+                                        const vector<ColumnBinding> &source_keys, vector<ColumnBinding> target_keys,
+                                        const vector<ExpressionType> &comparisons) {
 	if (!ContainsCTEJoinKeys(op, target_keys) || !CanPassCTEJoinFilter(op)) {
 		return;
 	}
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_CTE_REF:
-		context.AddJoinFilter(source, op.Cast<LogicalCTERef>(), source_keys, target_keys, comparisons);
+		AddFilter(source, op.Cast<LogicalCTERef>(), source_keys, target_keys, comparisons);
 		return;
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
-		PushCTEJoinFilter(*op.children[1], source, source_keys, std::move(target_keys), comparisons, context);
+		PushFilter(*op.children[1], source, source_keys, std::move(target_keys), comparisons);
 		return;
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		if (!MapCTEJoinProjection(op.Cast<LogicalProjection>(), target_keys)) {
@@ -159,7 +168,7 @@ void FilterPushdown::PushCTEJoinFilter(LogicalOperator &op, const LogicalCTERef 
 				auto position = std::find(bindings.begin(), bindings.end(), key) - bindings.begin();
 				key = child_bindings[position];
 			}
-			PushCTEJoinFilter(*child, source, source_keys, std::move(child_keys), comparisons, context);
+			PushFilter(*child, source, source_keys, std::move(child_keys), comparisons);
 		}
 		return;
 	}
@@ -170,17 +179,49 @@ void FilterPushdown::PushCTEJoinFilter(LogicalOperator &op, const LogicalCTERef 
 			return;
 		}
 		if (ContainsCTEJoinKeys(*op.children[0], target_keys)) {
-			PushCTEJoinFilter(*op.children[0], source, source_keys, target_keys, comparisons, context);
+			PushFilter(*op.children[0], source, source_keys, target_keys, comparisons);
 		}
 		if (join.join_type == JoinType::INNER && ContainsCTEJoinKeys(*op.children[1], target_keys)) {
-			PushCTEJoinFilter(*op.children[1], source, source_keys, std::move(target_keys), comparisons, context);
+			PushFilter(*op.children[1], source, source_keys, std::move(target_keys), comparisons);
 		}
 		return;
 	}
 	default:
 		return;
 	}
-	PushCTEJoinFilter(*op.children[0], source, source_keys, std::move(target_keys), comparisons, context);
+	PushFilter(*op.children[0], source, source_keys, std::move(target_keys), comparisons);
+}
+
+void CTEJoinFilterCollector::AddFilter(const LogicalCTERef &source, const LogicalCTERef &target,
+                                       const vector<ColumnBinding> &source_keys,
+                                       const vector<ColumnBinding> &target_keys,
+                                       const vector<ExpressionType> &comparisons) {
+	D_ASSERT(!comparisons.empty() && source_keys.size() == comparisons.size() &&
+	         target_keys.size() == comparisons.size());
+	auto target_entry = join_targets.find(target.cte_index);
+	if (source.is_recurring || target.is_recurring || source.cte_index == target.cte_index ||
+	    target_entry == join_targets.end() || target_entry->second != target.table_index) {
+		return;
+	}
+	CTEJoinFilter filter;
+	filter.source = source.cte_index;
+	filter.target = target.cte_index;
+	filter.target_scan = target.table_index;
+	filter.comparisons = comparisons;
+	for (idx_t i = 0; i < comparisons.size(); i++) {
+		D_ASSERT(source_keys[i].table_index == source.table_index);
+		D_ASSERT(target_keys[i].table_index == target.table_index);
+		filter.source_columns.push_back(source_keys[i].column_index);
+		filter.target_columns.push_back(target_keys[i].column_index);
+	}
+	for (auto &existing : join_filters) {
+		if (existing.source == filter.source && existing.target == filter.target &&
+		    existing.target_scan == filter.target_scan && existing.source_columns == filter.source_columns &&
+		    existing.target_columns == filter.target_columns && existing.comparisons == filter.comparisons) {
+			return;
+		}
+	}
+	join_filters.push_back(std::move(filter));
 }
 
 } // namespace duckdb
