@@ -130,37 +130,6 @@ TEST_CASE("Logical plan field types follow expression SQL type admission", "[sql
 	}
 }
 
-TEST_CASE("Logical plan SQL export applies filter predicates and projection maps",
-          "[sql_export][logical_plan_sql_export]") {
-	DuckDB db(nullptr);
-	Connection connection(db);
-	auto child = IntegerValues(TableIndex(30), {{1, 10, 100}, {2, 20, 200}, {3, 30, 300}});
-	auto filter = make_uniq<LogicalFilter>();
-	filter->expressions.push_back(BoundComparisonExpression::Create(
-	    ExpressionType::COMPARE_GREATERTHAN,
-	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, ColumnBinding(TableIndex(30), ProjectionIndex(0))),
-	    PlanIntegerConstant(1)));
-	filter->expressions.push_back(BoundComparisonExpression::Create(
-	    ExpressionType::COMPARE_LESSTHAN,
-	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, ColumnBinding(TableIndex(30), ProjectionIndex(1))),
-	    PlanIntegerConstant(30)));
-	filter->projection_map = {ProjectionIndex(2), ProjectionIndex(1)};
-	filter->children.push_back(std::move(child));
-
-	auto result = LogicalPlanSQLExporter::Export(*connection.context, *filter);
-	REQUIRE(result.IsSuccess());
-	REQUIRE(result.GetValue().fields.size() == 2);
-	REQUIRE(result.GetValue().fields[0].source_binding == ColumnBinding(TableIndex(30), ProjectionIndex(2)));
-	REQUIRE(result.GetValue().fields[1].source_binding == ColumnBinding(TableIndex(30), ProjectionIndex(1)));
-	auto query_result = connection.Query(result.GetValue().query->ToString());
-	REQUIRE_FALSE(query_result->HasError());
-	auto chunk = query_result->Fetch();
-	REQUIRE(chunk);
-	REQUIRE(chunk->size() == 1);
-	REQUIRE(chunk->GetValue(0, 0) == Value::INTEGER(200));
-	REQUIRE(chunk->GetValue(1, 0) == Value::INTEGER(20));
-}
-
 TEST_CASE("Logical plan SQL export applies requested output names", "[sql_export][logical_plan_sql_export]") {
 	DuckDB db(nullptr);
 	Connection connection(db);

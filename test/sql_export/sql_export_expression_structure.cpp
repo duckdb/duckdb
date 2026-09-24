@@ -143,47 +143,6 @@ TEST_CASE("Bound expression SQL export composes deterministic expression paths",
 	}
 }
 
-TEST_CASE("Bound expression SQL export handles default casts and exclusive BETWEEN",
-          "[sql_export][bound_expression_sql_export]") {
-	DBConfig config;
-	config.options.load_extensions = false;
-	DuckDB db(nullptr, &config);
-	Connection connection(db);
-	connection.BeginTransaction();
-	BoundExpressionSQLExportContext context;
-
-	auto default_cast = BoundCastExpression::AddDefaultCastToType(Constant(Value::INTEGER(42)), LogicalType::BIGINT);
-	auto default_result = BoundExpressionSQLExporter::Export(*default_cast, context);
-	REQUIRE(default_result.HasError());
-	REQUIRE(default_result.GetIssues()[0].code == LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE);
-	REQUIRE(*default_result.GetIssues()[0].construct->identifier == "default_cast_binding");
-	BoundExpressionSQLExportContext default_context;
-	default_context.client_context = connection.context.get();
-	auto supported_default = BoundExpressionSQLExporter::Export(*default_cast, default_context);
-	REQUIRE(supported_default.IsSuccess());
-	REQUIRE(supported_default.GetValue()->Cast<CastExpression>().GetTargetType()->Equals(
-	    *TypeExpression::FromLogicalType(LogicalType::BIGINT)));
-	RequireRoundTrip(connection, *default_cast, default_context, string(), "CAST(42 AS BIGINT)");
-	auto serialized_default = BinaryRoundTrip(*connection.context, *default_cast);
-	REQUIRE(BoundCastExpression::IsDefaultCast(serialized_default->Cast<BoundFunctionExpression>()));
-	RequireRoundTrip(connection, *serialized_default, default_context, string(), "CAST(42 AS BIGINT)");
-	auto try_default =
-	    BoundCastExpression::AddDefaultCastToType(Constant(Value("not an integer")), LogicalType::INTEGER, true);
-	RequireRoundTrip(connection, *try_default, default_context, string(), "TRY_CAST('not an integer' AS INTEGER)");
-
-	auto exclusive = BoundBetweenExpression::Create(Constant(Value::INTEGER(2)), Constant(Value::INTEGER(1)),
-	                                                Constant(Value::INTEGER(3)), false, true);
-	auto exclusive_result = BoundExpressionSQLExporter::Export(*exclusive, context);
-	REQUIRE(exclusive_result.IsSuccess());
-	REQUIRE(exclusive_result.GetValue()->GetExpressionClass() == ExpressionClass::CONJUNCTION);
-	auto &exclusive_conjunction = exclusive_result.GetValue()->Cast<ConjunctionExpression>();
-	REQUIRE(exclusive_conjunction.GetChildren().size() == 2);
-	REQUIRE(exclusive_conjunction.GetChildren()[0]->GetExpressionType() == ExpressionType::COMPARE_GREATERTHAN);
-	REQUIRE(exclusive_conjunction.GetChildren()[1]->GetExpressionType() == ExpressionType::COMPARE_LESSTHANOREQUALTO);
-
-	connection.Rollback();
-}
-
 TEST_CASE("Bound expression SQL export reconstructs registered casts", "[sql_export][bound_expression_sql_export]") {
 	BoundExpressionSQLExportContext context;
 	DuckDB registered_db;

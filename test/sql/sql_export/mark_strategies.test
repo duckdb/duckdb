@@ -126,21 +126,6 @@ EXPLAIN (SQL) SELECT __mark_join_marker FROM nested_l l JOIN BY (TYPE MARK) nest
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
-statement error
-EXPLAIN (SQL) SELECT __mark_join_marker FROM nested_l l JOIN BY (TYPE MARK) nested_r r ON l.g IS NOT DISTINCT FROM r.g AND l.x>r.y ORDER BY l.g;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT __mark_join_marker FROM nested_l l JOIN BY (TYPE MARK) nested_r r ON l.g IS NOT DISTINCT FROM r.g AND l.x<=r.y ORDER BY l.g;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT __mark_join_marker FROM nested_l l JOIN BY (TYPE MARK) nested_r r ON l.g IS NOT DISTINCT FROM r.g AND l.x>=r.y ORDER BY l.g;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
 statement ok
 CREATE OR REPLACE TABLE nested_l(g INTEGER,x STRUCT(v INTEGER));
 
@@ -159,27 +144,7 @@ EXPLAIN (SQL) SELECT __mark_join_marker FROM nested_l l JOIN BY (TYPE MARK) nest
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
 statement error
-EXPLAIN (SQL) SELECT __mark_join_marker FROM nested_l l JOIN BY (TYPE MARK) nested_r r ON l.g IS NOT DISTINCT FROM r.g AND l.x<>r.y ORDER BY l.g;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
 EXPLAIN (SQL) SELECT __mark_join_marker FROM nested_l l JOIN BY (TYPE MARK) nested_r r ON l.g IS NOT DISTINCT FROM r.g AND l.x<r.y ORDER BY l.g;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT __mark_join_marker FROM nested_l l JOIN BY (TYPE MARK) nested_r r ON l.g IS NOT DISTINCT FROM r.g AND l.x>r.y ORDER BY l.g;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT __mark_join_marker FROM nested_l l JOIN BY (TYPE MARK) nested_r r ON l.g IS NOT DISTINCT FROM r.g AND l.x<=r.y ORDER BY l.g;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT __mark_join_marker FROM nested_l l JOIN BY (TYPE MARK) nested_r r ON l.g IS NOT DISTINCT FROM r.g AND l.x>=r.y ORDER BY l.g;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 

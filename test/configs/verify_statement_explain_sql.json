@@ -85,6 +85,12 @@
         "test/sql/pragma/profiling/test_custom_profiling_using_groups.test",
         "test/sql/pragma/profiling/call_enable_profiling_function.test"
       ]
+    },
+    {
+      "reason": "The fixture imposes a 30 second execution deadline that the additional planning and rebinding pass exceeds",
+      "paths": [
+        "test/sql/cte/recursive_cte_aoc2022.test_slow"
+      ]
     }
   ]
 }

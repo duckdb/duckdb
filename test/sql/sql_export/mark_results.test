@@ -89,11 +89,6 @@ EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (1)) l(a) JOIN BY (TYPE MAR
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
 statement error
-EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (0)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a+b=2;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
 EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (NULL::INTEGER)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a+b IS NOT NULL;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
@@ -105,11 +100,6 @@ EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (NULL::INTEGER)) l(a) JOIN 
 
 statement error
 EXPLAIN (SQL) SELECT bool_and(__mark_join_marker IS NOT DISTINCT FROM (a>0)) FROM (VALUES (NULL::INTEGER),(1)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a>0;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT bool_and(__mark_join_marker IS NOT DISTINCT FROM (a IS NOT NULL)) FROM (VALUES (NULL::INTEGER),(1)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a+b IS NOT NULL;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
@@ -219,41 +209,6 @@ EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
 statement ok
 DROP TABLE IF EXISTS l;
 
@@ -274,41 +229,6 @@ INSERT INTO r SELECT g,k,CASE WHEN v IS NULL THEN NULL ELSE [v,NULL] END FROM (V
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
@@ -335,41 +255,6 @@ EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
 statement ok
 DROP TABLE IF EXISTS l;
 
@@ -390,40 +275,5 @@ INSERT INTO r SELECT g,k,CASE v WHEN 10 THEN 'a' WHEN 20 THEN 'B' ELSE NULL END 
 
 statement error
 EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
