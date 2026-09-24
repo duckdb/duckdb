@@ -21,7 +21,8 @@ namespace duckdb {
 
 class ExtraOperatorInfo {
 public:
-	static constexpr idx_t FILE_FILTER_TABLE_INDEX = 0;
+	//! Table index of retained file-filter bindings, reserved above any binder-generated index
+	static constexpr idx_t FILE_FILTER_TABLE_INDEX = DConstants::INVALID_INDEX - 1;
 
 	ExtraOperatorInfo() : file_filters(""), sample_options(nullptr) {
 	}
