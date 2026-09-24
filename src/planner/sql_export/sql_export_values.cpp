@@ -32,7 +32,18 @@
 #include "duckdb/planner/sql_export_helpers.hpp"
 
 namespace duckdb {
-using namespace logical_plan_sql_export;
+using logical_plan_sql_export::CollectExpressions;
+using logical_plan_sql_export::CreateBindingContext;
+using logical_plan_sql_export::CreateFields;
+using logical_plan_sql_export::CreateSubquery;
+using logical_plan_sql_export::ExportTypedNull;
+using logical_plan_sql_export::FieldIdentifier;
+using logical_plan_sql_export::HasEffectfulExpressions;
+using logical_plan_sql_export::LogicalPlanSQLExportResult;
+using logical_plan_sql_export::LogicalSourceIdentity;
+using logical_plan_sql_export::PlanChildPath;
+using logical_plan_sql_export::PlanUnsupportedFeature;
+using logical_plan_sql_export::UnsupportedSource;
 
 static bool HasEffectfulExpressionSubtree(const LogicalOperator &op) {
 	for (auto &expression : CollectExpressions(op)) {

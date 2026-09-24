@@ -19,7 +19,15 @@
 #include "duckdb/planner/operator/logical_pivot.hpp"
 
 namespace duckdb {
-using namespace logical_plan_sql_export;
+using logical_plan_sql_export::ChildColumn;
+using logical_plan_sql_export::CreateBindingContext;
+using logical_plan_sql_export::CreateFields;
+using logical_plan_sql_export::CreateSubquery;
+using logical_plan_sql_export::FieldIdentifier;
+using logical_plan_sql_export::LogicalPlanSQLExportResult;
+using logical_plan_sql_export::PlanChildPath;
+using logical_plan_sql_export::PlanExpressionPath;
+using logical_plan_sql_export::PlanUnsupportedFeature;
 
 static LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
 ExportPivotDefault(ClientContext &context, const BoundAggregateExpression &aggregate,

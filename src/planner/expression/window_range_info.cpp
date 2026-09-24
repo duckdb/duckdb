@@ -7,7 +7,7 @@
 namespace duckdb {
 
 static bool HasDirectRangeArguments(const BoundScalarFunction &function) {
-	auto definition = function.GetDefinition();
+	const auto &definition = function.GetDefinition();
 	if (!definition || function.HasBindExpressionCallback() || definition->HasUnbindCallback()) {
 		return false;
 	}
@@ -61,7 +61,7 @@ unique_ptr<WindowRangeBoundary> WindowRangeBoundary::Capture(const Expression &e
 	}
 	auto &call = expression.Cast<BoundFunctionExpression>();
 	auto &function = call.Function();
-	auto definition = function.GetDefinition();
+	const auto &definition = function.GetDefinition();
 	if (!HasDirectRangeArguments(function) || call.GetChildren().size() != 2) {
 		return nullptr;
 	}
@@ -86,7 +86,7 @@ optional_ptr<const Expression> WindowRangeBoundary::Match(const Expression &expr
 	}
 	auto &call = endpoint->Cast<BoundFunctionExpression>();
 	auto &function = call.Function();
-	auto definition = function.GetDefinition();
+	const auto &definition = function.GetDefinition();
 	if (!HasDirectRangeArguments(function) || call.GetChildren().size() != 2) {
 		return nullptr;
 	}

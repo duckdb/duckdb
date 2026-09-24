@@ -19,7 +19,21 @@
 #include "duckdb/planner/operator/logical_secure_view.hpp"
 
 namespace duckdb {
-using namespace logical_plan_sql_export;
+using logical_plan_sql_export::CollectExpressions;
+using logical_plan_sql_export::CreateBindingContext;
+using logical_plan_sql_export::CreateFields;
+using logical_plan_sql_export::CreateSubquery;
+using logical_plan_sql_export::FieldIdentifier;
+using logical_plan_sql_export::LogicalPlanSQLExportedChild;
+using logical_plan_sql_export::LogicalPlanSQLExportResult;
+using logical_plan_sql_export::LogicalSourceIdentity;
+using logical_plan_sql_export::PlainScope;
+using logical_plan_sql_export::PlanChildPath;
+using logical_plan_sql_export::PlanExpressionPath;
+using logical_plan_sql_export::PlanUnsupportedFeature;
+using logical_plan_sql_export::ReconstructSQLSource;
+using logical_plan_sql_export::SetChildScope;
+using logical_plan_sql_export::UnsupportedSource;
 
 static LogicalPlanVerificationIssue ExtensionIssue(LogicalPlanVerificationIssueCode code,
                                                    const LogicalPlanVerificationPath &path, const string &identifier,

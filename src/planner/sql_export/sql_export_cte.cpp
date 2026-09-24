@@ -16,11 +16,20 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
-#include "duckdb/planner/sql_export_helpers.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
-using namespace logical_plan_sql_export;
+using logical_plan_sql_export::CollectExpressions;
+using logical_plan_sql_export::CreateFields;
+using logical_plan_sql_export::CreateSubquery;
+using logical_plan_sql_export::ExportTypedNull;
+using logical_plan_sql_export::FieldIdentifier;
+using logical_plan_sql_export::IsIdentityProjection;
+using logical_plan_sql_export::LogicalPlanSQLExportedChild;
+using logical_plan_sql_export::LogicalPlanSQLExportResult;
+using logical_plan_sql_export::PlanChildPath;
+using logical_plan_sql_export::PlanExpressionPath;
+using logical_plan_sql_export::PlanUnsupportedFeature;
 
 LogicalPlanSQLExportResult LogicalMaterializedCTE::ToSQL(LogicalPlanSQLExportContext &export_context,
                                                          const LogicalPlanVerificationPath &path) {

@@ -15,10 +15,17 @@
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_expression_get.hpp"
-#include "duckdb/planner/sql_export_helpers.hpp"
 
 namespace duckdb {
-using namespace logical_plan_sql_export;
+using logical_plan_sql_export::CreateFields;
+using logical_plan_sql_export::CreateSubquery;
+using logical_plan_sql_export::FieldIdentifier;
+using logical_plan_sql_export::LogicalPlanSQLExportResult;
+using logical_plan_sql_export::LogicalPlanSQLExportSource;
+using logical_plan_sql_export::PlanChildPath;
+using logical_plan_sql_export::PlanExpressionPath;
+using logical_plan_sql_export::PlanUnsupportedFeature;
+using logical_plan_sql_export::PropagateSemanticTypes;
 
 namespace {
 

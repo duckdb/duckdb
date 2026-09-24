@@ -28,7 +28,22 @@
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
 
 namespace duckdb {
-using namespace logical_plan_sql_export;
+using logical_plan_sql_export::ChildColumn;
+using logical_plan_sql_export::CollectExpressions;
+using logical_plan_sql_export::CreateBindingContext;
+using logical_plan_sql_export::CreateFields;
+using logical_plan_sql_export::CreateSubquery;
+using logical_plan_sql_export::FieldIdentifier;
+using logical_plan_sql_export::HasEffectfulExpressions;
+using logical_plan_sql_export::IsIdentityProjection;
+using logical_plan_sql_export::LogicalPlanSQLExportedChild;
+using logical_plan_sql_export::LogicalPlanSQLExportResult;
+using logical_plan_sql_export::PlainScope;
+using logical_plan_sql_export::PlanChildPath;
+using logical_plan_sql_export::PlanExpressionPath;
+using logical_plan_sql_export::PlanUnsupportedFeature;
+using logical_plan_sql_export::PropagateSemanticTypes;
+using logical_plan_sql_export::SetChildScope;
 
 static LogicalType SemanticExpressionType(const Expression &expression,
                                           const BoundExpressionSQLExportContext &context) {

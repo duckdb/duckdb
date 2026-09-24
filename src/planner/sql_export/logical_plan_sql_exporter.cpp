@@ -1,7 +1,6 @@
 #include "duckdb/planner/sql_export/logical_plan_sql_exporter_internal.hpp"
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/planner/logical_plan_sql_exporter.hpp"
-#include "duckdb/planner/operator/logical_recursive_cte.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/bound_expression_sql_exporter.hpp"
@@ -13,19 +12,9 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
-#include "duckdb/planner/operator/logical_column_data_get.hpp"
-#include "duckdb/planner/operator/logical_materialized_cte.hpp"
-#include "duckdb/planner/operator/logical_cteref.hpp"
-#include "duckdb/planner/operator/logical_limit.hpp"
-#include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_expression_get.hpp"
-#include "duckdb/planner/operator/logical_extension_operator.hpp"
-#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/sql_export_helpers.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
-#include "duckdb/planner/operator/logical_pivot.hpp"
-#include "duckdb/planner/operator/logical_sample.hpp"
-#include "duckdb/planner/operator/logical_secure_view.hpp"
 
 namespace duckdb {
 namespace logical_plan_sql_export {
@@ -230,7 +219,10 @@ unique_ptr<SelectNode> LogicalPlanSQLExportContext::ForwardFields(const LogicalP
 
 LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
 LogicalOperator::ToSQL(LogicalPlanSQLExportContext &, const LogicalPlanVerificationPath &path) {
-	using namespace logical_plan_sql_export;
+	using logical_plan_sql_export::LogicalPlanSQLExportResult;
+	using logical_plan_sql_export::LogicalSourceIdentity;
+	using logical_plan_sql_export::UnsupportedOperator;
+	using logical_plan_sql_export::UnsupportedSource;
 	if (type == LogicalOperatorType::LOGICAL_DELIM_GET) {
 		return LogicalPlanSQLExportResult::Failure({UnsupportedSource(path, LogicalSourceIdentity(), "delim_get")});
 	}

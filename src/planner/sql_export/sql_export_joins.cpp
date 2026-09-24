@@ -11,7 +11,18 @@
 #include "duckdb/planner/sql_export_helpers.hpp"
 
 namespace duckdb {
-using namespace logical_plan_sql_export;
+using logical_plan_sql_export::CollectExpressions;
+using logical_plan_sql_export::CollectScopeAliases;
+using logical_plan_sql_export::CreateBindingContext;
+using logical_plan_sql_export::CreateFields;
+using logical_plan_sql_export::CreateSubquery;
+using logical_plan_sql_export::FieldIdentifier;
+using logical_plan_sql_export::LogicalPlanSQLExportedChild;
+using logical_plan_sql_export::LogicalPlanSQLExportResult;
+using logical_plan_sql_export::PlainScope;
+using logical_plan_sql_export::PlanChildPath;
+using logical_plan_sql_export::PlanUnsupportedFeature;
+using logical_plan_sql_export::PropagateSemanticTypes;
 
 static string MarkConditionUnsupportedReason(const LogicalComparisonJoin &join) {
 	bool comparisons_only = !join.conditions.empty();
