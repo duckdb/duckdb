@@ -116,7 +116,7 @@ SELECT ~2 ^ 2;
 ----
 <REGEX>:.*~\(DOUBLE\).*
 
-query D
+query I
 SELECT (~2) ^ 2;
 ----
 9

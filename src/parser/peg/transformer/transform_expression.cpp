@@ -1441,8 +1441,8 @@ PEGTransformerFactory::TransformBitwiseExpressionTail(PEGTransformer &transforme
 
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformTildeExpression(PEGTransformer &transformer,
-                                               optional<vector<string>> tilde_prefix_operator,
-                                               unique_ptr<ParsedExpression> additive_expression) {
+                                                optional<vector<string>> tilde_prefix_operator,
+                                                unique_ptr<ParsedExpression> additive_expression) {
 	auto expr = std::move(additive_expression);
 	if (!tilde_prefix_operator) {
 		return expr;
