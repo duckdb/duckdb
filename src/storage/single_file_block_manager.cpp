@@ -461,6 +461,15 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header) {
 	return CheckAndAddEncryptionKey(main_header, *options.encryption_options.user_key);
 }
 
+//! Open through the client file system when available, so session settings and logger apply
+static FileSystem &GetDatabaseFileSystem(QueryContext context, AttachedDatabase &db) {
+	auto client_context = context.GetClientContext();
+	if (client_context) {
+		return FileSystem::GetFileSystem(*client_context);
+	}
+	return FileSystem::Get(db);
+}
+
 void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	auto flags = GetFileFlags(true);
 
@@ -471,7 +480,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	}
 
 	// open the RDBMS handle
-	auto &fs = FileSystem::Get(db);
+	auto &fs = GetDatabaseFileSystem(context, db);
 	handle = fs.OpenFile(path, flags);
 	header_buffer.Clear();
 
@@ -573,7 +582,7 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 	auto flags = GetFileFlags(false);
 
 	// open the RDBMS handle
-	auto &fs = FileSystem::Get(db);
+	auto &fs = GetDatabaseFileSystem(context, db);
 	handle = fs.OpenFile(path, flags);
 	if (!handle) {
 		// this can only happen in read-only mode - as that is when we set FILE_FLAGS_NULL_IF_NOT_EXISTS
