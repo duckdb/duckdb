@@ -231,6 +231,57 @@ TEST_CASE("Large reads are split at the cache block size", "[external_file_cache
 	REQUIRE(CountCachedBlocks(cache) == 4);
 }
 
+TEST_CASE("Uncached reads are split at the cache block size", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+
+	const idx_t BLOCK_SIZE = 4096;
+	const idx_t FILE_SIZE = BLOCK_SIZE * 3 + 100;
+	Connection con(db);
+	con.Query(StringUtil::Format("SET external_file_cache_local_block_size=%llu", BLOCK_SIZE));
+	auto &cache = db_instance.GetExternalFileCache();
+	cache.SetEnabled(false);
+
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_uncached_split_reads.bin", content);
+
+	CachingFileSystem cfs(*recording_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+
+	// The same reads as with the cache enabled, but nothing is kept
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	REQUIRE(recording_fs->TakeReads() ==
+	        vector<pair<idx_t, idx_t>> {
+	            {0, BLOCK_SIZE}, {BLOCK_SIZE, BLOCK_SIZE}, {2 * BLOCK_SIZE, BLOCK_SIZE}, {3 * BLOCK_SIZE, 100}});
+	REQUIRE(CountCachedBlocks(cache) == 0);
+
+	// A read of at most one block stays a single read
+	REQUIRE(ReadFull(*handle, BLOCK_SIZE, 100) == content.substr(100, BLOCK_SIZE));
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{100, BLOCK_SIZE}});
+}
+
+TEST_CASE("Reads of files the cache does not handle are not split", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+
+	const idx_t BLOCK_SIZE = 4096;
+	const idx_t FILE_SIZE = BLOCK_SIZE * 3 + 100;
+	Connection con(db);
+	con.Query(StringUtil::Format("SET external_file_cache_local_block_size=%llu", BLOCK_SIZE));
+
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_local_unsplit_reads.bin", content);
+
+	CachingFileSystem cfs(*recording_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+
+	// Local files are not cached by default, so their reads stay whole
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, FILE_SIZE}});
+}
+
 TEST_CASE("A read spanning cached ranges only fetches the gaps between them", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
