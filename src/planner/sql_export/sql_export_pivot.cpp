@@ -63,7 +63,7 @@ ExportPivotDefault(ClientContext &context, const BoundAggregateExpression &aggre
 	auto result = BoundExpressionSQLExporter::ExportAggregateCallAtPath(copy->Cast<BoundAggregateExpression>(),
 	                                                                    CreateBindingContext(context, {}), path);
 	if (result.HasError()) {
-		return LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>::Failure(result.GetIssues());
+		return LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>::Failure(result);
 	}
 	return LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>::Success(std::move(result.GetValue()));
 }
@@ -112,7 +112,7 @@ LogicalPlanSQLExportResult LogicalPivot::ToSQL(LogicalPlanSQLExportContext &expo
 	D_ASSERT(HasConsistentPivotLayout(pivot));
 	auto fields = CreateFields(pivot, path);
 	if (fields.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(fields);
 	}
 	auto &info = pivot.bound_pivot;
 	auto aggregate_count = info.aggregates.size();
@@ -132,14 +132,14 @@ LogicalPlanSQLExportResult LogicalPivot::ToSQL(LogicalPlanSQLExportContext &expo
 		auto value =
 		    ExportPivotDefault(export_context.GetClientContext(), aggregate, PlanExpressionPath(path, aggregate_idx));
 		if (value.HasError()) {
-			return LogicalPlanSQLExportResult::Failure(value.GetIssues());
+			return LogicalPlanSQLExportResult::Failure(value);
 		}
 		value.GetValue()->SetAlias(FieldIdentifier(aggregate_idx));
 		defaults->select_list.push_back(std::move(value.GetValue()));
 	}
 	auto child = export_context.ExportChild(*pivot.children[0], PlanChildPath(path, 0));
 	if (child.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(child.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(child);
 	}
 	auto call = [](const char *name, unique_ptr<ParsedExpression> first,
 	               unique_ptr<ParsedExpression> second = nullptr) -> unique_ptr<ParsedExpression> {

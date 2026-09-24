@@ -6,20 +6,7 @@
 namespace duckdb {
 class Expression;
 class LogicalOperator;
-class LogicalMaterializedCTE;
-class LogicalCTERef;
-class LogicalRecursiveCTE;
 class LogicalComparisonJoin;
-class LogicalColumnDataGet;
-class LogicalGet;
-class LogicalExpressionGet;
-class LogicalFilter;
-class LogicalProjection;
-class LogicalSecureView;
-class LogicalSample;
-class LogicalPivot;
-class LogicalSetOperation;
-class LogicalAggregate;
 struct LogicalExtensionOperator;
 class ClientContext;
 
@@ -68,21 +55,18 @@ public:
 	                                     const vector<LogicalPlanSQLExportField> &fields,
 	                                     optional_ptr<const SelectNode> plain = nullptr);
 
-private:
-	friend class duckdb::LogicalMaterializedCTE;
-	friend class duckdb::LogicalCTERef;
-	friend class duckdb::LogicalRecursiveCTE;
-	friend class duckdb::LogicalColumnDataGet;
-	friend class duckdb::LogicalGet;
-	friend class duckdb::LogicalExpressionGet;
-	friend class duckdb::LogicalFilter;
-	friend class duckdb::LogicalProjection;
-	friend class duckdb::LogicalSecureView;
-	friend class duckdb::LogicalSample;
-	friend class duckdb::LogicalPivot;
-	friend class duckdb::LogicalSetOperation;
-	friend class duckdb::LogicalAggregate;
+	//! Operators from the root down to the operator currently being exported
+	const vector<reference<LogicalOperator>> &Ancestors() const {
+		return ancestors;
+	}
+	//! Make a CTE relation referenceable while its consumers are exported
+	void PushNamedRelation(TableIndex index, const Identifier &name, bool is_recurring);
+	//! Remove the innermost named relation and return how often it was referenced
+	idx_t PopNamedRelation();
+	//! Reference the innermost named relation with this index; empty when it is out of scope
+	optional<Identifier> ReferenceNamedRelation(TableIndex index, bool is_recurring);
 
+private:
 	struct SourceScope;
 	optional_ptr<const SourceScope> source_scope;
 	struct NamedRelation {

@@ -31,11 +31,8 @@ static optional<Value> ConstantSQLInput(const Expression &expression, LogicalOpe
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 		return expression.Cast<BoundConstantExpression>().GetValue();
 	}
-	if (expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
-		auto &function = expression.Cast<BoundFunctionExpression>();
-		if (!function.GetChildren().empty() && CMUtils::GetExpressionType(function) != CMExpressionType::NONE) {
-			return ConstantSQLInput(*function.GetChildren()[0], input);
-		}
+	if (auto wrapped = CMUtils::GetWrappedInput(expression)) {
+		return ConstantSQLInput(*wrapped, input);
 	}
 	if (expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF || input.children.size() != 1) {
 		return {};
@@ -138,6 +135,28 @@ LogicalPlanSQLExportResult LogicalPlanSQLExportContext::Export(LogicalOperator &
 	return result;
 }
 
+void LogicalPlanSQLExportContext::PushNamedRelation(TableIndex index, const Identifier &name, bool is_recurring) {
+	named_relations.push_back({index, name, is_recurring, 0});
+}
+
+idx_t LogicalPlanSQLExportContext::PopNamedRelation() {
+	D_ASSERT(!named_relations.empty());
+	auto references = named_relations.back().references;
+	named_relations.pop_back();
+	return references;
+}
+
+optional<Identifier> LogicalPlanSQLExportContext::ReferenceNamedRelation(TableIndex index, bool is_recurring) {
+	for (idx_t i = named_relations.size(); i > 0; i--) {
+		auto &relation = named_relations[i - 1];
+		if (relation.index == index && relation.is_recurring == is_recurring) {
+			relation.references++;
+			return relation.name;
+		}
+	}
+	return optional<Identifier>();
+}
+
 Identifier LogicalPlanSQLExportContext::NextRelationAlias(const Identifier &preferred) {
 	if (!preferred.empty() && relation_aliases.insert(preferred).second) {
 		return preferred;
@@ -154,7 +173,7 @@ LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>
 LogicalPlanSQLExportContext::ExportChild(LogicalOperator &child, const LogicalPlanVerificationPath &path) {
 	auto exported = Export(child, path);
 	if (exported.HasError()) {
-		return LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>::Failure(exported.GetIssues());
+		return LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>::Failure(exported);
 	}
 	LogicalPlanSQLExportedChild result {std::move(exported.GetValue()), NextRelationAlias()};
 	return LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>::Success(std::move(result));
@@ -235,7 +254,7 @@ LogicalPlanSQLExporter::Export(ClientContext &context, LogicalOperator &root,
                                const LogicalPlanSQLExportOptions &options) {
 	auto verification = LogicalPlanVerifier::VerifyAlways(root);
 	if (verification.HasError()) {
-		return LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>::Failure(verification.GetIssues());
+		return LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>::Failure(verification);
 	}
 	logical_plan_sql_export::LogicalPlanSQLExportContext state(context);
 	auto result = state.Export(root, LogicalPlanVerificationPath());

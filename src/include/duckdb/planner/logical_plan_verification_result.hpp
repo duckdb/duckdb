@@ -134,6 +134,13 @@ public:
 		return LogicalPlanVerificationResult(optional<T>(std::move(value)), {});
 	}
 
+	//! Propagate the normalized issues of a failed result carrying a different value type
+	template <class U>
+	static LogicalPlanVerificationResult Failure(const LogicalPlanVerificationResult<U> &failed) {
+		D_ASSERT(failed.HasError());
+		return LogicalPlanVerificationResult(optional<T>(), failed.GetIssues());
+	}
+
 	static LogicalPlanVerificationResult Failure(vector<LogicalPlanVerificationIssue> issues) {
 		for (auto &issue : issues) {
 			if (!issue.IsValid()) {

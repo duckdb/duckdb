@@ -95,7 +95,7 @@ ExportJoinCondition(LogicalJoin &op, LogicalPlanSQLExportContext &context,
 		}
 		auto exported = context.ExportExpression(op, expressions, 0, expression_context, path);
 		if (exported.HasError()) {
-			return Result::Failure(exported.GetIssues());
+			return Result::Failure(exported);
 		}
 		predicate = std::move(exported.GetValue());
 	} else {
@@ -118,13 +118,13 @@ ExportJoinCondition(LogicalJoin &op, LogicalPlanSQLExportContext &context,
 		for (auto &condition : comparison.conditions) {
 			auto lhs = context.ExportExpression(op, expressions, ordinal++, expression_context, path);
 			if (lhs.HasError()) {
-				return Result::Failure(lhs.GetIssues());
+				return Result::Failure(lhs);
 			}
 			auto conjunct = std::move(lhs.GetValue());
 			if (condition.IsComparison()) {
 				auto rhs = context.ExportExpression(op, expressions, ordinal++, expression_context, path);
 				if (rhs.HasError()) {
-					return Result::Failure(rhs.GetIssues());
+					return Result::Failure(rhs);
 				}
 				conjunct = make_uniq<ComparisonExpression>(condition.GetComparisonType(), std::move(conjunct),
 				                                           std::move(rhs.GetValue()));
@@ -143,15 +143,15 @@ static LogicalPlanSQLExportResult ExportJoin(LogicalOperator &op, LogicalPlanSQL
 	D_ASSERT(op.children.size() == 2);
 	auto fields = CreateFields(op, path);
 	if (fields.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(fields);
 	}
 	auto left = context.ExportChild(*op.children[0], PlanChildPath(path, 0));
 	if (left.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(left.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(left);
 	}
 	auto right = context.ExportChild(*op.children[1], PlanChildPath(path, 1));
 	if (right.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(right.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(right);
 	}
 	vector<reference<const LogicalPlanSQLExportedChild>> children {left.GetValue(), right.GetValue()};
 	PropagateSemanticTypes(fields.GetValue(), children);
@@ -199,7 +199,7 @@ static LogicalPlanSQLExportResult ExportJoin(LogicalOperator &op, LogicalPlanSQL
 		}
 		auto condition = ExportJoinCondition(*logical_join, context, expression_context, path);
 		if (condition.HasError()) {
-			return LogicalPlanSQLExportResult::Failure(condition.GetIssues());
+			return LogicalPlanSQLExportResult::Failure(condition);
 		}
 		join->condition = std::move(condition.GetValue());
 	}

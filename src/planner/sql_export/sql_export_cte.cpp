@@ -37,19 +37,18 @@ LogicalPlanSQLExportResult LogicalMaterializedCTE::ToSQL(LogicalPlanSQLExportCon
 	D_ASSERT(cte.children.size() == 2);
 	auto fields = CreateFields(cte, path);
 	if (fields.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(fields);
 	}
 	auto name = export_context.NextRelationAlias(cte.ctename);
 	auto producer = export_context.ExportNamedProducer(*cte.children[0], PlanChildPath(path, 0), name);
 	if (producer.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(producer.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(producer);
 	}
-	export_context.named_relations.push_back({cte.table_index, name, false, 0});
+	export_context.PushNamedRelation(cte.table_index, name, false);
 	auto consumer = export_context.ExportChild(*cte.children[1], PlanChildPath(path, 1));
-	auto references = export_context.named_relations.back().references;
-	export_context.named_relations.pop_back();
+	auto references = export_context.PopNamedRelation();
 	if (consumer.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(consumer.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(consumer);
 	}
 	if (references == 0) {
 		return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
@@ -76,22 +75,14 @@ LogicalPlanSQLExportResult LogicalCTERef::ToSQL(LogicalPlanSQLExportContext &exp
                                                 const LogicalPlanVerificationPath &path) {
 	auto &ref = *this;
 	D_ASSERT(ref.children.empty());
-	optional<Identifier> name;
-	for (idx_t i = export_context.named_relations.size(); i > 0; i--) {
-		auto &relation = export_context.named_relations[i - 1];
-		if (relation.index == ref.cte_index && relation.is_recurring == ref.is_recurring) {
-			relation.references++;
-			name = relation.name;
-			break;
-		}
-	}
+	auto name = export_context.ReferenceNamedRelation(ref.cte_index, ref.is_recurring);
 	if (!name) {
 		return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
 		    path, "cte_reference_scope", "The referenced CTE is not in the exported relation scope")});
 	}
 	auto fields = CreateFields(ref, path);
 	if (fields.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(fields);
 	}
 	return LogicalPlanSQLExportResult::Success(
 	    {export_context.CreateNamedSource(*name, fields.GetValue(), ref.is_recurring), std::move(fields.GetValue())});
@@ -121,21 +112,19 @@ LogicalPlanSQLExportResult LogicalRecursiveCTE::ExportSQLDefinition(LogicalPlanS
 	D_ASSERT(cte.children.size() == 2);
 	auto fields = CreateFields(cte, path);
 	if (fields.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(fields);
 	}
 	auto seed = export_context.Export(*cte.children[0], PlanChildPath(path, 0));
 	if (seed.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(seed.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(seed);
 	}
-	export_context.named_relations.push_back({cte.table_index, name, false, 0});
-	export_context.named_relations.push_back({cte.table_index, name, true, 0});
+	export_context.PushNamedRelation(cte.table_index, name, false);
+	export_context.PushNamedRelation(cte.table_index, name, true);
 	auto step = export_context.Export(*cte.children[1], PlanChildPath(path, 1));
-	auto recurring_references = export_context.named_relations.back().references;
-	export_context.named_relations.pop_back();
-	auto references = export_context.named_relations.back().references;
-	export_context.named_relations.pop_back();
+	auto recurring_references = export_context.PopNamedRelation();
+	auto references = export_context.PopNamedRelation();
 	if (step.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(step.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(step);
 	}
 	if ((references == 0 && recurring_references == 0) || (cte.ref_recurring && recurring_references == 0)) {
 		// Binding still needs a self reference when optimization removed the recursive scan.
@@ -144,7 +133,7 @@ LogicalPlanSQLExportResult LogicalRecursiveCTE::ExportSQLDefinition(LogicalPlanS
 		for (auto &type : cte.internal_types) {
 			auto value = ExportTypedNull(type, path);
 			if (value.HasError()) {
-				return LogicalPlanSQLExportResult::Failure(value.GetIssues());
+				return LogicalPlanSQLExportResult::Failure(value);
 			}
 			empty->select_list.push_back(std::move(value.GetValue()));
 		}
@@ -163,7 +152,7 @@ LogicalPlanSQLExportResult LogicalRecursiveCTE::ExportSQLDefinition(LogicalPlanS
 		query->aliases.push_back(FieldIdentifier(i));
 	}
 	BoundExpressionSQLExportContext key_context;
-	key_context.client_context = &export_context.context;
+	key_context.client_context = &export_context.GetClientContext();
 	key_context.resolve_binding = [&](const ColumnBinding &binding) -> optional<ResolvedSQLColumnReference> {
 		if (binding.table_index != cte.table_index || binding.column_index.GetIndex() >= cte.internal_types.size()) {
 			return {};
@@ -177,7 +166,7 @@ LogicalPlanSQLExportResult LogicalRecursiveCTE::ExportSQLDefinition(LogicalPlanS
 	for (auto &key : cte.key_targets) {
 		auto exported = export_context.ExportExpression(cte, expressions, expression_ordinal++, key_context, path);
 		if (exported.HasError()) {
-			return LogicalPlanSQLExportResult::Failure(exported.GetIssues());
+			return LogicalPlanSQLExportResult::Failure(exported);
 		}
 		key_columns.insert(key->Cast<BoundColumnRefExpression>().Binding().column_index);
 		query->key_targets.push_back(std::move(exported.GetValue()));
@@ -199,7 +188,7 @@ LogicalPlanSQLExportResult LogicalRecursiveCTE::ExportSQLDefinition(LogicalPlanS
 			auto exported = BoundExpressionSQLExporter::ExportAggregateCallAtPath(aggregate, key_context,
 			                                                                      PlanExpressionPath(path, ordinal));
 			if (exported.HasError()) {
-				return LogicalPlanSQLExportResult::Failure(exported.GetIssues());
+				return LogicalPlanSQLExportResult::Failure(exported);
 			}
 			exported.GetValue()->SetAlias(FieldIdentifier(column));
 			query->key_targets.push_back(std::move(exported.GetValue()));
@@ -237,7 +226,7 @@ logical_plan_sql_export::LogicalPlanSQLExportContext::ExportNamedProducer(Logica
 	auto exported = op.Cast<LogicalRecursiveCTE>().ExportSQLDefinition(*this, path, name);
 	ancestors.pop_back();
 	if (exported.HasError()) {
-		return LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>::Failure(exported.GetIssues());
+		return LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>::Failure(exported);
 	}
 	return LogicalPlanVerificationResult<LogicalPlanSQLExportedChild>::Success(
 	    {std::move(exported.GetValue()), NextRelationAlias()});
@@ -246,8 +235,8 @@ logical_plan_sql_export::LogicalPlanSQLExportContext::ExportNamedProducer(Logica
 LogicalPlanSQLExportResult LogicalRecursiveCTE::ToSQL(LogicalPlanSQLExportContext &export_context,
                                                       const LogicalPlanVerificationPath &path) {
 	auto &cte = *this;
-	if (Optimizer::OptimizerDisabled(export_context.context, OptimizerType::CTE_INLINING) ||
-	    Settings::Get<DebugDisableOptimizerSetting>(export_context.context)) {
+	if (Optimizer::OptimizerDisabled(export_context.GetClientContext(), OptimizerType::CTE_INLINING) ||
+	    Settings::Get<DebugDisableOptimizerSetting>(export_context.GetClientContext())) {
 		return LogicalPlanSQLExportResult::Failure(
 		    {PlanUnsupportedFeature(path, "recursive_cte_materialization",
 		                            "The SQL wrapper requires CTE inlining to preserve recursive evaluation")});

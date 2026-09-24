@@ -54,7 +54,7 @@ LogicalPlanSQLExportResult LogicalGet::ExportSQLSource(LogicalPlanSQLExportConte
 	}
 	auto fields = CreateFields(get, path);
 	if (fields.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(fields);
 	}
 	if ((!get.extra_info.file_filters.empty() || get.extra_info.total_files.IsValid()) &&
 	    !get.extra_info.file_filter_expressions) {
@@ -64,8 +64,8 @@ LogicalPlanSQLExportResult LogicalGet::ExportSQLSource(LogicalPlanSQLExportConte
 	if (get.row_group_order_options &&
 	    (get.row_group_order_options->row_group_offset || get.row_group_order_options->leading_null_group_offset)) {
 		bool has_unpruned_offset = false;
-		for (idx_t i = export_context.ancestors.size(); i > 0; i--) {
-			auto &ancestor = export_context.ancestors[i - 1].get();
+		for (idx_t i = export_context.Ancestors().size(); i > 0; i--) {
+			auto &ancestor = export_context.Ancestors()[i - 1].get();
 			if (ancestor.type == LogicalOperatorType::LOGICAL_LIMIT) {
 				has_unpruned_offset = ancestor.Cast<LogicalLimit>().unpruned_offset.IsValid();
 				break;
@@ -93,7 +93,7 @@ LogicalPlanSQLExportResult LogicalGet::ExportSQLSource(LogicalPlanSQLExportConte
 	if (!get.children.empty()) {
 		auto child = export_context.ExportChild(*get.children[0], PlanChildPath(path, 0));
 		if (child.HasError()) {
-			return LogicalPlanSQLExportResult::Failure(child.GetIssues());
+			return LogicalPlanSQLExportResult::Failure(child);
 		}
 		for (auto index : get.projected_input) {
 			scan_fields.push_back(child.GetValue().relation.fields[index]);
@@ -105,8 +105,8 @@ LogicalPlanSQLExportResult LogicalGet::ExportSQLSource(LogicalPlanSQLExportConte
 		scan_fields.push_back(*ordinality);
 	}
 	auto relation_alias = export_context.NextRelationAlias();
-	auto source_sql =
-	    ReconstructSQLSource(export_context.context, get, std::move(input), relation_alias, bool(ordinality));
+	auto source_sql = ReconstructSQLSource(export_context.GetClientContext(), get, std::move(input), relation_alias,
+	                                       bool(ordinality));
 	if (!source_sql.query) {
 		auto guard = source_sql.unsupported_reason.empty() ? "to_sql_callback_declined" : source_sql.unsupported_reason;
 		return LogicalPlanSQLExportResult::Failure(
@@ -138,7 +138,7 @@ LogicalPlanSQLExportResult LogicalGet::ExportSQLSource(LogicalPlanSQLExportConte
 	if (plain && (plain->where_clause || plain->select_list.size() != source.relation.fields.size())) {
 		plain = nullptr;
 	}
-	auto binding_context = CreateBindingContext(export_context.context, {source}, {plain});
+	auto binding_context = CreateBindingContext(export_context.GetClientContext(), {source}, {plain});
 	auto select = export_context.ForwardFields(source, fields.GetValue(), plain);
 	vector<unique_ptr<Expression>> predicates;
 	for (auto &entry : get.table_filters) {
@@ -155,7 +155,7 @@ LogicalPlanSQLExportResult LogicalGet::ExportSQLSource(LogicalPlanSQLExportConte
 		auto exported =
 		    BoundExpressionSQLExporter::ExportAtPath(*predicate, binding_context, PlanExpressionPath(path, ordinal++));
 		if (exported.HasError()) {
-			return LogicalPlanSQLExportResult::Failure(exported.GetIssues());
+			return LogicalPlanSQLExportResult::Failure(exported);
 		}
 		conjunction->AddExpression(std::move(exported.GetValue()));
 	}
@@ -173,7 +173,7 @@ LogicalPlanSQLExportResult LogicalSecureView::ToSQL(LogicalPlanSQLExportContext 
 	auto &view = *this;
 	auto fields = CreateFields(view, path);
 	if (fields.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(fields);
 	}
 	if (!view.has_source || view.source_name.Path().empty() || view.source_types.empty()) {
 		return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
@@ -214,7 +214,7 @@ LogicalPlanSQLExportResult LogicalSecureView::ToSQL(LogicalPlanSQLExportContext 
 	}
 
 	BoundExpressionSQLExportContext expression_context;
-	expression_context.client_context = &export_context.context;
+	expression_context.client_context = &export_context.GetClientContext();
 	expression_context.resolve_binding = [source_alias, source_types = view.source_types](
 	                                         const ColumnBinding &binding) -> optional<ResolvedSQLColumnReference> {
 		if (binding.table_index != TableIndex(0) || binding.column_index.GetIndex() >= source_types.size()) {
@@ -235,7 +235,7 @@ LogicalPlanSQLExportResult LogicalSecureView::ToSQL(LogicalPlanSQLExportContext 
 		auto expression = BoundExpressionSQLExporter::ExportAtPath(*view.output_expressions[i], expression_context,
 		                                                           PlanExpressionPath(path, i));
 		if (expression.HasError()) {
-			return LogicalPlanSQLExportResult::Failure(expression.GetIssues());
+			return LogicalPlanSQLExportResult::Failure(expression);
 		}
 		expression.GetValue()->SetAlias(FieldIdentifier(i));
 		select->select_list.push_back(std::move(expression.GetValue()));
@@ -248,7 +248,7 @@ LogicalPlanSQLExportResult LogicalSecureView::ToSQL(LogicalPlanSQLExportContext 
 		auto predicate = BoundExpressionSQLExporter::ExportAtPath(
 		    *view.source_filters[i], expression_context, PlanExpressionPath(path, fields.GetValue().size() + i));
 		if (predicate.HasError()) {
-			return LogicalPlanSQLExportResult::Failure(predicate.GetIssues());
+			return LogicalPlanSQLExportResult::Failure(predicate);
 		}
 		select->where_clause =
 		    SQLExportHelpers::Conjoin(std::move(select->where_clause), std::move(predicate.GetValue()));

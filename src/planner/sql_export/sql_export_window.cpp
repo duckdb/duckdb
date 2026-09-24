@@ -36,10 +36,54 @@ static optional<Value> NumericRangeLiteral(const ParsedExpression &literal) {
 	return {};
 }
 
+//! The SQL offset of a RANGE frame endpoint: the retained literal when it still describes the endpoint,
+//! otherwise the live input the binder's endpoint arithmetic was derived from
+static optional_ptr<const Expression> RangeOffset(const BoundWindowExpression &expression, const WindowSQLFrame &frame,
+                                                  const unique_ptr<Expression> &endpoint, WindowBoundary boundary,
+                                                  const unique_ptr<Expression> &literal,
+                                                  const unique_ptr<WindowRangeBoundary> &origin) {
+	const bool is_range_offset =
+	    boundary == WindowBoundary::EXPR_PRECEDING_RANGE || boundary == WindowBoundary::EXPR_FOLLOWING_RANGE;
+	if (!is_range_offset) {
+		return endpoint.get();
+	}
+	if (!origin || !endpoint || !frame.order) {
+		return nullptr;
+	}
+	auto &order = expression.OrderBy()[0];
+	const bool origin_matches_endpoint = origin->boundary == boundary && origin->direction == order.type;
+	if (!origin_matches_endpoint) {
+		return nullptr;
+	}
+	const bool has_literal_offset = literal && literal->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT;
+	const bool endpoint_is_order = has_literal_offset && Expression::Equals(*endpoint, *order.expression);
+	if (endpoint_is_order) {
+		auto &value = literal->Cast<BoundConstantExpression>().GetValue();
+		if (!value.IsNull() && value.type().IsNumeric() && value == Value::Numeric(value.type(), 0)) {
+			return literal.get();
+		}
+	}
+	auto input = origin->Match(*endpoint, *frame.order);
+	if (!input) {
+		return nullptr;
+	}
+	auto &offset = *input;
+	const bool offset_is_constant = offset.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT;
+	if (offset_is_constant && offset.Cast<BoundConstantExpression>().GetValue().IsNull()) {
+		return nullptr;
+	}
+	if (has_literal_offset && offset_is_constant) {
+		auto &original = literal->Cast<BoundConstantExpression>().GetValue();
+		auto &current = offset.Cast<BoundConstantExpression>().GetValue();
+		const bool has_numeric_offsets = original.type().IsNumeric() && current.type().IsNumeric();
+		if (!original.IsNull() && has_numeric_offsets && original == current) {
+			return literal.get();
+		}
+	}
+	return &offset;
+}
+
 static WindowSQLFrame ReconstructWindowFrame(const BoundWindowExpression &expression) {
-	auto is_range_offset = [](WindowBoundary boundary) {
-		return boundary == WindowBoundary::EXPR_PRECEDING_RANGE || boundary == WindowBoundary::EXPR_FOLLOWING_RANGE;
-	};
 	WindowSQLFrame frame;
 	if (expression.OrderBy().size() == 1) {
 		frame.order = WindowRangeCast::Match(*expression.OrderBy()[0].expression, expression.SQLRangeOrderCasts());
@@ -48,56 +92,16 @@ static WindowSQLFrame ReconstructWindowFrame(const BoundWindowExpression &expres
 			frame.order = nullptr;
 		}
 	}
-	auto range_offset = [&](const unique_ptr<Expression> &endpoint, WindowBoundary boundary,
-	                        const unique_ptr<Expression> &literal,
-	                        const unique_ptr<WindowRangeBoundary> &origin) -> optional_ptr<const Expression> {
-		if (!is_range_offset(boundary)) {
-			return endpoint.get();
-		}
-		if (!origin || !endpoint || !frame.order || origin->boundary != boundary ||
-		    origin->direction != expression.OrderBy()[0].type) {
-			return nullptr;
-		}
-		const bool has_literal_offset = literal && literal->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT;
-		const bool has_retained_endpoint = has_literal_offset && endpoint && frame.order;
-		const bool endpoint_is_order =
-		    has_retained_endpoint && Expression::Equals(*endpoint, *expression.OrderBy()[0].expression);
-		if (endpoint_is_order) {
-			auto &value = literal->Cast<BoundConstantExpression>().GetValue();
-			if (!value.IsNull() && value.type().IsNumeric() && value == Value::Numeric(value.type(), 0)) {
-				return literal.get();
-			}
-		}
-		auto input = origin->Match(*endpoint, *frame.order);
-		if (!input) {
-			return nullptr;
-		}
-		auto &offset = *input;
-		if (offset.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
-		    offset.Cast<BoundConstantExpression>().GetValue().IsNull()) {
-			return nullptr;
-		}
-		if (literal && literal->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
-		    offset.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-			auto &original = literal->Cast<BoundConstantExpression>().GetValue();
-			auto &current = offset.Cast<BoundConstantExpression>().GetValue();
-			const bool has_numeric_offsets = original.type().IsNumeric() && current.type().IsNumeric();
-			if (!original.IsNull() && has_numeric_offsets && original == current) {
-				return literal.get();
-			}
-		}
-		return &offset;
-	};
 	auto retained_offset = [&](const unique_ptr<ParsedExpression> &literal) -> unique_ptr<Expression> {
 		auto value = literal ? NumericRangeLiteral(*literal) : optional<Value>();
 		return value ? make_uniq<BoundConstantExpression>(*value) : nullptr;
 	};
 	frame.start_literal = retained_offset(expression.SQLRangeStart());
 	frame.end_literal = retained_offset(expression.SQLRangeEnd());
-	frame.start = range_offset(expression.StartExpr(), expression.WindowStart(), frame.start_literal,
-	                           expression.SQLRangeStartBoundary());
-	frame.end =
-	    range_offset(expression.EndExpr(), expression.WindowEnd(), frame.end_literal, expression.SQLRangeEndBoundary());
+	frame.start = RangeOffset(expression, frame, expression.StartExpr(), expression.WindowStart(), frame.start_literal,
+	                          expression.SQLRangeStartBoundary());
+	frame.end = RangeOffset(expression, frame, expression.EndExpr(), expression.WindowEnd(), frame.end_literal,
+	                        expression.SQLRangeEndBoundary());
 	return frame;
 }
 

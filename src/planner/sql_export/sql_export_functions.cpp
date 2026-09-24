@@ -346,7 +346,7 @@ BoundExpressionSQLExportState::ExportAggregate(const BoundAggregateExpression &e
                                                const LogicalPlanVerificationPath &path) {
 	auto call = BuildAggregateCall(expression, path);
 	if (call.HasError()) {
-		return BoundExpressionSQLExportResult::Failure(call.GetIssues());
+		return BoundExpressionSQLExportResult::Failure(call);
 	}
 	auto &function = expression.Function();
 	auto &definition = function.GetDefinition();

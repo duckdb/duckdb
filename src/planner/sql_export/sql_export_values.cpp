@@ -21,6 +21,10 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/function/lambda_functions.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
@@ -45,23 +49,51 @@ using logical_plan_sql_export::PlanChildPath;
 using logical_plan_sql_export::PlanUnsupportedFeature;
 using logical_plan_sql_export::UnsupportedSource;
 
+//! Whether the expression is volatile or can throw, ignoring compressed materialization wrappers
+static bool IsEffectfulSemanticExpression(const Expression &expression) {
+	if (auto wrapped = CMUtils::GetWrappedInput(expression)) {
+		return IsEffectfulSemanticExpression(*wrapped);
+	}
+	bool effectful = false;
+	ExpressionIterator::EnumerateChildren(
+	    expression, [&](const Expression &child) { effectful = effectful || IsEffectfulSemanticExpression(child); });
+	if (effectful) {
+		return true;
+	}
+	switch (expression.GetExpressionClass()) {
+	case ExpressionClass::BOUND_FUNCTION: {
+		auto &bound_function = expression.Cast<BoundFunctionExpression>();
+		auto &function = bound_function.Function();
+		if (function.GetStability() == FunctionStability::VOLATILE ||
+		    function.GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
+			return true;
+		}
+		if (!function.HasBindLambdaCallback()) {
+			return false;
+		}
+		auto lambda = bound_function.BindInfo()->Cast<LambdaFunctionData>().GetLambdaExpression();
+		return lambda && (lambda->IsVolatile() || lambda->CanThrow());
+	}
+	case ExpressionClass::BOUND_AGGREGATE:
+		return expression.Cast<BoundAggregateExpression>().Function().GetStability() == FunctionStability::VOLATILE;
+	case ExpressionClass::BOUND_WINDOW: {
+		auto &window = expression.Cast<BoundWindowExpression>();
+		auto stability = window.AggregateFunction() ? window.AggregateFunction()->GetStability()
+		                                            : window.WindowFunction()->GetStability();
+		return stability == FunctionStability::VOLATILE;
+	}
+	case ExpressionClass::BOUND_SUBQUERY: {
+		auto &plan = expression.Cast<BoundSubqueryExpression>().Subquery().plan;
+		return plan && plan->HasVolatileExpressions();
+	}
+	default:
+		return false;
+	}
+}
+
 static bool HasEffectfulExpressionSubtree(const LogicalOperator &op) {
 	for (auto &expression : CollectExpressions(op)) {
-		auto semantic = expression.get().Copy();
-		std::function<void(unique_ptr<Expression> &)> strip_compression = [&](unique_ptr<Expression> &value) {
-			if (value->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
-				auto &function = value->Cast<BoundFunctionExpression>();
-				if (CMUtils::GetExpressionType(function) != CMExpressionType::NONE && !function.GetChildren().empty()) {
-					auto child = std::move(function.GetChildrenMutable()[0]);
-					value = std::move(child);
-					strip_compression(value);
-					return;
-				}
-			}
-			ExpressionIterator::EnumerateChildren(*value, strip_compression);
-		};
-		strip_compression(semantic);
-		if (semantic->IsVolatile() || semantic->CanThrow()) {
+		if (IsEffectfulSemanticExpression(expression.get())) {
 			return true;
 		}
 	}
@@ -203,7 +235,7 @@ LogicalPlanSQLExportResult LogicalColumnDataGet::ToSQL(LogicalPlanSQLExportConte
 	}
 	auto fields = CreateFields(get, path);
 	if (fields.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(fields);
 	}
 	auto values = make_uniq<ExpressionListRef>();
 	values->alias = export_context.NextRelationAlias();
@@ -230,9 +262,9 @@ LogicalPlanSQLExportResult LogicalColumnDataGet::ToSQL(LogicalPlanSQLExportConte
 			values->values.push_back(std::move(exported_row));
 		}
 	}
-	if (repacked &&
-	    HasChunkSensitiveConsumer(export_context.context, export_context.ancestors.front().get(),
-	                              Settings::Get<ScalarSubqueryErrorOnMultipleRowsSetting>(export_context.context))) {
+	if (repacked && HasChunkSensitiveConsumer(
+	                    export_context.GetClientContext(), export_context.Ancestors().front().get(),
+	                    Settings::Get<ScalarSubqueryErrorOnMultipleRowsSetting>(export_context.GetClientContext()))) {
 		return LogicalPlanSQLExportResult::Failure({PlanUnsupportedFeature(
 		    path, "chunk_consumer_evaluation", "SQL cannot retain source chunks for an effectful consumer")});
 	}
@@ -261,7 +293,7 @@ LogicalPlanSQLExportResult LogicalExpressionGet::ToSQL(LogicalPlanSQLExportConte
 #endif
 	auto fields = CreateFields(get, path);
 	if (fields.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(fields);
 	}
 	if (get.children[0]->type != LogicalOperatorType::LOGICAL_DUMMY_SCAN) {
 		return ExportSQLInput(export_context, path, std::move(fields.GetValue()));
@@ -274,7 +306,7 @@ LogicalPlanSQLExportResult LogicalExpressionGet::ToSQL(LogicalPlanSQLExportConte
 		values->expected_names.push_back(FieldIdentifier(i));
 	}
 	BoundExpressionSQLExportContext expression_context;
-	expression_context.client_context = &export_context.context;
+	expression_context.client_context = &export_context.GetClientContext();
 	auto expressions = CollectExpressions(get);
 	idx_t expression_ordinal = 0;
 	for (auto &row : get.expressions) {
@@ -283,7 +315,7 @@ LogicalPlanSQLExportResult LogicalExpressionGet::ToSQL(LogicalPlanSQLExportConte
 			auto expression =
 			    export_context.ExportExpression(get, expressions, expression_ordinal++, expression_context, path);
 			if (expression.HasError()) {
-				return LogicalPlanSQLExportResult::Failure(expression.GetIssues());
+				return LogicalPlanSQLExportResult::Failure(expression);
 			}
 			exported_row.push_back(std::move(expression.GetValue()));
 		}
@@ -310,9 +342,9 @@ LogicalPlanSQLExportResult LogicalExpressionGet::ExportSQLInput(LogicalPlanSQLEx
 	}
 	auto child = export_context.ExportChild(*get.children[0], PlanChildPath(path, 0));
 	if (child.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(child.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(child);
 	}
-	auto expression_context = CreateBindingContext(export_context.context, {child.GetValue()});
+	auto expression_context = CreateBindingContext(export_context.GetClientContext(), {child.GetValue()});
 	auto expressions = CollectExpressions(get);
 	auto select = make_uniq<SelectNode>();
 	select->from_table = CreateSubquery(std::move(child.GetValue()));
@@ -330,7 +362,7 @@ LogicalPlanSQLExportResult LogicalExpressionGet::ExportSQLInput(LogicalPlanSQLEx
 			auto expression = export_context.ExportExpression(get, expressions, row * fields.size() + column,
 			                                                  expression_context, path);
 			if (expression.HasError()) {
-				return LogicalPlanSQLExportResult::Failure(expression.GetIssues());
+				return LogicalPlanSQLExportResult::Failure(expression);
 			}
 			arguments.emplace_back(FieldIdentifier(column), std::move(expression.GetValue()));
 		}
@@ -396,14 +428,14 @@ static LogicalPlanSQLExportResult ExportConstantSource(LogicalOperator &op, bool
 	D_ASSERT(op.children.empty() && op.expressions.empty());
 	auto fields = CreateFields(op, path);
 	if (fields.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(fields);
 	}
 	auto select = make_uniq<SelectNode>();
 	select->from_table = make_uniq<EmptyTableRef>();
 	for (idx_t i = 0; i < fields.GetValue().size(); i++) {
 		auto expression = ExportTypedNull(fields.GetValue()[i].type, path);
 		if (expression.HasError()) {
-			return LogicalPlanSQLExportResult::Failure(expression.GetIssues());
+			return LogicalPlanSQLExportResult::Failure(expression);
 		}
 		expression.GetValue()->SetAlias(FieldIdentifier(i));
 		select->select_list.push_back(std::move(expression.GetValue()));

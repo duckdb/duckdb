@@ -131,7 +131,7 @@ LimitSQLExporter::LimitExpressionResult LimitSQLExporter::ResolveLimitColumn(con
 		if (source_index == sources.size()) {
 			auto exported = context.ExportChild(child, child_path, sources);
 			if (exported.HasError()) {
-				return LimitExpressionResult::Failure(exported.GetIssues());
+				return LimitExpressionResult::Failure(exported);
 			}
 			sources.push_back(
 			    {child, std::move(exported.GetValue().relation_alias), std::move(exported.GetValue().relation)});
@@ -226,7 +226,7 @@ LogicalPlanVerificationResult<LimitSQLExport> LimitSQLExporter::Export(LogicalLi
 				    ExportLimitExpression(*value.GetExpression(), *limit.children[0], PlanChildPath(path, 0),
 				                          PlanExpressionPath(path, expression_ordinal++));
 				if (expression.HasError()) {
-					return LogicalPlanVerificationResult<LimitSQLExport>::Failure(expression.GetIssues());
+					return LogicalPlanVerificationResult<LimitSQLExport>::Failure(expression);
 				}
 				target = std::move(expression.GetValue());
 				if (value.Type() == LimitNodeType::EXPRESSION_PERCENTAGE) {
@@ -240,7 +240,7 @@ LogicalPlanVerificationResult<LimitSQLExport> LimitSQLExporter::Export(LogicalLi
 			auto expression = BoundExpressionSQLExporter::ExportAtPath(*value.GetExpression(), {},
 			                                                           PlanExpressionPath(path, expression_ordinal++));
 			if (expression.HasError()) {
-				return LogicalPlanVerificationResult<LimitSQLExport>::Failure(expression.GetIssues());
+				return LogicalPlanVerificationResult<LimitSQLExport>::Failure(expression);
 			}
 			target = std::move(expression.GetValue());
 			break;
@@ -260,18 +260,18 @@ LogicalPlanSQLExportResult LogicalLimit::ToSQL(LogicalPlanSQLExportContext &expo
 	D_ASSERT(limit.children.size() == 1);
 	auto fields = CreateFields(limit, path);
 	if (fields.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(fields.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(fields);
 	}
 	LimitSQLExporter modifier_exporter(export_context);
 	auto exported = modifier_exporter.Export(limit, path);
 	if (exported.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(exported.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(exported);
 	}
 	auto &modifier = exported.GetValue().modifier;
 	auto &sources = exported.GetValue().sources;
 	auto child = export_context.ExportChild(*limit.children[0], PlanChildPath(path, 0), sources);
 	if (child.HasError()) {
-		return LogicalPlanSQLExportResult::Failure(child.GetIssues());
+		return LogicalPlanSQLExportResult::Failure(child);
 	}
 	PropagateSemanticTypes(fields.GetValue(), {child.GetValue()});
 	if (limit.unpruned_offset.IsValid()) {
