@@ -18,7 +18,7 @@ private:
 		//! Validate the dictionary index and its offsets before reading the string.
 		string_t ValidateAndGetEntry(idx_t index) const;
 		//! The index must be within the table, and the offsets must be nondecreasing to avoid underflow.
-		uint32_t GetStringLength(sel_t index) const;
+		uint32_t GetStringLength(idx_t index) const;
 		//! The offset must be within the dictionary, and the length must not extend past its end.
 		string_t FetchStringFromDict(uint32_t dict_offset, uint32_t string_len) const;
 
