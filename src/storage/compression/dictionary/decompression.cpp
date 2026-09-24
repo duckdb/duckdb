@@ -4,6 +4,9 @@
 
 namespace duckdb {
 
+//===--------------------------------------------------------------------===//
+// Error Helpers
+//===--------------------------------------------------------------------===//
 [[noreturn]] static void ThrowDictionaryIndexOutOfRange() {
 	throw DataCorruptionException(
 	    "Failed to scan dictionary string - dictionary index was out of range. Database file appears "
@@ -33,26 +36,9 @@ namespace duckdb {
 	    "to be corrupted.");
 }
 
-string_t CompressedStringScanState::DictionarySegmentLayout::ValidateAndGetEntry(idx_t index) const {
-	if (index >= index_buffer.size()) {
-		ThrowDictionaryIndexOutOfRange();
-	}
-	auto offset = index_buffer[index];
-	if (offset > dictionary_reader.Size()) {
-		ThrowDictionaryOffsetOutOfRange();
-	}
-	if (index == 0) {
-		return string_t(nullptr, 0);
-	}
-	auto previous_offset = index_buffer[index - 1];
-	if (offset < previous_offset) {
-		ThrowDictionaryOffsetOutOfRange();
-	}
-	const auto string_length = offset - previous_offset;
-	auto string_data = dictionary_reader.GetBytes(dictionary_reader.Size() - offset, string_length);
-	return string_t(const_char_ptr_cast(string_data.data()), string_length);
-}
-
+//===--------------------------------------------------------------------===//
+// Dictionary Validation
+//===--------------------------------------------------------------------===//
 void CompressedStringScanState::ValidateDictionary(const SelectionVector &sel, const idx_t scan_count) const {
 	D_ASSERT(sel.IsSet());
 	bool has_error = false;
@@ -81,6 +67,9 @@ void CompressedStringScanState::ValidateIndexBuffer() const {
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// String Reading
+//===--------------------------------------------------------------------===//
 uint32_t CompressedStringScanState::GetStringLength(sel_t index) const {
 	const auto &offsets = layout.index_buffer;
 	D_ASSERT(index < offsets.size());
@@ -102,6 +91,9 @@ string_t CompressedStringScanState::FetchStringFromDict(uint32_t dict_offset, ui
 	return string_t(const_char_ptr_cast(string_data.data()), string_len);
 }
 
+//===--------------------------------------------------------------------===//
+// Segment Layout
+//===--------------------------------------------------------------------===//
 CompressedStringScanState::DictionarySegmentLayout CompressedStringScanState::ReadLayout(const BufferHandle &handle,
                                                                                          const ColumnSegment &segment) {
 	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "dictionary segment");
@@ -157,6 +149,29 @@ CompressedStringScanState::DictionarySegmentLayout CompressedStringScanState::Re
 	return {expected_width, selection_reader, dictionary_reader, index_buffer};
 }
 
+string_t CompressedStringScanState::DictionarySegmentLayout::ValidateAndGetEntry(idx_t index) const {
+	if (index >= index_buffer.size()) {
+		ThrowDictionaryIndexOutOfRange();
+	}
+	auto offset = index_buffer[index];
+	if (offset > dictionary_reader.Size()) {
+		ThrowDictionaryOffsetOutOfRange();
+	}
+	if (index == 0) {
+		return string_t(nullptr, 0);
+	}
+	auto previous_offset = index_buffer[index - 1];
+	if (offset < previous_offset) {
+		ThrowDictionaryOffsetOutOfRange();
+	}
+	const auto string_length = offset - previous_offset;
+	auto string_data = dictionary_reader.GetBytes(dictionary_reader.Size() - offset, string_length);
+	return string_t(const_char_ptr_cast(string_data.data()), string_length);
+}
+
+//===--------------------------------------------------------------------===//
+// Scan
+//===--------------------------------------------------------------------===//
 void CompressedStringScanState::InitializeDictionary(const ColumnSegment &segment) {
 	// Validate the whole index buffer once so the dictionary build below can trust it.
 	ValidateIndexBuffer();
