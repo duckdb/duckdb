@@ -435,6 +435,7 @@ public:
 			}
 			PushAsyncOpenError(gstate, ErrorData("Unknown exception while opening a file"));
 		} // LCOV_EXCL_STOP
+		gstate.async_open_settled.notify_all();
 	}
 
 	//! Schedule async opens for upcoming unopened files on the async pool, ahead of decoding. Lock held on entry.
@@ -466,6 +467,7 @@ public:
 					    [&gstate]() {
 						    // the reader stays in OPENING, so tell every waiter to stop instead of polling forever
 						    gstate.error_opening_file = true;
+						    gstate.async_open_settled.notify_all();
 					    });
 				}
 				progress_guaranteed = true;
@@ -549,14 +551,23 @@ public:
 	                             unique_lock<mutex> &parallel_lock) {
 		D_ASSERT(parallel_lock.owns_lock());
 		auto &read_ahead = *gstate.read_ahead;
-		while (HasFilesToRead(gstate, parallel_lock) && !gstate.error_opening_file &&
-		       gstate.readers[gstate.file_index]->file_state == MultiFileFileState::OPENING) {
+		auto still_opening = [&]() {
+			return HasFilesToRead(gstate, parallel_lock) && !gstate.error_opening_file &&
+			       gstate.readers[gstate.file_index]->file_state == MultiFileFileState::OPENING;
+		};
+		while (still_opening()) {
 			parallel_lock.unlock();
 			// the open may be queued behind other async work or the async pool may be gone, so run tasks inline
-			if (!read_ahead.TryRunPendingTask()) {
-				context.InterruptCheck();
-				TaskScheduler::YieldThread();
+			const bool ran_task = read_ahead.TryRunPendingTask();
+			parallel_lock.lock();
+			if (ran_task || !still_opening()) {
+				continue;
 			}
+			// the open is in flight: sleep until it settles; the timeout bounds interrupt latency and
+			// covers a cancellation that signals without the lock
+			gstate.async_open_settled.wait_for(parallel_lock, std::chrono::milliseconds(10));
+			parallel_lock.unlock();
+			context.InterruptCheck();
 			parallel_lock.lock();
 		}
 	}
