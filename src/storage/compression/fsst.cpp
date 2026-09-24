@@ -568,7 +568,7 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(const QueryContext &con
 	auto string_block_limit = StringUncompressed::GetStringBlockLimit(block_size);
 	auto state = make_uniq<FSSTScanState>(string_block_limit);
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-	state->handle = buffer_manager.Pin(segment.GetBlockHandle());
+	state->handle = buffer_manager.Pin(context, segment.GetBlockHandle());
 	auto base_ptr = state->handle.GetDataMutable() + block_offset;
 
 	state->duckdb_fsst_decoder = make_buffer<duckdb_fsst_decoder_t>();
@@ -729,7 +729,7 @@ void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t v
 void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                                  idx_t result_idx) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-	auto handle = buffer_manager.Pin(segment.GetBlockHandle());
+	auto handle = buffer_manager.Pin(state.context, segment.GetBlockHandle());
 	auto block_size = segment.GetBlockSize();
 	auto block_offset = segment.GetBlockOffset();
 	if (block_offset > block_size) {
