@@ -29,7 +29,7 @@ on:
     types: [opened, reopened, ready_for_review, converted_to_draft, synchronize]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ (github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/heads/v')) || github.run_id }}
   cancel-in-progress: true
 
 env:
