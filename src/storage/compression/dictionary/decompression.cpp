@@ -1,6 +1,7 @@
 #include "duckdb/storage/compression/dictionary/decompression.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 
 namespace duckdb {
 
@@ -39,12 +40,15 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Dictionary Validation
 //===--------------------------------------------------------------------===//
-void CompressedStringScanState::DictionarySegmentLayout::ValidateDictionary(const SelectionVector &sel,
-                                                                            const idx_t scan_count) const {
+void CompressedStringScanState::DictionarySegmentLayout::ValidateDictionaryIndices(const SelectionVector &sel,
+                                                                                   const idx_t start_offset,
+                                                                                   const idx_t scan_count) const {
 	D_ASSERT(sel.IsSet());
+	D_ASSERT(start_offset <= sel.Capacity());
+	D_ASSERT(scan_count <= sel.Capacity() - start_offset);
 	bool has_error = false;
 	for (idx_t i = 0; i < scan_count; i++) {
-		const idx_t sel_idx = sel.get_index_unsafe(i);
+		const idx_t sel_idx = sel.get_index_unsafe(i + start_offset);
 		has_error |= sel_idx >= index_buffer.size();
 	}
 
@@ -212,7 +216,6 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 
 	// We will scan in blocks of BITPACKING_ALGORITHM_GROUP_SIZE, so we may scan some extra values.
 	idx_t decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(scan_count + start_offset);
-	const auto source = GetSelectionBytes(start, decompress_count);
 
 	// Create a decompression buffer of sufficient size if we don't already have one.
 	if (!sel_vec || sel_vec_size < decompress_count) {
@@ -220,6 +223,7 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 		sel_vec = make_buffer<SelectionVector>(decompress_count);
 	}
 
+	const auto source = GetSelectionBytes(start, decompress_count);
 	sel_t *sel_vec_ptr = sel_vec->data();
 
 	BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(sel_vec_ptr), source.data(), decompress_count,
@@ -227,30 +231,28 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 
 	auto result_data = FlatVector::Writer<string_t>(result, scan_count, result_offset);
 
-	const auto &offsets = layout.index_buffer;
-	bool has_error = false;
-	for (idx_t i = 0; i < scan_count; i++) {
-		// Lookup dict offset in index buffer
-		auto string_dict_index = sel_vec->get_index(i + start_offset);
-
-		if (NEEDS_STRING_OFFSET_CHECK) {
+	if (NEEDS_STRING_OFFSET_CHECK) {
+		for (idx_t i = 0; i < scan_count; i++) {
+			const auto string_dict_index = sel_vec->get_index(i + start_offset);
 			const auto val = layout.ValidateAndGetEntry(string_dict_index);
 			result_data.WriteStringRef(val);
-			continue;
 		}
-
-		bool elem_error = string_dict_index >= offsets.size();
-		string_dict_index = elem_error ? 0 : string_dict_index;
-		auto str_dict_offset = offsets[string_dict_index];
-
-		has_error |= elem_error;
-
-		const auto str_len = layout.GetStringLength(string_dict_index);
-		result_data.WriteStringRef(layout.FetchStringFromDict(str_dict_offset, str_len));
+		return;
 	}
 
-	if (has_error) {
-		ThrowDictionaryIndexOutOfRange();
+	D_ASSERT(dictionary);
+	layout.ValidateDictionaryIndices(*sel_vec, start_offset, scan_count);
+
+	// The dictionary already contains validated strings, so copy the selected string references into the flat result.
+	auto strings = dictionary->data.Values<string_t>();
+	for (idx_t i = 0; i < scan_count; i++) {
+		const auto entry = strings[sel_vec->get_index(i + start_offset)];
+		if (entry.IsValid()) {
+			result_data.WriteStringRef(entry.GetValue());
+		} else {
+			// The NULL entry has no initialized string value to copy.
+			result_data.WriteNull();
+		}
 	}
 }
 
@@ -280,7 +282,7 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 	BitpackingPrimitives::UnPackBuffer<sel_t>(dst, source.data(), decompress_count, layout.current_width);
 
 	sel_vec->ShiftLeft(start_offset, scan_count);
-	layout.ValidateDictionary(*sel_vec, scan_count);
+	layout.ValidateDictionaryIndices(*sel_vec, 0, scan_count);
 
 	result.Dictionary(dictionary, *sel_vec, scan_count);
 }

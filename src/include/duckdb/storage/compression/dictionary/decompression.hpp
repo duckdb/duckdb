@@ -12,7 +12,8 @@ struct CompressedStringScanState : public SegmentScanState {
 private:
 	//! Dictionary segment data from disk, with byte ranges checked by ReadLayout.
 	struct DictionarySegmentLayout {
-		void ValidateDictionary(const SelectionVector &sel, idx_t scan_count) const;
+		//! The selection must be set, and the requested range must fit within its capacity.
+		void ValidateDictionaryIndices(const SelectionVector &sel, idx_t start_offset, idx_t scan_count) const;
 		//! Validate the index buffer (offsets monotonic and within the dictionary) so scans can trust it.
 		void ValidateIndexBuffer() const;
 		//! Validate the dictionary index and its offsets before reading the string.
@@ -28,8 +29,8 @@ private:
 		CompressionSegmentReader selection_reader;
 		//! String contents stored backwards from dict_end.
 		CompressionSegmentReader dictionary_reader;
-		//! Offsets to the strings, measured backwards from dict_end.
-		//! Consecutive offsets determine each string's length.
+		//! Maps dictionary indices to byte offsets measured backwards from dict_end.
+		//! Consecutive offsets determine each non-NULL string's length.
 		unsafe_array_ptr<const uint32_t> index_buffer;
 	};
 
@@ -43,6 +44,7 @@ public:
 
 public:
 	void InitializeDictionary(const ColumnSegment &segment);
+	//! Requires a materialized dictionary unless NEEDS_STRING_OFFSET_CHECK is true.
 	template <bool NEEDS_STRING_OFFSET_CHECK = false>
 	void ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count);
 	void ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset, idx_t start,
