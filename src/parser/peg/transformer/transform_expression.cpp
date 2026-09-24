@@ -1350,9 +1350,9 @@ bool PEGTransformerFactory::TransformSubqueryAll(PEGTransformer &transformer) {
 
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformBitwiseExpression(PEGTransformer &transformer,
-                                                  unique_ptr<ParsedExpression> additive_expression,
+                                                  unique_ptr<ParsedExpression> tilde_expression,
                                                   optional<vector<BinaryExpressionTail>> bitwise_expression_tail) {
-	auto expr = std::move(additive_expression);
+	auto expr = std::move(tilde_expression);
 	if (!bitwise_expression_tail) {
 		return expr;
 	}
@@ -1435,8 +1435,25 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExponentiationExpre
 
 BinaryExpressionTail
 PEGTransformerFactory::TransformBitwiseExpressionTail(PEGTransformer &transformer, const string &bit_operator,
-                                                      unique_ptr<ParsedExpression> additive_expression) {
-	return {bit_operator, std::move(additive_expression), optional_idx()};
+                                                      unique_ptr<ParsedExpression> tilde_expression) {
+	return {bit_operator, std::move(tilde_expression), optional_idx()};
+}
+
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformTildeExpression(PEGTransformer &transformer,
+                                                optional<vector<string>> tilde_prefix_operator,
+                                                unique_ptr<ParsedExpression> additive_expression) {
+	auto expr = std::move(additive_expression);
+	if (!tilde_prefix_operator) {
+		return expr;
+	}
+	auto tilde_depth_guard = transformer.StackCheck(tilde_prefix_operator->size());
+	for (const auto &prefix : *tilde_prefix_operator) {
+		vector<unique_ptr<ParsedExpression>> children;
+		children.push_back(std::move(expr));
+		expr = TransformOperatorFunction(prefix, std::move(children));
+	}
+	return expr;
 }
 
 BinaryExpressionTail

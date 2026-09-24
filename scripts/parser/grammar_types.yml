@@ -414,6 +414,7 @@ Expression:
     - InfixOtherOperatorExpression
     - CustomPrefixExpression
     - BitwiseExpression
+    - TildeExpression
     - AdditiveExpression
     - MultiplicativeExpression
     - ExponentiationExpression
