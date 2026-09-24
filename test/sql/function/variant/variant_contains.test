@@ -209,6 +209,51 @@ SELECT
 ----
 true	true	false
 
+# A failed object candidate must return control to the enclosing array search.
+query III
+SELECT
+    variant_contains('[{"a": 0, "b": 2}, {"a": 1, "b": 2}]'::JSON::VARIANT,
+                     '[{"a": 1, "b": 2}]'::JSON::VARIANT),
+    variant_contains('[{"a": 1}, {"a": 1, "b": 2}]'::JSON::VARIANT,
+                     '[{"a": 1, "b": 2}]'::JSON::VARIANT),
+    variant_contains('[{"a": 1, "b": 0}, {"a": 0, "b": 2}]'::JSON::VARIANT,
+                     '[{"a": 1, "b": 2}]'::JSON::VARIANT);
+----
+true	true	false
+
+# Nested array results must propagate through their object to the outer array.
+query II
+SELECT
+    variant_contains('[{"a": [0], "b": 2}, {"a": [1, 2], "b": 2}]'::JSON::VARIANT,
+                     '[{"a": [2], "b": 2}]'::JSON::VARIANT),
+    variant_contains('[{"a": [1], "b": 0}, {"a": [2], "b": 2}]'::JSON::VARIANT,
+                     '[{"a": [1], "b": 2}]'::JSON::VARIANT);
+----
+true	false
+
+# Object failures discard pending fields, while array retries preserve them.
+query IIII
+SELECT
+    variant_contains('{"a": 1, "b": {"x": 2, "y": 0}}'::JSON::VARIANT,
+                     '{"a": 1, "b": {"x": 2, "y": 3}}'::JSON::VARIANT),
+    variant_contains('[{"a": 0, "b": {"x": 2}}, {"a": 1, "b": {"x": 2, "y": 3}}]'::JSON::VARIANT,
+                     '[{"a": 1, "b": {"x": 2, "y": 3}}]'::JSON::VARIANT),
+    variant_contains('[{"a": 1, "b": [0, 2]}]'::JSON::VARIANT,
+                     '[{"a": 1, "b": [2]}]'::JSON::VARIANT),
+    variant_contains('[{"a": 0, "b": [0, 2]}]'::JSON::VARIANT,
+                     '[{"a": 1, "b": [2]}]'::JSON::VARIANT);
+----
+false	true	true	false
+
+# Deep nested objects are compared without recursive calls.
+query I
+SELECT variant_contains(
+    (repeat('{"a":', 20000) || '42' || repeat('}', 20000))::JSON::VARIANT,
+    (repeat('{"a":', 20000) || '42' || repeat('}', 20000))::JSON::VARIANT
+);
+----
+true
+
 # Empty arrays are contained only where an array occurs.
 query III
 SELECT
