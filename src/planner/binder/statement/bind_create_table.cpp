@@ -447,7 +447,7 @@ static void FindForeignKeyIndexes(const ColumnList &columns, const vector<Identi
 		}
 		auto &column = columns.GetColumn(name);
 		if (column.Generated()) {
-			throw BinderException("Failed to create foreign key: referenced column \"%s\" is a generated column",
+			throw BinderException("Failed to create foreign key: referenced column %s is a generated column",
 			                      column.Name());
 		}
 		indexes.push_back(column.Physical());
