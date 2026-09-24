@@ -27,10 +27,11 @@ CHECKPOINT rowid_gap_alter;
 statement ok
 DETACH rowid_gap_alter;
 
+# Keep both surviving row groups full so checkpoint vacuum cannot merge them.
 statement ok
-ATTACH '{TEST_DIR}/rowid_gap_alter.db' AS rowid_gap_alter;
+ATTACH '{TEST_DIR}/rowid_gap_alter.db' AS rowid_gap_alter (ROW_GROUP_SIZE 2048);
 
-# ADD COLUMN is allowed with the index present, so it must preserve the rowid gap.
+# ADD COLUMN preserves the rowid gap with the index present.
 statement ok
 ALTER TABLE rowid_gap_alter.t ADD COLUMN added INTEGER DEFAULT 7;
 
@@ -43,10 +44,30 @@ SELECT rowid, i, v, added FROM rowid_gap_alter.t WHERE i IN (2047, 4096) ORDER B
 statement ok
 DROP INDEX rowid_gap_alter.idx_i;
 
-# These ALTER operations require dropping the index. Without an index, rowids may be densely rewritten.
+# Also check ALTER on a table with rowid gaps and no index.
 statement ok
 ALTER TABLE rowid_gap_alter.t DROP COLUMN drop_me;
 
+query IIII
+SELECT rowid, i, v, added FROM rowid_gap_alter.t WHERE i IN (2047, 4096) ORDER BY i;
+----
+2047	2047	2047	7
+4096	4096	4096	7
+
+# Reopen with the default row group size to allow checkpoint vacuum to merge across the gap.
+statement ok
+DETACH rowid_gap_alter;
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_alter.db' AS rowid_gap_alter;
+
+query IIII
+SELECT rowid, i, v, added FROM rowid_gap_alter.t WHERE i IN (2047, 4096) ORDER BY i;
+----
+2047	2047	2047	7
+4096	4096	4096	7
+
+# ALTER TYPE reads the rowid gap before its commit-time checkpoint compacts the table.
 statement ok
 ALTER TABLE rowid_gap_alter.t ALTER v SET DATA TYPE BIGINT;
 
