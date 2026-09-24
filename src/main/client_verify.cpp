@@ -258,24 +258,27 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 			// not supported for statements that already have parameters
 			return;
 		}
-		// deliberately left without source text: the EXPLAIN runs as a nested statement, and giving it a
-		// query would let it consume the error location that belongs to the statement we are verifying
-		auto explain_stmt = make_uniq<ExplainStatement>(statement->Copy(), export_sql ? ExplainType::EXPLAIN_SQL
-		                                                                              : ExplainType::EXPLAIN_STANDARD);
-		explain_stmt->allow_unsupported_sql = verification == DebugStatementVerification::EXPLAIN_SQL;
-		// Disable the profiler during the verification EXPLAIN to prevent it from consuming the profiler context
-		// (which would lose parser timing captured before StatementVerification was called) and from
-		// overwriting the profiling output file with the EXPLAIN's profiling data.
-		auto &client_config = ClientConfig::GetConfig(*this);
-		bool saved_profiler = client_config.enable_profiler;
-		ScopedConfigSetting suppress_profiling(
-		    client_config, [](ClientConfig &config) { config.enable_profiler = false; },
-		    [saved_profiler](ClientConfig &config) { config.enable_profiler = saved_profiler; });
-		auto explain_result = RunStatementInternal(lock, std::move(explain_stmt), query_parameters, false);
-		if (explain_result->HasError()) {
-			explain_result->ThrowError();
-		}
-		if (export_sql) {
+		auto explain_and_replace = [&]() {
+			// deliberately left without source text: the EXPLAIN runs as a nested statement, and giving it a
+			// query would let it consume the error location that belongs to the statement we are verifying
+			auto explain_stmt = make_uniq<ExplainStatement>(
+			    statement->Copy(), export_sql ? ExplainType::EXPLAIN_SQL : ExplainType::EXPLAIN_STANDARD);
+			explain_stmt->allow_unsupported_sql = verification == DebugStatementVerification::EXPLAIN_SQL;
+			// Disable the profiler during the verification EXPLAIN to prevent it from consuming the profiler context
+			// (which would lose parser timing captured before StatementVerification was called) and from
+			// overwriting the profiling output file with the EXPLAIN's profiling data.
+			auto &client_config = ClientConfig::GetConfig(*this);
+			bool saved_profiler = client_config.enable_profiler;
+			ScopedConfigSetting suppress_profiling(
+			    client_config, [](ClientConfig &config) { config.enable_profiler = false; },
+			    [saved_profiler](ClientConfig &config) { config.enable_profiler = saved_profiler; });
+			auto explain_result = RunStatementInternal(lock, std::move(explain_stmt), query_parameters, false);
+			if (explain_result->HasError()) {
+				explain_result->ThrowError();
+			}
+			if (!export_sql) {
+				return;
+			}
 			auto chunk = explain_result->Fetch();
 			if (!chunk || chunk->size() == 0) {
 				D_ASSERT(verification == DebugStatementVerification::EXPLAIN_SQL);
@@ -292,6 +295,27 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 				throw InternalException("SQL export verification did not produce one parameter-free SELECT");
 			}
 			ReplaceStatement(statement, std::move(parser.statements[0]));
+		};
+		// The generated SQL encodes what the optimizer derived under the planning snapshot (statistics, exact
+		// cardinalities), so it must execute in the transaction the EXPLAIN planned it in
+		const bool shared_transaction = export_sql && transaction.IsAutoCommit();
+		if (shared_transaction) {
+			transaction.SetAutoCommit(false);
+		}
+		try {
+			explain_and_replace();
+		} catch (...) {
+			if (shared_transaction) {
+				if (transaction.HasActiveTransaction()) {
+					transaction.Rollback(nullptr);
+				}
+				transaction.SetAutoCommit(true);
+			}
+			throw;
+		}
+		if (shared_transaction) {
+			// the transaction stays open and the verified statement commits it
+			transaction.SetAutoCommit(true);
 		}
 	}
 }

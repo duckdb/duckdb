@@ -62,7 +62,9 @@ The fixtures under `test/sql/sql_export/` are ordinary tests that this configura
 routes through generated SQL like every other test. Only fixtures that assert rejection
 diagnostics, compare verification modes, or check the verification lifecycle set
 `debug_verify_statement` themselves; `explain_sql_strict` also rejects unsupported shapes.
-Both modes execute the generated statement once against existing expected results.
+Both modes execute the generated statement once against existing expected results,
+in the transaction the verification EXPLAIN planned it in: the generated SQL encodes
+statistics and cardinalities of that snapshot, so it must not observe a later one.
 
 Projection expressions consumed by a scan are currently unsupported when their SQL
 provenance is no longer retained. The optimizer records this condition explicitly,
