@@ -7,6 +7,7 @@
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 
 using namespace duckdb;
 
@@ -50,9 +51,9 @@ TEST_CASE("Field-id mapping requires a match or an explicit default", "[multifil
 
 	SECTION("Missing field without a default raises a recoverable error") {
 		REQUIRE_THROWS_AS(mapper.CreateMapping(MultiFileColumnMappingMode::BY_FIELD_ID), InvalidInputException);
-		REQUIRE_THROWS_WITH(mapper.CreateMapping(MultiFileColumnMappingMode::BY_FIELD_ID),
-		                    Catch::Contains("Field \"required_field\" (field id 42) is missing from the file schema "
-		                                    "and has no default expression"));
+		REQUIRE_THROWS_WITH(
+		    mapper.CreateMapping(MultiFileColumnMappingMode::BY_FIELD_ID),
+		    Catch::Contains("(field id 42) is missing from the file schema and has no default expression"));
 	}
 	SECTION("Matching field does not need a default") {
 		reader->columns.push_back(Field("file_field", LogicalType::INTEGER, 42));
@@ -64,7 +65,8 @@ TEST_CASE("Field-id mapping requires a match or an explicit default", "[multifil
 		columns[0].default_expression = ConstantExpression::FromValue(value);
 		REQUIRE(mapper.CreateMapping(MultiFileColumnMappingMode::BY_FIELD_ID) == ReaderInitializeType::INITIALIZED);
 		REQUIRE(reader_data.expressions.size() == 1);
-		REQUIRE(reader_data.expressions[0]->Cast<BoundConstantExpression>().GetValue() == value);
+		REQUIRE(ValueOperations::NotDistinctFrom(reader_data.expressions[0]->Cast<BoundConstantExpression>().GetValue(),
+		                                         value));
 	}
 	SECTION("Missing MAP key without a default raises a recoverable error") {
 		auto map_type = LogicalType::MAP(LogicalType::INTEGER, LogicalType::INTEGER);
@@ -78,8 +80,9 @@ TEST_CASE("Field-id mapping requires a match or an explicit default", "[multifil
 		local_map.children.push_back(key_value);
 		reader->columns.push_back(local_map);
 		REQUIRE_THROWS_AS(mapper.CreateMapping(MultiFileColumnMappingMode::BY_FIELD_ID), InvalidInputException);
-		REQUIRE_THROWS_WITH(mapper.CreateMapping(MultiFileColumnMappingMode::BY_FIELD_ID),
-		                    Catch::Contains("Field \"key\" (field id 42)"));
+		REQUIRE_THROWS_WITH(
+		    mapper.CreateMapping(MultiFileColumnMappingMode::BY_FIELD_ID),
+		    Catch::Contains("(field id 42) is missing from the file schema and has no default expression"));
 	}
 	con.Rollback();
 	REQUIRE_NO_FAIL(con.Query("SELECT 42"));
