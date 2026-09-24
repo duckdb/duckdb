@@ -160,7 +160,8 @@
     {
       "reason": "An early LIMIT over an unbounded recursion only terminates through the optimizer's limit pushdown",
       "paths": [
-        "test/sql/sql_export/recursive_state.test"
+        "test/sql/sql_export/recursive_state.test",
+        "test/sql/sql_export/single_child_union.test"
       ]
     }
   ]
