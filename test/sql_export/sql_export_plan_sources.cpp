@@ -254,6 +254,31 @@ TEST_CASE("Logical plan SQL export retains consumed file predicates",
 	TestDeleteDirectory(directory);
 }
 
+TEST_CASE("Logical plan SQL export renders the retained table AT clause",
+          "[sql_export][logical_plan_sql_export][table_source_sql]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE versioned(i INTEGER)"));
+	connection.BeginTransaction();
+	auto plan = OptimizeLogicalPlanExportQuery(connection, "SELECT i FROM versioned");
+	auto get = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_GET);
+	REQUIRE(get);
+	// Native tables reject time travel, so the clause an external catalog would bind is attached directly
+	get->Cast<LogicalGet>().at_clause = make_uniq<BoundAtClause>(Identifier("VERSION"), Value::BIGINT(3));
+	auto copy = plan->Copy(*connection.context);
+	auto copied_get = FindLogicalPlanExportOperator(*copy, LogicalOperatorType::LOGICAL_GET);
+	REQUIRE(copied_get);
+	REQUIRE(copied_get->Cast<LogicalGet>().at_clause);
+	REQUIRE(copied_get->Cast<LogicalGet>().at_clause->GetValue() == Value::BIGINT(3));
+	for (auto exported_plan : {plan.get(), copy.get()}) {
+		auto exported = LogicalPlanSQLExporter::Export(*connection.context, *exported_plan);
+		REQUIRE(exported.IsSuccess());
+		auto text = exported.GetValue().query->ToString();
+		REQUIRE(text.find("AT (VERSION => CAST(3 AS BIGINT))") != string::npos);
+	}
+	connection.Rollback();
+}
+
 TEST_CASE("Table row number SQL export retains stream effects",
           "[sql_export][logical_plan_sql_export][table_row_number_sql_export]") {
 	for (auto consumption : {0, 1, 2}) {

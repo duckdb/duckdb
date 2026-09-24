@@ -2,6 +2,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/at_clause.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -264,6 +265,13 @@ logical_plan_sql_export::ReconstructSQLSource(ClientContext &context, const Logi
 		}
 		function->function = make_uniq<FunctionExpression>(get.function.GetQualifiedName(), std::move(parameters));
 		source = std::move(function);
+	}
+	if (get.at_clause) {
+		if (source->type != TableReferenceType::BASE_TABLE) {
+			return {nullptr, "at_clause"};
+		}
+		source->Cast<BaseTableRef>().at_clause =
+		    make_uniq<AtClause>(get.at_clause->Unit(), ConstantExpression::FromValue(get.at_clause->GetValue()));
 	}
 	auto &function_ref = *source;
 	if (source->type == TableReferenceType::TABLE_FUNCTION) {

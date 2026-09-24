@@ -12,6 +12,7 @@
 #include "duckdb/common/enums/ordinality_request_type.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
+#include "duckdb/planner/tableref/bound_at_clause.hpp"
 #include "duckdb/common/extra_operator_info.hpp"
 
 #include "duckdb/storage/table/row_group_order_options.hpp"
@@ -70,6 +71,8 @@ public:
 	ExtraOperatorInfo extra_info;
 	//! The scan consumed a projection whose source expression is no longer retained.
 	bool has_pushed_projection = false;
+	//! The effective AT clause the table was looked up with, retained for SQL reconstruction
+	unique_ptr<BoundAtClause> at_clause;
 	//! Contains a reference to dynamically generated table filters (through e.g. a join up in the tree)
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
 	//! Information for WITH ORDINALITY

@@ -331,6 +331,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(216, "source_ordinality", source_ordinality,
 	                                    OrdinalityType::WITHOUT_ORDINALITY);
 	serializer.WritePropertyWithDefault(217, "has_pushed_projection", has_pushed_projection, false);
+	serializer.WritePropertyWithDefault(218, "at_clause", at_clause);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -368,6 +369,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	    216, "source_ordinality", OrdinalityType::WITHOUT_ORDINALITY);
 	result->has_pushed_projection =
 	    deserializer.ReadPropertyWithExplicitDefault<bool>(217, "has_pushed_projection", false);
+	result->at_clause = deserializer.ReadPropertyWithDefault<unique_ptr<BoundAtClause>>(218, "at_clause");
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
 			throw SerializationException(
