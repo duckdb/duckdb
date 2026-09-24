@@ -3370,6 +3370,9 @@ public:
 	static void InitializeOffsetFetchClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeOffsetFetchClauseTrampoline(PEGTransformer &transformer,
 	                                                                            GeneratedTransformProcess &process);
+	static void InitializeFetchOffsetClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeFetchOffsetClauseTrampoline(PEGTransformer &transformer,
+	                                                                            GeneratedTransformProcess &process);
 	static void InitializeFetchOnlyClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeFetchOnlyClauseTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
@@ -3842,6 +3845,14 @@ public:
 	static void InitializeFetchClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeFetchClauseTrampoline(PEGTransformer &transformer,
 	                                                                      GeneratedTransformProcess &process);
+	static void InitializeFetchClauseWithoutValueTrampoline(PEGTransformer &transformer,
+	                                                        GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue>
+	FinalizeFetchClauseWithoutValueTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeFetchClauseWithValueTrampoline(PEGTransformer &transformer,
+	                                                     GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeFetchClauseWithValueTrampoline(PEGTransformer &transformer,
+	                                                                               GeneratedTransformProcess &process);
 	static void InitializeFetchValueTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeFetchValueTrampoline(PEGTransformer &transformer,
 	                                                                     GeneratedTransformProcess &process);
@@ -5391,6 +5402,9 @@ public:
 	static unique_ptr<ResultModifier> TransformOffsetFetchClause(PEGTransformer &transformer,
 	                                                             LimitPercentResult offset_clause,
 	                                                             LimitPercentResult fetch_clause);
+	static unique_ptr<ResultModifier> TransformFetchOffsetClause(PEGTransformer &transformer,
+	                                                             LimitPercentResult fetch_clause,
+	                                                             LimitPercentResult offset_clause);
 	static unique_ptr<ResultModifier> TransformFetchOnlyClause(PEGTransformer &transformer,
 	                                                           LimitPercentResult fetch_clause);
 	static unique_ptr<SelectStatement> TransformTableStatement(PEGTransformer &transformer,
@@ -5637,6 +5651,7 @@ public:
 	                                                       unique_ptr<ParsedExpression> number_literal);
 	static LimitPercentResult TransformLimitExpression(PEGTransformer &transformer,
 	                                                   unique_ptr<ParsedExpression> expression, const bool &has_result);
+	static LimitPercentResult TransformFetchClauseWithoutValue(PEGTransformer &transformer);
 	static LimitPercentResult TransformFetchValue(PEGTransformer &transformer, unique_ptr<ParsedExpression> expression);
 	static unique_ptr<ParsedExpression> TransformColIdExpression(PEGTransformer &transformer, const Identifier &col_id,
 	                                                             unique_ptr<ParsedExpression> expression);
