@@ -14,6 +14,18 @@ CREATE TABLE candidates(g INTEGER, v INTEGER);
 statement ok
 INSERT INTO candidates VALUES (1,NULL),(2,5),(2,5),(3,NULL),(3,6),(4,8),(NULL,9);
 
+# The ordinary correlated query and its explicit reconstruction use the same groups.
+query II
+SELECT id, p.v = ANY(SELECT c.v FROM candidates c WHERE p.g IS NOT DISTINCT FROM c.g) FROM probes p ORDER BY id;
+----
+0	false
+1	NULL
+2	true
+3	NULL
+4	false
+5	true
+6	false
+
 query II
 SELECT id,__mark_join_marker FROM probes p JOIN BY (TYPE MARK) candidates c ON p.g IS NOT DISTINCT FROM c.g AND p.v=c.v ORDER BY id;
 ----

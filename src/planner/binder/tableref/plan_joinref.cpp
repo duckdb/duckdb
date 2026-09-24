@@ -439,6 +439,10 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 
 	if (ref.type == JoinType::MARK) {
 		join->Cast<LogicalJoin>().mark_index = ref.mark_index;
+		if (join->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			auto &comparison_join = join->Cast<LogicalComparisonJoin>();
+			comparison_join.TryGetMarkJoinGroupTypes(comparison_join.mark_types);
+		}
 	}
 	if (!ref.duplicate_eliminated_columns.empty()) {
 		D_ASSERT(join->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
