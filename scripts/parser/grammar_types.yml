@@ -1807,9 +1807,10 @@ matcher_rule_overrides:
     allow_type_overlap: true
     matcher: all_operators
 
-# collapsible_rules: see MatcherFactory::AddCollapsibleRule. Every rule below has a hand-written transformer that
-# returns its operand unchanged when the rest of the rule matched nothing. Take a rule out of this list if that
-# stops being true.
+# collapsible_rules: see ParsedGrammar::SetTransformProcess. Every rule below has a transformer that returns its
+# operand unchanged when the rest of the rule matched nothing. Take a rule out of this list if that stops being
+# true. The flag is attached to the default transform, so an extension that replaces the transform of
+# one of these rules does not inherit it.
 collapsible_rules:
   - Expression
   - ColumnDefaultExpr

@@ -57,10 +57,6 @@ protected:
 	void AddKeywordOverride(const char *name, KeywordInfo keyword_info);
 	void AddRuleOverride(const char *name, unique_ptr<Matcher> &&matcher_p);
 	void AddPackratMemoizedRule(const char *name);
-	//! Mark a rule whose transformer hands back one child's result unchanged, such as a level of the operator
-	//! precedence hierarchy that matched no tail. When that child is the only one with a parse result, the matcher
-	//! hands it out instead of wrapping it and the transformer runs the child's own transform.
-	void AddCollapsibleRule(const char *name);
 	void SuppressSuggestions(const char *name);
 	Matcher &CreateMatcher(string_t rule_name);
 	Matcher &CreateMatcher(string_t rule_name, vector<reference<Matcher>> &parameters);
@@ -83,7 +79,6 @@ private:
 	case_insensitive_map_t<KeywordInfo> keyword_overrides;
 	string_set_t no_suggestion_rules;
 	string_set_t packrat_memoized_rules;
-	string_set_t collapsible_rules;
 };
 
 } // namespace duckdb

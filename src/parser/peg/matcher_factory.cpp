@@ -166,7 +166,7 @@ Matcher &MatcherFactory::CreateMatcher(string_t rule_name, vector<reference<Matc
 	if (packrat_memoized_rules.count(rule_name)) {
 		matcher.SetPackratMemoized();
 	}
-	if (collapsible_rules.count(rule_name)) {
+	if (compiled_rule.collapsible) {
 		matcher.SetCollapsible();
 	}
 	if (no_suggestion_rules.count(rule_name)) {
@@ -199,10 +199,6 @@ void MatcherFactory::AddPackratMemoizedRule(const char *name) {
 	packrat_memoized_rules.insert(name);
 }
 
-void MatcherFactory::AddCollapsibleRule(const char *name) {
-	collapsible_rules.insert(name);
-}
-
 void MatcherFactory::SuppressSuggestions(const char *name) {
 	no_suggestion_rules.insert(name);
 }
@@ -231,39 +227,6 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 	AddPackratMemoizedRule("ReservedSchemaQualification");
 	//===--------------------------------------------------------------------===//
 	// END GENERATED PACKRAT MEMOIZED RULES
-	//===--------------------------------------------------------------------===//
-
-	// collapsible rules
-	//===--------------------------------------------------------------------===//
-	// START GENERATED COLLAPSIBLE RULES
-	//===--------------------------------------------------------------------===//
-	AddCollapsibleRule("Expression");
-	AddCollapsibleRule("ColumnDefaultExpr");
-	AddCollapsibleRule("LambdaArrowExpression");
-	AddCollapsibleRule("LogicalOrExpression");
-	AddCollapsibleRule("ColDefOrExpr");
-	AddCollapsibleRule("LogicalAndExpression");
-	AddCollapsibleRule("ColDefAndExpr");
-	AddCollapsibleRule("LogicalNotExpression");
-	AddCollapsibleRule("IsExpression");
-	AddCollapsibleRule("IsDistinctFromExpression");
-	AddCollapsibleRule("ComparisonExpression");
-	AddCollapsibleRule("BetweenInLikeExpression");
-	AddCollapsibleRule("OtherOperatorExpression");
-	AddCollapsibleRule("InfixOtherOperatorExpression");
-	AddCollapsibleRule("BitwiseExpression");
-	AddCollapsibleRule("AdditiveExpression");
-	AddCollapsibleRule("MultiplicativeExpression");
-	AddCollapsibleRule("ExponentiationExpression");
-	AddCollapsibleRule("CollateExpression");
-	AddCollapsibleRule("AtTimeZoneExpression");
-	AddCollapsibleRule("PrefixExpression");
-	AddCollapsibleRule("BaseExpression");
-	AddCollapsibleRule("SelectSetOpChain");
-	AddCollapsibleRule("IntersectChain");
-	AddCollapsibleRule("TableRef");
-	//===--------------------------------------------------------------------===//
-	// END GENERATED COLLAPSIBLE RULES
 	//===--------------------------------------------------------------------===//
 
 	for (auto &entry : terminal_rule_overrides) {

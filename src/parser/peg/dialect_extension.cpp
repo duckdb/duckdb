@@ -40,7 +40,7 @@ shared_ptr<CompiledGrammar> DialectExtension::GetCompiledGrammar(const ClientCon
 	compiled_rules_map_t rules;
 	for (auto &entry : parsed_grammar.rules) {
 		auto &rule = *entry.second;
-		rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, rule.transform_process));
+		rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, rule.transform_process, rule.collapsible));
 	}
 	auto terminal_rule_overrides = parsed_grammar.BuildTerminalRuleOverrides(*keyword_helper);
 	CreateMatcherFactoryInput matcher_factory_input {allocator, parsed_grammar, rules, *keyword_helper,

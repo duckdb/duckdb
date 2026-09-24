@@ -38,8 +38,10 @@ public:
 	                                              grammar_cursor_function_t find_cursor);
 	DUCKDB_API static GrammarChange ReplaceRule(const string &rule_definition,
 	                                            grammar_transform_process_function_t transform_process = nullptr);
+	//! See ParsedGrammar::SetTransformProcess for the meaning of collapsible
 	DUCKDB_API static GrammarChange SetTransformProcess(const string &rule_name,
-	                                                    grammar_transform_process_function_t transform_process);
+	                                                    grammar_transform_process_function_t transform_process,
+	                                                    bool collapsible = false);
 	DUCKDB_API static GrammarChange AddTerminalRuleOverride(const string &rule_name,
 	                                                        terminal_rule_matcher_factory_t matcher_factory);
 
@@ -60,14 +62,14 @@ private:
 	static GrammarChange Create(GrammarChangeType type, string rule_name, string definition,
 	                            grammar_transform_process_function_t transform_process = nullptr,
 	                            grammar_cursor_function_t find_cursor = nullptr,
-	                            terminal_rule_matcher_factory_t matcher_factory = nullptr);
+	                            terminal_rule_matcher_factory_t matcher_factory = nullptr, bool collapsible = false);
 
 	GrammarChange(GrammarChangeType type_p, string rule_name_p, string definition_p,
 	              grammar_transform_process_function_t transform_process_p, grammar_cursor_function_t find_cursor_p,
-	              terminal_rule_matcher_factory_t matcher_factory_p)
+	              terminal_rule_matcher_factory_t matcher_factory_p, bool collapsible_p)
 	    : type(type_p), rule_name(std::move(rule_name_p)), definition(std::move(definition_p)),
 	      transform_process(std::move(transform_process_p)), find_cursor(std::move(find_cursor_p)),
-	      matcher_factory(std::move(matcher_factory_p)) {
+	      matcher_factory(std::move(matcher_factory_p)), collapsible(collapsible_p) {
 	}
 
 private:
@@ -78,6 +80,7 @@ private:
 	grammar_transform_process_function_t transform_process;
 	grammar_cursor_function_t find_cursor;
 	terminal_rule_matcher_factory_t matcher_factory;
+	bool collapsible;
 };
 
 } // namespace duckdb

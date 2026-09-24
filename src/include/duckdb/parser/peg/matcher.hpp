@@ -308,7 +308,7 @@ public:
 	bool IsPackratMemoized() const {
 		return packrat_memoized;
 	}
-	//! See MatcherFactory::AddCollapsibleRule
+	//! See ParsedGrammar::SetTransformProcess
 	void SetCollapsible() {
 		collapsible = true;
 	}

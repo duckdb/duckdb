@@ -153,7 +153,7 @@ shared_ptr<CompiledGrammar> CompiledGrammar::Create(const vector<reference<Gramm
 	compiled_rules_map_t rules;
 	for (auto &entry : grammar.rules) {
 		auto &rule = *entry.second;
-		rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, rule.transform_process));
+		rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, rule.transform_process, rule.collapsible));
 	}
 
 	MatcherAllocator allocator;
