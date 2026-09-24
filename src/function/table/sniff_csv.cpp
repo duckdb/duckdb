@@ -9,6 +9,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_file_handle.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_schema_discovery.hpp"
 #include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/function/function_options.hpp"
 
 namespace duckdb {
 
@@ -325,7 +326,9 @@ void CSVSnifferFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction csv_sniffer("sniff_csv", {LogicalType::VARCHAR}, CSVSniffFunction, CSVSniffBind, CSVSniffInitGlobal);
 	// Accept same options as the actual csv reader
 	ReadCSVTableFunction::ReadCSVAddNamedParameters(csv_sniffer);
-	csv_sniffer.GetSignature().AddNamedParameter("force_match", LogicalType::BOOLEAN, Value::BOOLEAN(true));
+	MultiFileReader::AddParameters(csv_sniffer);
+	csv_sniffer.GetSignature().WithOptionSchema(
+	    [](FunctionOptionSchema &options) { options.Add("force_match", LogicalType::BOOLEAN); });
 	set.AddFunction(csv_sniffer);
 }
 } // namespace duckdb

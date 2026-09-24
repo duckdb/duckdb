@@ -10,6 +10,7 @@
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast_rules.hpp"
+#include "duckdb/function/function_options.hpp"
 #include "duckdb/function/type_constructor.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -165,7 +166,7 @@ optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const 
 				// no parameter with this name, and no "**kwargs" to receive it
 				return optional_idx();
 			}
-
+			// the options of "**kwargs" do not select the overload - they are checked once it is chosen
 			int64_t cast_cost = ImplicitCastCost(context, named_arg.second, kwargs_param->GetType());
 			if (cast_cost >= 0) {
 				// we can implicitly cast, add the cost to the total cost
@@ -430,6 +431,7 @@ static void VerifyNamedArgumentsAccepted(const Identifier &name, const FunctionS
 		bool accepted = false;
 		for (idx_t i = 0; i < functions.functions.size() && !accepted; i++) {
 			auto &signature = functions.functions[i]->GetSignature();
+			// the options of a "**kwargs" are checked once the overload is chosen
 			accepted = signature.GetParameterIndexByName(named_argument.first).IsValid() ||
 			           signature.GetKwargsParameter() != nullptr;
 		}
@@ -502,10 +504,10 @@ static Value PlaceArgument(ClientContext &context, Expression &expr, const Logic
 //! the type that parameter declares. Every parameter that accepts a position gets its slot in "parameters", whether
 //! the caller passed it by position, by name or not at all, so "range(1, col1 := 5)" reaches the callback exactly as
 //! "range(1, 5)" does. Only keyword-only and "**kwargs" arguments are handed back in "named_parameters", keyed by the
-//! name the caller wrote. A positional parameter the call leaves out receives its default; a keyword-only one is left
-//! out, so that the caller can record which options the call passed before filling in the rest.
-//! Overload selection has already established that every cast here is one the implicit rules allow, so this converts
-//! rather than forces - an argument no implicit cast reaches never selects the overload in the first place.
+//! name the caller wrote - or, for an option "**kwargs" declares, by the name of the option, cast to its type. A
+//! parameter the call leaves out receives its default; an option the call leaves out is not passed. Overload selection
+//! has already established that every cast here is one the implicit rules allow, so this converts rather than forces -
+//! an argument no implicit cast reaches never selects the overload in the first place.
 template <class T>
 static void PlaceArguments(ClientContext &context, const T &function,
                            vector<unique_ptr<Expression>> &positional_arguments,
@@ -526,8 +528,49 @@ static void PlaceArguments(ClientContext &context, const T &function,
 		}
 		auto param_idx = signature.GetParameterIndexByName(argument_name);
 		if (!param_idx.IsValid()) {
-			// received by "**kwargs", which has no declared type of its own to cast to
-			named_parameters.insert(make_pair(argument_name, FoldArgument(context, *named_argument.second)));
+			auto option_schema = signature.GetOptionSchema();
+			if (!option_schema) {
+				// received by "**kwargs" - cast to its type, as overload selection checked, unless that is ANY
+				auto &kwargs_type = signature.GetKwargsParameter()->GetType();
+				named_parameters.insert(
+				    make_pair(argument_name, PlaceArgument(context, *named_argument.second, kwargs_type)));
+				continue;
+			}
+			auto &expr = *named_argument.second;
+			auto option_ptr = option_schema->Find(argument_name);
+			if (!option_ptr) {
+				// only the options that resemble the name - listing every option buries the one that was meant
+				const double similarity_threshold = 0.8;
+				auto lower_name = StringUtil::Lower(argument_name.GetIdentifierName());
+				vector<pair<string, double>> scores;
+				for (auto &option_name : option_schema->GetNames()) {
+					auto score = StringUtil::SimilarityRating(option_name.GetIdentifierName(), lower_name);
+					if (score >= similarity_threshold) {
+						scores.emplace_back(option_name.GetIdentifierName(), score);
+					}
+				}
+				auto similar = StringUtil::TopNStrings(scores, 3, similarity_threshold);
+				throw BinderException(expr.GetQueryLocation(), "Invalid named parameter %s for function %s%s",
+				                      argument_name, function.GetName().GetIdentifierName(),
+				                      StringUtil::CandidatesMessage(similar, "Did you mean"));
+			}
+			auto &option = *option_ptr;
+			// as for a parameter, the argument reaches the option's type only by an implicit cast
+			auto argument_type = ExpressionBinder::GetExpressionReturnType(expr);
+			if (option.type.id() != LogicalTypeId::ANY && argument_type.id() != LogicalTypeId::UNKNOWN &&
+			    CastFunctionSet::ImplicitCastCost(context, argument_type, option.type) < 0) {
+				throw BinderException(expr.GetQueryLocation(),
+				                      "Invalid named parameter %s for function %s: expected %s, but got %s",
+				                      argument_name, function.GetName().GetIdentifierName(), option.type.ToString(),
+				                      expr.GetReturnType().ToString());
+			}
+			if (named_parameters.find(option.name) != named_parameters.end()) {
+				throw BinderException(named_argument.second->GetQueryLocation(),
+				                      "Named parameter %s was passed more than once in function call to %s",
+				                      option.name, function.GetName().GetIdentifierName());
+			}
+			named_parameters.insert(
+			    make_pair(option.name, PlaceArgument(context, *named_argument.second, option.type)));
 			continue;
 		}
 		auto &param = signature.GetParameter(param_idx.GetIndex());
@@ -563,6 +606,7 @@ static void PlaceArguments(ClientContext &context, const T &function,
 	for (idx_t i = positional_count; i < passed_count; i++) {
 		parameters.push_back(PlaceArgument(context, *positional_arguments[i], signature.GetVarArgs()));
 	}
+	signature.FillNamedDefaults(named_parameters);
 }
 
 optional_idx FunctionBinder::BindFunction(const Identifier &name, const TableFunctionSet &functions,
@@ -596,9 +640,8 @@ optional_idx FunctionBinder::BindFunction(const Identifier &name, const PragmaFu
 	if (!entry.IsValid()) {
 		error.Throw();
 	}
-	auto &function = *functions.GetFunctionByOffset(entry.GetIndex());
-	PlaceArguments(context, function, positional_arguments, named_arguments, parameters, named_parameters);
-	function.GetSignature().FillNamedDefaults(named_parameters);
+	PlaceArguments(context, *functions.GetFunctionByOffset(entry.GetIndex()), positional_arguments, named_arguments,
+	               parameters, named_parameters);
 	return entry;
 }
 

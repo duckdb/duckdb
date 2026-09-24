@@ -116,11 +116,6 @@ static unique_ptr<FunctionData> ReadSingleCSVFileBind(ClientContext &context, Ta
 	auto result = make_uniq<ReadSingleCSVFileData>();
 	auto &options = result->options;
 	for (auto &kv : input.named_parameters) {
-		// the options of the multi-file scan arrive through "multi_file_options" instead
-		MultiFileOptions ignored_file_options;
-		if (MultiFileReader().ParseOption(kv.first, kv.second, ignored_file_options, context)) {
-			continue;
-		}
 		options.ParseOption(context, kv.first, kv.second);
 	}
 	if (input.inputs[0].IsNull()) {

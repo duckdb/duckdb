@@ -222,10 +222,9 @@ bool TableFunction::operator!=(const TableFunction &rhs) const {
 	return !(*this == rhs);
 }
 
-//! Overload sets are deduplicated on this - two overloads are the same when they accept the same call, which is what
-//! comparing the signatures by parameter type and kind says
+//! Overload sets are deduplicated on this - two overloads are the same when they accept the same minimal call
 bool TableFunction::Equal(const TableFunction &rhs) const {
-	return GetSignature().Equal(rhs.GetSignature());
+	return GetSignature().IsSameOverload(rhs.GetSignature());
 }
 
 bool TableFunctionInput::HandleBlocked(AsyncResult &blocked_result) {

@@ -40,6 +40,7 @@ class SimpleFunction;
 class WindowFunction;
 class WindowFunctionSet;
 class BoundSimpleFunction;
+class FunctionOptionSchema;
 
 struct PragmaInfo;
 
@@ -229,6 +230,10 @@ public:
 	bool operator!=(const FunctionSignature &other) const;
 
 	bool Equal(const FunctionSignature &other) const;
+	//! Whether both accept the same minimal call: the same required positional parameters, in order, and the same
+	//! required keyword-only parameters, by name. Parameters with a default, "*args", "**kwargs" and its options do
+	//! not change which minimal call a function accepts, so adding one keeps it the same overload
+	DUCKDB_API bool IsSameOverload(const FunctionSignature &other) const;
 
 public:
 	auto GetParameter(idx_t index) const -> const FunctionParameter & {
@@ -264,19 +269,29 @@ public:
 	auto GetArgsParameter() const -> optional_ptr<const FunctionParameter> {
 		return GetParameterByKind(FunctionParameterKind::VAR_POSITIONAL);
 	}
+
+	//! Constrain the "options", i.e. arguments that the "**kwargs" parameter can receive
+	DUCKDB_API auto SetOptionSchema(FunctionOptionSchema schema) -> FunctionSignature &;
+	DUCKDB_API auto WithOptionSchema(std::function<void(FunctionOptionSchema &)> callback) -> FunctionSignature &;
+
+	//! The options the "**kwargs" parameter receives, or nullptr if it accepts any name
+	auto GetOptionSchema() const -> optional_ptr<const FunctionOptionSchema> {
+		return option_schema.get();
+	}
+
 	auto GetKwargsParameter() const -> optional_ptr<const FunctionParameter> {
 		return GetParameterByKind(FunctionParameterKind::VAR_KEYWORD);
 	}
 
 	//! A parameter added after "*args" is keyword-only
 	auto AddParameter(Identifier name, LogicalType type, Value default_value) -> FunctionSignature & {
-		parameters.emplace_back(std::move(name), std::move(type), std::move(default_value), GetNextKind());
-		return *this;
+		auto kind = GetNextKind();
+		return InsertBeforeKwargs(FunctionParameter(std::move(name), std::move(type), std::move(default_value), kind));
 	}
 
 	auto AddParameter(Identifier name, LogicalType type) -> FunctionSignature & {
-		parameters.emplace_back(std::move(name), std::move(type), GetNextKind());
-		return *this;
+		auto kind = GetNextKind();
+		return InsertBeforeKwargs(FunctionParameter(std::move(name), std::move(type), kind));
 	}
 
 	auto AddParameter(LogicalType type) -> FunctionSignature & {
@@ -311,31 +326,27 @@ public:
 
 	//! Adds a "*args" parameter, receiving all remaining positional arguments
 	auto AddArgsParameter(Identifier name, LogicalType type) -> FunctionSignature & {
-		parameters.emplace_back(std::move(name), std::move(type), FunctionParameterKind::VAR_POSITIONAL);
-		return *this;
+		return InsertBeforeKwargs(
+		    FunctionParameter(std::move(name), std::move(type), FunctionParameterKind::VAR_POSITIONAL));
 	}
 
 	//! Adds a parameter that can only be passed by name. It closes the positional parameters: a keyword-only
 	//! parameter that no "*args" precedes is itself the "*" separator. Required: a call that leaves it out does not
 	//! match
 	auto AddNamedParameter(Identifier name, LogicalType type) -> FunctionSignature & {
-		parameters.emplace_back(std::move(name), std::move(type), FunctionParameterKind::KEYWORD_ONLY);
-		return *this;
+		return InsertBeforeKwargs(
+		    FunctionParameter(std::move(name), std::move(type), FunctionParameterKind::KEYWORD_ONLY));
 	}
 
 	//! The same, with a default for calls that leave it out
 	auto AddNamedParameter(Identifier name, LogicalType type, Value default_value) -> FunctionSignature & {
-		parameters.emplace_back(std::move(name), std::move(type), std::move(default_value),
-		                        FunctionParameterKind::KEYWORD_ONLY);
-		return *this;
+		return InsertBeforeKwargs(FunctionParameter(std::move(name), std::move(type), std::move(default_value),
+		                                            FunctionParameterKind::KEYWORD_ONLY));
 	}
 
-	//! Adds a named parameter the caller may leave out, defaulting to NULL. The NULL is of the parameter's own type,
-	//! or untyped for a type like ANY that describes no value
-	auto AddOptionalNamedParameter(Identifier name, LogicalType type) -> FunctionSignature & {
-		auto default_value = type.InternalType() == PhysicalType::INVALID ? Value() : Value(type);
-		return AddNamedParameter(std::move(name), std::move(type), std::move(default_value));
-	}
+	//! Deprecated: declare options with WithOptionSchema. Adds an option the "**kwargs" parameter receives - a call
+	//! that leaves it out does not pass it
+	DUCKDB_API auto AddOptionalNamedParameter(Identifier name, LogicalType type) -> FunctionSignature &;
 
 	//! Adds a "**kwargs" parameter, receiving all named arguments that do not match another parameter
 	auto AddKwargsParameter(Identifier name, LogicalType type) -> FunctionSignature & {
@@ -401,14 +412,30 @@ private:
 	}
 	//! Anything added after "*args" or a keyword-only parameter is itself keyword-only
 	auto GetNextKind() const -> FunctionParameterKind {
-		if (parameters.empty() || parameters.back().AcceptsPosition()) {
+		auto end = parameters.size();
+		if (end > 0 && parameters[end - 1].GetKind() == FunctionParameterKind::VAR_KEYWORD) {
+			end--;
+		}
+		if (end == 0 || parameters[end - 1].AcceptsPosition()) {
 			return FunctionParameterKind::STANDARD;
 		}
 		return FunctionParameterKind::KEYWORD_ONLY;
 	}
+	//! "**kwargs" is the last parameter, so a parameter added after it goes in front of it
+	auto InsertBeforeKwargs(FunctionParameter param) -> FunctionSignature & {
+		if (!parameters.empty() && parameters.back().GetKind() == FunctionParameterKind::VAR_KEYWORD) {
+			parameters.insert(parameters.end() - 1, std::move(param));
+		} else {
+			parameters.push_back(std::move(param));
+		}
+		return *this;
+	}
 
 private:
 	vector<FunctionParameter> parameters;
+	//! The options the "**kwargs" parameter receives, if it declares them
+	//! Shared by the copies of this signature - copied before it is changed if it is shared
+	shared_ptr<FunctionOptionSchema> option_schema;
 	LogicalType return_type;
 };
 

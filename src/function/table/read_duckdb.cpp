@@ -506,8 +506,6 @@ void ReadDuckDBAddNamedParameters(TableFunction &table_function) {
 	table_function.GetSignature()
 	    .AddOptionalNamedParameter("schema_name", LogicalType::VARCHAR)
 	    .AddOptionalNamedParameter("table_name", LogicalType::VARCHAR);
-
-	MultiFileReader::AddParameters(table_function);
 }
 
 static vector<column_t> DuckDBGetRowIdColumns(ClientContext &, optional_ptr<FunctionData>) {

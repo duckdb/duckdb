@@ -4,6 +4,7 @@
 
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/function/function_options.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
@@ -274,24 +275,32 @@ unique_ptr<BaseFileReaderOptions> TableFunctionMultiFileWrapper::InitializeOptio
 	return make_uniq<TableFunctionFileReaderOptions>();
 }
 
-optional_ptr<const FunctionParameter> TableFunctionMultiFileWrapper::GetDeclaredOption(const Identifier &key) const {
-	auto index = function.GetSignature().GetParameterIndexByName(key);
-	if (!index.IsValid()) {
-		return nullptr;
+optional<pair<Identifier, LogicalType>> TableFunctionMultiFileWrapper::GetDeclaredOption(const Identifier &key) const {
+	auto &signature = function.GetSignature();
+	auto index = signature.GetParameterIndexByName(key);
+	if (index.IsValid()) {
+		auto &param = signature.GetParameter(index.GetIndex());
+		if (param.GetKind() != FunctionParameterKind::KEYWORD_ONLY) {
+			return {};
+		}
+		return make_pair(param.GetName(), param.GetType());
 	}
-	auto &param = function.GetSignature().GetParameter(index.GetIndex());
-	if (param.GetKind() != FunctionParameterKind::KEYWORD_ONLY) {
-		return nullptr;
+	auto option_schema = signature.GetOptionSchema();
+	auto option = option_schema ? option_schema->Find(key) : nullptr;
+	if (!option) {
+		return {};
 	}
-	return param;
+	return make_pair(option->name, option->type);
 }
 
 bool TableFunctionMultiFileWrapper::ParseNamedParameter(const Identifier &key, const Value &val,
                                                         TableFunctionFileReaderOptions &options) const {
-	if (!GetDeclaredOption(key)) {
+	auto declared_option = GetDeclaredOption(key);
+	if (!declared_option) {
 		return false;
 	}
-	options.named_parameters[key] = val;
+	// under the name of the option, whichever alias was used
+	options.named_parameters[declared_option->first] = val;
 	return true;
 }
 
@@ -317,7 +326,7 @@ bool TableFunctionMultiFileWrapper::ParseCopyOption(ClientContext &context, cons
 	if (!declared_option) {
 		return false;
 	}
-	auto &type = declared_option->GetType();
+	auto &type = declared_option->second;
 	Value val;
 	if (type.id() == LogicalTypeId::LIST || (type.id() == LogicalTypeId::ANY && values.size() != 1)) {
 		// COPY passes the elements of a list-valued option as separate values - an option that takes any value is
@@ -578,6 +587,10 @@ TableFunction TableFunctionMultiFileWrapper::CreateFunction(TableFunction single
 		} else {
 			signature.AddNamedParameter(param.GetName(), param.GetType());
 		}
+	}
+	auto wrapped_options = single_file_function.GetSignature().GetOptionSchema();
+	if (wrapped_options) {
+		signature.WithOptionSchema([&](FunctionOptionSchema &options) { options = options.Merge(*wrapped_options); });
 	}
 	result.projection_pushdown = single_file_function.projection_pushdown;
 	result.filter_pushdown = single_file_function.filter_pushdown;

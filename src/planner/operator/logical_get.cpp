@@ -348,21 +348,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	FunctionSerializer::Serialize(serializer, function, bind_data.get());
 	if (!function.HasSerializationCallbacks() || serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WriteProperty(206, "parameters", parameters);
-		// the defaults the call did not pass are left out - deserialization takes them from the signature
-		auto &signature = function.GetSignature();
-		identifier_set_t passed_names(function.GetNamedArguments().begin(), function.GetNamedArguments().end());
-		named_parameter_map_t passed_named_parameters;
-		for (auto &entry : named_parameters) {
-			auto param_idx = signature.GetParameterIndexByName(entry.first);
-			auto is_default =
-			    !passed_names.count(entry.first) && param_idx.IsValid() &&
-			    signature.GetParameter(param_idx.GetIndex()).GetKind() == FunctionParameterKind::KEYWORD_ONLY &&
-			    signature.GetParameter(param_idx.GetIndex()).HasDefaultValue();
-			if (!is_default) {
-				passed_named_parameters.insert(entry);
-			}
-		}
-		serializer.WriteProperty(207, "named_parameters", passed_named_parameters);
+		serializer.WriteProperty(207, "named_parameters", named_parameters);
 		serializer.WriteProperty(208, "input_table_types", input_table_types);
 		serializer.WriteProperty(209, "input_table_names", input_table_names);
 	}
@@ -398,7 +384,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	}
 	deserializer.ReadPropertyWithDefault(206, "parameters", result->parameters);
 	deserializer.ReadPropertyWithDefault(207, "named_parameters", result->named_parameters);
-	// a plan holds only the options the call passed
+	// a plan written by an older version holds only the arguments the call passed
 	function.GetSignature().FillNamedDefaults(result->named_parameters);
 	deserializer.ReadPropertyWithDefault(208, "input_table_types", result->input_table_types);
 	deserializer.ReadPropertyWithDefault(209, "input_table_names", result->input_table_names);

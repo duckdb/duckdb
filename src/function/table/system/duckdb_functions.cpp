@@ -1,4 +1,5 @@
 #include "duckdb/function/table/system_functions.hpp"
+#include "duckdb/function/function_options.hpp"
 #include "duckdb/common/atomic.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
@@ -465,6 +466,17 @@ struct TableMacroExtractor {
 	}
 };
 
+//! The options a "**kwargs" parameter declares are listed after the parameters, as they are passed by name like them
+static void AddOptions(const FunctionSignature &signature, vector<Value> &results, bool types) {
+	auto option_schema = signature.GetOptionSchema();
+	if (!option_schema) {
+		return;
+	}
+	for (auto &option : option_schema->GetOptions()) {
+		results.emplace_back(types ? Value(option.type.ToString()) : Value(option.name));
+	}
+}
+
 struct TableFunctionExtractor {
 	static idx_t FunctionCount(TableFunctionCatalogEntry &entry) {
 		return entry.functions.Size();
@@ -487,6 +499,7 @@ struct TableFunctionExtractor {
 				results.emplace_back(param.GetName());
 			}
 		}
+		AddOptions(fun.GetSignature(), results, false);
 		return results;
 	}
 
@@ -499,6 +512,7 @@ struct TableFunctionExtractor {
 				results.emplace_back(param.GetType().ToString());
 			}
 		}
+		AddOptions(fun.GetSignature(), results, true);
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
 
@@ -545,13 +559,13 @@ struct PragmaFunctionExtractor {
 	static vector<Value> GetParameters(PragmaFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
-
 		// the variadic parameters are reported in the "varargs" column instead
 		for (auto &param : fun.GetSignature().GetParameters()) {
 			if (!param.IsVariadic()) {
 				results.emplace_back(param.GetName());
 			}
 		}
+		AddOptions(fun.GetSignature(), results, false);
 		return results;
 	}
 
@@ -564,6 +578,7 @@ struct PragmaFunctionExtractor {
 				results.emplace_back(param.GetType().ToString());
 			}
 		}
+		AddOptions(fun.GetSignature(), results, true);
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
 

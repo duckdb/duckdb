@@ -23,6 +23,7 @@ add_library_unity(
   copy_function.cpp
   encoding_function.cpp
   function.cpp
+  function_options.cpp
   function_binder.cpp
   function_list.cpp
   function_set.cpp

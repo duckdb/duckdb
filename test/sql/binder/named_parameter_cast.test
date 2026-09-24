@@ -11,14 +11,14 @@ statement ok
 COPY (SELECT 42 AS a) TO '__TEST_DIR__/named_parameter_cast.csv' (HEADER false);
 
 # -----------------------------------------------------------------------------
-# A named argument is matched to its parameter the same way a positional one is: by an implicit cast. There is no
+# A named argument reaches its parameter the same way a positional one does: by an implicit cast. There is no
 # implicit cast from TIMESTAMPTZ to VARCHAR, so this is refused rather than silently stringified.
 #
 
 statement error
 SELECT column_name FROM (DESCRIBE SELECT * FROM read_csv('__TEST_DIR__/named_parameter_cast.csv', names => [TIMESTAMPTZ '2024-01-01 12:00:00+00']));
 ----
-<REGEX>:.*No function matches.*"names" := TIMESTAMP WITH TIME ZONE\[\].*
+Invalid named parameter "names" for function read_csv: expected VARCHAR[], but got TIMESTAMP WITH TIME ZONE[]
 
 # -----------------------------------------------------------------------------
 # Spelling the cast out reaches ICU's TIMESTAMPTZ -> VARCHAR cast, which prints in the session time zone

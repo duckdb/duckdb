@@ -6,6 +6,7 @@
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/function/function_options.hpp"
 
 namespace duckdb {
 
@@ -83,6 +84,33 @@ string FunctionParameter::ToString() const {
 	return StringUtil::Format("%s %s", SQLIdentifier(name), type.ToString());
 }
 
+// signatures are copied and moved freely - keep the move cheap
+static_assert(std::is_nothrow_move_constructible<FunctionSignature>::value, "FunctionSignature must stay movable");
+static_assert(std::is_nothrow_move_assignable<FunctionSignature>::value, "FunctionSignature must stay movable");
+
+auto FunctionSignature::SetOptionSchema(FunctionOptionSchema schema) -> FunctionSignature & {
+	option_schema = make_shared_ptr<FunctionOptionSchema>(std::move(schema));
+	return *this;
+}
+
+auto FunctionSignature::WithOptionSchema(std::function<void(FunctionOptionSchema &)> callback) -> FunctionSignature & {
+	if (!option_schema) {
+		option_schema = make_shared_ptr<FunctionOptionSchema>();
+	} else if (option_schema.use_count() > 1) {
+		// other signatures copied from this one share its options - extend a copy of them
+		option_schema = make_shared_ptr<FunctionOptionSchema>(*option_schema);
+	}
+	callback(*option_schema);
+	if (!GetKwargsParameter()) {
+		AddKwargsParameter("options", LogicalType::ANY);
+	}
+	return *this;
+}
+
+auto FunctionSignature::AddOptionalNamedParameter(Identifier name, LogicalType type) -> FunctionSignature & {
+	return WithOptionSchema([&](FunctionOptionSchema &options) { options.Add(std::move(name), std::move(type)); });
+}
+
 string FunctionSignature::ToString() const {
 	vector<string> params;
 	params.reserve(parameters.size());
@@ -144,6 +172,9 @@ hash_t FunctionSignature::Hash() const {
 	for (auto &param : parameters) {
 		hash = duckdb::CombineHash(hash, param.GetType().Hash());
 		hash = duckdb::CombineHash(hash, duckdb::Hash(static_cast<uint8_t>(param.GetKind())));
+	}
+	if (option_schema) {
+		hash = duckdb::CombineHash(hash, option_schema->Hash());
 	}
 	return hash;
 }
@@ -250,6 +281,19 @@ void FunctionSignature::Verify() const {
 			break;
 		}
 	}
+
+	if (option_schema) {
+		if (!found_kwargs) {
+			throw InvalidInputException("A function signature with options must have a '**kwargs' parameter");
+		}
+		option_schema->Verify();
+		// a named argument binds to a parameter of its name first, so an option of the same name is never reached
+		for (auto &param : parameters) {
+			if (param.AcceptsName() && option_schema->Find(param.GetName())) {
+				throw InvalidInputException("Option '%s' has the same name as a parameter", param.GetName());
+			}
+		}
+	}
 }
 
 hash_t SimpleFunction::Hash() const {
@@ -342,12 +386,70 @@ bool FunctionParameter::operator!=(const FunctionParameter &other) const {
 	return !(*this == other);
 }
 
+//! Whether two signatures declare the same options - compared by content, as each registration builds its own
+static bool OptionSchemasEqual(optional_ptr<const FunctionOptionSchema> lhs,
+                               optional_ptr<const FunctionOptionSchema> rhs) {
+	if (!lhs || !rhs) {
+		return !lhs && !rhs;
+	}
+	return *lhs == *rhs;
+}
+
 bool FunctionSignature::operator==(const FunctionSignature &other) const {
-	return parameters == other.parameters && return_type == other.return_type;
+	return parameters == other.parameters && return_type == other.return_type &&
+	       OptionSchemasEqual(GetOptionSchema(), other.GetOptionSchema());
 }
 
 bool FunctionSignature::operator!=(const FunctionSignature &other) const {
 	return !(*this == other);
+}
+
+bool FunctionSignature::IsSameOverload(const FunctionSignature &other) const {
+	// the required positional parameters, in order
+	auto required_positional = [](const FunctionSignature &signature) {
+		vector<reference<const FunctionParameter>> result;
+		for (idx_t i = 0; i < signature.GetPositionalParameterCount(); i++) {
+			auto &param = signature.GetParameter(i);
+			if (!param.HasDefaultValue()) {
+				result.push_back(param);
+			}
+		}
+		return result;
+	};
+	auto lhs_positional = required_positional(*this);
+	auto rhs_positional = required_positional(other);
+	if (lhs_positional.size() != rhs_positional.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < lhs_positional.size(); i++) {
+		auto &lhs = lhs_positional[i].get();
+		auto &rhs = rhs_positional[i].get();
+		if (lhs.GetType() != rhs.GetType() || lhs.GetKind() != rhs.GetKind()) {
+			return false;
+		}
+	}
+	// the required keyword-only parameters, by name
+	auto required_keywords = [](const FunctionSignature &signature) {
+		identifier_map_t<LogicalType> result;
+		for (auto &param : signature.GetParameters()) {
+			if (param.GetKind() == FunctionParameterKind::KEYWORD_ONLY && !param.HasDefaultValue()) {
+				result.emplace(param.GetName(), param.GetType());
+			}
+		}
+		return result;
+	};
+	auto lhs_keywords = required_keywords(*this);
+	auto rhs_keywords = required_keywords(other);
+	if (lhs_keywords.size() != rhs_keywords.size()) {
+		return false;
+	}
+	for (auto &entry : lhs_keywords) {
+		auto match = rhs_keywords.find(entry.first);
+		if (match == rhs_keywords.end() || match->second != entry.second) {
+			return false;
+		}
+	}
+	return true;
 }
 
 bool FunctionSignature::Equal(const FunctionSignature &other) const {
@@ -363,7 +465,7 @@ bool FunctionSignature::Equal(const FunctionSignature &other) const {
 	if (return_type != other.return_type) {
 		return false;
 	}
-	return true;
+	return OptionSchemasEqual(GetOptionSchema(), other.GetOptionSchema());
 }
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 #include "duckdb/common/multi_file/table_function_multi_file.hpp"
 #include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/function/function_options.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/function/table/read_duckdb.hpp"
 
@@ -58,56 +59,55 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 }
 
 void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_function) {
-	table_function.GetSignature()
-	    .AddOptionalNamedParameter("sep", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("delim", LogicalType::VARCHAR)
-	    // aliases that the CSV options accept - COPY has always taken these, so the table function takes them too
-	    .AddOptionalNamedParameter("separator", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("delimiter", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("null", LogicalType::ANY)
-	    .AddOptionalNamedParameter("date_format", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("timestamp_format", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("quote", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("new_line", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("escape", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("nullstr", LogicalType::ANY)
-	    .AddOptionalNamedParameter("columns", LogicalType::ANY)
-	    .AddOptionalNamedParameter("auto_type_candidates", LogicalType::ANY)
-	    .AddOptionalNamedParameter("header", LogicalType::BOOLEAN)
-	    .AddNamedParameter("auto_detect", LogicalType::BOOLEAN, Value::BOOLEAN(true))
-	    .AddOptionalNamedParameter("sample_size", LogicalType::BIGINT)
-	    .AddOptionalNamedParameter("all_varchar", LogicalType::BOOLEAN)
-	    .AddOptionalNamedParameter("dateformat", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("timestampformat", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("normalize_names", LogicalType::BOOLEAN)
-	    .AddOptionalNamedParameter("compression", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("skip", LogicalType::BIGINT)
-	    .AddOptionalNamedParameter("max_line_size", LogicalType::BIGINT)
-	    .AddOptionalNamedParameter("maximum_line_size", LogicalType::BIGINT)
-	    .AddOptionalNamedParameter("ignore_errors", LogicalType::BOOLEAN)
-	    .AddOptionalNamedParameter("store_rejects", LogicalType::BOOLEAN)
-	    .AddOptionalNamedParameter("rejects_table", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("rejects_scan", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("rejects_limit", LogicalType::BIGINT)
-	    .AddOptionalNamedParameter("rejects_line_size_limit", LogicalType::BIGINT)
-	    .AddOptionalNamedParameter("force_not_null", LogicalType::LIST(LogicalType::VARCHAR))
-	    .AddOptionalNamedParameter("buffer_size", LogicalType::BIGINT)
-	    .AddOptionalNamedParameter("decimal_separator", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("parallel", LogicalType::BOOLEAN)
-	    .AddOptionalNamedParameter("null_padding", LogicalType::BOOLEAN)
-	    .AddOptionalNamedParameter("allow_quoted_nulls", LogicalType::BOOLEAN)
-	    .AddOptionalNamedParameter("column_types", LogicalType::ANY)
-	    .AddOptionalNamedParameter("dtypes", LogicalType::ANY)
-	    .AddOptionalNamedParameter("types", LogicalType::ANY)
-	    .AddOptionalNamedParameter("names", LogicalType::LIST(LogicalType::VARCHAR))
-	    .AddOptionalNamedParameter("column_names", LogicalType::LIST(LogicalType::VARCHAR))
-	    .AddOptionalNamedParameter("comment", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("encoding", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("strict_mode", LogicalType::BOOLEAN)
-	    .AddOptionalNamedParameter("thousands", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("files_to_sniff", LogicalType::BIGINT);
-
-	MultiFileReader::AddParameters(table_function);
+	// the reader keeps the default of every option in CSVReaderOptions - an option the call leaves out is not passed
+	table_function.GetSignature().WithOptionSchema([](FunctionOptionSchema &options) {
+		options.Add("sep", LogicalType::VARCHAR)
+		    .Add("delim", LogicalType::VARCHAR)
+		    .Add("separator", LogicalType::VARCHAR)
+		    .Add("delimiter", LogicalType::VARCHAR)
+		    .Add("null", LogicalType::ANY)
+		    .Add("date_format", LogicalType::VARCHAR)
+		    .Add("timestamp_format", LogicalType::VARCHAR)
+		    .Add("quote", LogicalType::VARCHAR)
+		    .Add("new_line", LogicalType::VARCHAR)
+		    .Add("escape", LogicalType::VARCHAR)
+		    .Add("nullstr", LogicalType::ANY)
+		    .Add("columns", LogicalType::ANY)
+		    .Add("auto_type_candidates", LogicalType::ANY)
+		    .Add("header", LogicalType::BOOLEAN)
+		    .Add("auto_detect", LogicalType::BOOLEAN)
+		    .Add("sample_size", LogicalType::BIGINT)
+		    .Add("all_varchar", LogicalType::BOOLEAN)
+		    .Add("dateformat", LogicalType::VARCHAR)
+		    .Add("timestampformat", LogicalType::VARCHAR)
+		    .Add("normalize_names", LogicalType::BOOLEAN)
+		    .Add("compression", LogicalType::VARCHAR)
+		    .Add("skip", LogicalType::BIGINT)
+		    .Add("max_line_size", LogicalType::BIGINT)
+		    .Add("maximum_line_size", LogicalType::BIGINT)
+		    .Add("ignore_errors", LogicalType::BOOLEAN)
+		    .Add("store_rejects", LogicalType::BOOLEAN)
+		    .Add("rejects_table", LogicalType::VARCHAR)
+		    .Add("rejects_scan", LogicalType::VARCHAR)
+		    .Add("rejects_limit", LogicalType::BIGINT)
+		    .Add("rejects_line_size_limit", LogicalType::BIGINT)
+		    .Add("force_not_null", LogicalType::LIST(LogicalType::VARCHAR))
+		    .Add("buffer_size", LogicalType::BIGINT)
+		    .Add("decimal_separator", LogicalType::VARCHAR)
+		    .Add("parallel", LogicalType::BOOLEAN)
+		    .Add("null_padding", LogicalType::BOOLEAN)
+		    .Add("allow_quoted_nulls", LogicalType::BOOLEAN)
+		    .Add("column_types", LogicalType::ANY)
+		    .Add("dtypes", LogicalType::ANY)
+		    .Add("types", LogicalType::ANY)
+		    .Add("names", LogicalType::LIST(LogicalType::VARCHAR))
+		    .Add("column_names", LogicalType::LIST(LogicalType::VARCHAR))
+		    .Add("comment", LogicalType::VARCHAR)
+		    .Add("encoding", LogicalType::VARCHAR)
+		    .Add("strict_mode", LogicalType::BOOLEAN)
+		    .Add("thousands", LogicalType::VARCHAR)
+		    .Add("files_to_sniff", LogicalType::BIGINT);
+	});
 }
 
 static void CSVReaderSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,

@@ -19,6 +19,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/parser/statement/logical_plan_statement.hpp"
 #include "duckdb/planner/planner.hpp"
+#include "duckdb/function/function_options.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_secure_view.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -465,10 +466,12 @@ struct KeywordScanBindData : public TableFunctionData {
 //! Returns the option it was called with, typed as the overload it was bound to declares it
 static unique_ptr<FunctionData> KeywordScanBind(ClientContext &, TableFunctionBindInput &input,
                                                 vector<LogicalType> &types, vector<Identifier> &names) {
+	// "opt" is a keyword-only parameter, or an option of the overload's "**kwargs"
 	auto &signature = input.table_function.GetSignature();
 	auto param_idx = signature.GetParameterIndexByName("opt");
-	REQUIRE(param_idx.IsValid());
-	auto &type = signature.GetParameter(param_idx.GetIndex()).GetType();
+	auto option = signature.GetOptionSchema() ? signature.GetOptionSchema()->Find("opt") : nullptr;
+	REQUIRE((param_idx.IsValid() || option));
+	auto &type = param_idx.IsValid() ? signature.GetParameter(param_idx.GetIndex()).GetType() : option->type;
 	auto entry = input.named_parameters.find("opt");
 	types.push_back(type);
 	names.emplace_back("opt");
@@ -520,12 +523,15 @@ TEST_CASE("Table function overloads selected by named arguments survive serializ
 	TableFunctionSet set("keyword_scan");
 	set.AddFunction(
 	    KeywordScan(FunctionSignature().AddNamedParameter("opt", LogicalType::INTEGER), serialize_bind_data));
-	set.AddFunction(KeywordScan(
-	    FunctionSignature().AddParameter(LogicalType::VARCHAR).AddOptionalNamedParameter("opt", LogicalType::DOUBLE),
-	    serialize_bind_data));
-	set.AddFunction(KeywordScan(
-	    FunctionSignature().AddParameter(LogicalType::VARCHAR).AddOptionalNamedParameter("opt", LogicalType::DATE),
-	    serialize_bind_data));
+	// keyword-only parameters take part in overload selection - options would not
+	set.AddFunction(KeywordScan(FunctionSignature()
+	                                .AddParameter(LogicalType::VARCHAR)
+	                                .AddNamedParameter("opt", LogicalType::DOUBLE, Value(LogicalType::DOUBLE)),
+	                            serialize_bind_data));
+	set.AddFunction(KeywordScan(FunctionSignature()
+	                                .AddParameter(LogicalType::VARCHAR)
+	                                .AddNamedParameter("opt", LogicalType::DATE, Value(LogicalType::DATE)),
+	                            serialize_bind_data));
 	CreateTableFunctionInfo info(set);
 	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
 
@@ -650,9 +656,6 @@ TEST_CASE("Table function defaults survive serialization", "[serialization][func
 		planner.CreatePlan(std::move(parser.statements[0]));
 		auto &get = FindGet(*planner.plan);
 		REQUIRE(Value::NotDistinctFrom(get.named_parameters.at("opt"), test_case.value));
-		// the call records only the options it passed, which is all a plan stores
-		auto passed = StringUtil::Contains(test_case.sql, "opt :=");
-		REQUIRE(get.function.GetNamedArguments().size() == (passed ? 1 : 0));
 		if (test_case.drop_option) {
 			get.named_parameters.clear();
 		}

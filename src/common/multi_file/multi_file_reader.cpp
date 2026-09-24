@@ -6,6 +6,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/function/function_options.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/multi_file/multi_file_column_mapper.hpp"
@@ -86,28 +87,17 @@ Value MultiFileReader::CreateValueFromFileList(const vector<string> &file_list) 
 }
 
 void MultiFileReader::AddParameters(TableFunction &table_function, MultiFileParameters which) {
-	auto &signature = table_function.GetSignature();
-	// a function may already declare some of these - e.g. one built on MultiFileFunction, whose constructor declares
-	// them, and which then runs a helper that declares them for the plain table functions that share it
-	auto add = [&](const char *name, const LogicalType &type, optional<Value> default_value = {}) {
-		if (signature.GetParameterIndexByName(name).IsValid()) {
-			return;
+	table_function.GetSignature().WithOptionSchema([&](FunctionOptionSchema &options) {
+		if (which == MultiFileParameters::ALL) {
+			// "filename" is a boolean, or the name of the column to hold the file name
+			options.Add("filename", LogicalType::ANY)
+			    .Add("hive_partitioning", LogicalType::BOOLEAN)
+			    .Add("union_by_name", LogicalType::BOOLEAN)
+			    .Add("hive_types", LogicalType::ANY)
+			    .Add("hive_types_autocast", LogicalType::BOOLEAN);
 		}
-		if (default_value) {
-			signature.AddNamedParameter(name, type, std::move(*default_value));
-		} else {
-			signature.AddOptionalNamedParameter(name, type);
-		}
-	};
-	if (which == MultiFileParameters::ALL) {
-		add("filename", LogicalType::ANY, Value::BOOLEAN(false));
-		// NULL detects hive partitioning
-		add("hive_partitioning", LogicalType::BOOLEAN);
-		add("union_by_name", LogicalType::BOOLEAN, Value::BOOLEAN(false));
-		add("hive_types", LogicalType::ANY);
-		add("hive_types_autocast", LogicalType::BOOLEAN, Value::BOOLEAN(true));
-	}
-	add("allow_empty", LogicalType::BOOLEAN, Value::BOOLEAN(false));
+		options.Add("allow_empty", LogicalType::BOOLEAN);
+	});
 }
 
 OpenFileInfo MultiFileReader::ParseFileEntry(const Value &input) {

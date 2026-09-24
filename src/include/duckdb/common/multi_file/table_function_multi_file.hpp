@@ -221,8 +221,9 @@ public:
 private:
 	//! Parse a named parameter of the wrapped function - returns false if the function has no such parameter
 	bool ParseNamedParameter(const Identifier &key, const Value &val, TableFunctionFileReaderOptions &options) const;
-	//! The wrapped function's option of that name, or null if it declares none
-	optional_ptr<const FunctionParameter> GetDeclaredOption(const Identifier &key) const;
+	//! The name and type of the wrapped function's option of that name or alias - a keyword-only parameter or an
+	//! option its "**kwargs" declares - or empty if it declares none
+	optional<pair<Identifier, LogicalType>> GetDeclaredOption(const Identifier &key) const;
 	//! Release the per-file bind data that is only needed while combining schemas
 	static void ReleaseBindData(const vector<shared_ptr<BaseUnionData>> &union_data);
 

@@ -5,6 +5,8 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/function/function_options.hpp"
+#include "duckdb/function/function_set.hpp"
 
 using namespace duckdb;
 
@@ -263,15 +265,11 @@ TEST_CASE("A table function receives the declared default of every parameter", "
 	CreateTableFunctionInfo info(function);
 	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
 
-	// every default is supplied, NULL ones included
+	// every default is supplied, and an option the call leaves out is absent
 	REQUIRE_NO_FAIL(con.Query("SELECT * FROM defaults_probe()"));
 	REQUIRE(defaults_probe.inputs == vector<Value> {Value::INTEGER(42)});
-	REQUIRE(defaults_probe.named_parameters.size() == 3);
+	REQUIRE(defaults_probe.named_parameters.size() == 1);
 	REQUIRE(defaults_probe.named_parameters.at("k") == Value::INTEGER(7));
-	REQUIRE(defaults_probe.named_parameters.at("o").IsNull());
-	REQUIRE(defaults_probe.named_parameters.at("o").type() == LogicalType::INTEGER);
-	REQUIRE(defaults_probe.named_parameters.at("untyped").IsNull());
-	REQUIRE(defaults_probe.named_parameters.at("untyped").type() == LogicalType::SQLNULL);
 
 	// passed arguments replace the defaults, and a NULL is passed as a value - also in place of a default that is not
 	// NULL
@@ -287,4 +285,173 @@ TEST_CASE("A table function receives the declared default of every parameter", "
 	REQUIRE(defaults_probe.named_parameters.at("k") == Value::INTEGER(7));
 	REQUIRE(defaults_probe.named_parameters.at("o") == Value::INTEGER(4));
 	con.Rollback();
+}
+
+namespace {
+
+//! The named arguments the last bind of "options_probe" received
+named_parameter_map_t options_probe;
+
+unique_ptr<FunctionData> OptionsProbeBind(ClientContext &, TableFunctionBindInput &input, vector<LogicalType> &types,
+                                          vector<Identifier> &names) {
+	options_probe = input.named_parameters;
+	types.push_back(LogicalType::BOOLEAN);
+	names.emplace_back("ok");
+	return make_uniq<TableFunctionData>();
+}
+
+} // namespace
+
+TEST_CASE("A table function receives the options its **kwargs declares", "[api][table_function]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.BeginTransaction();
+	auto &context = *con.context;
+
+	FunctionOptionSchema options;
+	options.Add("header", LogicalType::BOOLEAN)
+	    .Add("delim", LogicalType::VARCHAR)
+	    .Alias("sep")
+	    .Add("sample_size", LogicalType::BIGINT)
+	    .Add("columns", LogicalType::ANY);
+	FunctionSignature sig;
+	sig.AddParameter("path", LogicalType::VARCHAR);
+	sig.AddKwargsParameter("options", LogicalType::ANY);
+	sig.SetOptionSchema(std::move(options));
+	sig.Verify();
+	TableFunction function("options_probe", std::move(sig), DefaultsProbeScan, OptionsProbeBind);
+	CreateTableFunctionInfo info(function);
+	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
+
+	// an option the call leaves out is absent
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM options_probe('x')"));
+	REQUIRE(options_probe.empty());
+
+	// passed options are cast to their declared types - a literal as leniently as for a parameter - and an alias is
+	// received under the name of its option
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM options_probe('x', header := 'true', sep := '|', sample_size := 10)"));
+	REQUIRE(options_probe.size() == 3);
+	REQUIRE(options_probe.at("header") == Value::BOOLEAN(true));
+	REQUIRE(options_probe.at("delim") == Value("|"));
+	REQUIRE(options_probe.at("sample_size") == Value::BIGINT(10));
+
+	// an ANY option is passed through as it is
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM options_probe('x', columns := {'a': 'INTEGER'})"));
+	REQUIRE(options_probe.at("columns").type().id() == LogicalTypeId::STRUCT);
+
+	// a NULL is passed as a value
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM options_probe('x', header := NULL)"));
+	REQUIRE(options_probe.at("header").IsNull());
+
+	// an undeclared name is rejected, naming the declared options
+	auto result = con.Query("SELECT * FROM options_probe('x', heder := true)");
+	REQUIRE(result->HasError());
+	REQUIRE(StringUtil::Contains(result->GetError(), "Invalid named parameter \"heder\""));
+	REQUIRE(StringUtil::Contains(result->GetError(), "Did you mean: \"header\""));
+
+	// a value no implicit cast reaches the declared type selects no overload
+	result = con.Query("SELECT * FROM options_probe('x', sample_size := 1.5::DOUBLE)");
+	REQUIRE(result->HasError());
+	result = con.Query("SELECT * FROM options_probe('x', sample_size := '1' || '0')");
+	REQUIRE(result->HasError());
+
+	// an option passed by its name and an alias is passed twice
+	result = con.Query("SELECT * FROM options_probe('x', delim := ',', sep := '|')");
+	REQUIRE(result->HasError());
+	REQUIRE(StringUtil::Contains(result->GetError(), "passed more than once"));
+	con.Rollback();
+}
+
+TEST_CASE("A signature with options requires a **kwargs parameter that no option shadows", "[api][table_function]") {
+	FunctionSignature without_kwargs;
+	without_kwargs.AddParameter("path", LogicalType::VARCHAR);
+	without_kwargs.SetOptionSchema(FunctionOptionSchema().Add("header", LogicalType::BOOLEAN));
+	REQUIRE_THROWS_WITH(without_kwargs.Verify(), Catch::Matchers::Contains("'**kwargs' parameter"));
+
+	FunctionSignature shadowed;
+	shadowed.AddParameter("path", LogicalType::VARCHAR);
+	shadowed.AddKwargsParameter("options", LogicalType::ANY);
+	shadowed.SetOptionSchema(FunctionOptionSchema().Add("x", LogicalType::BOOLEAN).Alias("path"));
+	REQUIRE_THROWS_WITH(shadowed.Verify(), Catch::Matchers::Contains("same name as a parameter"));
+
+	// names are checked once the schema is complete, case-insensitively and across merged schemas
+	REQUIRE_THROWS_WITH(FunctionOptionSchema().Add("a", LogicalType::BOOLEAN).Alias("A").Verify(),
+	                    Catch::Matchers::Contains("Duplicate option name"));
+	auto left = FunctionOptionSchema().Add("a", LogicalType::BOOLEAN);
+	auto right = FunctionOptionSchema().Add("b", LogicalType::BOOLEAN).Alias("a");
+	REQUIRE_THROWS_WITH(left.Merge(right).Verify(), Catch::Matchers::Contains("Duplicate option name"));
+}
+
+TEST_CASE("A typed **kwargs receives its arguments cast to its type", "[api][table_function]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.BeginTransaction();
+	auto &context = *con.context;
+
+	FunctionSignature sig;
+	sig.AddKwargsParameter("rest", LogicalType::BIGINT);
+	TableFunction function("kwargs_probe", std::move(sig), DefaultsProbeScan, OptionsProbeBind);
+	CreateTableFunctionInfo info(function);
+	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
+
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM kwargs_probe(x := 1, y := 2::TINYINT)"));
+	REQUIRE(options_probe.at("x") == Value::BIGINT(1));
+	REQUIRE(options_probe.at("x").type() == LogicalType::BIGINT);
+	REQUIRE(options_probe.at("y").type() == LogicalType::BIGINT);
+	// a value no implicit cast reaches the type selects no overload
+	REQUIRE(con.Query("SELECT * FROM kwargs_probe(x := 1.5::DOUBLE)")->HasError());
+	con.Rollback();
+}
+
+TEST_CASE("Two overloads are the same when they accept the same minimal call", "[api][table_function]") {
+	auto keyword = [](const char *name) {
+		return FunctionSignature().AddNamedParameter(name, LogicalType::INTEGER);
+	};
+	// distinct required keyword names accept distinct calls
+	REQUIRE(!keyword("a").IsSameOverload(keyword("b")));
+	REQUIRE(keyword("a").IsSameOverload(keyword("A")));
+
+	auto path = FunctionSignature().AddParameter("path", LogicalType::VARCHAR);
+	auto with_default = FunctionSignature()
+	                        .AddParameter("path", LogicalType::VARCHAR)
+	                        .AddNamedParameter("opt", LogicalType::INTEGER, Value::INTEGER(1));
+	auto with_option = FunctionSignature()
+	                       .AddParameter("path", LogicalType::VARCHAR)
+	                       .AddOptionalNamedParameter("opt", LogicalType::INTEGER);
+	auto with_required =
+	    FunctionSignature().AddParameter("path", LogicalType::VARCHAR).AddParameter("count", LogicalType::INTEGER);
+	// what a call may leave out does not change the overload
+	REQUIRE(path.IsSameOverload(with_default));
+	REQUIRE(path.IsSameOverload(with_option));
+	REQUIRE(!path.IsSameOverload(with_required));
+	REQUIRE(!path.IsSameOverload(FunctionSignature().AddParameter("path", LogicalType::BIGINT)));
+
+	// so an overload gaining an optional parameter replaces the one it evolved from
+	TableFunctionSet set("evolving");
+	set.AddFunction(TableFunction("evolving", path, DefaultsProbeScan, OptionsProbeBind));
+	TableFunctionSet next("evolving");
+	next.AddFunction(TableFunction("evolving", with_default, DefaultsProbeScan, OptionsProbeBind));
+	REQUIRE(!set.MergeFunctionSet(next));
+	REQUIRE(set.MergeFunctionSet(next, true));
+	REQUIRE(set.Size() == 1);
+	REQUIRE(set.GetFunctionByOffset(0)->GetSignature().GetParameterCount() == 2);
+}
+
+TEST_CASE("An option is checked once the overload is chosen", "[api][table_function]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// a name that is no option suggests the options it resembles, not the other overloads
+	auto result = con.Query("FROM read_csv('x.csv', heder := true)");
+	REQUIRE(result->HasError());
+	REQUIRE(StringUtil::Contains(result->GetError(), "Invalid named parameter \"heder\" for function read_csv"));
+	REQUIRE(StringUtil::Contains(result->GetError(), "header"));
+	REQUIRE(!StringUtil::Contains(result->GetError(), "Candidate functions"));
+
+	// a value of the wrong type names the option and the type it expects
+	result = con.Query("FROM read_csv('x.csv', header := ['a'])");
+	REQUIRE(result->HasError());
+	REQUIRE(StringUtil::Contains(result->GetError(),
+	                             "Invalid named parameter \"header\" for function read_csv: expected BOOLEAN"));
+	REQUIRE(!StringUtil::Contains(result->GetError(), "No function matches"));
 }

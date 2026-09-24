@@ -259,10 +259,10 @@ TEST_CASE("Test Table Function named parameters in C API", "[capi]") {
 	// a string computed from an expression is no literal, even though it is folded to a constant
 	result = tester.Query("SELECT * FROM my_multiplier_function(2, my_parameter := '3' || '')");
 	REQUIRE(result->HasError());
-	REQUIRE(duckdb::StringUtil::Contains(result->ErrorMessage(), "expects BIGINT"));
+	REQUIRE(duckdb::StringUtil::Contains(result->ErrorMessage(), "expected BIGINT"));
 	result = tester.Query("SELECT * FROM my_multiplier_function(2, my_parameter := 2.5::DOUBLE)");
 	REQUIRE(result->HasError());
-	REQUIRE(duckdb::StringUtil::Contains(result->ErrorMessage(), "expects BIGINT"));
+	REQUIRE(duckdb::StringUtil::Contains(result->ErrorMessage(), "expected BIGINT"));
 
 	// the parameter added by duckdb_table_function_add_parameter is positional-only, so the synthetic name it is
 	// given cannot be used by a caller, while the one added by name still can
@@ -271,12 +271,13 @@ TEST_CASE("Test Table Function named parameters in C API", "[capi]") {
 	result = tester.Query("SELECT * FROM my_multiplier_function(2, col0 := 2)");
 	REQUIRE(result->HasError());
 	REQUIRE(duckdb::StringUtil::Contains(result->ErrorMessage(), "Invalid named parameter \"col0\""));
-	// only the parameter that was declared with a name is offered as a candidate
-	REQUIRE(duckdb::StringUtil::Contains(result->ErrorMessage(), "my_parameter BIGINT"));
-	REQUIRE(!duckdb::StringUtil::Contains(result->ErrorMessage(), "col0 BIGINT"));
 	result = tester.Query("SELECT * FROM my_multiplier_function(2, col0 := 2, my_parameter := 3)");
 	REQUIRE(result->HasError());
 	REQUIRE(duckdb::StringUtil::Contains(result->ErrorMessage(), "Invalid named parameter \"col0\""));
+	// an option that resembles the name is suggested
+	result = tester.Query("SELECT * FROM my_multiplier_function(2, my_paramter := 3)");
+	REQUIRE(result->HasError());
+	REQUIRE(duckdb::StringUtil::Contains(result->ErrorMessage(), "Did you mean: \"my_parameter\""));
 }
 
 struct my_bind_connection_id_data {
