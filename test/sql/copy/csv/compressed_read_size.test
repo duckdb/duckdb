@@ -1,0 +1,38 @@
+# name: test/sql/copy/csv/compressed_read_size.test
+# description: A compressed file is read in large chunks, so a scan issues few reads
+# group: [csv]
+
+require parquet
+
+statement ok
+COPY (SELECT i, md5(i::VARCHAR) AS h FROM range(200000) t(i)) TO '{TEST_DIR}/read_size.csv.gz' (COMPRESSION gzip)
+
+statement ok
+COPY (SELECT i, md5(i::VARCHAR) AS h FROM range(200000) t(i)) TO '{TEST_DIR}/read_size.csv.zst' (COMPRESSION zstd)
+
+statement ok
+CALL enable_logging('FileSystem')
+
+query II
+SELECT count(*), sum(i) FROM '{TEST_DIR}/read_size.csv.gz'
+----
+200000	19999900000
+
+query II
+SELECT count(*), sum(i) FROM '{TEST_DIR}/read_size.csv.zst'
+----
+200000	19999900000
+
+query II
+SELECT count(*) < 50, max(bytes) > 1048576
+FROM duckdb_logs_parsed('FileSystem')
+WHERE path LIKE '%read_size.csv.gz' AND op = 'READ'
+----
+true	true
+
+query II
+SELECT count(*) < 50, max(bytes) > 1048576
+FROM duckdb_logs_parsed('FileSystem')
+WHERE path LIKE '%read_size.csv.zst' AND op = 'READ'
+----
+true	true
