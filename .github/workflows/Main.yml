@@ -40,7 +40,8 @@ env:
   # and the dependent job is also skipped.
   #
   # For example, to build and deploy extensions, use:
-  # OVERRIDE_JOBS: linux-relassert linux-release extensions-build extensions-deploy
+  # OVERRIDE_JOBS: linux-relassert linux-release linux-release-musl windows extensions-build extensions-deploy
+  # Add "osx" when running the full extension matrix.
 
 jobs:
  prepare:
@@ -390,12 +391,23 @@ jobs:
 
  extensions-build:
     name: Build extensions
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'extensions-build') }}
-    uses: duckdb/extension-ci-tools/.github/workflows/build.yml@main
+    if: |
+      always() &&
+      needs.prepare.result == 'success' &&
+      contains(fromJson(needs.prepare.outputs.enabled_jobs), 'extensions-build') &&
+      needs.linux-relassert.result == 'success' &&
+      needs.linux-release.result == 'success' &&
+      needs.linux-release-musl.result == 'success' &&
+      needs.windows.result == 'success' &&
+      (needs.osx.result == 'success' || needs.osx.result == 'skipped')
+    uses: smvv/extension-ci-tools/.github/workflows/build.yml@prebuilt_duckdb
     needs:
       - prepare
       - linux-relassert
       - linux-release
+      - linux-release-musl
+      - windows
+      - osx
     with:
       duckdb_version: ${{ needs.prepare.outputs.duckdb_version }}
       duckdb_commit: ${{ needs.prepare.outputs.duckdb_commit }}
@@ -427,8 +439,8 @@ jobs:
           toolchain: rust
       extension_repository: duckdb/extension-template
       extension_ref: main
-      ci_tools_repository: duckdb/extension-ci-tools
-      ci_tools_version: main
+      ci_tools_repository: smvv/extension-ci-tools
+      ci_tools_version: prebuilt_duckdb
       exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       allow_failure_archs: ${{ needs.prepare.outputs.extension_allow_failure_archs }}
       vcpkg_commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
@@ -436,6 +448,18 @@ jobs:
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
       runners: ${{ needs.prepare.outputs.runners }}
+      prebuilt_duckdb: |
+        {
+          "linux_amd64": "duckdb-static-libs-linux-amd64.tar.gz",
+          "linux_arm64": "duckdb-static-libs-linux-arm64.tar.gz",
+          "linux_amd64_musl": "duckdb-static-libs-linux-amd64-musl.tar.gz",
+          "linux_arm64_musl": "duckdb-static-libs-linux-arm64-musl.tar.gz",
+          "osx_amd64": "duckdb-static-libs-osx-amd64.tar.gz",
+          "osx_arm64": "duckdb-static-libs-osx-arm64.tar.gz",
+          "windows_amd64": "duckdb-static-libs-windows-amd64.tar.gz",
+          "windows_arm64": "duckdb-static-libs-windows-arm64.tar.gz",
+          "windows_amd64_mingw": "duckdb-static-libs-windows-mingw.tar.gz"
+        }
 
  extensions-deploy:
     name: Deploy extensions

@@ -136,7 +136,7 @@ class JobStagesTest(unittest.TestCase):
         self.assertTrue(required_jobs.issubset(set(selection.enabled_jobs)))
         self.assertNotIn("osx", selection.enabled_jobs)
         self.assertEqual([config["name"] for config in selection.linux_release_matrix], ["amd64 compatibility"])
-        self.assertFalse(selection.linux_release_matrix[0]["publish_static"])
+        self.assertTrue(selection.linux_release_matrix[0]["publish_static"])
         self.assertTrue(selection.linux_release_matrix[0]["test_static"])
         self.assertFalse(selection.save_cache)
 
@@ -153,7 +153,7 @@ class JobStagesTest(unittest.TestCase):
             "push", "main", "duckdb/duckdb", default_branch="v2.0-cyanoptera"
         )
         self.assertNotIn("codecov", former_default_selection.enabled_jobs)
-        self.assertNotIn("osx", former_default_selection.enabled_jobs)
+        self.assertIn("osx", former_default_selection.enabled_jobs)
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_workflow_dispatch_adds_release_jobs(self):
@@ -213,10 +213,16 @@ class JobStagesTest(unittest.TestCase):
         self.assertNotIn("osx", selection.enabled_jobs)
         self.assertIn("linux-release-musl", selection.enabled_jobs)
         self.assertEqual([config["name"] for config in selection.linux_release_matrix], ["amd64 compatibility"])
-        self.assertFalse(selection.linux_release_matrix[0]["publish_static"])
+        self.assertTrue(selection.linux_release_matrix[0]["publish_static"])
         self.assertTrue(selection.linux_release_matrix[0]["test_static"])
         self.assertEqual([config["name"] for config in selection.linux_musl_matrix], ["arm64"])
         self.assertFalse(selection.save_cache)
+
+    @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
+    def test_feature_branch_push_enables_osx_for_full_extension_matrix(self):
+        selection = self._compute_job_selection("push", "feature/my-branch", "duckdb/duckdb")
+        self.assertIn("extensions-build", selection.enabled_jobs)
+        self.assertIn("osx", selection.enabled_jobs)
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_osx_changed_key_enables_osx(self):

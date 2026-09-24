@@ -117,11 +117,9 @@ def enabled_jobs(selection_input: JobSelectionInput) -> list[str]:
     if selection_input.skip_tests:
         selected_jobs = [job for job in selected_jobs if job not in SKIP_TESTS_JOBS]
 
-    if (
-        selection_input.event_name in {"push", "pull_request"}
-        and "osx" in selection_input.changed_keys
-        and "osx" not in selected_jobs
-    ):
+    extensions_need_osx = selection_input.event_name == "push" and "extensions-build" in selected_jobs
+    osx_changed = selection_input.event_name in {"push", "pull_request"} and "osx" in selection_input.changed_keys
+    if (extensions_need_osx or osx_changed) and "osx" not in selected_jobs:
         selected_jobs.append("osx")
 
     override = parse_job_selection_override(os.getenv("OVERRIDE_JOBS"))
@@ -175,7 +173,7 @@ def compatibility_release_config(*, runner: str, arch: str, optimized_release: b
         "extra_cmake_variables": "",
         "is_compatibility_build": True,
         "is_canonical_build": not optimized_release,
-        "publish_static": False,
+        "publish_static": not optimized_release,
         "publish_source": is_amd64,
         "test_static": not optimized_release,
         "run_smoke": is_amd64,
