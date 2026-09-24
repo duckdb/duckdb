@@ -114,7 +114,7 @@ SELECT ~ ~1 + 2;
 statement error
 SELECT ~2 ^ 2;
 ----
-<REGEX>:.*~\(DOUBLE\).*
+Binder Error: No function matches the given name and argument types '~(DOUBLE)'. You might need to add explicit type casts.
 
 query I
 SELECT (~2) ^ 2;
