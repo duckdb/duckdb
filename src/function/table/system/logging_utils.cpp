@@ -69,7 +69,13 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 	for (const auto &param : input.named_parameters) {
 		auto &key = param.first;
 		if (key == "level") {
+			if (param.second.IsNull()) {
+				throw InvalidInputException("EnableLogging: level cannot be NULL");
+			}
 			result->config.level = EnumUtil::FromString<LogLevel>(param.second.ToString());
+		} else if (param.second.IsNull()) {
+			// a storage option that is not set
+			continue;
 		} else if (key == "storage") {
 			storage_isset = true;
 			result->config.storage = param.second.ToString();
@@ -178,7 +184,7 @@ void EnableLoggingFun::RegisterFunction(BuiltinFunctions &set) {
 	// a positional list, so it declares "*args" and no "**kwargs" - an argument named after no parameter is an error
 	enable_fun.GetSignature().AddArgsParameter("args", LogicalType::ANY);
 	enable_fun.GetSignature()
-	    .AddOptionalNamedParameter("level", LogicalType::VARCHAR)
+	    .AddNamedParameter("level", LogicalType::VARCHAR, Value("INFO"))
 	    .AddOptionalNamedParameter("storage", LogicalType::VARCHAR)
 	    .AddOptionalNamedParameter("storage_config", LogicalType::ANY);
 

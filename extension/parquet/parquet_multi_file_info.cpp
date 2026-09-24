@@ -516,16 +516,16 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	MultiFileFunction<ParquetMultiFileInfo> table_function("parquet_scan");
 	table_function.GetSignature()
 	    .AddOptionalNamedParameter("binary_as_string", LogicalType::BOOLEAN)
-	    .AddOptionalNamedParameter("file_row_number", LogicalType::BOOLEAN)
-	    .AddOptionalNamedParameter("debug_use_openssl", LogicalType::BOOLEAN)
-	    .AddOptionalNamedParameter("compression", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("explicit_cardinality", LogicalType::UBIGINT)
+	    .AddNamedParameter("file_row_number", LogicalType::BOOLEAN, Value::BOOLEAN(false))
+	    .AddNamedParameter("debug_use_openssl", LogicalType::BOOLEAN, Value::BOOLEAN(false))
+	    .AddNamedParameter("compression", LogicalType::VARCHAR, Value("auto"))
+	    .AddNamedParameter("explicit_cardinality", LogicalType::UBIGINT, Value::UBIGINT(0))
 	    .AddOptionalNamedParameter("schema", LogicalTypeId::ANY)
 	    .AddOptionalNamedParameter("encryption_config", LogicalTypeId::ANY)
 	    .AddOptionalNamedParameter("parquet_version", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("can_have_nan", LogicalType::BOOLEAN)
-	    .AddOptionalNamedParameter("prefetch_strategy", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("utf8_validation", LogicalType::VARCHAR);
+	    .AddNamedParameter("can_have_nan", LogicalType::BOOLEAN, Value::BOOLEAN(false))
+	    .AddNamedParameter("prefetch_strategy", LogicalType::VARCHAR, Value("auto"))
+	    .AddNamedParameter("utf8_validation", LogicalType::VARCHAR, Value("strict"));
 	table_function.statistics_extended = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStatsExtended;
 	table_function.get_metrics = ParquetScanGetMetrics;
 	table_function.projection_expression_pushdown = ParquetProjectionExpressionPushdown;
@@ -604,6 +604,10 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const Identifier 
 	auto &parquet_options = base_options.Cast<ParquetFileReaderOptions>();
 	auto &options = parquet_options.options;
 	if (val.IsNull()) {
+		if (key == "binary_as_string" || key == "schema" || key == "encryption_config" || key == "parquet_version") {
+			// not set
+			return true;
+		}
 		throw BinderException("Cannot use NULL as argument to %s", key);
 	}
 	if (key == "compression") {

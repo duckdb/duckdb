@@ -585,10 +585,9 @@ TEST_CASE("Table function options survive plans written for older versions", "[s
 		serialize_bind_data = true;
 	}
 	TableFunctionSet set("keyword_scan");
-	set.AddFunction(KeywordScan(FunctionSignature()
-	                                .AddParameter(LogicalType::VARCHAR)
-	                                .AddOptionalNamedParameter("opt", LogicalType::DOUBLE),
-	                            serialize_bind_data));
+	set.AddFunction(KeywordScan(
+	    FunctionSignature().AddParameter(LogicalType::VARCHAR).AddOptionalNamedParameter("opt", LogicalType::DOUBLE),
+	    serialize_bind_data));
 	CreateTableFunctionInfo info(set);
 	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
 
@@ -615,6 +614,54 @@ TEST_CASE("Table function options survive plans written for older versions", "[s
 		}
 		REQUIRE(copied_get.returned_types == vector<LogicalType> {LogicalType::DOUBLE});
 		REQUIRE(copied_get.bind_data->Cast<KeywordScanBindData>().value == Value::DOUBLE(1.5));
+	}
+	connection.Rollback();
+}
+
+TEST_CASE("Table function defaults survive serialization", "[serialization][function_invocation]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	connection.BeginTransaction();
+	auto &context = *connection.context;
+	TableFunctionSet set("keyword_scan");
+	set.AddFunction(KeywordScan(FunctionSignature()
+	                                .AddParameter(LogicalType::VARCHAR)
+	                                .AddNamedParameter("opt", LogicalType::DOUBLE, Value::DOUBLE(7)),
+	                            false));
+	CreateTableFunctionInfo info(set);
+	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
+
+	struct Case {
+		string sql;
+		Value value;
+		//! Whether to drop the option from the plan before writing it, as a version that did not place defaults did
+		bool drop_option;
+	};
+	vector<Case> cases {{"SELECT * FROM keyword_scan('a')", Value::DOUBLE(7), false},
+	                    {"SELECT * FROM keyword_scan('a', opt := NULL)", Value(LogicalType::DOUBLE), false},
+	                    {"SELECT * FROM keyword_scan('a', opt := 1)", Value::DOUBLE(1), false},
+	                    {"SELECT * FROM keyword_scan('a')", Value::DOUBLE(7), true}};
+	for (auto &test_case : cases) {
+		CAPTURE(test_case.sql);
+		CAPTURE(test_case.drop_option);
+		Parser parser(context.GetParserOptions());
+		parser.ParseQuery(test_case.sql);
+		Planner planner(context);
+		planner.CreatePlan(std::move(parser.statements[0]));
+		auto &get = FindGet(*planner.plan);
+		REQUIRE(Value::NotDistinctFrom(get.named_parameters.at("opt"), test_case.value));
+		if (test_case.drop_option) {
+			get.named_parameters.clear();
+		}
+
+		MemoryStream stream(Allocator::Get(context));
+		BinarySerializer::Serialize(get, stream, SerializationOptions());
+		stream.Rewind();
+		bound_parameter_map_t parameters;
+		auto copy = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
+		auto &copied_get = copy->Cast<LogicalGet>();
+		REQUIRE(Value::NotDistinctFrom(copied_get.named_parameters.at("opt"), test_case.value));
+		REQUIRE(Value::NotDistinctFrom(copied_get.bind_data->Cast<KeywordScanBindData>().value, test_case.value));
 	}
 	connection.Rollback();
 }

@@ -247,7 +247,7 @@ void DefaultsProbeScan(ClientContext &, TableFunctionInput &, DataChunk &output)
 
 } // namespace
 
-TEST_CASE("A table function receives the declared defaults, and no value for an option", "[api][table_function]") {
+TEST_CASE("A table function receives the declared default of every parameter", "[api][table_function]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.BeginTransaction();
@@ -257,22 +257,30 @@ TEST_CASE("A table function receives the declared defaults, and no value for an 
 	sig.AddParameter("a", LogicalType::INTEGER, Value::INTEGER(42));
 	sig.AddNamedParameter("k", LogicalType::INTEGER, Value::INTEGER(7));
 	sig.AddOptionalNamedParameter("o", LogicalType::INTEGER);
+	// a type like ANY describes no value, so the option defaults to an untyped NULL
+	sig.AddOptionalNamedParameter("untyped", LogicalType::ANY);
 	TableFunction function("defaults_probe", std::move(sig), DefaultsProbeScan, DefaultsProbeBind);
 	CreateTableFunctionInfo info(function);
 	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
 
-	// every default is supplied, the option is left out
+	// every default is supplied, NULL ones included
 	REQUIRE_NO_FAIL(con.Query("SELECT * FROM defaults_probe()"));
 	REQUIRE(defaults_probe.inputs == vector<Value> {Value::INTEGER(42)});
-	REQUIRE(defaults_probe.named_parameters.size() == 1);
+	REQUIRE(defaults_probe.named_parameters.size() == 3);
 	REQUIRE(defaults_probe.named_parameters.at("k") == Value::INTEGER(7));
-
-	// passed arguments replace the defaults, and a passed option - even a NULL one - is present
-	REQUIRE_NO_FAIL(con.Query("SELECT * FROM defaults_probe(1, k := 2, o := NULL)"));
-	REQUIRE(defaults_probe.inputs == vector<Value> {Value::INTEGER(1)});
-	REQUIRE(defaults_probe.named_parameters.size() == 2);
-	REQUIRE(defaults_probe.named_parameters.at("k") == Value::INTEGER(2));
 	REQUIRE(defaults_probe.named_parameters.at("o").IsNull());
+	REQUIRE(defaults_probe.named_parameters.at("o").type() == LogicalType::INTEGER);
+	REQUIRE(defaults_probe.named_parameters.at("untyped").IsNull());
+	REQUIRE(defaults_probe.named_parameters.at("untyped").type() == LogicalType::SQLNULL);
+
+	// passed arguments replace the defaults, and a NULL is passed as a value - also in place of a default that is not
+	// NULL
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM defaults_probe(1, k := NULL, o := 2, untyped := 'x')"));
+	REQUIRE(defaults_probe.inputs == vector<Value> {Value::INTEGER(1)});
+	REQUIRE(defaults_probe.named_parameters.size() == 3);
+	REQUIRE(defaults_probe.named_parameters.at("k").IsNull());
+	REQUIRE(defaults_probe.named_parameters.at("o") == Value::INTEGER(2));
+	REQUIRE(defaults_probe.named_parameters.at("untyped") == Value("x"));
 
 	REQUIRE_NO_FAIL(con.Query("SELECT * FROM defaults_probe(a := 3, o := 4)"));
 	REQUIRE(defaults_probe.inputs == vector<Value> {Value::INTEGER(3)});

@@ -89,20 +89,25 @@ void MultiFileReader::AddParameters(TableFunction &table_function, MultiFilePara
 	auto &signature = table_function.GetSignature();
 	// a function may already declare some of these - e.g. one built on MultiFileFunction, whose constructor declares
 	// them, and which then runs a helper that declares them for the plain table functions that share it
-	auto add = [&](const char *name, const LogicalType &type) {
+	auto add = [&](const char *name, const LogicalType &type, optional<Value> default_value = {}) {
 		if (signature.GetParameterIndexByName(name).IsValid()) {
 			return;
 		}
-		signature.AddOptionalNamedParameter(name, type);
+		if (default_value) {
+			signature.AddNamedParameter(name, type, std::move(*default_value));
+		} else {
+			signature.AddOptionalNamedParameter(name, type);
+		}
 	};
 	if (which == MultiFileParameters::ALL) {
-		add("filename", LogicalType::ANY);
+		add("filename", LogicalType::ANY, Value::BOOLEAN(false));
+		// NULL detects hive partitioning
 		add("hive_partitioning", LogicalType::BOOLEAN);
-		add("union_by_name", LogicalType::BOOLEAN);
+		add("union_by_name", LogicalType::BOOLEAN, Value::BOOLEAN(false));
 		add("hive_types", LogicalType::ANY);
-		add("hive_types_autocast", LogicalType::BOOLEAN);
+		add("hive_types_autocast", LogicalType::BOOLEAN, Value::BOOLEAN(true));
 	}
-	add("allow_empty", LogicalType::BOOLEAN);
+	add("allow_empty", LogicalType::BOOLEAN, Value::BOOLEAN(false));
 }
 
 OpenFileInfo MultiFileReader::ParseFileEntry(const Value &input) {
@@ -227,7 +232,8 @@ bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, Multi
 		}
 	} else if (key == "hive_partitioning") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for %s", key);
+			// detected
+			return true;
 		}
 		options.hive_partitioning = BooleanValue::Get(val);
 		options.auto_detect_hive_partitioning = false;
@@ -250,7 +256,8 @@ bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, Multi
 		options.hive_types_autocast = BooleanValue::Get(val);
 	} else if (key == "hive_types" || key == "hive_type") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for %s", key);
+			// not set
+			return true;
 		}
 		if (val.type().id() != LogicalTypeId::STRUCT) {
 			throw InvalidInputException(

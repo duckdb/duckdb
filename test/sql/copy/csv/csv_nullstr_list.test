@@ -44,11 +44,15 @@ FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', auto_detect=false, delim
 ----
 CSV Reader function option "nullstr" does not accept NULL values as a valid nullstr option
 
-# Test nullstr = NULL
-statement error
-FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"',  skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = NULL);
+# Test nullstr = NULL, which is the same as not passing nullstr
+query I
+SELECT count(*) FROM (
+	FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"',  skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = NULL)
+	EXCEPT ALL
+	FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"',  skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'})
+);
 ----
-CSV Reader function option "nullstr" requires a string or a list as input
+0
 
 # Test nullstr = [42]
 statement error

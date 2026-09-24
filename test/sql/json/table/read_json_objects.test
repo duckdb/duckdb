@@ -13,7 +13,7 @@ Invalid Input Error: Malformed JSON
 
 # now it should work!
 query I
-SELECT * FROM read_csv('{DATA_DIR}/json/example_n.ndjson', columns={'json': 'JSON'}, delim=NULL, header=0, quote=NULL, escape=NULL, auto_detect = false)
+SELECT * FROM read_csv('{DATA_DIR}/json/example_n.ndjson', columns={'json': 'JSON'}, delim='', header=0, quote='', escape='', auto_detect = false)
 ----
 {"id":1,"name":"O Brother, Where Art Thou?"}
 {"id":2,"name":"Home for the Holidays"}

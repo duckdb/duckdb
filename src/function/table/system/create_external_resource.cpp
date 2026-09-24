@@ -370,12 +370,13 @@ void CreateExternalResourceFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction fn("create_external_resource", {LogicalType::VARCHAR}, CreateExternalResourceFunction,
 	                 CreateExternalResourceBind, CreateExternalResourceInit);
 	fn.GetSignature()
-	    .AddOptionalNamedParameter("params", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR))
+	    .AddNamedParameter("params", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR),
+	                       Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, vector<Value>(), vector<Value>()))
 	    .AddOptionalNamedParameter("resource_name", LogicalType::VARCHAR)
 	    .AddOptionalNamedParameter("handle", LogicalType::ANY)
-	    .AddOptionalNamedParameter("teardown_on_failure", LogicalType::BOOLEAN)
-	    .AddOptionalNamedParameter("timeout_seconds", LogicalType::BIGINT)
-	    .AddOptionalNamedParameter("poll_interval_seconds", LogicalType::BIGINT);
+	    .AddNamedParameter("teardown_on_failure", LogicalType::BOOLEAN, Value::BOOLEAN(true))
+	    .AddNamedParameter("timeout_seconds", LogicalType::BIGINT, Value::BIGINT(DEFAULT_READINESS_TIMEOUT_SECONDS))
+	    .AddNamedParameter("poll_interval_seconds", LogicalType::BIGINT, Value::BIGINT(DEFAULT_POLL_INTERVAL_SECONDS));
 	set.AddFunction(fn);
 }
 

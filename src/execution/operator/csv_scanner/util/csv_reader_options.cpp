@@ -661,6 +661,10 @@ void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, Clie
 }
 
 void CSVReaderOptions::ParseOption(ClientContext &context, const Identifier &key, const Value &val) {
+	if (val.IsNull() && key != "auto_detect") {
+		// not set - a dialect option is detected, and every other one keeps its default
+		return;
+	}
 	// skip variables that are specific to auto-detection
 	if (StoreUserDefinedParameter(key)) {
 		// the parameter list is rendered back into a SQL prompt by GetUserDefinedParameters, so it is stored

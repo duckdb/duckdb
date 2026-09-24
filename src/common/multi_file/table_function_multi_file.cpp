@@ -66,6 +66,7 @@ void TableFunctionFileReader::BindFunction(ClientContext &context, const TableFu
 	vector<Value> inputs;
 	inputs.emplace_back(file.path);
 	auto parameters = named_parameters;
+	function.GetSignature().FillNamedDefaults(parameters);
 	vector<LogicalType> input_table_types;
 	vector<Identifier> input_table_names;
 	TableFunctionRef empty_ref;
@@ -572,7 +573,11 @@ TableFunction TableFunctionMultiFileWrapper::CreateFunction(TableFunction single
 		    signature.GetParameterIndexByName(param.GetName()).IsValid()) {
 			continue;
 		}
-		signature.AddOptionalNamedParameter(param.GetName(), param.GetType());
+		if (param.HasDefaultValue()) {
+			signature.AddNamedParameter(param.GetName(), param.GetType(), *param.GetDefaultValue());
+		} else {
+			signature.AddNamedParameter(param.GetName(), param.GetType());
+		}
 	}
 	result.projection_pushdown = single_file_function.projection_pushdown;
 	result.filter_pushdown = single_file_function.filter_pushdown;

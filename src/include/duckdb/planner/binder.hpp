@@ -599,11 +599,12 @@ private:
 	                                 BoundStatement &subquery, bool &table_in_out, ErrorData &error);
 	void BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions, BoundStatement &subquery);
 	BoundStatement BindTableFunction(TableFunction &function, vector<Value> parameters);
-	BoundStatement BindTableFunctionInternal(BoundTableFunction &table_function, const TableFunctionRef &ref,
-	                                         vector<Value> parameters, named_parameter_map_t named_parameters,
-	                                         vector<LogicalType> input_table_types,
-	                                         vector<Identifier> input_table_names,
-	                                         optional_ptr<unique_ptr<LogicalOperator>> input_plan);
+	BoundStatement
+	BindTableFunctionInternal(BoundTableFunction &table_function, const TableFunctionRef &ref, vector<Value> parameters,
+	                          named_parameter_map_t named_parameters, vector<LogicalType> input_table_types,
+	                          vector<Identifier> input_table_names,
+	                          optional_ptr<unique_ptr<LogicalOperator>> input_plan,
+	                          optional_ptr<const named_parameter_type_map_t> named_argument_types = nullptr);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundJoinRef &ref);
 

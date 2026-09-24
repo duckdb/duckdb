@@ -55,6 +55,12 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 	return_types.emplace_back(LogicalType::VARIANT());
 
 	auto result = make_uniq<DuckDBSettingsBindData>();
+	for (auto name : {"debug", "deprecated"}) {
+		auto it = input.named_parameters.find(name);
+		if (it != input.named_parameters.end() && it->second.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for %s", name);
+		}
+	}
 	if (auto it = input.named_parameters.find("debug"); it != input.named_parameters.end()) {
 		result->debug = it->second.GetValue<bool>();
 	}
@@ -183,8 +189,8 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 void DuckDBSettingsFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction settings_fun("duckdb_settings", {}, DuckDBSettingsFunction, DuckDBSettingsBind, DuckDBSettingsInit);
 	settings_fun.GetSignature()
-	    .AddOptionalNamedParameter("debug", LogicalType::BOOLEAN)
-	    .AddOptionalNamedParameter("deprecated", LogicalType::BOOLEAN);
+	    .AddNamedParameter("debug", LogicalType::BOOLEAN, Value::BOOLEAN(false))
+	    .AddNamedParameter("deprecated", LogicalType::BOOLEAN, Value::BOOLEAN(false));
 	set.AddFunction(settings_fun);
 }
 

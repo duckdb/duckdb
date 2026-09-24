@@ -1,6 +1,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/capi/capi_internal_table.hpp"
@@ -9,6 +10,47 @@
 #include "duckdb/storage/statistics/node_statistics.hpp"
 
 namespace duckdb {
+
+void CTableFunctionInfo::BindNamedParameters(ClientContext &context, const Identifier &function_name,
+                                             named_parameter_map_t &arguments,
+                                             optional_ptr<const named_parameter_type_map_t> argument_types) const {
+	for (auto &argument : arguments) {
+		auto entry = named_parameters.find(argument.first);
+		if (entry == named_parameters.end()) {
+			// list every declared option, in name order
+			map<string, string> candidates;
+			for (auto &option : named_parameters) {
+				candidates[option.first.GetIdentifierName()] = option.second.ToString();
+			}
+			string candidate_list;
+			for (auto &candidate : candidates) {
+				candidate_list += "    " + candidate.first + " " + candidate.second + "\n";
+			}
+			throw BinderException("Invalid named parameter %s for function %s\n%s", argument.first,
+			                      function_name.GetIdentifierName(),
+			                      candidate_list.empty() ? "Function does not accept any named parameters."
+			                                             : "Candidates:\n" + candidate_list);
+		}
+		auto &target_type = entry->second;
+		auto &value = argument.second;
+		if (value.type() == target_type) {
+			continue;
+		}
+		auto source_type = value.type();
+		if (argument_types) {
+			auto argument_type = argument_types->find(argument.first);
+			if (argument_type != argument_types->end()) {
+				source_type = argument_type->second;
+			}
+		}
+		if (CastFunctionSet::ImplicitCastCost(context, source_type, target_type) < 0) {
+			throw BinderException("Named parameter %s of function %s expects %s, but got %s", argument.first,
+			                      function_name.GetIdentifierName(), target_type.ToString(), value.type().ToString());
+		}
+		value = value.CastAs(context, target_type);
+	}
+}
+
 namespace {
 //===--------------------------------------------------------------------===//
 // Structures
@@ -111,6 +153,9 @@ unique_ptr<FunctionData> CTableFunctionBind(ClientContext &context, TableFunctio
 	D_ASSERT(info.bind && info.function && info.init);
 
 	auto result = make_uniq<CTableBindData>(info);
+	// the cast values are kept, so that a plan that repeats this bind needs no literal types
+	info.BindNamedParameters(context, input.table_function.GetName(), input.named_parameters,
+	                         input.named_argument_types);
 	CTableInternalBindInfo bind_info(context, input.inputs, input.named_parameters, return_types, names, *result, info);
 	info.bind(ToCTableFunctionBindInfo(bind_info));
 	if (!bind_info.success) {
@@ -217,7 +262,12 @@ void duckdb_table_function_add_named_parameter(duckdb_table_function function, c
 	}
 	auto &tf = GetCTableFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	tf.GetSignature().AddOptionalNamedParameter(name, *logical_type);
+	auto &info = tf.function_info->Cast<duckdb::CTableFunctionInfo>();
+	info.named_parameters[duckdb::Identifier(name)] = *logical_type;
+	auto &signature = tf.GetSignature();
+	if (!signature.GetKwargsParameter()) {
+		signature.AddKwargsParameter(duckdb::Identifier("options"), duckdb::LogicalType::ANY);
+	}
 }
 
 void duckdb_table_function_set_extra_info(duckdb_table_function function, void *extra_info,
@@ -292,6 +342,11 @@ duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb
 			continue;
 		}
 		if (duckdb::TypeVisitor::Contains(param.GetType(), duckdb::LogicalTypeId::INVALID)) {
+			return DuckDBError;
+		}
+	}
+	for (auto &option : info.named_parameters) {
+		if (duckdb::TypeVisitor::Contains(option.second, duckdb::LogicalTypeId::INVALID)) {
 			return DuckDBError;
 		}
 	}

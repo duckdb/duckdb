@@ -389,6 +389,9 @@ static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &conte
 	}
 	AutoCompleteParameters parameters;
 	for (auto &param : input.named_parameters) {
+		if (param.second.IsNull()) {
+			throw BinderException("sql_auto_complete %s cannot be NULL", param.first);
+		}
 		if (param.first == "max_suggestion_count") {
 			parameters.max_suggestion_count = UBigIntValue::Get(param.second);
 		} else if (param.first == "max_file_suggestion_count") {
@@ -670,9 +673,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
 	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
 	auto_complete_fun.GetSignature()
-	    .AddOptionalNamedParameter("max_suggestion_count", LogicalType::UBIGINT)
-	    .AddOptionalNamedParameter("max_file_suggestion_count", LogicalType::UBIGINT)
-	    .AddOptionalNamedParameter("max_exact_suggestion_count", LogicalType::UBIGINT);
+	    .AddNamedParameter("max_suggestion_count", LogicalType::UBIGINT, Value::UBIGINT(20))
+	    .AddNamedParameter("max_file_suggestion_count", LogicalType::UBIGINT, Value::UBIGINT(1))
+	    .AddNamedParameter("max_exact_suggestion_count", LogicalType::UBIGINT, Value::UBIGINT(100));
 	loader.RegisterFunction(auto_complete_fun);
 
 	TableFunction check_peg_parser_fun("check_peg_parser", {LogicalType::VARCHAR}, CheckPEGParserFunction,

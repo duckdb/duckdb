@@ -74,7 +74,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	    .AddOptionalNamedParameter("columns", LogicalType::ANY)
 	    .AddOptionalNamedParameter("auto_type_candidates", LogicalType::ANY)
 	    .AddOptionalNamedParameter("header", LogicalType::BOOLEAN)
-	    .AddOptionalNamedParameter("auto_detect", LogicalType::BOOLEAN)
+	    .AddNamedParameter("auto_detect", LogicalType::BOOLEAN, Value::BOOLEAN(true))
 	    .AddOptionalNamedParameter("sample_size", LogicalType::BIGINT)
 	    .AddOptionalNamedParameter("all_varchar", LogicalType::BOOLEAN)
 	    .AddOptionalNamedParameter("dateformat", LogicalType::VARCHAR)

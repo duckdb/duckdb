@@ -538,8 +538,8 @@ TEST_CASE("Stable C++API: table function parameter defaults, named arguments and
 	REQUIRE(CollectBigints(conn.Execute("SELECT * FROM cpp_args(1)")) == std::vector<int64_t> {1, 7});
 	// A defaulted parameter passed by name.
 	REQUIRE(CollectBigints(conn.Execute("SELECT * FROM cpp_args(1, b => 5)")) == std::vector<int64_t> {1, 5});
-	// The variadic tail follows the fixed slots, in call order.
-	REQUIRE(CollectBigints(conn.Execute("SELECT * FROM cpp_args(1, 30, 40)")) == std::vector<int64_t> {1, 7, 30, 40});
+	// Positional arguments fill the slots in order, as in Python: b takes 30, and the variadic tail takes the rest.
+	REQUIRE(CollectBigints(conn.Execute("SELECT * FROM cpp_args(1, 30, 40)")) == std::vector<int64_t> {1, 30, 40});
 }
 
 TEST_CASE("Stable C++API: table function user data, global and local state", "[cpp_api]") {

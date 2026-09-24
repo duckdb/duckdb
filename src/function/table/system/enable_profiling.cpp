@@ -67,6 +67,10 @@ static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, Tabl
 	auto bind_data = make_uniq<EnableProfilingBindData>();
 
 	for (const auto &named_param : input.named_parameters) {
+		if (named_param.second.IsNull()) {
+			// not set - the setting keeps its current value
+			continue;
+		}
 		const auto key = EnumUtil::FromString<ProfilingParameterNames>(named_param.first.GetIdentifierName());
 		switch (key) {
 		case ProfilingParameterNames::FORMAT:

@@ -383,6 +383,10 @@ bool DuckDBMultiFileInfo::ParseCopyOption(ClientContext &context, const Identifi
 bool DuckDBMultiFileInfo::ParseOption(ClientContext &context, const Identifier &key, const Value &val,
                                       MultiFileOptions &file_options, BaseFileReaderOptions &options_p) {
 	auto &options = options_p.Cast<DuckDBFileReaderOptions>();
+	if ((key == "schema_name" || key == "table_name") && val.IsNull()) {
+		// not set - the table is picked automatically
+		return true;
+	}
 	if (key == "schema_name") {
 		options.schema_name = Identifier(StringValue::Get(val));
 		return true;

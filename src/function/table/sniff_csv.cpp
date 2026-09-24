@@ -54,6 +54,9 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 	// If we want to force the match of the sniffer
 	it = input.named_parameters.find("force_match");
 	if (it != input.named_parameters.end()) {
+		if (it->second.IsNull()) {
+			throw BinderException("\"%s\" expects a non-null boolean value (e.g. TRUE or 1)", it->first);
+		}
 		result->force_match = it->second.GetValue<bool>();
 		input.named_parameters.erase("force_match");
 	}
@@ -322,7 +325,7 @@ void CSVSnifferFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction csv_sniffer("sniff_csv", {LogicalType::VARCHAR}, CSVSniffFunction, CSVSniffBind, CSVSniffInitGlobal);
 	// Accept same options as the actual csv reader
 	ReadCSVTableFunction::ReadCSVAddNamedParameters(csv_sniffer);
-	csv_sniffer.GetSignature().AddOptionalNamedParameter("force_match", LogicalType::BOOLEAN);
+	csv_sniffer.GetSignature().AddNamedParameter("force_match", LogicalType::BOOLEAN, Value::BOOLEAN(true));
 	set.AddFunction(csv_sniffer);
 }
 } // namespace duckdb

@@ -55,11 +55,11 @@ select yr, Quarter from read_csv_auto('{DATA_DIR}/csv/real/ontime_sample.csv', n
 ----
 1988	1
 
-# NULL
-statement error
+# NULL is the same as not passing names
+query IIII
 select column00, column01, column02, column03 from read_csv_auto('{DATA_DIR}/csv/real/lineitem_sample.csv', names=NULL) LIMIT 1;
 ----
-read_csv "names" cannot be NULL
+1	15519	785	1
 
 # specify the names twice
 statement error

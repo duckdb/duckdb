@@ -654,8 +654,7 @@ unique_ptr<FunctionData> CCopyFromBind(ClientContext &context, CopyFromFunctionB
 
 	// Turn all options into named parameters
 	for (auto opt : info.info.options) {
-		auto param_idx = info.tf.GetSignature().GetParameterIndexByName(Identifier(opt.first));
-		if (!param_idx.IsValid()) {
+		if (tf_info.named_parameters.find(Identifier(opt.first)) == tf_info.named_parameters.end()) {
 			// Option not found in the table function's named parameters
 			throw BinderException("'%s' is not a supported option for copy function '%s'", opt.first.c_str(),
 			                      info.tf.name.c_str());
@@ -730,6 +729,11 @@ void duckdb_copy_function_set_copy_from_function(duckdb_copy_function copy_funct
 			continue;
 		}
 		if (duckdb::TypeVisitor::Contains(param.GetType(), duckdb::LogicalTypeId::INVALID)) {
+			return;
+		}
+	}
+	for (auto &option : tf_info.named_parameters) {
+		if (duckdb::TypeVisitor::Contains(option.second, duckdb::LogicalTypeId::INVALID)) {
 			return;
 		}
 	}

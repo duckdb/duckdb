@@ -88,6 +88,12 @@ static unique_ptr<FunctionData> ReadSingleJSONFileBind(ClientContext &context, T
 		}
 	}
 	for (auto &kv : input.named_parameters) {
+		// the options of the multi-file scan arrive through "multi_file_options" instead
+		MultiFileOptions ignored_file_options;
+		if (kv.first != "maximum_sample_files" &&
+		    MultiFileReader().ParseOption(kv.first, kv.second, ignored_file_options, context)) {
+			continue;
+		}
 		if (JSONScan::ParseOption(context, kv.first, kv.second, options)) {
 			continue;
 		}

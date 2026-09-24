@@ -330,10 +330,10 @@ public:
 		return *this;
 	}
 
-	//! Adds a named parameter the caller may leave out, defaulting to a NULL of its own type - the form a function's
-	//! options take, so that an option that is not passed simply does not reach a table function
+	//! Adds a named parameter the caller may leave out, defaulting to NULL. The NULL is of the parameter's own type,
+	//! or untyped for a type like ANY that describes no value
 	auto AddOptionalNamedParameter(Identifier name, LogicalType type) -> FunctionSignature & {
-		auto default_value = Value(type);
+		auto default_value = type.InternalType() == PhysicalType::INVALID ? Value() : Value(type);
 		return AddNamedParameter(std::move(name), std::move(type), std::move(default_value));
 	}
 
@@ -382,6 +382,9 @@ public:
 		}
 		return result;
 	}
+
+	//! Inserts the default of every keyword-only parameter that is missing from the given named arguments
+	DUCKDB_API void FillNamedDefaults(named_parameter_map_t &named_parameters) const;
 
 	DUCKDB_API void Verify() const;
 

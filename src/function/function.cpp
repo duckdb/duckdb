@@ -167,6 +167,17 @@ void FunctionSignature::SetVarArgs(LogicalType varargs_p) {
 	AddKwargsParameter("kwargs", std::move(varargs_p));
 }
 
+void FunctionSignature::FillNamedDefaults(named_parameter_map_t &named_parameters) const {
+	for (auto &param : parameters) {
+		if (param.GetKind() != FunctionParameterKind::KEYWORD_ONLY || !param.HasDefaultValue()) {
+			continue;
+		}
+		if (named_parameters.find(param.GetName()) == named_parameters.end()) {
+			named_parameters.insert(make_pair(param.GetName(), *param.GetDefaultValue()));
+		}
+	}
+}
+
 void FunctionSignature::Verify() const {
 	// Check for duplicate parameter names
 	identifier_set_t seen_names;

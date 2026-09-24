@@ -31,6 +31,14 @@ struct CTableFunctionInfo : public TableFunctionInfo {
 	duckdb_table_function_t function = nullptr;
 	void *extra_info = nullptr;
 	duckdb_delete_callback_t delete_callback = nullptr;
+	//! The options declared with duckdb_table_function_add_named_parameter. The function receives them through
+	//! "**kwargs", so that an option the call leaves out stays absent
+	named_parameter_type_map_t named_parameters;
+
+	//! Checks the named arguments of a call against the declared options, and casts each to its declared type. The
+	//! argument types say which arguments were literals, which cast more leniently
+	void BindNamedParameters(ClientContext &context, const Identifier &function_name, named_parameter_map_t &arguments,
+	                         optional_ptr<const named_parameter_type_map_t> argument_types) const;
 };
 
 struct CTableBindData : public TableFunctionData {

@@ -502,8 +502,7 @@ static Value PlaceArgument(ClientContext &context, Expression &expr, const Logic
 //! the type that parameter declares. Every parameter that accepts a position gets its slot in "parameters", whether
 //! the caller passed it by position, by name or not at all, so "range(1, col1 := 5)" reaches the callback exactly as
 //! "range(1, 5)" does. Only keyword-only and "**kwargs" arguments are handed back in "named_parameters", keyed by the
-//! name the caller wrote. A parameter the call leaves out receives its default, except a named one defaulting to
-//! NULL: it stays out of "named_parameters", so the callback can still tell that the option was not passed.
+//! name the caller wrote. A parameter the call leaves out receives its default, a NULL one included.
 //! Overload selection has already established that every cast here is one the implicit rules allow, so this converts
 //! rather than forces - an argument no implicit cast reaches never selects the overload in the first place.
 template <class T>
@@ -563,12 +562,7 @@ static void PlaceArguments(ClientContext &context, const T &function,
 	for (idx_t i = positional_count; i < passed_count; i++) {
 		parameters.push_back(PlaceArgument(context, *positional_arguments[i], signature.GetVarArgs()));
 	}
-	for (auto &param : signature.GetParameters()) {
-		if (param.GetKind() == FunctionParameterKind::KEYWORD_ONLY && param.HasDefaultValue() &&
-		    !param.GetDefaultValue()->IsNull() && !seen_names.count(param.GetName())) {
-			named_parameters.insert(make_pair(param.GetName(), *param.GetDefaultValue()));
-		}
-	}
+	signature.FillNamedDefaults(named_parameters);
 }
 
 optional_idx FunctionBinder::BindFunction(const Identifier &name, const TableFunctionSet &functions,

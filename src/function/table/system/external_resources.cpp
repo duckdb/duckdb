@@ -211,7 +211,7 @@ static void ExternalResourcesFunction(ClientContext &context, TableFunctionInput
 void DuckDBExternalResourcesFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction fn("duckdb_external_resources", {}, ExternalResourcesFunction, ExternalResourcesBind,
 	                 ExternalResourcesInit);
-	fn.GetSignature().AddOptionalNamedParameter("discover", LogicalType::BOOLEAN);
+	fn.GetSignature().AddNamedParameter("discover", LogicalType::BOOLEAN, Value::BOOLEAN(false));
 	set.AddFunction(fn);
 }
 

@@ -133,6 +133,9 @@ struct TableFunctionBindInput {
 	//! instead of determining a schema of its own
 	optional_ptr<const vector<Identifier>> expected_names;
 	optional_ptr<const vector<LogicalType>> expected_types;
+	//! (Optional) The type overload resolution saw for each named argument of the call, before folding - a string or
+	//! integer literal has its literal type. Only set when binding a call written in SQL
+	optional_ptr<const named_parameter_type_map_t> named_argument_types;
 	//! (Optional) The bind data that determined the schema above, when it came from another bind of this same
 	//! function. This lets the bind read the file exactly the way the schema was determined, rather than deriving
 	//! that from the names and types alone

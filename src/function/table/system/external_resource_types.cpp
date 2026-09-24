@@ -156,8 +156,8 @@ void RegisterExternalResourceTypeFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction fn("register_external_resource_type", {LogicalType::VARCHAR}, RegisterExternalResourceTypeFunction,
 	                 RegisterExternalResourceTypeBind, RegisterExternalResourceTypeInit);
 	fn.GetSignature()
-	    .AddOptionalNamedParameter("kind", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("create_function", LogicalType::VARCHAR)
+	    .AddNamedParameter("kind", LogicalType::VARCHAR)
+	    .AddNamedParameter("create_function", LogicalType::VARCHAR)
 	    .AddOptionalNamedParameter("status_function", LogicalType::VARCHAR)
 	    .AddOptionalNamedParameter("destroy_function", LogicalType::VARCHAR)
 	    .AddOptionalNamedParameter("resolve_function", LogicalType::VARCHAR)

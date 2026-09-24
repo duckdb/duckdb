@@ -204,7 +204,8 @@ BoundStatement Binder::BindTableFunctionInternal(BoundTableFunction &table_funct
                                                  vector<Value> parameters, named_parameter_map_t named_parameters,
                                                  vector<LogicalType> input_table_types,
                                                  vector<Identifier> input_table_names,
-                                                 optional_ptr<unique_ptr<LogicalOperator>> input_plan) {
+                                                 optional_ptr<unique_ptr<LogicalOperator>> input_plan,
+                                                 optional_ptr<const named_parameter_type_map_t> named_argument_types) {
 	auto function_name = GetAlias(ref);
 	auto &column_name_alias = ref.column_name_alias;
 	auto bind_index = GenerateTableIndex();
@@ -215,10 +216,13 @@ BoundStatement Binder::BindTableFunctionInternal(BoundTableFunction &table_funct
 	auto constexpr ordinality_name = "ordinality";
 	string ordinality_column_name = ordinality_name;
 	optional_idx ordinality_column_id;
+	// the function binder has placed them already, but not for a table in-out call or a direct bind
+	table_function.GetSignature().FillNamedDefaults(named_parameters);
 	table_function.SetCallArguments(parameters, named_parameters);
 	if (table_function.bind || table_function.bind_replace || table_function.bind_operator) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
 		                                  table_function.function_info.get(), this, table_function, ref, input_plan);
+		bind_input.named_argument_types = named_argument_types;
 		if (table_function.bind_operator) {
 			auto new_plan = table_function.bind_operator(context, bind_input, bind_index, return_names);
 			if (new_plan) {
@@ -447,6 +451,12 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		error.Throw();
 	}
 
+	// the types overload resolution sees, before folding erases which arguments were literals
+	named_parameter_type_map_t named_argument_types;
+	for (auto &named_argument : named_arguments) {
+		named_argument_types[named_argument.first] = ExpressionBinder::GetExpressionReturnType(*named_argument.second);
+	}
+
 	// selection, named-argument checking, folding and casting all happen in the function binder
 	FunctionBinder function_binder(*this);
 	vector<Value> parameters;
@@ -491,7 +501,8 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	BoundStatement get;
 	try {
 		get = BindTableFunctionInternal(table_function, ref, std::move(parameters), std::move(named_parameters),
-		                                std::move(input_table_types), std::move(input_table_names), &subquery.plan);
+		                                std::move(input_table_types), std::move(input_table_names), &subquery.plan,
+		                                named_argument_types);
 	} catch (std::exception &ex) {
 		error = ErrorData(ex);
 		// if the error does not already contain a query location, add one
