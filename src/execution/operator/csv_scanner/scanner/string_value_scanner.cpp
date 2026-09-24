@@ -150,7 +150,10 @@ StringValueResult::~StringValueResult() {
 	}
 }
 
-inline bool IsValueNull(const char *null_str_ptr, const char *value_ptr, const idx_t size) {
+inline bool IsValueNull(const char *null_str_ptr, const idx_t null_str_size, const char *value_ptr, const idx_t size) {
+	if (size != null_str_size) {
+		return false;
+	}
 	for (idx_t i = 0; i < size; i++) {
 		if (null_str_ptr[i] != value_ptr[i]) {
 			return false;
@@ -167,7 +170,7 @@ bool StringValueResult::HandleTooManyColumnsError(const char *value_ptr, const i
 				// we make an exception if the first over-value is null
 				bool is_value_null = false;
 				for (idx_t i = 0; i < null_str_count; i++) {
-					is_value_null = is_value_null || (size == null_str_size[i] && IsValueNull(null_str_ptr[i], value_ptr, size));
+					is_value_null = is_value_null || IsValueNull(null_str_ptr[i], null_str_size[i], value_ptr, size);
 				}
 				error = !is_value_null;
 			}
@@ -248,7 +251,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 			// we make an exception if the first over-value is null
 			bool is_value_null = false;
 			for (idx_t i = 0; i < null_str_count; i++) {
-				is_value_null = is_value_null || (size == null_str_size[i] && IsValueNull(null_str_ptr[i], value_ptr, size));
+				is_value_null = is_value_null || IsValueNull(null_str_ptr[i], null_str_size[i], value_ptr, size);
 			}
 			error = !is_value_null;
 		}
@@ -275,8 +278,8 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 			bool is_null = false;
 			if (null_str_size[i] == 2 && null_str_ptr[i][0] == state_machine.state_machine_options.escape.GetValue()) {
 				is_null = check_unquoted_escaped_null && null_str_ptr[i][1] == value_ptr[0];
-			} else if (size == null_str_size[i] && !check_unquoted_escaped_null) {
-				is_null = IsValueNull(null_str_ptr[i], value_ptr, size);
+			} else if (!check_unquoted_escaped_null) {
+				is_null = IsValueNull(null_str_ptr[i], null_str_size[i], value_ptr, size);
 			}
 			if (is_null) {
 				bool empty = false;
