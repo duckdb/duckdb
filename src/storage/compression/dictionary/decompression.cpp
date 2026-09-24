@@ -33,6 +33,26 @@ namespace duckdb {
 	    "to be corrupted.");
 }
 
+string_t CompressedStringScanState::DictionarySegmentLayout::ValidateAndGetEntry(idx_t index) const {
+	if (index >= index_buffer.size()) {
+		ThrowDictionaryIndexOutOfRange();
+	}
+	auto offset = index_buffer[index];
+	if (offset > dictionary_reader.Size()) {
+		ThrowDictionaryOffsetOutOfRange();
+	}
+	if (index == 0) {
+		return string_t(nullptr, 0);
+	}
+	auto previous_offset = index_buffer[index - 1];
+	if (offset < previous_offset) {
+		ThrowDictionaryOffsetOutOfRange();
+	}
+	const auto string_length = offset - previous_offset;
+	auto string_data = dictionary_reader.GetBytes(dictionary_reader.Size() - offset, string_length);
+	return string_t(const_char_ptr_cast(string_data.data()), string_length);
+}
+
 void CompressedStringScanState::ValidateDictionary(const SelectionVector &sel, const idx_t scan_count) const {
 	D_ASSERT(sel.IsSet());
 	bool has_error = false;
@@ -194,19 +214,16 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 		// Lookup dict offset in index buffer
 		auto string_dict_index = sel_vec->get_index(i + start_offset);
 
+		if (NEEDS_STRING_OFFSET_CHECK) {
+			const auto val = layout.ValidateAndGetEntry(string_dict_index);
+			result_data.WriteStringRef(val);
+			continue;
+		}
+
 		bool elem_error = string_dict_index >= offsets.size();
 		string_dict_index = elem_error ? 0 : string_dict_index;
 		auto str_dict_offset = offsets[string_dict_index];
 
-		if (NEEDS_STRING_OFFSET_CHECK) {
-			elem_error |= str_dict_offset > layout.dictionary_reader.Size();
-			if (string_dict_index > 0) {
-				elem_error |= str_dict_offset < offsets[string_dict_index - 1];
-			}
-			// On error, fall back to index/offset 0 so the fetch below stays in bounds.
-			string_dict_index = elem_error ? 0 : string_dict_index;
-			str_dict_offset = elem_error ? 0 : str_dict_offset;
-		}
 		has_error |= elem_error;
 
 		const auto str_len = GetStringLength(UnsafeNumericCast<sel_t>(string_dict_index));

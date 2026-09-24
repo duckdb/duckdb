@@ -12,6 +12,9 @@ struct CompressedStringScanState : public SegmentScanState {
 private:
 	//! Dictionary segment data from disk, with byte ranges checked by ReadLayout.
 	struct DictionarySegmentLayout {
+		//! Validate the dictionary index and its offsets before reading the string.
+		string_t ValidateAndGetEntry(idx_t index) const;
+
 		//! Bits per dictionary index, derived from the entry count and checked against the stored width.
 		bitpacking_width_t current_width;
 		//! Packed indices, mapping each row to a dictionary entry.
