@@ -61,19 +61,13 @@ struct WalkFrame {
 	const VariantNode node;
 };
 
-bool IsPrimitiveEqual(const VariantNode &haystack, const VariantNode &needle) {
-	const auto haystack_type = haystack.GetTypeId();
-	const auto needle_type = needle.GetTypeId();
-	const auto haystack_category = GetVariantComparisonType(haystack_type);
-	if (haystack_category != GetVariantComparisonType(needle_type)) {
-		return false;
-	}
-
+bool IsPrimitiveEqual(const VariantNode &haystack, const VariantNode &needle, VariantLogicalType haystack_type,
+                      VariantLogicalType needle_type, VariantComparisonType haystack_category) {
 	switch (haystack_category) {
 	case VariantComparisonType::NULL_VALUE:
 		return true;
 	case VariantComparisonType::BOOLEAN:
-		return haystack.GetTypeId() == needle.GetTypeId();
+		return haystack_type == needle_type;
 	case VariantComparisonType::UUID:
 		return haystack.GetData<hugeint_t>() == needle.GetData<hugeint_t>();
 	case VariantComparisonType::REAL:
@@ -105,6 +99,7 @@ bool IsPrimitiveEqual(const VariantNode &haystack, const VariantNode &needle) {
 	return false;
 }
 
+
 //! Determines if the needle is an equivalent subset of the subtree of the haystack at the given node (inner walk).
 bool IsEquivalentSubset(vector<ContainsFrame> &stack) {
 	D_ASSERT(stack.size() == 1);
@@ -114,8 +109,10 @@ bool IsEquivalentSubset(vector<ContainsFrame> &stack) {
 
 		switch (frame.state) {
 		case ContainsState::ENTER: {
-			const auto haystack_category = GetVariantComparisonType(frame.haystack.GetTypeId());
-			const auto needle_category = GetVariantComparisonType(frame.needle.GetTypeId());
+			const auto haystack_type = frame.haystack.GetTypeId();
+			const auto needle_type = frame.needle.GetTypeId();
+			const auto haystack_category = GetVariantComparisonType(haystack_type);
+			const auto needle_category = GetVariantComparisonType(needle_type);
 
 			if (haystack_category != needle_category) {
 				frame.result = false;
@@ -131,7 +128,8 @@ bool IsEquivalentSubset(vector<ContainsFrame> &stack) {
 				}
 				frame.state = ContainsState::OBJECT_NEXT;
 			} else {
-				frame.result = IsPrimitiveEqual(frame.haystack, frame.needle);
+				frame.result = IsPrimitiveEqual(frame.haystack, frame.needle, haystack_type, needle_type,
+				                                haystack_category);
 				frame.state = ContainsState::RETURN;
 			}
 			break;
