@@ -725,6 +725,12 @@ option(
 set(PREBUILT_BINARY
     ""
     CACHE FILEPATH "Prebuilt DuckDB static library")
+set(PREBUILT_EXTENSIONS
+    ""
+    CACHE STRING "Extensions supplied as prebuilt static libraries")
+if(PREBUILT_EXTENSIONS AND NOT PREBUILT_BINARY)
+  message(FATAL_ERROR "PREBUILT_EXTENSIONS requires PREBUILT_BINARY")
+endif()
 
 if(DISABLE_EXTENSION_LOAD)
   add_definitions(-DDUCKDB_DISABLE_EXTENSION_LOAD)
@@ -1267,6 +1273,26 @@ if(PREBUILT_BINARY)
                                              "${PREBUILT_BINARY_PATH}")
   target_link_libraries(duckdb_static INTERFACE ${DUCKDB_SYSTEM_LIBS})
   link_threads(duckdb_static INTERFACE)
+
+  foreach(
+    DUCKDB_PREBUILT_LINK_LIBRARY
+    duckdb_fastpforlib
+    duckdb_fmt
+    duckdb_fsst
+    duckdb_hyperloglog
+    duckdb_mbedtls
+    duckdb_miniz
+    duckdb_re2
+    duckdb_skiplistlib
+    duckdb_utf8proc
+    duckdb_yyjson
+    duckdb_zstd)
+    if(NOT TARGET ${DUCKDB_PREBUILT_LINK_LIBRARY})
+      add_library(${DUCKDB_PREBUILT_LINK_LIBRARY} INTERFACE IMPORTED GLOBAL)
+      target_link_libraries(${DUCKDB_PREBUILT_LINK_LIBRARY}
+                            INTERFACE duckdb_static)
+    endif()
+  endforeach()
 
   add_subdirectory(tools)
   add_subdirectory(extension)
