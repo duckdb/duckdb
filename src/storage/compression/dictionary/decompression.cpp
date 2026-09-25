@@ -187,7 +187,9 @@ void CompressedStringScanState::InitializeDictionary(const ColumnSegment &segmen
 	const auto &offsets = layout.index_buffer;
 	dictionary = DictionaryVector::CreateReusableDictionary(segment.GetType(), offsets.size());
 	auto dict_child_data = FlatVector::Writer<string_t>(dictionary->data, offsets.size());
-	dict_child_data.WriteNull();
+	// A separate validity scan can mark a row selecting index zero valid, so initialize its string slot.
+	dict_child_data.WriteStringRef(string_t(nullptr, 0));
+	FlatVector::SetNull(dictionary->data, 0, true);
 	for (idx_t i = 1; i < offsets.size(); i++) {
 		const auto str_len = layout.GetStringLength(i);
 		dict_child_data.WriteStringRef(layout.FetchStringFromDict(offsets[i], str_len));
@@ -245,8 +247,9 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 		if (entry.IsValid()) {
 			result_data.WriteStringRef(entry.GetValue());
 		} else {
-			// The NULL entry has no initialized string value to copy.
-			result_data.WriteNull();
+			// The validity scan can mark this row valid, so initialize its string even for the NULL entry.
+			result_data.WriteStringRef(string_t(nullptr, 0));
+			FlatVector::SetNull(result, result_offset + i, true);
 		}
 	}
 }
