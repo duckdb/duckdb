@@ -2,6 +2,7 @@
 #include "dbgen/dbgen_gunk.hpp"
 #include "tpch_constants.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
@@ -1495,6 +1496,25 @@ string DBGenWrapper::GetQuery(int query) {
 		throw SyntaxException("Out of range TPC-H query number %d", query);
 	}
 	return TPCH_QUERIES[query - 1];
+}
+
+//! The stored Q11 carries the FRACTION substitution parameter for SF 1
+static constexpr const char *TPCH_Q11_SF1_FRACTION = "0.0001000000";
+
+string DBGenWrapper::GetQuery(int query, double sf) {
+	if (Value::IsNan(sf) || sf <= 0 || sf > MAX_SCALE) {
+		throw InvalidInputException("TPC-H queries require a scale factor between 0 and %d",
+		                            static_cast<int>(MAX_SCALE));
+	}
+	auto result = GetQuery(query);
+	if (query != 11) {
+		return result;
+	}
+	// Q11 selects the parts whose stock value exceeds FRACTION of the total, where qgen sets FRACTION = 0.0001 / SF
+	auto fraction = StringUtil::Format("%.10f", 0.0001 / sf);
+	auto pos = result.find(TPCH_Q11_SF1_FRACTION);
+	D_ASSERT(pos != string::npos);
+	return result.replace(pos, strlen(TPCH_Q11_SF1_FRACTION), fraction);
 }
 
 string DBGenWrapper::GetAnswer(double sf, int query) {
