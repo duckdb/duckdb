@@ -414,6 +414,7 @@ UnreservedKeyword <- 'ABORT' /
 'CASCADE' /
 'CASCADED' /
 'CATALOG' /
+'CELLS' /
 'CENTURIES' /
 'CENTURY' /
 'CHAIN' /
@@ -460,6 +461,7 @@ UnreservedKeyword <- 'ABORT' /
 'DEPENDS' /
 'DETACH' /
 'DICTIONARY' /
+'DIFF' /
 'DISABLE' /
 'DISCARD' /
 'DISCONNECT' /
@@ -1149,6 +1151,15 @@ DescRule <- 'DESC'
 
 DetachStatement <- 'DETACH' Database? IfExists? CatalogName
 
+# "DIFF old, new [KEY (columns)] [CELLS]" compares two relations and returns a summary of the changes between them -
+# or, with CELLS, the changed cells. Each side is a table name or a parenthesized query (see bind_diffref.cpp).
+DiffStatement <- 'DIFF' DiffSide ',' DiffSide DiffKey? DiffCells?
+DiffSide <- DiffSubquery / DiffTable
+DiffSubquery <- SelectParens
+DiffTable <- BaseTableName
+DiffKey <- 'KEY' InsertColumnList
+DiffCells <- 'CELLS'
+
 DropStatement <- 'DROP' DropEntries DropBehavior?
 
 DropEntries <-
@@ -1800,7 +1811,7 @@ SetopUnion <- 'UNION'
 SetopExcept <- 'EXCEPT'
 ByName <- 'BY' 'NAME'
 
-SelectStatementType <- OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement
+SelectStatementType <- OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement / DiffStatement
 ResultModifiers <- OrderByClause? LimitOffset?
 LimitOffset <- LimitOffsetClause / OffsetFetchClause / OffsetLimitClause / FetchOnlyClause
 LimitOffsetClause <- LimitClause OffsetClause?

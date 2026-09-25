@@ -96,6 +96,12 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		}
 		break;
 	}
+	case TableReferenceType::DIFF_REF: {
+		auto &diff_ref = ref.Cast<DiffRef>();
+		EnumerateTableRefChildren(*diff_ref.old_side, expr_callback, ref_callback);
+		EnumerateTableRefChildren(*diff_ref.new_side, expr_callback, ref_callback);
+		break;
+	}
 	case TableReferenceType::PIVOT: {
 		auto &p_ref = ref.Cast<PivotRef>();
 		EnumerateTableRefChildren(*p_ref.source, expr_callback, ref_callback);
