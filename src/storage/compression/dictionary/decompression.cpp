@@ -40,9 +40,9 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Dictionary Validation
 //===--------------------------------------------------------------------===//
-void CompressedStringScanState::DictionarySegmentLayout::ValidateDictionaryIndices(const SelectionVector &sel,
-                                                                                   const idx_t start_offset,
-                                                                                   const idx_t scan_count) const {
+void CompressedStringScanState::SegmentLayout::ValidateDictionaryIndices(const SelectionVector &sel,
+                                                                         const idx_t start_offset,
+                                                                         const idx_t scan_count) const {
 	D_ASSERT(sel.IsSet());
 	D_ASSERT(start_offset <= sel.Capacity());
 	D_ASSERT(scan_count <= sel.Capacity() - start_offset);
@@ -57,7 +57,7 @@ void CompressedStringScanState::DictionarySegmentLayout::ValidateDictionaryIndic
 	}
 }
 
-void CompressedStringScanState::DictionarySegmentLayout::ValidateIndexBuffer() const {
+void CompressedStringScanState::SegmentLayout::ValidateIndexBuffer() const {
 	// Only the checks required to avoid out-of-bounds reads when trusting the buffer: offsets must be
 	// monotonically increasing (else a length underflows) and the largest offset must lie within the dictionary.
 	const auto &offsets = index_buffer;
@@ -75,7 +75,7 @@ void CompressedStringScanState::DictionarySegmentLayout::ValidateIndexBuffer() c
 //===--------------------------------------------------------------------===//
 // String Reading
 //===--------------------------------------------------------------------===//
-uint32_t CompressedStringScanState::DictionarySegmentLayout::GetStringLength(idx_t index) const {
+uint32_t CompressedStringScanState::SegmentLayout::GetStringLength(idx_t index) const {
 	const auto &offsets = index_buffer;
 	D_ASSERT(index < offsets.size());
 	if (index == 0) {
@@ -86,8 +86,8 @@ uint32_t CompressedStringScanState::DictionarySegmentLayout::GetStringLength(idx
 	return string_length;
 }
 
-string_t CompressedStringScanState::DictionarySegmentLayout::FetchStringFromDict(uint32_t dict_offset,
-                                                                                 uint32_t string_len) const {
+string_t CompressedStringScanState::SegmentLayout::FetchStringFromDict(uint32_t dict_offset,
+                                                                       uint32_t string_len) const {
 	D_ASSERT(dict_offset <= dictionary_reader.Size());
 	D_ASSERT(string_len <= dict_offset);
 	if (dict_offset == 0) {
@@ -102,8 +102,8 @@ string_t CompressedStringScanState::DictionarySegmentLayout::FetchStringFromDict
 //===--------------------------------------------------------------------===//
 // Segment Layout
 //===--------------------------------------------------------------------===//
-CompressedStringScanState::DictionarySegmentLayout CompressedStringScanState::ReadLayout(const BufferHandle &handle,
-                                                                                         const ColumnSegment &segment) {
+CompressedStringScanState::SegmentLayout CompressedStringScanState::ReadLayout(const BufferHandle &handle,
+                                                                               const ColumnSegment &segment) {
 	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "dictionary segment");
 	auto header = reader.Read<dictionary_compression_header_t>();
 	// Index zero represents NULL, so even an all-NULL segment needs one dictionary offset.
@@ -157,7 +157,7 @@ CompressedStringScanState::DictionarySegmentLayout CompressedStringScanState::Re
 	return {expected_width, selection_reader, dictionary_reader, index_buffer};
 }
 
-string_t CompressedStringScanState::DictionarySegmentLayout::ValidateAndGetEntry(idx_t index) const {
+string_t CompressedStringScanState::SegmentLayout::ValidateAndGetEntry(idx_t index) const {
 	if (index >= index_buffer.size()) {
 		ThrowDictionaryIndexOutOfRange();
 	}
@@ -209,13 +209,9 @@ unsafe_array_ptr<const uint8_t> CompressedStringScanState::GetSelectionBytes(idx
 	return layout.selection_reader.GetBytes(source_offset, source_size);
 }
 
-template <bool NEEDS_STRING_OFFSET_CHECK>
-void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count) {
-	// Handling non-bitpacking-group-aligned start values;
-	idx_t start_offset = start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-
-	// We will scan in blocks of BITPACKING_ALGORITHM_GROUP_SIZE, so we may scan some extra values.
-	idx_t decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(scan_count + start_offset);
+void CompressedStringScanState::UnpackSelection(idx_t start, idx_t decompress_count) {
+	D_ASSERT(decompress_count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0);
+	const auto source = GetSelectionBytes(start, decompress_count);
 
 	// Create a decompression buffer of sufficient size if we don't already have one.
 	if (!sel_vec || sel_vec_size < decompress_count) {
@@ -223,25 +219,24 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 		sel_vec = make_buffer<SelectionVector>(decompress_count);
 	}
 
-	const auto source = GetSelectionBytes(start, decompress_count);
+	D_ASSERT(decompress_count <= sel_vec->Capacity());
 	sel_t *sel_vec_ptr = sel_vec->data();
 
 	BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(sel_vec_ptr), source.data(), decompress_count,
 	                                          layout.current_width);
+}
 
-	auto result_data = FlatVector::Writer<string_t>(result, scan_count, result_offset);
-
-	if (NEEDS_STRING_OFFSET_CHECK) {
-		for (idx_t i = 0; i < scan_count; i++) {
-			const auto string_dict_index = sel_vec->get_index(i + start_offset);
-			const auto val = layout.ValidateAndGetEntry(string_dict_index);
-			result_data.WriteStringRef(val);
-		}
-		return;
-	}
-
+void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count) {
 	D_ASSERT(dictionary);
+	// Handling non-bitpacking-group-aligned start values
+	const idx_t start_offset = start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+
+	// We will scan in blocks of BITPACKING_ALGORITHM_GROUP_SIZE, so we may scan some extra values.
+	const idx_t decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(scan_count + start_offset);
+	UnpackSelection(start, decompress_count);
+
 	layout.ValidateDictionaryIndices(*sel_vec, start_offset, scan_count);
+	auto result_data = FlatVector::Writer<string_t>(result, scan_count, result_offset);
 
 	// The dictionary already contains validated strings, so copy the selected string references into the flat result.
 	auto strings = dictionary->data.Values<string_t>();
@@ -255,11 +250,6 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 		}
 	}
 }
-
-template void CompressedStringScanState::ScanToFlatVector<false>(Vector &result, idx_t result_offset, idx_t start,
-                                                                 idx_t scan_count);
-template void CompressedStringScanState::ScanToFlatVector<true>(Vector &result, idx_t result_offset, idx_t start,
-                                                                idx_t scan_count);
 
 void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset,
                                                        idx_t start, idx_t scan_count) {
@@ -285,6 +275,25 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 	layout.ValidateDictionaryIndices(*sel_vec, 0, scan_count);
 
 	result.Dictionary(dictionary, *sel_vec, scan_count);
+}
+
+//===--------------------------------------------------------------------===//
+// Fetch
+//===--------------------------------------------------------------------===//
+void CompressedStringScanState::FetchRow(Vector &result, idx_t result_offset, idx_t row_id) {
+	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
+	D_ASSERT(result_offset < FlatVector::GetCapacity(result));
+
+	// Selections are encoded in whole groups, so unpack the group containing the requested row.
+	constexpr auto group_size = BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+	const auto start_offset = row_id % group_size;
+	UnpackSelection(row_id, group_size);
+
+	// Validate only the selected entry to avoid building the whole dictionary for one row.
+	const auto string_dict_index = sel_vec->get_index(start_offset);
+	const auto val = layout.ValidateAndGetEntry(string_dict_index);
+	auto result_data = FlatVector::Writer<string_t>(result, 1, result_offset);
+	result_data.WriteStringRef(val);
 }
 
 } // namespace duckdb

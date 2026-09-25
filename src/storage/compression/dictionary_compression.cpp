@@ -160,7 +160,7 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 	D_ASSERT(NumericCast<idx_t>(row_id) < segment.count.load());
 	// fetch a single row from the string segment
 	CompressedStringScanState scan_state(state.GetOrInsertHandle(segment), segment);
-	scan_state.ScanToFlatVector<true>(result, result_idx, NumericCast<idx_t>(row_id), 1);
+	scan_state.FetchRow(result, result_idx, NumericCast<idx_t>(row_id));
 }
 
 //===--------------------------------------------------------------------===//
