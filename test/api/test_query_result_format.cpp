@@ -339,6 +339,46 @@ TEST_CASE("A throw from the format on the retained path surfaces as the result's
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));
 }
 
+TEST_CASE("A throw while flushing a partial unit surfaces as the result's error", "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(300001)"));
+	REQUIRE_NO_FAIL(con.Query("SET threads=4"));
+
+	// A cap no producer reaches, so the only format call that throws is the flush of a producer's last unit
+	auto make_format = []() {
+		auto format = make_shared_ptr<TestFormat>(10000000);
+		format->throw_in_partial_finish = true;
+		return format;
+	};
+	SECTION("retained by Complete, one producer") {
+		auto handle = con.Submit("SELECT i FROM range(100000) t(i)", make_format());
+		REQUIRE(!handle->HasError());
+		DrainWatchdog watchdog(con);
+		REQUIRE_NOTHROW(handle->Complete());
+		REQUIRE(handle->HasError());
+		REQUIRE(StringUtil::Contains(handle->GetError(), "TestFormat::FinishUnit of a partial unit"));
+	}
+	SECTION("retained by Query, several producers") {
+		unique_ptr<QueryResult> result;
+		REQUIRE_NOTHROW(result = con.Query("SELECT i FROM t", make_format()));
+		REQUIRE(result->HasError());
+		REQUIRE(StringUtil::Contains(result->GetError(), "TestFormat::FinishUnit of a partial unit"));
+	}
+	SECTION("drained") {
+		auto handle = con.Submit("SELECT i FROM t", make_format());
+		REQUIRE(!handle->HasError());
+		DrainWatchdog watchdog(con);
+		QueryResultStream<TestFormat> stream(std::move(handle));
+		while (stream.Fetch()) {
+		}
+		REQUIRE(stream.HasError());
+		REQUIRE(StringUtil::Contains(stream.GetError(), "TestFormat::FinishUnit of a partial unit"));
+	}
+	auto next = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(next, 0, {42}));
+}
+
 TEST_CASE("A retained result in a format keeps its units in order", "[api][query_result_format]") {
 	DuckDB db(nullptr);
 	Connection con(db);

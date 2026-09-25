@@ -182,7 +182,7 @@ SinkCombineResultType PhysicalResultSink::Combine(ExecutionContext &context, Ope
 		return SinkCombineResultType::BLOCKED;
 	}
 	if (CurrentLifetime(gstate) == ResultLifetime::RETAINED) {
-		return CombineRetained(gstate, lstate);
+		return CombineRetained(context.client, gstate, lstate);
 	}
 	return CombineDraining(gstate, lstate);
 }
@@ -196,16 +196,18 @@ SinkCombineResultType PhysicalResultSink::CombineDraining(ResultSinkGlobalState 
 	return SinkCombineResultType::FINISHED;
 }
 
-SinkCombineResultType PhysicalResultSink::CombineRetained(ResultSinkGlobalState &gstate,
+SinkCombineResultType PhysicalResultSink::CombineRetained(ClientContext &context, ResultSinkGlobalState &gstate,
                                                           ResultSinkLocalState &lstate) const {
-	// A producer whose partition held no rows never created its local collection
-	if (!lstate.collection) {
-		return SinkCombineResultType::FINISHED;
-	}
+	auto &buffered_data = *gstate.buffered_data;
 	annotated_lock_guard<annotated_mutex> l(gstate.glock);
 	if (!gstate.collection) {
-		gstate.collection = std::move(lstate.collection);
-	} else {
+		// Never a producer's own: Combine flushes the producer's partial unit here, inside its task, so a
+		// throwing format surfaces as the query's error
+		gstate.collection = buffered_data.Format().CreateCollection(context, buffered_data.FormatState(),
+		                                                            buffered_data.FormatContext());
+	}
+	// A producer whose partition held no rows never created its local collection
+	if (lstate.collection) {
 		gstate.collection->Combine(*lstate.collection);
 	}
 	return SinkCombineResultType::FINISHED;

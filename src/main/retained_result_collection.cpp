@@ -75,11 +75,7 @@ void ChunkRetainedCollection::Finalize() {
 	if (batch_ordered) {
 		collection = batched->FetchCollection();
 		batched.reset();
-		return;
 	}
-	// The first producer's instance becomes the result, whose append pins must not outlive the database
-	append_state = ColumnDataAppendState();
-	append_initialized = false;
 }
 
 idx_t ChunkRetainedCollection::Count() const {

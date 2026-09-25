@@ -190,6 +190,9 @@ public:
 			return std::move(unit);
 		}
 		if (lstate.rows < max_unit_rows) {
+			if (throw_in_partial_finish) {
+				throw InvalidInputException("TestFormat::FinishUnit of a partial unit");
+			}
 			gstate.Cast<TestFormatGlobalState>().partial_units++;
 		}
 		return Seal(lstate);
@@ -214,6 +217,8 @@ public:
 	atomic<bool> throw_in_append {false};
 	atomic<bool> throw_in_is_finished {false};
 	atomic<bool> throw_in_finish {false};
+	//! Throws only when a unit is finished short of the cap, at a batch boundary or a producer's end
+	atomic<bool> throw_in_partial_finish {false};
 
 private:
 	//! Takes whatever is currently accumulated, whether it reached the cap or not

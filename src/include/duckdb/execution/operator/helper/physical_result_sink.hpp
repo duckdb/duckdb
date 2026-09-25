@@ -80,7 +80,8 @@ private:
 	SinkResultType SinkRetained(ExecutionContext &context, ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
 	                            DataChunk &chunk) const;
 	SinkCombineResultType CombineDraining(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
-	SinkCombineResultType CombineRetained(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
+	SinkCombineResultType CombineRetained(ClientContext &context, ResultSinkGlobalState &gstate,
+	                                      ResultSinkLocalState &lstate) const;
 
 private:
 	//! The buffer created at submission, which also holds the retention decision
