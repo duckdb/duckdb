@@ -256,13 +256,15 @@ TEST_CASE("Test Table Function named parameters in C API", "[capi]") {
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 126);
 	result = tester.Query("SELECT * FROM my_multiplier_function(2, my_parameter := 'three')");
 	REQUIRE(result->HasError());
-	// a string computed from an expression is no literal, even though it is folded to a constant
+	REQUIRE(duckdb::StringUtil::Contains(result->ErrorMessage(),
+	                                     "Could not cast value 'three' to named parameter \"my_parameter\""));
+	// the cast is an explicit one, so values no implicit cast reaches are cast as well
 	result = tester.Query("SELECT * FROM my_multiplier_function(2, my_parameter := '3' || '')");
-	REQUIRE(result->HasError());
-	REQUIRE(duckdb::StringUtil::Contains(result->ErrorMessage(), "expected BIGINT"));
-	result = tester.Query("SELECT * FROM my_multiplier_function(2, my_parameter := 2.5::DOUBLE)");
-	REQUIRE(result->HasError());
-	REQUIRE(duckdb::StringUtil::Contains(result->ErrorMessage(), "expected BIGINT"));
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 126);
+	result = tester.Query("SELECT * FROM my_multiplier_function(2, my_parameter := 3.2::DOUBLE)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 126);
 
 	// the parameter added by duckdb_table_function_add_parameter is positional-only, so the synthetic name it is
 	// given cannot be used by a caller, while the one added by name still can

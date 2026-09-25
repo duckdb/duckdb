@@ -682,6 +682,11 @@ TEST_CASE("V2 table: parameter defaults, named arguments and varargs", "[capi_v2
 	REQUIRE(table_arg_probe.values[0] == 1);
 	REQUIRE(table_arg_probe.values[1] == 30);
 	REQUIRE(table_arg_probe.values[2] == 40);
+
+	// The bind callback receives no argument names, so a name no parameter declares is rejected rather than dropped.
+	duckdb_v2_result_handle result = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT * FROM my_args(1, 30, x := 40)", &result) != DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_result_destroy(&result);
 }
 
 // ===========================================================================

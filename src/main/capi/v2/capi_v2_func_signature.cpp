@@ -32,7 +32,8 @@ DUCKDB_V2_ERROR duckdb_v2_function_signature_set_varargs(duckdb_v2_function_sign
 
 	return WithErrorHandler(err, [&]() {
 		auto &signature = *Convert(sig);
-		duckdb::CAPIFunctionSignature::SetVarArgs(signature, *Convert(type));
+		// the v2 callbacks receive no argument names, so the varargs take positional arguments only
+		duckdb::CAPIFunctionSignature::SetArgs(signature, *Convert(type));
 	});
 }
 
