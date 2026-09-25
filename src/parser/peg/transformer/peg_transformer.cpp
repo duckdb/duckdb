@@ -132,7 +132,12 @@ void TransformStack::InitializeFrame(TransformStackFrame &frame) {
 	if (!frame.rule) {
 		throw InternalException("No registered data exists for rule '%s'", frame.parse_result.name);
 	}
+	// Extension factories can reenter the transformer during initialization.
+	auto depth_guard = transformer.StackCheck();
 	frame.process = frame.rule->StartTransform(transformer, frame.parse_result);
+	if (!frame.process->IsForwarding()) {
+		frame.depth_guard.emplace(std::move(depth_guard));
+	}
 }
 
 unique_ptr<TransformResultValue> TransformStack::ExecuteFrame(TransformStackFrame &frame) {

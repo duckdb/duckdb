@@ -1532,6 +1532,7 @@ void PEGTransformerFactory::InitializePrefixExpressionTrampoline(PEGTransformer 
                                                                  GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	auto &prefix_opt = list_pr.Child<OptionalParseResult>(0);
+	process.SetForwarding(!prefix_opt.HasResult());
 	idx_t prefix_count = 0;
 	if (prefix_opt.HasResult()) {
 		auto &prefix_repeat = prefix_opt.GetResult().Cast<RepeatParseResult>();
