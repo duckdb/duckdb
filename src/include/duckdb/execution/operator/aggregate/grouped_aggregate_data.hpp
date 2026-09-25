@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/operator/aggregate/aggregate_input_layout.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -28,6 +29,7 @@ public:
 
 	//! The aggregates that have to be computed
 	vector<unique_ptr<Expression>> aggregates;
+	shared_ptr<const AggregateInputLayout> input_layout;
 	//! The payload types
 	vector<LogicalType> payload_types;
 	//! The aggregate return types

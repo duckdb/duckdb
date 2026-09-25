@@ -22,10 +22,11 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
                                                      vector<LogicalType> group_types, vector<LogicalType> payload_types,
                                                      const vector<BoundAggregateExpression *> &bindings,
                                                      idx_t initial_capacity, idx_t radix_bits,
-                                                     TupleDataValidityType group_validity)
+                                                     TupleDataValidityType group_validity,
+                                                     shared_ptr<const AggregateInputLayout> input_layout_p)
     : GroupedAggregateHashTable(context, allocator, std::move(group_types), std::move(payload_types),
                                 AggregateObject::CreateAggregateObjects(bindings), initial_capacity, radix_bits,
-                                group_validity) {
+                                group_validity, std::move(input_layout_p)) {
 }
 
 GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, Allocator &allocator,
@@ -48,15 +49,14 @@ AggregateHTProbeState::AggregateHTProbeState()
 AggregateHTLookupState::AggregateHTLookupState() : missing_vector(STANDARD_VECTOR_SIZE) {
 }
 
-GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, Allocator &allocator,
-                                                     vector<LogicalType> group_types_p,
-                                                     vector<LogicalType> payload_types_p,
-                                                     vector<AggregateObject> aggregate_objects_p,
-                                                     idx_t initial_capacity, idx_t radix_bits,
-                                                     TupleDataValidityType group_validity)
-    : BaseAggregateHashTable(context_p, allocator, aggregate_objects_p, std::move(payload_types_p)), context(context_p),
-      radix_bits(radix_bits), count(0), capacity(0), sink_count(0), skip_lookups(false), enable_hll(false),
-      aggregate_allocator(make_shared_ptr<ArenaAllocator>(allocator)), state(*aggregate_allocator) {
+GroupedAggregateHashTable::GroupedAggregateHashTable(
+    ClientContext &context_p, Allocator &allocator, vector<LogicalType> group_types_p,
+    vector<LogicalType> payload_types_p, vector<AggregateObject> aggregate_objects_p, idx_t initial_capacity,
+    idx_t radix_bits, TupleDataValidityType group_validity, shared_ptr<const AggregateInputLayout> input_layout_p)
+    : BaseAggregateHashTable(context_p, allocator, aggregate_objects_p, std::move(payload_types_p),
+                             std::move(input_layout_p)),
+      context(context_p), radix_bits(radix_bits), count(0), capacity(0), sink_count(0), skip_lookups(false),
+      enable_hll(false), aggregate_allocator(make_shared_ptr<ArenaAllocator>(allocator)), state(*aggregate_allocator) {
 	state.owner = this;
 	state.initialized = true;
 	clustered_state.all_clustered = AllAggregatesClustered(aggregate_objects_p);
@@ -681,7 +681,7 @@ bool GroupedAggregateHashTable::UpdateAggregatesClustered(DataChunk &payload, co
 	const bool skip_addresses = clustered_state.all_clustered;
 	auto &aggregates = layout_ptr->GetAggregates();
 	RowOperations::UpdateStatesClustered(state.row_state, aggregates, &filter_set, &filter, state.addresses, payload,
-	                                     clustered, skip_addresses);
+	                                     *input_layout, clustered, skip_addresses);
 	return true;
 }
 
@@ -694,12 +694,10 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 
 	auto &aggregates = layout_ptr->GetAggregates();
 	idx_t filter_idx = 0;
-	idx_t payload_idx = 0;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggr = aggregates[i];
 		if (filter_idx >= filter.size() || i < filter[filter_idx]) {
 			// Skip all the aggregates that are not in the filter
-			payload_idx += aggr.child_count;
 			VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size));
 			continue;
 		}
@@ -707,13 +705,12 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 
 		if (aggr.aggr_type != AggregateType::DISTINCT && aggr.filter) {
 			RowOperations::UpdateFilteredStates(state.row_state, filter_set.GetFilterData(i), aggr, state.addresses,
-			                                    payload, payload_idx);
+			                                    payload, input_layout->Arguments(payload, i));
 		} else {
-			RowOperations::UpdateStates(state.row_state, aggr, state.addresses, payload, payload_idx);
+			RowOperations::UpdateStates(state.row_state, aggr, state.addresses, input_layout->Arguments(payload, i));
 		}
 
 		// Move to the next aggregate
-		payload_idx += aggr.child_count;
 		VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size));
 		filter_idx++;
 	}
@@ -746,8 +743,9 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 #ifdef DEBUG
 	groups.Verify(context.db);
 	D_ASSERT(groups.ColumnCount() + 1 == layout_ptr->ColumnCount());
+	D_ASSERT(result.ColumnCount() == layout_ptr->GetAggregates().size());
 	for (idx_t i = 0; i < result.ColumnCount(); i++) {
-		D_ASSERT(result.data[i].GetType() == payload_types[i]);
+		D_ASSERT(result.data[i].GetType() == layout_ptr->GetAggregates()[i].function.GetReturnType());
 	}
 #endif
 

@@ -2537,13 +2537,11 @@ static void ResetMarkJoinInfo(JoinHashTable &ht) {
 	auto &info = ht.mark_join_info;
 	if (!info.correlated_types.empty()) {
 		vector<AggregateObject> correlated_aggregates;
-		vector<LogicalType> payload_types;
+		vector<LogicalType> payload_types {ht.condition_types[info.correlated_types.size()]};
 		correlated_aggregates.reserve(info.correlated_aggregates.size());
-		payload_types.reserve(info.correlated_aggregates.size());
 		for (auto &expr : info.correlated_aggregates) {
 			auto &aggr = expr->Cast<BoundAggregateExpression>();
 			correlated_aggregates.emplace_back(aggr);
-			payload_types.push_back(aggr.GetReturnType());
 		}
 		auto &allocator = BufferAllocator::Get(ht.context);
 		info.correlated_counts = make_uniq<GroupedAggregateHashTable>(ht.context, allocator, info.correlated_types,
