@@ -624,6 +624,73 @@ TEST_CASE("Table function options survive plans written for older versions", "[s
 	connection.Rollback();
 }
 
+TEST_CASE("Plans written for older versions select overloads with required keyword-only parameters",
+          "[serialization][function_invocation]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	connection.BeginTransaction();
+	auto &context = *connection.context;
+	// shaped like repeat_row, whose "num_rows" an older version recorded only as a named parameter - also declared as
+	// ANY, a type that has no value of its own
+	vector<TableFunction> functions;
+	for (auto &type : vector<LogicalType> {LogicalType::BIGINT, LogicalType::ANY}) {
+		TableFunction function(Identifier("legacy_required_keyword_" + StringUtil::Lower(type.ToString())),
+		                       FunctionSignature().AddArgs("args", LogicalType::ANY).AddKeywordOnly("num_rows", type),
+		                       nullptr);
+		function.bind = [](ClientContext &, TableFunctionBindInput &input, vector<LogicalType> &types,
+		                   vector<Identifier> &names) -> unique_ptr<FunctionData> {
+			auto entry = input.named_parameters.find("num_rows");
+			if (entry == input.named_parameters.end()) {
+				throw BinderException("num_rows is required");
+			}
+			types.push_back(LogicalType::BIGINT);
+			names.emplace_back("num_rows");
+			return make_uniq<KeywordScanBindData>(entry->second);
+		};
+		CreateTableFunctionInfo info(function);
+		Catalog::GetSystemCatalog(context).CreateFunction(context, info);
+		functions.push_back(std::move(function));
+	}
+
+	bool pass_num_rows = true;
+	SECTION("Passed") {
+	}
+	SECTION("Left out") {
+		pass_num_rows = false;
+	}
+	for (auto &function : functions) {
+		CAPTURE(function.GetName().GetIdentifierName());
+		LogicalGet get(TableIndex(0), BoundTableFunction(function), make_uniq<KeywordScanBindData>(Value::BIGINT(3)),
+		               {LogicalType::BIGINT}, {Identifier("num_rows")});
+		get.parameters = {Value::INTEGER(1)};
+		if (pass_num_rows) {
+			get.named_parameters["num_rows"] = Value::BIGINT(3);
+		}
+
+		for (const auto &version : {"v1.3.0", "v1.4.0", "v1.5.0"}) {
+			CAPTURE(version);
+			SerializationOptions options;
+			options.storage_compatibility = StorageCompatibility::FromString(version);
+			MemoryStream stream(Allocator::Get(context));
+			BinarySerializer::Serialize(get, stream, options);
+			stream.Rewind();
+			bound_parameter_map_t parameters;
+			if (!pass_num_rows) {
+				// the bind still rejects the call, as it did when the plan was written
+				REQUIRE_THROWS_WITH(BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters),
+				                    Catch::Matchers::Contains("num_rows is required"));
+				continue;
+			}
+			auto copy = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
+			auto &copied_get = copy->Cast<LogicalGet>();
+			REQUIRE(copied_get.parameters == get.parameters);
+			REQUIRE(copied_get.named_parameters == get.named_parameters);
+			REQUIRE(copied_get.bind_data->Cast<KeywordScanBindData>().value == Value::BIGINT(3));
+		}
+	}
+	connection.Rollback();
+}
+
 TEST_CASE("Table function defaults survive serialization", "[serialization][function_invocation]") {
 	DuckDB db(nullptr);
 	Connection connection(db);

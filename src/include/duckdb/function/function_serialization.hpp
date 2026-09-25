@@ -187,6 +187,27 @@ public:
 		}
 	}
 
+	//! Selects the overload of a plan written before v2.0.0, which records its named arguments only as the operator's
+	//! named parameters. Required keyword-only parameters are treated as if they had a default - the bind receives
+	//! those named parameters and rejects a missing one, as it did when the plan was written
+	static optional_idx SelectWithoutNamedArguments(FunctionBinder &binder, const Identifier &name,
+	                                                const TableFunctionSet &functions,
+	                                                const vector<LogicalType> &positional_types) {
+		auto relaxed = functions;
+		relaxed.ApplyToFunctions([](TableFunction &function) {
+			auto &signature = function.GetSignature();
+			for (idx_t i = 0; i < signature.GetParameterCount(); i++) {
+				auto &param = signature.GetParameter(i);
+				if (param.GetKind() == FunctionParameterKind::KEYWORD_ONLY && !param.HasDefaultValue()) {
+					// selection only checks that there is a default - an untyped NULL suits a parameter of any type
+					param.SetDefaultValue(Value());
+				}
+			}
+		});
+		ErrorData error;
+		return binder.BindFunction(name, relaxed, positional_types, {}, error);
+	}
+
 	//! Deserializes a table function, and whether the plan holds its bind data. Without it, the caller binds again
 	static pair<BoundTableFunction, bool> DeserializeTableFunction(Deserializer &deserializer) {
 		auto &context = deserializer.Get<ClientContext &>();
@@ -218,6 +239,9 @@ public:
 		FunctionBinder binder(context);
 		ErrorData error;
 		auto func_idx = binder.BindFunction(qualified_name.Name(), functions, positional_types, keyword_types, error);
+		if (!func_idx.IsValid() && named_arguments.empty()) {
+			func_idx = SelectWithoutNamedArguments(binder, qualified_name.Name(), functions, positional_types);
+		}
 		if (!func_idx.IsValid()) {
 			throw SerializationException("Failed to find function %s(%s)\n%s", qualified_name.ToString(),
 			                             StringUtil::ToString(arguments, ","), error.RawMessage());
