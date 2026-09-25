@@ -94,7 +94,7 @@ index 8f25e18..9387cb9 100644
  	deserialize = PostgresBinaryReadDeserialize;
  }
 diff --git a/src/postgres_query.cpp b/src/postgres_query.cpp
-index 77a2cfa..68cca46 100644
+index f43eafe..7ff4fd7 100644
 --- a/src/postgres_query.cpp
 +++ b/src/postgres_query.cpp
 @@ -163,12 +163,22 @@ static unique_ptr<FunctionData> PGQueryBind(ClientContext &context, TableFunctio
@@ -138,10 +138,10 @@ index 77a2cfa..68cca46 100644
  	init_global = scan_function.init_global;
  	init_local = scan_function.init_local;
 diff --git a/src/postgres_scanner.cpp b/src/postgres_scanner.cpp
-index 49d8225..38b142b 100644
+index cf80e97..a6a5186 100644
 --- a/src/postgres_scanner.cpp
 +++ b/src/postgres_scanner.cpp
-@@ -596,11 +596,12 @@ double PostgresScanProgress(ClientContext &context, const FunctionData *bind_dat
+@@ -601,11 +601,12 @@ double PostgresScanProgress(ClientContext &context, const FunctionData *bind_dat
  }
  
  static void PostgresScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
@@ -156,7 +156,7 @@ index 49d8225..38b142b 100644
  	throw NotImplementedException("PostgresScanDeserialize");
  }
  
-@@ -613,8 +614,12 @@ static BindInfo PostgresGetBindInfo(const optional_ptr<FunctionData> bind_data_p
+@@ -621,8 +622,12 @@ static BindInfo PostgresGetBindInfo(const optional_ptr<FunctionData> bind_data_p
  }
  
  PostgresScanFunction::PostgresScanFunction()
@@ -171,7 +171,7 @@ index 49d8225..38b142b 100644
  	to_string = PostgresScanToString;
  	serialize = PostgresScanSerialize;
  	deserialize = PostgresScanDeserialize;
-@@ -627,7 +632,11 @@ PostgresScanFunction::PostgresScanFunction()
+@@ -635,7 +640,11 @@ PostgresScanFunction::PostgresScanFunction()
  }
  
  PostgresScanFunctionFilterPushdown::PostgresScanFunctionFilterPushdown()
@@ -217,10 +217,10 @@ index 156678c..7e60342 100644
  			bind_data.requires_materialization = true;
  			bind_data.max_threads = 1;
 diff --git a/src/storage/postgres_optimizer.cpp b/src/storage/postgres_optimizer.cpp
-index 8c0175f..d7320f7 100644
+index a480660..75f7a02 100644
 --- a/src/storage/postgres_optimizer.cpp
 +++ b/src/storage/postgres_optimizer.cpp
-@@ -23,7 +23,7 @@ static void GatherPostgresScans(LogicalOperator &op, PostgresOperators &result)
+@@ -26,7 +26,7 @@ static void GatherPostgresScans(LogicalOperator &op, PostgresOperators &result)
  	if (op.type == LogicalOperatorType::LOGICAL_GET) {
  		auto &get = op.Cast<LogicalGet>();
  		auto &table_scan = get.function;
@@ -229,32 +229,6 @@ index 8c0175f..d7320f7 100644
  			// not a postgres scan - skip
  			return;
  		}
-diff --git a/database-connector/src/optimizer/optimizer_util.cpp b/database-connector/src/optimizer/optimizer_util.cpp
-index 19368cf..3a220e2 100644
---- a/database-connector/src/optimizer/optimizer_util.cpp
-+++ b/database-connector/src/optimizer/optimizer_util.cpp
-@@ -21,7 +21,7 @@ bool OptimizerUtil::FindExtensionGet(const std::string &table_scan_name, Logical
- 		return false;
- 	}
- 	auto &get = current.get().Cast<LogicalGet>();
--	if (get.function.name != table_scan_name) {
-+	if (get.function.GetName() != table_scan_name) {
- 		return false;
- 	}
- 	get_out = &get;
-diff --git a/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp b/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
-index bf9b87f..1a8f16d 100644
---- a/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
-+++ b/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
-@@ -312,7 +312,7 @@ void OrderByAndLimitOptimizer::Optimize(const OrderByAndLimitOptimizer::Config &
- 			return;
- 		}
- 		auto &get = child.get().Cast<LogicalGet>();
--		if (get.function.name != config.table_scan_name) {
-+		if (get.function.GetName() != config.table_scan_name) {
- 			return;
- 		}
- 		switch (limit.limit_val.Type()) {
 diff --git a/database-connector/src/functions/configure_pool.cpp b/database-connector/src/functions/configure_pool.cpp
 index 0ac9a34..e69b563 100644
 --- a/database-connector/src/functions/configure_pool.cpp
@@ -326,3 +300,29 @@ index abfdbcb..66eb3f5 100644
  	};
  
  	struct GlobalState : public duckdb::GlobalTableFunctionState {};
+diff --git a/database-connector/src/optimizer/optimizer_util.cpp b/database-connector/src/optimizer/optimizer_util.cpp
+index 19368cf..3a220e2 100644
+--- a/database-connector/src/optimizer/optimizer_util.cpp
++++ b/database-connector/src/optimizer/optimizer_util.cpp
+@@ -21,7 +21,7 @@ bool OptimizerUtil::FindExtensionGet(const std::string &table_scan_name, Logical
+ 		return false;
+ 	}
+ 	auto &get = current.get().Cast<LogicalGet>();
+-	if (get.function.name != table_scan_name) {
++	if (get.function.GetName() != table_scan_name) {
+ 		return false;
+ 	}
+ 	get_out = &get;
+diff --git a/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp b/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
+index bf9b87f..1a8f16d 100644
+--- a/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
++++ b/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
+@@ -312,7 +312,7 @@ void OrderByAndLimitOptimizer::Optimize(const OrderByAndLimitOptimizer::Config &
+ 			return;
+ 		}
+ 		auto &get = child.get().Cast<LogicalGet>();
+-		if (get.function.name != config.table_scan_name) {
++		if (get.function.GetName() != config.table_scan_name) {
+ 			return;
+ 		}
+ 		switch (limit.limit_val.Type()) {

@@ -110,10 +110,10 @@ index 7366611..c95cbdc 100644
  	// fun.filter_prune = true;
  	return fun;
 diff --git a/src/quack_scan_from_client.cpp b/src/quack_scan_from_client.cpp
-index d5a7310..c58313a 100644
+index 16094c8..2f7fbb1 100644
 --- a/src/quack_scan_from_client.cpp
 +++ b/src/quack_scan_from_client.cpp
-@@ -243,10 +243,13 @@ static OperatorPartitionData QuackScanFromClientGetPartitionData(ClientContext &
+@@ -244,10 +244,13 @@ static OperatorPartitionData QuackScanFromClientGetPartitionData(ClientContext &
  }
  
  TableFunction QuackScanFromClientFunction::GetFunction() {
