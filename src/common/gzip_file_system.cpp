@@ -502,11 +502,12 @@ string GZipFileSystem::UncompressGZIPString(const char *data, idx_t size) {
 	}
 
 	if (gzip_hdr[3] & GZIP_FLAG_NAME) {
-		char c;
-		do {
-			c = *body_ptr;
-			body_ptr++;
-		} while (c != '\0' && static_cast<idx_t>(body_ptr - data) < size);
+		auto end_ptr = data + size;
+		while (body_ptr < end_ptr) {
+			if (*body_ptr++ == '\0') {
+				break;
+			}
+		}
 	}
 
 	// stream is now set to beginning of payload data
@@ -527,6 +528,7 @@ string GZipFileSystem::UncompressGZIPString(const char *data, idx_t size) {
 		mz_stream_ptr->avail_out = sizeof(decompress_buffer);
 		status = mz_inflate(mz_stream_ptr.get(), duckdb_miniz::MZ_NO_FLUSH);
 		if (status != duckdb_miniz::MZ_STREAM_END && status != duckdb_miniz::MZ_OK) {
+			duckdb_miniz::mz_inflateEnd(mz_stream_ptr.get());
 			throw IOException("Failed to uncompress");
 		}
 		decompressed.append(char_ptr_cast(decompress_buffer), mz_stream_ptr->total_out - decompressed.size());
