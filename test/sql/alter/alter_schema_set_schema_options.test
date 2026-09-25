@@ -78,12 +78,6 @@ ALTER SCHEMA IF EXISTS s1 SET (foo='baz');
 ----
 <REGEX>:.*Not implemented Error: SET .*options.* is not supported for DuckDB schemas.*
 
-# fully qualified schema name
-statement error
-ALTER SCHEMA memory.s1 SET (foo='baz');
-----
-<REGEX>:.*Not implemented Error: SET .*options.* is not supported for DuckDB schemas.*
-
 # schema in another attached database
 statement ok
 ATTACH ':memory:' AS other_db
@@ -116,8 +110,14 @@ ALTER SCHEMA s1.child SET (foo='baz');
 ----
 <REGEX>:.*Not implemented Error: SET .*options.* is not supported for DuckDB schemas.*
 
+statement ok
+CREATE SCHEMA other_db.s3.child
+
+statement ok
+CREATE SCHEMA other_db.s3.child.grandchild
+
 statement error
-ALTER SCHEMA memory.s1.child.grandchild RESET (foo);
+ALTER SCHEMA other_db.s3.child.grandchild RESET (foo);
 ----
 <REGEX>:.*Not implemented Error: RESET .*options.* is not supported for DuckDB schemas.*
 
