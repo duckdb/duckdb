@@ -14,7 +14,6 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
                                              vector<unique_ptr<Expression>> expressions,
                                              vector<unsafe_vector<ProjectionIndex>> grouping_functions) {
 	InitializeGroupbyGroups(std::move(groups));
-	vector<LogicalType> payload_types_filters;
 
 	SetGroupingFunctions(grouping_functions);
 
@@ -26,21 +25,16 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 		bindings.push_back(&aggr);
 
 		aggregate_return_types.push_back(aggr.GetReturnType());
-		for (auto &child : aggr.GetChildren()) {
-			payload_types.push_back(child->GetReturnType());
-		}
 		if (aggr.GetFilter()) {
 			filter_count++;
-			payload_types_filters.push_back(aggr.GetFilter()->GetReturnType());
 		}
 		if (!aggr.Function().HasStateCombineCallback()) {
 			throw InternalException("Aggregate function %s is missing a combine method", aggr.Function().GetName());
 		}
 		aggregates.push_back(std::move(expr));
 	}
-	for (const auto &pay_filters : payload_types_filters) {
-		payload_types.push_back(pay_filters);
-	}
+	input_layout = make_uniq<AggregateInputLayout>(bindings);
+	payload_types = input_layout->Payload().GetTypes();
 }
 
 void GroupedAggregateData::InitializeDistinct(const unique_ptr<Expression> &aggregate,

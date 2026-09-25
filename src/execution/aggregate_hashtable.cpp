@@ -681,7 +681,7 @@ bool GroupedAggregateHashTable::UpdateAggregatesClustered(DataChunk &payload, co
 	const bool skip_addresses = clustered_state.all_clustered;
 	auto &aggregates = layout_ptr->GetAggregates();
 	RowOperations::UpdateStatesClustered(state.row_state, aggregates, &filter_set, &filter, state.addresses, payload,
-	                                     clustered, skip_addresses);
+	                                     input_layout, clustered, skip_addresses);
 	return true;
 }
 
@@ -694,12 +694,10 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 
 	auto &aggregates = layout_ptr->GetAggregates();
 	idx_t filter_idx = 0;
-	idx_t payload_idx = 0;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggr = aggregates[i];
 		if (filter_idx >= filter.size() || i < filter[filter_idx]) {
 			// Skip all the aggregates that are not in the filter
-			payload_idx += aggr.child_count;
 			VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size));
 			continue;
 		}
@@ -707,13 +705,12 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 
 		if (aggr.aggr_type != AggregateType::DISTINCT && aggr.filter) {
 			RowOperations::UpdateFilteredStates(state.row_state, filter_set.GetFilterData(i), aggr, state.addresses,
-			                                    payload, payload_idx);
+			                                    payload, input_layout.Arguments(payload, i));
 		} else {
-			RowOperations::UpdateStates(state.row_state, aggr, state.addresses, payload, payload_idx);
+			RowOperations::UpdateStates(state.row_state, aggr, state.addresses, input_layout.Arguments(payload, i));
 		}
 
 		// Move to the next aggregate
-		payload_idx += aggr.child_count;
 		VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size));
 		filter_idx++;
 	}

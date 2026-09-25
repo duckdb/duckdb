@@ -96,7 +96,7 @@ static vector<LogicalType> CreateGroupChunkTypes(vector<unique_ptr<Expression>> 
 }
 
 bool PhysicalHashAggregate::CanSkipRegularSink() const {
-	if (!filter_indexes.empty()) {
+	if (grouped_aggregate_data.filter_count > 0) {
 		// If we have filters, we can't skip the regular sink, because we might lose groups otherwise.
 		return false;
 	}
@@ -149,34 +149,12 @@ PhysicalHashAggregate::PhysicalHashAggregate(PhysicalPlan &physical_plan, Client
 	                                         std::move(grouping_functions_p));
 
 	auto &aggregates = grouped_aggregate_data.aggregates;
-	// filter_indexes must be pre-built, not lazily instantiated in parallel...
-	// Because everything that lives in this class should be read-only at execution time
-	idx_t aggregate_input_idx = 0;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
-		auto &aggregate = aggregates[i];
-		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-		aggregate_input_idx += aggr.GetChildren().size();
-		if (aggr.GetAggregateType() == AggregateType::DISTINCT) {
+		auto &aggr = aggregates[i]->Cast<BoundAggregateExpression>();
+		if (aggr.IsDistinct()) {
 			distinct_filter.push_back(i);
-		} else if (aggr.GetAggregateType() == AggregateType::NON_DISTINCT) {
+		} else {
 			non_distinct_filter.push_back(i);
-		} else { // LCOV_EXCL_START
-			throw NotImplementedException("AggregateType not implemented in PhysicalHashAggregate");
-		} // LCOV_EXCL_STOP
-	}
-
-	for (idx_t i = 0; i < aggregates.size(); i++) {
-		auto &aggregate = aggregates[i];
-		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-		if (aggr.GetFilter()) {
-			auto &filter_ref = *aggr.GetFilter();
-			auto &bound_ref_expr = filter_ref.Cast<BoundReferenceExpression>();
-			if (!filter_indexes.count(filter_ref)) {
-				// Replace the bound reference expression's index with the corresponding index of the payload chunk
-				filter_indexes[filter_ref] = bound_ref_expr.Index();
-				bound_ref_expr.IndexMutable() = aggregate_input_idx;
-			}
-			aggregate_input_idx++;
 		}
 	}
 
@@ -199,23 +177,10 @@ public:
 			auto &grouping = op.groupings[i];
 			grouping_states.emplace_back(grouping, context);
 		}
-		vector<LogicalType> filter_types;
-		for (auto &aggr : op.grouped_aggregate_data.aggregates) {
-			auto &aggregate = aggr->Cast<BoundAggregateExpression>();
-			for (auto &child : aggregate.GetChildren()) {
-				payload_types.push_back(child->GetReturnType());
-			}
-			if (aggregate.GetFilter()) {
-				filter_types.push_back(aggregate.GetFilter()->GetReturnType());
-			}
-		}
-		payload_types.reserve(payload_types.size() + filter_types.size());
-		payload_types.insert(payload_types.end(), filter_types.begin(), filter_types.end());
 	}
 
 	const PhysicalHashAggregate &op;
 	vector<HashAggregateGroupingGlobalState> grouping_states;
-	vector<LogicalType> payload_types;
 	//! Whether or not the aggregate is finished
 	bool finished = false;
 
@@ -248,7 +213,9 @@ public:
 
 class HashAggregateLocalSinkState : public LocalSinkState {
 public:
-	HashAggregateLocalSinkState(const PhysicalHashAggregate &op, ExecutionContext &context) : op(op) {
+	HashAggregateLocalSinkState(const PhysicalHashAggregate &op, ExecutionContext &context)
+	    : op(op), input_projection(op.grouped_aggregate_data.input_layout->CreateProjection(
+	                  op.children[0].get().GetTypes(), op.grouped_aggregate_data.bindings)) {
 		auto &payload_types = op.grouped_aggregate_data.payload_types;
 		if (!payload_types.empty()) {
 			aggregate_input_chunk.InitializeEmpty(payload_types);
@@ -266,10 +233,11 @@ public:
 			aggregate_objects.emplace_back(&aggr);
 		}
 
-		filter_set.Initialize(context.client, aggregate_objects, payload_types);
+		filter_set.Initialize(context.client, aggregate_objects, op.children[0].get().GetTypes());
 	}
 
 	const PhysicalHashAggregate &op;
+	ChunkProjection input_projection;
 	DataChunk aggregate_input_chunk;
 	vector<HashAggregateGroupingLocalState> grouping_states;
 	AggregateFilterDataSet filter_set;
@@ -358,22 +326,9 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Data
 		OperatorSinkInput sink_input {radix_global_sink, radix_local_sink, interrupt_state};
 
 		if (aggregate.GetFilter()) {
-			DataChunk filter_chunk;
 			auto &filtered_data = sink.filter_set.GetFilterData(idx);
-			filter_chunk.InitializeEmpty(filtered_data.filtered_payload.GetTypes());
-
-			// Add the filter Vector (BOOL)
-			auto &filter_ref = *aggregate.GetFilter();
-			auto it = filter_indexes.find(filter_ref);
-			D_ASSERT(it != filter_indexes.end());
-			D_ASSERT(it->second < chunk.data.size());
-			auto &filter_bound_ref = filter_ref.Cast<BoundReferenceExpression>();
-			filter_chunk.data[filter_bound_ref.Index()].Reference(chunk.data[it->second]);
-
-			// We cant use the AggregateFilterData::ApplyFilter method, because the chunk we need to
-			// apply the filter to also has the groups, and the filtered_data.filtered_payload does not have those.
 			SelectionVector sel_vec(STANDARD_VECTOR_SIZE);
-			idx_t count = filtered_data.filter_executor.SelectExpression(filter_chunk, sel_vec);
+			idx_t count = filtered_data.filter_executor.SelectExpression(chunk, sel_vec);
 
 			if (count == 0) {
 				continue;
@@ -426,31 +381,8 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk 
 	}
 
 	DataChunk &aggregate_input_chunk = local_state.aggregate_input_chunk;
-	auto &aggregates = grouped_aggregate_data.aggregates;
-	idx_t aggregate_input_idx = 0;
+	local_state.input_projection.Reference(chunk, aggregate_input_chunk);
 
-	// Populate the aggregate child vectors
-	for (auto &aggregate : aggregates) {
-		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-		for (auto &child_expr : aggr.GetChildren()) {
-			D_ASSERT(child_expr->GetExpressionType() == ExpressionType::BOUND_REF);
-			auto &bound_ref_expr = child_expr->Cast<BoundReferenceExpression>();
-			D_ASSERT(bound_ref_expr.Index() < chunk.data.size());
-			aggregate_input_chunk.data[aggregate_input_idx++].Reference(chunk.data[bound_ref_expr.Index()]);
-		}
-	}
-	// Populate the filter vectors
-	for (auto &aggregate : aggregates) {
-		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-		if (aggr.GetFilter()) {
-			auto it = filter_indexes.find(*aggr.GetFilter());
-			D_ASSERT(it != filter_indexes.end());
-			D_ASSERT(it->second < chunk.data.size());
-			aggregate_input_chunk.data[aggregate_input_idx++].Reference(chunk.data[it->second]);
-		}
-	}
-
-	aggregate_input_chunk.SetChildCardinality(chunk.size());
 	aggregate_input_chunk.Verify(context.client.db);
 
 	// For every grouping set there is one radix_table
@@ -635,8 +567,6 @@ private:
 	unique_ptr<LocalSourceState> radix_table_lstate;
 	bool blocked = false;
 	idx_t aggregation_idx = 0;
-	idx_t payload_idx = 0;
-	idx_t next_payload_idx = 0;
 };
 
 void HashAggregateDistinctFinalizeEvent::Schedule() {
@@ -696,8 +626,6 @@ TaskExecutionResult HashAggregateDistinctFinalizeTask::ExecuteTask(TaskExecution
 		}
 		D_ASSERT(res == TaskExecutionResult::TASK_FINISHED);
 		aggregation_idx = 0;
-		payload_idx = 0;
-		next_payload_idx = 0;
 		local_sink_state = nullptr;
 	}
 	event->FinishTask();
@@ -737,21 +665,14 @@ TaskExecutionResult HashAggregateDistinctFinalizeTask::AggregateDistinctGrouping
 	const idx_t group_by_size = op.grouped_aggregate_data.groups.size();
 
 	DataChunk aggregate_input_chunk;
-	if (!gstate.payload_types.empty()) {
-		aggregate_input_chunk.Initialize(executor.context, gstate.payload_types);
-	}
+	auto &input_layout = *op.grouped_aggregate_data.input_layout;
+	aggregate_input_chunk.Initialize(executor.context, input_layout.Payload().GetTypes());
 
 	const auto &finalize_event = event->Cast<HashAggregateDistinctFinalizeEvent>();
 
 	auto &agg_idx = aggregation_idx;
 	for (; agg_idx < op.grouped_aggregate_data.aggregates.size(); agg_idx++) {
 		auto &aggregate = aggregates[agg_idx]->Cast<BoundAggregateExpression>();
-
-		if (!blocked) {
-			// Forward the payload idx
-			payload_idx = next_payload_idx;
-			next_payload_idx = payload_idx + aggregate.GetChildren().size();
-		}
 
 		// If aggregate is not distinct, skip it
 		if (!distinct_data.IsDistinct(agg_idx)) {
@@ -797,8 +718,9 @@ TaskExecutionResult HashAggregateDistinctFinalizeTask::AggregateDistinctGrouping
 			}
 
 			for (idx_t child_idx = 0; child_idx < grouped_aggregate_data.groups.size() - group_by_size; child_idx++) {
-				aggregate_input_chunk.data[payload_idx + child_idx].Reference(
-				    output_chunk.data[group_by_size + child_idx]);
+				input_layout.Arguments(aggregate_input_chunk, agg_idx)
+				    .Column(child_idx)
+				    .Reference(output_chunk.data[group_by_size + child_idx]);
 			}
 			aggregate_input_chunk.SetChildCardinality(output_chunk.size());
 

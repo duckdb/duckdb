@@ -11,6 +11,7 @@ add_library_unity(
   cast_helpers.cpp
   conflict_manager.cpp
   conflict_info.cpp
+  chunk_layout.cpp
   data_chunk.cpp
   date.cpp
   decimal.cpp

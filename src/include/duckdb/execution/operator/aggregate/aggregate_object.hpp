@@ -15,6 +15,7 @@ namespace duckdb {
 
 class BoundAggregateExpression;
 class BoundWindowExpression;
+class AggregateInputLayout;
 
 struct FunctionDataWrapper {
 	explicit FunctionDataWrapper(unique_ptr<FunctionData> function_data_p) : function_data(std::move(function_data_p)) {
@@ -50,11 +51,12 @@ public:
 };
 
 struct AggregateFilterData {
-	AggregateFilterData(ClientContext &context, const Expression &filter_expr,
-	                    const vector<LogicalType> &payload_types);
+	AggregateFilterData(ClientContext &context, const Expression &filter_expr, const vector<LogicalType> &payload_types,
+	                    optional_idx filter_column = optional_idx());
 
 	idx_t ApplyFilter(DataChunk &payload);
 
+	unique_ptr<Expression> mapped_filter;
 	ExpressionExecutor filter_executor;
 	DataChunk filtered_payload;
 	SelectionVector true_sel;
@@ -67,7 +69,8 @@ struct AggregateFilterDataSet {
 
 public:
 	void Initialize(ClientContext &context, const vector<AggregateObject> &aggregates,
-	                const vector<LogicalType> &payload_types);
+	                const vector<LogicalType> &payload_types,
+	                optional_ptr<const AggregateInputLayout> layout = nullptr);
 
 	AggregateFilterData &GetFilterData(idx_t aggr_idx);
 };

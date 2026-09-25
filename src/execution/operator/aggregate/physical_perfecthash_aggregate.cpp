@@ -31,48 +31,15 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(PhysicalPlan &physica
 		group_types.push_back(expr->GetReturnType());
 	}
 
-	vector<BoundAggregateExpression *> bindings;
-	vector<LogicalType> payload_types_filters;
 	for (auto &expr : aggregates) {
-		D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-		D_ASSERT(expr->IsAggregate());
 		auto &aggr = expr->Cast<BoundAggregateExpression>();
-		bindings.push_back(&aggr);
-
 		D_ASSERT(!aggr.IsDistinct());
 		D_ASSERT(aggr.Function().HasStateCombineCallback());
-		for (auto &child : aggr.GetChildren()) {
-			payload_types.push_back(child->GetReturnType());
-		}
-		if (aggr.GetFilter()) {
-			payload_types_filters.push_back(aggr.GetFilter()->GetReturnType());
-		}
+		bindings.push_back(&aggr);
 	}
-	for (const auto &pay_filters : payload_types_filters) {
-		payload_types.push_back(pay_filters);
-	}
+	input_layout = make_uniq<AggregateInputLayout>(bindings);
+	payload_types = input_layout->Payload().GetTypes();
 	aggregate_objects = AggregateObject::CreateAggregateObjects(bindings);
-
-	// filter_indexes must be pre-built, not lazily instantiated in parallel...
-	idx_t aggregate_input_idx = 0;
-	for (auto &aggregate : aggregates) {
-		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-		aggregate_input_idx += aggr.GetChildren().size();
-	}
-	for (auto &aggregate : aggregates) {
-		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-		if (aggr.GetFilter()) {
-			auto &filter_ref = *aggr.GetFilter();
-			auto &bound_ref_expr = filter_ref.Cast<BoundReferenceExpression>();
-			auto it = filter_indexes.find(filter_ref);
-			if (it == filter_indexes.end()) {
-				filter_indexes[filter_ref] = bound_ref_expr.Index();
-				bound_ref_expr.IndexMutable() = aggregate_input_idx++;
-			} else {
-				++aggregate_input_idx;
-			}
-		}
-	}
 }
 
 unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(Allocator &allocator,
@@ -99,7 +66,8 @@ public:
 class PerfectHashAggregateLocalState : public LocalSinkState {
 public:
 	PerfectHashAggregateLocalState(const PhysicalPerfectHashAggregate &op, ExecutionContext &context)
-	    : ht(op.CreateHT(Allocator::Get(context.client), context.client)) {
+	    : ht(op.CreateHT(Allocator::Get(context.client), context.client)),
+	      input_projection(op.input_layout->CreateProjection(op.children[0].get().GetTypes(), op.bindings)) {
 		group_chunk.InitializeEmpty(op.group_types);
 		if (!op.payload_types.empty()) {
 			aggregate_input_chunk.InitializeEmpty(op.payload_types);
@@ -109,6 +77,7 @@ public:
 	//! The local aggregate hash table
 	unique_ptr<PerfectAggregateHashTable> ht;
 	DataChunk group_chunk;
+	ChunkProjection input_projection;
 	DataChunk aggregate_input_chunk;
 };
 
@@ -132,23 +101,7 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Dat
 		auto &bound_ref_expr = group->Cast<BoundReferenceExpression>();
 		group_chunk.data[group_idx].Reference(chunk.data[bound_ref_expr.Index()]);
 	}
-	idx_t aggregate_input_idx = 0;
-	for (auto &aggregate : aggregates) {
-		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-		for (auto &child_expr : aggr.GetChildren()) {
-			D_ASSERT(child_expr->GetExpressionType() == ExpressionType::BOUND_REF);
-			auto &bound_ref_expr = child_expr->Cast<BoundReferenceExpression>();
-			aggregate_input_chunk.data[aggregate_input_idx++].Reference(chunk.data[bound_ref_expr.Index()]);
-		}
-	}
-	for (auto &aggregate : aggregates) {
-		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-		if (aggr.GetFilter()) {
-			auto it = filter_indexes.find(*aggr.GetFilter());
-			D_ASSERT(it != filter_indexes.end());
-			aggregate_input_chunk.data[aggregate_input_idx++].Reference(chunk.data[it->second]);
-		}
-	}
+	lstate.input_projection.Reference(chunk, aggregate_input_chunk);
 
 	group_chunk.Verify(context.client.db);
 	aggregate_input_chunk.Verify(context.client.db);

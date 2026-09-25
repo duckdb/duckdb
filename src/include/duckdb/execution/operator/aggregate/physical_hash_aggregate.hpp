@@ -88,8 +88,6 @@ public:
 	unsafe_vector<idx_t> non_distinct_filter;
 	unsafe_vector<idx_t> distinct_filter;
 
-	reference_map_t<const Expression, size_t> filter_indexes;
-
 public:
 	// Source interface
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;

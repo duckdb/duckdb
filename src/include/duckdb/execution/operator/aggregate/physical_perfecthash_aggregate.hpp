@@ -87,7 +87,8 @@ public:
 	//! The number of bits we need to completely cover each of the groups
 	vector<idx_t> required_bits;
 
-	reference_map_t<const Expression, size_t> filter_indexes;
+	unique_ptr<AggregateInputLayout> input_layout;
+	vector<BoundAggregateExpression *> bindings;
 };
 
 } // namespace duckdb
