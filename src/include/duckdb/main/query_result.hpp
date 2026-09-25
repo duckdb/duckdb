@@ -259,7 +259,6 @@ private:
 	void PrepareCollected(const char *expected);
 	const ResultFormatGlobalState &CheckedFormatState(const char *expected) const;
 	[[noreturn]] void ThrowFormatMismatch(const char *expected) const;
-	bool IsChunkFormat() const;
 
 private:
 	//! The client context this result belongs to. Null once the query has ended

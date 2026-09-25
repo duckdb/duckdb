@@ -74,6 +74,8 @@ public:
 	atomic<idx_t> partial_units {0};
 	//! Slicing mode: the most finished units one producer ever held undelivered after an append
 	atomic<idx_t> max_pending_units {0};
+	//! How many times AppendToUnit ran: one per chunk the pipeline handed to the format
+	atomic<idx_t> append_calls {0};
 };
 
 class TestFormatLocalState : public ResultFormatLocalState {
@@ -123,6 +125,7 @@ public:
 		if (throw_in_append) {
 			throw InvalidInputException("TestFormat::AppendToUnit");
 		}
+		gstate.Cast<TestFormatGlobalState>().append_calls++;
 		auto &lstate = lstate_p.Cast<TestFormatLocalState>();
 		if (!lstate.producer_set) {
 			lstate.producer = std::this_thread::get_id();

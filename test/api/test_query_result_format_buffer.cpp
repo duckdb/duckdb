@@ -155,26 +155,42 @@ TEST_CASE("A producer parked at Combine is deposited on the consumer's pop", "[a
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(300001)"));
-	REQUIRE_NO_FAIL(con.Query("SET preserve_insertion_order=false"));
 	REQUIRE_NO_FAIL(con.Query("SET threads=4"));
 	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='128KB'"));
 
-	// The simple store runs no NextBatch, so Combine finishes and hands over every producer's partial unit
-	// No whole number of row groups is a multiple of the row cap, so every producer ends partial
-	auto handle = SubmitFormatted(con, "SELECT i FROM t", 14336);
-	DrainWatchdog watchdog(con);
-	QueryResultStream<TestFormat> stream(std::move(handle));
-	REQUIRE_NOTHROW(stream.GetBufferedData().Cast<SimpleBufferedData>());
-	auto report = Drain(stream);
+	SECTION("the simple store") {
+		REQUIRE_NO_FAIL(con.Query("SET preserve_insertion_order=false"));
+		// The simple store runs no NextBatch, so Combine finishes and hands over every producer's partial unit
+		// No whole number of row groups is a multiple of the row cap, so every producer ends partial
+		auto handle = SubmitFormatted(con, "SELECT i FROM t", 14336);
+		DrainWatchdog watchdog(con);
+		QueryResultStream<TestFormat> stream(std::move(handle));
+		REQUIRE_NOTHROW(stream.GetBufferedData().Cast<SimpleBufferedData>());
+		auto report = Drain(stream);
 
-	std::sort(report.rows.begin(), report.rows.end());
-	REQUIRE(report.rows.size() == 300001);
-	for (idx_t i = 0; i < report.rows.size(); i++) {
-		REQUIRE(report.rows[i] == NumericCast<int64_t>(i));
+		std::sort(report.rows.begin(), report.rows.end());
+		REQUIRE(report.rows.size() == 300001);
+		for (idx_t i = 0; i < report.rows.size(); i++) {
+			REQUIRE(report.rows[i] == NumericCast<int64_t>(i));
+		}
+		REQUIRE(report.saw_blocked_sink);
+		REQUIRE(stream.FormatState().partial_units == stream.FormatState().local_states);
+		stream.GetBufferedData().AssertNoBlockedSinks();
 	}
-	REQUIRE(report.saw_blocked_sink);
-	REQUIRE(stream.FormatState().partial_units == stream.FormatState().local_states);
-	stream.GetBufferedData().AssertNoBlockedSinks();
+	SECTION("the batched store") {
+		// preserve_insertion_order stays at its default (true), so the plan is batch ordered and Combine's
+		// final flush parks a non-minimum batch producer in the batched store's own blocked_sinks map
+		auto handle = SubmitFormatted(con, "SELECT i FROM t", 14336);
+		DrainWatchdog watchdog(con);
+		QueryResultStream<TestFormat> stream(std::move(handle));
+		REQUIRE_NOTHROW(stream.GetBufferedData().Cast<BatchedBufferedData>());
+		auto report = Drain(stream);
+
+		RequireAscending(report.rows, 300001);
+		REQUIRE(report.saw_blocked_sink);
+		REQUIRE(stream.FormatState().partial_units == stream.FormatState().local_states);
+		stream.GetBufferedData().AssertNoBlockedSinks();
+	}
 }
 
 TEST_CASE("The peak metric reports the bytes a formatted stream held", "[api][query_result_format]") {

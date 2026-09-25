@@ -663,7 +663,7 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 	// A custom hook can hand back the default sink, which is then served like any other query
 	const bool delegating = collector->Cast<PhysicalResultCollector>().BuildsOwnResult();
 	if (delegating && parameters.format) {
-		if (!parameters.format->IsChunk()) {
+		if (!parameters.format->Is<ChunkFormat>()) {
 			// The collector builds its own result, which the format would never reach
 			throw InvalidInputException("A result format cannot be combined with a custom result collector");
 		}

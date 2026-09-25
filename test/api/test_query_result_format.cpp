@@ -804,4 +804,76 @@ TEST_CASE("Empty partitions under a parallel retained sink in a format", "[api][
 	}
 }
 
+TEST_CASE("AppendToUnit runs exactly once per chunk, for a drained and a retained run", "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+	const idx_t row_count = 100000;
+	const idx_t expected_calls = (row_count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+	const string query = "SELECT i FROM range(" + to_string(row_count) + ") t(i)";
+
+	idx_t drained_calls;
+	{
+		auto handle = SubmitFormatted(con, query, 4096);
+		DrainWatchdog watchdog(con);
+		QueryResultStream<TestFormat> stream(std::move(handle));
+		DrainRows(stream);
+		drained_calls = stream.FormatState().append_calls;
+	}
+	REQUIRE(drained_calls == expected_calls);
+
+	idx_t retained_calls;
+	{
+		auto handle = SubmitFormatted(con, query, 4096);
+		DrainWatchdog watchdog(con);
+		handle->Complete();
+		REQUIRE(!handle->HasError());
+		retained_calls = handle->FormatState<TestFormat>().append_calls;
+	}
+	REQUIRE(retained_calls == expected_calls);
+	REQUIRE(drained_calls == retained_calls);
+
+	// A tiny buffer parks the single producer mid-drain; the re-delivered chunk must not be appended twice
+	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='1b'"));
+	auto handle = SubmitFormatted(con, query, 4096);
+	DrainWatchdog watchdog(con);
+	QueryResultStream<TestFormat> stream(std::move(handle));
+	DrainRows(stream);
+	REQUIRE(stream.FormatState().append_calls == expected_calls);
+}
+
+TEST_CASE("SOURCE_ORDERED has exactly one local state under threads=4, drained and retained",
+          "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=4"));
+	const idx_t row_count = 100000;
+	const string query = "SELECT i FROM range(" + to_string(row_count) + ") t(i)";
+
+	SECTION("drained") {
+		auto handle = SubmitFormatted(con, query, 4096);
+		DrainWatchdog watchdog(con);
+		REQUIRE(handle->FormatState<TestFormat>().ordering == ResultOrdering::SOURCE_ORDERED);
+		QueryResultStream<TestFormat> stream(std::move(handle));
+		auto rows = DrainRows(stream);
+		RequireAscending(rows, row_count);
+		REQUIRE(stream.FormatState().local_states == 1);
+	}
+	SECTION("retained") {
+		auto handle = SubmitFormatted(con, query, 4096);
+		DrainWatchdog watchdog(con);
+		REQUIRE(handle->FormatState<TestFormat>().ordering == ResultOrdering::SOURCE_ORDERED);
+		handle->Complete();
+		REQUIRE(!handle->HasError());
+		vector<int64_t> rows;
+		for (auto &payload : handle->Collection<TestFormat>()) {
+			for (auto &value : UnitValues(*payload, 0)) {
+				rows.push_back(value.GetValue<int64_t>());
+			}
+		}
+		RequireAscending(rows, row_count);
+		REQUIRE(handle->FormatState<TestFormat>().local_states == 1);
+	}
+}
+
 #endif

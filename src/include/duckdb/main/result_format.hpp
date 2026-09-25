@@ -67,7 +67,9 @@ struct ResultFormatContext {
 	ResultOrdering ordering = ResultOrdering::UNORDERED;
 };
 
-//! Subclasses declare T, C, Collection, GlobalState and NAME. Formats are identified by NAME, never by type
+//! Subclasses declare NAME, GlobalState, the payload T and a static UnpackUnit, which maps null to null;
+//! ResultFormatBase<F> supplies the retained store unless the format declares C and Collection.
+//! Formats are identified by NAME, never by type
 //! Workers call AppendToUnit, IsUnitFinished and FinishUnit concurrently and share the format and global
 //! state, so only local state is mutable
 //! AppendToUnit must copy out of the chunk: the pipeline reuses it (DataChunk::Reset restores the vector
@@ -78,7 +80,9 @@ public:
 
 public:
 	virtual const char *Name() const = 0;
+	//! Runs once, on the submitting thread, before any worker starts
 	virtual unique_ptr<ResultFormatGlobalState> InitGlobal(const ResultFormatContext &context) = 0;
+	//! Runs on each producer's own thread, concurrently with other producers' calls, against the shared global state
 	virtual unique_ptr<ResultFormatLocalState> InitLocal(ResultFormatGlobalState &gstate) = 0;
 	virtual void AppendToUnit(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate, DataChunk &chunk) = 0;
 	//! True while a unit that reached the cap is ready to be taken
@@ -91,9 +95,10 @@ public:
 	                                                              const ResultFormatContext &format_context) = 0;
 
 public:
-	DUCKDB_API bool IsChunk() const;
-	//! A null format anywhere means this instance
-	DUCKDB_API static const shared_ptr<ResultFormat> &Chunk();
+	template <class F>
+	bool Is() const {
+		return NameEquals(F::NAME);
+	}
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -106,6 +111,9 @@ public:
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+private:
+	DUCKDB_API bool NameEquals(const char *name) const;
 };
 
 class ChunkFormat : public ResultFormat {

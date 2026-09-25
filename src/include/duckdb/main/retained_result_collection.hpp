@@ -31,6 +31,7 @@ public:
 	virtual void Combine(RetainedResultCollection &local) = 0;
 	//! Once, after the last Combine
 	virtual void Finalize() = 0;
+	//! Rows stored so far; a format's unfinished partial unit counts once it is flushed (by Combine or Finalize)
 	virtual idx_t Count() const = 0;
 
 	template <class TARGET>

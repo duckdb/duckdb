@@ -15,12 +15,8 @@ ResultFormatLocalState::~ResultFormatLocalState() {
 ResultFormat::~ResultFormat() {
 }
 
-bool ResultFormat::IsChunk() const {
-	return StringUtil::Equals(Name(), ChunkFormat::NAME);
-}
-
-const shared_ptr<ResultFormat> &ResultFormat::Chunk() {
-	return ChunkFormat::InMemory();
+bool ResultFormat::NameEquals(const char *name) const {
+	return StringUtil::Equals(Name(), name);
 }
 
 //===--------------------------------------------------------------------===//

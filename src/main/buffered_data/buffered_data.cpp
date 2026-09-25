@@ -10,7 +10,7 @@ namespace duckdb {
 
 static shared_ptr<ResultFormat> FormatOrChunk(shared_ptr<ResultFormat> format) {
 	if (!format) {
-		return ResultFormat::Chunk();
+		return ChunkFormat::InMemory();
 	}
 	return format;
 }

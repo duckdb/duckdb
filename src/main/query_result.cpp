@@ -94,14 +94,14 @@ const vector<Identifier> &BaseQueryResult::GetNames() const {
 QueryResult::QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
                          vector<LogicalType> types_p, vector<Identifier> names_p, ClientProperties client_properties_p)
     : BaseQueryResult(type, statement_type, std::move(properties), std::move(types_p), std::move(names_p)),
-      client_properties(std::move(client_properties_p)), format(ResultFormat::Chunk()) {
+      client_properties(std::move(client_properties_p)), format(ChunkFormat::InMemory()) {
 	InitializeChunkFormatState();
 }
 
 QueryResult::QueryResult(QueryResultType type, ErrorData error)
     : BaseQueryResult(type, std::move(error)),
       client_properties("UTC", ArrowOffsetSize::REGULAR, false, false, false, ArrowFormatVersion::V1_0, nullptr),
-      format(ResultFormat::Chunk()) {
+      format(ChunkFormat::InMemory()) {
 	InitializeChunkFormatState();
 }
 
@@ -115,7 +115,7 @@ QueryResult::QueryResult(shared_ptr<ClientContext> context_p, PreparedStatementD
 		format = buffer->SharedFormat();
 		format_state = buffer->SharedFormatState();
 	} else {
-		format = ResultFormat::Chunk();
+		format = ChunkFormat::InMemory();
 		InitializeChunkFormatState();
 	}
 }
@@ -124,7 +124,7 @@ QueryResult::QueryResult(StatementType statement_type, StatementProperties prope
                          unique_ptr<ColumnDataCollection> collection_p, ClientProperties client_properties_p)
     : BaseQueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, std::move(properties),
                       collection_p->Types(), std::move(names_p)),
-      client_properties(std::move(client_properties_p)), format(ResultFormat::Chunk()),
+      client_properties(std::move(client_properties_p)), format(ChunkFormat::InMemory()),
       collection(make_uniq<ChunkRetainedCollection>(std::move(collection_p))) {
 	InitializeChunkFormatState();
 }
@@ -296,10 +296,6 @@ void QueryResult::ThrowFormatMismatch(const char *expected) const {
 	                            Format().Name(), expected);
 }
 
-bool QueryResult::IsChunkFormat() const {
-	return Format().IsChunk();
-}
-
 const ResultFormatGlobalState &QueryResult::CheckedFormatState(const char *expected) const {
 	if (!StringUtil::Equals(Format().Name(), expected)) {
 		ThrowFormatMismatch(expected);
@@ -424,7 +420,7 @@ unique_ptr<DataChunk> QueryResult::FetchInternal() {
 	if (HasError()) {
 		throw InvalidInputException("Attempting to fetch from an unsuccessful query result\nError: %s", GetError());
 	}
-	if (!IsChunkFormat()) {
+	if (!Format().Is<ChunkFormat>()) {
 		ThrowFormatMismatch(ChunkFormat::NAME);
 	}
 	if (!collection) {
@@ -445,7 +441,7 @@ string QueryResult::ToString() {
 		return GetError() + "\n";
 	}
 	string result = HeaderToString();
-	if (!IsChunkFormat()) {
+	if (!Format().Is<ChunkFormat>()) {
 		return result + "[ Rows: " + to_string(RowCount()) + "]\n\n";
 	}
 	auto &coll = Collection();
@@ -468,7 +464,7 @@ string QueryResult::ToBox(BoxRendererContext &context_p, const BoxRendererConfig
 	if (HasError()) {
 		return GetError() + "\n";
 	}
-	if (!IsChunkFormat()) {
+	if (!Format().Is<ChunkFormat>()) {
 		return HeaderToString() + "[ Rows: " + to_string(RowCount()) + "]\n\n";
 	}
 	BoxRenderer renderer(config);
@@ -484,7 +480,7 @@ bool QueryResult::Equals(QueryResult &other, bool compare_names) { // LCOV_EXCL_
 	if (HasError()) {
 		return GetErrorObject() == other.GetErrorObject();
 	}
-	if (!IsChunkFormat() || !other.IsChunkFormat()) {
+	if (!Format().Is<ChunkFormat>() || !other.Format().Is<ChunkFormat>()) {
 		throw InvalidInputException("Query results can only be compared in the chunk format");
 	}
 	// compare names
