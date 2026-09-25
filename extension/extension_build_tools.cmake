@@ -62,6 +62,10 @@ function(duckdb_link_extensions TARGET)
         if(TARGET ${EXT_NAME}_extension)
             target_link_libraries(${TARGET} ${LINKAGE} ${EXT_NAME}_extension)
             list(APPEND LINKED ${EXT_NAME})
+        elseif(TARGET duckdb_${EXT_NAME})
+            # linked and registered like an extension without being one, e.g. httplib
+            target_link_libraries(${TARGET} ${LINKAGE} duckdb_${EXT_NAME})
+            list(APPEND LINKED ${EXT_NAME})
         else()
             list(APPEND MISSING ${EXT_NAME})
         endif()
@@ -81,10 +85,14 @@ function(duckdb_link_extensions TARGET)
     endif()
 endfunction()
 
-# Links the extensions this build is configured to link by default (every loaded extension without DONT_LINK).
+# Links the extensions this build is configured to link by default (every loaded extension without DONT_LINK), after
+# the built-in httplib client when it is built.
 function(link_extension_libraries LIBRARY LINKAGE)
     get_statically_linked_extensions("${DUCKDB_EXTENSION_NAMES}" STATICALLY_LINKED_EXTENSIONS)
     set(DEFAULT_EXTENSIONS "")
+    if(TARGET duckdb_httplib)
+        list(APPEND DEFAULT_EXTENSIONS httplib)
+    endif()
     foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
         string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
         if (${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})

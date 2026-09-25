@@ -106,6 +106,10 @@ HTTPUtil &HTTPUtil::Get(DatabaseInstance &db) {
 	return db.config.GetHTTPUtil();
 }
 
+string HTTPUtil::GetName() const {
+	return "none";
+}
+
 HTTPTransportReusePolicy HTTPUtil::GetTransportReusePolicy() const {
 	return HTTPTransportReusePolicy::EPHEMERAL;
 }
@@ -164,6 +168,10 @@ PutRequestInfo::~PutRequestInfo() = default;
 HeadRequestInfo::~HeadRequestInfo() = default;
 DeleteRequestInfo::~DeleteRequestInfo() = default;
 PostRequestInfo::~PostRequestInfo() = default;
+
+unique_ptr<HTTPClient> HTTPUtil::InitializeClient(HTTPParams &http_params, const string &proto_host_port) {
+	return nullptr;
+}
 
 unique_ptr<HTTPClient> HTTPUtil::InitializeClientExtended(HTTPParams &http_params, const string &proto_host_port,
                                                           const HTTPClientInitializationOptions &) {

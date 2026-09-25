@@ -689,7 +689,7 @@ STATIC_EXTENSION_LOADER_FILE ?= $(STATIC_EXTENSION_LOADER_BUILD_DIR)/static_exte
 .PHONY: static_extension_loader
 static_extension_loader:
 	$(PYTHON) scripts/generate_static_extension_loader.py --output "$(STATIC_EXTENSION_LOADER_FILE)" \
-		$(if $(LINK_EXTENSIONS),"$(LINK_EXTENSIONS)",$(patsubst lib%_extension.a,%,$(notdir $(wildcard $(STATIC_EXTENSION_LOADER_BUILD_DIR)/extension/*/lib*_extension.a))))
+		$(if $(LINK_EXTENSIONS),"$(LINK_EXTENSIONS)",$(if $(wildcard $(STATIC_EXTENSION_LOADER_BUILD_DIR)/src/main/http/libduckdb_httplib.a),httplib) $(patsubst lib%_extension.a,%,$(notdir $(wildcard $(STATIC_EXTENSION_LOADER_BUILD_DIR)/extension/*/lib*_extension.a))))
 	@echo "Wrote $(STATIC_EXTENSION_LOADER_FILE)"
 
 .PHONY: static-libs-release-artifact
