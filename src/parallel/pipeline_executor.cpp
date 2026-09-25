@@ -170,7 +170,8 @@ bool PipelineExecutor::TryFlushCachingOperators(ExecutionBudget &chunk_budget) {
 	// extract every chunk from it and push it through the rest of the pipeline
 	// before moving onto the next operators' FinalExecute
 	while (flushing_idx < pipeline.operators.size()) {
-		if (!pipeline.operators[flushing_idx].get().RequiresFinalExecute()) {
+		if (!pipeline.ShouldFinalizeStreamingWindow(pipeline.operators[flushing_idx].get()) ||
+		    !pipeline.operators[flushing_idx].get().RequiresFinalExecute()) {
 			flushing_idx++;
 			continue;
 		}

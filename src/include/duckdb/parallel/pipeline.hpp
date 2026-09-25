@@ -194,6 +194,15 @@ public:
 	bool CanUseExternalInput(const OperatorPartitionInfo &source_partition_info) const;
 	PipelineExternalInputCost GetExternalInputCost() const;
 	bool CanStopSourceEarly() const;
+	void DisableStreamingWindowFinalization() {
+		finalize_streaming_windows = false;
+	}
+	bool ShouldFinalizeStreamingWindows() const {
+		return finalize_streaming_windows;
+	}
+	bool ShouldFinalizeStreamingWindow(const PhysicalOperator &op) const {
+		return ShouldFinalizeStreamingWindows() || op.type != PhysicalOperatorType::STREAMING_WINDOW;
+	}
 
 	idx_t GetBaseBatchIndex() const {
 		return base_batch_index;
@@ -242,6 +251,9 @@ private:
 	idx_t base_batch_index = 0;
 	//! How this pipeline receives input chunks
 	PipelineInputMode input_mode = PipelineInputMode::SCHEDULED_SOURCE;
+
+	//! Whether streaming windows should run FinalExecute when this pipeline is exhausted
+	bool finalize_streaming_windows = true;
 	//! Event that represents execution of an externally fed pipeline
 	weak_ptr<Event> external_input_event DUCKDB_GUARDED_BY(external_input_lock);
 	ExternalInputEventState external_input_event_state DUCKDB_GUARDED_BY(external_input_lock) =
