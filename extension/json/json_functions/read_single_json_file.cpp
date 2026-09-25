@@ -73,6 +73,7 @@ public:
 
 static unique_ptr<FunctionData> ReadSingleJSONFileBind(ClientContext &context, TableFunctionBindInput &input,
                                                        vector<LogicalType> &return_types, vector<Identifier> &names) {
+	auto &file_input = TableFunctionFileBindInput::Get(input);
 	auto result = make_uniq<ReadSingleJSONFileData>();
 	auto &options = result->options;
 	if (input.info) {
@@ -100,16 +101,16 @@ static unique_ptr<FunctionData> ReadSingleJSONFileBind(ClientContext &context, T
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("read_single_json_file requires a non-NULL file name");
 	}
-	if (input.expected_bind_data && input.HasExpectedSchema()) {
+	if (file_input.expected_bind_data && file_input.HasExpectedSchema()) {
 		// the schema of the scan was already determined - read this file exactly the way it was determined, so that
 		// every file of the scan produces the same columns from the same JSON keys
-		auto &source = input.expected_bind_data->Cast<ReadSingleJSONFileData>();
-		result->file = OpenFileInfo(StringValue::Get(input.inputs[0]));
+		auto &source = file_input.expected_bind_data->Cast<ReadSingleJSONFileData>();
+		result->file = TableFunctionFileBindInput::GetFile(input);
 		result->options.record_type = source.options.record_type;
 		result->options.geojson = source.options.geojson;
 		result->options.auto_detect = false;
-		result->options.name_list = *input.expected_names;
-		result->options.sql_type_list = *input.expected_types;
+		result->options.name_list = *file_input.expected_names;
+		result->options.sql_type_list = *file_input.expected_types;
 		result->key_names = source.key_names;
 		result->feature_columns = source.feature_columns;
 		// the date/timestamp formats that auto-detection settled on are part of how the scan is read
@@ -119,13 +120,13 @@ static unique_ptr<FunctionData> ReadSingleJSONFileBind(ClientContext &context, T
 		return_types = result->options.sql_type_list;
 		return std::move(result);
 	}
-	if (input.HasExpectedSchema()) {
+	if (file_input.HasExpectedSchema()) {
 		// the schema is known but not how it was determined (COPY takes its columns from the target table) - read
 		// this file using those columns
-		options.name_list = *input.expected_names;
-		options.sql_type_list = *input.expected_types;
+		options.name_list = *file_input.expected_names;
+		options.sql_type_list = *file_input.expected_types;
 	}
-	result->file = OpenFileInfo(StringValue::Get(input.inputs[0]));
+	result->file = TableFunctionFileBindInput::GetFile(input);
 
 	// keep the detected structure around - it is used to combine the schema of this file with that of other files
 	// when this function is wrapped into a multi-file function. This is only needed when the columns are not known
@@ -315,9 +316,6 @@ TableFunction JSONFunctions::GetReadSingleJSONFileTableFunction(shared_ptr<JSONS
 		JSONScan::AddReadJSONParameters(table_function);
 		JSONScan::AddAutoDetectParameters(table_function);
 	}
-	table_function.combine_schema = ReadSingleJSONFileCombineSchema;
-	table_function.claim_batch = ReadSingleJSONFileClaimBatch;
-	table_function.finish_batch = ReadSingleJSONFileFinishBatch;
 	table_function.table_scan_progress = ReadSingleJSONFileProgress;
 	table_function.cardinality = ReadSingleJSONFileCardinality;
 	table_function.function_info = std::move(function_info);
@@ -333,6 +331,9 @@ TableFunction JSONFunctions::GetJSONTableFunction(Identifier name, shared_ptr<JS
 	// the schema is determined by combining the schemas of up to 32 files - the keys of the files are unified, so a
 	// file does not need to have every column of the combined schema
 	settings.maximum_sample_files = 32;
+	settings.combine_schema = ReadSingleJSONFileCombineSchema;
+	settings.claim_batch = ReadSingleJSONFileClaimBatch;
+	settings.finish_batch = ReadSingleJSONFileFinishBatch;
 	return TableFunctionMultiFileWrapper::CreateFunction(std::move(single_file_function), std::move(name),
 	                                                     std::move(settings));
 }

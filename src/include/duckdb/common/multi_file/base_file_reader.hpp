@@ -90,6 +90,9 @@ public:
 	DUCKDB_API virtual shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx);
 	//! Get statistics for a specific column
 	DUCKDB_API virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name);
+	//! Get statistics for a virtual column the reader produces (e.g. the row number of every row within the file)
+	DUCKDB_API virtual unique_ptr<BaseStatistics> GetVirtualColumnStatistics(ClientContext &context,
+	                                                                         column_t virtual_column_id);
 	//! Prepare reader for scanning
 	DUCKDB_API virtual void PrepareReader(ClientContext &context, GlobalTableFunctionState &);
 	//! Called after opening when the scan is driven by read-ahead, lets the reader pre-open scan resources

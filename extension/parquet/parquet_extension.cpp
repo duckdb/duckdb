@@ -42,6 +42,7 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
+#include "duckdb/common/multi_file/table_function_multi_file.hpp"
 #include "parquet_multi_file_info.hpp"
 #include "column_reader.hpp"
 #include "duckdb/common/assert.hpp"
@@ -1001,16 +1002,30 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 	return {};
 }
 
+//! Bind a COPY ... FROM a parquet file - the reader is the same one read_parquet is built on
+static unique_ptr<FunctionData> ParquetCopyFromBind(ClientContext &context, CopyFromFunctionBindInput &input,
+                                                    vector<Identifier> &expected_names,
+                                                    vector<LogicalType> &expected_types) {
+	return TableFunctionMultiFileWrapper::MultiFileBindCopyWith(context, input, expected_names, expected_types,
+	                                                            ParquetScanFunction::GetSingleFileFunction(),
+	                                                            ParquetScanFunction::GetMultiFileSettings());
+}
+
 static void LoadInternal(ExtensionLoader &loader) {
 	auto &db_instance = loader.GetDatabaseInstance();
 	auto &fs = db_instance.GetFileSystem();
 	fs.RegisterCompressionFilesystem(make_uniq<ZStdFileSystem>());
 
-	auto scan_fun = ParquetScanFunction::GetFunctionSet();
+	auto scan_fun = MultiFileReader::CreateFunctionSet(ParquetScanFunction::GetMultiFileFunction("read_parquet"));
 	scan_fun.SetName("read_parquet");
 	loader.RegisterFunction(scan_fun);
 	scan_fun.SetName("parquet_scan");
 	loader.RegisterFunction(scan_fun);
+
+	// the single-file parquet reader that the multi-file reader above is built on
+	TableFunctionSet single_file_set("read_single_parquet_file");
+	single_file_set.AddFunction(ParquetScanFunction::GetSingleFileFunction());
+	loader.RegisterFunction(std::move(single_file_set));
 
 	// parquet_metadata
 	ParquetMetaDataFunction meta_fun;
@@ -1055,7 +1070,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	function.copy_to_finalize = ParquetWriteFinalize;
 	function.execution_mode = ParquetWriteExecutionMode;
 	function.initialize_operator = ParquetWriteInitializeOperator;
-	function.copy_from_bind = MultiFileFunction<ParquetMultiFileInfo>::MultiFileBindCopy;
+	function.copy_from_bind = ParquetCopyFromBind;
 	function.copy_from_function = *scan_fun.functions[0];
 
 	function.prepare_batch = ParquetWritePrepareBatch;

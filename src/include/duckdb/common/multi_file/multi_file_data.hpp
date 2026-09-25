@@ -26,6 +26,22 @@ public:
 	virtual idx_t Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) = 0;
 };
 
+//! A delete filter that forwards to one owned by somebody else - used to hand a reader the filter of the scan it is
+//! part of, which outlives it
+class BorrowedDeleteFilter : public DeleteFilter {
+public:
+	explicit BorrowedDeleteFilter(DeleteFilter &filter_p) : filter(filter_p) {
+	}
+
+public:
+	idx_t Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) override {
+		return filter.Filter(start_row_index, count, result_sel);
+	}
+
+private:
+	DeleteFilter &filter;
+};
+
 struct HivePartitioningIndex {
 	HivePartitioningIndex(string value, idx_t index);
 
@@ -38,7 +54,8 @@ struct HivePartitioningIndex {
 
 struct MultiFileColumnDefinition {
 public:
-	MultiFileColumnDefinition(const Identifier &name, const LogicalType &type) : name(name), type(type) {
+	MultiFileColumnDefinition(Identifier name_p, LogicalType type_p)
+	    : name(std::move(name_p)), type(std::move(type_p)) {
 	}
 	MultiFileColumnDefinition(const char *name, const LogicalType &type) : name(name), type(type) {
 	}
@@ -101,6 +118,9 @@ public:
 		D_ASSERT(identifier.type().id() == LogicalTypeId::INTEGER);
 		return identifier.GetValue<int32_t>();
 	}
+
+	DUCKDB_API void Serialize(Serializer &serializer) const;
+	DUCKDB_API static MultiFileColumnDefinition Deserialize(Deserializer &deserializer);
 
 	string GetIdentifierName() const {
 		if (identifier.IsNull()) {

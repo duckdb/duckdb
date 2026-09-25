@@ -712,6 +712,16 @@
         "name": "sampled_schema_is_union",
         "type": "bool",
         "default": "true"
+      },
+      {
+        "id": 110,
+        "name": "schema",
+        "type": "vector<MultiFileColumnDefinition>"
+      },
+      {
+        "id": 111,
+        "name": "file_row_number",
+        "type": "bool"
       }
     ],
     "pointer_type": "none"
@@ -731,6 +741,11 @@
         "id": 101,
         "name": "hive_partitioning_indexes",
         "type": "vector<HivePartitioningIndex>"
+      },
+      {
+        "id": 102,
+        "name": "file_row_number_idx",
+        "type": "optional_idx"
       }
     ],
     "pointer_type": "none"
@@ -753,6 +768,44 @@
     "constructor": [
       "value",
       "index"
+    ]
+  },
+  {
+    "class": "MultiFileColumnDefinition",
+    "includes": [
+      "duckdb/common/multi_file/multi_file_data.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "name",
+        "type": "Identifier"
+      },
+      {
+        "id": 101,
+        "name": "type",
+        "type": "LogicalType"
+      },
+      {
+        "id": 102,
+        "name": "children",
+        "type": "vector<MultiFileColumnDefinition>"
+      },
+      {
+        "id": 103,
+        "name": "default_expression",
+        "type": "unique_ptr<ParsedExpression>"
+      },
+      {
+        "id": 104,
+        "name": "identifier",
+        "type": "Value"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": [
+      "name",
+      "type"
     ]
   },
   {

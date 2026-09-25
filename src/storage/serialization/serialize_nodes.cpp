@@ -29,6 +29,7 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
@@ -420,6 +421,24 @@ Literal Literal::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
+void MultiFileColumnDefinition::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<Identifier>(100, "name", name);
+	serializer.WriteProperty<LogicalType>(101, "type", type);
+	serializer.WritePropertyWithDefault<vector<MultiFileColumnDefinition>>(102, "children", children);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(103, "default_expression", default_expression);
+	serializer.WriteProperty<Value>(104, "identifier", identifier);
+}
+
+MultiFileColumnDefinition MultiFileColumnDefinition::Deserialize(Deserializer &deserializer) {
+	auto name = deserializer.ReadPropertyWithDefault<Identifier>(100, "name");
+	auto type = deserializer.ReadProperty<LogicalType>(101, "type");
+	MultiFileColumnDefinition result(std::move(name), std::move(type));
+	deserializer.ReadPropertyWithDefault<vector<MultiFileColumnDefinition>>(102, "children", result.children);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(103, "default_expression", result.default_expression);
+	deserializer.ReadProperty<Value>(104, "identifier", result.identifier);
+	return result;
+}
+
 void MultiFileOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(100, "filename", filename);
 	serializer.WritePropertyWithDefault<bool>(101, "hive_partitioning", hive_partitioning);
@@ -431,6 +450,8 @@ void MultiFileOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(107, "allow_empty", allow_empty);
 	serializer.WritePropertyWithDefault<idx_t>(108, "maximum_sample_files", maximum_sample_files, 1);
 	serializer.WritePropertyWithDefault<bool>(109, "sampled_schema_is_union", sampled_schema_is_union, true);
+	serializer.WritePropertyWithDefault<vector<MultiFileColumnDefinition>>(110, "schema", schema);
+	serializer.WritePropertyWithDefault<bool>(111, "file_row_number", file_row_number);
 }
 
 MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
@@ -445,18 +466,22 @@ MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<bool>(107, "allow_empty", result.allow_empty);
 	deserializer.ReadPropertyWithExplicitDefault<idx_t>(108, "maximum_sample_files", result.maximum_sample_files, 1);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(109, "sampled_schema_is_union", result.sampled_schema_is_union, true);
+	deserializer.ReadPropertyWithDefault<vector<MultiFileColumnDefinition>>(110, "schema", result.schema);
+	deserializer.ReadPropertyWithDefault<bool>(111, "file_row_number", result.file_row_number);
 	return result;
 }
 
 void MultiFileReaderBindData::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<optional_idx>(100, "filename_idx", filename_idx);
 	serializer.WritePropertyWithDefault<vector<HivePartitioningIndex>>(101, "hive_partitioning_indexes", hive_partitioning_indexes);
+	serializer.WriteProperty<optional_idx>(102, "file_row_number_idx", file_row_number_idx);
 }
 
 MultiFileReaderBindData MultiFileReaderBindData::Deserialize(Deserializer &deserializer) {
 	MultiFileReaderBindData result;
 	deserializer.ReadProperty<optional_idx>(100, "filename_idx", result.filename_idx);
 	deserializer.ReadPropertyWithDefault<vector<HivePartitioningIndex>>(101, "hive_partitioning_indexes", result.hive_partitioning_indexes);
+	deserializer.ReadProperty<optional_idx>(102, "file_row_number_idx", result.file_row_number_idx);
 	return result;
 }
 

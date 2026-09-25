@@ -28,6 +28,8 @@ struct MultiFileReaderInterface;
 struct MultiFileReaderBindData {
 	//! The (global) column id of the filename column (if any)
 	optional_idx filename_idx;
+	//! The (global) column id of the file_row_number column (if any) - it is read from the row number virtual column
+	optional_idx file_row_number_idx;
 	//! The set of hive partitioning indexes (if any)
 	vector<HivePartitioningIndex> hive_partitioning_indexes;
 	//! (optional) The schema set by the multi file reader

@@ -8,6 +8,7 @@
         "test/fuzzer/pedro/vacuum_table_with_generated_column.test",
         "test/fuzzer/duckfuzz/bitstring_agg_uhugeint.test",
         "test/parquet/parquet_stats_function.test",
+        "test/sql/copy/parquet/read_single_parquet_file.test",
         "test/parquet/issue_22144.test",
         "test/sql/types/struct/struct_stats.test",
         "test/sql/types/list/list_stats.test",
