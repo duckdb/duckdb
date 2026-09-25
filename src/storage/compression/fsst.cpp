@@ -533,17 +533,12 @@ struct FSSTScanState : public SegmentScanState {
 	                                    reinterpret_cast<duckdb_fsst_decoder_t *>(duckdb_fsst_decoder.get()),
 	                                    segment.count.load())) {
 		ResetStoredDelta();
-		// FIXME: decompress_buffer is unused?
-		auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockSize());
-		decompress_buffer.resize(string_block_limit + 1);
 	}
 
 	buffer_ptr<void> duckdb_fsst_decoder;
 	void *duckdb_fsst_decoder_ptr = nullptr;
 	BufferHandle handle;
 	SegmentLayout layout;
-
-	vector<unsigned char> decompress_buffer;
 
 	// To speed up delta decoding we store the last index
 	uint32_t last_known_index;
