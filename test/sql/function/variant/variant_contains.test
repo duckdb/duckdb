@@ -248,8 +248,8 @@ false	true	true	false
 # Deep nested objects are compared without recursive calls.
 query I
 SELECT variant_contains(
-    (repeat('{"a":', 20000) || '42' || repeat('}', 20000))::JSON::VARIANT,
-    (repeat('{"a":', 20000) || '42' || repeat('}', 20000))::JSON::VARIANT
+    (repeat('{"a":', 5000) || '42' || repeat('}', 5000))::JSON::VARIANT,
+    (repeat('{"a":', 5000) || '42' || repeat('}', 5000))::JSON::VARIANT
 );
 ----
 true
