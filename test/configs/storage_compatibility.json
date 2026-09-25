@@ -92,7 +92,8 @@
         "test/sql/subquery/exists/test_exists_union_by_name.test",
         "test/sql/types/nested/array/array_fuzzer_failures.test",
         "test/parquet/timens_parquet.test",
-        "test/sql/types/time/test_time_ns.test"
+        "test/sql/types/time/test_time_ns.test",
+        "test/sql/optimizer/monotone_preimage.test"
       ]
     },
     {
