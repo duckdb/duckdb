@@ -272,6 +272,10 @@ bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const Log
 	if (source_type == target_type) {
 		return false;
 	}
+	// Converting VARIANT can hit its traversal depth limit, regardless of the target type or TRY_CAST.
+	if (source_type.id() == LogicalTypeId::VARIANT) {
+		return true;
+	}
 	// Casts involving custom types are implemented by extensions, so we cannot reason about them - they can throw
 	// even for a try_cast, e.g. casting JSON into a MAP throws when a key fails to cast, since map keys cannot be NULL
 	if (source_type.HasAlias() || target_type.HasAlias()) {
